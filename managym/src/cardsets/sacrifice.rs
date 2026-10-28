@@ -5,7 +5,7 @@ use super::alpha::CardRegistry;
 use crate::state::{
     ability::{Ability, Effect, TargetSpec, TriggerCondition, TriggerSubject},
     card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, SacrificeCost},
-    mana::{Mana, ManaCost},
+    mana::ManaCost,
     predicate::CardPredicate,
 };
 
@@ -93,17 +93,7 @@ impl CardRegistry {
                         ..Default::default()
                     }),
                 },
-                effects: vec![Effect::Modal {
-                    modes: ["W", "U", "B", "R", "G"]
-                        .into_iter()
-                        .map(|color| {
-                            vec![Effect::AddMana {
-                                mana: Mana::parse(color),
-                                until_end_of_combat: false,
-                            }]
-                        })
-                        .collect(),
-                }],
+                effects: vec![Effect::any_color_mana()],
             }],
             ..Default::default()
         });
@@ -259,17 +249,7 @@ impl CardRegistry {
             activated_abilities: vec![ActivatedAbilityDefinition {
                 tap_source: true,
                 sacrifice_source: true,
-                effect: Effect::Modal {
-                    modes: ["W", "U", "B", "R", "G"]
-                        .into_iter()
-                        .map(|color| {
-                            vec![Effect::AddMana {
-                                mana: Mana::parse(color),
-                                until_end_of_combat: false,
-                            }]
-                        })
-                        .collect(),
-                },
+                effect: Effect::any_color_mana(),
                 ..Default::default()
             }],
             ..Default::default()

@@ -22,10 +22,18 @@ clears sickness. Existing typed look/select carries Rallier's required reveal.
 The repeated Python pack-path tables and policy receipt comparison are removed:
 CURRENT_IR_PATHS selects explicit current catalogs and BoundSemanticPack checks
 pack key plus both source/IR hashes for every compiled binding. Policy retains
-its full-definition coverage check. Receipt tests mutate the native descriptor
+its required-receipt and full-definition coverage checks. The required-receipt
+guard rejects null or malformed provenance before generic observation binding,
+which still permits uncompiled manifests. Receipt tests mutate the native descriptor
 at that boundary rather than replacing a successfully validated binding.
 Directed card tests use effective_pt for paired assertions; learning tests check
 the complete shared compiler vocabulary separately from each pack's used opcodes.
+Pool descriptors now create implemented entries directly and add only missing
+inventory entries; both public accessors share the same runtime lookup. Current
+projections assemble their closure once. Qualification mutation tests share one
+fixture while preserving direct-card and transitive-token cases. Surviving
+Lotus Cobra and Treasure registrations reuse the existing modal-mana constructor,
+retaining color order and payment behavior. No deletion targets remain in this cut.
 
 ## Clause review
 
@@ -65,6 +73,8 @@ proof are D1 work. No Task, Graph, publication or merge was launched here.
 Qualification evidence includes 102 passing exact-filter debug witnesses plus
 Rallier reveal and haste controls (19 new directed tests), and verified source pins.
 Check: `cargo test --manifest-path managym/Cargo.toml --test rules_tests rules::tla_content` — 35 passed; `uv run --extra dev pytest tests/semantic/test_current_content.py tests/model/test_policy_catalog.py -q` — 23 passed after atomic release-extension rebuild; `uv run --extra dev pytest tests/semantic/test_learning_projection.py tests/semantic/test_learning_projection_env.py -q` — 12 passed; generator `--check`, Rust format, Ruff and `git diff --check` passed.
+Receipt follow-up: `uv run --extra dev pytest tests/model/test_policy_catalog.py -q -k 'receipt or catalog_uses_actual'` — 7 passed after three malformed-receipt cases reproduced the cleanup regression; focused Ruff and staged/unstaged whitespace checks passed.
+Reduction check: `cargo test --manifest-path managym/Cargo.toml --lib semantic::pool::tests` — 2 passed; `cargo test --manifest-path managym/Cargo.toml --test rules_tests rules::sacrifice_cards` — 21 passed; after atomic release-extension rebuild, `uv run --extra dev pytest tests/semantic/test_current_content.py tests/model/test_policy_catalog.py -q` — 27 passed and all 10 native pool descriptors match their pre-reduction snapshots exactly; generator `--check`, Rust format, Ruff and whitespace checks passed.
 Gate retains full debug Rust/Clippy, current-world
 arena/evaluation/monitoring, model suite, choice-navigation,
 Learn/browser proofs on new receipts, CI collection and release-source checks.

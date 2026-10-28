@@ -79,8 +79,8 @@ class ContentSource:
                 "decks": [],
                 "pool": sorted(roots),
                 "token_templates": sorted(self.token_templates),
-                "definitions": self.closure(roots | self.token_templates),
             }
+            roots = roots | self.token_templates
         else:
             setup = self.setups[preset]
             roots = {
@@ -89,7 +89,8 @@ class ContentSource:
                 for field in ("cards", "sideboard")
                 for entry in deck.get(field, [])
             }
-            source = {"schema_version": 1, **setup, "definitions": self.closure(roots)}
+            source = {"schema_version": 1, **setup}
+        source["definitions"] = self.closure(roots)
         return compile_source(source)
 
 

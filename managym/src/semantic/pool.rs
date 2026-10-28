@@ -76,21 +76,7 @@ impl PoolRuntime {
         let content = Arc::new(semantic.compile_content_pack()?);
         // IR owns identity and pack membership; qualifications only decide
         // eligibility. Inventory-only cards remain explicit.
-        let mut definitions: BTreeMap<_, _> = inventory
-            .iter()
-            .map(|name| {
-                (
-                    name.clone(),
-                    PoolDefinition {
-                        card_def_id: None,
-                        semantic_key: None,
-                        registry_name: name.clone(),
-                        eligibility: Eligibility::Unsupported,
-                        reason: Some("Not implemented in this content pack".into()),
-                    },
-                )
-            })
-            .collect();
+        let mut definitions = BTreeMap::new();
         for definition in &semantic.definitions {
             let eligible = qualification.eligible.remove(&definition.semantic_key);
             definitions.insert(
@@ -117,6 +103,17 @@ impl PoolRuntime {
                 "qualified definitions missing from {}: {:?}",
                 semantic.pack_key, qualification.eligible
             )));
+        }
+        for name in inventory {
+            definitions
+                .entry(name.clone())
+                .or_insert_with(|| PoolDefinition {
+                    card_def_id: None,
+                    semantic_key: None,
+                    registry_name: name.clone(),
+                    eligibility: Eligibility::Unsupported,
+                    reason: Some("Not implemented in this content pack".into()),
+                });
         }
         let manifest = content.manifest();
         let descriptor = ContentPool {
@@ -167,18 +164,18 @@ fn pools() -> Result<&'static BTreeMap<String, PoolRuntime>, IrError> {
 
 /// Describe supported and known unsupported cards without admitting a deck.
 pub fn content_pool(pack_key: &str) -> Result<ContentPool, IrError> {
-    pools()?
-        .get(pack_key)
-        .map(|p| p.descriptor.clone())
-        .ok_or_else(|| IrError::Malformed(format!("unknown content pool {pack_key:?}")))
+    Ok(pool_runtime(pack_key)?.descriptor.clone())
 }
 
 /// The same compiled content whose IDs and digest the descriptor exposes.
 /// Callers must check every submitted definition's eligibility before use.
 pub fn pool_content(pack_key: &str) -> Result<Arc<ContentPack>, IrError> {
+    Ok(Arc::clone(&pool_runtime(pack_key)?.content))
+}
+
+fn pool_runtime(pack_key: &str) -> Result<&'static PoolRuntime, IrError> {
     pools()?
         .get(pack_key)
-        .map(|p| Arc::clone(&p.content))
         .ok_or_else(|| IrError::Malformed(format!("unknown content pool {pack_key:?}")))
 }
 

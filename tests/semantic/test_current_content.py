@@ -36,7 +36,7 @@ def test_current_outputs_and_all_learning_projections() -> None:
         assert len(bound.definition_row_by_card_def_id) == len(ir["definitions"])
 
 
-def test_missing_token_and_changed_qualified_clause_fail_closed(tmp_path: Path) -> None:
+def test_missing_token_fails_closed() -> None:
     source = ContentSource.load()
     ally = next(
         k for k, d in source.definitions.items() if d["registry_name"] == "Ally"
@@ -44,15 +44,6 @@ def test_missing_token_and_changed_qualified_clause_fail_closed(tmp_path: Path) 
     del source.definitions[ally]
     with pytest.raises(SemanticCompileError, match="missing content definition"):
         source.project("two_deck")
-
-    shutil.copytree(CONTENT_ROOT, tmp_path / "content")
-    path = tmp_path / "content" / "definitions.json"
-    rows = json.loads(path.read_text())
-    enthusiast = next(d for d in rows if d["registry_name"] == "Avatar Enthusiasts")
-    enthusiast["programs"] = []
-    path.write_text(json.dumps(rows))
-    with pytest.raises(SemanticCompileError, match="stale qualification"):
-        generate(root=path.parent)
 
 
 def test_new_definition_compiles_without_a_native_registration() -> None:
@@ -84,14 +75,19 @@ def test_new_definition_compiles_without_a_native_registration() -> None:
     assert ir["programs"][0]["instructions"][0]["op_name"] == "draw_cards"
 
 
-def test_qualified_producer_rejects_changed_token_characteristics(
+@pytest.mark.parametrize("name", ["Avatar Enthusiasts", "Ally"])
+def test_qualification_rejects_changes_to_card_or_token_clauses(
     tmp_path: Path,
+    name: str,
 ) -> None:
     shutil.copytree(CONTENT_ROOT, tmp_path / "content")
     path = tmp_path / "content" / "definitions.json"
     rows = json.loads(path.read_text())
-    ally = next(row for row in rows if row["registry_name"] == "Ally")
-    ally["characteristics"]["power"] = 7
+    definition = next(row for row in rows if row["registry_name"] == name)
+    if name == "Ally":
+        definition["characteristics"]["power"] = 7
+    else:
+        definition["programs"] = []
     path.write_text(json.dumps(rows))
     with pytest.raises(SemanticCompileError, match="stale qualification"):
         generate(root=path.parent)
