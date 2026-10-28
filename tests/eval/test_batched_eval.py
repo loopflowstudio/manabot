@@ -4,7 +4,9 @@ from dataclasses import replace
 import json
 from multiprocessing import Pipe
 from multiprocessing.connection import Connection
+import os
 from pathlib import Path
+import signal
 import socket
 import threading
 import time
@@ -482,9 +484,6 @@ def test_service_start_failure_retains_unready_attempt(
 def test_games_reach_the_service_directly_and_its_failure_is_infrastructure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    import os
-    import signal
-
     key, player, anchor, path = fixture_policy(tmp_path)
     execution = EvalExecution(
         deadline_unix=time.time() + 120, max_active_games=2, request_seconds=10

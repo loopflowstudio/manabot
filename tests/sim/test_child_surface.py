@@ -143,10 +143,6 @@ def test_child_starts_with_single_threaded_pools(
     finally:
         child.close()
     assert child.exitcode == 0
-    missing = ChildProcess("manabot.sim.child_absent:main", ())
-    missing.join(60)
-    assert missing.exitcode not in (None, 0)
-    missing.close()
     monkeypatch.setenv("OMP_NUM_THREADS", "8")
     monkeypatch.setenv("HOME", "/h")
     assert child_environment() == {
@@ -154,6 +150,13 @@ def test_child_starts_with_single_threaded_pools(
         **dict.fromkeys(POOL_VARIABLES, "1"),
     }
     assert child_environment()["HOME"] == "/h"
+
+
+def test_child_with_a_missing_target_exits_with_failure() -> None:
+    missing = ChildProcess("manabot.sim.child_absent:main", ())
+    missing.join(60)
+    assert missing.exitcode not in (None, 0)
+    missing.close()
 
 
 def test_effective_cpus_honors_affinity_and_cgroup_quota(tmp_path: Path) -> None:
