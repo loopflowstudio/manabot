@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Training from deck collections · Concept review</title>
+<style>
+:root{color-scheme:light dark;--paper:#faf8f3;--ink:#282b26;--muted:#62665e;--line:#d5d6cc;--wash:#efeee7;--accent:#346245;--warn:#985025} @media(prefers-color-scheme:dark){:root{--paper:#1b201d;--ink:#f0f0e6;--muted:#bdc2b7;--line:#495147;--wash:#272e28;--accent:#a7d3ab;--warn:#f3b48a}} *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.6 system-ui,sans-serif}main{max-width:810px;margin:auto;padding:38px 24px 64px}h1{font:500 clamp(30px,5vw,44px)/1.15 Georgia,serif;margin:12px 0 22px;letter-spacing:-.025em}h2{font-size:23px;margin:34px 0 12px}h3{font-size:18px;margin:10px 0}p{margin:10px 0 16px}.meta,small,.muted{color:var(--muted)}.meta{font-size:13px}code{font:.85em ui-monospace,monospace;overflow-wrap:anywhere}pre{background:var(--wash);padding:18px;white-space:pre-wrap;font:15px/1.65 ui-monospace,monospace}a{color:var(--accent)}.lead{font-size:21px}.callout{border-left:3px solid var(--accent);padding-left:18px}.step{padding:16px 0;border-bottom:1px solid var(--line)}.arrow{color:var(--muted)}table{width:100%;border-collapse:collapse;font-size:15px}th,td{text-align:left;vertical-align:top;padding:10px 8px;border-bottom:1px solid var(--line)}th:first-child,td:first-child{padding-left:0}footer{margin-top:38px;border-top:1px solid var(--line);padding-top:18px}ul{padding-left:23px} @media(max-width:500px){main{padding:24px 17px}table{font-size:13px}th,td{padding:8px 5px}}
+</style>
+</head>
+<body><main>
+<header>
+<p class="meta">f871a8 · Decklist import · Concept review · October 28, 2026</p>
+<h1>A collection of decks to train against</h1>
+<p class="lead">Choose the deck population once. Training draws a fresh matchup at each game start.</p>
+<p>Accepted priority: training first, Academy second. Start with complete decks from 17Lands after all TLA is supported. The plumbing can be proved now using eligible fixture decks.</p>
+<p class="meta">Evidence: <code>training/rollout/matchups.py</code>, <code>training/rollout/collection.py</code>, <code>training/regime.py</code>, <code>training/execution.py</code>, <code>managym/src/agent/vector_env.rs</code>, <code>manabot/decklist.py</code>, and the Task’s accepted direction.</p>
+</header>
+<section>
+<h2>The actual gap</h2>
+<p class="callout">File import already supplies one admitted pair. Training already has per-game native resampling. But its roster admission is hard-coded to ten exact Elemental decks. Joining those two capabilities is the important work.</p>
+<table><thead><tr><th>Current implementation</th><th>Proposed next outcome</th></tr></thead><tbody>
+<tr><td>Two files → one fixed match</td><td>A local deck collection → many reproducible matchups</td></tr>
+<tr><td><code>elemental-uniform</code> requires the exact ten authored setups</td><td>Explicit sampling from any collection admitted to one content pool</td></tr>
+<tr><td>Regime validation pins Elemental policy input</td><td>One compatible vocabulary for the whole selected pool, fixed throughout the run</td></tr>
+</tbody></table>
+</section>
+<section>
+<h2>What using it should feel like</h2>
+<div class="step"><h3>1. Prepare the decks</h3><p>Import complete main/sideboard lists into a local versioned collection. Retain each source record and give every normalized deck a stable identity. Report unsupported cards and line errors before the collection can be used.</p><small>Later, a 17Lands adapter supplies these records. No runtime network lookup or replacement of unsupported cards.</small></div>
+<div class="step"><h3>2. Point training at the collection</h3><p>Choose the collection, distribution and seed in the ordinary training configuration. This example is proposed syntax, not an available command.</p><pre>deck_corpus: artifacts/tla-decks/manifest.json
+matchup_sampling: uniform-distinct
+seed: 17402</pre><small>Working baseline: two different deck identities, unbiased play/draw, and a versioned sampling rule. Mirror handling is explicit.</small></div>
+<div class="step"><h3>3. Start each game from a sampled pair</h3><pre>game root 0 → deck A on play · deck C on draw
+game root 1 → deck B on play · deck A on draw
+game root 2 → deck C on play · deck B on draw</pre><small>Illustration only. Actual pair and seat assignment comes from native reset identity. No N² schedule is needed to sample two decks.</small></div>
+<div class="step"><h3>4. Resume the same population and sequence</h3><p>Record corpus digest, deck IDs, sampling version, world/content identity and game seed. Recovery reconstructs the same matchup. A changed collection or incompatible policy input is an explicit mismatch.</p></div>
+</section>
+<section>
+<h2>Actions → concepts → APIs</h2>
+<table><thead><tr><th>Action</th><th>Concept</th><th>Owner / change</th></tr></thead><tbody>
+<tr><td>Resolve a deck</td><td>Qualified content pool</td><td>Existing <code>content_pool</code> and native admission; content Task 892c47 remains the authority.</td></tr>
+<tr><td>Prepare the population</td><td>Deck collection</td><td>Build on the source-preserving parser; add membership identity and source provenance. No second rules registry.</td></tr>
+<tr><td>Configure training</td><td>Corpus-backed regime</td><td>Extend <code>TrainingRegime</code> validation and collector wiring beyond the exact Elemental roster.</td></tr>
+<tr><td>Start another game</td><td>Matchup sampler</td><td>Reuse native roster/reset/seed ownership. Coordinate with PR383 / MTG-175 before changing this shared area.</td></tr>
+<tr><td>Explain or reproduce a failure</td><td>Sampled game receipt</td><td>Retain actual deck pair and seed in the existing capture/recovery path.</td></tr>
+</tbody></table>
+<p class="muted">Existing Elemental experiments and historical receipts keep their meaning. This does not select MTG-175’s adaptive curriculum, start training, or authorize paid compute.</p>
+</section>
+<section>
+<h2>Failures must remain visible</h2>
+<p>A collection containing an unsupported TLA card must fail preparation with the original source intact. Silently dropping that card—or silently excluding that deck—would change the training population.</p>
+<p>A deck collection must not cause the model vocabulary to change from one matchup to the next. Admission and checkpoint compatibility bind the whole pool once.</p>
+<p>Uniform game starts are not uniform learner transitions: longer games contribute more decisions. Report starts and transitions separately.</p>
+</section>
+<section>
+<h2>Proof now; real data after TLA</h2>
+<p>Use three or more eligible non-preset decks through the actual training collector’s reset path. Check changed pairs across roots, exact recovery, input rejection, stable model vocabulary and retained matchup identities. A bounded fixture proof does not need policy training.</p>
+<p>Once full TLA support is complete, prepare the real 17Lands collection through the same boundary. Data acquisition, schema mapping and evaluation holdouts still need design; none is claimed implemented.</p>
+</section>
+<footer>
+<p class="meta">Academy option 1a is accepted as secondary direction. No Academy-focused implementation has restarted. This page replaces the earlier UI-centered review.</p>
+<h2>Decision: uniform first, curriculum later</h2>
+<p><strong>Accepted by Jack Heart: 2a · Equal probability per distinct decklist.</strong> Nearly all imported lists are expected to be unique. Duplicate source records do not accidentally overweight a deck.</p>
+<p>Curriculum learning over decklists is a likely later extension, explicitly outside the initial implementation. Keep stable deck IDs and an explicit sampling policy; do not build adaptive weighting or a general curriculum framework now.</p>
+<p class="muted">Alternative 2b, frequency weighting, remains unselected. The comparison below illustrates the distinction only.</p>
+<table><thead><tr><th>Illustrative source: A, A, A, B, C</th><th>2a</th><th>2b</th></tr></thead><tbody><tr><td>Chance of first selecting A</td><td>33⅓%</td><td>60%</td></tr><tr><td>Chance of first selecting B or C, each</td><td>33⅓%</td><td>20%</td></tr></tbody></table>
+<p>Preserve original records and frequencies. The distribution choice is resolved; the next work is training collection and sampler integration using supported fixtures.</p>
+</footer>
+</main></body></html>
