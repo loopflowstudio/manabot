@@ -3,7 +3,8 @@
 `write_page` computes `card_data` for the base selection and for every
 combination of subject, opponent, position, deck and opponent deck that has
 retained games, including exclusions, in one pass over the experiment's card
-rollups (`card_variants`). It embeds the results so the page's filters switch
+rollups (`card_variants`), and writes each combination's columns without
+building per-card records. It embeds the results so the page's filters switch
 between precomputed selections. Python is the only implementation of the statistics.
 """
 
@@ -15,19 +16,38 @@ import json
 from pathlib import Path
 
 import duckdb
+import numpy as np
 
 from manabot.eval.card_metrics import METRIC_VERSION
 from manabot.eval.card_query import (
     DIMENSIONS,
-    CardData,
     CardSelection,
+    CardVariant,
     card_variants,
 )
 
 ALL = ""
 
 
-def _variant(data: CardData) -> dict[str, object]:
+# Page columns per card row, after the name: counts and rates interleaved.
+_COUNTS = (1, 3, 5, 7, 11)
+_FLOATS = (2, 4, 6, 8, 9, 10, 12, 13)
+
+
+def _variant(table: CardVariant) -> dict[str, object]:
+    data, columns = table.data, table.columns
+    floats = np.column_stack(
+        [
+            columns.rates[:, :4],
+            columns.gih_interval,
+            columns.rates[:, 4],
+            columns.iwd,
+        ]
+    )
+    rows = np.empty((len(columns.cards), 14), dtype=object)
+    rows[:, 0] = columns.names
+    rows[:, _COUNTS] = columns.counts.astype(object)
+    rows[:, _FLOATS] = np.where(np.isnan(floats), None, floats.astype(object))
     return {
         "games": data.games,
         "deals": data.deals,
@@ -35,25 +55,7 @@ def _variant(data: CardData) -> dict[str, object]:
         "win_rate": data.win_rate,
         "excluded": data.excluded,
         "failed_matches": data.failed_matches,
-        "cards": [
-            [
-                card.name,
-                card.gp.count,
-                card.gp.rate,
-                card.oh.count,
-                card.oh.rate,
-                card.gd.count,
-                card.gd.rate,
-                card.gih.count,
-                card.gih.rate,
-                card.gih_interval[0] if card.gih_interval else None,
-                card.gih_interval[1] if card.gih_interval else None,
-                card.gns.count,
-                card.gns.rate,
-                card.iwd,
-            ]
-            for card in data.cards
-        ],
+        "cards": rows.tolist(),
     }
 
 
@@ -74,13 +76,13 @@ def page_data(
         return value
 
     variants = {
-        tuple(label(value) for value in variant): data
-        for variant, data in card_variants(db, selection, DIMENSIONS).items()
+        tuple(label(value) for value in variant): table
+        for variant, table in card_variants(db, selection, DIMENSIONS).items()
     }
     present = [variant for variant in variants if ALL not in variant]
     return {
         "experiment": selection.experiment,
-        "runs": variants[(ALL,) * len(DIMENSIONS)].runs if variants else (),
+        "runs": variants[(ALL,) * len(DIMENSIONS)].data.runs if variants else (),
         "subjects": sorted({row[0] for row in present}),
         "opponents": sorted({row[1] for row in present}),
         "positions": sorted({row[2] for row in present}),
@@ -88,8 +90,8 @@ def page_data(
         "opponent_decks": sorted({row[4] for row in present}),
         "metric_version": METRIC_VERSION,
         "variants": {
-            "|".join(variant): _variant(data)
-            for variant, data in sorted(variants.items())
+            "|".join(variant): _variant(table)
+            for variant, table in sorted(variants.items())
         },
     }
 
