@@ -11,18 +11,33 @@ seed identities and frozen evidence retain their original meanings.
 `manabot.sim.execution.EvalExecution` declares a local evaluation allocation:
 CPU or CUDA float32, active-game limit, batch-row limit, batching delay,
 resident-model byte allowance, request timeout and absolute Unix deadline.
-The default registration remains historical CPU scalar execution. An explicit
-execution derives new registrations and a new arena compute envelope; it does
-not resume frozen results under different numerical assumptions.
+A declared execution serves flat checkpoint players; without one, `play_cell`,
+`evaluate` and the training monitor play them scalar in their game child, with
+their original registrations, identities and Commands. Execution derives new
+registrations and a new arena compute envelope, so served and scalar players
+of one checkpoint have distinct identities. Retiring scalar checkpoint play
+awaits a CPU measurement of served play after direct game connections
+(Jack Heart, 2026-10-28).
 
-`EvalCompute` is the stable part of that declaration: device/dtype, batching,
-residency/cache settings and request limits identify the player and benchmark.
-`EvalExecution` adds the allocation deadline and instrumentation/diagnostic
-switches. Those attempt settings remain in game and allocation receipts, not
-registration hashes. A new allocation window therefore preserves Etude model,
-benchmark and match identities when its compute contract is unchanged; changing
-the compute contract still creates distinct identities. Duel seed derivation
-also retains the original opponent cohort before binding shared execution.
+`EvalCompute` is the identity part of that declaration: version, device and
+dtype, i.e. how a served policy's numbers are computed (`shared-eval-v2`).
+`EvalAllocation` adds the scheduling and cache limits (active games, batch rows,
+batching delay, resident-model bytes, request timeout, catalog cache,
+residency), and `EvalExecution` adds the deadline and instrumentation/diagnostic
+switches. Allocation and attempt settings remain in game and allocation
+receipts, not registration hashes: they change throughput, not the contract,
+because batch composition already varies with arrival order and each row
+samples from its own decision seed. Commands are reproducible from retained
+traces (replay re-executes them), not by recomputing the policy live across
+batch sizes. Rerunning with more active games or larger batches therefore
+preserves Etude model, benchmark and match identities; changing device, dtype
+or the contract version creates distinct identities. Duel seed derivation also
+retains the original opponent cohort before binding shared execution.
+
+`shared-eval-v1` (through PR #389) hashed the allocation settings as well, and
+its served players carried `batch_size` in their spec. Its frozen records stay
+readable (`EvalComputeV1`, `EvalExecutionV1`) but are not reused or continued
+under v2 (Jack Heart, 2026-10-28).
 
 Etude can reuse completed deals under the same identity. Such reuse adds no new
 sample or performance measurement, and changing instrumentation alone does not
@@ -30,9 +45,68 @@ force a replay. Use the calibration runner's fresh direct arena attempts when
 measuring instrumentation or throughput. Diagnostic timings stay separate from
 ordinary throughput even though the underlying policy identity is the same.
 
-Ordinary flat, stateless checkpoints and random/scripted/heuristic anchors are
-supported. Compound, belief and search players retain their existing scalar
-path. Explicit shared execution rejects them before playing any games.
+## Batching and processes
+
+One allocation runs one serving child (`manabot.sim.serving`), the only process
+that loads served weights. `PolicyKey` groups requests by checkpoint,
+observation/action ABI, world, device, dtype, determinism and implementation.
+Matchup and content suite are not model inputs: the card catalog is bound by the
+checkpoint's world, so concurrent games that seat one checkpoint share its
+resident policy and its batches whatever their matchup. Each registration's
+setups are still validated against that policy at admission, and matchup
+identity remains in registrations and evidence. The contract never fixed batch
+composition, which depends on arrival order within the row and delay limits,
+and each row samples from its own decision seed. Each batch moves to the device in one copy per dtype (float32
+observations, int64 catalog references).
+
+Decisions do not pass through the allocation's supervising process. For each
+served game, `InferenceRuntime.connect` opens a socket pair and hands one end to
+the serving child as a descriptor. The game child holds the other end as an
+`InferenceClient` and exchanges its requests and replies directly with the
+service, so concurrent games' requests arrive together and can share a batch.
+The supervising process still owns game lifecycle, the wall-clock deadline,
+failure classification and the Command journal: a Command is retained before
+native execution exactly as before. A request that cannot be sent or answered
+by its deadline (bounded by the game's remaining wall time), a dead service, or
+a failed handoff makes the game an infrastructure failure and fails the
+allocation. The service watches its control connection, the handoff socket and
+every game connection with one selector. `service_receive` in `serving.json`
+measures its per-wake-up read cost and `reply_send` its reply cost, so the
+service's own per-request overhead is visible when it becomes the ceiling.
+
+The execution engine is the part that turns admitted requests into forwards:
+the serving child's flush loop and `serving._infer` (process layout, batching,
+threads, device transfer). Everything before it is shared by CPU and CUDA:
+registration, `PolicyKey`, admission and setup validation, the
+`DecisionRequest`/`DecisionReply` protocol, game children, per-row seeds and
+sampling, and receipts. Today both devices use the same engine, one serial
+service per allocation with one Torch thread; a CPU host shares one allocation
+among all its groups of games, as a GPU host does. CPU-specific
+engine code, such as several inference workers per allocation or sizing intra-op
+threads to the allocation, waits for a `cpu32` calibration whose `serving.json`
+shows the service saturated (forward, transfer, sampling and assembly near its
+elapsed time).
+
+Game, replay and serving children start through `manabot.sim.child`, never
+`multiprocessing` spawn, so they do not re-import the evaluator's `__main__`.
+Game children whose players are served checkpoints or code players (random,
+scripted, heuristic, demo search; `manabot.sim.players`) never import Torch, nor
+do replay children. Only a game with a search player (flat-MC, PUCT, local
+update, which keep their policy beside their rollouts) loads Torch in-child.
+Every child starts with single-threaded library pools
+(`manabot.sim.threads.child_environment`) and counts its own threads against a
+declared budget: 4 for game and replay children, 16 for serving. Exceeding it
+is an infrastructure failure, never a forfeit. Game children record
+`threads/game`, `rss_bytes/game` and `torch_loaded/game` in their
+`worker_performance`; `serving.json` carries the serving role. Each cell's
+`performance.json` records the group worker that ran `play_cell` under
+`threads/group_worker` against `max_active_games + 7` with a shared runtime,
+or 8 without one; this budget is recorded for calibration, not enforced.
+`effective_cpus()` honors affinity masks and cgroup quotas, unlike
+`os.cpu_count()`, which reports the host inside containers.
+
+Ordinary flat, stateless checkpoints are served. Code and search players keep
+their registrations under an execution and play in their game child.
 
 ```python
 from pathlib import Path
@@ -40,7 +114,7 @@ import time
 
 from manabot.sim.execution import EvalExecution
 from manabot.eval.evaluation import EvaluationRequest, evaluate
-from manabot.sim.serving import InferenceRuntime
+from manabot.sim.serving_protocol import InferenceRuntime
 
 execution = EvalExecution(
     device="cpu",
@@ -294,9 +368,9 @@ It requires four explicit configurations
 (`cold_scalar`, `resident_only`, `resident_catalog`, `batched`), three interleaved
 repetitions, named panels wrapping the same `EvaluationRequest`, retained-root population, numerical
 and action-agreement tolerances, speedup and instrumentation-overhead thresholds,
-process-tree memory cap and absolute deadline. Cold scalar uses original
-per-game checkpoint construction. Each panel uses the shared evaluator's fresh
-attempt and complete-cohort validation; replayed partial panels cannot pass.
+process-tree memory cap and absolute deadline. Cold scalar is served, one row
+per forward, without residency or catalog cache. Each panel uses the shared
+evaluator's fresh attempt and complete-cohort validation; replayed partial panels cannot pass.
 Every repetition/failure is retained; numerical
 and instrumentation probes run outside throughput timing, on identical retained
 inputs and row seeds in killable processes. Memory limits include descendants.

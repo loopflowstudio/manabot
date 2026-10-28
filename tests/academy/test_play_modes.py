@@ -166,7 +166,7 @@ def test_full_game_vs_random_villain(isolated_traces):
 
 def _write_tiny_checkpoint(path) -> None:
     """Write a minimal (untrained) ActorCritic checkpoint in the training format."""
-    from manabot.env import ObservationSpace
+    from manabot.env.observation import ObservationSpace
     from manabot.infra.config import ModelConfig, ObservationConfig
     from manabot.model.actor_critic import ActorCritic
 
@@ -209,11 +209,7 @@ def test_new_game_rejects_bad_villain_configs(isolated_traces):
 
 
 def test_named_decks_mirror_verify_util_constants():
-    from manabot.verify.util import (
-        GW_ALLIES_DECK,
-        INTERACTIVE_DECK,
-        UR_LESSONS_DECK,
-    )
+    from manabot.verify.games import GW_ALLIES_DECK, INTERACTIVE_DECK, UR_LESSONS_DECK
 
     assert server.NAMED_DECKS["interactive"] == INTERACTIVE_DECK
     assert server.NAMED_DECKS["ur_lessons"] == UR_LESSONS_DECK

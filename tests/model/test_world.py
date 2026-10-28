@@ -7,9 +7,10 @@ import pytest
 import torch
 
 from academy.villain import CheckpointVillain
-from manabot.env import Match, ObservationSpace
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
-from manabot.model import ActorCritic
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import checkpoint_world, validate_checkpoint_world
 
@@ -105,7 +106,8 @@ def test_same_shapes_do_not_admit_another_matchup():
 
 @pytest.mark.parametrize("consumer", ["policy", "puct", "rollout", "value", "play"])
 def test_loaded_consumers_reject_another_actual_setup(tmp_path, consumer):
-    from manabot.env import Env, Reward
+    from manabot.env.env import Env
+    from manabot.env.match import Reward
     from manabot.sim.rollout import BatchedSampler, PolicyRolloutMCPlayer
     from manabot.sim.search.flat_mc import AgentMatchupPlayer
     from manabot.sim.search.puct import AgentLeafEvaluator, DeterminizedPuctPlayer

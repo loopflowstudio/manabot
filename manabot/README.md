@@ -233,7 +233,7 @@ import os
 from torch import Tensor
 
 # First-party imports
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 
 # Local imports
 from .sibling import Thing

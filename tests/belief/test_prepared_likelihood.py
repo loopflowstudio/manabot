@@ -272,7 +272,7 @@ def test_batch_observer_aborts_before_the_next_provider_call() -> None:
 
 
 def test_real_prepared_likelihood_matches_scalar_reference(monkeypatch) -> None:
-    from manabot.env import ObservationSpace
+    from manabot.env.observation import ObservationSpace
     from manabot.infra.config import ModelConfig
     from manabot.model.actor_critic import ActorCritic
 

@@ -76,6 +76,7 @@ from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.sim.matchup import AuthoredMatchup
 from manabot.sim.registration import PlayerRegistration
+from manabot.sim.threads import child_environment
 import managym
 
 RESULTS = ROOT / "experiments/data/mtg186/pairings"
@@ -265,13 +266,10 @@ def arena(
     from manabot.infra.provenance import runtime_fingerprints
     from manabot.model.checkpoint import load_checkpoint
 
-    fingerprints = runtime_fingerprints(match_config=matchup.match())
     common = dict(
         world=managym.WORLD_VERSION,
         content_suite=matchup.content_suite,
         information_boundary="acting-viewer",
-        observation_abi_sha256=fingerprints["observation_abi_sha256"],
-        action_abi_sha256=fingerprints["action_abi_sha256"],
         matchup_sha256=canonical_sha256(matchup.match().model_dump()),
         player_seed_derivation_id="arena-pair-deal-player-v1",
     )
@@ -280,9 +278,16 @@ def arena(
         checkpoint = player.checkpoint
         if file_sha256(player.path) != checkpoint.sha256:
             raise ValueError("checkpoint byte identity differs")
-        model, _ = load_checkpoint(str(player.path))
+        model, space = load_checkpoint(str(player.path))
+        # The checkpoint's own observation space (its saved policy-input
+        # version) names its ABI; served admission rejects any other.
+        abi = runtime_fingerprints(
+            match_config=matchup.match(), observation_space=space
+        )
         return PlayerRegistration(
             **common,
+            observation_abi_sha256=abi["observation_abi_sha256"],
+            action_abi_sha256=abi["action_abi_sha256"],
             player_id=name,
             display_name=f"{checkpoint.trial} {checkpoint.seed} u{checkpoint.updates}",
             role=role,
@@ -447,7 +452,7 @@ def pair(spec: PairJob) -> None:
                 text=True,
                 capture_output=True,
                 timeout=GROUP_SECONDS,
-                env={**os.environ, "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"},
+                env=child_environment(),
             )
         except subprocess.TimeoutExpired:
             return _invalid(group, "group wall-time bound reached")

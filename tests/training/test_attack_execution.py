@@ -7,7 +7,8 @@ import signal
 import pytest
 import torch
 
-from manabot.env import Match, ObservationSpace
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.experiment import attack_execution
 from manabot.experiment.attack_execution import execute_attack_plan
 from manabot.experiment.attacks import AttackPlan, AttackTarget

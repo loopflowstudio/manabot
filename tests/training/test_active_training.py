@@ -187,7 +187,8 @@ def test_initial_admission_precedes_collection(
             assert finished.status == "completed"
             assert finished.stages[0].updates == 2
             assert finished.stages[0].admission_wait_seconds is not None
-            assert finished.stages[0].admission_wait_seconds >= 100
+            # The fake clock's 100 s offset can round to just under 100.
+            assert finished.stages[0].admission_wait_seconds >= 100 - 1e-6
         else:
             with pytest.raises(ValueError, match="admission differs"):
                 future.result(timeout=30)
@@ -195,6 +196,7 @@ def test_initial_admission_precedes_collection(
             assert failed.updates_through() == 0
             assert failed.stages[0].learner_transitions == 0
             assert failed.stages[0].admission_wait_seconds is not None
-            assert failed.stages[0].admission_wait_seconds >= 100
+            # The fake clock's 100 s offset can round to just under 100.
+            assert failed.stages[0].admission_wait_seconds >= 100 - 1e-6
             # Failure accounting does not charge the same wait a second time.
             assert failed.stages[0].diagnostic_seconds < 10

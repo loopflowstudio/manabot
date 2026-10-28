@@ -2,9 +2,9 @@
 
 import pytest
 
-from manabot.env import Match
+from manabot.env.match import Match
 from manabot.infra.config import MatchConfig
-from manabot.verify.util import INTERACTIVE_DECK
+from manabot.verify.games import INTERACTIVE_DECK
 
 
 @pytest.fixture

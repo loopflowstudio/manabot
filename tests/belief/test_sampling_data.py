@@ -17,8 +17,8 @@ from manabot.belief.sampling_data import (
     read_dataset,
     save_dataset,
 )
-from manabot.env import ObservationSpace
 from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.world import checkpoint_world

@@ -17,7 +17,8 @@ from pydantic import JsonValue
 import pytest
 import torch
 
-from manabot.env import Match as EnvMatch, ObservationSpace
+from manabot.env.match import Match as EnvMatch
+from manabot.env.observation import ObservationSpace
 from manabot.eval import card_evaluation as evaluation, cards as cards_cli
 from manabot.eval.card_evaluation import (
     card_tables,

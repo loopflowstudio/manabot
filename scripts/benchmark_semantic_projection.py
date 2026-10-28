@@ -23,7 +23,7 @@ import psutil
 
 from manabot.semantic.compiler import canonical_json
 from manabot.semantic.learning import BoundSemanticPack
-from manabot.verify.util import GW_ALLIES_DECK, UR_LESSONS_DECK
+from manabot.verify.games import GW_ALLIES_DECK, UR_LESSONS_DECK
 import managym
 
 REPO_ROOT = Path(__file__).resolve().parents[1]

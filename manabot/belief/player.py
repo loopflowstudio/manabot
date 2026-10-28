@@ -14,7 +14,7 @@ from managym.possible_worlds import PossibleWorldSpace
 import numpy as np
 
 from manabot.belief.tracker import ActionLikelihood, BeliefTracker
-from manabot.env import Env
+from manabot.env.env import Env
 from manabot.sim.search.flat_mc import (
     DEFAULT_MAX_PLAYOUT_STEPS,
     DEFAULT_ROLLOUTS_PER_WORLD,

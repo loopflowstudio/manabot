@@ -6,8 +6,13 @@ tensor dictionary interface used by forward instrumentation. Neither prepared
 inputs nor the cached catalog may cross an update boundary or enter autograd.
 The caller owns the model exclusively for the scope and must not mutate prepared
 observations. No serving state is persisted in the model or its checkpoints.
+
+Device inputs move with one contiguous copy per dtype (`transfer`): serving's
+float32 observation keys and int64 catalog references are two copies per batch
+instead of one per key.
 """
 
+from collections.abc import Mapping
 from types import TracebackType
 from typing import TYPE_CHECKING
 
@@ -30,8 +35,39 @@ _VALIDITY_KEYS = (
 )
 
 
+def transfer(
+    tensors: Mapping[str, torch.Tensor], device: torch.device
+) -> tuple[dict[str, torch.Tensor], int]:
+    """Move CPU tensors with one copy per dtype; return views and the copy count.
+
+    Each dtype group is packed into one contiguous host block (pinned for CUDA,
+    so the copy can be asynchronous) and the device block is split back into
+    views with the original shapes. Values are bitwise identical to per-key
+    `.to(device)`. CPU targets return the inputs unchanged, with no copies.
+    """
+    if device.type == "cpu":
+        return dict(tensors), 0
+    groups: dict[torch.dtype, list[str]] = {}
+    for key, tensor in tensors.items():
+        if tensor.device.type != "cpu":
+            raise ValueError("packed transfer requires CPU tensors")
+        groups.setdefault(tensor.dtype, []).append(key)
+    moved: dict[str, torch.Tensor] = {}
+    for dtype, keys in groups.items():
+        sizes = [tensors[key].numel() for key in keys]
+        block = torch.empty(sum(sizes), dtype=dtype, pin_memory=device.type == "cuda")
+        torch.cat([tensors[key].reshape(-1) for key in keys], out=block)
+        block = block.to(device, non_blocking=device.type == "cuda")
+        for key, part in zip(keys, block.split(sizes), strict=True):
+            moved[key] = part.view(tensors[key].shape)
+    return moved, len(groups)
+
+
 class PreparedObservation(dict[str, torch.Tensor]):
-    """Device tensors and CPU-admitted joins, valid only in their owning scope."""
+    """Device tensors and CPU-admitted joins, valid only in their owning scope.
+
+    `transfers` counts the host-to-device copies that produced them.
+    """
 
     def __init__(
         self,
@@ -39,11 +75,13 @@ class PreparedObservation(dict[str, torch.Tensor]):
         scope: "PolicyInference",
         references: CardReferences,
         objects_checked: bool,
+        transfers: int,
     ) -> None:
         super().__init__(tensors)
         self.scope = scope
         self.references = references
         self.objects_checked = objects_checked
+        self.transfers = transfers
 
 
 class PolicyInference:
@@ -138,9 +176,21 @@ class PolicyInference:
             validity = torch.cat([obs[key] for key in _VALIDITY_KEYS], dim=1)
             if (validity.sum(1) == 0).any():
                 raise ValueError("value aggregation requires a valid object")
+        joins = {"cards": references.cards, "permanents": references.permanents}
+        if references.known is not None:
+            joins["known"] = references.known
+        moved, transfers = transfer(
+            {**obs, **{f"references/{key}": value for key, value in joins.items()}},
+            self.device,
+        )
         return PreparedObservation(
-            {key: value.to(self.device) for key, value in obs.items()},
+            {key: moved[key] for key in obs},
             self,
-            references.to(self.device),
+            CardReferences(
+                moved["references/cards"],
+                moved["references/permanents"],
+                moved.get("references/known"),
+            ),
             objects_checked,
+            transfers,
         )

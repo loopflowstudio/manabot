@@ -5,7 +5,8 @@ from types import SimpleNamespace
 
 import pytest
 
-from manabot.env import Match, ObservationSpace
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.eval.match import MatchupMode, play_cell
 from manabot.eval.results import EvaluationRow
 from manabot.infra.config import MatchConfig

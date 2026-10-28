@@ -27,7 +27,8 @@ from managym.enums import ActionEnum, ActionSpaceEnum
 from pydantic import BaseModel, ConfigDict
 import torch
 
-from manabot.env import Env, Match, Reward
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
 from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.sim.heuristic import HeuristicPlayer
 from manabot.sim.search.flat_mc import make_player

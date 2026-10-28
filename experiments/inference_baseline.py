@@ -68,7 +68,7 @@ Workload = Annotated[PolicyWorkload | LLMWorkload, Field(discriminator="kind")]
 class Cell(Record):
     id: str = Field(pattern=r"^[a-z0-9-]+$")
     workload: str
-    # Existing EvalCompute JSON; None selects ordinary scalar CPU policy play.
+    # Existing EvalAllocation JSON; None selects ordinary scalar CPU policy play.
     execution: Path | None = None
     instrumentation: bool = True
     mode: Literal["ordinary", "diagnostic"] = "ordinary"

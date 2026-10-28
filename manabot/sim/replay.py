@@ -13,7 +13,9 @@ from typing import Any
 
 from managym.experience import UNVERSIONED_CONTENT_HASH, Command
 
-from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.env.replay import (
     ReplayAgreement,
     matches_retained_error,
@@ -24,10 +26,10 @@ from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
 from manabot.infra.identity import canonical_json, canonical_sha256, file_sha256
 from manabot.infra.provenance import RECORDED_ASSET_MANIFEST_HASH
 from manabot.model.world import checkpoint_world
-from manabot.sim.search.teacher1_evidence import build_command, build_viewer_frame
-from manabot.verify.competency import SCENARIOS, build_scenario_env
+from manabot.sim.frames import build_command, build_viewer_frame
+from manabot.verify.games import INTERACTIVE_DECK
 from manabot.verify.scenario_validation import scenario_identity
-from manabot.verify.util import INTERACTIVE_DECK
+from manabot.verify.scenarios import SCENARIOS, build_scenario_env
 import managym
 
 

@@ -15,9 +15,9 @@ from manabot.belief import (
     ViewerDecision,
     ViewerHistory,
 )
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model import ActorCritic
+from manabot.model.actor_critic import ActorCritic
 
 
 def fixture_history() -> ViewerHistory:

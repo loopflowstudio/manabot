@@ -1,22 +1,5 @@
-# Local directory imports
-from .config import (
-    MatchConfig,
-    ModelConfig,
-    ObservationConfig,
-    RewardConfig,
-    RuntimeConfig,
-    SimulationConfig,
-)
-from .log import getLogger
-from .runtime import RunContext
+"""Configuration, identity, provenance and run infrastructure.
 
-__all__ = [
-    "RunContext",
-    "MatchConfig",
-    "RewardConfig",
-    "SimulationConfig",
-    "ModelConfig",
-    "ObservationConfig",
-    "RuntimeConfig",
-    "getLogger",
-]
+Import names from their modules; this package re-exports nothing so light
+processes can import configuration without Torch or run tracking.
+"""
