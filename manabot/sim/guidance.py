@@ -191,7 +191,7 @@ def _build_policy_player(
             raise RuntimeError("determinized PUCT has no registered search semantics")
         if player.branch_audit != semantics.branch_audit:
             raise RuntimeError("constructed player did not echo branch_audit")
-        if type(player.evaluator).__name__ != "UniformRandomLeafEvaluator":
+        if type(player.evaluator) is not UniformRandomLeafEvaluator:
             raise RuntimeError(
                 "constructed player did not use the registered leaf evaluator"
             )
