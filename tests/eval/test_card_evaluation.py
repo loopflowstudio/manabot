@@ -859,6 +859,12 @@ def test_verifier_fails_when_the_audit_finds_a_problem(
         cards_cli.verify(8, tmp_path)
 
 
+def _page_cards(page: dict[str, object]) -> list[list[object]]:
+    variants = page["variants"]
+    assert isinstance(variants, dict)
+    return variants["||||"]["cards"]
+
+
 def test_card_page_embeds_every_filter_combination(tmp_path: Path) -> None:
     matches = []
     for deal, leg in ((1, 0), (2, 1), (3, 2)):
@@ -883,9 +889,28 @@ def test_card_page_embeds_every_filter_combination(tmp_path: Path) -> None:
                 "opponent_deck": opponent_deck,
             }
         )
-        assert computed[
-            ("subject", "rival", on_play, deck, opponent_deck)
-        ] == card_data(db, narrowed)
+        expected = card_data(db, narrowed)
+        key = ("subject", "rival", on_play, deck, opponent_deck)
+        assert computed[key].card_data() == expected
+        # The page writes the same values from the columns, without records.
+        assert _page_cards(page_data(db, narrowed)) == [
+            [
+                card.name,
+                card.gp.count,
+                card.gp.rate,
+                card.oh.count,
+                card.oh.rate,
+                card.gd.count,
+                card.gd.rate,
+                card.gih.count,
+                card.gih.rate,
+                *(card.gih_interval or (None, None)),
+                card.gns.count,
+                card.gns.rate,
+                card.iwd,
+            ]
+            for card in expected.cards
+        ]
     data = page_data(db, selection)
     variants = data["variants"]
     assert isinstance(variants, dict)
@@ -933,7 +958,9 @@ def test_card_page_keeps_excluded_choices_in_a_mixed_cohort(tmp_path: Path) -> N
         assert "subject|rival|play|green|red" not in variants
         grouped = card_variants(db, selection, DIMENSIONS)
         narrowed = selection.model_copy(update={"on_play": False, "deck": "green"})
-        assert grouped[(None, None, False, "green", None)] == card_data(db, narrowed)
+        assert grouped[(None, None, False, "green", None)].card_data() == card_data(
+            db, narrowed
+        )
         path = write_page(db, selection, tmp_path / "cards.html")
     assert _page_payload(path) == json.loads(json.dumps(page))
 

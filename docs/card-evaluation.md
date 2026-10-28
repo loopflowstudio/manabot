@@ -40,7 +40,8 @@ written on this computer. The database lives under `ETUDE_HOME/statsdb` and
 reads only blocks delivered since it was last opened; `--rebuild` reads everything
 again. Another experiment's games never appear. Queries read only the card
 rollups (below), never card rows, so the page's every filter combination is one
-pass over a subject/opponent pair's per-deal totals.
+pass over the selection's per-deal totals. Combinations with the same number of
+deals share each bootstrap call; each keeps the interval of its own selection.
 
 ## Card data from any evaluation
 
