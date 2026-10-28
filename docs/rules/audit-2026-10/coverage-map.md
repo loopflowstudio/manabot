@@ -23,8 +23,9 @@ slots, optional zero targets, type/hexproof changes, suspension, clone/undo and
 object departure/reentry. The original hexproof proposal is enabled and passing.
 CR 608.2b stays partial: this is bounded evidence, not exhaustive LKI/target support.
 MTG-195’s merged trigger ordering is integrated in development world w15/hash 10.
-Policy/capture v4 exposes retained eligibility; broader consumer acceptance remains
-gate-owned. Fresh w15 corpus/demo paths preserve the historical receipts.
+Policy/capture v4 exposes retained eligibility. The October 28 shipping gate and
+its limits are recorded in [shipping acceptance](resolution-shipping.md).
+Fresh w15 corpus/demo paths preserve the historical receipts.
 [Current repair evidence](resolution-validation.json) is separate from the original
 failure receipts. Deathtouch history and earthbend destination identity remain open.
 
@@ -74,6 +75,6 @@ or unreviewed. Unsupported mechanics are separated from admitted-game defects.
 executed checks from read-only evidence references. Its test/report-only step
 ran debug probes and source/index checks, without rebuilding native code or
 running consumers. The later resolution repair has separate receipts above;
-broader integrated acceptance remains gate-owned.
+integrated acceptance is recorded separately in [the shipping gate](resolution-shipping.md).
 The [prior delivery review](README.md#prior-delivery-review) and
 [authority adjudication](unification.md) remain historical evidence for PR354.

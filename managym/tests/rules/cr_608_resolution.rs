@@ -3,7 +3,10 @@
 
 use managym::{
     agent::action::{Action, ActionSpaceKind},
-    flow::{trigger::PendingTrigger, turn::StepKind},
+    flow::{
+        trigger::{PendingTrigger, TriggerId, TriggerOrderingClass},
+        turn::StepKind,
+    },
     state::{
         ability::{Effect, TargetSpec},
         game_object::{CardId, PlayerId},
@@ -24,7 +27,8 @@ fn queue_effects(s: &mut Scenario, source: CardId, effects: Vec<Effect>) {
         targets: Vec::new(),
         target_req_indices: Vec::new(),
         requirement_index: 0,
-        enqueue_order: 0,
+        id: TriggerId(0),
+        ordering_class: TriggerOrderingClass::Ordinary,
         context: None,
         inline_effects: Some(effects),
     });

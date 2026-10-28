@@ -102,7 +102,7 @@
       "reason": "Retained local analysis/provisioning helper; conservatively charged to draft tooling budget."
     }
   ],
-  "combined_draft_churn_lines": 10312,
+  "combined_draft_churn_lines": 10430,
   "report_inventory_evidence_files": [
     {
       "path": "docs/rules/audit-2026-10/README.md",
@@ -1057,5 +1057,52 @@
       }
     ],
     "churn_lines": 2
+  },
+  "shipping_gate_increment": {
+    "basis": "Working gate repairs against integrated checkpoint 8d490f60d. Historical charges retained; audit reports, evidence, plan and prepared PR copy excluded. Local bounded-check helper conservatively charged before delivery cleanup. No inherited main changes charged.",
+    "prior_combined_draft_churn_lines": 10312,
+    "files": [
+      {
+        "path": "docs/development/validation.md",
+        "added": 11,
+        "deleted": 0
+      },
+      {
+        "path": "docs/recent-events.md",
+        "added": 3,
+        "deleted": 2
+      },
+      {
+        "path": "managym/src/flow/resolution_tests.rs",
+        "added": 9,
+        "deleted": 2
+      },
+      {
+        "path": "managym/tests/rules/cr_608_resolution.rs",
+        "added": 6,
+        "deleted": 2
+      },
+      {
+        "path": "scratch/questions.md",
+        "added": 6,
+        "deleted": 0
+      },
+      {
+        "path": "tests/eval/test_batched_eval.py",
+        "added": 12,
+        "deleted": 6
+      },
+      {
+        "path": "tests/verify/test_continuation_input.py",
+        "added": 4,
+        "deleted": 1
+      },
+      {
+        "path": "scratch/gate_check.py",
+        "added": 54,
+        "deleted": 0
+      }
+    ],
+    "churn_lines": 118
   }
 }

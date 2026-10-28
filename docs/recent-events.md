@@ -205,8 +205,9 @@ current hexproof, control or type. It does not certify current presence: expired
 object references never join a replacement incarnation. Only the acting viewer
 receives the suspended facts. Clone/rollback preserve them with the frame.
 Development world w15 includes merged MTG-195 and this resolution contract.
-Broader consumer acceptance remains gate-owned; historical benchmark evidence
-below still describes its recorded v2 sources.
+Integrated consumer checks and remaining limits are recorded in the
+[shipping acceptance](rules/audit-2026-10/resolution-shipping.md). Historical
+benchmark evidence below still describes its recorded v2 sources.
 
 The v2 measurement protocol and receipts below are historical; they do not
 establish w15 performance. Measure encode-only behavior with

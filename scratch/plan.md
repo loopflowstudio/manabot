@@ -338,3 +338,66 @@ resolution and seven trigger tests. These are bounded implementation results,
 not the outstanding full affected suites or browser acceptance.
 
 Check (2026-10-27): `git diff --check` — passed; reused `uv run --no-sync pytest tests/verify/test_continuation_input.py tests/semantic/test_text_observation.py -q` — 30 passed in 19.33s (`scratch/compress-python.json`); broader acceptance remains gate/CI-owned.
+
+## Shipping gate — 2026-10-28
+
+Synced main c5d406e3d via `lf sync --manual` / `--continue`; preserved both
+sets of scratch assumptions. No source conflict or world identity collision.
+Comparison uses `origin/main...HEAD`, plus working edits. CI path selection
+requests all nine groups; no reusable whole-tree gate receipt exists.
+
+Planned checks and reach:
+- Native resolution/continuation/hash/PyO3: full debug `cargo test -j 2`,
+  then fmt and all-target/all-feature clippy with two jobs; native release build
+  and atomic installation for Python consumers.
+- Observation/model/world identity: model suite, current-world/admission/monitor,
+  active training, observation parity, continuation and text contracts.
+- Suspended frames/Command identity: experience protocol, recovery, replay/Study,
+  optional payments, trigger ordering, all choice-navigation and Learn setup.
+- Updated fixture selectors: frontend check/build, focused choice-navigation,
+  Learn and trigger-order browser interactions on isolated ports.
+- Audit/docs/CI selection: inventory verification, rules inventory/CI tests,
+  changed Python Ruff checks and whitespace.
+Each check records command, time, exit and exact source-content fingerprints in
+`.cache/rules-gate`; durable delivery evidence will summarize results and limits.
+Full native suite is explicitly required; bound it at 1200s, with two test
+threads. Focused Python groups get 300s, browser group 600s. These are ordinary
+bounded tests, not resource-load generation or strength experiments.
+
+Gate adjustment: the unoptimized debug run passed the rules suite (319 + two
+ignored proposals) but spent over five minutes in the existing search-state
+contract binary. Stopped it before its 1200s bound; retained the incomplete run.
+The inspected CI uses CARGO_PROFILE_DEV_OPT_LEVEL=1 expressly to reduce this
+cost while retaining debug assertions/overflow checks. Align the full debug
+acceptance run with that profile, retaining two build jobs/test threads. This
+changes compilation inputs, so one complete run at the CI profile is warranted.
+
+Consumer gate found the shared inference fixture defaulted to policy-input v2,
+while its current-runtime consumers now use v4. Monitoring correctly rejected
+the inconsistent ABI. Make the ordinary fixture use ObservationConfig's current
+default and keep explicit historical-version tests; extend the served checkpoint
+cases through v3/v4. Run shared-inference tests, the failed monitor metadata case,
+and the local-evaluation module (the helper's only other external consumer).
+The other 57 world/admission/monitor/active-training cases passed unchanged.
+
+Local-evaluation gate hit the wrapper's 300s limit after 18 pass markers. The
+module includes a real offline CLI proof with a declared 360s execution budget
+(and 240s per game), plus separate admission, two-policy and continuation cases;
+300s was an invalid aggregate bound. Its CLI proof had finished before cutoff.
+Retain that incomplete receipt, then run the unchanged module at 600s with -vv
+and durations so the completed proof names each case. No inner deadline,
+assertion, cohort, seed or resource pressure is changed.
+
+## Local gate complete — 2026-10-28
+
+Durable acceptance, source fingerprints, failed attempts, timeout diagnosis,
+remaining CI/CUDA limits and budget accounting are now in
+`docs/rules/audit-2026-10/resolution-shipping.md` / `.json`. Full debug: 558 passed,
+2 ignored proposals. Model/input: 253 + one expected skip; world/admission/
+monitor/active training: 58 across original and corrected fixture case. Shared
+inference: 17 + CUDA skip; Command/recovery/replay/choice/Learn: 85; training
+recovery: 26; local evaluation: 19; inventory/CI: 46. Browser: 8 ordinary-server
+choice/Learn cases and 2 release-harness trigger cases. Formatting and clippy
+passed; focused post-format tests passed. Servers stopped. No full-matrix or
+CUDA result is inferred. Main c5d406e3d is still current. Proceed to new waited
+same-Task delivery, preserving PR354 history and leaving MTG-177 open.

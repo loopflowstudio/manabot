@@ -1,4 +1,4 @@
-# Rules audit: integrated resolution repair draft
+# Rules audit: integrated resolution repair
 
 The selected CR 608.2b repair now retains clause-specific resolution eligibility
 across spells, activated abilities, triggers and suspended choices. Effect handlers
@@ -9,8 +9,11 @@ unresolved proposals. See [resolution evidence](resolution-validation.json).
 The repair is integrated with MTG-195’s merged PR386 in development world w15 /
 hash 10. Policy-input and capture/text v4 expose retained eligibility while v2/v3
 relation widths remain frozen. Fresh conformance/demo receipts bind the combined
-source; broader consumer acceptance remains gate-owned. Historical evidence stays
-unchanged. Publication, merge and whole-audit completion remain unselected.
+source. Jack Heart authorized shipping this repair on 2026-10-28 after reviewing
+the concept walkthrough. That authorization supersedes the earlier review-only
+boundary for this increment; the whole-rules audit remains open. Historical
+evidence stays unchanged. See [shipping acceptance](resolution-shipping.md) for
+the integrated checks and remaining limits.
 
 ## Earlier obligation audit
 
@@ -39,8 +42,8 @@ Other findings include the absent true modal-trigger placement decision and
 narrow LKI/ability-stack-lifetime semantics. Current resolution-time color/token
 choices must not be moved to placement merely because their enum is called
 `Modal`. Trigger ordering stays with MTG-195 and replacement ordering with
-MTG-196. This is a review draft: no publication, merge or Task completion is
-selected by it. The whole-rules audit remains open.
+MTG-196. These earlier findings retain their dated scope; the shipping decision
+above applies only to the resolution repair. The whole-rules audit remains open.
 
 ## Prior delivery review
 
@@ -52,8 +55,8 @@ checkpoints and experiment evidence retain their identities. The Prism/Treasure
 regression passes through explicit nested payment choices.
 
 Jack Heart approved that bounded delivery on October 22. The whole-rules audit
-remained open with 2,965 unknown entries. That approval does not select publication
-or completion of this continuation. Earlier payment-owner identifiers are stale;
+remained open with 2,965 unknown entries. The separate October 28 authorization
+selects this repair's delivery, not whole-audit completion. Earlier payment-owner identifiers are stale;
 [the ownership review](unification.md#refreshed-ownership-and-delivery-boundary)
 explains their historical context.
 

@@ -109,6 +109,12 @@ to exercise checkpoint loading and historical-world rejection. Tests that
 construct a current checkpoint should use the runtime world version; retain
 explicit historical versions for incompatible checkpoints.
 
+Trigger-order browser cases require the test-only ASGI root in
+`playwright.release.config.ts`; the ordinary server ignores fixture setup flags.
+After building the frontend, run
+`npm --prefix academy/ui run test:e2e -- --config playwright.release.config.ts trigger-order.spec.ts`
+with isolated `ACADEMY_RELEASE_API_PORT` and `ACADEMY_RELEASE_FRONTEND_PORT`.
+
 ## Required checks for Rust managym work
 
 When `managym/Cargo.toml` or `managym/src/**` changes:
@@ -119,6 +125,11 @@ cargo fmt --check
 cargo clippy --all-targets --all-features -- -D warnings
 cargo test
 ```
+
+For a local gate, match CI's `CARGO_PROFILE_DEV_OPT_LEVEL=1` when running
+`cargo test` and clippy, and use `-j 2` on shared hosts. This retains debug
+assertions and overflow checks while avoiding the much slower unoptimized
+search/rollback tests. Keep one Cargo operation per build directory at a time.
 
 Notes:
 - `cargo test --all-features` can fail in environments without Python dev/link symbols; treat that as environment setup, not core engine correctness.

@@ -53,3 +53,9 @@ Inherited MTG-206 notes are at `4ab16a140:scratch/questions.md`.
   Etude main's `estimate` swapped in is recorded in `scratch/mtg207.md`.
 - **Machine load.** Load average 90–240 on 16 cores throughout; wall times
   are inflated several-fold, CPU less so.
+
+- Shipping gate (2026-10-28): use CI's debug optimization level 1 with two
+  jobs/test threads. The first unoptimized full run was interrupted after its
+  search-state contract binary exceeded five minutes; no assertion was relaxed.
+  Both the incomplete run and the complete acceptance result belong in durable
+  evidence. No additional randomized exploration is selected.

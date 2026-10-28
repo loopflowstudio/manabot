@@ -583,11 +583,18 @@ fn resolution_eligibility_distinguishes_identical_present_observations() {
             )
             .unwrap()
             .relations;
-            for (row, old) in native.chunks_exact(33).zip(legacy.chunks_exact(32)) {
+            for (row, old) in native
+                .as_chunks::<33>()
+                .0
+                .iter()
+                .zip(legacy.as_chunks::<32>().0)
+            {
                 assert_eq!(&row[..32], old);
             }
             let target_rows = native
-                .chunks_exact(33)
+                .as_chunks::<33>()
+                .0
+                .iter()
                 .filter(|r| r[0] == 2.0 && r[3] == 5.0)
                 .collect::<Vec<_>>();
             assert_eq!(target_rows.len(), 2);
