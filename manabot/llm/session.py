@@ -15,7 +15,6 @@ from uuid import uuid4
 from manabot.llm.schema import (
     DecisionInput,
     EncodedPrompt,
-    Failure,
     InferenceConfig,
     RuntimeIdentity,
     SelectionResult,
@@ -26,15 +25,8 @@ from manabot.llm.selection import Runtime, select
 @dataclass(frozen=True)
 class _DecisionRequest:
     request_id: str
-    behavior_version: str
     decision: DecisionInput
     expected_prompt: EncodedPrompt | None
-
-
-@dataclass(frozen=True)
-class _Ready:
-    identity: RuntimeIdentity
-    behavior_version: str
 
 
 @dataclass(frozen=True)
@@ -65,8 +57,7 @@ def _serve(
         except Exception as error:
             connection.send(_LoadFailure(f"{type(error).__name__}: {error}"))
             return
-        version = runtime.identity.behavior_version(config)
-        connection.send(_Ready(runtime.identity, version))
+        connection.send(runtime.identity)
         while True:
             try:
                 request = connection.recv()
@@ -76,8 +67,6 @@ def _serve(
                 return
             if not isinstance(request, _DecisionRequest):
                 raise TypeError("expected decision request")
-            if request.behavior_version != version:
-                raise ValueError("request differs from admitted behavior version")
 
             def publish(result: SelectionResult) -> None:
                 connection.send(_Progress(request.request_id, result))
@@ -117,12 +106,11 @@ class InferenceSession:
             message = self.connection.recv()
             if isinstance(message, _LoadFailure):
                 raise RuntimeError(message.message)
-            if not isinstance(message, _Ready):
+            if not isinstance(message, RuntimeIdentity):
                 raise RuntimeError("worker did not report runtime identity")
-            self.identity = message.identity
+            self.identity = message
+            # The parent derives the version; replies must carry exactly this one.
             self.behavior_version = self.identity.behavior_version(config)
-            if message.behavior_version != self.behavior_version:
-                raise RuntimeError("worker admitted a different behavior version")
             self.load_seconds = time.monotonic() - started
         except BaseException:
             child.close()
@@ -149,9 +137,7 @@ class InferenceSession:
         try:
             request_id = uuid4().hex
             self.connection.send(
-                _DecisionRequest(
-                    request_id, self.behavior_version, decision, expected_prompt
-                )
+                _DecisionRequest(request_id, decision, expected_prompt)
             )
             while True:
                 remaining = deadline - time.monotonic()
@@ -179,19 +165,7 @@ class InferenceSession:
                 if result.failure is not None or result.origin is not None:
                     break
         except Exception as error:
-            result = result.model_copy(
-                update={
-                    "selected_reference": None,
-                    "origin": None,
-                    "fallback": None,
-                    "failure": Failure(
-                        kind="deadline"
-                        if isinstance(error, TimeoutError)
-                        else "runtime",
-                        message=f"{type(error).__name__}: {error}",
-                    ),
-                }
-            )
+            result = result.invalidate(error)
         if result.failure is not None:
             self.close()
         return result.model_copy(update={"seconds": time.monotonic() - started})

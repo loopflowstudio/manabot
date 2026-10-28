@@ -13,11 +13,10 @@ import transformers
 from transformers import (
     AutoConfig,
     AutoModelForCausalLM,
-    AutoTokenizer,
     GenerationConfig,
 )
 
-from manabot.llm.cache import MODEL_PATTERNS, TOKENIZER_PATTERNS
+from manabot.llm.cache import MODEL_PATTERNS
 from manabot.llm.schema import (
     EncodedPrompt,
     GeneratedResponse,
@@ -25,12 +24,22 @@ from manabot.llm.schema import (
     Message,
     RuntimeIdentity,
 )
-from manabot.llm.tokenization import decode_response, encode_prompt
+from manabot.llm.tokenization import (
+    decode_response,
+    encode_prompt,
+    eos_token_ids,
+    load_tokenizer,
+)
 
 
 class TransformersRuntime:
     def __init__(self, config: InferenceConfig) -> None:
         self.config = config
+        if config.sampling is not None and config.sampling.presence_penalty != 0:
+            # Transformers has no presence penalty; never run a nearby substitute.
+            raise ValueError(
+                "presence_penalty is unsupported by the Transformers runtime"
+            )
         if config.device == "cuda":
             if not torch.cuda.is_available():
                 raise RuntimeError("CUDA requested but unavailable")
@@ -41,17 +50,8 @@ class TransformersRuntime:
             revision=config.model_revision,
             allow_patterns=MODEL_PATTERNS,
         )
-        tokenizer_path = snapshot_download(
-            config.tokenizer_id,
-            revision=config.tokenizer_revision,
-            allow_patterns=TOKENIZER_PATTERNS,
-        )
-        self.tokenizer = AutoTokenizer.from_pretrained(
-            tokenizer_path,
-            local_files_only=True,
-            trust_remote_code=False,
-        )
-        self.template = self.tokenizer.get_chat_template()
+        self.tokenizer = load_tokenizer(config, offline=False)
+        template = self.tokenizer.get_chat_template()
         model_config = AutoConfig.from_pretrained(
             model_path,
             local_files_only=True,
@@ -84,22 +84,25 @@ class TransformersRuntime:
             .to(config.device)
             .eval()
         )
-        eos = self.model.generation_config.eos_token_id
-        self.eos_ids = (
-            set() if eos is None else {eos} if isinstance(eos, int) else set(eos)
+        self.eos_ids = eos_token_ids(
+            self.model.generation_config.eos_token_id, self.tokenizer.eos_token_id
         )
-        # Chat tokenizers can declare a message terminator distinct from the
-        # decoder's end-of-text token (Qwen3.5 does). Both end the answer;
-        # retain other special tokens so they still fail the exact-ref protocol.
-        if self.tokenizer.eos_token_id is not None:
-            self.eos_ids.add(self.tokenizer.eos_token_id)
-        if not self.eos_ids:
-            raise ValueError("model/tokenizer must define an EOS token")
         pad = self.tokenizer.pad_token_id
-        # Use explicit greedy settings instead of inheriting a model's sampling,
+        # Use explicit decoding settings instead of inheriting a model's sampling,
         # repetition penalty or beam-search defaults. Retain all effective values.
+        sampling = config.sampling
         self.generation = GenerationConfig(
-            do_sample=False,
+            do_sample=sampling is not None,
+            **(
+                {}
+                if sampling is None
+                else dict(
+                    temperature=sampling.temperature,
+                    top_p=sampling.top_p,
+                    top_k=sampling.top_k,
+                    min_p=sampling.min_p,
+                )
+            ),
             num_beams=1,
             max_new_tokens=config.max_new_tokens,
             eos_token_id=sorted(self.eos_ids),
@@ -115,7 +118,7 @@ class TransformersRuntime:
             device_name=(
                 torch.cuda.get_device_name() if config.device == "cuda" else "cpu"
             ),
-            chat_template=self.template,
+            chat_template=template,
             generation_config=self.generation.to_dict(),
             model_class=type(self.model).__name__,
         )
@@ -130,6 +133,10 @@ class TransformersRuntime:
         inputs = torch.tensor(
             [prompt.token_ids], dtype=torch.long, device=self.config.device
         )
+        if self.config.sampling is not None:
+            # The worker process owns this runtime, so the global generator is
+            # reseeded from the exact prompt immediately before each draw.
+            torch.manual_seed(self.config.sampling.request_seed(prompt.token_ids))
         with torch.inference_mode():
             output = self.model.generate(
                 input_ids=inputs,

@@ -1,24 +1,26 @@
-# bb4160 blockers and decisions — 2026-10-28
+# bb4160 unresolved decisions — 2026-10-28
 
-- **World contradiction, execution stopped.** The exact requested MTG-183
-  checkpoint (`4f2ad656ba036a33d527212a7ac2badf2c5b9db136916f730846b07eef2fbea4`,
-  1,071,166 bytes) was fetched and verified from
-  `r2://manabot/jobs/f3748bcabac8/checkpoints/learner_transitions-331180341.pt`.
-  It binds **w13**, policy-input v1. This checkout builds **w14**;
-  `CheckpointOpponent` rejects it with `checkpoint requires an explicit
-  compatible w14 world binding`. The directive requires current-world admission
-  and forbids changing the opponent or forcing admission. A historical w13
-  experiment or a different current-world opponent needs an accepted design
-  revision; neither is assumed here. No rental or scored game was started.
-- **Etude unavailable.** Installed pinned SDK 0.2.10 refuses
-  `/Users/jack/.etude/launcher.db` as written by another version. No database,
-  authentication, dependency pin or other Task's execution was changed. This is
-  a separate launch prerequisite, not the reason for world rejection.
-- **Independent scope.** Versioned LLM session admission/request/reply binding
-  is implemented and tested. Sampling, vLLM service routing, checkpoint version
-  propagation, cohorts, paid execution and settlement remain unfinished.
-  Training overlap and asynchronous learning are deferred: this evaluation
-  needs frozen players, and PRs #389/#383 remain open.
+The current accepted outcome, implementation and remaining work are in
+`scratch/bb4160-evaluate-qwen-versus.md`.
 
-Obsolete MTG-207 rendering notes remain at
+- **World choice ACCEPTED (Jack Heart, 2026-10-28):** run the exact MTG-183
+  checkpoint in a separately pinned **historical w13** experiment (w13
+  source/native build, w13 decks, policy-input v1). Label all results as w13
+  evidence. Do not weaken w14 admission or relabel the checkpoint. Paid
+  evaluation within the $10 budget is unblocked by this decision.
+- **Independent launch prerequisite:** Etude SDK 0.2.10 rejected the launcher
+  database version. No shared database or dependency pin was changed.
+- **Memory gap:** `.lf/wave/training/` and its child memories are absent. The
+  supplied chapter is the available objective; no other Wave is substituted.
+- **Service identity implementation choice, 2026-10-28:** derive the sole vLLM
+  served name from the existing behavior hash. Its base argv excludes that
+  derived argument to avoid a circular hash; the complete command is retained
+  separately. Model-list acknowledgement and completion model checks bind the
+  supervised service declaration, not independently measured GPU weight bytes.
+  This world-independent work does not settle the matchup decision.
+
+Original checkpoint evidence and the full directive are preserved in
+`02fccd93e1983319d355a1866c101d7d0e01565b:scratch/bb4160-evaluate-qwen-versus.md`
+and `02fccd93e1983319d355a1866c101d7d0e01565b:scratch/questions.md`.
+Obsolete MTG-207 notes remain at
 `c5d406e3d2a701525c15c8500a30f7da7896cc40:scratch/questions.md`.

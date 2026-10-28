@@ -115,7 +115,10 @@ def test_worker_exit_is_an_explicit_runtime_failure(
     config: InferenceConfig,
 ) -> None:
     monkeypatch.setattr(runner, "_worker", _exit)
-    result = runner.run_decision(decision, config)
+    # The deadline covers spawned-interpreter startup; exit must not race it.
+    result = runner.run_decision(
+        decision, config.model_copy(update={"deadline_seconds": 30})
+    )
     assert result.failure.kind == "runtime"
     assert result.origin is None and result.fallback is None
 
@@ -126,7 +129,10 @@ def test_completed_worker_retains_queued_selection(
     config: InferenceConfig,
 ) -> None:
     monkeypatch.setattr(runner, "_worker", _complete)
-    result = runner.run_decision(decision, config)
+    # The deadline covers spawned-interpreter startup; success must not race it.
+    result = runner.run_decision(
+        decision, config.model_copy(update={"deadline_seconds": 30})
+    )
     assert result.failure is None
     assert result.origin == "initial" and result.selected_reference == "A0"
 

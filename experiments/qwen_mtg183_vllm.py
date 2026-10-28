@@ -3,6 +3,8 @@
 Each game process owns its CPU policy RNG and native state. The coordinator
 reserves the unchanged schedule first and submits the declared number at once.
 A failed game stops new admissions; already admitted games retain their outcomes.
+A cohort evaluates one frozen pair: a game whose receipt names a different model
+behavior version or opponent digest also stops admission and is retained.
 The existing campaign watchdog kills the whole game process group on timeout.
 """
 
@@ -17,15 +19,21 @@ from pathlib import Path
 import time
 
 from etude.launch.records import Job
-from pydantic import Field
+from pydantic import Field, TypeAdapter
 
 from experiments import qwen_mtg183 as original
-from manabot.llm.schema import InferenceConfig
+from manabot.llm.schema import InferenceConfig, RuntimeIdentity
 from manabot.verify.llm_game import GameSummary, _write
+
+SAMPLED_INFERENCE = Path("configs/llm/qwen3.5-9b-reasoning-sampled.json")
 
 
 class Campaign(original.Campaign):
-    concurrency: int = Field(default=8, ge=1, le=16)
+    # The treatment's base inference file; campaign limits below override it.
+    inference: Path = original.INFERENCE
+    # A prefix of the frozen shuffled schedule: 1 for a development pilot.
+    games: int = Field(default=100, ge=1, le=100)
+    concurrency: int = Field(default=8, ge=1, le=32)
     decision_seconds: float = Field(default=1800, gt=0, le=1800)
     # Games share the campaign watchdog instead of a shorter per-game cutoff.
     game_seconds: float = Field(default=10 * 3600, gt=0, le=10 * 3600)
@@ -34,9 +42,9 @@ class Campaign(original.Campaign):
     context_tokens: int = Field(default=65_536, gt=0, le=65_536, strict=True)
 
 
-def _schedule(config: Campaign, out: Path) -> list[original.ScheduledGame]:
-    """Keep deal/seat identity while retaining the effective inference budgets."""
-    inference = InferenceConfig.model_validate_json(original.INFERENCE.read_text())
+def _prepare_schedule(config: Campaign, out: Path) -> list[original.ScheduledGame]:
+    """Freeze deals and effective budgets before starting the shared server."""
+    inference = InferenceConfig.model_validate_json(config.inference.read_text())
     inference = InferenceConfig.model_validate(
         {
             **inference.model_dump(),
@@ -47,12 +55,27 @@ def _schedule(config: Campaign, out: Path) -> list[original.ScheduledGame]:
     )
     path = (out / "inference.json").absolute()
     _write(path, inference.model_dump_json(indent=2))
-    return [
+    games = [
         game.model_copy(
             update={"config": game.config.model_copy(update={"inference": path})}
         )
-        for game in original.schedule(config)
+        for game in original.schedule(config)[: config.games]
     ]
+    _write(
+        out / "schedule.json",
+        json.dumps([g.model_dump(mode="json") for g in games], indent=2),
+    )
+    _write(
+        out / "games.json",
+        json.dumps(
+            {
+                "version": "llm-game-sequence-v1",
+                "mode": "concurrent",
+                "games": [f"game-{g.index:03d}" for g in games],
+            }
+        ),
+    )
+    return games
 
 
 def play_game(
@@ -113,24 +136,42 @@ def play_game(
     return original.GameResult(game=game, summary=summary)
 
 
+def _identity_departure(summary: GameSummary, behavior: str) -> str | None:
+    """Name a receipt that played a different player than the frozen cohort.
+
+    Failed preparation may omit identities; played games must name both players.
+    """
+    if summary.completed or summary.decisions:
+        if summary.model_behavior_version is None or summary.opponent_sha256 is None:
+            return "played game is missing a frozen player identity"
+    if summary.opponent_sha256 not in (None, original.CHECKPOINT_SHA256):
+        return f"opponent {summary.opponent_sha256} is not frozen {original.CHECKPOINT_SHA256}"
+    if summary.model_behavior_version not in (None, behavior):
+        return (
+            f"model behavior {summary.model_behavior_version} is not cohort {behavior}"
+        )
+    return None
+
+
 def worker(config: Campaign, out: Path) -> None:
     started = time.monotonic()
     deadline = time.time() + config.seconds
-    games = _schedule(config, out)
-    _write(
-        out / "schedule.json",
-        json.dumps([g.model_dump(mode="json") for g in games], indent=2),
+    # Execute the cohort retained before server startup, without regenerating it
+    # from current defaults or rewriting its inference configuration.
+    games = TypeAdapter(list[original.ScheduledGame]).validate_json(
+        (out / "schedule.json").read_text()
     )
-    _write(
-        out / "games.json",
-        json.dumps(
-            {
-                "version": "llm-game-sequence-v1",
-                "mode": "concurrent",
-                "games": [f"game-{g.index:03d}" for g in games],
-            }
-        ),
+    inference = InferenceConfig.model_validate_json(
+        (out / "inference.json").read_text()
     )
+    identity = RuntimeIdentity.model_validate_json(
+        (out / "vllm-identity.json").read_text()
+    )
+    if identity.runtime != "vllm":
+        raise ValueError("expected a vLLM runtime identity")
+    # Startup publishes this identity only after service acknowledgement. Freeze
+    # it before admission; a game result cannot select the cohort's candidate.
+    behavior_version = identity.behavior_version(inference)
     results: list[original.GameResult] = []
     pending: dict[Future[original.GameResult], original.ScheduledGame] = {}
     queued = iter(games)
@@ -156,6 +197,7 @@ def worker(config: Campaign, out: Path) -> None:
                     "concurrency": config.concurrency,
                     "session_closed": closed,
                     "checkpoint_sha256": original.CHECKPOINT_SHA256,
+                    "model_behavior_version": behavior_version,
                 },
                 indent=2,
             ),
@@ -202,7 +244,10 @@ def worker(config: Campaign, out: Path) -> None:
                         ),
                     )
                 results.append(result)
-                if not result.summary.completed:
+                departure = _identity_departure(result.summary, behavior_version)
+                if departure is not None:
+                    stop_reason = departure
+                elif not result.summary.completed:
                     stop_reason = result.summary.failure or "game incomplete"
                 print(
                     f"GAME {game.index}: completed={result.summary.completed} winner={result.summary.winner} seconds={result.summary.game_seconds:.3f}",
@@ -226,21 +271,7 @@ def run(config: Campaign) -> None:
 
     out = Path(os.environ["ETUDE_OUTPUT_DIR"])
     out.mkdir(parents=True, exist_ok=True)
-    games = _schedule(config, out)
-    _write(
-        out / "schedule.json",
-        json.dumps([g.model_dump(mode="json") for g in games], indent=2),
-    )
-    _write(
-        out / "games.json",
-        json.dumps(
-            {
-                "version": "llm-game-sequence-v1",
-                "mode": "concurrent",
-                "games": [f"game-{g.index:03d}" for g in games],
-            }
-        ),
-    )
+    games = _prepare_schedule(config, out)
     _write(out / "campaign-config.json", config.model_dump_json(indent=2))
     _write(
         out / "campaign.json",
@@ -290,17 +321,28 @@ def run(config: Campaign) -> None:
         )
 
 
-def runs(native_artifact: str, native_source: str, attempt_usd: str = "9.40") -> Job:
-    """The operator deducts every earlier allocation before setting this cap."""
+def runs(
+    native_artifact: str,
+    native_source: str,
+    attempt_usd: str = "9.40",
+    games: int = 100,
+    concurrency: int = 8,
+) -> Job:
+    """The sampled w13 treatment; deduct every earlier allocation from the cap.
+
+    Launch only from the pinned w13 campaign tree: native source equality and
+    checkpoint world admission both reject the current world.
+    """
     ceiling = Decimal(attempt_usd)
     if not ceiling.is_finite() or not Decimal("0") < ceiling <= Decimal("9.40"):
         raise ValueError("attempt_usd must be positive and at most 9.40")
+    config = Campaign(inference=SAMPLED_INFERENCE, games=games, concurrency=concurrency)
     job = original.runs(native_artifact, native_source)
     return job.model_copy(
         update={
-            "name": "mtg188-qwen-vllm-thinking-v-mtg183-u5950",
+            "name": f"bb4160-w13-qwen-vllm-sampled-v-mtg183-u5950-g{games}-c{concurrency}",
             "command": "uv run python -m etude.call --function experiments.qwen_mtg183_vllm:run",
-            "config": Campaign().model_dump_json(),
+            "config": config.model_dump_json(),
             "setup": "sh scripts/qwen-mtg183-vllm-setup.sh",
             "max_usd": ceiling,
         }

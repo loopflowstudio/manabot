@@ -1,13 +1,42 @@
 """Pinned chat encoding and lossless response decoding shared by LLM backends."""
 
-from transformers import PreTrainedTokenizerBase
+from huggingface_hub import snapshot_download
+from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
+from manabot.llm.cache import TOKENIZER_PATTERNS
 from manabot.llm.schema import (
     EncodedPrompt,
     GeneratedResponse,
     InferenceConfig,
     Message,
 )
+
+
+def load_tokenizer(
+    config: InferenceConfig, *, offline: bool
+) -> PreTrainedTokenizerBase:
+    """Resolve the pinned Hub revision, never a same-named local directory."""
+    snapshot = snapshot_download(
+        config.tokenizer_id,
+        revision=config.tokenizer_revision,
+        allow_patterns=TOKENIZER_PATTERNS,
+        local_files_only=offline,
+    )
+    return AutoTokenizer.from_pretrained(
+        snapshot, local_files_only=True, trust_remote_code=False
+    )
+
+
+def eos_token_ids(
+    model_eos: int | list[int] | None, tokenizer_eos: int | None
+) -> set[int]:
+    """Keep both decoder EOS and chat terminators (which differ for Qwen)."""
+    tokens = {model_eos} if isinstance(model_eos, int) else set(model_eos or [])
+    if tokenizer_eos is not None:
+        tokens.add(tokenizer_eos)
+    if not tokens:
+        raise ValueError("model/tokenizer must define an EOS token")
+    return tokens
 
 
 def encode_prompt(
@@ -48,10 +77,11 @@ def decode_response(
         boundary = tokenizer.encode("</think>", add_special_tokens=False)
         if len(boundary) != 1:
             raise ValueError("thinking requires a single-token Qwen closing delimiter")
-        if content.count(boundary[0]) == 1:
+        boundaries = content.count(boundary[0])
+        if boundaries == 1:
             split = content.index(boundary[0])
             reasoning_tokens, answer_tokens = split, len(content) - split - 1
-        elif boundary[0] not in content:
+        elif boundaries == 0:
             reasoning_tokens, answer_tokens = len(content), 0
     return GeneratedResponse(
         text=text,

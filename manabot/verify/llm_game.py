@@ -78,6 +78,10 @@ class GameSummary(BaseModel):
     replay_matches: bool = True
     final_digest: str | None = None
     mode: str
+    # Frozen identities of both players; absent for random control, hosted
+    # sessions and receipts written before version accounting.
+    model_behavior_version: str | None = None
+    opponent_sha256: str | None = None
     # Monotonic host intervals; native execution includes capture validation.
     observations: dict[str, float] = Field(default_factory=dict)
     model_latencies: list[float] = Field(default_factory=list)
@@ -249,6 +253,8 @@ def play(
     if session:
         summary.model_load_seconds = session.load_seconds
         retain(out / "runtime.json", session.identity.model_dump_json(indent=2))
+        if isinstance(session, InferenceSession):
+            summary.model_behavior_version = session.behavior_version
     origins: Counter[str] = Counter()
     latencies: list[float] = []
     try:
@@ -268,7 +274,9 @@ def play(
                 out / "opponent.json",
                 configured_opponent.identity.model_dump_json(indent=2),
             )
+            summary.opponent_sha256 = configured_opponent.identity.sha256
         if opponent is not None:
+            summary.opponent_sha256 = opponent.sha256
             opponent.admit(players, config.opponent_seed)
         with observe("native_reset"):
             env = managym.Env(seed=config.seed, skip_trivial=config.skip_trivial)

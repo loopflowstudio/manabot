@@ -54,9 +54,11 @@ The optional runtime pins Transformers 5.3.0. Its `AutoModelForCausalLM` loads
 Qwen3.5's text decoder from the composite checkpoint without instantiating the
 vision encoder. The retained `runtime.model_class` identifies the loaded class.
 `enable_thinking: false` passes the native template option on both attempts;
-omitting it retains a tokenizer's default. Reasoning-output parsing is not
-supported, and enabling thinking is rejected by configuration validation. The
-same generic loader and configuration still support ordinary causal models.
+omitting it retains a tokenizer's default and historical answer parsing.
+With `enable_thinking: true`, both attempts request reasoning and selection
+requires exactly one closing `</think>` boundary followed by one legal reference.
+Incomplete thinking receives the same protocol repair as any invalid answer.
+The generic loader and configuration also support ordinary causal models.
 
 This configuration pins the small model used for the CPU plumbing smoke. Model
 selection and limits are explicit run inputs; this example does not establish a
@@ -175,6 +177,20 @@ parent checks it and the returned version, configuration, runtime and decision
 before forwarding progress. A mismatch closes the session without selecting an
 action. Selection receipts retain the version; historical receipts without it
 remain readable and keep an unknown version.
+
+The vLLM server uses that behavior hash as its sole served model name. Startup
+and client admission verify the name through `/v1/models`; completion requests
+route by that hash and reject replies with a missing or different model name.
+The runtime identity retains base server arguments; `vllm-command.json` retains
+the complete command including the derived name, which cannot hash itself.
+This checks the supervised service's declared identity, not an independent
+measurement of loaded GPU weights. Historical receipts remain readable but
+cannot admit a server that only exposes the former model-name route.
+The vLLM campaign freezes that acknowledged identity before admitting games.
+Its worker reads the schedule and inference configuration retained before server
+startup; it does not regenerate the cohort from source defaults.
+Game receipts cannot redefine the cohort's model; changed player identities or
+played games missing either identity stop new admissions and remain in results.
 
 `manabot.verify.llm_game` connects the native text renderer and revision-bound
 Commands to that session. Its functional fixture is a 60-card mirror of 24

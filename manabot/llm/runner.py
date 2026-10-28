@@ -9,7 +9,7 @@ import multiprocessing
 from multiprocessing.connection import Connection
 import time
 
-from manabot.llm.schema import DecisionInput, Failure, InferenceConfig, SelectionResult
+from manabot.llm.schema import DecisionInput, InferenceConfig, SelectionResult
 from manabot.llm.selection import select
 
 
@@ -33,11 +33,8 @@ def _worker(
                 SelectionResult(
                     decision=decision,
                     config=config,
-                    failure=Failure(
-                        kind="runtime", message=f"{type(error).__name__}: {error}"
-                    ),
                     seconds=time.monotonic() - started,
-                )
+                ).invalidate(error, kind="runtime")
             )
             return
         # Selection owns inference failures; the parent retains every snapshot
@@ -74,17 +71,7 @@ def run_decision(decision: DecisionInput, config: InferenceConfig) -> SelectionR
             raise RuntimeError("inference worker exited without a result")
     except Exception as error:
         # Parent failures invalidate even a selection received after the deadline.
-        result = result.model_copy(
-            update={
-                "selected_reference": None,
-                "origin": None,
-                "fallback": None,
-                "failure": Failure(
-                    kind="deadline" if isinstance(error, TimeoutError) else "runtime",
-                    message=f"{type(error).__name__}: {error}",
-                ),
-            }
-        )
+        result = result.invalidate(error)
     finally:
         sender.close()
         receiver.close()

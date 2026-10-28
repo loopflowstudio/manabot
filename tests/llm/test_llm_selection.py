@@ -152,6 +152,30 @@ def test_two_protocol_failures_produce_reproducible_legal_fallback() -> None:
     assert first.failure is None
 
 
+@pytest.mark.parametrize(
+    "answers", [("A1",), ("invalid", "A1"), ("invalid", "invalid")]
+)
+def test_failed_progress_revokes_selection_and_retains_evidence(
+    answers: tuple[str, ...],
+) -> None:
+    snapshots: list[SelectionResult] = []
+
+    def publish(result: SelectionResult) -> None:
+        if result.origin is not None:
+            raise OSError("cannot retain selection")
+        snapshots.append(result)
+
+    replies = [response(answer) for answer in answers]
+    result = select(decision(), config(), ScriptedRuntime(replies), progress=publish)
+    assert result.failure is not None and result.failure.kind == "runtime"
+    assert result.failure.message == "OSError: cannot retain selection"
+    assert result.selected_reference is result.origin is result.fallback is None
+    assert len(result.attempts) == len(answers)
+    assert result.attempts[-1].response == response(answers[-1])
+    assert result.behavior_version is not None
+    assert snapshots[-1] == result
+
+
 def test_length_limited_legal_looking_answer_is_incomplete() -> None:
     result = select(
         decision(),

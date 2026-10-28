@@ -17,14 +17,19 @@ from urllib.error import URLError
 from urllib.request import urlopen
 
 from huggingface_hub import snapshot_download
-from transformers import AutoTokenizer
 
 from manabot.llm.cache import MODEL_PATTERNS
 from manabot.llm.schema import InferenceConfig, RuntimeIdentity
+from manabot.llm.tokenization import load_tokenizer
+from manabot.llm.vllm_runtime import SERVICE_PORT, SERVICE_URL, verify_service
 
 
 def server_command(config: InferenceConfig, model: str, concurrency: int) -> list[str]:
-    """No remote template, prefix reuse, quantization or generation defaults."""
+    """No remote template, prefix reuse, quantization or generation defaults.
+
+    This is the base argv; the derived behavior route is appended after
+    identity hashing.
+    """
     return [
         "uv",
         "run",
@@ -38,12 +43,10 @@ def server_command(config: InferenceConfig, model: str, concurrency: int) -> lis
         "vllm.entrypoints.openai.api_server",
         "--model",
         model,
-        "--served-model-name",
-        config.model_id,
         "--host",
         "127.0.0.1",
         "--port",
-        "8123",
+        str(SERVICE_PORT),
         "--dtype",
         config.precision,
         "--max-model-len",
@@ -79,15 +82,11 @@ class VLLMServer(AbstractContextManager["VLLMServer"]):
                 allow_patterns=MODEL_PATTERNS,
                 local_files_only=True,
             )
-            tokenizer = AutoTokenizer.from_pretrained(
-                model,
-                local_files_only=True,
-                trust_remote_code=False,
-            )
+            tokenizer = load_tokenizer(self.config, offline=True)
             command = server_command(self.config, model, self.concurrency)
             # Query the separate server interpreter, not the client's packages.
             probe = subprocess.run(
-                command[:7]
+                command[: command.index("-m")]
                 + [
                     "-c",
                     "import json,platform,torch; from importlib.metadata import version; print(json.dumps(dict(runtime_version=version('vllm'),torch_version=torch.__version__,python_version=platform.python_version(),device_name=torch.cuda.get_device_name())))",
@@ -106,7 +105,8 @@ class VLLMServer(AbstractContextManager["VLLMServer"]):
                 **facts,
                 chat_template=tokenizer.get_chat_template(),
                 generation_config={
-                    "server_argv": command,
+                    # The derived route cannot participate in its own hash.
+                    "server_argv_without_identity": command,
                     "concurrency": self.concurrency,
                     "client": "exact-token-completions-v1",
                     "model_revision": self.config.model_revision,
@@ -115,9 +115,9 @@ class VLLMServer(AbstractContextManager["VLLMServer"]):
                     "context_tokens": self.config.context_tokens,
                 },
             )
-            (self.out / "vllm-identity.json").write_text(
-                identity.model_dump_json(indent=2)
-            )
+            version = identity.behavior_version(self.config)
+            command = [*command, "--served-model-name", version]
+            (self.out / "vllm-command.json").write_text(json.dumps(command, indent=2))
             self.process = subprocess.Popen(
                 command,
                 stdout=self.log,
@@ -134,8 +134,12 @@ class VLLMServer(AbstractContextManager["VLLMServer"]):
                         f"vLLM exited during startup: {self.process.returncode}; see vllm.log"
                     )
                 try:
-                    with urlopen("http://127.0.0.1:8123/health", timeout=2) as response:
+                    with urlopen(f"{SERVICE_URL}/health", timeout=2) as response:
                         if response.status == 200:
+                            verify_service(version, timeout=2)
+                            (self.out / "vllm-identity.json").write_text(
+                                identity.model_dump_json(indent=2)
+                            )
                             self.seconds = time.monotonic() - started
                             print(
                                 f"vLLM server healthy after {self.seconds:.3f}s",

@@ -3,7 +3,7 @@
 from functools import partial
 from multiprocessing.connection import Connection
 import time
-from typing import Callable
+from typing import Callable, Literal
 
 import pytest
 
@@ -109,46 +109,36 @@ def test_session_deadline_retains_pending_prompt_and_invalidates_worker() -> Non
             session.decide(_decision())
 
 
+ReplyMismatch = Literal["request", "version", "decision", "configuration", "runtime"]
+
+
 def _wrong_reply(
-    mismatch: str,
+    mismatch: ReplyMismatch,
     connection: Connection,
     config: InferenceConfig,
     factory: Callable[[InferenceConfig], Runtime],
 ) -> None:
-    """Controlled peer sends a well-formed action belonging to another request."""
+    """Corrupt one binding while keeping the reply otherwise well formed."""
     with connection:
         identity = factory(config).identity
         version = identity.behavior_version(config)
-        if mismatch == "admission":
-            connection.send(session_module._Ready(identity, "0" * 64))
-            return
-        connection.send(session_module._Ready(identity, version))
+        connection.send(identity)
         request = connection.recv()
         result = SelectionResult(
-            decision=request.decision,
-            config=config,
-            runtime=identity,
-            behavior_version=version,
+            decision=_decision("previous")
+            if mismatch == "decision"
+            else request.decision,
+            config=config.model_copy(update={"max_new_tokens": 5})
+            if mismatch == "configuration"
+            else config,
+            runtime=identity.model_copy(update={"runtime_version": "other"})
+            if mismatch == "runtime"
+            else identity,
+            behavior_version="0" * 64 if mismatch == "version" else version,
             selected_reference="A0",
             origin="initial",
         )
-        request_id = request.request_id
-        if mismatch == "request":
-            request_id = "previous-request"
-        elif mismatch == "version":
-            result = result.model_copy(update={"behavior_version": "0" * 64})
-        elif mismatch == "decision":
-            result = result.model_copy(update={"decision": _decision("previous")})
-        elif mismatch == "configuration":
-            result = result.model_copy(
-                update={"config": config.model_copy(update={"max_new_tokens": 5})}
-            )
-        elif mismatch == "runtime":
-            result = result.model_copy(
-                update={
-                    "runtime": identity.model_copy(update={"runtime_version": "other"})
-                }
-            )
+        request_id = "previous-request" if mismatch == "request" else request.request_id
         connection.send(session_module._Progress(request_id, result))
 
 
@@ -156,7 +146,7 @@ def _wrong_reply(
     "mismatch", ["request", "version", "decision", "configuration", "runtime"]
 )
 def test_session_rejects_mismatched_replies_before_publishing_actions(
-    monkeypatch: pytest.MonkeyPatch, mismatch: str
+    monkeypatch: pytest.MonkeyPatch, mismatch: ReplyMismatch
 ) -> None:
     monkeypatch.setattr(session_module, "_serve", partial(_wrong_reply, mismatch))
     received: list[SelectionResult] = []
@@ -169,12 +159,6 @@ def test_session_rejects_mismatched_replies_before_publishing_actions(
         assert result.selected_reference is result.origin is result.fallback is None
         assert session.closed
         assert received == []
-
-
-def test_session_rejects_wrong_admission(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(session_module, "_serve", partial(_wrong_reply, "admission"))
-    with pytest.raises(RuntimeError, match="different behavior version"):
-        InferenceSession(_config(), factory=CountingRuntime, load_seconds=10)
 
 
 def test_behavior_identity_binds_model_tokenizer_and_effective_runtime() -> None:
