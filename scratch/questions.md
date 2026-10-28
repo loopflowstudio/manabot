@@ -7,11 +7,8 @@ live at `ce43a5cf7:scratch/questions.md`.
   under `shared-eval-v1` because v1 never fixed batch composition (it already
   varies with arrival order). If a reviewer reads the contract as fixing
   per-matchup grouping, bump `EvalCompute.version`; that is the only change.
-- **Confirmed on Linux rentals — served-child RSS ≤ 90 MiB:** game children
-  ≤ 77–88 MiB, 1 thread, no Torch (A4500 and `cpu32` arms).
-- **Oversubscription culprit (rental census):** this PR's children stay within
-  budget; the excess threads were in Etude `python3` callbacks and the runner
-  parent, which this PR does not own (design, Calibration).
+- **Settled on rentals:** served-child RSS, thread budgets and the
+  oversubscription culprit; evidence in the design's Calibration section.
 - **Rentals (Jack Heart, 2026-10-27):** MTG-193 may launch its own machines,
   under $5 total, with a spend ledger. MTG-183's runner is on its branch.
 - **Decided (Jack Heart, 2026-10-27):** code anchors become Torch-free in
@@ -21,8 +18,6 @@ live at `ce43a5cf7:scratch/questions.md`.
 - **Assumption — supervisor census recorded, not enforced:** the group-worker
   parent hosts Etude callbacks and checkpoint preparation whose threads this
   change does not own; failing an allocation at close would discard results.
-- **Budgets held on rentals:** game/replay 4 (measured 1), serving 16
-  (measured 5 on CUDA).
 - **Stacked on MTG-188 (Jack Heart, 2026-10-26):** this branch merges
   `jack/mtg-188-measure-inference-startup-decision-latency-and-game` (PR #381).
   Its design notes are the parent Task's context, not direction for MTG-193;
@@ -100,9 +95,6 @@ keep matching for resumption.
 
 ## Calibration after the parent hop (implement, 2026-10-27)
 
-- **Blocked — `cpu32` arm:** state and the Etude EXP-13 cause live in the
-  design's Calibration section; not repaired here (shared controller).
-- **Assumption — batch target:** median > 8 was not reached because only 88 of
-  256 slots were active (10 × 4 groups do not keep 256 games pending), not
-  because of the service (~54% busy). Raising groups is a runner setting;
-  the 256-active OOM check is likewise unexercised.
+- **Blocked `cpu32` arm and unmet batch target:** state, cause (Etude EXP-13)
+  and the 88-of-256 active-slot explanation live in the design's Calibration
+  section; not repaired here (shared controller, runner setting).
