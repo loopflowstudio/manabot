@@ -47,12 +47,11 @@ class PinnedFile(Record):
 
 
 class Protocol(Record):
-    version: Literal["jev-mtg183-v1"] = "jev-mtg183-v1"
+    version: Literal["jev-mtg183-v3"] = "jev-mtg183-v3"
     inference: OpenRouterConfig
     checkpoint: PinnedFile
     checkpoint_artifact_id: str = Field(min_length=1)
-    # Dated combined rating report and its explicit, resolved selection rule.
-    ratings: PinnedFile
+    # Who selected the checkpoint and by what rule; "final" is not "best".
     checkpoint_selection: str = Field(min_length=1)
     billing_evidence: PinnedFile
     budget: BudgetConfig
@@ -72,6 +71,8 @@ class Protocol(Record):
     max_decisions: int = Field(default=2000, gt=0)
     game_seconds: float = Field(default=3600, gt=0, allow_inf_nan=False)
     campaign_seconds: float = Field(default=86400, gt=0, allow_inf_nan=False)
+    # A failed game is retained unscored; consecutive failures suggest an outage.
+    max_consecutive_failures: int = Field(default=3, gt=0)
 
     @model_validator(mode="after")
     def treatment(self) -> "Protocol":
@@ -88,7 +89,7 @@ class Protocol(Record):
         return self
 
     def admit(self) -> None:
-        for artifact in (self.checkpoint, self.ratings, self.billing_evidence):
+        for artifact in (self.checkpoint, self.billing_evidence):
             artifact.verify()
         actual = runtime_identities()
         for name in ("world", "source_sha256", "engine_extension_sha256"):
@@ -240,6 +241,8 @@ class Report(Record):
     repairs: int
     fallbacks: int
     unpriced_attempts: int
+    # Unsent requests resent after connection failure; each keeps its bound.
+    connect_retries: int
     decision_seconds_median: float | None
     decision_seconds_p95: float | None
     stop_reason: str | None
@@ -298,6 +301,7 @@ def report(
         repairs=sum(s.origins.get("retry", 0) for s in summaries),
         fallbacks=sum(s.origins.get("fallback", 0) for s in summaries),
         unpriced_attempts=sum(c.charged_usd is None for c in spend.requests),
+        connect_retries=sum(c.abandoned for c in spend.requests),
         decision_seconds_median=statistics.median(latencies) if latencies else None,
         decision_seconds_p95=latencies[math.ceil(len(latencies) * 0.95) - 1]
         if latencies
@@ -361,6 +365,7 @@ def execute(
         # directory runnable once the missing input is supplied.
         admit()
         stop_reason = None
+        failed_run = 0
         started = time.monotonic()
         try:
             for game in games:
@@ -386,8 +391,12 @@ def execute(
                 current = retain_report(None)
                 if len(attempts) == protocol.pilot_games:
                     _write(out / "pilot.json", current.pilot.model_dump_json(indent=2))
-                if attempt.outcome is None:
-                    stop_reason = summary.failure or "game incomplete or replay failed"
+                failed_run = 0 if attempt.outcome is not None else failed_run + 1
+                if failed_run == protocol.max_consecutive_failures:
+                    stop_reason = (
+                        f"{failed_run} consecutive failed games; last: "
+                        f"{summary.failure or 'game incomplete or replay failed'}"
+                    )
                     break
         except BaseException as error:
             stop_reason = f"{type(error).__name__}: campaign interrupted"

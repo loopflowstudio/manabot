@@ -7,11 +7,13 @@ Current evidence and implementation: [mtg212.md](mtg212.md).
   `MEMORY.md` paths are absent. The current shared MTG-212 Task read succeeds;
   implementation follows its directive and the retained design.
 
-- **Required before execution:** dated combined ratings and resolved best
-  checkpoint; matching historical source/native/input package; justified maximum
-  inclusive request charge and overhead; credentials. All four accessible
-  `manabot` Doppler configurations lack `OPENROUTER_API_KEY`. No paid request or
-  rental occurred. Missing ratings do not establish an ambiguous ranking.
+- **Execution inputs resolved** by Jack Heart's 2026-10-28 direction below;
+  the w13 package, billing bound and probe are recorded in [mtg212.md](mtg212.md).
+- **Assumption (reversible):** reported charges settle ×1.06 for OpenRouter's
+  credit-purchase fee; the $0.02 per-request reservation is an engineering
+  choice from the dated listing. A missing provider cost stops admission.
+- **Assumption:** the w13 package is a local branch/worktree, not pushed; its
+  patch against `d7b98a487` is published with the campaign evidence.
 - **Reversible engineering choices:** the driver defaults to an included 20-game
   pilot, a shuffled 1,000-game schedule with independent deal seeds, and
   descriptive Wilson win intervals. It stops at the first failed game and never
@@ -41,3 +43,8 @@ Current evidence and implementation: [mtg212.md](mtg212.md).
 - **World:** Jack Heart (2026-10-28): run Jev on world w13, the checkpoint's own
   world. The campaign executes in the w13 historical package; main's w15 does not
   apply to this benchmark.
+- **Connect-only resend (2026-10-28, reversible engineering choice):** campaign 1
+  died on one `ConnectError` in its pilot. Campaign 2 resends only unsent
+  requests (≤3) and replays the same frozen schedule from game one as a new
+  cohort; campaign 1's 11 attempts stay separate and unpooled. Review may prefer
+  fresh deal seeds for cohort 2, or a different treatment of transport failures.
