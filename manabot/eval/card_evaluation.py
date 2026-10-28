@@ -2,10 +2,12 @@
 
 One match is the existing eight-leg authored arena matrix for one deal. Etude
 owns completion, retries and scalar tables; every eval run names the experiment
-whose database it joins. Each game's evidence is written under the eval run's
-folder, which Etude delivery carries with its tables. Games are admitted one at
-a time: a crash, timeout or failed replay is an ineligible `card_plays` row,
-never a reason to drop the rest of its deal."""
+whose database it joins. The replay worker hands each game's evidence over in a
+scratch folder; `play` returns it to Etude as a blob of its match
+(`etude.eval.match.Result`), named in `card_plays` by its SHA256, and the run
+declares `CARD_ROLLUPS` so its blocks carry the totals card queries read. Games
+are admitted one at a time: a crash, timeout or failed replay is an ineligible
+`card_plays` row, never a reason to drop the rest of its deal."""
 
 from __future__ import annotations
 
@@ -16,7 +18,7 @@ from pathlib import Path
 import tempfile
 from typing import Literal
 
-from etude.eval.match import EvalRun, Row, Tables
+from etude.eval.match import EvalRun, Result, Row, Tables
 from etude.eval.records import (
     CheckpointKey,
     CheckpointRef,
@@ -29,11 +31,15 @@ from etude.eval.records import (
     RoundRobin,
 )
 from etude.eval.tournament import hold
-from etude.run.declaration import declare
 from etude.run.records import ArtifactRef
 from pydantic import Field, model_validator
 
-from manabot.eval.card_metrics import METRIC_VERSION, normalize, reduce_cards
+from manabot.eval.card_metrics import (
+    CARD_ROLLUPS,
+    METRIC_VERSION,
+    normalize,
+    reduce_cards,
+)
 from manabot.eval.card_schedule import (
     RUNTIME_FIELDS,
     CardConditions,
@@ -41,6 +47,7 @@ from manabot.eval.card_schedule import (
     card_match_players,
 )
 from manabot.eval.evaluate import (
+    source_digest,
     validate_player_compatibility,
     validate_registered_player,
 )
@@ -58,6 +65,8 @@ from manabot.sim.card_evidence import (
 )
 from manabot.sim.matchup import SELECTED_SUITE, AuthoredMatchup, selected_match
 from manabot.sim.registration import PlayerRegistration
+
+VERIFY_EXPERIMENT = "card-verification"
 
 NAME = r"^[A-Za-z0-9][A-Za-z0-9._=-]{0,199}$"
 
@@ -97,6 +106,54 @@ class CardEvaluationSpec(StrictModel):
         ):
             raise ValueError("card evaluation requires an authored arena matrix")
         return self
+
+
+def verification_spec(games: int) -> CardEvaluationSpec:
+    """Build the bounded scripted schedule without importing report dependencies."""
+    if games < 8 or games % 8:
+        raise ValueError("games must be a positive multiple of eight")
+    matrix = AuthoredMatchup(
+        pack_key="elemental-world-v2", role_a="elemental_ug", role_b="elemental_bg"
+    )
+    runtime = runtime_fingerprints(match_config=matrix.match())
+    players = tuple(
+        PlayerRegistration(
+            player_id=name,
+            display_name=name,
+            role="anchor",
+            runner_kind="code",
+            player_spec={"kind": "scripted_greedy"},
+            compute_class_id="scripted-greedy-cpu-v1",
+            information_boundary="acting-viewer",
+            world=runtime["world"],
+            content_suite=matrix.content_suite,
+            observation_abi_sha256=runtime["observation_abi_sha256"],
+            action_abi_sha256=runtime["action_abi_sha256"],
+            matchup_sha256=runtime["matchup_sha256"],
+            source_sha256=source_digest(["manabot/sim/players.py"]),
+            player_seed_derivation_id="arena-pair-deal-player-v1",
+        )
+        for name in ("verify-one", "verify-two")
+    )
+    return CardEvaluationSpec(
+        experiment=VERIFY_EXPERIMENT,
+        run=f"verify-{games}",
+        key=EvaluationKey(
+            world=runtime["world"],
+            content_suite=matrix.content_suite,
+            viewer_boundary="acting-viewer",
+            arena_version="card-evaluation-v1",
+            rating_model_version="unrated-card-evaluation",
+            rating_prior_sha256=canonical_sha256({}),
+            anchor_cohort_sha256=canonical_sha256([p.model_dump() for p in players]),
+            evaluation_compute_envelope_id="scripted-greedy-cpu-v1",
+        ),
+        players=players,
+        deals=tuple(range(230000, 230000 + games // 8)),
+        authored_matchup=matrix,
+        game_seconds=60,
+        max_commands=10000,
+    )
 
 
 @contextmanager
@@ -156,7 +213,7 @@ def _entrants(spec: CardEvaluationSpec) -> tuple[Player, ...]:
     return tuple(entrants)
 
 
-def play_card_match(match: Match) -> Tables:
+def play_card_match(match: Match) -> Result:
     players = card_match_players(match)
     conditions = CardConditions.model_validate(match.conditions)
     paths: dict[str, str] = {}
@@ -186,13 +243,31 @@ def play_card_match(match: Match) -> Tables:
         authored_matchup=conditions.authored_matchup,
         card_evidence_dir=root,
     )
-    return card_tables(
-        match,
-        [
-            (ref, read_evidence((root / ref.path).read_bytes(), ref))
-            for ref in map(EvidenceRef.model_validate, trace["card_evidence"])
-        ],
+    games = _handed_over(root, trace)
+    return Result(
+        tables=card_tables(match, [(ref, game) for _, ref, game in games]),
+        blobs=[body for body, _, _ in games],
     )
+
+
+def _handed_over(
+    root: Path, trace: Mapping[str, object]
+) -> list[tuple[bytes, EvidenceRef, GameEvidence]]:
+    """Each game's evidence bytes the replay worker wrote under `root`, verified.
+
+    `root` is a scratch folder: each file is removed once read, since its bytes
+    leave as a blob of the match.
+    """
+    references = trace.get("card_evidence")
+    if not isinstance(references, list):
+        raise ValueError("play_cell retained no card evidence; pass card_evidence_dir")
+    games = []
+    for raw in references:
+        ref = EvidenceRef.model_validate(raw)
+        body = (root / ref.path).read_bytes()
+        games.append((body, ref, read_evidence(body, ref)))
+        (root / ref.path).unlink()
+    return games
 
 
 def card_tables(match: Match, games: list[tuple[EvidenceRef, GameEvidence]]) -> Tables:
@@ -223,26 +298,23 @@ def card_tables(match: Match, games: list[tuple[EvidenceRef, GameEvidence]]) -> 
 
 def trace_card_tables(
     root: Path, trace: Mapping[str, object], participants: tuple[str, str]
-) -> Tables:
-    """Card tables for the games one `play_cell(card_evidence_dir=root)` call retained.
+) -> Result:
+    """Card tables and evidence blobs for the games one `play_cell(card_evidence_dir=root)` call retained.
 
     This lets any evaluation deliver card data beside its own outcome tables:
-    merge the result into the `Tables` its `play` returns. `root` is the eval
-    run's folder, so Etude delivery carries the evidence and `cards audit` finds
-    it. `participants` names the two registered players in Etude row order.
-    Games are not bound to a card-evaluation schedule; each must seat exactly
-    these players.
+    merge the result's tables and blobs into the `Result` its `play` returns,
+    and declare `CARD_ROLLUPS` with the run. `root` is a scratch folder (see
+    `_handed_over`). `participants` names the two registered players in Etude
+    row order. Games are not bound to a card-evaluation schedule; each must
+    seat exactly these players.
     """
-    references = trace.get("card_evidence")
-    if not isinstance(references, list):
-        raise ValueError("play_cell retained no card evidence; pass card_evidence_dir")
     tables: dict[str, list[Row]] = {}
-    for raw in references:
-        ref = EvidenceRef.model_validate(raw)
-        game = read_evidence((root / ref.path).read_bytes(), ref)
+    blobs = []
+    for body, ref, game in _handed_over(root, trace):
+        blobs.append(body)
         for name, rows in _game_card_tables(ref, game, participants).items():
             tables.setdefault(name, []).extend(rows)
-    return tables
+    return Result(tables=tables, blobs=blobs)
 
 
 def _game_card_tables(
@@ -251,7 +323,6 @@ def _game_card_tables(
     """One game's normalized card rows, with its evidence and provenance on `card_plays`."""
     rows = normalize(reduce_cards(game, participants))
     evidence = {
-        "evidence": ref.path,
         "evidence_sha256": ref.sha256,
         "evidence_bytes": ref.bytes,
         "trace_sha256": game.trace_sha256,
@@ -299,15 +370,10 @@ def evaluate_cards(spec: CardEvaluationSpec, directory: Path) -> EvalRun:
         ),
         games=8,
     )
-    declared = declare(
-        experiment=spec.experiment,
-        clocks=(),
-        run=spec.run,
-        kind="evaluation",
-        directory=directory,
-    )
-    with _environment(
-        {"MANABOT_CARD_OUTPUT": str(declared.root.resolve()), "ETUDE_RUN": spec.run}
+    # Workers' attempt folders and evidence handoff; nothing here is kept.
+    with (
+        tempfile.TemporaryDirectory(prefix="manabot-cards-") as scratch,
+        _environment({"MANABOT_CARD_OUTPUT": scratch, "ETUDE_RUN": spec.run}),
     ):
         return hold(
             tournament,
@@ -316,4 +382,5 @@ def evaluate_cards(spec: CardEvaluationSpec, directory: Path) -> EvalRun:
             enter=entrants,
             workers=spec.workers,
             directory=directory,
+            rollups=CARD_ROLLUPS,
         )

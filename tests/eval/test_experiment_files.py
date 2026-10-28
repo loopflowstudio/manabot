@@ -102,6 +102,7 @@ def _finished_run(tmp_path: Path, updates: range) -> TrainingRun:
         saved.append(
             Checkpoint(
                 run="seed-1",
+                line="seed-1",
                 experiment="elemental",
                 ordinal=ordinal,
                 artifact=ArtifactRef(uri=path.as_uri(), sha256="0" * 64, size_bytes=1),
