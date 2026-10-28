@@ -24,7 +24,7 @@ CODE_PLAYER_KINDS = frozenset({"demo_search", "heuristic", "random", "scripted_g
 class DemoSearchPlayer:
     """Run the exact demo policy, including its forced-offer seed behavior."""
 
-    def __init__(self, spec: dict[str, Any], seed: int):
+    def __init__(self, spec: dict[str, Any], seed: int) -> None:
         self.policy = FlatSearchPolicy(
             sims=spec["sims"],
             rollouts_per_world=spec["rollouts_per_world"],
@@ -42,7 +42,7 @@ CodePlayer = (
 
 
 def build_code_player(registration: PlayerRegistration, *, seed: int) -> CodePlayer:
-    """Build a code player; `seed` drives only the random anchor."""
+    """Build a code player; `seed` drives the random anchor and demo search."""
     spec = registration.player_spec
     kind = spec["kind"]
     if kind == "demo_search":
