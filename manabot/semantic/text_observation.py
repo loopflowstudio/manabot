@@ -28,7 +28,7 @@ from pydantic import ValidationError
 
 import managym
 
-REPRESENTATION_VERSION = "manabot-text-2"
+REPRESENTATION_VERSION = "manabot-text-4"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
 _PHASES = ("beginning", "first main", "combat", "second main", "ending")
 _STEPS = (
@@ -423,9 +423,12 @@ class _Renderer:
             details.append(
                 f"waterbend {_yes(relation.waterbend)}; may decline {_yes(relation.can_decline)}"
             )
-        for target in relation.targets:
+        for ordinal, target in enumerate(relation.targets, 1):
+            legal = target.legal_at_resolution_start
+            eligibility = "unknown" if legal is None else _yes(legal)
             details.append(
-                f"target clause {target.clause + 1}: {self.fact_reference(target.reference)}"
+                f"target {ordinal}, clause {target.clause + 1}: {self.fact_reference(target.reference)}; "
+                f"Legal when resolution began: {eligibility}"
             )
         if relation.context is not None:
             details.append("trigger context " + self.fact_reference(relation.context))

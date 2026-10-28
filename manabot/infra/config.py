@@ -30,8 +30,8 @@ class BaseConfig(BaseModel):
 
 
 class ObservationConfig(BaseConfig):
-    policy_input_version: Literal[1, 2, 3] = Field(
-        default=3, exclude_if=lambda value: value == 1
+    policy_input_version: Literal[1, 2, 3, 4] = Field(
+        default=4, exclude_if=lambda value: value == 1
     )
 
     @classmethod
