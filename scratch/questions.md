@@ -7,11 +7,11 @@ live at `ce43a5cf7:scratch/questions.md`.
   under `shared-eval-v1` because v1 never fixed batch composition (it already
   varies with arrival order). If a reviewer reads the contract as fixing
   per-matchup grouping, bump `EvalCompute.version`; that is the only change.
-- **Assumption — served-child RSS target ≤ 90 MiB:** derived from local import
-  measurements (47 MiB light set vs 216 MiB today); confirm on Linux.
-- **Open — oversubscription culprit:** not reproducible on macOS. The rental
-  thread census by role and thread name decides which pool caused ~1,000
-  threads on `cpu32`; the bound is enforced regardless.
+- **Confirmed on Linux rentals — served-child RSS ≤ 90 MiB:** game children
+  ≤ 77–88 MiB, 1 thread, no Torch (A4500 and `cpu32` arms).
+- **Oversubscription culprit (rental census):** this PR's children stay within
+  budget; the excess threads were in Etude `python3` callbacks and the runner
+  parent, which this PR does not own (design, Calibration).
 - **Rentals (Jack Heart, 2026-10-27):** MTG-193 may launch its own machines,
   under $5 total, with a spend ledger. MTG-183's runner is on its branch.
 - **Decided (Jack Heart, 2026-10-27):** code anchors become Torch-free in
@@ -21,8 +21,8 @@ live at `ce43a5cf7:scratch/questions.md`.
 - **Assumption — supervisor census recorded, not enforced:** the group-worker
   parent hosts Etude callbacks and checkpoint preparation whose threads this
   change does not own; failing an allocation at close would discard results.
-- **Assumption — budgets:** game/replay 4, serving 16 (CUDA driver/profiler
-  threads). Local counts are 1; the rental census confirms or revises them.
+- **Budgets held on rentals:** game/replay 4 (measured 1), serving 16
+  (measured 5 on CUDA).
 - **Stacked on MTG-188 (Jack Heart, 2026-10-26):** this branch merges
   `jack/mtg-188-measure-inference-startup-decision-latency-and-game` (PR #381).
   Its design notes are the parent Task's context, not direction for MTG-193;
