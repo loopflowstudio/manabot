@@ -49,7 +49,7 @@ from manabot.sim.serving_protocol import (
     InferenceFailure,
     PolicyKey,
 )
-from manabot.sim.supervision import _failure
+from manabot.sim.supervision import _failure, _infrastructure_failure
 from manabot.sim.threads import GAME_BUDGET, ThreadBudgetExceeded
 
 
@@ -111,8 +111,7 @@ def _census(game: dict[str, Any]) -> None:
     try:
         GAME_BUDGET.account(game["worker_performance"]["counters"])
     except ThreadBudgetExceeded as exc:
-        _failure(game, "crash", str(exc), None)
-        game["infrastructure_failure"] = True
+        _infrastructure_failure(game, str(exc))
 
 
 def execute_game(

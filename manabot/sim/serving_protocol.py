@@ -135,9 +135,7 @@ class InferenceClient:
         payload = ForkingPickler.dumps(request)
         try:
             self._socket.settimeout(_remaining(request))
-            self._socket.sendall(struct.pack("!i", len(payload)))
-            self._socket.settimeout(_remaining(request))
-            self._socket.sendall(payload)
+            self._socket.sendall(struct.pack("!i", len(payload)) + payload)
             (size,) = struct.unpack("!i", self._read(4, request))
             identity, reply, error = pickle.loads(self._read(size, request))
         except TimeoutError as exc:
@@ -153,7 +151,7 @@ class InferenceClient:
             raise InferenceFailure("inference reply arrived after its deadline")
         return reply
 
-    def _read(self, size: int, request: DecisionRequest) -> bytes:
+    def _read(self, size: int, request: DecisionRequest) -> bytearray:
         buffer = bytearray(size)
         view = memoryview(buffer)
         received = 0
@@ -163,7 +161,7 @@ class InferenceClient:
             if count == 0:
                 raise EOFError("connection closed")
             received += count
-        return bytes(buffer)
+        return buffer
 
     def close(self) -> None:
         self._socket.close()

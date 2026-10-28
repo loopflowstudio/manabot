@@ -380,6 +380,9 @@ Findings (implement, 2026-10-27):
 
 Implement, 2026-10-27 (parent hop): `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/eval/test_local_evaluation.py tests/sim/test_child_surface.py tests/test_package_boundaries.py tests/eval/test_evaluation_match.py tests/training/test_game_errors.py tests/eval/test_mirror_admission.py tests/eval/test_inference_receipts.py -q` → 146 passed, 1 skipped (11 min). Host load average ~370 from other sessions during the run.
 
+Compress, 2026-10-27: one due rule (`serve.head_group`), one infrastructure-failure
+helper (`supervision._infrastructure_failure`), one client write. `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/sim/test_child_surface.py tests/training/test_game_errors.py tests/test_package_boundaries.py -q` → 57 passed, 1 skipped.
+
 Open for gate: three `tests/sim` failures (conditional-search fixture digest,
 rollout card admission, seed-197 world binding) also fail at `ea8d0e874`.
 Remaining `spawn` uses (`eval/local.py`, `verify/competency`, `llm/*`,

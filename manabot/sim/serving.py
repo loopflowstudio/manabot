@@ -3,8 +3,9 @@
 `InferenceRuntime` (`manabot.sim.serving_protocol`) launches `serve` as a
 `ChildProcess`; only this process imports Torch and loads served weights. Game
 children send owned arrays directly, each over its own connection, which the
-runtime hands to this process as a descriptor. Requests group by `PolicyKey` (checkpoint and numerics, not matchup);
-FIFO groups flush independently at `max_batch_rows` or `max_delay_seconds`.
+runtime hands to this process as a descriptor. Requests group by `PolicyKey`
+(checkpoint and numerics, not matchup); FIFO groups flush independently at
+`max_batch_rows` or `max_delay_seconds`.
 Each batch moves to the device in one copy per dtype, and each row samples on
 CPU from its own retained decision seed, so actions do not depend on batch
 composition.
@@ -459,6 +460,16 @@ def serve(
             perf.measure("service_receive", time.monotonic() - started)
         return True
 
+    def head_group() -> tuple[list[_PendingRequest], float]:
+        """The oldest request's policy group and the seconds until it is due."""
+        first = pending[0].request
+        group = [item for item in pending if item.request.policy == first.policy]
+        if len(group) >= execution.max_batch_rows:
+            return group, 0.0
+        return group, max(
+            0.0, first.submitted + execution.max_delay_seconds - time.monotonic()
+        )
+
     try:
         # Ready means the service can receive work, not that any model is loaded.
         perf.write(directory / "serving.json")
@@ -466,34 +477,13 @@ def serve(
         while execution.remaining() > 0:
             # A game has at most one request in flight, so one read per ready
             # connection drains any backlog before a due group flushes.
-            if pending:
-                head = pending[0].request
-                full = (
-                    sum(item.request.policy == head.policy for item in pending)
-                    >= execution.max_batch_rows
-                )
-                timeout = (
-                    0
-                    if full
-                    else max(
-                        0,
-                        head.submitted + execution.max_delay_seconds - time.monotonic(),
-                    )
-                )
-            else:
-                timeout = min(0.1, execution.remaining())
-            if not receive(timeout):
+            wait = head_group()[1] if pending else min(0.1, execution.remaining())
+            if not receive(wait):
                 break
             if not pending:
                 continue
-            first = pending[0].request
-            compatible = [
-                item for item in pending if item.request.policy == first.policy
-            ]
-            if (
-                len(compatible) < execution.max_batch_rows
-                and time.monotonic() - first.submitted < execution.max_delay_seconds
-            ):
+            compatible, wait = head_group()
+            if wait > 0:
                 continue
             chosen = compatible[: execution.max_batch_rows]
             ids = {item.request.request_id for item in chosen}

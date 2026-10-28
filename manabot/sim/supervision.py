@@ -47,6 +47,13 @@ def _failure(
     )
 
 
+def _infrastructure_failure(game: dict[str, Any], message: str) -> dict[str, Any]:
+    """Fail the game without blaming a player: the harness, not play, broke."""
+    _failure(game, "crash", message, None)
+    game["infrastructure_failure"] = True
+    return game
+
+
 @contextmanager
 def _game_slot(
     inference: InferenceRuntime | None, identity: str | None
@@ -127,9 +134,7 @@ def supervise_game(
                 try:
                     client = inference.connect()
                 except InferenceFailure as exc:
-                    _failure(game, "crash", str(exc), None)
-                    game["infrastructure_failure"] = True
-                    return game
+                    return _infrastructure_failure(game, str(exc))
             try:
                 descriptor = None if client is None else client.fileno()
                 process = ChildProcess(
@@ -156,9 +161,7 @@ def supervise_game(
                     try:
                         inference.check()
                     except InferenceFailure as exc:
-                        _failure(game, "crash", str(exc), None)
-                        game["infrastructure_failure"] = True
-                        return game
+                        return _infrastructure_failure(game, str(exc))
                 if remaining <= 0:
                     _failure(game, "timeout", "game wall-clock budget exhausted", None)
                     return game
@@ -187,9 +190,7 @@ def supervise_game(
                     # trusted for any game; stop the allocation, as for a crash.
                     if inference is not None:
                         inference.fail(value)
-                    _failure(game, "crash", value, None)
-                    game["infrastructure_failure"] = True
-                    return game
+                    return _infrastructure_failure(game, value)
                 with perf.span("durable_evidence"):
                     retain(kind, value)
                 game = apply_game_event(game, kind, value)
