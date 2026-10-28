@@ -1,7 +1,6 @@
 """Killable game supervision shared by served and in-child players.
 
-The pending Command is fsynced before acknowledgement; other journal events
-are written and flushed, and become durable with the next fsync. Each call owns one
+The pending Command is fsynced before acknowledgement. Each call owns one
 native `ChildProcess` (game or replay); allocation slots bound concurrent
 callbacks, including wait time. Torch-free.
 """
@@ -30,10 +29,6 @@ from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import apply_game_event, replay_games
 from manabot.sim.serving_protocol import InferenceFailure, InferenceRuntime
 from manabot.sim.threads import REPLAY_BUDGET
-
-# Journal events fsynced when retained: the pending Command before its
-# acknowledgement, and the settled game when a failure keeps its journal.
-_DURABLE_EVENTS = frozenset({"pending", "settled"})
 
 
 def _failure(
@@ -101,18 +96,11 @@ def supervise_game(
         )
 
         def retain(kind: str, value: Any) -> None:
-            # Every event reaches the kernel before the next is read, so a dead
-            # worker loses nothing. Only the pending Command (before its
-            # acknowledgement) and the settled game are fsynced; that fsync also
-            # makes the journal's earlier lines durable. One fsync per decision,
-            # not one per event: fsyncs serialize host-wide, and per-event fsyncs
-            # bounded rented evaluation throughput.
             if evidence_path is not None:
                 with evidence_path.open("a") as evidence:
                     evidence.write(json.dumps([kind, value], allow_nan=False) + "\n")
                     evidence.flush()
-                    if kind in _DURABLE_EVENTS:
-                        os.fsync(evidence.fileno())
+                    os.fsync(evidence.fileno())
 
         game["execution_limits"] = {"commands": max_commands, "seconds": game_seconds}
         game["registrations"] = [
