@@ -408,9 +408,10 @@ receipt past its deadline has its attempts finished as lost
 (`create_unconfirmed`) but returns without `_end_session`, so
 `unsettled_sessions` keeps counting it; `etude terminate` does not clear it.
 Once Etude ends that session, queue with `queue_runs.py batched-hop.json --go`
-from the 0.2.6 client as in Calibration. Last rechecked 2026-10-28 11:04 UTC:
+from the 0.2.6 client as in Calibration. Last rechecked 2026-10-28 11:09 UTC:
 still blocked, nothing queued, no new spend. Unfixed on Etude main v0.2.11
 (`scheduler.py:1898-1902`); tracked as Etude EXP-13 (comment added).
 Compress 2026-10-28 (third): `guidance._build_policy_player` now checks its leaf evaluator by class identity instead of the name string it inherited from `players` → `tests/sim/test_puct_compatibility.py tests/sim/test_mcts.py` 21 passed. No other cut in `guidance`, `teacher1_evidence`, `verify.util`.
 Compress 2026-10-28 (fourth): `docs/shared-evaluation.md` no longer describes the retired one-allocation-per-group CPU layout; no cut in `model.inference`, `performance`, `replay`, `target_practice`, `decision_profile`, experiment runners. Docs only, no rerun.
 Compress 2026-10-28 (fifth): tests only. `test_batched_eval` imports `os`/`signal` at the top; the missing-target `ChildProcess` check is its own test → `tests/eval/test_batched_eval.py tests/sim/test_child_surface.py` 27 passed, 1 skipped. No cut in the small import-cutover diffs (`env`/`infra`/`model` packages, `heuristic`, `rollout`, `sim`, `belief.demo`) or the game-error fixtures.
+Compress 2026-10-28 (sixth): no cut in the remaining import-cutover files (`academy`, `model`, `config`, `eval.{admission,evaluate,cards,endpoint}`, `experiment.{runner,evaluation_queue,execution,study}`, `search.{puct,value,local_update}`, AGENTS.md); `ruff check` on all changed Python passed. No edits, no rerun.
