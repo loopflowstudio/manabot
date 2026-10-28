@@ -1,8 +1,8 @@
 """Explicit native/semantic bindings admitted for ordinary policy encoders.
 
 A policy catalog is not inferred from card names or tensor dimensions. Each
-entry names immutable compiled IR and two authored setups used to obtain its
-native transport IDs. The native compilation receipt must match the IR before
+entry names immutable compiled IR. Authored setups or the native pool descriptor
+supply its transport IDs. The native compilation receipt must match the IR before
 any IDs reach the encoder. Research pools must register their own exact entry;
 this module does not relax subset, checkpoint or setup admission.
 """
@@ -19,11 +19,13 @@ ROOT = Path(__file__).resolve().parents[2] / "content/semantic/current/generated
 @dataclass(frozen=True)
 class PolicyCatalogSpec:
     ir_file: str
-    setup_keys: tuple[str, str]
+    setup_keys: tuple[str, str] | None
     schema_file: str = "learning_schema.json"
 
 
 _CATALOGS = {
+    "tla-pool-v1": PolicyCatalogSpec("pool.ir.json", None),
+    "tla-baseline-v1": PolicyCatalogSpec("baseline.ir.json", ("tla_white", "tla_red")),
     "ur-lessons-vs-gw-allies": PolicyCatalogSpec(
         "two_deck.ir.json", ("ur_lessons", "gw_allies")
     ),
@@ -66,11 +68,27 @@ def bind_policy_catalog(pack_key: str) -> BoundSemanticPack:
         spec = _CATALOGS[pack_key]
     except KeyError as error:
         raise ValueError(f"unsupported policy semantic pack: {pack_key}") from error
-    engine = managym.Env(seed=0)
-    engine.reset(
-        [managym.authored_deck_setup(pack_key, key) for key in spec.setup_keys]
-    )
-    manifest = engine.content_pack_manifest()
+    if spec.setup_keys is None:
+        pool = managym.content_pool(pack_key)
+        manifest = {
+            "schema_version": 1,
+            "content_digest": pool["content_digest"],
+            "compiled_semantics": pool["compiled_semantics"],
+            "definitions": [
+                {
+                    "card_def_id": row["card_def_id"],
+                    "registry_name": row["registry_name"],
+                }
+                for row in pool["definitions"]
+                if row["card_def_id"] is not None
+            ],
+        }
+    else:
+        engine = managym.Env(seed=0)
+        engine.reset(
+            [managym.authored_deck_setup(pack_key, key) for key in spec.setup_keys]
+        )
+        manifest = engine.content_pack_manifest()
     pack = BoundSemanticPack.bind(
         manifest,
         ir_path=ROOT / spec.ir_file,

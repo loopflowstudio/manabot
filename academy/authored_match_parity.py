@@ -626,8 +626,9 @@ def _run_live(
 def _source_manifest() -> dict[str, Any]:
     paths = {
         "conformance/authored-match-w11-v1/release-stack-ur-vs-gw-seed-0.json",
-        "content/semantic/v1/generated/two_deck.ir.json",
-        "content/semantic/v1/two_deck.source.json",
+        "content/semantic/current/generated/two_deck.ir.json",
+        "content/semantic/current/definitions.json",
+        "content/semantic/current/setups.json",
         "academy/curated_pack.py",
         "academy/authored_match_parity.py",
         "academy/authored_match_receipt.py",

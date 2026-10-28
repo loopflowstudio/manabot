@@ -1,0 +1,107 @@
+{
+  "admission_closure_complete": true,
+  "deck_definition_count": 6,
+  "decks": [
+    {
+      "card_count": 40,
+      "key": "tla_red"
+    },
+    {
+      "card_count": 40,
+      "key": "tla_white"
+    }
+  ],
+  "definition_count": 7,
+  "definitions": [
+    {
+      "in_admission_closure": true,
+      "opcodes": [],
+      "program_count": 0,
+      "program_kinds": [],
+      "semantic_key": "sacrifice.ally"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "add_mana"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "mana"
+      ],
+      "semantic_key": "sacrifice.plains"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "add_mana"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "mana"
+      ],
+      "semantic_key": "temur.mountain"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "add_mana",
+        "put_counters"
+      ],
+      "program_count": 2,
+      "program_kinds": [
+        "activated",
+        "triggered"
+      ],
+      "semantic_key": "tla.fire_sages"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "scry"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "triggered"
+      ],
+      "semantic_key": "tla.glider_kids"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "create_token"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "triggered"
+      ],
+      "semantic_key": "tla.treetop_freedom_fighters"
+    },
+    {
+      "in_admission_closure": true,
+      "opcodes": [
+        "modify_controlled"
+      ],
+      "program_count": 1,
+      "program_kinds": [
+        "activated"
+      ],
+      "semantic_key": "tla.water_tribe_captain"
+    }
+  ],
+  "ir_hash": "e5e642b0967c75e8900668f83a9f1458ac8f7abbf344284550ff01f8e7469905",
+  "no_card_name_dispatch": true,
+  "opcode_counts": {
+    "add_mana": 3,
+    "create_token": 1,
+    "modify_controlled": 1,
+    "put_counters": 1,
+    "scry": 1
+  },
+  "pack_key": "tla-baseline-v1",
+  "program_count": 7,
+  "referenced_definition_count": 1,
+  "schema_version": 1,
+  "setup_schema_version": 1,
+  "source_hash": "e3a23c56cc15cd463f81a14a5f8a81fd78a5680f18ef1cb8eb8b5f121e8f6df1"
+}

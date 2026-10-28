@@ -1,0 +1,10 @@
+{
+  "T1":{"title":"Content authority and baseline cards","depends_on":[],"effort_weeks":[2,3],"external_dependency":"Accepted MTG-177 resolution contract, not assumed delivered","owner":"card definitions, content lowering, pool/setup contract, immutable identity"},
+  "T2":{"title":"Casting, costs, zone permissions and private zones","depends_on":["T1"],"effort_weeks":[5,9],"owner":"PaymentModel, cast planning, exact-zone grants, private search/choice"},
+  "T3":{"title":"Characteristics, counters, replacements and attachments","depends_on":["T1","T2"],"effort_weeks":[6,10],"owner":"effective characteristics/LKI, replacement event decisions, attachment relations and SBAs; build beside T2, land after shared cost integration"},
+  "T4":{"title":"Triggers, history and stack behavior","depends_on":["T2","T3"],"effort_weeks":[4,7],"owner":"trigger event matching/placement, resolution choices, ability/spell copies and retargeting"},
+  "T5":{"title":"Permanent copying and linked-ability primitives","depends_on":["T4"],"effort_weeks":[3,5],"owner":"copiable-value authority and dynamic ability inheritance; complete self-copy cards; arbitrary face-aware consumers finish in T6"},
+  "T6":{"title":"Sagas, faces, face-aware copies and turn scheduling","depends_on":["T4","T5"],"effort_weeks":[4,7],"owner":"face state, lore/chapter lifecycle, extra turns/combat, generic copy consumers of DFCs"},
+  "T7":{"title":"Player control and full-file acceptance","depends_on":["T5","T6","D1"],"effort_weeks":[3,7],"owner":"decision controller/visibility and global full-file interaction/consumer qualification"},
+  "D1":{"title":"Decklist-file import and shared setup admission","depends_on":["T1"],"effort_weeks":[1,2],"owner":"file ingestion, line diagnostics, retained source and API/CLI/UI setup cutover; build beside T1, integrate after its admission contract"}
+}

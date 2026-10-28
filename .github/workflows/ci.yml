@@ -191,6 +191,7 @@ jobs:
 
       - name: Check semantic coverage evidence
         run: |
+          uv run python -m scripts.compile_current_content --check
           uv run pytest tests/semantic/test_compiler.py tests/semantic/test_coverage_gate.py -q
           uv run scripts/generate_coverage_gaps.py --check
           uv run python scripts/compile_semantic_content.py --check \

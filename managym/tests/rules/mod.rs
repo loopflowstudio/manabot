@@ -30,3 +30,5 @@ pub mod ur_lessons_increment;
 pub mod sacrifice_cards;
 
 pub mod temur_cards;
+
+pub mod tla_content;

@@ -1750,18 +1750,6 @@
       "G"
     ]
   },
-  "Rocky Rebuke": {
-    "name": "Rocky Rebuke",
-    "mana_cost": "{1}{G}",
-    "type_line": "Instant",
-    "power": null,
-    "toughness": null,
-    "keywords": [],
-    "oracle_text": "Target creature you control deals damage equal to its power to target creature an opponent controls.",
-    "colors": [
-      "G"
-    ]
-  },
   "Airship Engine Room": {
     "name": "Airship Engine Room",
     "mana_cost": "",
@@ -1874,5 +1862,63 @@
     ],
     "oracle_text": "Vigilance\nWhen this land enters, scry 1. (Look at the top card of your library. You may put it on the bottom.)\n{T}: Add {C}.\n{1}, {T}: Add one mana of any color.",
     "colors": []
+  },
+  "Walltop Sentries": {
+    "name": "Walltop Sentries",
+    "mana_cost": "{2}{G}",
+    "type_line": "Creature — Human Soldier Ally",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Reach",
+      "Deathtouch"
+    ],
+    "oracle_text": "Reach, deathtouch\nWhen this creature dies, if there's a Lesson card in your graveyard, you gain 2 life.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Cat-Owl": {
+    "name": "Cat-Owl",
+    "mana_cost": "{3}{W/U}",
+    "type_line": "Creature — Cat Bird",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever this creature attacks, untap target artifact or creature.",
+    "colors": [
+      "U",
+      "W"
+    ]
+  },
+  "Earth Kingdom Soldier": {
+    "name": "Earth Kingdom Soldier",
+    "mana_cost": "{4}{G/W}",
+    "type_line": "Creature — Human Soldier",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [
+      "Vigilance"
+    ],
+    "oracle_text": "Vigilance\nWhen this creature enters, put a +1/+1 counter on each of up to two target creatures you control.",
+    "colors": [
+      "G",
+      "W"
+    ]
+  },
+  "Wandering Musicians": {
+    "name": "Wandering Musicians",
+    "mana_cost": "{3}{R/W}",
+    "type_line": "Creature — Human Bard Ally",
+    "power": "2",
+    "toughness": "5",
+    "keywords": [],
+    "oracle_text": "Whenever this creature attacks, creatures you control get +1/+0 until end of turn.",
+    "colors": [
+      "R",
+      "W"
+    ]
   }
 }

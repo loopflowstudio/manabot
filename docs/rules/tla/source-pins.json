@@ -1,0 +1,87 @@
+{
+  "inspected_repository_revision": "c5d406e3d2a701525c15c8500a30f7da7896cc40",
+  "rules_effective_date": "2026-09-25",
+  "inventory_policy": "Official checklist names/numbers plus Scryfall Oracle identity join; all 394 printings and 414 printing faces verified; 286 identities/294 faces. TLE-only cards excluded; TTLA producer closure included. No official Oracle-text completeness certification.",
+  "sources": [
+    {
+      "path": "scratch/tla-evidence/gallery.html",
+      "bytes": 303849,
+      "sha256": "12f0e438b045fdbee265082b9bd34a1b9f074733163ecc090c35863bb5e8aee4",
+      "url": "https://magic.wizards.com/en/products/avatar-the-last-airbender/card-image-gallery",
+      "retrieved_utc": "2026-10-28T18:56:27.883021+00:00",
+      "authority": "official_Wizards"
+    },
+    {
+      "path": "scratch/tla-evidence/rules.html",
+      "bytes": 150636,
+      "sha256": "ee00fd253dc4ea01c78ed6caaef7d789ba5a46dba0a80e4993a410a3c759dc56",
+      "url": "https://magic.wizards.com/en/rules",
+      "retrieved_utc": "2026-10-28T18:56:28.148477+00:00",
+      "authority": "official_Wizards"
+    },
+    {
+      "path": "scratch/tla-evidence/release-notes.html",
+      "bytes": 671298,
+      "sha256": "f47bfb42f763c90a96044941bec1274785d8193ddcab3f65a5d289ee9d4f04a4",
+      "url": "https://magic.wizards.com/en/news/feature/avatar-the-last-airbender-release-notes",
+      "retrieved_utc": "2026-10-28T18:56:29.564502+00:00",
+      "authority": "official_Wizards"
+    },
+    {
+      "path": "scratch/tla-evidence/collecting.html",
+      "bytes": 252525,
+      "sha256": "918726b082389c49f6fdbefc89160567048b1af889c4a6dc7ed09042a9b72436",
+      "url": "https://magic.wizards.com/en/news/feature/collecting-avatar-the-last-airbender",
+      "retrieved_utc": "2026-10-28T19:09:21.967727+00:00",
+      "authority": "official_Wizards"
+    },
+    {
+      "path": "scratch/tla-evidence/official-card-list.pdf",
+      "bytes": 670702,
+      "sha256": "6f4d874899d49ea480ff1b98487a1b955f17eea8e4dfc7b04ffaffa97bee600a",
+      "url": "https://media.wizards.com/2025/downloads/card-sets/TLA_Cardlist_11182025.pdf",
+      "retrieved_utc": "2026-10-28T18:58:21.316951+00:00",
+      "authority": "official_Wizards"
+    },
+    {
+      "path": "scratch/tla-evidence/comprehensive-rules.txt",
+      "bytes": 977752,
+      "sha256": "8d860e451f20f38865b725b42d82feb714c725373dd8f3b32b8652b3eeb070ca",
+      "url": "https://media.wizards.com/2026/downloads/MagicCompRules%2020260925.txt",
+      "retrieved_utc": "2026-10-28T18:57:41.062553+00:00",
+      "authority": "official_Wizards"
+    },
+    {
+      "path": "scratch/tla-evidence/scryfall-tla-1.json",
+      "bytes": 947705,
+      "sha256": "b26f8e923629ebd2d3f6f73cab4f5859a3549b698f31563471fbd4554590eff3",
+      "url": "https://api.scryfall.com/cards/search?q=set%3Atla&unique=prints&order=set",
+      "retrieved_utc": "2026-10-28T18:56:30.014888+00:00",
+      "authority": "secondary_transcription"
+    },
+    {
+      "path": "scratch/tla-evidence/scryfall-tla-2.json",
+      "bytes": 948986,
+      "sha256": "4f517e7404e688cdc735f5c922c4add8e931251c4f6af9fffebf9a2e79e8d316",
+      "url": "https://api.scryfall.com/cards/search?q=set%3Atla&unique=prints&order=set&page=2",
+      "retrieved_utc": "2026-10-28T18:57:42.009529+00:00",
+      "authority": "secondary_transcription"
+    },
+    {
+      "path": "scratch/tla-evidence/scryfall-tla-3.json",
+      "bytes": 253693,
+      "sha256": "541b6ef06ee618e9fda301a6d2a1c75d4d19ab5c8eeb0b28631f13a6f9ff1639",
+      "url": "https://api.scryfall.com/cards/search?q=set%3Atla&unique=prints&order=set&page=3",
+      "retrieved_utc": "2026-10-28T18:57:42.469130+00:00",
+      "authority": "secondary_transcription"
+    },
+    {
+      "path": "scratch/tla-evidence/scryfall-ttla.json",
+      "bytes": 716984,
+      "sha256": "d6e8b3318e066efafa88bf2f8cbf6882f0c32c87fd03f8bc1747a806d7fbb181",
+      "url": "https://api.scryfall.com/cards/search?q=set%3Attla&unique=prints&order=set",
+      "retrieved_utc": "2026-10-28T18:57:42.880255+00:00",
+      "authority": "secondary_transcription"
+    }
+  ]
+}

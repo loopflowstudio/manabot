@@ -1,0 +1,372 @@
+{
+  "decks": [
+    {
+      "card_count": 40,
+      "cards": [
+        {
+          "count": 24,
+          "definition_index": 2
+        },
+        {
+          "count": 8,
+          "definition_index": 3
+        },
+        {
+          "count": 8,
+          "definition_index": 5
+        }
+      ],
+      "key": "tla_red",
+      "sideboard": []
+    },
+    {
+      "card_count": 40,
+      "cards": [
+        {
+          "count": 24,
+          "definition_index": 1
+        },
+        {
+          "count": 8,
+          "definition_index": 4
+        },
+        {
+          "count": 8,
+          "definition_index": 6
+        }
+      ],
+      "key": "tla_white",
+      "sideboard": []
+    }
+  ],
+  "definitions": [
+    {
+      "characteristics": {
+        "colors": [
+          "W"
+        ],
+        "keywords": [],
+        "power": 1,
+        "subtypes": [
+          "Ally"
+        ],
+        "supertypes": [],
+        "token": true,
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Ally"
+      },
+      "program_indexes": [],
+      "semantic_index": 0,
+      "semantic_key": "sacrifice.ally",
+      "text_box": ""
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Plains"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Plains"
+      },
+      "program_indexes": [
+        0
+      ],
+      "semantic_index": 1,
+      "semantic_key": "sacrifice.plains",
+      "text_box": "({T}: Add {W}.)"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Mountain"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Mountain"
+      },
+      "program_indexes": [
+        1
+      ],
+      "semantic_index": 2,
+      "semantic_key": "temur.mountain",
+      "text_box": "({T}: Add {R}.)"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "{1}{R}",
+        "power": 2,
+        "subtypes": [
+          "Human",
+          "Cleric"
+        ],
+        "toughness": 2,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Fire Sages"
+      },
+      "program_indexes": [
+        2,
+        3
+      ],
+      "semantic_index": 3,
+      "semantic_key": "tla.fire_sages",
+      "text_box": "Firebending 1 (Whenever this creature attacks, add {R}. This mana lasts until end of combat.)\n{1}{R}{R}: Put a +1/+1 counter on this creature."
+    },
+    {
+      "characteristics": {
+        "keywords": [
+          "flying"
+        ],
+        "mana_cost": "{2}{W}",
+        "power": 2,
+        "subtypes": [
+          "Human",
+          "Pilot",
+          "Ally"
+        ],
+        "toughness": 3,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Glider Kids"
+      },
+      "program_indexes": [
+        4
+      ],
+      "semantic_index": 4,
+      "semantic_key": "tla.glider_kids",
+      "text_box": "Flying\nWhen this creature enters, scry 1. (Look at the top card of your library. You may put it on the bottom.)"
+    },
+    {
+      "characteristics": {
+        "keywords": [
+          "haste"
+        ],
+        "mana_cost": "{2}{R}",
+        "power": 2,
+        "subtypes": [
+          "Human",
+          "Rebel",
+          "Ally"
+        ],
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Treetop Freedom Fighters"
+      },
+      "program_indexes": [
+        5
+      ],
+      "semantic_index": 5,
+      "semantic_key": "tla.treetop_freedom_fighters",
+      "text_box": "Haste\nWhen this creature enters, create a 1/1 white Ally creature token."
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "{2}{W}",
+        "power": 3,
+        "subtypes": [
+          "Human",
+          "Soldier",
+          "Ally"
+        ],
+        "toughness": 3,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Water Tribe Captain"
+      },
+      "program_indexes": [
+        6
+      ],
+      "semantic_index": 6,
+      "semantic_key": "tla.water_tribe_captain",
+      "text_box": "{5}: Creatures you control get +1/+1 until end of turn."
+    }
+  ],
+  "ir_hash": "e5e642b0967c75e8900668f83a9f1458ac8f7abbf344284550ff01f8e7469905",
+  "pack_key": "tla-baseline-v1",
+  "programs": [
+    {
+      "definition_index": 1,
+      "instructions": [
+        {
+          "mana": "W",
+          "op_name": "add_mana",
+          "opcode": 1
+        }
+      ],
+      "kind": 1,
+      "kind_name": "mana",
+      "program_index": 0,
+      "semantic_key": "sacrifice.plains.p0",
+      "targets": []
+    },
+    {
+      "definition_index": 2,
+      "instructions": [
+        {
+          "mana": "R",
+          "op_name": "add_mana",
+          "opcode": 1
+        }
+      ],
+      "kind": 1,
+      "kind_name": "mana",
+      "program_index": 1,
+      "semantic_key": "temur.mountain.p0",
+      "targets": []
+    },
+    {
+      "definition_index": 3,
+      "instructions": [
+        {
+          "mana": "R",
+          "op_name": "add_mana",
+          "opcode": 1,
+          "until": "end_of_combat"
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 2,
+      "semantic_key": "tla.fire_sages.firebend",
+      "targets": [],
+      "trigger": {
+        "event": "attacks",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "cost": {
+        "mana": "1RR"
+      },
+      "definition_index": 3,
+      "instructions": [
+        {
+          "count": 1,
+          "op_name": "put_counters",
+          "opcode": 5,
+          "target": "source"
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 3,
+      "semantic_key": "tla.fire_sages.grow",
+      "targets": []
+    },
+    {
+      "definition_index": 4,
+      "instructions": [
+        {
+          "count": 1,
+          "op_name": "scry",
+          "opcode": 7
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 4,
+      "semantic_key": "tla.glider_kids.scry",
+      "targets": [],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 5,
+      "instructions": [
+        {
+          "count": 1,
+          "definition_index": 0,
+          "op_name": "create_token",
+          "opcode": 4
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 5,
+      "semantic_key": "tla.treetop_freedom_fighters.reinforcements",
+      "targets": [],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "cost": {
+        "mana": "5"
+      },
+      "definition_index": 6,
+      "instructions": [
+        {
+          "op_name": "modify_controlled",
+          "opcode": 60,
+          "power": 1,
+          "predicate": {
+            "kind": "card_type",
+            "value": "creature"
+          },
+          "toughness": 1
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 6,
+      "semantic_key": "tla.water_tribe_captain.rally",
+      "targets": []
+    }
+  ],
+  "schema_version": 1,
+  "setup_schema_version": 1,
+  "source_hash": "e3a23c56cc15cd463f81a14a5f8a81fd78a5680f18ef1cb8eb8b5f121e8f6df1"
+}

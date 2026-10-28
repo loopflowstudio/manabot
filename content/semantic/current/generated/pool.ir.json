@@ -2009,8 +2009,7 @@
       },
       "program_indexes": [
         99,
-        100,
-        101
+        100
       ],
       "semantic_index": 82,
       "semantic_key": "tla.airship_engine_room",
@@ -2028,7 +2027,7 @@
         "value": "Allies at Last"
       },
       "program_indexes": [
-        102
+        101
       ],
       "semantic_index": 83,
       "semantic_key": "tla.allies_at_last",
@@ -2054,7 +2053,7 @@
         "value": "Avatar Enthusiasts"
       },
       "program_indexes": [
-        103
+        102
       ],
       "semantic_index": 84,
       "semantic_key": "tla.avatar_enthusiasts",
@@ -2078,8 +2077,8 @@
         "value": "Badgermole Cub"
       },
       "program_indexes": [
-        104,
-        105
+        103,
+        104
       ],
       "semantic_index": 85,
       "semantic_key": "tla.badgermole_cub",
@@ -2104,7 +2103,7 @@
         "value": "Boar-q-pine"
       },
       "program_indexes": [
-        106
+        105
       ],
       "semantic_index": 86,
       "semantic_key": "tla.boar_q_pine",
@@ -2124,13 +2123,39 @@
         "value": "Boiling Rock Prison"
       },
       "program_indexes": [
-        107,
-        108,
-        109
+        106,
+        107
       ],
       "semantic_index": 87,
       "semantic_key": "tla.boiling_rock_prison",
       "text_box": "This land enters tapped.\n{T}: Add {B} or {R}.\n{4}, {T}, Sacrifice this land: Draw a card."
+    },
+    {
+      "characteristics": {
+        "keywords": [
+          "flying"
+        ],
+        "mana_cost": "{3}{W/U}",
+        "power": 3,
+        "subtypes": [
+          "Cat",
+          "Bird"
+        ],
+        "toughness": 3,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Cat-Owl"
+      },
+      "program_indexes": [
+        108
+      ],
+      "semantic_index": 88,
+      "semantic_key": "tla.cat_owl",
+      "text_box": "Flying\nWhenever this creature attacks, untap target artifact or creature."
     },
     {
       "characteristics": {
@@ -2151,9 +2176,9 @@
         "value": "Compassionate Healer"
       },
       "program_indexes": [
-        110
+        109
       ],
-      "semantic_index": 88,
+      "semantic_index": 89,
       "semantic_key": "tla.compassionate_healer",
       "text_box": "Whenever this creature becomes tapped, you gain 1 life and scry 1. (Look at the top card of your library. You may put it on the bottom.)"
     },
@@ -2171,9 +2196,9 @@
         "value": "Cunning Maneuver"
       },
       "program_indexes": [
-        111
+        110
       ],
-      "semantic_index": 89,
+      "semantic_index": 90,
       "semantic_key": "tla.cunning_maneuver",
       "text_box": "Target creature gets +3/+1 until end of turn.\nCreate a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")"
     },
@@ -2198,11 +2223,11 @@
         "value": "Dragonfly Swarm"
       },
       "program_indexes": [
+        111,
         112,
-        113,
-        114
+        113
       ],
-      "semantic_index": 90,
+      "semantic_index": 91,
       "semantic_key": "tla.dragonfly_swarm",
       "text_box": "Flying, ward {1} (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays {1}.)\nThis creature's power is equal to the number of noncreature, nonland cards in your graveyard.\nWhen this creature dies, if there's a Lesson card in your graveyard, draw a card."
     },
@@ -2225,9 +2250,9 @@
         "value": "Earth Kingdom Jailer"
       },
       "program_indexes": [
-        115
+        114
       ],
-      "semantic_index": 91,
+      "semantic_index": 92,
       "semantic_key": "tla.earth_kingdom_jailer",
       "text_box": "When this creature enters, exile up to one target artifact, creature, or enchantment an opponent controls with mana value 3 or greater until this creature leaves the battlefield."
     },
@@ -2253,11 +2278,38 @@
         "value": "Earth Kingdom Protectors"
       },
       "program_indexes": [
-        116
+        115
       ],
-      "semantic_index": 92,
+      "semantic_index": 93,
       "semantic_key": "tla.earth_kingdom_protectors",
       "text_box": "Vigilance\nSacrifice this creature: Another target Ally you control gains indestructible until end of turn. (Damage and effects that say \"destroy\" don't destroy it.)"
+    },
+    {
+      "characteristics": {
+        "keywords": [
+          "vigilance"
+        ],
+        "mana_cost": "{4}{G/W}",
+        "power": 3,
+        "subtypes": [
+          "Human",
+          "Soldier"
+        ],
+        "toughness": 4,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Earth Kingdom Soldier"
+      },
+      "program_indexes": [
+        116
+      ],
+      "semantic_index": 94,
+      "semantic_key": "tla.earth_kingdom_soldier",
+      "text_box": "Vigilance\nWhen this creature enters, put a +1/+1 counter on each of up to two target creatures you control."
     },
     {
       "characteristics": {
@@ -2284,7 +2336,7 @@
         117,
         118
       ],
-      "semantic_index": 93,
+      "semantic_index": 95,
       "semantic_key": "tla.earth_kings_lieutenant",
       "text_box": "Trample\nWhen this creature enters, put a +1/+1 counter on each other Ally creature you control.\nWhenever another Ally you control enters, put a +1/+1 counter on this creature."
     },
@@ -2305,7 +2357,7 @@
       "program_indexes": [
         119
       ],
-      "semantic_index": 94,
+      "semantic_index": 96,
       "semantic_key": "tla.fancy_footwork",
       "text_box": "Untap one or two target creatures. They each get +2/+2 until end of turn."
     },
@@ -2330,7 +2382,7 @@
         120,
         121
       ],
-      "semantic_index": 95,
+      "semantic_index": 97,
       "semantic_key": "tla.fire_nation_cadets",
       "text_box": "This creature has firebending 2 as long as there's a Lesson card in your graveyard. (Whenever this creature attacks, add {R}{R}. This mana lasts until end of combat.)\n{2}: This creature gets +1/+0 until end of turn."
     },
@@ -2356,7 +2408,7 @@
         122,
         123
       ],
-      "semantic_index": 96,
+      "semantic_index": 98,
       "semantic_key": "tla.fire_sages",
       "text_box": "Firebending 1 (Whenever this creature attacks, add {R}. This mana lasts until end of combat.)\n{1}{R}{R}: Put a +1/+1 counter on this creature."
     },
@@ -2377,7 +2429,7 @@
       "program_indexes": [
         124
       ],
-      "semantic_index": 97,
+      "semantic_index": 99,
       "semantic_key": "tla.firebending_lesson",
       "text_box": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nFirebending Lesson deals 2 damage to target creature. If this spell was kicked, it deals 5 damage to that creature instead."
     },
@@ -2405,7 +2457,7 @@
       "program_indexes": [
         125
       ],
-      "semantic_index": 98,
+      "semantic_index": 100,
       "semantic_key": "tla.first_time_flyer",
       "text_box": "Flying\nThis creature gets +1/+1 as long as there's a Lesson card in your graveyard."
     },
@@ -2424,10 +2476,9 @@
       },
       "program_indexes": [
         126,
-        127,
-        128
+        127
       ],
-      "semantic_index": 99,
+      "semantic_index": 101,
       "semantic_key": "tla.foggy_bottom_swamp",
       "text_box": "This land enters tapped.\n{T}: Add {B} or {G}.\n{4}, {T}, Sacrifice this land: Draw a card."
     },
@@ -2450,9 +2501,9 @@
         "value": "Forecasting Fortune Teller"
       },
       "program_indexes": [
-        129
+        128
       ],
-      "semantic_index": 100,
+      "semantic_index": 102,
       "semantic_key": "tla.forecasting_fortune_teller",
       "text_box": "When this creature enters, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")"
     },
@@ -2478,9 +2529,9 @@
         "value": "Glider Kids"
       },
       "program_indexes": [
-        130
+        129
       ],
-      "semantic_index": 101,
+      "semantic_index": 103,
       "semantic_key": "tla.glider_kids",
       "text_box": "Flying\nWhen this creature enters, scry 1. (Look at the top card of your library. You may put it on the bottom.)"
     },
@@ -2507,9 +2558,9 @@
         "value": "Iguana Parrot"
       },
       "program_indexes": [
-        131
+        130
       ],
-      "semantic_index": 102,
+      "semantic_index": 104,
       "semantic_key": "tla.iguana_parrot",
       "text_box": "Flying, vigilance\nProwess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)"
     },
@@ -2535,9 +2586,9 @@
         "value": "Invasion Reinforcements"
       },
       "program_indexes": [
-        132
+        131
       ],
-      "semantic_index": 103,
+      "semantic_index": 105,
       "semantic_key": "tla.invasion_reinforcements",
       "text_box": "Flash\nWhen this creature enters, create a 1/1 white Ally creature token."
     },
@@ -2556,9 +2607,9 @@
         "value": "It'll Quench Ya!"
       },
       "program_indexes": [
-        133
+        132
       ],
-      "semantic_index": 104,
+      "semantic_index": 106,
       "semantic_key": "tla.itll_quench_ya",
       "text_box": "Counter target spell unless its controller pays {2}."
     },
@@ -2581,9 +2632,9 @@
         "value": "Jeong Jeong's Deserters"
       },
       "program_indexes": [
-        134
+        133
       ],
-      "semantic_index": 105,
+      "semantic_index": 107,
       "semantic_key": "tla.jeong_jeongs_deserters",
       "text_box": "When this creature enters, put a +1/+1 counter on target creature."
     },
@@ -2601,11 +2652,10 @@
         "value": "Kyoshi Village"
       },
       "program_indexes": [
-        135,
-        136,
-        137
+        134,
+        135
       ],
-      "semantic_index": 106,
+      "semantic_index": 108,
       "semantic_key": "tla.kyoshi_village",
       "text_box": "This land enters tapped.\n{T}: Add {G} or {W}.\n{4}, {T}, Sacrifice this land: Draw a card."
     },
@@ -2628,9 +2678,9 @@
         "value": "Kyoshi Warriors"
       },
       "program_indexes": [
-        138
+        136
       ],
-      "semantic_index": 107,
+      "semantic_index": 109,
       "semantic_key": "tla.kyoshi_warriors",
       "text_box": "When this creature enters, create a 1/1 white Ally creature token."
     },
@@ -2648,11 +2698,10 @@
         "value": "Meditation Pools"
       },
       "program_indexes": [
-        139,
-        140,
-        141
+        137,
+        138
       ],
-      "semantic_index": 108,
+      "semantic_index": 110,
       "semantic_key": "tla.meditation_pools",
       "text_box": "This land enters tapped.\n{T}: Add {G} or {U}.\n{4}, {T}, Sacrifice this land: Draw a card."
     },
@@ -2670,11 +2719,10 @@
         "value": "Misty Palms Oasis"
       },
       "program_indexes": [
-        142,
-        143,
-        144
+        139,
+        140
       ],
-      "semantic_index": 109,
+      "semantic_index": 111,
       "semantic_key": "tla.misty_palms_oasis",
       "text_box": "This land enters tapped.\n{T}: Add {W} or {B}.\n{4}, {T}, Sacrifice this land: Draw a card."
     },
@@ -2692,11 +2740,10 @@
         "value": "North Pole Gates"
       },
       "program_indexes": [
-        145,
-        146,
-        147
+        141,
+        142
       ],
-      "semantic_index": 110,
+      "semantic_index": 112,
       "semantic_key": "tla.north_pole_gates",
       "text_box": "This land enters tapped.\n{T}: Add {W} or {U}.\n{4}, {T}, Sacrifice this land: Draw a card."
     },
@@ -2714,11 +2761,10 @@
         "value": "Omashu City"
       },
       "program_indexes": [
-        148,
-        149,
-        150
+        143,
+        144
       ],
-      "semantic_index": 111,
+      "semantic_index": 113,
       "semantic_key": "tla.omashu_city",
       "text_box": "This land enters tapped.\n{T}: Add {R} or {G}.\n{4}, {T}, Sacrifice this land: Draw a card."
     },
@@ -2740,9 +2786,9 @@
         "value": "Otter-Penguin"
       },
       "program_indexes": [
-        151
+        145
       ],
-      "semantic_index": 112,
+      "semantic_index": 114,
       "semantic_key": "tla.otter_penguin",
       "text_box": "Whenever you draw your second card each turn, this creature gets +1/+2 until end of turn and can't be blocked this turn."
     },
@@ -2760,31 +2806,11 @@
         "value": "Pillar Launch"
       },
       "program_indexes": [
-        152
+        146
       ],
-      "semantic_index": 113,
+      "semantic_index": 115,
       "semantic_key": "tla.pillar_launch",
       "text_box": "Target creature gets +2/+2 and gains reach until end of turn. Untap it."
-    },
-    {
-      "characteristics": {
-        "keywords": [],
-        "mana_cost": "{1}{G}",
-        "subtypes": [],
-        "types": [
-          "instant"
-        ]
-      },
-      "content_pack_binding": {
-        "kind": "legacy_registry_name",
-        "value": "Rocky Rebuke"
-      },
-      "program_indexes": [
-        153
-      ],
-      "semantic_index": 114,
-      "semantic_key": "tla.rocky_rebuke",
-      "text_box": "Target creature you control deals damage equal to its power to target creature an opponent controls."
     },
     {
       "characteristics": {
@@ -2801,11 +2827,11 @@
         "value": "Rumble Arena"
       },
       "program_indexes": [
-        154,
-        155,
-        156
+        147,
+        148,
+        149
       ],
-      "semantic_index": 115,
+      "semantic_index": 116,
       "semantic_key": "tla.rumble_arena",
       "text_box": "Vigilance\nWhen this land enters, scry 1. (Look at the top card of your library. You may put it on the bottom.)\n{T}: Add {C}.\n{1}, {T}: Add one mana of any color."
     },
@@ -2823,11 +2849,10 @@
         "value": "Serpent's Pass"
       },
       "program_indexes": [
-        157,
-        158,
-        159
+        150,
+        151
       ],
-      "semantic_index": 116,
+      "semantic_index": 117,
       "semantic_key": "tla.serpents_pass",
       "text_box": "This land enters tapped.\n{T}: Add {U} or {B}.\n{4}, {T}, Sacrifice this land: Draw a card."
     },
@@ -2850,9 +2875,9 @@
         "value": "South Pole Voyager"
       },
       "program_indexes": [
-        160
+        152
       ],
-      "semantic_index": 117,
+      "semantic_index": 118,
       "semantic_key": "tla.south_pole_voyager",
       "text_box": "Whenever this creature or another Ally you control enters, you gain 1 life. If this is the second time this ability has resolved this turn, draw a card."
     },
@@ -2878,10 +2903,10 @@
         "value": "Suki, Kyoshi Warrior"
       },
       "program_indexes": [
-        161,
-        162
+        153,
+        154
       ],
-      "semantic_index": 118,
+      "semantic_index": 119,
       "semantic_key": "tla.suki_kyoshi_warrior",
       "text_box": "Suki's power is equal to the number of creatures you control.\nWhenever Suki attacks, create a 1/1 white Ally creature token that's tapped and attacking."
     },
@@ -2899,11 +2924,10 @@
         "value": "Sun-Blessed Peak"
       },
       "program_indexes": [
-        163,
-        164,
-        165
+        155,
+        156
       ],
-      "semantic_index": 119,
+      "semantic_index": 120,
       "semantic_key": "tla.sun_blessed_peak",
       "text_box": "This land enters tapped.\n{T}: Add {R} or {W}.\n{4}, {T}, Sacrifice this land: Draw a card."
     },
@@ -2928,10 +2952,10 @@
         "value": "Tiger-Seal"
       },
       "program_indexes": [
-        166,
-        167
+        157,
+        158
       ],
-      "semantic_index": 120,
+      "semantic_index": 121,
       "semantic_key": "tla.tiger_seal",
       "text_box": "Vigilance\nAt the beginning of your upkeep, tap this creature.\nWhenever you draw your second card each turn, untap this creature."
     },
@@ -2957,11 +2981,66 @@
         "value": "Treetop Freedom Fighters"
       },
       "program_indexes": [
-        168
+        159
       ],
-      "semantic_index": 121,
+      "semantic_index": 122,
       "semantic_key": "tla.treetop_freedom_fighters",
       "text_box": "Haste\nWhen this creature enters, create a 1/1 white Ally creature token."
+    },
+    {
+      "characteristics": {
+        "keywords": [
+          "reach",
+          "deathtouch"
+        ],
+        "mana_cost": "{2}{G}",
+        "power": 2,
+        "subtypes": [
+          "Human",
+          "Soldier",
+          "Ally"
+        ],
+        "toughness": 3,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Walltop Sentries"
+      },
+      "program_indexes": [
+        160
+      ],
+      "semantic_index": 123,
+      "semantic_key": "tla.walltop_sentries",
+      "text_box": "Reach, deathtouch\nWhen this creature dies, if there's a Lesson card in your graveyard, you gain 2 life."
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "{3}{R/W}",
+        "power": 2,
+        "subtypes": [
+          "Human",
+          "Bard",
+          "Ally"
+        ],
+        "toughness": 5,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Wandering Musicians"
+      },
+      "program_indexes": [
+        161
+      ],
+      "semantic_index": 124,
+      "semantic_key": "tla.wandering_musicians",
+      "text_box": "Whenever this creature attacks, creatures you control get +1/+0 until end of turn."
     },
     {
       "characteristics": {
@@ -2983,9 +3062,9 @@
         "value": "Water Tribe Captain"
       },
       "program_indexes": [
-        169
+        162
       ],
-      "semantic_index": 122,
+      "semantic_index": 125,
       "semantic_key": "tla.water_tribe_captain",
       "text_box": "{5}: Creatures you control get +1/+1 until end of turn."
     },
@@ -3008,9 +3087,9 @@
         "value": "Water Tribe Rallier"
       },
       "program_indexes": [
-        170
+        163
       ],
-      "semantic_index": 123,
+      "semantic_index": 126,
       "semantic_key": "tla.water_tribe_rallier",
       "text_box": "Waterbend {5}: Look at the top four cards of your library. You may reveal a creature card with power 3 or less from among them and put it into your hand. Put the rest on the bottom of your library in a random order. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)"
     },
@@ -3036,9 +3115,9 @@
         "value": "White Lotus Reinforcements"
       },
       "program_indexes": [
-        171
+        164
       ],
-      "semantic_index": 124,
+      "semantic_index": 127,
       "semantic_key": "tla.white_lotus_reinforcements",
       "text_box": "Vigilance\nOther Allies you control get +1/+1."
     },
@@ -3057,9 +3136,9 @@
         "value": "Yip Yip!"
       },
       "program_indexes": [
-        172
+        165
       ],
-      "semantic_index": 125,
+      "semantic_index": 128,
       "semantic_key": "tla.yip_yip",
       "text_box": "Target creature you control gets +2/+2 until end of turn. If that creature is an Ally, it also gains flying until end of turn."
     },
@@ -3084,11 +3163,145 @@
         "value": "Yuyan Archers"
       },
       "program_indexes": [
-        173
+        166
       ],
-      "semantic_index": 126,
+      "semantic_index": 129,
       "semantic_key": "tla.yuyan_archers",
       "text_box": "Reach\nWhen this creature enters, you may discard a card. If you do, draw a card."
+    },
+    {
+      "characteristics": {
+        "colors": [],
+        "keywords": [
+          "flying"
+        ],
+        "power": 2,
+        "subtypes": [
+          "Construct"
+        ],
+        "token": true,
+        "toughness": 1,
+        "types": [
+          "artifact",
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Ballistic Boulder"
+      },
+      "program_indexes": [],
+      "semantic_index": 130,
+      "semantic_key": "token.ballistic_boulder",
+      "text_box": "Flying"
+    },
+    {
+      "characteristics": {
+        "colors": [
+          "G"
+        ],
+        "keywords": [],
+        "power": 4,
+        "subtypes": [
+          "Bear"
+        ],
+        "token": true,
+        "toughness": 4,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Bear"
+      },
+      "program_indexes": [],
+      "semantic_index": 131,
+      "semantic_key": "token.bear",
+      "text_box": ""
+    },
+    {
+      "characteristics": {
+        "colors": [
+          "R"
+        ],
+        "keywords": [
+          "flying"
+        ],
+        "power": 4,
+        "subtypes": [
+          "Dragon"
+        ],
+        "token": true,
+        "toughness": 4,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Dragon"
+      },
+      "program_indexes": [
+        167
+      ],
+      "semantic_index": 132,
+      "semantic_key": "token.dragon",
+      "text_box": "Flying, firebending 4 (Whenever this token attacks, add {R}{R}{R}{R} to your mana pool. This mana lasts until end of combat.)"
+    },
+    {
+      "characteristics": {
+        "colors": [
+          "R"
+        ],
+        "keywords": [],
+        "power": 1,
+        "subtypes": [
+          "Monk"
+        ],
+        "token": true,
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Monk"
+      },
+      "program_indexes": [
+        168
+      ],
+      "semantic_index": 133,
+      "semantic_key": "token.monk",
+      "text_box": "Prowess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)"
+    },
+    {
+      "characteristics": {
+        "colors": [
+          "R"
+        ],
+        "keywords": [],
+        "power": 2,
+        "subtypes": [
+          "Soldier"
+        ],
+        "token": true,
+        "toughness": 2,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Soldier"
+      },
+      "program_indexes": [
+        169
+      ],
+      "semantic_index": 134,
+      "semantic_key": "token.soldier",
+      "text_box": "Firebending 1 (Whenever this token attacks, add {R}. This mana lasts until end of combat.)"
     },
     {
       "characteristics": {
@@ -3108,15 +3321,15 @@
         "value": "Spirit"
       },
       "program_indexes": [
-        174,
-        175
+        170,
+        171
       ],
-      "semantic_index": 127,
+      "semantic_index": 135,
       "semantic_key": "token.spirit",
       "text_box": "This token can't block or be blocked by non-Spirit creatures."
     }
   ],
-  "ir_hash": "f270799fa0230b03dc0684768ed139a4f918fcd17ef7ff133f7bf455ff8023d7",
+  "ir_hash": "18cd1450ce12f342702b925598509dfdad7ded1fc7129e5afb0ce5eeb0863554",
   "pack_key": "tla-pool-v1",
   "programs": [
     {
@@ -3740,7 +3953,7 @@
       "instructions": [
         {
           "count": 1,
-          "definition_index": 127,
+          "definition_index": 135,
           "op_name": "create_token",
           "opcode": 4,
           "tapped_and_attacking": false
@@ -6421,33 +6634,37 @@
       "targets": []
     },
     {
+      "cost": {
+        "mana": "0",
+        "tap_source": true
+      },
       "definition_index": 82,
       "instructions": [
         {
-          "mana": "R",
-          "op_name": "add_mana",
-          "opcode": 1
+          "modes": [
+            [
+              {
+                "mana": "U",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "R",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ]
+          ],
+          "op_name": "modal",
+          "opcode": 43
         }
       ],
-      "kind": 1,
-      "kind_name": "mana",
+      "kind": 4,
+      "kind_name": "activated",
       "program_index": 100,
-      "semantic_key": "tla.airship_engine_room.mana_R",
-      "targets": []
-    },
-    {
-      "definition_index": 82,
-      "instructions": [
-        {
-          "mana": "U",
-          "op_name": "add_mana",
-          "opcode": 1
-        }
-      ],
-      "kind": 1,
-      "kind_name": "mana",
-      "program_index": 101,
-      "semantic_key": "tla.airship_engine_room.mana_U",
+      "semantic_key": "tla.airship_engine_room.mana",
       "targets": []
     },
     {
@@ -6469,7 +6686,7 @@
       ],
       "kind": 2,
       "kind_name": "spell",
-      "program_index": 102,
+      "program_index": 101,
       "semantic_key": "tla.allies_at_last.spell",
       "targets": [
         {
@@ -6502,7 +6719,7 @@
       ],
       "kind": 3,
       "kind_name": "triggered",
-      "program_index": 103,
+      "program_index": 102,
       "semantic_key": "tla.avatar_enthusiasts.ally_enters",
       "targets": [],
       "trigger": {
@@ -6528,7 +6745,7 @@
       ],
       "kind": 3,
       "kind_name": "triggered",
-      "program_index": 104,
+      "program_index": 103,
       "semantic_key": "tla.badgermole_cub.earthbend",
       "targets": [
         {
@@ -6558,7 +6775,7 @@
       ],
       "kind": 6,
       "kind_name": "triggered_mana",
-      "program_index": 105,
+      "program_index": 104,
       "semantic_key": "tla.badgermole_cub.waterbend_bonus",
       "targets": [],
       "trigger": {
@@ -6584,7 +6801,7 @@
       ],
       "kind": 3,
       "kind_name": "triggered",
-      "program_index": 106,
+      "program_index": 105,
       "semantic_key": "tla.boar_q_pine.grow",
       "targets": [],
       "trigger": {
@@ -6616,42 +6833,83 @@
       ],
       "kind": 4,
       "kind_name": "activated",
-      "program_index": 107,
+      "program_index": 106,
       "semantic_key": "tla.boiling_rock_prison.draw",
       "targets": []
     },
     {
+      "cost": {
+        "mana": "0",
+        "tap_source": true
+      },
       "definition_index": 87,
       "instructions": [
         {
-          "mana": "B",
-          "op_name": "add_mana",
-          "opcode": 1
+          "modes": [
+            [
+              {
+                "mana": "B",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "R",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ]
+          ],
+          "op_name": "modal",
+          "opcode": 43
         }
       ],
-      "kind": 1,
-      "kind_name": "mana",
-      "program_index": 108,
-      "semantic_key": "tla.boiling_rock_prison.mana_B",
-      "targets": []
-    },
-    {
-      "definition_index": 87,
-      "instructions": [
-        {
-          "mana": "R",
-          "op_name": "add_mana",
-          "opcode": 1
-        }
-      ],
-      "kind": 1,
-      "kind_name": "mana",
-      "program_index": 109,
-      "semantic_key": "tla.boiling_rock_prison.mana_R",
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 107,
+      "semantic_key": "tla.boiling_rock_prison.mana",
       "targets": []
     },
     {
       "definition_index": 88,
+      "instructions": [
+        {
+          "op_name": "untap",
+          "opcode": 9,
+          "target": "permanent"
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 108,
+      "semantic_key": "tla.cat_owl.ability",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "permanent",
+          "selector": {
+            "kind": "permanent",
+            "predicate": {
+              "kind": "types_any",
+              "values": [
+                "artifact",
+                "creature"
+              ]
+            }
+          }
+        }
+      ],
+      "trigger": {
+        "event": "attacks",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 89,
       "instructions": [
         {
           "amount": 1,
@@ -6666,7 +6924,7 @@
       ],
       "kind": 3,
       "kind_name": "triggered",
-      "program_index": 110,
+      "program_index": 109,
       "semantic_key": "tla.compassionate_healer.tap_value",
       "targets": [],
       "trigger": {
@@ -6680,7 +6938,7 @@
       "cost": {
         "mana": "{1}{R}"
       },
-      "definition_index": 89,
+      "definition_index": 90,
       "instructions": [
         {
           "duration": "end_of_turn",
@@ -6699,7 +6957,7 @@
       ],
       "kind": 2,
       "kind_name": "spell",
-      "program_index": 111,
+      "program_index": 110,
       "semantic_key": "tla.cunning_maneuver.spell",
       "targets": [
         {
@@ -6713,7 +6971,7 @@
       ]
     },
     {
-      "definition_index": 90,
+      "definition_index": 91,
       "instructions": [
         {
           "controller": "you",
@@ -6731,12 +6989,12 @@
       ],
       "kind": 5,
       "kind_name": "static",
-      "program_index": 112,
+      "program_index": 111,
       "semantic_key": "tla.dragonfly_swarm.graveyard_power",
       "targets": []
     },
     {
-      "definition_index": 90,
+      "definition_index": 91,
       "instructions": [
         {
           "condition": {
@@ -6761,7 +7019,7 @@
       ],
       "kind": 3,
       "kind_name": "triggered",
-      "program_index": 113,
+      "program_index": 112,
       "semantic_key": "tla.dragonfly_swarm.lesson_death_draw",
       "targets": [],
       "trigger": {
@@ -6780,7 +7038,7 @@
       }
     },
     {
-      "definition_index": 90,
+      "definition_index": 91,
       "instructions": [
         {
           "cost": "1",
@@ -6791,7 +7049,7 @@
       ],
       "kind": 3,
       "kind_name": "triggered",
-      "program_index": 114,
+      "program_index": 113,
       "semantic_key": "tla.dragonfly_swarm.ward",
       "targets": [],
       "trigger": {
@@ -6802,7 +7060,7 @@
       }
     },
     {
-      "definition_index": 91,
+      "definition_index": 92,
       "instructions": [
         {
           "op_name": "exile_until_source_leaves",
@@ -6812,7 +7070,7 @@
       ],
       "kind": 3,
       "kind_name": "triggered",
-      "program_index": 115,
+      "program_index": 114,
       "semantic_key": "tla.earth_kingdom_jailer.temporary_exile",
       "targets": [
         {
@@ -6842,7 +7100,7 @@
         "mana": "0",
         "sacrifice_source": true
       },
-      "definition_index": 92,
+      "definition_index": 93,
       "instructions": [
         {
           "duration": "end_of_turn",
@@ -6856,7 +7114,7 @@
       ],
       "kind": 4,
       "kind_name": "activated",
-      "program_index": 116,
+      "program_index": 115,
       "semantic_key": "tla.earth_kingdom_protectors.protect",
       "targets": [
         {
@@ -6874,7 +7132,52 @@
       ]
     },
     {
-      "definition_index": 93,
+      "definition_index": 94,
+      "instructions": [
+        {
+          "body": [
+            {
+              "body": [
+                {
+                  "count": 1,
+                  "op_name": "put_counters",
+                  "opcode": 5,
+                  "target": "creatures"
+                }
+              ],
+              "op_name": "for_each_target",
+              "opcode": 19,
+              "role": "creatures"
+            }
+          ],
+          "op_name": "target_clause",
+          "opcode": 44,
+          "role": "creatures"
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 116,
+      "semantic_key": "tla.earth_kingdom_soldier.ability",
+      "targets": [
+        {
+          "max": 2,
+          "min": 0,
+          "role": "creatures",
+          "selector": {
+            "kind": "creature_you_control"
+          }
+        }
+      ],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 95,
       "instructions": [
         {
           "count": 1,
@@ -6900,7 +7203,7 @@
       }
     },
     {
-      "definition_index": 93,
+      "definition_index": 95,
       "instructions": [
         {
           "count": 1,
@@ -6925,7 +7228,7 @@
       "cost": {
         "mana": "2W"
       },
-      "definition_index": 94,
+      "definition_index": 96,
       "instructions": [
         {
           "body": [
@@ -6964,7 +7267,7 @@
       ]
     },
     {
-      "definition_index": 95,
+      "definition_index": 97,
       "instructions": [
         {
           "mana": "RR",
@@ -6997,7 +7300,7 @@
       "cost": {
         "mana": "2"
       },
-      "definition_index": 95,
+      "definition_index": 97,
       "instructions": [
         {
           "duration": "end_of_turn",
@@ -7015,7 +7318,7 @@
       "targets": []
     },
     {
-      "definition_index": 96,
+      "definition_index": 98,
       "instructions": [
         {
           "mana": "R",
@@ -7040,7 +7343,7 @@
       "cost": {
         "mana": "1RR"
       },
-      "definition_index": 96,
+      "definition_index": 98,
       "instructions": [
         {
           "count": 1,
@@ -7060,7 +7363,7 @@
         "kicker": "4",
         "mana": "R"
       },
-      "definition_index": 97,
+      "definition_index": 99,
       "instructions": [
         {
           "condition": {
@@ -7102,7 +7405,7 @@
       ]
     },
     {
-      "definition_index": 98,
+      "definition_index": 100,
       "instructions": [
         {
           "condition": {
@@ -7140,7 +7443,7 @@
         "sacrifice_source": true,
         "tap_source": true
       },
-      "definition_index": 99,
+      "definition_index": 101,
       "instructions": [
         {
           "count": 1,
@@ -7155,37 +7458,41 @@
       "targets": []
     },
     {
-      "definition_index": 99,
+      "cost": {
+        "mana": "0",
+        "tap_source": true
+      },
+      "definition_index": 101,
       "instructions": [
         {
-          "mana": "B",
-          "op_name": "add_mana",
-          "opcode": 1
+          "modes": [
+            [
+              {
+                "mana": "B",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "G",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ]
+          ],
+          "op_name": "modal",
+          "opcode": 43
         }
       ],
-      "kind": 1,
-      "kind_name": "mana",
+      "kind": 4,
+      "kind_name": "activated",
       "program_index": 127,
-      "semantic_key": "tla.foggy_bottom_swamp.mana_B",
+      "semantic_key": "tla.foggy_bottom_swamp.mana",
       "targets": []
     },
     {
-      "definition_index": 99,
-      "instructions": [
-        {
-          "mana": "G",
-          "op_name": "add_mana",
-          "opcode": 1
-        }
-      ],
-      "kind": 1,
-      "kind_name": "mana",
-      "program_index": 128,
-      "semantic_key": "tla.foggy_bottom_swamp.mana_G",
-      "targets": []
-    },
-    {
-      "definition_index": 100,
+      "definition_index": 102,
       "instructions": [
         {
           "count": 1,
@@ -7196,7 +7503,7 @@
       ],
       "kind": 3,
       "kind_name": "triggered",
-      "program_index": 129,
+      "program_index": 128,
       "semantic_key": "tla.forecasting_fortune_teller.create_clue",
       "targets": [],
       "trigger": {
@@ -7207,7 +7514,7 @@
       }
     },
     {
-      "definition_index": 101,
+      "definition_index": 103,
       "instructions": [
         {
           "count": 1,
@@ -7217,7 +7524,7 @@
       ],
       "kind": 3,
       "kind_name": "triggered",
-      "program_index": 130,
+      "program_index": 129,
       "semantic_key": "tla.glider_kids.scry",
       "targets": [],
       "trigger": {
@@ -7228,7 +7535,7 @@
       }
     },
     {
-      "definition_index": 102,
+      "definition_index": 104,
       "instructions": [
         {
           "duration": "end_of_turn",
@@ -7241,7 +7548,7 @@
       ],
       "kind": 3,
       "kind_name": "triggered",
-      "program_index": 131,
+      "program_index": 130,
       "semantic_key": "tla.iguana_parrot.prowess",
       "targets": [],
       "trigger": {
@@ -7258,7 +7565,7 @@
       }
     },
     {
-      "definition_index": 103,
+      "definition_index": 105,
       "instructions": [
         {
           "count": 1,
@@ -7269,7 +7576,7 @@
       ],
       "kind": 3,
       "kind_name": "triggered",
-      "program_index": 132,
+      "program_index": 131,
       "semantic_key": "tla.invasion_reinforcements.create_ally",
       "targets": [],
       "trigger": {
@@ -7283,7 +7590,7 @@
       "cost": {
         "mana": "1U"
       },
-      "definition_index": 104,
+      "definition_index": 106,
       "instructions": [
         {
           "cost": "2",
@@ -7294,7 +7601,7 @@
       ],
       "kind": 2,
       "kind_name": "spell",
-      "program_index": 133,
+      "program_index": 132,
       "semantic_key": "tla.itll_quench_ya.spell",
       "targets": [
         {
@@ -7308,7 +7615,7 @@
       ]
     },
     {
-      "definition_index": 105,
+      "definition_index": 107,
       "instructions": [
         {
           "count": 1,
@@ -7319,7 +7626,7 @@
       ],
       "kind": 3,
       "kind_name": "triggered",
-      "program_index": 134,
+      "program_index": 133,
       "semantic_key": "tla.jeong_jeongs_deserters.rally_counter",
       "targets": [
         {
@@ -7344,7 +7651,7 @@
         "sacrifice_source": true,
         "tap_source": true
       },
-      "definition_index": 106,
+      "definition_index": 108,
       "instructions": [
         {
           "count": 1,
@@ -7354,42 +7661,46 @@
       ],
       "kind": 4,
       "kind_name": "activated",
-      "program_index": 135,
+      "program_index": 134,
       "semantic_key": "tla.kyoshi_village.draw",
       "targets": []
     },
     {
-      "definition_index": 106,
+      "cost": {
+        "mana": "0",
+        "tap_source": true
+      },
+      "definition_index": 108,
       "instructions": [
         {
-          "mana": "G",
-          "op_name": "add_mana",
-          "opcode": 1
+          "modes": [
+            [
+              {
+                "mana": "G",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "W",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ]
+          ],
+          "op_name": "modal",
+          "opcode": 43
         }
       ],
-      "kind": 1,
-      "kind_name": "mana",
-      "program_index": 136,
-      "semantic_key": "tla.kyoshi_village.mana_G",
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 135,
+      "semantic_key": "tla.kyoshi_village.mana",
       "targets": []
     },
     {
-      "definition_index": 106,
-      "instructions": [
-        {
-          "mana": "W",
-          "op_name": "add_mana",
-          "opcode": 1
-        }
-      ],
-      "kind": 1,
-      "kind_name": "mana",
-      "program_index": 137,
-      "semantic_key": "tla.kyoshi_village.mana_W",
-      "targets": []
-    },
-    {
-      "definition_index": 107,
+      "definition_index": 109,
       "instructions": [
         {
           "count": 1,
@@ -7400,7 +7711,7 @@
       ],
       "kind": 3,
       "kind_name": "triggered",
-      "program_index": 138,
+      "program_index": 136,
       "semantic_key": "tla.kyoshi_warriors.create_ally",
       "targets": [],
       "trigger": {
@@ -7416,7 +7727,61 @@
         "sacrifice_source": true,
         "tap_source": true
       },
-      "definition_index": 108,
+      "definition_index": 110,
+      "instructions": [
+        {
+          "count": 1,
+          "op_name": "draw_cards",
+          "opcode": 2
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 137,
+      "semantic_key": "tla.meditation_pools.draw",
+      "targets": []
+    },
+    {
+      "cost": {
+        "mana": "0",
+        "tap_source": true
+      },
+      "definition_index": 110,
+      "instructions": [
+        {
+          "modes": [
+            [
+              {
+                "mana": "G",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "U",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ]
+          ],
+          "op_name": "modal",
+          "opcode": 43
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 138,
+      "semantic_key": "tla.meditation_pools.mana",
+      "targets": []
+    },
+    {
+      "cost": {
+        "mana": "4",
+        "sacrifice_source": true,
+        "tap_source": true
+      },
+      "definition_index": 111,
       "instructions": [
         {
           "count": 1,
@@ -7427,37 +7792,41 @@
       "kind": 4,
       "kind_name": "activated",
       "program_index": 139,
-      "semantic_key": "tla.meditation_pools.draw",
+      "semantic_key": "tla.misty_palms_oasis.draw",
       "targets": []
     },
     {
-      "definition_index": 108,
+      "cost": {
+        "mana": "0",
+        "tap_source": true
+      },
+      "definition_index": 111,
       "instructions": [
         {
-          "mana": "G",
-          "op_name": "add_mana",
-          "opcode": 1
+          "modes": [
+            [
+              {
+                "mana": "W",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "B",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ]
+          ],
+          "op_name": "modal",
+          "opcode": 43
         }
       ],
-      "kind": 1,
-      "kind_name": "mana",
+      "kind": 4,
+      "kind_name": "activated",
       "program_index": 140,
-      "semantic_key": "tla.meditation_pools.mana_G",
-      "targets": []
-    },
-    {
-      "definition_index": 108,
-      "instructions": [
-        {
-          "mana": "U",
-          "op_name": "add_mana",
-          "opcode": 1
-        }
-      ],
-      "kind": 1,
-      "kind_name": "mana",
-      "program_index": 141,
-      "semantic_key": "tla.meditation_pools.mana_U",
+      "semantic_key": "tla.misty_palms_oasis.mana",
       "targets": []
     },
     {
@@ -7466,152 +7835,110 @@
         "sacrifice_source": true,
         "tap_source": true
       },
-      "definition_index": 109,
+      "definition_index": 112,
       "instructions": [
         {
           "count": 1,
           "op_name": "draw_cards",
           "opcode": 2
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 141,
+      "semantic_key": "tla.north_pole_gates.draw",
+      "targets": []
+    },
+    {
+      "cost": {
+        "mana": "0",
+        "tap_source": true
+      },
+      "definition_index": 112,
+      "instructions": [
+        {
+          "modes": [
+            [
+              {
+                "mana": "W",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "U",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ]
+          ],
+          "op_name": "modal",
+          "opcode": 43
         }
       ],
       "kind": 4,
       "kind_name": "activated",
       "program_index": 142,
-      "semantic_key": "tla.misty_palms_oasis.draw",
+      "semantic_key": "tla.north_pole_gates.mana",
       "targets": []
     },
     {
-      "definition_index": 109,
+      "cost": {
+        "mana": "4",
+        "sacrifice_source": true,
+        "tap_source": true
+      },
+      "definition_index": 113,
       "instructions": [
         {
-          "mana": "B",
-          "op_name": "add_mana",
-          "opcode": 1
+          "count": 1,
+          "op_name": "draw_cards",
+          "opcode": 2
         }
       ],
-      "kind": 1,
-      "kind_name": "mana",
+      "kind": 4,
+      "kind_name": "activated",
       "program_index": 143,
-      "semantic_key": "tla.misty_palms_oasis.mana_B",
-      "targets": []
-    },
-    {
-      "definition_index": 109,
-      "instructions": [
-        {
-          "mana": "W",
-          "op_name": "add_mana",
-          "opcode": 1
-        }
-      ],
-      "kind": 1,
-      "kind_name": "mana",
-      "program_index": 144,
-      "semantic_key": "tla.misty_palms_oasis.mana_W",
-      "targets": []
-    },
-    {
-      "cost": {
-        "mana": "4",
-        "sacrifice_source": true,
-        "tap_source": true
-      },
-      "definition_index": 110,
-      "instructions": [
-        {
-          "count": 1,
-          "op_name": "draw_cards",
-          "opcode": 2
-        }
-      ],
-      "kind": 4,
-      "kind_name": "activated",
-      "program_index": 145,
-      "semantic_key": "tla.north_pole_gates.draw",
-      "targets": []
-    },
-    {
-      "definition_index": 110,
-      "instructions": [
-        {
-          "mana": "U",
-          "op_name": "add_mana",
-          "opcode": 1
-        }
-      ],
-      "kind": 1,
-      "kind_name": "mana",
-      "program_index": 146,
-      "semantic_key": "tla.north_pole_gates.mana_U",
-      "targets": []
-    },
-    {
-      "definition_index": 110,
-      "instructions": [
-        {
-          "mana": "W",
-          "op_name": "add_mana",
-          "opcode": 1
-        }
-      ],
-      "kind": 1,
-      "kind_name": "mana",
-      "program_index": 147,
-      "semantic_key": "tla.north_pole_gates.mana_W",
-      "targets": []
-    },
-    {
-      "cost": {
-        "mana": "4",
-        "sacrifice_source": true,
-        "tap_source": true
-      },
-      "definition_index": 111,
-      "instructions": [
-        {
-          "count": 1,
-          "op_name": "draw_cards",
-          "opcode": 2
-        }
-      ],
-      "kind": 4,
-      "kind_name": "activated",
-      "program_index": 148,
       "semantic_key": "tla.omashu_city.draw",
       "targets": []
     },
     {
-      "definition_index": 111,
+      "cost": {
+        "mana": "0",
+        "tap_source": true
+      },
+      "definition_index": 113,
       "instructions": [
         {
-          "mana": "G",
-          "op_name": "add_mana",
-          "opcode": 1
+          "modes": [
+            [
+              {
+                "mana": "R",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "G",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ]
+          ],
+          "op_name": "modal",
+          "opcode": 43
         }
       ],
-      "kind": 1,
-      "kind_name": "mana",
-      "program_index": 149,
-      "semantic_key": "tla.omashu_city.mana_G",
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 144,
+      "semantic_key": "tla.omashu_city.mana",
       "targets": []
     },
     {
-      "definition_index": 111,
-      "instructions": [
-        {
-          "mana": "R",
-          "op_name": "add_mana",
-          "opcode": 1
-        }
-      ],
-      "kind": 1,
-      "kind_name": "mana",
-      "program_index": 150,
-      "semantic_key": "tla.omashu_city.mana_R",
-      "targets": []
-    },
-    {
-      "definition_index": 112,
+      "definition_index": 114,
       "instructions": [
         {
           "duration": "end_of_turn",
@@ -7633,7 +7960,7 @@
       ],
       "kind": 3,
       "kind_name": "triggered",
-      "program_index": 151,
+      "program_index": 145,
       "semantic_key": "tla.otter_penguin.second_draw_boost",
       "targets": [],
       "trigger": {
@@ -7648,7 +7975,7 @@
       "cost": {
         "mana": "{G}"
       },
-      "definition_index": 113,
+      "definition_index": 115,
       "instructions": [
         {
           "duration": "end_of_turn",
@@ -7675,7 +8002,7 @@
       ],
       "kind": 2,
       "kind_name": "spell",
-      "program_index": 152,
+      "program_index": 146,
       "semantic_key": "tla.pillar_launch.spell",
       "targets": [
         {
@@ -7689,43 +8016,7 @@
       ]
     },
     {
-      "cost": {
-        "mana": "{1}{G}"
-      },
-      "definition_index": 114,
-      "instructions": [
-        {
-          "op_name": "deal_power_damage",
-          "opcode": 22,
-          "sources": "source",
-          "target": "victim"
-        }
-      ],
-      "kind": 2,
-      "kind_name": "spell",
-      "program_index": 153,
-      "semantic_key": "tla.rocky_rebuke.spell",
-      "targets": [
-        {
-          "max": 1,
-          "min": 1,
-          "role": "source",
-          "selector": {
-            "kind": "creature_you_control"
-          }
-        },
-        {
-          "max": 1,
-          "min": 1,
-          "role": "victim",
-          "selector": {
-            "kind": "creature_opponent_controls"
-          }
-        }
-      ]
-    },
-    {
-      "definition_index": 115,
+      "definition_index": 116,
       "instructions": [
         {
           "mana": "C",
@@ -7735,7 +8026,7 @@
       ],
       "kind": 1,
       "kind_name": "mana",
-      "program_index": 154,
+      "program_index": 147,
       "semantic_key": "tla.rumble_arena.colorless",
       "targets": []
     },
@@ -7744,7 +8035,7 @@
         "mana": "1",
         "tap_source": true
       },
-      "definition_index": 115,
+      "definition_index": 116,
       "instructions": [
         {
           "modes": [
@@ -7790,12 +8081,12 @@
       ],
       "kind": 4,
       "kind_name": "activated",
-      "program_index": 155,
+      "program_index": 148,
       "semantic_key": "tla.rumble_arena.filter",
       "targets": []
     },
     {
-      "definition_index": 115,
+      "definition_index": 116,
       "instructions": [
         {
           "count": 1,
@@ -7805,7 +8096,7 @@
       ],
       "kind": 3,
       "kind_name": "triggered",
-      "program_index": 156,
+      "program_index": 149,
       "semantic_key": "tla.rumble_arena.scry",
       "targets": [],
       "trigger": {
@@ -7821,7 +8112,7 @@
         "sacrifice_source": true,
         "tap_source": true
       },
-      "definition_index": 116,
+      "definition_index": 117,
       "instructions": [
         {
           "count": 1,
@@ -7831,42 +8122,46 @@
       ],
       "kind": 4,
       "kind_name": "activated",
-      "program_index": 157,
+      "program_index": 150,
       "semantic_key": "tla.serpents_pass.draw",
       "targets": []
     },
     {
-      "definition_index": 116,
-      "instructions": [
-        {
-          "mana": "B",
-          "op_name": "add_mana",
-          "opcode": 1
-        }
-      ],
-      "kind": 1,
-      "kind_name": "mana",
-      "program_index": 158,
-      "semantic_key": "tla.serpents_pass.mana_B",
-      "targets": []
-    },
-    {
-      "definition_index": 116,
-      "instructions": [
-        {
-          "mana": "U",
-          "op_name": "add_mana",
-          "opcode": 1
-        }
-      ],
-      "kind": 1,
-      "kind_name": "mana",
-      "program_index": 159,
-      "semantic_key": "tla.serpents_pass.mana_U",
-      "targets": []
-    },
-    {
+      "cost": {
+        "mana": "0",
+        "tap_source": true
+      },
       "definition_index": 117,
+      "instructions": [
+        {
+          "modes": [
+            [
+              {
+                "mana": "U",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "B",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ]
+          ],
+          "op_name": "modal",
+          "opcode": 43
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 151,
+      "semantic_key": "tla.serpents_pass.mana",
+      "targets": []
+    },
+    {
+      "definition_index": 118,
       "instructions": [
         {
           "amount": 1,
@@ -7892,7 +8187,7 @@
       ],
       "kind": 3,
       "kind_name": "triggered",
-      "program_index": 160,
+      "program_index": 152,
       "semantic_key": "tla.south_pole_voyager.ally_arrival",
       "targets": [],
       "trigger": {
@@ -7907,7 +8202,7 @@
       }
     },
     {
-      "definition_index": 118,
+      "definition_index": 119,
       "instructions": [
         {
           "count": 1,
@@ -7919,7 +8214,7 @@
       ],
       "kind": 3,
       "kind_name": "triggered",
-      "program_index": 161,
+      "program_index": 153,
       "semantic_key": "tla.suki_kyoshi_warrior.attack_ally",
       "targets": [],
       "trigger": {
@@ -7930,7 +8225,7 @@
       }
     },
     {
-      "definition_index": 118,
+      "definition_index": 119,
       "instructions": [
         {
           "controller": "you",
@@ -7945,7 +8240,7 @@
       ],
       "kind": 5,
       "kind_name": "static",
-      "program_index": 162,
+      "program_index": 154,
       "semantic_key": "tla.suki_kyoshi_warrior.creature_power",
       "targets": []
     },
@@ -7955,7 +8250,7 @@
         "sacrifice_source": true,
         "tap_source": true
       },
-      "definition_index": 119,
+      "definition_index": 120,
       "instructions": [
         {
           "count": 1,
@@ -7965,42 +8260,46 @@
       ],
       "kind": 4,
       "kind_name": "activated",
-      "program_index": 163,
+      "program_index": 155,
       "semantic_key": "tla.sun_blessed_peak.draw",
       "targets": []
     },
     {
-      "definition_index": 119,
-      "instructions": [
-        {
-          "mana": "R",
-          "op_name": "add_mana",
-          "opcode": 1
-        }
-      ],
-      "kind": 1,
-      "kind_name": "mana",
-      "program_index": 164,
-      "semantic_key": "tla.sun_blessed_peak.mana_R",
-      "targets": []
-    },
-    {
-      "definition_index": 119,
-      "instructions": [
-        {
-          "mana": "W",
-          "op_name": "add_mana",
-          "opcode": 1
-        }
-      ],
-      "kind": 1,
-      "kind_name": "mana",
-      "program_index": 165,
-      "semantic_key": "tla.sun_blessed_peak.mana_W",
-      "targets": []
-    },
-    {
+      "cost": {
+        "mana": "0",
+        "tap_source": true
+      },
       "definition_index": 120,
+      "instructions": [
+        {
+          "modes": [
+            [
+              {
+                "mana": "R",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "W",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ]
+          ],
+          "op_name": "modal",
+          "opcode": 43
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 156,
+      "semantic_key": "tla.sun_blessed_peak.mana",
+      "targets": []
+    },
+    {
+      "definition_index": 121,
       "instructions": [
         {
           "op_name": "untap",
@@ -8010,7 +8309,7 @@
       ],
       "kind": 3,
       "kind_name": "triggered",
-      "program_index": 166,
+      "program_index": 157,
       "semantic_key": "tla.tiger_seal.second_draw_untap",
       "targets": [],
       "trigger": {
@@ -8022,7 +8321,7 @@
       }
     },
     {
-      "definition_index": 120,
+      "definition_index": 121,
       "instructions": [
         {
           "op_name": "tap",
@@ -8032,7 +8331,7 @@
       ],
       "kind": 3,
       "kind_name": "triggered",
-      "program_index": 167,
+      "program_index": 158,
       "semantic_key": "tla.tiger_seal.upkeep_tap",
       "targets": [],
       "trigger": {
@@ -8043,7 +8342,7 @@
       }
     },
     {
-      "definition_index": 121,
+      "definition_index": 122,
       "instructions": [
         {
           "count": 1,
@@ -8054,7 +8353,7 @@
       ],
       "kind": 3,
       "kind_name": "triggered",
-      "program_index": 168,
+      "program_index": 159,
       "semantic_key": "tla.treetop_freedom_fighters.reinforcements",
       "targets": [],
       "trigger": {
@@ -8065,10 +8364,80 @@
       }
     },
     {
+      "definition_index": 123,
+      "instructions": [
+        {
+          "condition": {
+            "count": 1,
+            "kind": "graveyard_at_least",
+            "predicate": {
+              "kind": "subtype",
+              "value": "Lesson"
+            }
+          },
+          "op_name": "branch",
+          "opcode": 18,
+          "otherwise": [],
+          "then": [
+            {
+              "amount": 2,
+              "op_name": "gain_life",
+              "opcode": 6
+            }
+          ]
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 160,
+      "semantic_key": "tla.walltop_sentries.ability",
+      "targets": [],
+      "trigger": {
+        "event": "dies",
+        "if": {
+          "count": 1,
+          "kind": "graveyard_at_least",
+          "predicate": {
+            "kind": "subtype",
+            "value": "Lesson"
+          }
+        },
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 124,
+      "instructions": [
+        {
+          "op_name": "modify_controlled",
+          "opcode": 60,
+          "power": 1,
+          "predicate": {
+            "kind": "card_type",
+            "value": "creature"
+          },
+          "toughness": 0
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 161,
+      "semantic_key": "tla.wandering_musicians.ability",
+      "targets": [],
+      "trigger": {
+        "event": "attacks",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
       "cost": {
         "mana": "5"
       },
-      "definition_index": 122,
+      "definition_index": 125,
       "instructions": [
         {
           "op_name": "modify_controlled",
@@ -8083,7 +8452,7 @@
       ],
       "kind": 4,
       "kind_name": "activated",
-      "program_index": 169,
+      "program_index": 162,
       "semantic_key": "tla.water_tribe_captain.rally",
       "targets": []
     },
@@ -8092,7 +8461,7 @@
         "mana": "5",
         "waterbend": true
       },
-      "definition_index": 123,
+      "definition_index": 126,
       "instructions": [
         {
           "destination": "hand",
@@ -8120,12 +8489,12 @@
       ],
       "kind": 4,
       "kind_name": "activated",
-      "program_index": 170,
+      "program_index": 163,
       "semantic_key": "tla.water_tribe_rallier.waterbend",
       "targets": []
     },
     {
-      "definition_index": 124,
+      "definition_index": 127,
       "instructions": [
         {
           "duration": "static",
@@ -8138,7 +8507,7 @@
       ],
       "kind": 5,
       "kind_name": "static",
-      "program_index": 171,
+      "program_index": 164,
       "semantic_key": "tla.white_lotus_reinforcements.ally_anthem",
       "targets": []
     },
@@ -8146,7 +8515,7 @@
       "cost": {
         "mana": "W"
       },
-      "definition_index": 125,
+      "definition_index": 128,
       "instructions": [
         {
           "duration": "end_of_turn",
@@ -8183,7 +8552,7 @@
       ],
       "kind": 2,
       "kind_name": "spell",
-      "program_index": 172,
+      "program_index": 165,
       "semantic_key": "tla.yip_yip.spell",
       "targets": [
         {
@@ -8197,7 +8566,7 @@
       ]
     },
     {
-      "definition_index": 126,
+      "definition_index": 129,
       "instructions": [
         {
           "count": 1,
@@ -8207,7 +8576,7 @@
       ],
       "kind": 3,
       "kind_name": "triggered",
-      "program_index": 173,
+      "program_index": 166,
       "semantic_key": "tla.yuyan_archers.rummage",
       "targets": [],
       "trigger": {
@@ -8218,7 +8587,81 @@
       }
     },
     {
-      "definition_index": 127,
+      "definition_index": 132,
+      "instructions": [
+        {
+          "mana": "RRRR",
+          "op_name": "add_mana",
+          "opcode": 1,
+          "until": "end_of_combat"
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 167,
+      "semantic_key": "token.dragon.ability",
+      "targets": [],
+      "trigger": {
+        "event": "attacks",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 133,
+      "instructions": [
+        {
+          "duration": "end_of_turn",
+          "op_name": "modify_pt",
+          "opcode": 10,
+          "power": 1,
+          "target": "source",
+          "toughness": 1
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 168,
+      "semantic_key": "token.monk.ability",
+      "targets": [],
+      "trigger": {
+        "event": "cast_spell",
+        "predicate": {
+          "kind": "not_card_types",
+          "values": [
+            "creature"
+          ]
+        },
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 134,
+      "instructions": [
+        {
+          "mana": "R",
+          "op_name": "add_mana",
+          "opcode": 1,
+          "until": "end_of_combat"
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 169,
+      "semantic_key": "token.soldier.ability",
+      "targets": [],
+      "trigger": {
+        "event": "attacks",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 135,
       "instructions": [
         {
           "direction": "blocked_by",
@@ -8234,12 +8677,12 @@
       ],
       "kind": 5,
       "kind_name": "static",
-      "program_index": 174,
+      "program_index": 170,
       "semantic_key": "token.spirit.block_restriction",
       "targets": []
     },
     {
-      "definition_index": 127,
+      "definition_index": 135,
       "instructions": [
         {
           "direction": "blocking",
@@ -8255,12 +8698,12 @@
       ],
       "kind": 5,
       "kind_name": "static",
-      "program_index": 175,
+      "program_index": 171,
       "semantic_key": "token.spirit.blocking_restriction",
       "targets": []
     }
   ],
   "schema_version": 1,
   "setup_schema_version": 1,
-  "source_hash": "4eb150cf68bb33c576381c9250214d2f7958b82f11acaf39c6b24a24a4c10806"
+  "source_hash": "802ed1ccdac8481b4930d26c508aeb73a4b4d72d99f0d4097076b2909eac8584"
 }

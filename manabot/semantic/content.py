@@ -9,12 +9,17 @@ from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
-import json
 import hashlib
+import json
 from pathlib import Path
 from typing import Any
 
-from manabot.semantic.compiler import SemanticCompileError, canonical_json, compile_source, write_or_check
+from manabot.semantic.compiler import (
+    SemanticCompileError,
+    canonical_json,
+    compile_source,
+    write_or_check,
+)
 
 CONTENT_ROOT = Path(__file__).resolve().parents[2] / "content/semantic/current"
 
@@ -26,6 +31,7 @@ class ContentSource:
     definitions: dict[str, dict[str, Any]]
     setups: dict[str, dict[str, Any]]
     native_roots: set[str]
+    token_templates: set[str]
 
     @classmethod
     def load(cls, root: Path = CONTENT_ROOT) -> ContentSource:
@@ -36,8 +42,10 @@ class ContentSource:
         if len({row["registry_name"] for row in rows}) != len(rows):
             raise SemanticCompileError("duplicate content card name")
         return cls(
-            definitions, json.loads((root / "setups.json").read_text()),
+            definitions,
+            json.loads((root / "setups.json").read_text()),
             set(json.loads((root / "native_roots.json").read_text())),
+            set(json.loads((root / "token_templates.json").read_text())),
         )
 
     def closure(self, roots: set[str]) -> list[dict[str, Any]]:
@@ -57,14 +65,20 @@ class ContentSource:
     def project(self, preset: str) -> tuple[dict[str, Any], dict[str, Any]]:
         if preset in {"pool", "tla"}:
             roots = {
-                key for key, row in self.definitions.items()
-                if not row["characteristics"].get("token") and not key.startswith("research.")
+                key
+                for key, row in self.definitions.items()
+                if not row["characteristics"].get("token")
+                and not key.startswith("research.")
             }
             if preset == "tla":
                 roots = self.native_roots
             source = {
-                "schema_version": 1, "pack_key": f"tla-{preset}-v1", "decks": [],
-                "pool": sorted(roots), "definitions": self.closure(roots),
+                "schema_version": 1,
+                "pack_key": f"tla-{preset}-v1",
+                "decks": [],
+                "pool": sorted(roots),
+                "token_templates": sorted(self.token_templates),
+                "definitions": self.closure(roots | self.token_templates),
             }
         else:
             setup = self.setups[preset]
@@ -98,30 +112,53 @@ def generate(*, check: bool = False, root: Path = CONTENT_ROOT) -> None:
     qualifications = json.loads((root / "qualifications.json").read_text())
     for key, qualification in qualifications.items():
         definition = catalog.definitions.get(key)
-        digest = hashlib.sha256(canonical_json(definition).encode()).hexdigest()
-        if not definition or digest != qualification["definition_hash"]:
-            raise SemanticCompileError(f"stale qualification for {key}: review changed clauses")
+        digest = hashlib.sha256(
+            canonical_json(catalog.closure({key})).encode()
+        ).hexdigest()
+        if not definition or digest != qualification["closure_hash"]:
+            raise SemanticCompileError(
+                f"stale qualification for {key}: review changed clauses"
+            )
+        if definition["characteristics"].get("token", False):
+            raise SemanticCompileError(f"token {key} cannot qualify for deck entry")
+        if any(
+            row["registry_name"] == definition["registry_name"]
+            and len(row["faces"]) != 1
+            for row in inventory
+        ):
+            raise SemanticCompileError(
+                f"qualification for {key} requires unsupported face lifecycle"
+            )
         if not qualification["witnesses"]:
-            raise SemanticCompileError(f"qualification for {key} has no independent witnesses")
+            raise SemanticCompileError(
+                f"qualification for {key} has no independent witnesses"
+            )
     eligibility: dict[str, dict[str, Any]] = {}
     for preset in [*catalog.setups, "pool", "tla"]:
         ir, coverage = catalog.project(preset)
         write_or_check(root / "generated" / f"{preset}.ir.json", ir, check=check)
-        write_or_check(root / "generated" / f"{preset}.coverage.json", coverage, check=check)
+        write_or_check(
+            root / "generated" / f"{preset}.coverage.json", coverage, check=check
+        )
         definitions = {d["content_pack_binding"]["value"]: d for d in ir["definitions"]}
         rows = []
         for name in sorted(set(definitions) | {r["registry_name"] for r in inventory}):
             definition = definitions.get(name)
             key = definition["semantic_key"] if definition else None
             eligible = key in qualifications
-            rows.append({
-                "registry_name": name,
-                "semantic_key": key,
-                "eligibility": "eligible" if eligible else "unsupported",
-                "reason": None if eligible else (
-                    "Not implemented in this content pack" if definition is None else
-                    "Preserved authored behavior; complete independent qualification pending"
-                ),
-            })
+            rows.append(
+                {
+                    "registry_name": name,
+                    "semantic_key": key,
+                    "eligibility": "eligible" if eligible else "unsupported",
+                    "reason": None
+                    if eligible
+                    else (
+                        "Not implemented in this content pack"
+                        if definition is None
+                        else "Preserved authored behavior; complete independent qualification pending"
+                    ),
+                }
+            )
         eligibility[ir["pack_key"]] = {"ir_hash": ir["ir_hash"], "definitions": rows}
     write_or_check(root / "generated" / "eligibility.json", eligibility, check=check)
