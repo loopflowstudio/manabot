@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Literal
 
 from matplotlib.figure import Figure
 
-from manabot.training.rollout.self_play import deck_identity
+from manabot.decklist import deck_identity
 from manabot.training.update_metrics import MetricRow
 import managym
 

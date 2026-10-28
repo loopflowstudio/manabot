@@ -17,7 +17,7 @@ dataset now, another card-rules registry, arbitrary card-pile generation, or
 changing MTG-175's reserved curriculum experiments. The existing no-spend,
 no-training, one-cohesive-PR-for-review boundary remains.
 
-### Experience and proposed usage
+### Experience and usage
 
 Prepare a local deck collection once, validate it against an explicitly selected
 qualified world/content pool, then reference the resulting versioned collection
@@ -28,13 +28,17 @@ silently discard cards or silently train on a filtered subset. Once TLA support
 is complete, an offline 17Lands adapter feeds the same admission path. Preserve
 source records even when multiple records describe the same normalized deck.
 
-Proposed configuration sketch (NOT an available API):
+Implemented `TrainingRegime` configuration (other recipe fields omitted):
 
 ```yaml
-deck_corpus: artifacts/tla-decks/manifest.json
-matchup_sampling: uniform-distinct
-seed: 17402
+deck_collection: artifacts/tla-decks/manifest.json
+agent:
+  semantic_pack: tla-pool-v1
 ```
+
+The manifest selects `uniform-distinct-v1`; the ordinary run seed owns root
+randomness. Configuration embeds the loaded manifest and derives the initial
+representative match when omitted.
 
 The first plumbing proof can use several fully eligible supported decks now.
 It must run through the actual training collector's reset path, not just the
@@ -86,11 +90,10 @@ Preserve the file importer already implemented; the new work is corpus-backed
 training setup, not a repeat of the parser implementation or an Academy-first
 redesign. Real 17Lands ingestion remains sequenced after full TLA support.
 
-Working proposal samples distinct deck identities for the two seats, following
-the request for different decks; a mirror policy remains explicit configuration,
-not an accidental effect of independently drawing two indices. Play/draw is
-unbiased and reproducible. This sampling detail is proposed, not a claim that
-the user selected all statistical choices.
+Implementation assumption: `uniform-distinct-v1` samples two different normalized
+deck identities with unbiased ordered seats. Mirrors remain deferred; this
+reversible detail follows the different-decks request and is not attributed as
+an explicit additional user choice. See scratch/questions.md.
 
 Acceptance should cover three or more admitted non-preset decks; varying native
 roots across resets; identical pair/seat/seed sequence after recovery; invalid
@@ -206,7 +209,8 @@ Use repository conventions and validation.md. All Python through uv; debug Rust 
 Content contract coordinated with Task 892c47: native `content_pool(pack_key)`
 provides world/content/compiled identity and eligible/unsupported definition rows.
 That Task owns eligibility and closure; importer owns setup admission and parsing.
-PR389 and PR383 remain open; no edits planned in their reserved files.
+PR389 and PR383 remain open. The training extension's coordinated overlap is
+recorded below; original importer work did not edit their reserved files.
 
 Delete — do not maintain: replace explicit-pack authored-setup-only selection
 in `semantic/content.rs` with shared qualified pool admission. Preserve implicit
@@ -221,10 +225,10 @@ front/full DFC identity, native development-v1 construction/eligibility, retaine
 match identity, sim file options, Academy editable import and validation endpoint,
 private trace provenance, replay/rematch binding and focused tests.
 
-Remaining (gate/demo owners): complete changed-area suites and browser proof
-`decklist-import.spec.ts`; revalidate against final upstream content delivery;
-publish only the importer diff against its content dependency, then review.
-No automatic merge. No importer code gap is currently known.
+Remaining (gate/demo/delivery owners): complete affected suites and the training
+extension's acceptance review; revalidate against final upstream content delivery;
+publish the cohesive importer/collection diff against its content dependency.
+The importer browser proof already passed as recorded above. No automatic merge.
 
 Check result — focused debug native admission/catalog tests (7), Python startup/
 identity/reconnect/fork/stale/source/DFC checks, TypeScript check + focused store
@@ -250,3 +254,36 @@ It provides `tla-pool-v1`, world w16 and conservative eligibility; this is a
 dependency checkpoint, not final upstream qualification/review. Importer PR must
 be reviewed against the content branch (or revalidated after it lands), not
 present its 81k generated content lines as importer-owned work.
+
+## Training implementation cut — 2026-10-28
+
+Delete — do not maintain: remove the assumption that the native uniform roster
+must always be Elemental by giving its existing reset authority explicit
+collection admission. Preserve the exact Elemental admission and RNG sequence.
+Move deck content hashing from training accounting into shared decklist ownership
+so collection membership and exposure records share one identity. No other
+predecessor, migration or card-rules implementation is replaced.
+
+Implemented: immutable source-preserving collection preparation and CLI; whole-pool
+semantic/schema admission; native uniform distinct roots; ordinary regime,
+collector, checkpoint/catalog, recovery and failure capture integration. Duplicate
+normalized lists retain every source without increasing weight. Existing starts
+and transition counters remain separate. Both exact and current-game recovery
+retain sampling identity, deck IDs, seeds and policy RNG. Changed collection,
+content or schema is rejected; policy exports bind all collection decks.
+
+The failure proof exposed stale capture inputs after isolated stepping and failed
+root replacement. CapturedVector now journals isolated steps and synchronizes
+replacement roots through its existing capture path; GameAttempt retains the
+collection digest and actual imported pair. No alternate sampler was introduced.
+
+Coordination evidence: PR383 d0f48ca96 and PR389 c85470a59 inspected; scoped overlap
+published in comment 2c523295-b690-4e45-a989-1dd37b91cabb on Task 1d7884. Adaptive
+reassignment, curriculum experiment policies and shared simulation APIs are untouched.
+
+Check result — `cargo test --manifest-path managym/Cargo.toml collection_roots_are_distinct_replayable_and_admitted --lib` passed in debug; release extension rebuilt/atomically installed; `uv run --extra dev --extra artifacts pytest tests/training/test_deck_collection.py -q` passed (9), and the focused existing Elemental isolated-failure regression passed (1), without weight updates; Ruff, Rust fmt and diff checks passed. Gate owns full debug clippy/test, training recovery/learning-state/Elemental suites and combined CI collection including the new module (commands in docs/development/validation.md).
+
+No remaining training implementation gap is known. Full 17Lands acquisition,
+held-out corpus policy, mirrors, adaptive curriculum and the secondary Academy
+concept redesign remain outside this pass. One cohesive PR remains the delivery
+boundary; publication belongs to the caller's later Graph step.

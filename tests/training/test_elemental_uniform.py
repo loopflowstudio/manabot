@@ -10,6 +10,7 @@ import pytest
 import torch
 
 from experiments.ataraxos_move import ataraxos_move_scalar
+from manabot.decklist import deck_identity
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
@@ -20,7 +21,6 @@ from manabot.training.execution import execute_regime, validate_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.training.rollout.matchups import elemental_roster
-from manabot.training.rollout.self_play import deck_identity
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLedger,

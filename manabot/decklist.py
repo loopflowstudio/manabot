@@ -9,6 +9,7 @@ Native imports stay lazy so configuration and historical readers remain portable
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Mapping
 import hashlib
 import json
 from pathlib import Path
@@ -98,6 +99,12 @@ class DeckDocument(_Record):
     @property
     def source_sha256(self) -> str:
         return hashlib.sha256(self.source.encode("utf-8")).hexdigest()
+
+
+def deck_identity(deck: Mapping[str, int], sideboard: Mapping[str, int]) -> str:
+    """Content identity includes sideboard; player names never identify decks."""
+    payload = json.dumps([dict(deck), dict(sideboard)], sort_keys=True).encode()
+    return hashlib.sha256(payload).hexdigest()
 
 
 class AdmittedDeck(_Record):

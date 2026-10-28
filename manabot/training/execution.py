@@ -175,6 +175,18 @@ def validate_regime(
             raise ValueError(
                 "elemental-uniform requires complete Elemental policy input"
             )
+    if regime.deck_collection is not None:
+        collection = regime.deck_collection
+        if require_current_world:
+            collection.validate_current()
+        if regime.match != collection.match_config():
+            raise ValueError(
+                "collection representative match differs from regime match"
+            )
+        if regime.agent.semantic_pack != collection.pool.pack_key:
+            raise ValueError(
+                "deck collection requires the complete pool policy vocabulary"
+            )
     if regime.agent.belief_count_buckets:
         raise ValueError("regime stages do not produce belief inputs")
     return regime
@@ -610,6 +622,7 @@ def _execute_regime(
                 space,
                 target.with_suffix(".tmp"),
                 player_configs=Match(regime.match).to_rust(),
+                deck_collection=regime.deck_collection,
                 extra={
                     "run_id": run.id,
                     "stage_id": record.id,
@@ -1143,6 +1156,7 @@ def _execute_regime(
                             space,
                             temporary,
                             player_configs=Match(regime.match).to_rust(),
+                            deck_collection=regime.deck_collection,
                             extra={
                                 "run_id": run.id,
                                 "stage_id": stage.id,
@@ -1213,6 +1227,7 @@ def _execute_regime(
                         else None,
                         root=stage.root,
                         matchup_curriculum=stage.matchup_curriculum,
+                        deck_collection=regime.deck_collection,
                         device=stage.execution.device,
                         workers=stage.execution.workers,
                     )
@@ -1509,6 +1524,7 @@ def _execute_regime(
                         space,
                         temporary,
                         player_configs=Match(regime.match).to_rust(),
+                        deck_collection=regime.deck_collection,
                         extra={
                             "run_id": run.id,
                             "stage_id": stage.id,

@@ -1,4 +1,4 @@
-//! Batched games with native reset-seed ownership and optional exact Elemental sampling.
+//! Batched games with native reset-seed ownership and admitted per-game roster sampling.
 
 use rand::{Rng, SeedableRng};
 use rand_chacha::ChaCha8Rng;
@@ -20,6 +20,31 @@ pub struct StepResult {
     pub info: InfoDict,
 }
 
+/// One root sampler, with frozen Elemental draws and explicit distinct collection draws.
+#[derive(Debug, Default)]
+struct RootRoster {
+    players: Vec<PlayerConfig>,
+    distinct: bool,
+}
+
+impl RootRoster {
+    fn is_empty(&self) -> bool {
+        self.players.is_empty()
+    }
+
+    fn pair(&self, seed: u64) -> (usize, usize) {
+        if !self.distinct {
+            return uniform_pair(seed, self.players.len());
+        }
+        // uniform-distinct-v1: independent of shuffle/policy RNG. Drawing the
+        // second index from N-1 makes every ordered non-mirror pair equiprobable.
+        let mut rng = ChaCha8Rng::seed_from_u64(seed ^ 0x6465636b70616972);
+        let first = rng.gen_range(0..self.players.len());
+        let second = rng.gen_range(0..self.players.len() - 1);
+        (first, second + usize::from(second >= first))
+    }
+}
+
 #[derive(Debug)]
 pub struct VectorEnv {
     envs: Vec<Env>,
@@ -27,7 +52,7 @@ pub struct VectorEnv {
     opponent_policy: OpponentPolicy,
     next_seeds: Vec<u64>,
     seed_stride: u64,
-    uniform_roster: Vec<PlayerConfig>,
+    uniform_roster: RootRoster,
     skip_trivial: bool,
 }
 
@@ -63,7 +88,7 @@ impl VectorEnv {
             opponent_policy,
             next_seeds,
             seed_stride: num_envs.max(1) as u64,
-            uniform_roster: Vec::new(),
+            uniform_roster: RootRoster::default(),
             skip_trivial,
         }
     }
@@ -97,7 +122,54 @@ impl VectorEnv {
                 "uniform roster requires every exact Elemental setup once".into(),
             ));
         }
-        self.uniform_roster = roster;
+        self.uniform_roster = RootRoster {
+            players: roster,
+            distinct: false,
+        };
+        Ok(())
+    }
+
+    /// Admit complete qualified lists before any root allocation. No pair table.
+    pub fn set_deck_collection(&mut self, roster: Vec<PlayerConfig>) -> Result<(), AgentError> {
+        if !self.player_configs.is_empty() || roster.len() < 2 {
+            return Err(AgentError(
+                "collection requires at least two decks before reset".into(),
+            ));
+        }
+        let pack = roster[0]
+            .content_pack
+            .as_deref()
+            .ok_or_else(|| AgentError("collection requires an explicit content pool".into()))?;
+        let mut distinct = std::collections::BTreeSet::new();
+        for player in &roster {
+            if player.content_pack.as_deref() != Some(pack) {
+                return Err(AgentError(
+                    "collection decks must share one content pool".into(),
+                ));
+            }
+            let issues = crate::semantic::deck_admission::admit_deck(
+                pack,
+                &player.decklist,
+                &player.sideboard,
+                crate::semantic::deck_admission::DEVELOPMENT_RULESET,
+            )
+            .map_err(|error| AgentError(error.to_string()))?;
+            if !issues.is_empty() {
+                return Err(AgentError(format!(
+                    "collection deck {}: {:?}",
+                    player.name, issues
+                )));
+            }
+            if !distinct.insert((&player.decklist, &player.sideboard)) {
+                return Err(AgentError(
+                    "collection requires distinct normalized decks".into(),
+                ));
+            }
+        }
+        self.uniform_roster = RootRoster {
+            players: roster,
+            distinct: true,
+        };
         Ok(())
     }
 
@@ -108,7 +180,7 @@ impl VectorEnv {
         }
         self.envs
             .iter()
-            .map(|env| uniform_pair(env.seed(), self.uniform_roster.len()))
+            .map(|env| self.uniform_roster.pair(env.seed()))
             .collect()
     }
 
@@ -439,7 +511,7 @@ impl VectorEnv {
 
     fn for_each_env<R, F>(&mut self, work: F) -> Result<Vec<R>, AgentError>
     where
-        F: Fn(usize, &mut Env, &mut u64, &[PlayerConfig], &[PlayerConfig]) -> Result<R, AgentError>,
+        F: Fn(usize, &mut Env, &mut u64, &[PlayerConfig], &RootRoster) -> Result<R, AgentError>,
     {
         // Setups are immutable between resets. Borrow each stream's setup while
         // mutating its environment/seed, including when most streams are paused.
@@ -491,7 +563,7 @@ impl VectorEnv {
     }
 
     fn step_with_autoreset_on_env(
-        roster: &[PlayerConfig],
+        roster: &RootRoster,
         env: &mut Env,
         next_seed: &mut u64,
         action: i64,
@@ -584,7 +656,7 @@ impl VectorEnv {
     }
 
     fn skip_opponent_turns_until_hero_on_env(
-        roster: &[PlayerConfig],
+        roster: &RootRoster,
         env: &mut Env,
         mut obs: Observation,
         next_seed: &mut u64,
@@ -622,7 +694,7 @@ impl VectorEnv {
     }
 
     fn reset_env_on_env(
-        roster: &[PlayerConfig],
+        roster: &RootRoster,
         env: &mut Env,
         next_seed: &mut u64,
         seed_stride: u64,
@@ -634,14 +706,14 @@ impl VectorEnv {
         let configs = if roster.is_empty() {
             player_configs.to_vec()
         } else {
-            let (a, b) = uniform_pair(seed, roster.len());
-            vec![roster[a].clone(), roster[b].clone()]
+            let (a, b) = roster.pair(seed);
+            vec![roster.players[a].clone(), roster.players[b].clone()]
         };
         env.reset(configs)
     }
 
     fn reset_to_hero_turn_on_env(
-        roster: &[PlayerConfig],
+        roster: &RootRoster,
         env: &mut Env,
         next_seed: &mut u64,
         player_configs: &[PlayerConfig],
@@ -684,6 +756,47 @@ mod tests {
         agent::{action::AgentError, env::Env, opponent::OpponentPolicy, vector_env::VectorEnv},
         state::player::PlayerConfig,
     };
+
+    #[test]
+    fn collection_roots_are_distinct_replayable_and_admitted() {
+        let roster: Vec<_> = ["Plains", "Mountain", "Forest"]
+            .into_iter()
+            .map(|name| {
+                let mut player = PlayerConfig::new(name, BTreeMap::from([(name.into(), 12)]));
+                player.content_pack = Some("tla-pool-v1".into());
+                player
+            })
+            .collect();
+        let mut vector = VectorEnv::new(2, 17402, true, OpponentPolicy::None);
+        assert!(vector
+            .set_deck_collection(vec![roster[0].clone(); 2])
+            .is_err());
+        let mut bad = roster.clone();
+        bad[0].decklist = BTreeMap::from([("Black Lotus".into(), 12)]);
+        assert!(vector.set_deck_collection(bad).is_err());
+        vector.set_deck_collection(roster.clone()).unwrap();
+        vector.reset_all(roster[..2].to_vec()).unwrap();
+        let seeds = vector.current_game_seeds();
+        let pairs = vector.current_matchup_indices();
+        for (index, &(a, b)) in pairs.iter().enumerate() {
+            assert_ne!(a, b);
+            let mut scalar = Env::new(seeds[index], true, false, false);
+            scalar
+                .reset(vec![roster[a].clone(), roster[b].clone()])
+                .unwrap();
+            assert_eq!(
+                scalar.state_digest().unwrap(),
+                vector.envs[index].state_digest().unwrap()
+            );
+        }
+        vector.reset_all(roster[..2].to_vec()).unwrap();
+        assert_ne!(seeds, vector.current_game_seeds());
+        vector
+            .reset_seeds_into(seeds, |_, _, _, _, _| Ok(()))
+            .unwrap();
+        assert_eq!(pairs, vector.current_matchup_indices());
+        assert!(vector.set_deck_collection(roster).is_err());
+    }
 
     fn sample_player_configs() -> Vec<PlayerConfig> {
         vec![

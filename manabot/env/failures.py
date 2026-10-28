@@ -373,6 +373,17 @@ class CapturedVector(_Capture):
         self.native.set_uniform_roster(roster)
         self._roster = [PlayerSetup.retain(player) for player in roster]
 
+    def set_deck_collection(
+        self, roster: list[managym.PlayerConfig], digest: str
+    ) -> None:
+        self.native.set_deck_collection(roster)
+        self._roster = [PlayerSetup.retain(player) for player in roster]
+        self.identities["deck_collection"] = {
+            "digest": digest,
+            "sampling_policy": "uniform-distinct-v1",
+            "deck_ids": [player.name for player in roster],
+        }
+
     def reset_all_into_buffers(self, players: list[managym.PlayerConfig]) -> None:
         self.reset_each_into_buffers([players for _ in self.games])
 
@@ -412,6 +423,20 @@ class CapturedVector(_Capture):
     def step_into_buffers(
         self, actions: list[int], active: list[bool] | None = None
     ) -> None:
+        self._step(actions, active, isolated=False)
+
+    def step_isolated_into_buffers(
+        self, actions: list[int], active: list[bool] | None = None
+    ) -> None:
+        self._step(actions, active, isolated=True)
+
+    def replace_failed_into_buffers(self, active: list[bool]) -> None:
+        self.native.replace_failed_into_buffers(active)
+        self._synchronize()
+
+    def _step(
+        self, actions: list[int], active: list[bool] | None, *, isolated: bool
+    ) -> None:
         enabled = active if active is not None else [True] * len(self.games)
         actors = self.native.current_agent_indices()
         frames = self.native.semantic_decision_frames_json(active)
@@ -425,7 +450,10 @@ class CapturedVector(_Capture):
                 game.frame = frame
                 attempted.append(game)
         with self._guard(lambda: self._evidence_for(attempted, "step")):
-            self.native.step_into_buffers(actions, active)
+            if isolated:
+                self.native.step_isolated_into_buffers(actions, active)
+            else:
+                self.native.step_into_buffers(actions, active)
         self._synchronize()
 
 

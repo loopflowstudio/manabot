@@ -26,6 +26,7 @@ from typing import Any, Literal
 
 import torch
 
+from manabot.deck_collection import DeckCollection
 from manabot.env import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.world import WORLD, checkpoint_configs, checkpoint_world
@@ -167,7 +168,14 @@ def checkpoint_incompatibility(checkpoint: Mapping[str, Any]) -> str | None:
             checkpoint["hypers"]["observation_hypers"]
         )
         configs = checkpoint_configs(binding)
-        expected = checkpoint_world(configs, ObservationSpace(observation))
+        collection = (
+            DeckCollection.model_validate(binding["deck_collection"])
+            if "deck_collection" in binding
+            else None
+        )
+        expected = checkpoint_world(
+            configs, ObservationSpace(observation), deck_collection=collection
+        )
     except BaseException as error:  # PyO3 panics on invalid native setups
         if isinstance(error, (KeyboardInterrupt, SystemExit, GeneratorExit)):
             raise
@@ -191,6 +199,10 @@ def _content_mismatch(trained: Any, engine: Any) -> str:
 
 
 _BINDING_FIELDS = (
+    (
+        "deck_collection",
+        lambda trained, engine: "its deck collection no longer resolves the same",
+    ),
     (
         "policy_input_version",
         lambda trained, engine: (

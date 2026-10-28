@@ -22,6 +22,7 @@ from manabot.belief.encoding import (
     BeliefEncodingSchema,
     belief_checkpoint_fields,
 )
+from manabot.deck_collection import DeckCollection
 from manabot.env import ObservationSpace
 from manabot.infra.artifacts import StoredArtifact, materialize_artifact, verify_file
 from manabot.infra.config import ModelConfig, ObservationConfig
@@ -168,13 +169,16 @@ def save_checkpoint(
     player_configs: list[managym.PlayerConfig],
     extra: dict[str, Any] | None = None,
     belief_schema: BeliefEncodingSchema | None = None,
+    deck_collection: DeckCollection | None = None,
 ) -> None:
     """Save a portable policy with its explicit world, input and value semantics."""
 
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     checkpoint = {
-        "world_binding": checkpoint_world(player_configs, obs_space),
+        "world_binding": checkpoint_world(
+            player_configs, obs_space, deck_collection=deck_collection
+        ),
         "architecture": architecture_receipt(agent).model_dump(mode="json"),
         "model_state_dict": agent.state_dict(),
         "global_step": 0,

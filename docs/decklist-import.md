@@ -65,3 +65,59 @@ Imported setups currently reject checkpoint opponents. A checkpoint trained on
 a curated matchup is not admitted merely because tensor dimensions agree.
 The simulation entry point supports `random` and `default`; no training is
 required to use the importer.
+
+## Reproducible training collections
+
+Prepare a versioned local manifest from complete supported lists:
+
+```sh
+uv run python -m manabot.deck_collection --pool tla-pool-v1 --out decks-v1.json white.txt blue.txt red.txt
+```
+
+The command fails the entire preparation if any source is invalid or unsupported,
+with its filename and line diagnostics. It does not overwrite an existing
+manifest. It preserves UTF-8 source text, filenames, main decks and sideboards.
+Lists with equal normalized contents share one deck ID, retaining all their
+source records without increasing their sampling weight. At least two distinct
+lists are required. Construction remains `development-v1`, not tournament legality.
+
+In an ordinary `TrainingRegime`, set `deck_collection` to the manifest path and
+`agent.semantic_pack` to its pool key. The representative `match` may be omitted;
+it is derived from the admitted collection. Existing self-play stage settings
+remain in use. Collection stages require `behavior: current-self`, one producer,
+ordinary roots and the default fixed curriculum field. For example, adapting an
+existing recipe in Python (this only constructs a configuration):
+
+```python
+from manabot.training.regime import TrainingRegime
+
+values = recipe.model_dump(mode="json")
+values.pop("match")
+values["deck_collection"] = "decks-v1.json"
+values["agent"]["semantic_pack"] = "tla-pool-v1"
+regime = TrainingRegime.model_validate(values)
+```
+
+The recipe embeds the admitted manifest, so recovery does not reread a mutable
+path. Membership, retained sources, content/world identity and learning-schema
+hash are bound by the collection digest. Editing any of these requires preparing
+a new collection; recovery under different membership or schema is rejected.
+
+`uniform-distinct-v1` chooses two different deck IDs at each native game root,
+uniformly over ordered pairs. Either deck is equally likely to be on the play.
+Draws use the native reset seed in a separate RNG domain from shuffling and
+policy inference; recovery reproduces deck pair, seats and game seed. Storage is
+linear in the number of decks, with no all-pairs table. All games use the whole
+pool's fixed semantic vocabulary. Policy exports retain the full collection
+binding and admit its member decks; they contain private submitted sources.
+
+Existing exposure counters report game starts, environment decisions, learner
+transitions and terminal games separately. Uniform starts do not imply uniform
+transition exposure. Failure receipts retain actual sampled deck IDs, complete
+setups, collection digest and reset seed. Existing Elemental recipes keep their
+original roster admission, mirror distribution, seed sequence and serialization.
+
+The bounded local proof uses three supported development decks and performs no
+weight updates. Real 17Lands ingestion awaits full TLA support; this does not
+provide a 17Lands adapter, held-out dataset policy, adaptive curriculum or mirrors
+in collection sampling.

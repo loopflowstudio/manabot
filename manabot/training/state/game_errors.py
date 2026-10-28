@@ -21,6 +21,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
+from manabot.decklist import deck_identity
 from manabot.env import Match
 from manabot.env.failures import read_failure
 from manabot.env.replay import (
@@ -31,7 +32,6 @@ from manabot.env.replay import (
     run_bounded_replay,
 )
 from manabot.infra.config import MatchConfig
-from manabot.training.rollout.self_play import deck_identity
 import managym
 
 GameOutcome = Literal[
@@ -65,6 +65,9 @@ class GameAttempt(BaseModel):
     seed: int
     seat: int
     matchup: MatchConfig
+    collection_digest: str | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     outcome: GameOutcome
     actions: list[int] = []
     error_class: str | None = None

@@ -29,6 +29,8 @@ from typing import Any, Literal, TypedDict
 import numpy as np
 import torch
 
+from manabot.deck_collection import DeckCollection
+from manabot.decklist import deck_identity
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.env.failures import CapturedVector
 from manabot.env.observation import ACTION_TYPE_DIM, ActionEnum
@@ -54,7 +56,7 @@ from manabot.training.rollout.matchups import (
     stream_matches,
 )
 from manabot.training.rollout.producers import ShardedVectorEnv
-from manabot.training.rollout.self_play import SelfPlayCounter, deck_identity
+from manabot.training.rollout.self_play import SelfPlayCounter
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLimit,
@@ -185,6 +187,7 @@ class CollectorSnapshot:
     sampling_rng: torch.Tensor
     stats: CollectorStats
     current_games: CurrentGames | None = None
+    collection_digest: str | None = None
 
 
 _ACTION_TYPE_NAMES = {int(member): member.name.lower() for member in ActionEnum}
@@ -215,18 +218,32 @@ class SeatRoutedCollector:
         recovery_max_game_microsteps: int | None = None,
         root: str | None = None,
         matchup_curriculum: Curriculum = "fixed",
+        deck_collection: DeckCollection | None = None,
         workers: int = 1,
         game_errors: GameErrorPolicy | None = None,
         record_attempt: Callable[[GameAttempt], GameErrorState] | None = None,
     ) -> None:
+        self.deck_collection = deck_collection
+        if deck_collection is not None:
+            if matchup_curriculum != "fixed":
+                raise ValueError("deck collection cannot be combined with a curriculum")
+            deck_collection.validate_current()
+            if match.config != deck_collection.match_config():
+                raise ValueError(
+                    "collection representative match differs from the admitted collection"
+                )
         self._uniform_roster = (
-            elemental_roster(match) if matchup_curriculum == "elemental-uniform" else []
+            deck_collection.roster()
+            if deck_collection is not None
+            else elemental_roster(match)
+            if matchup_curriculum == "elemental-uniform"
+            else []
         )
         if self._uniform_roster and (
             workers != 1 or root is not None or opponent_mode != "self"
         ):
             raise ValueError(
-                "elemental-uniform requires current-self, one producer and ordinary roots"
+                "per-game roster sampling requires current-self, one producer and ordinary roots"
             )
         if workers not in (1, 2, 4) or workers > num_envs:
             raise ValueError("workers must be 1, 2 or 4 and cannot exceed streams")
@@ -313,7 +330,11 @@ class SeatRoutedCollector:
                 if self._uniform_roster
                 else stream_matches(match, num_envs, matchup_curriculum)
             )
-            if self._uniform_roster:
+            if deck_collection is not None:
+                self._env.set_deck_collection(
+                    self._uniform_roster, deck_collection.digest
+                )
+            elif self._uniform_roster:
                 self._env.set_uniform_roster(self._uniform_roster)
             if matchup_curriculum in ("fixed", "elemental-uniform"):
                 self._env.reset_all_into_buffers(match.to_rust())
@@ -370,10 +391,15 @@ class SeatRoutedCollector:
             CurrentGames(self._env.current_game_seeds(), deepcopy(self._game_actions))
             if self._game_recovery_limit is not None
             else None,
+            self.deck_collection.digest if self.deck_collection is not None else None,
         )
 
     def restore(self, state: CollectorSnapshot, check: Callable[[], None]) -> None:
         """Replay into a fresh collector; reject divergence before any learning."""
+        if getattr(state, "collection_digest", None) != (
+            self.deck_collection.digest if self.deck_collection is not None else None
+        ):
+            raise ValueError("collector deck collection identity mismatch")
         if self.stats.micro_steps or self._journal:
             raise ValueError("restore requires a fresh collector")
         if state.current_games is not None:
@@ -436,6 +462,11 @@ class SeatRoutedCollector:
         if self._uniform_roster:
             self.stream_matches = []
             for a, b in self._env.current_matchup_indices():
+                if self.deck_collection is not None:
+                    self.stream_matches.append(
+                        Match(self.deck_collection.match_config(a, b))
+                    )
+                    continue
                 first, second = self._uniform_roster[a], self._uniform_roster[b]
                 self.stream_matches.append(
                     Match(
@@ -556,6 +587,18 @@ class SeatRoutedCollector:
         No sampled action crosses the update boundary.
         """
 
+        if self.deck_collection is not None:
+            if agent.config.semantic_pack != self.deck_collection.pool.pack_key:
+                raise ValueError(
+                    "deck collection requires the complete pool policy vocabulary"
+                )
+            binding = getattr(agent, "world_binding", None)
+            if (
+                binding is not None
+                and binding.get("deck_collection", {}).get("digest")
+                != self.deck_collection.digest
+            ):
+                raise ValueError("policy checkpoint deck collection identity mismatch")
         if self.opponent_mode == "learning":
             raise ValueError("use collect_pair for two learning models")
         # No cache or prepared observation survives learning, snapshot or restore.
@@ -896,6 +939,9 @@ class SeatRoutedCollector:
                 seed=seed,
                 seat=seat,
                 matchup=self.stream_matches[row].config,
+                collection_digest=self.deck_collection.digest
+                if self.deck_collection is not None
+                else None,
                 outcome=outcome,
                 actions=[] if completed else list(self._game_actions[row]),
                 error_class=error_class,

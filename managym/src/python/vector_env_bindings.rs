@@ -247,6 +247,12 @@ impl PyVectorEnv {
             .map_err(map_agent_err)
     }
 
+    fn set_deck_collection(&mut self, roster: Vec<PyPlayerConfig>) -> PyResult<()> {
+        self.inner
+            .set_deck_collection(roster.into_iter().map(PlayerConfig::from).collect())
+            .map_err(map_agent_err)
+    }
+
     fn current_matchup_indices(&self) -> Vec<(usize, usize)> {
         self.inner.current_matchup_indices()
     }

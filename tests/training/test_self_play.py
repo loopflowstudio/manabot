@@ -6,9 +6,10 @@ from pathlib import Path
 
 import pytest
 
+from manabot.decklist import deck_identity
 from manabot.reports.experiment import load_evidence
 from manabot.reports.self_play import self_play_figures, self_play_points
-from manabot.training.rollout.self_play import SelfPlayCounter, deck_identity
+from manabot.training.rollout.self_play import SelfPlayCounter
 from manabot.training.update_metrics import stage_rows
 
 
