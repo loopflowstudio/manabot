@@ -131,7 +131,9 @@ def _report_environment(connection: Connection, names: tuple[str, ...]) -> None:
     connection.close()
 
 
-def test_child_starts_with_single_threaded_pools() -> None:
+def test_child_starts_with_single_threaded_pools(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     child = ChildProcess(
         "tests.sim.test_child_surface:_report_environment", (POOL_VARIABLES,)
     )
@@ -145,10 +147,13 @@ def test_child_starts_with_single_threaded_pools() -> None:
     missing.join(60)
     assert missing.exitcode not in (None, 0)
     missing.close()
-    assert child_environment({"OMP_NUM_THREADS": "8", "HOME": "/h"}) == {
-        "HOME": "/h",
+    monkeypatch.setenv("OMP_NUM_THREADS", "8")
+    monkeypatch.setenv("HOME", "/h")
+    assert child_environment() == {
+        **os.environ,
         **dict.fromkeys(POOL_VARIABLES, "1"),
     }
+    assert child_environment()["HOME"] == "/h"
 
 
 def test_effective_cpus_honors_affinity_and_cgroup_quota(tmp_path: Path) -> None:

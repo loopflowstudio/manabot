@@ -381,19 +381,12 @@ Findings (implement, 2026-10-27):
 
 Implement, 2026-10-27 (parent hop): `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/eval/test_local_evaluation.py tests/sim/test_child_surface.py tests/test_package_boundaries.py tests/eval/test_evaluation_match.py tests/training/test_game_errors.py tests/eval/test_mirror_admission.py tests/eval/test_inference_receipts.py -q` → 146 passed, 1 skipped (11 min). Host load average ~370 from other sessions during the run.
 
-Compress 1–4 (2026-10-27): one due rule (`serve.head_group`), one
-infrastructure-failure helper, a control channel carrying only
-admit/snapshot/close, `InferenceRuntime.game_slot` owning the slot wait, the
-client alone validating replies as `(reply, error)`.
-Compress 5: `PolicyStore.admit` alone checks each registration's parameter
-count (reloads re-verify bytes); `InferenceRuntime.check` relies on `_closing`.
-Compress 6: `supervise_game` keeps one clamped deadline; builtin
-`TimeoutError`; one admit/snapshot branch in `serve.control`.
-`uv run --extra dev pytest tests/eval/test_batched_eval.py tests/sim/test_child_surface.py tests/training/test_game_errors.py -q` → 50 passed, 1 skipped.
-Compress 7: `DecisionRequest`/`DecisionReply` drop game, actor, revision and
-ordinal (a connection has one request in flight; `request_id` binds the
-reply). Same command → 50 passed, 1 skipped; `test_inference_receipts` and
-`test_inference_baseline_execution` pass.
+Compress (2026-10-27/28; detail in git log): one due rule (`serve.head_group`),
+one infrastructure-failure helper, a control channel carrying only
+admit/snapshot/close, `game_slot` owning the slot wait, replies bound by
+`request_id` alone, parameter count checked once at admission, one clamped
+deadline in `supervise_game`, `child_environment()` without a test-only base.
+`uv run --extra dev pytest tests/eval/test_batched_eval.py tests/sim/test_child_surface.py tests/training/test_game_errors.py -q` → 50 passed, 1 skipped (compress 7); `tests/sim/test_child_surface.py` → 7 passed (latest).
 
 Open for gate: three `tests/sim` failures (conditional-search fixture digest,
 rollout card admission, seed-197 world binding) also fail at `ea8d0e874`.
@@ -515,8 +508,6 @@ receipt past its deadline has its attempts finished as lost
 (`create_unconfirmed`) but returns without `_end_session`, so
 `unsettled_sessions` keeps counting it; `etude terminate` does not clear it.
 Once Etude ends that session, queue with `queue_runs.py batched-hop.json --go`
-from the 0.2.6 client as in Calibration. Rechecked by quote 2026-10-28
-05:13 UTC (implement): still "at its machine limit" (`etude machines` lists
-`cpu32-b937fa5a80b7`); nothing queued, no new spend. The bug is unfixed on
-Etude main v0.2.11 (`scheduler.py:1898-1902`) and is Etude EXP-13's (an
-owned-SSH session that has no receipt stays claimed). This case is recorded there as a comment.
+from the 0.2.6 client as in Calibration. Last rechecked 2026-10-28 05:17 UTC:
+still blocked, nothing queued, no new spend. Unfixed on Etude main v0.2.11
+(`scheduler.py:1898-1902`); tracked as Etude EXP-13 (comment added).

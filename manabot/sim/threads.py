@@ -67,7 +67,7 @@ SERVING_BUDGET = ThreadBudget("serving", 16)
 # The group worker runs `play_cell`. Without a shared runtime (code and search
 # players only) it keeps the main thread plus a small helper allowance. Hosting
 # an inference runtime adds one game thread per active game; its main thread,
-# request reader and sender, plus four runtime helpers make the fixed
+# control-channel reader and sender, plus four runtime helpers make the fixed
 # allowance. Recorded for calibration, not enforced: the worker coordinates
 # games rather than playing them.
 _GROUP_WORKER_UNSERVED_THREADS = 8
@@ -116,11 +116,9 @@ def effective_cpus(
     return max(1, min(candidates))
 
 
-def child_environment(base: Mapping[str, str] | None = None) -> dict[str, str]:
-    """Environment for an evaluation child: every known pool has one thread."""
-    environment = dict(os.environ if base is None else base)
-    environment.update(dict.fromkeys(POOL_VARIABLES, "1"))
-    return environment
+def child_environment() -> dict[str, str]:
+    """This process's environment with every known pool pinned to one thread."""
+    return {**os.environ, **dict.fromkeys(POOL_VARIABLES, "1")}
 
 
 @dataclass(frozen=True)
