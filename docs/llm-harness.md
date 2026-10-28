@@ -169,6 +169,13 @@ has a hard parent-owned deadline. A timeout retains progress and closes the
 session without selecting an action or automatically restarting. Generation
 does not retain conversational or KV state across game decisions.
 
+Admission binds the pinned inference configuration to the runtime and chat
+template in a `behavior_version`. Each decision has a unique request ID; the
+parent checks it and the returned version, configuration, runtime and decision
+before forwarding progress. A mismatch closes the session without selecting an
+action. Selection receipts retain the version; historical receipts without it
+remain readable and keep an unknown version.
+
 `manabot.verify.llm_game` connects the native text renderer and revision-bound
 Commands to that session. Its functional fixture is a 60-card mirror of 24
 Mountains, 24 Gray Ogres and 12 Lightning Bolts, Qwen in seat zero against a

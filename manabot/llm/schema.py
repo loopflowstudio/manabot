@@ -4,11 +4,20 @@ The caller owns observation meaning and legal-reference binding. These records
 retain that input verbatim; no type here can execute a game action.
 """
 
+import hashlib
+import json
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
 DecisionObjective = Literal["legal-action", "win-game"]
+
+
+def _canonical_sha256(value: dict[str, JsonValue]) -> str:
+    # Keep receipt identities usable without infra's training/runtime imports.
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
 
 
 class Record(BaseModel):
@@ -55,6 +64,11 @@ class InferenceConfig(Record):
             raise ValueError("context must leave room for the prompt")
         return self
 
+    @property
+    def version(self) -> str:
+        """Immutable model, tokenizer and inference treatment identity."""
+        return _canonical_sha256(self.model_dump(mode="json"))
+
 
 class Message(Record):
     role: Literal["user", "assistant"]
@@ -84,6 +98,12 @@ class RuntimeIdentity(Record):
     chat_template: str
     generation_config: dict[str, JsonValue]
     model_class: str | None = None
+
+    def behavior_version(self, config: InferenceConfig) -> str:
+        """Bind the admitted treatment to its actual runtime and template."""
+        return _canonical_sha256(
+            {"inference": config.version, "runtime": self.model_dump(mode="json")}
+        )
 
 
 class Attempt(Record):
@@ -120,6 +140,8 @@ class SelectionResult(Record):
     decision: DecisionInput
     config: InferenceConfig
     runtime: RuntimeIdentity | None = None
+    # Historical receipts predate versioned admission; absence is not a version.
+    behavior_version: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     attempts: tuple[Attempt, ...] = ()
     selected_reference: str | None = None
     origin: Literal["initial", "retry", "fallback"] | None = None

@@ -118,7 +118,12 @@ def select(
     """
     start = time.monotonic() if started is None else started
     deadline = start + config.deadline_seconds
-    result = SelectionResult(decision=decision, config=config, runtime=runtime.identity)
+    result = SelectionResult(
+        decision=decision,
+        config=config,
+        runtime=runtime.identity,
+        behavior_version=runtime.identity.behavior_version(config),
+    )
     attempts: list[Attempt] = []
     messages = decision_messages(decision, thinking=config.enable_thinking)
 

@@ -91,6 +91,7 @@ def test_initial_selection_retains_exact_input_output_and_identity() -> None:
     assert result.failure is None and result.fallback is None
     assert result.decision == decision()
     assert result.runtime.runtime == "scripted-test"
+    assert result.behavior_version == result.runtime.behavior_version(config())
     assert len(result.attempts) == 1
     attempt = result.attempts[0]
     assert attempt.response.text == "  A1\n"
@@ -99,6 +100,8 @@ def test_initial_selection_retains_exact_input_output_and_identity() -> None:
     assert attempt.seconds >= 0 and result.seconds >= attempt.seconds
     assert result.peak_gpu_bytes is None
     assert SelectionResult.model_validate_json(result.model_dump_json()) == result
+    historical = result.model_dump_json(exclude={"behavior_version"})
+    assert SelectionResult.model_validate_json(historical).behavior_version is None
 
 
 @pytest.mark.parametrize("invalid", ["", "A9", "A0 A1", "I choose A1", "A1."])

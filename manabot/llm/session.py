@@ -10,6 +10,7 @@ import multiprocessing
 from multiprocessing.connection import Connection
 import time
 from typing import Callable
+from uuid import uuid4
 
 from manabot.llm.schema import (
     DecisionInput,
@@ -24,6 +25,8 @@ from manabot.llm.selection import Runtime, select
 
 @dataclass(frozen=True)
 class _DecisionRequest:
+    request_id: str
+    behavior_version: str
     decision: DecisionInput
     expected_prompt: EncodedPrompt | None
 
@@ -31,6 +34,13 @@ class _DecisionRequest:
 @dataclass(frozen=True)
 class _Ready:
     identity: RuntimeIdentity
+    behavior_version: str
+
+
+@dataclass(frozen=True)
+class _Progress:
+    request_id: str
+    result: SelectionResult
 
 
 @dataclass(frozen=True)
@@ -55,22 +65,29 @@ def _serve(
         except Exception as error:
             connection.send(_LoadFailure(f"{type(error).__name__}: {error}"))
             return
-        connection.send(_Ready(runtime.identity))
+        version = runtime.identity.behavior_version(config)
+        connection.send(_Ready(runtime.identity, version))
         while True:
             try:
-                decision = connection.recv()
+                request = connection.recv()
             except EOFError:
                 return
-            if decision is None:
+            if request is None:
                 return
-            if not isinstance(decision, _DecisionRequest):
+            if not isinstance(request, _DecisionRequest):
                 raise TypeError("expected decision request")
+            if request.behavior_version != version:
+                raise ValueError("request differs from admitted behavior version")
+
+            def publish(result: SelectionResult) -> None:
+                connection.send(_Progress(request.request_id, result))
+
             result = select(
-                decision.decision,
+                request.decision,
                 config,
                 runtime,
-                progress=connection.send,
-                expected_prompt=decision.expected_prompt,
+                progress=publish,
+                expected_prompt=request.expected_prompt,
             )
             if result.failure is not None:
                 return
@@ -103,6 +120,9 @@ class InferenceSession:
             if not isinstance(message, _Ready):
                 raise RuntimeError("worker did not report runtime identity")
             self.identity = message.identity
+            self.behavior_version = self.identity.behavior_version(config)
+            if message.behavior_version != self.behavior_version:
+                raise RuntimeError("worker admitted a different behavior version")
             self.load_seconds = time.monotonic() - started
         except BaseException:
             child.close()
@@ -121,18 +141,37 @@ class InferenceSession:
         started = time.monotonic()
         deadline = started + self.config.deadline_seconds
         result = SelectionResult(
-            decision=decision, config=self.config, runtime=self.identity
+            decision=decision,
+            config=self.config,
+            runtime=self.identity,
+            behavior_version=self.behavior_version,
         )
         try:
-            self.connection.send(_DecisionRequest(decision, expected_prompt))
+            request_id = uuid4().hex
+            self.connection.send(
+                _DecisionRequest(
+                    request_id, self.behavior_version, decision, expected_prompt
+                )
+            )
             while True:
                 remaining = deadline - time.monotonic()
                 if remaining <= 0 or not self.connection.poll(remaining):
                     raise TimeoutError("decision wall deadline exhausted")
                 message = self.connection.recv()
-                if not isinstance(message, SelectionResult):
+                if not isinstance(message, _Progress):
                     raise RuntimeError("worker did not report selection progress")
-                result = message
+                received = message.result
+                if (
+                    message.request_id != request_id
+                    or received.behavior_version != self.behavior_version
+                    or received.config != self.config
+                    or received.runtime != self.identity
+                    or received.decision != decision
+                ):
+                    raise RuntimeError("stale or mismatched behavior reply")
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("decision wall deadline exhausted")
+                result = received
                 if progress is not None:
                     progress(result)
                 if time.monotonic() >= deadline:

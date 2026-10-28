@@ -1,19 +1,24 @@
-# MTG-207 assumptions — 2026-10-27
+# bb4160 blockers and decisions — 2026-10-28
 
-Inherited MTG-206 notes are at `4ab16a140:scratch/questions.md`.
+- **World contradiction, execution stopped.** The exact requested MTG-183
+  checkpoint (`4f2ad656ba036a33d527212a7ac2badf2c5b9db136916f730846b07eef2fbea4`,
+  1,071,166 bytes) was fetched and verified from
+  `r2://manabot/jobs/f3748bcabac8/checkpoints/learner_transitions-331180341.pt`.
+  It binds **w13**, policy-input v1. This checkout builds **w14**;
+  `CheckpointOpponent` rejects it with `checkpoint requires an explicit
+  compatible w14 world binding`. The directive requires current-world admission
+  and forbids changing the opponent or forcing admission. A historical w13
+  experiment or a different current-world opponent needs an accepted design
+  revision; neither is assumed here. No rental or scored game was started.
+- **Etude unavailable.** Installed pinned SDK 0.2.10 refuses
+  `/Users/jack/.etude/launcher.db` as written by another version. No database,
+  authentication, dependency pin or other Task's execution was changed. This is
+  a separate launch prerequisite, not the reason for world rejection.
+- **Independent scope.** Versioned LLM session admission/request/reply binding
+  is implemented and tested. Sampling, vLLM service routing, checkpoint version
+  propagation, cohorts, paid execution and settlement remain unfinished.
+  Training overlap and asynchronous learning are deferred: this evaluation
+  needs frozen players, and PRs #389/#383 remain open.
 
-- **Design chosen without review.** The Task left design open; headless, the
-  simplest exact path was taken: batch `estimate` by deal count and keep the
-  page one self-contained file computing every combination. Per-pair payloads
-  were not adopted: without a server, every combination must still be
-  computed when the page is written, so splitting saves browser memory, not
-  render time.
-- **254 MB page.** The whole-experiment JSON is 254.2 MB at base and after
-  (unchanged bytes of values). Whether a browser should load that is a page
-  design question left for review; values were not rounded, since the
-  acceptance compares them exactly.
-- **etude-sdk 0.2.11** (etude #72) merged 2026-10-28 02:09Z but was not on
-  PyPI or GitHub releases at 03:24Z (still 0.2.10 at 03:40Z), so the pin stays 0.2.10 (confirmed by Jack Heart's operator steer 2026-10-28). Projection with
-  Etude main's `estimate` swapped in is recorded in `scratch/mtg207.md`.
-- **Machine load.** Load average 90–240 on 16 cores throughout; wall times
-  are inflated several-fold, CPU less so.
+Obsolete MTG-207 rendering notes remain at
+`c5d406e3d2a701525c15c8500a30f7da7896cc40:scratch/questions.md`.
