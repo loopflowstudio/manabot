@@ -69,8 +69,8 @@ threads, device transfer). Everything before it is shared by CPU and CUDA:
 registration, `PolicyKey`, admission and setup validation, the
 `DecisionRequest`/`DecisionReply` protocol, game children, per-row seeds and
 sampling, and receipts. Today both devices use the same engine, one serial
-service per allocation with one Torch thread. A CPU host runs several
-allocations side by side (one per group of games) to use more cores. CPU-specific
+service per allocation with one Torch thread; a CPU host shares one allocation
+among all its groups of games, as a GPU host does. CPU-specific
 engine code, such as several inference workers per allocation or sizing intra-op
 threads to the allocation, waits for a `cpu32` calibration whose `serving.json`
 shows the service saturated (forward, transfer, sampling and assembly near its
