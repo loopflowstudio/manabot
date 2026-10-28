@@ -18,10 +18,9 @@ database (`experiments.elemental_long_db`), which is published as one object.
 
 Two eval runs keep two compute contracts apart: `mtg183-eval-rent` plays the
 frozen scalar path (one Torch thread, one decision per forward pass), and
-`mtg183-eval-batched` plays each group's games concurrently through one
-batched inference service per group (`EvalCompute`), and `mtg183-eval-gpu`
-plays every group on the machine through one CUDA inference service, so
-concurrent games share one batch (`manabot.eval.endpoint.callback_allocation`).
+`mtg193-cal-batched` and `mtg193-cal-gpu` play every group on the machine
+through one inference service (CPU and CUDA respectively), so concurrent
+games share one batch (`manabot.eval.endpoint.callback_allocation`).
 The report treats them as separate sources until their agreement is checked.
 
     uv run --extra artifacts --extra evaluation python -m experiments.elemental_long_rent \\
@@ -95,9 +94,11 @@ CEILINGS = {"cpu32": Decimal("2.0"), "l4": Decimal("0.60"), "a4500": Decimal("0.
 # ten matches at once (a unit has ten), three groups each.
 WORKERS = 10
 GROUP_WORKERS_SCALAR = 3
-# Each batched group plays all its games at once; a few groups share the machine.
-BATCHED = EvalCompute(max_active_games=12, max_batch_rows=16)
-BATCHED_WORKERS = 6
+# One machine-wide CPU service, as on the GPU: every concurrent game's
+# decisions share its batches (MTG-193's parent-hop layout).
+BATCHED = EvalCompute(max_active_games=64, max_batch_rows=64)
+BATCHED_WORKERS = 10
+GROUP_WORKERS_BATCHED = 4
 GPU_RUN = "mtg193-cal-gpu"
 # One machine-wide CUDA service: every concurrent game's decisions share a batch.
 # MTG-193's served game children are Torch-free, so 256 active games checks
@@ -110,7 +111,7 @@ Mode = Literal["scalar", "batched", "gpu"]
 # Each mode's eval run, concurrent matches, groups per match and compute contract.
 MODES: dict[Mode, tuple[str, int, int, EvalCompute | None]] = {
     "scalar": (SCALAR_RUN, WORKERS, GROUP_WORKERS_SCALAR, None),
-    "batched": (BATCHED_RUN, BATCHED_WORKERS, 1, BATCHED),
+    "batched": (BATCHED_RUN, BATCHED_WORKERS, GROUP_WORKERS_BATCHED, BATCHED),
     "gpu": (GPU_RUN, GPU_WORKERS, GROUP_WORKERS_GPU, GPU),
 }
 # A batch starts no unit it would not finish this long before its hours end.
@@ -605,7 +606,7 @@ def launch(
             workers=workers,
             group_workers=group_workers,
             compute=compute,
-            shared=mode == "gpu",
+            shared=mode in ("gpu", "batched"),
             match_limit=match_limit,
             hours=hours,
             source_bundle=bundle,
