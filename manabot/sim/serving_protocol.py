@@ -187,7 +187,7 @@ class InferenceRuntime:
         self._error: str | None = None
         self._closed = False
         self._closing = False
-        self.performance.write(self.directory / "allocation.json")
+        self._write_allocation()
         self._service_started = time.monotonic()
         # Game connections reach the service over this socket as descriptors.
         self._handoff, service_handoff = socket.socketpair()
@@ -206,7 +206,7 @@ class InferenceRuntime:
             self.performance.record(
                 "failed_service_start", self._service_started, partitions_elapsed=False
             )
-            self.performance.write(self.directory / "allocation.json")
+            self._write_allocation()
             self._write_execution(f"{type(exc).__name__}: {exc}")
             raise
         finally:
@@ -306,7 +306,7 @@ class InferenceRuntime:
                         self._service_started,
                         partitions_elapsed=False,
                     )
-                    self.performance.write(self.directory / "allocation.json")
+                    self._write_allocation()
                     continue
                 with self._lock:
                     future = self._futures.pop(identity, None)
@@ -359,7 +359,7 @@ class InferenceRuntime:
             self.performance.record(
                 "admission_round_trip", started, partitions_elapsed=False
             )
-            self.performance.write(self.directory / "allocation.json")
+            self._write_allocation()
 
     def snapshot(self) -> dict[str, Any]:
         result = self._call("snapshot", None)
@@ -397,9 +397,12 @@ class InferenceRuntime:
         self._connection.close()
         self._handoff.close()
         self.performance.record("cleanup", cleanup_started, partitions_elapsed=False)
-        self.performance.write(self.directory / "allocation.json")
+        self._write_allocation()
 
         self._write_execution(self._error)
+
+    def _write_allocation(self) -> None:
+        self.performance.write(self.directory / "allocation.json")
 
     def _write_execution(self, error: str | None) -> None:
         """Retain the same allocation identity and cost boundary on every exit."""
