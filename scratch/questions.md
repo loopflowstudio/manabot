@@ -100,15 +100,8 @@ keep matching for resumption.
 
 ## Calibration after the parent hop (implement, 2026-10-27)
 
-- **Done:** A4500 `afb7b8581189`, 5,247 games/h (was ~2,600), median batch 5.
-- **Blocked — `cpu32` arm:** a stale Etude session from MTG-193's lost run
-  `6ed5413f5292` holds the `cpu32` on-demand's one slot (bug in
-  `Scheduler._observe`, see the design's Calibration section). Proposed Etude
-  fix: end a receipt-less session once its deadline passes; tracked as Etude
-  EXP-13, with this case commented there (2026-10-28). Not repaired here: the
-  shared controller other Tasks use would have to be stopped and its store
-  edited. Landing gate still needs
-  this arm or Jack Heart's decision on the A4500 evidence.
+- **Blocked — `cpu32` arm:** state and the Etude EXP-13 cause live in the
+  design's Calibration section; not repaired here (shared controller).
 - **Assumption — batch target:** median > 8 was not reached because only 88 of
   256 slots were active (10 × 4 groups do not keep 256 games pending), not
   because of the service (~54% busy). Raising groups is a runner setting;

@@ -392,6 +392,6 @@ receipt past its deadline has its attempts finished as lost
 (`create_unconfirmed`) but returns without `_end_session`, so
 `unsettled_sessions` keeps counting it; `etude terminate` does not clear it.
 Once Etude ends that session, queue with `queue_runs.py batched-hop.json --go`
-from the 0.2.6 client as in Calibration. Last rechecked 2026-10-28 12:15 UTC:
+from the 0.2.6 client as in Calibration. Last rechecked 2026-10-28 13:23 UTC:
 still blocked, nothing queued, no new spend. Unfixed on Etude main v0.2.11
 (`scheduler.py:1898-1902`); tracked as Etude EXP-13 (comment added).
