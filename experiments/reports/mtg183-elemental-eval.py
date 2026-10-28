@@ -13,7 +13,7 @@ update and its line, so the evaluation-only page draws curves over updates
         --source ~/.manabot/mtg183-eval-db/store --out ~/.manabot/mtg183-eval-db/reports --open
 """
 
-from etude.report import Anchors, Crosstable, Curve, Earlier, Report, Score
+from etude.report import Anchors, Crosstable, Curve, Earlier, Fraction, Report, Score
 
 
 def report() -> Report:
@@ -27,6 +27,11 @@ def report() -> Report:
             Curve(
                 title="Against the checkpoint 400 updates earlier",
                 opponent=Earlier(clock="updates", by=400),
+            ),
+            # Doubling's gain: each checkpoint against itself at half its updates.
+            Curve(
+                title="Against the checkpoint at half its updates",
+                opponent=Fraction(clock="updates", value=0.5),
             ),
             Crosstable(),
             Anchors(),
