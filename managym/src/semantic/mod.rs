@@ -21,7 +21,7 @@ mod pool;
 
 pub use pool::{content_pool, pool_content, ContentPool, Eligibility, PoolDefinition};
 
-pub(crate) use content::content_pack_for_authored_match;
+pub(crate) use content::content_pack_for_match;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;

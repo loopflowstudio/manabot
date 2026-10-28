@@ -124,10 +124,11 @@ The optional [policy-history v1 projection](../docs/recent-events.md) is a bound
 derived suffix updated at the native event append. Observation reads share it;
 clone/undo and diagnostic injection must preserve its documented lifecycle.
 
-`PlayerConfig.content_pack` can explicitly select the compiled authored runtime
-for repeated-deck matches. Both seats must name the same pack and each complete
-deck/sideboard must be one of its authored setups; unknown packs or partial
-bindings fail reset. Omitting it preserves exact-pair automatic selection.
+`PlayerConfig.content_pack` explicitly selects a compiled content pool. Both
+seats must name the same pack. Exact authored setups retain their admission;
+novel decks use the pool's qualified definitions and shared `development-v1`
+construction rules (see [decklist import](../docs/decklist-import.md)). Unknown
+packs or partial bindings fail reset. Omitting it preserves exact-pair selection.
 Python `MatchHypers.authored` carries this binding for same-deck matches so replay
 cannot silently use generic card definitions.
 

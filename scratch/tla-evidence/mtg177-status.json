@@ -1,0 +1,26 @@
+{
+  "task": {
+    "identifier": "MTG-177",
+    "state": "unstarted",
+    "revision": 9,
+    "worktree": "/Users/jack/src/manabot.rules-audit"
+  },
+  "planning_stale": true,
+  "planning_state": "available",
+  "observed_at": 1793150009,
+  "execution": {
+    "state": "idle",
+    "reason": "Graph pursue finished; nothing further is launched",
+    "step": null,
+    "captured": 2789657
+  },
+  "pr": {
+    "sequence": 1,
+    "branch": "jack/mtg-177-audit-all-mtg-rules-and-draft-low-cost-coverage-and",
+    "github": {
+      "number": 354,
+      "url": "https://github.com/loopflowstudio/manabot/pull/354",
+      "head_sha": "dccf75632e18e88abc2fd92904ea4d81535cadfc"
+    }
+  }
+}

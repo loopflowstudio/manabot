@@ -73,7 +73,7 @@ impl AuthoredRuntime {
 
 static AUTHORED_RUNTIME_CATALOG: OnceLock<Result<Vec<AuthoredRuntime>, IrError>> = OnceLock::new();
 
-fn authored_runtime_catalog() -> Result<Vec<AuthoredRuntime>, IrError> {
+fn authored_runtime_catalog() -> Result<&'static [AuthoredRuntime], IrError> {
     AUTHORED_RUNTIME_CATALOG
         .get_or_init(|| {
             SemanticPack::catalog()?
@@ -82,7 +82,9 @@ fn authored_runtime_catalog() -> Result<Vec<AuthoredRuntime>, IrError> {
                 .map(AuthoredRuntime::compile)
                 .collect()
         })
-        .clone()
+        .as_ref()
+        .map(Vec::as_slice)
+        .map_err(Clone::clone)
 }
 
 fn select_authored_runtime<'a>(
@@ -106,7 +108,7 @@ fn select_authored_runtime<'a>(
     }
 }
 
-pub(crate) fn content_pack_for_authored_match(
+pub(crate) fn content_pack_for_match(
     player_configs: &[PlayerConfig],
 ) -> Result<Option<Arc<ContentPack>>, IrError> {
     let catalog = authored_runtime_catalog()?;
@@ -151,7 +153,7 @@ pub(crate) fn content_pack_for_authored_match(
         }
         return super::pool_content(key).map(Some);
     }
-    Ok(select_authored_runtime(player_configs, &catalog)?
+    Ok(select_authored_runtime(player_configs, catalog)?
         .map(|runtime| Arc::clone(&runtime.content)))
 }
 
@@ -178,7 +180,7 @@ mod catalog_tests {
             std::collections::BTreeMap::from([("Island".into(), 20)]),
         );
         second.content_pack = first.content_pack.clone();
-        let content = content_pack_for_authored_match(&[first.clone(), second.clone()])
+        let content = content_pack_for_match(&[first.clone(), second.clone()])
             .unwrap()
             .unwrap();
         assert_eq!(
@@ -186,7 +188,7 @@ mod catalog_tests {
             "tla-pool-v1"
         );
         first.sideboard.insert("Airbending Lesson".into(), 1);
-        assert!(content_pack_for_authored_match(&[first, second]).is_err());
+        assert!(content_pack_for_match(&[first, second]).is_err());
     }
 
     #[test]
@@ -201,7 +203,7 @@ mod catalog_tests {
             config.content_pack = Some(runtime.pack_key.clone());
             let pair = vec![config.clone(), config.clone()];
             assert_eq!(
-                content_pack_for_authored_match(&pair)
+                content_pack_for_match(&pair)
                     .unwrap()
                     .unwrap()
                     .compiled_semantics()
@@ -211,13 +213,13 @@ mod catalog_tests {
             );
             let mut wrong = pair.clone();
             wrong[0].content_pack = None;
-            assert!(content_pack_for_authored_match(&wrong).is_err());
+            assert!(content_pack_for_match(&wrong).is_err());
             wrong = pair.clone();
             wrong[0].decklist.clear();
-            assert!(content_pack_for_authored_match(&wrong).is_err());
+            assert!(content_pack_for_match(&wrong).is_err());
             wrong = pair.clone();
             wrong[0].content_pack = Some("missing-pack".into());
-            assert!(content_pack_for_authored_match(&wrong).is_err());
+            assert!(content_pack_for_match(&wrong).is_err());
         }
     }
 
@@ -252,7 +254,7 @@ mod catalog_tests {
             let mut config = setup.clone();
             config.content_pack = Some(runtime.pack_key.clone());
             assert_eq!(
-                content_pack_for_authored_match(&[config.clone(), config])
+                content_pack_for_match(&[config.clone(), config])
                     .unwrap()
                     .unwrap()
                     .compiled_semantics()
@@ -269,7 +271,7 @@ mod catalog_tests {
             .setups
             .clone();
         assert_eq!(
-            select_authored_runtime(&pair, &catalog)
+            select_authored_runtime(&pair, catalog)
                 .unwrap()
                 .unwrap()
                 .pack_key,

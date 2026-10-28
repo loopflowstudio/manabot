@@ -63,13 +63,6 @@ def named_regime(name: str) -> TrainingRegime:
     return regime
 
 
-def _run_sim(preset: str, set_values: list[str]) -> None:
-    sim_config, runtime_config = load_sim_config(
-        preset=preset, set_overrides=set_values
-    )
-    run_simulation(sim_config, runtime_config)
-
-
 @app.command("train")
 def train_command(
     preset: Optional[str] = typer.Option(
@@ -215,20 +208,18 @@ def sim_command(
         "tla-pool-v1", help="Qualified native content pool"
     ),
 ) -> None:
-    if hero_deck_file is None and villain_deck_file is None:
-        _run_sim(preset, set_values or [])
-        return
-    if hero_deck_file is None or villain_deck_file is None:
+    if (hero_deck_file is None) != (villain_deck_file is None):
         raise typer.BadParameter("Supply both --hero-deck-file and --villain-deck-file")
     try:
-        imported = import_files(hero_deck_file, villain_deck_file, content_pool)
         sim_config, runtime_config = load_sim_config(preset, set_values)
-        config = sim_config.model_dump()
-        config["match"] = imported.match_config().model_dump()
-        sim_config = type(sim_config).model_validate(config)
+        if hero_deck_file is not None and villain_deck_file is not None:
+            imported = import_files(hero_deck_file, villain_deck_file, content_pool)
+            config = sim_config.model_dump()
+            config["match"] = imported.match_config().model_dump()
+            sim_config = type(sim_config).model_validate(config)
+            typer.echo(f"Admitted {imported.ruleset} setup {imported.setup_id}")
     except (ValueError, OSError) as error:
         raise typer.BadParameter(str(error)) from error
-    typer.echo(f"Admitted {imported.ruleset} setup {imported.setup_id}")
     run_simulation(sim_config, runtime_config)
 
 

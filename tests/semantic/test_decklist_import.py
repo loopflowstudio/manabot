@@ -3,7 +3,9 @@
 from pathlib import Path
 
 import pytest
+from typer.testing import CliRunner
 
+from manabot import cli
 from manabot.decklist import (
     ContentPool,
     DeckDocument,
@@ -15,7 +17,7 @@ from manabot.decklist import (
     parse_decklist,
 )
 from manabot.env.match import Match
-from manabot.infra.config import SimulationConfig
+from manabot.infra.config import RuntimeConfig, SimulationConfig
 import managym
 
 PACK = "tla-pool-v1"
@@ -45,6 +47,10 @@ def test_decklist_novel_setup_resolves_same_identity_from_files(tmp_path: Path) 
     villain.write_text(VILLAIN)
     imported = import_files(hero, villain, PACK)
     assert imported.hero.document.source == HERO.replace("\n", "\r\n")
+    assert "definitions" not in imported.model_dump()["pool"]
+    restored = ImportedMatch.model_validate_json(imported.model_dump_json())
+    restored.validate_current()
+    assert restored.setup_id == imported.setup_id
     reformatted = import_match(
         parse_decklist(
             "10 mountain\n5 Forest\n5 forest\n2 Avatar Enthusiasts\nSideboard\n1 Island"
@@ -79,7 +85,7 @@ def test_decklist_reports_unknown_unsupported_and_retains_source() -> None:
         for row in pool.definitions
         if row.eligibility == "unsupported"
     )
-    source = f"10 Forest\n1 Definitely Not A Card\nSideboard\n1 {unsupported}\n"
+    source = f"10 Forest\n1 Definitely Not A Card\nSideboard\n1 {unsupported}\n2 {unsupported}\nMain\n1 {unsupported}\n"
     with pytest.raises(DeckImportError) as caught:
         import_match(parse_decklist(source), parse_decklist(VILLAIN), PACK)
     document = caught.value.documents["hero"]
@@ -87,7 +93,41 @@ def test_decklist_reports_unknown_unsupported_and_retains_source() -> None:
     assert {(issue.line, issue.code) for issue in document.issues} >= {
         (2, "unknown"),
         (4, "unsupported"),
+        (5, "unsupported"),
+        (7, "unsupported"),
     }
+
+
+@pytest.mark.parametrize("with_files", [False, True])
+def test_sim_cli_preserves_overrides_with_optional_deck_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, with_files: bool
+) -> None:
+    configs: list[SimulationConfig] = []
+
+    def capture(config: SimulationConfig, runtime: RuntimeConfig) -> None:
+        configs.append(config)
+
+    monkeypatch.setattr(cli, "run_simulation", capture)
+    args = ["sim", "--set", "sim.max_steps=4", "--set", "sim.hero=random"]
+    if with_files:
+        hero, villain = tmp_path / "hero.txt", tmp_path / "villain.txt"
+        hero.write_text(HERO)
+        villain.write_text(VILLAIN)
+        args.extend(
+            ["--hero-deck-file", str(hero), "--villain-deck-file", str(villain)]
+        )
+    result = CliRunner().invoke(cli.app, args)
+    assert result.exit_code == 0, result.output
+    assert len(configs) == 1
+    assert configs[0].max_steps == 4
+    assert configs[0].hero == "random"
+    imported = configs[0].match.imported_decks
+    if with_files:
+        assert imported is not None
+        assert imported.hero.document.source == HERO
+        assert imported.setup_id in result.output
+    else:
+        assert imported is None
 
 
 def test_decklist_ambiguous_names_fail_without_substitution() -> None:

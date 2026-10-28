@@ -61,19 +61,15 @@ class Match:
         a swapped Match to Env.reset puts the hero on the draw. Used for
         seat-balanced evaluation.
         """
+        imported = self.config.imported_decks
+        if imported is not None:
+            imported = imported.model_copy(
+                update={"hero": imported.villain, "villain": imported.hero}
+            )
         return Match(
             MatchConfig(
                 content_pack=self.config.content_pack,
-                imported_decks=(
-                    self.config.imported_decks.model_copy(
-                        update={
-                            "hero": self.config.imported_decks.villain,
-                            "villain": self.config.imported_decks.hero,
-                        }
-                    )
-                    if self.config.imported_decks is not None
-                    else None
-                ),
+                imported_decks=imported,
                 hero=self.villain,
                 villain=self.hero,
                 hero_deck=self.villain_deck,

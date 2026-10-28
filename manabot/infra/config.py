@@ -74,15 +74,13 @@ class MatchConfig(BaseConfig):
     def validate_imported_decks(self) -> "MatchConfig":
         imported = self.imported_decks
         if imported is not None:
-            imported.validate_current()
-            if (
-                self.content_pack != imported.pool.pack_key
-                or self.hero_deck != imported.hero.main
-                or self.villain_deck != imported.villain.main
-                or self.hero_sideboard != imported.hero.sideboard
-                or self.villain_sideboard != imported.villain.sideboard
-            ):
-                raise ValueError("Match differs from its admitted decklist files")
+            imported.validate_setup(
+                content_pack=self.content_pack,
+                hero_deck=self.hero_deck,
+                villain_deck=self.villain_deck,
+                hero_sideboard=self.hero_sideboard,
+                villain_sideboard=self.villain_sideboard,
+            )
         return self
 
     @field_validator("hero_sideboard", "villain_sideboard", mode="before")

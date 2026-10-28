@@ -1,12 +1,16 @@
 <script lang="ts">
   import { gameStore } from '$lib/game.svelte';
 
+  const seats = [
+    { key: 'hero', label: 'Your deck' },
+    { key: 'villain', label: 'Opponent deck' },
+  ] as const;
   let enabled = $state(gameStore.deckImport !== null);
-  let hero = $state(gameStore.deckImport?.hero.source ?? '');
-  let villain = $state(gameStore.deckImport?.villain.source ?? '');
-  let heroFilename = $state(gameStore.deckImport?.hero.filename ?? 'hero.txt');
-  let villainFilename = $state(gameStore.deckImport?.villain.filename ?? 'villain.txt');
-  let packKey = $state(gameStore.deckImport?.pack_key ?? 'tla-pool-v1');
+  let draft = $state(gameStore.deckImport ?? {
+    pack_key: 'tla-pool-v1', ruleset: 'development-v1',
+    hero: { source: '', filename: 'hero.txt' },
+    villain: { source: '', filename: 'villain.txt' },
+  });
   let messages = $state<string[]>([]);
   let checking = $state(false);
   let revision = 0;
@@ -14,11 +18,7 @@
   function update(): void {
     revision += 1;
     messages = [];
-    gameStore.deckImport = enabled ? {
-      pack_key: packKey, ruleset: 'development-v1',
-      hero: { source: hero, filename: heroFilename },
-      villain: { source: villain, filename: villainFilename },
-    } : null;
+    gameStore.deckImport = enabled ? draft : null;
   }
 
   async function loadFile(event: Event, seat: 'hero' | 'villain'): Promise<void> {
@@ -30,8 +30,7 @@
     }
     try {
       const source = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await file.arrayBuffer());
-      if (seat === 'hero') { hero = source; heroFilename = file.name; }
-      else { villain = source; villainFilename = file.name; }
+      draft[seat] = { source, filename: file.name };
       update();
     } catch {
       messages = ['Could not read this file as UTF-8 text.'];
@@ -52,8 +51,14 @@
       if (result.admitted) {
         messages = [`Ready — ${result.ruleset}, ${result.world_version}. Choose New Game to play these decks.`];
       } else {
-        messages = Object.entries(result.documents as Record<string, { issues: { line: number | null; message: string }[] }>).
-          flatMap(([seat, document]) => document.issues.map(issue => `${seat === 'hero' ? 'Your deck' : 'Opponent deck'}${issue.line ? `, line ${issue.line}` : ''}: ${issue.message}`));
+        const documents = result.documents as Partial<Record<'hero' | 'villain', {
+          issues: { line: number | null; message: string }[];
+        }>>;
+        messages = seats.flatMap(({ key, label }) =>
+          (documents[key]?.issues ?? []).map(issue =>
+            `${label}${issue.line ? `, line ${issue.line}` : ''}: ${issue.message}`,
+          ),
+        );
       }
     } catch (error) {
       if (started === revision) messages = [error instanceof Error ? error.message : 'Could not validate decklists.'];
@@ -66,21 +71,17 @@
   <p class="mt-2 text-sm text-ink-2">Development format — supported cards only, no tournament legality claim. Sideboards are fixed outside-game copies. Checkpoint opponents are not available for imported decks.</p>
   <label class="mt-3 flex items-center gap-2"><input type="checkbox" bind:checked={enabled} onchange={update} /> Use imported decks for the next game</label>
   {#if enabled}
-    <label class="mt-3 block text-sm">Content pool <input class="ml-2 rounded border border-line p-2" bind:value={packKey} oninput={update} /></label>
+    <label class="mt-3 block text-sm">Content pool <input class="ml-2 rounded border border-line p-2" bind:value={draft.pack_key} oninput={update} /></label>
     <p class="mt-2 text-sm text-ink-2">One “count card name” per line. Optional Main and Sideboard headings; # starts a full-line comment.</p>
     <div class="mt-3 grid gap-4 md:grid-cols-2">
-      <div>
-        <label class="block text-sm" for="hero-deck-file">Your deck file</label>
-        <input id="hero-deck-file" type="file" accept=".txt,.dek,text/plain" onchange={event => loadFile(event, 'hero')} />
-        <label class="mt-2 block text-sm" for="hero-deck-source">Your deck source</label>
-        <textarea id="hero-deck-source" class="w-full rounded border border-line bg-panel p-2 font-mono text-sm" rows="9" bind:value={hero} oninput={update}></textarea>
-      </div>
-      <div>
-        <label class="block text-sm" for="villain-deck-file">Opponent deck file</label>
-        <input id="villain-deck-file" type="file" accept=".txt,.dek,text/plain" onchange={event => loadFile(event, 'villain')} />
-        <label class="mt-2 block text-sm" for="villain-deck-source">Opponent deck source</label>
-        <textarea id="villain-deck-source" class="w-full rounded border border-line bg-panel p-2 font-mono text-sm" rows="9" bind:value={villain} oninput={update}></textarea>
-      </div>
+      {#each seats as { key, label }}
+        <div>
+          <label class="block text-sm" for={`${key}-deck-file`}>{label} file</label>
+          <input id={`${key}-deck-file`} type="file" accept=".txt,.dek,text/plain" onchange={event => loadFile(event, key)} />
+          <label class="mt-2 block text-sm" for={`${key}-deck-source`}>{label} source</label>
+          <textarea id={`${key}-deck-source`} class="w-full rounded border border-line bg-panel p-2 font-mono text-sm" rows="9" bind:value={draft[key].source} oninput={update}></textarea>
+        </div>
+      {/each}
     </div>
     <button class="btn mt-3" disabled={checking} onclick={validate}>{checking ? 'Checking…' : 'Check decklists'}</button>
     <div aria-live="polite" class="mt-2 text-sm">{#each messages as message}<p>{message}</p>{/each}</div>

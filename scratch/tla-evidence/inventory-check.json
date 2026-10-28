@@ -1,0 +1,34 @@
+{
+  "gameplay_cards": 286,
+  "card_faces": 294,
+  "printings": 394,
+  "printing_faces": 414,
+  "official_base_mismatches": 0,
+  "official_variant_unmatched": [],
+  "face_support": {
+    "missing": 218,
+    "partial": 76
+  },
+  "native_gameplay_cards": 76,
+  "current_elemental_cards": 69,
+  "any_compiled_cards": 74,
+  "token_templates_including_copy_marker": 11,
+  "required_token_templates_including_copy_marker": 10,
+  "ledger_rows": 305,
+  "ledger_sha256": "fb832060ca7354c691d90d7e267b2c192eb815ebf29e29a38f93741b7801216a",
+  "family_face_counts": {
+    "core": 294,
+    "target_choice": 141,
+    "cost_mana": 132,
+    "airbend_permissions": 26,
+    "earthbend_identity": 47,
+    "triggers_history": 178,
+    "effective_characteristics": 186,
+    "replacement_counters": 115,
+    "attachments": 11,
+    "saga_faces": 20,
+    "copy_tokens": 61,
+    "private_zones": 75,
+    "combat_turn_control": 94
+  }
+}

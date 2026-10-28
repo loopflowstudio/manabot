@@ -37,7 +37,7 @@ impl DeckIssue {
     }
 }
 
-pub fn construction_issues(
+fn construction_issues(
     main: &BTreeMap<String, usize>,
     sideboard: &BTreeMap<String, usize>,
     ruleset: &str,
@@ -95,39 +95,32 @@ pub fn admit_deck(
         (DeckSection::Sideboard, sideboard),
     ] {
         for name in cards.keys() {
-            let rows = pool
+            let mut rows = pool
                 .definitions
                 .iter()
-                .filter(|row| &row.registry_name == name)
-                .collect::<Vec<_>>();
-            let (code, reason) = match rows.as_slice() {
-                [] => (
-                    "unknown",
-                    "card is not in the selected content pool".to_string(),
-                ),
-                [row] if row.eligibility != Eligibility::Eligible => (
+                .filter(|row| &row.registry_name == name);
+            let (code, reason) = match (rows.next(), rows.next()) {
+                (None, _) => ("unknown", "card is not in the selected content pool"),
+                (Some(row), None) if row.eligibility != Eligibility::Eligible => (
                     "unsupported",
-                    row.reason.clone().unwrap_or_else(|| {
-                        "card has no complete qualification in this pool".into()
-                    }),
+                    row.reason
+                        .as_deref()
+                        .unwrap_or("card has no complete qualification in this pool"),
                 ),
-                [row] => {
+                (Some(row), None) => {
                     let definition = row.card_def_id.and_then(|id| content.definition(id));
                     match definition {
                         Some(definition) if !definition.is_token => continue,
-                        Some(_) => (
-                            "format",
-                            "tokens cannot be submitted in main or sideboard".into(),
-                        ),
+                        Some(_) => ("format", "tokens cannot be submitted in main or sideboard"),
                         None => (
                             "unsupported",
-                            "qualified definition is missing from runtime content".into(),
+                            "qualified definition is missing from runtime content",
                         ),
                     }
                 }
                 _ => (
                     "ambiguous",
-                    "card name identifies multiple pool definitions".into(),
+                    "card name identifies multiple pool definitions",
                 ),
             };
             issues.push(DeckIssue {

@@ -12,7 +12,7 @@ use crate::{
         priority::PriorityState,
         turn::TurnState,
     },
-    semantic::content_pack_for_authored_match,
+    semantic::content_pack_for_match,
     state::{
         game_object::{CardId, CardVec, IdGenerator, Incarnation, PermanentVec, PlayerId},
         player::{Player, PlayerConfig},
@@ -24,8 +24,8 @@ use std::sync::Arc;
 
 impl Game {
     pub fn new(player_configs: Vec<PlayerConfig>, seed: u64, skip_trivial: bool) -> Self {
-        let content = content_pack_for_authored_match(&player_configs)
-            .unwrap_or_else(|error| panic!("compiled authored content is invalid: {error}"))
+        let content = content_pack_for_match(&player_configs)
+            .unwrap_or_else(|error| panic!("compiled match content is invalid: {error}"))
             .unwrap_or_else(default_content_pack);
         Self::new_with_content(player_configs, seed, skip_trivial, content)
     }
@@ -44,8 +44,8 @@ impl Game {
         seed: u64,
         skip_trivial: bool,
     ) -> Self {
-        let content = content_pack_for_authored_match(&player_configs)
-            .expect("validated authored content")
+        let content = content_pack_for_match(&player_configs)
+            .expect("validated match content")
             .unwrap_or_else(default_content_pack);
         Self::construct(player_configs, seed, skip_trivial, content, true)
     }

@@ -43,12 +43,25 @@ class PoolDefinition(_Record):
     reason: str | None = None
 
 
-class ContentPool(_Record):
+class PoolIdentity(_Record):
+    """Replay binding; the installed catalog owns definition eligibility."""
+
     pack_key: str
     world_version: str
     content_digest: str
     compiled_semantics: CompiledIdentity
+
+
+class ContentPool(PoolIdentity):
     definitions: tuple[PoolDefinition, ...]
+
+    def identity(self) -> PoolIdentity:
+        return PoolIdentity(
+            pack_key=self.pack_key,
+            world_version=self.world_version,
+            content_digest=self.content_digest,
+            compiled_semantics=self.compiled_semantics,
+        )
 
     @classmethod
     def load(cls, pack_key: str) -> ContentPool:
@@ -96,7 +109,7 @@ class AdmittedDeck(_Record):
 class ImportedMatch(_Record):
     """Private setup record; never attach submitted lists to viewer frames."""
 
-    pool: ContentPool
+    pool: PoolIdentity
     ruleset: str
     hero: AdmittedDeck
     villain: AdmittedDeck
@@ -106,7 +119,7 @@ class ImportedMatch(_Record):
     def setup_id(self) -> str:
         # Presentation (filenames, line order, comments) cannot alter game identity.
         value = {
-            "pool": self.pool.model_dump(exclude={"definitions"}),
+            "pool": self.pool.model_dump(),
             "ruleset": self.ruleset,
             "decks": [
                 {"main": deck.main, "sideboard": deck.sideboard}
@@ -131,7 +144,7 @@ class ImportedMatch(_Record):
 
     def validate_current(self) -> None:
         current = ContentPool.load(self.pool.pack_key)
-        if current != self.pool:
+        if current.identity() != self.pool:
             raise ValueError(
                 "Imported deck content identity differs from the installed pool"
             )
@@ -145,6 +158,26 @@ class ImportedMatch(_Record):
                 raise ValueError(
                     "Recorded imported deck differs from its admitted source"
                 )
+
+    def validate_setup(
+        self,
+        *,
+        content_pack: str | None,
+        hero_deck: dict[str, int],
+        villain_deck: dict[str, int],
+        hero_sideboard: dict[str, int],
+        villain_sideboard: dict[str, int],
+    ) -> None:
+        """Bind consumer setup fields to the re-admitted source without simulation imports."""
+        self.validate_current()
+        if (
+            content_pack != self.pool.pack_key
+            or hero_deck != self.hero.main
+            or villain_deck != self.villain.main
+            or hero_sideboard != self.hero.sideboard
+            or villain_sideboard != self.villain.sideboard
+        ):
+            raise ValueError("Match differs from its admitted decklist files")
 
 
 class DeckImportError(ValueError):
@@ -236,17 +269,19 @@ def admit_document(
             reverse_faces[_name_key(reverse)] = definition.registry_name
     issues = list(document.issues)
     resolved: list[DeckEntry] = []
+    source_lines: dict[tuple[Section, str], list[int]] = defaultdict(list)
     sections: dict[Section, dict[str, int]] = {"main": {}, "sideboard": {}}
     for entry in document.entries:
-        candidates = names.get(_name_key(entry.name), [])
-        if not candidates and _name_key(entry.name) in reverse_faces:
+        key = _name_key(entry.name)
+        candidates = names.get(key, [])
+        if not candidates and key in reverse_faces:
             issues.append(
                 DeckIssue(
                     line=entry.line,
                     section=entry.section,
                     code="face",
                     card_name=entry.name,
-                    message=f"Reverse faces cannot be deck entries; use {reverse_faces[_name_key(entry.name)]}.",
+                    message=f"Reverse faces cannot be deck entries; use {reverse_faces[key]}.",
                 )
             )
             continue
@@ -263,6 +298,7 @@ def admit_document(
             )
             continue
         definition = candidates[0]
+        source_lines[entry.section, definition.registry_name].append(entry.line)
         resolved.append(
             entry.model_copy(
                 update={
@@ -283,11 +319,11 @@ def admit_document(
     )
     for raw_issue in native_issues:
         issue = DeckIssue.model_validate(raw_issue)
-        lines = [
-            entry.line
-            for entry in resolved
-            if entry.section == issue.section and entry.name == issue.card_name
-        ]
+        lines = (
+            source_lines.get((issue.section, issue.card_name), [])
+            if issue.section is not None and issue.card_name is not None
+            else []
+        )
         issues.extend(
             issue.model_copy(update={"line": line}) for line in lines or [None]
         )
@@ -318,7 +354,9 @@ def import_match(
     if errors:
         raise DeckImportError(errors)
     assert isinstance(first, AdmittedDeck) and isinstance(second, AdmittedDeck)
-    return ImportedMatch(pool=pool, ruleset=ruleset, hero=first, villain=second)
+    return ImportedMatch(
+        pool=pool.identity(), ruleset=ruleset, hero=first, villain=second
+    )
 
 
 def _read_file(path: Path) -> DeckDocument:

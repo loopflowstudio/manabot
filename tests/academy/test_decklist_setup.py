@@ -57,6 +57,12 @@ def test_imported_setup_matches_manabot_reconnect_and_rebuilt_root(
     rebuilt = managym.Env(seed=7, skip_trivial=False)
     rebuilt.reset(restored.to_rust())
     assert rebuilt.search_witness_json() == bot.search_witness_json()
+    restored.hero_sideboard = {"Mountain": 1}
+    with pytest.raises(ValueError, match="admitted decklist"):
+        restored.to_rust()
+    restored.hero_sideboard = {"Island": True}
+    with pytest.raises(ValueError, match="positive integer counts"):
+        restored.to_rust()
     public = prepare_trace_payload(
         {"config": asdict(config), "events": [], "final_observation": {}}
     )
