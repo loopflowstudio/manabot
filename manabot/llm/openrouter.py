@@ -54,6 +54,9 @@ class OpenRouterConfig(Record):
     cache_prompt: bool = False
     provider: str | None = Field(default=None, min_length=1)
     max_prompt_bytes: int = Field(default=524288, gt=0, strict=True)
+    # Resend only after connection establishment failed, when no request bytes
+    # reached the provider. Each send has its own reservation; within the deadline.
+    connect_retries: int = Field(default=0, ge=0, le=5, strict=True)
 
     @model_validator(mode="after")
     def decisions_treatment(self) -> "OpenRouterConfig":
@@ -160,6 +163,8 @@ class HostedAttempt(Record):
     reservation_id: str | None = None
     # Historical attempts were dispatched; new preflight failures are explicit.
     dispatched: bool = True
+    # Connection never established; its reservation stays counted, abandoned.
+    connect_failed: bool = False
     completion: Completion | None = None
     prompt_tokens: int | None = None
     output_tokens: int | None = None
@@ -236,6 +241,14 @@ class OpenRouterResult(Record):
     failure: Failure | None = None
     seconds: float = 0
     peak_gpu_bytes: None = None
+
+
+_UNSENT = {
+    "dispatched": False,
+    "reservation_id": None,
+    "connect_failed": False,
+    "seconds": None,
+}
 
 
 class OpenRouterSession:
@@ -344,26 +357,47 @@ class OpenRouterSession:
                     ).encode()
                     if len(payload) > self.config.max_prompt_bytes:
                         raise OverflowError("complete request exceeds max_prompt_bytes")
-                    reservation = None
-                    if self._budget is not None:
-                        digest = hashlib.sha256(payload).hexdigest()
-                        reservation = self._budget.reserve(self._budget_owner, digest)
-                    attempts[-1] = attempts[-1].model_copy(
-                        update={
-                            "dispatched": True,
-                            "reservation_id": reservation,
-                        }
-                    )
-                    publish()
-                    response = await client.post(
-                        self.identity.endpoint,
-                        content=payload,
-                        headers={
-                            "Content-Type": "application/json",
-                            "Authorization": f"Bearer {key}",
-                            "X-OpenRouter-Title": "Manabot",
-                        },
-                    )
+                    for connect_retry in range(self.config.connect_retries + 1):
+                        if connect_retry:
+                            attempt_start = time.monotonic()
+                            attempts.append(attempts[-1].model_copy(update=_UNSENT))
+                        reservation = None
+                        if self._budget is not None:
+                            digest = hashlib.sha256(payload).hexdigest()
+                            reservation = self._budget.reserve(
+                                self._budget_owner, digest
+                            )
+                        attempts[-1] = attempts[-1].model_copy(
+                            update={
+                                "dispatched": True,
+                                "reservation_id": reservation,
+                            }
+                        )
+                        publish()
+                        try:
+                            response = await client.post(
+                                self.identity.endpoint,
+                                content=payload,
+                                headers={
+                                    "Content-Type": "application/json",
+                                    "Authorization": f"Bearer {key}",
+                                    "X-OpenRouter-Title": "Manabot",
+                                },
+                            )
+                            break
+                        except (httpx.ConnectError, httpx.ConnectTimeout):
+                            if reservation is not None:
+                                self._budget.abandon(reservation)
+                            attempts[-1] = attempts[-1].model_copy(
+                                update={
+                                    "connect_failed": True,
+                                    "seconds": time.monotonic() - attempt_start,
+                                }
+                            )
+                            publish()
+                            if connect_retry == self.config.connect_retries:
+                                raise
+                            await asyncio.sleep(2**connect_retry)
                     # Error bodies can echo request/auth data. Retain status,
                     # not the service's untrusted diagnostic text.
                     if response.status_code != 200:

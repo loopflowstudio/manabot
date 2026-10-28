@@ -267,3 +267,18 @@ def test_admission_failure_leaves_the_campaign_runnable(tmp_path: Path) -> None:
     assert not (tmp_path / "report.json").exists()
     result = execute(protocol(), tmp_path, player, admit=lambda: None)
     assert result.overall.attempted == 1
+
+
+def test_abandoned_reservation_counts_its_bound_without_blocking(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "spend.sqlite"
+    ledger = BudgetLedger(path, budget_config())
+    ledger.abandon(ledger.reserve("game", "digest"))
+    identifier = ledger.reserve("game", "digest")
+    ledger.settle(identifier, 0.1)
+    spend = BudgetLedger(path, budget_config()).snapshot()
+    assert spend.accounted_usd == Decimal("0.41")
+    assert [r.abandoned for r in spend.requests] == [True, False]
+    with pytest.raises(ValueError, match="only an unsettled"):
+        ledger.abandon(identifier)

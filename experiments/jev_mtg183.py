@@ -47,7 +47,7 @@ class PinnedFile(Record):
 
 
 class Protocol(Record):
-    version: Literal["jev-mtg183-v1"] = "jev-mtg183-v1"
+    version: Literal["jev-mtg183-v2"] = "jev-mtg183-v2"
     inference: OpenRouterConfig
     checkpoint: PinnedFile
     checkpoint_artifact_id: str = Field(min_length=1)
@@ -239,6 +239,8 @@ class Report(Record):
     repairs: int
     fallbacks: int
     unpriced_attempts: int
+    # Unsent requests resent after connection failure; each keeps its bound.
+    connect_retries: int
     decision_seconds_median: float | None
     decision_seconds_p95: float | None
     stop_reason: str | None
@@ -297,6 +299,7 @@ def report(
         repairs=sum(s.origins.get("retry", 0) for s in summaries),
         fallbacks=sum(s.origins.get("fallback", 0) for s in summaries),
         unpriced_attempts=sum(c.charged_usd is None for c in spend.requests),
+        connect_retries=sum(c.abandoned for c in spend.requests),
         decision_seconds_median=statistics.median(latencies) if latencies else None,
         decision_seconds_p95=latencies[math.ceil(len(latencies) * 0.95) - 1]
         if latencies

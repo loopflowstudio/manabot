@@ -65,7 +65,9 @@ from the same capture that binds the eventual Command.
 The adapter rejects more than 255 choices or an oversized complete request
 before dispatch. It never shortlists actions, invents an extra option or replaces
 the returned choice with a probability threshold. Typed requests have no repair,
-random fallback, chat history or chat caching. The chat-only reasoning, output
+random fallback, chat history or chat caching. `connect_retries` (default 0; the
+Jev config uses 3) resends only after connection establishment failed, when no
+request bytes reached OpenRouter, within the same decision deadline. The chat-only reasoning, output
 allowance and fallback-seed fields do not affect Decisions.
 See the [Choice contract](https://docs.typesafe.ai/primitives/choice)
 and [OpenRouter Decisions examples](https://openrouter.ai/blog/insights/what-is-jev/).
@@ -77,8 +79,8 @@ The runtime is `openrouter-decisions-v1`; game summaries use
 Existing chat defaults and historical receipts remain readable.
 
 `experiments.jev_mtg183` runs one sequential campaign through the same native
-runner. Its `Protocol` requires digest-bound checkpoint, dated combined-rating
-selection evidence, billing-bound evidence, source/native/driver identities and
+runner. Its `Protocol` requires a digest-bound checkpoint and its attributed
+selection rule, billing-bound evidence, source/native/driver identities and
 an inclusive budget of at most $10. Historical checkpoints require their matching
 runtime; these fields never override native world admission. The supplied Jev
 inference config alone does not authorize or admit a campaign.
@@ -102,7 +104,8 @@ request charge **before every dispatch**, including chat repairs when used by a
 chat caller. The provider's reported cost is multiplied by the declared billing
 fee factor, rounded up to nanodollars, and settles that reservation. Missing
 usage, failed requests and interruptions retain the full bound and block further
-requests. Charges exceeding the bound are retained and stop the campaign even
+requests. A reservation whose connection was never established is abandoned by
+the live session: it stays counted at its full bound without blocking the resend. Charges exceeding the bound are retained and stop the campaign even
 on restart. Rental, publication and shutdown allowances are reserved up front;
 the caller must establish that those allowances and the request bound are valid.
 A payload-byte limit or an observed pilot mean is not that evidence.
@@ -110,7 +113,7 @@ A payload-byte limit or an observed pilot mean is not that evidence.
 The output keeps the immutable protocol/schedule, an admission record for every
 attempt, native game evidence, `spend.sqlite`, a pilot summary and `report.json`.
 The report includes actual seat counts, wins/losses/draws, failures and interrupted
-attempts, replay failures, unpriced reservations, latency, tokens, per-game API
+attempts, replay failures, unpriced reservations, connection resends, latency, tokens, per-game API
 cost and inclusive totals. Rerunning the directory reconstructs retained results
 without continuing play or resetting spend. Keep this directory as the campaign's
 sole accounting authority. Publish its bytes with

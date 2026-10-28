@@ -646,3 +646,38 @@ def test_decisions_uncertain_charge_stops_and_keeps_reservation(
     assert budget_ledger.snapshot().pending_usd == Decimal("0.01")
     with pytest.raises(RuntimeError, match="unsettled"):
         budget_ledger.reserve("next", "digest")
+
+
+@pytest.mark.parametrize("failures", [1, 2])
+def test_decisions_resend_only_unsent_requests_and_keep_their_bounds(
+    failures: int, budget_ledger: BudgetLedger, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def no_wait(seconds: float) -> None:
+        pass
+
+    monkeypatch.setattr(asyncio, "sleep", no_wait)
+    sent = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal sent
+        sent += 1
+        if sent <= failures:
+            raise httpx.ConnectError("unreachable", request=request)
+        return httpx.Response(200, json=typed_reply())
+
+    config = typed_config().model_copy(update={"connect_retries": 1})
+    with OpenRouterSession(
+        config, budget=budget_ledger, transport=httpx.MockTransport(handler)
+    ) as session:
+        result = session.decide(typed_decision())
+    spend = budget_ledger.snapshot()
+    expected = [True] * failures + [False] * (2 - failures)
+    assert [a.connect_failed for a in result.attempts] == expected
+    assert [r.abandoned for r in spend.requests] == expected
+    if failures == 1:
+        assert result.selected_reference == "A1" and result.failure is None
+        assert spend.accounted_usd == Decimal("0.0100168")
+        budget_ledger.reserve("next", "digest")
+    else:
+        assert result.failure and "ConnectError" in result.failure.message
+        assert spend.accounted_usd == Decimal("0.02")
