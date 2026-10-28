@@ -337,6 +337,12 @@ def _stage() -> Path:
             f" TO '{destination}' (FORMAT parquet)"
         )
     mapping.close()
+    # etude-sdk 0.2.10 reads eval runs only as sealed blocks; the staged copy
+    # is converted in place, so the mirror keeps its sources' layout.
+    from etude.eval.convert import convert
+
+    for run in sorted({path.name for path in store.glob("*/*")}):
+        convert(run, store)
     return store
 
 
