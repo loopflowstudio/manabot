@@ -61,6 +61,16 @@ from manabot.eval.rating import (
 ANCHOR = HEURISTIC
 REPLICATES = 2000
 
+# The MTG Elo Project's scale (mtgeloproject.net/faq): ratings rate best-of-three
+# matches, and 200 points is a 60% win expectancy, not chess's 76%, because
+# Magic's variance keeps real match win rates near even. The fit stays on games;
+# `mtg_elo` re-expresses a rating as its best-of-three match win rate against
+# the heuristic on that scale. The heuristic's place on it is a judgment (Jack
+# Heart, 2026-10-28: well below a tournament player, who enters at 1500), not a
+# measurement; only differences from it are measured.
+MTG_DIVISOR = 200 / math.log10(1.5)
+MTG_HEURISTIC = 200.0
+
 
 @dataclass(frozen=True)
 class Results:
@@ -603,6 +613,18 @@ def _pct(view: ScoreView) -> str:
     return f"{view.score:.3f} [{view.low:.3f}, {view.high:.3f}]"
 
 
+def best_of_three(p: float) -> float:
+    """A best-of-three match win rate from independent games won with probability `p`."""
+    return p * p * (3 - 2 * p)
+
+
+def mtg_elo(rating: float) -> float:
+    """A game-scale rating (heuristic = 1000) on the MTG Elo Project's match scale."""
+    game = 1 / (1 + 10 ** (-(rating - 1000) / 400))
+    match = best_of_three(game)
+    return MTG_HEURISTIC + MTG_DIVISOR * math.log10(match / (1 - match))
+
+
 def markdown(summary: Summary) -> str:
     lines = [
         f"# MTG-183 seed {summary.seed}: heuristic and checkpoint rating",
@@ -613,8 +635,13 @@ def markdown(summary: Summary) -> str:
         if summary.seat0_elo is not None
         else "",
         "",
-        "| Update | Grid | Heuristic score [95%] | Rating (Elo, heuristic = 1000) [95%] |",
-        "|---:|---|---|---|",
+        "MTG Elo is the MTG Elo Project's scale: best-of-three matches against the"
+        f" heuristic, 200 points a 60% win expectancy, the heuristic placed at"
+        f" {MTG_HEURISTIC:.0f} (a judgment; a tournament player enters at 1500).",
+        "",
+        "| Update | Grid | Heuristic score [95%] | Rating (Elo, heuristic = 1000) [95%]"
+        f" | MTG Elo (Bo3, heuristic = {MTG_HEURISTIC:.0f}) [95%] |",
+        "|---:|---|---|---|---|",
     ]
     for p in summary.curve:
         interval = (
@@ -623,7 +650,16 @@ def markdown(summary: Summary) -> str:
             else ""
         )
         rating = "—" if p.rating is None else f"{p.rating:.0f}{interval}"
-        lines.append(f"| {p.updates:,} | {p.grid} | {_pct(p.heuristic)} | {rating} |")
+        # `mtg_elo` is increasing, so it carries the interval's ends over.
+        mtg_interval = (
+            f" [{mtg_elo(p.rating_interval[0]):.0f}, {mtg_elo(p.rating_interval[2]):.0f}]"
+            if p.rating_interval
+            else ""
+        )
+        mtg = "—" if p.rating is None else f"{mtg_elo(p.rating):.0f}{mtg_interval}"
+        lines.append(
+            f"| {p.updates:,} | {p.grid} | {_pct(p.heuristic)} | {rating} | {mtg} |"
+        )
     lines += [
         "",
         "## Pairs",
