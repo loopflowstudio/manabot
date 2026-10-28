@@ -113,3 +113,17 @@ keep matching for resumption.
   in the plan's "Parent hop decided" section.
 - **Assumption — the w13 calibration branch** (revert of `e742e8bff`) is
   measurement-only and never lands; MTG-183's checkpoints cannot play w14.
+
+## Calibration after the parent hop (implement, 2026-10-27)
+
+- **Done:** A4500 `afb7b8581189`, 5,247 games/h (was ~2,600), median batch 5.
+- **Blocked — `cpu32` arm:** a stale Etude session from MTG-193's lost run
+  `6ed5413f5292` holds the `cpu32` on-demand's one slot (bug in
+  `Scheduler._observe`, see the design's Calibration section). Proposed Etude
+  fix: end a receipt-less session once its deadline passes. Not repaired here:
+  it lives in the shared controller other Tasks use. Landing gate still needs
+  this arm or Jack Heart's decision on the A4500 evidence.
+- **Assumption — batch target:** median > 8 was not reached because only 88 of
+  256 slots were active (10 × 4 groups do not keep 256 games pending), not
+  because of the service (~54% busy). Raising groups is a runner setting;
+  the 256-active OOM check is likewise unexercised.

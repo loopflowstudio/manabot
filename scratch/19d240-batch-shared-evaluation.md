@@ -281,8 +281,9 @@ Ledger (cap $5; committed = caps until settled):
 | `2e066580c458` | A4500 `gpu` (256 active) at `625283822` | a4500 | $0.40 | ~$0.10, 999/1,000 valid (1 hit 600 s at 818 decisions) |
 | `6ed5413f5292` | `cpu32` `batched` at `7616dd740` (+ fsync fix) | cpu3c 32 vCPU | $2.50 | lost: pod create HTTP 400, no machine; Etude estimate ~$1.20, likely $0 actual |
 | `ccc8a29160c0` | A4500 `gpu` (256 active) at `7616dd740` (+ fsync fix) | a4500 | $0.40 | ~$0.03, 1,000/1,000 valid |
+| `afb7b8581189` | A4500 `gpu` (256 active) at `41102d8c3` (parent hop) | a4500 $0.25/h | $0.40 | ~$0.05, 1,000/1,000 valid |
 
-Settled ~$0.89 measured, ~$2.09 counting `6ed5413f5292`'s estimate; $2.91 of $5 left. Nothing running (17:10).
+Settled ~$0.94 measured, ~$2.14 counting `6ed5413f5292`'s estimate; $2.86 of $5 left. Nothing running (2026-10-28 03:50 UTC).
 
 Failure 1: both `950e2066e` arms recorded 1,000/1,000 games invalid with
 "checkpoint requires an explicit compatible w14 world binding": `e742e8bff`
@@ -472,9 +473,38 @@ Implemented (2026-10-27, local):
 - Not done here: `cpu32` one shared CPU service per machine is a runner
   layout (MTG-183's `batched` mode) and goes on the calibration branch.
 
-Remaining: rental calibration. The calibration worktree was removed; its
-branch survives as `recovery/mtg193-calibration-20261028` (`625283822`).
-Rebuild a worktree from it, merge this branch, switch the `batched` arm to one
-shared CPU allocation per machine, then build and queue the A4500 `gpu` and
-`cpu32` arms as in Calibration (about $1.30 for both at the last quotes;
-$2.91 of $5 left). Targets and landing gate unchanged.
+Calibration after the parent hop (implement, 2026-10-27): worktree
+`~/src/manabot.mtg193-calibration`, branch `jack-heart/mtg193-calibration-2`
+(unpushed) = `recovery/mtg193-calibration-20261028` + this branch at
+`10c91a433` (`d61ae13fd`; supervision takes this branch, so the fsync change
+stays reverted; both experiment ABI hunks take this branch), then
+`41102d8c3`: the `batched` arm is one shared CPU allocation per machine
+(`EvalCompute(max_active_games=64, max_batch_rows=64)`, 10 × 4 groups, as
+`gpu`). Runner tests pass (22). Local smoke (`smoke_shared.py`, shared CPU,
+4 active, 100 games): 100/100 valid, `model_loads` 2, batch rows 1/2/3/4 =
+8,130/3,380/925/33 of 12,468 forwards (before the hop: all 1), request p50
+26 ms, serving 1 thread. Arms built as `batched-hop.json` / `gpu-hop.json`.
+
+A4500 `afb7b8581189` (parent hop, receipts in
+`~/.manabot/mtg193-calibration/out/afb7b8581189/`): **5,247 games/h**
+(686 s; before 2,557–2,608), 1,000/1,000 valid; `model_loads` 2; median
+batch 5 rows, mean 5.6 (38,577 forwards for 214,231 decisions; before: 1);
+`host_to_device_calls` = 2 × forwards (0.36 per decision); request p50 92 ms,
+p95 212 ms (before: p50 1.14 s); service CPU 366 s of 683 s (~54% busy);
+serving 5 threads, 1.1 GiB; game children 1 thread, ≤ 77 MiB, no Torch;
+load 7–20 on 48 vCPUs. Peak active children 88 of 256, so the batch target
+(median > 8) and the 256-active OOM check are bound by how many games the
+10 × 4 groups keep pending, not by the service. Group-worker parents
+(`elemental_long_rent`) hold up to 135 threads each; Etude `play` callbacks
+(`python3`) ≤ 14 threads, ≤ 609 MiB.
+
+Remaining: the `cpu32` arm (`batched-hop.json`, built at `41102d8c3`, cap
+$2.50) and the landing gate. It is not queued: the `cpu32` on-demand (limit 1)
+reports "at its machine limit" because lost run `6ed5413f5292`'s session
+(`cpu32-b937fa5a80b7`, no pod at RunPod, window ended 00:08 UTC) is never
+ended. Etude bug (0.2.6 and 0.2.9, `Scheduler._observe`): a session with no
+receipt past its deadline has its attempts finished as lost
+(`create_unconfirmed`) but returns without `_end_session`, so
+`unsettled_sessions` keeps counting it; `etude terminate` does not clear it.
+Once Etude ends that session, queue with `queue_runs.py batched-hop.json --go`
+from the 0.2.6 client as in Calibration.
