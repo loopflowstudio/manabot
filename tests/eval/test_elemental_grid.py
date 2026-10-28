@@ -23,6 +23,7 @@ from experiments.elemental_grid import (
     schedule_sha256,
     summarize,
 )
+from experiments.elemental_long_eval import H2HRequest, LocalCheckpoint, play_h2h_group
 from manabot.env import Match, ObservationSpace
 from manabot.eval.execution import bind_execution
 from manabot.eval.models import EvaluationKey
@@ -36,6 +37,76 @@ from manabot.sim.matchup import AuthoredMatchup
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.serving import PolicyAdmission, PolicyStore
+
+
+@pytest.mark.parametrize("seat", (0, 1))
+@pytest.mark.parametrize("mirror", (False, True))
+def test_pair_admits_both_saved_schemas_and_forwards_shared_service(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, seat: Literal[0, 1], mirror: bool
+) -> None:
+    torch.set_num_threads(1)
+    group = Group(
+        model_deck=DECKS[0],
+        heuristic_deck=DECKS[0] if mirror else DECKS[1],
+        model_seat=seat,
+        deals=(1,),
+    )
+    a, b, leg = _legs(group)
+    setup = AuthoredMatchup(pack_key=PACK, role_a=a, role_b=b)
+    checkpoints: list[LocalCheckpoint] = []
+    for version in (1, 2):
+        space = ObservationSpace(ObservationConfig(policy_input_version=version))
+        model = ActorCritic(
+            space, ModelConfig(hidden_dim=8, num_attention_heads=2, semantic_pack=PACK)
+        )
+        path = tmp_path / f"v{version}.pt"
+        save_checkpoint(
+            model, space, path, player_configs=Match(setup.match()).to_rust()
+        )
+        checkpoints.append(
+            LocalCheckpoint(name=f"v{version}", path=path, sha256=file_sha256(path))
+        )
+    shared = object()
+    admitted: list[int] = []
+
+    def admit(
+        *,
+        key: EvaluationKey,
+        player_a: PlayerRegistration,
+        player_b: PlayerRegistration,
+        checkpoint_paths: dict[str, str],
+        inference: object,
+        legs: tuple[int, ...],
+        **kwargs: object,
+    ) -> tuple[list[dict[str, object]], dict[str, object], dict[str, object]]:
+        assert inference is shared
+        assert legs == (leg,)
+        execution = EvalExecution(deadline_unix=time.time() + 60)
+        _, players = bind_execution(key, (player_a, player_b), execution)
+        store = PolicyStore(execution, EvalPerformance("pair-admission"))
+        try:
+            for player in players:
+                actual = store.admit(
+                    PolicyAdmission(
+                        player, checkpoint_paths[player.player_id], (setup.match(),)
+                    )
+                )
+                admitted.append(actual.policy_input_version)
+        finally:
+            store.close()
+        return [], {}, {}
+
+    monkeypatch.setattr("manabot.eval.match.play_cell", admit)
+    play_h2h_group(
+        H2HRequest(
+            newer=checkpoints[0],
+            older=checkpoints[1],
+            group=group,
+            output=tmp_path / "evidence",
+        ),
+        inference=shared,  # type: ignore[arg-type] -- forwarding sentinel; no games run
+    )
+    assert admitted == [1, 2]
 
 
 @pytest.mark.parametrize("version", (1, 2))

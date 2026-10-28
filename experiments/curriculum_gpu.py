@@ -20,9 +20,11 @@ from experiments.elemental_long_eval import (
     ROOT,
     SEED,
     Conditions,
+    H2HRequest,
     _local,
     evidence_directory,
     game_rows,
+    play_h2h_group,
 )
 from manabot.infra.files import atomic_json
 from manabot.sim.execution import EvalCompute, EvalExecution
@@ -80,13 +82,14 @@ def play(match: Match) -> Tables:
 
     torch.set_num_threads(1)
     conditions = GPUConditions.model_validate(match.conditions)
-    if conditions.kind == "pair" or conditions.compute != COMPUTE:
-        raise ValueError("expected the declared heuristic GPU grid")
+    if conditions.compute != COMPUTE:
+        raise ValueError("expected the declared GPU compute contract")
     if any(group.model_deck != conditions.deck for group in conditions.groups):
         raise ValueError("a group plays another deck than its match")
     if not torch.cuda.is_available():
         raise RuntimeError("CUDA evaluation requires a GPU; no CPU fallback")
     checkpoint = _local(match.players[0])
+    opponent = _local(match.players[1]) if conditions.kind == "pair" else None
     root = evidence_directory() / match.key / f"attempt-{time.time_ns()}"
     execution = EvalExecution(
         **conditions.compute.model_dump(), deadline_unix=time.time() + 3600
@@ -97,6 +100,13 @@ def play(match: Match) -> Tables:
 
         def run(group: Group) -> list[GameRow]:
             output: Path = root / f"{group.heuristic_deck}-seat-{group.model_seat}"
+            if opponent is not None:
+                return play_h2h_group(
+                    H2HRequest(
+                        newer=checkpoint, older=opponent, group=group, output=output
+                    ),
+                    inference=inference,
+                )
             request = Request(
                 checkpoint=checkpoint.path,
                 sha256=checkpoint.sha256,
