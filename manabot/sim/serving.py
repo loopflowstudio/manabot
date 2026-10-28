@@ -338,6 +338,27 @@ def serve(
         # Ready means the service can receive work, not that any model is loaded.
         perf.write(directory / "serving.json")
         connection.send(("ready", None, None))
+
+        def receive() -> bool:
+            """Handle one message; False once the supervisor closes the service."""
+            identity, kind, payload = connection.recv()
+            if kind == "close":
+                return False
+            if kind == "infer":
+                pending.append(_PendingRequest(identity, payload, time.monotonic()))
+                perf.count("received_requests")
+                return True
+            try:
+                result = store.admit(payload) if kind == "admit" else perf.snapshot()
+                if kind == "admit":
+                    _sample_memory(perf, execution)
+                    perf.write(directory / "serving.json")
+                connection.send((identity, result, None))
+            except Exception as exc:
+                perf.count("failed_admissions")
+                connection.send((identity, None, f"{type(exc).__name__}: {exc}"))
+            return True
+
         while execution.remaining() > 0:
             # Once a group is due, continuous admissions cannot starve its flush.
             due = bool(pending) and (
@@ -349,26 +370,8 @@ def serve(
             if not due and connection.poll(
                 0 if pending else min(0.1, execution.remaining())
             ):
-                identity, kind, payload = connection.recv()
-                if kind == "close":
+                if not receive():
                     break
-                if kind == "infer":
-                    pending.append(_PendingRequest(identity, payload, time.monotonic()))
-                    perf.count("received_requests")
-                else:
-                    try:
-                        result = (
-                            store.admit(payload) if kind == "admit" else perf.snapshot()
-                        )
-                        if kind == "admit":
-                            _sample_memory(perf, execution)
-                            perf.write(directory / "serving.json")
-                        connection.send((identity, result, None))
-                    except Exception as exc:
-                        perf.count("failed_admissions")
-                        connection.send(
-                            (identity, None, f"{type(exc).__name__}: {exc}")
-                        )
                 continue
             if not pending:
                 continue
@@ -382,6 +385,26 @@ def serve(
             ):
                 connection.poll(min(execution.max_delay_seconds, 0.001))
                 continue
+            # A lagging service receives requests already past their delay.
+            # Read what has arrived, at most one batch's worth, so a backlog
+            # fills the due batch instead of flushing one row per loop.
+            closed = False
+            for _ in range(execution.max_batch_rows):
+                if len(compatible) >= execution.max_batch_rows or not connection.poll(
+                    0
+                ):
+                    break
+                received = len(pending)
+                if not receive():
+                    closed = True
+                    break
+                if (
+                    len(pending) > received
+                    and pending[-1].request.policy == first.policy
+                ):
+                    compatible.append(pending[-1])
+            if closed:
+                break
             chosen = compatible[: execution.max_batch_rows]
             ids = {item.identity for item in chosen}
             pending = deque(item for item in pending if item.identity not in ids)

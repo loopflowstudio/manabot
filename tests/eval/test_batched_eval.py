@@ -1,10 +1,11 @@
 """Shared inference preserves admission, request RNG and native arena evidence."""
 
+from collections import deque
 from dataclasses import replace
 import json
 from pathlib import Path
 import time
-from typing import Literal
+from typing import Any, Literal
 
 import numpy as np
 import pytest
@@ -272,6 +273,69 @@ def test_matchups_of_one_checkpoint_share_its_policy_and_batches(
     assert [r.action for r in mixed] == [r.action for r in single]
     assert perf.counters["model_loads"] == 1
     store.close()
+
+
+class _BacklogConnection:
+    """A service connection whose requests have all arrived before it reads."""
+
+    def __init__(self, messages: list[tuple[str, str, object]], replies: int) -> None:
+        self.messages = deque(messages)
+        self.sent: list[tuple[Any, ...]] = []
+        self.replies = replies
+
+    def poll(self, timeout: float = 0) -> bool:
+        # Hold `close` until every request is answered.
+        return len(self.messages) > 1 or (
+            bool(self.messages) and len(self.sent) > self.replies
+        )
+
+    def recv(self) -> tuple[str, str, object]:
+        return self.messages.popleft()
+
+    def send(self, message: tuple[Any, ...]) -> None:
+        self.sent.append(message)
+
+    def close(self) -> None:
+        pass
+
+
+def test_service_batches_a_backlog_of_overdue_requests(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    key, player, _, path = fixture_policy(tmp_path)
+    execution = EvalExecution(deadline_unix=time.time() + 60, max_batch_rows=4)
+    _, (player,) = bind_execution(key, (player,), execution)
+    # Submitted long before the service reads them, as when it lags.
+    requests = [
+        replace(request_for(player, execution, seed), submitted=time.monotonic() - 1)
+        for seed in range(6)
+    ]
+    connection = _BacklogConnection(
+        [
+            (
+                "admission",
+                "admit",
+                PolicyAdmission(player, str(path), (selected_match(),)),
+            )
+        ]
+        + [(r.request_id, "infer", r) for r in requests]
+        + [("close", "close", None)],
+        replies=len(requests),
+    )
+    # The pytest process keeps its own pools; the budget belongs to a child.
+    monkeypatch.setattr(torch, "set_num_threads", lambda _: None)
+    monkeypatch.setattr(torch, "set_num_interop_threads", lambda _: None)
+    monkeypatch.setattr(
+        serving, "SERVING_BUDGET", replace(serving.SERVING_BUDGET, threads=10**6)
+    )
+    serving.serve(connection, execution, tmp_path, "backlog")  # type: ignore[arg-type]
+    counters = json.loads((tmp_path / "serving.json").read_bytes())["counters"]
+    assert {k: v for k, v in counters.items() if k.startswith("batch_rows/")} == {
+        "batch_rows/4": 1,
+        "batch_rows/2": 1,
+    }
+    replies = {m[0]: m[1] for m in connection.sent[2:]}
+    assert all(replies[r.request_id] is not None for r in requests)
 
 
 def test_packed_transfer_makes_one_copy_per_dtype() -> None:
