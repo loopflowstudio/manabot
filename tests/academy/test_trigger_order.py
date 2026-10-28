@@ -9,7 +9,7 @@ import pytest
 
 from academy import server, trace as trace_store
 from academy.server import GameSession
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.semantic.text_observation import capture_text_decision
 from manabot.verify.trigger_order import DECK, SEED, configure_root, prefix_index, root
