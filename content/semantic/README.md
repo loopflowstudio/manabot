@@ -1,152 +1,100 @@
-# Curated semantic content
+# Semantic content
 
-`v1/two_deck.source.json` is the reviewed authoring input for the exact
-UR Lessons versus GW Allies product matchup. It describes card characteristics,
-typed ability programs, exact deck admission, and token closure without parsing
-Oracle text at runtime.
-
-The compiler validates every object and instruction against a closed schema,
-resolves semantic definition references, lowers named operations to stable
-numeric opcodes, and writes canonical JSON plus a coverage report:
+Current card authoring lives in `current/definitions.json`: typed characteristics,
+programs and presentation text shared by native play and learning. `current/setups.json`
+selects deck and sideboard entries; it does not redefine cards. The compiler resolves
+definition references and token closure, validates a closed instruction schema, and
+emits canonical IR plus coverage reports:
 
 ```bash
-uv run scripts/compile_semantic_content.py
-uv run scripts/compile_semantic_content.py --check
+uv run python -m scripts.compile_current_content
+uv run python -m scripts.compile_current_content --check
 ```
 
-`v1/coverage.evidence.json` adds the reviewed facts that typed card programs
-cannot derive themselves: rule-family ownership, exact executable Rust tests,
-support/deviation annotations, and a sequenced history classifying real card
-admissions as `content_only` or `kernel_changing`. Generate or verify the
-canonical coverage-gap artifact with:
+The [TLA authoring and qualification contract](../../docs/rules/tla/README.md)
+describes the inventory, independent witnesses, unsupported cards and ownership
+boundaries. A definition's availability in an authored setup does not qualify it
+for arbitrary deck entry. Qualifications bind reviewed witnesses to the complete
+transitive definition closure; editing a clause invalidates that qualification.
 
-```bash
-uv run scripts/generate_coverage_gaps.py
-uv run scripts/generate_coverage_gaps.py --check
-```
+## Native runtime and identity
 
-The rolling policy selects the latest 20 distinct real card admissions (basic
-lands and referenced tokens are excluded) and uses those 20 rows as the
-denominator. More than 20% kernel-changing cards is a breach. A breach remains
-visible in `v1/generated/coverage-gaps.json` and passes the check only when an
-IR redesign, kernel redesign, or stopped-expansion response exists and is
-acknowledged through the newest history sequence. Adding another card makes a
-previous acknowledgment stale, so the response cannot become a permanent
-waiver.
+`SemanticPack::compile_content_pack` lowers checked IR into the ordinary native
+`CardDefinition` runtime. It supplies characteristics, costs, targets, triggers,
+static abilities and effects. Presentation text comes from the same definition;
+Oracle text never supplies executable rules. Historical IR without embedded text
+uses `current/presentation.json`, a frozen text snapshot.
 
-The initial history intentionally reports the two-deck Milestone 1 expansion
-as an acknowledged `0 content-only / 20 total` breach. The linked semantic
-kernel design is the reviewed IR-redesign response to that historical pattern;
-future admissions should move the rolling window toward content-only changes.
+Each generated `semantic_index` is local to its IR document, distinct from native
+`CardDefId`. The compiled pack records its pack key, IR hash and source hash in
+`ContentPackManifest.compiled_semantics`. `managym.content_pool(pack_key)` exposes
+that identity, native IDs, semantic keys and eligibility without starting a game.
+Policy binding validates the native receipt before those IDs reach an encoder.
 
-The generated `semantic_index` is local to this IR document. It is deliberately
-not `CardDefId`. At pack load, `content_pack_binding` resolves once through the
-current `ContentPack` adapter and every executable program thereafter carries
-typed indices and opcodes rather than card names. The Rust conformance test
-checks that every binding resolves to a real `CardDefId`; W2-179 remains the
-owner of `ContentPack`, definition storage, and match-state layout.
+Exact authored setups select their compiled runtime through the shared native
+catalog. Explicit selection also supports repeated-deck matches. The generic
+native registry lowers its TLA cards from the same current definitions and retains
+non-TLA registrations. Independent directed rules tests witness behavior;
+comparisons between two projections of the same authoring source are not rules
+evidence.
 
-`v1/two_deck.fixtures.json` contains deterministic lowering expectations for
-representative branch, linked-exile, multi-target, and trigger programs. The
-Rust loader additionally lowers the complete checked-in pack into live
-`CardDefinition` values. When `Game::new` receives the exact UR Lessons and GW
-Allies decklists (in either seat order), that compiled pack supplies the match's
-characteristics, costs, targets, triggers, static abilities, and effects. Other
-deck configurations retain the broader general content pack.
+Current setup projections preserve historical counts, including the 41-card UR
+Lessons deck and 40-card GW Allies deck. The older milestone's 40-card description
+does not authorize deleting a card. Product deck changes remain the curated deck
+owner's decision.
 
-The compiled pack carries its pack key, IR hash, and source hash in
-`ContentPackManifest.compiled_semantics`. Oracle text is copied from the
-reviewed registry strictly as presentation data; it does not supply runtime
-rules behavior. `managym/tests/authored_match_tests.rs` differentially checks
-all admitted definitions, then runs a fixed complete match through normal game
-actions to a winner while requiring compiled spells, triggers, and damage to
-affect the world.
+## Learning projection
 
-One source fact is intentionally conspicuous: the checked-in UR product deck
-currently contains 41 cards while the milestone prose calls it a 40-card deck.
-The compiler records the actual product manifest rather than silently deleting
-a card. GW Allies contains 40 cards. Resolving that content decision belongs to
-the curated deck owner, and changing it will make the product-manifest parity
-test fail until both sides agree.
+Current execution uses world **w16** and `current/learning_schema.json` (schema **8**).
+`BoundSemanticPack` binds a native manifest to the exact IR and schema, resolving
+registry names once and discarding them from model inputs. The shared catalog
+stores typed definition/program token spans and definition-reference edges.
+Viewer observations carry ragged bindings into that immutable catalog.
 
-## Learning projection v1
+The `semantic_only` mode masks opaque `CardDefId` inputs; `identity` exposes them
+for controlled ablations. Neither mode tokenizes card names. The projection reads
+only viewer-safe `managym.Observation`, never `Game` or `MatchState`; mutable
+counters, damage, control and other match facts remain in observation tensors.
 
-`v1/learning_schema.json` defines the versioned, typed token graph used by
-learning consumers. `manabot.semantic.learning.BoundSemanticPack` obtains a
-read-only manifest from the exact environment `ContentPack`, resolves the IR's
-legacy registry-name adapters once, then discards names from model inputs.
-
-The shared catalog stores definition and program token spans plus explicit
-definition-reference edges. Viewer observations carry only ragged bindings into
-that immutable catalog. The `semantic_only` mode keeps the structural binding
-but masks every opaque `CardDefId`; the `identity` mode makes that feature
-explicit for controlled ablations. Neither mode tokenizes card names.
-
-Semantic datasets and checkpoints must persist the artifact header returned by
-`BoundSemanticPack.artifact_header()`. Semantic loaders reject missing or
-mismatched learning-schema, IR, content-pack, layout, and identity-mode
-provenance. Legacy artifacts without semantic inputs retain their existing
-load path and are not silently upgraded.
-
-The projection reads only `managym.Observation`, which already excludes the
-opponent's hand, unrevealed libraries, and private choices. It never reads
-`Game` or `MatchState`; mutable counters, damage, control, and other match facts
-remain in the existing observation tensors.
-
-Focused verification:
+Datasets and checkpoints persist `BoundSemanticPack.artifact_header()`. Loaders
+reject missing or mismatched schema, IR, content, layout and identity-mode
+provenance. Current manifest binding uses explicit entries in `CURRENT_IR_PATHS`.
+Historical artifact inspection requires its original schema and IR paths; frozen
+receipts and checkpoints are never silently upgraded.
 
 ```bash
 uv run --extra dev pytest -q \
+  tests/semantic/test_current_content.py \
   tests/semantic/test_learning_projection.py \
-  tests/semantic/test_learning_projection_env.py
+  tests/semantic/test_learning_projection_env.py \
+  tests/model/test_policy_catalog.py
 ```
 
-## Elemental development pack (w7)
+## Historical sources and coverage evidence
 
-`v1/elemental.source.json` supplies complete executable semantics for the 42
-owned Elemental cards, five basics and four referenced tokens. It is a distinct
-`elemental-combat-v1` catalog entry, exercised through two 46-card validation
-rosters. Final product deck admission remains separate. Compile or check it with:
+The `v1/` and `w7/` through `w11/` artifacts retain earlier sources, schemas,
+fixtures and receipts. They are not inputs to current generation. Historical
+compiler checks remain available through `scripts/compile_semantic_content.py`;
+the explicit source/output invocations in `.github/workflows/ci.yml` validate
+those frozen artifacts independently of the current generator.
+
+`v1/coverage.evidence.json` records rule-family ownership, executable witnesses,
+support/deviation annotations and admission history. Its coverage-gap artifact
+retains the original rolling policy: more than 20% kernel-changing cards among
+the latest 20 distinct nonbasic, nontoken admissions requires an acknowledged
+response through the newest history sequence. It records the initial two-deck
+expansion as a `0 content-only / 20 total` breach with the semantic-kernel redesign
+as its response; it is not the current pool's eligibility authority.
 
 ```bash
-uv run scripts/compile_semantic_content.py --check \
-  --source content/semantic/v1/elemental.source.json \
-  --fixtures content/semantic/v1/elemental.fixtures.json \
-  --ir-output content/semantic/v1/generated/elemental.ir.json \
-  --coverage-output content/semantic/v1/generated/elemental.coverage.json
+uv run scripts/generate_coverage_gaps.py --check
 ```
 
-Shared operations lower modal choices, explicit target clauses, private search,
-mill/select, graveyard returns, dynamic quantities and conditional statics into
-the ordinary engine. A spell's `target_binding: "inferred"` means its `targets`
-name semantic roles while the shared effect traversal binds the selected mode's
-actual clauses. Omitted binding retains the frozen packs' explicit contract.
-
-`w7/learning_schema.json` is learning schema 3 for this pack. Schema 2 and its
-original 23-opcode vocabulary remain readable and unchanged. The current schema
-adds typed quantities and nested modes, hybrid pips and the additional rules
-operations. `BoundSemanticPack.from_env` selects the artifacts from the exact
-Elemental manifest and rejects source/IR drift. No latest-pack alias changes
-historical meanings. Full structure parity against the native registry lives
-in `managym/tests/authored_match_tests.rs`; consumer admission lives in
-`tests/semantic/test_elemental.py`.
-
-## Sacrifice and landfall development pack (w8)
-
-`elemental-sacrifice-v1` adds the 17 owned sacrifice/landfall cards, five basics
-and five tokens in separate 40-card validation rosters. Schema 4 is at
-`w8/learning_schema.json`. It adds typed sacrifice costs, payment alternatives,
-per-turn trigger limits and search options. Earlier sources and learning
-schemas retain their identities and vocabularies. The native search authority
-is shared with frozen opcode 24, while opcode 51 supplies its additional options.
-
-```bash
-uv run scripts/compile_semantic_content.py --check \
-  --source content/semantic/v1/sacrifice.source.json \
-  --fixtures content/semantic/v1/sacrifice.fixtures.json \
-  --ir-output content/semantic/v1/generated/sacrifice.ir.json \
-  --coverage-output content/semantic/v1/generated/sacrifice.coverage.json
-```
-
-The [rule contracts](../../docs/rules/elemental-sacrifice.md) identify behavioral
-coverage and the separate final-deck and release boundaries.
+Historical Elemental operations and fixtures remain useful references for modal
+choices, target clauses, private selection and dynamic quantities. A spell's
+`target_binding: "inferred"` leaves target selection to shared effect traversal;
+omitting it retains the explicit binding contract. The
+[sacrifice and landfall rule contracts](../../docs/rules/elemental-sacrifice.md)
+retain their behavioral coverage and release boundaries. Earlier documentation
+of each pack's original rollout is available at
+`c5d406e3d2a701525c15c8500a30f7da7896cc40:content/semantic/README.md`.

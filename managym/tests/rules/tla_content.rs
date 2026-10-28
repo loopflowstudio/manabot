@@ -1,7 +1,7 @@
 //! Independent TLA clause outcomes through the same typed programs as the pool.
 //! Directed legal actions cover costs, choices, combat and effect lifetimes.
 use super::{
-    elemental_cards::{card, cast, counters, pass_until, permanent, settle, setup},
+    elemental_cards::{card, cast, counters, pass_until, permanent, pin_top, settle, setup},
     helpers::Scenario,
 };
 use managym::{
@@ -582,7 +582,7 @@ fn rallier_reveals_only_the_selected_card_and_can_decline() {
     for take in [false, true] {
         let mut s = setup(&["Water Tribe Rallier", "Gray Ogre", "Wall of Stone"]);
         let rallier = s.force_permanent_on_battlefield(0, "Water Tribe Rallier");
-        let top = pin_library(&mut s, &["Forest", "Gray Ogre", "Wall of Stone", "Island"]);
+        let top = pin_top(&mut s, &["Forest", "Gray Ogre", "Wall of Stone", "Island"]);
         s.set_player_mana_pool(0, "5");
         activate(&mut s, rallier, 0);
         // Paying in mana is a deliberate waterbend choice.
@@ -635,19 +635,6 @@ fn rallier_reveals_only_the_selected_card_and_can_decline() {
             }
         }
     }
-}
-
-fn pin_library(s: &mut Scenario, names: &[&str]) -> Vec<CardId> {
-    let mut ids = Vec::new();
-    for name in names {
-        let id = card(s, 0, name);
-        s.game_mut().move_card(id, ZoneType::Hand);
-        ids.push(id);
-    }
-    for id in ids.iter().rev() {
-        s.game_mut().move_card(*id, ZoneType::Library);
-    }
-    ids
 }
 
 #[test]
@@ -1127,7 +1114,7 @@ fn piandao_can_take_a_lesson_or_equipment_or_decline_without_revealing_remainder
             .as_mut()
             .unwrap()
             .summoning_sick = false;
-        let top = pin_library(
+        let top = pin_top(
             &mut s,
             &["Abandon Attachments", "Prophetic Prism", "Forest", "Island"],
         );

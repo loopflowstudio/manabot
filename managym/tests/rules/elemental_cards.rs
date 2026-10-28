@@ -814,7 +814,8 @@ fn mode(s: &mut Scenario, wanted: usize) {
     s.step_action(index);
 }
 
-fn pin_top(s: &mut Scenario, names: &[&str]) -> Vec<CardId> {
+/// Arrange a known library prefix without generating unrelated zone-change events.
+pub(super) fn pin_top(s: &mut Scenario, names: &[&str]) -> Vec<CardId> {
     let mut cards = Vec::new();
     for name in names {
         let next = s

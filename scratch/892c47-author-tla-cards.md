@@ -33,7 +33,12 @@ inventory entries; both public accessors share the same runtime lookup. Current
 projections assemble their closure once. Qualification mutation tests share one
 fixture while preserving direct-card and transitive-token cases. Surviving
 Lotus Cobra and Treasure registrations reuse the existing modal-mana constructor,
-retaining color order and payment behavior. No deletion targets remain in this cut.
+retaining color order and payment behavior. The duplicate `tla_content::pin_library`
+fixture is removed; Rallier and Piandao now reuse `elemental_cards::pin_top` to
+arrange private library choices without unrelated zone changes. The content README
+now points to current authoring and qualification, retaining historical checks and
+the original rollout reference at `c5d406e3d:content/semantic/README.md`.
+No deletion targets remain in this cut.
 
 ## Clause review
 
@@ -72,9 +77,7 @@ proof are D1 work. No Task, Graph, publication or merge was launched here.
 
 Qualification evidence includes 102 passing exact-filter debug witnesses plus
 Rallier reveal and haste controls (19 new directed tests), and verified source pins.
-Check: `cargo test --manifest-path managym/Cargo.toml --test rules_tests rules::tla_content` — 35 passed; `uv run --extra dev pytest tests/semantic/test_current_content.py tests/model/test_policy_catalog.py -q` — 23 passed after atomic release-extension rebuild; `uv run --extra dev pytest tests/semantic/test_learning_projection.py tests/semantic/test_learning_projection_env.py -q` — 12 passed; generator `--check`, Rust format, Ruff and `git diff --check` passed.
-Receipt follow-up: `uv run --extra dev pytest tests/model/test_policy_catalog.py -q -k 'receipt or catalog_uses_actual'` — 7 passed after three malformed-receipt cases reproduced the cleanup regression; focused Ruff and staged/unstaged whitespace checks passed.
-Reduction check: `cargo test --manifest-path managym/Cargo.toml --lib semantic::pool::tests` — 2 passed; `cargo test --manifest-path managym/Cargo.toml --test rules_tests rules::sacrifice_cards` — 21 passed; after atomic release-extension rebuild, `uv run --extra dev pytest tests/semantic/test_current_content.py tests/model/test_policy_catalog.py -q` — 27 passed and all 10 native pool descriptors match their pre-reduction snapshots exactly; generator `--check`, Rust format, Ruff and whitespace checks passed.
+Check: `cargo test --manifest-path managym/Cargo.toml --test rules_tests rules::tla_content -- --test-threads=1` — 35 passed after fixture reuse; Rust format and whitespace checks passed. Retained results for unchanged runtime: pool — 2 passed, sacrifice — 21 passed; current-content/policy — 27 passed including malformed receipts; learning projections — 12 passed; all 10 native pool descriptors match pre-reduction snapshots after atomic extension rebuild; generator `--check` and Ruff passed.
 Gate retains full debug Rust/Clippy, current-world
 arena/evaluation/monitoring, model suite, choice-navigation,
 Learn/browser proofs on new receipts, CI collection and release-source checks.
