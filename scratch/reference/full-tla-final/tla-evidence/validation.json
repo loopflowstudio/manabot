@@ -1,0 +1,58 @@
+{
+  "date": "2026-10-28",
+  "native_suites": [
+    {
+      "command": "CARGO_BUILD_JOBS=2 cargo test --manifest-path managym/Cargo.toml --test rules_tests tla_cards:: -- --test-threads=2",
+      "passed": 27,
+      "log": "scratch/tla-evidence/native-tla-tests.log"
+    },
+    {
+      "command": "CARGO_BUILD_JOBS=2 cargo test --manifest-path managym/Cargo.toml --test rules_tests rules::elemental_cards:: -- --test-threads=2",
+      "passed": 43,
+      "log": "scratch/tla-evidence/native-elemental-tests.log"
+    },
+    {
+      "command": "CARGO_BUILD_JOBS=2 cargo test --manifest-path managym/Cargo.toml --test rules_tests rules::sacrifice_cards:: -- --test-threads=2",
+      "passed": 21,
+      "log": "scratch/tla-evidence/native-sacrifice-tests.log"
+    },
+    {
+      "command": "CARGO_BUILD_JOBS=2 cargo test --manifest-path managym/Cargo.toml --test rules_tests rules::temur_cards:: -- --test-threads=2",
+      "passed": 34,
+      "log": "scratch/tla-evidence/native-temur-tests.log"
+    },
+    {
+      "command": "CARGO_BUILD_JOBS=2 cargo test --manifest-path managym/Cargo.toml --test rules_tests rules::stage2_cards:: -- --test-threads=2",
+      "passed": 31,
+      "log": "scratch/tla-evidence/native-stage2-tests.log"
+    },
+    {
+      "command": "CARGO_BUILD_JOBS=2 cargo test --manifest-path managym/Cargo.toml --test rules_tests rules::stage3_cards:: -- --test-threads=2",
+      "passed": 29,
+      "log": "scratch/tla-evidence/native-stage3-tests.log"
+    },
+    {
+      "command": "CARGO_BUILD_JOBS=2 cargo test --manifest-path managym/Cargo.toml --test rules_tests rules::ur_lessons_increment:: -- --test-threads=2",
+      "passed": 16,
+      "log": "scratch/tla-evidence/native-ur-tests.log"
+    }
+  ],
+  "compiled_parity": {
+    "command": "CARGO_BUILD_JOBS=2 cargo test --manifest-path managym/Cargo.toml --test elemental_world_tests selected_world_compiles_every_card_without_reduced_native_rules -- --exact",
+    "passed": 1,
+    "log": "scratch/tla-evidence/compiled-parity-tests.log"
+  },
+  "inventory_command": "uv run --no-project --python 3.12 python scratch/tla-evidence/verify_ledger.py",
+  "fixture_comparison": {
+    "compared": 76,
+    "differences": 0,
+    "receipt": "scratch/tla-evidence/fixture-comparison.json"
+  },
+  "not_run": [
+    "full Rust suite",
+    "browser proof",
+    "policy training",
+    "whole-card independent conformance"
+  ],
+  "limits": "Existing directed suites include a retained fixed-deck complete-game replay. No new probes, random searches, production changes, native extension replacement or load tools."
+}

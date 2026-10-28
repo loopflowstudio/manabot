@@ -1,0 +1,314 @@
+{
+  "core": {
+    "patterns": [],
+    "rules": [
+      "601",
+      "602",
+      "608",
+      "704"
+    ],
+    "owner": [
+      "managym/src/flow/play.rs",
+      "managym/src/flow/resolution.rs",
+      "managym/src/flow/sba.rs"
+    ],
+    "status": "partial",
+    "gap": "MTG-177 retains entry-time resolution repair; ability stack lifetime and complete LKI require expansion. Core references are family entry points, not claims every subrule applies."
+  },
+  "target_choice": {
+    "patterns": [
+      "target",
+      "choose",
+      "any number",
+      "distribut"
+    ],
+    "rules": [
+      "115",
+      "601.2b",
+      "601.2c",
+      "603.3c",
+      "608.2b"
+    ],
+    "owner": [
+      "managym/src/flow/action.rs",
+      "managym/src/flow/resolution.rs",
+      "managym/src/agent/structured_offer.rs"
+    ],
+    "status": "partial",
+    "gap": "Extend exact-object clauses to stack abilities, retargeting, divisions and variable cardinalities. Preserve phase-specific legality checks."
+  },
+  "cost_mana": {
+    "patterns": [
+      "waterbend",
+      "cost",
+      "kicker",
+      "flashback",
+      "foretell",
+      "mana",
+      "exhaust",
+      "crew"
+    ],
+    "rules": [
+      "106",
+      "601.2f",
+      "601.2h",
+      "602.2",
+      "701.67",
+      "702.177"
+    ],
+    "owner": [
+      "managym/src/flow/mana.rs",
+      "managym/src/flow/play.rs",
+      "managym/src/state/mana.rs"
+    ],
+    "status": "partial",
+    "gap": "Shared payment search exists. Add X, additional versus alternative cost scopes, broader restrictions, crew and per-incarnation exhaust; no separate browser cost solver."
+  },
+  "airbend_permissions": {
+    "patterns": [
+      "airbend",
+      "cast.*exil",
+      "play.*exil",
+      "foretell",
+      "top.*library.*cast",
+      "free cast",
+      "casting.*permission"
+    ],
+    "rules": [
+      "400.7",
+      "601",
+      "701.65",
+      "702.143"
+    ],
+    "owner": [
+      "managym/src/flow/zones.rs",
+      "managym/src/flow/play.rs",
+      "managym/src/flow/action.rs"
+    ],
+    "status": "missing_general_mechanism",
+    "gap": "No Airbend effect; general exact-exile casting grants, prohibition/duration checks, foretell privacy and casts during resolution are missing. Flashback is a useful bounded predecessor."
+  },
+  "earthbend_identity": {
+    "patterns": [
+      "earthbend",
+      "linked",
+      "incarnation",
+      "lki",
+      "blink",
+      "exile.*return"
+    ],
+    "rules": [
+      "400.7",
+      "603.6",
+      "603.7",
+      "701.66"
+    ],
+    "owner": [
+      "managym/src/flow/zones.rs",
+      "managym/src/flow/identity.rs",
+      "managym/src/flow/trigger.rs"
+    ],
+    "status": "partial",
+    "gap": "ObjectRef exists; historical earthbend witness exposes missing destination incarnation. Complete LKI and delayed return identity must compose with copying/control/airbend."
+  },
+  "triggers_history": {
+    "patterns": [
+      "when",
+      "beginning",
+      "trigger",
+      "raid",
+      "turn history",
+      "second.draw",
+      "once.per.turn"
+    ],
+    "rules": [
+      "603",
+      "603.3b",
+      "603.3c",
+      "603.12"
+    ],
+    "owner": [
+      "managym/src/flow/triggers.rs",
+      "managym/src/flow/trigger.rs",
+      "managym/src/flow/event.rs"
+    ],
+    "status": "partial",
+    "gap": "APNAP controller order landed; trigger-on-trigger matcher, reflexive/modal placement, broader events, multiplicity and source/turn history remain."
+  },
+  "effective_characteristics": {
+    "patterns": [
+      "gets",
+      "get ",
+      "gains",
+      "have ",
+      "has ",
+      "loses",
+      "lose ",
+      "base power",
+      "becomes",
+      "are lands",
+      "types",
+      "anthem",
+      "cda",
+      "ability inheritance"
+    ],
+    "rules": [
+      "604",
+      "611",
+      "613"
+    ],
+    "owner": [
+      "managym/src/flow/statics.rs",
+      "managym/src/state/permanent.rs",
+      "managym/src/state/predicate.rs"
+    ],
+    "status": "partial",
+    "gap": "Additive stats and narrow grants only. Need one effective-characteristic evaluator with relevant layers, timestamps/dependencies, control, names and dynamic abilities."
+  },
+  "replacement_counters": {
+    "patterns": [
+      "instead",
+      "counter",
+      "prevent",
+      "excess",
+      "enters tapped",
+      "mana.loss",
+      "damage addition"
+    ],
+    "rules": [
+      "120",
+      "122",
+      "614",
+      "615",
+      "616",
+      "704"
+    ],
+    "owner": [
+      "managym/src/flow/proposed_event.rs",
+      "managym/src/flow/damage.rs",
+      "managym/src/flow/sba.rs"
+    ],
+    "status": "partial",
+    "gap": "Fixed source ordering is not affected-player choice. Add iterative applicability and applied-effect history; typed lore/quest/stun/finality/keyword counters; route special replacement paths through event authority."
+  },
+  "attachments": {
+    "patterns": [
+      "aura",
+      "equipment",
+      "equipped",
+      "enchanted",
+      "attach"
+    ],
+    "rules": [
+      "301.5",
+      "303.4",
+      "701.3",
+      "704.5m",
+      "704.5n"
+    ],
+    "owner": [
+      "managym/src/state/permanent.rs",
+      "managym/src/flow/zones.rs",
+      "managym/src/flow/sba.rs"
+    ],
+    "status": "missing",
+    "gap": "No general attachment relation, legal attachment checks, equip or attachment SBAs."
+  },
+  "saga_faces": {
+    "patterns": [
+      "saga",
+      "transform",
+      "chapter",
+      "face.down"
+    ],
+    "rules": [
+      "303",
+      "712",
+      "701.27",
+      "714"
+    ],
+    "owner": [
+      "managym/src/state/card.rs",
+      "managym/src/state/permanent.rs",
+      "managym/src/flow/turn.rs"
+    ],
+    "status": "missing",
+    "gap": "Need multi-face definitions, active-face identity, lore/chapter lifecycle and final chapter SBA; preserve transform versus exile/reentry identity."
+  },
+  "copy_tokens": {
+    "patterns": [
+      "token",
+      "copy",
+      "copies",
+      "copiable"
+    ],
+    "rules": [
+      "111",
+      "707",
+      "704.5d"
+    ],
+    "owner": [
+      "managym/src/flow/zones.rs",
+      "managym/src/flow/resolution.rs",
+      "managym/src/state/card.rs"
+    ],
+    "status": "partial",
+    "gap": "Ordinary tokens and nonlegendary self-copy exist; arbitrary permanent copies, face/copy exceptions and stack spell/ability copies need shared characteristic/stack machinery."
+  },
+  "private_zones": {
+    "patterns": [
+      "library",
+      "search",
+      "scry",
+      "surveil",
+      "discard",
+      "mill",
+      "reveal",
+      "hand",
+      "private"
+    ],
+    "rules": [
+      "400",
+      "401",
+      "701.22",
+      "701.23",
+      "701.25"
+    ],
+    "owner": [
+      "managym/src/flow/search.rs",
+      "managym/src/agent/observation.rs",
+      "managym/src/decision_context.rs"
+    ],
+    "status": "partial",
+    "gap": "Private scry/search exist; extend selectors, delegated/opponent choices, top-library casting visibility and arbitrary card-name choices without hidden-state leakage."
+  },
+  "combat_turn_control": {
+    "patterns": [
+      "combat",
+      "attack",
+      "block",
+      "crew",
+      "extra turn",
+      "control target opponent",
+      "player control",
+      "untap",
+      "first strike",
+      "double strike"
+    ],
+    "rules": [
+      "500",
+      "506",
+      "508",
+      "509",
+      "510",
+      "723"
+    ],
+    "owner": [
+      "managym/src/flow/combat.rs",
+      "managym/src/flow/turn.rs",
+      "managym/src/experience.rs"
+    ],
+    "status": "partial",
+    "gap": "Ordinary two-player combat exists. Add extra phase/turn queue, control-player decision authority, crew, history and effective-characteristic restrictions."
+  }
+}

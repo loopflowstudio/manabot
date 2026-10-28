@@ -6,7 +6,7 @@
 //! policy belongs to the admission caller, not this catalog.
 
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     sync::{Arc, OnceLock},
 };
 
@@ -47,7 +47,13 @@ pub struct ContentPool {
 #[derive(Deserialize)]
 struct QualificationManifest {
     ir_hash: String,
-    definitions: Vec<PoolDefinition>,
+    eligible: BTreeSet<String>,
+}
+
+#[derive(Deserialize)]
+struct Qualifications {
+    inventory: BTreeSet<String>,
+    packs: BTreeMap<String, QualificationManifest>,
 }
 
 struct PoolRuntime {
@@ -55,63 +61,105 @@ struct PoolRuntime {
     descriptor: ContentPool,
 }
 
+impl PoolRuntime {
+    fn compile(
+        semantic: &SemanticPack,
+        mut qualification: QualificationManifest,
+        inventory: &BTreeSet<String>,
+    ) -> Result<Self, IrError> {
+        if qualification.ir_hash != semantic.ir_hash {
+            return Err(IrError::Malformed(format!(
+                "stale eligibility for {}",
+                semantic.pack_key
+            )));
+        }
+        let content = Arc::new(semantic.compile_content_pack()?);
+        // IR owns identity and pack membership; qualifications only decide
+        // eligibility. Inventory-only cards remain explicit.
+        let mut definitions: BTreeMap<_, _> = inventory
+            .iter()
+            .map(|name| {
+                (
+                    name.clone(),
+                    PoolDefinition {
+                        card_def_id: None,
+                        semantic_key: None,
+                        registry_name: name.clone(),
+                        eligibility: Eligibility::Unsupported,
+                        reason: Some("Not implemented in this content pack".into()),
+                    },
+                )
+            })
+            .collect();
+        for definition in &semantic.definitions {
+            let eligible = qualification.eligible.remove(&definition.semantic_key);
+            definitions.insert(
+                definition.registry_name.clone(),
+                PoolDefinition {
+                    card_def_id: content.definition_id(&definition.registry_name),
+                    semantic_key: Some(definition.semantic_key.clone()),
+                    registry_name: definition.registry_name.clone(),
+                    eligibility: if eligible {
+                        Eligibility::Eligible
+                    } else {
+                        Eligibility::Unsupported
+                    },
+                    reason: if eligible {
+                        None
+                    } else {
+                        Some("Preserved authored behavior; complete independent qualification pending".into())
+                    },
+                },
+            );
+        }
+        if !qualification.eligible.is_empty() {
+            return Err(IrError::Malformed(format!(
+                "qualified definitions missing from {}: {:?}",
+                semantic.pack_key, qualification.eligible
+            )));
+        }
+        let manifest = content.manifest();
+        let descriptor = ContentPool {
+            pack_key: semantic.pack_key.clone(),
+            world_version: manifest.world_version,
+            content_digest: manifest.content_digest,
+            compiled_semantics: manifest.compiled_semantics.expect("compiled pool"),
+            definitions: definitions.into_values().collect(),
+        };
+        Ok(Self {
+            content,
+            descriptor,
+        })
+    }
+}
+
 fn pools() -> Result<&'static BTreeMap<String, PoolRuntime>, IrError> {
     static POOLS: OnceLock<Result<BTreeMap<String, PoolRuntime>, IrError>> = OnceLock::new();
     POOLS
         .get_or_init(|| {
-            let mut qualifications: BTreeMap<String, QualificationManifest> = serde_json::from_str(
-                include_str!("../../../content/semantic/current/generated/eligibility.json"),
-            )
+            let mut qualifications: Qualifications = serde_json::from_str(include_str!(
+                "../../../content/semantic/current/generated/eligibility.json"
+            ))
             .map_err(|e| IrError::Malformed(e.to_string()))?;
-            let mut pools = BTreeMap::new();
-            for semantic in SemanticPack::catalog()?
+            let pool = SemanticPack::pool()?;
+            SemanticPack::catalog()?
                 .iter()
-                .cloned()
-                .chain([SemanticPack::pool()?])
-            {
-                let qualification = qualifications.remove(&semantic.pack_key).ok_or_else(|| {
-                    IrError::Malformed(format!("missing eligibility for {}", semantic.pack_key))
-                })?;
-                if qualification.ir_hash != semantic.ir_hash {
-                    return Err(IrError::Malformed(format!(
-                        "stale eligibility for {}",
-                        semantic.pack_key
-                    )));
-                }
-                let content = Arc::new(semantic.compile_content_pack()?);
-                let mut definitions = qualification.definitions;
-                for row in &mut definitions {
-                    row.card_def_id = content.definition_id(&row.registry_name);
-                    let actual = semantic
-                        .definitions
-                        .iter()
-                        .find(|d| d.registry_name == row.registry_name);
-                    if actual.map(|d| &d.semantic_key) != row.semantic_key.as_ref()
-                        || (row.eligibility == Eligibility::Eligible && row.card_def_id.is_none())
-                    {
-                        return Err(IrError::Malformed(format!(
-                            "incomplete pool definition {}",
-                            row.registry_name
-                        )));
-                    }
-                }
-                let manifest = content.manifest();
-                let descriptor = ContentPool {
-                    pack_key: semantic.pack_key.clone(),
-                    world_version: manifest.world_version,
-                    content_digest: manifest.content_digest,
-                    compiled_semantics: manifest.compiled_semantics.expect("compiled pool"),
-                    definitions,
-                };
-                pools.insert(
-                    semantic.pack_key,
-                    PoolRuntime {
-                        content,
-                        descriptor,
-                    },
-                );
-            }
-            Ok(pools)
+                .chain([&pool])
+                .map(|semantic| {
+                    let qualification = qualifications
+                        .packs
+                        .remove(&semantic.pack_key)
+                        .ok_or_else(|| {
+                            IrError::Malformed(format!(
+                                "missing eligibility for {}",
+                                semantic.pack_key
+                            ))
+                        })?;
+                    let runtime =
+                        PoolRuntime::compile(semantic, qualification, &qualifications.inventory)?;
+                    Ok((semantic.pack_key.clone(), runtime))
+                })
+                .collect()
         })
         .as_ref()
         .map_err(Clone::clone)
@@ -163,5 +211,37 @@ mod tests {
         assert!(missing.card_def_id.is_none());
         assert!(missing.reason.is_some());
         assert!(content_pool("missing-pool").is_err());
+
+        let baseline = content_pool("tla-baseline-v1").unwrap();
+        let excluded = baseline
+            .definitions
+            .iter()
+            .find(|d| d.registry_name == "Avatar Enthusiasts")
+            .unwrap();
+        assert_eq!(excluded.eligibility, Eligibility::Unsupported);
+        assert!(excluded.card_def_id.is_none());
+        assert!(excluded.semantic_key.is_none());
+    }
+
+    #[test]
+    fn qualifications_reject_stale_ir_and_missing_definitions() {
+        let semantic = SemanticPack::baseline().unwrap();
+        let inventory = BTreeSet::new();
+        let stale = QualificationManifest {
+            ir_hash: "stale".into(),
+            eligible: BTreeSet::new(),
+        };
+        assert!(matches!(
+            PoolRuntime::compile(&semantic, stale, &inventory),
+            Err(IrError::Malformed(reason)) if reason.contains("stale eligibility")
+        ));
+        let missing = QualificationManifest {
+            ir_hash: semantic.ir_hash.clone(),
+            eligible: BTreeSet::from(["missing.definition".into()]),
+        };
+        assert!(matches!(
+            PoolRuntime::compile(&semantic, missing, &inventory),
+            Err(IrError::Malformed(reason)) if reason.contains("qualified definitions missing")
+        ));
     }
 }

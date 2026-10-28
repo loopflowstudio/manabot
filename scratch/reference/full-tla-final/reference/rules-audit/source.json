@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "source_url": "https://media.wizards.com/2026/downloads/MagicCompRules%2020260925.txt",
+  "discovery_url": "https://magic.wizards.com/en/rules",
+  "effective_date": "2026-09-25",
+  "retrieved_utc": "2026-10-22",
+  "sha256": "8d860e451f20f38865b725b42d82feb714c725373dd8f3b32b8652b3eeb070ca",
+  "audited_revision": "20194feb758cd6d1df3e63b8d4fdd567d3ebbe6f",
+  "numbered_entries": 3322,
+  "ordered_ids_sha256": "ba5cc82752d37d3c778c9c922e92f67df98dd6ddfd9dad3fd6539ed73771ccda",
+  "inventory_policy": "Every numbered body chapter/section/rule/subrule, including multi-letter suffixes. TOC duplicates, examples, glossary and credits excluded. Source line numbers are one-based inclusive; per-entry digest normalizes LF and trims trailing whitespace. Parent digest covers its own paragraph, not descendants."
+}

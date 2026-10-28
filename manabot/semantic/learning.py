@@ -909,55 +909,20 @@ class BoundSemanticPack:
         ir_path: str | Path | None = None,
     ) -> "BoundSemanticPack":
         provenance = manifest.get("compiled_semantics")
-        default_schema, default_ir = DEFAULT_SCHEMA_PATH, DEFAULT_IR_PATH
+        default_ir = DEFAULT_IR_PATH
         if isinstance(provenance, Mapping):
-            match provenance.get("pack_key"):
-                case "tla-pool-v1":
-                    default_ir = (
-                        ROOT / "content/semantic/current/generated/pool.ir.json"
-                    )
-                case "tla-baseline-v1":
-                    default_ir = (
-                        ROOT / "content/semantic/current/generated/baseline.ir.json"
-                    )
-                case "elemental-combat-v1":
-                    default_schema = (
-                        ROOT / "content/semantic/current/learning_schema.json"
-                    )
-                    default_ir = (
-                        ROOT / "content/semantic/current/generated/elemental.ir.json"
-                    )
-                case "elemental-world-v2":
-                    default_schema = (
-                        ROOT / "content/semantic/current/learning_schema.json"
-                    )
-                    default_ir = (
-                        ROOT
-                        / "content/semantic/current/generated/optional_payments.ir.json"
-                    )
-                case "elemental-world-v1":
-                    default_schema = (
-                        ROOT / "content/semantic/current/learning_schema.json"
-                    )
-                    default_ir = (
-                        ROOT
-                        / "content/semantic/current/generated/elemental_world.ir.json"
-                    )
-                case "elemental-temur-v1":
-                    default_schema = (
-                        ROOT / "content/semantic/current/learning_schema.json"
-                    )
-                    default_ir = (
-                        ROOT / "content/semantic/current/generated/temur.ir.json"
-                    )
-                case "elemental-sacrifice-v1":
-                    default_schema = (
-                        ROOT / "content/semantic/current/learning_schema.json"
-                    )
-                    default_ir = (
-                        ROOT / "content/semantic/current/generated/sacrifice.ir.json"
-                    )
-        schema = LearningSchema.load(schema_path or default_schema)
+            filename = {
+                "tla-pool-v1": "pool.ir.json",
+                "tla-baseline-v1": "baseline.ir.json",
+                "elemental-combat-v1": "elemental.ir.json",
+                "elemental-world-v2": "optional_payments.ir.json",
+                "elemental-world-v1": "elemental_world.ir.json",
+                "elemental-temur-v1": "temur.ir.json",
+                "elemental-sacrifice-v1": "sacrifice.ir.json",
+            }.get(provenance.get("pack_key"))
+            if filename is not None:
+                default_ir = DEFAULT_IR_PATH.parent / filename
+        schema = LearningSchema.load(schema_path or DEFAULT_SCHEMA_PATH)
         ir = SemanticIr.load(schema, ir_path or default_ir)
         if isinstance(provenance, Mapping) and (
             provenance.get("ir_hash") != ir.ir_hash

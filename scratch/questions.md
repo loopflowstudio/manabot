@@ -1,19 +1,23 @@
-# MTG-207 assumptions — 2026-10-27
+# TLA content decisions — 2026-10-28
 
-Inherited MTG-206 notes are at `4ab16a140:scratch/questions.md`.
+Jack Heart accepted seven TLA PRs plus separate decklist Task f871a8. This Task
+implements only the first content cut. The earlier MTG-207 assumptions are
+retained at `c5d406e3:scratch/questions.md` and do not direct this Task.
 
-- **Design chosen without review.** The Task left design open; headless, the
-  simplest exact path was taken: batch `estimate` by deal count and keep the
-  page one self-contained file computing every combination. Per-pair payloads
-  were not adopted: without a server, every combination must still be
-  computed when the page is written, so splitting saves browser memory, not
-  render time.
-- **254 MB page.** The whole-experiment JSON is 254.2 MB at base and after
-  (unchanged bytes of values). Whether a browser should load that is a page
-  design question left for review; values were not rounded, since the
-  acceptance compares them exactly.
-- **etude-sdk 0.2.11** (etude #72) merged 2026-10-28 02:09Z but was not on
-  PyPI or GitHub releases at 03:24Z (still 0.2.10 at 03:40Z), so the pin stays 0.2.10 (confirmed by Jack Heart's operator steer 2026-10-28). Projection with
-  Etude main's `estimate` swapped in is recorded in `scratch/mtg207.md`.
-- **Machine load.** Load average 90–240 on 16 cores throughout; wall times
-  are inflated several-fold, CPU less so.
+- Current rules come from `content/semantic/current/definitions.json`; setup
+  projections select its transitive closure. Frozen v1/w11 documents remain
+  evidence. Current presets retain their names and deck/sideboard counts while
+  receiving new compiled hashes and world w16 (w15 reserved by MTG-177).
+- Pool eligibility is distinct from existing authored setup availability. A
+  preserved program is not a whole-card fidelity certificate. Only explicitly
+  qualified definitions can enter the decklist pool; unsupported inventory is
+  reported separately. Task f871a8 owns admission and parsing.
+- The final research handoff is preserved under `reference/full-tla-final/`.
+  Ten raw source hashes and 72 repository source hashes match the pins/base.
+  Its allocation supersedes the early sketch; five demonstrated prerequisites
+  are reassigned in durable `docs/rules/tla/allocation.jsonl`.
+- `.lf/wave/engine/{GOAL,MEMORY}.md` are absent. The accepted Task handoff supplies
+  direction; no Wave memory is modified.
+- MTG-177 still reports only merged PR354 as delivered. Its later resolution
+  repair is not integrated or presumed accepted. Independent content work
+  proceeds; final fidelity claims must name that remaining dependency.

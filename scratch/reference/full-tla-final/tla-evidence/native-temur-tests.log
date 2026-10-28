@@ -1,0 +1,41 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running tests/rules_tests.rs (managym/target/debug/deps/rules_tests-07e004f6799edcb6)
+
+running 34 tests
+test rules::temur_cards::a_mana_tap_can_precede_a_distinct_sacrifice_cost ... ok
+test rules::temur_cards::an_announced_tap_cannot_be_used_to_fund_itself ... ok
+test rules::temur_cards::audit_prism_treasure_empty_pool_activation ... ok
+test rules::temur_cards::a_committed_nonlesson_cost_excludes_herbalists_restricted_activation ... ok
+test rules::temur_cards::committed_optional_payment_resumes_after_two_nested_mana_decisions ... ok
+test rules::temur_cards::filtering_cannot_launder_restricted_mana_from_a_mixed_pool ... ok
+test rules::temur_cards::filters_require_a_real_seed_and_do_not_reuse_a_reserved_source ... ok
+test rules::temur_cards::flashback_is_exiled_when_countered_after_iroh_leaves ... ok
+test rules::temur_cards::guide_grants_tap_mana_with_sickness_and_removes_it_on_departure ... ok
+test rules::temur_cards::committed_optional_payment_resumes_after_granted_chosen_color_mana ... ok
+test rules::temur_cards::iroh_casts_lessons_for_one_and_exiles_on_resolution_or_bounce ... ok
+test rules::temur_cards::iroh_preserves_sorcery_timing_and_nonlesson_printed_cost ... ok
+test rules::temur_cards::herbalist_restriction_survives_color_selection_and_cannot_pay_abilities ... ok
+test rules::temur_cards::nested_mana_nonmana_life_cost_is_reserved_and_paid_once ... ok
+test rules::temur_cards::optional_decline_retains_mana_activation_costs_and_chosen_output ... ok
+test rules::temur_cards::nested_mana_every_offer_completes_replays_and_rolls_back ... ok
+test rules::temur_cards::optional_lesson_does_not_offer_a_tap_without_a_complete_payment ... ok
+test rules::temur_cards::optional_lesson_all_mana_mixed_and_all_taps_keep_the_same_continuation ... ok
+test rules::temur_cards::priority_prism_activation_can_use_a_treasure_for_its_upfront_cost ... ok
+test rules::temur_cards::prism_consumes_generic_before_adding_chosen_color ... ok
+test rules::temur_cards::optional_lesson_without_resources_only_declines_then_discards_one_drawn_card ... ok
+test rules::temur_cards::prism_payment_preserves_required_blue_already_in_the_pool ... ok
+test rules::temur_cards::prism_payment_preserves_the_spells_required_green_mana ... ok
+test rules::temur_cards::prism_pool_alternatives_keep_restrictions_and_expiring_mana_classes ... ok
+test rules::temur_cards::prism_upfront_payment_can_preserve_mana_already_in_the_pool ... ok
+test rules::temur_cards::prism_upfront_payment_preserves_professors_second_green ... ok
+test rules::temur_cards::prism_upfront_payment_search_preserves_a_required_pooled_white ... ok
+test rules::temur_cards::ran_and_shaw_copy_is_nonlegendary_uncast_and_has_printed_abilities ... ok
+test rules::temur_cards::prism_payment_offers_execute_and_undo_without_mutating_sibling_forks ... ok
+test rules::temur_cards::selected_sacrifice_cannot_also_fund_the_announced_spell ... ok
+test rules::temur_cards::waterbend_and_mana_taps_have_distinct_bonus_accounting ... ok
+test rules::temur_cards::waterbend_cannot_partially_pay_then_discard ... ok
+test rules::temur_cards::ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution ... ok
+test rules::temur_cards::waterbend_lesson_draws_before_optional_payment_and_taps_without_mana ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 282 filtered out; finished in 2.06s
+

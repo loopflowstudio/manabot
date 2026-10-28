@@ -18,6 +18,7 @@ references must resolve before compilation succeeds.
 world/content/compiled identity and `eligible` or `unsupported` status with a
 reason. `tla-pool-v1` is the content pool; existing authored pack keys expose their
 own projections. Rust consumers use `semantic::content_pool` and `pool_content`.
+Policy catalogs bind directly to these descriptors without creating a game.
 Decklist Task **f871a8** owns construction policy, native `admit_deck`, input
 parsing and consumer entry points. Merely appearing in an authored setup does
 not qualify a card for arbitrary submitted combinations.
@@ -28,6 +29,8 @@ its qualification is explicitly reviewed. This is a guard against stale evidence
 not a proof that tests or generated definitions implement every rule. Tokens
 cannot become deck entries. Unimplemented cards and preserved but unqualified
 programs remain explicitly unsupported by the shared pool descriptor.
+Generated eligibility retains the inventory once and qualified keys per IR hash;
+the runtime derives pack membership and definition identity from that checked IR.
 
 This cut qualifies **31 cards**: the five basic lands, migrated Avatar Enthusiasts
 and Glider Kids, and these 24 additions:

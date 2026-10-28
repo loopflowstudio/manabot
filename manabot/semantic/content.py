@@ -64,14 +64,15 @@ class ContentSource:
 
     def project(self, preset: str) -> tuple[dict[str, Any], dict[str, Any]]:
         if preset in {"pool", "tla"}:
-            roots = {
-                key
-                for key, row in self.definitions.items()
-                if not row["characteristics"].get("token")
-                and not key.startswith("research.")
-            }
             if preset == "tla":
                 roots = self.native_roots
+            else:
+                roots = {
+                    key
+                    for key, row in self.definitions.items()
+                    if not row["characteristics"].get("token")
+                    and not key.startswith("research.")
+                }
             source = {
                 "schema_version": 1,
                 "pack_key": f"tla-{preset}-v1",
@@ -111,11 +112,11 @@ def generate(*, check: bool = False, root: Path = CONTENT_ROOT) -> None:
     inventory = json.loads((root / "inventory.json").read_text())
     qualifications = json.loads((root / "qualifications.json").read_text())
     for key, qualification in qualifications.items():
-        definition = catalog.definitions.get(key)
         digest = hashlib.sha256(
             canonical_json(catalog.closure({key})).encode()
         ).hexdigest()
-        if not definition or digest != qualification["closure_hash"]:
+        definition = catalog.definitions[key]
+        if digest != qualification["closure_hash"]:
             raise SemanticCompileError(
                 f"stale qualification for {key}: review changed clauses"
             )
@@ -133,32 +134,25 @@ def generate(*, check: bool = False, root: Path = CONTENT_ROOT) -> None:
             raise SemanticCompileError(
                 f"qualification for {key} has no independent witnesses"
             )
-    eligibility: dict[str, dict[str, Any]] = {}
+    # IR already owns names, keys and presence in each projection. Retain only
+    # qualification decisions here, bound to the exact programs they reviewed.
+    packs: dict[str, dict[str, Any]] = {}
     for preset in [*catalog.setups, "pool", "tla"]:
         ir, coverage = catalog.project(preset)
         write_or_check(root / "generated" / f"{preset}.ir.json", ir, check=check)
         write_or_check(
             root / "generated" / f"{preset}.coverage.json", coverage, check=check
         )
-        definitions = {d["content_pack_binding"]["value"]: d for d in ir["definitions"]}
-        rows = []
-        for name in sorted(set(definitions) | {r["registry_name"] for r in inventory}):
-            definition = definitions.get(name)
-            key = definition["semantic_key"] if definition else None
-            eligible = key in qualifications
-            rows.append(
-                {
-                    "registry_name": name,
-                    "semantic_key": key,
-                    "eligibility": "eligible" if eligible else "unsupported",
-                    "reason": None
-                    if eligible
-                    else (
-                        "Not implemented in this content pack"
-                        if definition is None
-                        else "Preserved authored behavior; complete independent qualification pending"
-                    ),
-                }
-            )
-        eligibility[ir["pack_key"]] = {"ir_hash": ir["ir_hash"], "definitions": rows}
+        packs[ir["pack_key"]] = {
+            "ir_hash": ir["ir_hash"],
+            "eligible": sorted(
+                d["semantic_key"]
+                for d in ir["definitions"]
+                if d["semantic_key"] in qualifications
+            ),
+        }
+    eligibility = {
+        "inventory": sorted({row["registry_name"] for row in inventory}),
+        "packs": packs,
+    }
     write_or_check(root / "generated" / "eligibility.json", eligibility, check=check)
