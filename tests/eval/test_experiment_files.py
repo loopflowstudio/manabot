@@ -36,7 +36,7 @@ EXPERIMENTS = ROOT / "experiments"
 
 def test_etude_finds_each_current_experiment_and_nothing_else() -> None:
     found = {path.stem for path in experiment_files(EXPERIMENTS)}
-    assert found == {"elemental", "seat_comparison", "two_seat"}
+    assert found == {"elemental", "mtg183-elemental-eval", "seat_comparison", "two_seat"}
 
 
 def test_a_tracked_self_play_run_draws_every_named_metric(tmp_path: Path) -> None:
@@ -102,11 +102,11 @@ def _finished_run(tmp_path: Path, updates: range) -> TrainingRun:
         saved.append(
             Checkpoint(
                 run="seed-1",
+                line="seed-1",
                 experiment="elemental",
                 ordinal=ordinal,
                 artifact=ArtifactRef(uri=path.as_uri(), sha256="0" * 64, size_bytes=1),
                 clocks={"updates": float(update)},
-                line="seed-1",
             )
         )
     return TrainingRun(

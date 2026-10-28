@@ -214,17 +214,23 @@ def capture_verified_game(trace: GameTrace) -> GameEvidence:
     )
 
 
-def retain_evidence(directory: Path, evidence: GameEvidence) -> EvidenceRef:
-    """Write a game's evidence once, named by its content.
+def evidence_key(digest: str) -> str:
+    """Where `retain_evidence` writes the evidence whose bytes have SHA256 `digest`."""
+    return f"evidence/{digest}.json.gz"
 
-    It lives under `artifacts/`, which Etude delivery sends once and never
-    re-reads, so a run with thousands of games costs one upload per game.
+
+def retain_evidence(directory: Path, evidence: GameEvidence) -> EvidenceRef:
+    """Write a game's evidence once under `directory`, named by its content.
+
+    This hands the replay worker's evidence to the evaluation that played the
+    game; that evaluation returns the bytes to Etude as a blob of its match
+    (`manabot.eval.card_evaluation`), and the file is scratch.
     """
     body = gzip.compress(
         canonical_json(evidence.model_dump(mode="json", by_alias=True)), mtime=0
     )
     digest = sha256(body).hexdigest()
-    key = f"artifacts/evidence/{digest}.json.gz"
+    key = evidence_key(digest)
     store = DirectoryStorage(directory)
     if (directory / key).exists():
         if store.get(key) != body:

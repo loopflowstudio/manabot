@@ -1,29 +1,30 @@
 """A self-contained HTML card data page in the layout of 17Lands' Card Data.
 
 `write_page` computes `card_data` for the base selection and for every
-combination of subject, opponent, position, deck and opponent deck that has games, then
-embeds them, so the page's filters switch between precomputed selections and no
-metric is recomputed in the browser. Python is the only implementation of the
-statistics.
+combination of subject, opponent, position, deck and opponent deck that has
+retained games, including exclusions, in one pass over the experiment's card
+rollups (`card_variants`). It embeds the results so the page's filters switch
+between precomputed selections. Python is the only implementation of the statistics.
 """
 
 from __future__ import annotations
 
 from datetime import datetime, timezone
 from html import escape
-from itertools import product
 import json
 from pathlib import Path
 
 import duckdb
 
-from manabot.eval.card_query import CardData, CardSelection, card_data, selected_games
+from manabot.eval.card_metrics import METRIC_VERSION
+from manabot.eval.card_query import (
+    DIMENSIONS,
+    CardData,
+    CardSelection,
+    card_variants,
+)
 
 ALL = ""
-
-
-def _key(*values: str) -> str:
-    return "|".join(values)
 
 
 def _variant(data: CardData) -> dict[str, object]:
@@ -59,52 +60,37 @@ def _variant(data: CardData) -> dict[str, object]:
 def page_data(
     db: duckdb.DuckDBPyConnection, selection: CardSelection
 ) -> dict[str, object]:
-    """Every non-empty filter combination of `selection`, keyed for the page.
+    """Every filter combination with retained games, keyed for the page.
 
     Subjects and opponents are offered by player name, so one player whose code
     identity changed between runs is still one choice.
     """
-    base = card_data(db, selection)
-    sql, parameters = selected_games(db, selection)
-    names = dict(db.execute("select player, name from players").fetchall())
-    present = {
-        (names[subject], names[opponent], "play" if on_play else "draw", deck, against)
-        for subject, opponent, on_play, deck, against in db.execute(
-            "select distinct subject, opponent, on_play, deck, opponent_deck"
-            f" from ({sql}) where eligible",
-            parameters,
-        ).fetchall()
+
+    def label(value: str | bool | None) -> str:
+        if value is None:
+            return ALL
+        if isinstance(value, bool):
+            return "play" if value else "draw"
+        return value
+
+    variants = {
+        tuple(label(value) for value in variant): data
+        for variant, data in card_variants(db, selection, DIMENSIONS).items()
     }
-    combos = {
-        tuple(value if use else ALL for value, use in zip(row, mask, strict=True))
-        for row in present
-        for mask in product((False, True), repeat=5)
-    }
-    variants: dict[str, dict[str, object]] = {}
-    for subject, opponent, position, deck, opponent_deck in sorted(combos):
-        narrowed = selection.model_copy(
-            update={
-                "subjects": (subject,) if subject else selection.subjects,
-                "opponents": (opponent,) if opponent else selection.opponents,
-                "on_play": None if not position else position == "play",
-                "deck": deck or selection.deck,
-                "opponent_deck": opponent_deck or selection.opponent_deck,
-            }
-        )
-        data = base if narrowed == selection else card_data(db, narrowed)
-        variants[_key(subject, opponent, position, deck, opponent_deck)] = _variant(
-            data
-        )
+    present = [variant for variant in variants if ALL not in variant]
     return {
         "experiment": selection.experiment,
-        "runs": base.runs,
+        "runs": variants[(ALL,) * len(DIMENSIONS)].runs if variants else (),
         "subjects": sorted({row[0] for row in present}),
         "opponents": sorted({row[1] for row in present}),
         "positions": sorted({row[2] for row in present}),
         "decks": sorted({row[3] for row in present}),
         "opponent_decks": sorted({row[4] for row in present}),
-        "metric_version": base.metric_version,
-        "variants": variants,
+        "metric_version": METRIC_VERSION,
+        "variants": {
+            "|".join(variant): _variant(data)
+            for variant, data in sorted(variants.items())
+        },
     }
 
 
@@ -273,6 +259,15 @@ select { max-width: 100%; }
     const delta = Math.max(-1, Math.min(1, (value - mean) / 0.1));
     return `background: rgb(${delta >= 0 ? "var(--good)" : "var(--bad)"} / ${(Math.abs(delta) * 0.45).toFixed(2)})`;
   };
+  function emptyRows(message) {
+    const cell = document.createElement("td");
+    cell.className = "empty";
+    cell.colSpan = columns.length;
+    cell.textContent = message;
+    const row = document.createElement("tr");
+    row.append(cell);
+    $("rows").replaceChildren(row);
+  }
   function render() {
     const key = filters.map((id) => $(id).value).join("|");
     const variant = data.variants[key];
@@ -284,7 +279,7 @@ select { max-width: 100%; }
     });
     if (!variant) {
       summary.textContent = "No games match these filters.";
-      rows.replaceChildren(Object.assign(document.createElement("tr"), { innerHTML: `<td class="empty" colspan="${columns.length}">No games match these filters.</td>` }));
+      emptyRows(summary.textContent);
       return;
     }
     const subjects = $("subject").value ? [$("subject").value] : data.subjects;
@@ -292,15 +287,23 @@ select { max-width: 100%; }
     summary.innerHTML = [
       ["Subjects", subjects.length > 3 ? `${subjects.length} players` : subjects.join(", ") || "—"],
       ["Opponents", $("opponent").value || "all"],
-      ["Games", variant.games.toLocaleString()],
+      ["Eligible player-games", variant.games.toLocaleString()],
       ["Deals", variant.deals.toLocaleString()],
       ["Win rate", pct(variant.win_rate)],
       ["Runs", variant.runs],
       ["Excluded", excluded + (variant.failed_matches ? `, ${variant.failed_matches} failed matches` : "")],
     ].map(([k, v]) => `<span>${k} <strong>${String(v).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c])}</strong></span>`).join("");
+    if (variant.games === 0) {
+      emptyRows("No eligible games. Card rates are unavailable for this selection.");
+      return;
+    }
     const query = $("search").value.trim().toLowerCase();
     const minimum = Number($("minimum").value) || 0;
     const list = variant.cards.filter((c) => c[0].toLowerCase().includes(query) && c[7] >= minimum);
+    if (!list.length) {
+      emptyRows("No cards match.");
+      return;
+    }
     list.sort((a, b) => {
       const x = a[sortIndex], y = b[sortIndex];
       if (x == null && y == null) return 0;
@@ -325,7 +328,6 @@ select { max-width: 100%; }
       });
       return tr;
     }));
-    if (!list.length) rows.replaceChildren(Object.assign(document.createElement("tr"), { innerHTML: `<td class="empty" colspan="${columns.length}">No cards match.</td>` }));
   }
   // Filters live in the URL hash, so a link opens the same view.
   const fromHash = () => {

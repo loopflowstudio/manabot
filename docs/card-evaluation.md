@@ -30,24 +30,31 @@ between selections computed in Python. Narrow any of them from the command line:
 - `--position play|draw`, `--deck`, `--opponent-deck`.
 - `--run` and `--commit` (a prefix) narrow to some runs or source commits.
 
+Page filters include retained games even when none qualify for card rates.
+Such a selection shows zero eligible player-games, unavailable rates and its
+exclusions by outcome. “No games match” means no retained games match the
+selection; “No cards match” means the card search or minimum hides the card rows.
+
 `--source` is a directory or bucket of eval runs; by default, where runs are
 written on this computer. The database lives under `ETUDE_HOME/statsdb` and
-reads only files delivered since it was last opened; `--rebuild` reads everything
-again. Another experiment's games never appear.
+reads only blocks delivered since it was last opened; `--rebuild` reads everything
+again. Another experiment's games never appear. Queries read only the card
+rollups (below), never card rows, so the page's every filter combination is one
+pass over a subject/opponent pair's per-deal totals.
 
 ## Card data from any evaluation
 
 An evaluation that calls `play_cell` itself, such as a checkpoint grid or a
-head-to-head, can deliver card data beside its own tables. Pass
-`card_evidence_dir` as the eval run's folder, then merge the card tables into
-what `play` returns:
+head-to-head, can deliver card data beside its own tables. Pass a scratch
+folder as `card_evidence_dir`, merge the card tables and evidence blobs into
+the `Result` that `play` returns, and declare the card rollups with the run:
 
 ```python
-rows, trace, _ = play_cell(..., card_evidence_dir=run_folder)
-return {
-    "games": my_rows(rows),
-    **trace_card_tables(run_folder, trace, (player_a.player_id, player_b.player_id)),
-}
+rows, trace, _ = play_cell(..., card_evidence_dir=scratch)
+cards = trace_card_tables(scratch, trace, (player_a.player_id, player_b.player_id))
+return Result(tables={"games": my_rows(rows), **cards.tables}, blobs=cards.blobs)
+...
+evaluate(..., rollups=CARD_ROLLUPS)  # manabot.eval.card_metrics
 ```
 
 The participants are the two registered players in Etude row order (the order
@@ -78,8 +85,10 @@ are associations between cards and wins, not causal card values.
 
 The GIH interval is Etude's deterministic 95% percentile bootstrap over whole
 **deal seeds** across every pooled run, keeping each deal's correlated legs and
-opponent pairings together. Games sharing a seed share shuffles. It is
-unavailable with fewer than two deals.
+opponent pairings together. Games sharing a seed share shuffles. Every card
+in one filter combination shares one draw of deal weights, so a card's interval
+does not change when other cards are added or removed. It is unavailable with
+fewer than two deals.
 
 ## Tables and admission
 
@@ -88,13 +97,21 @@ Each match delivers four author tables; Etude adds `run` and `match`.
 the play):
 
 - `card_plays`: one row per game and player, with deal, decks, position,
-  outcome, eligibility, win, the evidence path and digests, and the source
-  commit and dirty flag that produced it.
+  outcome, eligibility, win, the evidence blob's SHA256 and size, the trace and
+  replay digests, and the source commit and dirty flag that produced it.
 - `card_counts`: deck, opening, drawn and GIH copies per card in that game.
 - `cards`: names for card keys (native content digest plus definition ID).
 - `plays`: the shared outcome table every Etude evaluation report reads.
 
-Subjects and opponents are joins against Etude's `seats` and `players`, never
+Etude sums `CARD_ROLLUPS` (`manabot/eval/card_metrics.py`) as each match is
+stored and keeps them in the run's blocks: `card_deals` holds each card's
+GP/OH/GD/GIH/GNS opportunities and winning copies per deal, position, decks,
+source commit, player and opponent over eligible games; `game_deals` holds
+player-games and wins per deal and the same splits, with eligibility and
+outcome. Open the database with `card_db`, which also sums them once for runs
+stored without them. A changed rollup takes a new name.
+
+Subjects and opponents are the rollups' Etude `player`/`opponents` keys, named by `players`, never
 fields copied into card rows; `players.artifact` is a checkpoint's digest.
 Within an experiment, games pool across engine and manabot commits; the source
 commit is provenance and a filter, not part of the pooling key.
@@ -111,11 +128,12 @@ uv run --extra evaluation python -m manabot.eval.cards audit --experiment EXPERI
 
 `audit` re-reads every game's evidence, checks its bytes, its schedule binding
 and the runtime/content identity its eval run declared, and rebuilds its rows.
-`--replay` also replays each trace. Evidence lives in the eval run's folder at
-`artifacts/evidence/SHA256.json.gz` and travels with ordinary Etude delivery
-(`uv run etude sync`). Etude sends files under `artifacts/` once and never re-reads
-them, so delivery stays cheap with thousands of games. Earlier runs keep their
-evidence at `evidence/`; their rows name that path. Evidence contains
+`--replay` also replays each trace. Each game's evidence is a blob of its match
+(gzip JSON, named by SHA256), kept in the block's `blobs.zip` and delivered with
+it (`uv run etude sync`); `audit` and `export-log` read it with Etude's
+`read_blobs`, which verifies every digest. Runs written before blocks kept a
+file per game; `etude convert-eval RUN --source URI` turns those files into
+blobs without rewriting them, and only then can they be read. Evidence contains
 copy/incarnation identity, owner/controller, movement source/destination/cause,
 sequence and turn, original commands and hashes, and the replay receipt. These
 are private full-game artifacts, not viewer-safe public replay payloads.
@@ -159,6 +177,23 @@ after a parser improvement without rerunning the models. This proposal does not
 add an import command or claim equivalence with 17Lands' downstream service.
 
 ## Scale proof
+
+MTG-206 acceptance on 2026-10-27 used the original converted MTG-183
+u005950-versus-heuristic cohort: 5,000 eligible player-games, 5,000 deals and
+90 cards. Page generation took **16.01 s wall / 5.28 s CPU** for 363
+deck/position combinations (1,452 embedded filter keys). Every variant preserved
+the previous counts, rates and summary; bootstrap interval endpoints were
+excluded from that comparison. The complete CLI took 44.67 s wall; a separate
+measurement put database catch-up at 30.48 s wall. These are observed local
+timings, not a latency guarantee or a reproduction of the 1.5-second prototype.
+
+The real L4 smoke, `mtg206-cards-l4-verify` (Etude launcher run `b6fc065fb4e0`,
+source `325b64652`), cost approximately $0.03. Its delivered sealed block held
+96 games with evidence blobs and both rollups; `cards data --html` completed in
+1.2 s wall, and the replay audit checked **96/96 games with no problems**.
+The headless page-script proof covered filtering and exclusions, without visual
+approval. Detailed gate/demo records are retained in git at
+`bb3091113:scratch/mtg206.md` and `bb3091113:scratch/mtg206-demo.md`.
 
 The `Card evaluation scale proof` workflow runs `verify --games 1024` on CPU CI:
 bounded native games between two code players, card data for both, and an audit
