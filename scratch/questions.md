@@ -29,5 +29,5 @@
 - Line accounting measures integration-authored differences against both merge
   parents and w14 fixture inputs separately from inherited bytes. Report full
   new runtime-fixture line counts as well; do not hide any ceiling conflict.
-  The completed cut is about 1% above the approximate 10k guideline; retain the
+  Current churn and overage are recorded in `line-accounting.json`; retain the
   coherent world/fixture cut and disclose the overage rather than omit consumers.

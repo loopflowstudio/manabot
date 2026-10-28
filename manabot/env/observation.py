@@ -47,6 +47,8 @@ PERMANENT_DEFINITION_INDEX = 24
 RELATION_ROWS = 64
 LEGACY_RELATION_DIM = 32
 RELATION_DIM = 33
+# V4 appends eligibility; row validity keeps its v2/v3 position.
+RELATION_VALID_INDEX = 31
 
 
 # -----------------------------------------------------------------------------
@@ -59,7 +61,7 @@ class ObservationEncoder:
     later by the agent to mask out invalid slots in attention, action encoding, etc.
     """
 
-    def __init__(self, config: ObservationConfig):
+    def __init__(self, config: ObservationConfig) -> None:
         self.config = config
         self.relation_dim = (
             RELATION_DIM if config.policy_input_version >= 4 else LEGACY_RELATION_DIM
@@ -312,22 +314,26 @@ class ObservationEncoder:
             row[19:22] = (frame.lesson, frame.waterbend, frame.can_decline)
             row[30] = frame.resolutions_this_turn
             row[28] = frame.decision
-            row[31] = 1
+            row[RELATION_VALID_INDEX] = 1
             rows.append(row)
-            targets = [(2, target.reference, target.clause) for target in frame.targets]
-            if frame.context is not None:
-                targets.append((3, frame.context, 0))
-            if frame.sacrifice is not None:
-                targets.append((4, frame.sacrifice, 0))
-            for ordinal, (kind, target, clause) in enumerate(targets):
+            for ordinal, target in enumerate(frame.targets, 1):
                 target_row = row.copy()
-                target_row[0], target_row[22] = kind, clause + 1
-                target_row[29] = ordinal + 1 if kind == 2 else 1
-                if kind == 2 and self.config.policy_input_version >= 4:
-                    legal = frame.targets[ordinal].legal_at_resolution_start
+                target_row[0], target_row[22], target_row[29] = (
+                    2,
+                    target.clause + 1,
+                    ordinal,
+                )
+                if self.config.policy_input_version >= 4:
+                    legal = target.legal_at_resolution_start
                     target_row[32] = 0 if legal is None else (1 if legal else 2)
-                _reference(target_row, target)
+                _reference(target_row, target.reference)
                 rows.append(target_row)
+            for kind, reference in ((3, frame.context), (4, frame.sacrifice)):
+                if reference is not None:
+                    context_row = row.copy()
+                    context_row[0], context_row[22], context_row[29] = kind, 1, 1
+                    _reference(context_row, reference)
+                    rows.append(context_row)
             for pair in frame.hybrid:
                 hybrid = row.copy()
                 hybrid[0], hybrid[26], hybrid[27] = 5, pair[0] + 1, pair[1] + 1

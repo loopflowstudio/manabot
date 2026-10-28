@@ -102,7 +102,7 @@
       "reason": "Retained local analysis/provisioning helper; conservatively charged to draft tooling budget."
     }
   ],
-  "combined_draft_churn_lines": 10104,
+  "combined_draft_churn_lines": 10312,
   "report_inventory_evidence_files": [
     {
       "path": "docs/rules/audit-2026-10/README.md",
@@ -1010,5 +1010,52 @@
       "scratch/w15-*.json"
     ],
     "approximate_budget_difference": 104
+  },
+  "continuation_reduction_increment": {
+    "basis": "Working reduction against b634eea39. Source and documentation churn plus retired one-shot helper deletions charged; historical charges retained. Plan, accounting and check receipt excluded.",
+    "files": [
+      {
+        "path": "WORLDS.md",
+        "added": 0,
+        "deleted": 1
+      },
+      {
+        "path": "manabot/env/observation.py",
+        "added": 19,
+        "deleted": 13
+      },
+      {
+        "path": "manabot/model/actor_critic.py",
+        "added": 5,
+        "deleted": 5
+      },
+      {
+        "path": "manabot/model/continuation.py",
+        "added": 12,
+        "deleted": 15
+      },
+      {
+        "path": "scratch/install_resolution_native.py",
+        "added": 0,
+        "deleted": 30
+      },
+      {
+        "path": "scratch/refresh_w15.py",
+        "added": 0,
+        "deleted": 106
+      }
+    ],
+    "churn_lines": 206
+  },
+  "plan_reconciliation_increment": {
+    "basis": "2026-10-27 realign: correct the stale assumption-note budget statement; plan and accounting remain excluded report artifacts. All previous charges retained.",
+    "files": [
+      {
+        "path": "scratch/questions.md",
+        "added": 1,
+        "deleted": 1
+      }
+    ],
+    "churn_lines": 2
   }
 }

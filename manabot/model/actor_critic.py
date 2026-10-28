@@ -12,7 +12,7 @@ import torch.nn as nn
 
 # Local imports
 from manabot.env import ObservationSpace
-from manabot.env.observation import PERMANENT_DEFINITION_INDEX
+from manabot.env.observation import PERMANENT_DEFINITION_INDEX, RELATION_VALID_INDEX
 from manabot.infra import ModelConfig
 from manabot.infra.log import getLogger
 from manabot.model.compound import CompoundDecoder, CompoundOutput
@@ -427,7 +427,7 @@ class ActorCritic(nn.Module):
             rows = obs["relations"]
             present = (
                 (indexes.unsqueeze(-1) == rows[:, None, :, 1])
-                & (rows[:, None, :, 31] == 1)
+                & (rows[:, None, :, RELATION_VALID_INDEX] == 1)
             ).any(-1)
             if ((indexes != 0) & ~present).any():
                 raise ValueError("action continuation reference has no frame")
@@ -574,9 +574,9 @@ class ActorCritic(nn.Module):
             encoded_relations = self.continuation.encode_rows(
                 rows, objects, relation_definitions
             )
-            continuation = encoded_relations.sum(1) / rows[..., 31].sum(
-                1, keepdim=True
-            ).clamp_min(1)
+            continuation = encoded_relations.sum(1) / rows[
+                ..., RELATION_VALID_INDEX
+            ].sum(1, keepdim=True).clamp_min(1)
             frame_context = self.continuation.frame_context(rows, encoded_relations)
             shared_context = (
                 continuation
