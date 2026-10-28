@@ -1,5 +1,83 @@
 # PR D: decklist import and reproducible training collections
 
+## Accepted concept correction: checkpoints bind worlds, not training regimes
+
+Jack Heart clarified on 2026-10-28: checkpoints should bind to worlds, whose
+core contract is (1) fixed rules-engine behavior and (2) the card file. He further
+stated that models/checkpoints should not really know about their training regime.
+This supersedes the review's 3a/3b framing and its proposal to retain training
+collection provenance inside the checkpoint. There is no remaining product
+choice between a training-roster allowlist and a world-bound policy.
+
+### Ownership and experienced behavior
+
+- **World:** the versioned rules-engine contract and card file, including the
+  authoritative semantics needed to interpret observations and legal actions.
+  A matching name or tensor shape is insufficient; validate actual identities.
+- **Portable model/checkpoint:** weights, architecture/inference configuration
+  and a world binding. Observation/action encodings and output semantics needed
+  to interpret the model are inference contracts, not training-regime knowledge.
+  No training deck collection, source files, sampling policy or regime is needed
+  to save, load, inspect or execute the portable model.
+- **Training run:** the regime, admitted deck collection and source provenance,
+  sampling policy/curriculum, seeds, metrics and producer history. It references
+  the checkpoint artifact by verified identity; the checkpoint need not contain
+  or load the run. This preserves provenance without making the model own it.
+- **Recovery state:** optimizer, scheduler, collector/RNG and exact-population
+  state owned by the run. Exact-resume checks happen here and in run admission,
+  not in portable checkpoint compatibility.
+
+A model may play any deck admitted by its bound world, regardless of which decks
+were used in training. Deck construction/content admission remains shared native
+domain behavior. Unsupported cards, wrong rules/content and incompatible model
+I/O still reject; unseen-but-admitted combinations do not. The distinction is
+compatibility, not a claim about strength. Uniform distinct-deck sampling remains
+the initial run policy; curriculum is deferred and never becomes model metadata.
+
+### Accepted usage copy (target behavior; implementation still differs)
+
+Prepare an admitted deck collection and select it in a training run. The run
+records its exact collection, sampling policy and history. Export or load the
+model with its world; the model does not require the training files or regime.
+Use any decklists admitted to that same world for play or evaluation, recording
+actual evaluation inputs in the evaluation record. Resume a training run using
+its recovery state and original run contract. A changed training population is
+an explicitly recorded change of experiment/transfer, never a silent exact
+resume. Cross-corpus training transfer and adaptive curriculum are still deferred.
+
+### Implementation consequence and proof
+
+At c76c814ae, `checkpoint_world` embeds both `setups` from the training collection
+and `deck_collection`, and `validate_agent_setup` uses those setups as an allowlist.
+Checkpoint/catalog code imports `DeckCollection` and re-admits its source records.
+That is the wrong ownership for the accepted model. Merely weakening the roster
+check while leaving regime/corpus dependencies in the model is insufficient.
+
+Remove this coupling from the current portable model path. Derive world binding
+from a world/content descriptor, not a representative training match. Move corpus
+provenance and producer/regime metadata to the owning run records, retaining
+artifact links and verification. Review current exporter `extra`/`bc` metadata,
+producer admission and catalog summaries for the same boundary; the run should
+supply training facts where a consumer needs them. Keep model architecture and
+observation/action/output compatibility strict. Do not add a parallel policy
+runtime, duplicate rules registry or speculative curriculum framework.
+
+Frozen checkpoints, experiments and old schema semantics remain unchanged.
+Version new portable artifacts explicitly where needed; keep historical readers
+separate from current authoring rather than silently broadening old bindings.
+Existing world version reservations/content ownership stay with their Tasks.
+
+Proof: export and load a current model without a training collection, recipe or
+source files available; inspect it without re-admitting training data; execute an
+unseen but native-admitted same-world deck; reject unsupported definitions and
+changed rules/card-file/input identities; preserve exact run recovery rejection
+for changed corpus/sampler/state; verify the run still links the checkpoint and
+its training provenance. No weight updates, paid compute or data download needed.
+
+The review updates the design and screen only. Implementation remains pending;
+this correction is not a claim that the existing checkpoint path already has
+this separation. Working screen: `scratch/concept-review.html`.
+
 ## Accepted direction — Jack Heart, 2026-10-28
 
 Implement, test, refine and publish one cohesive PR for review; stop before merge.
@@ -69,7 +147,8 @@ Academy's editable two-file validation/start flow. Retained imports bind exact
 pool/content identity and reject source/setup tampering. Simulation supports
 random/default players; Academy supports built-in opponents. Imported setup
 checkpoint opponents remain rejected until consumer compatibility admission
-exists. Collection-trained policy exports separately bind all member decks.
+exists. Current collection-trained exports bind all member decks; this is superseded by
+the accepted world-only checkpoint design above and needs correction.
 
 Training configuration embeds a loaded, versioned collection rather than keeping
 a mutable file pointer. Set `deck_collection: path/to/manifest.json` and
@@ -80,7 +159,9 @@ fixed curriculum field. See docs/decklist-import.md for preparation and usage.
 Collection digest binds normalized membership, all retained source records,
 content/world, schema and sampling policy. Native roots choose actual decks;
 collector counters, snapshots, exact/current-game recovery, checkpoint/catalog
-admission and failure records retain those identities. Failure capture journals
+admission and failure records currently retain those identities. Keep them in run
+and recovery records; remove the collection dependency from portable model
+checkpoint/catalog admission as directed above. Failure capture journals
 isolated steps and synchronizes replacement roots through CapturedVector.
 
 Acceptance: three or more eligible non-preset decks; changing pairs over resets;
@@ -90,8 +171,8 @@ actual sampled IDs in failure/capture records; one compatible policy vocabulary.
 Use bounded fixtures and the actual collector reset path, without weight updates.
 
 Gate/demo/delivery own full affected suites, acceptance review, final upstream
-content revalidation and publication. No remaining training implementation gap is
-known. Existing focused evidence: native admission/catalog tests, 50 Python
+content revalidation and publication. The world-only checkpoint correction above
+is now required implementation work. Existing focused evidence: native admission/catalog tests, 50 Python
 import/startup/identity/reconnect/fork/stale/source checks, frontend check/build
 and a real browser import/reconnect proof passed. The documented fixed-seed CLI
 proof stopped after four decisions, deliberately unfinished, with setup identity

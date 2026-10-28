@@ -1,69 +1,45 @@
 <!doctype html>
 <html lang="en">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Training from deck collections · Concept review</title>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Checkpoints bind worlds · Accepted concept</title>
 <style>
-:root{color-scheme:light dark;--paper:#faf8f3;--ink:#282b26;--muted:#62665e;--line:#d5d6cc;--wash:#efeee7;--accent:#346245;--warn:#985025} @media(prefers-color-scheme:dark){:root{--paper:#1b201d;--ink:#f0f0e6;--muted:#bdc2b7;--line:#495147;--wash:#272e28;--accent:#a7d3ab;--warn:#f3b48a}} *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.6 system-ui,sans-serif}main{max-width:810px;margin:auto;padding:38px 24px 64px}h1{font:500 clamp(30px,5vw,44px)/1.15 Georgia,serif;margin:12px 0 22px;letter-spacing:-.025em}h2{font-size:23px;margin:34px 0 12px}h3{font-size:18px;margin:10px 0}p{margin:10px 0 16px}.meta,small,.muted{color:var(--muted)}.meta{font-size:13px}code{font:.85em ui-monospace,monospace;overflow-wrap:anywhere}pre{background:var(--wash);padding:18px;white-space:pre-wrap;font:15px/1.65 ui-monospace,monospace}a{color:var(--accent)}.lead{font-size:21px}.callout{border-left:3px solid var(--accent);padding-left:18px}.step{padding:16px 0;border-bottom:1px solid var(--line)}.arrow{color:var(--muted)}table{width:100%;border-collapse:collapse;font-size:15px}th,td{text-align:left;vertical-align:top;padding:10px 8px;border-bottom:1px solid var(--line)}th:first-child,td:first-child{padding-left:0}footer{margin-top:38px;border-top:1px solid var(--line);padding-top:18px}ul{padding-left:23px} @media(max-width:500px){main{padding:24px 17px}table{font-size:13px}th,td{padding:8px 5px}}
-</style>
-</head>
+:root{color-scheme:light dark;--paper:#faf8f3;--ink:#282b26;--muted:#62665e;--line:#d5d6cc;--wash:#eeeee6;--accent:#346245}@media(prefers-color-scheme:dark){:root{--paper:#1b201d;--ink:#f0f0e6;--muted:#bdc2b7;--line:#495147;--wash:#272e28;--accent:#a7d3ab}}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.55 system-ui,sans-serif}main{max-width:790px;margin:auto;padding:36px 24px 60px}h1{font:500 clamp(31px,5vw,45px)/1.12 Georgia,serif;letter-spacing:-.025em;margin:14px 0 20px}h2{font-size:23px;margin:32px 0 12px}p{margin:10px 0 16px}.meta,.muted,small{color:var(--muted)}.meta{font-size:13px}.lead{font-size:21px}.contract{border-left:3px solid var(--accent);padding-left:18px}code{font:.85em ui-monospace,monospace;overflow-wrap:anywhere}pre{font:15px/1.65 ui-monospace,monospace;white-space:pre-wrap;background:var(--wash);padding:18px}table{width:100%;border-collapse:collapse;font-size:15px}th,td{text-align:left;vertical-align:top;padding:11px 8px;border-bottom:1px solid var(--line)}th:first-child,td:first-child{padding-left:0}footer{border-top:1px solid var(--line);margin-top:34px;padding-top:18px}@media(max-width:500px){main{padding:25px 17px}table{font-size:13px}th,td{padding:9px 5px}}
+</style></head>
 <body><main>
-<header>
-<p class="meta">f871a8 · Decklist import · Concept review · October 28, 2026</p>
-<h1>A collection of decks to train against</h1>
-<p class="lead">Choose the deck population once. Training draws a fresh matchup at each game start.</p>
-<p>Accepted priority: training first, Academy second. Start with complete decks from 17Lands after all TLA is supported. The plumbing can be proved now using eligible fixture decks.</p>
-<p class="meta">Evidence: <code>training/rollout/matchups.py</code>, <code>training/rollout/collection.py</code>, <code>training/regime.py</code>, <code>training/execution.py</code>, <code>managym/src/agent/vector_env.rs</code>, <code>manabot/decklist.py</code>, and the Task’s accepted direction.</p>
-</header>
-<section>
-<h2>The actual gap</h2>
-<p class="callout">File import already supplies one admitted pair. Training already has per-game native resampling. But its roster admission is hard-coded to ten exact Elemental decks. Joining those two capabilities is the important work.</p>
-<table><thead><tr><th>Current implementation</th><th>Proposed next outcome</th></tr></thead><tbody>
-<tr><td>Two files → one fixed match</td><td>A local deck collection → many reproducible matchups</td></tr>
-<tr><td><code>elemental-uniform</code> requires the exact ten authored setups</td><td>Explicit sampling from any collection admitted to one content pool</td></tr>
-<tr><td>Regime validation pins Elemental policy input</td><td>One compatible vocabulary for the whole selected pool, fixed throughout the run</td></tr>
+<header><p class="meta">f871a8 · Concept review · October 28, 2026 · Accepted clarification from Jack Heart</p>
+<h1>Checkpoints bind worlds.</h1>
+<p class="lead">The world fixes the rules-engine behavior and card file. The training run owns how the model was trained.</p>
+<p class="contract">A model can play any deck admitted by its world. It does not need its training decklists, sampling policy or regime to load or execute.</p>
+<p class="meta">Built from your clarification, <code>model/world.py</code>, <code>model/checkpoint.py</code>, <code>model/catalog.py</code>, <code>deck_collection.py</code>, training-state admission and the working design. This is the accepted target; current implementation still needs correction.</p></header>
+<section><h2>The ownership split</h2>
+<pre>Training run ── produces / references ──▶ Checkpoint
+                                              │
+                                           binds to
+                                              ▼
+                                            World</pre>
+<table><thead><tr><th>Concept</th><th>Owns</th></tr></thead><tbody>
+<tr><td><strong>World</strong></td><td>Versioned rules-engine behavior and card file, including the semantics of observations and legal actions.</td></tr>
+<tr><td><strong>Checkpoint</strong></td><td>Weights, architecture/inference configuration and world identity. The encodings and output meanings needed to interpret the model.</td></tr>
+<tr><td><strong>Training run</strong></td><td>Regime, deck collection, source provenance, sampling/curriculum, seeds, metrics and producer history. A verified reference to the checkpoint artifact.</td></tr>
+<tr><td><strong>Recovery state</strong></td><td>Run-owned optimizer, scheduler, collector and RNG state; exact population and continuation contract.</td></tr>
 </tbody></table>
-</section>
-<section>
-<h2>What using it should feel like</h2>
-<div class="step"><h3>1. Prepare the decks</h3><p>Import complete main/sideboard lists into a local versioned collection. Retain each source record and give every normalized deck a stable identity. Report unsupported cards and line errors before the collection can be used.</p><small>Later, a 17Lands adapter supplies these records. No runtime network lookup or replacement of unsupported cards.</small></div>
-<div class="step"><h3>2. Point training at the collection</h3><p>Choose the collection, distribution and seed in the ordinary training configuration. This example is proposed syntax, not an available command.</p><pre>deck_corpus: artifacts/tla-decks/manifest.json
-matchup_sampling: uniform-distinct
-seed: 17402</pre><small>Working baseline: two different deck identities, unbiased play/draw, and a versioned sampling rule. Mirror handling is explicit.</small></div>
-<div class="step"><h3>3. Start each game from a sampled pair</h3><pre>game root 0 → deck A on play · deck C on draw
-game root 1 → deck B on play · deck A on draw
-game root 2 → deck C on play · deck B on draw</pre><small>Illustration only. Actual pair and seat assignment comes from native reset identity. No N² schedule is needed to sample two decks.</small></div>
-<div class="step"><h3>4. Resume the same population and sequence</h3><p>Record corpus digest, deck IDs, sampling version, world/content identity and game seed. Recovery reconstructs the same matchup. A changed collection or incompatible policy input is an explicit mismatch.</p></div>
-</section>
-<section>
-<h2>Actions → concepts → APIs</h2>
-<table><thead><tr><th>Action</th><th>Concept</th><th>Owner / change</th></tr></thead><tbody>
-<tr><td>Resolve a deck</td><td>Qualified content pool</td><td>Existing <code>content_pool</code> and native admission; content Task 892c47 remains the authority.</td></tr>
-<tr><td>Prepare the population</td><td>Deck collection</td><td>Build on the source-preserving parser; add membership identity and source provenance. No second rules registry.</td></tr>
-<tr><td>Configure training</td><td>Corpus-backed regime</td><td>Extend <code>TrainingRegime</code> validation and collector wiring beyond the exact Elemental roster.</td></tr>
-<tr><td>Start another game</td><td>Matchup sampler</td><td>Reuse native roster/reset/seed ownership. Coordinate with PR383 / MTG-175 before changing this shared area.</td></tr>
-<tr><td>Explain or reproduce a failure</td><td>Sampled game receipt</td><td>Retain actual deck pair and seed in the existing capture/recovery path.</td></tr>
+<p class="muted">Architecture and model I/O are necessary to interpret weights. They do not require the model to understand its training regime.</p></section>
+<section><h2>One concrete interaction</h2>
+<p>Prepare collection A and use it in a training run. Export a model bound to world W. Copy the model somewhere without collection A or the training recipe.</p>
+<p><strong>Load and play:</strong> the model loads using W. A new deck D passes W’s native admission and can be played, even if D never appeared in A. The evaluation record owns D and its result.</p>
+<p><strong>Failure and recovery:</strong> an unsupported card or changed rules/card-file identity fails compatibility. Resuming the interrupted training run checks that run’s original collection, sampler and recovery state. Those checks do not become model execution restrictions.</p>
+<p>Curriculum may later change what a run samples. It belongs to the run. Uniform distinct-deck sampling is still the initial choice.</p></section>
+<section><h2>Current → accepted target</h2>
+<table><thead><tr><th>Current implementation</th><th>Required correction</th></tr></thead><tbody>
+<tr><td>Checkpoint embeds <code>DeckCollection</code> and an exact setup roster.</td><td>Portable checkpoint binds the world. The run retains the collection and training provenance.</td></tr>
+<tr><td>Checkpoint loading re-admits the training source records.</td><td>Loading validates weights/architecture, world and inference contracts without training data.</td></tr>
+<tr><td>Execution rejects a deck absent from the training roster.</td><td>Shared native admission validates the actual deck against the bound world.</td></tr>
+<tr><td>Training metadata is partly embedded in export metadata.</td><td>Audit current exporters and producer/catalog readers so run records supply training facts.</td></tr>
 </tbody></table>
-<p class="muted">Existing Elemental experiments and historical receipts keep their meaning. This does not select MTG-175’s adaptive curriculum, start training, or authorize paid compute.</p>
-</section>
-<section>
-<h2>Failures must remain visible</h2>
-<p>A collection containing an unsupported TLA card must fail preparation with the original source intact. Silently dropping that card—or silently excluding that deck—would change the training population.</p>
-<p>A deck collection must not cause the model vocabulary to change from one matchup to the next. Admission and checkpoint compatibility bind the whole pool once.</p>
-<p>Uniform game starts are not uniform learner transitions: longer games contribute more decisions. Report starts and transitions separately.</p>
-</section>
-<section>
-<h2>Proof now; real data after TLA</h2>
-<p>Use three or more eligible non-preset decks through the actual training collector’s reset path. Check changed pairs across roots, exact recovery, input rejection, stable model vocabulary and retained matchup identities. A bounded fixture proof does not need policy training.</p>
-<p>Once full TLA support is complete, prepare the real 17Lands collection through the same boundary. Data acquisition, schema mapping and evaluation holdouts still need design; none is claimed implemented.</p>
-</section>
-<footer>
-<p class="meta">Academy option 1a is accepted as secondary direction. No Academy-focused implementation has restarted. This page replaces the earlier UI-centered review.</p>
-<h2>Decision: uniform first, curriculum later</h2>
-<p><strong>Accepted by Jack Heart: 2a · Equal probability per distinct decklist.</strong> Nearly all imported lists are expected to be unique. Duplicate source records do not accidentally overweight a deck.</p>
-<p>Curriculum learning over decklists is a likely later extension, explicitly outside the initial implementation. Keep stable deck IDs and an explicit sampling policy; do not build adaptive weighting or a general curriculum framework now.</p>
-<p class="muted">Alternative 2b, frequency weighting, remains unselected. The comparison below illustrates the distinction only.</p>
-<table><thead><tr><th>Illustrative source: A, A, A, B, C</th><th>2a</th><th>2b</th></tr></thead><tbody><tr><td>Chance of first selecting A</td><td>33⅓%</td><td>60%</td></tr><tr><td>Chance of first selecting B or C, each</td><td>33⅓%</td><td>20%</td></tr></tbody></table>
-<p>Preserve original records and frequencies. The distribution choice is resolved; the next work is training collection and sampler integration using supported fixtures.</p>
-</footer>
+<p class="muted">The earlier review was too narrow: relaxing the roster check while retaining training-regime dependencies in the checkpoint would not satisfy this correction.</p></section>
+<section><h2>Actions → APIs</h2>
+<p><strong>Prepare and train:</strong> keep <code>DeckCollection</code> and <code>TrainingRegime</code> at the training boundary. <strong>Save, load and inspect:</strong> change <code>checkpoint_world</code>, checkpoint export/loading and catalog admission to consume the world descriptor, without a representative training match. <strong>Play:</strong> use the same native deck admission. <strong>Resume:</strong> keep exact run-state admission strict.</p>
+<p>Frozen artifacts and historical semantics stay intact. New portable contracts must be explicit where versioning is required. No new runtime, card registry or curriculum framework is needed.</p></section>
+<footer><h2>Decision resolved</h2>
+<p>Your clarification replaces the 3a/3b choice. The proof should load a model with no training inputs available, admit a new same-world deck, reject incompatible worlds/cards/model I/O, and retain exact-resume checks in the training run.</p>
+<p class="meta">Design and usage copy updated. No implementation changes or execution restart in this concept-review pass. Training remains primary; Academy secondary; 17Lands ingestion follows full TLA support.</p></footer>
 </main></body></html>
