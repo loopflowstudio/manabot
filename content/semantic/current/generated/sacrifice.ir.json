@@ -1,0 +1,1757 @@
+{
+  "decks": [
+    {
+      "card_count": 40,
+      "cards": [
+        {
+          "count": 1,
+          "definition_index": 1
+        },
+        {
+          "count": 1,
+          "definition_index": 2
+        },
+        {
+          "count": 1,
+          "definition_index": 4
+        },
+        {
+          "count": 1,
+          "definition_index": 5
+        },
+        {
+          "count": 1,
+          "definition_index": 6
+        },
+        {
+          "count": 1,
+          "definition_index": 7
+        },
+        {
+          "count": 1,
+          "definition_index": 8
+        },
+        {
+          "count": 1,
+          "definition_index": 11
+        },
+        {
+          "count": 1,
+          "definition_index": 12
+        },
+        {
+          "count": 1,
+          "definition_index": 13
+        },
+        {
+          "count": 4,
+          "definition_index": 14
+        },
+        {
+          "count": 1,
+          "definition_index": 15
+        },
+        {
+          "count": 1,
+          "definition_index": 16
+        },
+        {
+          "count": 5,
+          "definition_index": 17
+        },
+        {
+          "count": 1,
+          "definition_index": 18
+        },
+        {
+          "count": 1,
+          "definition_index": 19
+        },
+        {
+          "count": 1,
+          "definition_index": 20
+        },
+        {
+          "count": 1,
+          "definition_index": 22
+        },
+        {
+          "count": 1,
+          "definition_index": 23
+        },
+        {
+          "count": 5,
+          "definition_index": 24
+        },
+        {
+          "count": 4,
+          "definition_index": 25
+        },
+        {
+          "count": 5,
+          "definition_index": 26
+        }
+      ],
+      "key": "sacrifice_left",
+      "sideboard": []
+    },
+    {
+      "card_count": 40,
+      "cards": [
+        {
+          "count": 1,
+          "definition_index": 1
+        },
+        {
+          "count": 1,
+          "definition_index": 2
+        },
+        {
+          "count": 1,
+          "definition_index": 4
+        },
+        {
+          "count": 1,
+          "definition_index": 5
+        },
+        {
+          "count": 1,
+          "definition_index": 6
+        },
+        {
+          "count": 1,
+          "definition_index": 7
+        },
+        {
+          "count": 1,
+          "definition_index": 8
+        },
+        {
+          "count": 1,
+          "definition_index": 11
+        },
+        {
+          "count": 1,
+          "definition_index": 12
+        },
+        {
+          "count": 1,
+          "definition_index": 13
+        },
+        {
+          "count": 4,
+          "definition_index": 14
+        },
+        {
+          "count": 1,
+          "definition_index": 15
+        },
+        {
+          "count": 1,
+          "definition_index": 16
+        },
+        {
+          "count": 5,
+          "definition_index": 17
+        },
+        {
+          "count": 1,
+          "definition_index": 18
+        },
+        {
+          "count": 1,
+          "definition_index": 19
+        },
+        {
+          "count": 1,
+          "definition_index": 20
+        },
+        {
+          "count": 1,
+          "definition_index": 22
+        },
+        {
+          "count": 1,
+          "definition_index": 23
+        },
+        {
+          "count": 5,
+          "definition_index": 24
+        },
+        {
+          "count": 4,
+          "definition_index": 25
+        },
+        {
+          "count": 5,
+          "definition_index": 26
+        }
+      ],
+      "key": "sacrifice_right",
+      "sideboard": []
+    }
+  ],
+  "definitions": [
+    {
+      "characteristics": {
+        "colors": [
+          "W"
+        ],
+        "keywords": [],
+        "power": 1,
+        "subtypes": [
+          "Ally"
+        ],
+        "supertypes": [],
+        "token": true,
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Ally"
+      },
+      "program_indexes": [],
+      "semantic_index": 0,
+      "semantic_key": "sacrifice.ally",
+      "text_box": ""
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "2B",
+        "subtypes": [],
+        "supertypes": [],
+        "token": false,
+        "types": [
+          "enchantment"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Bastion of Remembrance"
+      },
+      "program_indexes": [
+        0,
+        1
+      ],
+      "semantic_index": 1,
+      "semantic_key": "sacrifice.bastion_of_remembrance",
+      "text_box": "When this enchantment enters, create a 1/1 white Human Soldier creature token.\nWhenever a creature you control dies, each opponent loses 1 life and you gain 1 life."
+    },
+    {
+      "characteristics": {
+        "keywords": [
+          "menace"
+        ],
+        "mana_cost": "B",
+        "power": 1,
+        "subtypes": [
+          "Human",
+          "Soldier"
+        ],
+        "supertypes": [],
+        "token": false,
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Callous Inspector"
+      },
+      "program_indexes": [
+        2
+      ],
+      "semantic_index": 2,
+      "semantic_key": "sacrifice.callous_inspector",
+      "text_box": "Menace (This creature can't be blocked except by two or more creatures.)\nWhen this creature dies, it deals 1 damage to you. Create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Clue"
+        ],
+        "supertypes": [],
+        "token": true,
+        "types": [
+          "artifact"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Clue"
+      },
+      "program_indexes": [
+        3
+      ],
+      "semantic_index": 3,
+      "semantic_key": "sacrifice.clue",
+      "text_box": "{2}, Sacrifice this token: Draw a card."
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "W",
+        "power": 1,
+        "subtypes": [
+          "Boar",
+          "Elk",
+          "Bird",
+          "Ox"
+        ],
+        "supertypes": [],
+        "token": false,
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Curious Farm Animals"
+      },
+      "program_indexes": [
+        4,
+        5
+      ],
+      "semantic_index": 4,
+      "semantic_key": "sacrifice.curious_farm_animals",
+      "text_box": "When this creature dies, you gain 3 life.\n{2}, Sacrifice this creature: Destroy up to one target artifact or enchantment."
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "2G",
+        "subtypes": [
+          "Lesson"
+        ],
+        "supertypes": [],
+        "token": false,
+        "types": [
+          "instant"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Cycle of Renewal"
+      },
+      "program_indexes": [
+        6
+      ],
+      "semantic_index": 5,
+      "semantic_key": "sacrifice.cycle_of_renewal",
+      "text_box": "Sacrifice a land. Search your library for up to two basic land cards, put them onto the battlefield tapped, then shuffle."
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "1B",
+        "subtypes": [],
+        "supertypes": [],
+        "token": false,
+        "types": [
+          "instant"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Deadly Dispute"
+      },
+      "program_indexes": [
+        7
+      ],
+      "semantic_index": 6,
+      "semantic_key": "sacrifice.deadly_dispute",
+      "text_box": "As an additional cost to cast this spell, sacrifice an artifact or creature.\nDraw two cards and create a Treasure token. (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "B",
+        "subtypes": [],
+        "supertypes": [],
+        "token": false,
+        "types": [
+          "sorcery"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Deadly Precision"
+      },
+      "program_indexes": [
+        8
+      ],
+      "semantic_index": 7,
+      "semantic_key": "sacrifice.deadly_precision",
+      "text_box": "As an additional cost to cast this spell, pay {4} or sacrifice an artifact or creature.\nDestroy target creature."
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [],
+        "supertypes": [],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Fabled Passage"
+      },
+      "program_indexes": [
+        9
+      ],
+      "semantic_index": 8,
+      "semantic_key": "sacrifice.fabled_passage",
+      "text_box": "{T}, Sacrifice this land: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle. Then if you control four or more lands, untap that land."
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Food"
+        ],
+        "supertypes": [],
+        "token": true,
+        "types": [
+          "artifact"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Food"
+      },
+      "program_indexes": [
+        10
+      ],
+      "semantic_index": 9,
+      "semantic_key": "sacrifice.food",
+      "text_box": "{2}, {T}, Sacrifice this token: You gain 3 life."
+    },
+    {
+      "characteristics": {
+        "colors": [
+          "W"
+        ],
+        "keywords": [],
+        "power": 1,
+        "subtypes": [
+          "Human",
+          "Soldier"
+        ],
+        "supertypes": [],
+        "token": true,
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Human Soldier"
+      },
+      "program_indexes": [],
+      "semantic_index": 10,
+      "semantic_key": "sacrifice.human_soldier",
+      "text_box": ""
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "1B",
+        "power": 2,
+        "subtypes": [
+          "Human",
+          "Mercenary"
+        ],
+        "supertypes": [
+          "Legendary"
+        ],
+        "token": false,
+        "toughness": 2,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "June, Bounty Hunter"
+      },
+      "program_indexes": [
+        11,
+        12
+      ],
+      "semantic_index": 11,
+      "semantic_key": "sacrifice.june_bounty_hunter",
+      "text_box": "June can't be blocked as long as you've drawn two or more cards this turn.\n{1}, Sacrifice another creature: Create a Clue token. Activate only during your turn. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "1G",
+        "power": 2,
+        "subtypes": [
+          "Snake"
+        ],
+        "supertypes": [],
+        "token": false,
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Lotus Cobra"
+      },
+      "program_indexes": [
+        13
+      ],
+      "semantic_index": 12,
+      "semantic_key": "sacrifice.lotus_cobra",
+      "text_box": "Landfall — Whenever a land you control enters, add one mana of any color."
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "1BR",
+        "power": 3,
+        "subtypes": [
+          "Devil"
+        ],
+        "supertypes": [],
+        "token": false,
+        "toughness": 3,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Mayhem Devil"
+      },
+      "program_indexes": [
+        14
+      ],
+      "semantic_index": 13,
+      "semantic_key": "sacrifice.mayhem_devil",
+      "text_box": "Whenever a player sacrifices a permanent, this creature deals 1 damage to any target."
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Plains"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Plains"
+      },
+      "program_indexes": [
+        15
+      ],
+      "semantic_index": 14,
+      "semantic_key": "sacrifice.plains",
+      "text_box": "({T}: Add {W}.)"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [],
+        "supertypes": [],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Prismatic Vista"
+      },
+      "program_indexes": [
+        16
+      ],
+      "semantic_index": 15,
+      "semantic_key": "sacrifice.prismatic_vista",
+      "text_box": "{T}, Pay 1 life, Sacrifice this land: Search your library for a basic land card, put it onto the battlefield, then shuffle."
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "G",
+        "power": 0,
+        "subtypes": [
+          "Bird"
+        ],
+        "supertypes": [],
+        "token": false,
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Sazh's Chocobo"
+      },
+      "program_indexes": [
+        17
+      ],
+      "semantic_index": 16,
+      "semantic_key": "sacrifice.sazh_s_chocobo",
+      "text_box": "Landfall — Whenever a land you control enters, put a +1/+1 counter on this creature."
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Swamp"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Swamp"
+      },
+      "program_indexes": [
+        18
+      ],
+      "semantic_index": 17,
+      "semantic_key": "sacrifice.swamp",
+      "text_box": "({T}: Add {B}.)"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "2G",
+        "power": 3,
+        "subtypes": [
+          "Elf",
+          "Scout"
+        ],
+        "supertypes": [],
+        "token": false,
+        "toughness": 2,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Tireless Provisioner"
+      },
+      "program_indexes": [
+        19
+      ],
+      "semantic_index": 18,
+      "semantic_key": "sacrifice.tireless_provisioner",
+      "text_box": "Landfall — Whenever a land you control enters, create a Food token or a Treasure token. (Food is an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\" Treasure is an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "2G",
+        "power": 3,
+        "subtypes": [
+          "Human",
+          "Scout"
+        ],
+        "supertypes": [],
+        "token": false,
+        "toughness": 2,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Tireless Tracker"
+      },
+      "program_indexes": [
+        20,
+        21
+      ],
+      "semantic_index": 19,
+      "semantic_key": "sacrifice.tireless_tracker",
+      "text_box": "Landfall — Whenever a land you control enters, investigate. (Create a Clue token. It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")\nWhenever you sacrifice a Clue, put a +1/+1 counter on this creature."
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "WB",
+        "subtypes": [],
+        "supertypes": [],
+        "token": false,
+        "types": [
+          "enchantment"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Tolls of War"
+      },
+      "program_indexes": [
+        22,
+        23
+      ],
+      "semantic_index": 20,
+      "semantic_key": "sacrifice.tolls_of_war",
+      "text_box": "When this enchantment enters, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")\nWhenever you sacrifice a permanent during your turn, create a 1/1 white Ally creature token. This ability triggers only once each turn."
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Treasure"
+        ],
+        "supertypes": [],
+        "token": true,
+        "types": [
+          "artifact"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Treasure"
+      },
+      "program_indexes": [
+        24
+      ],
+      "semantic_index": 21,
+      "semantic_key": "sacrifice.treasure",
+      "text_box": "{T}, Sacrifice this token: Add one mana of any color."
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "1G",
+        "power": 2,
+        "subtypes": [
+          "Human",
+          "Citizen"
+        ],
+        "supertypes": [],
+        "token": false,
+        "toughness": 2,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Unlucky Cabbage Merchant"
+      },
+      "program_indexes": [
+        25,
+        26
+      ],
+      "semantic_index": 22,
+      "semantic_key": "sacrifice.unlucky_cabbage_merchant",
+      "text_box": "When this creature enters, create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")\nWhenever you sacrifice a Food, you may search your library for a basic land card and put it onto the battlefield tapped. If you search your library this way, put this creature on the bottom of its owner's library, then shuffle."
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "mana_cost": "R",
+        "subtypes": [],
+        "supertypes": [],
+        "token": false,
+        "types": [
+          "enchantment"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Weaponize the Monsters"
+      },
+      "program_indexes": [
+        27
+      ],
+      "semantic_index": 23,
+      "semantic_key": "sacrifice.weaponize_the_monsters",
+      "text_box": "{2}, Sacrifice a creature: This enchantment deals 2 damage to any target."
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Forest"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Forest"
+      },
+      "program_indexes": [
+        28
+      ],
+      "semantic_index": 24,
+      "semantic_key": "temur.forest",
+      "text_box": "({T}: Add {G}.)"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Island"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Island"
+      },
+      "program_indexes": [
+        29
+      ],
+      "semantic_index": 25,
+      "semantic_key": "temur.island",
+      "text_box": "({T}: Add {U}.)"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Mountain"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Mountain"
+      },
+      "program_indexes": [
+        30
+      ],
+      "semantic_index": 26,
+      "semantic_key": "temur.mountain",
+      "text_box": "({T}: Add {R}.)"
+    }
+  ],
+  "ir_hash": "aef10c82232eff0e8718beb355c670ad95d65fd514c300d0222d3e1b69c4464a",
+  "pack_key": "elemental-sacrifice-v1",
+  "programs": [
+    {
+      "definition_index": 1,
+      "instructions": [
+        {
+          "count": 1,
+          "definition_index": 10,
+          "op_name": "create_token",
+          "opcode": 4,
+          "tapped_and_attacking": false
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 0,
+      "semantic_key": "sacrifice.bastion_of_remembrance.p0",
+      "targets": [],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 1,
+      "instructions": [
+        {
+          "amount": 1,
+          "op_name": "drain_life",
+          "opcode": 54
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 1,
+      "semantic_key": "sacrifice.bastion_of_remembrance.p1",
+      "targets": [],
+      "trigger": {
+        "event": "dies",
+        "subject": {
+          "kind": "any_you_control",
+          "predicate": {
+            "kind": "card_type",
+            "value": "creature"
+          }
+        }
+      }
+    },
+    {
+      "definition_index": 2,
+      "instructions": [
+        {
+          "amount": 1,
+          "op_name": "deal_damage_to_controller",
+          "opcode": 53
+        },
+        {
+          "count": 1,
+          "definition_index": 3,
+          "op_name": "create_token",
+          "opcode": 4,
+          "tapped_and_attacking": false
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 2,
+      "semantic_key": "sacrifice.callous_inspector.p0",
+      "targets": [],
+      "trigger": {
+        "event": "dies",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "cost": {
+        "mana": "2",
+        "sacrifice_source": true
+      },
+      "definition_index": 3,
+      "instructions": [
+        {
+          "count": 1,
+          "op_name": "draw_cards",
+          "opcode": 2
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 3,
+      "semantic_key": "sacrifice.clue.p0",
+      "targets": []
+    },
+    {
+      "definition_index": 4,
+      "instructions": [
+        {
+          "amount": 3,
+          "op_name": "gain_life",
+          "opcode": 6
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 4,
+      "semantic_key": "sacrifice.curious_farm_animals.p0",
+      "targets": [],
+      "trigger": {
+        "event": "dies",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "cost": {
+        "mana": "2",
+        "sacrifice_source": true
+      },
+      "definition_index": 4,
+      "instructions": [
+        {
+          "body": [
+            {
+              "op_name": "destroy",
+              "opcode": 27,
+              "target": "target_0"
+            }
+          ],
+          "op_name": "target_clause",
+          "opcode": 44,
+          "role": "target_0"
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 5,
+      "semantic_key": "sacrifice.curious_farm_animals.p1",
+      "target_binding": "inferred",
+      "targets": [
+        {
+          "max": 1,
+          "min": 0,
+          "role": "target_0",
+          "selector": {
+            "kind": "permanent",
+            "predicate": {
+              "kind": "types_any",
+              "values": [
+                "artifact",
+                "enchantment"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cost": {
+        "mana": "2G"
+      },
+      "definition_index": 5,
+      "instructions": [
+        {
+          "op_name": "sacrifice",
+          "opcode": 52,
+          "predicate": {
+            "kind": "card_type",
+            "value": "land"
+          }
+        },
+        {
+          "bottom_source": false,
+          "count": 2,
+          "op_name": "search_basic_lands",
+          "opcode": 51,
+          "tapped": true,
+          "untap_if_lands": null
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 6,
+      "semantic_key": "sacrifice.cycle_of_renewal.p0",
+      "targets": []
+    },
+    {
+      "cost": {
+        "mana": "1B",
+        "sacrifice": {
+          "another": false,
+          "or_mana": null,
+          "predicate": {
+            "kind": "types_any",
+            "values": [
+              "artifact",
+              "creature"
+            ]
+          }
+        }
+      },
+      "definition_index": 6,
+      "instructions": [
+        {
+          "count": 2,
+          "op_name": "draw_cards",
+          "opcode": 2
+        },
+        {
+          "count": 1,
+          "definition_index": 21,
+          "op_name": "create_token",
+          "opcode": 4,
+          "tapped_and_attacking": false
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 7,
+      "semantic_key": "sacrifice.deadly_dispute.p0",
+      "targets": []
+    },
+    {
+      "cost": {
+        "mana": "B",
+        "sacrifice": {
+          "another": false,
+          "or_mana": "4",
+          "predicate": {
+            "kind": "types_any",
+            "values": [
+              "artifact",
+              "creature"
+            ]
+          }
+        }
+      },
+      "definition_index": 7,
+      "instructions": [
+        {
+          "op_name": "destroy",
+          "opcode": 27,
+          "target": "target_0"
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 8,
+      "semantic_key": "sacrifice.deadly_precision.p0",
+      "target_binding": "inferred",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "creature"
+          }
+        }
+      ]
+    },
+    {
+      "cost": {
+        "mana": "0",
+        "sacrifice_source": true,
+        "tap_source": true
+      },
+      "definition_index": 8,
+      "instructions": [
+        {
+          "bottom_source": false,
+          "count": 1,
+          "op_name": "search_basic_lands",
+          "opcode": 51,
+          "tapped": true,
+          "untap_if_lands": 4
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 9,
+      "semantic_key": "sacrifice.fabled_passage.p0",
+      "targets": []
+    },
+    {
+      "cost": {
+        "mana": "2",
+        "sacrifice_source": true,
+        "tap_source": true
+      },
+      "definition_index": 9,
+      "instructions": [
+        {
+          "amount": 3,
+          "op_name": "gain_life",
+          "opcode": 6
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 10,
+      "semantic_key": "sacrifice.food.p0",
+      "targets": []
+    },
+    {
+      "cost": {
+        "mana": "1",
+        "own_turn_only": true,
+        "sacrifice": {
+          "another": true,
+          "or_mana": null,
+          "predicate": {
+            "kind": "card_type",
+            "value": "creature"
+          }
+        }
+      },
+      "definition_index": 11,
+      "instructions": [
+        {
+          "count": 1,
+          "definition_index": 3,
+          "op_name": "create_token",
+          "opcode": 4,
+          "tapped_and_attacking": false
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 11,
+      "semantic_key": "sacrifice.june_bounty_hunter.p0",
+      "targets": []
+    },
+    {
+      "definition_index": 11,
+      "instructions": [
+        {
+          "condition": {
+            "count": 2,
+            "kind": "cards_drawn_at_least"
+          },
+          "op_name": "unblockable_if",
+          "opcode": 55
+        }
+      ],
+      "kind": 5,
+      "kind_name": "static",
+      "program_index": 12,
+      "semantic_key": "sacrifice.june_bounty_hunter.unblockable",
+      "targets": []
+    },
+    {
+      "definition_index": 12,
+      "instructions": [
+        {
+          "modes": [
+            [
+              {
+                "mana": "W",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "U",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "B",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "R",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "G",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ]
+          ],
+          "op_name": "modal",
+          "opcode": 43
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 13,
+      "semantic_key": "sacrifice.lotus_cobra.p0",
+      "targets": [],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "any_you_control",
+          "predicate": {
+            "kind": "card_type",
+            "value": "land"
+          }
+        }
+      }
+    },
+    {
+      "definition_index": 13,
+      "instructions": [
+        {
+          "amount": 1,
+          "op_name": "deal_damage",
+          "opcode": 13,
+          "target": "target_0"
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 14,
+      "semantic_key": "sacrifice.mayhem_devil.p0",
+      "target_binding": "inferred",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "creature_or_player"
+          }
+        }
+      ],
+      "trigger": {
+        "controller_only": false,
+        "event": "sacrificed",
+        "predicate": {
+          "kind": "any"
+        },
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 14,
+      "instructions": [
+        {
+          "mana": "W",
+          "op_name": "add_mana",
+          "opcode": 1
+        }
+      ],
+      "kind": 1,
+      "kind_name": "mana",
+      "program_index": 15,
+      "semantic_key": "sacrifice.plains.p0",
+      "targets": []
+    },
+    {
+      "cost": {
+        "life": 1,
+        "mana": "0",
+        "sacrifice_source": true,
+        "tap_source": true
+      },
+      "definition_index": 15,
+      "instructions": [
+        {
+          "bottom_source": false,
+          "count": 1,
+          "op_name": "search_basic_lands",
+          "opcode": 51,
+          "tapped": false,
+          "untap_if_lands": null
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 16,
+      "semantic_key": "sacrifice.prismatic_vista.p0",
+      "targets": []
+    },
+    {
+      "definition_index": 16,
+      "instructions": [
+        {
+          "count": 1,
+          "op_name": "put_counters",
+          "opcode": 5,
+          "target": "source"
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 17,
+      "semantic_key": "sacrifice.sazh_s_chocobo.p0",
+      "targets": [],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "any_you_control",
+          "predicate": {
+            "kind": "card_type",
+            "value": "land"
+          }
+        }
+      }
+    },
+    {
+      "definition_index": 17,
+      "instructions": [
+        {
+          "mana": "B",
+          "op_name": "add_mana",
+          "opcode": 1
+        }
+      ],
+      "kind": 1,
+      "kind_name": "mana",
+      "program_index": 18,
+      "semantic_key": "sacrifice.swamp.p0",
+      "targets": []
+    },
+    {
+      "definition_index": 18,
+      "instructions": [
+        {
+          "modes": [
+            [
+              {
+                "count": 1,
+                "definition_index": 9,
+                "op_name": "create_token",
+                "opcode": 4,
+                "tapped_and_attacking": false
+              }
+            ],
+            [
+              {
+                "count": 1,
+                "definition_index": 21,
+                "op_name": "create_token",
+                "opcode": 4,
+                "tapped_and_attacking": false
+              }
+            ]
+          ],
+          "op_name": "modal",
+          "opcode": 43
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 19,
+      "semantic_key": "sacrifice.tireless_provisioner.p0",
+      "targets": [],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "any_you_control",
+          "predicate": {
+            "kind": "card_type",
+            "value": "land"
+          }
+        }
+      }
+    },
+    {
+      "definition_index": 19,
+      "instructions": [
+        {
+          "count": 1,
+          "definition_index": 3,
+          "op_name": "create_token",
+          "opcode": 4,
+          "tapped_and_attacking": false
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 20,
+      "semantic_key": "sacrifice.tireless_tracker.p0",
+      "targets": [],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "any_you_control",
+          "predicate": {
+            "kind": "card_type",
+            "value": "land"
+          }
+        }
+      }
+    },
+    {
+      "definition_index": 19,
+      "instructions": [
+        {
+          "count": 1,
+          "op_name": "put_counters",
+          "opcode": 5,
+          "target": "source"
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 21,
+      "semantic_key": "sacrifice.tireless_tracker.p1",
+      "targets": [],
+      "trigger": {
+        "controller_only": true,
+        "event": "sacrificed",
+        "predicate": {
+          "kind": "subtype",
+          "value": "Clue"
+        },
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 20,
+      "instructions": [
+        {
+          "count": 1,
+          "definition_index": 3,
+          "op_name": "create_token",
+          "opcode": 4,
+          "tapped_and_attacking": false
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 22,
+      "semantic_key": "sacrifice.tolls_of_war.p0",
+      "targets": [],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 20,
+      "instructions": [
+        {
+          "count": 1,
+          "definition_index": 0,
+          "op_name": "create_token",
+          "opcode": 4,
+          "tapped_and_attacking": false
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 23,
+      "semantic_key": "sacrifice.tolls_of_war.p1",
+      "targets": [],
+      "trigger": {
+        "controller_only": true,
+        "event": "sacrificed",
+        "once_each_turn": true,
+        "own_turn_only": true,
+        "predicate": {
+          "kind": "any"
+        },
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "cost": {
+        "mana": "0",
+        "sacrifice_source": true,
+        "tap_source": true
+      },
+      "definition_index": 21,
+      "instructions": [
+        {
+          "modes": [
+            [
+              {
+                "mana": "W",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "U",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "B",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "R",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ],
+            [
+              {
+                "mana": "G",
+                "op_name": "add_mana",
+                "opcode": 1
+              }
+            ]
+          ],
+          "op_name": "modal",
+          "opcode": 43
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 24,
+      "semantic_key": "sacrifice.treasure.p0",
+      "targets": []
+    },
+    {
+      "definition_index": 22,
+      "instructions": [
+        {
+          "count": 1,
+          "definition_index": 9,
+          "op_name": "create_token",
+          "opcode": 4,
+          "tapped_and_attacking": false
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 25,
+      "semantic_key": "sacrifice.unlucky_cabbage_merchant.p0",
+      "targets": [],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 22,
+      "instructions": [
+        {
+          "modes": [
+            [
+              {
+                "bottom_source": true,
+                "count": 1,
+                "op_name": "search_basic_lands",
+                "opcode": 51,
+                "tapped": true,
+                "untap_if_lands": null
+              }
+            ],
+            []
+          ],
+          "op_name": "modal",
+          "opcode": 43
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 26,
+      "semantic_key": "sacrifice.unlucky_cabbage_merchant.p1",
+      "targets": [],
+      "trigger": {
+        "controller_only": true,
+        "event": "sacrificed",
+        "predicate": {
+          "kind": "subtype",
+          "value": "Food"
+        },
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "cost": {
+        "mana": "2",
+        "sacrifice": {
+          "another": false,
+          "or_mana": null,
+          "predicate": {
+            "kind": "card_type",
+            "value": "creature"
+          }
+        }
+      },
+      "definition_index": 23,
+      "instructions": [
+        {
+          "amount": 2,
+          "op_name": "deal_damage",
+          "opcode": 13,
+          "target": "target_0"
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 27,
+      "semantic_key": "sacrifice.weaponize_the_monsters.p0",
+      "target_binding": "inferred",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "creature_or_player"
+          }
+        }
+      ]
+    },
+    {
+      "definition_index": 24,
+      "instructions": [
+        {
+          "mana": "G",
+          "op_name": "add_mana",
+          "opcode": 1
+        }
+      ],
+      "kind": 1,
+      "kind_name": "mana",
+      "program_index": 28,
+      "semantic_key": "temur.forest.p0",
+      "targets": []
+    },
+    {
+      "definition_index": 25,
+      "instructions": [
+        {
+          "mana": "U",
+          "op_name": "add_mana",
+          "opcode": 1
+        }
+      ],
+      "kind": 1,
+      "kind_name": "mana",
+      "program_index": 29,
+      "semantic_key": "temur.island.p0",
+      "targets": []
+    },
+    {
+      "definition_index": 26,
+      "instructions": [
+        {
+          "mana": "R",
+          "op_name": "add_mana",
+          "opcode": 1
+        }
+      ],
+      "kind": 1,
+      "kind_name": "mana",
+      "program_index": 30,
+      "semantic_key": "temur.mountain.p0",
+      "targets": []
+    }
+  ],
+  "schema_version": 1,
+  "setup_schema_version": 1,
+  "source_hash": "84ee7cda96de298bfe5d9681085a333c7b2abb4a0d6db5468633501c5a3eb1d5"
+}

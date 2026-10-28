@@ -1,0 +1,3304 @@
+{
+  "decks": [
+    {
+      "card_count": 46,
+      "cards": [
+        {
+          "count": 1,
+          "definition_index": 0
+        },
+        {
+          "count": 1,
+          "definition_index": 1
+        },
+        {
+          "count": 1,
+          "definition_index": 2
+        },
+        {
+          "count": 1,
+          "definition_index": 3
+        },
+        {
+          "count": 1,
+          "definition_index": 4
+        },
+        {
+          "count": 1,
+          "definition_index": 5
+        },
+        {
+          "count": 1,
+          "definition_index": 6
+        },
+        {
+          "count": 1,
+          "definition_index": 7
+        },
+        {
+          "count": 1,
+          "definition_index": 8
+        },
+        {
+          "count": 1,
+          "definition_index": 9
+        },
+        {
+          "count": 1,
+          "definition_index": 10
+        },
+        {
+          "count": 1,
+          "definition_index": 11
+        },
+        {
+          "count": 1,
+          "definition_index": 12
+        },
+        {
+          "count": 1,
+          "definition_index": 13
+        },
+        {
+          "count": 1,
+          "definition_index": 14
+        },
+        {
+          "count": 1,
+          "definition_index": 15
+        },
+        {
+          "count": 1,
+          "definition_index": 16
+        },
+        {
+          "count": 1,
+          "definition_index": 17
+        },
+        {
+          "count": 1,
+          "definition_index": 18
+        },
+        {
+          "count": 1,
+          "definition_index": 19
+        },
+        {
+          "count": 1,
+          "definition_index": 20
+        },
+        {
+          "count": 5,
+          "definition_index": 45
+        },
+        {
+          "count": 5,
+          "definition_index": 46
+        },
+        {
+          "count": 5,
+          "definition_index": 47
+        },
+        {
+          "count": 5,
+          "definition_index": 48
+        },
+        {
+          "count": 5,
+          "definition_index": 49
+        }
+      ],
+      "key": "elemental_left",
+      "sideboard": []
+    },
+    {
+      "card_count": 46,
+      "cards": [
+        {
+          "count": 1,
+          "definition_index": 21
+        },
+        {
+          "count": 1,
+          "definition_index": 22
+        },
+        {
+          "count": 1,
+          "definition_index": 23
+        },
+        {
+          "count": 1,
+          "definition_index": 24
+        },
+        {
+          "count": 1,
+          "definition_index": 25
+        },
+        {
+          "count": 1,
+          "definition_index": 26
+        },
+        {
+          "count": 1,
+          "definition_index": 27
+        },
+        {
+          "count": 1,
+          "definition_index": 28
+        },
+        {
+          "count": 1,
+          "definition_index": 29
+        },
+        {
+          "count": 1,
+          "definition_index": 30
+        },
+        {
+          "count": 1,
+          "definition_index": 31
+        },
+        {
+          "count": 1,
+          "definition_index": 32
+        },
+        {
+          "count": 1,
+          "definition_index": 33
+        },
+        {
+          "count": 1,
+          "definition_index": 34
+        },
+        {
+          "count": 1,
+          "definition_index": 35
+        },
+        {
+          "count": 1,
+          "definition_index": 36
+        },
+        {
+          "count": 1,
+          "definition_index": 37
+        },
+        {
+          "count": 1,
+          "definition_index": 38
+        },
+        {
+          "count": 1,
+          "definition_index": 39
+        },
+        {
+          "count": 1,
+          "definition_index": 40
+        },
+        {
+          "count": 1,
+          "definition_index": 41
+        },
+        {
+          "count": 5,
+          "definition_index": 45
+        },
+        {
+          "count": 5,
+          "definition_index": 46
+        },
+        {
+          "count": 5,
+          "definition_index": 47
+        },
+        {
+          "count": 5,
+          "definition_index": 48
+        },
+        {
+          "count": 5,
+          "definition_index": 49
+        }
+      ],
+      "key": "elemental_right",
+      "sideboard": []
+    }
+  ],
+  "definitions": [
+    {
+      "characteristics": {
+        "mana_cost": "{1}{U/R}",
+        "subtypes": [
+          "Lesson"
+        ],
+        "types": [
+          "instant"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Abandon Attachments"
+      },
+      "program_indexes": [
+        0
+      ],
+      "semantic_index": 0,
+      "semantic_key": "elemental.abandon_attachments",
+      "text_box": "You may discard a card. If you do, draw two cards."
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{1}{B}",
+        "subtypes": [
+          "Lesson"
+        ],
+        "types": [
+          "instant"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Azula Always Lies"
+      },
+      "program_indexes": [
+        1
+      ],
+      "semantic_index": 1,
+      "semantic_key": "elemental.azula_always_lies",
+      "text_box": "Choose one or both —\n• Target creature gets -1/-1 until end of turn.\n• Put a +1/+1 counter on target creature."
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{U}",
+        "subtypes": [
+          "Lesson"
+        ],
+        "types": [
+          "sorcery"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Boomerang Basics"
+      },
+      "program_indexes": [
+        2
+      ],
+      "semantic_index": 2,
+      "semantic_key": "elemental.boomerang_basics",
+      "text_box": "Return target nonland permanent to its owner's hand. If you controlled that permanent, draw a card."
+    },
+    {
+      "characteristics": {
+        "keywords": [
+          "lifelink"
+        ],
+        "mana_cost": "{6}{B}",
+        "power": 3,
+        "subtypes": [
+          "Fish",
+          "Crocodile"
+        ],
+        "toughness": 2,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Cat-Gator"
+      },
+      "program_indexes": [
+        3
+      ],
+      "semantic_index": 3,
+      "semantic_key": "elemental.cat_gator",
+      "text_box": "Lifelink\nWhen this creature enters, it deals damage equal to the number of Swamps you control to any target."
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{1}{B}",
+        "power": 1,
+        "subtypes": [
+          "Human",
+          "Advisor"
+        ],
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Corrupt Court Official"
+      },
+      "program_indexes": [
+        4
+      ],
+      "semantic_index": 4,
+      "semantic_key": "elemental.corrupt_court_official",
+      "text_box": "When this creature enters, target opponent discards a card."
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{3}{B}{G}",
+        "power": 3,
+        "subtypes": [
+          "Human",
+          "Soldier"
+        ],
+        "toughness": 4,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Dai Li Agents"
+      },
+      "program_indexes": [
+        5,
+        6
+      ],
+      "semantic_index": 5,
+      "semantic_key": "elemental.dai_li_agents",
+      "text_box": "When this creature enters, earthbend 1, then earthbend 1. (To earthbend 1, target land you control becomes a 0/0 creature with haste that's still a land. Put a +1/+1 counter on it. When it dies or is exiled, return it to the battlefield tapped.)\nWhenever this creature attacks, each opponent loses X life and you gain X life, where X is the number of creatures you control with +1/+1 counters on them."
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{1}{R}",
+        "power": 2,
+        "subtypes": [
+          "Human",
+          "Rebel",
+          "Ally"
+        ],
+        "toughness": 2,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Deserter's Disciple"
+      },
+      "program_indexes": [
+        7
+      ],
+      "semantic_index": 6,
+      "semantic_key": "elemental.deserter_s_disciple",
+      "text_box": "{T}: Another target creature you control with power 2 or less can't be blocked this turn."
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{2}{R}",
+        "types": [
+          "instant"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Enthusiastic Study"
+      },
+      "program_indexes": [
+        8
+      ],
+      "semantic_index": 7,
+      "semantic_key": "elemental.enthusiastic_study",
+      "text_box": "Target creature gets +3/+1 and gains trample until end of turn.\nLearn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)"
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{1}{B}",
+        "types": [
+          "sorcery"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Epic Downfall"
+      },
+      "program_indexes": [
+        9
+      ],
+      "semantic_index": 8,
+      "semantic_key": "elemental.epic_downfall",
+      "text_box": "Exile target creature with mana value 3 or greater."
+    },
+    {
+      "characteristics": {
+        "keywords": [
+          "flying"
+        ],
+        "mana_cost": "{B}",
+        "power": 1,
+        "subtypes": [
+          "Eye",
+          "Bat"
+        ],
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Eyetwitch"
+      },
+      "program_indexes": [
+        10
+      ],
+      "semantic_index": 9,
+      "semantic_key": "elemental.eyetwitch",
+      "text_box": "Flying\nWhen this creature dies, learn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)"
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{2}{G}",
+        "types": [
+          "sorcery"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Field Trip"
+      },
+      "program_indexes": [
+        11
+      ],
+      "semantic_index": 10,
+      "semantic_key": "elemental.field_trip",
+      "text_box": "Search your library for a basic Forest card, put that card onto the battlefield tapped, then shuffle.\nLearn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)"
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{1}{R}",
+        "types": [
+          "instant"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Fists of Flame"
+      },
+      "program_indexes": [
+        12
+      ],
+      "semantic_index": 11,
+      "semantic_key": "elemental.fists_of_flame",
+      "text_box": "Draw a card. Until end of turn, target creature gains trample and gets +1/+0 for each card you've drawn this turn. (A creature with trample can deal excess combat damage to the player or planeswalker it's attacking.)"
+    },
+    {
+      "characteristics": {
+        "keywords": [
+          "lifelink"
+        ],
+        "mana_cost": "{1}{U}{B}",
+        "power": 2,
+        "subtypes": [
+          "Human",
+          "Druid",
+          "Ally"
+        ],
+        "toughness": 4,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Foggy Swamp Spirit Keeper"
+      },
+      "program_indexes": [
+        13
+      ],
+      "semantic_index": 12,
+      "semantic_key": "elemental.foggy_swamp_spirit_keeper",
+      "text_box": "Lifelink\nWhenever you draw your second card each turn, create a 1/1 colorless Spirit creature token with \"This token can't block or be blocked by non-Spirit creatures.\""
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{4}{W}",
+        "types": [
+          "sorcery"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Gather the White Lotus"
+      },
+      "program_indexes": [
+        14
+      ],
+      "semantic_index": 13,
+      "semantic_key": "elemental.gather_the_white_lotus",
+      "text_box": "Create a 1/1 white Ally creature token for each Plains you control. Scry 2. (Look at the top two cards of your library, then put any number of them on the bottom and the rest on top in any order.)"
+    },
+    {
+      "characteristics": {
+        "keywords": [
+          "trample"
+        ],
+        "mana_cost": "{2}{R}",
+        "power": 4,
+        "subtypes": [
+          "Dinosaur",
+          "Beast"
+        ],
+        "toughness": 3,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Giant Cindermaw"
+      },
+      "program_indexes": [
+        15
+      ],
+      "semantic_index": 14,
+      "semantic_key": "elemental.giant_cindermaw",
+      "text_box": "Trample (This creature can deal excess combat damage to the player or planeswalker it's attacking.)\nPlayers can't gain life."
+    },
+    {
+      "characteristics": {
+        "keywords": [
+          "trample"
+        ],
+        "mana_cost": "{2}{G}{G}",
+        "power": 5,
+        "subtypes": [
+          "Treefolk",
+          "Druid"
+        ],
+        "toughness": 4,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Gnarled Professor"
+      },
+      "program_indexes": [
+        16
+      ],
+      "semantic_index": 15,
+      "semantic_key": "elemental.gnarled_professor",
+      "text_box": "Trample\nWhen this creature enters, learn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)"
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{1}{G}",
+        "power": 1,
+        "subtypes": [
+          "Human",
+          "Peasant",
+          "Ally"
+        ],
+        "supertypes": [
+          "legendary"
+        ],
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Haru, Hidden Talent"
+      },
+      "program_indexes": [
+        17
+      ],
+      "semantic_index": 16,
+      "semantic_key": "elemental.haru_hidden_talent",
+      "text_box": "Whenever another Ally you control enters, earthbend 1. (Target land you control becomes a 0/0 creature with haste that's still a land. Put a +1/+1 counter on it. When it dies or is exiled, return it to the battlefield tapped.)"
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{1}{R}",
+        "subtypes": [
+          "Lesson"
+        ],
+        "types": [
+          "sorcery"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Iroh's Demonstration"
+      },
+      "program_indexes": [
+        18
+      ],
+      "semantic_index": 17,
+      "semantic_key": "elemental.iroh_s_demonstration",
+      "text_box": "Choose one —\n• Iroh's Demonstration deals 1 damage to each creature your opponents control.\n• Iroh's Demonstration deals 4 damage to target creature."
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{2}{R/W}{R/W}{R/W}",
+        "power": 3,
+        "subtypes": [
+          "Human",
+          "Rebel",
+          "Ally"
+        ],
+        "supertypes": [
+          "legendary"
+        ],
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Jet, Freedom Fighter"
+      },
+      "program_indexes": [
+        19,
+        20
+      ],
+      "semantic_index": 18,
+      "semantic_key": "elemental.jet_freedom_fighter",
+      "text_box": "When Jet enters, he deals damage equal to the number of creatures you control to target creature an opponent controls.\nWhen Jet dies, put a +1/+1 counter on each of up to two target creatures."
+    },
+    {
+      "characteristics": {
+        "keywords": [
+          "vigilance"
+        ],
+        "mana_cost": "{1}{U}",
+        "power": 2,
+        "subtypes": [
+          "Fox",
+          "Spirit"
+        ],
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Knowledge Seeker"
+      },
+      "program_indexes": [
+        21,
+        22
+      ],
+      "semantic_index": 19,
+      "semantic_key": "elemental.knowledge_seeker",
+      "text_box": "Vigilance\nWhenever you draw your second card each turn, put a +1/+1 counter on this creature.\nWhen this creature dies, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")"
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{1}{R}",
+        "types": [
+          "instant"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Lightning Strike"
+      },
+      "program_indexes": [
+        23
+      ],
+      "semantic_index": 20,
+      "semantic_key": "elemental.lightning_strike",
+      "text_box": "Lightning Strike deals 3 damage to any target."
+    },
+    {
+      "characteristics": {
+        "keywords": [
+          "first_strike"
+        ],
+        "mana_cost": "{4}{W}",
+        "power": 4,
+        "subtypes": [
+          "Human",
+          "Warrior",
+          "Ally"
+        ],
+        "supertypes": [
+          "legendary"
+        ],
+        "toughness": 4,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Master Piandao"
+      },
+      "program_indexes": [
+        24
+      ],
+      "semantic_index": 21,
+      "semantic_key": "elemental.master_piandao",
+      "text_box": "First strike\nWhenever Master Piandao attacks, look at the top four cards of your library. You may reveal an Ally, Equipment, or Lesson card from among them and put it into your hand. Put the rest on the bottom of your library in a random order."
+    },
+    {
+      "characteristics": {
+        "keywords": [
+          "flying"
+        ],
+        "mana_cost": "{2}{U/B}",
+        "power": 1,
+        "subtypes": [
+          "Bird",
+          "Scout"
+        ],
+        "toughness": 2,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Messenger Hawk"
+      },
+      "program_indexes": [
+        25,
+        26
+      ],
+      "semantic_index": 22,
+      "semantic_key": "elemental.messenger_hawk",
+      "text_box": "Flying\nWhen this creature enters, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")\nThis creature gets +2/+0 as long as you've drawn two or more cards this turn."
+    },
+    {
+      "characteristics": {
+        "keywords": [
+          "flying"
+        ],
+        "mana_cost": "{W}",
+        "power": 1,
+        "subtypes": [
+          "Lemur",
+          "Bat",
+          "Ally"
+        ],
+        "supertypes": [
+          "legendary"
+        ],
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Momo, Friendly Flier"
+      },
+      "program_indexes": [
+        27,
+        28
+      ],
+      "semantic_index": 23,
+      "semantic_key": "elemental.momo_friendly_flier",
+      "text_box": "Flying\nThe first non-Lemur creature spell with flying you cast during each of your turns costs {1} less to cast.\nWhenever another creature you control with flying enters, Momo gets +1/+1 until end of turn."
+    },
+    {
+      "characteristics": {
+        "keywords": [
+          "haste"
+        ],
+        "mana_cost": "{R}",
+        "power": 1,
+        "subtypes": [
+          "Human",
+          "Monk"
+        ],
+        "toughness": 2,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Monastery Swiftspear"
+      },
+      "program_indexes": [
+        29
+      ],
+      "semantic_index": 24,
+      "semantic_key": "elemental.monastery_swiftspear",
+      "text_box": "Haste\nProwess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)"
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{U}",
+        "subtypes": [
+          "Lesson"
+        ],
+        "types": [
+          "instant"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Octopus Form"
+      },
+      "program_indexes": [
+        30
+      ],
+      "semantic_index": 25,
+      "semantic_key": "elemental.octopus_form",
+      "text_box": "Target creature you control gets +1/+1 and gains hexproof until end of turn. Untap it. (It can't be the target of spells or abilities your opponents control.)"
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{1}{G}",
+        "subtypes": [
+          "Lesson"
+        ],
+        "types": [
+          "instant"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Origin of Metalbending"
+      },
+      "program_indexes": [
+        31
+      ],
+      "semantic_index": 26,
+      "semantic_key": "elemental.origin_of_metalbending",
+      "text_box": "Choose one —\n• Destroy target artifact or enchantment.\n• Put a +1/+1 counter on target creature you control. It gains indestructible until end of turn. (Damage and effects that say \"destroy\" don't destroy it.)"
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{2}{G}",
+        "power": 3,
+        "subtypes": [
+          "Bird",
+          "Horse"
+        ],
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Ostrich-Horse"
+      },
+      "program_indexes": [
+        32
+      ],
+      "semantic_index": 27,
+      "semantic_key": "elemental.ostrich_horse",
+      "text_box": "When this creature enters, mill three cards. You may put a land card from among them into your hand. If you don't, put a +1/+1 counter on this creature. (To mill three cards, put the top three cards of your library into your graveyard.)"
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{2}{B}",
+        "subtypes": [
+          "Lesson"
+        ],
+        "types": [
+          "sorcery"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Ozai's Cruelty"
+      },
+      "program_indexes": [
+        33
+      ],
+      "semantic_index": 28,
+      "semantic_key": "elemental.ozai_s_cruelty",
+      "text_box": "Ozai's Cruelty deals 2 damage to target player. That player discards two cards."
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{1}{B}",
+        "types": [
+          "instant"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Power Word Kill"
+      },
+      "program_indexes": [
+        34
+      ],
+      "semantic_index": 29,
+      "semantic_key": "elemental.power_word_kill",
+      "text_box": "Destroy target non-Angel, non-Demon, non-Devil, non-Dragon creature."
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{1}{W/B}",
+        "power": 2,
+        "subtypes": [
+          "Human",
+          "Citizen",
+          "Ally"
+        ],
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Pretending Poxbearers"
+      },
+      "program_indexes": [
+        35
+      ],
+      "semantic_index": 30,
+      "semantic_key": "elemental.pretending_poxbearers",
+      "text_box": "When this creature dies, create a 1/1 white Ally creature token."
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{1}{W}",
+        "power": 2,
+        "subtypes": [
+          "Kor",
+          "Cleric"
+        ],
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Professor of Symbology"
+      },
+      "program_indexes": [
+        36
+      ],
+      "semantic_index": 31,
+      "semantic_key": "elemental.professor_of_symbology",
+      "text_box": "When this creature enters, learn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)"
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{1}{B}",
+        "types": [
+          "instant"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Savor"
+      },
+      "program_indexes": [
+        37
+      ],
+      "semantic_index": 32,
+      "semantic_key": "elemental.savor",
+      "text_box": "Target creature gets -2/-2 until end of turn. Create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")"
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{1}{G}",
+        "subtypes": [
+          "Lesson"
+        ],
+        "types": [
+          "sorcery"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Shared Roots"
+      },
+      "program_indexes": [
+        38
+      ],
+      "semantic_index": 33,
+      "semantic_key": "elemental.shared_roots",
+      "text_box": "Search your library for a basic land card, put it onto the battlefield tapped, then shuffle."
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{3}{U}{U}",
+        "subtypes": [
+          "Lesson"
+        ],
+        "types": [
+          "instant"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Sokka's Haiku"
+      },
+      "program_indexes": [
+        39
+      ],
+      "semantic_index": 34,
+      "semantic_key": "elemental.sokka_s_haiku",
+      "text_box": "Counter target spell.\nDraw a card, then mill three cards.\nUntap target land."
+    },
+    {
+      "characteristics": {
+        "keywords": [
+          "flying",
+          "flash"
+        ],
+        "mana_cost": "{U}",
+        "power": 1,
+        "subtypes": [
+          "Spirit",
+          "Pirate"
+        ],
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Spectral Sailor"
+      },
+      "program_indexes": [
+        40
+      ],
+      "semantic_index": 35,
+      "semantic_key": "elemental.spectral_sailor",
+      "text_box": "Flash (You may cast this spell any time you could cast an instant.)\nFlying\n{3}{U}: Draw a card."
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{1}{R}",
+        "power": 4,
+        "subtypes": [
+          "Cat",
+          "Armadillo"
+        ],
+        "toughness": 3,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Tiger-Dillo"
+      },
+      "program_indexes": [
+        41
+      ],
+      "semantic_index": 36,
+      "semantic_key": "elemental.tiger_dillo",
+      "text_box": "This creature can't attack or block unless you control another creature with power 4 or greater."
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{2}{G}",
+        "power": 0,
+        "subtypes": [
+          "Human",
+          "Warrior",
+          "Ally"
+        ],
+        "supertypes": [
+          "legendary"
+        ],
+        "toughness": 3,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Toph, the Blind Bandit"
+      },
+      "program_indexes": [
+        42,
+        43
+      ],
+      "semantic_index": 37,
+      "semantic_key": "elemental.toph_the_blind_bandit",
+      "text_box": "When Toph enters, earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)\nToph's power is equal to the number of +1/+1 counters on lands you control."
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{1}{G}",
+        "subtypes": [
+          "Lesson"
+        ],
+        "types": [
+          "sorcery"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "True Ancestry"
+      },
+      "program_indexes": [
+        44
+      ],
+      "semantic_index": 38,
+      "semantic_key": "elemental.true_ancestry",
+      "text_box": "Return up to one target permanent card from your graveyard to your hand.\nCreate a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")"
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{1}{R/G}{R/G}",
+        "power": 4,
+        "subtypes": [
+          "Human",
+          "Noble",
+          "Ally"
+        ],
+        "supertypes": [
+          "legendary"
+        ],
+        "toughness": 2,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Uncle Iroh"
+      },
+      "program_indexes": [
+        45,
+        46
+      ],
+      "semantic_index": 39,
+      "semantic_key": "elemental.uncle_iroh",
+      "text_box": "Firebending 1 (Whenever this creature attacks, add {R}. This mana lasts until end of combat.)\nLesson spells you cast cost {1} less to cast."
+    },
+    {
+      "characteristics": {
+        "keywords": [
+          "haste"
+        ],
+        "mana_cost": "{3}{R}",
+        "power": 4,
+        "subtypes": [
+          "Human",
+          "Rebel",
+          "Ally"
+        ],
+        "toughness": 4,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Wartime Protestors"
+      },
+      "program_indexes": [
+        47
+      ],
+      "semantic_index": 40,
+      "semantic_key": "elemental.wartime_protestors",
+      "text_box": "Haste\nWhenever another Ally you control enters, put a +1/+1 counter on that creature and it gains haste until end of turn."
+    },
+    {
+      "characteristics": {
+        "mana_cost": "{5}",
+        "subtypes": [
+          "Lesson"
+        ],
+        "types": [
+          "instant"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Zuko's Exile"
+      },
+      "program_indexes": [
+        48
+      ],
+      "semantic_index": 41,
+      "semantic_key": "elemental.zuko_s_exile",
+      "text_box": "Exile target artifact, creature, or enchantment. Its controller creates a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")"
+    },
+    {
+      "characteristics": {
+        "colors": [
+          "W"
+        ],
+        "keywords": [],
+        "power": 1,
+        "subtypes": [
+          "Ally"
+        ],
+        "supertypes": [],
+        "token": true,
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Ally"
+      },
+      "program_indexes": [],
+      "semantic_index": 42,
+      "semantic_key": "sacrifice.ally",
+      "text_box": ""
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Clue"
+        ],
+        "supertypes": [],
+        "token": true,
+        "types": [
+          "artifact"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Clue"
+      },
+      "program_indexes": [
+        49
+      ],
+      "semantic_index": 43,
+      "semantic_key": "sacrifice.clue",
+      "text_box": "{2}, Sacrifice this token: Draw a card."
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Food"
+        ],
+        "supertypes": [],
+        "token": true,
+        "types": [
+          "artifact"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Food"
+      },
+      "program_indexes": [
+        50
+      ],
+      "semantic_index": 44,
+      "semantic_key": "sacrifice.food",
+      "text_box": "{2}, {T}, Sacrifice this token: You gain 3 life."
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Plains"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Plains"
+      },
+      "program_indexes": [
+        51
+      ],
+      "semantic_index": 45,
+      "semantic_key": "sacrifice.plains",
+      "text_box": "({T}: Add {W}.)"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Swamp"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Swamp"
+      },
+      "program_indexes": [
+        52
+      ],
+      "semantic_index": 46,
+      "semantic_key": "sacrifice.swamp",
+      "text_box": "({T}: Add {B}.)"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Forest"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Forest"
+      },
+      "program_indexes": [
+        53
+      ],
+      "semantic_index": 47,
+      "semantic_key": "temur.forest",
+      "text_box": "({T}: Add {G}.)"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Island"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Island"
+      },
+      "program_indexes": [
+        54
+      ],
+      "semantic_index": 48,
+      "semantic_key": "temur.island",
+      "text_box": "({T}: Add {U}.)"
+    },
+    {
+      "characteristics": {
+        "keywords": [],
+        "subtypes": [
+          "Mountain"
+        ],
+        "supertypes": [
+          "basic"
+        ],
+        "token": false,
+        "types": [
+          "land"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Mountain"
+      },
+      "program_indexes": [
+        55
+      ],
+      "semantic_index": 49,
+      "semantic_key": "temur.mountain",
+      "text_box": "({T}: Add {R}.)"
+    },
+    {
+      "characteristics": {
+        "colors": [],
+        "power": 1,
+        "subtypes": [
+          "Spirit"
+        ],
+        "token": true,
+        "toughness": 1,
+        "types": [
+          "creature"
+        ]
+      },
+      "content_pack_binding": {
+        "kind": "legacy_registry_name",
+        "value": "Spirit"
+      },
+      "program_indexes": [
+        56,
+        57
+      ],
+      "semantic_index": 50,
+      "semantic_key": "token.spirit",
+      "text_box": "This token can't block or be blocked by non-Spirit creatures."
+    }
+  ],
+  "ir_hash": "acbc0b15e7a6e58864389f8575888980007546173cb555853fc599f5c85631ff",
+  "pack_key": "elemental-combat-v1",
+  "programs": [
+    {
+      "cost": {
+        "mana": "{1}{U/R}"
+      },
+      "definition_index": 0,
+      "instructions": [
+        {
+          "count": 2,
+          "op_name": "optional_discard_draw",
+          "opcode": 25
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 0,
+      "semantic_key": "elemental.abandon_attachments.spell",
+      "target_binding": "inferred",
+      "targets": []
+    },
+    {
+      "cost": {
+        "mana": "{1}{B}"
+      },
+      "definition_index": 1,
+      "instructions": [
+        {
+          "modes": [
+            [
+              {
+                "body": [
+                  {
+                    "duration": "end_of_turn",
+                    "op_name": "modify_pt",
+                    "opcode": 10,
+                    "power": -1,
+                    "target": "target_0",
+                    "toughness": -1
+                  }
+                ],
+                "op_name": "target_clause",
+                "opcode": 44,
+                "role": "target_0"
+              }
+            ],
+            [
+              {
+                "body": [
+                  {
+                    "count": 1,
+                    "op_name": "put_counters",
+                    "opcode": 5,
+                    "target": "target_1"
+                  }
+                ],
+                "op_name": "target_clause",
+                "opcode": 44,
+                "role": "target_1"
+              }
+            ],
+            [
+              {
+                "body": [
+                  {
+                    "duration": "end_of_turn",
+                    "op_name": "modify_pt",
+                    "opcode": 10,
+                    "power": -1,
+                    "target": "target_2",
+                    "toughness": -1
+                  }
+                ],
+                "op_name": "target_clause",
+                "opcode": 44,
+                "role": "target_2"
+              },
+              {
+                "body": [
+                  {
+                    "count": 1,
+                    "op_name": "put_counters",
+                    "opcode": 5,
+                    "target": "target_3"
+                  }
+                ],
+                "op_name": "target_clause",
+                "opcode": 44,
+                "role": "target_3"
+              }
+            ]
+          ],
+          "op_name": "modal",
+          "opcode": 43
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 1,
+      "semantic_key": "elemental.azula_always_lies.spell",
+      "target_binding": "inferred",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "creature"
+          }
+        },
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_1",
+          "selector": {
+            "kind": "creature"
+          }
+        },
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_2",
+          "selector": {
+            "kind": "creature"
+          }
+        },
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_3",
+          "selector": {
+            "kind": "creature"
+          }
+        }
+      ]
+    },
+    {
+      "cost": {
+        "mana": "{U}"
+      },
+      "definition_index": 2,
+      "instructions": [
+        {
+          "op_name": "return_to_hand_draw_if_controlled",
+          "opcode": 30,
+          "target": "target_0"
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 2,
+      "semantic_key": "elemental.boomerang_basics.spell",
+      "target_binding": "inferred",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "permanent",
+            "predicate": {
+              "kind": "not_card_types",
+              "values": [
+                "land"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "definition_index": 3,
+      "instructions": [
+        {
+          "amount": {
+            "kind": "battlefield_matching",
+            "predicate": {
+              "kind": "subtype",
+              "value": "Swamp"
+            }
+          },
+          "op_name": "deal_damage_value",
+          "opcode": 32,
+          "target": "target_0"
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 3,
+      "semantic_key": "elemental.cat_gator.trigger_0",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "creature_or_player"
+          }
+        }
+      ],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 4,
+      "instructions": [
+        {
+          "count": 1,
+          "op_name": "discard_target_player",
+          "opcode": 26,
+          "target": "target_0"
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 4,
+      "semantic_key": "elemental.corrupt_court_official.trigger_0",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "opponent"
+          }
+        }
+      ],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 5,
+      "instructions": [
+        {
+          "body": [
+            {
+              "count": 1,
+              "op_name": "earthbend",
+              "opcode": 20,
+              "target": "target_0"
+            }
+          ],
+          "op_name": "target_clause",
+          "opcode": 44,
+          "role": "target_0"
+        },
+        {
+          "body": [
+            {
+              "count": 1,
+              "op_name": "earthbend",
+              "opcode": 20,
+              "target": "target_1"
+            }
+          ],
+          "op_name": "target_clause",
+          "opcode": 44,
+          "role": "target_1"
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 5,
+      "semantic_key": "elemental.dai_li_agents.trigger_0",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "land_you_control"
+          }
+        },
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_1",
+          "selector": {
+            "kind": "land_you_control"
+          }
+        }
+      ],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 5,
+      "instructions": [
+        {
+          "amount": {
+            "kind": "creatures_with_counters"
+          },
+          "op_name": "drain_life_value",
+          "opcode": 39
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 6,
+      "semantic_key": "elemental.dai_li_agents.trigger_1",
+      "targets": [],
+      "trigger": {
+        "event": "attacks",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "cost": {
+        "mana": "0",
+        "sacrifice_source": false,
+        "tap_source": true,
+        "waterbend": false
+      },
+      "definition_index": 6,
+      "instructions": [
+        {
+          "op_name": "cant_be_blocked_target",
+          "opcode": 41,
+          "target": "target_0"
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 7,
+      "semantic_key": "elemental.deserter_s_disciple.activate_0",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "permanent_you_control",
+            "predicate": {
+              "kind": "all",
+              "predicates": [
+                {
+                  "kind": "card_type",
+                  "value": "creature"
+                },
+                {
+                  "kind": "power_at_most",
+                  "value": 2
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cost": {
+        "mana": "{2}{R}"
+      },
+      "definition_index": 7,
+      "instructions": [
+        {
+          "duration": "end_of_turn",
+          "op_name": "modify_pt",
+          "opcode": 10,
+          "power": 3,
+          "target": "target_0",
+          "toughness": 1
+        },
+        {
+          "duration": "end_of_turn",
+          "keywords": [
+            "trample"
+          ],
+          "op_name": "grant_keywords",
+          "opcode": 11,
+          "target": "target_0"
+        },
+        {
+          "op_name": "learn",
+          "opcode": 15
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 8,
+      "semantic_key": "elemental.enthusiastic_study.spell",
+      "target_binding": "inferred",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "creature"
+          }
+        }
+      ]
+    },
+    {
+      "cost": {
+        "mana": "{1}{B}"
+      },
+      "definition_index": 8,
+      "instructions": [
+        {
+          "op_name": "exile",
+          "opcode": 28,
+          "target": "target_0"
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 9,
+      "semantic_key": "elemental.epic_downfall.spell",
+      "target_binding": "inferred",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "permanent",
+            "predicate": {
+              "kind": "all",
+              "predicates": [
+                {
+                  "kind": "card_type",
+                  "value": "creature"
+                },
+                {
+                  "kind": "mana_value_at_least",
+                  "value": 3
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "definition_index": 9,
+      "instructions": [
+        {
+          "op_name": "learn",
+          "opcode": 15
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 10,
+      "semantic_key": "elemental.eyetwitch.trigger_0",
+      "targets": [],
+      "trigger": {
+        "event": "dies",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "cost": {
+        "mana": "{2}{G}"
+      },
+      "definition_index": 10,
+      "instructions": [
+        {
+          "op_name": "search_basic_land",
+          "opcode": 24,
+          "subtype": "Forest"
+        },
+        {
+          "op_name": "learn",
+          "opcode": 15
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 11,
+      "semantic_key": "elemental.field_trip.spell",
+      "target_binding": "inferred",
+      "targets": []
+    },
+    {
+      "cost": {
+        "mana": "{1}{R}"
+      },
+      "definition_index": 11,
+      "instructions": [
+        {
+          "count": 1,
+          "op_name": "draw_cards",
+          "opcode": 2
+        },
+        {
+          "op_name": "buff_target_value",
+          "opcode": 29,
+          "power": {
+            "kind": "cards_drawn_minus",
+            "subtract": 0
+          },
+          "target": "target_0",
+          "toughness": 0
+        },
+        {
+          "duration": "end_of_turn",
+          "keywords": [
+            "trample"
+          ],
+          "op_name": "grant_keywords",
+          "opcode": 11,
+          "target": "target_0"
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 12,
+      "semantic_key": "elemental.fists_of_flame.spell",
+      "target_binding": "inferred",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "creature"
+          }
+        }
+      ]
+    },
+    {
+      "definition_index": 12,
+      "instructions": [
+        {
+          "count": 1,
+          "definition_index": 50,
+          "op_name": "create_token",
+          "opcode": 4,
+          "tapped_and_attacking": false
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 13,
+      "semantic_key": "elemental.foggy_swamp_spirit_keeper.trigger_0",
+      "targets": [],
+      "trigger": {
+        "event": "draw_nth_card",
+        "n": 2,
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "cost": {
+        "mana": "{4}{W}"
+      },
+      "definition_index": 13,
+      "instructions": [
+        {
+          "count": {
+            "kind": "battlefield_matching",
+            "predicate": {
+              "kind": "subtype",
+              "value": "Plains"
+            }
+          },
+          "definition_index": 42,
+          "op_name": "create_tokens_value",
+          "opcode": 34
+        },
+        {
+          "count": 2,
+          "op_name": "scry",
+          "opcode": 7
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 14,
+      "semantic_key": "elemental.gather_the_white_lotus.spell",
+      "target_binding": "inferred",
+      "targets": []
+    },
+    {
+      "definition_index": 14,
+      "instructions": [
+        {
+          "op_name": "prevent_life_gain",
+          "opcode": 45
+        }
+      ],
+      "kind": 5,
+      "kind_name": "static",
+      "program_index": 15,
+      "semantic_key": "elemental.giant_cindermaw.prevent_life_gain",
+      "targets": []
+    },
+    {
+      "definition_index": 15,
+      "instructions": [
+        {
+          "op_name": "learn",
+          "opcode": 15
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 16,
+      "semantic_key": "elemental.gnarled_professor.trigger_0",
+      "targets": [],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 16,
+      "instructions": [
+        {
+          "count": 1,
+          "op_name": "earthbend",
+          "opcode": 20,
+          "target": "target_0"
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 17,
+      "semantic_key": "elemental.haru_hidden_talent.trigger_0",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "land_you_control"
+          }
+        }
+      ],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "another_you_control",
+          "predicate": {
+            "kind": "subtype",
+            "value": "Ally"
+          }
+        }
+      }
+    },
+    {
+      "cost": {
+        "mana": "{1}{R}"
+      },
+      "definition_index": 17,
+      "instructions": [
+        {
+          "modes": [
+            [
+              {
+                "amount": 1,
+                "op_name": "damage_opponent_creatures",
+                "opcode": 36
+              }
+            ],
+            [
+              {
+                "amount": 4,
+                "op_name": "deal_damage",
+                "opcode": 13,
+                "target": "target_0"
+              }
+            ]
+          ],
+          "op_name": "modal",
+          "opcode": 43
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 18,
+      "semantic_key": "elemental.iroh_s_demonstration.spell",
+      "target_binding": "inferred",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "creature"
+          }
+        }
+      ]
+    },
+    {
+      "definition_index": 18,
+      "instructions": [
+        {
+          "amount": {
+            "kind": "battlefield_matching",
+            "predicate": {
+              "kind": "card_type",
+              "value": "creature"
+            }
+          },
+          "op_name": "deal_damage_value",
+          "opcode": 32,
+          "target": "target_0"
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 19,
+      "semantic_key": "elemental.jet_freedom_fighter.trigger_0",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "creature_opponent_controls"
+          }
+        }
+      ],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 18,
+      "instructions": [
+        {
+          "body": [
+            {
+              "body": [
+                {
+                  "count": 1,
+                  "op_name": "put_counters",
+                  "opcode": 5,
+                  "target": "target_0"
+                }
+              ],
+              "op_name": "for_each_target",
+              "opcode": 19,
+              "role": "target_0"
+            }
+          ],
+          "op_name": "target_clause",
+          "opcode": 44,
+          "role": "target_0"
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 20,
+      "semantic_key": "elemental.jet_freedom_fighter.trigger_1",
+      "targets": [
+        {
+          "max": 2,
+          "min": 0,
+          "role": "target_0",
+          "selector": {
+            "kind": "creature"
+          }
+        }
+      ],
+      "trigger": {
+        "event": "dies",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 19,
+      "instructions": [
+        {
+          "count": 1,
+          "op_name": "put_counters",
+          "opcode": 5,
+          "target": "source"
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 21,
+      "semantic_key": "elemental.knowledge_seeker.trigger_0",
+      "targets": [],
+      "trigger": {
+        "event": "draw_nth_card",
+        "n": 2,
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 19,
+      "instructions": [
+        {
+          "count": 1,
+          "definition_index": 43,
+          "op_name": "create_token",
+          "opcode": 4,
+          "tapped_and_attacking": false
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 22,
+      "semantic_key": "elemental.knowledge_seeker.trigger_1",
+      "targets": [],
+      "trigger": {
+        "event": "dies",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "cost": {
+        "mana": "{1}{R}"
+      },
+      "definition_index": 20,
+      "instructions": [
+        {
+          "amount": 3,
+          "op_name": "deal_damage",
+          "opcode": 13,
+          "target": "target_0"
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 23,
+      "semantic_key": "elemental.lightning_strike.spell",
+      "target_binding": "inferred",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "creature_or_player"
+          }
+        }
+      ]
+    },
+    {
+      "definition_index": 21,
+      "instructions": [
+        {
+          "destination": "hand",
+          "look": 4,
+          "max_select": 1,
+          "min_select": 0,
+          "op_name": "look_and_select",
+          "opcode": 17,
+          "predicate": {
+            "kind": "subtypes_any",
+            "values": [
+              "Ally",
+              "Equipment",
+              "Lesson"
+            ]
+          },
+          "reveal": true
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 24,
+      "semantic_key": "elemental.master_piandao.trigger_0",
+      "targets": [],
+      "trigger": {
+        "event": "attacks",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 22,
+      "instructions": [
+        {
+          "condition": {
+            "count": 2,
+            "kind": "cards_drawn_at_least"
+          },
+          "op_name": "static_pt",
+          "opcode": 50,
+          "power": 2,
+          "toughness": 0
+        }
+      ],
+      "kind": 5,
+      "kind_name": "static",
+      "program_index": 25,
+      "semantic_key": "elemental.messenger_hawk.pt_0",
+      "targets": []
+    },
+    {
+      "definition_index": 22,
+      "instructions": [
+        {
+          "count": 1,
+          "definition_index": 43,
+          "op_name": "create_token",
+          "opcode": 4,
+          "tapped_and_attacking": false
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 26,
+      "semantic_key": "elemental.messenger_hawk.trigger_0",
+      "targets": [],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 23,
+      "instructions": [
+        {
+          "condition": {
+            "kind": "always"
+          },
+          "first_on_own_turn": true,
+          "generic": 1,
+          "op_name": "spell_cost_reduction",
+          "opcode": 49,
+          "predicate": {
+            "kind": "all",
+            "predicates": [
+              {
+                "kind": "flying"
+              },
+              {
+                "kind": "not_subtypes",
+                "values": [
+                  "Lemur"
+                ]
+              },
+              {
+                "kind": "card_type",
+                "value": "creature"
+              }
+            ]
+          }
+        }
+      ],
+      "kind": 5,
+      "kind_name": "static",
+      "program_index": 27,
+      "semantic_key": "elemental.momo_friendly_flier.reduce_cost_0",
+      "targets": []
+    },
+    {
+      "definition_index": 23,
+      "instructions": [
+        {
+          "duration": "end_of_turn",
+          "op_name": "modify_pt",
+          "opcode": 10,
+          "power": 1,
+          "target": "source",
+          "toughness": 1
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 28,
+      "semantic_key": "elemental.momo_friendly_flier.trigger_0",
+      "targets": [],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "another_you_control",
+          "predicate": {
+            "kind": "all",
+            "predicates": [
+              {
+                "kind": "flying"
+              },
+              {
+                "kind": "card_type",
+                "value": "creature"
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "definition_index": 24,
+      "instructions": [
+        {
+          "duration": "end_of_turn",
+          "op_name": "modify_pt",
+          "opcode": 10,
+          "power": 1,
+          "target": "source",
+          "toughness": 1
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 29,
+      "semantic_key": "elemental.monastery_swiftspear.trigger_0",
+      "targets": [],
+      "trigger": {
+        "event": "cast_spell",
+        "predicate": {
+          "kind": "not_card_types",
+          "values": [
+            "creature"
+          ]
+        },
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "cost": {
+        "mana": "{U}"
+      },
+      "definition_index": 25,
+      "instructions": [
+        {
+          "duration": "end_of_turn",
+          "op_name": "modify_pt",
+          "opcode": 10,
+          "power": 1,
+          "target": "target_0",
+          "toughness": 1
+        },
+        {
+          "duration": "end_of_turn",
+          "keywords": [
+            "hexproof"
+          ],
+          "op_name": "grant_keywords",
+          "opcode": 11,
+          "target": "target_0"
+        },
+        {
+          "op_name": "untap",
+          "opcode": 9,
+          "target": "target_0"
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 30,
+      "semantic_key": "elemental.octopus_form.spell",
+      "target_binding": "inferred",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "creature_you_control"
+          }
+        }
+      ]
+    },
+    {
+      "cost": {
+        "mana": "{1}{G}"
+      },
+      "definition_index": 26,
+      "instructions": [
+        {
+          "modes": [
+            [
+              {
+                "op_name": "destroy",
+                "opcode": 27,
+                "target": "target_0"
+              }
+            ],
+            [
+              {
+                "count": 1,
+                "op_name": "put_counters",
+                "opcode": 5,
+                "target": "target_1"
+              },
+              {
+                "duration": "end_of_turn",
+                "keywords": [
+                  "indestructible"
+                ],
+                "op_name": "grant_keywords",
+                "opcode": 11,
+                "target": "target_1"
+              }
+            ]
+          ],
+          "op_name": "modal",
+          "opcode": 43
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 31,
+      "semantic_key": "elemental.origin_of_metalbending.spell",
+      "target_binding": "inferred",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "permanent",
+            "predicate": {
+              "kind": "types_any",
+              "values": [
+                "artifact",
+                "enchantment"
+              ]
+            }
+          }
+        },
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_1",
+          "selector": {
+            "kind": "creature_you_control"
+          }
+        }
+      ]
+    },
+    {
+      "definition_index": 27,
+      "instructions": [
+        {
+          "count": 3,
+          "if_declined": [
+            {
+              "count": 1,
+              "op_name": "put_counters",
+              "opcode": 5,
+              "target": "source"
+            }
+          ],
+          "op_name": "mill_and_select",
+          "opcode": 38,
+          "predicate": {
+            "kind": "card_type",
+            "value": "land"
+          }
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 32,
+      "semantic_key": "elemental.ostrich_horse.trigger_0",
+      "targets": [],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "cost": {
+        "mana": "{2}{B}"
+      },
+      "definition_index": 28,
+      "instructions": [
+        {
+          "amount": 2,
+          "op_name": "deal_damage",
+          "opcode": 13,
+          "target": "target_0"
+        },
+        {
+          "count": 2,
+          "op_name": "discard_target_player",
+          "opcode": 26,
+          "target": "target_0"
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 33,
+      "semantic_key": "elemental.ozai_s_cruelty.spell",
+      "target_binding": "inferred",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "player"
+          }
+        }
+      ]
+    },
+    {
+      "cost": {
+        "mana": "{1}{B}"
+      },
+      "definition_index": 29,
+      "instructions": [
+        {
+          "op_name": "destroy",
+          "opcode": 27,
+          "target": "target_0"
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 34,
+      "semantic_key": "elemental.power_word_kill.spell",
+      "target_binding": "inferred",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "permanent",
+            "predicate": {
+              "kind": "all",
+              "predicates": [
+                {
+                  "kind": "not_subtypes",
+                  "values": [
+                    "Angel",
+                    "Demon",
+                    "Devil",
+                    "Dragon"
+                  ]
+                },
+                {
+                  "kind": "card_type",
+                  "value": "creature"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "definition_index": 30,
+      "instructions": [
+        {
+          "count": 1,
+          "definition_index": 42,
+          "op_name": "create_token",
+          "opcode": 4,
+          "tapped_and_attacking": false
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 35,
+      "semantic_key": "elemental.pretending_poxbearers.trigger_0",
+      "targets": [],
+      "trigger": {
+        "event": "dies",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 31,
+      "instructions": [
+        {
+          "op_name": "learn",
+          "opcode": 15
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 36,
+      "semantic_key": "elemental.professor_of_symbology.trigger_0",
+      "targets": [],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "cost": {
+        "mana": "{1}{B}"
+      },
+      "definition_index": 32,
+      "instructions": [
+        {
+          "duration": "end_of_turn",
+          "op_name": "modify_pt",
+          "opcode": 10,
+          "power": -2,
+          "target": "target_0",
+          "toughness": -2
+        },
+        {
+          "count": 1,
+          "definition_index": 44,
+          "op_name": "create_token",
+          "opcode": 4,
+          "tapped_and_attacking": false
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 37,
+      "semantic_key": "elemental.savor.spell",
+      "target_binding": "inferred",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "creature"
+          }
+        }
+      ]
+    },
+    {
+      "cost": {
+        "mana": "{1}{G}"
+      },
+      "definition_index": 33,
+      "instructions": [
+        {
+          "op_name": "search_basic_land",
+          "opcode": 24,
+          "subtype": null
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 38,
+      "semantic_key": "elemental.shared_roots.spell",
+      "target_binding": "inferred",
+      "targets": []
+    },
+    {
+      "cost": {
+        "mana": "{3}{U}{U}"
+      },
+      "definition_index": 34,
+      "instructions": [
+        {
+          "body": [
+            {
+              "op_name": "counter_spell",
+              "opcode": 40,
+              "target": "target_0"
+            }
+          ],
+          "op_name": "target_clause",
+          "opcode": 44,
+          "role": "target_0"
+        },
+        {
+          "count": 1,
+          "op_name": "draw_cards",
+          "opcode": 2
+        },
+        {
+          "count": 3,
+          "op_name": "mill_cards",
+          "opcode": 37
+        },
+        {
+          "body": [
+            {
+              "op_name": "untap",
+              "opcode": 9,
+              "target": "target_1"
+            }
+          ],
+          "op_name": "target_clause",
+          "opcode": 44,
+          "role": "target_1"
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 39,
+      "semantic_key": "elemental.sokka_s_haiku.spell",
+      "target_binding": "inferred",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "spell"
+          }
+        },
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_1",
+          "selector": {
+            "kind": "permanent",
+            "predicate": {
+              "kind": "card_type",
+              "value": "land"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cost": {
+        "mana": "{3}{U}",
+        "sacrifice_source": false,
+        "tap_source": false,
+        "waterbend": false
+      },
+      "definition_index": 35,
+      "instructions": [
+        {
+          "count": 1,
+          "op_name": "draw_cards",
+          "opcode": 2
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 40,
+      "semantic_key": "elemental.spectral_sailor.activate_0",
+      "targets": []
+    },
+    {
+      "definition_index": 36,
+      "instructions": [
+        {
+          "op_name": "combat_requires_other",
+          "opcode": 46,
+          "predicate": {
+            "kind": "all",
+            "predicates": [
+              {
+                "kind": "power_at_least",
+                "value": 4
+              },
+              {
+                "kind": "card_type",
+                "value": "creature"
+              }
+            ]
+          }
+        }
+      ],
+      "kind": 5,
+      "kind_name": "static",
+      "program_index": 41,
+      "semantic_key": "elemental.tiger_dillo.combat_eligibility",
+      "targets": []
+    },
+    {
+      "definition_index": 37,
+      "instructions": [
+        {
+          "op_name": "power_from_land_counters",
+          "opcode": 48
+        }
+      ],
+      "kind": 5,
+      "kind_name": "static",
+      "program_index": 42,
+      "semantic_key": "elemental.toph_the_blind_bandit.power",
+      "targets": []
+    },
+    {
+      "definition_index": 37,
+      "instructions": [
+        {
+          "count": 2,
+          "op_name": "earthbend",
+          "opcode": 20,
+          "target": "target_0"
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 43,
+      "semantic_key": "elemental.toph_the_blind_bandit.trigger_0",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "land_you_control"
+          }
+        }
+      ],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "cost": {
+        "mana": "{1}{G}"
+      },
+      "definition_index": 38,
+      "instructions": [
+        {
+          "body": [
+            {
+              "op_name": "return_graveyard_target",
+              "opcode": 42,
+              "target": "target_0"
+            }
+          ],
+          "op_name": "target_clause",
+          "opcode": 44,
+          "role": "target_0"
+        },
+        {
+          "count": 1,
+          "definition_index": 43,
+          "op_name": "create_token",
+          "opcode": 4,
+          "tapped_and_attacking": false
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 44,
+      "semantic_key": "elemental.true_ancestry.spell",
+      "target_binding": "inferred",
+      "targets": [
+        {
+          "max": 1,
+          "min": 0,
+          "role": "target_0",
+          "selector": {
+            "kind": "graveyard_card_you_own",
+            "predicate": {
+              "kind": "types_any",
+              "values": [
+                "artifact",
+                "creature",
+                "enchantment",
+                "land",
+                "planeswalker",
+                "battle"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "definition_index": 39,
+      "instructions": [
+        {
+          "condition": {
+            "kind": "always"
+          },
+          "first_on_own_turn": false,
+          "generic": 1,
+          "op_name": "spell_cost_reduction",
+          "opcode": 49,
+          "predicate": {
+            "kind": "subtype",
+            "value": "Lesson"
+          }
+        }
+      ],
+      "kind": 5,
+      "kind_name": "static",
+      "program_index": 45,
+      "semantic_key": "elemental.uncle_iroh.reduce_cost_0",
+      "targets": []
+    },
+    {
+      "definition_index": 39,
+      "instructions": [
+        {
+          "mana": "R",
+          "op_name": "add_mana",
+          "opcode": 1,
+          "until": "end_of_combat"
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 46,
+      "semantic_key": "elemental.uncle_iroh.trigger_0",
+      "targets": [],
+      "trigger": {
+        "event": "attacks",
+        "subject": {
+          "kind": "this"
+        }
+      }
+    },
+    {
+      "definition_index": 40,
+      "instructions": [
+        {
+          "counters": 1,
+          "keywords": [
+            "haste"
+          ],
+          "op_name": "modify_triggering_permanent",
+          "opcode": 31
+        }
+      ],
+      "kind": 3,
+      "kind_name": "triggered",
+      "program_index": 47,
+      "semantic_key": "elemental.wartime_protestors.trigger_0",
+      "targets": [],
+      "trigger": {
+        "event": "enters_battlefield",
+        "subject": {
+          "kind": "another_you_control",
+          "predicate": {
+            "kind": "subtype",
+            "value": "Ally"
+          }
+        }
+      }
+    },
+    {
+      "cost": {
+        "mana": "{5}"
+      },
+      "definition_index": 41,
+      "instructions": [
+        {
+          "definition_index": 43,
+          "op_name": "exile_with_controller_token",
+          "opcode": 35,
+          "target": "target_0"
+        }
+      ],
+      "kind": 2,
+      "kind_name": "spell",
+      "program_index": 48,
+      "semantic_key": "elemental.zuko_s_exile.spell",
+      "target_binding": "inferred",
+      "targets": [
+        {
+          "max": 1,
+          "min": 1,
+          "role": "target_0",
+          "selector": {
+            "kind": "permanent",
+            "predicate": {
+              "kind": "types_any",
+              "values": [
+                "artifact",
+                "creature",
+                "enchantment"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "cost": {
+        "mana": "2",
+        "sacrifice_source": true
+      },
+      "definition_index": 43,
+      "instructions": [
+        {
+          "count": 1,
+          "op_name": "draw_cards",
+          "opcode": 2
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 49,
+      "semantic_key": "sacrifice.clue.p0",
+      "targets": []
+    },
+    {
+      "cost": {
+        "mana": "2",
+        "sacrifice_source": true,
+        "tap_source": true
+      },
+      "definition_index": 44,
+      "instructions": [
+        {
+          "amount": 3,
+          "op_name": "gain_life",
+          "opcode": 6
+        }
+      ],
+      "kind": 4,
+      "kind_name": "activated",
+      "program_index": 50,
+      "semantic_key": "sacrifice.food.p0",
+      "targets": []
+    },
+    {
+      "definition_index": 45,
+      "instructions": [
+        {
+          "mana": "W",
+          "op_name": "add_mana",
+          "opcode": 1
+        }
+      ],
+      "kind": 1,
+      "kind_name": "mana",
+      "program_index": 51,
+      "semantic_key": "sacrifice.plains.p0",
+      "targets": []
+    },
+    {
+      "definition_index": 46,
+      "instructions": [
+        {
+          "mana": "B",
+          "op_name": "add_mana",
+          "opcode": 1
+        }
+      ],
+      "kind": 1,
+      "kind_name": "mana",
+      "program_index": 52,
+      "semantic_key": "sacrifice.swamp.p0",
+      "targets": []
+    },
+    {
+      "definition_index": 47,
+      "instructions": [
+        {
+          "mana": "G",
+          "op_name": "add_mana",
+          "opcode": 1
+        }
+      ],
+      "kind": 1,
+      "kind_name": "mana",
+      "program_index": 53,
+      "semantic_key": "temur.forest.p0",
+      "targets": []
+    },
+    {
+      "definition_index": 48,
+      "instructions": [
+        {
+          "mana": "U",
+          "op_name": "add_mana",
+          "opcode": 1
+        }
+      ],
+      "kind": 1,
+      "kind_name": "mana",
+      "program_index": 54,
+      "semantic_key": "temur.island.p0",
+      "targets": []
+    },
+    {
+      "definition_index": 49,
+      "instructions": [
+        {
+          "mana": "R",
+          "op_name": "add_mana",
+          "opcode": 1
+        }
+      ],
+      "kind": 1,
+      "kind_name": "mana",
+      "program_index": 55,
+      "semantic_key": "temur.mountain.p0",
+      "targets": []
+    },
+    {
+      "definition_index": 50,
+      "instructions": [
+        {
+          "direction": "blocked_by",
+          "op_name": "blocking_restriction",
+          "opcode": 47,
+          "predicate": {
+            "kind": "not_subtypes",
+            "values": [
+              "Spirit"
+            ]
+          }
+        }
+      ],
+      "kind": 5,
+      "kind_name": "static",
+      "program_index": 56,
+      "semantic_key": "token.spirit.block_restriction",
+      "targets": []
+    },
+    {
+      "definition_index": 50,
+      "instructions": [
+        {
+          "direction": "blocking",
+          "op_name": "blocking_restriction",
+          "opcode": 47,
+          "predicate": {
+            "kind": "not_subtypes",
+            "values": [
+              "Spirit"
+            ]
+          }
+        }
+      ],
+      "kind": 5,
+      "kind_name": "static",
+      "program_index": 57,
+      "semantic_key": "token.spirit.blocking_restriction",
+      "targets": []
+    }
+  ],
+  "schema_version": 1,
+  "setup_schema_version": 1,
+  "source_hash": "e6592b7452bc5cf7911cbb03c02b190b2a7ff441ab286677892914867edc6094"
+}

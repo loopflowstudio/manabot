@@ -702,6 +702,7 @@ def _validate_characteristics(value: Any, context: str) -> dict[str, Any]:
             "supertypes",
             "token",
             "toughness",
+            "enters_tapped",
         },
     )
     types = [
@@ -735,6 +736,8 @@ def _validate_characteristics(value: Any, context: str) -> dict[str, Any]:
             _integer(characteristics[field], f"{context}.{field}")
     if "token" in characteristics:
         _boolean(characteristics["token"], f"{context}.token")
+    if "enters_tapped" in characteristics:
+        _boolean(characteristics["enters_tapped"], f"{context}.enters_tapped")
     return deepcopy(characteristics)
 
 
@@ -810,6 +813,7 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
         source,
         "source",
         required={"schema_version", "pack_key", "decks", "definitions"},
+        optional={"pool"},
     )
     if source["schema_version"] != SOURCE_SCHEMA_VERSION:
         _fail("source.schema_version", f"expected {SOURCE_SCHEMA_VERSION}")
@@ -839,6 +843,7 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
             raw_definition,
             context,
             required={"key", "registry_name", "characteristics", "programs"},
+            optional={"text_box"},
         )
         registry_name = _string(
             raw_definition["registry_name"], f"{context}.registry_name"
@@ -929,6 +934,11 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
                 "semantic_key": definition_key,
             }
         )
+        if "text_box" in raw_definition:
+            text_box = raw_definition["text_box"]
+            if not isinstance(text_box, str):
+                _fail(context, "text_box must be a string")
+            definitions[-1]["text_box"] = text_box
     _unique(program_keys, "programs")
 
     registry_names = [
@@ -994,6 +1004,17 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
     _unique([deck["key"] for deck in decks], "source.decks")
     decks.sort(key=lambda deck: deck["key"])
 
+    pool_keys = [
+        _string(key, "source.pool[]")
+        for key in _array(source.get("pool", []), "source.pool")
+    ]
+    _unique(pool_keys, "source.pool")
+    for key in pool_keys:
+        if key not in definition_indexes:
+            _fail("source.pool", f"unknown definition {key!r}")
+        if source_by_key[key]["characteristics"].get("token", False):
+            _fail("source.pool", "token cannot be a deck pool entry")
+
     source_hash = _sha256(source)
     ir: dict[str, Any] = {
         "definitions": definitions,
@@ -1014,7 +1035,7 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
     }
     closure_indexes = {
         definition_indexes[key] for key in deck_definition_keys
-    } | referenced_indexes
+    } | referenced_indexes | {definition_indexes[key] for key in pool_keys}
     opcode_counts = Counter(
         instruction["op_name"]
         for program in programs

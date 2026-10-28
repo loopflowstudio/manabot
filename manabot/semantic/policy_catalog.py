@@ -13,7 +13,7 @@ from pathlib import Path
 from manabot.semantic.learning import BoundSemanticPack, ContentPackBindingError
 import managym
 
-ROOT = Path(__file__).resolve().parents[2] / "content/semantic/v1/generated"
+ROOT = Path(__file__).resolve().parents[2] / "content/semantic/current/generated"
 
 
 @dataclass(frozen=True)
@@ -30,32 +30,32 @@ _CATALOGS = {
     "elemental-combat-v1": PolicyCatalogSpec(
         "elemental.ir.json",
         ("elemental_left", "elemental_right"),
-        "../w7/learning_schema.json",
+        "learning_schema.json",
     ),
     "elemental-sacrifice-v1": PolicyCatalogSpec(
         "sacrifice.ir.json",
         ("sacrifice_left", "sacrifice_right"),
-        "../w8/learning_schema.json",
+        "learning_schema.json",
     ),
     "elemental-temur-v1": PolicyCatalogSpec(
         "temur.ir.json",
         ("temur_left", "temur_right"),
-        "../w9/learning_schema.json",
+        "learning_schema.json",
     ),
     "elemental-world-v2": PolicyCatalogSpec(
-        "../../w11/generated/elemental_world.ir.json",
+        "optional_payments.ir.json",
         ("elemental_bg", "elemental_gr"),
-        "../w11/learning_schema.json",
+        "learning_schema.json",
     ),
     "elemental-world-v1": PolicyCatalogSpec(
         "elemental_world.ir.json",
         ("elemental_bg", "elemental_gr"),
-        "../w10/learning_schema.json",
+        "learning_schema.json",
     ),
     "mtg122-complexity-v1": PolicyCatalogSpec(
         "complexity.ir.json",
         ("l1_swift", "l1_heavy"),
-        "complexity.learning_schema.json",
+        "learning_schema.json",
     ),
 }
 

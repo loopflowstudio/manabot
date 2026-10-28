@@ -1,0 +1,3104 @@
+{
+  "optional_payments": {
+    "pack_key": "elemental-world-v2",
+    "decks": [
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 2,
+            "definition": "elemental.tiger_dillo"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.ostrich_horse"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.uncle_iroh"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.giant_cindermaw"
+          },
+          {
+            "count": 1,
+            "definition": "tla.badgermole_cub"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.toph_the_blind_bandit"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.deserter_s_disciple"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.wartime_protestors"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.gnarled_professor"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.monastery_swiftspear"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.lightning_strike"
+          },
+          {
+            "count": 2,
+            "definition": "tla.firebending_lesson"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.fists_of_flame"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.enthusiastic_study"
+          },
+          {
+            "count": 1,
+            "definition": "stx.igneous_inspiration"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.field_trip"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.origin_of_metalbending"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.shared_roots"
+          },
+          {
+            "count": 8,
+            "definition": "temur.forest"
+          },
+          {
+            "count": 7,
+            "definition": "temur.mountain"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.fabled_passage"
+          }
+        ],
+        "key": "elemental_gr",
+        "sideboard": [
+          {
+            "count": 1,
+            "definition": "tla.firebending_lesson"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.combustion_technique"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.origin_of_metalbending"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.zuko_s_exile"
+          }
+        ]
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 2,
+            "definition": "tla.compassionate_healer"
+          },
+          {
+            "count": 1,
+            "definition": "tla.jeong_jeongs_deserters"
+          },
+          {
+            "count": 3,
+            "definition": "tla.invasion_reinforcements"
+          },
+          {
+            "count": 2,
+            "definition": "tla.water_tribe_rallier"
+          },
+          {
+            "count": 2,
+            "definition": "tla.earth_kingdom_jailer"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.haru_hidden_talent"
+          },
+          {
+            "count": 1,
+            "definition": "tla.white_lotus_reinforcements"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.ostrich_horse"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.professor_of_symbology"
+          },
+          {
+            "count": 1,
+            "definition": "tla.south_pole_voyager"
+          },
+          {
+            "count": 2,
+            "definition": "tla.allies_at_last"
+          },
+          {
+            "count": 1,
+            "definition": "tla.yip_yip"
+          },
+          {
+            "count": 1,
+            "definition": "tla.fancy_footwork"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.enter_the_avatar_state"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.origin_of_metalbending"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.true_ancestry"
+          },
+          {
+            "count": 8,
+            "definition": "sacrifice.plains"
+          },
+          {
+            "count": 7,
+            "definition": "temur.forest"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.fabled_passage"
+          }
+        ],
+        "key": "elemental_gw",
+        "sideboard": [
+          {
+            "count": 1,
+            "definition": "elemental.origin_of_metalbending"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.enter_the_avatar_state"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.zuko_s_exile"
+          }
+        ]
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 4,
+            "definition": "tla.fire_nation_cadets"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.gran_gran"
+          },
+          {
+            "count": 2,
+            "definition": "tla.dragonfly_swarm"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.deserter_s_disciple"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.monastery_swiftspear"
+          },
+          {
+            "count": 3,
+            "definition": "tla.firebending_lesson"
+          },
+          {
+            "count": 2,
+            "definition": "stx.igneous_inspiration"
+          },
+          {
+            "count": 1,
+            "definition": "stx.pop_quiz"
+          },
+          {
+            "count": 2,
+            "definition": "stx.divide_by_zero"
+          },
+          {
+            "count": 1,
+            "definition": "tla.accumulate_wisdom"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.abandon_attachments"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.combustion_technique"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.lightning_strike"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.octopus_form"
+          },
+          {
+            "count": 8,
+            "definition": "temur.mountain"
+          },
+          {
+            "count": 7,
+            "definition": "temur.island"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.fabled_passage"
+          }
+        ],
+        "key": "elemental_ur",
+        "sideboard": [
+          {
+            "count": 1,
+            "definition": "tla.firebending_lesson"
+          },
+          {
+            "count": 1,
+            "definition": "tla.accumulate_wisdom"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.combustion_technique"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.zuko_s_exile"
+          }
+        ]
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 3,
+            "definition": "tla.otter_penguin"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.knowledge_seeker"
+          },
+          {
+            "count": 3,
+            "definition": "tla.forecasting_fortune_teller"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.foggy_swamp_spirit_keeper"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.gran_gran"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.june_bounty_hunter"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.eyetwitch"
+          },
+          {
+            "count": 1,
+            "definition": "stx.pop_quiz"
+          },
+          {
+            "count": 2,
+            "definition": "tla.itll_quench_ya"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.abandon_attachments"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.deadly_dispute"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.power_word_kill"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.savor"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.epic_downfall"
+          },
+          {
+            "count": 1,
+            "definition": "tla.accumulate_wisdom"
+          },
+          {
+            "count": 8,
+            "definition": "temur.island"
+          },
+          {
+            "count": 7,
+            "definition": "sacrifice.swamp"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.fabled_passage"
+          }
+        ],
+        "key": "elemental_ub",
+        "sideboard": [
+          {
+            "count": 1,
+            "definition": "tla.accumulate_wisdom"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.ozai_s_cruelty"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.zuko_s_exile"
+          }
+        ]
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 1,
+            "definition": "elemental.spectral_sailor"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.messenger_hawk"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.momo_friendly_flier"
+          },
+          {
+            "count": 3,
+            "definition": "tla.forecasting_fortune_teller"
+          },
+          {
+            "count": 2,
+            "definition": "tla.earth_kingdom_jailer"
+          },
+          {
+            "count": 2,
+            "definition": "tla.compassionate_healer"
+          },
+          {
+            "count": 1,
+            "definition": "tla.jeong_jeongs_deserters"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.professor_of_symbology"
+          },
+          {
+            "count": 2,
+            "definition": "stx.divide_by_zero"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.boomerang_basics"
+          },
+          {
+            "count": 1,
+            "definition": "stx.pop_quiz"
+          },
+          {
+            "count": 2,
+            "definition": "tla.itll_quench_ya"
+          },
+          {
+            "count": 1,
+            "definition": "tla.yip_yip"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.enter_the_avatar_state"
+          },
+          {
+            "count": 8,
+            "definition": "sacrifice.plains"
+          },
+          {
+            "count": 7,
+            "definition": "temur.island"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.fabled_passage"
+          }
+        ],
+        "key": "elemental_uw",
+        "sideboard": [
+          {
+            "count": 1,
+            "definition": "tla.fancy_footwork"
+          },
+          {
+            "count": 1,
+            "definition": "tla.accumulate_wisdom"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.zuko_s_exile"
+          }
+        ]
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 2,
+            "definition": "temur.hermitic_herbalist"
+          },
+          {
+            "count": 1,
+            "definition": "temur.great_divide_guide"
+          },
+          {
+            "count": 1,
+            "definition": "temur.iroh_grand_lotus"
+          },
+          {
+            "count": 1,
+            "definition": "temur.ran_and_shaw"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.gnarled_professor"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.gran_gran"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.unlucky_cabbage_merchant"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.ostrich_horse"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.toph_the_blind_bandit"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.field_trip"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.shared_roots"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.cycle_of_renewal"
+          },
+          {
+            "count": 1,
+            "definition": "temur.waterbending_lesson"
+          },
+          {
+            "count": 1,
+            "definition": "tla.accumulate_wisdom"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.abandon_attachments"
+          },
+          {
+            "count": 1,
+            "definition": "tla.firebending_lesson"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.combustion_technique"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.true_ancestry"
+          },
+          {
+            "count": 1,
+            "definition": "temur.prophetic_prism"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.zuko_s_exile"
+          },
+          {
+            "count": 5,
+            "definition": "temur.forest"
+          },
+          {
+            "count": 5,
+            "definition": "temur.island"
+          },
+          {
+            "count": 3,
+            "definition": "temur.mountain"
+          },
+          {
+            "count": 3,
+            "definition": "sacrifice.fabled_passage"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.prismatic_vista"
+          }
+        ],
+        "key": "elemental_ug",
+        "sideboard": [
+          {
+            "count": 1,
+            "definition": "elemental.origin_of_metalbending"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.iroh_s_demonstration"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.sokka_s_haiku"
+          }
+        ]
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 2,
+            "definition": "tla.compassionate_healer"
+          },
+          {
+            "count": 1,
+            "definition": "tla.jeong_jeongs_deserters"
+          },
+          {
+            "count": 3,
+            "definition": "tla.invasion_reinforcements"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.professor_of_symbology"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.deserter_s_disciple"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.jet_freedom_fighter"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.wartime_protestors"
+          },
+          {
+            "count": 1,
+            "definition": "tla.water_tribe_rallier"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.master_piandao"
+          },
+          {
+            "count": 1,
+            "definition": "tla.south_pole_voyager"
+          },
+          {
+            "count": 3,
+            "definition": "elemental.lightning_strike"
+          },
+          {
+            "count": 1,
+            "definition": "tla.firebending_lesson"
+          },
+          {
+            "count": 1,
+            "definition": "stx.igneous_inspiration"
+          },
+          {
+            "count": 1,
+            "definition": "tla.yip_yip"
+          },
+          {
+            "count": 1,
+            "definition": "tla.fancy_footwork"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.enthusiastic_study"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.gather_the_white_lotus"
+          },
+          {
+            "count": 8,
+            "definition": "sacrifice.plains"
+          },
+          {
+            "count": 7,
+            "definition": "temur.mountain"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.fabled_passage"
+          }
+        ],
+        "key": "elemental_wr",
+        "sideboard": [
+          {
+            "count": 1,
+            "definition": "tla.firebending_lesson"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.enter_the_avatar_state"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.zuko_s_exile"
+          }
+        ]
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 2,
+            "definition": "elemental.pretending_poxbearers"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.curious_farm_animals"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.callous_inspector"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.eyetwitch"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.professor_of_symbology"
+          },
+          {
+            "count": 1,
+            "definition": "tla.jeong_jeongs_deserters"
+          },
+          {
+            "count": 3,
+            "definition": "tla.invasion_reinforcements"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.corrupt_court_official"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.june_bounty_hunter"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.deadly_precision"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.deadly_dispute"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.tolls_of_war"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.bastion_of_remembrance"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.savor"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.power_word_kill"
+          },
+          {
+            "count": 1,
+            "definition": "tla.yip_yip"
+          },
+          {
+            "count": 8,
+            "definition": "sacrifice.plains"
+          },
+          {
+            "count": 7,
+            "definition": "sacrifice.swamp"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.fabled_passage"
+          }
+        ],
+        "key": "elemental_wb",
+        "sideboard": [
+          {
+            "count": 1,
+            "definition": "elemental.enter_the_avatar_state"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.ozai_s_cruelty"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.zuko_s_exile"
+          }
+        ]
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 1,
+            "definition": "sacrifice.callous_inspector"
+          },
+          {
+            "count": 4,
+            "definition": "elemental.corrupt_court_official"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.eyetwitch"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.mayhem_devil"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.june_bounty_hunter"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.deserter_s_disciple"
+          },
+          {
+            "count": 1,
+            "definition": "tla.fire_nation_cadets"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.cat_gator"
+          },
+          {
+            "count": 3,
+            "definition": "tla.firebending_lesson"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.lightning_strike"
+          },
+          {
+            "count": 1,
+            "definition": "stx.igneous_inspiration"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.deadly_precision"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.deadly_dispute"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.weaponize_the_monsters"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.savor"
+          },
+          {
+            "count": 8,
+            "definition": "sacrifice.swamp"
+          },
+          {
+            "count": 7,
+            "definition": "temur.mountain"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.fabled_passage"
+          }
+        ],
+        "key": "elemental_rb",
+        "sideboard": [
+          {
+            "count": 1,
+            "definition": "tla.firebending_lesson"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.combustion_technique"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.ozai_s_cruelty"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.zuko_s_exile"
+          }
+        ]
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 1,
+            "definition": "sacrifice.sazh_s_chocobo"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.tireless_tracker"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.tireless_provisioner"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.lotus_cobra"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.unlucky_cabbage_merchant"
+          },
+          {
+            "count": 1,
+            "definition": "tla.badgermole_cub"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.toph_the_blind_bandit"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.dai_li_agents"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.corrupt_court_official"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.callous_inspector"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.june_bounty_hunter"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.ostrich_horse"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.cycle_of_renewal"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.field_trip"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.true_ancestry"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.origin_of_metalbending"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.deadly_precision"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.deadly_dispute"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.savor"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.power_word_kill"
+          },
+          {
+            "count": 6,
+            "definition": "temur.forest"
+          },
+          {
+            "count": 6,
+            "definition": "sacrifice.swamp"
+          },
+          {
+            "count": 3,
+            "definition": "sacrifice.fabled_passage"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.prismatic_vista"
+          }
+        ],
+        "key": "elemental_bg",
+        "sideboard": [
+          {
+            "count": 1,
+            "definition": "elemental.azula_always_lies"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.ozai_s_cruelty"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.zuko_s_exile"
+          }
+        ]
+      }
+    ]
+  },
+  "complexity": {
+    "pack_key": "mtg122-complexity-v1",
+    "decks": [
+      {
+        "card_count": 41,
+        "cards": [
+          {
+            "count": 9,
+            "definition": "temur.island"
+          },
+          {
+            "count": 8,
+            "definition": "temur.mountain"
+          },
+          {
+            "count": 2,
+            "definition": "tla.tiger_seal"
+          },
+          {
+            "count": 2,
+            "definition": "tla.otter_penguin"
+          },
+          {
+            "count": 2,
+            "definition": "tla.fire_nation_cadets"
+          },
+          {
+            "count": 2,
+            "definition": "tla.first_time_flyer"
+          },
+          {
+            "count": 1,
+            "definition": "tla.forecasting_fortune_teller"
+          },
+          {
+            "count": 1,
+            "definition": "tla.dragonfly_swarm"
+          },
+          {
+            "count": 4,
+            "definition": "tla.firebending_lesson"
+          },
+          {
+            "count": 2,
+            "definition": "stx.igneous_inspiration"
+          },
+          {
+            "count": 2,
+            "definition": "stx.pop_quiz"
+          },
+          {
+            "count": 2,
+            "definition": "stx.divide_by_zero"
+          },
+          {
+            "count": 2,
+            "definition": "tla.itll_quench_ya"
+          },
+          {
+            "count": 2,
+            "definition": "tla.accumulate_wisdom"
+          }
+        ],
+        "key": "ur_lessons",
+        "sideboard": [
+          {
+            "count": 1,
+            "definition": "tla.firebending_lesson"
+          },
+          {
+            "count": 1,
+            "definition": "tla.itll_quench_ya"
+          },
+          {
+            "count": 1,
+            "definition": "tla.accumulate_wisdom"
+          }
+        ]
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 9,
+            "definition": "sacrifice.plains"
+          },
+          {
+            "count": 8,
+            "definition": "temur.forest"
+          },
+          {
+            "count": 2,
+            "definition": "tla.water_tribe_rallier"
+          },
+          {
+            "count": 2,
+            "definition": "tla.invasion_reinforcements"
+          },
+          {
+            "count": 2,
+            "definition": "tla.compassionate_healer"
+          },
+          {
+            "count": 2,
+            "definition": "tla.earth_kingdom_jailer"
+          },
+          {
+            "count": 2,
+            "definition": "tla.white_lotus_reinforcements"
+          },
+          {
+            "count": 2,
+            "definition": "tla.earth_kings_lieutenant"
+          },
+          {
+            "count": 2,
+            "definition": "tla.kyoshi_warriors"
+          },
+          {
+            "count": 2,
+            "definition": "tla.badgermole_cub"
+          },
+          {
+            "count": 1,
+            "definition": "tla.suki_kyoshi_warrior"
+          },
+          {
+            "count": 1,
+            "definition": "tla.south_pole_voyager"
+          },
+          {
+            "count": 2,
+            "definition": "tla.allies_at_last"
+          },
+          {
+            "count": 1,
+            "definition": "tla.yip_yip"
+          },
+          {
+            "count": 2,
+            "definition": "tla.fancy_footwork"
+          }
+        ],
+        "key": "gw_allies",
+        "sideboard": [
+          {
+            "count": 1,
+            "definition": "tla.yip_yip"
+          },
+          {
+            "count": 1,
+            "definition": "tla.fancy_footwork"
+          }
+        ]
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 9,
+            "definition": "temur.mountain"
+          },
+          {
+            "count": 8,
+            "definition": "sacrifice.plains"
+          },
+          {
+            "count": 8,
+            "definition": "research.savannah_lions"
+          },
+          {
+            "count": 8,
+            "definition": "research.glory_seeker"
+          },
+          {
+            "count": 7,
+            "definition": "research.hill_giant"
+          }
+        ],
+        "key": "l1_swift",
+        "sideboard": []
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 9,
+            "definition": "temur.mountain"
+          },
+          {
+            "count": 8,
+            "definition": "sacrifice.plains"
+          },
+          {
+            "count": 4,
+            "definition": "research.savannah_lions"
+          },
+          {
+            "count": 8,
+            "definition": "research.glory_seeker"
+          },
+          {
+            "count": 11,
+            "definition": "research.hill_giant"
+          }
+        ],
+        "key": "l1_heavy",
+        "sideboard": []
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 9,
+            "definition": "temur.mountain"
+          },
+          {
+            "count": 8,
+            "definition": "sacrifice.plains"
+          },
+          {
+            "count": 6,
+            "definition": "research.savannah_lions"
+          },
+          {
+            "count": 5,
+            "definition": "research.glory_seeker"
+          },
+          {
+            "count": 4,
+            "definition": "research.hill_giant"
+          },
+          {
+            "count": 4,
+            "definition": "research.lightning_bolt"
+          },
+          {
+            "count": 4,
+            "definition": "tla.yip_yip"
+          }
+        ],
+        "key": "l2_swift",
+        "sideboard": []
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 9,
+            "definition": "temur.mountain"
+          },
+          {
+            "count": 8,
+            "definition": "sacrifice.plains"
+          },
+          {
+            "count": 2,
+            "definition": "research.savannah_lions"
+          },
+          {
+            "count": 5,
+            "definition": "research.glory_seeker"
+          },
+          {
+            "count": 8,
+            "definition": "research.hill_giant"
+          },
+          {
+            "count": 4,
+            "definition": "research.lightning_bolt"
+          },
+          {
+            "count": 4,
+            "definition": "tla.yip_yip"
+          }
+        ],
+        "key": "l2_heavy",
+        "sideboard": []
+      }
+    ]
+  },
+  "elemental": {
+    "pack_key": "elemental-combat-v1",
+    "decks": [
+      {
+        "card_count": 46,
+        "cards": [
+          {
+            "count": 1,
+            "definition": "elemental.abandon_attachments"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.azula_always_lies"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.boomerang_basics"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.cat_gator"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.corrupt_court_official"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.dai_li_agents"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.deserter_s_disciple"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.enthusiastic_study"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.epic_downfall"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.eyetwitch"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.field_trip"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.fists_of_flame"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.foggy_swamp_spirit_keeper"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.gather_the_white_lotus"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.giant_cindermaw"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.gnarled_professor"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.haru_hidden_talent"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.iroh_s_demonstration"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.jet_freedom_fighter"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.knowledge_seeker"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.lightning_strike"
+          },
+          {
+            "count": 5,
+            "definition": "sacrifice.plains"
+          },
+          {
+            "count": 5,
+            "definition": "temur.island"
+          },
+          {
+            "count": 5,
+            "definition": "sacrifice.swamp"
+          },
+          {
+            "count": 5,
+            "definition": "temur.mountain"
+          },
+          {
+            "count": 5,
+            "definition": "temur.forest"
+          }
+        ],
+        "key": "elemental_left"
+      },
+      {
+        "card_count": 46,
+        "cards": [
+          {
+            "count": 1,
+            "definition": "elemental.master_piandao"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.messenger_hawk"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.momo_friendly_flier"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.monastery_swiftspear"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.octopus_form"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.origin_of_metalbending"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.ostrich_horse"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.ozai_s_cruelty"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.power_word_kill"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.pretending_poxbearers"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.professor_of_symbology"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.savor"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.shared_roots"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.sokka_s_haiku"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.spectral_sailor"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.tiger_dillo"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.toph_the_blind_bandit"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.true_ancestry"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.uncle_iroh"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.wartime_protestors"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.zuko_s_exile"
+          },
+          {
+            "count": 5,
+            "definition": "sacrifice.plains"
+          },
+          {
+            "count": 5,
+            "definition": "temur.island"
+          },
+          {
+            "count": 5,
+            "definition": "sacrifice.swamp"
+          },
+          {
+            "count": 5,
+            "definition": "temur.mountain"
+          },
+          {
+            "count": 5,
+            "definition": "temur.forest"
+          }
+        ],
+        "key": "elemental_right"
+      }
+    ]
+  },
+  "elemental_world": {
+    "pack_key": "elemental-world-v1",
+    "decks": [
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 2,
+            "definition": "elemental.tiger_dillo"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.ostrich_horse"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.uncle_iroh"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.giant_cindermaw"
+          },
+          {
+            "count": 1,
+            "definition": "tla.badgermole_cub"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.toph_the_blind_bandit"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.deserter_s_disciple"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.wartime_protestors"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.gnarled_professor"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.monastery_swiftspear"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.lightning_strike"
+          },
+          {
+            "count": 2,
+            "definition": "tla.firebending_lesson"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.fists_of_flame"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.enthusiastic_study"
+          },
+          {
+            "count": 1,
+            "definition": "stx.igneous_inspiration"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.field_trip"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.origin_of_metalbending"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.shared_roots"
+          },
+          {
+            "count": 8,
+            "definition": "temur.forest"
+          },
+          {
+            "count": 7,
+            "definition": "temur.mountain"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.fabled_passage"
+          }
+        ],
+        "key": "elemental_gr",
+        "sideboard": [
+          {
+            "count": 1,
+            "definition": "tla.firebending_lesson"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.combustion_technique"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.origin_of_metalbending"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.zuko_s_exile"
+          }
+        ]
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 2,
+            "definition": "tla.compassionate_healer"
+          },
+          {
+            "count": 1,
+            "definition": "tla.jeong_jeongs_deserters"
+          },
+          {
+            "count": 3,
+            "definition": "tla.invasion_reinforcements"
+          },
+          {
+            "count": 2,
+            "definition": "tla.water_tribe_rallier"
+          },
+          {
+            "count": 2,
+            "definition": "tla.earth_kingdom_jailer"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.haru_hidden_talent"
+          },
+          {
+            "count": 1,
+            "definition": "tla.white_lotus_reinforcements"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.ostrich_horse"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.professor_of_symbology"
+          },
+          {
+            "count": 1,
+            "definition": "tla.south_pole_voyager"
+          },
+          {
+            "count": 2,
+            "definition": "tla.allies_at_last"
+          },
+          {
+            "count": 1,
+            "definition": "tla.yip_yip"
+          },
+          {
+            "count": 1,
+            "definition": "tla.fancy_footwork"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.enter_the_avatar_state"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.origin_of_metalbending"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.true_ancestry"
+          },
+          {
+            "count": 8,
+            "definition": "sacrifice.plains"
+          },
+          {
+            "count": 7,
+            "definition": "temur.forest"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.fabled_passage"
+          }
+        ],
+        "key": "elemental_gw",
+        "sideboard": [
+          {
+            "count": 1,
+            "definition": "elemental.origin_of_metalbending"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.enter_the_avatar_state"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.zuko_s_exile"
+          }
+        ]
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 4,
+            "definition": "tla.fire_nation_cadets"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.gran_gran"
+          },
+          {
+            "count": 2,
+            "definition": "tla.dragonfly_swarm"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.deserter_s_disciple"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.monastery_swiftspear"
+          },
+          {
+            "count": 3,
+            "definition": "tla.firebending_lesson"
+          },
+          {
+            "count": 2,
+            "definition": "stx.igneous_inspiration"
+          },
+          {
+            "count": 1,
+            "definition": "stx.pop_quiz"
+          },
+          {
+            "count": 2,
+            "definition": "stx.divide_by_zero"
+          },
+          {
+            "count": 1,
+            "definition": "tla.accumulate_wisdom"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.abandon_attachments"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.combustion_technique"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.lightning_strike"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.octopus_form"
+          },
+          {
+            "count": 8,
+            "definition": "temur.mountain"
+          },
+          {
+            "count": 7,
+            "definition": "temur.island"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.fabled_passage"
+          }
+        ],
+        "key": "elemental_ur",
+        "sideboard": [
+          {
+            "count": 1,
+            "definition": "tla.firebending_lesson"
+          },
+          {
+            "count": 1,
+            "definition": "tla.accumulate_wisdom"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.combustion_technique"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.zuko_s_exile"
+          }
+        ]
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 3,
+            "definition": "tla.otter_penguin"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.knowledge_seeker"
+          },
+          {
+            "count": 3,
+            "definition": "tla.forecasting_fortune_teller"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.foggy_swamp_spirit_keeper"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.gran_gran"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.june_bounty_hunter"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.eyetwitch"
+          },
+          {
+            "count": 1,
+            "definition": "stx.pop_quiz"
+          },
+          {
+            "count": 2,
+            "definition": "tla.itll_quench_ya"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.abandon_attachments"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.deadly_dispute"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.power_word_kill"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.savor"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.epic_downfall"
+          },
+          {
+            "count": 1,
+            "definition": "tla.accumulate_wisdom"
+          },
+          {
+            "count": 8,
+            "definition": "temur.island"
+          },
+          {
+            "count": 7,
+            "definition": "sacrifice.swamp"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.fabled_passage"
+          }
+        ],
+        "key": "elemental_ub",
+        "sideboard": [
+          {
+            "count": 1,
+            "definition": "tla.accumulate_wisdom"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.ozai_s_cruelty"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.zuko_s_exile"
+          }
+        ]
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 1,
+            "definition": "elemental.spectral_sailor"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.messenger_hawk"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.momo_friendly_flier"
+          },
+          {
+            "count": 3,
+            "definition": "tla.forecasting_fortune_teller"
+          },
+          {
+            "count": 2,
+            "definition": "tla.earth_kingdom_jailer"
+          },
+          {
+            "count": 2,
+            "definition": "tla.compassionate_healer"
+          },
+          {
+            "count": 1,
+            "definition": "tla.jeong_jeongs_deserters"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.professor_of_symbology"
+          },
+          {
+            "count": 2,
+            "definition": "stx.divide_by_zero"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.boomerang_basics"
+          },
+          {
+            "count": 1,
+            "definition": "stx.pop_quiz"
+          },
+          {
+            "count": 2,
+            "definition": "tla.itll_quench_ya"
+          },
+          {
+            "count": 1,
+            "definition": "tla.yip_yip"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.enter_the_avatar_state"
+          },
+          {
+            "count": 8,
+            "definition": "sacrifice.plains"
+          },
+          {
+            "count": 7,
+            "definition": "temur.island"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.fabled_passage"
+          }
+        ],
+        "key": "elemental_uw",
+        "sideboard": [
+          {
+            "count": 1,
+            "definition": "tla.fancy_footwork"
+          },
+          {
+            "count": 1,
+            "definition": "tla.accumulate_wisdom"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.zuko_s_exile"
+          }
+        ]
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 2,
+            "definition": "temur.hermitic_herbalist"
+          },
+          {
+            "count": 1,
+            "definition": "temur.great_divide_guide"
+          },
+          {
+            "count": 1,
+            "definition": "temur.iroh_grand_lotus"
+          },
+          {
+            "count": 1,
+            "definition": "temur.ran_and_shaw"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.gnarled_professor"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.gran_gran"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.unlucky_cabbage_merchant"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.ostrich_horse"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.toph_the_blind_bandit"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.field_trip"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.shared_roots"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.cycle_of_renewal"
+          },
+          {
+            "count": 1,
+            "definition": "temur.waterbending_lesson"
+          },
+          {
+            "count": 1,
+            "definition": "tla.accumulate_wisdom"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.abandon_attachments"
+          },
+          {
+            "count": 1,
+            "definition": "tla.firebending_lesson"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.combustion_technique"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.true_ancestry"
+          },
+          {
+            "count": 1,
+            "definition": "temur.prophetic_prism"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.zuko_s_exile"
+          },
+          {
+            "count": 5,
+            "definition": "temur.forest"
+          },
+          {
+            "count": 5,
+            "definition": "temur.island"
+          },
+          {
+            "count": 3,
+            "definition": "temur.mountain"
+          },
+          {
+            "count": 3,
+            "definition": "sacrifice.fabled_passage"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.prismatic_vista"
+          }
+        ],
+        "key": "elemental_ug",
+        "sideboard": [
+          {
+            "count": 1,
+            "definition": "elemental.origin_of_metalbending"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.iroh_s_demonstration"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.sokka_s_haiku"
+          }
+        ]
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 2,
+            "definition": "tla.compassionate_healer"
+          },
+          {
+            "count": 1,
+            "definition": "tla.jeong_jeongs_deserters"
+          },
+          {
+            "count": 3,
+            "definition": "tla.invasion_reinforcements"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.professor_of_symbology"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.deserter_s_disciple"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.jet_freedom_fighter"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.wartime_protestors"
+          },
+          {
+            "count": 1,
+            "definition": "tla.water_tribe_rallier"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.master_piandao"
+          },
+          {
+            "count": 1,
+            "definition": "tla.south_pole_voyager"
+          },
+          {
+            "count": 3,
+            "definition": "elemental.lightning_strike"
+          },
+          {
+            "count": 1,
+            "definition": "tla.firebending_lesson"
+          },
+          {
+            "count": 1,
+            "definition": "stx.igneous_inspiration"
+          },
+          {
+            "count": 1,
+            "definition": "tla.yip_yip"
+          },
+          {
+            "count": 1,
+            "definition": "tla.fancy_footwork"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.enthusiastic_study"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.gather_the_white_lotus"
+          },
+          {
+            "count": 8,
+            "definition": "sacrifice.plains"
+          },
+          {
+            "count": 7,
+            "definition": "temur.mountain"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.fabled_passage"
+          }
+        ],
+        "key": "elemental_wr",
+        "sideboard": [
+          {
+            "count": 1,
+            "definition": "tla.firebending_lesson"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.enter_the_avatar_state"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.zuko_s_exile"
+          }
+        ]
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 2,
+            "definition": "elemental.pretending_poxbearers"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.curious_farm_animals"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.callous_inspector"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.eyetwitch"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.professor_of_symbology"
+          },
+          {
+            "count": 1,
+            "definition": "tla.jeong_jeongs_deserters"
+          },
+          {
+            "count": 3,
+            "definition": "tla.invasion_reinforcements"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.corrupt_court_official"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.june_bounty_hunter"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.deadly_precision"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.deadly_dispute"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.tolls_of_war"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.bastion_of_remembrance"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.savor"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.power_word_kill"
+          },
+          {
+            "count": 1,
+            "definition": "tla.yip_yip"
+          },
+          {
+            "count": 8,
+            "definition": "sacrifice.plains"
+          },
+          {
+            "count": 7,
+            "definition": "sacrifice.swamp"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.fabled_passage"
+          }
+        ],
+        "key": "elemental_wb",
+        "sideboard": [
+          {
+            "count": 1,
+            "definition": "elemental.enter_the_avatar_state"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.ozai_s_cruelty"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.zuko_s_exile"
+          }
+        ]
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 1,
+            "definition": "sacrifice.callous_inspector"
+          },
+          {
+            "count": 4,
+            "definition": "elemental.corrupt_court_official"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.eyetwitch"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.mayhem_devil"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.june_bounty_hunter"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.deserter_s_disciple"
+          },
+          {
+            "count": 1,
+            "definition": "tla.fire_nation_cadets"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.cat_gator"
+          },
+          {
+            "count": 3,
+            "definition": "tla.firebending_lesson"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.lightning_strike"
+          },
+          {
+            "count": 1,
+            "definition": "stx.igneous_inspiration"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.deadly_precision"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.deadly_dispute"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.weaponize_the_monsters"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.savor"
+          },
+          {
+            "count": 8,
+            "definition": "sacrifice.swamp"
+          },
+          {
+            "count": 7,
+            "definition": "temur.mountain"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.fabled_passage"
+          }
+        ],
+        "key": "elemental_rb",
+        "sideboard": [
+          {
+            "count": 1,
+            "definition": "tla.firebending_lesson"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.combustion_technique"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.ozai_s_cruelty"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.zuko_s_exile"
+          }
+        ]
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 1,
+            "definition": "sacrifice.sazh_s_chocobo"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.tireless_tracker"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.tireless_provisioner"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.lotus_cobra"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.unlucky_cabbage_merchant"
+          },
+          {
+            "count": 1,
+            "definition": "tla.badgermole_cub"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.toph_the_blind_bandit"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.dai_li_agents"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.corrupt_court_official"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.callous_inspector"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.june_bounty_hunter"
+          },
+          {
+            "count": 2,
+            "definition": "elemental.ostrich_horse"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.cycle_of_renewal"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.field_trip"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.true_ancestry"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.origin_of_metalbending"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.deadly_precision"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.deadly_dispute"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.savor"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.power_word_kill"
+          },
+          {
+            "count": 6,
+            "definition": "temur.forest"
+          },
+          {
+            "count": 6,
+            "definition": "sacrifice.swamp"
+          },
+          {
+            "count": 3,
+            "definition": "sacrifice.fabled_passage"
+          },
+          {
+            "count": 2,
+            "definition": "sacrifice.prismatic_vista"
+          }
+        ],
+        "key": "elemental_bg",
+        "sideboard": [
+          {
+            "count": 1,
+            "definition": "elemental.azula_always_lies"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.ozai_s_cruelty"
+          },
+          {
+            "count": 1,
+            "definition": "elemental.zuko_s_exile"
+          }
+        ]
+      }
+    ]
+  },
+  "jeong_increment": {
+    "pack_key": "tla-jeong-increment-v1",
+    "decks": [
+      {
+        "key": "ur_lessons",
+        "card_count": 41,
+        "cards": [
+          {
+            "definition": "temur.island",
+            "count": 9
+          },
+          {
+            "definition": "temur.mountain",
+            "count": 8
+          },
+          {
+            "definition": "tla.tiger_seal",
+            "count": 2
+          },
+          {
+            "definition": "tla.otter_penguin",
+            "count": 2
+          },
+          {
+            "definition": "tla.fire_nation_cadets",
+            "count": 2
+          },
+          {
+            "definition": "tla.first_time_flyer",
+            "count": 2
+          },
+          {
+            "definition": "tla.forecasting_fortune_teller",
+            "count": 1
+          },
+          {
+            "definition": "tla.dragonfly_swarm",
+            "count": 1
+          },
+          {
+            "definition": "tla.firebending_lesson",
+            "count": 4
+          },
+          {
+            "definition": "stx.igneous_inspiration",
+            "count": 2
+          },
+          {
+            "definition": "stx.pop_quiz",
+            "count": 2
+          },
+          {
+            "definition": "stx.divide_by_zero",
+            "count": 2
+          },
+          {
+            "definition": "tla.itll_quench_ya",
+            "count": 2
+          },
+          {
+            "definition": "tla.accumulate_wisdom",
+            "count": 2
+          }
+        ]
+      },
+      {
+        "key": "gw_allies_jeong",
+        "card_count": 40,
+        "cards": [
+          {
+            "definition": "sacrifice.plains",
+            "count": 9
+          },
+          {
+            "definition": "temur.forest",
+            "count": 8
+          },
+          {
+            "definition": "tla.water_tribe_rallier",
+            "count": 1
+          },
+          {
+            "definition": "tla.jeong_jeongs_deserters",
+            "count": 1
+          },
+          {
+            "definition": "tla.invasion_reinforcements",
+            "count": 2
+          },
+          {
+            "definition": "tla.compassionate_healer",
+            "count": 2
+          },
+          {
+            "definition": "tla.earth_kingdom_jailer",
+            "count": 2
+          },
+          {
+            "definition": "tla.white_lotus_reinforcements",
+            "count": 2
+          },
+          {
+            "definition": "tla.earth_kings_lieutenant",
+            "count": 2
+          },
+          {
+            "definition": "tla.kyoshi_warriors",
+            "count": 2
+          },
+          {
+            "definition": "tla.badgermole_cub",
+            "count": 2
+          },
+          {
+            "definition": "tla.suki_kyoshi_warrior",
+            "count": 1
+          },
+          {
+            "definition": "tla.south_pole_voyager",
+            "count": 1
+          },
+          {
+            "definition": "tla.allies_at_last",
+            "count": 2
+          },
+          {
+            "definition": "tla.yip_yip",
+            "count": 1
+          },
+          {
+            "definition": "tla.fancy_footwork",
+            "count": 2
+          }
+        ]
+      }
+    ]
+  },
+  "sacrifice": {
+    "pack_key": "elemental-sacrifice-v1",
+    "decks": [
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 1,
+            "definition": "sacrifice.bastion_of_remembrance"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.callous_inspector"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.curious_farm_animals"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.cycle_of_renewal"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.deadly_dispute"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.deadly_precision"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.fabled_passage"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.june_bounty_hunter"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.lotus_cobra"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.mayhem_devil"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.prismatic_vista"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.sazh_s_chocobo"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.tireless_provisioner"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.tireless_tracker"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.tolls_of_war"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.unlucky_cabbage_merchant"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.weaponize_the_monsters"
+          },
+          {
+            "count": 4,
+            "definition": "sacrifice.plains"
+          },
+          {
+            "count": 4,
+            "definition": "temur.island"
+          },
+          {
+            "count": 5,
+            "definition": "temur.mountain"
+          },
+          {
+            "count": 5,
+            "definition": "sacrifice.swamp"
+          },
+          {
+            "count": 5,
+            "definition": "temur.forest"
+          }
+        ],
+        "key": "sacrifice_left"
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 1,
+            "definition": "sacrifice.bastion_of_remembrance"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.callous_inspector"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.curious_farm_animals"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.cycle_of_renewal"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.deadly_dispute"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.deadly_precision"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.fabled_passage"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.june_bounty_hunter"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.lotus_cobra"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.mayhem_devil"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.prismatic_vista"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.sazh_s_chocobo"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.tireless_provisioner"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.tireless_tracker"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.tolls_of_war"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.unlucky_cabbage_merchant"
+          },
+          {
+            "count": 1,
+            "definition": "sacrifice.weaponize_the_monsters"
+          },
+          {
+            "count": 4,
+            "definition": "sacrifice.plains"
+          },
+          {
+            "count": 4,
+            "definition": "temur.island"
+          },
+          {
+            "count": 5,
+            "definition": "temur.mountain"
+          },
+          {
+            "count": 5,
+            "definition": "sacrifice.swamp"
+          },
+          {
+            "count": 5,
+            "definition": "temur.forest"
+          }
+        ],
+        "key": "sacrifice_right"
+      }
+    ]
+  },
+  "temur": {
+    "pack_key": "elemental-temur-v1",
+    "decks": [
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 3,
+            "definition": "temur.great_divide_guide"
+          },
+          {
+            "count": 3,
+            "definition": "temur.hermitic_herbalist"
+          },
+          {
+            "count": 3,
+            "definition": "temur.iroh_grand_lotus"
+          },
+          {
+            "count": 3,
+            "definition": "temur.prophetic_prism"
+          },
+          {
+            "count": 3,
+            "definition": "temur.ran_and_shaw"
+          },
+          {
+            "count": 3,
+            "definition": "temur.waterbending_lesson"
+          },
+          {
+            "count": 8,
+            "definition": "temur.forest"
+          },
+          {
+            "count": 7,
+            "definition": "temur.island"
+          },
+          {
+            "count": 7,
+            "definition": "temur.mountain"
+          }
+        ],
+        "key": "temur_left",
+        "sideboard": []
+      },
+      {
+        "card_count": 40,
+        "cards": [
+          {
+            "count": 3,
+            "definition": "temur.great_divide_guide"
+          },
+          {
+            "count": 3,
+            "definition": "temur.hermitic_herbalist"
+          },
+          {
+            "count": 3,
+            "definition": "temur.iroh_grand_lotus"
+          },
+          {
+            "count": 3,
+            "definition": "temur.prophetic_prism"
+          },
+          {
+            "count": 3,
+            "definition": "temur.ran_and_shaw"
+          },
+          {
+            "count": 3,
+            "definition": "temur.waterbending_lesson"
+          },
+          {
+            "count": 8,
+            "definition": "temur.forest"
+          },
+          {
+            "count": 7,
+            "definition": "temur.island"
+          },
+          {
+            "count": 7,
+            "definition": "temur.mountain"
+          }
+        ],
+        "key": "temur_right",
+        "sideboard": []
+      }
+    ]
+  },
+  "two_deck": {
+    "pack_key": "ur-lessons-vs-gw-allies",
+    "decks": [
+      {
+        "key": "ur_lessons",
+        "card_count": 41,
+        "sideboard": [
+          {
+            "definition": "tla.firebending_lesson",
+            "count": 1
+          },
+          {
+            "definition": "tla.itll_quench_ya",
+            "count": 1
+          },
+          {
+            "definition": "tla.accumulate_wisdom",
+            "count": 1
+          }
+        ],
+        "cards": [
+          {
+            "definition": "temur.island",
+            "count": 9
+          },
+          {
+            "definition": "temur.mountain",
+            "count": 8
+          },
+          {
+            "definition": "tla.tiger_seal",
+            "count": 2
+          },
+          {
+            "definition": "tla.otter_penguin",
+            "count": 2
+          },
+          {
+            "definition": "tla.fire_nation_cadets",
+            "count": 2
+          },
+          {
+            "definition": "tla.first_time_flyer",
+            "count": 2
+          },
+          {
+            "definition": "tla.forecasting_fortune_teller",
+            "count": 1
+          },
+          {
+            "definition": "tla.dragonfly_swarm",
+            "count": 1
+          },
+          {
+            "definition": "tla.firebending_lesson",
+            "count": 4
+          },
+          {
+            "definition": "stx.igneous_inspiration",
+            "count": 2
+          },
+          {
+            "definition": "stx.pop_quiz",
+            "count": 2
+          },
+          {
+            "definition": "stx.divide_by_zero",
+            "count": 2
+          },
+          {
+            "definition": "tla.itll_quench_ya",
+            "count": 2
+          },
+          {
+            "definition": "tla.accumulate_wisdom",
+            "count": 2
+          }
+        ]
+      },
+      {
+        "key": "gw_allies",
+        "card_count": 40,
+        "sideboard": [
+          {
+            "definition": "tla.yip_yip",
+            "count": 1
+          },
+          {
+            "definition": "tla.fancy_footwork",
+            "count": 1
+          }
+        ],
+        "cards": [
+          {
+            "definition": "sacrifice.plains",
+            "count": 9
+          },
+          {
+            "definition": "temur.forest",
+            "count": 8
+          },
+          {
+            "definition": "tla.water_tribe_rallier",
+            "count": 2
+          },
+          {
+            "definition": "tla.invasion_reinforcements",
+            "count": 2
+          },
+          {
+            "definition": "tla.compassionate_healer",
+            "count": 2
+          },
+          {
+            "definition": "tla.earth_kingdom_jailer",
+            "count": 2
+          },
+          {
+            "definition": "tla.white_lotus_reinforcements",
+            "count": 2
+          },
+          {
+            "definition": "tla.earth_kings_lieutenant",
+            "count": 2
+          },
+          {
+            "definition": "tla.kyoshi_warriors",
+            "count": 2
+          },
+          {
+            "definition": "tla.badgermole_cub",
+            "count": 2
+          },
+          {
+            "definition": "tla.suki_kyoshi_warrior",
+            "count": 1
+          },
+          {
+            "definition": "tla.south_pole_voyager",
+            "count": 1
+          },
+          {
+            "definition": "tla.allies_at_last",
+            "count": 2
+          },
+          {
+            "definition": "tla.yip_yip",
+            "count": 1
+          },
+          {
+            "definition": "tla.fancy_footwork",
+            "count": 2
+          }
+        ]
+      }
+    ]
+  }
+}
