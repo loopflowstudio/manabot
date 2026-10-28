@@ -70,9 +70,6 @@ context, not new execution direction. No rental is launched by this sync.
   saturated, the first candidates are several workers per allocation and then
   intra-op threads. Both are allocation settings; intra-op threads could change
   numerics, so they would need a compute-contract decision.
-- **Not run — rental calibration:** this is an operator step (cross-branch
-  runner, paid machines, shared storage). The headless implement pass did not
-  launch it. No spend: the ledger is $0.00 of $5.
 - **Search players stay in-child (Jack Heart, 2026-10-27):** serving search
   players' model calls is out of scope for MTG-193; follow-up MTG-205.
 
@@ -107,10 +104,6 @@ keep matching for resumption.
 - **Assumption — `allocation.json` has no request latency:** decisions no
   longer pass the supervisor; latency lives in `worker_performance` (game) and
   `serving.json` (service). No reader used the allocation's request counters.
-- **Not run — rental calibration:** the calibration worktree was removed
-  (branch `recovery/mtg193-calibration-20261028`), and a headless pass should
-  not rebuild that cross-branch launch path and spend unattended. Steps are
-  in the plan's "Parent hop decided" section.
 - **Assumption — the w13 calibration branch** (revert of `e742e8bff`) is
   measurement-only and never lands; MTG-183's checkpoints cannot play w14.
 
