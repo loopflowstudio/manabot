@@ -54,13 +54,10 @@ revision's `scratch/questions.md`); they do not touch shared evaluation.
 
 ## Engine boundary — implement 2026-10-27
 
-- **Decision — no CPU-specific engine code yet:** a CPU host already gets
-  several serial CPU services by running several allocations (one per group).
-  exp-07 measured batched CPU inference at about 12× scalar obs/s. If the `cpu32`
-  served arm is slower than scalar and `serving.json` shows the service
-  saturated, the first candidates are several workers per allocation and then
-  intra-op threads. Both are allocation settings; intra-op threads could change
-  numerics, so they would need a compute-contract decision.
+- **Decision — no CPU-specific engine code yet:** `cpu32` runs one shared CPU
+  allocation per machine (exp-07: batched CPU inference ≈ 12× scalar obs/s).
+  The fallback if it is slower than scalar is slice 7's; intra-op threads could
+  change numerics, so they would need a compute-contract decision.
 - **Search players stay in-child (Jack Heart, 2026-10-27):** serving search
   players' model calls is out of scope for MTG-193; follow-up MTG-205.
 

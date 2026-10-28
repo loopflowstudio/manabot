@@ -281,7 +281,8 @@ decisions/s), which led to the parent-hop decision below.
 Implement, 2026-10-27 (parent hop): `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/eval/test_local_evaluation.py tests/sim/test_child_surface.py tests/test_package_boundaries.py tests/eval/test_evaluation_match.py tests/training/test_game_errors.py tests/eval/test_mirror_admission.py tests/eval/test_inference_receipts.py -q` → 146 passed, 1 skipped (11 min). Host load average ~370 from other sessions during the run.
 
 Compress (2026-10-27/28, per-pass detail in git log up to `c054e05d2`): every
-changed module, test, doc and import cutover reviewed; settled, no further cut.
+changed module, test, doc and import cutover reviewed; settled, no further cut
+(rechecked 2026-10-28: no code change since `a245bb3bf`).
 Last code check: `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/sim/test_child_surface.py -q` → 27 passed, 1 skipped;
 `ruff check` on all changed Python passed.
 
@@ -392,6 +393,6 @@ receipt past its deadline has its attempts finished as lost
 (`create_unconfirmed`) but returns without `_end_session`, so
 `unsettled_sessions` keeps counting it; `etude terminate` does not clear it.
 Once Etude ends that session, queue with `queue_runs.py batched-hop.json --go`
-from the 0.2.6 client as in Calibration. Last rechecked 2026-10-28 15:41 UTC:
+from the 0.2.6 client as in Calibration. Last rechecked 2026-10-28 18:00 UTC:
 still blocked, nothing queued, no new spend. Unfixed on Etude main v0.2.11
 (`scheduler.py:1898-1902`); tracked as Etude EXP-13 (comment added).
