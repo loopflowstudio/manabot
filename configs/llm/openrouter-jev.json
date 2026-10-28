@@ -1,0 +1,7 @@
+{
+  "transport": "decisions",
+  "model_id": "typesafe/jev-1.14",
+  "objective": "win-game",
+  "deadline_seconds": 120,
+  "max_prompt_bytes": 262144
+}
