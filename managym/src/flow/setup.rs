@@ -148,7 +148,7 @@ impl Game {
                 pending_events: Default::default(),
                 observation_events: Default::default(),
                 pending_triggers: Vec::new(),
-                trigger_placement: None,
+                pending_trigger_choice: None,
                 delayed_triggers: Vec::new(),
                 exile_links: Vec::new(),
                 suspended_decision: None,

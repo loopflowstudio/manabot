@@ -510,7 +510,6 @@ fn action_kind_name(kind: ActionSpaceKind) -> &'static str {
         ActionSpaceKind::Waterbend => "waterbend",
         ActionSpaceKind::Discard => "discard",
         ActionSpaceKind::LegendRule => "legend_rule",
-        ActionSpaceKind::OrderTriggers => "order_triggers",
     }
 }
 

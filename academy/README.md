@@ -238,14 +238,3 @@ and protocol checks as well as attempt-store checks. SQLite is the trace
 authority; historical JSON is read-only. `ed2` names a pre-command frame;
 Command and offer validation belongs to its landmark. Preserve frozen `erd1`
 evidence and test recorder failure through the WebSocket boundary.
-
-### Ordering simultaneous triggered abilities
-
-When several of your abilities are waiting, choose one ability to put on the
-stack next. The shared native label describes that specific ability; inspect its
-source for the full card text. Choosing commits its place in the order. If it
-needs targets, finish those choices before continuing. Later placements sit above
-earlier ones and resolve first if the stack proceeds without responses. The last
-remaining position is forced. Reload restores the actual pending order or target
-decision, or the current stack if placement has finished. A lost response does not
-undo a submitted choice.

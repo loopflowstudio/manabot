@@ -257,7 +257,7 @@
     "triggers": {
       "scope": "Supported event-trigger matching, LKI and mandatory choices.",
       "inspected_owners": [
-        "managym/src/flow/triggers.rs:Game::flush_triggers, Game::choose_trigger",
+        "managym/src/flow/triggers.rs:Game::pop_next_pending_trigger",
         "managym/src/flow/stabilization.rs",
         "managym/src/flow/trigger.rs"
       ],
@@ -265,12 +265,11 @@
         "managym/tests/rules/cr_603_triggers.rs",
         "managym/tests/rules/cr_704_sba.rs"
       ],
-      "gap": "MTG-195 w14 adds controller ordering and a two-pass scheduler. Trigger-on-trigger condition matching remains unsupported; deterministic replay alone is not proof of legal choice completeness.",
+      "gap": "APNAP ordering uses enqueue_order within controller; CR 603.3b controller ordering choice absent. Deterministic replay is not proof of legal choice completeness.",
       "ownership": "dispersed",
-      "comments": "The original audit finding is retained in unification.md. These live evidence anchors were refreshed for MTG-195 on 2026-10-27; inspect individual entries before claiming conformance.",
+      "comments": "Inspect individual entry before claiming comment adequacy.",
       "anchors": [
-        "managym/src/flow/triggers.rs::pub(crate) fn flush_triggers",
-        "managym/src/flow/trigger.rs::pub struct TriggerPlacement"
+        "managym/src/flow/triggers.rs::(apnap_rank, trigger.enqueue_order)"
       ]
     },
     "statics": {
@@ -663,7 +662,7 @@
       "tests": [
         "managym/tests/rules/cr_704_sba.rs:cr_704_3_sba_trigger_sba_chain_reaches_fixpoint_before_priority"
       ],
-      "gap": "Unsupported SBAs are not certified. MTG-195 w14 adds controller ordering and resumes a suspended placement round before another SBA or collection pass.",
+      "gap": "Same-controller trigger ordering choice absent; unsupported SBAs not certified.",
       "comments": "Relevant intent comments exist at the cited authority; not a proof.",
       "dispersion": "dispersed",
       "anchors": [
@@ -728,22 +727,18 @@
     },
     "603.3b": {
       "status": "partial",
-      "scope": "MTG-195 w14: controllers choose sequential next-to-stack occurrences within two APNAP passes; target choices finish before the next placement. Opposite orders independently prove survival versus loss.",
-      "authority": "managym/src/flow/triggers.rs:Game::flush_triggers, Game::choose_trigger; managym/src/flow/trigger.rs:TriggerPlacement",
+      "scope": "Two-player APNAP placement retained; same-controller fixed enqueue order has no order choice. Two injected orders independently prove survival versus loss at 2 life.",
+      "authority": "managym/src/flow/triggers.rs:Game::pop_next_pending_trigger",
       "tests": [
         "managym/tests/rules/cr_603_triggers.rs",
-        "managym/src/flow/target_authority_tests.rs",
-        "tests/academy/test_trigger_order.py"
+        "managym/src/flow/target_authority_tests.rs"
       ],
-      "gap": "Trigger-on-trigger condition matching remains unsupported. Typed second-class fixtures establish scheduling only, not that missing matching feature or all triggered-ability semantics.",
-      "comments": "Follow-up reviewed 2026-10-27 for MTG-195. The historical fixed-order finding remains in unification.md. Owning code cites the pinned two-pass placement and stabilization rules.",
+      "gap": "Missing shared controller-order decision, not competing implementations. Ignored probe explicitly fails; two-part CR 603.3b process, Command/stale/replay/fork and admission proof remain proposals in unification.md.",
+      "comments": "Stabilization documents deterministic APNAP/enqueue order, which is narrower than CR choice contract.",
       "dispersion": "dispersed",
       "anchors": [
         "managym/src/flow/target_authority_tests.rs::simultaneous_trigger_orders_have_distinct_rules_outcomes",
-        "managym/src/flow/target_authority_tests.rs::audit_same_controller_triggers_require_an_order_choice",
-        "managym/src/flow/target_authority_tests.rs::trigger_order_two_passes_precede_controller_and_defer_new_arrivals",
-        "managym/src/flow/target_authority_tests.rs::trigger_order_target_resume_and_nested_rollback_preserve_round",
-        "tests/academy/test_trigger_order.py::test_survival_orders_cross_consumers"
+        "managym/src/flow/target_authority_tests.rs::audit_same_controller_triggers_require_an_order_choice"
       ]
     },
     "605.3a": {
@@ -894,7 +889,7 @@
         "managym/tests/rules/cr_704_sba.rs:cr_704_3_simultaneous_terminal_conditions_are_a_draw",
         "managym/tests/rules/cr_704_sba.rs:cr_704_3_sba_trigger_sba_chain_reaches_fixpoint_before_priority"
       ],
-      "gap": "Unimplemented SBA kinds remain excluded from positive evidence. MTG-195 w14 covers explicit trigger ordering and placement-round suspension separately.",
+      "gap": "Unimplemented SBA kinds and trigger-order choice excluded from positive evidence.",
       "comments": "Relevant intent comments exist at the cited authority; not a proof.",
       "dispersion": "dispersed",
       "anchors": [
@@ -985,7 +980,7 @@
       "comments": "Trigger source snapshot comment explains committed-event ownership; stack placement and target selection are separate from event matching.",
       "tests": ["managym/src/flow/target_authority_tests.rs", "managym/tests/rules/cr_603_triggers.rs"],
       "anchors": ["managym/src/flow/target_authority_tests.rs::restricted_trigger_rejects_low_value_spell_and_counters_legal_spell", "managym/tests/rules/cr_603_triggers.rs::cr_603_6a_manowar_etb_returns_target_creature"],
-      "gap": "Authored typed effects only; delayed/context-dependent targeting and each keyword's implicit target wording are not exhaustively reviewed. MTG-195 w14 adds controller ordering and resumable target placement."
+      "gap": "Authored typed effects only; delayed/context-dependent targeting and each keyword's implicit target wording are not exhaustively reviewed. Controller ordering remains the separate CR 603.3b defect."
     },
     "115.2": {
       "status": "partial",

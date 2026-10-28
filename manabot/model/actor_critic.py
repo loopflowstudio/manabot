@@ -92,12 +92,12 @@ class ActorCritic(nn.Module):
         self.card_embedding = ProjectionLayer(card_dim, embed_dim)
         self.perm_embedding = ProjectionLayer(perm_dim, embed_dim)
         # Embed policy features; validity only masks legal rows.
-        self.action_embedding = ProjectionLayer(action_dim - 2, embed_dim)
+        self.action_embedding = ProjectionLayer(action_dim - 1, embed_dim)
 
         self.logger.info(f"Player embedding: ({player_dim} -> {embed_dim})")
         self.logger.info(f"Card embedding: ({card_dim} -> {embed_dim})")
         self.logger.info(f"Permanent embedding: ({perm_dim} -> {embed_dim})")
-        self.logger.info(f"Action embedding: ({action_dim - 2} -> {embed_dim})")
+        self.logger.info(f"Action embedding: ({action_dim - 1} -> {embed_dim})")
 
         # Global game state processor via attention.
         if self.config.attention_on:
@@ -215,7 +215,7 @@ class ActorCritic(nn.Module):
 
         self.continuation = (
             ContinuationEncoder(embed_dim)
-            if enc.config.policy_input_version >= 2
+            if enc.config.policy_input_version == 2
             else None
         )
 
@@ -255,8 +255,8 @@ class ActorCritic(nn.Module):
             raise ValueError(
                 "compound checkpoint requires authoritative offers; use ActorCritic.compound"
             )
-        objects, is_agent, validity, shared_context, frame_context = (
-            self._gather_object_embeddings(obs)
+        objects, is_agent, validity, shared_context = self._gather_object_embeddings(
+            obs
         )
 
         encoded = self._attend_objects(
@@ -270,7 +270,7 @@ class ActorCritic(nn.Module):
         post_attention_objects = encoded[:, : validity.shape[1]]
 
         informed_actions = self._gather_informed_actions(
-            obs, post_attention_objects, shared_context, frame_context
+            obs, post_attention_objects, shared_context
         )
         if self.policy_film is not None:
             informed_actions = self._condition_actions(
@@ -356,9 +356,7 @@ class ActorCritic(nn.Module):
         """One viewer-safe root, one ragged action; no intermediate observation."""
         if self.compound_decoder is None:
             raise ValueError("checkpoint has no compound policy")
-        objects, ownership, valid, shared_context, frame_context = (
-            self._gather_object_embeddings(obs)
-        )
+        objects, ownership, valid, shared_context = self._gather_object_embeddings(obs)
         if objects.shape[0] != 1:
             raise ValueError("compound decoding requires one root")
         if self.config.attention_on:
@@ -374,9 +372,9 @@ class ActorCritic(nn.Module):
             offer["verb"] in {"declare_attackers", "declare_blockers", "pay_waterbend"}
             for offer in batch.offers
         ):
-            features = self._gather_informed_actions(
-                obs, objects, shared_context, frame_context
-            )[0, : len(batch.offers)]
+            features = self._gather_informed_actions(obs, objects, shared_context)[
+                0, : len(batch.offers)
+            ]
         return self.compound_decoder(
             context[0],
             batch,
@@ -416,31 +414,8 @@ class ActorCritic(nn.Module):
         obs: Dict[str, torch.Tensor],
         post_attention_objects: torch.Tensor,
         shared_context: torch.Tensor | None,
-        frame_context: torch.Tensor | None,
     ) -> torch.Tensor:
-        # The continuation selector is a join, never a numeric strategic feature.
-        actions = self.action_embedding(obs["actions"][..., :-2])
-        indexes = torch.where(obs["actions_valid"].bool(), obs["actions"][..., -2], 0)
-        if not ((indexes == indexes.floor()) & (indexes >= 0) & (indexes <= 64)).all():
-            raise ValueError("invalid action continuation reference")
-        if frame_context is not None:
-            rows = obs["relations"]
-            present = (
-                (indexes.unsqueeze(-1) == rows[:, None, :, 1])
-                & (rows[:, None, :, -1] == 1)
-            ).any(-1)
-            if ((indexes != 0) & ~present).any():
-                raise ValueError("action continuation reference has no frame")
-            linked = frame_context.gather(
-                1,
-                (indexes.long() - 1)
-                .clamp_min(0)
-                .unsqueeze(-1)
-                .expand(-1, -1, actions.shape[-1]),
-            )
-            actions = actions + linked.masked_fill((indexes == 0).unsqueeze(-1), 0)
-        elif (indexes != 0).any():
-            raise ValueError("trigger ordering requires continuation policy input")
+        actions = self.action_embedding(obs["actions"][..., :-1])
         if shared_context is not None:
             # Focus-free actions also receive the same context without attention.
             actions = actions + shared_context.unsqueeze(1)
@@ -453,13 +428,7 @@ class ActorCritic(nn.Module):
 
     def _gather_object_embeddings(
         self, obs: Dict[str, torch.Tensor]
-    ) -> tuple[
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor,
-        torch.Tensor | None,
-        torch.Tensor | None,
-    ]:
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor | None]:
         if isinstance(obs, PreparedObservation):
             obs.scope.check(self)
             if torch.is_grad_enabled():
@@ -557,7 +526,6 @@ class ActorCritic(nn.Module):
         objects = torch.cat(object_parts, dim=1)
         # History and current continuation both inform objects and focus-free actions.
         shared_context = None
-        frame_context = None
         if self.recent_events is not None:
             assert self.semantic_cards is not None and definitions is not None
             shared_context = self.recent_events(
@@ -571,13 +539,7 @@ class ActorCritic(nn.Module):
                 if self.semantic_cards is not None and definitions is not None
                 else self._generic_definitions(ids)
             )
-            encoded_relations = self.continuation.encode_rows(
-                rows, objects, relation_definitions
-            )
-            continuation = encoded_relations.sum(1) / rows[..., -1].sum(
-                1, keepdim=True
-            ).clamp_min(1)
-            frame_context = self.continuation.frame_context(rows, encoded_relations)
+            continuation = self.continuation(rows, objects, relation_definitions)
             shared_context = (
                 continuation
                 if shared_context is None
@@ -601,7 +563,7 @@ class ActorCritic(nn.Module):
             )
 
         validity = torch.cat(validity_parts, dim=1)
-        return objects, is_agent, validity, shared_context, frame_context
+        return objects, is_agent, validity, shared_context
 
     def _generic_definitions(
         self, ids: torch.Tensor, admitted: torch.Tensor | None = None

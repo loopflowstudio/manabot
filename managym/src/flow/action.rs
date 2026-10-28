@@ -1,8 +1,6 @@
 // action.rs
 // Player action computation and action space construction.
 
-use crate::agent::ability_description::{mana_description, trigger_description};
-
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::game::{Game, PendingChoice},
@@ -13,55 +11,36 @@ use crate::{
     },
 };
 
+fn mana_label(mana: &Mana) -> String {
+    let mut label: String = ["W", "U", "B", "R", "G", "C"]
+        .into_iter()
+        .enumerate()
+        .flat_map(|(index, symbol)| {
+            std::iter::repeat_n(
+                format!("{{{symbol}}}"),
+                mana.mana[index] as usize + mana.lesson[index] as usize,
+            )
+        })
+        .collect();
+    if mana.lesson.iter().any(|amount| *amount > 0) {
+        label.push_str(" (Lesson spells only)");
+    }
+    label
+}
+
 impl Game {
     pub(crate) fn action_description(&self, action: &Action) -> Option<String> {
         use crate::flow::decision::Decision;
         use crate::state::ability::Effect;
         match action {
-            Action::ChooseTrigger { trigger_id, player } => {
-                let trigger = self
-                    .state
-                    .trigger_placement
-                    .as_ref()?
-                    .remaining
-                    .iter()
-                    .find(|t| t.id == *trigger_id)?;
-                let card = &self.state.cards[trigger.source_card];
-                let mut label = format!(
-                    "Put on stack next — {}",
-                    trigger_description(
-                        card,
-                        trigger.ability_index,
-                        trigger.inline_effects.as_deref()
-                    )
-                );
-                if let Some(context) = trigger.context {
-                    let reference = self.target_reference(context, *player);
-                    if let Some(seat) = reference.player {
-                        label.push_str(&format!(" — event: Seat {}", seat + 1));
-                    } else if let Some(definition) = reference.definition.and_then(|id| {
-                        self.state
-                            .content
-                            .definition(crate::state::card::CardDefId(id))
-                    }) {
-                        label.push_str(&format!(" — event: {}", definition.name));
-                        if let Some(object) = reference.object {
-                            label.push_str(&format!(" (object {object})"));
-                        }
-                    }
-                }
-                Some(label)
-            }
             Action::ChooseMode { mode, .. } => {
                 match &self.state.suspended_decision.as_ref()?.decision {
                     Decision::ManaChoice { choices, .. } => {
-                        Some(format!("Add {}", mana_description(choices.get(*mode)?)))
+                        Some(format!("Add {}", mana_label(choices.get(*mode)?)))
                     }
                     Decision::Modal { modes, .. } => match modes.get(*mode)?.as_slice() {
                         [] => Some("Decline".into()),
-                        [Effect::AddMana { mana, .. }] => {
-                            Some(format!("Add {}", mana_description(mana)))
-                        }
+                        [Effect::AddMana { mana, .. }] => Some(format!("Add {}", mana_label(mana))),
                         [Effect::CreateToken { token_name, .. }] => {
                             Some(format!("Create a {token_name} token"))
                         }
@@ -86,7 +65,7 @@ impl Game {
                                 .expect("six colored mana slots"),
                             ..Default::default()
                         };
-                        label.push_str(&mana_description(&colored));
+                        label.push_str(&mana_label(&colored));
                         format!("Pay {label} instead of sacrificing")
                     })
                 }
@@ -530,9 +509,6 @@ impl Game {
     pub(crate) fn execute_action(&mut self, action: &Action) -> Result<(), AgentError> {
         self.journal_priority();
         match action {
-            Action::ChooseTrigger { player, trigger_id } => {
-                self.choose_trigger(*player, *trigger_id)
-            }
             Action::PlayLand { player, card } => {
                 self.play_land(*player, *card)?;
                 self.state.priority.on_non_pass_action(self.active_player());
@@ -562,12 +538,7 @@ impl Game {
                     Some(PendingChoice::ActivatedTarget { .. })
                 ) {
                     self.choose_activated_target(*player, target)
-                } else if self
-                    .state
-                    .trigger_placement
-                    .as_ref()
-                    .is_some_and(|p| p.placing.is_some())
-                {
+                } else if self.state.pending_trigger_choice.is_some() {
                     self.choose_trigger_target(*player, target)
                 } else {
                     Err(AgentError("no pending target choice".to_string()))
@@ -619,12 +590,7 @@ impl Game {
                     Some(PendingChoice::ChooseTargets { .. }) => {
                         self.finish_targets_action(*player)
                     }
-                    _ if self
-                        .state
-                        .trigger_placement
-                        .as_ref()
-                        .is_some_and(|p| p.placing.is_some()) =>
-                    {
+                    _ if self.state.pending_trigger_choice.is_some() => {
                         // "Up to one target" triggered ability: decline
                         // choosing a target.
                         self.decline_trigger_target(*player)

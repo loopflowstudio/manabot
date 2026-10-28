@@ -112,9 +112,9 @@ recipes, presets (`ataraxos-mtg-v1`, `baseline-v1` receipts) and checkpoints
 keep their meaning.
 
 An observation/action-shape or rules-meaning change is a world version.
-The current development world is **w14** (`managym.WORLD_VERSION`); its rules, tensor shape,
+The current development world is **w13** (`managym.WORLD_VERSION`); its rules, tensor shape,
 and compatibility limits are in [WORLDS.md](../WORLDS.md). Earlier checkpoints,
-including w13 artifacts, are not compatible with w14. Elemental combat,
+including w12 artifacts, are not compatible with w13. Elemental combat,
 [sacrifice/landfall](../docs/rules/elemental-sacrifice.md) and [Temur](../docs/rules/elemental-temur.md) compiled admission is implemented;
 [ten-deck Elemental admission](../docs/rules/elemental/world.md) is implemented in
 `elemental-world-v2`; release certification remains unfinished. The local

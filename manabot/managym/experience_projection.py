@@ -245,8 +245,7 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
                 int(entry.kind)
             ],
             "controller": int(entry.controller_id),
-            "label": entry.description
-            or data["definition_names"][str(entry.source_card_registry_key)],
+            "label": data["definition_names"][str(entry.source_card_registry_key)],
             "source_permanent": entry.source_permanent_id,
             "ability_index": entry.ability_index,
             "chosen_mode": entry.chosen_mode,
