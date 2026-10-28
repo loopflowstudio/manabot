@@ -232,13 +232,11 @@ class SeatRoutedCollector:
                 raise ValueError(
                     "collection representative match differs from the admitted collection"
                 )
-        self._uniform_roster = (
-            deck_collection.roster()
-            if deck_collection is not None
-            else elemental_roster(match)
-            if matchup_curriculum == "elemental-uniform"
-            else []
-        )
+            self._uniform_roster = deck_collection.roster()
+        elif matchup_curriculum == "elemental-uniform":
+            self._uniform_roster = elemental_roster(match)
+        else:
+            self._uniform_roster = []
         if self._uniform_roster and (
             workers != 1 or root is not None or opponent_mode != "self"
         ):

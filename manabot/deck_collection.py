@@ -25,6 +25,7 @@ from manabot.decklist import (
     admit_document,
     deck_identity,
     parse_decklist,
+    read_decklist,
 )
 from manabot.infra.identity import StrictModel, canonical_sha256
 
@@ -116,8 +117,7 @@ def prepare_collection(documents: list[DeckDocument], pack_key: str) -> DeckColl
     from manabot.semantic.policy_catalog import bind_policy_catalog
 
     pool = ContentPool.load(pack_key)
-    admitted: dict[str, AdmittedDeck] = {}
-    sources: dict[str, list[DeckDocument]] = defaultdict(list)
+    admitted: dict[str, list[AdmittedDeck]] = defaultdict(list)
     errors: dict[str, DeckDocument] = {}
     for index, source in enumerate(documents):
         result = admit_document(
@@ -127,8 +127,7 @@ def prepare_collection(documents: list[DeckDocument], pack_key: str) -> DeckColl
             errors[str(index)] = result
             continue
         identity = deck_identity(result.main, result.sideboard)
-        admitted[identity] = result
-        sources[identity].append(result.document)
+        admitted[identity].append(result)
     if errors:
         raise DeckImportError(errors)
     if len(admitted) < 2:
@@ -137,16 +136,16 @@ def prepare_collection(documents: list[DeckDocument], pack_key: str) -> DeckColl
     decks = tuple(
         CollectionDeck(
             deck_id=identity,
-            main=deck.main,
-            sideboard=deck.sideboard,
+            main=records[0].main,
+            sideboard=records[0].sideboard,
             sources=tuple(
                 sorted(
-                    sources[identity],
+                    (record.document for record in records),
                     key=lambda source: (source.filename, source.source),
                 )
             ),
         )
-        for identity, deck in sorted(admitted.items())
+        for identity, records in sorted(admitted.items())
     )
     payload = {
         "schema_version": "deck-collection-v1",
@@ -167,10 +166,7 @@ def main() -> None:
     parser.add_argument("--pool", required=True)
     parser.add_argument("--out", type=Path, required=True)
     args = parser.parse_args()
-    documents = [
-        parse_decklist(path.read_bytes().decode("utf-8"), str(path))
-        for path in args.files
-    ]
+    documents = [read_decklist(path, filename=str(path)) for path in args.files]
     collection = prepare_collection(documents, args.pool)
     # Never overwrite an admitted artifact; callers choose a new version's path.
     with args.out.open("x", encoding="utf-8") as target:

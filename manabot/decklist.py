@@ -366,13 +366,16 @@ def import_match(
     )
 
 
-def _read_file(path: Path) -> DeckDocument:
+def read_decklist(path: Path, *, filename: str | None = None) -> DeckDocument:
+    """Read bounded UTF-8 input without changing BOM or newline bytes."""
     with path.open("rb") as stream:
         data = stream.read(MAX_SOURCE_BYTES + 1)
     if len(data) > MAX_SOURCE_BYTES:
         raise ValueError(f"{path.name}: decklist exceeds the 64 KiB import limit")
-    return parse_decklist(data.decode("utf-8"), path.name)
+    return parse_decklist(
+        data.decode("utf-8"), path.name if filename is None else filename
+    )
 
 
 def import_files(hero: Path, villain: Path, pack_key: str) -> ImportedMatch:
-    return import_match(_read_file(hero), _read_file(villain), pack_key)
+    return import_match(read_decklist(hero), read_decklist(villain), pack_key)

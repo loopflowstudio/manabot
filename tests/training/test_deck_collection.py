@@ -15,7 +15,12 @@ import pytest
 import torch
 
 from manabot.deck_collection import DeckCollection, main, prepare_collection
-from manabot.decklist import DeckDocument, DeckImportError, parse_decklist
+from manabot.decklist import (
+    MAX_SOURCE_BYTES,
+    DeckDocument,
+    DeckImportError,
+    parse_decklist,
+)
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.env.failures import CaptureScope, FailureEvidence, capture_scope
 from manabot.infra.config import ModelConfig, RewardConfig
@@ -125,19 +130,30 @@ def test_collection_cli_retains_files_and_never_publishes_a_filtered_subset(
     paths = []
     for document in _documents():
         path = tmp_path / document.filename
-        path.write_bytes(document.source.encode("utf-8"))
+        path.write_bytes(
+            ("\ufeff" + document.source.replace("\n", "\r\n")).encode("utf-8")
+        )
         paths.append(str(path))
     target = tmp_path / "manifest.json"
     monkeypatch.setattr(
         sys, "argv", ["deck_collection", "--pool", PACK, "--out", str(target), *paths]
     )
     main()
-    assert len(DeckCollection.load(target).decks) == 3
+    collection = DeckCollection.load(target)
+    assert len(collection.decks) == 3
+    for deck in collection.decks:
+        for source in deck.sources:
+            assert source.filename in paths
+            assert source.source.encode("utf-8") == Path(source.filename).read_bytes()
     with pytest.raises(FileExistsError):
         main()
     target.unlink()
     Path(paths[1]).write_text("1 Unknown Card")
     with pytest.raises(DeckImportError):
+        main()
+    assert not target.exists()
+    Path(paths[1]).write_bytes(b"#" * (MAX_SOURCE_BYTES + 1))
+    with pytest.raises(ValueError, match="64 KiB import limit"):
         main()
     assert not target.exists()
 
