@@ -93,8 +93,9 @@ class PolicyStore:
             raise ValueError("policy admission requires an execution setup")
         key = PolicyKey.from_registration(player, self.execution)
         # Registrations of one checkpoint for other matchups share its resident
-        # policy. Each registration's own setups are validated against it here;
-        # loading needs only the first admission's checkpoint path.
+        # policy. Each registration's own parameter count, ABI and setups are
+        # validated against it here; a reload after eviction re-verifies the
+        # bytes. Loading needs only the first admission's checkpoint path.
         self.admissions.setdefault(key, admission)
         resident = self.get(key)
         if (
@@ -137,8 +138,6 @@ class PolicyStore:
                 raise ValueError(
                     "shared inference rejects compound or belief checkpoints"
                 )
-            if sum(p.numel() for p in agent.parameters()) != player.parameter_count:
-                raise ValueError("checkpoint parameter count drift")
             schema = {
                 name: {"shape": list(shape), "dtype": "float32"}
                 for name, shape in sorted(space.shapes.items())

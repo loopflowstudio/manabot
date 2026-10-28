@@ -235,7 +235,6 @@ class InferenceRuntime:
     def check(self) -> None:
         if (
             self._error
-            or self._closed
             or self._closing
             or self.execution.remaining() <= 0
             or not self.process.is_alive()
