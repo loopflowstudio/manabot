@@ -170,14 +170,20 @@ thread count within its declared bound.
 ## Exclusions
 
 Multi-process or multi-device serving; vectorized sampling that would change
-Commands; removing the parent's request hop; making group-worker parents
+Commands; making group-worker parents
 Torch-free (they load checkpoints for registration); CPU/CUDA parity (stays a
 stated limit); serving search players' model calls (follow-up MTG-205); a
 second CPU engine before rental counters show a saturated CPU service.
 
 ## Delete — do not maintain
 
-All removed as of `c6c8f4c87`; no deletion target remains.
+All removed (slices 1–7 by `c6c8f4c87`; the parent hop in this pass); no
+deletion target remains.
+
+- The parent request relay: `InferenceRuntime.infer`, its request latency in
+  `allocation.json`, `supervise_game`'s `"inference"` event and `replace`d
+  deadlines, `game_worker`'s pipe `infer`, and `serve`'s single-connection
+  `"infer"` message kind and poll loop.
 
 - `PolicyKey` matchup/content-suite fields in `input_binding`.
 - Per-key `.to(device)` loops in `PolicyInference.prepare` and `_infer`'s
@@ -372,18 +378,12 @@ Findings (implement, 2026-10-27):
 
 ## Check result
 
-Compress, 2026-10-27, after `c3bd35895`: checkpoint registrations in `elemental_grid.play_group` and `mtg186_eval.arena` pass their own ABI as keyword arguments (no default-space fingerprints computed only to be overridden); `uv run --extra dev pytest tests/eval/test_elemental_grid.py tests/eval/test_mtg186_cards.py tests/eval/test_etude_player_migration.py -q` → 13 passed (no test reaches these two functions; the calibration's `machine` smoke does).
-Compress, 2026-10-27: `InferenceRuntime.close` relies on `ChildProcess.kill`'s liveness guard; `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/sim/test_child_surface.py -q` → 24 passed, 1 skipped.
-Implement, 2026-10-27 15:55: drain-before-flush in `serve`; `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/sim/test_child_surface.py -q -k "not two_policies_never_share"` → 23 passed, 1 skipped. Rental arms at `625283822` settled (table above).
-Implement, 2026-10-27, after the `_InChildPlayers` rename: `uv run --extra dev pytest tests/training/test_game_errors.py tests/training/test_game_error_recovery.py tests/test_package_boundaries.py tests/sim/test_child_surface.py -q` → 39 passed (lost-worker fixtures run from Torch-free `tests/training/game_error_fixtures.py`; the acceptance set passed 50/1 skipped at `46d52b1e0`). Full suite belongs to gate/CI.
+Implement, 2026-10-27 (parent hop): `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/eval/test_local_evaluation.py tests/sim/test_child_surface.py tests/test_package_boundaries.py tests/eval/test_evaluation_match.py tests/training/test_game_errors.py tests/eval/test_mirror_admission.py tests/eval/test_inference_receipts.py -q` → 146 passed, 1 skipped (11 min). Host load average ~370 from other sessions during the run.
 
-Open for gate: the two
-`test_two_policies_never_share_a_forward_and_hung_service_is_bounded` cases
-failed only under concurrent load. Three `tests/sim` failures
-(conditional-search fixture digest, rollout card admission, seed-197 world
-binding) also fail at `ea8d0e874`. Remaining `spawn` uses (`eval/local.py`,
-`verify/competency`, `llm/*`, `_process.py`) are not game/replay/serving
-children.
+Open for gate: three `tests/sim` failures (conditional-search fixture digest,
+rollout card admission, seed-197 world binding) also fail at `ea8d0e874`.
+Remaining `spawn` uses (`eval/local.py`, `verify/competency`, `llm/*`,
+`_process.py`) are not game/replay/serving children.
 
 ## Concept reviews 1–3 (headless, 2026-10-26)
 
@@ -411,28 +411,13 @@ batching, threads and transfer, and CPU performance is iterated on rental
 evidence rather than only gated. Implemented as slices 6–7. Proposal text at
 `303e65204`.
 
-## Concept review 5 (headless, 2026-10-27, at `302204fd7`)
+## Concept reviews 5–6 (headless, 2026-10-27, at `302204fd7`, `c6c8f4c87`)
 
-Against decisions 1a/2b/3b and the engine boundary, the concepts hold:
-a checkpoint has one way to play in evaluation (served; `is_served` →
-`bind_execution`, local CPU envelope from `resolve_execution`); code and
-search players play in their game child; one engine serves both devices, with
-the boundary written in `docs/shared-evaluation.md`. No open product choice.
-
-Applied (implement, 2026-10-27): `native_game._InChildPlayers` names the
-in-child players. The `scalar_policy` performance span and `cold_scalar`
-benchmark variant keep their names as retained receipt keys; MTG-183's runner
-`scalar` mode is MTG-183's name. Remaining: the rental calibration and landing
-gate as written in Acceptance.
-
-## Concept review 6 (headless, 2026-10-27, at `c6c8f4c87`)
-
-Since review 5 only the `_InChildPlayers` rename and Torch-free lost-worker
-fixtures landed; both follow the accepted concepts. Served checkpoints,
-in-child code/search players, one policy key per checkpoint, child processes
-and role thread budgets still hold, and the engine boundary is unchanged. No
-design change and no open product choice. Remaining: the rental calibration
-and landing gate in Acceptance (now run by MTG-193 itself; ledger in Calibration).
+Concepts hold: a checkpoint plays served only (`is_served` → `bind_execution`,
+local CPU envelope from `resolve_execution`); code and search players play in
+their game child (`native_game._InChildPlayers`); one engine serves both
+devices. The `scalar_policy` span and `cold_scalar` benchmark variant keep their
+names as retained receipt keys. No open product choice.
 
 ## Parent hop decided (Jack Heart, 2026-10-27)
 
@@ -457,3 +442,33 @@ Requirements carried forward:
   engine direction). `cpu32` uses one shared CPU service per machine instead
   of a service per cell.
 - Calibrate on rentals within the remaining $5 ledger.
+
+Implemented (2026-10-27, local):
+- `InferenceRuntime.connect` opens a socket pair per served game and passes
+  one end to the service over a handoff socket (`socket.send_fds`); the
+  service acknowledges each descriptor before the parent closes its copy
+  (closing an in-flight socket's last descriptor disconnects it on macOS).
+  `supervise_game` passes the other end to the game child (`ChildProcess`
+  `pass_fds`) and closes its own copy; a failed handoff is that game's
+  infrastructure failure, retained in its journal.
+- `InferenceClient` (Torch-free) speaks `Connection` framing over a plain
+  socket so send and reply share one deadline (`SO_SNDTIMEO` bounds each
+  write, not the send). `game_worker` clamps each request to the game's
+  wall deadline; a failure is reported as `("inference_failure", message)`,
+  and the parent fails the allocation and records the game as an
+  infrastructure failure with no failed player.
+- `serve` watches control, handoff and game connections with one
+  `selectors.DefaultSelector`; one read per ready connection per wake-up
+  (each game has at most one request in flight) fills a due batch from any
+  backlog. `service_receive` (`EvalPerformance.measure`, no span) and
+  `reply_send` measure the service's own per-request work.
+- The parent's journal is opened once per game, still fsynced per event.
+- Not done here: `cpu32` one shared CPU service per machine is a runner
+  layout (MTG-183's `batched` mode) and goes on the calibration branch.
+
+Remaining: rental calibration. The calibration worktree was removed; its
+branch survives as `recovery/mtg193-calibration-20261028` (`625283822`).
+Rebuild a worktree from it, merge this branch, switch the `batched` arm to one
+shared CPU allocation per machine, then build and queue the A4500 `gpu` and
+`cpu32` arms as in Calibration (about $1.30 for both at the last quotes;
+$2.91 of $5 left). Targets and landing gate unchanged.

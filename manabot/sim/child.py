@@ -5,7 +5,8 @@ an evaluator whose main imports Torch or Etude makes every game child pay for
 it. `ChildProcess` instead runs `python -m manabot.sim.child <target> <fd>`:
 this module imports only the target `module:function`, receives its arguments
 as the first message on a socketpair `Connection`, then calls
-`function(connection, *arguments)`. The child starts from
+`function(connection, *arguments)`. Further descriptors named in `pass_fds`
+keep their numbers in the child, so arguments may name them. The child starts from
 `threads.child_environment()`, so its library pools are single-threaded.
 
 Exit codes follow `multiprocessing`: negative values name the killing signal.
@@ -26,7 +27,13 @@ from manabot.sim.threads import child_environment
 class ChildProcess:
     """One child process and the parent's end of its connection."""
 
-    def __init__(self, target: str, arguments: tuple[object, ...]) -> None:
+    def __init__(
+        self,
+        target: str,
+        arguments: tuple[object, ...],
+        *,
+        pass_fds: tuple[int, ...] = (),
+    ) -> None:
         module, separator, function = target.partition(":")
         if not (module and separator and function):
             raise ValueError(f"child target must be module:function, got {target!r}")
@@ -35,7 +42,7 @@ class ChildProcess:
         try:
             self._process = subprocess.Popen(
                 [sys.executable, "-m", __name__, target, str(child.fileno())],
-                pass_fds=(child.fileno(),),
+                pass_fds=(child.fileno(), *pass_fds),
                 env=child_environment(),
             )
         except BaseException:

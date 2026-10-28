@@ -48,6 +48,21 @@ order within the row and delay limits, and each row samples from its own
 decision seed. Each batch moves to the device in one copy per dtype (float32
 observations, int64 catalog references).
 
+Decisions do not pass through the allocation's supervising process. For each
+served game, `InferenceRuntime.connect` opens a socket pair and hands one end to
+the serving child as a descriptor. The game child holds the other end as an
+`InferenceClient` and exchanges its requests and replies directly with the
+service, so concurrent games' requests arrive together and can share a batch.
+The supervising process still owns game lifecycle, the wall-clock deadline,
+failure classification and the Command journal: a Command is retained before
+native execution exactly as before. A request that cannot be sent or answered
+by its deadline (bounded by the game's remaining wall time), a dead service, or
+a failed handoff makes the game an infrastructure failure and fails the
+allocation. The service watches its control connection, the handoff socket and
+every game connection with one selector. `service_receive` in `serving.json`
+measures its per-wake-up read cost and `reply_send` its reply cost, so the
+service's own per-request overhead is visible when it becomes the ceiling.
+
 The execution engine is the part that turns admitted requests into forwards:
 the serving child's flush loop and `serving._infer` (process layout, batching,
 threads, device transfer). Everything before it is shared by CPU and CUDA:

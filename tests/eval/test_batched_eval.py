@@ -1,11 +1,14 @@
 """Shared inference preserves admission, request RNG and native arena evidence."""
 
-from collections import deque
 from dataclasses import replace
 import json
+from multiprocessing import Pipe
+from multiprocessing.connection import Connection
 from pathlib import Path
+import socket
+import threading
 import time
-from typing import Any, Literal
+from typing import Literal
 
 import numpy as np
 import pytest
@@ -38,6 +41,7 @@ from manabot.sim.serving import (
 )
 from manabot.sim.serving_protocol import (
     DecisionRequest,
+    InferenceClient,
     InferenceFailure,
     InferenceRuntime,
     PolicyAdmission,
@@ -275,28 +279,9 @@ def test_matchups_of_one_checkpoint_share_its_policy_and_batches(
     store.close()
 
 
-class _BacklogConnection:
-    """A service connection whose requests have all arrived before it reads."""
-
-    def __init__(self, messages: list[tuple[str, str, object]], replies: int) -> None:
-        self.messages = deque(messages)
-        self.sent: list[tuple[Any, ...]] = []
-        self.replies = replies
-
-    def poll(self, timeout: float = 0) -> bool:
-        # Hold `close` until every request is answered.
-        return len(self.messages) > 1 or (
-            bool(self.messages) and len(self.sent) > self.replies
-        )
-
-    def recv(self) -> tuple[str, str, object]:
-        return self.messages.popleft()
-
-    def send(self, message: tuple[Any, ...]) -> None:
-        self.sent.append(message)
-
-    def close(self) -> None:
-        pass
+def _client(runtime: InferenceRuntime) -> InferenceClient:
+    """A direct service connection held in this process, as a game child holds one."""
+    return InferenceClient(runtime.connect().detach())
 
 
 def test_service_batches_a_backlog_of_overdue_requests(
@@ -310,32 +295,57 @@ def test_service_batches_a_backlog_of_overdue_requests(
         replace(request_for(player, execution, seed), submitted=time.monotonic() - 1)
         for seed in range(6)
     ]
-    connection = _BacklogConnection(
-        [
-            (
-                "admission",
-                "admit",
-                PolicyAdmission(player, str(path), (selected_match(),)),
-            )
-        ]
-        + [(r.request_id, "infer", r) for r in requests]
-        + [("close", "close", None)],
-        replies=len(requests),
+    control, service_control = Pipe()
+    handoff, service_handoff = socket.socketpair()
+    control.send(
+        ("admission", "admit", PolicyAdmission(player, str(path), (selected_match(),)))
     )
+    clients, handed_over = [], []
+    for request in requests:
+        client, service_end = socket.socketpair()
+        # Room for the whole request before the service reads any of it.
+        client.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 2**20)
+        service_end.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 2**20)
+        socket.send_fds(handoff, [b"c"], [service_end.fileno()])
+        # Kept open until the service holds it, as `InferenceRuntime.connect` does.
+        handed_over.append(service_end)
+        clients.append(Connection(client.detach()))
+        clients[-1].send(request)
     # The pytest process keeps its own pools; the budget belongs to a child.
     monkeypatch.setattr(torch, "set_num_threads", lambda _: None)
     monkeypatch.setattr(torch, "set_num_interop_threads", lambda _: None)
     monkeypatch.setattr(
         serving, "SERVING_BUDGET", replace(serving.SERVING_BUDGET, threads=10**6)
     )
-    serving.serve(connection, execution, tmp_path, "backlog")  # type: ignore[arg-type]
+    service = threading.Thread(
+        target=serving.serve,
+        args=(
+            service_control,
+            execution,
+            tmp_path,
+            "backlog",
+            service_handoff.detach(),
+        ),
+    )
+    service.start()
+    try:
+        assert all(client.poll(30) for client in clients)
+        replies = [client.recv() for client in clients]
+    finally:
+        control.send(("close", "close", None))
+        service.join(30)
+        for service_end in handed_over:
+            service_end.close()
+    assert handoff.recv(len(requests)) == b"a" * len(requests)
+    assert [(identity, error) for identity, _, error in replies] == [
+        (r.request_id, None) for r in requests
+    ]
     counters = json.loads((tmp_path / "serving.json").read_bytes())["counters"]
     assert {k: v for k, v in counters.items() if k.startswith("batch_rows/")} == {
         "batch_rows/4": 1,
         "batch_rows/2": 1,
     }
-    replies = {m[0]: m[1] for m in connection.sent[2:]}
-    assert all(replies[r.request_id] is not None for r in requests)
+    assert counters["client_connections"] == len(requests)
 
 
 def test_packed_transfer_makes_one_copy_per_dtype() -> None:
@@ -358,16 +368,20 @@ def test_service_partial_flush_stale_replies_and_death(tmp_path: Path) -> None:
     _, (player,) = bind_execution(key, (player,), execution)
     with InferenceRuntime(execution, tmp_path / "allocation") as runtime:
         runtime.admit(PolicyAdmission(player, str(path), (selected_match(),)))
+        client = _client(runtime)
         request = request_for(player, execution)
-        reply = runtime.infer(request)
+        reply = client.infer(request)
         reply.validate(request)
         with pytest.raises(InferenceFailure, match="stale"):
             replace(reply, revision=-1).validate(request)
         receipt = runtime.snapshot()
         runtime.process.kill()
         runtime.process.join()
+        with pytest.raises(InferenceFailure, match="exited"):
+            client.infer(request)
         with pytest.raises(InferenceFailure):
-            runtime.infer(request)
+            runtime.connect()
+        client.close()
     assert receipt["counters"]["batch_rows/1"] == 1
     assert receipt["counters"]["completed_requests"] == 1
     assert "batch_queue" not in receipt["measurements"]
@@ -376,8 +390,9 @@ def test_service_partial_flush_stale_replies_and_death(tmp_path: Path) -> None:
     assert lifecycle["measurements"]["service_start_to_ready"]["population"] == 1
     assert lifecycle["measurements"]["admission_round_trip"]["population"] == 1
     assert lifecycle["measurements"]["cleanup"]["population"] == 1
-    assert lifecycle["counters"]["completed_requests"] == 1
-    assert lifecycle["counters"]["failed_requests"] == 1
+    # Decisions bypass the supervisor; it only hands over connections.
+    assert lifecycle["counters"]["client_connections"] == 1
+    assert "requests" not in lifecycle["counters"]
     retained = json.loads((tmp_path / "allocation/serving.json").read_bytes())
     assert retained["counters"]["model_loads"] == 1
     assert retained["counters"]["rss_samples"] >= 1
@@ -409,9 +424,8 @@ def test_queue_boundary_excludes_cold_load_and_overlapping_requests(
 
     monkeypatch.setattr(serving, "load_checkpoint", delayed_load)
     monkeypatch.setattr(time, "monotonic", lambda: clock[0])
-    _record_dispatch(
-        perf, [_PendingRequest(r.request_id, r, 3) for r in requests], "batch"
-    )
+    client, _ = Pipe()
+    _record_dispatch(perf, [_PendingRequest(r, client, 3) for r in requests], "batch")
     try:
         replies = _infer(store, requests, "batch")
         assert len(replies) == 2
@@ -438,7 +452,7 @@ def test_failed_service_request_has_no_success_latency(tmp_path: Path) -> None:
         runtime.admit(PolicyAdmission(player, str(path), (selected_match(),)))
         request = replace(request_for(player, execution), observation={})
         with pytest.raises(InferenceFailure, match="observation fields"):
-            runtime.infer(request)
+            _client(runtime).infer(request)
     receipt = json.loads((tmp_path / "allocation/serving.json").read_bytes())
     assert receipt["counters"]["received_requests"] == 1
     assert receipt["counters"]["failed_requests"] == 1
@@ -467,6 +481,55 @@ def test_service_start_failure_retains_unready_attempt(
     execution_receipt = json.loads((directory / "execution.json").read_bytes())
     assert execution_receipt["error"] == "OSError: injected spawn failure"
     assert execution_receipt["cost"]["measured_usd"] is None
+
+
+def test_games_reach_the_service_directly_and_its_failure_is_infrastructure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import os
+    import signal
+
+    key, player, anchor, path = fixture_policy(tmp_path)
+    execution = EvalExecution(
+        deadline_unix=time.time() + 120, max_active_games=2, request_seconds=10
+    )
+    _, (bound,) = bind_execution(key, (player,), execution)
+    with InferenceRuntime(execution, tmp_path / "allocation") as runtime:
+        connect = runtime.connect
+        connected = []
+
+        def connect_then_stop() -> socket.socket:
+            # Both games hold their connections; every decision then meets a
+            # stopped service and times out in the game child.
+            connected.append(connect())
+            if len(connected) == execution.max_active_games:
+                os.kill(runtime.process.pid, signal.SIGSTOP)
+            return connected[-1]
+
+        monkeypatch.setattr(runtime, "connect", connect_then_stop)
+        rows, trace, _ = play_cell(
+            key=key,
+            player_a=player,
+            player_b=anchor,
+            deal_seeds=(831,),
+            out_dir=tmp_path / "panel",
+            checkpoint_paths={player.player_id: str(path)},
+            execution=execution,
+            inference=runtime,
+            max_commands=4,
+        )
+        lifecycle = runtime.performance.snapshot()["counters"]
+        os.kill(runtime.process.pid, signal.SIGCONT)
+    assert len(rows) == 2 and all(
+        row["failure"] == "inference service request timed out"
+        and row["failed_player_id"] is None
+        and row["score_a"] is None
+        for row in rows
+    )
+    games = read_trace(Path(trace["path"]))
+    assert all(game["infrastructure_failure"] for game in games)
+    # No decision passes through the runtime.
+    assert "requests" not in lifecycle
 
 
 def test_concurrent_deal_blocks_retain_commands_and_one_resident_model(
@@ -687,8 +750,12 @@ def test_two_policies_never_share_a_forward_and_hung_service_is_bounded(
             request_for(player, execution, seed)
             for player, seed in ((first, 1), (second, 2), (first, 3), (second, 4))
         ]
+        # One connection per game, each with one request in flight.
+        clients = [_client(runtime) for _ in requests]
         with ThreadPoolExecutor(4) as pool:
-            replies = list(pool.map(runtime.infer, requests))
+            replies = list(
+                pool.map(lambda pair: pair[0].infer(pair[1]), zip(clients, requests))
+            )
         batches: dict[str, set[PolicyKey]] = {}
         for request, reply in zip(requests, replies, strict=True):
             batches.setdefault(reply.batch_id, set()).add(request.policy)
@@ -701,12 +768,15 @@ def test_two_policies_never_share_a_forward_and_hung_service_is_bounded(
         os.kill(runtime.process.pid, signal.SIGSTOP)
         started = time.monotonic()
         with pytest.raises(InferenceFailure, match="timed out"):
-            # Exceed pipe capacity while the reader is stopped. A synchronous
-            # send under the futures lock would prevent the deadline firing.
-            runtime.infer(
+            # Exceed socket capacity while the reader is stopped. The send
+            # itself is bounded, not only the wait for a reply.
+            clients[0].infer(
                 replace(
                     requests[0],
-                    deadline_unix=time.time() + deadline_seconds,
+                    # A game bounds each request by the allocation's request
+                    # allowance, as `execute_game` builds it.
+                    deadline_unix=time.time()
+                    + min(deadline_seconds, execution.request_seconds),
                     observation={"blocked_pipe": np.zeros(2**22, dtype=np.float32)},
                 )
             )

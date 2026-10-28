@@ -2,8 +2,8 @@
 
 `InferenceRuntime` (`manabot.sim.serving_protocol`) launches `serve` as a
 `ChildProcess`; only this process imports Torch and loads served weights. Game
-children send owned arrays through their supervisor, which multiplexes them
-here. Requests group by `PolicyKey` (checkpoint and numerics, not matchup);
+children send owned arrays directly, each over its own connection, which the
+runtime hands to this process as a descriptor. Requests group by `PolicyKey` (checkpoint and numerics, not matchup);
 FIFO groups flush independently at `max_batch_rows` or `max_delay_seconds`.
 Each batch moves to the device in one copy per dtype, and each row samples on
 CPU from its own retained decision seed, so actions do not depend on batch
@@ -17,6 +17,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from multiprocessing.connection import Connection
 from pathlib import Path
+import selectors
+import socket
 import time
 from uuid import uuid4
 
@@ -47,8 +49,8 @@ from manabot.sim.threads import SERVING_BUDGET
 
 @dataclass(frozen=True)
 class _PendingRequest:
-    identity: str
     request: DecisionRequest
+    client: Connection
     received: float
 
 
@@ -319,10 +321,67 @@ def _sample_memory(perf: EvalPerformance, execution: EvalExecution) -> None:
         perf.counters["peak_reserved_cuda_bytes"] = torch.cuda.max_memory_reserved()
 
 
+def _profiled_infer(
+    store: PolicyStore,
+    requests: list[DecisionRequest],
+    batch: str,
+    trace: Path,
+) -> list[DecisionReply]:
+    """Run one diagnostic batch under the Torch profiler and retain its trace."""
+    perf, execution = store.perf, store.execution
+    activities = [torch.profiler.ProfilerActivity.CPU]
+    if execution.device == "cuda":
+        activities.append(torch.profiler.ProfilerActivity.CUDA)
+    with torch.profiler.profile(activities=activities, record_shapes=True) as profile:
+        if execution.device == "cuda":
+            begin, end = (
+                torch.cuda.Event(enable_timing=True),
+                torch.cuda.Event(enable_timing=True),
+            )
+            begin.record()
+        replies = _infer(store, requests, batch)
+        if execution.device == "cuda":
+            end.record()
+            end.synchronize()
+            perf.count("diagnostic_synchronizations")
+            perf.device_events.append(
+                {
+                    "batch": batch,
+                    "seconds": begin.elapsed_time(end) / 1000,
+                    "clock": "CUDA event duration; no host epoch alignment",
+                    "resource": "device stream elapsed",
+                    "scope": "diagnostic batch, includes stream gaps; not pure kernel compute",
+                }
+            )
+    profile.export_chrome_trace(str(trace))
+    perf.traces.append(str(trace))
+    perf.count("diagnostic_batches")
+    return replies
+
+
+def _reply(perf: EvalPerformance, item: _PendingRequest, message: object) -> None:
+    """A killed game cannot receive its reply; that is its supervisor's failure."""
+    try:
+        item.client.send(message)
+    except OSError:
+        perf.count("undeliverable_replies")
+
+
 def serve(
-    connection: Connection, execution: EvalExecution, directory: Path, allocation: str
+    connection: Connection,
+    execution: EvalExecution,
+    directory: Path,
+    allocation: str,
+    handoff: int,
 ) -> None:
-    """Serving child entry; exceeding its thread budget fails the allocation."""
+    """Serving child entry; exceeding its thread budget fails the allocation.
+
+    `connection` carries the supervisor's admissions, snapshots and close.
+    `handoff` delivers one socket descriptor per game; each game sends its
+    `DecisionRequest`s on that socket and receives `(request_id, reply, error)`.
+    One selector watches all of them, so each wake-up costs only its ready
+    connections, and `service_receive` measures that per-request work.
+    """
     torch.set_num_threads(1)
     torch.set_num_interop_threads(1)
     perf = EvalPerformance(
@@ -332,47 +391,99 @@ def serve(
     )
     store = PolicyStore(execution, perf)
     pending: deque[_PendingRequest] = deque()
+    selector = selectors.DefaultSelector()
+    handoff_socket = socket.socket(fileno=handoff)
+    handoff_socket.setblocking(False)
+    selector.register(connection, selectors.EVENT_READ, "control")
+    selector.register(handoff_socket, selectors.EVENT_READ, "handoff")
     diagnostics = 0
     published = time.monotonic()
+
+    def control() -> bool:
+        """Handle one supervisor message; False once it closes the service."""
+        identity, kind, payload = connection.recv()
+        if kind == "close":
+            return False
+        try:
+            result = store.admit(payload) if kind == "admit" else perf.snapshot()
+            if kind == "admit":
+                _sample_memory(perf, execution)
+                perf.write(directory / "serving.json")
+            connection.send((identity, result, None))
+        except Exception as exc:
+            perf.count("failed_admissions")
+            connection.send((identity, None, f"{type(exc).__name__}: {exc}"))
+        return True
+
+    def accept() -> None:
+        """Register every game connection handed over so far."""
+        while True:
+            try:
+                data, descriptors, _, _ = socket.recv_fds(handoff_socket, 1, 1)
+            except BlockingIOError:
+                return
+            for descriptor in descriptors:
+                selector.register(Connection(descriptor), selectors.EVENT_READ, "game")
+                perf.count("client_connections")
+                # The supervisor holds its copy until this acknowledgement.
+                handoff_socket.send(b"a")
+            if not data:
+                # The supervisor closed its end; no further games will connect.
+                selector.unregister(handoff_socket)
+                return
+
+    def request(client: Connection) -> None:
+        try:
+            message = client.recv()
+        except (EOFError, OSError):
+            # The game finished or was killed; its connection closes with it.
+            selector.unregister(client)
+            client.close()
+            return
+        pending.append(_PendingRequest(message, client, time.monotonic()))
+        perf.count("received_requests")
+
+    def receive(timeout: float) -> bool:
+        """Read each ready connection once; False once the supervisor closes."""
+        ready = selector.select(timeout)
+        started = time.monotonic()
+        for key, _ in ready:
+            if key.data == "control":
+                if not control():
+                    return False
+            elif key.data == "handoff":
+                accept()
+            else:
+                request(key.fileobj)  # type: ignore[arg-type]
+        if ready:
+            perf.measure("service_receive", time.monotonic() - started)
+        return True
+
     try:
         # Ready means the service can receive work, not that any model is loaded.
         perf.write(directory / "serving.json")
         connection.send(("ready", None, None))
-
-        def receive() -> bool:
-            """Handle one message; False once the supervisor closes the service."""
-            identity, kind, payload = connection.recv()
-            if kind == "close":
-                return False
-            if kind == "infer":
-                pending.append(_PendingRequest(identity, payload, time.monotonic()))
-                perf.count("received_requests")
-                return True
-            try:
-                result = store.admit(payload) if kind == "admit" else perf.snapshot()
-                if kind == "admit":
-                    _sample_memory(perf, execution)
-                    perf.write(directory / "serving.json")
-                connection.send((identity, result, None))
-            except Exception as exc:
-                perf.count("failed_admissions")
-                connection.send((identity, None, f"{type(exc).__name__}: {exc}"))
-            return True
-
         while execution.remaining() > 0:
-            # Once a group is due, continuous admissions cannot starve its flush.
-            due = bool(pending) and (
-                time.monotonic() - pending[0].request.submitted
-                >= execution.max_delay_seconds
-                or sum(r.request.policy == pending[0].request.policy for r in pending)
-                >= execution.max_batch_rows
-            )
-            if not due and connection.poll(
-                0 if pending else min(0.1, execution.remaining())
-            ):
-                if not receive():
-                    break
-                continue
+            # A game has at most one request in flight, so one read per ready
+            # connection drains any backlog before a due group flushes.
+            if pending:
+                head = pending[0].request
+                full = (
+                    sum(item.request.policy == head.policy for item in pending)
+                    >= execution.max_batch_rows
+                )
+                timeout = (
+                    0
+                    if full
+                    else max(
+                        0,
+                        head.submitted + execution.max_delay_seconds - time.monotonic(),
+                    )
+                )
+            else:
+                timeout = min(0.1, execution.remaining())
+            if not receive(timeout):
+                break
             if not pending:
                 continue
             first = pending[0].request
@@ -383,83 +494,44 @@ def serve(
                 len(compatible) < execution.max_batch_rows
                 and time.monotonic() - first.submitted < execution.max_delay_seconds
             ):
-                connection.poll(min(execution.max_delay_seconds, 0.001))
                 continue
-            # A lagging service receives requests already past their delay.
-            # Read what has arrived, at most one batch's worth, so a backlog
-            # fills the due batch instead of flushing one row per loop.
-            closed = False
-            for _ in range(execution.max_batch_rows):
-                if len(compatible) >= execution.max_batch_rows or not connection.poll(
-                    0
-                ):
-                    break
-                received = len(pending)
-                if not receive():
-                    closed = True
-                    break
-                if (
-                    len(pending) > received
-                    and pending[-1].request.policy == first.policy
-                ):
-                    compatible.append(pending[-1])
-            if closed:
-                break
             chosen = compatible[: execution.max_batch_rows]
-            ids = {item.identity for item in chosen}
-            pending = deque(item for item in pending if item.identity not in ids)
+            ids = {item.request.request_id for item in chosen}
+            pending = deque(
+                item for item in pending if item.request.request_id not in ids
+            )
             batch = uuid4().hex
             _record_dispatch(perf, chosen, batch)
+            requests = [item.request for item in chosen]
             try:
                 if diagnostics < execution.diagnostic_batches:
-                    activities = [torch.profiler.ProfilerActivity.CPU]
-                    if execution.device == "cuda":
-                        activities.append(torch.profiler.ProfilerActivity.CUDA)
-                    with torch.profiler.profile(
-                        activities=activities, record_shapes=True
-                    ) as profile:
-                        if execution.device == "cuda":
-                            begin, end = (
-                                torch.cuda.Event(enable_timing=True),
-                                torch.cuda.Event(enable_timing=True),
-                            )
-                            begin.record()
-                        replies = _infer(store, [r.request for r in chosen], batch)
-                        if execution.device == "cuda":
-                            end.record()
-                            end.synchronize()
-                            perf.count("diagnostic_synchronizations")
-                            perf.device_events.append(
-                                {
-                                    "batch": batch,
-                                    "seconds": begin.elapsed_time(end) / 1000,
-                                    "clock": "CUDA event duration; no host epoch alignment",
-                                    "resource": "device stream elapsed",
-                                    "scope": "diagnostic batch, includes stream gaps; not pure kernel compute",
-                                }
-                            )
-                    trace = directory / f"diagnostic-{diagnostics}.json"
-                    profile.export_chrome_trace(str(trace))
-                    perf.traces.append(str(trace))
-                    perf.count("diagnostic_batches")
+                    replies = _profiled_infer(
+                        store,
+                        requests,
+                        batch,
+                        directory / f"diagnostic-{diagnostics}.json",
+                    )
                     diagnostics += 1
                 else:
-                    replies = _infer(store, [r.request for r in chosen], batch)
+                    replies = _infer(store, requests, batch)
                 # Pools start lazily (CUDA, profiler); count after each batch
                 # and fail its requests, never attribute them to a player.
                 SERVING_BUDGET.account(perf.counters)
             except Exception as exc:
                 for item in chosen:
-                    connection.send(
-                        (item.identity, None, f"{type(exc).__name__}: {exc}")
+                    _reply(
+                        perf,
+                        item,
+                        (item.request.request_id, None, f"{type(exc).__name__}: {exc}"),
                     )
                     perf.latency(
                         time.monotonic() - item.request.submitted, outcome="failed"
                     )
             else:
-                for item, reply in zip(chosen, replies, strict=True):
-                    connection.send((item.identity, reply, None))
-                    perf.latency(time.monotonic() - item.request.submitted)
+                with perf.span("reply_send", batch=batch):
+                    for item, reply in zip(chosen, replies, strict=True):
+                        _reply(perf, item, (item.request.request_id, reply, None))
+                        perf.latency(time.monotonic() - item.request.submitted)
             _sample_memory(perf, execution)
             if time.monotonic() - published >= 1:
                 perf.write(directory / "serving.json")
@@ -470,4 +542,9 @@ def serve(
         )
         store.close()
         perf.write(directory / "serving.json")
+        for key in list(selector.get_map().values()):
+            if key.data == "game":
+                key.fileobj.close()  # type: ignore[union-attr]
+        selector.close()
+        handoff_socket.close()
         connection.close()

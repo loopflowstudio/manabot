@@ -2,20 +2,22 @@
 
 The pending Command is fsynced before acknowledgement. Each call owns one
 native `ChildProcess` (game or replay); allocation slots bound concurrent
-callbacks, including wait time. Torch-free.
+callbacks, including wait time. A served game's child holds its own connection
+to the inference service, so decisions never pass through this process; the
+child reports an inference failure, which fails the allocation. Torch-free.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 import json
 from multiprocessing.connection import Connection
 import os
 from pathlib import Path
 import time
-from typing import Any
+from typing import IO, Any
 
 from manabot.sim.card_evidence import (
     EvidenceRef,
@@ -85,7 +87,9 @@ def supervise_game(
     """Retain attempted Commands before native code can hang or kill its worker.
 
     `worker` is the child's `module:function` target, called with the
-    connection, game, registrations, checkpoint paths and Command cap.
+    connection, game, registrations, checkpoint paths, Command cap, the
+    descriptor of its inference connection (or None) and the game's wall-clock
+    deadline in Unix seconds.
     Successful games discard their journal unless `keep_completed`; their
     returned trace holds every decision. Failed games always keep the journal.
     """
@@ -95,27 +99,56 @@ def supervise_game(
             str(game.get("match_id", "game")), game.get("instrumentation", True)
         )
 
+        journal: IO[str] | None = None
+
         def retain(kind: str, value: Any) -> None:
-            if evidence_path is not None:
-                with evidence_path.open("a") as evidence:
-                    evidence.write(json.dumps([kind, value], allow_nan=False) + "\n")
-                    evidence.flush()
-                    os.fsync(evidence.fileno())
+            if journal is not None:
+                journal.write(json.dumps([kind, value], allow_nan=False) + "\n")
+                journal.flush()
+                os.fsync(journal.fileno())
 
         game["execution_limits"] = {"commands": max_commands, "seconds": game_seconds}
         game["registrations"] = [
             registration.model_dump(mode="json") for registration in registrations
         ]
+        deadline_unix = time.time() + game_seconds
+        if inference is not None:
+            deadline_unix = min(deadline_unix, inference.execution.deadline_unix)
         if evidence_path is not None:
             evidence_path.parent.mkdir(parents=True, exist_ok=True)
             evidence_path.touch(mode=0o600, exist_ok=False)
+            journal = evidence_path.open("a")
             retain("game", game)
-        process = ChildProcess(
-            worker, (game, registrations, checkpoint_paths, max_commands)
-        )
-        receiver = process.connection
+        process: ChildProcess | None = None
         responsible = None
         try:
+            client = None
+            if inference is not None:
+                try:
+                    client = inference.connect()
+                except InferenceFailure as exc:
+                    _failure(game, "crash", str(exc), None)
+                    game["infrastructure_failure"] = True
+                    return game
+            try:
+                descriptor = None if client is None else client.fileno()
+                process = ChildProcess(
+                    worker,
+                    (
+                        game,
+                        registrations,
+                        checkpoint_paths,
+                        max_commands,
+                        descriptor,
+                        deadline_unix,
+                    ),
+                    pass_fds=() if descriptor is None else (descriptor,),
+                )
+            finally:
+                # The child holds its own copy; the service answers only the child.
+                if client is not None:
+                    client.close()
+            receiver = process.connection
             while True:
                 remaining = game_seconds - (time.monotonic() - started)
                 if inference is not None:
@@ -149,26 +182,14 @@ def supervise_game(
                         game, "crash", "worker exited without a result", responsible
                     )
                     return game
-                if kind == "inference":
-                    if inference is None:
-                        raise InferenceFailure("no inference runtime attached")
-                    # Inference waiting consumes the active game's wall allowance.
-                    value = replace(
-                        value,
-                        deadline_unix=min(
-                            value.deadline_unix,
-                            time.time()
-                            + max(0, game_seconds - (time.monotonic() - started)),
-                        ),
-                    )
-                    try:
-                        reply = inference.infer(value)
-                        receiver.send(reply)
-                    except InferenceFailure as exc:
-                        _failure(game, "crash", str(exc), None)
-                        game["infrastructure_failure"] = True
-                        return game
-                    continue
+                if kind == "inference_failure":
+                    # A failed or late reply means the shared service cannot be
+                    # trusted for any game; stop the allocation, as for a crash.
+                    if inference is not None:
+                        inference.fail(value)
+                    _failure(game, "crash", value, None)
+                    game["infrastructure_failure"] = True
+                    return game
                 with perf.span("durable_evidence"):
                     retain(kind, value)
                 game = apply_game_event(game, kind, value)
@@ -185,11 +206,14 @@ def supervise_game(
                 elif kind == "result":
                     return game
         finally:
-            process.close()
+            if process is not None:
+                process.close()
             game["execution_seconds"] = time.monotonic() - started
             perf.record("worker_wall", started, request=game.get("match_id"))
             game["supervision_performance"] = perf.snapshot()
             retain("settled", game)
+            if journal is not None:
+                journal.close()
             if (
                 evidence_path is not None
                 and game["failure"] is None

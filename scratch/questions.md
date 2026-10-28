@@ -98,16 +98,18 @@ keep matching for resumption.
   nothing after `2e066580c458` and left its `serve` drain fix uncommitted for that
   writer and gate, so two writers would not spend the $5 ledger.
 
-## Parent hop (implement, 2026-10-27 17:15) — needs Jack Heart
+## Parent hop (decided by Jack Heart, 2026-10-27: option b; implemented)
 
-- **Open — revise the Exclusion "removing the parent's request hop".** Three
-  valid A4500 runs all played ~153 decisions/s (2,553–2,608 games/h) with
-  1-row batches, because one allocation parent supervises and relays every
-  game at ~8 ms of Python CPU per decision (local `yappi` profile; plan
-  "Findings"). The A4500 target (> 2,600 games/h, median batch > 8) is
-  unreachable on this layout. Candidate: several supervising processes per
-  allocation, each with its own connection to the one service. That is
-  architectural, so implement stopped instead of building it. The `cpu32`
-  target is a separate layout question (shared CPU allocation).
+- **Assumption — failure text:** a game whose handoff fails reads
+  "inference connection handoff failed: …"; a decision timeout in the child
+  keeps "inference service request timed out". Both remain infrastructure
+  failures with no failed player and fail the allocation.
+- **Assumption — `allocation.json` has no request latency:** decisions no
+  longer pass the supervisor; latency lives in `worker_performance` (game) and
+  `serving.json` (service). No reader used the allocation's request counters.
+- **Not run — rental calibration:** the calibration worktree was removed
+  (branch `recovery/mtg193-calibration-20261028`), and a headless pass should
+  not rebuild that cross-branch launch path and spend unattended. Steps are
+  in the plan's "Parent hop decided" section.
 - **Assumption — the w13 calibration branch** (revert of `e742e8bff`) is
   measurement-only and never lands; MTG-183's checkpoints cannot play w14.

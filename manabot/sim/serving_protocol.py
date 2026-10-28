@@ -1,9 +1,12 @@
-"""Torch-free protocol and parent supervisor for shared evaluation inference.
+"""Torch-free protocol and allocation supervisor for shared evaluation inference.
 
-Game children build `DecisionRequest`s and validate `DecisionReply`s; the
-parent's `InferenceRuntime` multiplexes them, from every concurrent game in an
-allocation, to one serving child (`manabot.sim.serving`), the only process that
-loads served weights.
+Every concurrent game in an allocation talks to one serving child
+(`manabot.sim.serving`), the only process that loads served weights. The
+allocation's `InferenceRuntime` starts that child, admits policies over its
+control connection, and hands the service one end of a fresh socket per game
+(`connect`). The game child holds the other end as an `InferenceClient`, so
+decisions travel game → service → game without passing through the parent;
+the parent keeps game lifecycle, deadlines, failures and the Command journal.
 
 `PolicyKey` is the batching key: decisions that seat the same checkpoint under
 the same observation/action ABI, world and numerics share one resident policy
@@ -17,12 +20,16 @@ from __future__ import annotations
 from collections.abc import Callable
 from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError
 from dataclasses import dataclass
+from multiprocessing.reduction import ForkingPickler
 from pathlib import Path
+import pickle
 import queue
+import socket
+import struct
 import threading
 import time
 from types import TracebackType
-from typing import Any, Literal
+from typing import Any
 from uuid import uuid4
 
 import numpy as np
@@ -110,6 +117,65 @@ class PolicyAdmission:
     setups: tuple[MatchConfig, ...]
 
 
+class InferenceClient:
+    """A game's direct connection to the serving child, one request in flight.
+
+    Owns `descriptor`, one end of a socket whose other end the runtime handed
+    to the service, which reads it as a `multiprocessing` `Connection`. The
+    client writes and reads that framing (a 4-byte big-endian length, then a
+    pickle) itself, so the whole exchange, including a send to a stopped
+    service, is bounded by the request's deadline. Every failure is an
+    `InferenceFailure`.
+    """
+
+    def __init__(self, descriptor: int) -> None:
+        self._socket = socket.socket(fileno=descriptor)
+
+    def infer(self, request: DecisionRequest) -> DecisionReply:
+        payload = ForkingPickler.dumps(request)
+        try:
+            self._socket.settimeout(_remaining(request))
+            self._socket.sendall(struct.pack("!i", len(payload)))
+            self._socket.settimeout(_remaining(request))
+            self._socket.sendall(payload)
+            (size,) = struct.unpack("!i", self._read(4, request))
+            identity, reply, error = pickle.loads(self._read(size, request))
+        except TimeoutError as exc:
+            raise InferenceFailure("inference service request timed out") from exc
+        except (OSError, EOFError) as exc:
+            raise InferenceFailure(f"inference service exited: {exc}") from exc
+        if error:
+            raise InferenceFailure(error)
+        if identity != request.request_id or not isinstance(reply, DecisionReply):
+            raise InferenceFailure("invalid inference reply")
+        reply.validate(request)
+        if time.time() >= request.deadline_unix:
+            raise InferenceFailure("inference reply arrived after its deadline")
+        return reply
+
+    def _read(self, size: int, request: DecisionRequest) -> bytes:
+        buffer = bytearray(size)
+        view = memoryview(buffer)
+        received = 0
+        while received < size:
+            self._socket.settimeout(_remaining(request))
+            count = self._socket.recv_into(view[received:])
+            if count == 0:
+                raise EOFError("connection closed")
+            received += count
+        return bytes(buffer)
+
+    def close(self) -> None:
+        self._socket.close()
+
+
+def _remaining(request: DecisionRequest) -> float:
+    remaining = request.deadline_unix - time.time()
+    if remaining <= 0:
+        raise TimeoutError
+    return remaining
+
+
 class InferenceRuntime:
     """Allocation supervisor, shared by concurrent local Etude callbacks."""
 
@@ -123,7 +189,7 @@ class InferenceRuntime:
         self.performance = EvalPerformance(
             self.identity,
             execution.instrumentation,
-            latency_boundary="game worker submission through supervisor reply validation, or observed failure; excludes return to game worker",
+            latency_boundary="no decisions pass through the allocation supervisor; game worker and serving receipts hold request latency",
         )
         self.slots = threading.BoundedSemaphore(execution.max_active_games)
         self._game_capacity = threading.BoundedSemaphore(execution.max_active_games * 2)
@@ -136,11 +202,18 @@ class InferenceRuntime:
         self._closing = False
         self.performance.write(self.directory / "allocation.json")
         self._service_started = time.monotonic()
+        # Game connections reach the service over this socket as descriptors.
+        self._handoff, service_handoff = socket.socketpair()
+        self._handoff.settimeout(execution.request_seconds)
+        self._handoff_lock = threading.Lock()
         try:
             self.process = ChildProcess(
-                "manabot.sim.serving:serve", (execution, directory, self.identity)
+                "manabot.sim.serving:serve",
+                (execution, directory, self.identity, service_handoff.fileno()),
+                pass_fds=(service_handoff.fileno(),),
             )
         except BaseException as exc:
+            self._handoff.close()
             self._games.shutdown(wait=True, cancel_futures=True)
             self.performance.count("failed_service_starts")
             self.performance.record(
@@ -149,6 +222,8 @@ class InferenceRuntime:
             self.performance.write(self.directory / "allocation.json")
             self._write_execution(f"{type(exc).__name__}: {exc}")
             raise
+        finally:
+            service_handoff.close()
         self._connection = self.process.connection
         self._reader = threading.Thread(target=self._receive, daemon=True)
         self._reader.start()
@@ -184,6 +259,32 @@ class InferenceRuntime:
             raise
         future.add_done_callback(lambda _: self._game_capacity.release())
         return future
+
+    def connect(self) -> socket.socket:
+        """Open one game's direct connection; the caller owns the returned end.
+
+        The service receives the other end over the handoff socket and answers
+        that game's requests on it. A failed handoff fails the allocation.
+        """
+        self.check()
+        client, service = socket.socketpair()
+        try:
+            with self._handoff_lock:
+                socket.send_fds(self._handoff, [b"c"], [service.fileno()])
+                # Closing an in-flight socket's last descriptor disconnects it
+                # on macOS, so keep ours until the service has its own.
+                if self._handoff.recv(1) != b"a":
+                    raise OSError("service closed the connection handoff")
+        except OSError as exc:
+            client.close()
+            self.fail(f"inference connection handoff failed: {exc}")
+            raise InferenceFailure(
+                f"inference connection handoff failed: {exc}"
+            ) from exc
+        finally:
+            service.close()
+        self.performance.count("client_connections")
+        return client
 
     def _send(self) -> None:
         try:
@@ -267,25 +368,6 @@ class InferenceRuntime:
             )
             self.performance.write(self.directory / "allocation.json")
 
-    def infer(self, request: DecisionRequest) -> DecisionReply:
-        outcome: Literal["completed", "failed"] = "failed"
-        try:
-            result = self._call("infer", request, request.deadline_unix - time.time())
-            if not isinstance(result, DecisionReply):
-                raise InferenceFailure("invalid inference reply")
-            result.validate(request)
-            if time.time() >= request.deadline_unix:
-                raise InferenceFailure("inference reply arrived after its deadline")
-            outcome = "completed"
-            return result
-        except InferenceFailure as exc:
-            self.fail(str(exc))
-            raise
-        finally:
-            self.performance.latency(
-                time.monotonic() - request.submitted, outcome=outcome
-            )
-
     def snapshot(self) -> dict[str, Any]:
         result = self._call("snapshot", None)
         if not isinstance(result, dict):
@@ -326,6 +408,7 @@ class InferenceRuntime:
         self._sender.join(timeout=1)
         self._closed = True
         self._connection.close()
+        self._handoff.close()
         self.performance.record("cleanup", cleanup_started, partitions_elapsed=False)
         self.performance.write(self.directory / "allocation.json")
 

@@ -3,7 +3,8 @@
 `supervise_game` launches `game_worker` as a `ChildProcess`. The child builds
 viewer-safe frames, sends each pending Command for durable acknowledgement
 before native execution, and reports the settled game. Checkpoint players
-are served: they reach their policy through the supervisor's inference runtime.
+are served: they reach their policy over the game's own connection to the
+allocation's inference service, not through the supervisor.
 Code players (anchors, heuristic) are built Torch-free, so a game between them
 and served players never imports Torch. Search players (flat-MC, PUCT, local
 update) keep their policy in-child; `_InChildPlayers` is the one place this
@@ -16,6 +17,7 @@ budget; exceeding it is an infrastructure failure, not a forfeit.
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import replace
 from multiprocessing.connection import Connection
 from pathlib import Path
 import time
@@ -43,6 +45,7 @@ from manabot.sim.replay import replay_environment
 from manabot.sim.serving_protocol import (
     DecisionReply,
     DecisionRequest,
+    InferenceClient,
     InferenceFailure,
     PolicyKey,
 )
@@ -368,7 +371,17 @@ def game_worker(
     registrations: list[PlayerRegistration],
     checkpoint_paths: dict[str, str],
     max_commands: int,
+    inference: int | None,
+    deadline_unix: float,
 ) -> None:
+    """Game child entry; `inference` is this game's service connection descriptor.
+
+    Inference waiting consumes the game's wall allowance, so each request's
+    deadline is clamped to `deadline_unix`. An inference failure is reported to
+    the supervisor before the game settles, so it fails the allocation.
+    """
+    client = None if inference is None else InferenceClient(inference)
+
     def send(event: tuple[str, Any]) -> None:
         if event[0] == "result":
             _census(event[1])
@@ -377,13 +390,22 @@ def game_worker(
             raise RuntimeError("pre-command evidence was not retained")
 
     def infer(request: DecisionRequest) -> DecisionReply:
-        connection.send(("inference", request))
-        reply = connection.recv()
-        if not isinstance(reply, DecisionReply):
-            raise InferenceFailure("invalid inference transport reply")
-        return reply
+        if client is None:
+            raise InferenceFailure("no inference connection attached")
+        try:
+            return client.infer(
+                replace(
+                    request,
+                    deadline_unix=min(request.deadline_unix, deadline_unix),
+                )
+            )
+        except InferenceFailure as exc:
+            connection.send(("inference_failure", str(exc)))
+            raise
 
     try:
         execute_game(game, registrations, checkpoint_paths, max_commands, send, infer)
     finally:
+        if client is not None:
+            client.close()
         connection.close()
