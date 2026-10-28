@@ -23,11 +23,11 @@ was dead on arrival in exp-10.)
 | **w11** | in development, optional payments, 2026-10-21 | 40 / 41 / 28 / 16; shared typed optional-payment state and learning schema 7 | `elemental-world-v2`; no promoted artifacts | no strength baseline |
 | **w12** | in development, MTG-177, 2026-10-21 | 40 / 41 / 28 / 16; permanent-wide hexproof targeting enforcement | unchanged authored packs; fresh w12 conformance receipts | no strength baseline |
 | **w13** | in development, MTG-177 integration, 2026-10-22 | 40 / 41 / 28 / 16; targeting enforcement plus shared-payment repair | unchanged authored packs; fresh combined-runtime conformance receipts | no strength baseline |
-
 | **w14** | in development, MTG-195, 2026-10-26 | 40 / 41 / 28 / 17; controller-selected trigger placement and policy-input v3 occurrence joins | unchanged authored packs; fresh w14 conformance and play fixtures | no strength baseline |
+| **w15** | in development, MTG-177, 2026-10-27 | 40 / 41 / 28 / 17; retained resolution eligibility, policy-input v4 relations 64 × 33 | unchanged authored packs; fresh integrated conformance and play fixtures | no strength baseline |
 
-**Current development world: w14.** `managym.WORLD_VERSION` identifies live runs. Earlier
-checkpoints (including w13) are **not comparable** to w14; do not reuse their
+**Current development world: w15.** `managym.WORLD_VERSION` identifies live runs. Earlier
+checkpoints (including w14) are **not comparable** to w15; do not reuse their
 win rates or load them as current-world policies. Shape alone is insufficient
 identity. Exp-11 historically ported opponent components with
 `port_legacy_state_dict` and behavioral validation; that utility is now retired.
@@ -301,3 +301,25 @@ The existing-card trigger witness uses the explicit scenario recipe in
 `manabot.verify.trigger_order` before ordinary human Commands and agent actions;
 `academy/fixtures/trigger-order-w14.json` retains its root and content identities.
 This is a constructed root, not a seed-only authored-match prefix.
+
+
+## w15: resolution-start target eligibility
+
+CR 608.2b eligibility is evaluated once at resolution entry for each chosen
+clause/target slot, across spells, activated abilities and triggers. Instructions
+and suspended choices retain that result; live presence checks separately reject
+departed objects. Illegal slots remain positional, all-invalid targeted objects
+perform no instructions, and zero optional targets still resolve. Controller-selected
+trigger placement from w14 remains intact.
+
+Canonical mutable-state hash 10 includes the retained eligibility slots. Policy
+input v4 extends the 64 relation rows from 32 to 33 columns, adding unknown/legal/
+illegal eligibility at column 32. Validity stays at column 31; v2/v3 layouts and
+checkpoint omissions remain unchanged. Capture/text v4 carries the same native
+fact, with unchanged embedded decision schema 7. Earlier checkpoints are rejected
+for current-world play, and historical captures retain their recorded semantics.
+
+Fresh `conformance/semantic-kernel-w15-v1` receipts and Academy w15 prefixes bind
+the integrated source. Earlier corpora, demos, authored packs and experiment
+artifacts remain unchanged. These bounded fixtures do not establish exhaustive
+rules correctness, scientific baselines or final release certification.

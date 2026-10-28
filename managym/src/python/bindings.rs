@@ -97,7 +97,7 @@ fn encoded_to_dict<'py>(
 ) -> PyResult<Bound<'py, PyDict>> {
     let np = PyModule::import_bound(py, "numpy")?;
     let dict = PyDict::new_bound(py);
-    if config.relations {
+    if config.policy_input_version >= 2 {
         dict.set_item(
             "relations",
             to_numpy_array_f32(
@@ -106,7 +106,7 @@ fn encoded_to_dict<'py>(
                 &encoded.relations,
                 &[
                     crate::agent::continuation::RELATION_ROWS,
-                    crate::agent::continuation::RELATION_DIM,
+                    config.relation_dim(),
                 ],
             )?,
         )?;
@@ -3534,7 +3534,7 @@ impl PyEnv {
         })
     }
 
-    #[pyo3(signature = (obs, policy_input_version=3))]
+    #[pyo3(signature = (obs, policy_input_version=4))]
     fn encode_observation(
         &self,
         py: Python<'_>,
@@ -3542,11 +3542,11 @@ impl PyEnv {
         policy_input_version: u8,
     ) -> PyResult<PyObject> {
         let rust_obs = Observation::from(obs);
-        if !matches!(policy_input_version, 1..=3) {
+        if !matches!(policy_input_version, 1..=4) {
             return Err(PyValueError::new_err("unsupported policy input version"));
         }
         let config = ObservationEncoderConfig {
-            relations: policy_input_version >= 2,
+            policy_input_version,
             ..ObservationEncoderConfig::default()
         };
         let encoded = crate::agent::observation_encoder::encode(&rust_obs, &config)
@@ -3563,7 +3563,7 @@ impl PyEnv {
     ) -> PyResult<()> {
         let rust_obs = Observation::from(obs);
         let config = ObservationEncoderConfig {
-            relations: out.contains("relations")?,
+            policy_input_version: crate::python::vector_env_bindings::buffer_input_version(&out)?,
             ..ObservationEncoderConfig::default()
         };
         let encoded = crate::agent::observation_encoder::encode(&rust_obs, &config)
@@ -3621,12 +3621,31 @@ fn content_pool(py: Python<'_>, pack_key: &str) -> PyResult<PyObject> {
 fn parse_continuation_frames_json(
     text: &str,
 ) -> PyResult<Vec<crate::agent::continuation::ContinuationFrame>> {
-    let value: serde_json::Value =
+    let mut value: serde_json::Value =
         serde_json::from_str(text).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    // Only the added nullable fact may be absent in historical captures.
+    if let Some(frames) = value.as_array_mut() {
+        for frame in frames {
+            if let Some(targets) = frame.get_mut("targets").and_then(|v| v.as_array_mut()) {
+                for target in targets {
+                    if let Some(target) = target.as_object_mut() {
+                        target
+                            .entry("legal_at_resolution_start")
+                            .or_insert(serde_json::Value::Null);
+                    }
+                }
+            }
+        }
+    }
     let frames: Vec<crate::agent::continuation::ContinuationFrame> =
         serde_json::from_value(value.clone()).map_err(|e| PyValueError::new_err(e.to_string()))?;
     if frames.iter().enumerate().any(|(index, frame)| {
         !(1..=9).contains(&frame.kind)
+            || (frame.kind != 5
+                && frame
+                    .targets
+                    .iter()
+                    .any(|t| t.legal_at_resolution_start.is_some()))
             || frame.decision > 13
             || frame.parent.is_some_and(|parent| parent >= index)
     }) {

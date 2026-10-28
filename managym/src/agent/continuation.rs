@@ -18,10 +18,11 @@ use crate::{
     },
 };
 
-/// Policy-input v2: up to 64 relation rows, 32 floats per row. Overflow is an
+/// Policy inputs v2/v3/v4: up to 64 relation rows, 32/33 floats per row. Overflow is an
 /// admission error, never truncation. Zero is padding/absence for selectors.
 pub const RELATION_ROWS: usize = 64;
-pub const RELATION_DIM: usize = 32;
+pub const LEGACY_RELATION_DIM: usize = 32;
+pub const RELATION_DIM: usize = 33;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "python", pyo3::pyclass(get_all, frozen))]
@@ -38,6 +39,9 @@ pub struct VisibleReference {
 pub struct ClauseTarget {
     pub reference: VisibleReference,
     pub clause: usize,
+    /// Retained CR 608.2b result, not current presence. Missing historical data is unknown.
+    #[serde(default)]
+    pub legal_at_resolution_start: Option<bool>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -170,6 +174,7 @@ impl Game {
             .map(|(index, target)| ClauseTarget {
                 reference: self.target_reference(*target, viewer),
                 clause: clauses.get(index).copied().unwrap_or(0),
+                legal_at_resolution_start: None,
             })
             .collect()
     }
@@ -402,7 +407,15 @@ impl Game {
             kicked: effect.kicked,
             resolutions_this_turn: effect.resolutions_this_turn,
             active_clause: Some(effect.active_requirement),
-            targets: self.clause_targets(&effect.targets, &effect.target_req_indices, viewer),
+            targets: effect
+                .targets
+                .iter()
+                .map(|slot| ClauseTarget {
+                    reference: self.target_reference(slot.target, viewer),
+                    clause: slot.requirement,
+                    legal_at_resolution_start: Some(slot.legal),
+                })
+                .collect(),
             context: effect
                 .context_target
                 .map(|t| self.target_reference(t, viewer)),
@@ -529,7 +542,8 @@ pub fn encode_into(
             actual: count,
         });
     }
-    if out.len() != RELATION_ROWS * RELATION_DIM {
+    let dim = out.len() / RELATION_ROWS;
+    if ![LEGACY_RELATION_DIM, RELATION_DIM].contains(&dim) || out.len() != RELATION_ROWS * dim {
         return Err(ObservationEncodeError::InvalidLength {
             field: "relations",
             expected: RELATION_ROWS * RELATION_DIM,
@@ -537,7 +551,7 @@ pub fn encode_into(
         });
     }
     out.fill(0.0);
-    let mut rows = out.as_chunks_mut::<RELATION_DIM>().0.iter_mut();
+    let mut rows = out.chunks_exact_mut(dim);
     let link = |reference: VisibleReference| {
         reference
             .object
@@ -571,35 +585,47 @@ pub fn encode_into(
         header[28] = frame.decision as f32;
         header[30] = frame.resolutions_this_turn as f32;
         header[31] = 1.0;
-        rows.next().unwrap().copy_from_slice(&header);
-        let mut reference_row =
-            |kind: f32, reference: VisibleReference, clause: usize, ordinal: usize| {
-                let row = rows.next().unwrap();
-                row.copy_from_slice(&header);
-                row[0] = kind;
-                row[22] = (clause + 1) as f32;
-                row[29] = (ordinal + 1) as f32;
-                row[23] = definition(reference);
-                row[24] = link(reference);
-                row[25] = reference
-                    .player
-                    .map_or(0.0, |p| if p == viewer { 1.0 } else { 2.0 });
-                if let Some(player) = reference.player {
-                    row[24] = if player == viewer { 1.0 } else { 2.0 };
-                }
-            };
+        rows.next().unwrap().copy_from_slice(&header[..dim]);
+        let mut reference_row = |kind: f32,
+                                 reference: VisibleReference,
+                                 clause: usize,
+                                 ordinal: usize,
+                                 legal: Option<bool>| {
+            let row = rows.next().unwrap();
+            row.copy_from_slice(&header[..dim]);
+            row[0] = kind;
+            if dim == RELATION_DIM {
+                row[32] = legal.map_or(0.0, |value| if value { 1.0 } else { 2.0 });
+            }
+            row[22] = (clause + 1) as f32;
+            row[29] = (ordinal + 1) as f32;
+            row[23] = definition(reference);
+            row[24] = link(reference);
+            row[25] = reference
+                .player
+                .map_or(0.0, |p| if p == viewer { 1.0 } else { 2.0 });
+            if let Some(player) = reference.player {
+                row[24] = if player == viewer { 1.0 } else { 2.0 };
+            }
+        };
         for (ordinal, target) in frame.targets.iter().enumerate() {
-            reference_row(2.0, target.reference, target.clause, ordinal);
+            reference_row(
+                2.0,
+                target.reference,
+                target.clause,
+                ordinal,
+                target.legal_at_resolution_start,
+            );
         }
         if let Some(target) = frame.context {
-            reference_row(3.0, target, 0, 0);
+            reference_row(3.0, target, 0, 0, None);
         }
         if let Some(target) = frame.sacrifice {
-            reference_row(4.0, target, 0, 0);
+            reference_row(4.0, target, 0, 0, None);
         }
         for pair in &frame.hybrid {
             let row = rows.next().unwrap();
-            row.copy_from_slice(&header);
+            row.copy_from_slice(&header[..dim]);
             row[0] = 5.0;
             row[26] = (pair[0] + 1) as f32;
             row[27] = (pair[1] + 1) as f32;
@@ -607,7 +633,7 @@ pub fn encode_into(
         for output in &frame.mana_outputs {
             for (restricted, amounts) in [(false, output.mana), (true, output.lesson)] {
                 let row = rows.next().unwrap();
-                row.copy_from_slice(&header);
+                row.copy_from_slice(&header[..dim]);
                 row[0] = 6.0;
                 row[7] = (output.mode + 1) as f32;
                 for (index, amount) in amounts.iter().enumerate() {
@@ -717,6 +743,7 @@ mod tests {
                         ..VisibleReference::default()
                     },
                     clause: 0,
+                    legal_at_resolution_start: None,
                 },
                 ClauseTarget {
                     reference: VisibleReference {
@@ -724,6 +751,7 @@ mod tests {
                         ..VisibleReference::default()
                     },
                     clause: 1,
+                    legal_at_resolution_start: None,
                 },
             ],
             ..ContinuationFrame::default()

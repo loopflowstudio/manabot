@@ -11,7 +11,13 @@ import json
 from typing import Literal
 
 from managym.decision import Observation
-from pydantic import BaseModel, ConfigDict, SkipValidation, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    SkipValidation,
+    ValidationInfo,
+    field_validator,
+)
 
 import managym
 
@@ -140,7 +146,7 @@ class DecisionInput(CaptureModel):
         extra="forbid", frozen=True, strict=True, arbitrary_types_allowed=True
     )
 
-    capture_version: Literal[3]
+    capture_version: Literal[3, 4]
     world_version: str
     content_digest: str
     observation: SkipValidation[Observation]
@@ -160,5 +166,14 @@ class DecisionInput(CaptureModel):
 
     @field_validator("frames", mode="before")
     @classmethod
-    def parse_frames(cls, value: object) -> list[managym.ContinuationFrame]:
-        return managym.parse_continuation_frames_json(json.dumps(value))
+    def parse_frames(
+        cls, value: object, info: ValidationInfo
+    ) -> list[managym.ContinuationFrame]:
+        frames = managym.parse_continuation_frames_json(json.dumps(value))
+        if info.data.get("capture_version") == 3 and any(
+            target.legal_at_resolution_start is not None
+            for frame in frames
+            for target in frame.targets
+        ):
+            raise ValueError("capture v3 has no retained eligibility contract")
+        return frames

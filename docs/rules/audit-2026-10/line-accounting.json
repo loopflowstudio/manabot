@@ -102,7 +102,7 @@
       "reason": "Retained local analysis/provisioning helper; conservatively charged to draft tooling budget."
     }
   ],
-  "combined_draft_churn_lines": 6891,
+  "combined_draft_churn_lines": 10430,
   "report_inventory_evidence_files": [
     {
       "path": "docs/rules/audit-2026-10/README.md",
@@ -156,7 +156,7 @@
     }
   ],
   "self_accounting": "This accounting file is itself an audit report artifact, excluded from draft budget.",
-  "untracked_official_source": "scratch/MagicCompRules-20260925.txt is retained input from Wizards, not authored draft lines. Task snapshots, CI API reads and raw local logs also remain in scratch. No source text is republished in the committed index.",
+  "untracked_official_source": ".cache/rules-audit/MagicCompRules-20260925.txt is the verified Wizards input, not authored lines. Exact command receipts are retained in obligation-validation.json.",
   "original_combined_draft_churn_lines": 621,
   "unification_increment": {
     "basis": "Additions plus deletions since ededb325; report/index artifacts excluded, original draft and local helper charge retained.",
@@ -503,5 +503,606 @@
     ],
     "local_helper_lines": 73,
     "charged_lines": 2617
+  },
+  "obligation_review_increment": {
+    "basis": "2026-10-26 working diff against 324db65f2. Tests, module registration, local authored helpers and question-note churn charged; reports/index/receipts/design notes and recovered official text excluded. Previous 6891-line charge retained.",
+    "files": [
+      {
+        "path": "managym/tests/rules/mod.rs",
+        "added": 1,
+        "deleted": 0
+      },
+      {
+        "path": "scratch/questions.md",
+        "added": 12,
+        "deleted": 85
+      },
+      {
+        "path": "managym/tests/rules/cr_608_resolution.rs",
+        "added": 195,
+        "deleted": 0
+      },
+      {
+        "path": "scratch/run_audit.py",
+        "added": 41,
+        "deleted": 0
+      },
+      {
+        "path": "scratch/update_review.py",
+        "added": 195,
+        "deleted": 0
+      },
+      {
+        "path": "scratch/finalize_audit.py",
+        "added": 73,
+        "deleted": 0
+      }
+    ],
+    "churn_lines": 602,
+    "excluded_reports": [
+      "README.md",
+      "coverage-map.md",
+      "reviews.json",
+      "index.jsonl",
+      "obligation-validation.json",
+      "line-accounting.json",
+      "unification.md"
+    ],
+    "excluded_local_notes": [
+      "scratch/plan.md"
+    ],
+    "retired_helpers": {
+      "archive": ".cache/rules-audit/retired-authoring-20261026.tar",
+      "sha256": "c3cb336bb0422ef681d7a297eefe5344df263391c75cfc1a7936285694e60bc9",
+      "policy": "The three one-shot scratch helpers are retired after byte-for-byte archival. Their original 309 authored lines remain charged above; historical effort is not refunded. Edit reviews.json and regenerate with scripts/audit_rules.py."
+    }
+  },
+  "resolution_repair_increment": {
+    "basis": "Working change from e35982be4, including focused fixtures, local bounded-check runner, docs and question churn. Historical 7493-line charge retained; audit reports/index/receipts and plan excluded. Provisional identity pending MTG-195 integration.",
+    "files": [
+      {
+        "path": "WORLDS.md",
+        "added": 6,
+        "deleted": 0
+      },
+      {
+        "path": "managym/README.md",
+        "added": 5,
+        "deleted": 1
+      },
+      {
+        "path": "managym/src/agent/continuation.rs",
+        "added": 8,
+        "deleted": 1
+      },
+      {
+        "path": "managym/src/flow/decision.rs",
+        "added": 21,
+        "deleted": 22
+      },
+      {
+        "path": "managym/src/flow/resolution.rs",
+        "added": 154,
+        "deleted": 151
+      },
+      {
+        "path": "managym/src/lib.rs",
+        "added": 1,
+        "deleted": 1
+      },
+      {
+        "path": "managym/src/state/hash.rs",
+        "added": 1,
+        "deleted": 1
+      },
+      {
+        "path": "managym/tests/rules/cr_608_resolution.rs",
+        "added": 0,
+        "deleted": 1
+      },
+      {
+        "path": "scratch/questions.md",
+        "added": 10,
+        "deleted": 0
+      },
+      {
+        "path": "managym/src/flow/resolution_tests.rs",
+        "added": 483,
+        "deleted": 0
+      },
+      {
+        "path": "scratch/check_resolution.py",
+        "added": 38,
+        "deleted": 0
+      },
+      {
+        "path": "scratch/install_resolution_native.py",
+        "added": 30,
+        "deleted": 0
+      }
+    ],
+    "churn_lines": 935,
+    "simplification": {
+      "basis": "Reduction from a9dd41142: additions plus deletions for resolution.rs; plan and evidence excluded. Preserve the original repair charge.",
+      "files": [
+        {
+          "path": "managym/src/flow/resolution.rs",
+          "added": 27,
+          "deleted": 67
+        }
+      ],
+      "churn_lines": 94
+    }
+  },
+  "resolution_projection_increment": {
+    "basis": "2026-10-27 correction against supplied working tree. Authored code/tests/docs churn plus eight new assumption lines; inherited resolution reduction and plan edits are excluded. Historical 8522-line charge retained. Generated native captures are immutable observation/encoder evidence, not authored runtime demos.",
+    "files": [
+      {
+        "path": "AGENTS.md",
+        "added": 3,
+        "deleted": 0
+      },
+      {
+        "path": "docs/recent-events.md",
+        "added": 21,
+        "deleted": 5
+      },
+      {
+        "path": "manabot/README.md",
+        "added": 3,
+        "deleted": 0
+      },
+      {
+        "path": "manabot/env/observation.py",
+        "added": 20,
+        "deleted": 10
+      },
+      {
+        "path": "manabot/infra/config.py",
+        "added": 2,
+        "deleted": 2
+      },
+      {
+        "path": "manabot/managym/__init__.pyi",
+        "added": 2,
+        "deleted": 1
+      },
+      {
+        "path": "manabot/managym/decision_capture.py",
+        "added": 19,
+        "deleted": 4
+      },
+      {
+        "path": "manabot/model/actor_critic.py",
+        "added": 2,
+        "deleted": 2
+      },
+      {
+        "path": "manabot/model/continuation.py",
+        "added": 10,
+        "deleted": 7
+      },
+      {
+        "path": "manabot/semantic/text_observation.py",
+        "added": 6,
+        "deleted": 3
+      },
+      {
+        "path": "managym/README.md",
+        "added": 3,
+        "deleted": 2
+      },
+      {
+        "path": "managym/examples/bench_observation.rs",
+        "added": 5,
+        "deleted": 1
+      },
+      {
+        "path": "managym/src/agent/continuation.rs",
+        "added": 47,
+        "deleted": 26
+      },
+      {
+        "path": "managym/src/agent/observation_encoder.rs",
+        "added": 15,
+        "deleted": 7
+      },
+      {
+        "path": "managym/src/decision_capture.rs",
+        "added": 2,
+        "deleted": 2
+      },
+      {
+        "path": "managym/src/flow/resolution_tests.rs",
+        "added": 124,
+        "deleted": 0
+      },
+      {
+        "path": "managym/src/python/bindings.rs",
+        "added": 26,
+        "deleted": 7
+      },
+      {
+        "path": "managym/src/python/vector_env_bindings.rs",
+        "added": 19,
+        "deleted": 3
+      },
+      {
+        "path": "tests/semantic/test_text_observation.py",
+        "added": 1,
+        "deleted": 1
+      },
+      {
+        "path": "tests/verify/test_continuation_input.py",
+        "added": 148,
+        "deleted": 5
+      },
+      {
+        "path": "scratch/questions.md",
+        "added": 8,
+        "deleted": 0
+      }
+    ],
+    "churn_lines": 574,
+    "excluded_generated_evidence": [
+      "tests/fixtures/resolution-eligibility-captures.json",
+      "scratch/eligibility-*.json"
+    ]
+  },
+  "resolution_stack_integration": {
+    "basis": "Integration-specific remerge diff of b25b90610, excluding conflict markers, audit reports, plan and generated captures; conservatively charges removed conflict alternatives but excludes clean inherited MTG-195/main changes. Follow-up 4f0511233 adds four source/test churn lines. Prior 9096-line charge retained.",
+    "prior_combined_draft_churn_lines": 9096,
+    "accounting_pending": false,
+    "excluded_generated_evidence": [
+      "tests/fixtures/resolution-eligibility-captures-v4.json"
+    ],
+    "preserved_generated_evidence": [
+      "tests/fixtures/resolution-eligibility-captures.json"
+    ],
+    "files": [
+      {
+        "path": "AGENTS.md",
+        "added": 1,
+        "deleted": 1
+      },
+      {
+        "path": "docs/recent-events.md",
+        "added": 9,
+        "deleted": 24
+      },
+      {
+        "path": "manabot/README.md",
+        "added": 2,
+        "deleted": 2
+      },
+      {
+        "path": "manabot/env/observation.py",
+        "added": 2,
+        "deleted": 4
+      },
+      {
+        "path": "manabot/infra/config.py",
+        "added": 2,
+        "deleted": 2
+      },
+      {
+        "path": "manabot/managym/__init__.pyi",
+        "added": 1,
+        "deleted": 1
+      },
+      {
+        "path": "manabot/managym/decision_capture.py",
+        "added": 3,
+        "deleted": 4
+      },
+      {
+        "path": "manabot/model/actor_critic.py",
+        "added": 1,
+        "deleted": 2
+      },
+      {
+        "path": "manabot/model/continuation.py",
+        "added": 5,
+        "deleted": 11
+      },
+      {
+        "path": "manabot/semantic/text_observation.py",
+        "added": 1,
+        "deleted": 1
+      },
+      {
+        "path": "managym/README.md",
+        "added": 3,
+        "deleted": 6
+      },
+      {
+        "path": "managym/src/agent/continuation.rs",
+        "added": 1,
+        "deleted": 1
+      },
+      {
+        "path": "managym/src/agent/observation_encoder.rs",
+        "added": 6,
+        "deleted": 6
+      },
+      {
+        "path": "managym/src/decision_capture.rs",
+        "added": 2,
+        "deleted": 4
+      },
+      {
+        "path": "managym/src/lib.rs",
+        "added": 0,
+        "deleted": 1
+      },
+      {
+        "path": "managym/src/python/bindings.rs",
+        "added": 3,
+        "deleted": 5
+      },
+      {
+        "path": "managym/src/python/vector_env_bindings.rs",
+        "added": 3,
+        "deleted": 3
+      },
+      {
+        "path": "managym/src/state/hash.rs",
+        "added": 0,
+        "deleted": 1
+      },
+      {
+        "path": "scratch/questions.md",
+        "added": 7,
+        "deleted": 86
+      },
+      {
+        "path": "tests/semantic/test_text_observation.py",
+        "added": 0,
+        "deleted": 1
+      },
+      {
+        "path": "tests/verify/test_continuation_input.py",
+        "added": 9,
+        "deleted": 7
+      }
+    ],
+    "merge_churn_lines": 234,
+    "focused_followup_churn_lines": 4
+  },
+  "world_finalization_increment": {
+    "basis": "2026-10-27 working change against 4f0511233. Source, test, documentation, assumptions and recorder churn charged. Runtime fixture churn is measured against the inherited MTG-195 w14 inputs, with full new-file lines separately reported; unchanged inherited fixture content is not newly authored. Frozen predecessor files remain unchanged. Audit reports/index, design plan, conformance receipts and generated native eligibility captures are excluded.",
+    "source_files": [
+      {
+        "path": ".github/workflows/ci.yml",
+        "added": 2,
+        "deleted": 2
+      },
+      {
+        "path": "WORLDS.md",
+        "added": 26,
+        "deleted": 9
+      },
+      {
+        "path": "academy/play_demo.py",
+        "added": 3,
+        "deleted": 3
+      },
+      {
+        "path": "academy/ui/e2e/choice-navigation.spec.ts",
+        "added": 2,
+        "deleted": 2
+      },
+      {
+        "path": "academy/ui/e2e/learn.spec.ts",
+        "added": 1,
+        "deleted": 1
+      },
+      {
+        "path": "conformance/README.md",
+        "added": 1,
+        "deleted": 1
+      },
+      {
+        "path": "docs/recent-events.md",
+        "added": 4,
+        "deleted": 3
+      },
+      {
+        "path": "manabot/README.md",
+        "added": 2,
+        "deleted": 2
+      },
+      {
+        "path": "manabot/sim/registration.py",
+        "added": 14,
+        "deleted": 1
+      },
+      {
+        "path": "managym/README.md",
+        "added": 1,
+        "deleted": 1
+      },
+      {
+        "path": "managym/src/lib.rs",
+        "added": 1,
+        "deleted": 1
+      },
+      {
+        "path": "managym/tests/semantic_conformance_tests.rs",
+        "added": 1,
+        "deleted": 1
+      },
+      {
+        "path": "scratch/questions.md",
+        "added": 14,
+        "deleted": 5
+      },
+      {
+        "path": "tests/academy/test_choice_navigation.py",
+        "added": 3,
+        "deleted": 3
+      },
+      {
+        "path": "tests/academy/test_trigger_order.py",
+        "added": 1,
+        "deleted": 1
+      },
+      {
+        "path": "tests/verify/test_continuation_input.py",
+        "added": 1,
+        "deleted": 1
+      },
+      {
+        "path": "scratch/refresh_w15.py",
+        "added": 106,
+        "deleted": 0
+      }
+    ],
+    "runtime_fixture_deltas": [
+      {
+        "path": "academy/fixtures/choice-navigation-explicit-w15.json",
+        "inherited_from": "academy/fixtures/choice-navigation-explicit-w14.json",
+        "added": 6,
+        "deleted": 6,
+        "full_new_file_lines": 1965
+      },
+      {
+        "path": "academy/fixtures/choice-navigation-w15.json",
+        "inherited_from": "academy/fixtures/choice-navigation-w14.json",
+        "added": 15,
+        "deleted": 15,
+        "full_new_file_lines": 5951
+      },
+      {
+        "path": "academy/fixtures/learn-demo-explicit-w15.json",
+        "inherited_from": "academy/fixtures/learn-demo-explicit-w14.json",
+        "added": 59,
+        "deleted": 59,
+        "full_new_file_lines": 433
+      },
+      {
+        "path": "academy/fixtures/precision-demo-w15.json",
+        "inherited_from": "academy/fixtures/precision-demo-w14.json",
+        "added": 88,
+        "deleted": 88,
+        "full_new_file_lines": 979
+      },
+      {
+        "path": "academy/fixtures/precision-mana-demo-w15.json",
+        "inherited_from": "academy/fixtures/precision-mana-demo-w14.json",
+        "added": 105,
+        "deleted": 105,
+        "full_new_file_lines": 1064
+      },
+      {
+        "path": "academy/fixtures/trigger-order-w15.json",
+        "inherited_from": "academy/fixtures/trigger-order-w14.json",
+        "added": 2,
+        "deleted": 2,
+        "full_new_file_lines": 21
+      }
+    ],
+    "full_new_runtime_fixture_lines": 10413,
+    "churn_lines": 770,
+    "excluded_generated_evidence": [
+      "conformance/semantic-kernel-w15-v1/",
+      "tests/fixtures/resolution-eligibility-captures-v4-w15.json",
+      "scratch/w15-*.json"
+    ],
+    "approximate_budget_difference": 104
+  },
+  "continuation_reduction_increment": {
+    "basis": "Working reduction against b634eea39. Source and documentation churn plus retired one-shot helper deletions charged; historical charges retained. Plan, accounting and check receipt excluded.",
+    "files": [
+      {
+        "path": "WORLDS.md",
+        "added": 0,
+        "deleted": 1
+      },
+      {
+        "path": "manabot/env/observation.py",
+        "added": 19,
+        "deleted": 13
+      },
+      {
+        "path": "manabot/model/actor_critic.py",
+        "added": 5,
+        "deleted": 5
+      },
+      {
+        "path": "manabot/model/continuation.py",
+        "added": 12,
+        "deleted": 15
+      },
+      {
+        "path": "scratch/install_resolution_native.py",
+        "added": 0,
+        "deleted": 30
+      },
+      {
+        "path": "scratch/refresh_w15.py",
+        "added": 0,
+        "deleted": 106
+      }
+    ],
+    "churn_lines": 206
+  },
+  "plan_reconciliation_increment": {
+    "basis": "2026-10-27 realign: correct the stale assumption-note budget statement; plan and accounting remain excluded report artifacts. All previous charges retained.",
+    "files": [
+      {
+        "path": "scratch/questions.md",
+        "added": 1,
+        "deleted": 1
+      }
+    ],
+    "churn_lines": 2
+  },
+  "shipping_gate_increment": {
+    "basis": "Working gate repairs against integrated checkpoint 8d490f60d. Historical charges retained; audit reports, evidence, plan and prepared PR copy excluded. Local bounded-check helper conservatively charged before delivery cleanup. No inherited main changes charged.",
+    "prior_combined_draft_churn_lines": 10312,
+    "files": [
+      {
+        "path": "docs/development/validation.md",
+        "added": 11,
+        "deleted": 0
+      },
+      {
+        "path": "docs/recent-events.md",
+        "added": 3,
+        "deleted": 2
+      },
+      {
+        "path": "managym/src/flow/resolution_tests.rs",
+        "added": 9,
+        "deleted": 2
+      },
+      {
+        "path": "managym/tests/rules/cr_608_resolution.rs",
+        "added": 6,
+        "deleted": 2
+      },
+      {
+        "path": "scratch/questions.md",
+        "added": 6,
+        "deleted": 0
+      },
+      {
+        "path": "tests/eval/test_batched_eval.py",
+        "added": 12,
+        "deleted": 6
+      },
+      {
+        "path": "tests/verify/test_continuation_input.py",
+        "added": 4,
+        "deleted": 1
+      },
+      {
+        "path": "scratch/gate_check.py",
+        "added": 54,
+        "deleted": 0
+      }
+    ],
+    "churn_lines": 118
   }
 }

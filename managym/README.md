@@ -45,7 +45,11 @@ use the native Rust implementations so new visibility fields cannot drift.
 Spell-level modes are announced before targets and payment. Independent target
 clauses use `Effect::TargetClause`; effects within a clause share its targets.
 Repeated specs in separate clauses may choose the same object. A resolving
-frame retains its active clause across suspended decisions. Graveyard targets
+frame retains its active clause and each chosen slot's resolution-start eligibility
+across suspended decisions (CR 608.2b). Effects use those retained results; live
+presence checks separately prevent following departed objects (CR 400.7).
+Illegal slots remain positional, and zero optional targets still resolve.
+Graveyard targets
 carry an exact `ObjectRef`, so continuations cannot follow a physical card into
 a later incarnation. Journal permanent mutations at their event authority;
 source-relative effects require the original battlefield object.
@@ -73,7 +77,7 @@ New registered real cards also need their Scryfall shell and Oracle text in
 checks every registration against that snapshot. For an accepted rules-world
 change, record a new versioned conformance corpus and update the CI/test root
 without rewriting earlier receipts. The current corpus is
-[semantic-kernel-w14-v1](../conformance/semantic-kernel-w14-v1/).
+[semantic-kernel-w15-v1](../conformance/semantic-kernel-w15-v1/).
 
 After changing Rust, rebuild the Python extension into the uv-managed venv:
 
@@ -168,7 +172,7 @@ still requires a complete witness. This is finite search, without a general
 large-board performance guarantee.
 
 `Env.capture_decision(viewer, history_capacity=0)` supplies atomic decision capture
-v3: the schema-7 semantic Observation, shared native continuation frames, bound public card
+v4: the schema-7 semantic Observation, shared native continuation frames, bound public card
 characteristics, visible object joins, world/content identity and optional public
 history v1 (0 disables it; 1..32 admits a chronological suffix). Its SHA-256 covers
 all fields except the digest itself using recursively key-sorted compact JSON.
@@ -182,8 +186,8 @@ current-digest validation plus ordinary semantic execution. Portable capture JSO
 is evidence, not execution authority; clones need their own live capture.
 
 
-Fresh policy input v3 includes current stack/continuation relations and a
-decision-local action join for controller-selected trigger placement. Its
+Fresh policy input v4 includes trigger-placement action joins and adds retained
+resolution-start eligibility to native current stack/continuation relations. Its
 layout, legacy checkpoint admission and measurement commands are documented in
 [the observation input contract](../docs/recent-events.md#current-continuation-input).
 The presentation context and text capture derive from the same typed frames;
