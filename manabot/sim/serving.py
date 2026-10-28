@@ -38,6 +38,7 @@ from manabot.model.inference import PolicyInference, transfer
 from manabot.model.world import validate_agent_setup
 from manabot.sim.execution import EvalExecution
 from manabot.sim.performance import EvalPerformance
+from manabot.sim.registration import PlayerRegistration
 from manabot.sim.serving_protocol import (
     DecisionReply,
     DecisionRequest,
@@ -46,6 +47,14 @@ from manabot.sim.serving_protocol import (
     PolicyKey,
 )
 from manabot.sim.threads import SERVING_BUDGET
+
+
+def _verify_checkpoint_bytes(path: Path, player: PlayerRegistration) -> None:
+    if (
+        path.stat().st_size != player.checkpoint_bytes
+        or file_sha256(path) != player.checkpoint_sha256
+    ):
+        raise ValueError("checkpoint byte identity drift")
 
 
 @dataclass(frozen=True)
@@ -77,12 +86,7 @@ class PolicyStore:
 
     def admit(self, admission: PolicyAdmission) -> ObservationConfig:
         player = admission.registration
-        path = Path(admission.path)
-        if (
-            path.stat().st_size != player.checkpoint_bytes
-            or file_sha256(path) != player.checkpoint_sha256
-        ):
-            raise ValueError("checkpoint byte identity drift")
+        _verify_checkpoint_bytes(Path(admission.path), player)
         if player.player_spec.get("execution") != self.execution.compute.model_dump():
             raise ValueError("registration differs from serving execution")
         if not admission.setups:
@@ -125,11 +129,7 @@ class PolicyStore:
         admission = self.admissions[key]
         player, path = admission.registration, Path(admission.path)
         with self.perf.span("checkpoint_verification"):
-            if (
-                path.stat().st_size != player.checkpoint_bytes
-                or file_sha256(path) != key.checkpoint
-            ):
-                raise ValueError("checkpoint byte identity drift")
+            _verify_checkpoint_bytes(path, player)
         with self.perf.span("model_load"):
             agent, space = load_checkpoint(str(path))
             agent.eval()

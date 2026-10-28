@@ -9,8 +9,7 @@ child reports an inference failure, which fails the allocation. Torch-free.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import nullcontext
 from dataclasses import dataclass, field
 import json
 from multiprocessing.connection import Connection
@@ -54,31 +53,6 @@ def _infrastructure_failure(game: dict[str, Any], message: str) -> dict[str, Any
     return game
 
 
-@contextmanager
-def _game_slot(
-    inference: InferenceRuntime | None, identity: str | None
-) -> Iterator[None]:
-    queued = time.monotonic()
-    if inference is not None:
-        while not inference.slots.acquire(
-            timeout=min(0.1, inference.execution.remaining())
-        ):
-            inference.check()
-        try:
-            inference.check()
-        except BaseException:
-            inference.slots.release()
-            raise
-        inference.performance.record(
-            "game_admission", queued, request=identity, partitions_elapsed=False
-        )
-    try:
-        yield
-    finally:
-        if inference is not None:
-            inference.slots.release()
-
-
 def supervise_game(
     game: dict[str, Any],
     registrations: list[PlayerRegistration],
@@ -100,7 +74,12 @@ def supervise_game(
     Successful games discard their journal unless `keep_completed`; their
     returned trace holds every decision. Failed games always keep the journal.
     """
-    with _game_slot(inference, game.get("match_id")):
+    slot = (
+        nullcontext()
+        if inference is None
+        else inference.game_slot(game.get("match_id"))
+    )
+    with slot:
         started = time.monotonic()
         perf = EvalPerformance(
             str(game.get("match_id", "game")), game.get("instrumentation", True)

@@ -386,6 +386,10 @@ helper (`supervision._infrastructure_failure`), one client write. `uv run --extr
 Compress 2: the runtime's control channel carries only admit/snapshot/close,
 so its relay-era backpressure semaphore and bounded queue are gone.
 `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/eval/test_evaluation_match.py tests/sim/test_child_surface.py -q` → 36 passed, 1 skipped.
+Compress 3: `InferenceRuntime.game_slot` owns the slot wait (one health-checked
+acquire shared with `submit_game`); one checkpoint byte check in `serving`; the
+client alone validates replies. Same focused set plus `test_game_error_recovery`
+→ 68 passed, 1 skipped.
 
 Open for gate: three `tests/sim` failures (conditional-search fixture digest,
 rollout card admission, seed-197 world binding) also fail at `ea8d0e874`.
@@ -507,4 +511,5 @@ receipt past its deadline has its attempts finished as lost
 (`create_unconfirmed`) but returns without `_end_session`, so
 `unsettled_sessions` keeps counting it; `etude terminate` does not clear it.
 Once Etude ends that session, queue with `queue_runs.py batched-hop.json --go`
-from the 0.2.6 client as in Calibration.
+from the 0.2.6 client as in Calibration. Rechecked by quote 2026-10-27
+(implement): still "at its machine limit"; nothing queued, no new spend.

@@ -17,8 +17,9 @@ of each registration, its admission and its evidence.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError
+from contextlib import contextmanager
 from dataclasses import dataclass
 from multiprocessing.reduction import ForkingPickler
 from pathlib import Path
@@ -189,7 +190,7 @@ class InferenceRuntime:
             execution.instrumentation,
             latency_boundary="no decisions pass through the allocation supervisor; game worker and serving receipts hold request latency",
         )
-        self.slots = threading.BoundedSemaphore(execution.max_active_games)
+        self._slots = threading.BoundedSemaphore(execution.max_active_games)
         self._game_capacity = threading.BoundedSemaphore(execution.max_active_games * 2)
         self._games = ThreadPoolExecutor(max_workers=execution.max_active_games)
         self._lock = threading.RLock()
@@ -241,20 +242,39 @@ class InferenceRuntime:
         ):
             raise InferenceFailure(self._error or "inference allocation stopped")
 
-    def submit_game(self, run: Callable[[], dict[str, Any]]) -> Future[dict[str, Any]]:
-        """Bound both threads and queued games across all callbacks."""
-        while not self._game_capacity.acquire(
-            timeout=min(0.1, self.execution.remaining())
-        ):
+    def _acquire(self, semaphore: threading.BoundedSemaphore) -> None:
+        """Wait for `semaphore` while the allocation stays healthy."""
+        while not semaphore.acquire(timeout=min(0.1, self.execution.remaining())):
             self.check()
         try:
             self.check()
+        except BaseException:
+            semaphore.release()
+            raise
+
+    def submit_game(self, run: Callable[[], dict[str, Any]]) -> Future[dict[str, Any]]:
+        """Bound both threads and queued games across all callbacks."""
+        self._acquire(self._game_capacity)
+        try:
             future = self._games.submit(run)
         except BaseException:
             self._game_capacity.release()
             raise
         future.add_done_callback(lambda _: self._game_capacity.release())
         return future
+
+    @contextmanager
+    def game_slot(self, identity: str | None) -> Iterator[None]:
+        """Hold one of `max_active_games` slots, including the wait for it."""
+        queued = time.monotonic()
+        self._acquire(self._slots)
+        try:
+            self.performance.record(
+                "game_admission", queued, request=identity, partitions_elapsed=False
+            )
+            yield
+        finally:
+            self._slots.release()
 
     def connect(self) -> socket.socket:
         """Open one game's direct connection; the caller owns the returned end.

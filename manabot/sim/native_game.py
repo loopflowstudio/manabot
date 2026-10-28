@@ -240,7 +240,6 @@ def execute_game(
                 with perf.span("inference_round_trip", request=request.request_id):
                     try:
                         reply = infer(request)
-                        reply.validate(request)
                         action = reply.action
                     except BaseException:
                         perf.latency(
@@ -389,8 +388,7 @@ def game_worker(
             raise RuntimeError("pre-command evidence was not retained")
 
     def infer(request: DecisionRequest) -> DecisionReply:
-        if client is None:
-            raise InferenceFailure("no inference connection attached")
+        assert client is not None
         try:
             return client.infer(
                 replace(
@@ -403,7 +401,14 @@ def game_worker(
             raise
 
     try:
-        execute_game(game, registrations, checkpoint_paths, max_commands, send, infer)
+        execute_game(
+            game,
+            registrations,
+            checkpoint_paths,
+            max_commands,
+            send,
+            None if client is None else infer,
+        )
     finally:
         if client is not None:
             client.close()
