@@ -305,7 +305,9 @@ deadline in `supervise_game`, `child_environment()` without a test-only base.
 `uv run --extra dev pytest tests/eval/test_batched_eval.py tests/sim/test_child_surface.py tests/training/test_game_errors.py -q` → 50 passed, 1 skipped (compress 7); `tests/sim/test_child_surface.py` → 7 passed (latest).
 Compress 2026-10-28: scratch curated only (pre-hop calibration narrative
 and delete list summarized, stale "not run" notes dropped); no code cut
-remained worth taking, so no test rerun.
+remained worth taking, so no test rerun. Rechecked 2026-10-28 (late):
+`threads`, `child`, `serving_protocol` unchanged; the control sender
+thread and `DecisionReply.validate` stay (stopped-service sends; test use).
 
 Open for gate: three `tests/sim` failures (conditional-search fixture digest,
 rollout card admission, seed-197 world binding) also fail at `ea8d0e874`.
@@ -427,6 +429,6 @@ receipt past its deadline has its attempts finished as lost
 (`create_unconfirmed`) but returns without `_end_session`, so
 `unsettled_sessions` keeps counting it; `etude terminate` does not clear it.
 Once Etude ends that session, queue with `queue_runs.py batched-hop.json --go`
-from the 0.2.6 client as in Calibration. Last rechecked 2026-10-28 05:49 UTC:
+from the 0.2.6 client as in Calibration. Last rechecked 2026-10-28 07:32 UTC:
 still blocked, nothing queued, no new spend. Unfixed on Etude main v0.2.11
 (`scheduler.py:1898-1902`); tracked as Etude EXP-13 (comment added).
