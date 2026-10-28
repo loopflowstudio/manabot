@@ -396,3 +396,11 @@ Once Etude ends that session, queue with `queue_runs.py batched-hop.json --go`
 from the 0.2.6 client as in Calibration. Last rechecked 2026-10-28 18:00 UTC:
 still blocked, nothing queued, no new spend. Unfixed on Etude main v0.2.11
 (`scheduler.py:1898-1902`); tracked as Etude EXP-13 (comment added).
+
+## CPU work descoped (Jack Heart, 2026-10-28)
+
+"skip cpu work on this task and just focus on landing the improved eval
+time." The `cpu32` arm and CPU-engine iteration leave MTG-193; the stuck
+`cpu32` session is Etude EXP-33 (filed autonomously). Open with Jack Heart:
+concept review 4's served-only checkpoint play was gated on `cpu32` served ≥
+scalar, which is now unmeasured after the parent hop.
