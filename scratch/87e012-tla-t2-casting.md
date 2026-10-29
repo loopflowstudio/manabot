@@ -139,11 +139,11 @@ and UI. Guard + directed + viewer-safety tests in
 
 ## Remaining
 
-- Next T1 sync, after T1 publishes engine-type cards/w17 (PR #394 still at
-  `e403b8a1f`; T1's worktree clean at `f9732c12f`, its Remaining 1–4 unstarted
-  in commits; main gained unrelated `9a62e8b39` and `2fc0af676`, which T1's
-  next main sync brings in; still so on a later 2026-10-29 check, T1 idle on PR
-  copy): the three steers above, then the world gate.
+- Next T1 sync, after T1 publishes engine-type cards/w17: the three steers
+  above, then the world gate. Last observed 2026-10-29 (after `56438177e`):
+  PR #394 head `e403b8a1f`, T1 worktree clean at `f9732c12f` with
+  `authoring.rs`/`compile.rs` present; main's `9a62e8b39`, `2fc0af676` arrive
+  with T1's next main sync.
 - Gate (not run here): CLAUDE.md arena admission/monitoring suite; full debug
   `cargo test`; Academy check/build (local node can't load libllhttp; CI).
 - Known gaps (questions.md): possible-worlds ignore foretold cards; granted
