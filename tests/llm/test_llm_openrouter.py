@@ -1,6 +1,8 @@
 """Hosted requests retain the shared selection protocol and honest billing."""
 
 import asyncio
+from decimal import Decimal
+import hashlib
 import json
 from pathlib import Path
 
@@ -11,6 +13,7 @@ import torch
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.infra.identity import file_sha256
+from manabot.llm.budget import BudgetConfig, BudgetLedger
 from manabot.llm.openrouter import OpenRouterConfig, OpenRouterResult, OpenRouterSession
 from manabot.llm.schema import DecisionInput
 from manabot.llm.selection import REPAIR, decision_messages
@@ -49,6 +52,20 @@ def reply(text: str | None = "A1", finish: str = "stop") -> dict[str, object]:
 @pytest.fixture(autouse=True)
 def api_key(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENROUTER_API_KEY", "fixture-secret")
+
+
+@pytest.fixture
+def budget_ledger(tmp_path: Path) -> BudgetLedger:
+    return BudgetLedger(
+        tmp_path / "spend.sqlite",
+        BudgetConfig(
+            ceiling_usd=Decimal("1"),
+            request_bound_usd=Decimal("0.01"),
+            overhead_usd=Decimal(0),
+            charge_multiplier=Decimal(1),
+            bound_evidence="fixture",
+        ),
+    )
 
 
 def test_exact_request_and_usage_without_model_memory() -> None:
@@ -414,3 +431,253 @@ def test_checkpoint_admission_failure_retains_a_summary(tmp_path: Path) -> None:
     assert "FileNotFoundError" in summary.failure
     assert summary.final_digest is None
     assert json.loads((out / "summary.json").read_text()) == summary.model_dump()
+
+
+def typed_decision(count: int = 2) -> DecisionInput:
+    refs = tuple(f"A{i}" for i in range(count))
+    return DecisionInput(
+        text="Complete viewer-safe observation, with all actions.",
+        legal_references=refs,
+        action_descriptions={r: f"Action {r}" for r in refs},
+        representation_id="fixture",
+        source_identity={"capture_digest": "fixture"},
+    )
+
+
+def typed_reply(refs: tuple[str, ...] = ("A0", "A1")) -> dict[str, object]:
+    return {
+        "id": "gen-dec-fixture",
+        "model": "typesafe/jev-1.14-dated",
+        "provider": "TypeSafe",
+        "answers": {
+            "action": {
+                "type": "choice",
+                "choice": refs[-1],
+                "confidence": 0.1,
+                # Deliberately different argmax: only the returned choice selects.
+                "probabilities": {ref: float(i == 0) for i, ref in enumerate(refs)},
+            }
+        },
+        "usage": {"input_tokens": 400, "output_tokens": 31, "cost": 0.0000168},
+    }
+
+
+def typed_config() -> OpenRouterConfig:
+    return OpenRouterConfig(
+        model_id="typesafe/jev-1.14",
+        transport="decisions",
+        objective="win-game",
+    )
+
+
+def test_decisions_full_choice_coverage_and_native_receipt() -> None:
+    supplied = typed_decision(255)
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert str(request.url) == "https://openrouter.ai/api/alpha/decisions"
+        body = json.loads(request.content)
+        assert body["state"] == supplied.text
+        question = body["questions"]["action"]
+        assert set(question["criteria"]) == set(supplied.legal_references)
+        assert question["criteria"]["A254"] == "A254: Action A254"
+        assert "winning this game" in question["instructions"]
+        assert "messages" not in body
+        return httpx.Response(200, json=typed_reply(supplied.legal_references))
+
+    with OpenRouterSession(
+        typed_config(), transport=httpx.MockTransport(handler)
+    ) as session:
+        result = session.decide(supplied)
+    assert result.selected_reference == "A254"
+    assert result.attempts[0].completion is None
+    assert result.attempts[0].decision_reply.model == "typesafe/jev-1.14-dated"
+    assert result.attempts[0].decision_reply.provider == "TypeSafe"
+    assert result.attempts[0].prompt_tokens == 400
+    assert result.runtime.runtime == "openrouter-decisions-v1"
+    assert OpenRouterResult.model_validate_json(result.model_dump_json()) == result
+
+
+@pytest.mark.parametrize("supplied", [typed_decision(256), decision()])
+def test_decisions_reject_incomplete_descriptions_or_excess_choices_before_send(
+    supplied: DecisionInput,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise AssertionError("preflight failure cannot dispatch")
+
+    with OpenRouterSession(
+        typed_config(), transport=httpx.MockTransport(handler)
+    ) as session:
+        result = session.decide(supplied)
+    assert result.failure and result.selected_reference is None
+    assert not result.attempts
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"error": "fixture-secret"},
+        {**typed_reply(), "answers": {}},
+        {
+            **typed_reply(),
+            "answers": {
+                "action": {
+                    "type": "choice",
+                    "choice": "A9",
+                    "confidence": 1,
+                    "probabilities": {"A9": 1},
+                }
+            },
+        },
+    ],
+)
+def test_decisions_bad_answers_stop_without_repair_and_retain_charges(
+    payload: dict[str, object], budget_ledger: BudgetLedger
+) -> None:
+    with OpenRouterSession(
+        typed_config(),
+        budget=budget_ledger,
+        transport=httpx.MockTransport(lambda _: httpx.Response(200, json=payload)),
+    ) as session:
+        result = session.decide(typed_decision())
+    assert result.failure and result.selected_reference is None
+    assert len(result.attempts) == 1 and result.fallback is None
+    assert "fixture-secret" not in result.model_dump_json()
+    spend = budget_ledger.snapshot()
+    # A rejected action is still billable; a malformed envelope stays uncertain.
+    if "usage" in payload:
+        assert spend.reported_inclusive_usd == Decimal("0.0000168")
+        assert spend.pending_usd == 0
+    else:
+        assert spend.reported_inclusive_usd == 0
+        assert spend.pending_usd == Decimal("0.01")
+
+
+def test_decisions_native_game_usage_and_replay(tmp_path: Path) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        refs = tuple(json.loads(request.content)["questions"]["action"]["criteria"])
+        return httpx.Response(200, json=typed_reply(refs))
+
+    with OpenRouterSession(
+        typed_config(), transport=httpx.MockTransport(handler)
+    ) as session:
+        summary = play(GameConfig(max_decisions=8), tmp_path / "game", session)
+    assert summary.replay_matches and summary.decisions == 8
+    assert summary.mode == "openrouter-decisions-v-random"
+    assert summary.prompt_tokens == 400 * summary.model_decisions
+    assert summary.completion_tokens == 31 * summary.model_decisions
+    assert summary.reported_cost_usd == pytest.approx(
+        0.0000168 * summary.model_decisions
+    )
+    assert summary.unpriced_attempts == 0
+    assert summary.reasoning_tokens == 0
+
+
+def test_chat_repair_cannot_dispatch_past_durable_budget(tmp_path: Path) -> None:
+    ledger = BudgetLedger(
+        tmp_path / "spend.sqlite",
+        BudgetConfig(
+            ceiling_usd=Decimal("0.0015"),
+            request_bound_usd=Decimal("0.001"),
+            overhead_usd=Decimal(0),
+            charge_multiplier=Decimal(1),
+            bound_evidence="fixture",
+        ),
+    )
+    requests = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal requests
+        requests += 1
+        return httpx.Response(200, json=reply("bad"))
+
+    with OpenRouterSession(
+        OpenRouterConfig(model_id="fixture/model"),
+        budget=ledger,
+        transport=httpx.MockTransport(handler),
+    ) as session:
+        result = session.decide(decision())
+    assert requests == 1
+    assert result.failure and "budget exhausted" in result.failure.message
+    assert result.attempts[0].dispatched and not result.attempts[1].dispatched
+    assert result.fallback is None
+    assert ledger.snapshot().accounted_usd == Decimal("0.001")
+
+
+@pytest.mark.parametrize("typed", [False, True])
+def test_budget_digest_identifies_exact_dispatched_payload(
+    budget_ledger: BudgetLedger, typed: bool
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        (charge,) = budget_ledger.snapshot().requests
+        assert charge.request_sha256 == hashlib.sha256(request.content).hexdigest()
+        assert request.headers["Content-Type"] == "application/json"
+        assert "雪" in request.content.decode()
+        return httpx.Response(200, json=typed_reply() if typed else reply())
+
+    supplied = typed_decision().model_copy(update={"text": "Visible state: 雪"})
+    config = typed_config() if typed else OpenRouterConfig(model_id="fixture/model")
+    with OpenRouterSession(
+        config, budget=budget_ledger, transport=httpx.MockTransport(handler)
+    ) as session:
+        result = session.decide(supplied)
+    assert result.failure is None and result.selected_reference == "A1"
+    assert budget_ledger.snapshot().pending_usd == 0
+
+
+@pytest.mark.parametrize("failure", ["missing", "deadline", "http"])
+def test_decisions_uncertain_charge_stops_and_keeps_its_bound(
+    failure: str, budget_ledger: BudgetLedger
+) -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        assert budget_ledger.snapshot().pending_usd == Decimal("0.01")
+        if failure == "deadline":
+            await asyncio.Event().wait()
+        if failure == "http":
+            return httpx.Response(503)
+        return httpx.Response(200, json={**typed_reply(), "usage": None})
+
+    config = typed_config().model_copy(update={"deadline_seconds": 0.05})
+    with OpenRouterSession(
+        config, budget=budget_ledger, transport=httpx.MockTransport(handler)
+    ) as session:
+        result = session.decide(typed_decision())
+    assert result.failure is not None and result.selected_reference is None
+    assert result.attempts[0].reservation_id
+    assert budget_ledger.snapshot().pending_usd == Decimal("0.01")
+    budget_ledger.reserve("next", "digest")
+    assert budget_ledger.snapshot().accounted_usd == Decimal("0.02")
+
+
+@pytest.mark.parametrize("failures", [1, 2])
+def test_decisions_resend_only_unsent_requests_and_keep_their_bounds(
+    failures: int, budget_ledger: BudgetLedger, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def no_wait(seconds: float) -> None:
+        pass
+
+    monkeypatch.setattr(asyncio, "sleep", no_wait)
+    sent = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal sent
+        sent += 1
+        if sent <= failures:
+            raise httpx.ConnectError("unreachable", request=request)
+        return httpx.Response(200, json=typed_reply())
+
+    config = typed_config().model_copy(update={"connect_retries": 1})
+    with OpenRouterSession(
+        config, budget=budget_ledger, transport=httpx.MockTransport(handler)
+    ) as session:
+        result = session.decide(typed_decision())
+    spend = budget_ledger.snapshot()
+    expected = [True] * failures + [False] * (2 - failures)
+    assert [a.connect_failed for a in result.attempts] == expected
+    assert [r.abandoned for r in spend.requests] == expected
+    if failures == 1:
+        assert result.selected_reference == "A1" and result.failure is None
+        assert spend.accounted_usd == Decimal("0.0100168")
+        budget_ledger.reserve("next", "digest")
+    else:
+        assert result.failure and "ConnectError" in result.failure.message
+        assert spend.accounted_usd == Decimal("0.02")

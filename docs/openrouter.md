@@ -1,11 +1,12 @@
 # Hosted game decisions through OpenRouter
 
 `OpenRouterSession` sends the same complete `DecisionInput` as the local
-Transformers harness. It selects exactly one legal reference, allows one
-protocol-only repair, then records a seeded uniform fallback. HTTP failures,
-provider errors/refusals, malformed envelopes, byte overflow and deadline expiry
-stop the decision without fallback. It does not execute Commands; the native
-game runner still owns capture, stale rejection, submission and replay.
+Transformers harness. Its default chat transport selects exactly one legal
+reference, allows one protocol-only repair, then records a seeded uniform
+fallback. HTTP failures, provider errors/refusals, malformed envelopes, byte
+overflow and deadline expiry stop the decision without fallback. It does not
+execute Commands; the native game runner still owns capture, stale rejection,
+submission and replay.
 
 Set `OPENROUTER_API_KEY` in the process environment. Credentials are never part
 of inference configuration or saved receipts. Run one saved observation:
@@ -40,7 +41,7 @@ covers reasoning and visible text. It is an engineering starting point, not
 a measured reasoning budget. No temperature is forced on models that do not
 support it. Hosted slugs are not immutable weight revisions.
 
-`max_prompt_bytes` is a complete-message engineering ceiling, not a token count.
+`max_prompt_bytes` bounds the complete JSON request, not a token count.
 Provider-native tokenization, templates and context admission happen remotely;
 the adapter never estimates these as exact or silently truncates. Usage receipts
 retain native prompt/completion tokens, optional reasoning/cache counts, cost,
@@ -50,6 +51,76 @@ the game summary exposes `unpriced_attempts`. `reported_cost_usd` includes all
 reported attempts, even unsuccessful protocol answers, and is not a hard budget
 or a complete bill when any attempt is unpriced. A cancelled connection cannot
 guarantee remote cancellation. HTTP requests and provider failures are not retried.
+
+## Typed Decisions and the bounded Jev campaign
+
+`configs/llm/openrouter-jev.json` selects `transport: "decisions"` and
+`typesafe/jev-1.14`. `OpenRouterSession` sends the full observation as `state`
+and one Choice question asking which action maximizes the chance of winning.
+Each criterion contains the captured reference and its renderer description.
+`DecisionInput.action_descriptions` must cover exactly the legal references;
+older chat inputs can omit it. The native game runner supplies these descriptions
+from the same capture that binds the eventual Command.
+
+The adapter rejects more than 255 choices or an oversized complete request
+before dispatch. It never shortlists actions, invents an extra option or replaces
+the returned choice with a probability threshold. Typed requests have no repair,
+random fallback, chat history or chat caching. `connect_retries` (default 0; the
+Jev config uses 3) resends only after connection establishment failed, when no
+request bytes reached OpenRouter, within the same decision deadline. The chat-only reasoning, output
+allowance and fallback-seed fields do not affect Decisions.
+See the [Choice contract](https://docs.typesafe.ai/primitives/choice)
+and [OpenRouter Decisions examples](https://openrouter.ai/blog/insights/what-is-jev/).
+
+Receipts retain the typed request, `answers`, returned model/provider and native
+`input_tokens` / `output_tokens` / cost. They do not manufacture chat completions.
+The runtime is `openrouter-decisions-v1`; game summaries use
+`openrouter-decisions-v-checkpoint` or `openrouter-decisions-v-random`.
+Existing chat defaults and historical receipts remain readable.
+
+`experiments.jev_mtg183` runs one sequential campaign through the same native
+runner. Its `Protocol` requires a digest-bound checkpoint and its attributed
+selection rule, billing-bound evidence, source/native/driver identities and
+an inclusive budget of at most $10. Historical checkpoints require their matching
+runtime; these fields never override native world admission. The supplied Jev
+inference config alone does not authorize or admit a campaign.
+
+```sh
+uv run --extra openrouter --extra artifacts python -m experiments.jev_mtg183 \
+  --protocol path/to/frozen-protocol.json --out experiments/data/jev-mtg183
+```
+
+The frozen treatment has 1,000 uniquely seeded games: five per ordered deck
+pair and Jev seat, shuffled with a retained seed. The first 10–20 games are the
+included pilot under the same treatment. History capacity, forced-choice
+skipping, policy RNG and game limits are retained. Only a complete, valid pilot
+produces a 1,000-game cost projection.
+The driver continues the affordable prefix, with no replacement games. A failed
+or replay-divergent game is retained unscored; three consecutive failed games
+stop the campaign. Reported
+Wilson intervals describe wins among completed, replay-verified games and do not
+claim fixed-sample coverage under cost-based stopping.
+
+`BudgetLedger` uses SQLite transactions to reserve a justified maximum inclusive
+request charge **before every dispatch**, including chat repairs when used by a
+chat caller. The provider's reported cost is multiplied by the declared billing
+fee factor, rounded up to nanodollars, and settles that reservation. Missing
+usage and failed requests keep their full bound: the live session abandons the
+reservation, which stays counted but no longer blocks later requests. Process
+death leaves it pending and blocks restart. Charges exceeding the bound are retained and stop the campaign even
+on restart. Rental, publication and shutdown allowances are reserved up front;
+the caller must establish that those allowances and the request bound are valid.
+A payload-byte limit or an observed pilot mean is not that evidence.
+
+The output keeps the immutable protocol/schedule, an admission record for every
+attempt, native game evidence, `spend.sqlite`, a pilot summary and `report.json`.
+The report includes actual seat counts, wins/losses/draws, failures and interrupted
+attempts, replay failures, unpriced reservations, connection resends, latency, tokens, per-game API
+cost and inclusive totals. Rerunning the directory reconstructs retained results
+without continuing play or resetting spend. Keep this directory as the campaign's
+sole accounting authority. Publish its bytes with
+`uv run --extra artifacts python -m manabot.data publish <directory>` before
+committing an artifact manifest; publication is separate from executing games.
 
 ## Frozen policy opponent
 
