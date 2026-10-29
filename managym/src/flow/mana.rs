@@ -708,17 +708,14 @@ impl Game {
                 waterbend: false,
             }),
             Some(PendingChoice::Waterbend {
-                permanent,
-                ability_index,
+                payment,
                 remaining_generic,
+                tapped,
                 ..
             }) => {
-                result.push(Obligation::Pay {
-                    cost: self.activated_abilities_for(*permanent)[*ability_index]
-                        .mana_cost
-                        .with_generic(*remaining_generic),
-                    waterbend: true,
-                });
+                let (mana, waterbend) =
+                    self.waterbend_remainder(player, payment, *remaining_generic, *tapped);
+                result.extend(waterbend_obligations(&mana, waterbend));
             }
             _ => {}
         }
@@ -850,14 +847,18 @@ impl Game {
             .is_some()
     }
 
-    pub(crate) fn waterbend_payment_possible(&self, player: PlayerId, cost: &ManaCost) -> bool {
+    /// Can `player` pay `mana` with mana, plus `waterbend` generic with mana
+    /// or waterbend taps?
+    pub(crate) fn waterbend_payment_possible(
+        &self,
+        player: PlayerId,
+        mana: &ManaCost,
+        waterbend: u8,
+    ) -> bool {
         self.payment_model(player, None)
             .plan(
                 self.pooled_mana(player),
-                vec![Obligation::Pay {
-                    cost: cost.clone(),
-                    waterbend: true,
-                }],
+                waterbend_obligations(mana, waterbend),
                 SourcePolicy::All,
             )
             .is_some()
@@ -1132,6 +1133,26 @@ impl Game {
             self.state.players[player.0].combat_mana_pool.clear();
         }
     }
+}
+
+/// A waterbend payment as obligations: `mana` paid only with mana, and
+/// `waterbend` generic that taps may also pay.
+fn waterbend_obligations(mana: &ManaCost, waterbend: u8) -> Vec<Obligation> {
+    let mut obligations = vec![Obligation::Pay {
+        cost: mana.clone(),
+        waterbend: false,
+    }];
+    if waterbend > 0 {
+        obligations.push(Obligation::Pay {
+            cost: ManaCost {
+                purpose: mana.purpose,
+                ..ManaCost::default()
+            }
+            .with_generic(waterbend),
+            waterbend: true,
+        });
+    }
+    obligations
 }
 
 #[cfg(test)]

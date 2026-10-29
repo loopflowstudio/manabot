@@ -90,7 +90,8 @@
       "battlefield_matching": 2,
       "cards_drawn_minus": 4,
       "creatures_with_counters": 1,
-      "graveyard_matching": 3
+      "graveyard_matching": 3,
+      "x": 5
     },
     "remainder": {
       "library_bottom": 1
@@ -270,6 +271,7 @@
     "affinity_zone": 94,
     "opponent_picks": 95,
     "discard_card": 96,
+    "mana_x": 97,
     "max": 28,
     "max_select": 29,
     "min": 30,

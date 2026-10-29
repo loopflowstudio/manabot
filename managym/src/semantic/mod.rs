@@ -1665,9 +1665,14 @@ fn object_field<'a>(value: &'a Value, name: &str) -> Result<&'a Value, IrError> 
 /// Quantities evaluated by the live engine relative to the resolving controller.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ValueExpression {
+    /// The resolving spell's announced X.
+    X,
     CreaturesWithCounters,
     BattlefieldMatching(Predicate),
-    GraveyardMatching { base: i32, predicate: Predicate },
+    GraveyardMatching {
+        base: i32,
+        predicate: Predicate,
+    },
     CardsDrawnMinus(u32),
 }
 /// A printed integer or a resolution-time [`ValueExpression`].
@@ -1689,6 +1694,7 @@ impl Amount {
 impl ValueExpression {
     fn parse(value: &Value) -> Result<Self, IrError> {
         Ok(match str_field(value, "kind")? {
+            "x" => Self::X,
             "creatures_with_counters" => Self::CreaturesWithCounters,
             "battlefield_matching" => {
                 Self::BattlefieldMatching(parse_predicate(object_field(value, "predicate")?)?)

@@ -254,6 +254,7 @@ fn target_description(t: &TargetSpec) -> String {
 fn value_description(value: &EffectValue) -> String {
     match value {
         EffectValue::Fixed(value) => value.to_string(),
+        EffectValue::X => "the announced value of X".into(),
         EffectValue::CreaturesWithCounters => {
             "the number of creatures you control with +1/+1 counters".into()
         }

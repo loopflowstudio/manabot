@@ -12,7 +12,7 @@ use crate::{
     agent::action::AgentError,
     flow::{
         event::GameEvent,
-        game::{ActivationSource, Game, Payment, PendingChoice},
+        game::{ActivationSource, CastChoices, Game, Payment, PendingChoice},
     },
     state::{
         ability::TargetRequirement,
@@ -91,22 +91,26 @@ impl Game {
         }
     }
 
-    /// The cost to cast `card` right now: base (+ kicker if `kicked`),
-    /// with affinity-style reductions applied (CR 601.2f).
+    /// The total cost to cast `card` right now with the announced `cast`
+    /// choices: its mana cost (none when cast free) with X fixed, plus the
+    /// kicker, less affinity-style reductions (CR 601.2f).
     pub(crate) fn effective_spell_cost(
         &self,
         player: PlayerId,
         card: CardId,
-        kicked: bool,
+        cast: CastChoices,
     ) -> Option<ManaCost> {
         let card_ref = &self.state.cards[card];
-        let mut cost = if self.state.zones.zone_of(card) == Some(ZoneType::Hand) {
+        let mut cost = if cast.free {
+            ManaCost::default()
+        } else if self.state.zones.zone_of(card) == Some(ZoneType::Hand) {
             card_ref.mana_cost.clone()?
         } else {
             self.zone_cast_cost(player, card)?
         };
+        cost = cost.with_x(cast.x);
         cost.purpose = ManaUse::spell(card_ref.subtypes.iter().map(String::as_str));
-        if kicked {
+        if cast.kicked {
             if let Some(kicker) = &card_ref.kicker {
                 cost = cost.plus(kicker);
             }
@@ -207,18 +211,115 @@ impl Game {
             ));
         }
 
-        // CR 601.2b — Optional additional costs (kicker) are chosen before
-        // targets. Only offer the choice when the kicked cost is payable.
-        if self.state.cards[card].kicker.is_some() {
-            let kicked_cost = self.effective_spell_cost(player, card, true);
-            if kicked_cost.is_some_and(|cost| self.can_pay_with_mana_abilities(player, &cost, None))
-            {
-                self.pending_choice = Some(PendingChoice::KickerChoice { player, card });
-                return Ok(());
-            }
-        }
+        self.begin_cast(player, card, CastChoices::default())
+    }
 
-        self.begin_mode_selection(player, card, false)
+    /// Cast `card` without paying its mana cost while an effect resolves
+    /// (CR 608.2g): its timing and zone permissions don't apply.
+    pub(crate) fn begin_free_cast(
+        &mut self,
+        player: PlayerId,
+        card: CardId,
+    ) -> Result<(), AgentError> {
+        let cast = CastChoices {
+            free: true,
+            ..CastChoices::default()
+        };
+        self.begin_cast(player, card, cast)
+    }
+
+    /// CR 601.2b — announce X, then any optional additional cost, before
+    /// modes and targets. A free cast has X = 0 (CR 107.3b).
+    fn begin_cast(
+        &mut self,
+        player: PlayerId,
+        card: CardId,
+        cast: CastChoices,
+    ) -> Result<(), AgentError> {
+        let has_x = self.state.cards[card]
+            .mana_cost
+            .as_ref()
+            .is_some_and(|cost| cost.x > 0);
+        if has_x && !cast.free {
+            self.pending_choice = Some(PendingChoice::AnnounceX { player, card, cast });
+            return Ok(());
+        }
+        self.begin_kicker_choice(player, card, cast)
+    }
+
+    /// Whether `player` can pay the total cost of `card` with `cast`'s
+    /// choices, waterbending any part that allows it.
+    pub(crate) fn can_pay_cast(&self, player: PlayerId, card: CardId, cast: CastChoices) -> bool {
+        let Some(cost) = self.effective_spell_cost(player, card, cast) else {
+            return false;
+        };
+        let waterbend = self
+            .cast_waterbend_generic(player, card, cast)
+            .min(cost.generic());
+        if waterbend > 0 {
+            self.waterbend_payment_possible(player, &cost.reduced_generic(waterbend), waterbend)
+        } else {
+            self.can_pay_with_mana_abilities(player, &cost, None)
+        }
+    }
+
+    /// The values of X `player` may announce: zero through the largest
+    /// payable value (payability is monotone in X).
+    pub(crate) fn legal_x_values(
+        &self,
+        player: PlayerId,
+        card: CardId,
+        cast: CastChoices,
+    ) -> Vec<u8> {
+        let mut values = vec![0];
+        for x in 1..=u8::MAX {
+            if !self.can_pay_cast(player, card, CastChoices { x, ..cast }) {
+                break;
+            }
+            values.push(x);
+        }
+        values
+    }
+
+    /// Announce X for the pending cast, then continue the pipeline.
+    pub(crate) fn announce_x_action(
+        &mut self,
+        player: PlayerId,
+        x: usize,
+    ) -> Result<(), AgentError> {
+        let Some(PendingChoice::AnnounceX {
+            player: chooser,
+            card,
+            cast,
+        }) = self.pending_choice
+        else {
+            return Err(AgentError("no X announcement is pending".into()));
+        };
+        let x = u8::try_from(x).map_err(|_| AgentError("X is too large".into()))?;
+        if chooser != player || !self.legal_x_values(player, card, cast).contains(&x) {
+            return Err(AgentError("illegal value of X".into()));
+        }
+        self.pending_choice = None;
+        self.begin_kicker_choice(player, card, CastChoices { x, ..cast })
+    }
+
+    /// CR 601.2b — offer the optional additional cost when the total cost
+    /// including it is payable.
+    fn begin_kicker_choice(
+        &mut self,
+        player: PlayerId,
+        card: CardId,
+        cast: CastChoices,
+    ) -> Result<(), AgentError> {
+        let kicked = CastChoices {
+            kicked: true,
+            ..cast
+        };
+        if self.state.cards[card].kicker.is_some() && self.can_pay_cast(player, card, kicked) {
+            self.pending_choice = Some(PendingChoice::KickerChoice { player, card, cast });
+            return Ok(());
+        }
+        self.begin_mode_selection(player, card, cast)
     }
 
     /// Resolve the pending kicker choice, then continue the pipeline.
@@ -230,6 +331,7 @@ impl Game {
         let Some(PendingChoice::KickerChoice {
             player: chooser,
             card,
+            cast,
         }) = self.pending_choice
         else {
             return Err(AgentError("no kicker choice is pending".to_string()));
@@ -238,7 +340,26 @@ impl Game {
             return Err(AgentError("wrong player for kicker choice".to_string()));
         }
         self.pending_choice = None;
-        self.begin_mode_selection(player, card, pay)
+        let cast = CastChoices {
+            kicked: pay,
+            ..cast
+        };
+        self.begin_mode_selection(player, card, cast)
+    }
+
+    /// The generic part of `card`'s total cost that `cast` lets `player`
+    /// pay by waterbending: a waterbend additional cost, once chosen.
+    pub(crate) fn cast_waterbend_generic(
+        &self,
+        _player: PlayerId,
+        card: CardId,
+        cast: CastChoices,
+    ) -> u8 {
+        let card_ref = &self.state.cards[card];
+        match &card_ref.kicker {
+            Some(kicker) if cast.kicked && card_ref.kicker_waterbend => kicker.generic(),
+            _ => 0,
+        }
     }
 
     pub(crate) fn legal_spell_modes(&self, player: PlayerId, card: CardId) -> Vec<usize> {
@@ -264,20 +385,16 @@ impl Game {
         &mut self,
         player: PlayerId,
         card: CardId,
-        kicked: bool,
+        cast: CastChoices,
     ) -> Result<(), AgentError> {
         if self.state.cards[card].spell_modes().is_some() {
             if self.legal_spell_modes(player, card).is_empty() {
                 return Err(AgentError("no legal spell mode".into()));
             }
-            self.pending_choice = Some(PendingChoice::SpellMode {
-                player,
-                card,
-                kicked,
-            });
+            self.pending_choice = Some(PendingChoice::SpellMode { player, card, cast });
             return Ok(());
         }
-        self.advance_target_selection(player, card, kicked, None, TargetSelection::default())
+        self.advance_target_selection(player, card, cast, None, TargetSelection::default())
     }
 
     pub(crate) fn spell_mode_action(
@@ -288,7 +405,7 @@ impl Game {
         let Some(PendingChoice::SpellMode {
             player: chooser,
             card,
-            kicked,
+            cast,
         }) = self.pending_choice
         else {
             return Err(AgentError("no spell mode is pending".into()));
@@ -296,7 +413,7 @@ impl Game {
         if chooser != player || !self.legal_spell_modes(player, card).contains(&mode) {
             return Err(AgentError("illegal spell mode".into()));
         }
-        self.advance_target_selection(player, card, kicked, Some(mode), TargetSelection::default())
+        self.advance_target_selection(player, card, cast, Some(mode), TargetSelection::default())
     }
 
     /// Move the casting pipeline to `requirement_index`, skipping
@@ -306,7 +423,7 @@ impl Game {
         &mut self,
         player: PlayerId,
         card: CardId,
-        kicked: bool,
+        cast: CastChoices,
         mode: Option<usize>,
         selection: TargetSelection,
     ) -> Result<(), AgentError> {
@@ -318,7 +435,7 @@ impl Game {
         let requirements = self.state.cards[card].target_requirements_for_mode(mode);
         loop {
             let Some(requirement) = requirements.get(requirement_index) else {
-                return self.finish_casting(player, card, kicked, mode, chosen, chosen_req_indices);
+                return self.finish_casting(player, card, cast, mode, chosen, chosen_req_indices);
             };
             let legal = self.remaining_legal_targets(
                 player,
@@ -338,7 +455,7 @@ impl Game {
             self.pending_choice = Some(PendingChoice::ChooseTargets {
                 player,
                 card,
-                kicked,
+                cast,
                 mode,
                 requirement_index,
                 chosen,
@@ -379,7 +496,7 @@ impl Game {
         let Some(PendingChoice::ChooseTargets {
             player: chooser,
             card,
-            kicked,
+            cast,
             mode,
             requirement_index,
             chosen,
@@ -394,7 +511,7 @@ impl Game {
             self.pending_choice = Some(PendingChoice::ChooseTargets {
                 player: chooser,
                 card,
-                kicked,
+                cast,
                 mode,
                 requirement_index,
                 chosen,
@@ -407,7 +524,7 @@ impl Game {
             self.pending_choice = Some(PendingChoice::ChooseTargets {
                 player: chooser,
                 card,
-                kicked,
+                cast,
                 mode,
                 requirement_index,
                 chosen,
@@ -433,7 +550,7 @@ impl Game {
             return self.advance_target_selection(
                 player,
                 card,
-                kicked,
+                cast,
                 mode,
                 TargetSelection {
                     requirement_index: requirement_index + 1,
@@ -455,7 +572,7 @@ impl Game {
             return self.advance_target_selection(
                 player,
                 card,
-                kicked,
+                cast,
                 mode,
                 TargetSelection {
                     requirement_index: requirement_index + 1,
@@ -467,7 +584,7 @@ impl Game {
         self.pending_choice = Some(PendingChoice::ChooseTargets {
             player,
             card,
-            kicked,
+            cast,
             mode,
             requirement_index,
             chosen,
@@ -483,7 +600,7 @@ impl Game {
         let Some(PendingChoice::ChooseTargets {
             player: chooser,
             card,
-            kicked,
+            cast,
             mode,
             requirement_index,
             chosen,
@@ -497,7 +614,7 @@ impl Game {
             self.pending_choice = Some(PendingChoice::ChooseTargets {
                 player: chooser,
                 card,
-                kicked,
+                cast,
                 mode,
                 requirement_index,
                 chosen,
@@ -517,7 +634,7 @@ impl Game {
             self.pending_choice = Some(PendingChoice::ChooseTargets {
                 player: chooser,
                 card,
-                kicked,
+                cast,
                 mode,
                 requirement_index,
                 chosen,
@@ -531,7 +648,7 @@ impl Game {
         self.advance_target_selection(
             player,
             card,
-            kicked,
+            cast,
             mode,
             TargetSelection {
                 requirement_index: requirement_index + 1,
@@ -545,7 +662,7 @@ impl Game {
         &mut self,
         player: PlayerId,
         card: CardId,
-        kicked: bool,
+        cast: CastChoices,
         mode: Option<usize>,
         targets: Vec<Target>,
         target_req_indices: Vec<usize>,
@@ -555,7 +672,7 @@ impl Game {
             player,
             Payment::Spell {
                 card,
-                kicked,
+                cast,
                 mode,
                 targets,
                 target_req_indices,
@@ -570,7 +687,7 @@ impl Game {
         card: CardId,
         targets: Vec<Target>,
         target_req_indices: Vec<usize>,
-        kicked: bool,
+        cast: CastChoices,
     ) -> Result<(), AgentError> {
         let owner = self.state.cards[card].owner;
         if owner != player {
@@ -579,7 +696,7 @@ impl Game {
         self.journal_turn();
         self.state.turn.spells_cast[player.0].push(card);
         // CR 601.2i — A cast spell is put onto the stack.
-        self.push_spell_to_stack(card, player, targets.clone(), target_req_indices, kicked);
+        self.push_spell_to_stack(card, player, targets.clone(), target_req_indices, cast);
         self.emit(GameEvent::SpellCast {
             card,
             targets: targets.clone(),
@@ -659,40 +776,7 @@ impl Game {
             return self.begin_activated_targets(player, source, ability_index, &ability);
         }
 
-        // Waterbend costs open a payment sub-decision instead of paying
-        // directly (the generic part may be paid by tapping permanents).
-        if self.begin_waterbend(player, source, ability_index, &ability, None) {
-            return Ok(());
-        }
         self.begin_activation_payment(player, source, ability_index, Vec::new())
-    }
-
-    /// Waterbend costs open a payment sub-decision instead of paying directly
-    /// (the generic part may be paid by tapping permanents). Returns whether
-    /// it opened.
-    fn begin_waterbend(
-        &mut self,
-        player: PlayerId,
-        source: ActivationSource,
-        ability_index: usize,
-        ability: &ActivatedAbilityDefinition,
-        target: Option<Target>,
-    ) -> bool {
-        let generic = ability.mana_cost.generic();
-        let ActivationSource::Permanent(permanent) = source else {
-            return false;
-        };
-        if !ability.waterbend || generic == 0 {
-            return false;
-        }
-        self.pending_choice = Some(PendingChoice::Waterbend {
-            player,
-            permanent,
-            ability_index,
-            remaining_generic: generic,
-            target,
-        });
-        true
     }
 
     /// Activate an ability of a card in `player`'s hand or graveyard. Only
@@ -860,11 +944,6 @@ impl Game {
         {
             return Err(AgentError("illegal activated target".into()));
         }
-        if let Some(ability) = self.activation_ability(source, ability_index) {
-            if self.begin_waterbend(player, source, ability_index, &ability, Some(target)) {
-                return Ok(());
-            }
-        }
         self.begin_activation_payment(player, source, ability_index, vec![target])
     }
 
@@ -1011,8 +1090,8 @@ impl Game {
         alternative: Option<&ManaCost>,
     ) -> ManaCost {
         let base = match payment {
-            Payment::Spell { card, kicked, .. } => self
-                .effective_spell_cost(player, *card, *kicked)
+            Payment::Spell { card, cast, .. } => self
+                .effective_spell_cost(player, *card, *cast)
                 .unwrap_or_default(),
             Payment::Activation {
                 source,
@@ -1030,6 +1109,26 @@ impl Game {
         }
     }
 
+    /// The part of `payment`'s generic cost its payer may pay by waterbending
+    /// (tapping artifacts and creatures for {1} each): all of a waterbend
+    /// ability's generic cost, or a spell's waterbend additional cost.
+    pub(crate) fn payment_waterbend_generic(&self, player: PlayerId, payment: &Payment) -> u8 {
+        match payment {
+            Payment::Spell { card, cast, .. } => {
+                let total = self.payment_mana_cost(player, payment, None).generic();
+                self.cast_waterbend_generic(player, *card, *cast).min(total)
+            }
+            Payment::Activation {
+                source,
+                ability_index,
+                ..
+            } => self
+                .activation_ability(*source, *ability_index)
+                .filter(|ability| ability.waterbend)
+                .map_or(0, |ability| ability.mana_cost.generic()),
+        }
+    }
+
     fn begin_mana_payment(
         &mut self,
         player: PlayerId,
@@ -1037,6 +1136,18 @@ impl Game {
         sacrifice: Option<PermanentId>,
         alternative: Option<ManaCost>,
     ) -> Result<(), AgentError> {
+        // Waterbend costs open a payment sub-decision: taps pay part of the
+        // generic cost, then mana pays the rest.
+        let waterbend = self.payment_waterbend_generic(player, &payment);
+        if waterbend > 0 && sacrifice.is_none() && alternative.is_none() {
+            self.pending_choice = Some(PendingChoice::Waterbend {
+                player,
+                payment: Box::new(payment),
+                remaining_generic: waterbend,
+                tapped: 0,
+            });
+            return Ok(());
+        }
         self.pending_choice = Some(PendingChoice::ManaPayment {
             player,
             payment: Box::new(payment.clone()),
@@ -1046,7 +1157,7 @@ impl Game {
         if !self.mana_ability_actions(player, sacrifice).is_empty() {
             return Ok(());
         }
-        self.commit_payment(player, payment, sacrifice, alternative)
+        self.commit_payment(player, payment, sacrifice, alternative, 0)
     }
 
     pub(crate) fn finish_mana_payment(&mut self, player: PlayerId) -> Result<(), AgentError> {
@@ -1062,17 +1173,22 @@ impl Game {
         if chooser != player {
             return Err(AgentError("wrong payer".into()));
         }
-        self.commit_payment(player, *payment, sacrifice, alternative)
+        self.commit_payment(player, *payment, sacrifice, alternative, 0)
     }
 
+    /// Pay `payment`'s announced cost, less `waterbent` generic already paid
+    /// by waterbend taps, then cast the spell or activate the ability.
     fn commit_payment(
         &mut self,
         player: PlayerId,
         payment: Payment,
         sacrifice: Option<PermanentId>,
         alternative: Option<ManaCost>,
+        waterbent: u8,
     ) -> Result<(), AgentError> {
-        let cost = self.payment_mana_cost(player, &payment, alternative.as_ref());
+        let cost = self
+            .payment_mana_cost(player, &payment, alternative.as_ref())
+            .reduced_generic(waterbent);
         self.produce_mana(player, &cost)?;
         // Commit the complete announced cost once, before sacrifice triggers
         // can observe a departing permanent or a spell reaches the stack.
@@ -1084,12 +1200,12 @@ impl Game {
         match payment {
             Payment::Spell {
                 card,
-                kicked,
+                cast,
                 mode,
                 targets,
                 target_req_indices,
             } => {
-                self.cast_spell(player, card, targets, target_req_indices, kicked)?;
+                self.cast_spell(player, card, targets, target_req_indices, cast)?;
                 if let Some(StackObject::Spell(spell)) = self.state.stack_objects.last_mut() {
                     spell.mode = mode;
                 }
@@ -1138,23 +1254,67 @@ impl Game {
             .collect()
     }
 
-    /// Waterbend candidates for `source`'s ability: a source whose ability
-    /// also costs {T} cannot tap for both.
-    pub(crate) fn waterbend_activation_candidates(
+    /// The card whose spell or ability `payment` pays for.
+    pub(crate) fn payment_source_card(&self, payment: &Payment) -> Option<CardId> {
+        match payment {
+            Payment::Spell { card, .. }
+            | Payment::Activation {
+                source: ActivationSource::Card(card),
+                ..
+            } => Some(*card),
+            Payment::Activation {
+                source: ActivationSource::Permanent(permanent),
+                ..
+            } => self.state.permanents[*permanent]
+                .as_ref()
+                .map(|permanent| permanent.card),
+        }
+    }
+
+    /// The permanent whose ability `payment` activates when that ability
+    /// also costs {T}: it can't tap for both.
+    pub(crate) fn payment_tapped_source(&self, payment: &Payment) -> Option<PermanentId> {
+        let Payment::Activation {
+            source: ActivationSource::Permanent(source),
+            ability_index,
+            ..
+        } = payment
+        else {
+            return None;
+        };
+        self.activated_abilities_for(*source)
+            .get(*ability_index)
+            .is_some_and(|ability| ability.tap_source)
+            .then_some(*source)
+    }
+
+    /// Waterbend candidates for `payment`, less a source it taps anyway.
+    pub(crate) fn waterbend_payment_candidates(
         &self,
         player: PlayerId,
-        source: PermanentId,
-        ability_index: usize,
+        payment: &Payment,
     ) -> Vec<PermanentId> {
-        let taps_source = self
-            .activated_abilities_for(source)
-            .get(ability_index)
-            .is_some_and(|ability| ability.tap_source);
         let mut candidates = self.waterbend_candidates(player);
-        if taps_source {
+        if let Some(source) = self.payment_tapped_source(payment) {
             candidates.retain(|candidate| *candidate != source);
         }
         candidates
+    }
+
+    /// What a pending waterbend payment still owes: the cost mana must pay,
+    /// and the generic that further taps may pay instead.
+    pub(crate) fn waterbend_remainder(
+        &self,
+        player: PlayerId,
+        payment: &Payment,
+        remaining_generic: u8,
+        tapped: u8,
+    ) -> (ManaCost, u8) {
+        let owed = self
+            .payment_mana_cost(player, payment, None)
+            .reduced_generic(tapped);
+        let generic = remaining_generic.min(owed.generic());
+        (owed.reduced_generic(generic), generic)
     }
 
     /// Can `source`'s waterbend ability be paid, its own {T} included?
@@ -1175,7 +1335,7 @@ impl Game {
     /// Can `player` cover `cost` with untapped waterbend candidates
     /// ({1} each, generic only) plus available mana?
     pub(crate) fn can_pay_with_waterbend(&self, player: PlayerId, cost: &ManaCost) -> bool {
-        self.waterbend_payment_possible(player, cost)
+        self.waterbend_payment_possible(player, &cost.with_generic(0), cost.generic())
     }
 
     /// Tap `permanent` to pay {1} of the pending waterbend cost.
@@ -1186,11 +1346,10 @@ impl Game {
     ) -> Result<(), AgentError> {
         let Some(PendingChoice::Waterbend {
             player: payer,
-            permanent,
-            ability_index,
+            payment,
             remaining_generic,
-            target,
-        }) = self.pending_choice
+            tapped,
+        }) = self.pending_choice.clone()
         else {
             return Err(AgentError("no waterbend payment is pending".to_string()));
         };
@@ -1201,7 +1360,7 @@ impl Game {
             return Err(AgentError("waterbend cost is already paid".to_string()));
         }
         if !self
-            .waterbend_activation_candidates(player, permanent, ability_index)
+            .waterbend_payment_candidates(player, &payment)
             .contains(&tap_permanent)
         {
             return Err(AgentError(
@@ -1212,22 +1371,16 @@ impl Game {
         // Waterbend pays a cost without activating a mana ability.
         self.tap_permanent(tap_permanent, false);
         let remaining_generic = remaining_generic - 1;
-
+        let tapped = tapped + 1;
         if remaining_generic == 0 {
-            return self.finish_waterbend(
-                player,
-                permanent,
-                ability_index,
-                remaining_generic,
-                target,
-            );
+            self.pending_choice = None;
+            return self.commit_payment(player, *payment, None, None, tapped);
         }
         self.pending_choice = Some(PendingChoice::Waterbend {
             player,
-            permanent,
-            ability_index,
+            payment,
             remaining_generic,
-            target,
+            tapped,
         });
         Ok(())
     }
@@ -1239,54 +1392,18 @@ impl Game {
     ) -> Result<(), AgentError> {
         let Some(PendingChoice::Waterbend {
             player: payer,
-            permanent,
-            ability_index,
-            remaining_generic,
-            target,
-        }) = self.pending_choice
+            payment,
+            tapped,
+            ..
+        }) = self.pending_choice.clone()
         else {
             return Err(AgentError("no waterbend payment is pending".to_string()));
         };
         if payer != player {
             return Err(AgentError("wrong player for waterbend payment".to_string()));
         }
-        self.finish_waterbend(player, permanent, ability_index, remaining_generic, target)
-    }
-
-    fn finish_waterbend(
-        &mut self,
-        player: PlayerId,
-        permanent_id: PermanentId,
-        ability_index: usize,
-        remaining_generic: u8,
-        target: Option<Target>,
-    ) -> Result<(), AgentError> {
-        let Some(_) = self.state.permanents[permanent_id].as_ref() else {
-            self.pending_choice = None;
-            return Err(AgentError("source permanent does not exist".to_string()));
-        };
-        let Some(ability) = self
-            .activated_abilities_for(permanent_id)
-            .get(ability_index)
-            .cloned()
-        else {
-            self.pending_choice = None;
-            return Err(AgentError("invalid ability index".to_string()));
-        };
-
-        // Pay the colored components plus the unpaid generic remainder.
-        let remainder = ability.mana_cost.with_generic(remaining_generic);
-        if remainder.mana_value > 0 {
-            self.produce_mana(player, &remainder)?;
-            self.spend_mana(player, &remainder)?;
-        }
         self.pending_choice = None;
-        self.push_activated_ability(
-            player,
-            permanent_id,
-            ability_index,
-            target.into_iter().collect(),
-        )
+        self.commit_payment(player, *payment, None, None, tapped)
     }
 
     /// Costs are paid: put the activated ability on the stack (handling

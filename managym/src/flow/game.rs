@@ -76,12 +76,34 @@ pub enum ActivationSource {
     Card(CardId),
 }
 
+/// What a caster announces while casting a spell (CR 601.2b) that changes
+/// its total cost or resolution. Serialized flat; `x` and `free` are omitted
+/// when unset so ordinary casts keep their shape.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+pub struct CastChoices {
+    /// The optional additional cost (kicker, or a waterbend additional cost)
+    /// is paid (CR 702.33).
+    pub kicked: bool,
+    /// The announced value of X (CR 107.3, 601.2b).
+    #[serde(skip_serializing_if = "is_zero")]
+    pub x: u8,
+    /// Cast without paying its mana cost (CR 118.9), as an effect directs;
+    /// timing and zone permissions don't apply (CR 608.2g).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub free: bool,
+}
+
+fn is_zero(value: &u8) -> bool {
+    *value == 0
+}
+
 /// A fully announced spell or activation waiting for selected costs.
 #[derive(Clone, Debug, serde::Serialize)]
 pub enum Payment {
     Spell {
         card: CardId,
-        kicked: bool,
+        #[serde(flatten)]
+        cast: CastChoices,
         mode: Option<usize>,
         targets: Vec<Target>,
         target_req_indices: Vec<usize>,
@@ -94,7 +116,7 @@ pub enum Payment {
 }
 
 /// Cast-time / activation-time choice pipeline. Casting a spell walks
-/// KickerChoice? -> ChooseTargets (per requirement) -> payment; activating a
+/// AnnounceX? -> KickerChoice? -> SpellMode? -> ChooseTargets (per requirement) -> payment; activating a
 /// waterbend ability walks Waterbend until the cost is paid.
 #[derive(Clone, Debug, serde::Serialize)]
 pub enum PendingChoice {
@@ -121,19 +143,33 @@ pub enum PendingChoice {
         ability_index: usize,
         targets: Vec<Target>,
     },
+    /// Announcing X (CR 601.2b): the chosen value is offered as a mode index.
+    AnnounceX {
+        player: PlayerId,
+        card: CardId,
+        #[serde(flatten)]
+        cast: CastChoices,
+    },
     /// "You may pay the kicker cost" (CR 601.2b) — asked before targeting.
-    KickerChoice { player: PlayerId, card: CardId },
+    KickerChoice {
+        player: PlayerId,
+        card: CardId,
+        #[serde(flatten)]
+        cast: CastChoices,
+    },
     SpellMode {
         player: PlayerId,
         card: CardId,
-        kicked: bool,
+        #[serde(flatten)]
+        cast: CastChoices,
     },
     /// Choosing targets for requirement `requirement_index` of the card's
     /// `target_requirements()` (CR 601.2c).
     ChooseTargets {
         player: PlayerId,
         card: CardId,
-        kicked: bool,
+        #[serde(flatten)]
+        cast: CastChoices,
         mode: Option<usize>,
         requirement_index: usize,
         chosen: Vec<Target>,
@@ -141,17 +177,16 @@ pub enum PendingChoice {
         /// Legal, not-yet-chosen targets for the current requirement.
         legal_targets: Vec<Target>,
     },
-    /// Paying a waterbend activation cost: tap artifacts/creatures for {1}
-    /// each, then pay the remainder with mana.
+    /// Paying a waterbend cost (an ability's, or a spell's additional or
+    /// alternative cost): tap artifacts/creatures for {1} each, then pay the
+    /// remainder with mana.
     Waterbend {
         player: PlayerId,
-        permanent: PermanentId,
-        ability_index: usize,
-        /// Generic mana still owed (colored components are paid with mana
-        /// at the end).
+        payment: Box<Payment>,
+        /// Generic mana further taps may still pay.
         remaining_generic: u8,
-        /// The ability's chosen target, if it has one.
-        target: Option<Target>,
+        /// Generic mana already paid by taps.
+        tapped: u8,
     },
 }
 

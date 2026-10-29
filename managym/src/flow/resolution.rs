@@ -23,9 +23,11 @@ use crate::{
 };
 
 impl Game {
-    fn effect_value(&self, value: &EffectValue, controller: PlayerId) -> i32 {
+    fn effect_value(&self, value: &EffectValue, frame: &EffectFrame) -> i32 {
+        let controller = frame.controller;
         match value {
             EffectValue::Fixed(value) => *value,
+            EffectValue::X => i32::from(frame.x),
             EffectValue::CreaturesWithCounters => self
                 .battlefield_permanents(controller)
                 .into_iter()
@@ -95,6 +97,7 @@ impl Game {
             controller: spell.controller,
             resolutions_this_turn: 0,
             kicked: spell.kicked,
+            x: spell.x,
             targets,
             active_requirement: 0,
             context_target: None,
@@ -140,6 +143,7 @@ impl Game {
             controller: ability.controller,
             resolutions_this_turn: 0,
             kicked: false,
+            x: 0,
             targets,
             active_requirement: 0,
             context_target: None,
@@ -205,6 +209,7 @@ impl Game {
             controller: source_controller,
             resolutions_this_turn,
             kicked: false,
+            x: 0,
             targets,
             active_requirement: 0,
             context_target: triggered.context,
@@ -361,7 +366,7 @@ impl Game {
                 }
             }
             Effect::DrainLifeValue { amount } => {
-                let amount = self.effect_value(amount, frame.controller).max(0);
+                let amount = self.effect_value(amount, frame).max(0);
                 self.change_life(PlayerId(1 - frame.controller.0), -amount);
                 self.gain_life(frame.controller, amount);
                 None
@@ -380,7 +385,7 @@ impl Game {
                 None
             }
             Effect::CreateTokensValue { token_name, count } => {
-                let count = self.effect_value(count, frame.controller).max(0) as usize;
+                let count = self.effect_value(count, frame).max(0) as usize;
                 for _ in 0..count {
                     self.create_token(token_name, frame.controller, false);
                 }
@@ -560,7 +565,7 @@ impl Game {
                 target,
             } => self.execute_frame_effect(
                 &Effect::BuffTarget {
-                    power: self.effect_value(power, frame.controller),
+                    power: self.effect_value(power, frame),
                     toughness: *toughness,
                     target: target.clone(),
                 },
@@ -584,8 +589,8 @@ impl Game {
                     return None;
                 };
                 self.permanent_object_ref(id)?;
-                let power = self.effect_value(power, frame.controller);
-                let toughness = self.effect_value(toughness, frame.controller);
+                let power = self.effect_value(power, frame);
+                let toughness = self.effect_value(toughness, frame);
                 self.journal_permanent(id);
                 let permanent = self.state.permanents[id].as_mut()?;
                 permanent.temp_power += power;
@@ -715,7 +720,7 @@ impl Game {
                 None
             }
             Effect::DealDamageValue { amount, target } => {
-                let amount = self.effect_value(amount, frame.controller);
+                let amount = self.effect_value(amount, frame);
                 self.execute_frame_effect(
                     &Effect::DealDamage {
                         amount,
@@ -725,7 +730,7 @@ impl Game {
                 )
             }
             Effect::PutCountersValue { count, target } => {
-                let count = self.effect_value(count, frame.controller);
+                let count = self.effect_value(count, frame);
                 self.execute_frame_effect(
                     &Effect::PutCounters {
                         count,
@@ -860,7 +865,7 @@ impl Game {
                 max_select,
                 predicate,
             } => {
-                let look = self.effect_value(look, frame.controller).max(0) as usize;
+                let look = self.effect_value(look, frame).max(0) as usize;
                 let looked = self.library_top(frame.controller, look);
                 if looked.is_empty() {
                     return None;
@@ -955,7 +960,7 @@ impl Game {
                 None
             }
             Effect::Earthbend { count, .. } => {
-                let count = self.effect_value(count, frame.controller);
+                let count = self.effect_value(count, frame);
                 let chosen = self.present_primary_target(frame)?;
                 let Target::Permanent(permanent_id) = chosen else {
                     return None;
@@ -1097,6 +1102,7 @@ impl Game {
                         controller: frame.controller,
                         resolutions_this_turn: frame.resolutions_this_turn,
                         kicked: frame.kicked,
+                        x: frame.x,
                         targets: vec![ResolutionTarget {
                             requirement: 0,
                             ..target
@@ -1251,12 +1257,24 @@ impl Game {
         }
     }
 
+    /// The card's mana value; a spell on the stack counts its announced X
+    /// (CR 202.3e).
     pub(crate) fn card_mana_value(&self, card: CardId) -> u8 {
-        self.state.cards[card]
+        let printed = self.state.cards[card]
             .mana_cost
             .as_ref()
-            .map(|cost| cost.mana_value)
-            .unwrap_or(0)
+            .map_or(0, |cost| cost.mana_value);
+        let x = self
+            .find_spell_on_stack_index(card)
+            .and_then(|index| match &self.state.stack_objects[index] {
+                StackObject::Spell(spell) => {
+                    let symbols = self.state.cards[card].mana_cost.as_ref().map_or(0, |c| c.x);
+                    Some(spell.x.saturating_mul(symbols))
+                }
+                _ => None,
+            })
+            .unwrap_or(0);
+        printed.saturating_add(x)
     }
 }
 

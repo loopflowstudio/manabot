@@ -548,6 +548,7 @@ def _validate_value_expression(value: Any, context: str) -> None:
     expression = _object(value, context)
     kind = _string(expression.get("kind"), context)
     fields = {
+        "x": set(),
         "creatures_with_counters": set(),
         "battlefield_matching": {"predicate"},
         "graveyard_matching": {"predicate", "base"},

@@ -4,7 +4,7 @@
 use crate::{
     flow::{
         event::GameEvent,
-        game::Game,
+        game::{CastChoices, Game},
         proposed_event::{BattlefieldEntry, ProposedEvent},
     },
     state::{
@@ -295,7 +295,7 @@ impl Game {
         controller: PlayerId,
         targets: Vec<Target>,
         target_req_indices: Vec<usize>,
-        kicked: bool,
+        cast: CastChoices,
     ) {
         let cast_from = self.state.zones.zone_of(card).expect("cast source zone");
         let flashback = cast_from == ZoneType::Graveyard;
@@ -312,7 +312,8 @@ impl Game {
                 source_definition_id: self.state.cards[card].definition_id,
                 targets,
                 target_req_indices,
-                kicked,
+                kicked: cast.kicked,
+                x: cast.x,
                 mode: None,
             }));
     }

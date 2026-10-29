@@ -164,6 +164,7 @@ pub(super) fn cards() -> Vec<Card> {
         elemental_teachings(),
         dai_li_indoctrination(),
         professor_zei_anthropologist(),
+        united_front(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -5227,6 +5228,37 @@ fn professor_zei_anthropologist() -> Card {
             )]),
         ],
         registry_name: "Professor Zei, Anthropologist",
+        text_box,
+    }
+}
+
+fn united_front() -> Card {
+    let text_box = "Create X 1/1 white Ally creature tokens, then put a +1/+1 counter on each creature you control.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{X}{W}{W}"),
+            types: vec![CardType::Sorcery],
+            ..Default::default()
+        },
+        key: "tla.united_front",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![
+                Op::CreateTokensValue {
+                    count: Quantity::X,
+                    definition_ref: "token.ally",
+                },
+                Op::PutCounters {
+                    count: 1,
+                    target: "each:creature_you_control",
+                },
+            ],
+        )
+        .cost(Cost::mana("{X}{W}{W}"))
+        .inferred()],
+        registry_name: "United Front",
         text_box,
     }
 }

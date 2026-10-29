@@ -393,6 +393,10 @@ pub struct CardDefinition {
     pub targeting: Vec<TargetRequirement>,
     /// Kicker (CR 702.33): optional additional cost chosen while casting.
     pub kicker: Option<ManaCost>,
+    /// The optional additional cost is "waterbend [kicker]": its generic
+    /// mana may be paid by tapping artifacts and creatures.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub kicker_waterbend: bool,
     /// Printed flashback (CR 702.34): castable from its owner's graveyard
     /// for this cost, then exiled instead of going anywhere else.
     #[serde(skip_serializing_if = "Option::is_none")]

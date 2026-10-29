@@ -73,6 +73,7 @@ pub fn mana_cost<'de, D: Deserializer<'de>>(deserializer: D) -> Result<ManaCost,
         mana_value: raw.mana_value,
         hybrid,
         purpose: Default::default(),
+        x: 0,
     })
 }
 pub fn parse(text: &str) -> Result<Observation, String> {

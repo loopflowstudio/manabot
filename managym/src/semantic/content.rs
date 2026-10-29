@@ -377,6 +377,7 @@ fn apply_program(
             }
             definition.sacrifice_cost = cost.sacrifice;
             definition.kicker = cost.kicker;
+            definition.kicker_waterbend = cost.waterbend;
             definition.flashback = cost.flashback;
             definition.cost_reduction_per = cost.affinity;
             definition.cost_reduction_in_graveyard = cost.affinity_in_graveyard;
@@ -906,6 +907,16 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
                     ..CardPredicate::default()
                 },
                 other: true,
+            }
+        }
+        Step::PutCounters { target, count } if target == "each:creature_you_control" => {
+            Effect::PutCountersOnEachMatching {
+                count: i32_value(program, *count, "counter count")?,
+                predicate: CardPredicate {
+                    card_type: Some(CardType::Creature),
+                    ..CardPredicate::default()
+                },
+                other: false,
             }
         }
         Step::PutCounters { target, count } => Effect::PutCounters {
@@ -1483,6 +1494,7 @@ fn lower_condition(condition: &Condition) -> Result<StaticCondition, IrError> {
 impl ValueExpression {
     fn lower(&self) -> Result<EffectValue, IrError> {
         Ok(match self {
+            Self::X => EffectValue::X,
             Self::CreaturesWithCounters => EffectValue::CreaturesWithCounters,
             Self::BattlefieldMatching(predicate) => EffectValue::BattlefieldMatching {
                 predicate: predicate_card(predicate)?,

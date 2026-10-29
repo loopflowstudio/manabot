@@ -1789,3 +1789,41 @@ fn professor_zei_discards_as_a_cost_to_draw_and_sacrifices_to_recall_a_spell() {
         .battlefield_permanents_named(0, "Professor Zei, Anthropologist")
         .is_empty());
 }
+
+/// X is announced while casting: offers run from 0 to the most the caster can
+/// pay, the stack object keeps it, and the spell makes X Allies before every
+/// creature you control gets a counter.
+#[test]
+fn united_front_announces_x_and_counts_it_on_resolution() {
+    use managym::state::stack_object::StackObject;
+    let mut s = setup(&["United Front", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let opposing = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.set_player_mana_pool(0, "3WW");
+    cast(&mut s, "United Front");
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+    let offered: Vec<usize> = s
+        .action_space()
+        .actions
+        .iter()
+        .filter_map(|a| match a {
+            Action::ChooseMode { mode, .. } => Some(*mode),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(offered, vec![0, 1, 2, 3]);
+    mode(&mut s, 3);
+    let Some(StackObject::Spell(spell)) = s.game().state.stack_objects.last() else {
+        panic!("United Front is not on the stack");
+    };
+    assert_eq!(spell.x, 3);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    settle(&mut s);
+    let allies = s.battlefield_permanents_named(0, "Ally");
+    assert_eq!(allies.len(), 3);
+    for ally in allies {
+        assert_eq!(counters(&s, ally), 1);
+    }
+    assert_eq!(counters(&s, ogre), 1);
+    assert_eq!(counters(&s, opposing), 0);
+}

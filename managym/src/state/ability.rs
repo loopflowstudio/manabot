@@ -122,10 +122,19 @@ pub enum TriggerSubject {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum EffectValue {
     Fixed(i32),
+    /// The resolving spell's announced X (CR 107.3).
+    X,
     CreaturesWithCounters,
-    BattlefieldMatching { predicate: CardPredicate },
-    GraveyardMatching { base: i32, predicate: CardPredicate },
-    CardsDrawnMinus { subtract: u32 },
+    BattlefieldMatching {
+        predicate: CardPredicate,
+    },
+    GraveyardMatching {
+        base: i32,
+        predicate: CardPredicate,
+    },
+    CardsDrawnMinus {
+        subtract: u32,
+    },
 }
 
 /// A resolving obligation, distinct from the effects chosen by its outcome.

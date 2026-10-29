@@ -344,7 +344,7 @@ impl Game {
             }
             PendingChoice::ChooseTargets {
                 card,
-                kicked,
+                cast,
                 mode,
                 requirement_index,
                 chosen,
@@ -352,16 +352,16 @@ impl Game {
                 ..
             } => {
                 frame.source = self.card_reference(*card, viewer);
-                frame.kicked = *kicked;
+                frame.kicked = cast.kicked;
                 frame.mode = *mode;
                 frame.active_clause = Some(*requirement_index);
                 frame.targets = self.clause_targets(chosen, chosen_req_indices, viewer);
             }
-            PendingChoice::SpellMode { card, kicked, .. } => {
+            PendingChoice::SpellMode { card, cast, .. } => {
                 frame.source = self.card_reference(*card, viewer);
-                frame.kicked = *kicked;
+                frame.kicked = cast.kicked;
             }
-            PendingChoice::KickerChoice { card, .. } => {
+            PendingChoice::KickerChoice { card, .. } | PendingChoice::AnnounceX { card, .. } => {
                 frame.source = self.card_reference(*card, viewer)
             }
             PendingChoice::ActivatedTarget {
@@ -378,19 +378,17 @@ impl Game {
                 frame.ability = Some(*ability_index);
             }
             PendingChoice::Waterbend {
-                permanent,
-                ability_index,
-                remaining_generic,
+                player,
+                payment,
+                tapped,
                 ..
             } => {
-                frame.source = self.target_reference(Target::Permanent(*permanent), viewer);
-                frame.ability = Some(*ability_index);
+                self.payment_frame(payment, viewer, &mut frame);
                 frame.waterbend = true;
-                let mut cost = self.activated_abilities_for(*permanent)[*ability_index]
-                    .mana_cost
-                    .clone();
-                cost.cost[6] = *remaining_generic;
-                frame.cost(&cost);
+                let owed = self
+                    .payment_mana_cost(*player, payment, None)
+                    .reduced_generic(*tapped);
+                frame.cost(&owed);
             }
         }
         frame
@@ -513,13 +511,13 @@ impl Game {
         match payment {
             Payment::Spell {
                 card,
-                kicked,
+                cast,
                 mode,
                 targets,
                 target_req_indices,
             } => {
                 frame.source = self.card_reference(*card, viewer);
-                frame.kicked = *kicked;
+                frame.kicked = cast.kicked;
                 frame.mode = *mode;
                 frame.targets = self.clause_targets(targets, target_req_indices, viewer);
             }

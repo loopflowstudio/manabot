@@ -1102,6 +1102,7 @@ impl Observation {
                     .or(match &game.pending_choice {
                         Some(crate::flow::game::PendingChoice::SpellMode { card, .. })
                         | Some(crate::flow::game::PendingChoice::KickerChoice { card, .. })
+                        | Some(crate::flow::game::PendingChoice::AnnounceX { card, .. })
                         | Some(crate::flow::game::PendingChoice::ChooseTargets { card, .. }) => {
                             Some(*card)
                         }
@@ -1120,11 +1121,11 @@ impl Observation {
                         | Some(crate::flow::game::PendingChoice::DiscardPayment {
                             source: crate::flow::game::ActivationSource::Permanent(permanent),
                             ..
-                        })
-                        | Some(crate::flow::game::PendingChoice::Waterbend { permanent, .. }) => {
-                            game.state.permanents[*permanent]
-                                .as_ref()
-                                .map(|perm| perm.card)
+                        }) => game.state.permanents[*permanent]
+                            .as_ref()
+                            .map(|perm| perm.card),
+                        Some(crate::flow::game::PendingChoice::Waterbend { payment, .. }) => {
+                            game.payment_source_card(payment)
                         }
                         Some(
                             crate::flow::game::PendingChoice::SacrificePayment { .. }

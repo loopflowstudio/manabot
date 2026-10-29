@@ -57,6 +57,8 @@ pub struct EffectFrame {
     pub resolutions_this_turn: u32,
     /// Whether the resolving spell was kicked.
     pub kicked: bool,
+    /// The resolving spell's announced X (0 for abilities).
+    pub x: u8,
     /// Chosen slots, with eligibility retained across instructions and choices.
     pub targets: Vec<ResolutionTarget>,
     pub active_requirement: usize,
@@ -322,6 +324,7 @@ impl Game {
                 controller: decision.player(),
                 resolutions_this_turn: 0,
                 kicked: false,
+                x: 0,
                 targets: Vec::new(),
                 active_requirement: 0,
                 context_target: None,
@@ -1342,6 +1345,7 @@ mod learn_tests {
             controller: PlayerId(0),
             resolutions_this_turn: 0,
             kicked: false,
+            x: 0,
             targets: vec![],
             active_requirement: 0,
             context_target: None,
@@ -2094,6 +2098,7 @@ mod payment_tests {
             controller: PlayerId(0),
             resolutions_this_turn: 0,
             kicked: false,
+            x: 0,
             targets: vec![],
             active_requirement: 0,
             context_target: None,

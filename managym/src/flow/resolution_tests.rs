@@ -69,7 +69,7 @@ fn stack(
         // own requirements, so its printed targeting must not apply.
         game.state.cards[card].spell_effects = effects;
         game.state.cards[card].targeting = Vec::new();
-        game.push_spell_to_stack(card, controller, targets, indices, false);
+        game.push_spell_to_stack(card, controller, targets, indices, Default::default());
         return;
     }
     let source = game

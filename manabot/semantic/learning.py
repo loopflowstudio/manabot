@@ -410,6 +410,7 @@ class _TokenBuilder:
         "R": "mana_r",
         "G": "mana_g",
         "C": "mana_c",
+        "X": "mana_x",
     }
 
     def __init__(self, schema: LearningSchema, ir: SemanticIr):
@@ -487,7 +488,7 @@ class _TokenBuilder:
         if digits:
             counts["generic"] += int(digits)
         self.structure("mana_begin")
-        for component in ("generic", "W", "U", "B", "R", "G", "C"):
+        for component in ("generic", "W", "U", "B", "R", "G", "C", "X"):
             count = counts[component]
             if count:
                 self.field(self._MANA_FIELDS[component])

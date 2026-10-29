@@ -700,10 +700,19 @@ pub enum Count {
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Quantity {
-    BattlefieldMatching { predicate: Predicate },
-    GraveyardMatching { base: i32, predicate: Predicate },
+    /// The resolving spell's announced X.
+    X,
+    BattlefieldMatching {
+        predicate: Predicate,
+    },
+    GraveyardMatching {
+        base: i32,
+        predicate: Predicate,
+    },
     CreaturesWithCounters,
-    CardsDrawnMinus { subtract: i32 },
+    CardsDrawnMinus {
+        subtract: i32,
+    },
 }
 
 #[derive(Serialize)]

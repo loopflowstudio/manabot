@@ -2452,5 +2452,17 @@
       "R",
       "U"
     ]
+  },
+  "United Front": {
+    "name": "United Front",
+    "mana_cost": "{X}{W}{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Create X 1/1 white Ally creature tokens, then put a +1/+1 counter on each creature you control.",
+    "colors": [
+      "W"
+    ]
   }
 }

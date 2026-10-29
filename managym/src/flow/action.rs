@@ -361,14 +361,14 @@ impl Game {
             }
         }
 
-        match self.effective_spell_cost(player, card_id, false) {
+        match self.effective_spell_cost(player, card_id, Default::default()) {
             Some(cost) => {
                 // Castability gating sees pooled mana too — until-end-of-
                 // combat mana (firebending) must make spells castable.
                 let payable = if let Some(additional) = &self.state.cards[card_id].sacrifice_cost {
                     let payment = crate::flow::game::Payment::Spell {
                         card: card_id,
-                        kicked: false,
+                        cast: Default::default(),
                         mode: None,
                         targets: Vec::new(),
                         target_req_indices: Vec::new(),
@@ -503,7 +503,20 @@ impl Game {
                     .collect(),
                 focus: vec![self.state.cards[card].id],
             }),
-            PendingChoice::KickerChoice { player, card } => Some(ActionSpace {
+            PendingChoice::AnnounceX { player, card, cast } => Some(ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::Modal,
+                actions: self
+                    .legal_x_values(*player, *card, *cast)
+                    .into_iter()
+                    .map(|x| Action::ChooseMode {
+                        player: *player,
+                        mode: usize::from(x),
+                    })
+                    .collect(),
+                focus: vec![self.state.cards[card].id],
+            }),
+            PendingChoice::KickerChoice { player, card, .. } => Some(ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::PayOrNot,
                 actions: vec![
@@ -549,50 +562,48 @@ impl Game {
             }
             PendingChoice::Waterbend {
                 player,
-                permanent,
-                ability_index,
+                payment,
                 remaining_generic,
-                ..
+                tapped,
             } => {
-                let cost = self.state.permanents[*permanent]
-                    .as_ref()
-                    .and_then(|perm| {
-                        self.state.cards[perm.card]
-                            .activated_abilities
-                            .get(*ability_index)
-                    })
-                    .map(|ability| ability.mana_cost.clone())?;
-                let remainder = cost.with_generic(*remaining_generic);
-                let candidates =
-                    self.waterbend_activation_candidates(*player, *permanent, *ability_index);
-                let taps_source = self
-                    .activated_abilities_for(*permanent)
-                    .get(*ability_index)
-                    .is_some_and(|ability| ability.tap_source);
-
+                let (mana, waterbend) =
+                    self.waterbend_remainder(*player, payment, *remaining_generic, *tapped);
+                let tapped_source = self.payment_tapped_source(payment);
                 let mut actions = self.mana_ability_actions(*player, None);
-                for candidate in &candidates {
-                    // Only offer taps that keep the rest of the cost payable.
-                    let after_tap = remainder.reduced_generic(1);
-                    let mut probe = self.clone();
-                    probe.tap_permanent(*candidate, false);
-                    if taps_source {
-                        probe.tap_permanent(*permanent, false);
-                    }
-                    if probe.can_pay_with_waterbend(*player, &after_tap) {
-                        actions.push(Action::WaterbendTap {
-                            player: *player,
-                            permanent: *candidate,
-                        });
+                if waterbend > 0 {
+                    for candidate in self.waterbend_payment_candidates(*player, payment) {
+                        // Only offer taps that keep the rest of the cost payable.
+                        let mut probe = self.clone();
+                        probe.tap_permanent(candidate, false);
+                        if let Some(source) = tapped_source {
+                            probe.tap_permanent(source, false);
+                        }
+                        if probe.waterbend_payment_possible(*player, &mana, waterbend - 1) {
+                            actions.push(Action::WaterbendTap {
+                                player: *player,
+                                permanent: candidate,
+                            });
+                        }
                     }
                 }
+                let remainder =
+                    mana.plus(&crate::state::mana::ManaCost::default().with_generic(waterbend));
                 if self.can_pay_mana_cost(*player, &remainder) {
                     actions.push(Action::PayCost { player: *player });
                 }
-                let focus = self.state.permanents[*permanent]
-                    .as_ref()
-                    .map(|perm| vec![perm.id])
-                    .unwrap_or_default();
+                let focus = match payment.as_ref() {
+                    crate::flow::game::Payment::Activation {
+                        source: crate::flow::game::ActivationSource::Permanent(permanent),
+                        ..
+                    } => self.state.permanents[*permanent]
+                        .as_ref()
+                        .map(|perm| vec![perm.id])
+                        .unwrap_or_default(),
+                    _ => self
+                        .payment_source_card(payment)
+                        .map(|card| vec![self.state.cards[card].id])
+                        .unwrap_or_default(),
+                };
                 Some(ActionSpace {
                     player: Some(*player),
                     kind: ActionSpaceKind::Waterbend,
@@ -672,6 +683,11 @@ impl Game {
                 if matches!(self.pending_choice, Some(PendingChoice::SpellMode { .. })) =>
             {
                 self.spell_mode_action(*player, *mode)
+            }
+            Action::ChooseMode { player, mode }
+                if matches!(self.pending_choice, Some(PendingChoice::AnnounceX { .. })) =>
+            {
+                self.announce_x_action(*player, *mode)
             }
             Action::SelectCard { player, card }
                 if matches!(

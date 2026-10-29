@@ -121,6 +121,14 @@ pub struct ManaCost {
     /// Omission keeps frozen ordinary-cost manifests byte-for-byte stable.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub hybrid: Vec<[Color; 2]>,
+    /// Number of {X} symbols. X is 0 outside the stack (CR 202.3e), so it
+    /// adds nothing to `mana_value` until [`ManaCost::with_x`] fixes it.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub x: u8,
+}
+
+fn is_zero(value: &u8) -> bool {
+    *value == 0
 }
 
 impl ManaCost {
@@ -166,10 +174,16 @@ impl ManaCost {
                     for (slot, amount) in out.cost.iter_mut().zip(part.cost) {
                         *slot = slot.saturating_add(amount);
                     }
+                    out.x = out.x.saturating_add(part.x);
                 }
                 continue;
             }
 
+            if ch == 'X' {
+                out.x += 1;
+                chars.next();
+                continue;
+            }
             let slot = match ch {
                 'W' => Color::White,
                 'U' => Color::Blue,
@@ -202,6 +216,17 @@ impl ManaCost {
     /// (affinity-style cost reduction, waterbend payments).
     pub fn reduced_generic(&self, amount: u8) -> ManaCost {
         self.with_generic(self.generic().saturating_sub(amount))
+    }
+
+    /// This cost with X announced as `value` (CR 601.2b): each {X} becomes
+    /// `value` generic mana.
+    pub fn with_x(&self, value: u8) -> ManaCost {
+        let mut out = self.clone();
+        out.cost[Color::Generic as usize] =
+            out.generic().saturating_add(self.x.saturating_mul(value));
+        out.x = 0;
+        out.update_mana_value();
+        out
     }
 
     /// The generic component of the cost.
