@@ -713,9 +713,9 @@ impl Game {
                 tapped,
                 ..
             }) => {
-                let (mana, waterbend) =
-                    self.waterbend_remainder(player, payment, *remaining_generic, *tapped);
-                result.extend(waterbend_obligations(&mana, waterbend));
+                let (owed, waterbend) =
+                    self.waterbend_owed(player, payment, *remaining_generic, *tapped);
+                result.extend(waterbend_obligations(&owed, waterbend));
             }
             _ => {}
         }
@@ -847,18 +847,18 @@ impl Game {
             .is_some()
     }
 
-    /// Can `player` pay `mana` with mana, plus `waterbend` generic with mana
-    /// or waterbend taps?
+    /// Can `player` pay `cost`, `waterbend` of its generic with mana or
+    /// waterbend taps and the rest with mana?
     pub(crate) fn waterbend_payment_possible(
         &self,
         player: PlayerId,
-        mana: &ManaCost,
+        cost: &ManaCost,
         waterbend: u8,
     ) -> bool {
         self.payment_model(player, None)
             .plan(
                 self.pooled_mana(player),
-                waterbend_obligations(mana, waterbend),
+                waterbend_obligations(cost, waterbend),
                 SourcePolicy::All,
             )
             .is_some()
@@ -1135,17 +1135,17 @@ impl Game {
     }
 }
 
-/// A waterbend payment as obligations: `mana` paid only with mana, and
-/// `waterbend` generic that taps may also pay.
-fn waterbend_obligations(mana: &ManaCost, waterbend: u8) -> Vec<Obligation> {
+/// `cost` as obligations: `waterbend` of its generic that taps may also
+/// pay, and the rest paid only with mana.
+fn waterbend_obligations(cost: &ManaCost, waterbend: u8) -> Vec<Obligation> {
     let mut obligations = vec![Obligation::Pay {
-        cost: mana.clone(),
+        cost: cost.reduced_generic(waterbend),
         waterbend: false,
     }];
     if waterbend > 0 {
         obligations.push(Obligation::Pay {
             cost: ManaCost {
-                purpose: mana.purpose,
+                purpose: cost.purpose,
                 ..ManaCost::default()
             }
             .with_generic(waterbend),

@@ -291,7 +291,9 @@ pub enum Effect {
         grant: LinkedGrant,
         target: TargetSpec,
     },
-    /// Exile cards from the top of your library until you exile a nonland card; you may cast it without paying its mana cost if its mana value is less than the value, otherwise put it into your hand.
+    /// Exile cards from the top of your library until you exile a nonland
+    /// card; you may cast it without paying its mana cost if its mana value
+    /// is less than `below`, otherwise put it into your hand.
     ExileUntilNonlandCastFree {
         below: EffectValue,
     },

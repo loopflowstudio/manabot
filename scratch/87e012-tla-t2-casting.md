@@ -94,8 +94,8 @@ lands that move.
 
 ## Check
 
-2026-10-29 casting slices: full debug `cargo test` passes except the
-pre-existing semantic-conformance pair; clippy (incl. `--features python`) and
-fmt clean; `pytest tests/semantic/` fails only T1's three frozen-schema
-assertions (expect 3/7/4, bind 8). World-change Python suite and Academy check
-deferred to gate.
+2026-10-29 after compress: debug `cargo test --no-fail-fast` passes except the
+pre-existing semantic-conformance pair; clippy and fmt clean (`--features
+python` clippy needs the root venv interpreter: gate). `pytest
+tests/semantic/` fails only T1's three frozen-schema assertions (expect
+3/7/4, bind 8). World-change Python suite and Academy check deferred to gate.

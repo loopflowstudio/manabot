@@ -887,10 +887,8 @@ impl Game {
         }) {
             return Ok(None);
         }
-        let (mana, remaining_generic) =
-            self.waterbend_remainder(player, payment, *remaining_generic, *tapped);
-        let cost =
-            mana.plus(&crate::state::mana::ManaCost::default().with_generic(remaining_generic));
+        let (cost, remaining_generic) =
+            self.waterbend_owed(player, payment, *remaining_generic, *tapped);
         let max = legal_taps.len().min(usize::from(remaining_generic));
         let min = (0..=max)
             .find(|count| self.can_pay_mana_cost(player, &cost.reduced_generic(*count as u8)))

@@ -10,11 +10,13 @@ use rand::seq::SliceRandom;
 
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
-    flow::{cast_permission::ExileCastGrant, event::GameEvent, game::Game},
+    flow::{
+        event::GameEvent,
+        game::{CastChoices, Game},
+    },
     state::{
         ability::{Effect, LinkedGrant, PaymentCost},
         game_object::{CardId, ObjectRef, PlayerId, Target},
-        mana::ManaCost,
         predicate::CardPredicate,
         zone::ZoneType,
     },
@@ -191,7 +193,7 @@ pub enum Decision {
         count: usize,
         #[serde(skip_serializing_if = "is_one")]
         remaining: usize,
-        #[serde(skip_serializing_if = "is_zero")]
+        #[serde(skip_serializing_if = "crate::state::is_zero")]
         discarded: usize,
     },
     /// Choose cards in their desired top/bottom order (CR 701.26).
@@ -284,9 +286,6 @@ pub enum Decision {
 
 fn is_one(value: &usize) -> bool {
     *value == 1
-}
-fn is_zero(value: &usize) -> bool {
-    *value == 0
 }
 
 fn is_true(value: &bool) -> bool {
@@ -1118,18 +1117,17 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::CastWithoutPaying { player, offer }, Action::SelectCard { card, .. }) => {
-                let decision = Decision::CastWithoutPaying {
-                    player: *player,
-                    offer: offer.clone(),
-                };
-                if !self.free_cast_candidates(&decision).contains(card) {
+            (Decision::CastWithoutPaying { .. }, Action::SelectCard { card, .. }) => {
+                if !self
+                    .free_cast_candidates(&suspended.decision)
+                    .contains(card)
+                {
                     self.state.suspended_decision = Some(suspended);
                     return Err(AgentError("not a castable offered card".into()));
                 }
                 // The cast is the effect's last instruction: finish the
                 // resolution, then cast the chosen card onto the stack.
-                let (player, card) = (*player, *card);
+                let (player, card) = (suspended.decision.player(), *card);
                 self.run_frame(suspended.frame);
                 debug_assert!(
                     self.state.suspended_decision.is_none(),
@@ -1137,44 +1135,24 @@ impl Game {
                 );
                 self.begin_free_cast(player, card)
             }
-            (Decision::ExileLinked { .. }, Action::SelectCard { card, .. }) => {
-                let decision = suspended.decision.clone();
-                let Decision::ExileLinked {
+            (
+                Decision::ExileLinked {
                     grant,
                     grantee,
                     source,
                     ..
-                } = decision
-                else {
-                    unreachable!("matched ExileLinked");
-                };
-                if !self.linked_exile_candidates(&decision).contains(card) {
+                },
+                Action::SelectCard { card, .. },
+            ) => {
+                let (grant, grantee, source) = (*grant, *grantee, *source);
+                if !self
+                    .linked_exile_candidates(&suspended.decision)
+                    .contains(card)
+                {
                     self.state.suspended_decision = Some(suspended);
                     return Err(AgentError("not an offered card to exile".into()));
                 }
-                self.move_card(*card, ZoneType::Exile);
-                if let (Some(source), Some(object)) = (source, self.current_object_ref(*card)) {
-                    if self.state.zones.zone_of(*card) == Some(ZoneType::Exile) {
-                        let base = ExileCastGrant {
-                            source: Some(source),
-                            own_turn_only: true,
-                            ..ExileCastGrant::new(object, grantee)
-                        };
-                        let mana_value = self.card_mana_value(*card);
-                        self.add_exile_grant(match grant {
-                            LinkedGrant::WaterbendManaValue => ExileCastGrant {
-                                cost: Some(ManaCost::default().with_generic(mana_value)),
-                                waterbend: true,
-                                ..base
-                            },
-                            LinkedGrant::FlashAnyMana => ExileCastGrant {
-                                flash: true,
-                                any_mana: true,
-                                ..base
-                            },
-                        });
-                    }
-                }
+                self.exile_linked(*card, grantee, source, grant);
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -1376,7 +1354,7 @@ impl Game {
         let Decision::CastWithoutPaying { player, offer } = decision else {
             return Vec::new();
         };
-        let free = crate::flow::game::CastChoices {
+        let free = CastChoices {
             free: true,
             ..Default::default()
         };

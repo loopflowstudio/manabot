@@ -85,16 +85,12 @@ pub struct CastChoices {
     /// is paid (CR 702.33).
     pub kicked: bool,
     /// The announced value of X (CR 107.3, 601.2b).
-    #[serde(skip_serializing_if = "is_zero")]
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub x: u8,
     /// Cast without paying its mana cost (CR 118.9), as an effect directs;
     /// timing and zone permissions don't apply (CR 608.2g).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub free: bool,
-}
-
-fn is_zero(value: &u8) -> bool {
-    *value == 0
 }
 
 /// A fully announced spell or activation waiting for selected costs.

@@ -10,8 +10,9 @@ use crate::{
         turn::StepKind,
     },
     state::{
-        ability::{Ability, TargetSpec, TriggerCondition, TriggerSubject},
+        ability::{Ability, Effect, TargetSpec, TriggerCondition, TriggerSubject},
         game_object::{CardId, ObjectLki, ObjectRef, PermanentId, PlayerId, Target},
+        mana::{Color, Mana},
         stack_object::{StackObject, TriggeredAbilityOnStack},
         zone::ZoneType,
     },
@@ -493,9 +494,9 @@ impl Game {
             ) else {
                 continue;
             };
-            let mut mana = crate::state::mana::Mana::default();
-            mana.mana[crate::state::mana::Color::Red as usize] = amount;
-            let effect = crate::state::ability::Effect::AddMana {
+            let mut mana = Mana::default();
+            mana.mana[Color::Red as usize] = amount;
+            let effect = Effect::AddMana {
                 mana,
                 until_end_of_combat: true,
             };

@@ -1370,21 +1370,17 @@ impl Game {
     /// The card's mana value; a spell on the stack counts its announced X
     /// (CR 202.3e).
     pub(crate) fn card_mana_value(&self, card: CardId) -> u8 {
-        let printed = self.state.cards[card]
-            .mana_cost
-            .as_ref()
-            .map_or(0, |cost| cost.mana_value);
-        let x = self
+        let Some(cost) = self.state.cards[card].mana_cost.as_ref() else {
+            return 0;
+        };
+        let x = match self
             .find_spell_on_stack_index(card)
-            .and_then(|index| match &self.state.stack_objects[index] {
-                StackObject::Spell(spell) => {
-                    let symbols = self.state.cards[card].mana_cost.as_ref().map_or(0, |c| c.x);
-                    Some(spell.x.saturating_mul(symbols))
-                }
-                _ => None,
-            })
-            .unwrap_or(0);
-        printed.saturating_add(x)
+            .map(|index| &self.state.stack_objects[index])
+        {
+            Some(StackObject::Spell(spell)) => spell.x,
+            _ => 0,
+        };
+        cost.mana_value.saturating_add(cost.x.saturating_mul(x))
     }
 }
 

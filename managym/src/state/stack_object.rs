@@ -21,7 +21,7 @@ pub struct SpellOnStack {
     pub kicked: bool,
     /// The value of X announced while casting (CR 107.3); its mana value
     /// on the stack includes it (CR 202.3e).
-    #[serde(skip_serializing_if = "is_zero")]
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub x: u8,
     pub mode: Option<usize>,
 }
@@ -112,8 +112,4 @@ impl StackObject {
             StackObject::TriggeredAbility(triggered) => &triggered.targets,
         }
     }
-}
-
-fn is_zero(value: &u8) -> bool {
-    *value == 0
 }

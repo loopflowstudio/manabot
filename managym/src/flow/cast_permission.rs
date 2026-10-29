@@ -13,6 +13,7 @@
 use crate::{
     flow::game::Game,
     state::{
+        ability::LinkedGrant,
         game_object::{CardId, ObjectRef, PermanentId, PlayerId},
         mana::ManaCost,
         zone::ZoneType,
@@ -103,24 +104,65 @@ impl Game {
         };
         let card = permanent.card;
         let owner = self.state.cards[card].owner;
-        self.exile_with_play_grant(card, owner, Some(ManaCost::parse(AIRBEND_COST)), false);
+        self.exile_with_play_grant(card, |object| ExileCastGrant {
+            cost: Some(ManaCost::parse(AIRBEND_COST)),
+            ..ExileCastGrant::new(object, owner)
+        });
     }
 
     /// "Exile the top card of your library. You may play that card this turn."
     pub(crate) fn exile_top_card_play_this_turn(&mut self, player: PlayerId) {
         if let Some(card) = self.state.zones.top(ZoneType::Library, player) {
-            self.exile_with_play_grant(card, player, None, true);
+            self.exile_with_play_grant(card, |object| ExileCastGrant {
+                this_turn: true,
+                ..ExileCastGrant::new(object, player)
+            });
         }
     }
 
-    /// Exile `card` and grant `player` play of the exiled object. A token, or
-    /// a card a replacement kept out of exile, receives no grant.
-    fn exile_with_play_grant(
+    /// Exile `card` linked to `source`: while `player` controls `source`,
+    /// they may cast it during their turn as `linked` allows (Hama, Azula).
+    /// Without a source the card is only exiled.
+    pub(crate) fn exile_linked(
         &mut self,
         card: CardId,
         player: PlayerId,
-        cost: Option<ManaCost>,
-        this_turn: bool,
+        source: Option<ObjectRef>,
+        linked: LinkedGrant,
+    ) {
+        let Some(source) = source else {
+            self.move_card(card, ZoneType::Exile);
+            return;
+        };
+        let mana_value = self.card_mana_value(card);
+        self.exile_with_play_grant(card, |object| {
+            let base = ExileCastGrant {
+                source: Some(source),
+                own_turn_only: true,
+                ..ExileCastGrant::new(object, player)
+            };
+            match linked {
+                LinkedGrant::WaterbendManaValue => ExileCastGrant {
+                    cost: Some(ManaCost::default().with_generic(mana_value)),
+                    waterbend: true,
+                    ..base
+                },
+                LinkedGrant::FlashAnyMana => ExileCastGrant {
+                    flash: true,
+                    any_mana: true,
+                    ..base
+                },
+            }
+        });
+    }
+
+    /// Exile `card` and add the play grant `grant` builds for the exiled
+    /// object. A token, or a card a replacement kept out of exile, receives
+    /// no grant.
+    fn exile_with_play_grant(
+        &mut self,
+        card: CardId,
+        grant: impl FnOnce(ObjectRef) -> ExileCastGrant,
     ) {
         self.move_card(card, ZoneType::Exile);
         if self.state.zones.zone_of(card) != Some(ZoneType::Exile)
@@ -128,17 +170,12 @@ impl Game {
         {
             return;
         }
-        let Some(object) = self.current_object_ref(card) else {
-            return;
-        };
-        self.add_exile_grant(ExileCastGrant {
-            cost,
-            this_turn,
-            ..ExileCastGrant::new(object, player)
-        });
+        if let Some(object) = self.current_object_ref(card) {
+            self.add_exile_grant(grant(object));
+        }
     }
 
-    pub(crate) fn add_exile_grant(&mut self, grant: ExileCastGrant) {
+    fn add_exile_grant(&mut self, grant: ExileCastGrant) {
         self.edit_cast_permissions(|permissions| permissions.exile_grants.push(grant));
     }
 

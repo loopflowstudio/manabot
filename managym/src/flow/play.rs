@@ -257,7 +257,7 @@ impl Game {
             .cast_waterbend_generic(player, card, cast)
             .min(cost.generic());
         if waterbend > 0 {
-            self.waterbend_payment_possible(player, &cost.reduced_generic(waterbend), waterbend)
+            self.waterbend_payment_possible(player, &cost, waterbend)
         } else {
             self.can_pay_with_mana_abilities(player, &cost, None)
         }
@@ -1307,9 +1307,9 @@ impl Game {
         candidates
     }
 
-    /// What a pending waterbend payment still owes: the cost mana must pay,
-    /// and the generic that further taps may pay instead.
-    pub(crate) fn waterbend_remainder(
+    /// What a pending waterbend payment still owes, and how much of that
+    /// generic further taps may pay instead of mana.
+    pub(crate) fn waterbend_owed(
         &self,
         player: PlayerId,
         payment: &Payment,
@@ -1320,7 +1320,7 @@ impl Game {
             .payment_mana_cost(player, payment, None)
             .reduced_generic(tapped);
         let generic = remaining_generic.min(owed.generic());
-        (owed.reduced_generic(generic), generic)
+        (owed, generic)
     }
 
     /// Can `source`'s waterbend ability be paid, its own {T} included?
@@ -1341,7 +1341,7 @@ impl Game {
     /// Can `player` cover `cost` with untapped waterbend candidates
     /// ({1} each, generic only) plus available mana?
     pub(crate) fn can_pay_with_waterbend(&self, player: PlayerId, cost: &ManaCost) -> bool {
-        self.waterbend_payment_possible(player, &cost.with_generic(0), cost.generic())
+        self.waterbend_payment_possible(player, cost, cost.generic())
     }
 
     /// Tap `permanent` to pay {1} of the pending waterbend cost.

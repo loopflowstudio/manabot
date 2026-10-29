@@ -5,7 +5,7 @@ use crate::agent::ability_description::{mana_description, trigger_description};
 
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
-    flow::game::{ActivationSource, Game, PendingChoice},
+    flow::game::{ActivationSource, CastChoices, Game, Payment, PendingChoice},
     state::{
         game_object::{CardId, PlayerId},
         mana::Mana,
@@ -226,7 +226,7 @@ impl Game {
                     continue;
                 }
                 if let Some(cost) = &ability.sacrifice {
-                    let payment = crate::flow::game::Payment::Activation {
+                    let payment = Payment::Activation {
                         source: ActivationSource::Permanent(permanent_id),
                         ability_index,
                         targets: Vec::new(),
@@ -263,7 +263,7 @@ impl Game {
                     self.can_pay_announced_activation(
                         player,
                         &ability.mana_cost,
-                        &crate::flow::game::Payment::Activation {
+                        &Payment::Activation {
                             source: ActivationSource::Permanent(permanent_id),
                             ability_index,
                             targets: Vec::new(),
@@ -304,7 +304,7 @@ impl Game {
                     {
                         continue;
                     }
-                    let payment = crate::flow::game::Payment::Activation {
+                    let payment = Payment::Activation {
                         source,
                         ability_index,
                         targets: Vec::new(),
@@ -360,14 +360,14 @@ impl Game {
         &self,
         player: PlayerId,
         card_id: CardId,
-        cast: crate::flow::game::CastChoices,
+        cast: CastChoices,
     ) -> bool {
         let card = &self.state.cards[card_id];
         if card.spell_modes().is_some() && self.legal_spell_modes(player, card_id).is_empty() {
             return false;
         }
         // Every mandatory targeting requirement needs a legal target.
-        for requirement in self.state.cards[card_id].target_requirements() {
+        for requirement in card.target_requirements() {
             if requirement.min > 0
                 && self
                     .legal_targets_for_requirement(player, card_id, &requirement)
@@ -377,31 +377,27 @@ impl Game {
             }
         }
 
-        match self.effective_spell_cost(player, card_id, cast) {
-            Some(cost) => {
-                // Castability gating sees pooled mana too — until-end-of-
-                // combat mana (firebending) must make spells castable.
-                let payable = if let Some(additional) = &self.state.cards[card_id].sacrifice_cost {
-                    let payment = crate::flow::game::Payment::Spell {
-                        card: card_id,
-                        cast,
-                        mode: None,
-                        targets: Vec::new(),
-                        target_req_indices: Vec::new(),
-                    };
-                    self.payment_candidates(player, &payment, additional)
-                        .into_iter()
-                        .any(|id| self.can_pay_with_mana_abilities(player, &cost, Some(id)))
-                        || additional.or_mana.as_ref().is_some_and(|extra| {
-                            self.can_pay_with_mana_abilities(player, &cost.plus(extra), None)
-                        })
-                } else {
-                    self.can_pay_cast(player, card_id, cast)
-                };
-                payable
-            }
-            None => true,
-        }
+        let Some(cost) = self.effective_spell_cost(player, card_id, cast) else {
+            return true;
+        };
+        // Castability gating sees pooled mana too — until-end-of-combat mana
+        // (firebending) must make spells castable.
+        let Some(additional) = &card.sacrifice_cost else {
+            return self.can_pay_cast(player, card_id, cast);
+        };
+        let payment = Payment::Spell {
+            card: card_id,
+            cast,
+            mode: None,
+            targets: Vec::new(),
+            target_req_indices: Vec::new(),
+        };
+        self.payment_candidates(player, &payment, additional)
+            .into_iter()
+            .any(|id| self.can_pay_with_mana_abilities(player, &cost, Some(id)))
+            || additional.or_mana.as_ref().is_some_and(|extra| {
+                self.can_pay_with_mana_abilities(player, &cost.plus(extra), None)
+            })
     }
 
     pub(crate) fn pending_choice_action_space(&self) -> Option<ActionSpace> {
@@ -576,8 +572,8 @@ impl Game {
                 remaining_generic,
                 tapped,
             } => {
-                let (mana, waterbend) =
-                    self.waterbend_remainder(*player, payment, *remaining_generic, *tapped);
+                let (owed, waterbend) =
+                    self.waterbend_owed(*player, payment, *remaining_generic, *tapped);
                 let tapped_source = self.payment_tapped_source(payment);
                 let mut actions = self.mana_ability_actions(*player, None);
                 if waterbend > 0 {
@@ -588,7 +584,8 @@ impl Game {
                         if let Some(source) = tapped_source {
                             probe.tap_permanent(source, false);
                         }
-                        if probe.waterbend_payment_possible(*player, &mana, waterbend - 1) {
+                        let rest = owed.reduced_generic(1);
+                        if probe.waterbend_payment_possible(*player, &rest, waterbend - 1) {
                             actions.push(Action::WaterbendTap {
                                 player: *player,
                                 permanent: candidate,
@@ -596,14 +593,12 @@ impl Game {
                         }
                     }
                 }
-                let remainder =
-                    mana.plus(&crate::state::mana::ManaCost::default().with_generic(waterbend));
-                if self.can_pay_mana_cost(*player, &remainder) {
+                if self.can_pay_mana_cost(*player, &owed) {
                     actions.push(Action::PayCost { player: *player });
                 }
                 let focus = match payment.as_ref() {
-                    crate::flow::game::Payment::Activation {
-                        source: crate::flow::game::ActivationSource::Permanent(permanent),
+                    Payment::Activation {
+                        source: ActivationSource::Permanent(permanent),
                         ..
                     } => self.state.permanents[*permanent]
                         .as_ref()

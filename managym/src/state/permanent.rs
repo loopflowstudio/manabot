@@ -22,7 +22,7 @@ pub struct Permanent {
     pub cant_be_blocked_this_turn: bool,
     /// Firebending granted until end of turn ("gains firebending 5"): red
     /// mana added when it attacks, summed over grants. Cleared at cleanup.
-    #[serde(skip_serializing_if = "is_zero")]
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub firebending_this_turn: u8,
     /// Earthbend animation: this permanent is a 0/0 creature with haste in
     /// addition to its printed types (still a land). No duration — it lasts
@@ -174,8 +174,4 @@ impl Permanent {
         self.temp_subtypes.clear();
         self.activated_this_turn.clear();
     }
-}
-
-fn is_zero(value: &u8) -> bool {
-    *value == 0
 }
