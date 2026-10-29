@@ -1,73 +1,65 @@
-# TLA Rust authoring — reviewed, 2026-10-28
+# TLA cards — direct Rust cards and one world (accepted 2026-10-28)
 
-Jack Heart accepted clear typed Rust set files as the single card-authoring source,
-minimal configuration, and checked-in generated representations. This supersedes
-JSON authoring; see [the accepted direction](tla-rust-authoring-direction.md).
-Task 892c47 updates existing PR394 and stops at demo. Merge, auto-merge, paid
-compute, training and follow-up Task launches are not authorized.
+Task 892c47 updates PR394 and stops at demo; merge, auto-merge, paid compute,
+training and follow-up launches are not authorized. Direction: Jack Heart's
+accepted "Direct Rust cards and worlds" in
+[tla-rust-authoring-direction.md](tla-rust-authoring-direction.md). The earlier
+Rust → cards.json → Python compiler → IR JSON → include_str! pipeline and its
+review/recovery notes are history at `544ae312c:scratch/892c47-author-tla-cards.md`.
+D1/f871a8 keeps parser, construction, `admit_deck` and consumer input; the
+`content_pool`/`pool_content`/`Eligibility` API is unchanged.
 
-## Implemented
+## Implemented (2026-10-28)
 
-Commit `0a0d22577` contains 140 typed definitions in `managym/src/cardsets/`,
-95 native roots and nine fixed tokens. A Rust exporter produces checked-in
-`generated/cards.json`; the existing compiler validates symbolic programs and
-emits the native/learning IR. Set files own rules, characteristics and presentation.
-Shared typed helpers remove repeated land-cycle, cost, target and mechanic code.
-The removed hand-authored definitions/native-roots/token-templates JSON and their
-loaders are not maintained. There is one native runtime. Setups and independent
-qualification evidence remain data. Historical artifacts remain frozen.
+1. **In-process compile** (`2b34e4964`): `managym/src/semantic/compile.rs` lowers the
+   typed definitions to IR in memory (references, token closure, target roles,
+   opcodes, hashes, qualification check). Proven identical to every removed
+   checked-in IR (incl. ir/source hashes) and eligibility before deletion.
+   Deleted: `content/semantic/current/generated/*`, `export_cards.rs`,
+   `scripts/compile_current_content.py`, `manabot/semantic/content.py`.
+   Python reads `managym.semantic_ir_json(pack_key)`; `CURRENT_IR_PATHS` →
+   `CURRENT_PACK_KEYS`. `compiler.py` remains only for frozen v1/w7–w11 checks.
+2. **Set files and keys**: `cardsets/` holds one file per printed set (tla, stx,
+   mh1, bro, blb, ktk, afr, m20, iko, eld, zen, war, fin, lci, soi, arb, ons,
+   lea) plus `tokens.rs`; keys are `<set>.<card>` / `token.*`. Set attribution
+   for uncertain cards was checked on Scryfall/retail listings. Qualification
+   hashes were refreshed only after a test proved every reviewed closure
+   byte-identical once the rename is undone. `pool` now holds every non-token
+   card (research cards included; still unsupported); the unused `tla` preset
+   and `native_roots` are gone.
+3. **One default pack**: native duplicates (elemental/sacrifice/temur files,
+   STX Learn spells, basics, Lightning Bolt) deleted; the default pack registers
+   all typed definitions. `cards/` holds the language (`authoring.rs`),
+   `content_pack.rs` (from `cardsets/alpha.rs`) and `native.rs`: cards still
+   lacking a typed op (Ancestral Recall, Pyroclasm, Man-o'-War, Waterfall
+   Aerialist ward, Proft's Eidetic Memory, legacy vanilla/keyword creatures,
+   Crossroads fixture). Legacy `CardDefId` prefix preserved by slot order.
+4. **World**: `managym/src/world.rs` owns `WORLD_VERSION` (w16), `supports_card`,
+   `unsupported_cards` (Python `managym.unsupported_cards`). WORLDS.md gains w16
+   and "run an old world from its git revision".
 
-The Rust migration preserved prior source values and IR/coverage identities.
-Current execution is w16/schema 8. Main's resolution repair `7d7736c6a` was merged
-at `f674bcd8f`; independent Allies at Last witnesses clear its prior blocker.
-The native pool now admits 86 cards. ContentPool/Eligibility/pool_content and
-Python exports remain stable for D1/f871a8, which retains parser, construction,
-admit_deck and consumer-input ownership. Authored availability is not arbitrary
-pool admission. T1 retains five unsupported cards with explicit prerequisites:
-Accumulate Wisdom (T2 ordering), Suki and Water Tribe Rallier (T3 characteristics),
-and Cat-Gator/Lightning Strike (T3 target classes). All 286 card identities and
-294 faces retain their accepted batch owners; neither T1 nor full TLA is complete.
+## Remaining
 
-## Review and recovery
+- Migrate `cards/native.rs` into set files (needs new ops: target-player draw,
+  damage each creature, defender, ward, conditional combat trigger) — not done.
+- Gate/CI: full debug cargo, Clippy, world-change Python suite, conformance
+  receipts (semantic-kernel corpus is still w15 — pre-existing failure),
+  authored-match receipt (pre-existing stale keys), `test_semantic_cards`
+  zero-logit failure (seen with identical IR; not shown pre-existing).
+- Demo: human review of the set layout and world check; `scratch/demo.html`
+  describes the superseded pipeline and needs replacing.
 
-Reconciliation and concept review confirmed the accepted Rust ownership model;
-no new authoring choice is required. A stale-output diagnostic incorrectly named
-the historical compiler. The current catalog, IR, coverage and eligibility paths
-now name `uv run python -m scripts.compile_current_content`; historical callers
-retain their original command. Isolated stale-output/recovery checks passed for
-all four current artifact kinds and historical behavior.
+## Delete — do not maintain
 
-Generation is sequential: a later failure can leave derived files updated.
-Repair the source/evidence, regenerate completely, then check freshness before
-rebuilding consumers. Rust export failure precedes catalog writing; missing
-references fail compilation; edited qualified clauses reject stale qualifications.
-Do not mechanically refresh qualification hashes instead of reviewing behavior.
-Native pool loading rejects eligibility/IR mismatch. No atomic-generation promise
-or additional registry is needed.
+Done in compress: `current/presentation.json` and its frozen-IR text fallback
+(lowering IR without `text_box` now fails closed; the optional-payment test uses
+current IR); `compiler.py`'s pool/token/text/enters_tapped additions (reverted to
+main — only frozen sources use it). Next: `cards/native.rs` entries as their ops
+land in set files.
 
-The original Graph stopped on an ignored `.lf/tmp` sync-pathspec bug, then an
-agent-startup routing error. Manual sync succeeded. Direct realign and concept
-review subsequently completed. Their results, rather than the stopped route,
-support the remaining publication assessment. No Graph schedules the next steps.
-The selected engine Wave GOAL/MEMORY are absent; none was edited.
-
-## Evidence and publication boundary
-
-Retained checks at `0a0d22577`: 37 focused TLA debug tests plus prowess ordering,
-13 Python consumer checks, Rust-export freshness, formatting, source pins and an
-atomically rebuilt cp312 extension. Reconciliation verified ten raw source pins.
-The current pass ran 28 current-content/coverage tests, isolated generation
-recovery checks, Ruff and whitespace checks. A real native descriptor read returned
-w16, 86 eligible cards, eligible Allies at Last/Water Tribe Captain, and unsupported
-Water Tribe Rallier. The baseline Command/fork/learning/Academy proof serializes
-real observations; it is not an observed browser walkthrough.
-
-Focused evidence and completed review satisfy the selected pre-demo publication
-boundary. Update PR394 around Rust authority, 86 qualified cards, five holdouts,
-and these proof limits; then present demo here. Gate/CI still owns full debug
-Rust/conformance and Clippy, arena/evaluation/monitoring/model suites, choice/Learn
-and browser receipts, CI collection and release-source checks. Exact commands are
-in `docs/development/validation.md`. D1 integration proofs and its named-format
-choice remain D1/full-file work, not content-publication approval requirements.
-
-Check: `uv run --no-sync pytest tests/semantic/test_current_content.py tests/semantic/test_coverage_gate.py -q` — 28 passed; isolated recovery, Ruff and whitespace passed. Broader gate/CI checks remain unclaimed.
+PR394 updated at `6f8b2231e` (title/body rewritten; auto-merge unset).
+Check: debug `cargo test --no-fail-fast` — only the pre-existing w15 conformance pair
+fails (two stale test refs fixed and re-run); clippy clean; rebuilt cp312 extension;
+103 Python consumer tests pass, `test_optional_payments` fails on a pre-existing schema-7 assertion.
+Compress: semantic_ir/conformance/content_pack/lib semantic debug tests, test_temur
+(schema assertion now tracks the current schema), test_current_content, test_policy_catalog pass.

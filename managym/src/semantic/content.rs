@@ -1,5 +1,5 @@
 // content.rs
-// Lower checked-in semantic IR into the live rules engine's immutable content pack.
+// Lower compiled semantic IR into the live rules engine's immutable content pack.
 
 use std::{
     collections::BTreeSet,
@@ -305,10 +305,10 @@ impl SemanticPack {
         let mut definitions = Vec::with_capacity(self.definitions.len());
         for definition in &self.definitions {
             let mut compiled = compile_characteristics(definition)?;
-            compiled.text_box = match &definition.text_box {
-                Some(text) => text.clone(),
-                None => historical_presentation(&definition.registry_name)?,
-            };
+            // Frozen IR predating embedded text runs from its own git revision.
+            compiled.text_box = definition.text_box.clone().ok_or_else(|| {
+                IrError::Malformed(format!("{} has no text_box", definition.semantic_key))
+            })?;
 
             for program in self
                 .programs
@@ -353,21 +353,6 @@ impl SemanticPack {
     ) -> Result<std::collections::BTreeMap<String, usize>, IrError> {
         Ok(self.player_config(key, key)?.decklist)
     }
-}
-
-/// Frozen IR predating embedded presentation remains readable without loading
-/// another executable content pack. Current compiled IR always includes text.
-fn historical_presentation(name: &str) -> Result<String, IrError> {
-    static TEXT: OnceLock<std::collections::BTreeMap<String, String>> = OnceLock::new();
-    TEXT.get_or_init(|| {
-        serde_json::from_str(include_str!(
-            "../../../content/semantic/current/presentation.json"
-        ))
-        .expect("checked presentation snapshot")
-    })
-    .get(name)
-    .cloned()
-    .ok_or_else(|| IrError::Malformed(format!("missing presentation for {name:?}")))
 }
 
 fn compile_characteristics(definition: &Definition) -> Result<CardDefinition, IrError> {

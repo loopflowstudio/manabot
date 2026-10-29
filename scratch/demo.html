@@ -1,0 +1,46 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TLA card authoring review</title><style>
+:root{color-scheme:light dark;font:17px/1.6 system-ui,sans-serif;background:#faf9f6;color:#252521}body{max-width:760px;margin:48px auto;padding:0 24px 64px}h1{font-size:2rem;line-height:1.2}h2{margin-top:2.5rem;font-size:1.3rem}small{color:#666}pre{font:13px/1.5 ui-monospace,monospace;overflow:auto;padding:20px;background:#ecece7;border-radius:6px}code{font-family:ui-monospace,monospace}textarea{width:100%;box-sizing:border-box;min-height:110px;font:inherit;padding:12px;background:transparent;color:inherit;border:1px solid #888;border-radius:4px}a{color:#245b90}@media(prefers-color-scheme:dark){:root{background:#1b1d1c;color:#ecece6}pre{background:#292d2b}small{color:#b4b8b2}a{color:#9ac5eb}}@media(max-width:540px){body{margin-top:24px;padding:0 16px 40px}pre{font-size:12px;padding:12px}}
+</style><body><small>Task 892c47 · Demo · 28 October 2026<br>Sources: cardsets/tla.rs, current plan, native content_pool response</small>
+<h1>Does this match how you want to author cards?</h1>
+<p>The current implementation puts card behavior and text in typed Rust set files. Scripts generate the checked-in catalog and learning/runtime projections. No hand-authored card JSON remains on the current path.</p>
+<h2>1. Read one card in its set file</h2><p>Existing implementation: <code>managym/src/cardsets/tla.rs</code>. Here is the actual Cunning Maneuver definition.</p><pre>fn cunning_maneuver() -&gt; Card {
+    let text_box = &quot;Target creature gets +3/+1 until end of turn.\nCreate a Clue token. (It&#x27;s an artifact with \&quot;{2}, Sacrifice this token: Draw a card.\&quot;)&quot;;
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some(&quot;{1}{R}&quot;),
+            subtypes: Some(vec![]),
+            types: vec![CardType::Instant],
+            keywords: Some(vec![]),
+            ..Default::default()
+        },
+        key: &quot;tla.cunning_maneuver&quot;,
+        programs: vec![Program::new(
+            &quot;spell&quot;,
+            ProgramKind::Spell,
+            vec![
+                Op::ModifyPt {
+                    duration: Duration::EndOfTurn,
+                    power: 3,
+                    target: &quot;creature&quot;,
+                    toughness: 1,
+                },
+                Op::CreateToken {
+                    count: 1,
+                    definition_ref: &quot;sacrifice.clue&quot;,
+                    tapped_and_attacking: None,
+                },
+            ],
+        )
+        .cost(Cost::mana(&quot;{1}{R}&quot;))
+        .targets(vec![Target::one(&quot;creature&quot;, Selector::Creature)])],
+        registry_name: &quot;Cunning Maneuver&quot;,
+        text_box,
+    }
+}</pre><p>The card has one authored definition. Its characteristics, cost, target and effects live together.</p>
+<h2>2. Generate and check the derived files</h2><pre>uv run python -m scripts.compile_current_content
+uv run python -m scripts.compile_current_content --check</pre><p>Expected: the first command exports Rust and regenerates current projections; the second succeeds when checked-in outputs match. A stale-output error now names this same generator. A changed qualified clause requires independent review of its evidence.</p>
+<h2>3. Inspect what the real runtime admits</h2><pre>uv run python -c 'import managym; print(managym.content_pool("tla-pool-v1"))'</pre><p>Observed in this checkout: world <strong>w16</strong>, <strong>86 eligible cards</strong>. Allies at Last and Water Tribe Captain are eligible. Water Tribe Rallier remains unsupported.</p>
+<h2>Proof limits</h2><p>The recorded checks include 37 focused debug TLA tests, current generation freshness and consumer checks. The recovery repair passed 28 focused Python tests and isolated failure/recovery checks. Full gate, browser receipts and decklist integration are still pending. This page is an authoring review, not approval to merge.</p>
+<h2>Your observations</h2><label for="notes">What feels clear or still too complicated?</label><textarea id="notes" placeholder="Use this space while reviewing; send your feedback in the conversation."></textarea><ol><li>Does this Rust layout match your preference? <strong>1a:</strong> yes; <strong>1b:</strong> needs changes.</li><li>Is anything in generation or qualification still confusing? Point to that part here in the conversation.</li></ol>
+</body></html>

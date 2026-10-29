@@ -34,7 +34,7 @@ transitive definition closure; editing a clause invalidates that qualification.
 `CardDefinition` runtime. It supplies characteristics, costs, targets, triggers,
 static abilities and effects. Presentation text comes from the same definition;
 Oracle text never supplies executable rules. Historical IR without embedded text
-uses `current/presentation.json`, a frozen text snapshot.
+runs from the git revision that produced it.
 
 Each compiled `semantic_index` is local to its IR document, distinct from native
 `CardDefId`. The compiled pack records its pack key, IR hash and source hash in

@@ -19,24 +19,29 @@ or transfer decklist/admission ownership from f871a8. Reconcile the current desi
 and implementation before publication; do not publish the superseded authoring
 architecture as the accepted result.
 
-## Recovery and delivered implementation
+## Direct Rust cards and worlds — Jack Heart, 2026-10-28 (accepted)
 
-The preceding Graph stopped at automatic sync before receiving this direction.
-The installed sync checkpoint failed on its ignored `.lf/tmp` exclusion pathspec.
-The operator preserved the cleanup and direction in commit `080289907`, completed
-`lf sync --manual` and `lf sync --continue`, retained world w16, and preserved both
-scratch histories. Main's resolution repair `7d7736c6a` is now integrated locally;
-the Rust revision reassessed Allies at Last with independent directed witnesses.
-Checks predating that integration remain historical evidence.
+Supersedes the Rust → JSON → Python compiler → IR → Rust pipeline kept in PR394.
+Accepted, in Jack Heart's words condensed:
+- The actual Rust card code runs as directly as possible. No official JSON/YAML
+  card representation; no Rust → JSON → Python → IR → Rust round trip.
+- Scripts may generate Rust code; keep tools that help maintenance, but the
+  resulting codebase must be clear and simple.
+- `cardsets/` should be card set files, organized and de-duplicated; remove as
+  much junk as possible around card sets, card files and card authoring.
+- Worlds: the codebase has one current world, so any running engine knows its
+  rules world. A world encodes which cards it supports, with a check of whether a
+  card/deck is supported. There should be some way to run an old world; rules
+  backwards compatibility is kept only where feasible (Jack Heart is unsure it is
+  worth it).
+- All of this lands in this Task's PR394; the commit may be large and combine
+  concerns.
 
-Implementation and compression are complete at `0a0d22577`; manual sync succeeded.
-The 2026-10-28 Task status reports no running Graph. The launcher failure was
-workspace routing discovery, not evidence that implementation must be repeated.
-The current outcome and retained validation are in
-[892c47-author-tla-cards.md](892c47-author-tla-cards.md).
+Constraints still in force: frozen experiment evidence, checkpoints and receipts
+are never rewritten; D1/f871a8 owns decklist parsing/admission and depends on the
+`content_pool` API; independent rules witnesses and explicit unsupported-card
+eligibility remain. No merge authorized.
 
-The remaining pre-demo boundary is concept review and publication assessment,
-then an update to existing PR394. Full gate/CI checks remain explicitly deferred;
-they are not a step in the saved pursue procedure. The recorded draft publication
-still describes the superseded implementation. Jack Heart's accepted boundary
-remains one updated PR for demo review, without merge or additional Task launches.
+Open questions (asked 2026-10-28, unanswered; operator defaults applied, see
+questions.md): old worlds run from their git revision; learning tokens may change
+with the world.
