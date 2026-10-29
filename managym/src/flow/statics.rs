@@ -327,29 +327,24 @@ impl Game {
     }
 
     /// Distinct creature types of a battlefield creature (CR 205.3m): printed
-    /// subtypes of a printed creature, less noncreature subtypes, plus
-    /// temporarily granted subtypes. Animated lands keep only granted types.
+    /// subtypes of a printed creature plus temporarily granted subtypes, less
+    /// noncreature subtypes. Animated lands keep only granted types.
     fn creature_types(&self, permanent_id: PermanentId) -> Vec<&str> {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return Vec::new();
         };
         let card = &self.state.cards[permanent.card];
-        let mut types: Vec<&str> = Vec::new();
-        if card.types.is_creature() {
-            types.extend(
-                card.subtypes
-                    .iter()
-                    .map(String::as_str)
-                    .filter(|s| !NONCREATURE_SUBTYPES.contains(s)),
-            );
-        }
-        types.extend(
-            permanent
-                .temp_subtypes
-                .iter()
-                .map(String::as_str)
-                .filter(|s| !NONCREATURE_SUBTYPES.contains(s)),
-        );
+        let printed: &[String] = if card.types.is_creature() {
+            &card.subtypes
+        } else {
+            &[]
+        };
+        let mut types: Vec<&str> = printed
+            .iter()
+            .chain(&permanent.temp_subtypes)
+            .map(String::as_str)
+            .filter(|s| !NONCREATURE_SUBTYPES.contains(s))
+            .collect();
         types.sort_unstable();
         types.dedup();
         types
