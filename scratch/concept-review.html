@@ -1,40 +1,77 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>A deck run names a match it never plays · Manabot concept review</title><style>
-:root{color-scheme:light dark;--bg:#faf8f3;--ink:#282d29;--muted:#5d675f;--line:#ccd2c9;--wash:#eef0e9;--accent:#2b6847;--warn:#8a4b14}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 system-ui,sans-serif}main{max-width:860px;margin:auto;padding:34px 25px 65px}h1{font:500 clamp(30px,5vw,44px)/1.15 Georgia,serif;margin:17px 0}h2{font-size:22px;margin:32px 0 12px}p{margin:10px 0 16px}.meta{font-size:13px;color:var(--muted);overflow-wrap:anywhere}.lead{font-size:20px}.note{border-left:3px solid var(--warn);padding-left:18px}.prop{border-left:3px dashed var(--accent);padding-left:18px}code{font:.9em ui-monospace,monospace;overflow-wrap:anywhere}pre{background:var(--wash);padding:18px;font:14px/1.6 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;font-size:15px}td,th{padding:11px 10px 11px 0;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}th{font-weight:600}em.tag{font-style:normal;font-size:13px;color:var(--muted)}footer{border-top:1px solid var(--line);padding-top:16px;margin-top:30px}@media(prefers-color-scheme:dark){:root{--bg:#1c211e;--ink:#ecefe6;--muted:#b4beb5;--line:#4d5a4f;--wash:#29332b;--accent:#a2d7ae;--warn:#e7b07a}}@media(max-width:520px){main{padding:24px 16px}table{font-size:13px}pre{font-size:12px;padding:12px}}
-</style></head><body><main>
-<p class="meta">Task f871a8 · concept-review (headless Graph step) · 2026-10-28 · at a74aceb88 · built from <code>scratch/f871a8-import-decklist-files.md</code>, <code>manabot/training/regime.py</code>, <code>manabot/training/decks.py</code>, <code>manabot/training/execution.py</code>, <code>manabot/training/state/</code>, <code>managym/src/agent/vector_env.rs</code></p>
-<h1>A deck-supplied run still names a match it never plays</h1>
-<p class="lead">Outcome: <strong>the design changed</strong>. Jack Heart's accepted decisions settle it: the run records the decks it actually used, and each fact has one owner. It goes back to implement, with no new approval needed.</p>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Concept review — one rule for who may play a deck run</title>
+<style>
+  :root { color-scheme: light dark; --fg:#1d1b18; --bg:#faf8f4; --mute:#6b655c; --line:#ddd6ca; --prop:#2f6b4f; --old:#9a3b2f; --code:#f0ece4; }
+  @media (prefers-color-scheme: dark) { :root { --fg:#ebe6dd; --bg:#1a1916; --mute:#a39d92; --line:#3a3731; --prop:#7fc4a0; --old:#e08a7c; --code:#26241f; } }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 Georgia, serif; }
+  main { max-width:44rem; margin:0 auto; padding:2.5rem 1.25rem 4rem; }
+  header p { color:var(--mute); font-size:.9rem; margin:.2rem 0; }
+  h1 { font-size:1.6rem; line-height:1.25; margin:.5rem 0 1rem; }
+  h2 { font-size:1.15rem; margin:2.5rem 0 .75rem; }
+  code, pre { font:.85rem/1.5 ui-monospace, Menlo, monospace; background:var(--code); border-radius:4px; }
+  code { padding:.05rem .3rem; }
+  pre { padding:.9rem 1rem; overflow-x:auto; }
+  .old { border-left:3px solid var(--old); padding-left:1rem; }
+  .prop { border-left:3px solid var(--prop); padding-left:1rem; }
+  .tag { font:600 .75rem/1 ui-sans-serif, system-ui, sans-serif; letter-spacing:.04em; text-transform:uppercase; }
+  .old .tag { color:var(--old); } .prop .tag { color:var(--prop); }
+  ol li { margin:.4rem 0; }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <p>Task f871a8 · Import decklist files · concept-review (headless Graph step) · 2026-10-28 · HEAD 59648dc59</p>
+  <p>Built from <code>scratch/f871a8-import-decklist-files.md</code>, <code>manabot/model/world.py</code>, <code>manabot/training/state/admission.py</code>, <code>manabot/training/regime.py</code>, <code>manabot/training/decks.py</code>, <code>manabot/training/rollout/collection.py</code></p>
+</header>
+
+<h1>Decision: who may play a deck run should have one answer, in the world module</h1>
+<p>No product choice is open. Jack Heart's accepted model already settles this: deck admission is shared world behavior, with one owner per fact. The next implement pass should merge a duplicated rule.</p>
 
 <h2>Actions → concepts → APIs</h2>
-<table>
-<tr><th>Action</th><th>Concept</th><th>API</th></tr>
-<tr><td>Import a decklist file</td><td>Source document → deck</td><td><code>parse_decklist</code> → <code>admit_document</code> → <code>DeckImport(document, deck)</code> <em class="tag">existing, matches design</em></td></tr>
-<tr><td>Supply decks to a training run</td><td>Run-owned deck supply</td><td>regime <code>decks: {pool, files}</code> → <code>TrainingDecks</code> → native <code>set_training_decks</code> <em class="tag">existing</em></td></tr>
-<tr><td>Read what a run trained on</td><td>Run record</td><td><code>TrainingRegime.decks</code> <strong>and</strong> <code>TrainingRegime.match</code> <em class="tag">existing: two sources for the same fact</em></td></tr>
-<tr><td>Export / load the model</td><td>Checkpoint bound to a world</td><td><code>pool_world</code>; <code>validate_agent_setup</code> <em class="tag">existing, matches design</em></td></tr>
-</table>
+<pre>Supply decklists        → Deck (counts)          → TrainingDecks.from_files / regime.decks
+Train on them           → native roots            → VectorEnv.set_training_decks (admits each)
+Export / load the model → world (pool descriptor) → pool_world / validate_checkpoint_world
+Play or evaluate        → any pool-admitted deck  → validate_agent_setup
+Continue from a producer→ same question as above  → state/admission._admit_setups   ← mismatch</pre>
 
 <h2>The mismatch</h2>
-<div class="note">
-<pre>TrainingRegime(
-    decks=TrainingDecks(Plains, Mountain, Island),   # what native sampling plays
-    match=MatchConfig(Forest×40 v Swamp×40,          # never played
-                      content_pack="tla-pool-v1"),
-)
-validate_regime(...)   # accepted at a74aceb88</pre>
-<p><code>match</code> is a required field. <code>read_decks</code> fills it with the first two decks as a “representative root”, but keeps an authored match whenever its pool agrees. Native roster sampling ignores it at every reset. The regime digest, <code>runtime_fingerprints</code>, the learning-state comparison and producer admission (<code>validate_agent_setup(…, regime.match)</code>) still read it. As a result, the run record names a pair the run never played.</p>
+<div class="old">
+<p class="tag">Existing</p>
+<p>Producer admission answers "may this checkpoint play these decks?" with its own rule:</p>
+<pre>binding = getattr(agent, "world_binding", None) or {}
+if binding.get("content_pool", {}).get("pack_key") != regime.decks.pool:
+    raise ValueError("training decks require a checkpoint bound to their pool")
+regime.decks.check()</pre>
+<p>That restates <code>validate_agent_setup</code>'s pool branch outside <code>model/world.py</code>, and they already disagree at the edges: an unbound checkpoint passes one and fails the other. They also give different diagnostics.</p>
 </div>
-
-<h2>After <em class="tag">proposed implement direction</em></h2>
 <div class="prop">
-<pre>TrainingRegime(decks={pool, files}, ...)           # decks alone own the setups
-TrainingRegime(decks=..., match=...)               # rejected with a diagnostic
-regime.model_dump()                                # no "match" for deck runs</pre>
-<p>Derive any internal representative match from <code>decks</code>; fingerprints still need one game to read the content manifest. Keep that derived match out of the serialized record, so the digest and the learning-state comparison depend only on <code>decks</code>. Admit a pool-bound checkpoint by checking the pool, not a representative pair. The frozen <code>match</code> meaning for Elemental-uniform does not change.</p>
-<p>Proof: authoring <code>match</code> together with <code>decks</code> is rejected. A files-based regime round-trips without <code>match</code> and keeps the same <code>decks</code> digest. The existing recovery and learning-state tests pass.</p>
+<p class="tag">Proposed</p>
+<pre># model/world.py
+def validate_agent_decks(agent, players) -&gt; None:
+    """May this checkpoint play every one of these decks?"""
+
+# validate_agent_setup: two-seat + explicit-pack checks, then validate_agent_decks
+# state/admission._admit_setups (deck regime):
+validate_agent_decks(agent, regime.decks.players())</pre>
+<p>A pool binding requires every deck to belong to the bound pool and pass native admission. A setup binding requires every deck to be in its roster. Admission still rejects unbound checkpoints explicitly, as it requires anyway.</p>
 </div>
 
-<footer>
-<p>No product choice is open. This applies the accepted decisions “the run records the decks used” and “one owner for each fact”, so no questions are pending. Not reopened: the producer links in checkpoint <code>bc</code> (a recorded deferral) and the Academy 1a redesign (deferred).</p>
-</footer>
-</main></body></html>
+<h2>Checked and unchanged</h2>
+<ul>
+  <li>A deck regime's only setup record is its decks; <code>root_match</code> is derived and never serialized.</li>
+  <li>Checkpoints bind the pool's world only. Play, sim and Academy admit any deck that pool admits.</li>
+  <li>The collector and native env still name the deck field <code>uniform_roster</code>. That is internal; it no longer gates admission.</li>
+</ul>
+
+<h2>Questions</h2>
+<ol>
+  <li>None for a person. The outcome is that the design changed, so the next step is implement.</li>
+</ol>
+</main>
+</body>
+</html>

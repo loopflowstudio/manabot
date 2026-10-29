@@ -229,6 +229,36 @@ and learning-state comparison rest on `decks`. Producer admission
 pool and re-admits every deck; setup transfer requires an authored match.
 Elemental-uniform and authored regimes keep their `match` unchanged.
 
+### Concept review at 59648dc59 (2026-10-28, headless Graph step)
+
+Regimes, `TrainingDecks`, native `set_training_decks` and pool-world
+checkpoints match the accepted model; a deck regime's only setup record is its
+decks. One residue contradicts "deck/content admission remains shared native
+domain behavior" and "one owner for each fact": **producer admission keeps a
+second rule for which checkpoint may play a deck run.**
+`state/admission._admit_setups` probes
+`world_binding["content_pool"]["pack_key"]` itself and calls
+`regime.decks.check()`, restating `validate_agent_setup`'s pool branch
+(same pool, then `admit_pool_decks`) outside `model/world.py`. The two already
+differ at the edges: a checkpoint without a binding passes
+`validate_agent_setup` but fails `_admit_setups`, and only the shared rule
+names the exact diagnostic consumers see in sim/Academy.
+
+Next implement direction (settled, no product choice): `model/world.py` owns
+one entry, e.g. `validate_agent_decks(agent, players)`, answering "may this
+checkpoint play every one of these decks": pool binding → each deck in the
+bound pool and natively admitted; setup binding → every deck in its roster.
+`validate_agent_setup` keeps the two-seat/explicit-pack match checks and
+delegates its pool branch to it; `_admit_setups` becomes
+`validate_agent_decks(agent, regime.decks.players())` (keeping its explicit
+rejection of unbound checkpoints, which admission already requires). Proof: the
+existing producer-admission and pool-checkpoint tests, plus an authored-bound
+checkpoint rejected for a deck regime with the shared diagnostic.
+
+Noted, not a change: the collector and native `VectorEnv` still hold training
+decks in a field named `uniform_roster`; it no longer gates admission
+(`set_training_decks` admits and replaces at any time), so the name is internal.
+
 ## Accepted direction — Jack Heart, 2026-10-28
 
 Implement, test, refine and publish one cohesive PR for review; stop before merge.
