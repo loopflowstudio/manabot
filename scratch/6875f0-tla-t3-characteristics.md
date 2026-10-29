@@ -41,7 +41,8 @@ Zookeeper, Foggy Swamp Hunters, The Walls of Ba Sing Se.
 Slice 3, typed counters (12 of 49): Rowdy Snowballers, Mai, Jaded Edge, Heartless Act.
 - `state::permanent::CounterKind` {+1/+1, stun, fire, double strike} replaces the
   crate-private proposal enum; `Permanent.counters` holds non-+1/+1 kinds;
-  `counter_count`/`change_counters`/`has_counters` are the one accessor.
+  `counter_count`/`change_counters`/`has_counters` are the one accessor
+  (`Game::change_counters` takes the kind; no +1/+1-only wrapper).
   `ProposedEvent::CounterChange` commits any kind.
 - Stun (CR 122.1d) lives in `Permanent::untap`, so every untap path obeys it;
   a double strike counter feeds `Permanent::effective_keywords` (CR 122.1b).
@@ -62,6 +63,7 @@ Check (implement, slice 3): debug `cargo test` passes except the known
 `rules_tests` 356; clippy clean; learning projection/compiler/current-content 41/41
 after rebuilding the extension. Slice 2's Ranger and Wall subtypes lacked schema
 entries (projection failed); appended as subtypes 64/65.
+Check (compress, slice 3): debug `cards` 15/15, lib 119, `rules_tests` 356; clippy clean.
 
 ## Remaining (37 cards), suggested next slices
 

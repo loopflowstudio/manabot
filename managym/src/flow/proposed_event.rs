@@ -331,14 +331,6 @@ impl Game {
         }
     }
 
-    pub(crate) fn change_plus_one_counters(
-        &mut self,
-        permanent_id: PermanentId,
-        delta: i32,
-    ) -> bool {
-        self.change_counters(permanent_id, CounterKind::PlusOnePlusOne, delta)
-    }
-
     pub(crate) fn change_counters(
         &mut self,
         permanent_id: PermanentId,

@@ -449,7 +449,7 @@ impl Game {
                     return None;
                 };
                 self.permanent_object_ref(id)?;
-                self.change_plus_one_counters(id, *counters);
+                self.change_counters(id, CounterKind::PlusOnePlusOne, *counters);
                 self.journal_permanent(id);
                 if let Some(permanent) = self.state.permanents[id].as_mut() {
                     permanent.temp_keywords = permanent.temp_keywords.union(keywords);
@@ -998,7 +998,7 @@ impl Game {
                     if !self.permanent_matches_predicate(permanent_id, predicate) {
                         continue;
                     }
-                    self.change_plus_one_counters(permanent_id, *count);
+                    self.change_counters(permanent_id, CounterKind::PlusOnePlusOne, *count);
                 }
                 None
             }

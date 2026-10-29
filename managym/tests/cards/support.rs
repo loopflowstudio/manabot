@@ -140,10 +140,7 @@ pub fn tapped(s: &Scenario, id: PermanentId) -> bool {
 }
 
 pub fn counters(s: &Scenario, id: PermanentId) -> i32 {
-    s.game().state.permanents[id]
-        .as_ref()
-        .unwrap()
-        .plus1_counters
+    counters_of(s, id, CounterKind::PlusOnePlusOne)
 }
 
 pub fn counters_of(s: &Scenario, id: PermanentId, kind: CounterKind) -> i32 {
