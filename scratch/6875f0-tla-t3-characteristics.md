@@ -7,7 +7,7 @@ Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
 
 ## Done (45 of 49)
 
-Detail per slice is in each commit message (`git log 86ebe9ccf..`).
+Per-slice detail: `git log 86ebe9ccf..`.
 
 1. Locations: `ReplacementEffect::EntersTappedUnlessControls`, `Predicate::Supertype`,
    `Cost.sorcery_timing`; multi-instruction activations lower to `IfCondition{Always}`.
@@ -83,8 +83,8 @@ Schema 8 (unreleased, T1 precedent) appended in place: fields 85-98, predicates
 quantities 5-7, trigger_event 13, subtypes 64-74.
 `scratch/add_fixture.py` copies pinned evidence into the conformance fixture.
 
-Check (slice 14, debug): `cargo test` all targets pass (cards 54, rules_tests
-356, lib 120) except `semantic_conformance_tests` (w16 vs w15, digest drift, as
+Check (slice 14, debug; cards 54, rules_tests 356 at `6ef2ab513`): `cargo test`
+all targets pass (lib 120) except `semantic_conformance_tests` (w16 vs w15, digest drift, as
 PR #394 CI 40819903624); clippy, fmt clean; extension rebuilt; `pytest
 tests/semantic` 158 pass, 4 fail on `be2b7586b`'s `schema_version` asserts.
 
