@@ -302,3 +302,4 @@ covers orphaned inference descendants. New campaign receipts distinguish failed,
 canceled and unattempted games; watchdog interruption retains canceled admission
 IDs. These repairs do not retroactively describe source `cfcd947042c4` running
 on the current rental. Broader mixed-report/Perf and review checks remain with gate.
+| `81769c1a29c7` | **scored cohort**, budget-64k, 100 games, c=32, no MTP | $4.80 | running | pending |
