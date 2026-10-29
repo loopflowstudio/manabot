@@ -11,7 +11,7 @@ worktree, so new T2 cards read "unsupported" in this base until T1 lands.
 - 2026-10-29, Jack Heart: card tests live in `managym/tests/cards/<set>.rs`
   (one `tests/cards.rs` entry); existing per-card `tests/rules/` tests move
   there. Operator reading: those files predate T2 (T1's base), so T1 moves
-  them and T2 reconciles on sync; T2 created the folder because T1 had not.
+  them and T2 reconciles on sync. T1 is now doing the move (see Remaining).
 - Activated abilities carry an effect sequence (`ActivatedAbilityDefinition.effects`).
 - Printed flashback is `Cost.flashback` → `CardDefinition.flashback`.
 - Earthbend takes a `Count`; printed counts stay `EffectValue::Fixed` (IR unchanged).
@@ -78,8 +78,8 @@ worktree, so new T2 cards read "unsupported" in this base until T1 lands.
 
 All 51 T2 cards are defined, none in `tla::INCOMPLETE` for T2 behavior, each
 with a Scryfall fixture entry and a witness in `tests/cards/tla.rs` (Toph and
-Dai Li Agents in `tests/rules/elemental_cards.rs`, pending the move). Merged
-onto PR #394's head `86ebe9ccf`. WORLDS.md w16 records T2 (166 supported).
+Dai Li Agents in `tests/rules/elemental_cards.rs`, pending the move). Synced
+onto PR #394's head `e403b8a1f` (merge `e7933c6fd`). WORLDS.md w16 records T2 (166 supported).
 Earlier check (`35404b274`): debug `cargo test` passes except the
 pre-existing semantic-conformance pair.
 
@@ -118,20 +118,32 @@ and UI. Guard + directed + viewer-safety tests in
   tokens, enforced by an exhaustive guard (Effect/Ability, keywords, counters,
   status fields) plus per-mechanic and viewer-safety tests. Done here for
   observation status fields → tensor. Tokens and the Effect/Ability guard
-  depend on T1's representation change.
+  depend on the representation change.
 - One card representation: cards in engine types (`CardDefinition`/`Ability`/
   `Effect`/`TargetSpec`) with constructor helpers; remove `cards/authoring.rs`
-  and `semantic/compile.rs`; tokens derived in Rust; world w17. T1 is doing
-  the removal (uncommitted in its worktree at 2026-10-29 07:55); T2 then
-  converts its 51 cards and stops adding authoring `Op` variants.
+  and `semantic/compile.rs`; tokens derived in Rust; world w17. The steer says
+  T1 removes the layer and T2 converts its 51 cards (no new authoring `Op`
+  variants). Observed 2026-10-29 after the sync: T1's head `e403b8a1f` still
+  has both files. Confirmed 2026-10-29 (T1 worktree plan, after `352faa968`):
+  T1's Remaining lists, in order, one card representation (convert typed
+  cards, Rust tokens, delete authoring/compile.rs, w17), the observability
+  guard, `scryfall_id`, then gate and PR394 update. T1's implement step is live.
+  T1 moved the per-card tests (225 tests in 14 set files, `tests/support/`,
+  `tests/cards/README.md`, `coverage.py`; `f9732c12f`), so question 2 is
+  settled on T1's side; T2 reconciles its `tests/cards/` on sync.
 - Scryfall object id on every definition (first printing, required field),
   offline uniqueness test and an online maintenance script beside the card
   tests. Lands with the engine-type definitions after the sync.
 
 ## Remaining
 
-- Sync onto T1 when PR #394 publishes the engine-type cards/w17; then the
-  three steers above, the test move (decision 2), and re-run the world gate.
+- Next T1 sync: T1 committed the card-test move locally (`f9732c12f`, not yet
+  on PR #394, whose head is still `e403b8a1f`): `tests/cards.rs` with one
+  module per set, `tests/support/`, `tests/cards/tla.rs`. Merge T2's
+  `tests/cards/{tla,support,observability}.rs` into that layout; Toph/Dai Li
+  move with T1's `elemental_cards.rs` split.
+- Then the three steers above once engine-type cards/w17 exist, and the
+  world gate.
 - Gate (not run here): CLAUDE.md arena admission/monitoring suite; full debug
   `cargo test`; Academy check/build (local node can't load libllhttp; CI).
 - Known gaps (questions.md): possible-worlds ignore foretold cards; granted
@@ -139,11 +151,12 @@ and UI. Guard + directed + viewer-safety tests in
 
 ## Check
 
-2026-10-29, v5 work: `cargo test --test cards observability` 6 passed (debug);
-`--lib observation` 11 passed; clippy `--features python --tests --examples`
-and fmt clean. Pytest: continuation-input parity v1–v5, text observation,
-experience protocol, play modes, env observation, `tests/model` all pass.
-`tests/eval/test_batched_eval.py` fails on T1's missing w16 `WorldVersion`.
-Compress (2026-10-29): exile-grant lookups share `Game::grants_naming`;
-`casts_only_from_hand` reads `hand_only_until`. `cargo test --test cards` 68
-passed (debug), clippy clean, experience protocol + text observation pytest pass.
+2026-10-29 realign: state read only, no tests rerun. PR #394 open at
+`e403b8a1f` (merged here); T1's local head `f9732c12f` still has
+`cards/authoring.rs` and `semantic/compile.rs`. Compress 2 (uncommitted
+`flow/cast_permission.rs`: foretell and play grants share `grant_if_exiled`,
+`is_foretold` reads `grants_naming`) reported debug `cargo test --test cards`
+68, `--test rules_tests` 356, `--lib` 121 and clippy clean. Earlier v5 check:
+continuation-input parity v1–v5, text observation, experience protocol, play
+modes, env observation and `tests/model` pytest pass; `tests/eval/test_batched_eval.py`
+fails on T1's missing w16 `WorldVersion`.

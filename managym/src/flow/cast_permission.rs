@@ -159,15 +159,11 @@ impl Game {
                 ..ZoneEntry::default()
             },
         );
-        if self.state.zones.zone_of(card) == Some(ZoneType::Exile) {
-            if let Some(object) = self.current_object_ref(card) {
-                self.add_exile_grant(ExileCastGrant {
-                    after_turn: Some(turn),
-                    foretold: true,
-                    ..ExileCastGrant::new(object, player)
-                });
-            }
-        }
+        self.grant_if_exiled(card, |object| ExileCastGrant {
+            after_turn: Some(turn),
+            foretold: true,
+            ..ExileCastGrant::new(object, player)
+        });
         self.state.priority.on_non_pass_action(self.active_player());
         Ok(())
     }
@@ -175,14 +171,7 @@ impl Game {
     /// Whether `card` is a foretold card lying face down in exile, hidden
     /// from everyone but its owner.
     pub(crate) fn is_foretold(&self, card: CardId) -> bool {
-        self.state.zones.zone_of(card) == Some(ZoneType::Exile)
-            && self.current_object_ref(card).is_some_and(|object| {
-                self.state
-                    .cast_permissions
-                    .exile_grants
-                    .iter()
-                    .any(|grant| grant.foretold && grant.object == object)
-            })
+        self.grants_naming(card).any(|grant| grant.foretold)
     }
 
     /// Determinization: hidden card `new` becomes `player`'s foretold card
@@ -251,14 +240,19 @@ impl Game {
     }
 
     /// Exile `card` and add the play grant `grant` builds for the exiled
-    /// object. A token, or a card a replacement kept out of exile, receives
-    /// no grant.
+    /// object.
     fn exile_with_play_grant(
         &mut self,
         card: CardId,
         grant: impl FnOnce(ObjectRef) -> ExileCastGrant,
     ) {
         self.move_card(card, ZoneType::Exile);
+        self.grant_if_exiled(card, grant);
+    }
+
+    /// Add the grant `grant` builds for `card`'s exiled object. A token, or a
+    /// card a replacement kept out of exile, receives no grant.
+    fn grant_if_exiled(&mut self, card: CardId, grant: impl FnOnce(ObjectRef) -> ExileCastGrant) {
         if self.state.zones.zone_of(card) != Some(ZoneType::Exile)
             || self.state.cards[card].is_token
         {
