@@ -8,7 +8,7 @@ and pool-membership choices that were here (history: `be2b7586b:scratch/question
 - Superseded 2026-10-29 by Jack Heart's one-representation decision (w17, no
   JSON, tokens from `Effect`): the earlier choices to stay in w16, keep the IR's
   JSON shape and build tokens in `learning.py`.
-- 2026-10-29 (sync onto T1 `8790821da`): T1's test layout wins
+- 2026-10-29 (sync onto T1 `01e8f9975`): T1's test layout wins
   (`tests/support/{game,play,inspect}.rs`, flat `cards/<set>.rs`); T3's
   `cards/support.rs`, `rules/helpers.rs` and `rules/tla_mechanics.rs` are folded
   into it. T1 widened every policy-input version's permanent row to 29 for

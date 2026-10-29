@@ -1,7 +1,7 @@
 # T3 — characteristics, counters, replacements, attachments (Task 6875f0)
 
 Brief: the Task directive (49 cards, obligations in `docs/rules/tla/allocation.jsonl`,
-`planned_pr == "T3"`). Stacked on T1 (892c47, PR #394; last synced at head `8790821da`)
+`planned_pr == "T3"`). Stacked on T1 (892c47, PR #394; last synced at head `01e8f9975`)
 and carrying T2 (87e012, PR #398 head `16dfd3dbb`; T2 has not yet synced onto that
 T1). Every merge needs Jack Heart's review.
 Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
@@ -90,7 +90,7 @@ Scryfall id.
    same words, and adds directed LLM-text tests (Foretell, foretold casts,
    Hakoda's library-top casts).
 
-26. Sync onto T1's one card representation (`8790821da`, 2026-10-29; Jack
+26. Sync onto T1's one card representation (`01e8f9975`, 2026-10-29; Jack
    Heart's steer). Every T2+T3 card and authoring `Op` is now an engine
    `CardDefinition`/`Ability`/named `Effect` value: set files regenerated with
    T1's `scratch/conversion/generate.py` (extended for `ManaUse`, restricted
