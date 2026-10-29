@@ -25,13 +25,14 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.infra.identity import canonical_sha256
+from manabot.infra.provenance import authored_matchup_sha256, runtime_fingerprints
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.inference import PolicyInference
 from manabot.model.world import checkpoint_world, validate_agent_setup
 from manabot.training.decks import TrainingDecks, pair_match
-from manabot.training.execution import validate_regime
+from manabot.training.execution import _runtime_identities, validate_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.rollout.collection import SeatRoutedCollector
 from manabot.training.state.admission import _admit_setups
@@ -41,6 +42,7 @@ from manabot.training.state.game_errors import (
     GameErrorPolicy,
     replay_attempt,
 )
+from manabot.training.state.recovery import admit_recovery_identities
 import managym
 
 PACK = "tla-pool-v1"
@@ -392,3 +394,41 @@ def test_failure_records_actual_sampled_decks(
             ]
     finally:
         collector.close()
+
+
+def test_deck_run_identities_name_the_supply_not_a_pair(
+    decks: TrainingDecks,
+) -> None:
+    space = ObservationSpace()
+    regime = _regime(decks)
+    identities = _runtime_identities(7, regime, space)
+    assert "matchup" not in identities and "matchup_sha256" not in identities
+    assert identities["training_decks_sha256"] == decks.digest
+    assert identities["content_pool"] == PACK
+    opened = runtime_fingerprints(
+        7, match_config=regime.root_match, observation_space=space
+    )
+    for name in ("content_manifest_sha256", "observation_abi_sha256"):
+        assert identities[name] == opened[name]
+    with pytest.raises(ValueError, match="monitoring requires an authored matchup"):
+        authored_matchup_sha256(identities, "monitoring")
+
+    changed = _regime(TrainingDecks.from_documents(_documents("Plains", "Swamp"), PACK))
+    with pytest.raises(ValueError, match="recovery runtime/source identity mismatch"):
+        admit_recovery_identities(
+            identities, _runtime_identities(7, changed, space), None
+        )
+
+    authored = TrainingRegime.model_validate(
+        {
+            **regime.model_dump(mode="json", exclude={"decks"}),
+            "match": decks.match_config().model_dump(),
+        }
+    )
+    recorded = _runtime_identities(7, authored, space)
+    fingerprints = runtime_fingerprints(
+        7, match_config=authored.match, observation_space=space
+    )
+    assert {k: recorded[k] for k in fingerprints} == fingerprints
+    assert "training_decks_sha256" not in recorded
+    assert authored_matchup_sha256(recorded, "monitoring") == recorded["matchup_sha256"]

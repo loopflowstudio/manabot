@@ -265,6 +265,14 @@ unchanged. Proof: a bounded deck-run setup records no `matchup` and the supply
 digest; changed decks still reject resume; an authored run's identities are
 byte-identical to before.
 
+Implemented 2026-10-28: `_runtime_identities` replaces the pair with
+`content_pool` + `training_decks_sha256`; recovery compares them through the
+existing identity equality. `manabot.infra.provenance.authored_matchup_sha256`
+is the one reader for authored-matchup consumers (monitoring, study
+calibration/resume/arenas, attack arena) and rejects deck runs by name. Card
+evaluation fingerprints its own authored matrix and reads no run identity.
+Check: `pytest tests/training/test_training_decks.py -k supply_not_a_pair` passes.
+
 Noted, not a change: the collector and native `VectorEnv` still hold training
 decks in a field named `uniform_roster`; it no longer gates admission
 (`set_training_decks` admits and replaces at any time), so the name is internal.

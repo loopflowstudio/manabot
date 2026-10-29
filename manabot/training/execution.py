@@ -201,6 +201,14 @@ def _runtime_identities(
     identities = runtime_fingerprints(
         seed, match_config=regime.root_match, observation_space=space
     )
+    if regime.decks is not None:
+        # Opening the pool fixes content and input identities; the run's setup
+        # is the supply it samples, never the representative pair it opened.
+        del identities["matchup"], identities["matchup_sha256"]
+        identities.update(
+            content_pool=regime.decks.pool,
+            training_decks_sha256=regime.decks.digest,
+        )
     identities.update(
         architecture=architecture_identity(regime.agent, space),
         hardware={

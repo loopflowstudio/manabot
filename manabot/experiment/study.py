@@ -34,7 +34,11 @@ from manabot.eval.match import play_cell
 from manabot.eval.models import EvaluationKey
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
-from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
+from manabot.infra.provenance import (
+    authored_matchup_sha256,
+    runtime_fingerprints,
+    source_bundle_sha256,
+)
 from manabot.model.checkpoint import load_checkpoint
 from manabot.reports.analysis import report, valid_game, verify_saved_inputs
 from manabot.sim.matchup import SELECTED_SUITE
@@ -296,6 +300,8 @@ def scientific_plan(calibration: Path | str, prior_seconds: float) -> ResolvedSt
             "campaign has insufficient budget; amend allocations before scoring"
         )
     runs = [json.loads(Path(r["path"]).read_text()) for r in study["runs"]]
+    for run in runs:
+        authored_matchup_sha256(run["identities"], "study calibration")
     identities = {k: runs[0]["identities"][k] for k in _IDENTITY_KEYS}
     if any({k: r["identities"][k] for k in _IDENTITY_KEYS} != identities for r in runs):
         raise ValueError("calibration mixes runtime or source identities")
@@ -498,7 +504,7 @@ def registration(
         content_suite=SELECTED_SUITE,
         observation_abi_sha256=identity["observation_abi_sha256"],
         action_abi_sha256=identity["action_abi_sha256"],
-        matchup_sha256=identity["matchup_sha256"],
+        matchup_sha256=authored_matchup_sha256(identity, "study arena"),
         checkpoint_sha256=artifact["sha256"],
         checkpoint_bytes=artifact["bytes"],
         parameter_count=sum(p.numel() for p in agent.parameters()),
@@ -570,6 +576,8 @@ def run_study(
     if len({recipe.id.replace("_", "-") for recipe in recipes}) != len(recipes):
         raise ValueError("recipe IDs collide after arena normalization")
     if resume or (plan is not None and plan.protocol.purpose == "scientific"):
+        for run in resumed_runs:
+            authored_matchup_sha256(run.identities, "study resume")
         current = runtime_fingerprints(
             protocol.training_seeds[0],
             match_config=recipes[0].root_match,
@@ -682,7 +690,7 @@ def run_study(
             content_suite=SELECTED_SUITE,
             observation_abi_sha256=identity["observation_abi_sha256"],
             action_abi_sha256=identity["action_abi_sha256"],
-            matchup_sha256=identity["matchup_sha256"],
+            matchup_sha256=authored_matchup_sha256(identity, "study arena"),
             player_seed_derivation_id="arena-pair-deal-player-v1",
         )
 
