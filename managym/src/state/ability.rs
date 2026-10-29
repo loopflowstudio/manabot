@@ -256,6 +256,14 @@ pub enum Effect {
     OpponentsCastOnlyFromHand,
     /// "Exile the top card of your library. You may play that card this turn."
     ExileTopCardPlayThisTurn,
+    /// Exile cards from the top of your library until you exile a nonland card; you may cast it without paying its mana cost if its mana value is less than the value, otherwise put it into your hand.
+    ExileUntilNonlandCastFree {
+        below: EffectValue,
+    },
+    /// You may cast a matching spell from your hand without paying its mana cost.
+    CastFromHandFree {
+        predicate: CardPredicate,
+    },
     /// You have no maximum hand size for the rest of the game.
     NoMaximumHandSize,
     /// Shuffle your graveyard into your library.
@@ -690,6 +698,8 @@ impl Effect {
             | Effect::OpponentsCastOnlyFromHand
             | Effect::ExileSourceSpell
             | Effect::ExileTopCardPlayThisTurn
+            | Effect::ExileUntilNonlandCastFree { .. }
+            | Effect::CastFromHandFree { .. }
             | Effect::NoMaximumHandSize
             | Effect::ShuffleGraveyardIntoLibrary
             | Effect::PlaceTargetInLibrary { .. }

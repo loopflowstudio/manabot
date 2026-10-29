@@ -129,6 +129,17 @@ impl PaymentProgress {
     }
 }
 
+/// Where a `CastWithoutPaying` decision's candidates come from.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum FreeCastOffer {
+    /// Spells in the deciding player's hand matching `predicate`, read when
+    /// offered (Yue, the Moon Spirit).
+    Hand { predicate: CardPredicate },
+    /// One exiled card, put into its owner's hand if not cast (Solstice
+    /// Revelations).
+    Exiled { card: CardId },
+}
+
 /// A pending mid-resolution decision, including its own bookkeeping so a
 /// multi-step choice (scry card-by-card, pick-by-pick selection) re-suspends
 /// with updated state.
@@ -229,6 +240,12 @@ pub enum Decision {
         revealed: Vec<CardId>,
         remaining: usize,
     },
+    /// "You may cast [a spell] without paying its mana cost" while an effect
+    /// resolves (CR 608.2g): choose a candidate from `offer`, or decline.
+    CastWithoutPaying {
+        player: PlayerId,
+        offer: FreeCastOffer,
+    },
     /// "Choose one —".
     Modal {
         player: PlayerId,
@@ -272,6 +289,7 @@ impl Decision {
             | Decision::SearchBasicLand { player, .. }
             | Decision::SearchDistinctLands { player, .. }
             | Decision::DiscardFromRevealedHand { player, .. }
+            | Decision::CastWithoutPaying { player, .. }
             | Decision::OpponentSplitsRevealed { player, .. }
             | Decision::OptionalDiscardDraw { player, .. }
             | Decision::Scry { player, .. }
@@ -299,6 +317,7 @@ impl Decision {
             Decision::SelectMilled { .. }
             | Decision::SearchBasicLand { .. }
             | Decision::DiscardFromRevealedHand { .. }
+            | Decision::CastWithoutPaying { .. }
             | Decision::OptionalDiscardDraw { .. }
             | Decision::Modal { .. }
             | Decision::Learn { .. }
@@ -490,6 +509,25 @@ impl Game {
                     .collect(),
                 focus: source_focus,
             },
+            Decision::CastWithoutPaying { player, .. } => {
+                let cards = self.free_cast_candidates(&suspended.decision);
+                ActionSpace {
+                    player: Some(*player),
+                    kind: ActionSpaceKind::LookAndSelect,
+                    focus: cards
+                        .iter()
+                        .map(|card| self.state.cards[*card].id)
+                        .collect(),
+                    actions: cards
+                        .into_iter()
+                        .map(|card| Action::SelectCard {
+                            player: *player,
+                            card,
+                        })
+                        .chain(std::iter::once(Action::Decline { player: *player }))
+                        .collect(),
+                }
+            }
             Decision::OpponentSplitsRevealed {
                 player, revealed, ..
             } => ActionSpace {
@@ -1041,6 +1079,32 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
+            (Decision::CastWithoutPaying { player, offer }, Action::SelectCard { card, .. }) => {
+                let decision = Decision::CastWithoutPaying {
+                    player: *player,
+                    offer: offer.clone(),
+                };
+                if !self.free_cast_candidates(&decision).contains(card) {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("not a castable offered card".into()));
+                }
+                // The cast is the effect's last instruction: finish the
+                // resolution, then cast the chosen card onto the stack.
+                let (player, card) = (*player, *card);
+                self.run_frame(suspended.frame);
+                debug_assert!(
+                    self.state.suspended_decision.is_none(),
+                    "a free cast ends its resolving effect"
+                );
+                self.begin_free_cast(player, card)
+            }
+            (Decision::CastWithoutPaying { player, offer }, Action::Decline { .. }) => {
+                if let FreeCastOffer::Exiled { card } = offer {
+                    self.reveal_card_to_hand(*card, *player);
+                }
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
             (Decision::SearchDistinctLands { .. }, Action::Decline { .. }) => {
                 self.finish_distinct_land_search(suspended);
                 Ok(())
@@ -1188,6 +1252,43 @@ impl Game {
             .take(count)
             .copied()
             .collect()
+    }
+
+    /// The cards a `CastWithoutPaying` decision offers: hand spells matching
+    /// its predicate (one per definition, so resampled copies stay
+    /// consistent) or the exiled card, each castable for free right now.
+    pub(crate) fn free_cast_candidates(&self, decision: &Decision) -> Vec<CardId> {
+        let Decision::CastWithoutPaying { player, offer } = decision else {
+            return Vec::new();
+        };
+        let free = crate::flow::game::CastChoices {
+            free: true,
+            ..Default::default()
+        };
+        let mut candidates: Vec<CardId> = match offer {
+            FreeCastOffer::Hand { predicate } => self
+                .state
+                .zones
+                .zone_cards(ZoneType::Hand, *player)
+                .iter()
+                .copied()
+                .filter(|card| {
+                    let card = &self.state.cards[*card];
+                    card.types.is_castable() && predicate.matches_card(card)
+                })
+                .collect(),
+            FreeCastOffer::Exiled { card } => self
+                .state
+                .zones
+                .contains(*card, ZoneType::Exile, *player)
+                .then_some(*card)
+                .into_iter()
+                .collect(),
+        };
+        candidates.retain(|card| self.can_cast_with(*player, *card, free));
+        candidates.sort_unstable_by_key(|card| (self.state.cards[*card].definition_id, *card));
+        candidates.dedup_by_key(|card| self.state.cards[*card].definition_id);
+        candidates
     }
 
     /// One hand card per matching definition for `DiscardFromRevealedHand`.

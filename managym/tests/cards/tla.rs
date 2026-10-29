@@ -1891,3 +1891,108 @@ fn spirit_water_revival_waterbends_its_additional_cost() {
     assert_eq!(s.game().state.zones.zone_of(second), Some(ZoneType::Exile));
     assert!(s.game().state.players[0].no_maximum_hand_size);
 }
+
+/// Pass priority once so the top of the stack resolves into its decision.
+fn resolve_top(s: &mut Scenario) {
+    s.pass_priority();
+    s.pass_priority();
+}
+
+/// Yue's ability offers only noncreature spells from hand; the chosen spell
+/// is cast for free after the ability finishes resolving.
+#[test]
+fn yue_casts_a_noncreature_spell_from_hand_for_free() {
+    let mut s = setup(&["Yue, the Moon Spirit", "Lightning Strike", "Gray Ogre"]);
+    let yue = s.force_permanent_on_battlefield(0, "Yue, the Moon Spirit");
+    ready(&mut s, yue);
+    let strike = library_card(&s, 0, "Lightning Strike");
+    let ogre = library_card(&s, 0, "Gray Ogre");
+    s.game_mut().move_card(strike, ZoneType::Hand);
+    s.game_mut().move_card(ogre, ZoneType::Hand);
+    s.set_player_mana_pool(0, "5");
+    activate(&mut s, yue, 0);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    assert!(s.game().state.permanents[yue].as_ref().unwrap().tapped);
+    resolve_top(&mut s);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
+    let offered: Vec<&Action> = s.action_space().actions.iter().collect();
+    assert!(offered
+        .iter()
+        .any(|a| matches!(a, Action::SelectCard { card, .. } if *card == strike)));
+    assert!(!offered
+        .iter()
+        .any(|a| matches!(a, Action::SelectCard { card, .. } if *card == ogre)));
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { card, .. } if *card == strike),
+    );
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    if s.action_space().kind == ActionSpaceKind::PayOrNot {
+        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    }
+    assert_eq!(s.game().state.zones.zone_of(strike), Some(ZoneType::Stack));
+    settle(&mut s);
+    s.assert_life(1, 17);
+}
+
+/// Solstice Revelations exiles to the first nonland card and offers it free
+/// only when its mana value is below the Mountains you control; otherwise it
+/// goes to hand.
+#[test]
+fn solstice_revelations_casts_cheap_spells_free_and_keeps_the_rest() {
+    let mut s = setup(&["Solstice Revelations", "Lightning Strike"]);
+    let on_top = |s: &mut Scenario, card: CardId| {
+        s.game_mut().move_card(card, ZoneType::Hand);
+        s.game_mut().move_card(card, ZoneType::Library);
+    };
+    let strike = library_card(&s, 0, "Lightning Strike");
+    on_top(&mut s, strike);
+    let land = library_card(&s, 0, "Plains");
+    on_top(&mut s, land);
+    for _ in 0..2 {
+        s.force_permanent_on_battlefield(0, "Mountain");
+    }
+    // Two Mountains: Strike's mana value 2 is not less, so it goes to hand.
+    cast(&mut s, "Solstice Revelations");
+    settle(&mut s);
+    assert_eq!(s.game().state.zones.zone_of(land), Some(ZoneType::Exile));
+    assert_eq!(s.game().state.zones.zone_of(strike), Some(ZoneType::Hand));
+
+    // Three Mountains: the exiled Strike is offered and cast for free.
+    on_top(&mut s, strike);
+    s.force_permanent_on_battlefield(0, "Mountain");
+    let solstice = cast(&mut s, "Solstice Revelations");
+    resolve_top(&mut s);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { card, .. } if *card == strike),
+    );
+    assert_eq!(
+        s.game().state.zones.zone_of(solstice),
+        Some(ZoneType::Graveyard)
+    );
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    if s.action_space().kind == ActionSpaceKind::PayOrNot {
+        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    }
+    settle(&mut s);
+    s.assert_life(1, 17);
+    assert_eq!(
+        s.game().state.zones.zone_of(strike),
+        Some(ZoneType::Graveyard)
+    );
+
+    // Flashback from the graveyard for {6}{R}, then it is exiled.
+    s.set_player_mana_pool(0, "6R");
+    on_top(&mut s, strike);
+    cast_card(&mut s, solstice);
+    resolve_top(&mut s);
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    assert_eq!(s.game().state.zones.zone_of(strike), Some(ZoneType::Hand));
+    assert_eq!(
+        s.game().state.zones.zone_of(solstice),
+        Some(ZoneType::Exile)
+    );
+}

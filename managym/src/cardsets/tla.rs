@@ -166,6 +166,8 @@ pub(super) fn cards() -> Vec<Card> {
         professor_zei_anthropologist(),
         united_front(),
         spirit_water_revival(),
+        yue_the_moon_spirit(),
+        solstice_revelations(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -5297,6 +5299,71 @@ fn spirit_water_revival() -> Card {
             ..Default::default()
         })],
         registry_name: "Spirit Water Revival",
+        text_box,
+    }
+}
+
+fn yue_the_moon_spirit() -> Card {
+    let text_box = "Flying, vigilance\nWaterbend {5}, {T}: You may cast a noncreature spell from your hand without paying its mana cost. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{3}{U}"),
+            subtypes: Some(vec!["Spirit", "Ally"]),
+            supertypes: Some(vec!["Legendary"]),
+            types: vec![CardType::Creature],
+            keywords: Some(vec![Keyword::Flying, Keyword::Vigilance]),
+            power: Some(PrintedPower::Fixed(3)),
+            toughness: Some(3),
+            ..Default::default()
+        },
+        key: "tla.yue_the_moon_spirit",
+        programs: vec![Program::new(
+            "free_cast",
+            ProgramKind::Activated,
+            vec![Op::CastFromHandFree {
+                predicate: Predicate::NotCardTypes {
+                    values: vec![CardType::Creature, CardType::Land],
+                },
+            }],
+        )
+        .cost(Cost {
+            mana: Some("{5}"),
+            tap_source: Some(true),
+            waterbend: Some(true),
+            ..Default::default()
+        })],
+        registry_name: "Yue, the Moon Spirit",
+        text_box,
+    }
+}
+
+fn solstice_revelations() -> Card {
+    let text_box = "Exile cards from the top of your library until you exile a nonland card. You may cast that card without paying its mana cost if the spell's mana value is less than the number of Mountains you control. If you don't cast that card this way, put it into your hand.\nFlashback {6}{R} (You may cast this card from your graveyard for its flashback cost. Then exile it.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{R}"),
+            subtypes: Some(vec!["Lesson"]),
+            types: vec![CardType::Instant],
+            ..Default::default()
+        },
+        key: "tla.solstice_revelations",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::ExileUntilNonlandCastFree {
+                below: Quantity::BattlefieldMatching {
+                    predicate: Predicate::Subtype { value: "Mountain" },
+                },
+            }],
+        )
+        .cost(Cost {
+            mana: Some("{2}{R}"),
+            flashback: Some("{6}{R}"),
+            ..Default::default()
+        })],
+        registry_name: "Solstice Revelations",
         text_box,
     }
 }

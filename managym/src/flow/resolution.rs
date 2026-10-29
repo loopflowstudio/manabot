@@ -6,7 +6,9 @@ use std::collections::VecDeque;
 
 use crate::{
     flow::{
-        decision::{Decision, EffectFrame, FrameFinalize, PaymentProgress, ResolutionTarget},
+        decision::{
+            Decision, EffectFrame, FrameFinalize, FreeCastOffer, PaymentProgress, ResolutionTarget,
+        },
         event::GameEvent,
         game::Game,
         trigger::{DelayedTrigger, DelayedTriggerKind, ExileLink},
@@ -480,6 +482,44 @@ impl Game {
             }
             Effect::OpponentsCastOnlyFromHand => {
                 self.restrict_opponent_to_hand(frame.controller);
+                None
+            }
+            Effect::CastFromHandFree { predicate } => {
+                let decision = Decision::CastWithoutPaying {
+                    player: frame.controller,
+                    offer: FreeCastOffer::Hand {
+                        predicate: predicate.clone(),
+                    },
+                };
+                (!self.free_cast_candidates(&decision).is_empty()).then_some(decision)
+            }
+            Effect::ExileUntilNonlandCastFree { below } => {
+                let player = frame.controller;
+                let mut nonland = None;
+                while let Some(&top) = self
+                    .state
+                    .zones
+                    .zone_cards(ZoneType::Library, player)
+                    .last()
+                {
+                    self.move_card(top, ZoneType::Exile);
+                    if !self.state.cards[top].types.is_land() {
+                        nonland = Some(top);
+                        break;
+                    }
+                }
+                let card = nonland?;
+                let limit = self.effect_value(below, frame);
+                let decision = Decision::CastWithoutPaying {
+                    player,
+                    offer: FreeCastOffer::Exiled { card },
+                };
+                if i32::from(self.card_mana_value(card)) < limit
+                    && !self.free_cast_candidates(&decision).is_empty()
+                {
+                    return Some(decision);
+                }
+                self.reveal_card_to_hand(card, player);
                 None
             }
             Effect::RevealHandDiscardChosen { predicate, .. } => {

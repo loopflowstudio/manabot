@@ -111,6 +111,8 @@ class Opcode(IntEnum):
     REVEAL_HAND_DISCARD_CHOSEN = 73
     SHUFFLE_GRAVEYARD_INTO_LIBRARY = 74
     NO_MAXIMUM_HAND_SIZE = 75
+    CAST_FROM_HAND_FREE = 76
+    EXILE_UNTIL_NONLAND_CAST_FREE = 77
 
 
 PROGRAM_KINDS = {kind.name.lower(): kind for kind in ProgramKind}
@@ -252,6 +254,8 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "airbend_all": ({"except", "predicate"}, set()),
     "opponents_cast_only_from_hand": (set(), set()),
     "exile_top_card_play_this_turn": (set(), set()),
+    "exile_until_nonland_cast_free": ({"below"}, set()),
+    "cast_from_hand_free": ({"predicate"}, set()),
     "no_maximum_hand_size": (set(), set()),
     "shuffle_graveyard_into_library": (set(), set()),
     "sacrifice_source": ({"then"}, set()),

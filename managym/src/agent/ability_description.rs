@@ -403,6 +403,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
         OpponentsCastOnlyFromHand => "Until your next turn, your opponents can't cast spells from anywhere other than their hands".to_string(),
         ExileSourceSpell => "Exile this spell".to_string(),
         ExileTopCardPlayThisTurn => "Exile the top card of your library. You may play that card this turn".to_string(),
+        ExileUntilNonlandCastFree { below } => format!("Exile cards from the top of your library until you exile a nonland card. You may cast that card without paying its mana cost if its mana value is less than {}. If you don't cast it this way, put it into your hand", value_description(below)),
+        CastFromHandFree { predicate } => format!("You may cast a {} from your hand without paying its mana cost", predicate_description(predicate, "spell")),
         NoMaximumHandSize => "You have no maximum hand size for the rest of the game".to_string(),
         ShuffleGraveyardIntoLibrary => "Shuffle your graveyard into your library".to_string(),
         RevealHandDiscardChosen { target, predicate } => format!("{} reveals their hand. You choose a {} from it; that player discards it", target_description(target), predicate_description(predicate, "card")),

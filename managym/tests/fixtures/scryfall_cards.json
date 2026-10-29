@@ -2478,5 +2478,35 @@
     "colors": [
       "U"
     ]
+  },
+  "Yue, the Moon Spirit": {
+    "name": "Yue, the Moon Spirit",
+    "mana_cost": "{3}{U}",
+    "type_line": "Legendary Creature — Spirit Ally",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Vigilance",
+      "Waterbend"
+    ],
+    "oracle_text": "Flying, vigilance\nWaterbend {5}, {T}: You may cast a noncreature spell from your hand without paying its mana cost. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Solstice Revelations": {
+    "name": "Solstice Revelations",
+    "mana_cost": "{2}{R}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flashback"
+    ],
+    "oracle_text": "Exile cards from the top of your library until you exile a nonland card. You may cast that card without paying its mana cost if the spell's mana value is less than the number of Mountains you control. If you don't cast that card this way, put it into your hand.\nFlashback {6}{R} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "R"
+    ]
   }
 }

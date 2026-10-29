@@ -77,6 +77,7 @@ impl Game {
                                 | Decision::OptionalDiscardDraw { .. }
                                 | Decision::SearchBasicLand { .. }
                                 | Decision::SearchDistinctLands { .. }
+                                | Decision::CastWithoutPaying { .. }
                         )
             });
         if refresh {

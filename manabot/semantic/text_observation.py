@@ -103,6 +103,9 @@ _STAGES = frozenset(
         "legend_rule",
         "order_triggers",
         "trigger_targets",
+        "revealed_hand",
+        "split_revealed",
+        "free_cast",
     )
 )
 

@@ -346,9 +346,25 @@ impl Game {
         if !can_cast_now {
             return None;
         }
+        self.can_cast_with(player, card_id, Default::default())
+            .then_some(Action::CastSpell {
+                player,
+                card: card_id,
+            })
+    }
 
+    /// Whether `card_id`'s modes and mandatory targets admit casting it and
+    /// `player` can pay its total cost with `cast`'s choices. Timing and zone
+    /// permission are the caller's.
+    pub(crate) fn can_cast_with(
+        &self,
+        player: PlayerId,
+        card_id: CardId,
+        cast: crate::flow::game::CastChoices,
+    ) -> bool {
+        let card = &self.state.cards[card_id];
         if card.spell_modes().is_some() && self.legal_spell_modes(player, card_id).is_empty() {
-            return None;
+            return false;
         }
         // Every mandatory targeting requirement needs a legal target.
         for requirement in self.state.cards[card_id].target_requirements() {
@@ -357,18 +373,18 @@ impl Game {
                     .legal_targets_for_requirement(player, card_id, &requirement)
                     .is_empty()
             {
-                return None;
+                return false;
             }
         }
 
-        match self.effective_spell_cost(player, card_id, Default::default()) {
+        match self.effective_spell_cost(player, card_id, cast) {
             Some(cost) => {
                 // Castability gating sees pooled mana too — until-end-of-
                 // combat mana (firebending) must make spells castable.
                 let payable = if let Some(additional) = &self.state.cards[card_id].sacrifice_cost {
                     let payment = crate::flow::game::Payment::Spell {
                         card: card_id,
-                        cast: Default::default(),
+                        cast,
                         mode: None,
                         targets: Vec::new(),
                         target_req_indices: Vec::new(),
@@ -382,15 +398,9 @@ impl Game {
                 } else {
                     self.can_pay_with_mana_abilities(player, &cost, None)
                 };
-                payable.then_some(Action::CastSpell {
-                    player,
-                    card: card_id,
-                })
+                payable
             }
-            None => Some(Action::CastSpell {
-                player,
-                card: card_id,
-            }),
+            None => true,
         }
     }
 

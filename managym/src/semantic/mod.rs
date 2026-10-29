@@ -115,6 +115,8 @@ pub enum Opcode {
     RevealHandDiscardChosen = 73,
     ShuffleGraveyardIntoLibrary = 74,
     NoMaximumHandSize = 75,
+    CastFromHandFree = 76,
+    ExileUntilNonlandCastFree = 77,
 }
 
 impl Opcode {
@@ -195,6 +197,8 @@ impl Opcode {
             73 => Opcode::RevealHandDiscardChosen,
             74 => Opcode::ShuffleGraveyardIntoLibrary,
             75 => Opcode::NoMaximumHandSize,
+            76 => Opcode::CastFromHandFree,
+            77 => Opcode::ExileUntilNonlandCastFree,
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -448,6 +452,12 @@ pub enum Step {
     },
     OpponentsCastOnlyFromHand,
     ExileTopCardPlayThisTurn,
+    ExileUntilNonlandCastFree {
+        below: ValueExpression,
+    },
+    CastFromHandFree {
+        predicate: Predicate,
+    },
     NoMaximumHandSize,
     ShuffleGraveyardIntoLibrary,
     SacrificeSource {
@@ -1033,6 +1043,8 @@ impl<'a> BoundPack<'a> {
             | Step::AirbendAll { .. }
             | Step::OpponentsCastOnlyFromHand
             | Step::ExileTopCardPlayThisTurn
+            | Step::ExileUntilNonlandCastFree { .. }
+            | Step::CastFromHandFree { .. }
             | Step::NoMaximumHandSize
             | Step::ShuffleGraveyardIntoLibrary
             | Step::SacrificeSource { .. }
@@ -1371,6 +1383,12 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         },
         Opcode::OpponentsCastOnlyFromHand => Step::OpponentsCastOnlyFromHand,
         Opcode::ExileTopCardPlayThisTurn => Step::ExileTopCardPlayThisTurn,
+        Opcode::ExileUntilNonlandCastFree => Step::ExileUntilNonlandCastFree {
+            below: ValueExpression::parse(object_field(value, "below")?)?,
+        },
+        Opcode::CastFromHandFree => Step::CastFromHandFree {
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
+        },
         Opcode::NoMaximumHandSize => Step::NoMaximumHandSize,
         Opcode::ShuffleGraveyardIntoLibrary => Step::ShuffleGraveyardIntoLibrary,
         Opcode::SacrificeSource => Step::SacrificeSource {

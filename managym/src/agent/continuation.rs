@@ -493,6 +493,7 @@ impl Game {
                 Decision::SearchDistinctLands { .. } => (14, None),
                 Decision::OpponentSplitsRevealed { .. } => (15, None),
                 Decision::DiscardFromRevealedHand { .. } => (16, None),
+                Decision::CastWithoutPaying { .. } => (17, None),
             };
             frame.decision = kind;
             frames.push(frame);

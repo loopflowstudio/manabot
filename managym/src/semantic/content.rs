@@ -1134,6 +1134,12 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         }
         Step::OpponentsCastOnlyFromHand => Effect::OpponentsCastOnlyFromHand,
         Step::ExileTopCardPlayThisTurn => Effect::ExileTopCardPlayThisTurn,
+        Step::ExileUntilNonlandCastFree { below } => Effect::ExileUntilNonlandCastFree {
+            below: below.lower()?,
+        },
+        Step::CastFromHandFree { predicate } => Effect::CastFromHandFree {
+            predicate: predicate_card(predicate)?,
+        },
         Step::NoMaximumHandSize => Effect::NoMaximumHandSize,
         Step::ShuffleGraveyardIntoLibrary => Effect::ShuffleGraveyardIntoLibrary,
         Step::RevealHandDiscardChosen { target, predicate } => Effect::RevealHandDiscardChosen {

@@ -352,6 +352,14 @@ pub enum Op {
     OpponentsCastOnlyFromHand,
     /// "Exile the top card of your library. You may play that card this turn."
     ExileTopCardPlayThisTurn,
+    /// "Exile cards from the top of your library until you exile a nonland card; you may cast it without paying its mana cost if its mana value is less than the value, otherwise put it into your hand."
+    ExileUntilNonlandCastFree {
+        below: Quantity,
+    },
+    /// "You may cast a matching spell from your hand without paying its mana cost."
+    CastFromHandFree {
+        predicate: Predicate,
+    },
     /// "You have no maximum hand size for the rest of the game."
     NoMaximumHandSize,
     /// "Shuffle your graveyard into your library."
