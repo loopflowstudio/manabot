@@ -62,8 +62,8 @@ worktree, so new T2 cards read "unsupported" in this base until T1 lands.
 ## Done (slices 1–2 `648edee6b` → T1 merge `f7b59aa99`; 3 `afff1e1ed`; 4a `0d124a66e`; 4b `dea25eda8`, `d84c5f590`; T1 review `c223ea581`; slice 5/6 `43ef1210f`…)
 
 44 of 51 T2 cards are defined (2026-10-28, against `allocation.jsonl`); 7
-remain (Next slices). The six T1 cards were reviewed and left `tla::INCOMPLETE`
-in `c223ea581`. Each T2-defined card has a witness in `tests/cards/tla.rs` and
+remain (Next slices). The six T1 cards were reviewed, witnessed and dropped
+from `tla::INCOMPLETE` in `c223ea581`. Each T2-defined card has a witness in `tests/cards/tla.rs` and
 a Scryfall fixture entry (`scratch/add_fixture.py <name>` appends one);
 per-slice card lists are in the commit messages above.
 
