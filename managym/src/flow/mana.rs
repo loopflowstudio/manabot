@@ -469,17 +469,8 @@ impl Game {
             abilities = self.state.cards[source.card].activated_abilities.clone();
             self.extend_own_abilities(permanent, &mut abilities);
         }
-        for grantor in [PlayerId(0), PlayerId(1)]
-            .into_iter()
-            .flat_map(|player| self.battlefield_permanents(player))
-        {
-            let attachment = self.state.permanents[grantor].as_ref().unwrap();
-            let card = &self.state.cards[attachment.card];
-            if card.attached_grants.is_empty()
-                || attachment.abilities_lost
-                || (lost && card.attached_characteristics.is_none())
-                || self.attached_creature(grantor) != Some(permanent)
-            {
+        for (grantor, card) in self.attachments_on(permanent) {
+            if lost && card.attached_characteristics.is_none() {
                 continue;
             }
             let grantor = self
@@ -677,6 +668,7 @@ impl Game {
             .map(|permanent| {
                 let source = self.state.permanents[permanent].as_ref().unwrap();
                 let card = &self.state.cards[source.card];
+                // A source that lost its abilities offers no zero-mana tap.
                 let fixed = (source.can_tap(card)
                     && !card.mana_abilities.is_empty()
                     && !self.has_lost_abilities(permanent))

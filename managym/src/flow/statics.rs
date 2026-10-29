@@ -256,25 +256,11 @@ impl Game {
     }
 
     /// The characteristics an Aura attached to `permanent_id` sets, if any
-    /// (the latest in battlefield order). An Aura that has itself lost its
-    /// abilities sets nothing; no further statics are read, so this never
-    /// recurses.
-    pub(crate) fn set_characteristics(
-        &self,
-        permanent_id: PermanentId,
-    ) -> Option<&SetCharacteristics> {
-        [PlayerId(0), PlayerId(1)]
-            .into_iter()
-            .flat_map(|player| self.state.zones.zone_cards(ZoneType::Battlefield, player))
-            .filter_map(|&card_id| {
-                let set = self.state.cards[card_id]
-                    .attached_characteristics
-                    .as_ref()?;
-                let source = self.state.card_to_permanent[card_id]?;
-                (!self.state.permanents[source].as_ref()?.abilities_lost
-                    && self.attached_creature(source) == Some(permanent_id))
-                .then_some(set)
-            })
+    /// (the latest in battlefield order). Attachments are filtered on their
+    /// own `abilities_lost` flag alone, so this never recurses.
+    fn set_characteristics(&self, permanent_id: PermanentId) -> Option<&SetCharacteristics> {
+        self.attachments_on(permanent_id)
+            .filter_map(|(_, card)| card.attached_characteristics.as_ref())
             .last()
     }
 
@@ -410,6 +396,23 @@ impl Game {
     pub(crate) fn attached_creature(&self, source: PermanentId) -> Option<PermanentId> {
         self.attached_permanent(source)
             .filter(|&creature| self.permanent_is_creature(creature))
+    }
+
+    /// Auras and Equipment attached to the creature `target`, in battlefield
+    /// order, less those that have lost their own abilities.
+    pub(crate) fn attachments_on(
+        &self,
+        target: PermanentId,
+    ) -> impl Iterator<Item = (PermanentId, &Card)> {
+        [PlayerId(0), PlayerId(1)]
+            .into_iter()
+            .flat_map(move |player| self.state.zones.zone_cards(ZoneType::Battlefield, player))
+            .filter_map(move |&card_id| {
+                let source = self.state.card_to_permanent[card_id]?;
+                (!self.state.permanents[source].as_ref()?.abilities_lost
+                    && self.attached_creature(source) == Some(target))
+                .then(|| (source, &self.state.cards[card_id]))
+            })
     }
 
     /// Whether a static restriction from a battlefield permanent applies to
