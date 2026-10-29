@@ -1134,6 +1134,8 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         }
         Step::OpponentsCastOnlyFromHand => Effect::OpponentsCastOnlyFromHand,
         Step::ExileTopCardPlayThisTurn => Effect::ExileTopCardPlayThisTurn,
+        Step::NoMaximumHandSize => Effect::NoMaximumHandSize,
+        Step::ShuffleGraveyardIntoLibrary => Effect::ShuffleGraveyardIntoLibrary,
         Step::RevealHandDiscardChosen { target, predicate } => Effect::RevealHandDiscardChosen {
             target: target_for(program, target)?,
             predicate: predicate_card(predicate)?,

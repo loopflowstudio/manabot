@@ -256,6 +256,10 @@ pub enum Effect {
     OpponentsCastOnlyFromHand,
     /// "Exile the top card of your library. You may play that card this turn."
     ExileTopCardPlayThisTurn,
+    /// You have no maximum hand size for the rest of the game.
+    NoMaximumHandSize,
+    /// Shuffle your graveyard into your library.
+    ShuffleGraveyardIntoLibrary,
     /// The target's owner chooses second from the top of their library or
     /// the bottom (a resolution-time mode of [`Effect::PlaceTargetInLibrary`]).
     OwnerPutsIntoLibrary {
@@ -686,6 +690,8 @@ impl Effect {
             | Effect::OpponentsCastOnlyFromHand
             | Effect::ExileSourceSpell
             | Effect::ExileTopCardPlayThisTurn
+            | Effect::NoMaximumHandSize
+            | Effect::ShuffleGraveyardIntoLibrary
             | Effect::PlaceTargetInLibrary { .. }
             | Effect::SearchLandsOpponentSplits { .. }
             | Effect::ModifyControlled { .. }

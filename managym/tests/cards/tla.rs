@@ -1827,3 +1827,67 @@ fn united_front_announces_x_and_counts_it_on_resolution() {
     assert_eq!(counters(&s, ogre), 1);
     assert_eq!(counters(&s, opposing), 0);
 }
+
+/// The optional waterbend {6} is offered only when payable and may be paid by
+/// tapping creatures; paid, the spell reshuffles the graveyard, draws seven
+/// and lifts the maximum hand size. Either way it exiles itself.
+#[test]
+fn spirit_water_revival_waterbends_its_additional_cost() {
+    let mut s = setup(&["Spirit Water Revival", "Gray Ogre", "Craw Wurm"]);
+    let ogres: Vec<PermanentId> = ["Gray Ogre", "Craw Wurm"]
+        .into_iter()
+        .flat_map(|name| [name; 3])
+        .map(|name| s.force_permanent_on_battlefield(0, name))
+        .collect();
+    let binned = library_card(&s, 0, "Gray Ogre");
+    s.game_mut().move_card(binned, ZoneType::Graveyard);
+
+    // Unkicked: with {1}{U}{U} and no untapped helpers, no choice is offered.
+    for ogre in &ogres {
+        s.game_mut().state.permanents[*ogre]
+            .as_mut()
+            .unwrap()
+            .tapped = true;
+    }
+    s.set_player_mana_pool(0, "1UU");
+    let hand = s.zone_size(0, ZoneType::Hand);
+    let first = cast(&mut s, "Spirit Water Revival");
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    settle(&mut s);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 2);
+    assert_eq!(s.game().state.zones.zone_of(first), Some(ZoneType::Exile));
+    assert!(!s.game().state.players[0].no_maximum_hand_size);
+
+    // Kicked: five creatures and {1} more mana pay the {6}.
+    for ogre in &ogres[..5] {
+        ready(&mut s, *ogre);
+        s.game_mut().state.permanents[*ogre]
+            .as_mut()
+            .unwrap()
+            .tapped = false;
+    }
+    s.set_player_mana_pool(0, "2UU");
+    let second = cast(&mut s, "Spirit Water Revival");
+    assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);
+    for ogre in &ogres[..5] {
+        choose(
+            &mut s,
+            |a| matches!(a, Action::WaterbendTap { permanent, .. } if permanent == ogre),
+        );
+    }
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    let hand = s.zone_size(0, ZoneType::Hand);
+    settle(&mut s);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 7);
+    assert_eq!(s.zone_size(0, ZoneType::Graveyard), 0);
+    assert_ne!(
+        s.game().state.zones.zone_of(binned),
+        Some(ZoneType::Graveyard)
+    );
+    assert_eq!(s.game().state.zones.zone_of(second), Some(ZoneType::Exile));
+    assert!(s.game().state.players[0].no_maximum_hand_size);
+}

@@ -364,6 +364,8 @@
     "exile": 28,
     "exile_if_dies": 63,
     "exile_top_card_play_this_turn": 69,
+    "no_maximum_hand_size": 75,
+    "shuffle_graveyard_into_library": 74,
     "exile_until_source_leaves": 21,
     "exile_with_controller_token": 35,
     "for_each_target": 19,

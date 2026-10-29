@@ -550,6 +550,27 @@ impl Game {
                 self.exile_top_card_play_this_turn(frame.controller);
                 None
             }
+            Effect::ShuffleGraveyardIntoLibrary => {
+                let player = frame.controller;
+                let graveyard = self
+                    .state
+                    .zones
+                    .zone_cards(ZoneType::Graveyard, player)
+                    .to_vec();
+                for card in graveyard {
+                    self.move_card(card, ZoneType::Library);
+                }
+                self.journal_zones();
+                self.state
+                    .zones
+                    .shuffle(ZoneType::Library, player, &mut self.state.rng);
+                None
+            }
+            Effect::NoMaximumHandSize => {
+                self.journal_player(frame.controller);
+                self.state.players[frame.controller.0].no_maximum_hand_size = true;
+                None
+            }
             Effect::ExileSourceSpell => {
                 if let Some(card) = frame
                     .source

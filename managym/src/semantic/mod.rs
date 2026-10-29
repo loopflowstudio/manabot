@@ -113,6 +113,8 @@ pub enum Opcode {
     PutIntoLibrarySecondOrBottom = 71,
     SearchLandsOpponentSplits = 72,
     RevealHandDiscardChosen = 73,
+    ShuffleGraveyardIntoLibrary = 74,
+    NoMaximumHandSize = 75,
 }
 
 impl Opcode {
@@ -191,6 +193,8 @@ impl Opcode {
             71 => Opcode::PutIntoLibrarySecondOrBottom,
             72 => Opcode::SearchLandsOpponentSplits,
             73 => Opcode::RevealHandDiscardChosen,
+            74 => Opcode::ShuffleGraveyardIntoLibrary,
+            75 => Opcode::NoMaximumHandSize,
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -444,6 +448,8 @@ pub enum Step {
     },
     OpponentsCastOnlyFromHand,
     ExileTopCardPlayThisTurn,
+    NoMaximumHandSize,
+    ShuffleGraveyardIntoLibrary,
     SacrificeSource {
         then: Vec<Step>,
     },
@@ -1027,6 +1033,8 @@ impl<'a> BoundPack<'a> {
             | Step::AirbendAll { .. }
             | Step::OpponentsCastOnlyFromHand
             | Step::ExileTopCardPlayThisTurn
+            | Step::NoMaximumHandSize
+            | Step::ShuffleGraveyardIntoLibrary
             | Step::SacrificeSource { .. }
             | Step::PutIntoLibrarySecondOrBottom { .. }
             | Step::SearchLandsOpponentSplits { .. }
@@ -1363,6 +1371,8 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         },
         Opcode::OpponentsCastOnlyFromHand => Step::OpponentsCastOnlyFromHand,
         Opcode::ExileTopCardPlayThisTurn => Step::ExileTopCardPlayThisTurn,
+        Opcode::NoMaximumHandSize => Step::NoMaximumHandSize,
+        Opcode::ShuffleGraveyardIntoLibrary => Step::ShuffleGraveyardIntoLibrary,
         Opcode::SacrificeSource => Step::SacrificeSource {
             then: parse_steps(array_field(value, "then")?)?,
         },

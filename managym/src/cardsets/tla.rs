@@ -165,6 +165,7 @@ pub(super) fn cards() -> Vec<Card> {
         dai_li_indoctrination(),
         professor_zei_anthropologist(),
         united_front(),
+        spirit_water_revival(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -5259,6 +5260,43 @@ fn united_front() -> Card {
         .cost(Cost::mana("{X}{W}{W}"))
         .inferred()],
         registry_name: "United Front",
+        text_box,
+    }
+}
+
+fn spirit_water_revival() -> Card {
+    let text_box = "As an additional cost to cast this spell, you may waterbend {6}. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)\nDraw two cards. If this spell's additional cost was paid, instead shuffle your graveyard into your library, draw seven cards, and you have no maximum hand size for the rest of the game.\nExile Spirit Water Revival.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{U}{U}"),
+            types: vec![CardType::Sorcery],
+            ..Default::default()
+        },
+        key: "tla.spirit_water_revival",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![
+                Op::Branch {
+                    condition: Condition::Kicked,
+                    otherwise: vec![Op::DrawCards { count: 2 }],
+                    then: vec![
+                        Op::ShuffleGraveyardIntoLibrary,
+                        Op::DrawCards { count: 7 },
+                        Op::NoMaximumHandSize,
+                    ],
+                },
+                Op::Exile { target: "source" },
+            ],
+        )
+        .cost(Cost {
+            mana: Some("{1}{U}{U}"),
+            kicker: Some("{6}"),
+            waterbend: Some(true),
+            ..Default::default()
+        })],
+        registry_name: "Spirit Water Revival",
         text_box,
     }
 }

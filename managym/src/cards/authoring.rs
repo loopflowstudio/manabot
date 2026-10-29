@@ -352,6 +352,10 @@ pub enum Op {
     OpponentsCastOnlyFromHand,
     /// "Exile the top card of your library. You may play that card this turn."
     ExileTopCardPlayThisTurn,
+    /// "You have no maximum hand size for the rest of the game."
+    NoMaximumHandSize,
+    /// "Shuffle your graveyard into your library."
+    ShuffleGraveyardIntoLibrary,
     /// "Sacrifice this [permanent]. If you do, [then]." Nothing happens when
     /// the exact source already left the battlefield.
     SacrificeSource {
