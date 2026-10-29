@@ -88,7 +88,7 @@ lib 119, `rules_tests` 356; clippy, fmt clean; `pytest tests/semantic` 158 pass,
 - T2 (87e012, uncommitted on `be2b7586b`, re-read 2026-10-28) appends to schema 8
   with colliding numbers: fields 85-87, predicate 13 `with_counter`, subtypes
   64-70, special role 6. The later lander renumbers its own entries (append-only,
-  contiguous); this branch now also holds opcode 67 and subtype 66.
+  contiguous); this branch now also holds opcodes 67-68, field 90, special role 11 and subtype 66.
 - T2 also implements exhaust and `Predicate::WithCounter` (+1/+1 only). Keep one
   exhaust cost field and gate, and one with-counters predicate reading every kind.
 - T2 created its own `tests/cards.rs`, `support.rs` and `tla.rs`; merge into one of
