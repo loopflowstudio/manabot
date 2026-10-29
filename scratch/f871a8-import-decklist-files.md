@@ -225,37 +225,19 @@ both checks live in the `references` validator, `read_decks` only embeds.
 `TrainingRegime.root_match` derives the representative pair from `decks` for
 fingerprints/collector construction and is never serialized, so the digest
 and learning-state comparison rest on `decks`. Producer admission
-(`state/admission._admit_setups`) requires a checkpoint bound to the decks'
-pool and re-admits every deck; setup transfer requires an authored match.
+(`state/admission._admit_setups`) applies the shared world deck rule to every
+deck (see below); setup transfer requires an authored match.
 Elemental-uniform and authored regimes keep their `match` unchanged.
 
-### Concept review at 59648dc59 (2026-10-28, headless Graph step)
+### Concept review at 59648dc59 (2026-10-28), implemented at 569e595ca/1e0c293c2
 
-Regimes, `TrainingDecks`, native `set_training_decks` and pool-world
-checkpoints match the accepted model; a deck regime's only setup record is its
-decks. One residue contradicts "deck/content admission remains shared native
-domain behavior" and "one owner for each fact": **producer admission keeps a
-second rule for which checkpoint may play a deck run.**
-`state/admission._admit_setups` probes
-`world_binding["content_pool"]["pack_key"]` itself and calls
-`regime.decks.check()`, restating `validate_agent_setup`'s pool branch
-(same pool, then `admit_pool_decks`) outside `model/world.py`. The two already
-differ at the edges: a checkpoint without a binding passes
-`validate_agent_setup` but fails `_admit_setups`, and only the shared rule
-names the exact diagnostic consumers see in sim/Academy.
-
-Implemented: `model/world.validate_agent_decks(agent, players)` is the one
-rule for "may this checkpoint play every one of these decks" (pool → bound
-pool + native admission; setup → roster membership). `validate_agent_setup`
-keeps seat count and explicit-pack checks and delegates deck membership;
-`_admit_setups` rejects unbound checkpoints, then calls the shared rule.
-Check: focused training-decks/matchups/world/catalog/import/mirror tests, 64
-passed (incl. authored-bound checkpoint rejected for a deck regime). Full
-affected suites and debug Rust remain for gate.
-Compress: `validate_agent_setup` runs seat count and the shared deck rule once
-for both binding forms. World/mirror/catalog/pool `-k` sweep: 148 passed;
-9 failures (academy/test_learn_setup, semantic learning projection, temur,
-elemental_world) fail identically without the change — for gate.
+Found producer admission (`_admit_setups`) restating the pool branch of
+`validate_agent_setup` outside `model/world.py`. Resolved:
+`model/world.validate_agent_decks(agent, players)` is now the one rule for
+"may this checkpoint play every one of these decks" (pool → bound pool + native
+admission; setup → roster membership). `validate_agent_setup` checks seat count
+and explicit pack, then delegates; `_admit_setups` rejects unbound checkpoints,
+then calls the shared rule. No second pool rule remains in `state/admission.py`.
 
 Noted, not a change: the collector and native `VectorEnv` still hold training
 decks in a field named `uniform_roster`; it no longer gates admission
@@ -362,14 +344,15 @@ collector and failure capture. `current_matchup_indices` is Elemental-only.
 Checkpoints: deck runs export `save_checkpoint(content_pool=...)` →
 `model.world.pool_world`: native `content_pool` descriptor, rules, input schema
 and learning-schema hash; no setups, decks, sources or sampler. Execution admits
-any deck the pool admits (`validate_agent_setup`), rejects unsupported/other
+any deck the pool admits (`validate_agent_decks`, shared by
+`validate_agent_setup` and producer admission), rejects unsupported/other
 pools; load/catalog reject changed descriptor/rules/input. Exact setup bindings
 bind a compiled authored pack's complete roster (versioned
 `authored-pack-v1`; Elemental unmarked and frozen); historical unmarked pairs and
 default content keep exact pairs. Run recovery keeps the decks digest in collector
 snapshots and `GameAttempt.decks_digest`; learning-state resume compares
-`regime.decks`; producer admission requires a checkpoint bound to the decks'
-pool and re-admits every deck, never a representative pair.
+`regime.decks`; producer admission requires a bound checkpoint and applies
+`validate_agent_decks` to every deck, never a representative pair.
 
 Acceptance (training): three or more eligible decks; changing pairs over resets;
 identical pair/seat/seed/policy RNG after recovery; invalid/unsupported fixed
@@ -380,7 +363,10 @@ fixtures, actual collector path, no weight updates.
 
 Remaining: gate owns full affected suites (debug Rust, training recovery,
 learning-state, Elemental and combined CI collection) per
-docs/development/validation.md. Run→checkpoint linkage is existing TrainingRun
+docs/development/validation.md. A world/mirror/catalog/pool `-k` sweep after
+1e0c293c2 had 9 failures (academy/test_learn_setup, semantic learning
+projection, temur, elemental_world) that fail identically without the change;
+gate must attribute them before publish. Run→checkpoint linkage is existing TrainingRun
 records; not re-proved end-to-end by executing a regime here.
 
 ## Delete — do not maintain
