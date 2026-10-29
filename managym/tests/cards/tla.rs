@@ -1222,25 +1222,27 @@ fn earthen_ally_grows_with_ally_colors_and_earthbends_five() {
     assert_eq!(s.game().effective_pt(forest), (5, 5));
 }
 
-/// Declare every offered attacker.
-fn attack_with_all(s: &mut Scenario) {
+/// Advance to declare attackers and attack with exactly `attackers`.
+fn declare_attackers(s: &mut Scenario, attackers: &[PermanentId]) {
     s.advance_until(
         |s| s.action_space().kind == ActionSpaceKind::DeclareAttacker,
         "attackers".into(),
     );
     while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
         choose(s, |a| {
-            matches!(a, Action::DeclareAttacker { attack: true, .. })
+            matches!(a, Action::DeclareAttacker { permanent, attack, .. }
+                if *attack == attackers.contains(permanent))
         });
     }
 }
 
+fn is_block_of(action: &Action, attacker: PermanentId) -> bool {
+    matches!(action, Action::DeclareBlocker { attacker: Some(target), .. } if *target == attacker)
+}
+
 /// Whether the current blocker may block `attacker`.
 fn may_block(s: &Scenario, attacker: PermanentId) -> bool {
-    has_action(
-        s,
-        |a| matches!(a, Action::DeclareBlocker { attacker: Some(target), .. } if *target == attacker),
-    )
+    has_action(s, |a| is_block_of(a, attacker))
 }
 
 /// The entry trigger counters each creature you control. CR 509.1b: a
@@ -1264,22 +1266,16 @@ fn flopsie_counters_your_team_and_limits_big_attackers_to_one_blocker() {
     ready(&mut s, flopsie);
     ready(&mut s, ogre);
 
-    attack_with_all(&mut s);
+    declare_attackers(&mut s, &[flopsie, ogre]);
     s.advance_until(
         |s| s.action_space().kind == ActionSpaceKind::DeclareBlocker,
         "blockers".into(),
     );
     assert!(may_block(&s, flopsie));
-    choose(
-        &mut s,
-        |a| matches!(a, Action::DeclareBlocker { attacker: Some(target), .. } if *target == flopsie),
-    );
+    choose(&mut s, |a| is_block_of(a, flopsie));
     assert!(!may_block(&s, flopsie), "a second blocker is refused");
     assert!(may_block(&s, ogre));
-    choose(
-        &mut s,
-        |a| matches!(a, Action::DeclareBlocker { attacker: Some(target), .. } if *target == ogre),
-    );
+    choose(&mut s, |a| is_block_of(a, ogre));
     assert!(may_block(&s, ogre), "a 3/3 can be blocked by two");
 }
 
@@ -1297,16 +1293,7 @@ fn the_boulder_earthbends_for_each_four_power_creature_on_attack() {
     add_counters(&mut s, theirs, CounterKind::PlusOnePlusOne, 2);
     ready(&mut s, boulder);
 
-    s.advance_until(
-        |s| s.action_space().kind == ActionSpaceKind::DeclareAttacker,
-        "attackers".into(),
-    );
-    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
-        choose(&mut s, |a| {
-            matches!(a, Action::DeclareAttacker { permanent, attack, .. }
-                if *attack == (*permanent == boulder))
-        });
-    }
+    declare_attackers(&mut s, &[boulder]);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(forest)));
     settle(&mut s);

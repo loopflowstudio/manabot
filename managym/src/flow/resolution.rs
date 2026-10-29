@@ -301,12 +301,8 @@ impl Game {
                 None
             }
             Effect::CantBeBlockedTarget { .. } => {
-                let target = self.present_primary_target(frame)?;
-                if let Target::Permanent(id) = target {
-                    self.journal_permanent(id);
-                    self.state.permanents[id]
-                        .as_mut()?
-                        .cant_be_blocked_this_turn = true;
+                if let Some(permanent) = self.target_permanent_mut(frame) {
+                    permanent.cant_be_blocked_this_turn = true;
                 }
                 None
             }
@@ -563,34 +559,29 @@ impl Game {
                 }
                 None
             }
-            Effect::SetBasePtUntilEot { power, toughness } => {
-                if let Some(permanent) = self.source_permanent_mut(frame) {
-                    permanent.temp_base_power = power.or(permanent.temp_base_power);
-                    permanent.temp_base_toughness = toughness.or(permanent.temp_base_toughness);
-                }
-                None
-            }
-            Effect::BecomeCreatureTarget { duration, .. } => {
-                if let Some(Target::Permanent(id)) = self.present_primary_target(frame) {
-                    self.journal_permanent(id);
-                    let permanent = self.state.permanents[id].as_mut()?;
-                    permanent.becomes_creature = permanent.becomes_creature.max(Some(*duration));
-                }
-                None
-            }
-            Effect::SetBasePtTarget {
+            Effect::SetBasePtUntilEot { power, toughness }
+            | Effect::SetBasePtTarget {
                 power, toughness, ..
             } => {
-                if let Some(Target::Permanent(id)) = self.present_primary_target(frame) {
-                    self.journal_permanent(id);
-                    let permanent = self.state.permanents[id].as_mut()?;
+                let permanent = if matches!(effect, Effect::SetBasePtTarget { .. }) {
+                    self.target_permanent_mut(frame)
+                } else {
+                    self.source_permanent_mut(frame)
+                };
+                if let Some(permanent) = permanent {
                     permanent.temp_base_power = power.or(permanent.temp_base_power);
                     permanent.temp_base_toughness = toughness.or(permanent.temp_base_toughness);
                 }
                 None
             }
-            Effect::BecomeCreatureSource { duration } => {
-                if let Some(permanent) = self.source_permanent_mut(frame) {
+            Effect::BecomeCreatureSource { duration }
+            | Effect::BecomeCreatureTarget { duration, .. } => {
+                let permanent = if matches!(effect, Effect::BecomeCreatureTarget { .. }) {
+                    self.target_permanent_mut(frame)
+                } else {
+                    self.source_permanent_mut(frame)
+                };
+                if let Some(permanent) = permanent {
                     permanent.becomes_creature = permanent.becomes_creature.max(Some(*duration));
                 }
                 None
@@ -655,10 +646,7 @@ impl Game {
                 )
             }
             Effect::AddSubtypeToTarget { subtype, .. } => {
-                let chosen = self.present_primary_target(frame)?;
-                if let Target::Permanent(id) = chosen {
-                    self.journal_permanent(id);
-                    let permanent = self.state.permanents[id].as_mut()?;
+                if let Some(permanent) = self.target_permanent_mut(frame) {
                     if !permanent.temp_subtypes.contains(subtype) {
                         permanent.temp_subtypes.push(subtype.clone());
                     }
@@ -666,10 +654,8 @@ impl Game {
                 None
             }
             Effect::ExileIfDiesThisTurn { .. } => {
-                let chosen = self.present_primary_target(frame)?;
-                if let Target::Permanent(id) = chosen {
-                    self.journal_permanent(id);
-                    self.state.permanents[id].as_mut()?.exile_if_dies_this_turn = true;
+                if let Some(permanent) = self.target_permanent_mut(frame) {
+                    permanent.exile_if_dies_this_turn = true;
                 }
                 None
             }
@@ -1144,6 +1130,15 @@ impl Game {
 
     fn source_permanent_mut(&mut self, frame: &EffectFrame) -> Option<&mut Permanent> {
         let permanent_id = self.source_permanent_id(frame)?;
+        self.journal_permanent(permanent_id);
+        self.state.permanents[permanent_id].as_mut()
+    }
+
+    /// The frame's still-present primary target, when it is a permanent.
+    fn target_permanent_mut(&mut self, frame: &EffectFrame) -> Option<&mut Permanent> {
+        let Some(Target::Permanent(permanent_id)) = self.present_primary_target(frame) else {
+            return None;
+        };
         self.journal_permanent(permanent_id);
         self.state.permanents[permanent_id].as_mut()
     }

@@ -67,10 +67,11 @@ quantity 5, trigger_event 13, subtypes 64-74.
 `scratch/add_fixture.py` copies pinned evidence into the conformance fixture.
 
 Check (slice 9, debug): `cargo test` all targets pass (cards 39, rules_tests 356,
-lib 119) except `semantic_conformance_tests` (world w16 vs w15 and receipt digest
+lib 119) except `semantic_conformance_tests` (w16 vs w15 and receipt digest
 drift; fails in PR #394 CI run 40819903624); clippy, fmt clean; extension rebuilt;
-`pytest tests/semantic` 158 pass, 4 fail on `schema_version == 3/4/7` asserts,
-inherited from `be2b7586b`.
+`pytest tests/semantic` 158 pass, 4 fail on `schema_version == 3/4/7` asserts
+inherited from `be2b7586b`. Its compress
+kept the IR; cards, rules, lib, clippy re-run.
 
 ## Remaining (15 cards), suggested next slices
 
@@ -90,7 +91,6 @@ inherited from `be2b7586b`.
 
 ## Reconcile at sync (T2 87e012 at `67c532c3c`, read 2026-10-28)
 
-- T1 (892c47) deletions reconciled at sync 86ebe9ccf.
 - Both branches append to schema 8 from 86ebe9ccf with colliding numbers. T2:
   fields 85-94, predicates 13-15, subtypes 64-71, special role 6, opcodes 66-71,
   trigger_event 13, destination 2, zone 3. This branch: fields 85-93, predicates

@@ -666,45 +666,21 @@ impl Op {
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Predicate {
-    NotCardTypes {
-        values: Vec<CardType>,
-    },
-    Subtype {
-        value: &'static str,
-    },
-    Supertype {
-        value: &'static str,
-    },
-    All {
-        predicates: Vec<Predicate>,
-    },
-    CardType {
-        value: CardType,
-    },
-    PowerAtMost {
-        value: i32,
-    },
-    ManaValueAtLeast {
-        value: i32,
-    },
-    SubtypesAny {
-        values: Vec<&'static str>,
-    },
+    NotCardTypes { values: Vec<CardType> },
+    Subtype { value: &'static str },
+    Supertype { value: &'static str },
+    All { predicates: Vec<Predicate> },
+    CardType { value: CardType },
+    PowerAtMost { value: i32 },
+    ManaValueAtLeast { value: i32 },
+    SubtypesAny { values: Vec<&'static str> },
     Flying,
     NoCounters,
-    NotSubtypes {
-        values: Vec<&'static str>,
-    },
-    TypesAny {
-        values: Vec<CardType>,
-    },
-    PowerAtLeast {
-        value: i32,
-    },
-    /// A token (`true`) or a nontoken (`false`) object.
-    Token {
-        value: bool,
-    },
+    NotSubtypes { values: Vec<&'static str> },
+    TypesAny { values: Vec<CardType> },
+    PowerAtLeast { value: i32 },
+    // A token (`true`) or a nontoken (`false`) object.
+    Token { value: bool },
     Any,
 }
 

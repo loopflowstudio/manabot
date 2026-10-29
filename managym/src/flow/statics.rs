@@ -29,7 +29,7 @@
 // scopes add effective keywords; restrictions, which no layer reads, also
 // read effective power. No computation can recurse.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
     flow::game::Game,
@@ -259,7 +259,7 @@ impl Game {
             .filter(|&id| self.permanent_matches_with(id, predicate, ScopeView::Keywords))
             .filter_map(|id| self.state.permanents[id].as_ref())
             .flat_map(|permanent| self.state.cards[permanent.card].colors())
-            .collect::<std::collections::BTreeSet<_>>()
+            .collect::<BTreeSet<_>>()
             .len() as i32
     }
 
