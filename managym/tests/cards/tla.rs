@@ -6,19 +6,21 @@
 use crate::support::{
     game::{
         clear_hand, clear_summoning_sickness, deck, enter_battlefield, five_color_setup,
-        five_color_unfunded_setup, force_lands, move_to_hand, pin_top, put_onto_battlefield, ready,
-        ur_lessons_deck, ur_lessons_setup, Scenario,
+        five_color_unfunded_setup, force_lands, force_new_card_in_hand, move_to_hand, pin_top,
+        plant_in_graveyard, put_onto_battlefield, ready, ur_lessons_deck, ur_lessons_setup,
+        Scenario,
     },
     inspect::{
         assert_choice_contract, can_cast, card_of, counters, counters_of, find_owned_card,
-        find_owned_card_off_battlefield, hand, has_action, library, library_card, offered_targets,
-        permanent, permanent_named, stack_spell_card, tapped,
+        find_owned_card_off_battlefield, hand, has_action, keywords, library, library_card,
+        library_top, offered_targets, permanent, permanent_named, stack_spell_card, tapped,
     },
     play::{
-        activate, activate_card, activate_first, activate_named, can_activate, can_activate_any,
-        can_activate_card, cast, cast_and_resolve, cast_card, cast_only, cast_owned, castable,
-        choose, choose_mode, enter_and_settle, pass_until, play_and_settle, play_land, resolve_top,
-        resolve_until_priority, select_card, settle, settle_targeting_opponent,
+        activate, activate_card, activate_first, activate_named, attack_with, can_activate,
+        can_activate_any, can_activate_card, cast, cast_and_resolve, cast_card, cast_only,
+        cast_owned, castable, choose, choose_mode, enter_and_settle, pass_until, play_and_settle,
+        play_land, resolve_everything, resolve_top, resolve_until_priority, select_card, settle,
+        settle_targeting_opponent,
     },
 };
 use managym::{
@@ -5749,11 +5751,6 @@ fn put(s: &mut Scenario, player: usize, name: &str, zone: ZoneType) -> CardId {
     card
 }
 
-fn keywords(s: &Scenario, id: PermanentId) -> Keywords {
-    let permanent = permanent(s, id);
-    permanent.effective_keywords(&s.game().state.cards[permanent.card])
-}
-
 fn cycling_index(s: &Scenario, card: CardId) -> usize {
     s.game().state.cards[card]
         .activated_abilities
@@ -9872,58 +9869,4 @@ fn enters_battlefield_with_triggers(s: &mut Scenario, player: usize, name: &str)
     let card_id = find_owned_card_off_battlefield(s, player, name);
     s.game_mut().move_card(card_id, ZoneType::Battlefield);
     s.game().state.card_to_permanent[card_id].expect("permanent should exist")
-}
-
-fn library_top(s: &Scenario, player: usize) -> CardId {
-    *library(s, player)
-        .last()
-        .expect("library should be nonempty")
-}
-
-fn plant_in_graveyard(s: &mut Scenario, player: usize, card_name: &str) -> CardId {
-    let card = find_owned_card(s, player, card_name);
-    s.game_mut()
-        .state
-        .zones
-        .move_card(card, PlayerId(player), ZoneType::Graveyard);
-    card
-}
-
-fn force_new_card_in_hand(s: &mut Scenario, player: usize, card_name: &str) -> CardId {
-    let card = library_card(s, player, card_name);
-    s.game_mut()
-        .state
-        .zones
-        .move_card(card, PlayerId(player), ZoneType::Hand);
-    card
-}
-
-fn resolve_everything(s: &mut Scenario) {
-    s.advance_until(
-        |sc| {
-            sc.game().state.pending_triggers.is_empty()
-                && sc.game().state.trigger_placement.is_none()
-                && sc.game().state.stack_objects.is_empty()
-                && sc.game().state.suspended_decision.is_none()
-        },
-        "stack and triggers should drain".to_string(),
-    );
-}
-
-fn attack_with(s: &mut Scenario, attacker: PermanentId) {
-    let mut attacked = false;
-    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
-        let space = s.action_space().clone();
-        let index = space.actions.iter().position(|action| {
-            matches!(action, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == attacker)
-        });
-        match index {
-            Some(index) => {
-                s.step_action(index);
-                attacked = true;
-            }
-            None => s.decline_attack(),
-        }
-    }
-    assert!(attacked, "expected to attack");
 }

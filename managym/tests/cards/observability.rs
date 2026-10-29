@@ -24,9 +24,9 @@ use managym::{
             RELATION_KEYWORDS_INDEX, RELATION_X_INDEX,
         },
         observation::{
-            ActionOption, ActionSpaceData, CardData, CardTypeData, EventData, KeywordData,
-            Observation, PermanentData, PlayerData, SideboardCardData, StackObjectData,
-            StackTargetData, TurnData, KEYWORD_COUNT,
+            ActionOption, ActionSpaceData, CardData, CardTypeData, EventData, Observation,
+            PermanentData, PlayerData, SideboardCardData, StackObjectData, StackTargetData,
+            TurnData, KEYWORD_COUNT,
         },
         observation_encoder::{
             encode, EncodedObservation, ObservationEncoderConfig, CARD_DIM_V5,
@@ -1451,46 +1451,6 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
     fields
 }
 
-/// `(keyword, card column, permanent column)`; relation rows use
-/// `RELATION_KEYWORDS_INDEX + position`. Exhaustive like [`guard`].
-fn keyword_encodings() -> Vec<(&'static str, usize, usize)> {
-    #[allow(dead_code)]
-    fn exhaustive(value: &KeywordData) {
-        let KeywordData {
-            flying: _,
-            reach: _,
-            haste: _,
-            flash: _,
-            vigilance: _,
-            trample: _,
-            first_strike: _,
-            double_strike: _,
-            deathtouch: _,
-            lifelink: _,
-            defender: _,
-            menace: _,
-            hexproof: _,
-            indestructible: _,
-        } = value;
-    }
-    vec![
-        ("flying", 17, 10),
-        ("reach", 18, 11),
-        ("haste", 19, 12),
-        ("flash", 28, 13),
-        ("vigilance", 20, 14),
-        ("trample", 21, 15),
-        ("first_strike", 22, 16),
-        ("double_strike", 23, 17),
-        ("deathtouch", 24, 18),
-        ("lifelink", 25, 19),
-        ("defender", 26, 20),
-        ("menace", 27, 21),
-        ("hexproof", 36, 22),
-        ("indestructible", 38, 25),
-    ]
-}
-
 /// The permanent column that counts each counter kind.
 fn counter_column(kind: CounterKind) -> usize {
     match kind {
@@ -1528,7 +1488,7 @@ fn every_observed_field_names_its_v5_encoding_and_every_v5_column_is_claimed() {
             }
         }
     }
-    for (keyword, card, permanent) in keyword_encodings() {
+    for (keyword, _, card, permanent) in keyword_columns(Keywords::default()) {
         for (buffer, index) in [(Buffer::Card, card), (Buffer::Permanent, permanent)] {
             assert!(
                 index < buffer.width() && Some(index) != buffer.validity(),
@@ -1861,18 +1821,18 @@ fn honest_work_marks_set_characteristics_and_joins_the_aura_to_its_host() {
     );
 }
 
+/// Card and permanent keyword columns are checked by
+/// `printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens`;
+/// this checks the v5 relation block for keywords granted to a stack object.
 #[test]
-fn every_keyword_reaches_its_card_permanent_and_relation_columns() {
+fn every_keyword_reaches_its_relation_column() {
     let mut s = five_color_unfunded_setup(&["Gray Ogre"]);
     s.force_permanent_on_battlefield(0, "Gray Ogre");
     let observation = Observation::for_player(s.game(), PlayerId(0));
-    for (position, (keyword, card, permanent)) in keyword_encodings().into_iter().enumerate() {
+    for position in 0..KEYWORD_COUNT {
         let mut flags = [false; KEYWORD_COUNT];
         flags[position] = true;
-        let keywords = keyword_data(flags);
         let mut changed = observation.clone();
-        changed.agent_cards[0].keywords = keywords.clone();
-        changed.agent_permanents[0].keywords = keywords;
         let mut frame = ContinuationFrame {
             kind: 1,
             granted_keywords: flags,
@@ -1881,43 +1841,10 @@ fn every_keyword_reaches_its_card_permanent_and_relation_columns() {
         frame.controller = 0;
         changed.continuation = vec![frame];
         let encoded = encode(&changed, &config(5)).unwrap();
-        let card_row = &encoded.agent_cards[..CARD_DIM_V5];
-        let permanent_row_of = &encoded.agent_permanents[..PERMANENT_DIM_V5];
-        for (_, other_card, other_permanent) in keyword_encodings() {
-            assert_eq!(card_row[other_card] == 1.0, other_card == card, "{keyword}");
-            assert_eq!(
-                permanent_row_of[other_permanent] == 1.0,
-                other_permanent == permanent,
-                "{keyword}"
-            );
-        }
         let relation = &encoded.relations[RELATION_KEYWORDS_INDEX..][..KEYWORD_COUNT];
         assert_eq!(relation.iter().position(|v| *v == 1.0), Some(position));
-        assert_eq!(relation.iter().sum::<f32>(), 1.0, "{keyword}");
+        assert_eq!(relation.iter().sum::<f32>(), 1.0, "{position}");
     }
-}
-
-fn keyword_data(flags: [bool; KEYWORD_COUNT]) -> KeywordData {
-    let [flying, reach, haste, flash, vigilance, trample, first_strike, double_strike, deathtouch, lifelink, defender, menace, hexproof, indestructible] =
-        flags;
-    let keywords = KeywordData {
-        flying,
-        reach,
-        haste,
-        flash,
-        vigilance,
-        trample,
-        first_strike,
-        double_strike,
-        deathtouch,
-        lifelink,
-        defender,
-        menace,
-        hexproof,
-        indestructible,
-    };
-    assert_eq!(keywords.flags(), flags, "flags() follows field order");
-    keywords
 }
 
 #[test]
