@@ -15,7 +15,7 @@ from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import (
     AUTHORED_PACK_BINDING,
-    _pair_world,
+    _setup_world,
     checkpoint_world,
     validate_agent_setup,
     validate_checkpoint_world,
@@ -166,9 +166,7 @@ def _complexity(left: str, right: str) -> list[managym.PlayerConfig]:
 
 def _historical_pair(configs: list[managym.PlayerConfig], space) -> dict:
     """The unversioned pair binding every authored-pack checkpoint carried before."""
-    engine = managym.Env(seed=0)
-    engine.reset(configs)
-    return _pair_world(configs, engine.content_pack_manifest(), space)
+    return _setup_world(configs, space, roster=False)
 
 
 def test_pair_trained_pack_checkpoint_runs_any_authored_pair() -> None:

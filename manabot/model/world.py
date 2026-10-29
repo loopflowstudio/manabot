@@ -7,7 +7,7 @@ exact setups. Over a compiled authored pack it names the pack's complete
 authored roster, whichever pair trained it; the Elemental packs did so before
 the form was versioned, and new bindings over other authored packs carry
 `setup_binding: authored-pack-v1`. Unversioned bindings over other packs keep
-their historical pair semantics (`_pair_world`), as does default content,
+their historical pair semantics, as does default content,
 which has no native deck admission. Neither form records how a model trained.
 """
 
@@ -72,8 +72,7 @@ def validate_agent_setup(
         admit_pool_decks(pack_key, player_configs)
         return
     actual = _setups(player_configs)
-    roster_world = _binds_roster(binding)
-    if not roster_world and not allow_deck_repetition:
+    if not _binds_roster(binding) and not allow_deck_repetition:
         if actual != binding["setups"]:
             raise ValueError("checkpoint setup differs from the execution match")
         return
@@ -134,8 +133,7 @@ def bound_pack(binding: Mapping[str, Any]) -> str | None:
     """Compiled content pack a binding names, or None for default content."""
     if "content_pool" in binding:
         return binding["content_pool"]["pack_key"]
-    compiled = binding["content_manifest"].get("compiled_semantics")
-    return compiled["pack_key"] if compiled is not None else None
+    return _manifest_pack(binding["content_manifest"])
 
 
 def validate_policy_input(agent: Any, binding: dict) -> None:
@@ -182,50 +180,41 @@ def checkpoint_world(player_configs: Sequence[Any], observation_space: Any) -> d
     compatibility; each deck stays paired with its own sideboard. Names and
     shuffle seeds are not rules identity.
     """
-    configs, manifest = _configured(player_configs)
-    compiled = manifest.get("compiled_semantics")
-    pack_key = compiled["pack_key"] if compiled is not None else None
-    roster = _authored_roster(pack_key) if pack_key is not None else None
-    if pack_key in _ROSTER_PACKS:
-        return {
-            **_input_binding(observation_space),
-            "setups": roster,
-            "content_manifest": manifest,
-            "learning_schema_sha256": _digest(
-                BoundSemanticPack.bind(manifest).schema.raw
-            ),
-        }
-    if roster is None or any(setup not in roster for setup in _setups(configs)):
-        return _pair_world(configs, manifest, observation_space)
-    return {
-        **_input_binding(observation_space),
-        "setup_binding": AUTHORED_PACK_BINDING,
-        "setups": roster,
-        "content_manifest": manifest,
-        "learning_schema_sha256": _schema_file_digest(pack_key),
-    }
+    return _setup_world(player_configs, observation_space, roster=True)
 
 
-def _pair_world(configs: Sequence[Any], manifest: dict, observation_space: Any) -> dict:
-    """Exact-pair binding: default content, and historical authored bindings."""
-    compiled = manifest.get("compiled_semantics")
-    return {
-        **_input_binding(observation_space),
-        "setups": _setups(configs),
-        "content_manifest": manifest,
-        "learning_schema_sha256": _schema_file_digest(
-            compiled["pack_key"] if compiled else None
-        ),
-    }
-
-
-def _configured(player_configs: Sequence[Any]) -> tuple[list[Any], dict]:
+def _setup_world(
+    player_configs: Sequence[Any], observation_space: Any, *, roster: bool
+) -> dict:
+    """Setup binding; `roster=False` rebuilds historical exact-pair bindings."""
     configs = list(player_configs)
     if len(configs) != 2:
         raise ValueError("checkpoint world requires exactly two player setups")
     engine = managym.Env(seed=0)
     engine.reset(configs)
-    return configs, engine.content_pack_manifest()
+    manifest = engine.content_pack_manifest()
+    pack_key = _manifest_pack(manifest)
+    binding = {**_input_binding(observation_space), "content_manifest": manifest}
+    if pack_key in _ROSTER_PACKS:
+        # Frozen pre-versioning form: unmarked, digesting the bound schema.
+        return {
+            **binding,
+            "setups": _authored_roster(pack_key),
+            "learning_schema_sha256": _digest(
+                BoundSemanticPack.bind(manifest).schema.raw
+            ),
+        }
+    binding["learning_schema_sha256"] = _schema_file_digest(pack_key)
+    setups = _setups(configs)
+    authored = _authored_roster(pack_key) if roster and pack_key else None
+    if authored is not None and all(setup in authored for setup in setups):
+        return {**binding, "setup_binding": AUTHORED_PACK_BINDING, "setups": authored}
+    return {**binding, "setups": setups}
+
+
+def _manifest_pack(manifest: Mapping[str, Any]) -> str | None:
+    compiled = manifest.get("compiled_semantics")
+    return compiled["pack_key"] if compiled is not None else None
 
 
 def _schema_file_digest(pack_key: str | None) -> str:
@@ -259,9 +248,7 @@ def expected_world(
     configs = player_configs
     if configs is None:
         configs = checkpoint_configs(binding)
-    if _binds_roster(binding) or bound_pack(binding) is None:
-        return checkpoint_world(configs, observation_space)
-    return _pair_world(configs, _configured(configs)[1], observation_space)
+    return _setup_world(configs, observation_space, roster=_binds_roster(binding))
 
 
 def validate_checkpoint_world(
