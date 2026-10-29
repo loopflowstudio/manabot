@@ -1,11 +1,11 @@
 # Qwen versus MTG-183 with vLLM and explicit policy versions
 
 Accepted direction: Jack Heart, 2026-10-28, in MTG-209's primary conversation.
-Reconciled 2026-10-29 against checkout `e2a1e3bf2fc38c574d9715ab9473848b71a7d4bc`,
+Reconciled 2026-10-29 against checkout `3564b0c1ba1f2dc2a58fe84da54bfcc28a051801`,
 including merged main `6d069d6e5f0755b392c796aaf6d754913e8996c2`. The latest
-retained status, game counts and provider reads are from 07:14 UTC, when a live
-refresh reported the cohort running on `cfcd947042c4`. Final settlement is not
-evidenced.
+retained log was collected at 07:25 UTC; the 07:27 scheduler read still reports
+the cohort running on `cfcd947042c4`. Direct provider reads remain dated 07:14
+UTC: this run lacks `RUNPOD_API_KEY`. Final settlement is not evidenced.
 The original directive
 is preserved in this file at `02fccd93e1983319d355a1866c101d7d0e01565b`.
 
@@ -140,16 +140,6 @@ budget pilot: 95 initial, 3 repaired, 32 interrupted; MTP: 106 initial, 5 repair
 failed fetch identity validation and remains unverified. These attempts do not
 qualify the pending no-MTP cohort.
 
-## Delete — do not maintain
-
-Removed: unbound IPC, redundant IPC JSON, the game supervisor's two-state loop,
-duplicate treatment-limit owners, and separate game/sequence assembly of selection
-statistics. Shared lightweight child and completion fixtures retain the surviving
-failure checks. The duplicated implementation sections above are consolidated
-by owner so constraints need updating in only one place. No further code deletion
-target is identified; frozen attempts, logs, receipts and artifact bytes remain
-evidence.
-
 Detailed implementation history remains at
 `f01fd6a4554b2880b48c77b1b657ed040851313c:scratch/bb4160-evaluate-qwen-versus.md`;
 earlier removal rationale is at
@@ -157,33 +147,54 @@ earlier removal rationale is at
 
 ## Remaining execution and qualification
 
-Latest retained evidence: `experiments/data/bb4160/accounting-20261029T071423Z.json`
-and its linked log are manifest-published. At 07:14 UTC, `cdb0c09f90c6` was running:
-49 admitted, 37 complete, 3 failed, 9 unsettled and 51 unattempted. The disjoint
+Latest retained evidence: `experiments/data/bb4160/accounting-20261029T072713Z.json`
+and its linked log are manifest-published. The 07:25 log of `cdb0c09f90c6` shows
+49 admitted, 42 complete, 3 failed, 4 unsettled and 51 unattempted. The disjoint
 sets cover all 100 scheduled IDs and the admitted prefix matches the unchanged
-schedule. Games 6, 92, 85 and 25 completed since 06:57 without new admissions or
-failures; none were admitted after the first failure. Unsettled IDs were
-13, 41, 60, 69, 70, 76, 77, 89 and 98. Etude retained zero output files at the
-read; the successful bounded log refresh establishes no terminal coverage.
+schedule. Games 41, 60, 69, 76 and 89 completed since 07:14 without new admissions
+or failures; none were admitted after the first failure. Unsettled IDs were
+13, 70, 77 and 98. Etude retained zero output files at the 07:27 read. Bounded
+log retrieval returned retained bytes but could not refresh directly from the
+provider: `RUNPOD_API_KEY` is absent both locally and through the configured
+`loopflow/prd` and documented `manabot/prd` Doppler environments. No authentication
+configuration was changed. This missing provider access blocks fresh billing and
+allocation verification; scheduler estimates cannot substitute for those reads.
 
-The same snapshot retains provider reads and transfer gaps: three ended pods
+The earlier `accounting-20261029T071423Z.json` retains provider reads and transfer gaps: three ended pods
 absent, $1.47606228455 billed; current pod present, $2.01204355841 billed through
 whole hours, rental deadline 14:04 UTC. Partial-hour and ancillary charges are
 unknown. The provider revised its earlier 05:00 bill upward, so these snapshots
 are not final inclusive bills. The $7 commitment and $0.50 reserve remain held,
 leaving $1.02393771545 uncommitted.
 
-1. **Settle and reconcile before another commitment.** Obtain current status,
-   preserve stopped admissions and let admitted games settle under the frozen
-   watchdog. Recover, verify and manifest-publish final campaign/results receipts,
-   every admitted game archive and replay receipt. Check the full schedule and
-   frozen player/runtime identities; partition all 100 IDs into completed, failed,
-   canceled and unattempted with no unsettled or replaced entries. Reconcile
-   inclusive charges and verify allocation deletion. Neither logs nor a terminal
+## Delete — do not maintain
+
+The prior process cut removed `ProcessPoolExecutor` in
+`experiments/qwen_mtg183_vllm.py` and multiprocessing spawn ownership in
+`manabot/llm/session.py` and `manabot/llm/runner.py`; `ChildProcess` is the surviving
+owner. Admission, identity, deadline, failure evidence and reap coverage remain.
+The campaign also removes placeholder futures used only to reserve admissions:
+`retain(admitting=game)` writes the reservation before submission, and the map
+holds submitted work or a settled submission error. This avoids swapping dummy
+and real futures while preserving interruption accounting. Optional MTP argv
+is appended directly to the base command without an intermediate option list;
+the command bytes and behavior hash are unchanged. Frozen attempts and logs
+remain evidence; no further deletion target is identified.
+
+## Ordered remaining work
+
+1. **Settlement before another commitment.** Current status, settlement under
+   the frozen watchdog with admissions stopped, verified and manifest-published
+   final campaign/results receipts, every admitted game archive and replay
+   receipt remain outstanding. Acceptance requires the full schedule and frozen
+   player/runtime identities, all 100 IDs partitioned into completed, failed,
+   canceled and unattempted with no unsettled or replaced entries, inclusive
+   charges and verified allocation deletion. Neither logs nor a terminal
    status establishes receipt recovery, W/L/D, replay qualification, failure
    causes or final billing. Short early-game pilots did not qualify full-game
-   16k context; classify failures from final receipts. `budget-64k` remains
-   unlaunched and unqualified.
+   16k context; failure classification requires final receipts. `budget-64k`
+   remains an unlaunched, unqualified candidate for context pressure, not an
+   established diagnosis or repair of these three failures.
 2. **Qualify the no-thinking floor.** The bounded pilot is constructible with
    `runs(..., arm="nothink", games=1, concurrency=1, attempt_usd="0.80",
    decision_seconds=300)`: 15 minutes for acquisition, 45 for setup/delivery,
@@ -195,8 +206,8 @@ leaving $1.02393771545 uncommitted.
    games remains the goal; no scored size is frozen. Final budget-limited
    infeasibility needs reconciled costs, cleanup headroom and measured results,
    including pilot failures and remaining repair costs; it is not established.
-3. **Report and publish.** Produce the outcome and metrics required above,
-   separating treatments and preserving unknown coverage. Gate owns mixed-report
+3. **Report and publication.** The outcome and metrics required above remain
+   outstanding, with separate treatments and unknown coverage retained. Gate owns mixed-report
    builder/Perf and broader replay/review checks. A reviewable published change
    remains required; no PR is recorded.
 
@@ -216,8 +227,8 @@ Main's shared evaluation/serving and collection work (MTG-193) is now present at
 open-overlap/base description is obsolete. It introduces the child-process owner
 and preserves LLM-only offline reporting through lazy evaluation projection.
 This Task adds no structured-policy training or shared serving changes.
-The locally available main reference remains `6d069d6e5`; remote changes were
-not refreshed in this reconciliation. The last captured MTG-175 / PR #383 state
+Remote `main` was checked read-only on 2026-10-29 and still points to
+`6d069d6e5`; no newer main changes were available. The last captured MTG-175 / PR #383 state
 was open at `d0f48ca96` on 2026-10-28; its current delivery was not re-queried.
 MTG-212 owns the separate Jev/OpenRouter
 comparison. The accepted directive includes MTG-210's relevant version-accounting
@@ -247,9 +258,9 @@ cohort; both setup windows and the remaining cleanup reserve affect that decisio
 
 Validation retained from the preceding implementation: 128 vLLM/receipt tests,
 focused Ruff/compile checks, the sampled fresh-process import boundary and the
-artifact-untracked test passed. The 07:14 audit verified snapshot digests/sizes,
+artifact-untracked test passed. The 07:27 audit verified prior snapshot digests/sizes,
 the frozen schedule, 49-game admission prefix, disjoint 100-ID accounting and
 stopped admissions. Documentation consolidation changes none of those bytes or
-behaviors; these results remain applicable without rerun.
+experiment outcomes; their receipt and report checks remain applicable.
 
-Check: `git diff --check && lf context` — passed; scratch within 12,000 tokens/98,304 bytes. Gate owns mixed-report/Perf and broader review; execution owns settlement, inclusive billing, cleanup and floor qualification.
+Check: `uv run --extra dev --extra artifacts --extra llm pytest tests/llm/test_llm_vllm.py -q` — 64 passed; focused Ruff/format/compile checks, `git diff --check` and `lf context` passed within both limits. Prior snapshot SHA256/size, 100-ID partition and artifact-untracked checks remain applicable. Gate owns mixed-report/Perf and broader review; execution still needs final receipts and provider access for settlement, inclusive billing, cleanup and floor qualification.

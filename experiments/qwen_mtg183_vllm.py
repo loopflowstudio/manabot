@@ -261,8 +261,15 @@ def worker(config: Campaign, out: Path) -> None:
     queued = iter(games)
     stop_reason: str | None = None
 
-    def retain(*, closed: bool = False) -> None:
-        # Persist admissions before waiting: a killed worker is still attempted.
+    def retain(
+        *, closed: bool = False, admitting: original.ScheduledGame | None = None
+    ) -> None:
+        # Reserve a game before submission can start its child. The futures map
+        # tracks work and submission failures, never reservation placeholders.
+        pending_games = [g.index for g in pending.values()]
+        if admitting is not None:
+            pending_games.append(admitting.index)
+        attempted = len(results) + len(pending_games)
         _write(
             out / "results.json",
             json.dumps([r.model_dump(mode="json") for r in results], indent=2),
@@ -272,14 +279,14 @@ def worker(config: Campaign, out: Path) -> None:
             json.dumps(
                 {
                     "planned": len(games),
-                    "attempted": len(results) + len(pending),
+                    "attempted": attempted,
                     "settled": len(results),
                     "completed": sum(r.summary.completed for r in results),
                     "failed": sum(not r.summary.completed for r in results),
                     "canceled": 0,
                     "canceled_games": [],
-                    "unattempted": len(games) - len(results) - len(pending),
-                    "pending_games": [g.index for g in pending.values()],
+                    "unattempted": len(games) - attempted,
+                    "pending_games": pending_games,
                     "seconds": time.monotonic() - started,
                     "stop_reason": stop_reason,
                     "concurrency": config.concurrency,
@@ -303,17 +310,15 @@ def worker(config: Campaign, out: Path) -> None:
                 return
             game = next(queued, None)
             if game is not None:
-                future: Future[original.GameResult] = Future()
-                pending[future] = game
-                retain()
+                retain(admitting=game)
                 try:
-                    submitted = pool.submit(play_game, game, out, deadline)
+                    future = pool.submit(play_game, game, out, deadline)
                 except Exception as error:
+                    future = Future()
                     future.set_exception(error)
                 else:
-                    del pending[future]
-                    pending[submitted] = game
                     print(f"GAME {game.index}: admitted", flush=True)
+                pending[future] = game
 
         for _ in range(config.concurrency):
             admit()

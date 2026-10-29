@@ -159,7 +159,7 @@ cap $7.00. The MTP attempt is not pooled with it.
 | `dddaf3001dfa` | sampled pilot, 1 game, c=1 | $2.00 | 1 admitted/canceled, 0 completed; pod absent | $1.11978240 provider billed |
 | `139099571cbb` | budget pilot, 32 games, c=32, MTP 1 | $1.20 | 32 admitted/canceled, 0 completed; pod absent | $0.16946718 provider billed |
 | `8f68c0bc488b` | scored cohort, budget, 100 games, c=32, MTP 1 | $7.00 | 32 failed, 0 completed, 68 unattempted; pod absent | $0.18681270 provider billed |
-| `cdb0c09f90c6` | **scored cohort**, budget, 100 games, c=32, no MTP | $7.00 | running, admissions stopped; 37 complete/3 failed/9 pending in logs | $2.01204356 provider billed through whole hours at snapshot; not final |
+| `cdb0c09f90c6` | **scored cohort**, budget, 100 games, c=32, no MTP | $7.00 | running at 07:27; admissions stopped; 42 complete/3 failed/4 pending in 07:25 log | $2.01204356 provider billed at 07:14 snapshot; not refreshed or final |
 
 ### Retained evidence and reporting (2026-10-29)
 
@@ -178,19 +178,26 @@ targets response. Generated reasoning floor-index p50/max: priority 4,606/8,223,
 declare-blockers 5,853/5,853, targets 3,903/3,903. These distributions include
 repairs; the interrupted attempt stays in the denominator with an unknown split.
 
-The latest retained log, at 07:14 UTC, shows the replacement cohort running: 49
-admitted games, 37 completed, 3 failed and 9 unsettled; 51 schedule entries
+The latest retained log, collected at 07:25 UTC, shows the replacement cohort: 49
+admitted games, 42 completed, 3 failed and 4 unsettled; 51 schedule entries
 remain unattempted. No admission follows the first failure. These are log
-observations, not final game/replay receipts. Etude still retains zero output
-files at that read. The bounded refresh retrieved the live log without a
-retrieval error; the stream remains unfinished. Final W/L/D, replay qualification
+observations, not final game/replay receipts. The 07:27 scheduler read still reports
+running and zero output files. The bounded read returned retained log bytes, then
+reported `RUNPOD_API_KEY is not set`; direct provider refresh is unavailable.
+The key is absent in this environment and the configured `loopflow/prd` and
+documented `manabot/prd` Doppler environments. No auth configuration was changed.
+`accounting-20261029T072713Z.json` and its linked log are manifest-published;
+provider fields are explicitly unknown and refer to the earlier observation.
+Games 41, 60, 69, 76 and 89 completed since 07:14; pending IDs are 13, 70, 77
+and 98. The admitted prefix and disjoint partition of all 100 IDs still hold.
+Final W/L/D, replay qualification
 and failure classification remain unavailable. The frozen stopping rule allows
 admitted games to settle under the watchdog. These dated observations do not
 establish the run's later status or terminal evidence coverage.
 
-Direct RunPod reads for the 07:14:23 UTC snapshot again confirmed the first three pods absent
-and their bills totaling **$1.47606228455**. The current cohort pod remains
-present; its whole-hour provider bills total **$2.01204355841**, excluding the
+The last direct RunPod reads, for the 07:14:23 UTC snapshot, confirmed the first three pods absent
+and their bills totaling **$1.47606228455**. The current cohort pod was then
+present; its whole-hour provider bills totaled **$2.01204355841**, excluding the
 current partial hour and unknown ancillary charges. The rental deadline remains
 2026-10-29 14:04 UTC. Provider totals supersede understated launcher estimates;
 frozen launcher receipts remain unchanged. The manifest-published
@@ -209,7 +216,10 @@ The earlier accounting snapshot remains at
 commitment and $0.50 reserve leaves **$1.02393771545** uncommitted. The previous
 $1.05 constructor minimum was a software constraint, not proof of final
 budget-limited infeasibility. `budget-64k` remains unlaunched; its declaration
-at `8f2711df3` diagnoses late-game 16k overflow without changing this cohort.
+at `8f2711df3` provides a candidate treatment for late-game context pressure
+without changing this cohort. The retained log identifies the three failed games
+but does not establish their causes; final receipts must support diagnosis before
+this candidate can be described as a repair.
 
 ### Bounded no-thinking pilot declaration (unlaunched)
 

@@ -17,11 +17,18 @@ no vLLM upgrade is accepted. Native `skip_trivial` stays ON for all Qwen games.
 
 Stop admissions on failure, settle admitted games, then reconcile final receipts,
 all 100 scheduled IDs, inclusive charges and allocation deletion before another
-commitment. The plan's 07:14 UTC snapshot is interim, not settlement or replay
+commitment. The plan's 07:27 UTC snapshot is interim, not settlement or replay
 qualification. `budget-64k` remains unlaunched. These constraints are unchanged.
 
 ## Reversible choices and limits
 
+- **Settlement access gap (2026-10-29 07:27 UTC):** retained logs show 42 complete,
+  3 failed and 4 pending games with 49 admissions; no final outputs exist yet.
+  `RUNPOD_API_KEY` is missing locally and in the configured `loopflow/prd` and
+  documented `manabot/prd` environments. Direct billing/allocation reads are
+  unavailable; the last provider evidence remains 07:14. The new snapshot and
+  log are artifact-published. Keep the existing commitment/reserve and defer
+  both new treatments; no auth changes or infeasibility conclusion are justified.
 - **No-thinking pilot (2026-10-29):** $0.80, one game/concurrency one, no MTP,
   five-minute decision deadline, original non-thinking sampling, 512 output
   tokens and 16k context. Preserve 15-minute acquisition and 45-minute

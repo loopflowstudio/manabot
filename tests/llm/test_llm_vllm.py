@@ -11,7 +11,7 @@ import sys
 import tarfile
 import time
 from types import SimpleNamespace, TracebackType
-from typing import Callable
+from typing import Callable, Never
 from urllib.request import Request
 
 from etude.launch.records import Job
@@ -887,15 +887,25 @@ def test_game_child_lifecycle(
     assert not children[0].is_alive()
 
 
-def test_game_child_launch_failure_settles_admission(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, campaign_identity: RuntimeIdentity
+@pytest.mark.parametrize("failure_at", ["submission", "child"])
+def test_game_launch_failure_settles_admission(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    campaign_identity: RuntimeIdentity,
+    failure_at: str,
 ) -> None:
-    def fail(target: str, arguments: tuple[object, ...]) -> ChildProcess:
+    def fail(*args: object, **kwargs: object) -> Never:
+        admission = json.loads((tmp_path / "campaign.json").read_text())
+        assert admission["attempted"] == 1
+        assert admission["pending_games"] == [games[0].index]
         raise OSError("injected launch failure")
 
     config = campaign.Campaign(concurrency=1, games=2)
-    campaign._prepare_schedule(config, tmp_path)
-    monkeypatch.setattr(campaign, "ChildProcess", fail)
+    games = campaign._prepare_schedule(config, tmp_path)
+    if failure_at == "submission":
+        monkeypatch.setattr(campaign.ThreadPoolExecutor, "submit", fail)
+    else:
+        monkeypatch.setattr(campaign, "ChildProcess", fail)
     campaign.worker(config, tmp_path)
     receipt = json.loads((tmp_path / "campaign.json").read_text())
     assert receipt["attempted"] == receipt["settled"] == receipt["failed"] == 1

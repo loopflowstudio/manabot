@@ -38,18 +38,7 @@ def server_command(
     server argv, and so the behavior version, records it. This is the base argv;
     the derived behavior route is appended after identity hashing.
     """
-    speculative = (
-        []
-        if speculative_tokens is None
-        else [
-            "--speculative-config",
-            json.dumps(
-                {"method": "mtp", "num_speculative_tokens": speculative_tokens},
-                separators=(",", ":"),
-            ),
-        ]
-    )
-    return [
+    command = [
         "uv",
         "run",
         "--no-project",
@@ -81,8 +70,18 @@ def server_command(
         "vllm",
         "--max-num-batched-tokens",
         "4096",
-        *speculative,
     ]
+    if speculative_tokens is not None:
+        command.extend(
+            [
+                "--speculative-config",
+                json.dumps(
+                    {"method": "mtp", "num_speculative_tokens": speculative_tokens},
+                    separators=(",", ":"),
+                ),
+            ]
+        )
+    return command
 
 
 class VLLMServer(AbstractContextManager["VLLMServer"]):
