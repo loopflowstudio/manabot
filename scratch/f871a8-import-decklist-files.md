@@ -165,10 +165,39 @@ the historical `_pair_world` reader. `validate_agent_setup` admits any roster
 pair; the pack must be explicit unless it is the pack's own distinct pair that
 native reset infers. Scenario replay compares via `expected_world`.
 
-Recorded deferrals, not reopened here: checkpoint `bc` extra still carries
-run/regime producer links (questions.md); sim/Academy imported-setup consumers
-still refuse checkpoint opponents. Neither constrains world compatibility of a
-deck-supplied checkpoint. Working screen: `scratch/concept-review.html`.
+Recorded deferral, not reopened here: checkpoint `bc` extra still carries
+opaque run/regime producer links (questions.md). They do not affect world
+compatibility, and moving them is a training-state change across all producers.
+
+### Concept review at 821824996 (2026-10-28, headless Graph step)
+
+The authored-pack binding now matches the decision. One consumer path still
+contradicts it, and the decision settles how: **imported decks still refuse
+every checkpoint player.** `SimulationConfig.validate_imported_players`
+(`manabot/infra/config.py:240`) and Academy's start path
+(`academy/server.py:734`) reject any checkpoint player when the match is imported,
+saying "checkpoint setup admission is not available". That admission now exists.
+Sim rollouts already call `validate_agent_setup` (`manabot/sim/rollout.py:174`),
+and `CheckpointVillain` calls it when given player configs. The run this PR
+produces, a pool-bound deck-trained checkpoint, therefore cannot be simulated
+on imported decks from its own pool. The decision says to "use any decklists
+admitted to that same world for play or evaluation". The earlier deferral called
+this consumer scope, but sim is manabot evaluation and the special case is a
+second, older rule standing in front of the shared one.
+
+Next implement direction: delete `validate_imported_players` so sim relies on
+the shared check. In Academy, replace the blanket rejection with that check only
+if every `CheckpointVillain` built for an imported match (start, fork, reconnect,
+rematch) receives the imported player configs; otherwise keep Academy's refusal
+and reword it to name the Academy limitation, not a missing admission. Neither
+case is the deferred 1a redesign. Update `docs/decklist-import.md`
+("Imported setups currently reject checkpoint opponents") and questions.md. Proof
+uses bounded fixtures and no weight updates. A fixture checkpoint exported with
+`save_checkpoint(content_pool="tla-pool-v1")` (untrained weights) plays a sim
+game on two imported files. An authored/Elemental checkpoint on the same files
+is rejected by `validate_agent_setup` with its world diagnostic. Random/default
+imported sim and existing Academy imported/built-in tests stay green.
+Working screen: `scratch/concept-review.html`.
 
 ## Accepted direction — Jack Heart, 2026-10-28
 

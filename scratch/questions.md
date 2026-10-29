@@ -30,8 +30,9 @@
   PR389 c85470a59 requires no simulation API change for this extension.
 
 - 2026-10-28 implementation: imported-setup consumers (sim, Academy) still
-  reject checkpoint opponents; pool-bound checkpoints would now be admissible
-  there, but enabling it is consumer scope beyond this training correction.
+  reject checkpoint opponents. Concept review at 821824996 settled this from the
+  world-bound decision: route them through the shared `validate_agent_setup`
+  (sim now; Academy only if every imported CheckpointVillain gets the setup).
 - Checkpoint `bc` extra still carries run_id/stage_id/regime_digest producer
   links that predate this branch; producer admission depends on them. Moving
   them fully to run records is a separate change; no training-deck data remains.
