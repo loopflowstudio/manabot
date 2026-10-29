@@ -140,7 +140,9 @@ and UI. Guard + directed + viewer-safety tests in
 ## Remaining
 
 - Next T1 sync, after T1 publishes engine-type cards/w17 (PR #394 still at
-  `e403b8a1f`): the three steers above, then the world gate.
+  `e403b8a1f`; T1's worktree clean at `f9732c12f`, its Remaining 1–4 unstarted
+  in commits; main gained one unrelated LLM-eval commit `9a62e8b39`, which T1's
+  next main sync brings in): the three steers above, then the world gate.
 - Gate (not run here): CLAUDE.md arena admission/monitoring suite; full debug
   `cargo test`; Academy check/build (local node can't load libllhttp; CI).
 - Known gaps (questions.md): possible-worlds ignore foretold cards; granted
