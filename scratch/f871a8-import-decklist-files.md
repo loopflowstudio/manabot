@@ -153,16 +153,9 @@ authors six decks over one card file, and native reset admits any pair of them
 the training-roster allowlist Jack Heart rejected, and the MTG-122 L1-then-
 Allies-v-Lessons case. Two-deck packs are unaffected in practice (pair = pack).
 
-Next implement direction (implied, not a new product choice): a new setup-bound
-checkpoint over a compiled authored pack binds that pack's complete authored
-setup set, as Elemental already does; execution admits any pair native setup
-admits (native admission, not a Python mirror rule, decides mirrors). Version
-the new binding form explicitly so historical pair bindings, including MTG-122
-checkpoints, keep verifying under their original semantics through a separate
-historical reader. Default (uncompiled) content has no native deck admission and
-keeps its exact pair binding. Proof: a pair-trained complexity-pack checkpoint
-executes a different authored pair from the same pack; a historical pair binding
-still loads and still rejects other pairs; another pack's setup still rejects.
+Resolution (implied by the accepted decision, not a new product choice):
+default (uncompiled) content has no native deck admission and keeps its exact
+pair binding; native admission, not a Python mirror rule, decides mirrors.
 
 Implemented 2026-10-28: `checkpoint_world` binds the complete authored roster
 for any compiled authored pack when the actual setups are authored, marked
@@ -277,7 +270,9 @@ Checkpoints: deck runs export `save_checkpoint(content_pool=...)` →
 and learning-schema hash; no setups, decks, sources or sampler. Execution admits
 any deck the pool admits (`validate_agent_setup`), rejects unsupported/other
 pools; load/catalog reject changed descriptor/rules/input. Exact setup bindings
-(authored, Elemental) unchanged. Run recovery keeps the decks digest in collector
+bind a compiled authored pack's complete roster (versioned
+`authored-pack-v1`; Elemental unmarked and frozen); historical unmarked pairs and
+default content keep exact pairs. Run recovery keeps the decks digest in collector
 snapshots and `GameAttempt.decks_digest`; learning-state resume compares
 `regime.decks`; policy admission no longer compares training decks.
 
@@ -346,5 +341,4 @@ The manifest references `.lf/wave/engine/GOAL.md` and `MEMORY.md`, but neither
 exists in this checkout. The supplied Task, accepted design and dated Steers
 provide the implementation scope; Wave context was not reconstructed.
 
-Check — 2026-10-28 authored-pack binding: `uv run --extra dev pytest` over tests/model/test_world.py, test_catalog.py, training/test_training_decks.py (the four approval proofs), test_matchups.py, eval/test_mirror_admission.py, semantic/test_elemental_world.py, policy_catalog/attack_choice/categorical_value, belief runtime/player/sampling_data, academy/test_watch.py, test_elemental_uniform.py, test_package_boundaries.py: all pass except four failures that predate this pass (verified against c42bf4934 without it): EvaluationRow `arena_key.world` literal stops at w15 while the world is w16 (test_mirror_arena_plays_all_seats_and_replays ×2), Elemental program count 8 vs 7 (test_elemental_world.py:151), belief runtime `KeyError: 'relations'` (test_runtime.py). Gate owns them with the full suites and debug Rust. Two stale native-message regexes ("explicit pack") were updated.
-Compress — 2026-10-28: `checkpoint_world`/`expected_world` share one `_setup_world(..., roster=)` builder (historical pair rebuild is `roster=False`); `WorldVersion` literal gains w16, fixing the two mirror-arena failures above. `uv run --extra dev pytest tests/model/test_world.py tests/model/test_catalog.py tests/training/test_training_decks.py tests/training/test_matchups.py tests/eval/test_mirror_admission.py -q`: 39 passed. Elemental program count and belief `relations` failures remain for gate.
+Check — 2026-10-28 at 63c9f6bf5: `uv run --extra dev pytest tests/model/test_world.py tests/model/test_catalog.py tests/training/test_training_decks.py tests/training/test_matchups.py tests/eval/test_mirror_admission.py -q`: 39 passed (covers the four approval proofs and the authored-pack proofs). Earlier wider run: Elemental program count 8 vs 7 (test_elemental_world.py:151) and belief runtime `KeyError: 'relations'` (test_runtime.py) fail identically at c42bf4934 without this work; gate owns them with full suites and debug Rust.
