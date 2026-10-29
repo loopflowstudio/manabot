@@ -30,7 +30,7 @@ class PlayDemo(BaseModel):
 
 def load_play_demo(name: str) -> PlayDemo:
     filenames = {
-        "learn": "learn-demo-explicit-w15.json",
+        "learn": "learn-demo-w15.json",
         "precision": "precision-demo-w15.json",
         "precision-mana": "precision-mana-demo-w15.json",
     }

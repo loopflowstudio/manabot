@@ -233,7 +233,7 @@ JSONL evidence remains incomplete and cannot supply a terminal target.
 Accounting distinguishes native microchoices, grouped decisions, decoder
 factors, forced factors, native optionless auto-resolution, completed games,
 optimizer exposures, collection/learning/export costs, and total/max group
-latency. `skip_trivial` is a separate explicit collection setting. Arena traces
+latency. Native `skip_trivial` collapse is on in every runner. Arena traces
 retain underlying Commands and per-command latency; report complete-game wall
 cost alongside these counts. Fewer exposed prompts alone are not a speedup.
 
