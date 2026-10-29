@@ -206,7 +206,7 @@ fn basic_land_taps_for_its_color() {
     let pack = pack();
     let bound = pack.bind(&ContentPack::default()).expect("bind");
     let trace = bound
-        .run(program(&pack, "tla.island.p0"), &Fixture::default())
+        .run(program(&pack, "lea.island.p0"), &Fixture::default())
         .expect("run");
     assert_eq!(
         trace,

@@ -1,46 +1,47 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>TLA card authoring review</title><style>
-:root{color-scheme:light dark;font:17px/1.6 system-ui,sans-serif;background:#faf9f6;color:#252521}body{max-width:760px;margin:48px auto;padding:0 24px 64px}h1{font-size:2rem;line-height:1.2}h2{margin-top:2.5rem;font-size:1.3rem}small{color:#666}pre{font:13px/1.5 ui-monospace,monospace;overflow:auto;padding:20px;background:#ecece7;border-radius:6px}code{font-family:ui-monospace,monospace}textarea{width:100%;box-sizing:border-box;min-height:110px;font:inherit;padding:12px;background:transparent;color:inherit;border:1px solid #888;border-radius:4px}a{color:#245b90}@media(prefers-color-scheme:dark){:root{background:#1b1d1c;color:#ecece6}pre{background:#292d2b}small{color:#b4b8b2}a{color:#9ac5eb}}@media(max-width:540px){body{margin-top:24px;padding:0 16px 40px}pre{font-size:12px;padding:12px}}
-</style><body><small>Task 892c47 · Demo · 28 October 2026<br>Sources: cardsets/tla.rs, current plan, native content_pool response</small>
-<h1>Does this match how you want to author cards?</h1>
-<p>The current implementation puts card behavior and text in typed Rust set files. Scripts generate the checked-in catalog and learning/runtime projections. No hand-authored card JSON remains on the current path.</p>
-<h2>1. Read one card in its set file</h2><p>Existing implementation: <code>managym/src/cardsets/tla.rs</code>. Here is the actual Cunning Maneuver definition.</p><pre>fn cunning_maneuver() -&gt; Card {
-    let text_box = &quot;Target creature gets +3/+1 until end of turn.\nCreate a Clue token. (It&#x27;s an artifact with \&quot;{2}, Sacrifice this token: Draw a card.\&quot;)&quot;;
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Task 892c47 — cards filed by first printing, support by definition</title>
+<style>
+  body { font: 16px/1.5 Georgia, serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; color: #2b241c; background: #f6f0e4; }
+  h1, h2 { font-weight: normal; }
+  code, pre { font: 14px/1.4 Menlo, monospace; }
+  pre { background: #ece3d2; padding: .75rem; overflow-x: auto; }
+  table { border-collapse: collapse; width: 100%; }
+  th, td { text-align: left; padding: .25rem .5rem; border-bottom: 1px solid #d8ccb5; }
+</style>
+</head>
+<body>
+<h1>Cards filed by first printing; support by definition</h1>
+<p>World w16, PR394. This follows Jack Heart's 2026-10-29 direction ("simplify simplify simplify").</p>
 
-    Card {
-        characteristics: Characteristics {
-            mana_cost: Some(&quot;{1}{R}&quot;),
-            subtypes: Some(vec![]),
-            types: vec![CardType::Instant],
-            keywords: Some(vec![]),
-            ..Default::default()
-        },
-        key: &quot;tla.cunning_maneuver&quot;,
-        programs: vec![Program::new(
-            &quot;spell&quot;,
-            ProgramKind::Spell,
-            vec![
-                Op::ModifyPt {
-                    duration: Duration::EndOfTurn,
-                    power: 3,
-                    target: &quot;creature&quot;,
-                    toughness: 1,
-                },
-                Op::CreateToken {
-                    count: 1,
-                    definition_ref: &quot;sacrifice.clue&quot;,
-                    tapped_and_attacking: None,
-                },
-            ],
-        )
-        .cost(Cost::mana(&quot;{1}{R}&quot;))
-        .targets(vec![Target::one(&quot;creature&quot;, Selector::Creature)])],
-        registry_name: &quot;Cunning Maneuver&quot;,
-        text_box,
-    }
-}</pre><p>The card has one authored definition. Its characteristics, cost, target and effects live together.</p>
-<h2>2. Generate and check the derived files</h2><pre>uv run python -m scripts.compile_current_content
-uv run python -m scripts.compile_current_content --check</pre><p>Expected: the first command exports Rust and regenerates current projections; the second succeeds when checked-in outputs match. A stale-output error now names this same generator. A changed qualified clause requires independent review of its evidence.</p>
-<h2>3. Inspect what the real runtime admits</h2><pre>uv run python -c 'import managym; print(managym.content_pool("tla-pool-v1"))'</pre><p>Observed in this checkout: world <strong>w16</strong>, <strong>86 eligible cards</strong>. Allies at Last and Water Tribe Captain are eligible. Water Tribe Rallier remains unsupported.</p>
-<h2>Proof limits</h2><p>The recorded checks include 37 focused debug TLA tests, current generation freshness and consumer checks. The recovery repair passed 28 focused Python tests and isolated failure/recovery checks. Full gate, browser receipts and decklist integration are still pending. This page is an authoring review, not approval to merge.</p>
-<h2>Your observations</h2><label for="notes">What feels clear or still too complicated?</label><textarea id="notes" placeholder="Use this space while reviewing; send your feedback in the conversation."></textarea><ol><li>Does this Rust layout match your preference? <strong>1a:</strong> yes; <strong>1b:</strong> needs changes.</li><li>Is anything in generation or qualification still confusing? Point to that part here in the conversation.</li></ol>
-</body></html>
+<h2>What changed</h2>
+<ul>
+  <li><strong>No qualification gate.</strong> <code>qualifications.json</code>, <code>inventory.json</code>, the T1 clause review and the closure-hash check are deleted. A card is supported when its set file defines it with a typed program and does not mark it incomplete.</li>
+  <li><strong>One incomplete list.</strong> <code>tla::INCOMPLETE</code> names 14 TLA cards that fixed setups still use, each with its missing behavior.</li>
+  <li><strong>The world pool is every defined card.</strong> <code>tla-pool-v1</code> covers every set: 115 supported cards, plus tokens, incomplete cards and native cards, all marked unsupported. <code>managym.set_cards(["tla", "lea"])</code> narrows it to chosen sets.</li>
+  <li><strong>First printings.</strong> Basic lands are now <code>lea.plains</code> … <code>lea.forest</code>. <code>cards/native.rs</code> is gone: Counterspell, Serra Angel and the rest sit in their first-printing set files (lea, por, isd, ori, sth, rtr, grn, ice, vis, stx, mkm). Crossroads of Destiny is a rules fixture in <code>cards/fixtures.rs</code>.</li>
+</ul>
+
+<h2>Try it</h2>
+<pre>uv run python -c "
+import managym
+print(managym.unsupported_cards(['Forest', 'Lightning Bolt', 'Cat-Gator', 'Counterspell']))
+print(len(managym.set_cards(['tla', 'lea'])))
+"</pre>
+<p>This prints <code>['Cat-Gator', 'Counterspell']</code>: Cat-Gator is marked incomplete and Counterspell is native. Forest and Lightning Bolt are supported.</p>
+
+<h2>Evidence</h2>
+<table>
+  <tr><th>Check</th><th>Result</th></tr>
+  <tr><td>IR for all 10 packs, before vs after</td><td>Identical apart from the basic-land key renames (<code>scratch/prove_basic_rename.py</code>)</td></tr>
+  <tr><td>Default pack</td><td>Content digest and every <code>CardDefId</code> unchanged</td></tr>
+  <tr><td>Debug <code>cargo test --no-fail-fast</code></td><td>Green, except the known w15 semantic-conformance pair</td></tr>
+  <tr><td>Focused pytest</td><td>42 failures, all of which also fail at HEAD; none are new</td></tr>
+</table>
+
+<h2>Not yet done</h2>
+<p>The <code>managym/tests/cards/</code> folder that mirrors <code>cardsets/</code> (2026-10-29 steer). Fixing <code>scripts/refresh_card_fixture.py</code>.</p>
+</body>
+</html>

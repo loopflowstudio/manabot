@@ -1,12 +1,14 @@
 //! Versioned content eligibility shared by deck import and native admission.
 //!
-//! A compiled definition is not automatically eligible. Reviewed qualifications
-//! bind independent witnesses to the complete authored closure (see
-//! [`compile::qualified`]). Setup construction policy belongs to the admission
+//! Every pack key names compiled content with one descriptor row per
+//! definition. A defined card is eligible unless its set file marks it
+//! incomplete ([`compile::incomplete`]); tokens are never deck entries. The
+//! world pool also lists the native set-file cards, which have no semantic
+//! program, as unsupported. Setup construction policy belongs to the admission
 //! caller, not this catalog.
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     sync::{Arc, OnceLock},
 };
 
@@ -15,6 +17,7 @@ use serde::{Deserialize, Serialize};
 use super::{compile, IrError, SemanticPack};
 use crate::{
     cards::content_pack::{CompiledSemanticManifest, ContentPack},
+    cardsets,
     state::card::CardDefId,
 };
 
@@ -52,44 +55,43 @@ struct PoolRuntime {
 impl PoolRuntime {
     fn compile(
         semantic: &SemanticPack,
-        qualified: &BTreeSet<String>,
-        inventory: &BTreeSet<String>,
+        incomplete: &BTreeMap<String, String>,
+        native: &[String],
     ) -> Result<Self, IrError> {
         let content = Arc::new(semantic.compile_content_pack()?);
-        // IR owns identity and pack membership; qualifications only decide
-        // eligibility. Inventory-only cards remain explicit.
         let mut definitions = BTreeMap::new();
         for definition in &semantic.definitions {
-            let eligible = qualified.contains(&definition.semantic_key);
+            let reason = if definition.characteristics["token"] == true {
+                Some("A token, created by its card; not a deck entry".to_owned())
+            } else {
+                incomplete.get(&definition.semantic_key).cloned()
+            };
             definitions.insert(
                 definition.registry_name.clone(),
                 PoolDefinition {
                     card_def_id: content.definition_id(&definition.registry_name),
                     semantic_key: Some(definition.semantic_key.clone()),
                     registry_name: definition.registry_name.clone(),
-                    eligibility: if eligible {
+                    eligibility: if reason.is_none() {
                         Eligibility::Eligible
                     } else {
                         Eligibility::Unsupported
                     },
-                    reason: if eligible {
-                        None
-                    } else {
-                        Some("Preserved authored behavior; complete independent qualification pending".into())
-                    },
+                    reason,
                 },
             );
         }
-        for name in inventory {
-            definitions
-                .entry(name.clone())
-                .or_insert_with(|| PoolDefinition {
+        for name in native {
+            definitions.insert(
+                name.clone(),
+                PoolDefinition {
                     card_def_id: None,
                     semantic_key: None,
                     registry_name: name.clone(),
                     eligibility: Eligibility::Unsupported,
-                    reason: Some("Not implemented in this content pack".into()),
-                });
+                    reason: Some("Native definition without a semantic program".into()),
+                },
+            );
         }
         let manifest = content.manifest();
         let descriptor = ContentPool {
@@ -110,22 +112,27 @@ fn pools() -> Result<&'static BTreeMap<String, PoolRuntime>, IrError> {
     static POOLS: OnceLock<Result<BTreeMap<String, PoolRuntime>, IrError>> = OnceLock::new();
     POOLS
         .get_or_init(|| {
-            let (qualified, inventory) = (compile::qualified()?, compile::inventory()?);
-            let pool = SemanticPack::current("pool")?;
+            let incomplete = compile::incomplete()?;
+            let native = cardsets::native_cards()
+                .into_iter()
+                .map(|definition| definition.name)
+                .collect::<Vec<_>>();
+            let world = SemanticPack::current("pool")?;
+            let world_runtime = PoolRuntime::compile(&world, incomplete, &native)?;
             SemanticPack::catalog()?
                 .iter()
-                .chain([&pool])
                 .map(|semantic| {
-                    let runtime = PoolRuntime::compile(semantic, qualified, inventory)?;
+                    let runtime = PoolRuntime::compile(semantic, incomplete, &[])?;
                     Ok((semantic.pack_key.clone(), runtime))
                 })
+                .chain([Ok((world.pack_key.clone(), world_runtime))])
                 .collect()
         })
         .as_ref()
         .map_err(Clone::clone)
 }
 
-/// Describe supported and known unsupported cards without admitting a deck.
+/// Describe every card of a pack and whether it is supported, without admitting a deck.
 pub fn content_pool(pack_key: &str) -> Result<ContentPool, IrError> {
     Ok(pool_runtime(pack_key)?.descriptor.clone())
 }
@@ -146,40 +153,48 @@ fn pool_runtime(pack_key: &str) -> Result<&'static PoolRuntime, IrError> {
 mod tests {
     use super::*;
 
+    fn row<'a>(pool: &'a ContentPool, name: &str) -> &'a PoolDefinition {
+        pool.definitions
+            .iter()
+            .find(|d| d.registry_name == name)
+            .unwrap()
+    }
+
     #[test]
     fn descriptor_joins_runtime_ids_and_rejects_unknown_pool() {
         let pool = content_pool("tla-pool-v1").unwrap();
         let content = pool_content(&pool.pack_key).unwrap();
         assert_eq!(pool.world_version, crate::WORLD_VERSION);
         assert_eq!(pool.content_digest, content.content_digest());
-        let avatar = pool
-            .definitions
-            .iter()
-            .find(|d| d.registry_name == "Avatar Enthusiasts")
-            .unwrap();
+        let avatar = row(&pool, "Avatar Enthusiasts");
         assert_eq!(avatar.eligibility, Eligibility::Eligible);
         assert_eq!(
             avatar.card_def_id,
             content.definition_id("Avatar Enthusiasts")
         );
-        let missing = pool
+        // Every defined card is in the world pool, whatever its set.
+        assert_eq!(row(&pool, "Pop Quiz").eligibility, Eligibility::Eligible);
+        let marked = row(&pool, "Cat-Gator");
+        assert_eq!(marked.eligibility, Eligibility::Unsupported);
+        assert!(marked.card_def_id.is_some() && marked.reason.is_some());
+        assert_eq!(row(&pool, "Ally").eligibility, Eligibility::Unsupported);
+        let native = row(&pool, "Counterspell");
+        assert_eq!(native.eligibility, Eligibility::Unsupported);
+        assert!(native.card_def_id.is_none());
+        assert!(pool
             .definitions
             .iter()
-            .find(|d| d.registry_name == "Airbending Lesson")
-            .unwrap();
-        assert_eq!(missing.eligibility, Eligibility::Unsupported);
-        assert!(missing.card_def_id.is_none());
-        assert!(missing.reason.is_some());
+            .all(|d| d.registry_name != "Crossroads of Destiny"));
         assert!(content_pool("missing-pool").is_err());
 
         let baseline = content_pool("tla-baseline-v1").unwrap();
-        let excluded = baseline
+        assert!(baseline
             .definitions
             .iter()
-            .find(|d| d.registry_name == "Avatar Enthusiasts")
-            .unwrap();
-        assert_eq!(excluded.eligibility, Eligibility::Unsupported);
-        assert!(excluded.card_def_id.is_none());
-        assert!(excluded.semantic_key.is_none());
+            .all(|d| d.registry_name != "Avatar Enthusiasts"));
+        assert_eq!(
+            row(&baseline, "Treetop Freedom Fighters").eligibility,
+            Eligibility::Eligible
+        );
     }
 }

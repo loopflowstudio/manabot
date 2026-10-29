@@ -79,11 +79,11 @@
           },
           {
             "count": 8,
-            "definition": "tla.forest"
+            "definition": "lea.forest"
           },
           {
             "count": 7,
-            "definition": "tla.mountain"
+            "definition": "lea.mountain"
           },
           {
             "count": 2,
@@ -179,11 +179,11 @@
           },
           {
             "count": 8,
-            "definition": "tla.plains"
+            "definition": "lea.plains"
           },
           {
             "count": 7,
-            "definition": "tla.forest"
+            "definition": "lea.forest"
           },
           {
             "count": 2,
@@ -267,11 +267,11 @@
           },
           {
             "count": 8,
-            "definition": "tla.mountain"
+            "definition": "lea.mountain"
           },
           {
             "count": 7,
-            "definition": "tla.island"
+            "definition": "lea.island"
           },
           {
             "count": 2,
@@ -363,11 +363,11 @@
           },
           {
             "count": 8,
-            "definition": "tla.island"
+            "definition": "lea.island"
           },
           {
             "count": 7,
-            "definition": "tla.swamp"
+            "definition": "lea.swamp"
           },
           {
             "count": 2,
@@ -451,11 +451,11 @@
           },
           {
             "count": 8,
-            "definition": "tla.plains"
+            "definition": "lea.plains"
           },
           {
             "count": 7,
-            "definition": "tla.island"
+            "definition": "lea.island"
           },
           {
             "count": 2,
@@ -563,15 +563,15 @@
           },
           {
             "count": 5,
-            "definition": "tla.forest"
+            "definition": "lea.forest"
           },
           {
             "count": 5,
-            "definition": "tla.island"
+            "definition": "lea.island"
           },
           {
             "count": 3,
-            "definition": "tla.mountain"
+            "definition": "lea.mountain"
           },
           {
             "count": 3,
@@ -671,11 +671,11 @@
           },
           {
             "count": 8,
-            "definition": "tla.plains"
+            "definition": "lea.plains"
           },
           {
             "count": 7,
-            "definition": "tla.mountain"
+            "definition": "lea.mountain"
           },
           {
             "count": 2,
@@ -767,11 +767,11 @@
           },
           {
             "count": 8,
-            "definition": "tla.plains"
+            "definition": "lea.plains"
           },
           {
             "count": 7,
-            "definition": "tla.swamp"
+            "definition": "lea.swamp"
           },
           {
             "count": 2,
@@ -859,11 +859,11 @@
           },
           {
             "count": 8,
-            "definition": "tla.swamp"
+            "definition": "lea.swamp"
           },
           {
             "count": 7,
-            "definition": "tla.mountain"
+            "definition": "lea.mountain"
           },
           {
             "count": 2,
@@ -975,11 +975,11 @@
           },
           {
             "count": 6,
-            "definition": "tla.forest"
+            "definition": "lea.forest"
           },
           {
             "count": 6,
-            "definition": "tla.swamp"
+            "definition": "lea.swamp"
           },
           {
             "count": 3,
@@ -1016,11 +1016,11 @@
         "cards": [
           {
             "count": 9,
-            "definition": "tla.island"
+            "definition": "lea.island"
           },
           {
             "count": 8,
-            "definition": "tla.mountain"
+            "definition": "lea.mountain"
           },
           {
             "count": 2,
@@ -1092,11 +1092,11 @@
         "cards": [
           {
             "count": 9,
-            "definition": "tla.plains"
+            "definition": "lea.plains"
           },
           {
             "count": 8,
-            "definition": "tla.forest"
+            "definition": "lea.forest"
           },
           {
             "count": 2,
@@ -1168,11 +1168,11 @@
         "cards": [
           {
             "count": 9,
-            "definition": "tla.mountain"
+            "definition": "lea.mountain"
           },
           {
             "count": 8,
-            "definition": "tla.plains"
+            "definition": "lea.plains"
           },
           {
             "count": 8,
@@ -1195,11 +1195,11 @@
         "cards": [
           {
             "count": 9,
-            "definition": "tla.mountain"
+            "definition": "lea.mountain"
           },
           {
             "count": 8,
-            "definition": "tla.plains"
+            "definition": "lea.plains"
           },
           {
             "count": 4,
@@ -1222,11 +1222,11 @@
         "cards": [
           {
             "count": 9,
-            "definition": "tla.mountain"
+            "definition": "lea.mountain"
           },
           {
             "count": 8,
-            "definition": "tla.plains"
+            "definition": "lea.plains"
           },
           {
             "count": 6,
@@ -1257,11 +1257,11 @@
         "cards": [
           {
             "count": 9,
-            "definition": "tla.mountain"
+            "definition": "lea.mountain"
           },
           {
             "count": 8,
-            "definition": "tla.plains"
+            "definition": "lea.plains"
           },
           {
             "count": 2,
@@ -1381,23 +1381,23 @@
           },
           {
             "count": 5,
-            "definition": "tla.plains"
+            "definition": "lea.plains"
           },
           {
             "count": 5,
-            "definition": "tla.island"
+            "definition": "lea.island"
           },
           {
             "count": 5,
-            "definition": "tla.swamp"
+            "definition": "lea.swamp"
           },
           {
             "count": 5,
-            "definition": "tla.mountain"
+            "definition": "lea.mountain"
           },
           {
             "count": 5,
-            "definition": "tla.forest"
+            "definition": "lea.forest"
           }
         ],
         "key": "elemental_left"
@@ -1491,23 +1491,23 @@
           },
           {
             "count": 5,
-            "definition": "tla.plains"
+            "definition": "lea.plains"
           },
           {
             "count": 5,
-            "definition": "tla.island"
+            "definition": "lea.island"
           },
           {
             "count": 5,
-            "definition": "tla.swamp"
+            "definition": "lea.swamp"
           },
           {
             "count": 5,
-            "definition": "tla.mountain"
+            "definition": "lea.mountain"
           },
           {
             "count": 5,
-            "definition": "tla.forest"
+            "definition": "lea.forest"
           }
         ],
         "key": "elemental_right"
@@ -1594,11 +1594,11 @@
           },
           {
             "count": 8,
-            "definition": "tla.forest"
+            "definition": "lea.forest"
           },
           {
             "count": 7,
-            "definition": "tla.mountain"
+            "definition": "lea.mountain"
           },
           {
             "count": 2,
@@ -1694,11 +1694,11 @@
           },
           {
             "count": 8,
-            "definition": "tla.plains"
+            "definition": "lea.plains"
           },
           {
             "count": 7,
-            "definition": "tla.forest"
+            "definition": "lea.forest"
           },
           {
             "count": 2,
@@ -1782,11 +1782,11 @@
           },
           {
             "count": 8,
-            "definition": "tla.mountain"
+            "definition": "lea.mountain"
           },
           {
             "count": 7,
-            "definition": "tla.island"
+            "definition": "lea.island"
           },
           {
             "count": 2,
@@ -1878,11 +1878,11 @@
           },
           {
             "count": 8,
-            "definition": "tla.island"
+            "definition": "lea.island"
           },
           {
             "count": 7,
-            "definition": "tla.swamp"
+            "definition": "lea.swamp"
           },
           {
             "count": 2,
@@ -1966,11 +1966,11 @@
           },
           {
             "count": 8,
-            "definition": "tla.plains"
+            "definition": "lea.plains"
           },
           {
             "count": 7,
-            "definition": "tla.island"
+            "definition": "lea.island"
           },
           {
             "count": 2,
@@ -2078,15 +2078,15 @@
           },
           {
             "count": 5,
-            "definition": "tla.forest"
+            "definition": "lea.forest"
           },
           {
             "count": 5,
-            "definition": "tla.island"
+            "definition": "lea.island"
           },
           {
             "count": 3,
-            "definition": "tla.mountain"
+            "definition": "lea.mountain"
           },
           {
             "count": 3,
@@ -2186,11 +2186,11 @@
           },
           {
             "count": 8,
-            "definition": "tla.plains"
+            "definition": "lea.plains"
           },
           {
             "count": 7,
-            "definition": "tla.mountain"
+            "definition": "lea.mountain"
           },
           {
             "count": 2,
@@ -2282,11 +2282,11 @@
           },
           {
             "count": 8,
-            "definition": "tla.plains"
+            "definition": "lea.plains"
           },
           {
             "count": 7,
-            "definition": "tla.swamp"
+            "definition": "lea.swamp"
           },
           {
             "count": 2,
@@ -2374,11 +2374,11 @@
           },
           {
             "count": 8,
-            "definition": "tla.swamp"
+            "definition": "lea.swamp"
           },
           {
             "count": 7,
-            "definition": "tla.mountain"
+            "definition": "lea.mountain"
           },
           {
             "count": 2,
@@ -2490,11 +2490,11 @@
           },
           {
             "count": 6,
-            "definition": "tla.forest"
+            "definition": "lea.forest"
           },
           {
             "count": 6,
-            "definition": "tla.swamp"
+            "definition": "lea.swamp"
           },
           {
             "count": 3,
@@ -2531,11 +2531,11 @@
         "card_count": 41,
         "cards": [
           {
-            "definition": "tla.island",
+            "definition": "lea.island",
             "count": 9
           },
           {
-            "definition": "tla.mountain",
+            "definition": "lea.mountain",
             "count": 8
           },
           {
@@ -2593,11 +2593,11 @@
         "card_count": 40,
         "cards": [
           {
-            "definition": "tla.plains",
+            "definition": "lea.plains",
             "count": 9
           },
           {
-            "definition": "tla.forest",
+            "definition": "lea.forest",
             "count": 8
           },
           {
@@ -2736,23 +2736,23 @@
           },
           {
             "count": 4,
-            "definition": "tla.plains"
+            "definition": "lea.plains"
           },
           {
             "count": 4,
-            "definition": "tla.island"
+            "definition": "lea.island"
           },
           {
             "count": 5,
-            "definition": "tla.mountain"
+            "definition": "lea.mountain"
           },
           {
             "count": 5,
-            "definition": "tla.swamp"
+            "definition": "lea.swamp"
           },
           {
             "count": 5,
-            "definition": "tla.forest"
+            "definition": "lea.forest"
           }
         ],
         "key": "sacrifice_left"
@@ -2830,23 +2830,23 @@
           },
           {
             "count": 4,
-            "definition": "tla.plains"
+            "definition": "lea.plains"
           },
           {
             "count": 4,
-            "definition": "tla.island"
+            "definition": "lea.island"
           },
           {
             "count": 5,
-            "definition": "tla.mountain"
+            "definition": "lea.mountain"
           },
           {
             "count": 5,
-            "definition": "tla.swamp"
+            "definition": "lea.swamp"
           },
           {
             "count": 5,
-            "definition": "tla.forest"
+            "definition": "lea.forest"
           }
         ],
         "key": "sacrifice_right"
@@ -2885,15 +2885,15 @@
           },
           {
             "count": 8,
-            "definition": "tla.forest"
+            "definition": "lea.forest"
           },
           {
             "count": 7,
-            "definition": "tla.island"
+            "definition": "lea.island"
           },
           {
             "count": 7,
-            "definition": "tla.mountain"
+            "definition": "lea.mountain"
           }
         ],
         "key": "temur_left",
@@ -2928,15 +2928,15 @@
           },
           {
             "count": 8,
-            "definition": "tla.forest"
+            "definition": "lea.forest"
           },
           {
             "count": 7,
-            "definition": "tla.island"
+            "definition": "lea.island"
           },
           {
             "count": 7,
-            "definition": "tla.mountain"
+            "definition": "lea.mountain"
           }
         ],
         "key": "temur_right",
@@ -2966,11 +2966,11 @@
         ],
         "cards": [
           {
-            "definition": "tla.island",
+            "definition": "lea.island",
             "count": 9
           },
           {
-            "definition": "tla.mountain",
+            "definition": "lea.mountain",
             "count": 8
           },
           {
@@ -3038,11 +3038,11 @@
         ],
         "cards": [
           {
-            "definition": "tla.plains",
+            "definition": "lea.plains",
             "count": 9
           },
           {
-            "definition": "tla.forest",
+            "definition": "lea.forest",
             "count": 8
           },
           {
@@ -3109,7 +3109,7 @@
         "card_count": 40,
         "cards": [
           {
-            "definition": "tla.plains",
+            "definition": "lea.plains",
             "count": 24
           },
           {
@@ -3127,7 +3127,7 @@
         "card_count": 40,
         "cards": [
           {
-            "definition": "tla.mountain",
+            "definition": "lea.mountain",
             "count": 24
           },
           {

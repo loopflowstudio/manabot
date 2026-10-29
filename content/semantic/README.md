@@ -1,32 +1,30 @@
 # Semantic content
 
-Every current card is a typed Rust function in its printed set's file under
-[`managym/src/cardsets/`](../../managym/src/cardsets/) (`tla.rs`, `stx.rs`,
-`lea.rs`, …), defined once and keyed by set (`tla.forest`, `stx.pop_quiz`;
-tokens made outside TLA are `token.*` in `tokens.rs`).
+Every current card is a typed Rust function in the file of the set that first
+printed it, under [`managym/src/cardsets/`](../../managym/src/cardsets/)
+(`tla.rs`, `stx.rs`, `lea.rs`, …), defined once and keyed by set (`lea.forest`,
+`stx.pop_quiz`; tokens made outside TLA are `token.*` in `tokens.rs`).
 [`cards/authoring.rs`](../../managym/src/cards/authoring.rs) defines symbolic
 programs, costs, targets, predicates and characteristics. Card text is
-presentation only.
+presentation only. A few cards the typed language cannot yet express are native
+`CardDefinition`s in their set file's `native_cards()`.
 
-The engine compiles those definitions in process
+The engine compiles the typed definitions in process
 ([`semantic/compile.rs`](../../managym/src/semantic/compile.rs)): it resolves
 definition references and token closure, checks target roles, assigns opcodes and
 program indexes, and hashes canonical IR. No card catalog or IR is generated on
 disk. Python reads the same documents through `managym.semantic_ir_json(pack_key)`.
 
 Edit a card's Rust function, add it to its set's `cards()` list, and rebuild.
-TLA membership and fixed tokens derive from that set list. Do not add another
-native registration. `cargo test --lib semantic::compile` compiles every current
-preset and checks qualifications. `current/setups.json` remains ordinary
-deck/sideboard data, and `qualifications.json` remains independent review evidence.
-Changes to rules or token dependencies require renewed qualification, even if the
-Rust source compiles.
+`cargo test --lib semantic::compile` compiles every current preset.
+`current/setups.json` remains ordinary deck/sideboard data.
 
-The [TLA authoring and qualification contract](../../docs/rules/tla/README.md)
-describes the inventory, independent witnesses, unsupported cards and ownership
-boundaries. A definition's availability in an authored setup does not qualify it
-for arbitrary deck entry. Qualifications bind reviewed witnesses to the complete
-transitive definition closure; editing a clause invalidates that qualification.
+**Support is definition.** The world supports a card for deck entry when its set
+file defines it with a typed program, unless that set file marks it incomplete
+(`tla::INCOMPLETE`, one reason per card). Incomplete and native cards still run in
+the fixed setups that name them. Tokens are never deck entries. Rules tests are
+ordinary tests; they never gate support. See the
+[TLA notes](../../docs/rules/tla/README.md) for the open TLA work.
 
 ## Native runtime and identity
 
@@ -39,13 +37,15 @@ runs from the git revision that produced it.
 Each compiled `semantic_index` is local to its IR document, distinct from native
 `CardDefId`. The compiled pack records its pack key, IR hash and source hash in
 `ContentPackManifest.compiled_semantics`. `managym.content_pool(pack_key)` exposes
-that identity, native IDs, semantic keys and eligibility without starting a game.
+that identity, native IDs, semantic keys and eligibility without starting a game;
+`managym.set_cards(["tla", "lea"])` narrows the world pool to chosen sets.
 Policy binding validates the native receipt before those IDs reach an encoder.
 
 Exact authored setups select their compiled runtime through the shared native
 catalog. Explicit selection also supports repeated-deck matches. The default
 content pack registers every typed definition through the same lowering, plus
-the few native cards that still lack one (`managym/src/cards/native.rs`). Independent directed rules tests witness behavior;
+the native set-file cards and the rules fixtures in `managym/src/cards/fixtures.rs`
+(Crossroads of Destiny), keeping the legacy `CardDefId` prefix. Independent directed rules tests witness behavior;
 comparisons between two projections of the same authoring source are not rules
 evidence.
 
@@ -95,7 +95,7 @@ retains the original rolling policy: more than 20% kernel-changing cards among
 the latest 20 distinct nonbasic, nontoken admissions requires an acknowledged
 response through the newest history sequence. It records the initial two-deck
 expansion as a `0 content-only / 20 total` breach with the semantic-kernel redesign
-as its response; it is not the current pool's eligibility authority.
+as its response; it has no bearing on current support.
 
 ```bash
 uv run scripts/generate_coverage_gaps.py --check

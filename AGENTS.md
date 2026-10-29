@@ -180,20 +180,26 @@ checks required by the affected package and workflow.
 
 ### Typed card authoring
 
-Cards are authored once, in their printed set's file under
-`managym/src/cardsets/` (keys `<set>.<card>`), using the symbolic types in
-`managym/src/cards/authoring.rs`. Add a card to its set file's `cards()`; do
-not add native registrations (`cards/native.rs` only shrinks). The engine compiles them in process
-(`managym/src/semantic/compile.rs`); there is no generated card JSON or IR to
-regenerate. Python reads current IR through `managym.semantic_ir_json`; rebuild
-the extension after card changes. Keep decklists and independent qualification
-receipts separate from behavior. Keep long printed text in a local `text_box`
-binding so rustfmt can format the typed definition.
+Cards are authored once, in the set file of their first printing under
+`managym/src/cardsets/` (keys `<set>.<card>`; basics are `lea.*`), using the
+symbolic types in `managym/src/cards/authoring.rs`. Add a card to its set file's
+`cards()`. A card the typed language cannot yet express may be a native
+`CardDefinition` in that set file's `native_cards()`; it is unsupported for deck
+entry. The engine compiles typed cards in process (`managym/src/semantic/compile.rs`);
+there is no generated card JSON or IR to regenerate. Python reads current IR
+through `managym.semantic_ir_json`; rebuild the extension after card changes.
+
+Support is definition: the world pool is every defined card from every set, and
+a card is supported unless its set file marks it incomplete (`tla::INCOMPLETE`,
+with the missing behavior). Restrict to a set with `world::set_cards` /
+`managym.set_cards`, never with per-pack membership lists. Tests never qualify
+or gate a card. Keep decklists separate from behavior. Keep long printed text in
+a local `text_box` binding so rustfmt can format the typed definition.
+Default-pack `CardDefId` order lives in `cards/content_pack.rs` (`LEGACY_ORDER`).
 Card tests mirror the set files: `managym/tests/cards/<set>.rs`, one module per
 set under the single `tests/cards.rs` target. `tests/rules/` keeps engine rules
-not about one card. Tests never decide support (Jack Heart, 2026-10-29). A new
-authored field, predicate kind or `each:` role also needs its entry appended to
-`content/semantic/current/learning_schema.json`.
+not about one card. A new authored field, predicate kind or `each:` role also
+needs its entry appended to `content/semantic/current/learning_schema.json`.
 
 Native fixed mana abilities on a card are additive: multiple fixed productions
 produce all listed colors together. A land that produces one chosen color uses

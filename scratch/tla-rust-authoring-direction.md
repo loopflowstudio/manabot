@@ -45,3 +45,8 @@ eligibility remain. No merge authorized.
 Open questions (asked 2026-10-28, unanswered; operator defaults applied, see
 questions.md): old worlds run from their git revision; learning tokens may change
 with the world.
+
+Later accepted refinements (2026-10-29, Jack Heart): every card in its
+first-printing set file, support by definition instead of qualification, one
+world pool with set filters. Recorded in
+[892c47-author-tla-cards.md](892c47-author-tla-cards.md).

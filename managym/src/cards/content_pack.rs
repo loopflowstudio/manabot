@@ -11,7 +11,7 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-use super::native::{self, Slot};
+use super::fixtures;
 use crate::state::{
     ability::{Ability, Effect, TriggerCondition, TriggerSubject},
     card::{Card, CardDefId, CardDefinition},
@@ -19,6 +19,42 @@ use crate::state::{
 };
 
 pub const CONTENT_PACK_SCHEMA_VERSION: u32 = 1;
+
+/// The default pack's historical prefix, by printed name.
+const LEGACY_ORDER: [&str; 29] = [
+    "Plains",
+    "Island",
+    "Swamp",
+    "Mountain",
+    "Forest",
+    "Llanowar Elves",
+    "Gray Ogre",
+    "Lightning Bolt",
+    "Ancestral Recall",
+    "Counterspell",
+    "Wind Drake",
+    "Giant Spider",
+    "Raging Goblin",
+    "Serra Angel",
+    "Typhoid Rats",
+    "War Mammoth",
+    "Wall of Stone",
+    "Boggart Brute",
+    "Youthful Knight",
+    "Fencing Ace",
+    "Healer's Hawk",
+    "Craw Wurm",
+    "Shivan Dragon",
+    "Pyroclasm",
+    "Man-o'-War",
+    "Pop Quiz",
+    "Igneous Inspiration",
+    "Divide by Zero",
+    "Waterfall Aerialist",
+];
+
+/// Registered after every other typed definition, by printed name.
+const TRAILING_ORDER: [&str; 2] = ["Crossroads of Destiny", "Proft's Eidetic Memory"];
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ContentPackDefinitionManifest {
@@ -141,8 +177,10 @@ impl ContentPack {
     }
 
     /// Register every current card: typed set definitions lowered once by
-    /// `semantic::compile`, plus the remaining native cards. The legacy prefix
-    /// keeps its historical order (and so its `CardDefId`s).
+    /// `semantic::compile`, the native set-file definitions and the rules
+    /// fixtures. [`LEGACY_ORDER`] keeps the historical prefix (and so its
+    /// `CardDefId`s) that older evidence records; the remaining typed cards
+    /// follow by name, then [`TRAILING_ORDER`].
     pub fn register_all_cards(&mut self) {
         let mut typed = crate::semantic::SemanticPack::current("pool")
             .and_then(|pack| pack.lower_definitions())
@@ -150,25 +188,30 @@ impl ContentPack {
             .into_iter()
             .map(|definition| (definition.name.clone(), definition))
             .collect::<BTreeMap<_, _>>();
-        for slot in native::legacy_slots() {
-            self.register_slot(slot, &mut typed);
-        }
-        for definition in std::mem::take(&mut typed).into_values() {
+        let mut native = crate::cardsets::native_cards()
+            .into_iter()
+            .chain([fixtures::crossroads_of_destiny()])
+            .map(|definition| (definition.name.clone(), definition))
+            .collect::<BTreeMap<_, _>>();
+        let mut take = |name: &str| {
+            typed
+                .remove(name)
+                .or_else(|| native.remove(name))
+                .unwrap_or_else(|| panic!("ordered card {name} has no definition"))
+        };
+        let legacy = LEGACY_ORDER.map(&mut take);
+        let trailing = TRAILING_ORDER.map(&mut take);
+        assert!(
+            native.is_empty(),
+            "native cards outside the registration order"
+        );
+        for definition in legacy
+            .into_iter()
+            .chain(std::mem::take(&mut typed).into_values())
+            .chain(trailing)
+        {
             self.register_card(definition);
         }
-        for slot in native::trailing_slots() {
-            self.register_slot(slot, &mut typed);
-        }
-    }
-
-    fn register_slot(&mut self, slot: Slot, typed: &mut BTreeMap<String, CardDefinition>) {
-        let definition = match slot {
-            Slot::Native(definition) => definition,
-            Slot::Typed(name) => typed
-                .remove(name)
-                .unwrap_or_else(|| panic!("legacy slot {name} has no typed definition")),
-        };
-        self.register_card(definition);
     }
 
     pub fn register_card(&mut self, mut definition: CardDefinition) {

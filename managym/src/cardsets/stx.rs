@@ -3,6 +3,10 @@ use crate::cards::authoring::{
     Card, CardType, Characteristics, Cost, Duration, Event, Keyword, Op, PrintedPower, Program,
     ProgramKind, Selector, Subject, Target, Trigger,
 };
+use crate::state::{
+    card::{CardDefinition, CardType as NativeCardType, CardTypes, Keywords},
+    mana::ManaCost,
+};
 
 pub(super) fn cards() -> Vec<Card> {
     vec![
@@ -15,6 +19,11 @@ pub(super) fn cards() -> Vec<Card> {
         igneous_inspiration(),
         pop_quiz(),
     ]
+}
+
+/// Native definitions, until the typed card language has the operations they need.
+pub(super) fn native_cards() -> Vec<CardDefinition> {
+    vec![waterfall_aerialist()]
 }
 
 fn enthusiastic_study() -> Card {
@@ -221,4 +230,22 @@ fn pop_quiz() -> Card {
         registry_name: "Pop Quiz",
         text_box,
     }
+}
+
+fn waterfall_aerialist() -> CardDefinition {
+    CardDefinition {
+            name: "Waterfall Aerialist".to_string(),
+            mana_cost: Some(ManaCost::parse("3U")),
+            types: CardTypes::new([NativeCardType::Creature]),
+            subtypes: vec!["Djinn".into(), "Wizard".into()],
+            keywords: Keywords {
+                flying: true,
+                ..Default::default()
+            },
+            ward: Some(ManaCost::parse("2")),
+            text_box: "Flying\nWard {2} (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays {2}.)".to_string(),
+            power: Some(3),
+            toughness: Some(1),
+            ..Default::default()
+        }
 }
