@@ -150,14 +150,14 @@ impl Game {
 
         // CR 704.5n — An Equipment attached to an object that is gone or is
         // no longer a creature becomes unattached and stays on the battlefield.
-        let detached: Vec<PermanentId> = self
-            .state
-            .permanents
-            .iter()
-            .enumerate()
-            .filter(|(_, permanent)| permanent.as_ref().is_some_and(|p| p.attached_to.is_some()))
-            .map(|(index, _)| PermanentId(index))
-            .filter(|&id| self.equipped_creature(id).is_none())
+        let detached: Vec<PermanentId> = (0..self.state.permanents.len())
+            .map(PermanentId)
+            .filter(|&id| {
+                self.state.permanents[id]
+                    .as_ref()
+                    .is_some_and(|equipment| equipment.attached_to.is_some())
+                    && self.equipped_creature(id).is_none()
+            })
             .collect();
         for permanent_id in detached {
             self.journal_permanent(permanent_id);

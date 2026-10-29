@@ -196,6 +196,13 @@ fn observed_keywords(s: &Scenario, id: PermanentId) -> KeywordData {
         .unwrap()
 }
 
+fn ready(s: &mut Scenario, id: PermanentId) {
+    s.game_mut().state.permanents[id]
+        .as_mut()
+        .unwrap()
+        .summoning_sick = false;
+}
+
 fn mark_damage(s: &mut Scenario, id: PermanentId, damage: i32) {
     s.game_mut().state.permanents[id].as_mut().unwrap().damage = damage;
 }
@@ -401,10 +408,7 @@ fn mai_jaded_edge_exhausts_into_a_double_strike_counter() {
     s.set_player_mana_pool(0, "3");
     assert!(!can_activate(&mut s, mai, 0), "exhaust activates only once");
 
-    s.game_mut().state.permanents[mai]
-        .as_mut()
-        .unwrap()
-        .summoning_sick = false;
+    ready(&mut s, mai);
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     s.declare_attack();
     s.advance_to_active_step(0, StepKind::End);
@@ -531,13 +535,6 @@ fn turtle_duck_sets_base_power_and_gains_trample_until_end_of_turn() {
     s.advance_to_active_step(1, StepKind::Main);
     assert_eq!(s.game().effective_pt(duck), (1, 5));
     assert!(!observed_keywords(&s, duck).trample);
-}
-
-fn ready(s: &mut Scenario, id: PermanentId) {
-    s.game_mut().state.permanents[id]
-        .as_mut()
-        .unwrap()
-        .summoning_sick = false;
 }
 
 fn equip(s: &mut Scenario, equipment: PermanentId, creature: PermanentId) {

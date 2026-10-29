@@ -645,7 +645,7 @@ impl Game {
                 for _ in 0..*count {
                     let token =
                         self.create_token(token_name, frame.controller, *tapped_and_attacking);
-                    if let (true, Some(token)) = (*attach_source, token) {
+                    if let Some(token) = token.filter(|_| *attach_source) {
                         self.attach_source_to(frame, token);
                     }
                 }
