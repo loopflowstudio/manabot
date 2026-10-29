@@ -94,7 +94,7 @@ lands that move.
 
 ## Check
 
-2026-10-29 after compress: debug `cargo test --no-fail-fast` passes except the
+2026-10-29 at `2673c95cd`: debug `cargo test --no-fail-fast` passes except the
 pre-existing semantic-conformance pair; clippy and fmt clean (`--features
 python` clippy needs the root venv interpreter: gate). `pytest
 tests/semantic/` fails only T1's three frozen-schema assertions (expect
