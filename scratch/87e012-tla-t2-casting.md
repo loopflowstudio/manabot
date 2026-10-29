@@ -131,8 +131,8 @@ and UI. Guard + directed + viewer-safety tests in
 - Next T1 sync, once T1 publishes engine-type cards/w17 (last observed
   2026-10-29: PR #394 head still `f9732c12f`; T1 local head `4fa385183`, with
   `167eb13d4` engine-type set files + Scryfall ids, `a80d9c349` tokens in
-  `semantic/tokens.rs`, `485c5146b` guard, `fc3dd9b12` w17 docs, and
-  uncommitted Python/test follow-up). Conversion: dump T2's lowered
+  `semantic/tokens.rs`, `485c5146b` guard, `fc3dd9b12` w17 docs, `4fa385183` w16/w17 eval admission,
+  and uncommitted edits across `managym/tests/{cards,rules,support}`). Conversion: dump T2's lowered
   `CardDefinition`s before the merge, regenerate T2's set files with T1's
   `scratch/conversion/generate.py`, resolve set-file conflicts to that output.
   Main's `9a62e8b39`, `2fc0af676`, `633dca159` arrive with T1's main sync.
