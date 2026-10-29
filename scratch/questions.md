@@ -84,6 +84,7 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   card order; T2-only primitives joined `support/` (`cast_card`,
   `activate_card`, `move_from_library`, `can_activate[_card]`,
   `offered_targets`, `offered_cards`, `zone_of`), each defined once.
-- Gaps: possible-worlds ignore foretold cards; granted land plays of another
-  player's card would enter under its owner. (Academy's card face now prints
+- Gaps: possible-worlds ignore foretold cards (concept review 5 settles it
+  as T2 work: implied by viewer safety); granted land plays of another
+  player's card would enter under its owner (unreachable: no T2 grant lets a player play another player's land). (Academy's card face now prints
   and names exhausted / once-each-turn / granted firebending, text-5 wording.)

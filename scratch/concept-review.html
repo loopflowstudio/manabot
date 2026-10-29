@@ -1,25 +1,25 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>T2 concept review 4</title>
+<title>T2 concept review 5</title>
 <style>
 :root{color-scheme:light dark;--fg:#222;--bg:#fbfaf7;--mute:#666;--new:#2a6f3a}
 @media (prefers-color-scheme:dark){:root{--fg:#e8e6e1;--bg:#1b1a18;--mute:#a09c94;--new:#7fcf8f}}
 body{font:16px/1.55 Georgia,serif;color:var(--fg);background:var(--bg);max-width:42rem;margin:2rem auto;padding:0 1rem}
-.meta{color:var(--mute);font-size:.85rem}code{font-size:.9em}
+.meta{color:var(--mute);font-size:.85rem}code{font-size:.9em;overflow-wrap:anywhere}
 .proposed{color:var(--new)}table{border-collapse:collapse;width:100%}td,th{padding:.3rem .5rem;border-bottom:1px solid var(--mute);text-align:left;vertical-align:top}
 </style></head><body>
-<h1>T2 concept review 4 (headless)</h1>
-<p class="meta">Task 87e012 (TLA T2) · concept-review step · 2026-10-29 · PR #398 at <code>d218e1dc2</code> · built from <code>scratch/87e012-tla-t2-casting.md</code>, <code>scratch/questions.md</code>, <code>managym/src/agent/observation_encoder.rs</code>, <code>manabot/semantic/text_observation.py</code>, <code>academy/ui/src/lib/components/{PlayerArea,PermanentRow,Card}.svelte</code></p>
+<h1>T2 concept review 5 (headless)</h1>
+<p class="meta">Task 87e012 (TLA T2) · concept-review step · 2026-10-29 · PR #398 at <code>93d94c4f9</code> · built from <code>scratch/87e012-tla-t2-casting.md</code>, <code>scratch/questions.md</code>, <code>managym/src/flow/search.rs</code>, <code>managym/src/possible_worlds.rs</code>, <code>managym/src/flow/cast_permission.rs</code></p>
 <p><strong>Result:</strong> the design changed in one small way. No product question is open.</p>
 <h2>The mismatch</h2>
-<p>Jack Heart's Academy direction says a person should see the agent's viewer-safe observations. Three T2 permanent statuses reach every surface except Academy:</p>
-<table><tr><th>Status</th><th>Tensor / tokens</th><th>Text-5</th><th>Academy</th></tr>
-<tr><td>Exhaust abilities used</td><td>yes</td><td>yes</td><td class="proposed">proposed: card state note</td></tr>
-<tr><td>Once-each-turn abilities used</td><td>yes</td><td>yes</td><td class="proposed">proposed: card state note</td></tr>
-<tr><td>Firebending granted until end of turn</td><td>yes</td><td>yes</td><td class="proposed">proposed: card state note</td></tr></table>
-<p>Cast permissions, the hand-only lock, restricted mana by class, X and the face-down exile count are already shown (concept review 3, 1b/3c).</p>
+<p>Under the accepted Foretell decision, a viewer who does not own a foretold card sees only an exile count. Two engine paths reason about the opponent's hidden cards, and only one of them follows that rule:</p>
+<table><tr><th>Path</th><th>Unseen pool</th><th>Foretold card in branches</th></tr>
+<tr><td><code>Game::determinize</code> (search)</td><td>Hand ∪ Library ∪ foretold</td><td>resampled from cards with foretell</td></tr>
+<tr><td><code>PossibleWorldSpace</code> (world queries)</td><td>Hand ∪ Library</td><td class="proposed">kept as the real card. Proposed: resample it, as search does</td></tr></table>
+<p>Because the pool leaves out the foretold card, a viewer can infer its identity from the pool's counts, and every materialized branch keeps the real face-down card. Viewer safety is already an accepted requirement, so this needs no new approval.</p>
 <h2>Next implement direction</h2>
-<p class="proposed">Pass the three fields from <code>PermanentRow.svelte</code> into <code>Card.svelte</code>'s <code>stateNotes</code> so they are visible and in the accessible name. Use text-5's wording and add a test. The engine and tensor stay unchanged.</p>
+<p class="proposed">Add the opponent's foretold cards to the possible-world pool. Weight each hand composition by its exact count of compatible deals, multiplied by the ways to fill the face-down slots from the remaining cards with foretell. Materialize those slots with <code>resample_foretold</code>. Bump <code>POSSIBLE_WORLD_SPACE_VERSION</code> and add a directed Sozin's Comet test. Frozen evidence is not changed.</p>
+<p>The other recorded gap is that a granted land play of another player's card would enter under its owner. No T2 card can reach it: Zuko exiles his controller's own card, and Azula and Hama grant spell casts only. It stays a documented gap.</p>
 <h2>Questions</h2>
 <ol><li>None. The landing order is already settled: T2 lands after #394.</li></ol>
 </body></html>

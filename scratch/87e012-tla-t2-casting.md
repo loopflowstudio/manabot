@@ -48,6 +48,15 @@ exhaust, used once-each-turn, granted firebending) in text-5 wording
 
 ## Remaining
 
+- Next implement (concept review 5): the possible-world space
+  (`possible_worlds.rs`) must treat the opponent's foretold cards as unseen,
+  as `Game::determinize` does. Today its pool is Hand ∪ Library, so it leaves
+  out the foretold card's identity (the viewer could infer it) and every
+  branch keeps the real face-down card. Add foretold cards to the pool. Weight
+  each hand composition by the exact count of compatible deals, multiplied by
+  the ways to fill the face-down slots from the foretell-bearing remainder.
+  Materialize those slots with `resample_foretold`. Bump
+  `POSSIBLE_WORLD_SPACE_VERSION`, and add a directed test using Sozin's Comet.
 - Gate: CLAUDE.md arena admission/monitoring suite; Academy vitest suite; world-bound receipts T1 already flagged.
 - Land only after #394 lands; re-sync then.
 
