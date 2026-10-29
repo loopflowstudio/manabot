@@ -516,6 +516,7 @@ impl Game {
                 Decision::DiscardFromRevealedHand { .. } => (16, None),
                 Decision::CastWithoutPaying { .. } => (17, None),
                 Decision::ExileLinked { .. } => (18, None),
+                Decision::DistributeCounters { .. } => (19, None),
             };
             frame.decision = kind;
             frames.push(frame);

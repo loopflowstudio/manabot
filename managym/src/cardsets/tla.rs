@@ -188,6 +188,8 @@ pub(super) fn cards() -> Vec<Card> {
         kyoshi_battle_fan(),
         meteor_sword(),
         twin_blades(),
+        glider_staff(),
+        crashing_wave(),
         path_to_redemption(),
         watery_grasp(),
         swampsnare_trap(),
@@ -6148,6 +6150,86 @@ fn twin_blades() -> Card {
             Program::equip("equip", "{2}"),
         ],
         registry_name: "Twin Blades",
+        text_box,
+    }
+}
+
+fn glider_staff() -> Card {
+    let text_box = "When this Equipment enters, airbend up to one target creature. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)\nEquipped creature gets +1/+1 and has flying.\nEquip {2}";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{W}"),
+            subtypes: Some(vec!["Equipment"]),
+            types: vec![CardType::Artifact],
+            ..Default::default()
+        },
+        key: "tla.glider_staff",
+        programs: vec![
+            Program::new(
+                "enters",
+                ProgramKind::Triggered,
+                vec![Op::TargetClause {
+                    role: "creature",
+                    body: vec![Op::Airbend {
+                        target: "current_target",
+                    }],
+                }],
+            )
+            .targets(vec![Target::up_to(1, "creature", Selector::Creature)])
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::equipped_pt("equipped", 1, 1),
+            Program::new(
+                "equipped_flying",
+                ProgramKind::Static,
+                vec![Op::GrantKeywords {
+                    duration: Duration::Static,
+                    keywords: vec![Keyword::Flying],
+                    target: "each:equipped_creature",
+                }],
+            ),
+            Program::equip("equip", "{2}"),
+        ],
+        registry_name: "Glider Staff",
+        text_box,
+    }
+}
+
+fn crashing_wave() -> Card {
+    let text_box = "As an additional cost to cast this spell, waterbend {X}. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)\nTap up to X target creatures, then distribute three stun counters among any number of tapped creatures your opponents control. (If a permanent with a stun counter would become untapped, remove one from it instead.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{U}{U}"),
+            types: vec![CardType::Sorcery],
+            ..Default::default()
+        },
+        key: "tla.crashing_wave",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![
+                Op::ForEachTarget {
+                    body: vec![Op::Tap {
+                        target: "current_target",
+                    }],
+                    role: "creatures",
+                },
+                Op::DistributeCounters {
+                    count: 3,
+                    counter: CounterKind::Stun,
+                    target: "each:tapped_creature_opponents_control",
+                },
+            ],
+        )
+        .cost(Cost {
+            mana: Some("{U}{U}"),
+            additional: Some("{X}"),
+            waterbend: Some(true),
+            ..Default::default()
+        })
+        .targets(vec![Target::up_to_x("creatures", Selector::Creature)])],
+        registry_name: "Crashing Wave",
         text_box,
     }
 }

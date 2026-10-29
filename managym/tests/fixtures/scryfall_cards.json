@@ -3111,5 +3111,30 @@
     "keywords": [],
     "oracle_text": "This land can't be blocked.\n{T}: Add {C}.\n{4}, {T}: Two target creatures you control that share a creature type can't be blocked this turn.",
     "colors": []
+  },
+  "Glider Staff": {
+    "name": "Glider Staff",
+    "mana_cost": "{2}{W}",
+    "type_line": "Artifact — Equipment",
+    "keywords": [
+      "Airbend",
+      "Equip"
+    ],
+    "oracle_text": "When this Equipment enters, airbend up to one target creature. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)\nEquipped creature gets +1/+1 and has flying.\nEquip {2}",
+    "colors": [
+      "W"
+    ]
+  },
+  "Crashing Wave": {
+    "name": "Crashing Wave",
+    "mana_cost": "{U}{U}",
+    "type_line": "Sorcery",
+    "keywords": [
+      "Waterbend"
+    ],
+    "oracle_text": "As an additional cost to cast this spell, waterbend {X}. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)\nTap up to X target creatures, then distribute three stun counters among any number of tapped creatures your opponents control. (If a permanent with a stun counter would become untapped, remove one from it instead.)",
+    "colors": [
+      "U"
+    ]
   }
 }

@@ -243,6 +243,7 @@ def test_opcode_numbers_are_an_explicit_compatibility_surface() -> None:
         "CAST_FROM_LIBRARY_TOP": 103,
         "SET_CHARACTERISTICS": 104,
         "REMOVE_ALL_COUNTERS": 105,
+        "DISTRIBUTE_COUNTERS": 106,
     }
 
 

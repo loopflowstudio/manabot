@@ -385,9 +385,16 @@ fn apply_program(
             if definition.mana_cost.as_ref() != Some(&mana_cost) {
                 return unsupported(program, "spell cost disagrees with characteristics");
             }
+            if cost.additional.is_some() && (!cost.waterbend || cost.kicker.is_some()) {
+                return unsupported(
+                    program,
+                    "a required additional cost is a waterbend cost without kicker",
+                );
+            }
             definition.sacrifice_cost = cost.sacrifice;
             definition.kicker = cost.kicker;
-            definition.kicker_waterbend = cost.waterbend;
+            definition.kicker_waterbend = cost.waterbend && cost.additional.is_none();
+            definition.waterbend_cost = cost.additional;
             definition.flashback = cost.flashback;
             definition.foretell = cost.foretell;
             definition.cost_reduction_per = cost.affinity;
@@ -520,6 +527,7 @@ fn apply_program(
 struct ProgramCost {
     mana: Option<ManaCost>,
     kicker: Option<ManaCost>,
+    additional: Option<ManaCost>,
     flashback: Option<ManaCost>,
     foretell: Option<ManaCost>,
     affinity: Option<CardPredicate>,
@@ -554,6 +562,7 @@ fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
     Ok(ProgramCost {
         mana: opt_str_field(value, "mana")?.map(ManaCost::parse),
         kicker: opt_str_field(value, "kicker")?.map(ManaCost::parse),
+        additional: opt_str_field(value, "additional")?.map(ManaCost::parse),
         flashback: opt_str_field(value, "flashback")?.map(ManaCost::parse),
         foretell: opt_str_field(value, "foretell")?.map(ManaCost::parse),
         affinity: value.get("affinity").map(predicate_value).transpose()?,
@@ -802,14 +811,14 @@ fn apply_static(definition: &mut CardDefinition, program: &Program) -> Result<()
             definition
                 .replacement_effects
                 .push(ReplacementEffect::EntersWithXCounters {
-                    kind: counter_kind(program, counter)?,
+                    kind: counter_kind(program, counter.as_deref())?,
                 })
         }
         [Step::OpponentDamagePlusCounters { counter }] => {
             definition
                 .replacement_effects
                 .push(ReplacementEffect::OpponentDamagePlusCounters {
-                    kind: counter_kind(program, counter)?,
+                    kind: counter_kind(program, counter.as_deref())?,
                 })
         }
         [Step::Branch {
@@ -889,7 +898,7 @@ fn apply_static(definition: &mut CardDefinition, program: &Program) -> Result<()
             ) =>
         {
             definition.creature_with_counters = Some(CounterThreshold {
-                kind: counter_kind(program, counter)?,
+                kind: counter_kind(program, counter.as_deref())?,
                 count: i32::try_from(*count)
                     .map_err(|_| malformed(program, "counter threshold exceeds i32"))?,
             });
@@ -1066,8 +1075,8 @@ fn static_scope(program: &Program, target: &str) -> Result<StaticScope, IrError>
 }
 
 /// Authored counter kind; absence is the +1/+1 counter.
-fn counter_kind(program: &Program, counter: &Option<String>) -> Result<CounterKind, IrError> {
-    match counter.as_deref() {
+fn counter_kind(program: &Program, counter: Option<&str>) -> Result<CounterKind, IrError> {
+    match counter {
         None => Ok(CounterKind::PlusOnePlusOne),
         Some(name) => CounterKind::parse(name)
             .ok_or_else(|| malformed(program, &format!("unknown counter kind {name:?}"))),
@@ -1213,7 +1222,7 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             counter,
         } if target == "source" => Effect::PutCountersOnSource {
             count: i32_value(program, *count, "counter count")?,
-            kind: counter_kind(program, counter)?,
+            kind: counter_kind(program, counter.as_deref())?,
         },
         Step::PutCounters {
             target,
@@ -1245,7 +1254,7 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             counter,
         } if !target.starts_with("each:") => Effect::PutCounters {
             count: i32_value(program, *count, "counter count")?,
-            kind: counter_kind(program, counter)?,
+            kind: counter_kind(program, counter.as_deref())?,
             target: target_for(program, target)?,
         },
         Step::PutCounters { .. } => {
@@ -1264,6 +1273,22 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         }
         Step::RemoveAllCounters { .. } => {
             return unsupported(program, "remove_all_counters reads the enchanted creature")
+        }
+        Step::DistributeCounters {
+            target,
+            count,
+            counter,
+        } if target == "each:tapped_creature_opponents_control" => {
+            Effect::DistributeCountersToTappedOpponentCreatures {
+                kind: counter_kind(program, Some(counter.as_str()))?,
+                count: usize_value(program, *count, "counter count")?,
+            }
+        }
+        Step::DistributeCounters { .. } => {
+            return unsupported(
+                program,
+                "distribute_counters reads tapped creatures your opponents control",
+            )
         }
         Step::RemoveCounters { target, count } => Effect::RemoveCounters {
             up_to: i32_value(program, *count, "counter count")?,
@@ -1952,6 +1977,7 @@ fn parse_target_requirement(
         max: usize::try_from(u64_field(target, "max")?)
             .map_err(|_| malformed(program, "target max exceeds usize"))?,
         another: opt_bool_field(target, "another")?.unwrap_or(false),
+        max_x: opt_bool_field(target, "max_x")?.unwrap_or(false),
     })
 }
 

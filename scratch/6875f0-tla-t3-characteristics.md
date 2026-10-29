@@ -5,7 +5,7 @@ Brief: the Task directive (49 cards, obligations in `docs/rules/tla/allocation.j
 (87e012, PR #398 head `16dfd3dbb`). Every merge needs Jack Heart's review.
 Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
 
-## Done (46 of 49)
+## Done (48 of 49)
 
 Per-slice detail: `git log 86ebe9ccf..`.
 
@@ -113,26 +113,34 @@ quantities 5-7, trigger_event 13, subtypes 64-75.
    Li Agents' quantity counts +1/+1 counters only (a stun counter no longer
    qualifies).
 
-Check (compress, debug): `cards` 121, `rules_tests` 356, lib 122 pass; clippy and
-fmt clean; extension rebuilt; `pytest tests/semantic` same 3 known failures.
+18. Glider Staff and Crashing Wave (2026-10-29): Glider Staff is authored on
+   T2's `Op::Airbend` (up to one target creature), `equipped_pt` 1/1, a static
+   flying `GrantKeywords` on `each:equipped_creature` and `equip {2}`.
+   Crashing Wave: authoring `Cost.additional` (with `waterbend`) lowers to
+   `CardDefinition.waterbend_cost`, a required waterbend additional cost whose
+   {X} is announced with the spell's (`begin_cast`), added in
+   `effective_spell_cost` and waterbent through `cast_waterbend_generic`; the
+   mana value is unchanged. `Target::up_to_x` (field `max_x`) →
+   `TargetRequirement.max_x`/`max_for(x)` in target selection. Opcode 106
+   `distribute_counters` on special role 17
+   `each:tapped_creature_opponents_control` →
+   `Effect::DistributeCountersToTappedOpponentCreatures` →
+   `Decision::DistributeCounters` (continuation kind 19, stage
+   `distribute_counters`), one `SelectCard` placement per counter. Schema 8
+   gains fields 115 `additional`, 116 `max_x`.
 
-Check (sync, debug): `cargo test --no-fail-fast` all targets pass (lib 122,
-cards 121, rules_tests 356) except `semantic_conformance_tests` (receipts are w15,
-as on PR #394/#398 CI); clippy (`--all-targets --all-features -D warnings`) and fmt
-clean; extension rebuilt; `pytest tests/semantic` 160 pass, 3 fail on T1's frozen
-`schema_version` asserts (8 vs 3/7/4). World-change Python suite (CLAUDE.md) left to gate.
+Compress after item 18: Glider Staff uses `Target::up_to`; `counter_kind` takes
+`Option<&str>`; the "up to X" bound check is `max < 1 && !max_x`; a counter
+recipient resolves through `card_to_permanent`. IR unchanged.
 
-## Remaining (3 cards), suggested next slices
+Check (item 18 + compress, debug): `cargo test --no-fail-fast` passes on every target
+(lib 122, cards 124, rules_tests 356) except `semantic_conformance_tests` (w15
+receipts, as on PR #394/#398 CI); clippy and fmt clean; before the compress (IR unchanged by it) extension rebuilt and
+`pytest tests/semantic` 160 pass, 3 fail on T1's frozen `schema_version` asserts. World-change
+Python suite (CLAUDE.md) left to gate.
 
-- Glider Staff: entry trigger with T2's `Op::Airbend` (exact-object cast
-  permission), plus `equipped_pt` 1/1, an equipped flying grant
-  (`StaticKeywordGrant` on `each:equipped_creature`) and `equip {2}`.
+## Remaining (1 card)
 
-- Crashing Wave (deferred from slice 11): build on T2's waterbend additional
-  cost (`kicker_waterbend`) and `AnnounceX`; then "up to
-  X targets" (requirement max read from X) and a resolution-time distribution
-  of three stun counters among tapped opponents' creatures (repeated
-  one-at-a-time choice, as Heartless Act).
 - Fire Nation Palace (granted firebending; observation shape change).
 
 ## Concept review after slice 14 (2026-10-29, headless)
@@ -155,11 +163,12 @@ and **one observation change before landing.** The acceptance criteria say obser
    frozen widths are unchanged), and the world/observation validation in
    CLAUDE.md applies.
 
-Realign after the compress (2026-10-29): PR #398 head still `16dfd3dbb`, PR #394 head
-still `86ebe9ccf`, `origin/main` fully contained; plan and code agree.
+Realign after item 18 (2026-10-29): PR #398 head still `16dfd3dbb`, PR #394 head
+still `86ebe9ccf`, `origin/main` fully contained; schema 8 ids contiguous (fields
+to 116, opcodes to 106, special roles to 17); item 18 is uncommitted in the worktree.
 
-Next implement order: (4) Glider Staff and Crashing Wave on T2's airbend and
-waterbend; (5) the observation change with Fire Nation Palace.
+Next implement order: (5) the observation change with Fire Nation Palace
+((4), Glider Staff and Crashing Wave, is item 18).
 
 ## Delete — do not maintain
 

@@ -141,6 +141,7 @@ class Opcode(IntEnum):
     CAST_FROM_LIBRARY_TOP = 103
     SET_CHARACTERISTICS = 104
     REMOVE_ALL_COUNTERS = 105
+    DISTRIBUTE_COUNTERS = 106
 
 
 PROGRAM_KINDS = {kind.name.lower(): kind for kind in ProgramKind}
@@ -262,6 +263,7 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "cast_from_library_top": ({"predicate"}, set()),
     "set_characteristics": ({"target", "name", "subtypes", "power", "toughness"}, set()),
     "remove_all_counters": ({"target"}, set()),
+    "distribute_counters": ({"count", "counter", "target"}, set()),
     "add_lesson_mana": ({"mana"}, set()),
     "grant_flashback": (set(), set()),
     "grant_mana": ({"predicates"}, set()),

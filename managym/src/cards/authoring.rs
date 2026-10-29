@@ -245,6 +245,11 @@ pub struct Cost {
     pub affinity_zone: Option<Zone>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kicker: Option<&'static str>,
+    /// "As an additional cost to cast this spell, [pay] [cost]" (CR 601.2b),
+    /// required rather than optional like `kicker`. With `waterbend`, it is a
+    /// waterbend cost; its {X} is announced with the spell's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub additional: Option<&'static str>,
     /// Printed flashback (CR 702.34) on a spell program: its graveyard cost.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub flashback: Option<&'static str>,
@@ -325,6 +330,9 @@ pub struct Target {
     /// "That share a creature type": the chosen targets must share one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shares_creature_type: Option<bool>,
+    /// "Up to X targets": the announced X is the maximum (`max` is 0).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_x: Option<bool>,
 }
 
 impl Target {
@@ -336,6 +344,7 @@ impl Target {
             selector,
             another: false,
             shares_creature_type: None,
+            max_x: None,
         }
     }
 
@@ -345,6 +354,14 @@ impl Target {
             min: 0,
             max,
             ..Self::one(role, selector)
+        }
+    }
+
+    /// "Up to X targets", X announced on casting (CR 601.2b-c).
+    pub fn up_to_x(role: &'static str, selector: Selector) -> Self {
+        Self {
+            max_x: Some(true),
+            ..Self::up_to(0, role, selector)
         }
     }
 
@@ -437,6 +454,13 @@ pub enum Op {
         target: &'static str,
         #[serde(skip_serializing_if = "Option::is_none")]
         toughness: Option<i32>,
+    },
+    /// "Distribute `count` [counter] counters among any number of [target]",
+    /// chosen one counter at a time as the effect resolves.
+    DistributeCounters {
+        count: i32,
+        counter: CounterKind,
+        target: &'static str,
     },
     /// Remove up to `count` counters of any kinds, chosen one at a time.
     RemoveCounters {

@@ -108,3 +108,9 @@ mana, `Game::zone_cast_cost`/`may_play_from_zone`, `ZoneEntry`.
 - Card tests: T2's funded `setup` stays; this branch's tests use
   `setup_unfunded`. T2's one-argument `can_activate` is `can_activate_any`.
 - World: w17 (own `WORLDS.md` entry); conformance receipts stay w15.
+- Crashing Wave (item 18): the stun counters are placed one at a time among
+  the tapped creatures an opponent controls at each placement, and all three
+  must be placed while any is eligible ("any number" of recipients, CR 601.2d
+  applied at resolution). The required waterbend {X} adds to the total cost,
+  not the mana value; a free cast still pays it with X = 0. Kicker and a
+  required additional cost on one spell are rejected at compile time.

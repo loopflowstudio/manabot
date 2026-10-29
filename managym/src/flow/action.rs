@@ -143,6 +143,11 @@ impl Game {
                             "Put {} into your hand",
                             self.state.cards[*card].name
                         )),
+                        Decision::DistributeCounters { kind, .. } => Some(format!(
+                            "Put a {} counter on {}",
+                            counter_description(*kind),
+                            self.state.cards[*card].name
+                        )),
                         _ => None,
                     }
                 } else {
@@ -603,6 +608,7 @@ impl Game {
             PendingChoice::ChooseTargets {
                 player,
                 card,
+                cast,
                 requirement_index,
                 mode,
                 chosen_req_indices,
@@ -624,7 +630,7 @@ impl Game {
                     .count();
                 let min_met = requirements
                     .get(*requirement_index)
-                    .is_some_and(|req| chosen_in_req >= req.min && req.max > req.min);
+                    .is_some_and(|req| chosen_in_req >= req.min && req.max_for(cast.x) > req.min);
                 if min_met {
                     actions.push(Action::Decline { player: *player });
                 }

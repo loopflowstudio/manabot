@@ -382,6 +382,9 @@ impl Game {
                     predicate: predicate.clone(),
                 })
             }
+            Effect::DistributeCountersToTappedOpponentCreatures { kind, count } => {
+                self.distribute_counters(frame.controller, *kind, *count)
+            }
             Effect::DealDamageToController { amount } => {
                 self.apply_player_damage(frame.source_ref, frame.controller, *amount);
                 None

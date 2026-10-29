@@ -3,6 +3,7 @@
 
 use crate::{
     flow::{
+        decision::Decision,
         event::GameEvent,
         game::{CastChoices, Game},
         proposed_event::{ProposedEvent, ZoneEntry},
@@ -10,6 +11,7 @@ use crate::{
     state::{
         card::Restriction,
         game_object::{CardId, Incarnation, ObjectRef, PermanentId, PlayerId, Target},
+        permanent::CounterKind,
         permanent::Permanent,
         predicate::CardPredicate,
         stack_object::{SpellOnStack, StackObject},
@@ -33,6 +35,36 @@ impl Game {
         self.emit(GameEvent::PermanentSacrificed { card, controller });
         self.process_game_events_with_sources(&sources);
         self.move_card(card, ZoneType::Graveyard);
+    }
+
+    /// Tapped creatures the opponent of `player` controls.
+    pub(crate) fn tapped_opponent_creatures(&self, player: PlayerId) -> Vec<PermanentId> {
+        self.battlefield_permanents(PlayerId(1 - player.0))
+            .into_iter()
+            .filter(|id| {
+                self.permanent_is_battlefield_creature(*id)
+                    && self.state.permanents[*id]
+                        .as_ref()
+                        .is_some_and(|permanent| permanent.tapped)
+            })
+            .collect()
+    }
+
+    /// The next placement of `remaining` counters, if any remain and a
+    /// tapped opposing creature can receive one.
+    pub(crate) fn distribute_counters(
+        &self,
+        player: PlayerId,
+        kind: CounterKind,
+        remaining: usize,
+    ) -> Option<Decision> {
+        (remaining > 0 && !self.tapped_opponent_creatures(player).is_empty()).then_some(
+            Decision::DistributeCounters {
+                player,
+                kind,
+                remaining,
+            },
+        )
     }
 
     pub(crate) fn sacrifice_candidates(

@@ -466,6 +466,13 @@ pub enum Effect {
     TapAttached,
     /// Remove all counters from the object the source is attached to.
     RemoveAllCountersFromAttached,
+    /// "Distribute `count` [kind] counters among any number of tapped
+    /// creatures your opponents control": the controller places them one
+    /// at a time, choosing among the eligible creatures at each placement.
+    DistributeCountersToTappedOpponentCreatures {
+        kind: CounterKind,
+        count: usize,
+    },
     /// Return the permanent that granted this ability to its owner's hand
     /// ("Return Trusty Boomerang"); nothing if it has left the battlefield.
     ReturnGrantorToHand,
@@ -740,6 +747,9 @@ pub struct TargetRequirement {
     /// "other target": the ability's own source object is not a candidate.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub another: bool,
+    /// "Up to X targets": the announced X replaces `max` (CR 601.2c).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub max_x: bool,
 }
 
 impl TargetRequirement {
@@ -750,6 +760,16 @@ impl TargetRequirement {
             min: 1,
             max: 1,
             another: false,
+            max_x: false,
+        }
+    }
+
+    /// The most targets this requirement allows with X announced as `x`.
+    pub fn max_for(&self, x: u8) -> usize {
+        if self.max_x {
+            usize::from(x)
+        } else {
+            self.max
         }
     }
 
@@ -894,6 +914,7 @@ impl Effect {
             | Effect::ExileAttached
             | Effect::TapAttached
             | Effect::RemoveAllCountersFromAttached
+            | Effect::DistributeCountersToTappedOpponentCreatures { .. }
             | Effect::ReturnGrantorToHand
             | Effect::ShuffleAttachedIntoLibrary
             | Effect::ReturnSourceToHand

@@ -17,6 +17,7 @@ use crate::{
     state::{
         ability::{Effect, LinkedGrant, PaymentCost},
         game_object::{CardId, ObjectRef, PlayerId, Target},
+        permanent::CounterKind,
         predicate::CardPredicate,
         zone::ZoneType,
     },
@@ -180,6 +181,13 @@ pub enum Decision {
         player: PlayerId,
         predicate: CardPredicate,
     },
+    /// Place one of `remaining` `kind` counters on a tapped creature an
+    /// opponent of `player` controls; candidates are read at each placement.
+    DistributeCounters {
+        player: PlayerId,
+        kind: CounterKind,
+        remaining: usize,
+    },
     SelectMilled {
         player: PlayerId,
         cards: Vec<CardId>,
@@ -319,7 +327,8 @@ impl Decision {
             Decision::Payment(payment) => payment.player,
             Decision::ManaUpfront { player, .. }
             | Decision::ManaChoice { player, .. }
-            | Decision::Sacrifice { player, .. } => *player,
+            | Decision::Sacrifice { player, .. }
+            | Decision::DistributeCounters { player, .. } => *player,
             Decision::SelectMilled { player, .. }
             | Decision::SearchBasicLand { player, .. }
             | Decision::SearchLibraryToHand { player, .. }
@@ -346,7 +355,8 @@ impl Decision {
             Decision::ManaUpfront { .. }
             | Decision::Payment(_)
             | Decision::ManaChoice { .. }
-            | Decision::Sacrifice { .. } => &[],
+            | Decision::Sacrifice { .. }
+            | Decision::DistributeCounters { .. } => &[],
             Decision::Scry { looked, .. } => looked,
             Decision::LookAndSelect { looked, .. } => looked,
             Decision::SearchDistinctLands { selected, .. } => selected,
@@ -514,6 +524,19 @@ impl Game {
                 kind: ActionSpaceKind::LookAndSelect,
                 actions: self
                     .sacrifice_candidates(*player, predicate)
+                    .into_iter()
+                    .map(|id| Action::SelectCard {
+                        player: *player,
+                        card: self.state.permanents[id].as_ref().unwrap().card,
+                    })
+                    .collect(),
+                focus: source_focus,
+            },
+            Decision::DistributeCounters { player, .. } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: self
+                    .tapped_opponent_creatures(*player)
                     .into_iter()
                     .map(|id| Action::SelectCard {
                         player: *player,
@@ -897,6 +920,29 @@ impl Game {
                 };
                 self.sacrifice_permanent(selected);
                 self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (
+                Decision::DistributeCounters {
+                    player,
+                    kind,
+                    remaining,
+                },
+                Action::SelectCard { card, .. },
+            ) => {
+                let selected = self.state.card_to_permanent[*card]
+                    .filter(|id| self.tapped_opponent_creatures(*player).contains(id));
+                let Some(selected) = selected else {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("illegal counter recipient".into()));
+                };
+                self.change_counters(selected, *kind, 1);
+                if let Some(next) = self.distribute_counters(*player, *kind, *remaining - 1) {
+                    suspended.decision = next;
+                    self.state.suspended_decision = Some(suspended);
+                } else {
+                    self.run_frame(suspended.frame);
+                }
                 Ok(())
             }
             (

@@ -200,7 +200,7 @@ class LearningSchema:
 
         opcodes = _validate_id_map(raw.get("opcodes"), "learning_schema.opcodes")
         # Frozen schemas admit only the opcode prefix available at publication.
-        max_opcode = {2: 23, 3: 50, 4: 55, 5: 61, 6: 64, 7: 65, 8: 105}[version]
+        max_opcode = {2: 23, 3: 50, 4: 55, 5: 61, 6: 64, 7: 65, 8: 106}[version]
         expected_opcodes = {
             opcode.name.lower(): int(opcode)
             for opcode in Opcode
@@ -569,6 +569,7 @@ class _TokenBuilder:
                 "mana",
                 "mana_cost",
                 "kicker",
+                "additional",
                 "flashback",
                 "foretell",
                 "cost",
@@ -766,7 +767,7 @@ class _TokenBuilder:
                 self.field(field)
                 self.value(field, target[field], context="target", roles=roles)
             # Optional, so targets without them keep their token streams.
-            for field in ("another", "shares_creature_type"):
+            for field in ("another", "shares_creature_type", "max_x"):
                 if field in target:
                     self.field(field)
                     self.value(field, target[field], context="target", roles=roles)
@@ -777,6 +778,7 @@ class _TokenBuilder:
                 "selector",
                 "another",
                 "shares_creature_type",
+                "max_x",
             }
             if unknown:
                 raise SemanticProjectionError(

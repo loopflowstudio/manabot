@@ -1896,6 +1896,114 @@ fn spirit_water_revival_waterbends_its_additional_cost() {
     assert!(s.game().state.players[0].no_maximum_hand_size);
 }
 
+/// Waterbend {X} is required and announced with X; it adds to the total cost
+/// (helpers may tap for it) but not to the mana value. Up to X targets are
+/// tapped, then three stun counters go one at a time onto tapped creatures
+/// an opponent controls.
+#[test]
+fn crashing_wave_waterbends_x_taps_up_to_x_and_distributes_three_stun_counters() {
+    use managym::state::stack_object::StackObject;
+    let mut s = setup_unfunded(&["Crashing Wave", "Gray Ogre"]);
+    let helpers: Vec<PermanentId> = (0..2)
+        .map(|_| s.force_permanent_on_battlefield(0, "Gray Ogre"))
+        .collect();
+    let ours = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let [first, second, tapped_already, untouched] =
+        [(); 4].map(|_| s.force_permanent_on_battlefield(1, "Gray Ogre"));
+    for id in helpers.iter().chain([&ours]) {
+        ready(&mut s, *id);
+    }
+    s.game_mut().state.permanents[tapped_already]
+        .as_mut()
+        .unwrap()
+        .tapped = true;
+    s.game_mut().state.permanents[ours].as_mut().unwrap().tapped = true;
+
+    // {U}{U} plus two helpers: X may be 0, 1 or 2.
+    s.set_player_mana_pool(0, "UU");
+    let wave = cast(&mut s, "Crashing Wave");
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+    let offered: Vec<usize> = s
+        .action_space()
+        .actions
+        .iter()
+        .filter_map(|a| match a {
+            Action::ChooseMode { mode, .. } => Some(*mode),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(offered, vec![0, 1, 2]);
+    assert_eq!(
+        s.game().state.cards[wave]
+            .mana_cost
+            .as_ref()
+            .unwrap()
+            .mana_value,
+        2
+    );
+    mode(&mut s, 2);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(first)));
+    assert!(s.choose_target(Target::Permanent(second)));
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);
+    for helper in &helpers {
+        choose(
+            &mut s,
+            |a| matches!(a, Action::WaterbendTap { permanent, .. } if permanent == helper),
+        );
+    }
+    let Some(StackObject::Spell(spell)) = s.game().state.stack_objects.last() else {
+        panic!("Crashing Wave is not on the stack");
+    };
+    assert_eq!(spell.x, 2);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+
+    resolve_top(&mut s);
+    assert!(tapped(&s, first) && tapped(&s, second));
+    assert!(!tapped(&s, untouched));
+    let recipients = offered_cards(&s);
+    assert_eq!(recipients.len(), 3);
+    for id in [first, second, tapped_already] {
+        assert!(recipients.contains(&card_of(&s, id)));
+    }
+    for id in [ours, untouched] {
+        assert!(
+            !recipients.contains(&card_of(&s, id)),
+            "only tapped opposing creatures"
+        );
+    }
+    for id in [first, first, tapped_already] {
+        let pick = card_of(&s, id);
+        choose(
+            &mut s,
+            |a| matches!(a, Action::SelectCard { card, .. } if *card == pick),
+        );
+    }
+    settle(&mut s);
+    assert_eq!(counters_of(&s, first, CounterKind::Stun), 2);
+    assert_eq!(counters_of(&s, second, CounterKind::Stun), 0);
+    assert_eq!(counters_of(&s, tapped_already, CounterKind::Stun), 1);
+    assert_eq!(
+        s.game().state.zones.zone_of(wave),
+        Some(ZoneType::Graveyard)
+    );
+}
+
+/// With X = 0 there are no targets, and with no tapped opposing creature the
+/// stun counters have nowhere to go.
+#[test]
+fn crashing_wave_for_zero_targets_nothing_and_places_no_counters() {
+    let mut s = setup_unfunded(&["Crashing Wave", "Gray Ogre"]);
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.set_player_mana_pool(0, "UU");
+    cast(&mut s, "Crashing Wave");
+    mode(&mut s, 0);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    settle(&mut s);
+    assert!(!tapped(&s, theirs));
+    assert_eq!(counters_of(&s, theirs, CounterKind::Stun), 0);
+}
+
 /// Pass priority once so the top of the stack resolves into its decision.
 fn resolve_top(s: &mut Scenario) {
     s.pass_priority();
@@ -2968,6 +3076,45 @@ fn twin_blades_attaches_on_entry_and_grants_double_strike_this_turn() {
     s.advance_to_active_step(1, StepKind::Main);
     assert_eq!(s.game().effective_pt(ours), (3, 3));
     assert!(!observed_keywords(&s, ours).double_strike);
+}
+
+/// The entry trigger airbends up to one target creature, whose owner may
+/// recast that exact card for {2}; equipped creature gets +1/+1 and flying.
+#[test]
+fn glider_staff_airbends_a_creature_and_gives_its_bearer_flying() {
+    let mut s = setup_unfunded(&["Glider Staff", "Gray Ogre"]);
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let ours = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let their_card = card_of(&s, theirs);
+    s.set_player_mana_pool(0, "2W");
+    let staff = cast(&mut s, "Glider Staff");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s
+        .action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::Decline { .. })));
+    assert!(s.choose_target(Target::Permanent(theirs)));
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.zones.zone_of(their_card),
+        Some(ZoneType::Exile)
+    );
+    let staff = s.game().state.card_to_permanent[staff].expect("staff entered");
+    assert_eq!(s.game().effective_pt(ours), (2, 2));
+    assert!(!observed_keywords(&s, ours).flying);
+
+    s.set_player_mana_pool(0, "2");
+    equip(&mut s, staff, ours);
+    assert_eq!(s.game().effective_pt(ours), (3, 3));
+    assert!(observed_keywords(&s, ours).flying);
+
+    s.advance_to_active_step(1, StepKind::Main);
+    s.set_player_mana_pool(1, "2");
+    assert!(can_cast(&mut s, their_card));
+    cast_card(&mut s, their_card);
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(1, "Gray Ogre").len(), 1);
 }
 
 /// Cast an Aura from player 0's hand onto `creature` and resolve it.

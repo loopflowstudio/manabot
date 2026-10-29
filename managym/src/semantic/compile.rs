@@ -35,7 +35,7 @@ const SOURCE_SCHEMA_VERSION: u64 = 1;
 
 /// Opcode names in numeric order: `OPCODE_NAMES[n - 1]` names opcode `n`.
 /// These numbers are learning token identities; append, never reorder.
-pub(crate) const OPCODE_NAMES: [&str; 105] = [
+pub(crate) const OPCODE_NAMES: [&str; 106] = [
     "add_mana",
     "draw_cards",
     "put_top_cards_in_hand",
@@ -141,6 +141,7 @@ pub(crate) const OPCODE_NAMES: [&str; 105] = [
     "cast_from_library_top",
     "set_characteristics",
     "remove_all_counters",
+    "distribute_counters",
 ];
 
 /// Program kinds in numeric order, as for [`OPCODE_NAMES`].
@@ -509,7 +510,9 @@ fn compile_program(
             integer(&target["min"], &context)?,
             integer(&target["max"], &context)?,
         );
-        if min < 0 || max < 1 || min > max {
+        // "Up to X targets" reads its maximum from the announced X.
+        let max_x = target.get("max_x").and_then(Value::as_bool) == Some(true);
+        if min < 0 || (max < 1 && !max_x) || min > max {
             return malformed(&context, format!("invalid target bounds for {role}"));
         }
         if !roles.insert(role.to_owned()) {

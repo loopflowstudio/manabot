@@ -145,6 +145,7 @@ pub enum Opcode {
     CastFromLibraryTop = 103,
     SetCharacteristics = 104,
     RemoveAllCounters = 105,
+    DistributeCounters = 106,
 }
 
 impl Opcode {
@@ -255,6 +256,7 @@ impl Opcode {
             103 => Opcode::CastFromLibraryTop,
             104 => Opcode::SetCharacteristics,
             105 => Opcode::RemoveAllCounters,
+            106 => Opcode::DistributeCounters,
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -500,6 +502,12 @@ pub enum Step {
     },
     RemoveAllCounters {
         target: String,
+    },
+    /// "Distribute `count` [counter] counters among any number of [target]".
+    DistributeCounters {
+        target: String,
+        count: i64,
+        counter: String,
     },
     /// "Enters with X [counter] counters" (static).
     EntersWithXCounters {
@@ -1285,6 +1293,7 @@ impl<'a> BoundPack<'a> {
             | Step::CastFromLibraryTop { .. }
             | Step::SetCharacteristics { .. }
             | Step::RemoveAllCounters { .. }
+            | Step::DistributeCounters { .. }
             | Step::SearchBasicLands { .. }
             | Step::Sacrifice { .. }
             | Step::DealDamageToController { .. }
@@ -1594,6 +1603,11 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         },
         Opcode::RemoveAllCounters => Step::RemoveAllCounters {
             target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::DistributeCounters => Step::DistributeCounters {
+            target: str_field(value, "target")?.to_owned(),
+            count: i64_field(value, "count")?,
+            counter: str_field(value, "counter")?.to_owned(),
         },
         Opcode::EntersWithXCounters => Step::EntersWithXCounters {
             counter: opt_str_field(value, "counter")?.map(str::to_owned),

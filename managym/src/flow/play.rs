@@ -156,6 +156,9 @@ impl Game {
         };
         cost = cost.with_x(cast.x);
         cost.purpose = ManaUse::spell(card_ref.subtypes.iter().map(String::as_str));
+        if let Some(additional) = &card_ref.waterbend_cost {
+            cost = cost.plus(&additional.with_x(cast.x));
+        }
         if cast.kicked {
             if let Some(kicker) = &card_ref.kicker {
                 cost = cost.plus(kicker);
@@ -298,10 +301,11 @@ impl Game {
         card: CardId,
         cast: CastChoices,
     ) -> Result<(), AgentError> {
-        let has_x = self.state.cards[card]
-            .mana_cost
-            .as_ref()
-            .is_some_and(|cost| cost.x > 0);
+        let card_ref = &self.state.cards[card];
+        let has_x = [&card_ref.mana_cost, &card_ref.waterbend_cost]
+            .into_iter()
+            .flatten()
+            .any(|cost| cost.x > 0);
         if has_x && !cast.free {
             self.pending_choice = Some(PendingChoice::AnnounceX { player, card, cast });
             return Ok(());
@@ -418,8 +422,9 @@ impl Game {
     }
 
     /// The generic part of `card`'s total cost that `cast` lets `player`
-    /// pay by waterbending: a waterbend additional cost once chosen, or all
-    /// of a cost granted as "waterbending {X}" (Hama).
+    /// pay by waterbending: a required waterbend additional cost, an
+    /// optional one once chosen, or all of a cost granted as
+    /// "waterbending {X}" (Hama).
     pub(crate) fn cast_waterbend_generic(
         &self,
         player: PlayerId,
@@ -431,6 +436,10 @@ impl Game {
             Some(kicker) if cast.kicked && card_ref.kicker_waterbend => kicker.generic(),
             _ => 0,
         };
+        let required = card_ref
+            .waterbend_cost
+            .as_ref()
+            .map_or(0, |cost| cost.with_x(cast.x).generic());
         let granted = !cast.free
             && self
                 .exile_grant(player, card)
@@ -438,7 +447,7 @@ impl Game {
         if granted {
             u8::MAX
         } else {
-            kicker
+            kicker.saturating_add(required)
         }
     }
 
@@ -531,7 +540,7 @@ impl Game {
                     self.target_leaves_cost_payable(player, card, cast, &chosen, *target)
                 })
                 .collect::<Vec<_>>();
-            if legal.is_empty() {
+            if legal.is_empty() || requirement.max_for(cast.x) == 0 {
                 if requirement.min == 0 {
                     requirement_index += 1;
                     continue;
@@ -649,7 +658,7 @@ impl Game {
             .filter(|i| **i == requirement_index)
             .count();
 
-        if chosen_in_req >= requirement.max {
+        if chosen_in_req >= requirement.max_for(cast.x) {
             return self.advance_target_selection(
                 player,
                 card,

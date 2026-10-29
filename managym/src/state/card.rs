@@ -520,6 +520,11 @@ pub struct CardDefinition {
     /// mana may be paid by tapping artifacts and creatures.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub kicker_waterbend: bool,
+    /// "As an additional cost to cast this spell, waterbend [cost]"
+    /// (CR 601.2b, 601.2f): required, and its {X} is announced with the
+    /// spell's. It adds to the total cost, not the mana value (CR 202.3).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub waterbend_cost: Option<ManaCost>,
     /// Printed flashback (CR 702.34): castable from its owner's graveyard
     /// for this cost, then exiled instead of going anywhere else.
     #[serde(skip_serializing_if = "Option::is_none")]
