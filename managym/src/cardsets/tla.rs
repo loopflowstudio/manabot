@@ -4,7 +4,7 @@ use crate::cards::authoring::{
     Card, CardType, Characteristics, Color, Condition, Controller, Cost, CounterKind, Destination,
     Direction, Duration, Event, Incomplete, Keyword, Op, Payment, Predicate, PrintedPower, Program,
     ProgramKind, Quantity, Remainder, RemainderOrder, Sacrifice, Selector, Subject, Target,
-    Trigger, Until, Zone,
+    TargetReduction, Trigger, Until, Zone,
 };
 /// Defined cards whose behavior is incomplete. The fixed setups that name them
 /// still run them; the world does not support them for deck entry until their
@@ -149,6 +149,9 @@ pub(super) fn cards() -> Vec<Card> {
         kyoshi_battle_fan(),
         meteor_sword(),
         twin_blades(),
+        path_to_redemption(),
+        watery_grasp(),
+        swampsnare_trap(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -4324,6 +4327,134 @@ fn twin_blades() -> Card {
             Program::equip("equip", "{2}"),
         ],
         registry_name: "Twin Blades",
+        text_box,
+    }
+}
+
+fn path_to_redemption() -> Card {
+    let text_box = "Enchant creature\nEnchanted creature can't attack or block.\n{5}, Sacrifice this Aura: Exile enchanted creature. Create a 1/1 white Ally creature token. Activate only during your turn.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{W}"),
+            subtypes: Some(vec!["Aura"]),
+            types: vec![CardType::Enchantment],
+            ..Default::default()
+        },
+        key: "tla.path_to_redemption",
+        programs: vec![
+            Program::enchant("{1}{W}", Selector::Creature),
+            Program::new(
+                "pacify",
+                ProgramKind::Static,
+                vec![Op::CantAttackOrBlock {
+                    target: "each:enchanted_creature",
+                }],
+            ),
+            Program::new(
+                "redeem",
+                ProgramKind::Activated,
+                vec![
+                    Op::Exile {
+                        target: "each:enchanted_creature",
+                    },
+                    Op::CreateToken {
+                        count: 1,
+                        definition_ref: "token.ally",
+                        tapped_and_attacking: None,
+                    },
+                ],
+            )
+            .cost(Cost {
+                mana: Some("{5}"),
+                sacrifice_source: Some(true),
+                own_turn_only: Some(true),
+                ..Default::default()
+            }),
+        ],
+        registry_name: "Path to Redemption",
+        text_box,
+    }
+}
+
+fn watery_grasp() -> Card {
+    let text_box = "Enchant creature\nEnchanted creature doesn't untap during its controller's untap step.\nWaterbend {5}: Enchanted creature's owner shuffles it into their library. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{U}"),
+            subtypes: Some(vec!["Aura"]),
+            types: vec![CardType::Enchantment],
+            ..Default::default()
+        },
+        key: "tla.watery_grasp",
+        programs: vec![
+            Program::enchant("{U}", Selector::Creature),
+            Program::new(
+                "frozen",
+                ProgramKind::Static,
+                vec![Op::DoesntUntap {
+                    target: "each:enchanted_creature",
+                }],
+            ),
+            Program::new(
+                "shuffle",
+                ProgramKind::Activated,
+                vec![Op::ShuffleIntoLibrary {
+                    target: "each:enchanted_creature",
+                }],
+            )
+            .cost(Cost {
+                mana: Some("{5}"),
+                waterbend: Some(true),
+                ..Default::default()
+            }),
+        ],
+        registry_name: "Watery Grasp",
+        text_box,
+    }
+}
+
+fn swampsnare_trap() -> Card {
+    let text_box = "This spell costs {1} less to cast if it targets a creature with flying.\nEnchant creature\nEnchanted creature gets -5/-3.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{B}"),
+            subtypes: Some(vec!["Aura"]),
+            types: vec![CardType::Enchantment],
+            ..Default::default()
+        },
+        key: "tla.swampsnare_trap",
+        programs: vec![
+            Program::enchant("{2}{B}", Selector::Creature).cost(Cost {
+                mana: Some("{2}{B}"),
+                reduced_if_targets: Some(TargetReduction {
+                    generic: 1,
+                    predicate: Predicate::All {
+                        predicates: vec![
+                            Predicate::Flying,
+                            Predicate::CardType {
+                                value: CardType::Creature,
+                            },
+                        ],
+                    },
+                }),
+                ..Default::default()
+            }),
+            Program::new(
+                "enchanted",
+                ProgramKind::Static,
+                vec![Op::ModifyPt {
+                    duration: Duration::Static,
+                    power: -5,
+                    target: "each:enchanted_creature",
+                    toughness: -3,
+                    per_creature_type_max: None,
+                }],
+            ),
+        ],
+        registry_name: "Swampsnare Trap",
         text_box,
     }
 }

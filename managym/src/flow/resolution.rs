@@ -98,7 +98,10 @@ impl Game {
             active_requirement: 0,
             context_target: None,
             queue: VecDeque::from(effects),
-            finalize: FrameFinalize::Spell { card },
+            finalize: FrameFinalize::Spell {
+                card,
+                attach_to: None,
+            },
         };
         self.run_frame(frame);
     }
@@ -122,6 +125,12 @@ impl Game {
 
         let effects = vec![definition.effect];
         let requirements = crate::state::ability::effect_target_requirements(&effects);
+        // The object an Aura or Equipment was attached to as the ability was
+        // activated (last known information once the source has left).
+        let attached = ability
+            .attached
+            .and_then(|object| self.lookup_current_permanent(object).ok())
+            .map(Target::Permanent);
         let Some(targets) =
             self.resolution_targets(&ability.targets, &[], &requirements, ability.controller)
         else {
@@ -141,7 +150,7 @@ impl Game {
             kicked: false,
             targets,
             active_requirement: 0,
-            context_target: None,
+            context_target: attached,
             queue: VecDeque::from(crate::state::ability::bind_effect_clauses(effects)),
             finalize: FrameFinalize::None,
         };
@@ -653,7 +662,29 @@ impl Game {
             }
             Effect::AttachSourceTo { .. } => {
                 if let Target::Permanent(permanent_id) = self.present_primary_target(frame)? {
-                    self.attach_source_to(frame, permanent_id);
+                    if let FrameFinalize::Spell { attach_to, .. } = &mut frame.finalize {
+                        *attach_to = self.permanent_object_ref(permanent_id);
+                    } else {
+                        self.attach_source_to(frame, permanent_id);
+                    }
+                }
+                None
+            }
+            Effect::ExileAttached | Effect::ShuffleAttachedIntoLibrary => {
+                let Some(Target::Permanent(id)) = frame.context_target else {
+                    return None;
+                };
+                let (card, owner) = self.state.permanents[id]
+                    .as_ref()
+                    .map(|permanent| (permanent.card, self.state.cards[permanent.card].owner))?;
+                if matches!(effect, Effect::ExileAttached) {
+                    self.move_card(card, ZoneType::Exile);
+                } else {
+                    self.move_card(card, ZoneType::Library);
+                    self.journal_zones();
+                    self.state
+                        .zones
+                        .shuffle(ZoneType::Library, owner, &mut self.state.rng);
                 }
                 None
             }
@@ -1091,41 +1122,9 @@ impl Game {
                 };
                 // CR 702.11b applies regardless of target wording. Recheck live
                 // presence and hexproof at selection and resolution (608.2b).
-                if self.state.zones.zone_of(permanent.card) != Some(ZoneType::Battlefield)
-                    || (permanent.controller != controller && self.effective_keywords(id).hexproof)
-                {
-                    return false;
-                }
-                match spec {
-                    TargetSpec::Permanent { predicate } => {
-                        self.permanent_matches_predicate(id, predicate)
-                    }
-                    TargetSpec::PermanentYouControl { predicate } => {
-                        permanent.controller == controller
-                            && self.permanent_matches_predicate(id, predicate)
-                    }
-                    TargetSpec::PermanentOpponentControls { predicate } => {
-                        permanent.controller != controller
-                            && self.permanent_matches_predicate(id, predicate)
-                    }
-                    TargetSpec::CreatureOrPlayer | TargetSpec::Creature => {
-                        self.permanent_is_creature(id)
-                    }
-                    TargetSpec::CreatureYouControl => {
-                        permanent.controller == controller && self.permanent_is_creature(id)
-                    }
-                    TargetSpec::CreatureOpponentControls => {
-                        permanent.controller != controller && self.permanent_is_creature(id)
-                    }
-                    TargetSpec::LandYouControl => {
-                        permanent.controller == controller
-                            && self.state.cards[permanent.card].types.is_land()
-                    }
-                    TargetSpec::SpellOrPermanent { min_mana_value } => {
-                        self.card_mana_value(permanent.card) >= *min_mana_value
-                    }
-                    _ => false,
-                }
+                self.state.zones.zone_of(permanent.card) == Some(ZoneType::Battlefield)
+                    && (permanent.controller == controller || !self.effective_keywords(id).hexproof)
+                    && self.permanent_matches_spec(id, spec, controller)
             }
             Target::Player(player) => match spec {
                 TargetSpec::Player | TargetSpec::CreatureOrPlayer => true,
@@ -1152,6 +1151,46 @@ impl Game {
                 }
                 _ => false,
             },
+        }
+    }
+
+    /// Whether a battlefield permanent matches a spec's characteristics and
+    /// controller relation, without targeting rules (hexproof): the
+    /// targeting check, and an Aura's enchant legality (CR 704.5m).
+    pub(crate) fn permanent_matches_spec(
+        &self,
+        id: PermanentId,
+        spec: &TargetSpec,
+        controller: PlayerId,
+    ) -> bool {
+        let Some(permanent) = self.state.permanents.get(id.0).and_then(|p| p.as_ref()) else {
+            return false;
+        };
+        match spec {
+            TargetSpec::Permanent { predicate } => self.permanent_matches_predicate(id, predicate),
+            TargetSpec::PermanentYouControl { predicate } => {
+                permanent.controller == controller
+                    && self.permanent_matches_predicate(id, predicate)
+            }
+            TargetSpec::PermanentOpponentControls { predicate } => {
+                permanent.controller != controller
+                    && self.permanent_matches_predicate(id, predicate)
+            }
+            TargetSpec::CreatureOrPlayer | TargetSpec::Creature => self.permanent_is_creature(id),
+            TargetSpec::CreatureYouControl => {
+                permanent.controller == controller && self.permanent_is_creature(id)
+            }
+            TargetSpec::CreatureOpponentControls => {
+                permanent.controller != controller && self.permanent_is_creature(id)
+            }
+            TargetSpec::LandYouControl => {
+                permanent.controller == controller
+                    && self.state.cards[permanent.card].types.is_land()
+            }
+            TargetSpec::SpellOrPermanent { min_mana_value } => {
+                self.card_mana_value(permanent.card) >= *min_mana_value
+            }
+            _ => false,
         }
     }
 

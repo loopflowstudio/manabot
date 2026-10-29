@@ -54,3 +54,11 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   Kyoshi Battle Fan's "create, then attach" is a `create_token` field rather
   than a created-object reference; the authoring variant avoids touching every
   `CreateToken` literal.
+- Slice 6 (Auras): an Aura's activated ability acts on the object it was
+  attached to at activation (captured before costs; LKI after sacrifice), not
+  re-read at resolution; no TLA card moves an Aura in between. An Aura put onto
+  the battlefield without being cast has no attach choice yet and goes to the
+  graveyard by 704.5m (303.4g not modeled; no current card does this).
+- Swampsnare Trap: before targets are chosen, castability assumes the reduction
+  if any legal target earns it; target choices that would leave the cost
+  unpayable are not offered.

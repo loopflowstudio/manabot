@@ -17,8 +17,9 @@ use crate::{
         },
         card::{
             ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keywords, PowerCda,
-            ReplacementEffect, SacrificeCost, SpellCostReduction, StaticKeywordGrant, StaticPtBuff,
-            StaticScope, TriggeredManaAbility,
+            ReplacementEffect, Restriction, SacrificeCost, SpellCostReduction, StaticKeywordGrant,
+            StaticPtBuff, StaticRestriction, StaticScope, TargetCostReduction,
+            TriggeredManaAbility,
         },
         mana::{Color, Colors, Mana, ManaCost},
         permanent::CounterKind,
@@ -385,12 +386,22 @@ fn apply_program(
             definition.sacrifice_cost = cost.sacrifice;
             definition.kicker = cost.kicker;
             definition.cost_reduction_per = cost.affinity;
+            definition.cost_reduction_if_targets = cost.reduced_if_targets;
             definition.targeting = match opt_str_field(&program.metadata, "target_binding")? {
                 None | Some("explicit") => targeting,
                 Some("inferred") => Vec::new(),
                 Some(_) => return unsupported(program, "unknown target binding"),
             };
             definition.spell_effects = lower_steps(pack, program, &program.steps)?;
+            // An Aura spell is the one spell that attaches its card (CR 303.4f).
+            let attaches = definition
+                .spell_effects
+                .iter()
+                .any(|effect| matches!(effect, Effect::AttachSourceTo { .. }));
+            let aura = definition.subtypes.iter().any(|subtype| subtype == "Aura");
+            if attaches != aura || (aura && definition.spell_effects.len() != 1) {
+                return unsupported(program, "an Aura spell has exactly one attach instruction");
+            }
         }
         "triggered" => {
             let trigger = program_trigger(program)?;
@@ -468,6 +479,7 @@ struct ProgramCost {
     mana: Option<ManaCost>,
     kicker: Option<ManaCost>,
     affinity: Option<CardPredicate>,
+    reduced_if_targets: Option<TargetCostReduction>,
     sacrifice: Option<SacrificeCost>,
     own_turn_only: bool,
     sorcery_timing: bool,
@@ -492,6 +504,19 @@ fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
         mana: opt_str_field(value, "mana")?.map(ManaCost::parse),
         kicker: opt_str_field(value, "kicker")?.map(ManaCost::parse),
         affinity: value.get("affinity").map(predicate_value).transpose()?,
+        reduced_if_targets: value
+            .get("reduced_if_targets")
+            .map(|reduction| {
+                Ok::<_, IrError>(TargetCostReduction {
+                    predicate: predicate_value(object_field(reduction, "predicate")?)?,
+                    generic: reduction
+                        .get("generic")
+                        .and_then(Value::as_u64)
+                        .and_then(|n| u8::try_from(n).ok())
+                        .ok_or_else(|| malformed(program, "invalid target cost reduction"))?,
+                })
+            })
+            .transpose()?,
         sacrifice: value
             .get("sacrifice")
             .map(|cost| {
@@ -750,6 +775,16 @@ fn apply_static(definition: &mut CardDefinition, program: &Program) -> Result<()
         [step @ (Step::ModifyPt { .. } | Step::GrantKeywords { .. })] => {
             apply_static_effect(definition, program, step, None)?
         }
+        [Step::CantAttackOrBlock { target }] => {
+            definition.static_restrictions.push(StaticRestriction {
+                scope: static_scope(program, target)?,
+                kind: Restriction::CantAttackOrBlock,
+            })
+        }
+        [Step::DoesntUntap { target }] => definition.static_restrictions.push(StaticRestriction {
+            scope: static_scope(program, target)?,
+            kind: Restriction::DoesntUntap,
+        }),
         _ => return unsupported(program, "unsupported static program shape"),
     }
     Ok(())
@@ -797,6 +832,11 @@ fn apply_static_effect(
     Ok(())
 }
 
+/// "Equipped creature" and "enchanted creature" name the exact object the
+/// source is attached to.
+const ATTACHED_EQUIPMENT: &str = "each:equipped_creature";
+const ATTACHED_AURA: &str = "each:enchanted_creature";
+
 /// The permanents a static effect's target reference covers.
 fn static_scope(program: &Program, target: &str) -> Result<StaticScope, IrError> {
     let creature = CardPredicate::creature;
@@ -819,7 +859,7 @@ fn static_scope(program: &Program, target: &str) -> Result<StaticScope, IrError>
             not_subtypes: vec!["Human".into()],
             ..creature()
         }),
-        "each:equipped_creature" => StaticScope::Equipped,
+        ATTACHED_EQUIPMENT | ATTACHED_AURA => StaticScope::Attached,
         _ => return unsupported(program, &format!("unsupported static scope {target:?}")),
     })
 }
@@ -851,6 +891,16 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
                 program,
                 "mana and flashback grants require a static program",
             )
+        }
+        Step::CantAttackOrBlock { .. } | Step::DoesntUntap { .. } => {
+            return unsupported(program, "restrictions require a static program")
+        }
+        Step::Exile { target } if target == ATTACHED_AURA => Effect::ExileAttached,
+        Step::ShuffleIntoLibrary { target } if target == ATTACHED_AURA => {
+            Effect::ShuffleAttachedIntoLibrary
+        }
+        Step::ShuffleIntoLibrary { .. } => {
+            return unsupported(program, "shuffle_into_library reads the enchanted creature")
         }
         Step::AddLessonMana { mana } => {
             let mut mana = Mana::parse(mana);

@@ -1,7 +1,7 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use super::{
-    ability::{Ability, Effect, StaticCondition, TargetRequirement},
+    ability::{Ability, Effect, StaticCondition, TargetRequirement, TargetSpec},
     game_object::{ObjectId, PlayerId},
     mana::{Color, Colors, Mana, ManaCost},
     predicate::CardPredicate,
@@ -181,8 +181,9 @@ pub enum StaticScope {
     YouControl(CardPredicate),
     /// "[predicate] you control with +1/+1 counters on them" (Badgermole).
     YouControlWithCounters(CardPredicate),
-    /// "Equipped creature": the creature the source is attached to.
-    Equipped,
+    /// "Equipped creature" / "enchanted creature": the exact creature the
+    /// source Equipment or Aura is attached to.
+    Attached,
 }
 
 /// A static continuous P/T effect (CR 613.3c layer 7c): "[scope] get(s)
@@ -210,6 +211,29 @@ pub struct StaticKeywordGrant {
     pub scope: StaticScope,
     pub condition: Option<StaticCondition>,
     pub keywords: Keywords,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct TargetCostReduction {
+    pub predicate: CardPredicate,
+    pub generic: u8,
+}
+
+/// A static rule-changing restriction: "[scope] can't attack or block",
+/// "[scope] doesn't untap during its controller's untap step". Applies only
+/// while the source is on the battlefield.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct StaticRestriction {
+    pub scope: StaticScope,
+    pub kind: Restriction,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum Restriction {
+    /// CR 508.1c, 509.1b.
+    CantAttackOrBlock,
+    /// CR 502.3.
+    DoesntUntap,
 }
 
 /// Declarative replacement/prevention effects supported by the curated
@@ -353,6 +377,10 @@ pub struct CardDefinition {
     /// for each [predicate] you control", computed while casting (generic
     /// floor 0).
     pub cost_reduction_per: Option<CardPredicate>,
+    /// "This spell costs {N} less to cast if it targets a [predicate]"
+    /// (Swampsnare Trap), read once targets are chosen (CR 601.2f).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_reduction_if_targets: Option<TargetCostReduction>,
     pub keywords: Keywords,
     /// "This creature can't be blocked by creatures matching [predicate]."
     pub block_restriction: Option<CardPredicate>,
@@ -368,6 +396,10 @@ pub struct CardDefinition {
     /// Static keyword grants this card projects while on the battlefield.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub static_keyword_grants: Vec<StaticKeywordGrant>,
+    /// Static attack/block and untap restrictions this card projects while
+    /// on the battlefield.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub static_restrictions: Vec<StaticRestriction>,
     /// Replacement/prevention definitions consumed by the proposed-event
     /// pipeline. Empty vectors are omitted so existing content-pack digests
     /// remain stable until production content actually adopts the feature.
@@ -435,6 +467,18 @@ impl Card {
     pub fn spell_modes(&self) -> Option<&[Vec<Effect>]> {
         self.spell_effects.iter().find_map(|effect| match effect {
             Effect::Modal { modes } => Some(modes.as_slice()),
+            _ => None,
+        })
+    }
+
+    /// An Aura's enchant restriction (CR 303.4a, 702.5c): what its spell
+    /// targets and what its attached object must keep matching (CR 704.5m).
+    pub fn enchant(&self) -> Option<&TargetSpec> {
+        if !self.has_subtype("Aura") {
+            return None;
+        }
+        self.spell_effects.iter().find_map(|effect| match effect {
+            Effect::AttachSourceTo { target } => Some(target),
             _ => None,
         })
     }

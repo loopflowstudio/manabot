@@ -5,64 +5,70 @@ Brief: the Task directive (49 cards, obligations in `docs/rules/tla/allocation.j
 T2 and reconcile shared costs before landing. Every merge needs Jack Heart's review.
 Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
 
-## Done (17 of 49)
+## Done (20 of 49)
 
-Slice 1, basic-check locations: Abandoned Air Temple, Agna Qel'a, Ba Sing Se,
-Realm of Koh. `Characteristics.enters_tapped_unless` → `ReplacementEffect::
-EntersTappedUnlessControls` (owner's battlefield); `Predicate::Supertype`;
-`Cost.sorcery_timing`; multi-instruction activated programs lower to one
-`IfCondition{Always}`; `each:creature_you_control` → `PutCountersOnEachMatching`.
+Slice 1, locations (Abandoned Air Temple, Agna Qel'a, Ba Sing Se, Realm of Koh):
+`enters_tapped_unless` → `ReplacementEffect::EntersTappedUnlessControls` (owner's
+battlefield); `Predicate::Supertype`; `Cost.sorcery_timing`; multi-instruction
+activated programs lower to one `IfCondition{Always}`.
 
-Slice 2, static grants/anthems: Air Nomad Legacy, Badgermole, Diligent Zookeeper,
-Foggy Swamp Hunters, The Walls of Ba Sing Se. `StaticKeywordGrant` (layer 6) read by
-one `Game::effective_keywords`; `StaticScope::{YouControl, YouControlWithCounters}`
-through one `static_scope_applies`; `modify_pt.per_creature_type_max` (CR 205.3m,
-`NONCREATURE_SUBTYPES` excluded); roles 7-10; `Keyword::Defender`. Static haste/
-defender grants still miss `Permanent::can_tap/can_attack` (no card needs them).
+Slice 2, static grants (Air Nomad Legacy, Badgermole, Diligent Zookeeper, Foggy
+Swamp Hunters, The Walls of Ba Sing Se): `StaticKeywordGrant` (layer 6) read by
+`Game::effective_keywords`; scopes through one `static_scope_applies`;
+`modify_pt.per_creature_type_max`; `Keyword::Defender`. Static haste/defender grants
+still miss `Permanent::can_tap/can_attack` (no card needs them).
 
-Slice 3, typed counters: Rowdy Snowballers, Mai, Jaded Edge, Heartless Act.
-`CounterKind` {+1/+1, stun, fire, double strike} with one accessor
-(`counter_count`/`change_counters`/`has_counters`); stun in `Permanent::untap`;
-double strike counter feeds `effective_keywords`; `put_counters.counter`;
-`Effect::TapTarget`; `Cost.exhaust` → `exhausted_abilities`; `Predicate::NoCounters`;
-opcode 66 `remove_counters` (repeated resolution `Decision::Modal`).
+Slice 3, typed counters (Rowdy Snowballers, Mai, Jaded Edge, Heartless Act):
+`CounterKind` {+1/+1, stun, fire, double strike} with one accessor; stun in
+`Permanent::untap`; `Cost.exhaust`; `Predicate::NoCounters`; opcode 66
+`remove_counters`.
 
-Slice 4, base P/T setting (layer 7b): Flexible Waterbender, Turtle-Duck.
-X costs were deferred: choosing X is a new agent decision (action-space and
-observation change), larger than one slice.
-- `Permanent.temp_base_power/_toughness: Option<i32>` (serialized only when set,
-  cleared at cleanup; a later setter overwrites = timestamp order). `effective_pt`
-  applies them after the 7a CDA/printed base, before 7c terms and counters.
-- Opcode 67 `set_base_pt {target, duration, power?, toughness?}` lowers only for
-  `source`/end of turn to `Effect::SetBasePtUntilEot`. `grant_keywords` on
-  `source` until EOT lowers to `Effect::GrantKeywordsToSource`.
-- Deleted `Permanent::local_power/local_toughness` (no callers; would ignore 7b).
+Slice 4, base P/T (layer 7b; Flexible Waterbender, Turtle-Duck):
+`Permanent.temp_base_power/_toughness`, cleared at cleanup; opcode 67 `set_base_pt`
+(source, end of turn only). X costs deferred (choosing X is a new agent decision).
 
-Slice 5, Equipment: Kyoshi Battle Fan, Meteor Sword, Twin Blades.
-`Permanent.attached_to: Option<ObjectRef>` (exact object; serialized only when
-set); opcode 68 `attach` → `Effect::AttachSourceTo`; `Program::equip` (sorcery
-timing, creature you control) and `Program::equipped_pt`; static scope role
-`each:equipped_creature` → `StaticScope::Equipped` via `Game::equipped_creature`;
-`create_token.attach_source` (authored as `Op::CreateTokenAttached`, one token);
-SBA 704.5n clears `attached_to`; authoring `Keyword::DoubleStrike`.
+Slice 5, Equipment (Kyoshi Battle Fan, Meteor Sword, Twin Blades):
+`Permanent.attached_to: Option<ObjectRef>`; opcode 68 `attach` →
+`Effect::AttachSourceTo`; `Program::equip`/`equipped_pt`; `create_token.attach_source`;
+SBA 704.5n unattaches.
 
-Schema 8 (unreleased, T1 precedent) appended in place: fields 85-90, predicates
-13-14, special roles 6-11, opcodes 66-68, enum `counter`, subtypes 64-66
-(Ranger, Wall, Turtle). Card tests drive through `tests/cards/support.rs`;
+Slice 6, Auras (Path to Redemption, Watery Grasp, Swampsnare Trap):
+- An Aura's spell program (`Program::enchant`) is one `attach` instruction on its
+  enchant target. `Card::enchant()` reads that spec; it is the cast targeting
+  (303.4a) and the 704.5m legality (via `permanent_matches_spec`, which
+  `target_is_legal` now wraps with presence/hexproof). The spell records the
+  target in `FrameFinalize::Spell.attach_to` and enters attached (303.4f).
+- `StaticScope::Equipped` → `StaticScope::Attached`, from roles
+  `each:equipped_creature` and new `each:enchanted_creature`; `attached_permanent`
+  / `attached_creature` replace `equipped_creature`.
+- `CardDefinition.static_restrictions` (`Restriction::{CantAttackOrBlock,
+  DoesntUntap}`, opcodes 69-70) read by `Game::has_restriction` in
+  `combat_condition_met` and the untap step.
+- `ActivatedAbilityOnStack.attached` captures the attached object before costs
+  (sacrifice), becoming the frame's `context_target`; `exile`/opcode 71
+  `shuffle_into_library` on `each:enchanted_creature` lower to
+  `Effect::ExileAttached`/`ShuffleAttachedIntoLibrary`.
+- `Cost.reduced_if_targets` → `cost_reduction_if_targets`; `effective_spell_cost`
+  takes the chosen targets (None before choice: reduction if any legal target
+  earns it); targets that leave the cost unpayable are not offered.
+
+Schema 8 (unreleased, T1 precedent) appended in place: fields 85-91, predicates
+13-14, special roles 6-12, opcodes 66-71, enum `counter`, subtypes 64-67.
 `scratch/add_fixture.py` copies pinned evidence into the conformance fixture.
 
-Check (slice 5, debug): `cargo test` all targets pass except known
-`semantic_conformance_tests` (w16 vs w15, digest drift; from T1); `cards` 20/20,
-lib 119, `rules_tests` 356; clippy, fmt clean; `pytest tests/semantic` 158 pass,
-4 fail on inherited `schema_version == 3/4/7` asserts (T1's schema 8).
+Check (slice 6, debug): `cargo test` all targets pass (cards 25, rules_tests 356,
+lib 119) except `semantic_conformance_tests` (w16 vs w15; fails identically in
+PR #394 CI run 40819903624); clippy, fmt clean; extension rebuilt; `pytest
+tests/semantic` 158 pass, 4 fail on `schema_version == 3/4/7` asserts, inherited:
+T1's head already has schema 8 (CI shows `8 == 7`) and this branch only appends.
 
-## Remaining (32 cards), suggested next slices
+## Remaining (29 cards), suggested next slices
 
+- Honest Work (Aura; enchant creature an opponent controls; ETB tap + remove all
+  counters; loses all abilities, becomes Citizen "Humble Merchant" base 1/1 with
+  "{T}: Add {C}" — characteristic replacement, layers 1-7b).
 - Equipment left: Glider Staff (needs airbend), Trusty Boomerang (granted
   activated ability).
-- Auras (cast targeting, enchant legality, 704.5m): Path to Redemption,
-  Swampsnare Trap, Watery Grasp, Honest Work (ability loss, base 1/1 via 7b).
-  `attached_to` and `StaticScope::Equipped` generalize to "enchanted".
 - Vehicles/crew (new tap-creatures cost choice; type change to artifact
   creature): Fire Nation Warship, Invasion Submersible, Tundra Tank, War Balloon
   (fire counter ready; counter-threshold animation static).
@@ -88,7 +94,8 @@ lib 119, `rules_tests` 356; clippy, fmt clean; `pytest tests/semantic` 158 pass,
 - T2 (87e012, uncommitted on `be2b7586b`, re-read 2026-10-28) appends to schema 8
   with colliding numbers: fields 85-87, predicate 13 `with_counter`, subtypes
   64-70, special role 6. The later lander renumbers its own entries (append-only,
-  contiguous); this branch now also holds opcodes 67-68, field 90, special role 11 and subtype 66.
+  contiguous); this branch now also holds opcodes 67-71, fields 90-91, special
+  roles 11-12 and subtypes 66-67 (Turtle, Aura).
 - T2 also implements exhaust and `Predicate::WithCounter` (+1/+1 only). Keep one
   exhaust cost field and gate, and one with-counters predicate reading every kind.
 - T2 created its own `tests/cards.rs`, `support.rs` and `tla.rs`; merge into one of
@@ -98,3 +105,4 @@ lib 119, `rules_tests` 356; clippy, fmt clean; `pytest tests/semantic` 158 pass,
 
 - Qualification entries (gone at the T1 sync).
 - `Permanent::local_power`/`local_toughness` (removed in slice 4).
+- `StaticScope::Equipped`, `Game::equipped_creature` (replaced in slice 6).

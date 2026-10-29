@@ -2122,5 +2122,42 @@
     "colors": [
       "R"
     ]
+  },
+  "Path to Redemption": {
+    "name": "Path to Redemption",
+    "mana_cost": "{1}{W}",
+    "type_line": "Enchantment — Aura",
+    "keywords": [
+      "Enchant"
+    ],
+    "oracle_text": "Enchant creature\nEnchanted creature can't attack or block.\n{5}, Sacrifice this Aura: Exile enchanted creature. Create a 1/1 white Ally creature token. Activate only during your turn.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Watery Grasp": {
+    "name": "Watery Grasp",
+    "mana_cost": "{U}",
+    "type_line": "Enchantment — Aura",
+    "keywords": [
+      "Enchant",
+      "Waterbend"
+    ],
+    "oracle_text": "Enchant creature\nEnchanted creature doesn't untap during its controller's untap step.\nWaterbend {5}: Enchanted creature's owner shuffles it into their library. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Swampsnare Trap": {
+    "name": "Swampsnare Trap",
+    "mana_cost": "{2}{B}",
+    "type_line": "Enchantment — Aura",
+    "keywords": [
+      "Enchant"
+    ],
+    "oracle_text": "This spell costs {1} less to cast if it targets a creature with flying.\nEnchant creature\nEnchanted creature gets -5/-3.",
+    "colors": [
+      "B"
+    ]
   }
 }

@@ -436,6 +436,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
         UntapTarget { target } => format!("Untap {}",target_description(target)),
         TapTarget { target } => format!("Tap {}",target_description(target)),
         AttachSourceTo { target } => format!("Attach this to {}",target_description(target)),
+        ExileAttached => "Exile the creature this is attached to".into(),
+        ShuffleAttachedIntoLibrary => "The attached creature's owner shuffles it into their library".into(),
         RemoveCounters { up_to, chosen: None, target } => format!("Remove up to {up_to} counters from {}",target_description(target)),
         RemoveCounters { chosen: Some(kind), target, .. } => format!("Remove a {} counter from {}",counter_description(*kind),target_description(target)),
         GrantKeywordsToTarget { keywords, target } => format!("{} gains {} until end of turn",target_description(target),keywords_description(keywords)),

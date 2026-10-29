@@ -4,7 +4,7 @@ use managym::{
         action::{Action, ActionSpaceKind},
         observation::{KeywordData, Observation},
     },
-    flow::turn::StepKind,
+    flow::{event::GameEvent, turn::StepKind},
     state::{
         game_object::{PermanentId, PlayerId, Target},
         permanent::CounterKind,
@@ -639,4 +639,200 @@ fn twin_blades_attaches_on_entry_and_grants_double_strike_this_turn() {
     s.advance_to_active_step(1, StepKind::Main);
     assert_eq!(s.game().effective_pt(ours), (3, 3));
     assert!(!observed_keywords(&s, ours).double_strike);
+}
+
+/// Cast an Aura from player 0's hand onto `creature` and resolve it.
+fn enchant(s: &mut Scenario, name: &str, mana: &str, creature: PermanentId) -> PermanentId {
+    s.set_player_mana_pool(0, mana);
+    let aura = cast(s, name);
+    pass_until(s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(creature)));
+    settle(s);
+    let aura = s.game().state.card_to_permanent[aura].expect("aura entered");
+    assert_eq!(
+        s.game().state.permanents[aura]
+            .as_ref()
+            .unwrap()
+            .attached_to,
+        s.game().permanent_object_ref(creature),
+        "CR 303.4f: the Aura enters attached to its target"
+    );
+    aura
+}
+
+/// Whether the current combat decision offers `id` as an attacker or blocker.
+fn offered_in_combat(s: &Scenario, id: PermanentId) -> bool {
+    has_action(s, |a| {
+        matches!(a, Action::DeclareAttacker { permanent, .. } if *permanent == id)
+            || matches!(a, Action::DeclareBlocker { blocker, .. } if *blocker == id)
+    })
+}
+
+/// CR 508.1c, 509.1b: the enchanted creature is never offered as an attacker
+/// or blocker. The sacrifice ability reads the creature it enchanted after
+/// the Aura has left as a cost, and only on its controller's turn.
+#[test]
+fn path_to_redemption_pacifies_then_exiles_for_an_ally_on_your_turn() {
+    let mut s = setup(&["Path to Redemption", "Gray Ogre"]);
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let free = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let ours = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    for id in [theirs, free, ours] {
+        ready(&mut s, id);
+    }
+    let path = enchant(&mut s, "Path to Redemption", "1W", theirs);
+
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    s.declare_attack();
+    s.advance_until(
+        |s| s.action_space().kind == ActionSpaceKind::DeclareBlocker,
+        "blockers".into(),
+    );
+    assert!(offered_in_combat(&s, free));
+    assert!(!offered_in_combat(&s, theirs), "can't block");
+
+    s.advance_to_active_step(1, StepKind::Main);
+    s.set_player_mana_pool(0, "5");
+    assert!(!can_activate(&mut s, path, 0), "only during your turn");
+    s.advance_until(
+        |s| s.action_space().kind == ActionSpaceKind::DeclareAttacker,
+        "attackers".into(),
+    );
+    assert!(offered_in_combat(&s, free));
+    assert!(!offered_in_combat(&s, theirs), "can't attack");
+
+    s.advance_to_active_step(0, StepKind::Main);
+    let theirs_card = s.game().state.permanents[theirs].as_ref().unwrap().card;
+    let path_card = s.game().state.permanents[path].as_ref().unwrap().card;
+    s.set_player_mana_pool(0, "5");
+    activate(&mut s, path, 0);
+    settle(&mut s);
+    let zones = &s.game().state.zones;
+    assert_eq!(zones.zone_of(theirs_card), Some(ZoneType::Exile));
+    assert_eq!(zones.zone_of(path_card), Some(ZoneType::Graveyard));
+    let ally = battlefield_token(&s, 0);
+    assert_eq!(s.game().effective_pt(ally), (1, 1));
+}
+
+/// CR 704.5m: an Aura whose creature leaves is put into its owner's
+/// graveyard.
+#[test]
+fn path_to_redemption_follows_its_creature_to_the_graveyard() {
+    let mut s = setup(&["Path to Redemption", "Gray Ogre"]);
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let path = enchant(&mut s, "Path to Redemption", "1W", theirs);
+    let path_card = s.game().state.permanents[path].as_ref().unwrap().card;
+    mark_damage(&mut s, theirs, 2);
+    s.pass_priority();
+    assert!(s.game().state.permanents[theirs].is_none(), "lethal damage");
+    assert_eq!(
+        s.game().state.zones.zone_of(path_card),
+        Some(ZoneType::Graveyard)
+    );
+}
+
+/// CR 608.3b: an Aura spell whose target is gone doesn't resolve and never
+/// reaches the battlefield.
+#[test]
+fn path_to_redemption_without_its_target_does_not_resolve() {
+    let mut s = setup(&["Path to Redemption", "Gray Ogre"]);
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.set_player_mana_pool(0, "1W");
+    let spell = cast(&mut s, "Path to Redemption");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(theirs)));
+    mark_damage(&mut s, theirs, 2);
+    s.drain_events();
+    settle(&mut s);
+    assert!(s.game().state.permanents[theirs].is_none(), "lethal damage");
+    assert_eq!(
+        s.game().state.zones.zone_of(spell),
+        Some(ZoneType::Graveyard)
+    );
+    assert!(s
+        .drain_events()
+        .iter()
+        .any(|event| matches!(event, GameEvent::SpellCountered { card, .. } if *card == spell)));
+}
+
+/// CR 502.3: the enchanted creature stays tapped through its controller's
+/// untap step. Waterbend {5} shuffles it into its owner's library, and the
+/// unattached Aura then goes to the graveyard (704.5m).
+#[test]
+fn watery_grasp_holds_a_creature_tapped_then_shuffles_it_away() {
+    let mut s = setup(&["Watery Grasp", "Gray Ogre"]);
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let helpers = [
+        s.force_permanent_on_battlefield(0, "Gray Ogre"),
+        s.force_permanent_on_battlefield(0, "Gray Ogre"),
+    ];
+    s.game_mut().state.permanents[theirs]
+        .as_mut()
+        .unwrap()
+        .tapped = true;
+    let grasp = enchant(&mut s, "Watery Grasp", "U", theirs);
+    let grasp_card = s.game().state.permanents[grasp].as_ref().unwrap().card;
+
+    s.advance_to_active_step(1, StepKind::Main);
+    assert!(tapped(&s, theirs), "doesn't untap");
+    assert!(helpers.iter().all(|helper| !tapped(&s, *helper)));
+
+    s.advance_to_active_step(0, StepKind::Main);
+    let theirs_card = s.game().state.permanents[theirs].as_ref().unwrap().card;
+    let library = s.zone_size(1, ZoneType::Library);
+    s.set_player_mana_pool(0, "3");
+    activate(&mut s, grasp, 0);
+    for helper in helpers {
+        assert!(s.choose_waterbend_tap(helper));
+    }
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.zones.zone_of(theirs_card),
+        Some(ZoneType::Library)
+    );
+    assert_eq!(s.zone_size(1, ZoneType::Library), library + 1);
+    assert_eq!(
+        s.game().state.zones.zone_of(grasp_card),
+        Some(ZoneType::Graveyard)
+    );
+}
+
+/// CR 601.2f: the reduction depends on the chosen target, so with only
+/// {1}{B} the spell is castable only onto a flier and offers no other
+/// target; at full cost any creature may be enchanted.
+#[test]
+fn swampsnare_trap_costs_less_onto_a_flier_and_shrinks_its_creature() {
+    let mut s = setup(&["Swampsnare Trap", "Wind Drake", "Craw Wurm"]);
+    let wurm = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    s.set_player_mana_pool(0, "1B");
+    let trap = to_hand(&mut s, "Swampsnare Trap");
+    assert!(
+        !has_action(
+            &s,
+            |a| matches!(a, Action::CastSpell { card, .. } if *card == trap)
+        ),
+        "no flier to earn the reduction"
+    );
+
+    let drake = s.force_permanent_on_battlefield(1, "Wind Drake");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    choose(
+        &mut s,
+        |a| matches!(a, Action::CastSpell { card, .. } if *card == trap),
+    );
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(!has_action(&s, |a| {
+        matches!(a, Action::ChooseTarget { target, .. } if *target == Target::Permanent(wurm))
+    }));
+    assert!(s.choose_target(Target::Permanent(drake)));
+    settle(&mut s);
+    assert!(s.game().state.permanents[drake].is_none(), "2/2 gets -5/-3");
+    assert_eq!(
+        s.game().state.zones.zone_of(trap),
+        Some(ZoneType::Graveyard)
+    );
+
+    enchant(&mut s, "Swampsnare Trap", "2B", wurm);
+    assert_eq!(s.game().effective_pt(wurm), (1, 1));
 }

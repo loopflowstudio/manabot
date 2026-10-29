@@ -117,6 +117,18 @@ impl Program {
         .targets(vec![Target::one("creature", Selector::CreatureYouControl)])
     }
 
+    /// The spell of an Aura with "Enchant [selector]": it targets what it
+    /// can enchant and enters attached to it (CR 303.4a, 303.4f).
+    pub fn enchant(mana: &'static str, selector: Selector) -> Self {
+        Self::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::Attach { target: "enchant" }],
+        )
+        .cost(Cost::mana(mana))
+        .targets(vec![Target::one("enchant", selector)])
+    }
+
     /// "Equipped creature gets +P/+T."
     pub fn equipped_pt(key: &'static str, power: i32, toughness: i32) -> Self {
         Self::new(
@@ -187,6 +199,15 @@ pub struct Cost {
     /// "Exhaust — [Cost]": activate only once (CR 702.177a).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exhaust: Option<bool>,
+    /// "This spell costs {N} less to cast if it targets a [predicate]."
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reduced_if_targets: Option<TargetReduction>,
+}
+
+#[derive(Serialize)]
+pub struct TargetReduction {
+    pub generic: i32,
+    pub predicate: Predicate,
 }
 
 impl Cost {
@@ -376,8 +397,21 @@ pub enum Op {
         count: Quantity,
         definition_ref: &'static str,
     },
-    /// Attach the source Equipment to the target creature.
+    /// Attach the source Equipment to the target creature; an Aura spell's
+    /// one instruction.
     Attach {
+        target: &'static str,
+    },
+    /// "[target] can't attack or block" (static).
+    CantAttackOrBlock {
+        target: &'static str,
+    },
+    /// "[target] doesn't untap during its controller's untap step" (static).
+    DoesntUntap {
+        target: &'static str,
+    },
+    /// "[target]'s owner shuffles it into their library."
+    ShuffleIntoLibrary {
         target: &'static str,
     },
     Scry {

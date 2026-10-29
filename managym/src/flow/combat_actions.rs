@@ -7,7 +7,10 @@ use crate::{
         combat::CombatState,
         game::{CombatDamagePass, Game},
     },
-    state::game_object::{PermanentId, PlayerId},
+    state::{
+        card::Restriction,
+        game_object::{PermanentId, PlayerId},
+    },
 };
 
 impl Game {
@@ -15,6 +18,9 @@ impl Game {
         let Some(permanent) = self.state.permanents[id].as_ref() else {
             return false;
         };
+        if self.has_restriction(id, Restriction::CantAttackOrBlock) {
+            return false;
+        }
         self.state.cards[permanent.card]
             .combat_requires_other
             .as_ref()

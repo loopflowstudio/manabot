@@ -32,6 +32,10 @@ pub struct ActivatedAbilityOnStack {
     pub source_ref: ObjectRef,
     pub ability_index: usize,
     pub targets: Vec<Target>,
+    /// The exact object the source Aura or Equipment was attached to when
+    /// the ability was activated, before costs such as sacrificing it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attached: Option<ObjectRef>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]

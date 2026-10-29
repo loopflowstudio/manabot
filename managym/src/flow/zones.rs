@@ -8,6 +8,7 @@ use crate::{
         proposed_event::{BattlefieldEntry, ProposedEvent},
     },
     state::{
+        card::Restriction,
         game_object::{CardId, Incarnation, ObjectRef, PermanentId, PlayerId, Target},
         permanent::Permanent,
         predicate::CardPredicate,
@@ -97,8 +98,13 @@ impl Game {
             .collect()
     }
 
+    /// The untap step (CR 502.3), less permanents a static effect keeps
+    /// from untapping during it.
     pub(crate) fn untap_all_permanents(&mut self, player: PlayerId) {
         for permanent_id in self.battlefield_permanents(player) {
+            if self.has_restriction(permanent_id, Restriction::DoesntUntap) {
+                continue;
+            }
             self.journal_permanent(permanent_id);
             if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                 permanent.untap();

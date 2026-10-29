@@ -97,6 +97,7 @@ fn stack(
                 source_ref,
                 ability_index: 0,
                 targets,
+                attached: None,
             })
         }
         Entry::Triggered => StackObject::TriggeredAbility(TriggeredAbilityOnStack {

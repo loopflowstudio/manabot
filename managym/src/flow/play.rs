@@ -72,12 +72,15 @@ impl Game {
     }
 
     /// The cost to cast `card` right now: base (+ kicker if `kicked`),
-    /// with affinity-style reductions applied (CR 601.2f).
+    /// with affinity-style reductions applied (CR 601.2f). `targets` are the
+    /// chosen targets; before they are chosen (`None`), a target-dependent
+    /// reduction applies if some legal target would earn it.
     pub(crate) fn effective_spell_cost(
         &self,
         player: PlayerId,
         card: CardId,
         kicked: bool,
+        targets: Option<&[Target]>,
     ) -> Option<ManaCost> {
         let card_ref = &self.state.cards[card];
         let mut cost = if self.state.zones.zone_of(card) == Some(ZoneType::Graveyard) {
@@ -99,6 +102,23 @@ impl Game {
                 }
             }
             cost = cost.reduced_generic(count);
+        }
+        if let Some(reduction) = &card_ref.cost_reduction_if_targets {
+            let earns = |target: &Target| {
+                matches!(target, Target::Permanent(id)
+                    if self.permanent_matches_predicate(*id, &reduction.predicate))
+            };
+            let applies = match targets {
+                Some(targets) => targets.iter().any(earns),
+                None => card_ref.target_requirements().iter().any(|requirement| {
+                    self.legal_targets_for_requirement(player, card, requirement)
+                        .iter()
+                        .any(earns)
+                }),
+            };
+            if applies {
+                cost = cost.reduced_generic(reduction.generic);
+            }
         }
         for permanent_id in self.battlefield_permanents(player) {
             let permanent = self.state.permanents[permanent_id].as_ref()?;
@@ -187,7 +207,7 @@ impl Game {
         // CR 601.2b — Optional additional costs (kicker) are chosen before
         // targets. Only offer the choice when the kicked cost is payable.
         if self.state.cards[card].kicker.is_some() {
-            let kicked_cost = self.effective_spell_cost(player, card, true);
+            let kicked_cost = self.effective_spell_cost(player, card, true, None);
             if kicked_cost.is_some_and(|cost| self.can_pay_with_mana_abilities(player, &cost, None))
             {
                 self.pending_choice = Some(PendingChoice::KickerChoice { player, card });
@@ -297,14 +317,20 @@ impl Game {
             let Some(requirement) = requirements.get(requirement_index) else {
                 return self.finish_casting(player, card, kicked, mode, chosen, chosen_req_indices);
             };
-            let legal = self.remaining_legal_targets(
-                player,
-                card,
-                requirement,
-                requirement_index,
-                &chosen,
-                &chosen_req_indices,
-            );
+            let legal = self
+                .remaining_legal_targets(
+                    player,
+                    card,
+                    requirement,
+                    requirement_index,
+                    &chosen,
+                    &chosen_req_indices,
+                )
+                .into_iter()
+                .filter(|target| {
+                    self.target_leaves_cost_payable(player, card, kicked, &chosen, *target)
+                })
+                .collect::<Vec<_>>();
             if legal.is_empty() {
                 if requirement.min == 0 {
                     requirement_index += 1;
@@ -324,6 +350,24 @@ impl Game {
             });
             return Ok(());
         }
+    }
+
+    /// With a target-dependent reduction, a choice that would leave the
+    /// spell's total cost unpayable is not offered (CR 601.2f-h).
+    fn target_leaves_cost_payable(
+        &self,
+        player: PlayerId,
+        card: CardId,
+        kicked: bool,
+        chosen: &[Target],
+        target: Target,
+    ) -> bool {
+        if self.state.cards[card].cost_reduction_if_targets.is_none() {
+            return true;
+        }
+        let targets: Vec<Target> = chosen.iter().copied().chain([target]).collect();
+        self.effective_spell_cost(player, card, kicked, Some(&targets))
+            .is_some_and(|cost| self.can_pay_with_mana_abilities(player, &cost, None))
     }
 
     fn remaining_legal_targets(
@@ -840,8 +884,13 @@ impl Game {
         alternative: Option<&ManaCost>,
     ) -> ManaCost {
         let base = match payment {
-            Payment::Spell { card, kicked, .. } => self
-                .effective_spell_cost(player, *card, *kicked)
+            Payment::Spell {
+                card,
+                kicked,
+                targets,
+                ..
+            } => self
+                .effective_spell_cost(player, *card, *kicked, Some(targets))
                 .unwrap_or_default(),
             Payment::Activation {
                 permanent,
@@ -1077,6 +1126,7 @@ impl Game {
             .permanent_object_ref(permanent_id)
             .ok_or_else(|| AgentError("missing activation source identity".into()))?;
         let source_card = permanent.card;
+        let attached = permanent.attached_to;
         let source_definition_id = self.state.cards[source_card].definition_id;
         let Some(ability) = self
             .activated_abilities_for(permanent_id)
@@ -1114,6 +1164,7 @@ impl Game {
             source_ref,
             ability_index,
             targets,
+            attached,
         }));
         self.state.priority.on_non_pass_action(self.active_player());
         Ok(())

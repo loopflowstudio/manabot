@@ -104,6 +104,9 @@ pub enum Opcode {
     RemoveCounters = 66,
     SetBasePt = 67,
     Attach = 68,
+    CantAttackOrBlock = 69,
+    DoesntUntap = 70,
+    ShuffleIntoLibrary = 71,
 }
 
 impl Opcode {
@@ -177,6 +180,9 @@ impl Opcode {
             66 => Opcode::RemoveCounters,
             67 => Opcode::SetBasePt,
             68 => Opcode::Attach,
+            69 => Opcode::CantAttackOrBlock,
+            70 => Opcode::DoesntUntap,
+            71 => Opcode::ShuffleIntoLibrary,
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -302,8 +308,20 @@ pub enum Step {
         toughness: Option<i64>,
         duration: String,
     },
-    /// Attach the source Equipment to `target` (CR 701.3).
+    /// Attach the source Aura or Equipment to `target` (CR 701.3).
     Attach {
+        target: String,
+    },
+    /// "[target] can't attack or block" (static).
+    CantAttackOrBlock {
+        target: String,
+    },
+    /// "[target] doesn't untap during its controller's untap step" (static).
+    DoesntUntap {
+        target: String,
+    },
+    /// "[target]'s owner shuffles it into their library."
+    ShuffleIntoLibrary {
         target: String,
     },
 
@@ -991,6 +1009,9 @@ impl<'a> BoundPack<'a> {
             | Step::RemoveCounters { .. }
             | Step::SetBasePt { .. }
             | Step::Attach { .. }
+            | Step::CantAttackOrBlock { .. }
+            | Step::DoesntUntap { .. }
+            | Step::ShuffleIntoLibrary { .. }
             | Step::SearchBasicLands { .. }
             | Step::Sacrifice { .. }
             | Step::DealDamageToController { .. }
@@ -1204,6 +1225,15 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
             count: i64_field(value, "count")?,
         },
         Opcode::Attach => Step::Attach {
+            target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::CantAttackOrBlock => Step::CantAttackOrBlock {
+            target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::DoesntUntap => Step::DoesntUntap {
+            target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::ShuffleIntoLibrary => Step::ShuffleIntoLibrary {
             target: str_field(value, "target")?.to_owned(),
         },
         Opcode::Tap => Step::Tap {

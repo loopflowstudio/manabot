@@ -26,8 +26,14 @@ pub enum FrameFinalize {
     /// Abilities: nothing to clean up.
     None,
     /// Spells: remove the stack object, then put the card into the
-    /// battlefield (permanents) or graveyard.
-    Spell { card: CardId },
+    /// battlefield (permanents) or graveyard. A resolving Aura spell enters
+    /// attached to `attach_to`, the object its attach instruction chose
+    /// (CR 303.4f).
+    Spell {
+        card: CardId,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        attach_to: Option<ObjectRef>,
+    },
 }
 
 /// A chosen target's clause and eligibility at resolution start (CR 608.2b).
@@ -61,7 +67,8 @@ pub struct EffectFrame {
     pub targets: Vec<ResolutionTarget>,
     pub active_requirement: usize,
     /// Trigger-context object (e.g. the spell that targeted a warded
-    /// permanent) — used as the primary target when none was chosen.
+    /// permanent) — used as the primary target when none was chosen. For an
+    /// activated ability of an Aura or Equipment, the object it was attached to.
     pub context_target: Option<Target>,
     /// Effects still to execute.
     pub queue: VecDeque<Effect>,
@@ -303,10 +310,16 @@ impl Game {
     }
 
     fn finalize_frame(&mut self, frame: EffectFrame) {
-        if let FrameFinalize::Spell { card } = frame.finalize {
+        if let FrameFinalize::Spell { card, attach_to } = frame.finalize {
             let is_permanent = self.state.cards[card].types.is_permanent();
             if is_permanent {
                 self.move_card(card, ZoneType::Battlefield);
+                if let Some(permanent_id) = self.state.card_to_permanent[card] {
+                    self.journal_permanent(permanent_id);
+                    if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
+                        permanent.attached_to = attach_to;
+                    }
+                }
                 let owner = self.state.cards[card].owner;
                 self.invalidate_mana_cache(owner);
             } else {

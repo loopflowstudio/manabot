@@ -310,7 +310,7 @@ impl Game {
             }
         }
 
-        match self.effective_spell_cost(player, card_id, false) {
+        match self.effective_spell_cost(player, card_id, false, None) {
             Some(cost) => {
                 // Castability gating sees pooled mana too — until-end-of-
                 // combat mana (firebending) must make spells castable.

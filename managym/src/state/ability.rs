@@ -290,10 +290,16 @@ pub enum Effect {
         /// "then attach this Equipment to it" (one token).
         attach_source: bool,
     },
-    /// Attach the source Equipment to the target creature (CR 701.3).
+    /// Attach the source Equipment to the target creature (CR 701.3). A
+    /// resolving Aura spell instead enters attached to it (CR 303.4f).
     AttachSourceTo {
         target: TargetSpec,
     },
+    /// Exile the object the source Aura or Equipment is attached to.
+    ExileAttached,
+    /// The owner of the object the source is attached to shuffles it into
+    /// their library.
+    ShuffleAttachedIntoLibrary,
     /// Put `count` counters of `kind` on the source permanent.
     PutCountersOnSource {
         count: i32,
@@ -619,6 +625,8 @@ impl Effect {
             | Effect::CantBeBlockedThisTurnSource
             | Effect::GrantKeywordsToSource { .. }
             | Effect::SetBasePtUntilEot { .. }
+            | Effect::ExileAttached
+            | Effect::ShuffleAttachedIntoLibrary
             | Effect::GainLife { .. }
             | Effect::Scry { .. }
             | Effect::LookAndSelect { .. }

@@ -206,6 +206,9 @@ def test_opcode_numbers_are_an_explicit_compatibility_surface() -> None:
         "REMOVE_COUNTERS": 66,
         "SET_BASE_PT": 67,
         "ATTACH": 68,
+        "CANT_ATTACK_OR_BLOCK": 69,
+        "DOESNT_UNTAP": 70,
+        "SHUFFLE_INTO_LIBRARY": 71,
     }
 
 

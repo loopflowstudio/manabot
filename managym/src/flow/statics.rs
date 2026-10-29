@@ -19,7 +19,9 @@
 // These additive layer-7c terms commute. Layer 7d switches P/T, and is not
 // represented here; neither are general timestamp/dependency interactions.
 // Static keyword grants (layer 6) add to printed and until-EOT keywords.
-// "Equipped creature" effects follow the Equipment's exact attached object.
+// "Equipped/enchanted creature" effects follow the exact attached object.
+// Static restrictions (can't attack or block, doesn't untap) use the same
+// scopes.
 // Scopes match printed characteristics, animation, counters and temporary
 // subtypes (never power). A P/T scope's flying test reads effective
 // keywords; a keyword-grant scope's reads only non-static keywords. Neither
@@ -29,7 +31,7 @@ use crate::{
     flow::game::Game,
     state::{
         ability::StaticCondition,
-        card::{Card, Keywords, PowerCda, StaticScope},
+        card::{Card, Keywords, PowerCda, Restriction, StaticScope},
         game_object::{PermanentId, PlayerId},
         predicate::CardPredicate,
         zone::ZoneType,
@@ -156,8 +158,8 @@ impl Game {
         keywords
     }
 
-    /// Battlefield permanents whose cards project static P/T or keyword
-    /// effects, with their controllers.
+    /// Battlefield permanents whose cards project static P/T, keyword or
+    /// restriction effects, with their controllers.
     fn static_sources(&self) -> impl Iterator<Item = (PermanentId, PlayerId, &Card)> {
         [PlayerId(0), PlayerId(1)]
             .into_iter()
@@ -168,7 +170,9 @@ impl Game {
                     .iter()
                     .filter_map(move |&card_id| {
                         let card = &self.state.cards[card_id];
-                        if card.static_pt_buffs.is_empty() && card.static_keyword_grants.is_empty()
+                        if card.static_pt_buffs.is_empty()
+                            && card.static_keyword_grants.is_empty()
+                            && card.static_restrictions.is_empty()
                         {
                             return None;
                         }
@@ -195,7 +199,7 @@ impl Game {
         };
         let (predicate, other, with_counters) = match scope {
             StaticScope::This => return source_id == target_id,
-            StaticScope::Equipped => return self.equipped_creature(source_id) == Some(target_id),
+            StaticScope::Attached => return self.attached_creature(source_id) == Some(target_id),
             StaticScope::OtherYouControl(predicate) => (predicate, true, false),
             StaticScope::YouControl(predicate) => (predicate, false, false),
             StaticScope::YouControlWithCounters(predicate) => (predicate, false, true),
@@ -217,12 +221,34 @@ impl Game {
         })
     }
 
-    /// The creature an Equipment is attached to, if that exact object is
-    /// still a battlefield creature.
-    pub(crate) fn equipped_creature(&self, equipment: PermanentId) -> Option<PermanentId> {
-        let attached = self.state.permanents[equipment].as_ref()?.attached_to?;
-        let creature = self.lookup_current_permanent(attached).ok()?;
-        self.permanent_is_creature(creature).then_some(creature)
+    /// The permanent an Aura or Equipment is attached to, if that exact
+    /// object is still on the battlefield.
+    pub(crate) fn attached_permanent(&self, source: PermanentId) -> Option<PermanentId> {
+        let attached = self.state.permanents[source].as_ref()?.attached_to?;
+        self.lookup_current_permanent(attached).ok()
+    }
+
+    /// The attached permanent, if it is still a creature.
+    pub(crate) fn attached_creature(&self, source: PermanentId) -> Option<PermanentId> {
+        self.attached_permanent(source)
+            .filter(|&creature| self.permanent_is_creature(creature))
+    }
+
+    /// Whether a static restriction from a battlefield permanent applies to
+    /// `target_id`.
+    pub(crate) fn has_restriction(&self, target_id: PermanentId, kind: Restriction) -> bool {
+        self.static_sources().any(|(source_id, controller, card)| {
+            card.static_restrictions.iter().any(|restriction| {
+                restriction.kind == kind
+                    && self.static_scope_applies(
+                        &restriction.scope,
+                        source_id,
+                        controller,
+                        target_id,
+                        false,
+                    )
+            })
+        })
     }
 
     /// Distinct creature types of a battlefield creature (CR 205.3m): printed

@@ -104,6 +104,9 @@ class Opcode(IntEnum):
     REMOVE_COUNTERS = 66
     SET_BASE_PT = 67
     ATTACH = 68
+    CANT_ATTACK_OR_BLOCK = 69
+    DOESNT_UNTAP = 70
+    SHUFFLE_INTO_LIBRARY = 71
 
 
 PROGRAM_KINDS = {kind.name.lower(): kind for kind in ProgramKind}
@@ -196,6 +199,9 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "remove_counters": ({"target", "count"}, set()),
     "set_base_pt": ({"target", "duration"}, {"power", "toughness"}),
     "attach": ({"target"}, set()),
+    "cant_attack_or_block": ({"target"}, set()),
+    "doesnt_untap": ({"target"}, set()),
+    "shuffle_into_library": ({"target"}, set()),
     "add_lesson_mana": ({"mana"}, set()),
     "grant_flashback": (set(), set()),
     "grant_mana": ({"predicates"}, set()),
