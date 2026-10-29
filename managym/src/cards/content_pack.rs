@@ -87,6 +87,31 @@ pub struct ContentPack {
 /// shared `Arc<ContentPack>` rather than cloning this value.
 pub type CardRegistry = ContentPack;
 
+/// Every current card from `cardsets/` and the rules fixtures, in default-pack
+/// order. [`LEGACY_ORDER`] keeps the historical prefix (and so its `CardDefId`s)
+/// that older evidence records; the remaining cards follow by name, then
+/// [`TRAILING_ORDER`].
+fn default_order() -> Vec<CardDefinition> {
+    let mut cards = crate::cardsets::catalog()
+        .iter()
+        .cloned()
+        .chain([fixtures::crossroads_of_destiny()])
+        .map(|definition| (definition.name.clone(), definition))
+        .collect::<BTreeMap<_, _>>();
+    let mut take = |name: &str| {
+        cards
+            .remove(name)
+            .unwrap_or_else(|| panic!("ordered card {name} has no definition"))
+    };
+    let legacy = LEGACY_ORDER.map(&mut take);
+    let trailing = TRAILING_ORDER.map(&mut take);
+    legacy
+        .into_iter()
+        .chain(cards.into_values())
+        .chain(trailing)
+        .collect()
+}
+
 static DEFAULT_CONTENT_PACK: OnceLock<Arc<ContentPack>> = OnceLock::new();
 
 /// Process-wide immutable pack used by ordinary matches and every search fork.
@@ -135,16 +160,7 @@ impl ContentPack {
 
 impl Default for ContentPack {
     fn default() -> Self {
-        let mut out = Self {
-            schema_version: CONTENT_PACK_SCHEMA_VERSION,
-            pack_key: None,
-            cards_by_name: BTreeMap::new(),
-            digest: OnceLock::new(),
-            public_definitions: OnceLock::new(),
-            definitions: Vec::new(),
-        };
-        out.register_all_cards();
-        out
+        Self::from_definitions(None, default_order())
     }
 }
 
@@ -171,33 +187,6 @@ impl ContentPack {
     /// The authored setup or pool this pack was built for.
     pub fn pack_key(&self) -> Option<&str> {
         self.pack_key.as_deref()
-    }
-
-    /// Register every current card from `cardsets/` and the rules fixtures.
-    /// [`LEGACY_ORDER`] keeps the historical prefix (and so its `CardDefId`s)
-    /// that older evidence records; the remaining cards follow by name, then
-    /// [`TRAILING_ORDER`].
-    pub fn register_all_cards(&mut self) {
-        let mut cards = crate::cardsets::catalog()
-            .iter()
-            .cloned()
-            .chain([fixtures::crossroads_of_destiny()])
-            .map(|definition| (definition.name.clone(), definition))
-            .collect::<BTreeMap<_, _>>();
-        let mut take = |name: &str| {
-            cards
-                .remove(name)
-                .unwrap_or_else(|| panic!("ordered card {name} has no definition"))
-        };
-        let legacy = LEGACY_ORDER.map(&mut take);
-        let trailing = TRAILING_ORDER.map(&mut take);
-        for definition in legacy
-            .into_iter()
-            .chain(std::mem::take(&mut cards).into_values())
-            .chain(trailing)
-        {
-            self.register_card(definition);
-        }
     }
 
     pub fn register_card(&mut self, mut definition: CardDefinition) {

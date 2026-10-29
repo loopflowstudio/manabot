@@ -52,6 +52,13 @@ pub struct AuthoredDeck {
     pub sideboard: BTreeMap<String, usize>,
 }
 
+impl AuthoredDeck {
+    /// Whether `config` plays exactly this deck and sideboard.
+    fn matches(&self, config: &PlayerConfig) -> bool {
+        self.cards == config.decklist && self.sideboard == config.sideboard
+    }
+}
+
 /// One setup's pack and decks.
 #[derive(Clone, Debug)]
 pub struct AuthoredPack {
@@ -77,10 +84,6 @@ impl AuthoredPack {
 
     pub fn decklist(&self, key: &str) -> Result<BTreeMap<String, usize>, ContentError> {
         Ok(self.deck(key)?.cards.clone())
-    }
-
-    fn setups(&self) -> impl Iterator<Item = &AuthoredDeck> {
-        self.decks.iter()
     }
 }
 
@@ -245,8 +248,7 @@ pub(crate) fn content_pack_for_authored_match(
 }
 
 fn admits(pack: &AuthoredPack, config: &PlayerConfig) -> bool {
-    pack.setups()
-        .any(|deck| deck.cards == config.decklist && deck.sideboard == config.sideboard)
+    pack.decks.iter().any(|deck| deck.matches(config))
 }
 
 fn select<'a>(
@@ -295,10 +297,7 @@ fn exact(pack: &AuthoredPack, player_configs: &[PlayerConfig]) -> bool {
     }
     let mut unmatched = pack.decks.iter().collect::<Vec<_>>();
     for config in player_configs {
-        let Some(index) = unmatched
-            .iter()
-            .position(|deck| deck.cards == config.decklist && deck.sideboard == config.sideboard)
-        else {
+        let Some(index) = unmatched.iter().position(|deck| deck.matches(config)) else {
             return false;
         };
         unmatched.remove(index);

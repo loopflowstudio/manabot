@@ -56,7 +56,7 @@ impl PoolRuntime {
             .iter()
             .copied()
             .collect::<BTreeMap<_, _>>();
-        let definitions = content
+        let mut definitions = content
             .definition_entries()
             .map(|(card_def_id, definition)| {
                 let reason = if definition.is_token {
@@ -80,7 +80,6 @@ impl PoolRuntime {
                 }
             })
             .collect::<Vec<_>>();
-        let mut definitions = definitions;
         definitions.sort_by(|a, b| a.registry_name.cmp(&b.registry_name));
         let manifest = content.manifest();
         Self {
