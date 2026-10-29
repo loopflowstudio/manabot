@@ -130,6 +130,9 @@ fn static_description(condition: &StaticCondition) -> String {
             "you control a {}",
             predicate_description(predicate, "permanent")
         ),
+        StaticCondition::UnspentManaAtLeast { count } => {
+            format!("you have {count} or more unspent mana")
+        }
     }
 }
 
@@ -378,6 +381,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         SelectTargetRequirement { .. } => return None,
         CreateNonlegendaryCopy => "Create a nonlegendary token copy of this".into(),
         ModifyControlled { predicate, power, toughness } => format!("{} you control get {power:+}/{toughness:+} until end of turn", predicate_description(predicate,"permanents")),
+        AddSubtypesControlled { predicate, subtypes } => format!("{} you control gain {} until end of turn", predicate_description(predicate,"permanents"), subtypes.join(", ")),
         OptionalPayment { cost, if_paid, if_declined } => {
             let cost = match cost { PaymentCost::Mana(m) => cost_description(m), PaymentCost::Waterbend { generic } => format!("waterbend {generic}") };
             format!("You may pay {cost}. If paid: {}. Otherwise: {}", effects_description(if_paid), effects_description(if_declined))

@@ -285,6 +285,10 @@ pub enum ReplacementEffect {
     EntersTappedUnlessControls { predicate: CardPredicate },
     /// This object enters with +1/+1 counters already present (CR 614.1c).
     EntersWithPlusOneCounters { count: i32 },
+    /// While this permanent is on the battlefield, unspent mana its
+    /// controller would lose as a step or phase ends becomes red instead
+    /// (CR 106.4, 614.1a). Read by `Game::clear_mana_pools`.
+    UnspentManaBecomesRed,
 }
 
 impl ActivatedAbilityDefinition {

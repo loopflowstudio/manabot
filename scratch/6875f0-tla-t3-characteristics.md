@@ -5,7 +5,7 @@ Brief: the Task directive (49 cards, obligations in `docs/rules/tla/allocation.j
 T2 and reconcile shared costs before landing. Every merge needs Jack Heart's review.
 Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
 
-## Done (34 of 49)
+## Done (36 of 49)
 
 1. Locations (Abandoned Air Temple, Agna Qel'a, Ba Sing Se, Realm of Koh):
    `ReplacementEffect::EntersTappedUnlessControls`; `Predicate::Supertype`;
@@ -61,25 +61,37 @@ Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
      (`BecomeCreatureTarget`, `SetBasePtTarget`); earthbent permanents have
      base 0/0 even if they print P/T.
 
+10. Mana remainder (Energybending, Ozai, the Phoenix King):
+   - Opcode 78 `add_subtypes_controlled` (until-EOT `temp_subtypes` on matching
+     permanents at resolution); `Game::activated_abilities_for` appends one
+     derived "{T}: Add" choosing among gained basic land types' colors (CR 305.6).
+     Basic land types never count as creature types.
+   - Opcode 79 `unspent_mana_becomes_red` → `ReplacementEffect::UnspentManaBecomesRed`,
+     read by `clear_mana_pools`/`clear_combat_mana_pools` (combat mana joins the
+     regular pool as red); `Mana::become_red` keeps Lesson restrictions.
+   - Condition 9 `unspent_mana_at_least` → `StaticCondition::UnspentManaAtLeast`
+     (both pools).
+
 Schema 8 (unreleased, T1 precedent) appended in place: fields 85-93, predicates
-13-15, special roles 6-12, opcodes 66-77, enum `counter`, conditions 7-8,
+13-15, special roles 6-12, opcodes 66-79, enum `counter`, conditions 7-9,
 quantity 5, trigger_event 13, subtypes 64-74.
 `scratch/add_fixture.py` copies pinned evidence into the conformance fixture.
 
-Check (slice 9, debug): `cargo test` all targets pass (cards 39, rules_tests 356,
-lib 119) except `semantic_conformance_tests` (w16 vs w15 and receipt digest
-drift; fails in PR #394 CI run 40819903624); clippy, fmt clean; extension rebuilt;
-`pytest tests/semantic` 158 pass, 4 fail on `schema_version == 3/4/7` asserts
-inherited from `be2b7586b`. Its compress
-kept the IR; cards, rules, lib, clippy re-run.
+Check (slice 10, debug): `cargo test` all targets pass (cards 41, rules_tests
+356, lib 119) except `semantic_conformance_tests` (w16 vs w15 and receipt digest
+drift; fails in PR #394 CI run 40819903624); clippy, fmt clean; extension
+rebuilt; `pytest tests/semantic` 158 pass, 4 fail on `schema_version == 3/4/7`
+asserts inherited from `be2b7586b`.
 
-## Remaining (15 cards), suggested next slices
+## Remaining (13 cards), suggested next slices
 
-- Mana remainder: Energybending (lands gain all basic land types until end of
-  turn: effective subtypes plus derived mana), Ozai (unspent mana becomes red
-  instead of emptying; flying/indestructible while six or more unspent), Secret
-  Tunnel (Cave; needs two-target activated abilities — `PendingChoice::ActivatedTarget`
-  chooses one — with a shared-creature-type constraint).
+- Secret Tunnel (Cave; "this land can't be blocked" is `unblockable_if` Always;
+  {T}: Add {C}): deferred from slice 10. Its "{4}, {T}: two target creatures you
+  control that share a creature type" needs two-target activated abilities —
+  `PendingChoice::ActivatedTarget` chooses one target, and its observation,
+  continuation and stale-rejection paths assume one — plus a constraint that
+  reads the first target, and partial legality at resolution (release notes:
+  the survivor needs a type the departed creature had as it left).
 - Honest Work (Aura; loses all abilities, becomes Citizen "Humble Merchant" 1/1
   with "{T}: Add {C}" — characteristic replacement, layers 1-7b).
 - X costs: Fated Firepower, Crashing Wave, Katara Water Tribe's Hope (team role

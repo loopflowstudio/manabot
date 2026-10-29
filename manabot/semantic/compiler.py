@@ -113,6 +113,8 @@ class Opcode(IntEnum):
     CANT_BE_BLOCKED_BY_MORE_THAN = 75
     ATTACKS_DESPITE_DEFENDER = 76
     ADD_CARD_TYPES = 77
+    ADD_SUBTYPES_CONTROLLED = 78
+    UNSPENT_MANA_BECOMES_RED = 79
 
 
 PROGRAM_KINDS = {kind.name.lower(): kind for kind in ProgramKind}
@@ -199,6 +201,7 @@ CONDITION_KINDS = {
     "target_matches",
     "source_counters_at_least",
     "controls_matching",
+    "unspent_mana_at_least",
 }
 
 OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
@@ -217,6 +220,8 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "cant_be_blocked_by_more_than": ({"count", "predicate"}, set()),
     "attacks_despite_defender": ({"target"}, set()),
     "add_card_types": ({"predicate", "types"}, set()),
+    "add_subtypes_controlled": ({"predicate", "subtypes"}, set()),
+    "unspent_mana_becomes_red": (set(), set()),
     "add_lesson_mana": ({"mana"}, set()),
     "grant_flashback": (set(), set()),
     "grant_mana": ({"predicates"}, set()),
@@ -414,7 +419,7 @@ def _validate_condition(value: Any, context: str) -> dict[str, Any]:
         _fail(context, f"unknown condition kind {kind!r}")
     if kind in {"kicked", "always"}:
         _keys(condition, context, required={"kind"})
-    elif kind == "cards_drawn_at_least":
+    elif kind in {"cards_drawn_at_least", "unspent_mana_at_least"}:
         _keys(condition, context, required={"kind", "count"})
         _integer(condition["count"], context, minimum=0)
     elif kind == "graveyard_at_least":

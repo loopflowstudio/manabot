@@ -9,11 +9,20 @@ use crate::{
     flow::game::Game,
     state::{
         ability::Effect,
-        card::ActivatedAbilityDefinition,
+        card::{ActivatedAbilityDefinition, ReplacementEffect},
         game_object::{PermanentId, PlayerId},
         mana::{Mana, ManaCost},
     },
 };
+
+/// Basic land types and the mana their intrinsic ability adds (CR 305.6).
+const BASIC_LAND_TYPES: [(&str, &str); 5] = [
+    ("Plains", "W"),
+    ("Island", "U"),
+    ("Swamp", "B"),
+    ("Mountain", "R"),
+    ("Forest", "G"),
+];
 
 /// One finite resource transition model. A source is reserved before its
 /// upfront obligation, so filters cannot finance themselves or form seedless
@@ -442,7 +451,8 @@ impl PaymentModel {
 }
 
 impl Game {
-    /// Printed abilities followed by currently granted abilities, in source order.
+    /// Printed abilities, then currently granted abilities in source order,
+    /// then the intrinsic mana ability of basic land types gained by an effect.
     pub(crate) fn activated_abilities_for(
         &self,
         permanent: PermanentId,
@@ -470,7 +480,40 @@ impl Game {
                 });
             }
         }
+        if let Some(effect) = self.gained_land_type_mana(permanent) {
+            abilities.push(ActivatedAbilityDefinition {
+                tap_source: true,
+                effect,
+                ..Default::default()
+            });
+        }
         abilities
+    }
+
+    /// A land with a basic land type has "{T}: Add [its color]" (CR 305.6).
+    /// Printed types already carry that ability; types gained until end of
+    /// turn (Energybending) add one ability choosing among their colors.
+    fn gained_land_type_mana(&self, permanent: PermanentId) -> Option<Effect> {
+        let source = self.state.permanents[permanent].as_ref()?;
+        if source.temp_subtypes.is_empty() || !self.permanent_is_land(permanent) {
+            return None;
+        }
+        let card = &self.state.cards[source.card];
+        let colors: Vec<Mana> = BASIC_LAND_TYPES
+            .iter()
+            .filter(|(name, _)| {
+                source.temp_subtypes.iter().any(|s| s == name) && !card.has_subtype(name)
+            })
+            .map(|(_, mana)| Mana::parse(mana))
+            .collect();
+        match colors.as_slice() {
+            [] => None,
+            [mana] => Some(Effect::AddMana {
+                mana: mana.clone(),
+                until_end_of_combat: false,
+            }),
+            _ => Some(Effect::mana_choice(colors)),
+        }
     }
 
     /// Mana abilities resolve at once (CR 605.3a), so an output that depends
@@ -1124,16 +1167,36 @@ impl Game {
     pub(crate) fn clear_mana_pools(&mut self) {
         for player in [PlayerId(0), PlayerId(1)] {
             self.journal_player(player);
-            self.state.players[player.0].mana_pool.clear();
+            if self.unspent_mana_becomes_red(player) {
+                self.state.players[player.0].mana_pool.become_red();
+            } else {
+                self.state.players[player.0].mana_pool.clear();
+            }
         }
     }
 
-    /// Until-end-of-combat mana (firebending) empties as combat ends.
+    /// Until-end-of-combat mana (firebending) empties as combat ends. Under
+    /// Ozai it stays as ordinary red mana instead.
     pub(crate) fn clear_combat_mana_pools(&mut self) {
         for player in [PlayerId(0), PlayerId(1)] {
             self.journal_player(player);
-            self.state.players[player.0].combat_mana_pool.clear();
+            let mut combat = std::mem::take(&mut self.state.players[player.0].combat_mana_pool);
+            if self.unspent_mana_becomes_red(player) {
+                combat.become_red();
+                self.state.players[player.0].mana_pool.add(&combat);
+            }
         }
+    }
+
+    /// Whether `player` controls a permanent replacing mana loss (CR 614.1a).
+    fn unspent_mana_becomes_red(&self, player: PlayerId) -> bool {
+        self.battlefield_permanents(player).into_iter().any(|id| {
+            self.state.permanents[id].as_ref().is_some_and(|permanent| {
+                self.state.cards[permanent.card]
+                    .replacement_effects
+                    .contains(&ReplacementEffect::UnspentManaBecomesRed)
+            })
+        })
     }
 }
 

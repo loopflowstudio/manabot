@@ -62,3 +62,11 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   was created can attack. Flopsie's
   limit refuses a second blocker during the one-at-a-time declaration rather
   than repairing it afterwards as menace does.
+- Slice 10 (mana remainder): gained basic land types add one activated mana
+  ability choosing among their colors, not one ability per type (CR 305.6);
+  outputs are the same, ability indices differ. Energybending's affected set is
+  fixed at resolution (CR 611.2c), so a land played later that turn gains
+  nothing. Ozai's replacement is applied directly as pools empty, not through
+  the proposed-event pipeline (no other mana-loss replacements exist); it
+  applies while Ozai is on the battlefield as the step ends. Secret Tunnel is
+  deferred (two-target activation).

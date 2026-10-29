@@ -106,6 +106,10 @@ pub enum StaticCondition {
     ControlsMatching {
         predicate: CardPredicate,
     },
+    /// "as long as you have `count` or more unspent mana" (both pools).
+    UnspentManaAtLeast {
+        count: u32,
+    },
 }
 
 /// Which game objects an event-based trigger condition watches.
@@ -163,6 +167,12 @@ pub enum Effect {
         predicate: CardPredicate,
         power: i32,
         toughness: i32,
+    },
+    /// Permanents the resolving player controls matching `predicate` gain
+    /// `subtypes` until end of turn (Energybending).
+    AddSubtypesControlled {
+        predicate: CardPredicate,
+        subtypes: Vec<String>,
     },
     OptionalPayment {
         cost: PaymentCost,
@@ -671,6 +681,7 @@ impl Effect {
             }
             Effect::CreateNonlegendaryCopy
             | Effect::ModifyControlled { .. }
+            | Effect::AddSubtypesControlled { .. }
             | Effect::ModifyUntilEot { .. }
             | Effect::DrawCards { .. }
             | Effect::MassDamage { .. }

@@ -372,6 +372,19 @@ impl Mana {
         }
     }
 
+    /// All unspent mana becomes red, keeping its spending restrictions
+    /// (Ozai, the Phoenix King).
+    pub fn become_red(&mut self) {
+        let red = Color::Red as usize;
+        for pool in [&mut self.mana, &mut self.lesson] {
+            let total = pool
+                .iter()
+                .fold(0u8, |sum, amount| sum.saturating_add(*amount));
+            *pool = [0; 6];
+            pool[red] = total;
+        }
+    }
+
     pub fn clear(&mut self) {
         // CR 106.4 — Unspent mana empties from pools as steps/phases end.
         self.mana = [0; 6];

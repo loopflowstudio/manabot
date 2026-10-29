@@ -164,6 +164,8 @@ pub(super) fn cards() -> Vec<Card> {
         platypus_bear(),
         toph_the_first_metalbender(),
         the_mechanist_aerial_artisan(),
+        energybending(),
+        ozai_the_phoenix_king(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -5043,6 +5045,77 @@ fn the_mechanist_aerial_artisan() -> Card {
             )]),
         ],
         registry_name: "The Mechanist, Aerial Artisan",
+        text_box,
+    }
+}
+
+fn energybending() -> Card {
+    let text_box = "Lands you control gain all basic land types until end of turn.\nDraw a card.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}"),
+            subtypes: Some(vec!["Lesson"]),
+            types: vec![CardType::Instant],
+            ..Default::default()
+        },
+        key: "tla.energybending",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![
+                Op::AddSubtypesControlled {
+                    predicate: Predicate::CardType {
+                        value: CardType::Land,
+                    },
+                    subtypes: vec!["Plains", "Island", "Swamp", "Mountain", "Forest"],
+                },
+                Op::DrawCards { count: 1 },
+            ],
+        )
+        .cost(Cost::mana("{2}"))],
+        registry_name: "Energybending",
+        text_box,
+    }
+}
+
+fn ozai_the_phoenix_king() -> Card {
+    let text_box = "Trample, firebending 4, haste\nIf you would lose unspent mana, that mana becomes red instead.\nOzai has flying and indestructible as long as you have six or more unspent mana.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{B}{B}{R}{R}"),
+            subtypes: Some(vec!["Human", "Noble"]),
+            types: vec![CardType::Creature],
+            supertypes: Some(vec!["Legendary"]),
+            keywords: Some(vec![Keyword::Trample, Keyword::Haste]),
+            power: Some(PrintedPower::Fixed(7)),
+            toughness: Some(7),
+            ..Default::default()
+        },
+        key: "tla.ozai_the_phoenix_king",
+        programs: vec![
+            Program::firebending("firebending", "RRRR"),
+            Program::new(
+                "red_mana",
+                ProgramKind::Static,
+                vec![Op::UnspentManaBecomesRed],
+            ),
+            Program::new(
+                "phoenix",
+                ProgramKind::Static,
+                vec![Op::Branch {
+                    condition: Condition::UnspentManaAtLeast { count: 6 },
+                    otherwise: vec![],
+                    then: vec![Op::GrantKeywords {
+                        duration: Duration::Static,
+                        keywords: vec![Keyword::Flying, Keyword::Indestructible],
+                        target: "source",
+                    }],
+                }],
+            ),
+        ],
+        registry_name: "Ozai, the Phoenix King",
         text_box,
     }
 }

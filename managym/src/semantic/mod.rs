@@ -113,6 +113,8 @@ pub enum Opcode {
     CantBeBlockedByMoreThan = 75,
     AttacksDespiteDefender = 76,
     AddCardTypes = 77,
+    AddSubtypesControlled = 78,
+    UnspentManaBecomesRed = 79,
 }
 
 impl Opcode {
@@ -195,6 +197,8 @@ impl Opcode {
             75 => Opcode::CantBeBlockedByMoreThan,
             76 => Opcode::AttacksDespiteDefender,
             77 => Opcode::AddCardTypes,
+            78 => Opcode::AddSubtypesControlled,
+            79 => Opcode::UnspentManaBecomesRed,
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -291,6 +295,7 @@ pub enum Condition {
     ControlsMatching {
         predicate: Predicate,
     },
+    UnspentManaAtLeast(u32),
 }
 
 /// One typed, executable IR step. Nested arms (`Branch`, `ForEachTarget`) carry
@@ -383,6 +388,13 @@ pub enum Step {
         predicate: Predicate,
         types: Vec<String>,
     },
+    /// "[predicate] permanents you control gain [subtypes] until end of turn".
+    AddSubtypesControlled {
+        predicate: Predicate,
+        subtypes: Vec<String>,
+    },
+    /// "If you would lose unspent mana, that mana becomes red instead" (static).
+    UnspentManaBecomesRed,
 
     SearchBasicLands {
         count: usize,
@@ -752,6 +764,10 @@ pub trait InterpreterContext {
         false
     }
 
+    fn unspent_mana(&self) -> u32 {
+        0
+    }
+
     /// Number of objects bound to a `for_each_target` role in this resolution.
     fn role_target_count(&self, _role: &str) -> usize {
         1
@@ -1087,6 +1103,8 @@ impl<'a> BoundPack<'a> {
             | Step::CantBeBlockedByMoreThan { .. }
             | Step::AttacksDespiteDefender { .. }
             | Step::AddCardTypes { .. }
+            | Step::AddSubtypesControlled { .. }
+            | Step::UnspentManaBecomesRed
             | Step::SearchBasicLands { .. }
             | Step::Sacrifice { .. }
             | Step::DealDamageToController { .. }
@@ -1148,6 +1166,7 @@ fn evaluate_condition(condition: &Condition, context: &dyn InterpreterContext) -
             context.source_counters_at_least(counter.as_deref(), *count)
         }
         Condition::ControlsMatching { predicate } => context.controls_matching(predicate),
+        Condition::UnspentManaAtLeast(count) => context.unspent_mana() >= *count,
     }
 }
 
@@ -1337,6 +1356,11 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
             predicate: parse_predicate(object_field(value, "predicate")?)?,
             types: str_array_field(value, "types")?,
         },
+        Opcode::AddSubtypesControlled => Step::AddSubtypesControlled {
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
+            subtypes: str_array_field(value, "subtypes")?,
+        },
+        Opcode::UnspentManaBecomesRed => Step::UnspentManaBecomesRed,
         Opcode::Tap => Step::Tap {
             target: str_field(value, "target")?.to_owned(),
         },
@@ -1581,6 +1605,10 @@ fn parse_condition(value: &Value) -> Result<Condition, IrError> {
         "controls_matching" => Condition::ControlsMatching {
             predicate: parse_predicate(object_field(value, "predicate")?)?,
         },
+        "unspent_mana_at_least" => Condition::UnspentManaAtLeast(
+            u32::try_from(u64_field(value, "count")?)
+                .map_err(|_| IrError::Malformed("count exceeds u32".into()))?,
+        ),
         other => {
             return Err(IrError::Malformed(format!(
                 "unknown branch condition kind {other:?}"

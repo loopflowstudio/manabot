@@ -722,6 +722,9 @@ fn apply_static(definition: &mut CardDefinition, program: &Program) -> Result<()
             definition.unblockable_if = Some(lower_condition(condition)?);
         }
         [Step::PreventLifeGain] => definition.prevents_life_gain = true,
+        [Step::UnspentManaBecomesRed] => definition
+            .replacement_effects
+            .push(ReplacementEffect::UnspentManaBecomesRed),
         [Step::CombatRequiresOther { predicate }] => {
             definition.combat_requires_other = Some(predicate_card(predicate)?)
         }
@@ -1032,6 +1035,13 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         Step::AddSubtype { target, subtype } => Effect::AddSubtypeToTarget {
             target: target_for(program, target)?,
             subtype: subtype.clone(),
+        },
+        Step::AddSubtypesControlled {
+            predicate,
+            subtypes,
+        } => Effect::AddSubtypesControlled {
+            predicate: predicate_card(predicate)?,
+            subtypes: subtypes.clone(),
         },
         Step::OptionalPayment {
             cost,
@@ -1449,6 +1459,7 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             effects: lower_steps(pack, program, body)?,
         },
         Step::PreventLifeGain
+        | Step::UnspentManaBecomesRed
         | Step::CombatRequiresOther { .. }
         | Step::BlockingRestriction { .. }
         | Step::PowerFromLandCounters
@@ -1675,6 +1686,9 @@ fn lower_condition(condition: &Condition) -> Result<StaticCondition, IrError> {
         Condition::ControlsMatching { predicate } => StaticCondition::ControlsMatching {
             predicate: predicate_card(predicate)?,
         },
+        Condition::UnspentManaAtLeast(count) => {
+            StaticCondition::UnspentManaAtLeast { count: *count }
+        }
         _ => return Err(IrError::Malformed("unsupported static condition".into())),
     })
 }

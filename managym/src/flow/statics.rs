@@ -343,7 +343,13 @@ impl Game {
                     .filter(|s| !NONCREATURE_SUBTYPES.contains(s)),
             );
         }
-        types.extend(permanent.temp_subtypes.iter().map(String::as_str));
+        types.extend(
+            permanent
+                .temp_subtypes
+                .iter()
+                .map(String::as_str)
+                .filter(|s| !NONCREATURE_SUBTYPES.contains(s)),
+        );
         types.sort_unstable();
         types.dedup();
         types
@@ -382,6 +388,9 @@ impl Game {
                 .battlefield_permanents(controller)
                 .into_iter()
                 .any(|id| self.permanent_matches_predicate(id, predicate)),
+            StaticCondition::UnspentManaAtLeast { count } => {
+                u32::from(self.pooled_mana(controller).total()) >= *count
+            }
         }
     }
 

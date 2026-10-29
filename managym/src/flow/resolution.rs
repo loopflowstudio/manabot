@@ -539,6 +539,23 @@ impl Game {
                 }
                 None
             }
+            Effect::AddSubtypesControlled {
+                predicate,
+                subtypes,
+            } => {
+                for id in self.battlefield_permanents(frame.controller) {
+                    if self.permanent_matches_predicate(id, predicate) {
+                        self.journal_permanent(id);
+                        let permanent = self.state.permanents[id].as_mut()?;
+                        for subtype in subtypes {
+                            if !permanent.temp_subtypes.contains(subtype) {
+                                permanent.temp_subtypes.push(subtype.clone());
+                            }
+                        }
+                    }
+                }
+                None
+            }
             Effect::OptionalPayment {
                 cost,
                 if_paid,

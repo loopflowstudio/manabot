@@ -485,6 +485,15 @@ pub enum Op {
         predicate: Predicate,
         types: Vec<CardType>,
     },
+    /// "[predicate] permanents you control gain [subtypes] until end of
+    /// turn"; the affected set is fixed as the effect resolves (CR 611.2c).
+    AddSubtypesControlled {
+        predicate: Predicate,
+        subtypes: Vec<&'static str>,
+    },
+    /// "If you would lose unspent mana, that mana becomes red instead"
+    /// (static, CR 106.4, 614).
+    UnspentManaBecomesRed,
     /// "Add X mana of any one color", X read when the mana ability resolves.
     AddManaOfOneColor {
         amount: Quantity,
@@ -711,6 +720,10 @@ pub enum Condition {
     /// "If you control a [predicate] permanent."
     ControlsMatching {
         predicate: Predicate,
+    },
+    /// "As long as you have `count` or more unspent mana."
+    UnspentManaAtLeast {
+        count: i32,
     },
 }
 

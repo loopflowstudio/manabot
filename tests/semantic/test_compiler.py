@@ -215,6 +215,8 @@ def test_opcode_numbers_are_an_explicit_compatibility_surface() -> None:
         "CANT_BE_BLOCKED_BY_MORE_THAN": 75,
         "ATTACKS_DESPITE_DEFENDER": 76,
         "ADD_CARD_TYPES": 77,
+        "ADD_SUBTYPES_CONTROLLED": 78,
+        "UNSPENT_MANA_BECOMES_RED": 79,
     }
 
 

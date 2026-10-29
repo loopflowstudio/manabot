@@ -2337,5 +2337,30 @@
     "colors": [
       "U"
     ]
+  },
+  "Energybending": {
+    "name": "Energybending",
+    "mana_cost": "{2}",
+    "type_line": "Instant — Lesson",
+    "keywords": [],
+    "oracle_text": "Lands you control gain all basic land types until end of turn.\nDraw a card.",
+    "colors": []
+  },
+  "Ozai, the Phoenix King": {
+    "name": "Ozai, the Phoenix King",
+    "mana_cost": "{2}{B}{B}{R}{R}",
+    "type_line": "Legendary Creature — Human Noble",
+    "power": "7",
+    "toughness": "7",
+    "keywords": [
+      "Haste",
+      "Trample",
+      "Firebending"
+    ],
+    "oracle_text": "Trample, firebending 4, haste\nIf you would lose unspent mana, that mana becomes red instead.\nOzai has flying and indestructible as long as you have six or more unspent mana.",
+    "colors": [
+      "B",
+      "R"
+    ]
   }
 }

@@ -42,26 +42,9 @@ pipeline: `544ae312c:scratch/892c47-author-tla-cards.md`.
 
 ## Implemented
 
-1. In-process compile of typed set definitions to IR (`semantic/compile.rs`);
-   keys `<set>.<card>` in first-printing set files; one default pack.
-2. Support by definition (2026-10-29 direction): `qualifications.json`,
-   `inventory.json`, `t1-clause-review.json`, `Qualification`/`qualified()`/
-   `check_qualifications`/`inventory()` and their tests are gone.
-   `world::supports_card` = typed definition not in `tla::INCOMPLETE` (14 cards,
-   each with its missing behavior). Pool rows: tokens and incomplete cards
-   unsupported; the world pool also lists native set-file cards as unsupported
-   (no IR, not in `pool_content`). `world::set_cards(&["tla","lea"])` /
-   `managym.set_cards` filter by key prefix. `tla-pool-v1` key kept for D1.
-3. Basics are `lea.plains`…`lea.forest`. Proof (`scratch/prove_basic_rename.py`
-   over dumps of all 10 packs before/after): every IR equivalent apart from the
-   rename; default-pack digest and `CardDefId` manifest unchanged.
-4. `cards/native.rs` deleted. Native cards live in first-printing set files'
-   `native_cards()` (lea, por, isd, ori, sth, rtr, grn, ice, vis, stx, mkm; sets
-   checked on Scryfall); Crossroads of Destiny in `cards/fixtures.rs` (still in
-   the default pack, which tests and `manabot/verify` build games from);
-   `LEGACY_ORDER`/`TRAILING_ORDER` in `content_pack.rs`.
-5. Docs rewritten: `content/semantic/README.md`, `docs/rules/tla/README.md`,
-   `managym/README.md`, AGENTS.md typed-card section, WORLDS.md.
+Typed set files compiled in process, support by definition (`tla::INCOMPLETE`),
+`lea.*` basics, native cards in first-printing set files, docs rewritten. Details
+and the basic-rename proof: `86ebe9ccf:scratch/892c47-author-tla-cards.md`.
 
 ## Remaining
 

@@ -34,7 +34,8 @@
       "kicked": 2,
       "nth_resolution": 3,
       "source_counters_at_least": 7,
-      "target_matches": 4
+      "target_matches": 4,
+      "unspent_mana_at_least": 9
     },
     "controller": {
       "you": 1
@@ -340,6 +341,7 @@
     "add_mana": 1,
     "add_mana_of_one_color": 73,
     "add_subtype": 64,
+    "add_subtypes_controlled": 78,
     "attach": 68,
     "attacks_despite_defender": 76,
     "become_artifact_creature": 72,
@@ -410,6 +412,7 @@
     "tap": 8,
     "target_clause": 44,
     "unblockable_if": 55,
+    "unspent_mana_becomes_red": 79,
     "untap": 9,
     "waterbend_or_discard": 61
   },

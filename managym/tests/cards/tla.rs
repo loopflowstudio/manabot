@@ -1420,3 +1420,76 @@ fn the_mechanist_makes_clues_and_flies_them_until_end_of_turn() {
     assert!(!is_creature(&s, clue), "until end of turn");
     assert!(!observed_keywords(&s, clue).flying);
 }
+
+/// CR 305.6, 611.2c: lands you control at resolution gain every basic land
+/// type until end of turn, and with them "{T}: Add" each new type's color.
+/// A Forest's own green stays its printed ability. An opponent's land is
+/// unaffected, and the grant ends at cleanup.
+#[test]
+fn energybending_lets_your_lands_tap_for_any_color_this_turn() {
+    let mut s = setup(&["Energybending", "Typhoid Rats"]);
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    let theirs = s.force_permanent_on_battlefield(1, "Forest");
+    assert!(!can_activate(&mut s, forest, 0), "a Forest only taps for G");
+
+    s.set_player_mana_pool(0, "2");
+    cast(&mut s, "Energybending");
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.zones.size(ZoneType::Hand, PlayerId(0)),
+        1,
+        "draws a card"
+    );
+    assert!(observed(&s, forest)
+        .temp_subtypes
+        .contains(&"Swamp".to_owned()));
+    assert!(observed(&s, theirs).temp_subtypes.is_empty());
+
+    activate(&mut s, forest, 0);
+    choose_mode(&mut s, 2);
+    assert_eq!(pool(&s), Mana::parse("B"));
+    cast(&mut s, "Typhoid Rats");
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Typhoid Rats").len(), 1);
+    assert_eq!(pool(&s).total(), 0);
+
+    untap(&mut s, forest);
+    s.advance_to_active_step(1, StepKind::Main);
+    assert!(!can_activate(&mut s, forest, 0), "until end of turn");
+}
+
+/// CR 106.4, 614.1a: under Ozai unspent mana, firebending's combat mana
+/// included, becomes red instead of emptying, keeping its Lesson
+/// restriction. Six or more unspent mana gives Ozai flying and
+/// indestructible. Once Ozai is gone, mana empties again.
+#[test]
+fn ozai_keeps_unspent_mana_as_red_and_flies_on_six() {
+    let mut s = setup(&["Ozai, the Phoenix King"]);
+    let ozai = s.force_permanent_on_battlefield(0, "Ozai, the Phoenix King");
+    s.set_player_mana_pool(0, "WUB");
+    s.game_mut().state.players[0].mana_pool.lesson[4] = 1;
+    assert!(!observed_keywords(&s, ozai).flying);
+
+    declare_attackers(&mut s, &[ozai]);
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.players[0].combat_mana_pool,
+        Mana::parse("RRRR")
+    );
+    let keywords = observed_keywords(&s, ozai);
+    assert!(keywords.flying && keywords.indestructible, "eight unspent");
+
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    let mut red = Mana::parse("RRRRRRR");
+    red.lesson[3] = 1;
+    assert_eq!(pool(&s), red);
+    assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 0);
+    assert!(observed_keywords(&s, ozai).indestructible);
+
+    s.set_player_mana_pool(0, "RRRRR");
+    assert!(!observed_keywords(&s, ozai).flying, "five unspent");
+    let card = card_of(&s, ozai);
+    s.game_mut().move_card(card, ZoneType::Graveyard);
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(pool(&s).total(), 0);
+}
