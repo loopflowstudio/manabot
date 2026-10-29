@@ -12,6 +12,8 @@ binary is `tests/cards.rs`; run it with `cargo test --test cards` (or
   such as Crossroads of Destiny, token mechanics — stay in `tests/rules/`.
 - Inside a set file, tests are grouped by the helper family they play with;
   the helpers live in `tests/support/`, shared with the rules tests.
+- `observability.rs` is the one module that is not a set: it checks that every
+  observation field reaches the policy tensor, using cards to reach each state.
 
 Tests and coverage never qualify or gate a card. A card is supported when its
 set file defines it (see `managym/src/world.rs`); a missing test is a gap to

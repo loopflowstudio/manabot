@@ -3,12 +3,13 @@
 //! The guard functions destructure each observation row type without `..`,
 //! so a new field fails to compile until it names the v5 tensor columns that
 //! encode it, or says why it needs none. Directed tests then put real games
-//! into each T2 state and check the named columns, and that hidden facts
-//! (an opponent's foretold card) reach neither the tensor nor the JSON.
+//! into each cast-permission and restricted-mana state and check the named
+//! columns, and that hidden facts (an opponent's foretold card) reach neither
+//! the tensor nor the JSON.
 use std::ops::Range;
 
 use crate::support::{
-    casting::{cast, choose, library_card, mode, settle, setup},
+    casting::{activate, cast, choose, library_card, mode, settle, setup},
     helpers::Scenario,
 };
 use managym::{
@@ -436,7 +437,7 @@ fn restricted_mana_is_encoded_by_spending_subtype() {
     let mut s = setup(&["Jasmine Dragon Tea Shop"]);
     let shop = s.force_permanent_on_battlefield(0, "Jasmine Dragon Tea Shop");
     s.set_player_mana_pool(0, "");
-    crate::support::casting::activate(&mut s, shop, 0);
+    activate(&mut s, shop, 0);
     mode(&mut s, 4);
 
     let observation = Observation::for_player(s.game(), PlayerId(0));
