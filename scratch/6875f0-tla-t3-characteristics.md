@@ -80,16 +80,18 @@ rules_tests 356, lib 119 pass; clippy clean; no IR change, so no rebuild.
   Trusty Boomerang (granted activated ability); Razor Rings, The Last Agni Kai
   (excess damage); Hakoda.
 
-## Reconcile at sync (observed 2026-10-28 in sibling worktrees, uncommitted)
+## Reconcile at sync (T2 87e012 at `67c532c3c`, read 2026-10-28)
 
 - T1 (892c47) deletions reconciled at sync 86ebe9ccf.
-- T2 (87e012) appends to schema 8 with colliding numbers: fields 85-87, predicate
-  13 `with_counter`, subtypes 64-70, special role 6. This branch holds fields 85-92,
-  predicates 13-14, subtypes 64-69, special roles 6-12, opcodes 66-73, conditions
-  7-8, quantity 5.
-  The later lander renumbers its own entries (append-only, contiguous).
-- Keep one exhaust cost field and gate, and one with-counters predicate reading
-  every `CounterKind`. Merge T2's `tests/cards.rs`, `support.rs`, `tla.rs` with
+- Both branches append to schema 8 from 86ebe9ccf with colliding numbers. T2:
+  fields 85-94, predicates 13-15, subtypes 64-71, special role 6, opcodes 66-71,
+  trigger_event 13, destination 2, zone 3. This branch: fields 85-92, predicates
+  13-14, subtypes 64-69, special roles 6-12, opcodes 66-73, conditions 7-8,
+  quantity 5, enum `counter`. The later lander renumbers its own entries
+  (append-only, contiguous).
+- Keep one exhaust field and gate (T2 field 87, here 89) and one with-counters
+  predicate reading every `CounterKind` (T2 `with_counter` 13; here `no_counters`
+  14 complements it). Merge T2's `tests/cards.rs`, `support.rs`, `tla.rs` with
   these. Moving `tests/rules/tla_cards.rs` belongs to whichever PR lands it.
 
 ## Delete — do not maintain
