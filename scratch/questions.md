@@ -130,6 +130,8 @@ mana, `Game::zone_cast_cost`/`may_play_from_zone`, `ZoneEntry`.
   2026-10-21 Academy direction). Encoding them in the policy tensor (a new policy-input
   version beside v4) is left for Jack Heart's PR review; bots train and play
   T3 cards without perceiving stun/fire counters or attachment until then.
+  Superseded 2026-10-29: Jack Heart chose full policy encoding in T3 (policy
+  input v5, item 23).
 - Item 22 moved all of `rules/tla_content.rs` into `cards/tla.rs` and merged its
   drivers into `cards/support.rs`. Multi-set tests went to the first card named
   (`landfall_*` → `fin.rs`). TLA's fixed tokens are TLA cards, so their tests
@@ -138,3 +140,24 @@ mana, `Game::zone_cast_cost`/`may_play_from_zone`, `ZoneEntry`.
   failed once at `structured_offers.rs:329` in a full debug `rules_tests` run,
   then passed alone and on a full rerun. It is untouched here and may compare a
   nondeterministic `Debug` rendering. Gate should watch for it.
+
+## Item 23 (policy input v5) — 2026-10-29
+
+- Effect-set name and creature types encode as one "characteristics set"
+  flag. Their values follow from the setter (Honest Work names "Humble
+  Merchant", a Citizen); the attachment join carries its definition to the
+  host. No definition carries the name, so a definition reference is impossible
+  without a name vocabulary in the native encoder.
+- Temporary subtypes: flags for the five basic land types and Construct (every
+  current grant besides v4's Avatar), then a count of any other, so none is
+  dropped silently.
+- `sideboard_counts` / `remaining_sideboard_counts`: the agent's remaining
+  copies are already outside rows; the opponent's sideboard looks like hidden
+  information that the `Observation` (and the LLM text's "Initial sideboard")
+  exposes. Not encoded in the tensor. Question for Jack Heart: is a
+  sideboard public in this format, or should the `Observation` hide it?
+- Event `from_zone`/`to_zone`/incarnations stay out of the v0 event tensor;
+  public history v1 (`policy_history_version` 1) encodes them.
+- The tensor and text halves land before T1's sync. The learning-token guard
+  and card conversion wait for T1's unpublished authoring-layer removal, as
+  Jack Heart's steer directs ("sync onto it before reworking the encoding").

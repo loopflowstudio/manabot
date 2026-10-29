@@ -535,6 +535,8 @@ class _Renderer:
             optional = f"; type flags {flags}" if flags else ""
             if keywords := _keywords(card.keywords):
                 optional += f"; printed keywords {keywords}"
+            if card.face_down:
+                optional += "; face down"
             lines.append(
                 f"{self.name(card.id)} [{self.definition(card.registry_key)}]: owner {self.name(card.owner_id)}; zone {_enum(_ZONES, int(card.zone))}; card power/toughness {card.power}/{card.toughness}; cost {_mana(card.mana_cost)}; mana value {card.mana_cost.mana_value}{optional}; unlisted type and keyword flags false; token {_yes(card.is_token)}; legendary {_yes(card.is_legendary)}; Ally {_yes(card.is_ally)}; Lesson {_yes(card.is_lesson)}; ward mana value {card.ward_cost}; kicker mana value {card.kicker_cost}. Rules: {card.text_box or '(empty)'}"
             )
@@ -690,6 +692,10 @@ class _Renderer:
             details.extend(_selectors(item.chosen_mode, item.ability_index))
             if item.x:
                 details.append(f"X = {item.x}")
+            if item.granted_keywords is not None and (
+                granted := _keywords(item.granted_keywords)
+            ):
+                details.append(f"granted keywords {granted}")
             if targets:
                 details.append("targets " + ", ".join(targets))
             lines.append(

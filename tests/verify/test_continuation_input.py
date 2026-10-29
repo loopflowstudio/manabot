@@ -183,7 +183,11 @@ def test_retained_eligibility_separates_portable_text_and_policy_input() -> None
             capture.frames, observation.agent.player_index
         )
         tensors["relations"] = rows
-        np.testing.assert_array_equal(rows, np.array(record.relations).reshape(64, 33))
+        # V5 keeps the retained v4 columns and appends X and granted keywords.
+        np.testing.assert_array_equal(
+            rows[:, :33], np.array(record.relations).reshape(64, 33)
+        )
+        assert not rows[:, 33:].any()
         selected = rows[(rows[:, 0] == 2) & (rows[:, 3] == 5)]
         np.testing.assert_array_equal(selected[:, 22], [1, 2])
         np.testing.assert_array_equal(selected[:, 29], [1, 2])

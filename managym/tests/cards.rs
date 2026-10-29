@@ -28,6 +28,8 @@ mod lea;
 mod m20;
 #[path = "cards/mkm.rs"]
 mod mkm;
+#[path = "cards/observability.rs"]
+mod observability;
 #[path = "cards/stx.rs"]
 mod stx;
 #[path = "cards/support.rs"]

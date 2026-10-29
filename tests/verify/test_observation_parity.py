@@ -312,9 +312,103 @@ def test_elemental_indestructible_encoding_preserves_outside_and_definition_colu
     actual = env.encode_observation(obs)
     for key, value in expected.items():
         np.testing.assert_array_equal(actual[key], value, err_msg=key)
-    assert actual["agent_cards"].shape[-1] == 41
-    assert actual["agent_permanents"].shape[-1] == 28
+    assert actual["agent_cards"].shape[-1] == 42
+    assert actual["agent_permanents"].shape[-1] == 42
     assert actual["agent_cards"][0, 38] == 1
     assert actual["agent_cards"][0, 37] == 0
     assert actual["agent_permanents"][0, 25] == 1
     assert actual["agent_permanents"][0, 24] == permanent.registry_key + 1
+
+
+# Policy input v5 encodes every Observation fact. These states reach its new
+# columns through real T3 games and through each observed field directly.
+_T3_DECK = {
+    "Plains": 5,
+    "Island": 5,
+    "Swamp": 4,
+    "Mountain": 5,
+    "Forest": 5,
+    "Trusty Boomerang": 4,
+    "Glider Staff": 4,
+    "Rowdy Snowballers": 4,
+    "United Front": 4,
+    "Lo and Li, Twin Tutors": 2,
+    "Firebending Lesson": 4,
+    "Toph, the First Metalbender": 2,
+    "White Lotus Tile": 4,
+    "Sozin's Comet": 4,
+}
+
+
+def test_v5_native_and_python_encoders_agree_on_t3_games() -> None:
+    rng = np.random.default_rng(5)
+    env = managym.Env(seed=5, skip_trivial=True)
+    encoder = ObservationEncoder(ObservationConfig(policy_input_version=5))
+    reached: set[str] = set()
+    for _ in range(12):
+        obs, _ = env.reset(
+            [managym.PlayerConfig(name, dict(_T3_DECK)) for name in ("a", "b")]
+        )
+        for _ in range(400):
+            expected = encoder.encode(obs)
+            actual = env.encode_observation(obs, 5)
+            for key, value in expected.items():
+                np.testing.assert_array_equal(actual[key], value, err_msg=key)
+            permanents = np.concatenate(
+                (actual["agent_permanents"], actual["opponent_permanents"])
+            )
+            for name, seen in (
+                ("stun", permanents[:, 27]),
+                ("attached", permanents[:, 30]),
+                ("granted land", permanents[:, 32]),
+                ("stack X", actual["relations"][:, 33]),
+                ("spell grant", actual["relations"][:, 34:48]),
+                ("face down", actual["agent_cards"][:, 40]),
+            ):
+                if seen.any():
+                    reached.add(name)
+            if obs.game_over or not obs.action_space.actions:
+                break
+            obs, *_ = env.step(random_valid_action(obs, rng))
+    # Seeded play reaches every new column, so parity covers each of them.
+    assert reached == {
+        "stun",
+        "attached",
+        "granted land",
+        "stack X",
+        "spell grant",
+        "face down",
+    }
+
+
+def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
+    env = managym.Env(seed=11, skip_trivial=False)
+    env.reset(make_player_configs())
+    env.scenario_force_battlefield(0, "Mountain")
+    env.scenario_force_battlefield(1, "Forest")
+    obs = env.scenario_refresh()
+    mine, theirs = obs.agent_permanents[0], obs.opponent_permanents[0]
+    mine.stun_counters, mine.fire_counters, mine.double_strike_counters = 1, 2, 3
+    mine.attached_to = theirs.id
+    mine.name, mine.creature_types = "Humble Merchant", ["Citizen"]
+    mine.is_granted_land, mine.firebending = True, 4
+    mine.temp_subtypes = ["Island", "Construct", "Citizen"]
+    obs.agent_permanents = [mine]
+    cards = obs.agent_cards
+    cards[0].face_down = True
+    obs.agent_cards = cards
+
+    encoder = ObservationEncoder(ObservationConfig(policy_input_version=5))
+    expected = encoder.encode(obs)
+    actual = env.encode_observation(obs, 5)
+    for key, value in expected.items():
+        np.testing.assert_array_equal(actual[key], value, err_msg=key)
+    row = actual["agent_permanents"][0]
+    host = 2 + 2 * encoder.cards_per_player + encoder.perms_per_player
+    np.testing.assert_allclose(
+        row[27:42], [0.1, 0.2, 0.3, host + 1, 1, 1, 0.4, 0, 1, 0, 0, 0, 1, 1, 1]
+    )
+    assert actual["agent_cards"][0, 40] == 1 and actual["agent_cards"][0, 41] == 1
+    v4 = env.encode_observation(obs, 4)
+    assert v4["agent_permanents"].shape[-1] == 28
+    assert v4["agent_cards"].shape[-1] == 41

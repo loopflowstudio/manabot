@@ -263,3 +263,143 @@ def test_stack_text_states_announced_x_only_when_present() -> None:
         "Stack (native order, top to bottom):\n", 1
     )[1]
     assert stack.startswith("S1: ") and "; X = 3" in stack.split("\n", 1)[0]
+
+
+def test_stack_text_states_granted_spell_keywords_only_when_present() -> None:
+    _, env = collision_branches()
+    submit_response(env, capture_text_decision(env), "A0")
+    decision = capture_text_decision(env)
+    assert "granted keywords" not in decision.text
+    payload = json.loads(decision.capture_json)
+    keywords = {name: name == "lifelink" for name in _KEYWORDS}
+    payload["observation"]["viewer_state"]["stack_objects"][0]["granted_keywords"] = (
+        keywords
+    )
+    stack = render_decision(_redigest(payload)).text.split(
+        "Stack (native order, top to bottom):\n", 1
+    )[1]
+    assert "; granted keywords lifelink" in stack.split("\n", 1)[0]
+
+
+def test_face_down_card_text_appears_only_when_present() -> None:
+    env = priority_root(("Gray Ogre",), ())
+    decision = capture_text_decision(env)
+    assert "face down" not in decision.text
+    payload = json.loads(decision.capture_json)
+    payload["observation"]["viewer_state"]["agent_cards"][0]["face_down"] = True
+    text = render_decision(_redigest(payload)).text
+    changed = [
+        (old, new)
+        for old, new in zip(decision.text.splitlines(), text.splitlines())
+        if old != new
+    ]
+    assert len(changed) == 1 and "; face down;" in changed[0][1]
+
+
+_KEYWORDS = (
+    "flying",
+    "reach",
+    "haste",
+    "flash",
+    "vigilance",
+    "trample",
+    "first_strike",
+    "double_strike",
+    "deathtouch",
+    "lifelink",
+    "defender",
+    "menace",
+    "hexproof",
+    "indestructible",
+)
+
+# Every observed field and the LLM text that states it, or why none is needed.
+# A field added to the native observation fails here until it is listed.
+_TEXT_FIELDS: dict[type, dict[str, str]] = {
+    managym.Permanent: {
+        "id": "the permanent's alias",
+        "registry_key": "[definition]",
+        "controller_id": "controller",
+        "tapped": "tapped",
+        "damage": "damage",
+        "is_summoning_sick": "summoning sick",
+        "plus1_counters": "+1/+1 counters",
+        "cant_be_blocked_this_turn": "cannot be blocked this turn",
+        "power": "power/toughness",
+        "toughness": "power/toughness",
+        "is_animated": "animated",
+        "has_exile_link": "holds exile link",
+        "exile_if_dies_this_turn": "exile if dies this turn",
+        "temp_subtypes": "temporary subtypes",
+        "keywords": "effective keywords",
+        "stun_counters": "stun counters",
+        "fire_counters": "fire counters",
+        "double_strike_counters": "double strike counters",
+        "attached_to": "attached to",
+        "name": "name set to",
+        "creature_types": "creature types set to",
+        "is_granted_land": "land through an effect",
+        "firebending": "firebending",
+    },
+    managym.Card: {
+        "id": "the card's alias",
+        "registry_key": "[definition]",
+        "name": "the definition line",
+        "text_box": "Rules:",
+        "owner_id": "owner",
+        "zone": "zone",
+        "power": "card power/toughness",
+        "toughness": "card power/toughness",
+        "mana_cost": "cost",
+        "card_types": "type flags",
+        "keywords": "printed keywords",
+        "is_token": "token",
+        "is_legendary": "legendary",
+        "is_ally": "Ally",
+        "is_lesson": "Lesson",
+        "ward_cost": "ward mana value",
+        "kicker_cost": "kicker mana value",
+        "face_down": "face down",
+    },
+    managym.StackObject: {
+        "stack_object_id": "S<n>",
+        "kind": "spell/activated ability/triggered ability",
+        "controller_id": "controller",
+        "source_card_registry_key": "[definition]",
+        "source_permanent_id": "source",
+        "description": "the ability text",
+        "chosen_mode": "mode",
+        "ability_index": "ability",
+        "targets": "targets",
+        "x": "X =",
+        "granted_keywords": "granted keywords",
+    },
+    managym.Player: {
+        "id": "the player's alias",
+        "player_index": "seat label",
+        "is_agent": "the viewer's own section",
+        "is_active": "active player",
+        "life": "life",
+        "zone_counts": "zone counts",
+        "graveyard_lessons": "graveyard Lessons",
+        "combat_mana": "combat mana",
+        "mana": "mana pool",
+        "lesson_mana": "Restricted mana",
+        "known_hand": "known hand",
+        "sideboard_counts": "Initial sideboard",
+        "remaining_sideboard_counts": "Owned outside-game candidates",
+    },
+    managym.Turn: {
+        "turn_number": "Turn",
+        "phase": "Phase",
+        "step": "Step",
+        "active_player_id": "active player",
+        "agent_player_id": "the viewer's own section",
+    },
+}
+
+
+@pytest.mark.parametrize("kind", list(_TEXT_FIELDS), ids=lambda kind: kind.__name__)
+def test_every_observed_field_has_llm_text(kind: type) -> None:
+    observed = {name for name in dir(kind) if not name.startswith("_")}
+    assert observed == set(_TEXT_FIELDS[kind])

@@ -33,9 +33,7 @@ use crate::{
             EventType, KeywordData, Observation, PermanentData, PlayerData, SideboardCardData,
             StackObjectData, StackObjectKindData, StackTargetData, StackTargetKindData, TurnData,
         },
-        observation_encoder::{
-            ObservationEncoderConfig, ACTION_DIM, CARD_DIM, PERMANENT_DIM, PLAYER_DIM,
-        },
+        observation_encoder::{ObservationEncoderConfig, ACTION_DIM},
         structured_offer::{OfferId as StructuredOfferId, OfferSubmission, StructuredOfferSet},
     },
     decision::Command as SemanticCommand,
@@ -114,11 +112,11 @@ fn encoded_to_dict<'py>(
 
     dict.set_item(
         "agent_player",
-        to_numpy_array_f32(py, &np, &encoded.agent_player, &[1, PLAYER_DIM])?,
+        to_numpy_array_f32(py, &np, &encoded.agent_player, &[1, config.player_dim()])?,
     )?;
     dict.set_item(
         "opponent_player",
-        to_numpy_array_f32(py, &np, &encoded.opponent_player, &[1, PLAYER_DIM])?,
+        to_numpy_array_f32(py, &np, &encoded.opponent_player, &[1, config.player_dim()])?,
     )?;
     dict.set_item(
         "agent_cards",
@@ -126,7 +124,7 @@ fn encoded_to_dict<'py>(
             py,
             &np,
             &encoded.agent_cards,
-            &[config.max_cards_per_player, CARD_DIM],
+            &[config.max_cards_per_player, config.card_dim()],
         )?,
     )?;
     dict.set_item(
@@ -135,7 +133,7 @@ fn encoded_to_dict<'py>(
             py,
             &np,
             &encoded.opponent_cards,
-            &[config.max_cards_per_player, CARD_DIM],
+            &[config.max_cards_per_player, config.card_dim()],
         )?,
     )?;
     dict.set_item(
@@ -144,7 +142,7 @@ fn encoded_to_dict<'py>(
             py,
             &np,
             &encoded.agent_permanents,
-            &[config.max_permanents_per_player, PERMANENT_DIM],
+            &[config.max_permanents_per_player, config.permanent_dim()],
         )?,
     )?;
     dict.set_item(
@@ -153,7 +151,7 @@ fn encoded_to_dict<'py>(
             py,
             &np,
             &encoded.opponent_permanents,
-            &[config.max_permanents_per_player, PERMANENT_DIM],
+            &[config.max_permanents_per_player, config.permanent_dim()],
         )?,
     )?;
     dict.set_item(
@@ -3586,7 +3584,7 @@ impl PyEnv {
         })
     }
 
-    #[pyo3(signature = (obs, policy_input_version=4))]
+    #[pyo3(signature = (obs, policy_input_version=5))]
     fn encode_observation(
         &self,
         py: Python<'_>,
@@ -3594,7 +3592,7 @@ impl PyEnv {
         policy_input_version: u8,
     ) -> PyResult<PyObject> {
         let rust_obs = Observation::from(obs);
-        if !matches!(policy_input_version, 1..=4) {
+        if !matches!(policy_input_version, 1..=5) {
             return Err(PyValueError::new_err("unsupported policy input version"));
         }
         let config = ObservationEncoderConfig {

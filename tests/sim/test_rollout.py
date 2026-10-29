@@ -10,7 +10,11 @@ import torch
 
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import PERMANENT_DEFINITION_INDEX, ObservationSpace
+from manabot.env.observation import (
+    PERMANENT_ATTACHED_INDEX,
+    PERMANENT_DEFINITION_INDEX,
+    ObservationSpace,
+)
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.sim.rollout import (
@@ -105,10 +109,12 @@ class TestBatchedSampler:
                 continue
             if arr.dtype == np.float32:
                 arr[:] = rng.random(arr.shape, dtype=np.float32)
-        # Transport definition IDs are discrete even in a synthetic feature batch.
+        # Definition IDs and attachment links are discrete joins even in a
+        # synthetic feature batch.
         buffers["semantic_cards"].fill(0)
         for key in ("agent_permanents", "opponent_permanents"):
             buffers[key][..., PERMANENT_DEFINITION_INDEX] = 0
+            buffers[key][..., PERMANENT_ATTACHED_INDEX] = 0
         valid = np.zeros_like(buffers["actions_valid"])
         valid[:, :5] = (rng.random((batch, 5)) < 0.6).astype(np.float32)
         valid[np.arange(batch), rng.integers(0, 5, batch)] = 1.0

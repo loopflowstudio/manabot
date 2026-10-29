@@ -3,47 +3,96 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>T3 concept review after item 21 — finish the card-test move</title>
+<title>T3 Concept Review</title>
 <style>
-  :root { color-scheme: light dark; --fg:#1d1b18; --bg:#faf8f4; --mute:#6b655c; --line:#ddd6ca; --prop:#7a4b00; --code:#efe9df; }
-  @media (prefers-color-scheme: dark) { :root { --fg:#ece7de; --bg:#1a1916; --mute:#a39b8e; --line:#3a362f; --prop:#f0b45a; --code:#26241f; } }
-  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 Georgia, serif; }
-  main { max-width:44rem; margin:0 auto; padding:2.5rem 1.25rem 4rem; }
-  header p { color:var(--mute); font-size:.9rem; margin:.2rem 0; }
-  h1 { font-size:1.5rem; line-height:1.3; } h2 { font-size:1.15rem; margin-top:2.2rem; }
-  code { background:var(--code); padding:0 .25em; border-radius:3px; font-size:.88em; }
-  .proposed { border-left:3px solid var(--prop); padding-left:1rem; }
-  .proposed::before { content:"Proposed — next implement"; display:block; color:var(--prop); font-size:.8rem; letter-spacing:.04em; text-transform:uppercase; }
-  table { border-collapse:collapse; width:100%; font-size:.92rem; }
-  td, th { border-bottom:1px solid var(--line); padding:.4rem .5rem; text-align:left; vertical-align:top; }
-  ol li { margin:.4rem 0; }
+:root{--bg:#fbfaf7;--fg:#22201c;--mute:#6b665d;--rule:#e2ddd3;--code:#f1ede5;--prop:#9a5b13;--propbg:#fbf0e1;--have:#2f6b3a;--gap:#a3322a}
+@media (prefers-color-scheme:dark){:root{--bg:#1a1916;--fg:#e9e5dc;--mute:#a19b90;--rule:#36332d;--code:#26241f;--prop:#e6a65a;--propbg:#2e2416;--have:#7fc28b;--gap:#ef8a80}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 ui-serif,Georgia,serif}
+main{max-width:46rem;margin:0 auto;padding:2.5rem 16px 4rem}
+h1{font-size:1.6rem;line-height:1.25;margin:0 0 .4rem}
+h2{font-size:1.15rem;margin:2.6rem 0 .6rem}
+header p{margin:.15rem 0;color:var(--mute);font-size:.9rem}
+code{font:.86em ui-monospace,Menlo,monospace;background:var(--code);padding:.05em .3em;border-radius:3px;overflow-wrap:anywhere}
+.lead{font-size:1.1rem;border-left:3px solid var(--prop);padding:.2rem 0 .2rem 1rem;margin:1.8rem 0}
+table{width:100%;border-collapse:collapse;font-size:.92rem;margin:.6rem 0}
+th,td{text-align:left;vertical-align:top;padding:.45rem .5rem;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--mute);font-size:.82rem}
+.wrap{overflow-x:auto}
+.y{color:var(--have)}.n{color:var(--gap);font-weight:600}.e{color:var(--mute)}
+.proposed{background:var(--propbg);border:1px dashed var(--prop);border-radius:6px;padding:.8rem 1rem;margin:1rem 0}
+.proposed::before{content:"PROPOSED · not written";display:block;font:600 .72rem ui-sans-serif,system-ui,sans-serif;letter-spacing:.06em;color:var(--prop);margin-bottom:.3rem}
+.flow{font:.82rem ui-monospace,Menlo,monospace;white-space:pre;overflow-x:auto;background:var(--code);padding:.8rem 1rem;border-radius:6px;line-height:1.5}
+ol.q>li{margin:.9rem 0}
+ol.q ol{list-style:lower-alpha;margin:.3rem 0}
+.rec{color:var(--prop);font-weight:600}
 </style>
 </head>
-<body><main>
+<body>
+<main>
 <header>
-  <p>Task 6875f0 · TLA T3 · concept-review step (headless) · 2026-10-29, after item 22</p>
-  <p>Built from <code>scratch/6875f0-tla-t3-characteristics.md</code>, Jack Heart's 2026-10-29 card-test steer, <code>managym/tests/cards.rs</code>, <code>managym/tests/cards/*.rs</code>, <code>managym/tests/rules/*.rs</code>, <code>managym/src/cardsets/</code>, commits <code>9cf2f4e71</code>..<code>605814d8a</code>.</p>
+<h1>Who sees a stun counter?</h1>
+<p>Task 6875f0 · TLA T3: characteristics, counters, replacements, attachments</p>
+<p>Concept review with Jack Heart · Task standing at <code>demo</code> · 2026-10-29</p>
+<p>Built from <code>scratch/6875f0-tla-t3-characteristics.md</code>, <code>scratch/questions.md</code>, <code>manabot/env/observation.py</code>, <code>managym/src/agent/observation.rs</code>, <code>managym/src/agent/observation_encoder.rs</code>, <code>manabot/infra/config.py</code></p>
 </header>
 
-<h1>Card tests now live with their set. Nothing left to change.</h1>
-<p><strong>Decision:</strong> none needed. <strong>Outcome:</strong> nothing to change and no open choice, so the loop advances to gate.</p>
+<p class="lead">Decision needed: is a policy input that cannot see T3's new state acceptable, and if so, where is that written down? Today the omission is silent. Humans and LLM bots see stun counters and attachments, but the bot we train does not.</p>
 
-<h2>Actions → concepts → APIs (as implemented)</h2>
-<table>
-<tr><th>A contributor wants to…</th><th>Concept</th><th>Where it lives</th></tr>
-<tr><td>see how a card behaves</td><td>Card test</td><td><code>tests/cards/&lt;set&gt;.rs</code>, one module per set file in <code>src/cardsets/</code>, mounted by <code>tests/cards.rs</code></td></tr>
-<tr><td>see how a rule behaves across cards</td><td>Rule test</td><td><code>tests/rules/cr_*.rs</code>, <code>tla_mechanics.rs</code>, the structured-offer files</td></tr>
-<tr><td>drive a scenario</td><td>Shared driver</td><td><code>tests/cards/support.rs</code> (both targets mount it)</td></tr>
-<tr><td>know whether a card is supported</td><td>Definition</td><td>the set file alone; tests never decide support</td></tr>
-</table>
+<h2>One interaction</h2>
+<p>The opponent casts Crashing Wave. Three stun counters go on your tapped creatures. On your turn they stay tapped and lose a counter each. Separately, you have Trusty Boomerang on creature A rather than creature B.</p>
+<div class="flow">Engine state        Permanent.counters.stun = 1, attached_to = A
+   │
+Observation         PermanentData.stun_counters = 1, attached_to = A   (item 19)
+   ├─► Academy       chip "1 stun", "Trusty Boomerang attached"     (item 20)
+   ├─► LLM text      "stun counters: 1; attached to A"              (item 20)
+   └─► policy v4     tapped = 1, P/T and keywords as modified
+                     · no stun column, no attachment edge · unchanged</div>
+<p>The trained policy sees the creature tapped but cannot tell whether it will untap. It sees A's raised P/T but not that removing A strands the Equipment. Under item 19 the omission was a deliberate choice: keep frozen widths and leave encoding for your PR review. Nothing in the code or docs states that choice.</p>
 
-<h2>Checked counterexamples</h2>
-<p>Some TLA card names still appear under <code>tests/rules/</code>. Each one is there to witness a rule or to fill a deck, not to test that card. <code>cr_400_7_death_trigger_keeps_source_lki_across_reentry</code> and <code>dragonfly_sba_scenario</code> use Dragonfly Swarm for CR 400.7 and 704. The structured-offer tests use cards as action fixtures. <code>tla_mechanics.rs</code> uses TLA cards only to build the deck for its full-deck replay. Its other tests use vanilla cards, injected abilities or the fixture card Crossroads of Destiny.</p>
-<p>The steer allows a coverage README or script in <code>tests/cards/</code> but does not ask for one. It is not added here.</p>
+<h2>What each consumer sees (verified)</h2>
+<div class="wrap"><table>
+<tr><th>T3 state</th><th>Observation / Academy / LLM</th><th>Policy v4</th></tr>
+<tr><td>Stun, fire, other counters by kind</td><td class="y">yes</td><td class="n">no (only +1/+1, col 4)</td></tr>
+<tr><td>Equipment / Aura attached to which creature</td><td class="y">yes</td><td class="n">no edge; P/T and keywords show the effect</td></tr>
+<tr><td>Announced X on the stack</td><td class="y">yes</td><td class="n">no</td></tr>
+<tr><td>Granted land type (Toph)</td><td class="y">yes</td><td class="n">no</td></tr>
+<tr><td>Set name / creature types (Honest Work)</td><td class="y">yes</td><td class="e">only indirectly: lost keywords, base P/T</td></tr>
+<tr><td>Granted firebending</td><td class="y">yes</td><td class="n">no</td></tr>
+</table></div>
+<p>No decklist or world uses a T3 card yet, so no current training run is affected. The gap matters once a world puts these cards into a training pool. Then card evaluations, which feed cube design, would measure a bot playing blind, the same pilot confound seen in exp-08b.</p>
+
+<h2>Actions → concepts → APIs</h2>
+<div class="wrap"><table>
+<tr><th></th><th>Before (as built)</th><th>After (proposed)</th></tr>
+<tr><td>Concept</td><td>"Observations stay complete" — stated for <code>Observation</code>, assumed for everything</td><td><code>Observation</code> is the complete shared decision surface; each policy input version is a frozen, <em>documented</em> projection of it</td></tr>
+<tr><td>Config</td><td><code>policy_input_version: Literal[1,2,3,4]</code>, default 4</td><td>same, with its omissions written beside it; (a) or (b) adds 5</td></tr>
+<tr><td>Encoders</td><td><code>_encode_permanent_features</code> = <code>observation_encoder.rs</code>, 28 columns</td><td>v5: counters by kind, granted land, firebending columns; attachment relation row; stack X. v1–v4 byte-frozen</td></tr>
+<tr><td>Failure</td><td>none: a v4 policy plays T3 cards without warning</td><td>the omission is on record; under (b), v5 lands before T3 cards enter a training pool</td></tr>
+</table></div>
+
+<div class="proposed">
+<p style="margin:0">Docstring on <code>ObservationConfig.policy_input_version</code>:</p>
+<p style="margin:.4rem 0 0"><em>Policy input versions are frozen projections of the complete <code>Observation</code>. v4 omits counters other than +1/+1, attachment edges, stack X, granted land types, set names and creature types, and granted firebending. A policy trained on v4 sees only their effects on P/T and keywords.</em></p>
+</div>
+
+<h2>Counterexample checked</h2>
+<p>"The policy can infer attachment from P/T." It can't, reliably. Two creatures with equal raised P/T, one equipped and one pumped until end of turn, encode identically. Under v4 a stunned tapped creature and an unstunned tapped one also encode identically. These two pairs become the v5 proof: v4 rows are equal and v5 rows differ, with native and Python encoders in parity.</p>
 
 <h2>Questions</h2>
-<ol>
-<li>None block this loop. Whether to encode item 19's fields in the policy tensor stays with your PR review: (a) bump the policy-input version in T3, or (b) do it in a later Task.</li>
+<ol class="q">
+<li>Where does policy encoding of T3 state happen?
+  <ol>
+  <li>In T3: add policy input v5 now, in both encoders, with v1–v4 frozen.</li>
+  <li><span class="rec">Recommended:</span> write v4's omissions down now, and give v5 its own Task, which must land before any world puts T3 cards into a training pool.</li>
+  <li>Write the omissions down only, and decide on v5 when a world wants these cards.</li>
+  </ol></li>
+<li>Is the contract right: the <code>Observation</code> is complete, and policy versions are documented projections that may omit things?
+  <ol>
+  <li>Yes.</li>
+  <li>No. New engine state must reach the policy in the same change, so a frozen version is never silently behind.</li>
+  </ol></li>
 </ol>
-</main></body>
+</main>
+</body>
 </html>

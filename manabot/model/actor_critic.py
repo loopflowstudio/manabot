@@ -12,6 +12,7 @@ import torch.nn as nn
 
 # Local imports
 from manabot.env.observation import (
+    PERMANENT_ATTACHED_INDEX,
     PERMANENT_DEFINITION_INDEX,
     RELATION_VALID_INDEX,
     ObservationSpace,
@@ -68,8 +69,12 @@ class ActorCritic(nn.Module):
             )
         player_dim = enc.player_dim
         card_dim = enc.card_dim
-        # Definition IDs are categorical joins, never numeric permanent features.
-        perm_dim = enc.permanent_dim - 1
+        # Definition IDs and v5 attachment links are categorical joins, never
+        # numeric permanent features.
+        self._join_columns = (PERMANENT_DEFINITION_INDEX,) + (
+            (PERMANENT_ATTACHED_INDEX,) if enc.shows_everything else ()
+        )
+        perm_dim = enc.permanent_dim - len(self._join_columns)
         action_dim = enc.action_dim
         self.max_focus_objects = enc.max_focus_objects
         embed_dim = config.hidden_dim
@@ -221,6 +226,25 @@ class ActorCritic(nn.Module):
             if enc.config.policy_input_version >= 2
             else None
         )
+
+        # Policy input v5 links each Aura/Equipment to its host. The join
+        # exchanges pre-attention embeddings both ways: the attachment reads
+        # its host and the host reads (summed) attachments, so an Equipment's
+        # effect and an Honest Work host's set characteristics reach both
+        # objects. Zero weights start additive; skip_init draws no RNG.
+        self.attachment_to_host: nn.Linear | None = None
+        self.host_to_attachment: nn.Linear | None = None
+        self._permanents_start = 2 + 2 * enc.cards_per_player
+        if enc.shows_everything:
+            self.attachment_to_host = torch.nn.utils.skip_init(
+                nn.Linear, embed_dim, embed_dim
+            )
+            self.host_to_attachment = torch.nn.utils.skip_init(
+                nn.Linear, embed_dim, embed_dim
+            )
+            for layer in (self.attachment_to_host, self.host_to_attachment):
+                nn.init.zeros_(layer.weight)
+                nn.init.zeros_(layer.bias)
 
         # When True, forward() stashes raw pre-mask logits on
         # self.last_raw_logits for offline diagnosis. Off by default: the
@@ -508,14 +532,13 @@ class ActorCritic(nn.Module):
             permanent_definitions = self._generic_definitions(
                 permanent_ids, None if references is None else references.permanents
             )
+        numeric = [
+            column
+            for column in range(obs["agent_permanents"].shape[-1])
+            if column not in self._join_columns
+        ]
         permanent_features = [
-            torch.cat(
-                (
-                    obs[key][..., :PERMANENT_DEFINITION_INDEX],
-                    obs[key][..., PERMANENT_DEFINITION_INDEX + 1 :],
-                ),
-                dim=-1,
-            )
+            obs[key][..., numeric]
             for key in ("agent_permanents", "opponent_permanents")
         ]
         enc_agent_perms = (
@@ -558,6 +581,8 @@ class ActorCritic(nn.Module):
             )
 
         objects = torch.cat(object_parts, dim=1)
+        if self.attachment_to_host is not None:
+            objects = self._join_attachments(obs, objects)
         # History and current continuation both inform objects and focus-free actions.
         shared_context = None
         frame_context = None
@@ -605,6 +630,39 @@ class ActorCritic(nn.Module):
 
         validity = torch.cat(validity_parts, dim=1)
         return objects, is_agent, validity, shared_context, frame_context
+
+    def _join_attachments(
+        self, obs: Dict[str, torch.Tensor], objects: torch.Tensor
+    ) -> torch.Tensor:
+        """Add each host's embedding to its attachments and theirs to it.
+
+        Links are object index + 1 (zero: unattached) into `objects` [B,N,D].
+        """
+        assert self.attachment_to_host is not None
+        assert self.host_to_attachment is not None
+        links = torch.cat(
+            [
+                obs[key][..., PERMANENT_ATTACHED_INDEX]
+                for key in ("agent_permanents", "opponent_permanents")
+            ],
+            dim=1,
+        )
+        if not (
+            (links == links.floor()) & (links >= 0) & (links <= objects.shape[1])
+        ).all():
+            raise ValueError("invalid attachment object reference")
+        start = self._permanents_start
+        permanents = objects[:, start : start + links.shape[1]]
+        attached = (links > 0).unsqueeze(-1)
+        hosts = (links.long() - 1).clamp_min(0).unsqueeze(-1).expand_as(permanents)
+        from_host = self.host_to_attachment(objects.gather(1, hosts))
+        to_host = torch.zeros_like(objects).scatter_add(
+            1, hosts, self.attachment_to_host(permanents).masked_fill(~attached, 0)
+        )
+        to_host[:, start : start + links.shape[1]] += from_host.masked_fill(
+            ~attached, 0
+        )
+        return objects + to_host
 
     def _generic_definitions(
         self, ids: torch.Tensor, admitted: torch.Tensor | None = None

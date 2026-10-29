@@ -129,7 +129,46 @@ pub struct KeywordData {
     pub indestructible: bool,
 }
 
+/// Number of `KeywordData` flags; tensor keyword blocks follow field order.
+pub const KEYWORD_COUNT: usize = 14;
+
 impl KeywordData {
+    /// Every flag in field order, for fixed-width policy columns.
+    pub fn flags(&self) -> [bool; KEYWORD_COUNT] {
+        let Self {
+            flying,
+            reach,
+            haste,
+            flash,
+            vigilance,
+            trample,
+            first_strike,
+            double_strike,
+            deathtouch,
+            lifelink,
+            defender,
+            menace,
+            hexproof,
+            indestructible,
+        } = *self;
+        [
+            flying,
+            reach,
+            haste,
+            flash,
+            vigilance,
+            trample,
+            first_strike,
+            double_strike,
+            deathtouch,
+            lifelink,
+            defender,
+            menace,
+            hexproof,
+            indestructible,
+        ]
+    }
+
     pub fn from_keywords(keywords: &crate::state::card::Keywords) -> Self {
         Self {
             flying: keywords.flying,

@@ -5,6 +5,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    agent::observation::{KeywordData, KEYWORD_COUNT},
     flow::{
         decision::{Decision, SuspendedResolution},
         game::{ActivationSource, Game, Payment, PendingChoice},
@@ -18,11 +19,17 @@ use crate::{
     },
 };
 
-/// Policy inputs v2/v3/v4: up to 64 relation rows, 32/33 floats per row. Overflow is an
-/// admission error, never truncation. Zero is padding/absence for selectors.
+/// Policy inputs v2/v3/v4/v5: up to 64 relation rows, 32/33/48 floats per row.
+/// Overflow is an admission error, never truncation. Zero is padding/absence
+/// for selectors. Validity stays at column 31 in every width.
 pub const RELATION_ROWS: usize = 64;
 pub const LEGACY_RELATION_DIM: usize = 32;
 pub const RELATION_DIM: usize = 33;
+/// V5 appends the frame's X (column 33) and its granted keywords (34..48, in
+/// `KeywordData` field order) after v4's eligibility column.
+pub const RELATION_DIM_V5: usize = 48;
+pub const RELATION_X_INDEX: usize = 33;
+pub const RELATION_KEYWORDS_INDEX: usize = 34;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "python", pyo3::pyclass(get_all, frozen))]
@@ -84,6 +91,14 @@ pub struct ContinuationFrame {
     pub can_decline: bool,
     pub mana_outputs: Vec<ManaOutput>,
     pub resolutions_this_turn: u32,
+    /// The announced value of X (CR 107.3) of the spell or ability this frame
+    /// casts, activates or resolves; zero when it has none.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub x: u8,
+    /// Keywords a static grants this spell on the stack (a Lesson's lifelink),
+    /// in `KeywordData` field order.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub granted_keywords: [bool; KEYWORD_COUNT],
 }
 
 impl ContinuationFrame {
@@ -298,11 +313,16 @@ impl Game {
                 frame.source = self.card_reference(spell.card, viewer);
                 frame.mode = spell.mode;
                 frame.kicked = spell.kicked;
+                frame.x = spell.x;
+                frame.granted_keywords =
+                    KeywordData::from_keywords(&self.spell_keywords(spell.card, spell.controller))
+                        .flags();
                 &spell.target_req_indices
             }
             StackObject::ActivatedAbility(ability) => {
                 frame.kind = 2;
                 frame.source = self.visible_reference(ability.source_ref, viewer);
+                frame.x = ability.x;
                 &[]
             }
             StackObject::TriggeredAbility(ability) => {
@@ -353,6 +373,7 @@ impl Game {
             } => {
                 frame.source = self.card_reference(*card, viewer);
                 frame.kicked = cast.kicked;
+                frame.x = cast.x;
                 frame.mode = *mode;
                 frame.active_clause = Some(*requirement_index);
                 frame.targets = self.clause_targets(chosen, chosen_req_indices, viewer);
@@ -360,6 +381,7 @@ impl Game {
             PendingChoice::SpellMode { card, cast, .. } => {
                 frame.source = self.card_reference(*card, viewer);
                 frame.kicked = cast.kicked;
+                frame.x = cast.x;
             }
             PendingChoice::KickerChoice { card, .. } | PendingChoice::AnnounceX { card, .. } => {
                 frame.source = self.card_reference(*card, viewer)
@@ -439,6 +461,7 @@ impl Game {
                         .unwrap_or_default()
                 }),
             kicked: effect.kicked,
+            x: effect.x,
             resolutions_this_turn: effect.resolutions_this_turn,
             active_clause: Some(effect.active_requirement),
             targets: effect
@@ -543,6 +566,7 @@ impl Game {
             } => {
                 frame.source = self.card_reference(*card, viewer);
                 frame.kicked = cast.kicked;
+                frame.x = cast.x;
                 frame.mode = *mode;
                 frame.targets = self.clause_targets(targets, target_req_indices, viewer);
             }
@@ -550,10 +574,11 @@ impl Game {
                 source,
                 ability_index,
                 targets,
-                ..
+                x,
             } => {
                 frame.source = self.activation_reference(*source, viewer);
                 frame.ability = Some(*ability_index);
+                frame.x = *x;
                 frame.targets = self.clause_targets(targets, &[], viewer);
             }
         }
@@ -587,10 +612,12 @@ pub fn encode_into(
         });
     }
     let dim = out.len() / RELATION_ROWS;
-    if ![LEGACY_RELATION_DIM, RELATION_DIM].contains(&dim) || out.len() != RELATION_ROWS * dim {
+    if ![LEGACY_RELATION_DIM, RELATION_DIM, RELATION_DIM_V5].contains(&dim)
+        || out.len() != RELATION_ROWS * dim
+    {
         return Err(ObservationEncodeError::InvalidLength {
             field: "relations",
-            expected: RELATION_ROWS * RELATION_DIM,
+            expected: RELATION_ROWS * RELATION_DIM_V5,
             actual: out.len(),
         });
     }
@@ -605,7 +632,7 @@ pub fn encode_into(
     let definition =
         |reference: VisibleReference| reference.definition.map_or(0.0, |id| (id + 1) as f32);
     for (index, frame) in frames.iter().enumerate() {
-        let mut header = [0.0; RELATION_DIM];
+        let mut header = [0.0; RELATION_DIM_V5];
         header[0] = 1.0;
         header[1] = (index + 1) as f32;
         header[2] = frame.parent.map_or(0.0, |p| (p + 1) as f32);
@@ -629,6 +656,10 @@ pub fn encode_into(
         header[28] = frame.decision as f32;
         header[30] = frame.resolutions_this_turn as f32;
         header[31] = 1.0;
+        header[RELATION_X_INDEX] = f32::from(frame.x);
+        for (index, granted) in frame.granted_keywords.iter().enumerate() {
+            header[RELATION_KEYWORDS_INDEX + index] = f32::from(*granted);
+        }
         rows.next().unwrap().copy_from_slice(&header[..dim]);
         let mut reference_row = |kind: f32,
                                  reference: VisibleReference,
@@ -638,7 +669,7 @@ pub fn encode_into(
             let row = rows.next().unwrap();
             row.copy_from_slice(&header[..dim]);
             row[0] = kind;
-            if dim == RELATION_DIM {
+            if dim >= RELATION_DIM {
                 row[32] = legal.map_or(0.0, |value| if value { 1.0 } else { 2.0 });
             }
             row[22] = (clause + 1) as f32;

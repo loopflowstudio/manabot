@@ -114,8 +114,14 @@ checkpoints or experiment evidence.
   repository-wide type safety without a passing configured type check, or
   weaken types merely to silence one.
 - Native scalar/vector observation buffers bind continuation input semantics by
-  relation width: v2/v3 have 32 columns, v4 has 33; validity remains column 31.
+  relation width: v2/v3 have 32 columns, v4 has 33, v5 has 48; validity
+  remains column 31. V5 also widens player, card and permanent rows to 42.
   Preserve the frozen widths and derive buffers from `ObservationSpace`.
+- New observation state reaches the policy input (native and Python encoders
+  in parity), the LLM text observation and the learning tokens in the change
+  that adds it; a frozen policy-input version never silently falls behind.
+  `managym/tests/cards/observability.rs` names each `Observation` field's
+  tensor columns and fails to compile when a field is unlisted.
 - Saved observation configurations use `ObservationConfig.from_checkpoint` so
   an absent policy-input version retains v1 semantics. Fresh construction uses
   the current version. Keep version-specific zero/default exclusions stable:

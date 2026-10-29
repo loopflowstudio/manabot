@@ -49,6 +49,41 @@ LEGACY_RELATION_DIM = 32
 RELATION_DIM = 33
 # V4 appends eligibility; row validity keeps its v2/v3 position.
 RELATION_VALID_INDEX = 31
+# Policy input v5 encodes every Observation fact; managym's
+# observation_encoder.rs owns the layout and these mirror it exactly.
+RELATION_DIM_V5 = 48
+RELATION_X_INDEX = 33
+RELATION_KEYWORDS_INDEX = 34  # 14 granted spell keywords, KeywordData order
+PLAYER_TURN_INDEX = 40
+PLAYER_SEAT_INDEX = 41
+CARD_FACE_DOWN_INDEX = 40
+PERMANENT_STUN_INDEX = 27
+PERMANENT_FIRE_INDEX = 28
+PERMANENT_DOUBLE_STRIKE_COUNTERS_INDEX = 29
+# Object index + 1 of the attachment's host: a join, never a numeric feature.
+PERMANENT_ATTACHED_INDEX = 30
+PERMANENT_CHARACTERISTICS_SET_INDEX = 31
+PERMANENT_GRANTED_LAND_INDEX = 32
+PERMANENT_FIREBENDING_INDEX = 33
+PERMANENT_TEMP_SUBTYPES_INDEX = 34
+TEMP_SUBTYPES = ("Plains", "Island", "Swamp", "Mountain", "Forest", "Construct")
+PERMANENT_OTHER_TEMP_SUBTYPES_INDEX = 40
+KEYWORD_FIELDS = (
+    "flying",
+    "reach",
+    "haste",
+    "flash",
+    "vigilance",
+    "trample",
+    "first_strike",
+    "double_strike",
+    "deathtouch",
+    "lifelink",
+    "defender",
+    "menace",
+    "hexproof",
+    "indestructible",
+)
 
 
 # -----------------------------------------------------------------------------
@@ -63,8 +98,13 @@ class ObservationEncoder:
 
     def __init__(self, config: ObservationConfig) -> None:
         self.config = config
+        self.shows_everything = config.policy_input_version >= 5
         self.relation_dim = (
-            RELATION_DIM if config.policy_input_version >= 4 else LEGACY_RELATION_DIM
+            RELATION_DIM_V5
+            if self.shows_everything
+            else RELATION_DIM
+            if config.policy_input_version >= 4
+            else LEGACY_RELATION_DIM
         )
         self.cards_per_player = config.max_cards_per_player
         self.perms_per_player = config.max_permanents_per_player
@@ -81,18 +121,28 @@ class ObservationEncoder:
 
         # Define dimensions for players, cards, permanents.
         # Player: life + is_active + zones + phase/step one-hots + gy
-        # lessons + until-end-of-combat mana + pooled and spend-restricted colors.
-        self.player_dim = 2 + self.num_zones + self.num_phases + self.num_steps + 14
+        # lessons + until-end-of-combat mana + pooled and spend-restricted colors;
+        # v5: turn number and seat.
+        self.player_dim = (
+            2 + self.num_zones + self.num_phases + self.num_steps + 14
+        ) + 2 * self.shows_everything
         # Card: zone one-hot + is_mine + P/T + mana value + 6 type flags +
         # 12 keywords + is_token/is_ally/is_lesson tags + ward flag/cost +
-        # kicker flag/cost + hexproof + outside + indestructible + legendary + validity.
-        self.card_dim = (self.num_zones + 1 + 2 + 1 + 6 + 12 + 3 + 4 + 1) + 4
+        # kicker flag/cost + hexproof + outside + indestructible + legendary;
+        # v5: face down; validity.
+        self.card_dim = (
+            (self.num_zones + 1 + 2 + 1 + 6 + 12 + 3 + 4 + 1)
+            + 4
+            + self.shows_everything
+        )
         # Permanent: is_mine, tapped, damage, summoning sick, +1/+1 counters,
         # can't-be-blocked-this-turn, effective power/toughness, animated
         # (earthbent land), exile-linkage (Jailer), 13 effective-keyword flags
         # (printed + until-EOT grants), death-to-exile replacement, definition,
-        # temporary Avatar subtype, validity.
-        self.permanent_dim = 28
+        # temporary Avatar subtype; v5: stun/fire/double-strike counters,
+        # attachment join, effect-set characteristics, granted land,
+        # firebending, temporary subtypes; validity.
+        self.permanent_dim = 42 if self.shows_everything else 28
         self.event_dim = 12 if config.policy_history_version == 1 else 7
 
         # Preserve attack/decline independently of action family and focus.
@@ -241,6 +291,17 @@ class ObservationEncoder:
             ("opponent_permanents", obs.opponent_permanents, 0.0),
         ):
             out[key] = self._encode_perms(perms, is_mine=is_mine)
+        if self.shows_everything:
+            # Hosts may be listed after their attachments, so links follow indexing.
+            for key, perms in (
+                ("agent_permanents", obs.agent_permanents),
+                ("opponent_permanents", obs.opponent_permanents),
+            ):
+                for row, perm in enumerate(perms):
+                    if perm.attached_to is not None:
+                        out[key][row, PERMANENT_ATTACHED_INDEX] = (
+                            self.object_to_index.get(perm.attached_to, -1) + 1
+                        )
 
         # Validity masks
         out["agent_player_valid"] = np.ones((1,), dtype=np.float32)
@@ -315,6 +376,11 @@ class ObservationEncoder:
             row[30] = frame.resolutions_this_turn
             row[28] = frame.decision
             row[RELATION_VALID_INDEX] = 1
+            if self.shows_everything:
+                row[RELATION_X_INDEX] = frame.x
+                row[RELATION_KEYWORDS_INDEX : RELATION_KEYWORDS_INDEX + 14] = (
+                    frame.granted_keywords
+                )
             rows.append(row)
             for ordinal, target in enumerate(frame.targets, 1):
                 target_row = row.copy()
@@ -323,7 +389,7 @@ class ObservationEncoder:
                     target.clause + 1,
                     ordinal,
                 )
-                if self.config.policy_input_version >= 4:
+                if self.relation_dim >= RELATION_DIM:
                     legal = target.legal_at_resolution_start
                     target_row[32] = 0 if legal is None else (1 if legal else 2)
                 _reference(target_row, target.reference)
@@ -384,6 +450,10 @@ class ObservationEncoder:
 
         arr[28:34] = np.asarray(player.mana, dtype=np.float32) / 10.0
         arr[34:40] = np.asarray(player.lesson_mana, dtype=np.float32) / 10.0
+        if self.shows_everything:
+            arr[PLAYER_TURN_INDEX] = float(turn.turn_number) / 20.0
+            # Seat 0 is on the play.
+            arr[PLAYER_SEAT_INDEX] = float(player.player_index)
 
         self.object_to_index[player.id] = self.current_object_index
         self.current_object_index += 1
@@ -469,6 +539,8 @@ class ObservationEncoder:
         arr[i] = float(card.keywords.hexproof)
         arr[38] = float(card.keywords.indestructible)
         arr[39] = float(card.is_legendary)
+        if self.shows_everything:
+            arr[CARD_FACE_DOWN_INDEX] = float(card.face_down)
         # Set validity flag (card exists)
         arr[-1] = 1.0
         return arr
@@ -520,6 +592,26 @@ class ObservationEncoder:
         arr[25] = float(perm.keywords.indestructible)
         arr[26] = float("Avatar" in perm.temp_subtypes)
         arr[PERMANENT_DEFINITION_INDEX] = perm.registry_key + 1
+        if self.shows_everything:
+            arr[PERMANENT_STUN_INDEX] = float(perm.stun_counters) / 10.0
+            arr[PERMANENT_FIRE_INDEX] = float(perm.fire_counters) / 10.0
+            arr[PERMANENT_DOUBLE_STRIKE_COUNTERS_INDEX] = (
+                float(perm.double_strike_counters) / 10.0
+            )
+            # PERMANENT_ATTACHED_INDEX is written once every object is indexed.
+            arr[PERMANENT_CHARACTERISTICS_SET_INDEX] = float(
+                perm.name is not None or perm.creature_types is not None
+            )
+            arr[PERMANENT_GRANTED_LAND_INDEX] = float(perm.is_granted_land)
+            arr[PERMANENT_FIREBENDING_INDEX] = float(perm.firebending) / 10.0
+            for offset, subtype in enumerate(TEMP_SUBTYPES):
+                arr[PERMANENT_TEMP_SUBTYPES_INDEX + offset] = float(
+                    subtype in perm.temp_subtypes
+                )
+            arr[PERMANENT_OTHER_TEMP_SUBTYPES_INDEX] = sum(
+                subtype != "Avatar" and subtype not in TEMP_SUBTYPES
+                for subtype in perm.temp_subtypes
+            )
         # Set validity flag (permanent exists)
         arr[-1] = 1.0
         return arr

@@ -48,7 +48,7 @@ def test_match_config_candidate_finishes_with_complete_native_and_python_encodin
     if reverse:
         match = match.swapped()
     space = ObservationSpace()
-    assert space.encoder.permanent_dim == 28
+    assert space.encoder.permanent_dim == 42
     assert managym.WORLD_VERSION == "w13"
     env = Env(match, space, Reward(RewardConfig()), seed=seed)
     obs, _ = env.reset(seed=seed)
