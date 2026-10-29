@@ -1,7 +1,7 @@
 # T3 — characteristics, counters, replacements, attachments (Task 6875f0)
 
 Brief: the Task directive (49 cards, obligations in `docs/rules/tla/allocation.jsonl`,
-`planned_pr == "T3"`). Stacked on T1 (892c47, PR #394 at `be2b7586b`); build beside
+`planned_pr == "T3"`). Stacked on T1 (892c47, PR #394 head `86ebe9ccf`); build beside
 T2 and reconcile shared costs before landing. Every merge needs Jack Heart's review.
 Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
 
@@ -100,7 +100,7 @@ Schema 8 (unreleased, T1 precedent) appended in place: fields 85-99, predicates
 quantities 5-7, trigger_event 13, subtypes 64-75.
 `scratch/add_fixture.py` copies pinned evidence into the conformance fixture.
 
-Check (items 15-16, debug; cards 59, rules_tests 356): `cargo test`
+Check (items 15-16, debug; cards 59, rules_tests 356 re-run at `2b86ca7d8`): `cargo test`
 all targets pass (lib 120) except `semantic_conformance_tests` (w16 vs w15, digest drift, as
 PR #394 CI 40819903624); clippy, fmt clean; extension rebuilt; `pytest
 tests/semantic` 158 pass, 4 fail on `be2b7586b`'s `schema_version` asserts.
@@ -126,10 +126,8 @@ Accepted model: a permanent's characteristics are what `Game` derives from them
 (`ScopeView` layers, `has_lost_abilities`, `permanent_name`,
 `permanent_has_subtype`, `activated_abilities_for`); `Permanent` and `Card`
 fields are inputs, never answers. Slice 14 applied that rule to ability loss.
-Two consequences follow from that rule and the Task's acceptance criteria, with no new product choice:
-
-1. **One tap/attack-eligibility authority**: done as item 15.
-2. **One observation change before landing.** The acceptance criteria say observations stay
+Two consequences follow, with no new product choice: one tap authority (item 15),
+and **one observation change before landing.** The acceptance criteria say observations stay
    "complete", and Jack Heart's shared-decision-surface direction says the same, so the
    "later shape change" deferrals in `scratch/questions.md` belong to this
    Task, not another one. After the T2 sync, add them in one change built on T2's
@@ -142,11 +140,16 @@ Two consequences follow from that rule and the Task's acceptance criteria, with 
    frozen widths are unchanged), and the world/observation validation in
    CLAUDE.md applies.
 
-Next implement order: (1) and (2) done (items 15, 16); (3) the T2 sync per the
-list below; (4) Glider Staff and Crashing Wave on T2's airbend and
+Next implement order: (3) the T2 sync per the list below; (4) Glider Staff and Crashing Wave on T2's airbend and
 waterbend; (5) the observation change with Fire Nation Palace.
 
-## Reconcile at sync (T2 87e012 at `65544f0ff`, 2026-10-29)
+## Reconcile at sync (T2 87e012, PR #398 on T1, head `16dfd3dbb`, 2026-10-29)
+
+- World number: T2 `cd215fb83` records w16 in `WORLDS.md` (166 supported cards);
+  this branch's conformance drift is also w16 vs w15 with no `WORLDS.md` entry.
+  At the sync T3's world becomes the next number after T2's, with its own entry.
+- T2 `ee9e32383` bumped the text observation to `manabot-text-5` (restricted
+  mana); this Task's observation change builds on v5 and the policy-input version.
 
 - Both branches append to schema 8 from 86ebe9ccf with colliding numbers. T2:
   fields 85-96, predicates 13-15, subtypes 64-74, special role 6, opcodes 66-73,
@@ -166,7 +169,9 @@ waterbend; (5) the observation change with Fire Nation Palace.
 - Keep one exhaust field and gate (T2 field 87, here 89) and one with-counters
   predicate reading every `CounterKind` (T2 `with_counter` 13; here `no_counters`
   14 complements it). Merge T2's `tests/cards.rs`, `support.rs`, `tla.rs` with
-  these. Moving `tests/rules/tla_cards.rs` belongs to whichever PR lands it.
+  these. `tests/rules/tla_cards.rs` (one line added here) predates T2 and T3;
+  T2's recorded operator reading (`d7ea2cd17`) leaves its move to T1, so T3
+  reconciles with wherever it lives at the sync.
 - Both branches added `state::is_zero` (T2 `2673c95cd`, here `2598ddacf`); keep
   one. T2's foretell (`1144d0f32`) adds face-down exile to observations and
   protocol schemas; Fire Nation Palace's observation change should build on it.
