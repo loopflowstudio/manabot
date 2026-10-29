@@ -1,8 +1,9 @@
 # T3 — characteristics, counters, replacements, attachments (Task 6875f0)
 
 Brief: the Task directive (49 cards, obligations in `docs/rules/tla/allocation.jsonl`,
-`planned_pr == "T3"`). Stacked on T1 (892c47, PR #394; last synced at head `e403b8a1f`,
-merge `e5f26e23b`) and synced onto T2 (87e012, PR #398 head `16dfd3dbb`). Every merge needs Jack Heart's review.
+`planned_pr == "T3"`). Stacked on T1 (892c47, PR #394; last synced at head `8790821da`)
+and carrying T2 (87e012, PR #398 head `16dfd3dbb`; T2 has not yet synced onto that
+T1). Every merge needs Jack Heart's review.
 Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
 
 ## Done (49 of 49)
@@ -27,10 +28,8 @@ Per-item detail for items 1–22 is at
    grants (PyO3, protocol schemas, Academy types), then Academy and LLM text.
 21–22. Card tests in `tests/cards/<set>.rs` with shared `cards/support.rs`.
 
-Schema 8 (unreleased) is appended in place after T2's entries.
-`semantic_conformance_tests` fails on w15 receipts, and the CLAUDE.md world
-suite fails on `manabot/sim/registration.py` (w15 literal), frozen
-`schema_version` asserts and w13 pins. All are world-release evidence.
+`semantic_conformance_tests` fails on w15 receipts (world-release evidence,
+as on T1).
 One intermittent `structured_offers` failure is recorded in `scratch/questions.md`.
 
 ## Accepted model (concept reviews, 2026-10-29)
@@ -80,71 +79,38 @@ exhaustive guard, a directed test per mechanic and viewer-safety tests; cards
 become engine-type definitions (no authoring layer) on T1's sync, each with a
 Scryfall id.
 
-23. Policy input v5 (2026-10-29), the new default; v1–v4 byte-frozen.
-   - Layout (`observation_encoder.rs` owns it; `observation.py` mirrors):
-     player 42 (turn/20 at 40, seat at 41); card 42 (face down at 40);
-     permanent 42 (stun/fire/double-strike counters 27–29, attachment join
-     30, characteristics set 31, granted land 32, firebending 33, temporary
-     Plains/Island/Swamp/Mountain/Forest/Construct 34–39, other temporary
-     subtypes 40); relation 48 (`ContinuationFrame.x` at 33,
-     `granted_keywords` 34–47). Validity stays last (relation: 31).
-   - `ContinuationFrame` gains `x` (stack, announcement, payment and
-     resolution frames) and `granted_keywords` (stack spells), serde-omitted
-     at defaults; `KeywordData::flags()` gives field order.
-   - Model: the attachment column is a join (excluded from numeric features,
-     like the definition); zero-initialized `attachment_to_host` /
-     `host_to_attachment` exchange pre-attention embeddings both ways, v5 only.
-   - LLM text adds "face down" and stack "granted keywords" (present-only).
-   - Tests: `managym/tests/cards/observability.rs` (exhaustive guard; directed
-     pairs v4 cannot tell apart; viewer safety); Python native = reference
-     parity, attachment join, text guard over every pyclass field.
+23–25. Policy input v5 (2026-10-29), the new default; v1–v4 byte-frozen.
+   Layout constants live in `observation_encoder.rs` (Python mirrors them;
+   WORLDS.md w18 lists widths); `ContinuationFrame` gains `x` and
+   `granted_keywords`. The model joins attachment and blocking columns
+   (`PERMANENT_LINK_INDEXES`), not numeric features. Item 24 added the
+   state the `Observation` lacked (attacking, blocking, abilities lost, used
+   abilities, kept red mana, no maximum hand size); item 25 shows it in
+   Academy (`permanent-notes.ts`, PlayerArea) and the LLM text with the
+   same words, and adds directed LLM-text tests (Foretell, foretold casts,
+   Hakoda's library-top casts).
 
-24. Missing observation state (2026-10-29): `PermanentData.attacking`,
-   `blocking` (the attacker from `CombatState.attacker_to_blockers`),
-   `abilities_lost` (`has_lost_abilities`), `used_abilities` (indices in
-   `activated_abilities_for` whose `activation_used`), `PlayerData.
-   keeps_red_mana` and `no_maximum_hand_size`; serde-omitted at defaults,
-   PyO3 and `.pyi`. V5 edited in place: permanent 50 (attacking 41, blocking
-   join 42, abilities lost 43, used-ability flags 44–47 for indices 0–3,
-   later-index count 48), player 44 (kept red mana 42, no maximum hand size
-   43). The model's link join covers both permanent links
-   (`PERMANENT_LINK_INDEXES`, `link_to_target`/`link_from_target`). Text and
-   both guards list them; directed Rust tests for attacking, blocking A vs B,
-   lost abilities, spent exhaust and player flags.
-
-
-25. Academy and LLM text for item 24 (2026-10-29): `LegacyPermanentView`
-   gains `attacking`, `blocking`, `abilities_lost`, `used_abilities`;
-   `LegacyPlayerView` gains `keeps_red_mana`, `no_maximum_hand_size` (Rust,
-   Pydantic, six schemas regenerated, `types.ts`, projection omits at
-   defaults). `permanent-notes.ts` labels "attacking", "blocking X", "has lost
-   all abilities", "used-up abilities 1, 3" (the LLM text's words);
-   PlayerArea states kept red mana beside the mana pool and "No maximum hand
-   size" in the player bar. Directed LLM-text tests for the Foretell offer,
-   casting a foretold card on a later turn and casting an Ally from Hakoda's
-   library top; a live projection test for attack and block.
+26. Sync onto T1's one card representation (`8790821da`, 2026-10-29; Jack
+   Heart's steer). Every T2+T3 card and authoring `Op` is now an engine
+   `CardDefinition`/`Ability`/named `Effect` value: set files regenerated with
+   T1's `scratch/conversion/generate.py` (extended for `ManaUse`, restricted
+   mana, `{X}` and all `state` modules) from T3's lowering; all 254
+   definitions Debug-identical to it. 93 new Scryfall ids fetched. World w18
+   (T1's w17 is the representation). v1–v4 stay 28 wide; T1's v4 `attacking`
+   column moves to v5. Token closure walks serialized `token_name`s.
+   `SetCharacteristics.name` became `named` (tokens never carry a `name`
+   field). Tests now use T1's `tests/support/{game,play,inspect}.rs` (added:
+   `five_color_unfunded_setup`, `move_to_hand`, `cast_card`, `castable`,
+   `play_land`, `can_activate*`, `activate_card`, `has_action`,
+   `offered_targets`, `counters_of`); `observability.rs` joins T1's token
+   guards (106 `Effect`, 16 `TriggerCondition` witnesses, `Permanent`/`Player`
+   fields at v5 columns) with T3's v5 tensor guard.
 
 ## Remaining
 
-- After T1 (PR #394) publishes its authoring-layer removal: sync, convert
-  this batch's cards to engine-type definitions (no new authoring `Op`s), add
-  the learning-token half of the guard over `Effect`/`Ability`, and Scryfall
-  ids. T1's plan now lists all three as its Remaining 1–3 (owner: T1). Still
-  unpublished (2026-10-29): origin at `e403b8a1f`; T1's local `f9732c12f` also
-  files card tests by set, so the sync reconciles it with items 21–22.
-- World release items (registration literal stops at w15, w15 conformance
-  receipts, frozen `schema_version`/digest asserts, w13 pins) and browser proof.
+- World release items (w15 conformance receipts) and browser proof.
 
-Check (items 23–24, debug, before the e403b8a1f merge): `cargo test --no-fail-fast`
-passes except `semantic_conformance_tests` (w15 receipts); pytest 690 pass, 19 fail + 5 error, all
-world-release evidence or failing at `752c75ef7~1` too. The merge touched only
-`world.rs`: debug `cargo test --lib world::` 2 pass.
-Compress (after item 25): encoder card/permanent rows via `chunks_exact_mut`;
-the model's numeric permanent columns computed once. Debug `cargo test --lib
-agent::` 31 and `observability` 18 pass; pytest tests/model 176 pass. Native
-parity against a rebuilt `.so` is left to gate.
-Compress rerun (no code change since): scratch trimmed of superseded "observations
-don't show" notes and the stale support-map pointer.
-Check (item 25): vitest 115 pass, `npm run check` 0 errors (nvm node 24); pytest
-play modes, experience/study/advice/replay/server protocol 89 pass; text
-observation 29 pass; debug `experience_protocol_tests` 5 pass.
+Check (item 26, debug): `cargo test --no-fail-fast` passes except the w15
+`semantic_conformance_tests` pair; clippy `--all-targets -D warnings` clean.
+pytest: model+semantic+verify parity 374, CLAUDE.md world suite 66, Academy
+play/protocol 66, env+verify 182 pass.

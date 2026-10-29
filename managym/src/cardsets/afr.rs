@@ -1,88 +1,70 @@
 //! Adventures in the Forgotten Realms.
-use crate::cards::authoring::{
-    Card, CardType, Characteristics, Cost, Op, Predicate, Program, ProgramKind, Sacrifice,
-    Selector, Target,
+use crate::state::{
+    ability::{Effect, TargetSpec},
+    card::{CardDefinition, CardType, CardTypes, SacrificeCost},
+    mana::ManaCost,
+    predicate::CardPredicate,
 };
 
-pub(super) fn cards() -> Vec<Card> {
-    vec![power_word_kill(), deadly_dispute()]
+pub(super) fn cards() -> Vec<CardDefinition> {
+    vec![deadly_dispute(), power_word_kill()]
 }
 
-fn power_word_kill() -> Card {
-    let text_box = "Destroy target non-Angel, non-Demon, non-Devil, non-Dragon creature.";
+fn deadly_dispute() -> CardDefinition {
+    let text_box = "As an additional cost to cast this spell, sacrifice an artifact or creature.\nDraw two cards and create a Treasure token. (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")";
 
-    Card {
-        characteristics: Characteristics {
-            mana_cost: Some("{1}{B}"),
-            types: vec![CardType::Instant],
-            ..Default::default()
-        },
-        key: "afr.power_word_kill",
-        programs: vec![Program::new(
-            "spell",
-            ProgramKind::Spell,
-            vec![Op::Destroy { target: "target_0" }],
-        )
-        .cost(Cost::mana("{1}{B}"))
-        .targets(vec![Target::one(
-            "target_0",
-            Selector::Permanent {
-                predicate: Predicate::All {
-                    predicates: vec![
-                        Predicate::NotSubtypes {
-                            values: vec!["Angel", "Demon", "Devil", "Dragon"],
-                        },
-                        Predicate::CardType {
-                            value: CardType::Creature,
-                        },
-                    ],
-                },
+    CardDefinition {
+        key: "afr.deadly_dispute",
+        scryfall_id: "7373fe95-ad1c-44b9-8c7f-464ce8cbffc6",
+        name: "Deadly Dispute".into(),
+        mana_cost: Some(ManaCost::parse("{1}{B}")),
+        types: CardTypes::new([CardType::Instant]),
+        sacrifice_cost: Some(SacrificeCost {
+            predicate: CardPredicate {
+                card_types_any: vec![CardType::Artifact, CardType::Creature],
+                ..Default::default()
             },
-        )])
-        .inferred()],
-        registry_name: "Power Word Kill",
-        text_box,
+            another: false,
+            or_mana: None,
+        }),
+        spell_effects: vec![
+            Effect::DrawCards { count: 2 },
+            Effect::CreateToken {
+                token_name: "Treasure".into(),
+                count: 1,
+                tapped_and_attacking: false,
+                attach_source: false,
+            },
+        ],
+        text_box: text_box.into(),
+        ..Default::default()
     }
 }
 
-fn deadly_dispute() -> Card {
-    let text_box = "As an additional cost to cast this spell, sacrifice an artifact or creature.\nDraw two cards and create a Treasure token. (It's an artifact with \"{T}, Sacrifice this token: Add one mana of any color.\")";
+fn power_word_kill() -> CardDefinition {
+    let text_box = "Destroy target non-Angel, non-Demon, non-Devil, non-Dragon creature.";
 
-    Card {
-        characteristics: Characteristics {
-            mana_cost: Some("1B"),
-            subtypes: Some(vec![]),
-            types: vec![CardType::Instant],
-            keywords: Some(vec![]),
-            token: Some(false),
-            supertypes: Some(vec![]),
-            ..Default::default()
-        },
-        key: "afr.deadly_dispute",
-        programs: vec![Program::new(
-            "p0",
-            ProgramKind::Spell,
-            vec![
-                Op::DrawCards { count: 2 },
-                Op::CreateToken {
-                    count: 1,
-                    definition_ref: "token.treasure",
-                    tapped_and_attacking: Some(false),
+    CardDefinition {
+        key: "afr.power_word_kill",
+        scryfall_id: "395b6ce4-143f-4eed-b565-98aa3d6208ef",
+        name: "Power Word Kill".into(),
+        mana_cost: Some(ManaCost::parse("{1}{B}")),
+        types: CardTypes::new([CardType::Instant]),
+        spell_effects: vec![Effect::Destroy {
+            target: TargetSpec::Permanent {
+                predicate: CardPredicate {
+                    not_subtypes: vec![
+                        "Angel".into(),
+                        "Demon".into(),
+                        "Devil".into(),
+                        "Dragon".into(),
+                    ],
+                    card_type: Some(CardType::Creature),
+                    ..Default::default()
                 },
-            ],
-        )
-        .cost(Cost {
-            mana: Some("1B"),
-            sacrifice: Some(Sacrifice {
-                another: false,
-                or_mana: None,
-                predicate: Predicate::TypesAny {
-                    values: vec![CardType::Artifact, CardType::Creature],
-                },
-            }),
-            ..Default::default()
-        })],
-        registry_name: "Deadly Dispute",
-        text_box,
+            },
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
     }
 }

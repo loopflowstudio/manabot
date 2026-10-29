@@ -26,6 +26,9 @@ type WorldVersion = Literal[
     "w13",
     "w14",
     "w15",
+    "w16",
+    "w17",
+    "w18",
 ]
 
 

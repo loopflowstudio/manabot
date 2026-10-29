@@ -1,12 +1,22 @@
-//! Ice Age (`src/cardsets/ice.rs`).
-use crate::helpers::{ogre_deck, pyroclasm_deck, Scenario};
+//! Tests for cards filed in `src/cardsets/ice.rs`, in card order.
+
+use crate::support::game::{deck, deck_of, Scenario};
 use managym::{agent::action::ActionType, flow::turn::StepKind};
 
 /// Pyroclasm deals 2 damage to each creature on both sides; creatures with
 /// toughness <= 2 die via state-based actions, tougher ones survive.
 #[test]
 fn pyroclasm_kills_small_creatures_on_both_sides() {
-    let mut s = Scenario::new(pyroclasm_deck(), ogre_deck(), 1213);
+    let mut s = Scenario::new(
+        deck(&[
+            ("Mountain", 20),
+            ("Pyroclasm", 8),
+            ("Gray Ogre", 6),
+            ("Wall of Stone", 6),
+        ]),
+        deck_of("Mountain", "Gray Ogre"),
+        1213,
+    );
 
     // Two mountains over two turns to afford 1R.
     s.advance_to_active_step(0, StepKind::Main);

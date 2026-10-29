@@ -9,7 +9,7 @@ use managym::{
         viewer_observation, CanonicalWorldQuery, ConditioningError, CountQuery, MaterializeError,
         MaterializeMode, PossibleWorldSpace, WorldQuery,
     },
-    semantic::SemanticPack,
+    semantic::setups::authored_pack,
     state::game_object::PlayerId,
     state::player::PlayerConfig,
     state::zone::ZoneType,
@@ -34,7 +34,7 @@ fn local_binom(n: u32, k: u32) -> u128 {
 }
 
 fn authored_match() -> Game {
-    let semantic = SemanticPack::current("two_deck").expect("checked-in semantic IR parses");
+    let semantic = authored_pack("two_deck").unwrap();
     let configs = vec![
         PlayerConfig::new(
             "UR Lessons",

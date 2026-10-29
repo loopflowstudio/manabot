@@ -1,10 +1,9 @@
-//! Strixhaven: School of Mages (`src/cardsets/stx.rs`).
-use crate::{
-    helpers::Scenario,
-    support::{
-        cast, cast_and_resolve, cast_only, clear_hand, deck, force_lands, hand_of, library,
-        library_card, pass_until, permanent_state, settle, setup, stack_spell_card,
-    },
+//! Tests for cards filed in `src/cardsets/stx.rs`, in card order.
+
+use crate::support::{
+    game::{clear_hand, deck, five_color_setup, force_lands, Scenario},
+    inspect::{hand, library, library_card, permanent, stack_spell_card},
+    play::{cast, cast_and_resolve, cast_only, pass_until, settle},
 };
 use managym::{
     agent::{
@@ -22,114 +21,114 @@ use managym::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-// ---------------------------------------------------------------------------
-// Ward (Waterfall Aerialist) — triggered PAY_OR_NOT on being targeted.
-// ---------------------------------------------------------------------------
-
-fn ward_setup(seed: u64, p1_mountains: usize) -> (Scenario, PermanentId) {
+#[test]
+fn divide_by_zero_bounces_spell_from_stack() {
     let mut s = Scenario::new(
-        deck(&[
-            ("Island", 12),
-            ("Mountain", 12),
-            ("Waterfall Aerialist", 8),
-            ("Lightning Bolt", 8),
-        ]),
-        deck(&[("Mountain", 24), ("Lightning Bolt", 16)]),
-        seed,
+        deck(&[("Island", 24), ("Divide by Zero", 16)]),
+        deck(&[("Mountain", 24), ("Gray Ogre", 16)]),
+        61,
     );
-    let aerialist = s.force_permanent_on_battlefield(0, "Waterfall Aerialist");
-    force_lands(&mut s, 1, "Mountain", p1_mountains);
+    force_lands(&mut s, 0, "Island", 3);
+    force_lands(&mut s, 1, "Mountain", 3);
     clear_hand(&mut s, 0);
     clear_hand(&mut s, 1);
-    s.force_card_in_hand(1, "Lightning Bolt");
+    s.force_card_in_hand(0, "Divide by Zero");
+    s.force_card_in_hand(1, "Gray Ogre");
     s.advance_to_active_step(1, StepKind::Main);
-    cast_only(&mut s); // P1 casts Lightning Bolt
-    s.choose_target_named("Waterfall Aerialist");
-    // Ward trigger goes on the stack above the bolt; let it resolve.
+    cast_only(&mut s); // P1 casts Gray Ogre
+    s.pass_priority();
+    cast_only(&mut s); // P0 responds with Divide by Zero
+    let ogre = stack_spell_card(&s, "Gray Ogre");
+    assert!(s.choose_target(Target::StackSpell(ogre)));
     s.pass_priority();
     s.pass_priority();
-    (s, aerialist)
-}
 
-#[test]
-fn ward_asks_spell_controller_and_counters_on_decline() {
-    let (mut s, aerialist) = ward_setup(101, 3);
-    let space = s.action_space().clone();
-    assert_eq!(space.kind, ActionSpaceKind::PayOrNot);
-    assert_eq!(
-        space.player,
-        Some(PlayerId(1)),
-        "the bolt's controller pays"
-    );
+    // The Ogre spell was bounced to its owner's hand, not countered.
+    assert_eq!(s.game().state.zones.zone_of(ogre), Some(ZoneType::Hand));
+    assert_eq!(s.zone_size(1, ZoneType::Graveyard), 0);
+    // Learn rider.
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Learn);
     assert!(s.take_action_by_type(ActionType::DeclineChoice));
-
-    // The bolt was countered.
     assert_eq!(s.game().state.stack_objects.len(), 0);
-    assert_eq!(s.zone_size(1, ZoneType::Graveyard), 1);
-    assert_eq!(permanent_state(&s, aerialist).damage, 0);
 }
 
 #[test]
-fn ward_paid_lets_the_spell_resolve() {
-    let (mut s, _aerialist) = ward_setup(102, 3);
-    assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
-    assert!(s.take_action_by_type(ActionType::PayCost));
-    s.pass_priority();
-    s.pass_priority();
-    // Bolt resolved: 3 damage kills the 3/1 Aerialist (lethal SBA).
-    assert_eq!(
-        s.battlefield_permanents_named(0, "Waterfall Aerialist")
-            .len(),
-        0
-    );
-    assert_eq!(s.zone_size(0, ZoneType::Graveyard), 1);
-}
-
-#[test]
-fn ward_does_not_trigger_for_controllers_own_spell() {
+fn divide_by_zero_bounces_permanent_but_not_lands() {
     let mut s = Scenario::new(
-        deck(&[
-            ("Island", 12),
-            ("Mountain", 12),
-            ("Waterfall Aerialist", 8),
-            ("Lightning Bolt", 8),
-        ]),
-        deck(&[("Plains", 40)]),
-        103,
+        deck(&[("Island", 24), ("Divide by Zero", 16)]),
+        deck(&[("Mountain", 24), ("Gray Ogre", 16)]),
+        62,
     );
-    let _aerialist = s.force_permanent_on_battlefield(0, "Waterfall Aerialist");
-    force_lands(&mut s, 0, "Mountain", 1);
+    force_lands(&mut s, 0, "Island", 3);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
     clear_hand(&mut s, 0);
-    s.force_card_in_hand(0, "Lightning Bolt");
+    clear_hand(&mut s, 1);
+    s.force_card_in_hand(0, "Divide by Zero");
     s.advance_to_active_step(0, StepKind::Main);
     cast_only(&mut s);
-    s.choose_target_named("Waterfall Aerialist");
+
+    // Lands (mana value 0) are not legal targets; the Ogre is.
+    let space = s.action_space().clone();
+    assert_eq!(space.kind, ActionSpaceKind::ChooseTarget);
+    assert_eq!(space.actions.len(), 1, "only the Gray Ogre is targetable");
+    assert!(s.choose_target(Target::Permanent(ogre)));
     s.pass_priority();
     s.pass_priority();
-    // No ward pay-or-not; the bolt resolved directly and killed the 3/1.
-    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
-    assert_eq!(
-        s.battlefield_permanents_named(0, "Waterfall Aerialist")
-            .len(),
-        0
-    );
+    assert_eq!(s.battlefield_permanents_named(1, "Gray Ogre").len(), 0);
+    assert_eq!(s.zone_size(1, ZoneType::Hand), 1);
+    assert!(s.take_action_by_type(ActionType::DeclineChoice));
 }
 
 #[test]
-fn professors_enter_and_offer_learn_before_priority_returns() {
-    for name in ["Professor of Symbology", "Gnarled Professor"] {
-        let mut s = setup(&[name]);
+fn targeted_combat_tricks_apply_through_play() {
+    for name in ["Enthusiastic Study", "Octopus Form", "Fists of Flame"] {
+        let mut s = five_color_setup(&[name, "Gnarled Professor"]);
+        let target = s.force_permanent_on_battlefield(0, "Gnarled Professor");
         cast(&mut s, name);
-        pass_until(&mut s, ActionSpaceKind::Learn);
-        assert_eq!(s.battlefield_permanents_named(0, name).len(), 1);
+        assert!(s.choose_target(Target::Permanent(target)));
         settle(&mut s);
+        let data = Observation::for_player(s.game(), PlayerId(0));
+        let p = data
+            .agent_permanents
+            .iter()
+            .find(|p| p.id == s.game().state.permanents[target].as_ref().unwrap().id.0 as i32)
+            .unwrap();
+        if name == "Octopus Form" {
+            assert!(p.keywords.hexproof);
+            assert_eq!(s.game().effective_power(target), 6);
+        } else {
+            assert!(p.keywords.trample);
+            assert!(s.game().effective_power(target) > 5);
+        }
+        if name == "Enthusiastic Study" {
+            assert_eq!(s.game().effective_power(target), 8);
+        }
+    }
+}
+
+#[test]
+fn eyetwitch_and_poxbearer_deaths_keep_their_different_rewards() {
+    for name in ["Eyetwitch", "Pretending Poxbearers", "Knowledge Seeker"] {
+        let mut s = five_color_setup(&[name, "Lightning Strike"]);
+        let target = s.force_permanent_on_battlefield(0, name);
+        cast(&mut s, "Lightning Strike");
+        assert!(s.choose_target(Target::Permanent(target)));
+        settle(&mut s);
+        assert!(s.game().state.permanents[target].is_none());
+        match name {
+            "Pretending Poxbearers" => {
+                assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 1)
+            }
+            "Knowledge Seeker" => assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1),
+            _ => assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 0),
+        }
     }
 }
 
 #[test]
 fn library_search_is_private_enters_tapped_and_continues_to_learn() {
     for (name, forest) in [("Field Trip", true), ("Shared Roots", false)] {
-        let mut s = setup(&[name]);
+        let mut s = five_color_setup(&[name]);
         cast(&mut s, name);
         s.pass_priority();
         s.pass_priority();
@@ -183,7 +182,7 @@ fn library_search_is_private_enters_tapped_and_continues_to_learn() {
 #[test]
 fn search_selection_or_decline_and_shuffle_restore_exactly_under_undo() {
     use managym::search_state::{BenchCommand, BranchDriver, ClonePlusUndoDriver};
-    let mut s = setup(&["Field Trip"]);
+    let mut s = five_color_setup(&["Field Trip"]);
     cast(&mut s, "Field Trip");
     s.pass_priority();
     s.pass_priority();
@@ -223,54 +222,8 @@ fn search_selection_or_decline_and_shuffle_restore_exactly_under_undo() {
 }
 
 #[test]
-fn targeted_combat_tricks_apply_through_play() {
-    for name in ["Enthusiastic Study", "Octopus Form", "Fists of Flame"] {
-        let mut s = setup(&[name, "Gnarled Professor"]);
-        let target = s.force_permanent_on_battlefield(0, "Gnarled Professor");
-        cast(&mut s, name);
-        assert!(s.choose_target(Target::Permanent(target)));
-        settle(&mut s);
-        let data = Observation::for_player(s.game(), PlayerId(0));
-        let p = data
-            .agent_permanents
-            .iter()
-            .find(|p| p.id == s.game().state.permanents[target].as_ref().unwrap().id.0 as i32)
-            .unwrap();
-        if name == "Octopus Form" {
-            assert!(p.keywords.hexproof);
-            assert_eq!(s.game().effective_power(target), 6);
-        } else {
-            assert!(p.keywords.trample);
-            assert!(s.game().effective_power(target) > 5);
-        }
-        if name == "Enthusiastic Study" {
-            assert_eq!(s.game().effective_power(target), 8);
-        }
-    }
-}
-
-#[test]
-fn eyetwitch_and_poxbearer_deaths_keep_their_different_rewards() {
-    for name in ["Eyetwitch", "Pretending Poxbearers", "Knowledge Seeker"] {
-        let mut s = setup(&[name, "Lightning Strike"]);
-        let target = s.force_permanent_on_battlefield(0, name);
-        cast(&mut s, "Lightning Strike");
-        assert!(s.choose_target(Target::Permanent(target)));
-        settle(&mut s);
-        assert!(s.game().state.permanents[target].is_none());
-        match name {
-            "Pretending Poxbearers" => {
-                assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 1)
-            }
-            "Knowledge Seeker" => assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1),
-            _ => assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 0),
-        }
-    }
-}
-
-#[test]
 fn resampled_private_search_choices_still_name_library_cards() {
-    let mut s = setup(&["Field Trip"]);
+    let mut s = five_color_setup(&["Field Trip"]);
     cast(&mut s, "Field Trip");
     s.pass_priority();
     s.pass_priority();
@@ -313,7 +266,7 @@ fn resampled_private_search_choices_still_name_library_cards() {
 fn library_search_semantic_command_replays_and_rejects_reuse_without_mutation() {
     use managym::decision::Command;
     use managym::search_state::witness;
-    let mut s = setup(&["Field Trip"]);
+    let mut s = five_color_setup(&["Field Trip"]);
     cast(&mut s, "Field Trip");
     s.pass_priority();
     s.pass_priority();
@@ -337,7 +290,7 @@ fn library_search_semantic_command_replays_and_rejects_reuse_without_mutation() 
 #[test]
 fn search_possible_worlds_refresh_private_candidates_without_exposing_library_cards() {
     use managym::possible_worlds::{MaterializeMode, PossibleWorldSpace};
-    let mut s = setup(&["Field Trip"]);
+    let mut s = five_color_setup(&["Field Trip"]);
     let hand = library_card(&s, 0, "Forest");
     s.game_mut().move_card(hand, ZoneType::Hand);
     cast(&mut s, "Field Trip");
@@ -366,9 +319,25 @@ fn search_possible_worlds_refresh_private_candidates_without_exposing_library_ca
     }
 }
 
-// ---------------------------------------------------------------------------
-// Learn (Pop Quiz / Igneous Inspiration) and Divide by Zero.
-// ---------------------------------------------------------------------------
+#[test]
+fn igneous_inspiration_deals_three_then_learns() {
+    let mut s = Scenario::new(
+        deck(&[("Mountain", 24), ("Igneous Inspiration", 16)]),
+        deck(&[("Plains", 40)]),
+        53,
+    );
+    force_lands(&mut s, 0, "Mountain", 3);
+    clear_hand(&mut s, 0);
+    s.force_card_in_hand(0, "Igneous Inspiration");
+    s.advance_to_active_step(0, StepKind::Main);
+    cast_only(&mut s);
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    s.pass_priority();
+    s.pass_priority();
+    s.assert_life(1, 17);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Learn);
+    assert!(s.take_action_by_type(ActionType::DeclineChoice));
+}
 
 #[test]
 fn pop_quiz_draws_then_learn_discard_draws() {
@@ -388,7 +357,7 @@ fn pop_quiz_draws_then_learn_discard_draws() {
     assert_eq!(space.kind, ActionSpaceKind::Learn);
     assert_eq!(space.player, Some(PlayerId(0)));
     // One action per hand card plus a decline.
-    let hand_size = hand_of(&s, 0).len();
+    let hand_size = hand(&s, 0).len();
     assert_eq!(space.actions.len(), hand_size + 1);
     assert_eq!(
         space.actions.last().map(Action::action_type),
@@ -398,7 +367,7 @@ fn pop_quiz_draws_then_learn_discard_draws() {
     assert!(s.take_action_by_type(ActionType::LearnDiscard));
     // Discarded one, drew one: hand size unchanged; graveyard has the
     // discarded card + Pop Quiz.
-    assert_eq!(hand_of(&s, 0).len(), hand_size);
+    assert_eq!(hand(&s, 0).len(), hand_size);
     assert_eq!(s.zone_size(0, ZoneType::Graveyard), 2);
     assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
 }
@@ -416,9 +385,9 @@ fn pop_quiz_learn_can_be_declined() {
     s.advance_to_active_step(0, StepKind::Main);
     cast_and_resolve(&mut s);
     assert_eq!(s.action_space().kind, ActionSpaceKind::Learn);
-    let hand_size = hand_of(&s, 0).len();
+    let hand_size = hand(&s, 0).len();
     assert!(s.take_action_by_type(ActionType::DeclineChoice));
-    assert_eq!(hand_of(&s, 0).len(), hand_size, "no discard, no draw");
+    assert_eq!(hand(&s, 0).len(), hand_size, "no discard, no draw");
     assert_eq!(s.zone_size(0, ZoneType::Graveyard), 1); // just Pop Quiz
 }
 
@@ -568,84 +537,6 @@ fn discard_public_commitment_materialization_rebuilds_hypothetical_hand() {
 }
 
 #[test]
-fn igneous_inspiration_deals_three_then_learns() {
-    let mut s = Scenario::new(
-        deck(&[("Mountain", 24), ("Igneous Inspiration", 16)]),
-        deck(&[("Plains", 40)]),
-        53,
-    );
-    force_lands(&mut s, 0, "Mountain", 3);
-    clear_hand(&mut s, 0);
-    s.force_card_in_hand(0, "Igneous Inspiration");
-    s.advance_to_active_step(0, StepKind::Main);
-    cast_only(&mut s);
-    assert!(s.choose_target(Target::Player(PlayerId(1))));
-    s.pass_priority();
-    s.pass_priority();
-    s.assert_life(1, 17);
-    assert_eq!(s.action_space().kind, ActionSpaceKind::Learn);
-    assert!(s.take_action_by_type(ActionType::DeclineChoice));
-}
-
-#[test]
-fn divide_by_zero_bounces_spell_from_stack() {
-    let mut s = Scenario::new(
-        deck(&[("Island", 24), ("Divide by Zero", 16)]),
-        deck(&[("Mountain", 24), ("Gray Ogre", 16)]),
-        61,
-    );
-    force_lands(&mut s, 0, "Island", 3);
-    force_lands(&mut s, 1, "Mountain", 3);
-    clear_hand(&mut s, 0);
-    clear_hand(&mut s, 1);
-    s.force_card_in_hand(0, "Divide by Zero");
-    s.force_card_in_hand(1, "Gray Ogre");
-    s.advance_to_active_step(1, StepKind::Main);
-    cast_only(&mut s); // P1 casts Gray Ogre
-    s.pass_priority();
-    cast_only(&mut s); // P0 responds with Divide by Zero
-    let ogre = stack_spell_card(&s, "Gray Ogre");
-    assert!(s.choose_target(Target::StackSpell(ogre)));
-    s.pass_priority();
-    s.pass_priority();
-
-    // The Ogre spell was bounced to its owner's hand, not countered.
-    assert_eq!(s.game().state.zones.zone_of(ogre), Some(ZoneType::Hand));
-    assert_eq!(s.zone_size(1, ZoneType::Graveyard), 0);
-    // Learn rider.
-    assert_eq!(s.action_space().kind, ActionSpaceKind::Learn);
-    assert!(s.take_action_by_type(ActionType::DeclineChoice));
-    assert_eq!(s.game().state.stack_objects.len(), 0);
-}
-
-#[test]
-fn divide_by_zero_bounces_permanent_but_not_lands() {
-    let mut s = Scenario::new(
-        deck(&[("Island", 24), ("Divide by Zero", 16)]),
-        deck(&[("Mountain", 24), ("Gray Ogre", 16)]),
-        62,
-    );
-    force_lands(&mut s, 0, "Island", 3);
-    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
-    clear_hand(&mut s, 0);
-    clear_hand(&mut s, 1);
-    s.force_card_in_hand(0, "Divide by Zero");
-    s.advance_to_active_step(0, StepKind::Main);
-    cast_only(&mut s);
-
-    // Lands (mana value 0) are not legal targets; the Ogre is.
-    let space = s.action_space().clone();
-    assert_eq!(space.kind, ActionSpaceKind::ChooseTarget);
-    assert_eq!(space.actions.len(), 1, "only the Gray Ogre is targetable");
-    assert!(s.choose_target(Target::Permanent(ogre)));
-    s.pass_priority();
-    s.pass_priority();
-    assert_eq!(s.battlefield_permanents_named(1, "Gray Ogre").len(), 0);
-    assert_eq!(s.zone_size(1, ZoneType::Hand), 1);
-    assert!(s.take_action_by_type(ActionType::DeclineChoice));
-}
-
-#[test]
 fn pop_quiz_learn_retrieves_owned_lesson_and_finalizes_once() {
     for lesson in [
         "Firebending Lesson",
@@ -669,11 +560,11 @@ fn pop_quiz_learn_retrieves_owned_lesson_and_finalizes_once() {
         assert_eq!(s.action_space().kind, ActionSpaceKind::Learn);
         let card = s.game().state.players[0].sideboard[0];
         let library_before = library(&s, 0);
-        let hand_before = hand_of(&s, 0).len();
+        let hand_before = hand(&s, 0).len();
         s.drain_events();
         assert!(s.take_action_by_type(ActionType::LearnTakeLesson));
-        assert!(hand_of(&s, 0).contains(&card));
-        assert_eq!(hand_of(&s, 0).len(), hand_before + 1);
+        assert!(hand(&s, 0).contains(&card));
+        assert_eq!(hand(&s, 0).len(), hand_before + 1);
         assert_eq!(library(&s, 0), library_before);
         assert_eq!(s.zone_size(0, ZoneType::Graveyard), 1);
         assert!(s.game().state.stack_objects.is_empty());
@@ -692,4 +583,106 @@ fn pop_quiz_learn_retrieves_owned_lesson_and_finalizes_once() {
             .iter()
             .any(|event| matches!(event, managym::flow::event::GameEvent::CardDrawn { .. })));
     }
+}
+
+#[test]
+fn professors_enter_and_offer_learn_before_priority_returns() {
+    for name in ["Professor of Symbology", "Gnarled Professor"] {
+        let mut s = five_color_setup(&[name]);
+        cast(&mut s, name);
+        pass_until(&mut s, ActionSpaceKind::Learn);
+        assert_eq!(s.battlefield_permanents_named(0, name).len(), 1);
+        settle(&mut s);
+    }
+}
+
+/// Waterfall Aerialist with ward on player 0's battlefield; player 1 casts
+/// Lightning Bolt at it and the ward trigger resolves to its pay-or-not.
+fn ward_setup(seed: u64, p1_mountains: usize) -> (Scenario, PermanentId) {
+    let mut s = Scenario::new(
+        deck(&[
+            ("Island", 12),
+            ("Mountain", 12),
+            ("Waterfall Aerialist", 8),
+            ("Lightning Bolt", 8),
+        ]),
+        deck(&[("Mountain", 24), ("Lightning Bolt", 16)]),
+        seed,
+    );
+    let aerialist = s.force_permanent_on_battlefield(0, "Waterfall Aerialist");
+    force_lands(&mut s, 1, "Mountain", p1_mountains);
+    clear_hand(&mut s, 0);
+    clear_hand(&mut s, 1);
+    s.force_card_in_hand(1, "Lightning Bolt");
+    s.advance_to_active_step(1, StepKind::Main);
+    cast_only(&mut s); // P1 casts Lightning Bolt
+    s.choose_target_named("Waterfall Aerialist");
+    // Ward trigger goes on the stack above the bolt; let it resolve.
+    s.pass_priority();
+    s.pass_priority();
+    (s, aerialist)
+}
+
+#[test]
+fn ward_asks_spell_controller_and_counters_on_decline() {
+    let (mut s, aerialist) = ward_setup(101, 3);
+    let space = s.action_space().clone();
+    assert_eq!(space.kind, ActionSpaceKind::PayOrNot);
+    assert_eq!(
+        space.player,
+        Some(PlayerId(1)),
+        "the bolt's controller pays"
+    );
+    assert!(s.take_action_by_type(ActionType::DeclineChoice));
+
+    // The bolt was countered.
+    assert_eq!(s.game().state.stack_objects.len(), 0);
+    assert_eq!(s.zone_size(1, ZoneType::Graveyard), 1);
+    assert_eq!(permanent(&s, aerialist).damage, 0);
+}
+
+#[test]
+fn ward_paid_lets_the_spell_resolve() {
+    let (mut s, _aerialist) = ward_setup(102, 3);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
+    assert!(s.take_action_by_type(ActionType::PayCost));
+    s.pass_priority();
+    s.pass_priority();
+    // Bolt resolved: 3 damage kills the 3/1 Aerialist (lethal SBA).
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Waterfall Aerialist")
+            .len(),
+        0
+    );
+    assert_eq!(s.zone_size(0, ZoneType::Graveyard), 1);
+}
+
+#[test]
+fn ward_does_not_trigger_for_controllers_own_spell() {
+    let mut s = Scenario::new(
+        deck(&[
+            ("Island", 12),
+            ("Mountain", 12),
+            ("Waterfall Aerialist", 8),
+            ("Lightning Bolt", 8),
+        ]),
+        deck(&[("Plains", 40)]),
+        103,
+    );
+    let _aerialist = s.force_permanent_on_battlefield(0, "Waterfall Aerialist");
+    force_lands(&mut s, 0, "Mountain", 1);
+    clear_hand(&mut s, 0);
+    s.force_card_in_hand(0, "Lightning Bolt");
+    s.advance_to_active_step(0, StepKind::Main);
+    cast_only(&mut s);
+    s.choose_target_named("Waterfall Aerialist");
+    s.pass_priority();
+    s.pass_priority();
+    // No ward pay-or-not; the bolt resolved directly and killed the 3/1.
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Waterfall Aerialist")
+            .len(),
+        0
+    );
 }

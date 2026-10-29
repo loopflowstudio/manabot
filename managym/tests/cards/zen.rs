@@ -1,6 +1,9 @@
-//! Final Fantasy (`src/cardsets/fin.rs`).
+//! Tests for cards filed in `src/cardsets/zen.rs`, in card order.
+
 use crate::support::{
-    activate_any, choose, counters, enter_or_cast, library_card, permanent, settle, setup,
+    game::five_color_setup,
+    inspect::{counters, library_card, permanent_named},
+    play::{activate_first, choose, play_and_settle, settle},
 };
 use managym::{
     agent::action::{Action, ActionSpaceKind},
@@ -9,7 +12,7 @@ use managym::{
 
 #[test]
 fn landfall_creates_resources_and_counters() {
-    let mut s = setup(&[
+    let mut s = five_color_setup(&[
         "Sazh's Chocobo",
         "Tireless Tracker",
         "Lotus Cobra",
@@ -21,7 +24,7 @@ fn landfall_creates_resources_and_counters() {
         "Lotus Cobra",
         "Tireless Provisioner",
     ] {
-        enter_or_cast(&mut s, name);
+        play_and_settle(&mut s, name);
     }
     // The Cobra's color and Provisioner's token are separate resolution choices.
     let land = library_card(&s, 0, "Forest");
@@ -41,11 +44,11 @@ fn landfall_creates_resources_and_counters() {
             s.pass_priority();
         }
     }
-    assert_eq!(counters(&s, permanent(&s, "Sazh's Chocobo")), 1);
+    assert_eq!(counters(&s, permanent_named(&s, "Sazh's Chocobo")), 1);
     assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
     assert_eq!(s.battlefield_permanents_named(0, "Food").len(), 1);
-    let clue = permanent(&s, "Clue");
-    activate_any(&mut s, clue);
+    let clue = permanent_named(&s, "Clue");
+    activate_first(&mut s, clue);
     settle(&mut s);
-    assert_eq!(counters(&s, permanent(&s, "Tireless Tracker")), 1);
+    assert_eq!(counters(&s, permanent_named(&s, "Tireless Tracker")), 1);
 }

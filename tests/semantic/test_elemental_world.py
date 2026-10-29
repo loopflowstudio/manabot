@@ -91,7 +91,7 @@ def test_both_seats_and_mirrors_preserve_complete_academy_setups(left: str) -> N
             assert actual.content_pack == PACK
         engine = managym.Env(seed=164)
         engine.reset(configs)
-        assert engine.content_pack_manifest()["compiled_semantics"]["pack_key"] == PACK
+        assert engine.content_pack_manifest()["pack_key"] == PACK
 
 
 def test_full_roster_checkpoint_admits_every_pair_and_rejects_drift() -> None:
@@ -147,8 +147,8 @@ def test_ordinary_policy_has_complete_programs_and_trains_on_a_real_offer(
         Match(MatchConfig.authored(PACK, "elemental_ug", "elemental_bg")).to_rust()
     )
     pack = BoundSemanticPack.from_env(native)
-    assert len(pack.ir.definitions) == 100
-    assert pack.schema.raw["schema_version"] == 7
+    assert pack.definition_count == 100
+    assert pack.schema.raw["schema_version"] == 9
     pack.pad_catalog()
     tensors = {
         key: torch.as_tensor(value).unsqueeze(0) for key, value in observation.items()
@@ -320,7 +320,7 @@ def test_academy_records_a_real_elemental_command_with_the_exact_pack(
     )
     assert result["status"] == "accepted"
     assert session.env is not None
-    assert session.env.content_pack_manifest()["compiled_semantics"]["pack_key"] == PACK
+    assert session.env.content_pack_manifest()["pack_key"] == PACK
     assert session.trace is not None
     assert (
         session.trace.config.hero_sideboard

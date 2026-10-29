@@ -1,64 +1,43 @@
-//! Engine mechanics the TLA cards introduced, witnessed with vanilla cards,
-//! injected abilities and fixture-only cards rather than one printed card:
-//! trigger events, token lifetime, block restrictions, counters on lands,
-//! observation tags, modal choice, cleanup discard and a full-deck replay.
-use super::{
-    helpers::{forest_elves_deck, ogre_only_deck, raging_goblin_deck, serra_angel_deck, Scenario},
-    support::{
-        card_of, cast_and_resolve, cast_only, clear_hand, deck, find_owned_card_off_battlefield,
-        force_lands, hand_of, permanent_state, put_permanent, resolve, resolve_all,
-        ur_lessons_setup,
+//! Engine rules exercised through injected abilities, tokens and fixture
+//! cards rather than one set's card.
+
+use crate::support::{
+    game::{
+        clear_hand, deck, deck_of, five_color_setup, force_from_library, force_lands,
+        inject_ability, Scenario,
     },
+    inspect::{card_of, find_owned_card_off_battlefield, hand, permanent},
+    play::{activate_first, cast_and_resolve, cast_only, choose, resolve_until_priority},
 };
 use managym::{
     agent::{
         action::{Action, ActionSpaceKind, ActionType},
         observation::Observation,
     },
-    decision::Command,
     flow::turn::StepKind,
-    semantic::SemanticPack,
     state::{
         ability::{Ability, Effect, TriggerCondition, TriggerSubject},
         card::CardType,
-        game_object::{CardId, PlayerId},
+        game_object::PlayerId,
         predicate::CardPredicate,
         zone::ZoneType,
     },
-    Game,
 };
 
-/// Move a specific card from the library into the hand (avoids colliding
-/// with same-named cards already on the battlefield or in hand).
-fn force_from_library(s: &mut Scenario, player: usize, name: &str) -> CardId {
-    let game = s.game();
-    let card_id = game
-        .state
-        .zones
-        .zone_cards(ZoneType::Library, PlayerId(player))
-        .iter()
-        .copied()
-        .find(|card_id| game.state.cards[card_id].name == name)
-        .unwrap_or_else(|| panic!("no {name} in player {player}'s library"));
-    s.game_mut()
-        .state
-        .zones
-        .move_card(card_id, PlayerId(player), ZoneType::Hand);
-    card_id
+#[test]
+fn mana_activation_keeps_the_nonactive_players_priority() {
+    let mut s = five_color_setup(&[]);
+    s.game_mut().create_token("Treasure", PlayerId(1), false);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    s.pass_priority();
+    let source = s.battlefield_permanents_named(1, "Treasure")[0];
+    activate_first(&mut s, source);
+    choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
+    assert_eq!(s.action_space().player, Some(PlayerId(1)));
+    assert_eq!(s.game().state.players[1].mana_pool.mana[1], 5);
 }
 
-// ---------------------------------------------------------------------------
-// Attack triggers, tapped-and-attacking tokens, vigilance & haste.
-// ---------------------------------------------------------------------------
-
-fn inject_ability(s: &mut Scenario, card_id: CardId, ability: Ability) {
-    s.game_mut().state.cards[card_id].abilities.push(ability);
-}
-
-// ---------------------------------------------------------------------------
-// Crossroads of Destiny — MODAL machinery proof.
-// ---------------------------------------------------------------------------
-
+/// Crossroads of Destiny cast with one Island out, stopped at its mode choice.
 fn crossroads_setup(seed: u64) -> Scenario {
     let mut s = Scenario::new(
         deck(&[("Island", 24), ("Crossroads of Destiny", 16)]),
@@ -73,15 +52,42 @@ fn crossroads_setup(seed: u64) -> Scenario {
     s
 }
 
+#[test]
+fn modal_mode_one_gains_life() {
+    let mut s = crossroads_setup(111);
+    let space = s.action_space().clone();
+    assert_eq!(space.kind, ActionSpaceKind::Modal);
+    assert_eq!(space.actions.len(), 2);
+    assert!(space
+        .actions
+        .iter()
+        .all(|action| action.action_type() == ActionType::ChooseMode));
+    s.step_action(0);
+    s.pass_priority();
+    s.pass_priority();
+    s.assert_life(0, 23);
+}
+
+#[test]
+fn modal_mode_two_draws_a_card() {
+    let mut s = crossroads_setup(112);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+    s.step_action(1);
+    let hand_before = hand(&s, 0).len();
+    s.pass_priority();
+    s.pass_priority();
+    assert_eq!(hand(&s, 0).len(), hand_before + 1);
+}
+
 /// A creature token that dies goes to the graveyard (firing zone-change
 /// events) and then ceases to exist via state-based actions.
 #[test]
 fn creature_token_ceases_to_exist_after_dying() {
     let mut s = Scenario::new(deck(&[("Plains", 40)]), deck(&[("Plains", 40)]), 37);
     s.game_mut().create_token("Ally", PlayerId(0), false);
-    resolve_all(&mut s);
+    resolve_until_priority(&mut s);
     let token = s.battlefield_permanents_named(0, "Ally")[0];
-    let token_card = permanent_state(&s, token).card;
+    let token_card = permanent(&s, token).card;
 
     s.game_mut().state.permanents[token]
         .as_mut()
@@ -98,7 +104,7 @@ fn creature_token_ceases_to_exist_after_dying() {
 /// a token created tapped-and-attacking joins combat and deals damage.
 #[test]
 fn attack_trigger_creates_tapped_and_attacking_token() {
-    let mut s = Scenario::new(ogre_only_deck(), deck(&[("Plains", 40)]), 43);
+    let mut s = Scenario::new(deck(&[("Gray Ogre", 40)]), deck(&[("Plains", 40)]), 43);
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     s.game_mut().state.permanents[ogre]
         .as_mut()
@@ -123,12 +129,12 @@ fn attack_trigger_creates_tapped_and_attacking_token() {
 
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     s.declare_attack();
-    resolve_all(&mut s);
+    resolve_until_priority(&mut s);
 
     let tokens = s.battlefield_permanents_named(0, "Ally");
     assert_eq!(tokens.len(), 1, "attack trigger should create one token");
-    assert!(permanent_state(&s, tokens[0]).tapped);
-    assert!(permanent_state(&s, tokens[0]).attacking);
+    assert!(permanent(&s, tokens[0]).tapped);
+    assert!(permanent(&s, tokens[0]).attacking);
 
     // Unblocked: Gray Ogre (2) + token (1) = 3 damage.
     s.advance_to_active_step(0, StepKind::EndOfCombat);
@@ -139,7 +145,7 @@ fn attack_trigger_creates_tapped_and_attacking_token() {
 /// combat, not once per attacker.
 #[test]
 fn one_or_more_attack_trigger_fires_once() {
-    let mut s = Scenario::new(ogre_only_deck(), deck(&[("Plains", 40)]), 47);
+    let mut s = Scenario::new(deck(&[("Gray Ogre", 40)]), deck(&[("Plains", 40)]), 47);
     let ogre_a = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let ogre_b = s.force_permanent_on_battlefield(0, "Gray Ogre");
     for ogre in [ogre_a, ogre_b] {
@@ -163,7 +169,7 @@ fn one_or_more_attack_trigger_fires_once() {
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     s.declare_attack();
     s.declare_attack();
-    resolve_all(&mut s);
+    resolve_until_priority(&mut s);
 
     s.assert_life(0, 21);
 }
@@ -172,7 +178,11 @@ fn one_or_more_attack_trigger_fires_once() {
 /// trigger fires.
 #[test]
 fn haste_attacker_fires_attack_trigger_on_entry_turn() {
-    let mut s = Scenario::new(raging_goblin_deck(), deck(&[("Plains", 40)]), 53);
+    let mut s = Scenario::new(
+        deck_of("Mountain", "Raging Goblin"),
+        deck(&[("Plains", 40)]),
+        53,
+    );
     force_lands(&mut s, 0, "Mountain", 1);
     clear_hand(&mut s, 0);
     // Inject on the card before it enters; abilities are per-card-instance.
@@ -192,7 +202,7 @@ fn haste_attacker_fires_attack_trigger_on_entry_turn() {
     cast_and_resolve(&mut s);
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     s.declare_attack();
-    resolve_all(&mut s);
+    resolve_until_priority(&mut s);
 
     s.assert_life(0, 21);
 }
@@ -200,7 +210,7 @@ fn haste_attacker_fires_attack_trigger_on_entry_turn() {
 /// Attacking taps a non-vigilance creature and fires "becomes tapped".
 #[test]
 fn becomes_tapped_fires_when_attacker_taps() {
-    let mut s = Scenario::new(ogre_only_deck(), deck(&[("Plains", 40)]), 59);
+    let mut s = Scenario::new(deck(&[("Gray Ogre", 40)]), deck(&[("Plains", 40)]), 59);
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     s.game_mut().state.permanents[ogre]
         .as_mut()
@@ -220,16 +230,20 @@ fn becomes_tapped_fires_when_attacker_taps() {
 
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     s.declare_attack();
-    resolve_all(&mut s);
+    resolve_until_priority(&mut s);
 
-    assert!(permanent_state(&s, ogre).tapped);
+    assert!(permanent(&s, ogre).tapped);
     s.assert_life(0, 21);
 }
 
 /// A vigilance attacker does not tap, so "becomes tapped" must NOT fire.
 #[test]
 fn vigilance_attacker_does_not_become_tapped() {
-    let mut s = Scenario::new(serra_angel_deck(), deck(&[("Plains", 40)]), 61);
+    let mut s = Scenario::new(
+        deck(&[("Plains", 24), ("Serra Angel", 16)]),
+        deck(&[("Plains", 40)]),
+        61,
+    );
     let angel = s.force_permanent_on_battlefield(0, "Serra Angel");
     s.game_mut().state.permanents[angel]
         .as_mut()
@@ -252,7 +266,7 @@ fn vigilance_attacker_does_not_become_tapped() {
     s.advance_to_active_step(0, StepKind::EndOfCombat);
 
     assert!(
-        !permanent_state(&s, angel).tapped,
+        !permanent(&s, angel).tapped,
         "vigilance attacker stays untapped"
     );
     s.assert_life(0, 20);
@@ -262,7 +276,11 @@ fn vigilance_attacker_does_not_become_tapped() {
 /// fire for combat taps).
 #[test]
 fn tapped_for_mana_trigger() {
-    let mut s = Scenario::new(forest_elves_deck(), deck(&[("Plains", 40)]), 67);
+    let mut s = Scenario::new(
+        deck(&[("Forest", 24), ("Llanowar Elves", 36)]),
+        deck(&[("Plains", 40)]),
+        67,
+    );
     let elves = s.force_permanent_on_battlefield(0, "Llanowar Elves");
     s.game_mut().state.permanents[elves]
         .as_mut()
@@ -285,16 +303,16 @@ fn tapped_for_mana_trigger() {
     force_from_library(&mut s, 0, "Llanowar Elves");
     s.advance_to_active_step(0, StepKind::Main);
     cast_and_resolve(&mut s);
-    resolve_all(&mut s);
+    resolve_until_priority(&mut s);
 
-    assert!(permanent_state(&s, elves).tapped);
+    assert!(permanent(&s, elves).tapped);
     s.assert_life(0, 21);
 }
 
 /// A combat tap is not "tapped for mana".
 #[test]
 fn attack_tap_is_not_tapped_for_mana() {
-    let mut s = Scenario::new(ogre_only_deck(), deck(&[("Plains", 40)]), 71);
+    let mut s = Scenario::new(deck(&[("Gray Ogre", 40)]), deck(&[("Plains", 40)]), 71);
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     s.game_mut().state.permanents[ogre]
         .as_mut()
@@ -316,18 +334,14 @@ fn attack_tap_is_not_tapped_for_mana() {
     s.declare_attack();
     s.advance_to_active_step(0, StepKind::EndOfCombat);
 
-    assert!(permanent_state(&s, ogre).tapped);
+    assert!(permanent(&s, ogre).tapped);
     s.assert_life(0, 20);
 }
-
-// ---------------------------------------------------------------------------
-// Death triggers.
-// ---------------------------------------------------------------------------
 
 /// "When this creature dies" fires on battlefield → graveyard.
 #[test]
 fn dies_trigger_fires_on_death() {
-    let mut s = Scenario::new(ogre_only_deck(), deck(&[("Plains", 40)]), 73);
+    let mut s = Scenario::new(deck(&[("Gray Ogre", 40)]), deck(&[("Plains", 40)]), 73);
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let ogre_card = card_of(&s, ogre);
     inject_ability(
@@ -343,7 +357,7 @@ fn dies_trigger_fires_on_death() {
 
     s.game_mut().state.permanents[ogre].as_mut().unwrap().damage = 2;
     s.pass_priority();
-    resolve_all(&mut s);
+    resolve_until_priority(&mut s);
 
     assert_eq!(s.zone_size(0, ZoneType::Graveyard), 1);
     s.assert_life(0, 21);
@@ -352,7 +366,7 @@ fn dies_trigger_fires_on_death() {
 /// A creature going battlefield → hand did not die.
 #[test]
 fn bounce_is_not_death() {
-    let mut s = Scenario::new(ogre_only_deck(), deck(&[("Plains", 40)]), 79);
+    let mut s = Scenario::new(deck(&[("Gray Ogre", 40)]), deck(&[("Plains", 40)]), 79);
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let ogre_card = card_of(&s, ogre);
     inject_ability(
@@ -368,20 +382,16 @@ fn bounce_is_not_death() {
 
     s.game_mut().move_card(ogre_card, ZoneType::Hand);
     s.pass_priority();
-    resolve_all(&mut s);
+    resolve_until_priority(&mut s);
 
     s.assert_life(0, 20);
 }
-
-// ---------------------------------------------------------------------------
-// Conditional unblockability.
-// ---------------------------------------------------------------------------
 
 /// "Can't be blocked by creatures with power 2 or less" — the predicate is
 /// checked against effective power, so +1/+1 counters can re-enable a block.
 #[test]
 fn block_restriction_respects_effective_power() {
-    let mut s = Scenario::new(ogre_only_deck(), ogre_only_deck(), 83);
+    let mut s = Scenario::new(deck(&[("Gray Ogre", 40)]), deck(&[("Gray Ogre", 40)]), 83);
     let attacker = s.force_permanent_on_battlefield(0, "Gray Ogre");
     s.game_mut().state.permanents[attacker]
         .as_mut()
@@ -442,7 +452,7 @@ fn block_restriction_respects_effective_power() {
 /// A permanent flagged "can't be blocked this turn" cannot be blocked.
 #[test]
 fn cant_be_blocked_this_turn_blocks_all_blocks() {
-    let mut s = Scenario::new(ogre_only_deck(), ogre_only_deck(), 89);
+    let mut s = Scenario::new(deck(&[("Gray Ogre", 40)]), deck(&[("Gray Ogre", 40)]), 89);
     let attacker = s.force_permanent_on_battlefield(0, "Gray Ogre");
     s.game_mut().state.permanents[attacker]
         .as_mut()
@@ -472,10 +482,6 @@ fn cant_be_blocked_this_turn_blocks_all_blocks() {
     assert!(!can_block);
 }
 
-// ---------------------------------------------------------------------------
-// Counters on lands, upkeep trigger scoping, observation encoding.
-// ---------------------------------------------------------------------------
-
 /// +1/+1 counters sit on lands without killing them (earthbend prereq —
 /// Stage 3 animates lands; the counter state must not assume creature-ness).
 #[test]
@@ -490,7 +496,7 @@ fn counters_on_lands_are_inert_and_persistent() {
     s.pass_priority();
     s.pass_priority();
 
-    let forest_perm = permanent_state(&s, forest);
+    let forest_perm = permanent(&s, forest);
     assert_eq!(forest_perm.plus1_counters, 1);
     assert!(s
         .game()
@@ -511,7 +517,7 @@ fn observation_encodes_counters_tokens_and_type_tags() {
     );
     // A token with counters on the battlefield.
     s.game_mut().create_token("Ally", PlayerId(0), false);
-    resolve_all(&mut s);
+    resolve_until_priority(&mut s);
     let token = s.battlefield_permanents_named(0, "Ally")[0];
     s.game_mut().state.permanents[token]
         .as_mut()
@@ -560,138 +566,4 @@ fn observation_encodes_counters_tokens_and_type_tags() {
         .find(|perm| perm.plus1_counters == 3)
         .expect("counter count should be observable");
     assert!(!token_perm.cant_be_blocked_this_turn);
-}
-
-#[test]
-fn modal_mode_one_gains_life() {
-    let mut s = crossroads_setup(111);
-    let space = s.action_space().clone();
-    assert_eq!(space.kind, ActionSpaceKind::Modal);
-    assert_eq!(space.actions.len(), 2);
-    assert!(space
-        .actions
-        .iter()
-        .all(|action| action.action_type() == ActionType::ChooseMode));
-    s.step_action(0);
-    s.pass_priority();
-    s.pass_priority();
-    s.assert_life(0, 23);
-}
-
-#[test]
-fn modal_mode_two_draws_a_card() {
-    let mut s = crossroads_setup(112);
-    assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
-    s.step_action(1);
-    let hand_before = hand_of(&s, 0).len();
-    s.pass_priority();
-    s.pass_priority();
-    assert_eq!(hand_of(&s, 0).len(), hand_before + 1);
-}
-
-#[test]
-fn cleanup_sba_grants_priority_and_then_repeats_mandatory_discard() {
-    let mut s = ur_lessons_setup();
-    let land = put_permanent(&mut s, 0, "Island");
-    let card = card_of(&s, land);
-    // A 0/0 animated land survives only while its until-end-of-turn buff lasts.
-    let permanent = s.game_mut().state.permanents[land].as_mut().unwrap();
-    permanent.animated = true;
-    permanent.temp_toughness = 1;
-    s.game_mut().draw_cards(PlayerId(0), 4);
-    s.advance_to_active_step(0, StepKind::End);
-    resolve(&mut s);
-    while s.action_space().kind == ActionSpaceKind::Discard {
-        s.step_action(0);
-    }
-    assert_eq!(s.zone_size(0, ZoneType::Hand), 7);
-    assert_eq!(
-        s.game().state.zones.zone_of(card),
-        Some(ZoneType::Graveyard)
-    );
-    assert_eq!(s.game().state.turn.current_step_kind(), StepKind::Cleanup);
-    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
-
-    // CR 514.3a: cards drawn during exceptional cleanup priority must be
-    // discarded in a new cleanup step before the next turn starts.
-    let turn = s.game().state.turn.turn_number;
-    s.game_mut().draw_cards(PlayerId(0), 2);
-    resolve(&mut s);
-    assert_eq!(s.action_space().kind, ActionSpaceKind::Discard);
-    assert_eq!(s.game().state.turn.turn_number, turn);
-    while s.action_space().kind == ActionSpaceKind::Discard {
-        s.step_action(0);
-    }
-    assert_eq!(s.zone_size(0, ZoneType::Hand), 7);
-    assert!(s.game().state.turn.turn_number > turn);
-}
-
-#[test]
-fn revised_forty_card_deck_completes_and_replays_every_command_exactly() {
-    let semantic = SemanticPack::current("two_deck").unwrap();
-    let mut ur = semantic
-        .player_config("UR candidate", "ur_lessons")
-        .unwrap();
-    for (name, n) in [
-        ("It'll Quench Ya!", 2),
-        ("First-Time Flyer", 2),
-        ("Pop Quiz", 1),
-        ("Igneous Inspiration", 1),
-    ] {
-        *ur.decklist.get_mut(name).unwrap() -= n;
-    }
-    ur.decklist.retain(|_, n| *n > 0);
-    for (name, n) in [
-        ("Combustion Technique", 2),
-        ("Proft's Eidetic Memory", 1),
-        ("Gran-Gran", 1),
-        ("Accumulate Wisdom", 1),
-    ] {
-        *ur.decklist.entry(name.into()).or_default() += n;
-    }
-    assert_eq!(ur.decklist.values().sum::<usize>(), 40);
-    let gw = semantic.player_config("GW", "gw_allies").unwrap();
-    for seed in 0..4 {
-        for reverse in [false, true] {
-            let configs = if reverse {
-                vec![gw.clone(), ur.clone()]
-            } else {
-                vec![ur.clone(), gw.clone()]
-            };
-            let mut game = Game::new(configs.clone(), seed, true);
-            let mut replay = Game::new(configs, seed, true);
-            for step in 0..20_000_u64 {
-                if game.is_game_over() {
-                    break;
-                }
-                let frame = game.semantic_decision_frame().unwrap();
-                let i = ((step
-                    .wrapping_mul(6364136223846793005)
-                    .wrapping_add(seed + 1)) as usize)
-                    % frame.offers.len();
-                let command = Command {
-                    command_id: format!("etu88-{step}"),
-                    expected_revision: frame.revision,
-                    offer_id: frame.offers[i].id.0,
-                    answers: vec![],
-                    object_preconditions: vec![],
-                };
-                game.execute_semantic_command(&command).unwrap();
-                replay.execute_semantic_command(&command).unwrap();
-                assert_eq!(
-                    game.state.deterministic_hash(),
-                    replay.state.deterministic_hash()
-                );
-                assert_eq!(
-                    serde_json::to_value(&game.state.events).unwrap(),
-                    serde_json::to_value(&replay.state.events).unwrap()
-                );
-                assert_eq!(
-                    Observation::new(&game, &[]).to_json(),
-                    Observation::new(&replay, &[]).to_json()
-                );
-            }
-            assert!(game.is_game_over(), "seed {seed}, reverse {reverse}");
-        }
-    }
 }

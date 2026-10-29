@@ -1,23 +1,30 @@
 //! Magic Origins.
-use super::native_creature;
-use crate::state::card::{CardDefinition, Keywords};
+use crate::state::{
+    card::{CardDefinition, CardType, CardTypes, Keywords},
+    mana::ManaCost,
+};
 
-/// Native definitions, until the typed card language has the operations they need.
-pub(super) fn native_cards() -> Vec<CardDefinition> {
+pub(super) fn cards() -> Vec<CardDefinition> {
     vec![boggart_brute()]
 }
 
 fn boggart_brute() -> CardDefinition {
-    native_creature(
-        "Boggart Brute",
-        "2R",
-        &["Goblin", "Warrior"],
-        3,
-        2,
-        Keywords {
+    let text_box = "Menace (This creature can't be blocked except by two or more creatures.)";
+
+    CardDefinition {
+        key: "ori.boggart_brute",
+        scryfall_id: "9d735ebf-61a4-4507-9399-6d32c8903ded",
+        name: "Boggart Brute".into(),
+        mana_cost: Some(ManaCost::parse("{2}{R}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Goblin".into(), "Warrior".into()],
+        power: Some(3),
+        toughness: Some(2),
+        keywords: Keywords {
             menace: true,
             ..Default::default()
         },
-        "Menace (This creature can't be blocked except by two or more creatures.)",
-    )
+        text_box: text_box.into(),
+        ..Default::default()
+    }
 }

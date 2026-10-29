@@ -1,39 +1,37 @@
 //! Core Set 2020.
-use crate::cards::authoring::{
-    Card, CardType, Characteristics, Cost, Keyword, Op, PrintedPower, Program, ProgramKind,
+use crate::state::{
+    ability::Effect,
+    card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keywords},
+    mana::ManaCost,
 };
 
-pub(super) fn cards() -> Vec<Card> {
+pub(super) fn cards() -> Vec<CardDefinition> {
     vec![spectral_sailor()]
 }
 
-fn spectral_sailor() -> Card {
+fn spectral_sailor() -> CardDefinition {
     let text_box = "Flash (You may cast this spell any time you could cast an instant.)\nFlying\n{3}{U}: Draw a card.";
 
-    Card {
-        characteristics: Characteristics {
-            mana_cost: Some("{U}"),
-            subtypes: Some(vec!["Spirit", "Pirate"]),
-            types: vec![CardType::Creature],
-            keywords: Some(vec![Keyword::Flying, Keyword::Flash]),
-            power: Some(PrintedPower::Fixed(1)),
-            toughness: Some(1),
+    CardDefinition {
+        key: "m20.spectral_sailor",
+        scryfall_id: "67483891-36d1-46f2-8b4f-b8b7bd54bdcc",
+        name: "Spectral Sailor".into(),
+        mana_cost: Some(ManaCost::parse("{U}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Spirit".into(), "Pirate".into()],
+        power: Some(1),
+        toughness: Some(1),
+        keywords: Keywords {
+            flying: true,
+            flash: true,
             ..Default::default()
         },
-        key: "m20.spectral_sailor",
-        programs: vec![Program::new(
-            "activate_0",
-            ProgramKind::Activated,
-            vec![Op::DrawCards { count: 1 }],
-        )
-        .cost(Cost {
-            mana: Some("{3}{U}"),
-            sacrifice_source: Some(false),
-            tap_source: Some(false),
-            waterbend: Some(false),
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            mana_cost: ManaCost::parse("{3}{U}"),
+            effects: vec![Effect::DrawCards { count: 1 }],
             ..Default::default()
-        })],
-        registry_name: "Spectral Sailor",
-        text_box,
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
     }
 }

@@ -34,18 +34,15 @@ def test_temur_artifacts_and_learning_catalog_close_the_registered_cards() -> No
     assert binding.schema.raw == LearningSchema.load().raw
     assert binding.pad_catalog()
     assert len(binding.definition_row_by_card_def_id) == 9
-    assert (
-        len(LearningSchema.load("content/semantic/w8/learning_schema.json").opcodes)
-        == 55
-    )
 
 
 def test_temur_finishes_through_the_production_training_observation_path() -> None:
     match = MatchConfig.authored("elemental-temur-v1", "temur_left", "temur_right")
     env = Env(Match(match), ObservationSpace(), Reward(RewardConfig()), seed=163)
     observation, _ = env.reset(seed=163)
-    assert observation["agent_player"].shape[-1] == 40
-    assert observation["agent_cards"].shape[-1] == 41
+    # Policy input v5, the default: every observed fact has a column.
+    assert observation["agent_player"].shape[-1] == 44
+    assert observation["agent_cards"].shape[-1] == 42
     rng = np.random.default_rng(163)
     for _ in range(5000):
         actions = np.flatnonzero(observation["actions_valid"])

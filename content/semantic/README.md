@@ -1,77 +1,62 @@
 # Semantic content
 
-Every current card is a typed Rust function in the file of the set that first
+Every current card is one Rust function in the file of the set that first
 printed it, under [`managym/src/cardsets/`](../../managym/src/cardsets/)
-(`tla.rs`, `stx.rs`, `lea.rs`, …), defined once and keyed by set (`lea.forest`,
-`stx.pop_quiz`; tokens made outside TLA are `token.*` in `tokens.rs`).
-[`cards/authoring.rs`](../../managym/src/cards/authoring.rs) defines symbolic
-programs, costs, targets, predicates and characteristics. Card text is
-presentation only. A few cards the typed language cannot yet express are native
-`CardDefinition`s in their set file's `native_cards()`.
+(`tla.rs`, `stx.rs`, `lea.rs`, …), returning the engine's own
+[`CardDefinition`](../../managym/src/state/card.rs) written with its rules types
+(`Ability`, `Effect`, `TargetSpec`, `TriggerCondition`, …). That value is the
+card: the engine runs it, the pool describes it and the policy reads it. There
+is no second card vocabulary, compiler or IR for current content. Each
+definition carries its key (`<set>.<card>`, tokens `token.*`) and the Scryfall
+id of that printing; Oracle text, rulings and images are reachable from the id,
+while the printed `text_box` stays in the definition so play works offline.
 
-The engine compiles the typed definitions in process
-([`semantic/compile.rs`](../../managym/src/semantic/compile.rs)): it resolves
-definition references and token closure, checks target roles, assigns opcodes and
-program indexes, and hashes canonical IR. No card catalog or IR is generated on
-disk. Python reads the same documents through `managym.semantic_ir_json(pack_key)`.
-
-Edit a card's Rust function, add it to its set's `cards()` list, and rebuild.
-`cargo test --lib semantic::compile` compiles every current preset.
-`current/setups.json` remains ordinary deck/sideboard data.
+New behavior is a new rules-type variant (for example an `Effect`) with a
+directed card test in `managym/tests/cards/<set>.rs`, never card-specific logic.
+Edit a card's function, list it in its set's `cards()`, and rebuild the
+extension. `current/setups.json` is ordinary deck/sideboard data naming cards by
+key.
 
 **Support is definition.** The world supports a card for deck entry when its set
-file defines it with a typed program, unless that set file marks it incomplete
-(`tla::INCOMPLETE`, one reason per card). Incomplete and native cards still run in
-the fixed setups that name them. Tokens are never deck entries. Rules tests are
-ordinary tests; they never gate support. See the
-[TLA notes](../../docs/rules/tla/README.md) for the open TLA work.
+file defines it, unless that set file marks it incomplete (`tla::INCOMPLETE`, one
+reason per card). Incomplete cards still run in the fixed setups that name them.
+Tokens are never deck entries. Rules tests are ordinary tests; they never gate
+support. See the [TLA notes](../../docs/rules/tla/README.md) for the open TLA work.
 
-## Native runtime and identity
+## Packs and identity
 
-`SemanticPack::compile_content_pack` lowers compiled IR into the ordinary native
-`CardDefinition` runtime. It supplies characteristics, costs, targets, triggers,
-static abilities and effects. Presentation text comes from the same definition;
-Oracle text never supplies executable rules. Historical IR without embedded text
-runs from the git revision that produced it.
-
-Each compiled `semantic_index` is local to its IR document, distinct from native
-`CardDefId`. The compiled pack records its pack key, IR hash and source hash in
-`ContentPackManifest.compiled_semantics`. `managym.content_pool(pack_key)` exposes
-that identity, native IDs, semantic keys and eligibility without starting a game;
-`managym.set_cards(["tla", "lea"])` narrows the world pool to chosen sets.
-Policy binding validates the native receipt before those IDs reach an encoder.
-
-Exact authored setups select their compiled runtime through the shared native
-catalog. Explicit selection also supports repeated-deck matches. The default
-content pack registers every typed definition through the same lowering, plus
-the native set-file cards and the rules fixtures in `managym/src/cards/fixtures.rs`
-(Crossroads of Destiny), keeping the legacy `CardDefId` prefix. Independent directed rules tests witness behavior;
-comparisons between two projections of the same authoring source are not rules
-evidence.
-
-Current setup projections preserve historical counts, including the 41-card UR
-Lessons deck and 40-card GW Allies deck. The older milestone's 40-card description
-does not authorize deleting a card. Product deck changes remain the curated deck
-owner's decision.
+The default content pack registers every set-file definition plus the rules
+fixtures in `managym/src/cards/fixtures.rs` (Crossroads of Destiny), keeping the
+legacy `CardDefId` prefix. Each authored setup is a pack of exactly its decks'
+cards and the tokens they create, in key order
+([`semantic/setups.rs`](../../managym/src/semantic/setups.rs)); exact authored
+decklists, or an explicit `content_pack`, select it. A pack's identity is its
+`content_digest`; its manifest also names its `pack_key` (absent for the default
+pack). `managym.content_pool(pack_key)` exposes native IDs, keys and eligibility
+without starting a game; `managym.set_cards(["tla", "lea"])` narrows the world
+pool (`tla-pool-v1`, every defined card) to chosen sets.
 
 ## Learning projection
 
-Current execution uses world **w17** and `current/learning_schema.json` (schema **8**).
-`BoundSemanticPack` binds a native manifest to the exact IR and schema, resolving
-registry names once and discarding them from model inputs. The shared catalog
-stores typed definition/program token spans and definition-reference edges.
-Viewer observations carry ragged bindings into that immutable catalog.
+Current execution uses world **w18** and `current/learning_schema.json` (schema
+**9**). `managym.learning_catalog(pack_key)` walks every definition of a pack
+with a `serde` serializer ([`semantic/tokens.rs`](../../managym/src/semantic/tokens.rs)):
+struct and variant boundaries, field names, `Effect::…` variants, integers,
+booleans and printed categories become tokens, so a new rules variant reaches
+the policy without a vocabulary edit. Each definition has a characteristics span
+and one program span per ability or spell; a created token is a reference to its
+definition row. `key`, `scryfall_id`, `name` and `text_box` are never tokens.
 
-The `semantic_only` mode masks opaque `CardDefId` inputs; `identity` exposes them
-for controlled ablations. Neither mode tokenizes card names. The projection reads
-only viewer-safe `managym.Observation`, never `Game` or `MatchState`; mutable
-counters, damage, control and other match facts remain in observation tensors.
+`BoundSemanticPack` binds that catalog to a live manifest: the digests must match
+and manifest IDs join rows by registry name, so rows never depend on `CardDefId`
+allocation. The `semantic_only` mode masks opaque `CardDefId` inputs;
+`identity` exposes them for controlled ablations. The projection reads only
+viewer-safe `managym.Observation`; mutable counters, damage, control and other
+match facts remain in observation tensors.
 
 Datasets and checkpoints persist `BoundSemanticPack.artifact_header()`. Loaders
-reject missing or mismatched schema, IR, content, layout and identity-mode
-provenance. Current manifest binding uses explicit pack keys in `CURRENT_PACK_KEYS`.
-Historical artifact inspection requires its original schema and IR paths; frozen
-receipts and checkpoints are never silently upgraded.
+reject mismatched schema, content, layout and identity-mode provenance. Older
+worlds' artifacts run from the git revision that produced them.
 
 ```bash
 uv run --extra dev pytest -q \
@@ -84,10 +69,11 @@ uv run --extra dev pytest -q \
 ## Historical sources and coverage evidence
 
 The `v1/` and `w7/` through `w11/` artifacts retain earlier sources, schemas,
-fixtures and receipts. They are not inputs to current content. Historical
-compiler checks remain available through `scripts/compile_semantic_content.py`
-(the retained Python compiler); the explicit source/output invocations in
-`.github/workflows/ci.yml` validate those frozen artifacts.
+fixtures, IR and receipts. They are not inputs to current content and are never
+rewritten. The retired Python compiler (`manabot/semantic/compiler.py`,
+`scripts/compile_semantic_content.py`) only reproduces those frozen artifacts;
+the explicit source/output invocations in `.github/workflows/ci.yml` validate
+them.
 
 `v1/coverage.evidence.json` records rule-family ownership, executable witnesses,
 support/deviation annotations and admission history. Its coverage-gap artifact

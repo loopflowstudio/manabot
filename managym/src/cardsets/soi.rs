@@ -1,63 +1,58 @@
 //! Shadows over Innistrad.
-use crate::cards::authoring::{
-    Card, CardType, Characteristics, Event, Op, Predicate, PrintedPower, Program, ProgramKind,
-    Subject, Trigger,
+use crate::state::{
+    ability::{Ability, Effect, TriggerCondition, TriggerSubject},
+    card::{CardDefinition, CardType, CardTypes},
+    mana::ManaCost,
+    permanent::CounterKind,
+    predicate::CardPredicate,
 };
 
-pub(super) fn cards() -> Vec<Card> {
+pub(super) fn cards() -> Vec<CardDefinition> {
     vec![tireless_tracker()]
 }
 
-fn tireless_tracker() -> Card {
+fn tireless_tracker() -> CardDefinition {
     let text_box = "Landfall — Whenever a land you control enters, investigate. (Create a Clue token. It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")\nWhenever you sacrifice a Clue, put a +1/+1 counter on this creature.";
 
-    Card {
-        characteristics: Characteristics {
-            mana_cost: Some("2G"),
-            subtypes: Some(vec!["Human", "Scout"]),
-            types: vec![CardType::Creature],
-            keywords: Some(vec![]),
-            power: Some(PrintedPower::Fixed(3)),
-            toughness: Some(2),
-            token: Some(false),
-            supertypes: Some(vec![]),
-            ..Default::default()
-        },
+    CardDefinition {
         key: "soi.tireless_tracker",
-        programs: vec![
-            Program::new(
-                "p0",
-                ProgramKind::Triggered,
-                vec![Op::CreateToken {
-                    count: 1,
-                    definition_ref: "token.clue",
-                    tapped_and_attacking: Some(false),
-                }],
-            )
-            .trigger(Trigger::new(
-                Event::EntersBattlefield,
-                Subject::AnyYouControl {
-                    predicate: Predicate::CardType {
-                        value: CardType::Land,
-                    },
+        scryfall_id: "ee8e9928-d9b2-4570-adb8-44b34115decd",
+        name: "Tireless Tracker".into(),
+        mana_cost: Some(ManaCost::parse("{2}{G}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Human".into(), "Scout".into()],
+        power: Some(3),
+        toughness: Some(2),
+        abilities: vec![
+            Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::AnyYouControl(CardPredicate {
+                        card_type: Some(CardType::Land),
+                        ..Default::default()
+                    }),
                 },
-            )),
-            Program::new(
-                "p1",
-                ProgramKind::Triggered,
-                vec![Op::PutCounters {
+                effects: vec![Effect::CreateToken {
+                    token_name: "Clue".into(),
                     count: 1,
-                    counter: None,
-                    target: "source",
+                    tapped_and_attacking: false,
+                    attach_source: false,
                 }],
-            )
-            .trigger(Trigger {
-                predicate: Some(Predicate::Subtype { value: "Clue" }),
-                controller_only: Some(true),
-                ..Trigger::new(Event::Sacrificed, Subject::This)
-            }),
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::Sacrificed {
+                    predicate: CardPredicate {
+                        subtype: Some("Clue".into()),
+                        ..Default::default()
+                    },
+                    controller_only: true,
+                },
+                effects: vec![Effect::PutCountersOnSource {
+                    count: 1,
+                    kind: CounterKind::PlusOnePlusOne,
+                }],
+            },
         ],
-        registry_name: "Tireless Tracker",
-        text_box,
+        text_box: text_box.into(),
+        ..Default::default()
     }
 }

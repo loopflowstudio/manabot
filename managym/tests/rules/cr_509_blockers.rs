@@ -1,9 +1,13 @@
 use managym::{agent::action::ActionSpaceKind, flow::turn::StepKind};
 
-use super::helpers::*;
+use crate::support::game::*;
 
 fn setup_combat_with_available_blocker() -> Scenario {
-    let mut s = Scenario::new(forest_elves_deck(), forest_elves_deck(), 91);
+    let mut s = Scenario::new(
+        deck(&[("Forest", 24), ("Llanowar Elves", 36)]),
+        deck(&[("Forest", 24), ("Llanowar Elves", 36)]),
+        91,
+    );
     s.play_land_and_cast_creature(0, "Forest", "Llanowar Elves");
     s.advance_to_active_step(1, StepKind::Main);
     s.play_land_and_cast_creature(1, "Forest", "Llanowar Elves");

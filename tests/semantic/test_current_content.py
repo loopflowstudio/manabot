@@ -1,7 +1,7 @@
-"""Current cards compile natively and the world pool reports their support.
+"""Current packs bind learning catalogs and the world pool reports support.
 
-Unresolved-reference and missing-token rejection are native tests in
-`managym/src/semantic/compile.rs`; these checks cover the Python consumers.
+Setup and token-closure rejection are native tests in
+`managym/src/semantic/setups.rs`; these checks cover the Python consumers.
 """
 
 import json
@@ -11,11 +11,7 @@ from managym.decision import Command, DecisionFrame, Observation
 from managym.experience_projection import describe_actions, serialize_observation
 import pytest
 
-from manabot.semantic.learning import (
-    CURRENT_PACK_KEYS,
-    BoundSemanticPack,
-    current_ir_document,
-)
+from manabot.semantic.learning import CURRENT_PACK_KEYS, BoundSemanticPack
 from manabot.semantic.policy_catalog import bind_policy_catalog
 import managym
 
@@ -23,35 +19,39 @@ CONTENT_ROOT = Path(__file__).resolve().parents[2] / "content/semantic"
 SETUPS = json.loads((CONTENT_ROOT / "current/setups.json").read_text())
 
 
+def _manifest(pack_key: str) -> dict:
+    pool = managym.content_pool(pack_key)
+    return {
+        "schema_version": 1,
+        "content_digest": pool["content_digest"],
+        "pack_key": pack_key,
+        "definitions": [
+            {"card_def_id": row["card_def_id"], "registry_name": row["registry_name"]}
+            for row in pool["definitions"]
+        ],
+    }
+
+
 def test_all_current_packs_bind_learning_projections() -> None:
     pack_keys = {setup["pack_key"] for setup in SETUPS.values()} | {"tla-pool-v1"}
     assert CURRENT_PACK_KEYS <= pack_keys
     for pack_key in sorted(pack_keys):
-        ir = current_ir_document(pack_key)
-        assert ir["pack_key"] == pack_key
-        manifest = {
-            "schema_version": 1,
-            "content_digest": "projection-test",
-            "definitions": [
-                {"card_def_id": i, "registry_name": d["content_pack_binding"]["value"]}
-                for i, d in enumerate(ir["definitions"])
-            ],
-        }
-        if pack_key in CURRENT_PACK_KEYS:
-            bound = BoundSemanticPack.bind(
-                {**manifest, "compiled_semantics": _receipt(ir)}
-            )
-            assert bound.ir.ir_hash == ir["ir_hash"]
-            assert len(bound.definition_row_by_card_def_id) == len(ir["definitions"])
+        manifest = _manifest(pack_key)
+        bound = BoundSemanticPack.bind(manifest)
+        assert bound.pack_key == pack_key
+        assert bound.definition_count == len(manifest["definitions"])
+        assert len(bound.definition_row_by_card_def_id) == bound.definition_count
 
 
-def _receipt(ir: dict) -> dict[str, str]:
-    return {key: ir[key] for key in ("pack_key", "ir_hash", "source_hash")}
+def test_catalog_must_match_the_live_pack_digest() -> None:
+    manifest = {**_manifest("tla-baseline-v1"), "content_digest": "0" * 64}
+    with pytest.raises(ValueError, match="differs from the live pack"):
+        BoundSemanticPack.bind(manifest)
 
 
-def test_unknown_pack_has_no_current_ir() -> None:
-    with pytest.raises(ValueError, match="unknown content pack"):
-        current_ir_document("missing-pack")
+def test_unknown_pack_has_no_learning_catalog() -> None:
+    with pytest.raises(ValueError, match="unknown content pool"):
+        managym.learning_catalog("missing-pack")
 
 
 @pytest.mark.parametrize(
@@ -114,23 +114,21 @@ def test_current_projections_preserve_every_historical_setup_count() -> None:
         historical = json.loads(
             (CONTENT_ROOT / directory / "generated" / f"{filename}.ir.json").read_text()
         )
-        current = current_ir_document(setup["pack_key"])
-        for old, new in zip(historical["decks"], current["decks"], strict=True):
-            assert old["key"] == new["key"]
-            for field in ("cards", "sideboard"):
+        pack_key = setup["pack_key"]
+        for old in historical["decks"]:
+            current = managym.authored_deck_setup(pack_key, old["key"])
+            for field, actual in (
+                ("cards", current.decklist),
+                ("sideboard", current.sideboard),
+            ):
                 expected = {
                     historical["definitions"][entry["definition_index"]][
                         "content_pack_binding"
                     ]["value"]: entry["count"]
                     for entry in old.get(field, [])
                 }
-                actual = {
-                    current["definitions"][entry["definition_index"]][
-                        "content_pack_binding"
-                    ]["value"]: entry["count"]
-                    for entry in new.get(field, [])
-                }
-                assert actual == expected, (preset, old["key"], field)
+                assert dict(actual) == expected, (preset, old["key"], field)
+        assert len(managym.authored_deck_keys(pack_key)) == len(historical["decks"])
 
 
 def test_baseline_card_executes_shared_commands_and_forks_with_learning_and_academy_views() -> (
@@ -162,9 +160,9 @@ def test_baseline_card_executes_shared_commands_and_forks_with_learning_and_acad
     obs = env.scenario_refresh()
     bound = BoundSemanticPack.from_env(env)
     policy = bind_policy_catalog("tla-baseline-v1")
-    assert bound.ir.ir_hash == policy.ir.ir_hash
+    assert bound.semantic_pack_hash == policy.semantic_pack_hash
     full_pool = bind_policy_catalog("tla-pool-v1")
-    assert full_pool.ir.raw["pack_key"] == "tla-pool-v1"
+    assert full_pool.pack_key == "tla-pool-v1"
     pool = managym.content_pool("tla-baseline-v1")
     assert pool["content_digest"] == env.content_pack_manifest()["content_digest"]
     assert (

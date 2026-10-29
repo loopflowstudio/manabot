@@ -1,7 +1,9 @@
-//! Limited Edition Alpha (`src/cardsets/lea.rs`).
-use crate::{
-    helpers::{counterspell_deck, island_deck, recall_deck, Scenario},
-    support::{activate_named, enter_settled, permanent, ready_named, setup},
+//! Tests for cards filed in `src/cardsets/lea.rs`, in card order.
+
+use crate::support::{
+    game::{deck, deck_of, five_color_setup, ready, Scenario},
+    inspect::permanent_named,
+    play::{activate_named, enter_and_settle},
 };
 use managym::{
     agent::action::{Action, ActionType},
@@ -12,49 +14,14 @@ use managym::{
     },
 };
 
-#[test]
-fn an_announced_tap_cannot_be_used_to_fund_itself() {
-    use managym::state::{ability::Effect, card::ActivatedAbilityDefinition, mana::ManaCost};
-
-    for tap_source in [false, true] {
-        let mut s = setup(&["Llanowar Elves"]);
-        let elves_card = enter_settled(&mut s, "Llanowar Elves");
-        ready_named(&mut s, "Llanowar Elves");
-        let elves = permanent(&s, "Llanowar Elves");
-        s.game_mut().state.cards[elves_card]
-            .activated_abilities
-            .push(ActivatedAbilityDefinition {
-                mana_cost: ManaCost::parse("1"),
-                tap_source,
-                sacrifice_source: true,
-                effects: vec![Effect::DrawCards { count: 1 }],
-                ..Default::default()
-            });
-        s.set_player_mana_pool(0, "0");
-        s.game_mut().scenario_refresh_priority().unwrap();
-        assert_eq!(
-            s.action_space().actions.iter().any(
-                |a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == elves)
-            ),
-            !tap_source
-        );
-        if !tap_source {
-            activate_named(&mut s, "Llanowar Elves", 0);
-            assert!(s.game().state.permanents[elves].is_none());
-            assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
-            assert_eq!(
-                s.game().state.stack_objects.len(),
-                1,
-                "the nonmana parent ability uses the stack"
-            );
-        }
-    }
-}
-
 /// CR 121.1 — Resolving a draw spell moves cards from library to hand.
 #[test]
 fn ancestral_recall_draws_three() {
-    let mut s = Scenario::new(recall_deck(), island_deck(), 1211);
+    let mut s = Scenario::new(
+        deck_of("Island", "Ancestral Recall"),
+        deck(&[("Island", 40)]),
+        1211,
+    );
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Island");
@@ -81,7 +48,11 @@ fn ancestral_recall_draws_three() {
 /// draws caused by spell effects.
 #[test]
 fn ancestral_recall_decking_loses_game() {
-    let mut s = Scenario::new(recall_deck(), island_deck(), 1212);
+    let mut s = Scenario::new(
+        deck_of("Island", "Ancestral Recall"),
+        deck(&[("Island", 40)]),
+        1212,
+    );
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Island");
@@ -114,7 +85,11 @@ fn ancestral_recall_decking_loses_game() {
 /// are drawn and the countered spell goes to the graveyard.
 #[test]
 fn counterspell_counters_ancestral_recall() {
-    let mut s = Scenario::new(recall_deck(), counterspell_deck(), 1214);
+    let mut s = Scenario::new(
+        deck_of("Island", "Ancestral Recall"),
+        deck_of("Island", "Counterspell"),
+        1214,
+    );
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_permanent_on_battlefield(0, "Island");
@@ -152,4 +127,43 @@ fn counterspell_counters_ancestral_recall() {
         s.game().state.zones.zone_of(recall_card),
         Some(ZoneType::Graveyard)
     );
+}
+
+#[test]
+fn an_announced_tap_cannot_be_used_to_fund_itself() {
+    use managym::state::{ability::Effect, card::ActivatedAbilityDefinition, mana::ManaCost};
+
+    for tap_source in [false, true] {
+        let mut s = five_color_setup(&["Llanowar Elves"]);
+        let elves_card = enter_and_settle(&mut s, "Llanowar Elves");
+        ready(&mut s, "Llanowar Elves");
+        let elves = permanent_named(&s, "Llanowar Elves");
+        s.game_mut().state.cards[elves_card]
+            .activated_abilities
+            .push(ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("1"),
+                tap_source,
+                sacrifice_source: true,
+                effects: vec![Effect::DrawCards { count: 1 }],
+                ..Default::default()
+            });
+        s.set_player_mana_pool(0, "0");
+        s.game_mut().scenario_refresh_priority().unwrap();
+        assert_eq!(
+            s.action_space().actions.iter().any(
+                |a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == elves)
+            ),
+            !tap_source
+        );
+        if !tap_source {
+            activate_named(&mut s, "Llanowar Elves", 0);
+            assert!(s.game().state.permanents[elves].is_none());
+            assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+            assert_eq!(
+                s.game().state.stack_objects.len(),
+                1,
+                "the nonmana parent ability uses the stack"
+            );
+        }
+    }
 }

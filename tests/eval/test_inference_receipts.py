@@ -145,6 +145,122 @@ def _report(path: Path) -> dict[str, Any]:
     return json.loads(path.with_name("data.json").read_text())["experiments"][0]
 
 
+def _sampled_fixture(root: Path, *, failure: bool = False) -> Path:
+    _fixture(root, failure=failure)
+    for path in sorted(root.glob("game/decision-*/selection.json")):
+        selection = json.loads(path.read_text())
+        selection["config"].update(
+            decoding="sampled",
+            sampling={"temperature": 1.0, "top_p": 0.95, "seed": 4160},
+            enable_thinking=True,
+            thinking_budget=1,
+            max_new_tokens=8,
+        )
+        selection["behavior_version"] = "c" * 64
+        for attempt in selection["attempts"]:
+            if attempt["response"] is not None:
+                attempt["response"].update(
+                    token_ids=[3, 4, 5, 6, 7],
+                    reasoning_tokens=2,
+                    answer_tokens=2,
+                    forced_close_at=1,
+                    inserted_token_ids=[4, 5, 6],
+                )
+                attempt["output_tokens"] = 5
+        _write(path, selection)
+        capture_path = path.with_name("capture.json")
+        capture = json.loads(capture_path.read_text())
+        capture["continuation"] = {"stage": "priority"}
+        _write(capture_path, capture)
+    return root
+
+
+def test_sampled_report_retains_treatment_and_counts_only_generated_tokens(
+    tmp_path: Path,
+) -> None:
+    root = _sampled_fixture(tmp_path / "sampled", failure=True)
+    before = inventory(root)
+    result = project_llm(root)
+    assert result["inference_config"]["sampling"]["seed"] == 4160
+    assert result["inference_config"]["thinking_budget"] == 1
+    assert result["behavior_version"] == "c" * 64
+    assert result["unversioned_selections"] == 0
+    assert result["coverage"]["fallback"] == 1
+    tokens = result["generation_tokens"]
+    assert tokens["attempts"] == 6
+    assert tokens["responses"] == tokens["forced_closes"] == 5
+    assert tokens["inserted_tokens"] == 15
+    assert tokens["observed_generated_output_tokens"] == 10
+    reasoning = tokens["reasoning_by_decision_kind"]["priority"]
+    assert reasoning["n"] == 5
+    assert reasoning["population"] == 6
+    assert reasoning["p50"] == reasoning["maximum"] == 1
+    assert "inserted tokens excluded" in reasoning["method"]
+    assert inventory(root) == before
+
+
+@pytest.mark.parametrize("changed", ["sampling", "thinking_budget", "behavior_version"])
+def test_sampled_report_rejects_changed_treatment(tmp_path: Path, changed: str) -> None:
+    root = _sampled_fixture(tmp_path / "sampled")
+    path = root / "game/decision-00001/selection.json"
+    selection = json.loads(path.read_text())
+    if changed == "behavior_version":
+        selection[changed] = "d" * 64
+    elif changed == "sampling":
+        selection["config"][changed]["seed"] = 4161
+    else:
+        selection["config"][changed] = 2
+    _write(path, selection)
+    with pytest.raises(ValueError, match="changed"):
+        project_llm(root)
+
+
+def test_sampled_report_rejects_invalid_inserted_span(tmp_path: Path) -> None:
+    root = _sampled_fixture(tmp_path / "sampled")
+    path = root / "game/decision-00001/selection.json"
+    selection = json.loads(path.read_text())
+    selection["attempts"][0]["response"]["forced_close_at"] = 4
+    _write(path, selection)
+    with pytest.raises(ValueError, match="forced-close span"):
+        project_llm(root)
+
+
+def test_sampled_sequence_keeps_reasoning_kinds_and_missing_splits(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "sequence"
+    _sampled_fixture(root / "game-000")
+    _fixture(root / "game-001")
+    # A historical response can lack split evidence even when the treatment
+    # identity is retained. It must remain in the distribution's denominator.
+    for path in (root / "game-001").glob("game/decision-*/selection.json"):
+        sample = json.loads(
+            (root / "game-000/game" / path.parent.name / "selection.json").read_text()
+        )
+        data = json.loads(path.read_text())
+        data["config"] = sample["config"]
+        _write(path, data)
+    _write(
+        root / "games.json",
+        {
+            "version": "llm-game-sequence-v1",
+            "mode": "concurrent",
+            "games": ["game-000", "game-001", "game-002"],
+        },
+    )
+    result = project_llm(root)
+    assert result["observed_status"] == "partial"
+    assert result["coverage"]["planned_games"] == 3
+    assert result["unversioned_selections"] == 3
+    tokens = result["generation_tokens"]
+    assert tokens["observed_generated_output_tokens"] == 15
+    assert tokens["forced_closes"] == 5
+    unknown = tokens["reasoning_by_decision_kind"]["unknown"]
+    assert unknown["n"] == 0
+    assert unknown["population"] == 5
+    assert unknown["p50"] is None
+
+
 def _baseline(
     path: Path, root: Path, *, status: str = "completed", policy: Path | None = None
 ) -> Path:
@@ -364,7 +480,7 @@ def test_malformed_receipts_fail_closed(tmp_path: Path, mutation: str) -> None:
 
 
 def test_cli_never_imports_model_or_native_runtime(tmp_path: Path) -> None:
-    root = _fixture(tmp_path / "offline")
+    root = _sampled_fixture(tmp_path / "offline")
     blocker = tmp_path / "blocker"
     blocker.mkdir()
     (blocker / "sitecustomize.py").write_text("""import sys
@@ -1170,3 +1286,35 @@ def test_same_game_matchup_keeps_exclusive_and_nested_timers_separate(
     path = write_report([], [root], tmp_path / "report")
     assert _report(path)["question"] == "Where does evaluation time go?"
     assert _report(path)["inference_performance"]["runs"][0]["matchup"] == matchup
+
+
+@pytest.mark.parametrize("invalid", [None, "extra", "successful", "wrong_step"])
+def test_failed_terminal_selection_survives_historical_close_error(
+    tmp_path: Path, invalid: str | None
+) -> None:
+    root = _fixture(tmp_path / "close-error", failure=True)
+    summary_path = root / "game/summary.json"
+    summary = json.loads(summary_path.read_text())
+    summary["model_decisions"] = 3
+    _write(summary_path, summary)
+    terminal = root / "game/decision-00003"
+    if invalid == "extra":
+        summary["model_decisions"] = 2
+        _write(summary_path, summary)
+    elif invalid == "successful":
+        selection = json.loads((terminal / "selection.json").read_text())
+        selection.update(origin="initial", selected_reference="A0", failure=None)
+        _write(terminal / "selection.json", selection)
+    elif invalid == "wrong_step":
+        terminal.rename(root / "game/decision-00004")
+    before = inventory(root)
+    if invalid is not None:
+        with pytest.raises(ValueError, match="counts exceed summary"):
+            project_llm(root)
+    else:
+        result = project_llm(root)
+        assert result["coverage"]["selection_population"] == 4
+        assert result["coverage"]["failed_selections"] == 1
+        assert result["coverage"]["replay_verified_games"] == 0
+        assert result["observed_status"] == "failed"
+    assert inventory(root) == before

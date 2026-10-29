@@ -758,7 +758,7 @@ impl Observation {
                 .attached_to
                 .and_then(|object| game.object_event_ref(object))
                 .map(|object| object.entity.0 as i32),
-            name: set_characteristics.map(|set| set.name.clone()),
+            name: set_characteristics.map(|set| set.named.clone()),
             creature_types: set_characteristics.map(|_| {
                 game.creature_types(perm_id)
                     .into_iter()

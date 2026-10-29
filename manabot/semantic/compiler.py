@@ -101,47 +101,6 @@ class Opcode(IntEnum):
     EXILE_IF_DIES = 63
     ADD_SUBTYPE = 64
     OPTIONAL_PAYMENT = 65
-    AIRBEND = 66
-    AIRBEND_ALL = 67
-    OPPONENTS_CAST_ONLY_FROM_HAND = 68
-    EXILE_TOP_CARD_PLAY_THIS_TURN = 69
-    SACRIFICE_SOURCE = 70
-    PUT_INTO_LIBRARY_SECOND_OR_BOTTOM = 71
-    SEARCH_LANDS_OPPONENT_SPLITS = 72
-    REVEAL_HAND_DISCARD_CHOSEN = 73
-    SHUFFLE_GRAVEYARD_INTO_LIBRARY = 74
-    NO_MAXIMUM_HAND_SIZE = 75
-    CAST_FROM_HAND_FREE = 76
-    EXILE_UNTIL_NONLAND_CAST_FREE = 77
-    EXILE_LINKED = 78
-    GRANT_FIREBENDING_UNTIL_EOT = 79
-    REMOVE_COUNTERS = 80
-    SET_BASE_PT = 81
-    ATTACH = 82
-    CANT_ATTACK_OR_BLOCK = 83
-    DOESNT_UNTAP = 84
-    SHUFFLE_INTO_LIBRARY = 85
-    BECOME_ARTIFACT_CREATURE = 86
-    ADD_MANA_OF_ONE_COLOR = 87
-    CANT_BE_BLOCKED_BY_MORE_THAN = 88
-    ATTACKS_DESPITE_DEFENDER = 89
-    ADD_CARD_TYPES = 90
-    ADD_SUBTYPES_CONTROLLED = 91
-    UNSPENT_MANA_BECOMES_RED = 92
-    DESTROY_CREATURES_LOSING_ABILITIES = 93
-    ENTERS_WITH_X_COUNTERS = 94
-    OPPONENT_DAMAGE_PLUS_COUNTERS = 95
-    SET_BASE_PT_VALUE = 96
-    FIGHT = 97
-    GAIN_LIFE_VALUE = 98
-    ADD_MANA_VALUE = 99
-    KEEP_UNSPENT_RED_MANA = 100
-    SEARCH_LIBRARY_TO_HAND = 101
-    LOOK_AT_LIBRARY_TOP = 102
-    CAST_FROM_LIBRARY_TOP = 103
-    SET_CHARACTERISTICS = 104
-    REMOVE_ALL_COUNTERS = 105
-    DISTRIBUTE_COUNTERS = 106
 
 
 PROGRAM_KINDS = {kind.name.lower(): kind for kind in ProgramKind}
@@ -187,7 +146,6 @@ TRIGGER_EVENTS = {
     "upkeep_begins",
     "combat_begins",
     "cast_spell",
-    "end_step_begins",
 }
 SUBJECT_KINDS = {"another_you_control", "any_you_control", "this"}
 SELECTOR_KINDS = {
@@ -207,7 +165,6 @@ SELECTOR_KINDS = {
 }
 PREDICATE_KINDS = {
     "all",
-    "any_of",
     "any",
     "card_type",
     "not_card_types",
@@ -215,7 +172,6 @@ PREDICATE_KINDS = {
     "power_at_least",
     "mana_value_at_least",
     "flying",
-    "attacking",
     "types_any",
     "subtypes_any",
     "not_subtypes",
@@ -228,42 +184,12 @@ CONDITION_KINDS = {
     "cards_drawn_at_least",
     "nth_resolution",
     "target_matches",
-    "source_counters_at_least",
-    "controls_matching",
-    "unspent_mana_at_least",
 }
 
 OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "discard": (set(), set()),
     "exile_if_dies": ({"target"}, set()),
     "add_subtype": ({"target", "subtype"}, set()),
-    "remove_counters": ({"target", "count"}, set()),
-    "set_base_pt": ({"target", "duration"}, {"power", "toughness"}),
-    "attach": ({"target"}, set()),
-    "cant_attack_or_block": ({"target"}, set()),
-    "doesnt_untap": ({"target"}, set()),
-    "shuffle_into_library": ({"target"}, set()),
-    "become_artifact_creature": ({"target"}, {"duration"}),
-    "add_mana_of_one_color": ({"amount"}, set()),
-    "cant_be_blocked_by_more_than": ({"count", "predicate"}, set()),
-    "attacks_despite_defender": ({"target"}, set()),
-    "add_card_types": ({"predicate", "types"}, set()),
-    "add_subtypes_controlled": ({"predicate", "subtypes"}, set()),
-    "unspent_mana_becomes_red": (set(), set()),
-    "destroy_creatures_losing_abilities": ({"max_mana_value"}, set()),
-    "enters_with_x_counters": ({"counter"}, set()),
-    "opponent_damage_plus_counters": ({"counter"}, set()),
-    "set_base_pt_value": ({"target", "power", "toughness", "duration"}, set()),
-    "fight": ({"sources", "target"}, set()),
-    "gain_life_value": ({"amount"}, set()),
-    "add_mana_value": ({"amount", "mana"}, set()),
-    "keep_unspent_red_mana": (set(), set()),
-    "search_library_to_hand": ({"predicate"}, set()),
-    "look_at_library_top": (set(), set()),
-    "cast_from_library_top": ({"predicate"}, set()),
-    "set_characteristics": ({"target", "name", "subtypes", "power", "toughness"}, set()),
-    "remove_all_counters": ({"target"}, set()),
-    "distribute_counters": ({"count", "counter", "target"}, set()),
     "add_lesson_mana": ({"mana"}, set()),
     "grant_flashback": (set(), set()),
     "grant_mana": ({"predicates"}, set()),
@@ -282,19 +208,13 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "add_mana": ({"mana"}, {"until"}),
     "draw_cards": ({"count"}, set()),
     "put_top_cards_in_hand": ({"count"}, set()),
-    "create_token": (
-        {"definition_ref", "count"},
-        {"tapped_and_attacking", "attach_source"},
-    ),
-    "put_counters": ({"target", "count"}, {"counter"}),
+    "create_token": ({"definition_ref", "count"}, {"tapped_and_attacking"}),
+    "put_counters": ({"target", "count"}, set()),
     "gain_life": ({"amount"}, set()),
     "scry": ({"count"}, set()),
     "tap": ({"target"}, set()),
     "untap": ({"target"}, set()),
-    "modify_pt": (
-        {"target", "power", "toughness", "duration"},
-        {"per_creature_type_max", "per_color_among"},
-    ),
+    "modify_pt": ({"target", "power", "toughness", "duration"}, set()),
     "grant_keywords": ({"target", "keywords", "duration"}, set()),
     "restrict_blocking": ({"target", "duration", "predicate"}, set()),
     "deal_damage": ({"amount", "target"}, set()),
@@ -312,24 +232,10 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "deal_power_damage": ({"sources", "target"}, set()),
     "set_power_from_count": ({"predicate", "zone", "controller"}, set()),
     "search_basic_land": ({"subtype"}, set()),
-    "optional_discard_draw": ({"count"}, {"up_to"}),
+    "optional_discard_draw": ({"count"}, set()),
     "discard_target_player": ({"count", "target"}, set()),
     "destroy": ({"target"}, set()),
     "exile": ({"target"}, set()),
-    "airbend": ({"target"}, set()),
-    "airbend_all": ({"except", "predicate"}, set()),
-    "opponents_cast_only_from_hand": (set(), set()),
-    "exile_top_card_play_this_turn": (set(), set()),
-    "grant_firebending_until_eot": ({"amount"}, {"target"}),
-    "exile_linked": ({"chooser", "grant", "predicate", "target", "up_to", "zone"}, set()),
-    "exile_until_nonland_cast_free": ({"below"}, set()),
-    "cast_from_hand_free": ({"predicate"}, set()),
-    "no_maximum_hand_size": (set(), set()),
-    "shuffle_graveyard_into_library": (set(), set()),
-    "sacrifice_source": ({"then"}, set()),
-    "put_into_library_second_or_bottom": ({"target"}, set()),
-    "search_lands_opponent_splits": ({"count", "opponent_picks"}, set()),
-    "reveal_hand_discard_chosen": ({"predicate", "target"}, set()),
     "buff_target_value": ({"power", "toughness", "target"}, set()),
     "return_to_hand_draw_if_controlled": ({"target"}, set()),
     "modify_triggering_permanent": ({"counters", "keywords"}, set()),
@@ -338,12 +244,12 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "create_tokens_value": ({"definition_ref", "count"}, set()),
     "exile_with_controller_token": ({"target", "definition_ref"}, set()),
     "damage_opponent_creatures": ({"amount"}, set()),
-    "mill_cards": ({"count"}, {"target"}),
-    "mill_and_select": ({"count", "predicate", "if_declined"}, {"milled_any", "then"}),
+    "mill_cards": ({"count"}, set()),
+    "mill_and_select": ({"count", "predicate", "if_declined"}, set()),
     "drain_life_value": ({"amount"}, set()),
     "counter_spell": ({"target"}, set()),
     "cant_be_blocked_target": ({"target"}, set()),
-    "return_graveyard_target": ({"target"}, {"destination"}),
+    "return_graveyard_target": ({"target"}, set()),
     "modal": ({"modes"}, set()),
     "target_clause": ({"role", "body"}, set()),
     "prevent_life_gain": (set(), set()),
@@ -475,19 +381,12 @@ def _validate_condition(value: Any, context: str) -> dict[str, Any]:
         _fail(context, f"unknown condition kind {kind!r}")
     if kind in {"kicked", "always"}:
         _keys(condition, context, required={"kind"})
-    elif kind in {"cards_drawn_at_least", "unspent_mana_at_least"}:
+    elif kind == "cards_drawn_at_least":
         _keys(condition, context, required={"kind", "count"})
         _integer(condition["count"], context, minimum=0)
     elif kind == "graveyard_at_least":
         _keys(condition, context, required={"kind", "count", "predicate"})
         _integer(condition["count"], f"{context}.count", minimum=1)
-        _validate_predicate(condition["predicate"], f"{context}.predicate")
-    elif kind == "source_counters_at_least":
-        _keys(condition, context, required={"kind", "count", "counter"})
-        _integer(condition["count"], f"{context}.count", minimum=1)
-        _string(condition["counter"], f"{context}.counter")
-    elif kind == "controls_matching":
-        _keys(condition, context, required={"kind", "predicate"})
         _validate_predicate(condition["predicate"], f"{context}.predicate")
     elif kind == "nth_resolution":
         _keys(condition, context, required={"kind", "n"})
@@ -631,13 +530,10 @@ def _validate_value_expression(value: Any, context: str) -> None:
     expression = _object(value, context)
     kind = _string(expression.get("kind"), context)
     fields = {
-        "x": set(),
         "creatures_with_counters": set(),
         "battlefield_matching": {"predicate"},
         "graveyard_matching": {"predicate", "base"},
         "cards_drawn_minus": {"subtract"},
-        "greatest_shared_creature_type": set(),
-        "excess_damage": set(),
     }
     if kind not in fields:
         _fail(context, f"unknown quantity {kind!r}")
@@ -655,7 +551,6 @@ def _validate_instruction_scalars(
         "amount",
         "count",
         "look",
-        "max_mana_value",
         "max_select",
         "min_select",
         "power",
@@ -671,12 +566,6 @@ def _validate_instruction_scalars(
                 ("put_counters_value", "count"),
                 ("create_tokens_value", "count"),
                 ("drain_life_value", "amount"),
-                ("add_mana_of_one_color", "amount"),
-                ("destroy_creatures_losing_abilities", "max_mana_value"),
-                ("set_base_pt_value", "power"),
-                ("set_base_pt_value", "toughness"),
-                ("gain_life_value", "amount"),
-                ("add_mana_value", "amount"),
             }:
                 _validate_value_expression(instruction[field], f"{context}.{field}")
             else:
@@ -731,8 +620,6 @@ def _validate_instruction_scalars(
         _string(instruction["subtype"], context)
     if "tapped_and_attacking" in instruction:
         _boolean(instruction["tapped_and_attacking"], f"{context}.tapped_and_attacking")
-    if "attach_source" in instruction:
-        _boolean(instruction["attach_source"], f"{context}.attach_source")
     if "reveal" in instruction:
         _boolean(instruction["reveal"], context)
     if "keywords" in instruction:
@@ -974,7 +861,7 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
                 raw_program,
                 program_context,
                 required={"key", "kind", "ops"},
-                optional={"cost", "granted_to", "targets", "trigger", "target_binding"},
+                optional={"cost", "targets", "trigger", "target_binding"},
             )
             if raw_program.get("target_binding", "explicit") not in {
                 "explicit",
@@ -1000,22 +887,12 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
             ]
             target_roles = [target["role"] for target in targets]
             _unique(target_roles, f"{program_context}.targets")
-            # A granted ability names its grantor ("Return Trusty Boomerang").
-            granted_to = raw_program.get("granted_to")
-            if granted_to is not None and (
-                kind_name != "activated"
-                or granted_to not in {"each:equipped_creature", "each:enchanted_creature"}
-            ):
-                _fail(
-                    program_context,
-                    "only activated abilities grant to an attached creature",
-                )
             instructions = _compile_instructions(
                 raw_program["ops"], f"{program_context}.ops", definition_indexes
             )
             _validate_instruction_references(
                 instructions,
-                set(target_roles) | ({"grantor"} if granted_to is not None else set()),
+                set(target_roles),
                 f"{program_context}.instructions",
             )
             program = {
@@ -1029,8 +906,6 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
             }
             if "target_binding" in raw_program:
                 program["target_binding"] = raw_program["target_binding"]
-            if granted_to is not None:
-                program["granted_to"] = granted_to
             if "cost" in raw_program:
                 program["cost"] = _validate_cost(
                     raw_program["cost"], f"{program_context}.cost"

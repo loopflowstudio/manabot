@@ -554,6 +554,8 @@ class _Renderer:
         lines: list[str] = []
         for permanent in state.agent_permanents + state.opponent_permanents:
             optional = ""
+            if permanent.attacking:
+                optional += "; attacking"
             if permanent.temp_subtypes:
                 optional += f"; temporary subtypes {', '.join(permanent.temp_subtypes)}"
             if keywords := _keywords(permanent.keywords):

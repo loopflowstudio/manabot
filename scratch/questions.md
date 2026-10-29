@@ -8,14 +8,13 @@ and pool-membership choices that were here (history: `be2b7586b:scratch/question
 - Superseded 2026-10-29 by Jack Heart's one-representation decision (w17, no
   JSON, tokens from `Effect`): the earlier choices to stay in w16, keep the IR's
   JSON shape and build tokens in `learning.py`.
-- 2026-10-29 (sync onto T1 `f9732c12f`): T1 and T3 each filed card tests by set.
-  This branch keeps T3's flat layout (`cards/support.rs` drivers, `rules/helpers.rs`
-  `Scenario`, `rules/tla_mechanics.rs`, `cards/{fin,mkm,tokens}.rs`) because its
-  tests carry T3's engine changes; T1's `tests/support/` families, `mod stage2 { … }`
-  grouping, `soi.rs`, `zen.rs` and `rules/engine_events.rs` hold only tests already
-  present here. Strixhaven-card tests moved to `cards/stx.rs` and coverage
-  evidence identifiers were flattened to match. Revisit if T1's grouped layout
-  should win when T1 lands.
+- 2026-10-29 (sync onto T1 `8790821da`): T1's test layout wins
+  (`tests/support/{game,play,inspect}.rs`, flat `cards/<set>.rs`); T3's
+  `cards/support.rs`, `rules/helpers.rs` and `rules/tla_mechanics.rs` are folded
+  into it. T1 widened every policy-input version's permanent row to 29 for
+  `attacking`; this branch keeps v1–v4 byte-frozen at 28 (CLAUDE.md) and
+  carries `attacking` in v5 (column 41), which T3 already had. T1's w17 is the
+  card representation, so T2+T3's rules here are w18.
 - 2026-10-29: the 14 setup-used incomplete TLA cards keep their definitions and
   are listed in one `tla::INCOMPLETE` const (key, missing behavior) beside
   `cards()`, rather than a field on all 269 `Card` literals. Native cards sit in
@@ -28,23 +27,39 @@ and pool-membership choices that were here (history: `be2b7586b:scratch/question
   keep pre-rename keys.
 - Full TLA completion remains the eight-PR plan; no merge or new Task authorized.
 
-Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
+Main's notes at the syncs live at `6d069d6e5:scratch/questions.md` and `origin/main@633dca159:scratch/questions.md`.
+
+- 2026-10-29 (one-representation rewrite): five cards were filed under a later
+  printing and moved to their first printing's set (see plan). Three are TLA
+  reprints (Corrupt Court Official, Epic Downfall, Lightning Strike), so
+  `set_cards(["tla"])` no longer lists them; a TLA-legal filter would need
+  printings, not first-printing key prefixes. Followed Jack Heart's
+  first-printing rule; flag for f871a8 deck validation.
+- 2026-10-29: `key` and `scryfall_id` are `#[serde(skip)]` — identity metadata,
+  not rules — so content and state digests stay equal to w16's and digest-bound
+  fixtures keep validating.
+- 2026-10-29: learning token values are stable blake3 hashes of Rust/printed
+  names (no vocabulary file); the policy builds its vocabulary from observed
+  (kind, value) pairs as before.
+- 2026-10-29: D1/f871a8 interface change: `ContentPool.compiled_semantics`
+  (IR/source hashes) is gone; manifests carry `pack_key`; rows add
+  `scryfall_id`; `IrError` is `ContentError`. `content_pool`/`pool_content`/
+  `Eligibility` otherwise unchanged.
+- 2026-10-29: the Python offline compiler (`manabot/semantic/compiler.py`) and its
+  frozen-source tests stay as the reader/reproducer of frozen v1–w11 IR; nothing
+  current reads it.
+- 2026-10-29 (support reorg): tests that exercise several cards stay where
+  they were (Corrupt Court Official with Ozai's Cruelty in `cards/tla.rs`, Epic
+  Downfall with Power Word Kill in `cards/afr.rs`); Lightning Strike has no test
+  of its own, so no `ptk.rs`/`ths.rs` test files exist yet.
 
 ## T3 (6875f0) assumptions — 2026-10-29
 
-- Support is by definition since the T1 sync (86ebe9ccf). Superseded after item 20:
-  per-card tests already in `tests/rules/` move to `tests/cards/<set>.rs` here
-  (Jack Heart's steer; items 21–22), since PR #394 has not moved them; on sync the
-  first landed layout wins.
-- Conditional entry reads the card owner's battlefield. Schema 8 is unreleased, so
-  vocabulary is appended in place. `semantic_conformance_tests` is left to T1's
-  world release.
+- Conditional entry reads the card owner's battlefield.
 - Zookeeper's creature-type count excludes a fixed noncreature-subtype list.
 - Non-+1/+1 counters live in `Permanent.counters` (serialized only when present).
 - Heartless Act removes counters by a repeated resolution-time choice. Exhaust is
   per incarnation; 702.177b "haven't activated" effects are not modeled.
-- `set_base_pt` lowers only for the source until end of turn. Kyoshi Battle Fan's
-  "create, then attach" is a `create_token` field.
 - Auras act on the object attached at activation (captured before costs). An Aura
   put onto the battlefield uncast goes to the graveyard (303.4g not modeled).
 - Swampsnare Trap castability assumes the reduction if any legal target earns it;
@@ -99,35 +114,18 @@ and `16dfd3dbb:scratch/questions.md`; the ones this branch now builds on:
 `Permanent::{activation_used, record_activation}`, `ManaUse`-keyed restricted
 mana, `Game::zone_cast_cost`/`may_play_from_zone`, `ZoneEntry`.
 
-- Schema 8: T2's numbers stay; this branch's entries follow T2's maxima in
-  their old order. Same-named entries are one entry (`x`, `mana_x`, `exhaust`,
-  `each:creature_you_control`). `earthbend_value` is gone (T2's `earthbend`
-  takes a `Count`), so opcodes after it moved down one.
 - `with_counter` keeps T2's +1/+1 meaning (Hog-Monkey's text); `no_counters`
   reads every kind. Card-only matching rejects `with_counter`/`attacking`.
-- Activation X rides `Payment::Activation.x`; `ActivationX` and `Crew` keep a
-  `PermanentId` (battlefield only). `ActivatedAbilityDefinition::target_requirement`
-  replaced `requires_target`/`target_is_optional`.
 - Library-top casting is a `zone_cast_cost` case; `in_casting_zone` is gone.
 - An Aura entering attached invalidates both players' mana caches.
-- Card tests: T2's funded `setup` stays; this branch's tests use
-  `setup_unfunded`. T2's one-argument `can_activate` is `can_activate_any`.
-- World: w17 (own `WORLDS.md` entry); conformance receipts stay w15.
 - Crashing Wave (item 18): the stun counters are placed one at a time among
   the tapped creatures an opponent controls at each placement, and all three
   must be placed while any is eligible ("any number" of recipients, CR 601.2d
   applied at resolution). The required waterbend {X} adds to the total cost,
-  not the mana value; a free cast still pays it with X = 0. Kicker and a
-  required additional cost on one spell are rejected at compile time.
+  not the mana value; a free cast still pays it with X = 0.
 - Item 19 (with Fire Nation Palace): Name/creature types appear only while an effect sets them; spell keyword
   grants reach `Observation`, not the Academy stack view. `.pyi` now also lists `Permanent`'s
   existing `exile_if_dies_this_turn` and `temp_subtypes`.
-- `manabot/sim/registration.py` admits worlds only up to w15 (w16 and w17 are
-  rejected); left to the world release with the receipts.
-- Item 22 moved all of `rules/tla_content.rs` into `cards/tla.rs` and merged its
-  drivers into `cards/support.rs`. Multi-set tests went to the first card named
-  (`landfall_*` → `fin.rs`). TLA's fixed tokens are TLA cards, so their tests
-  stay in `tla.rs` (assumed reading of "tokens go to tokens.rs").
 - `rules::structured_offers::structured_offer_rejects_fabricated_and_stale_ids_without_mutation`
   failed once at `structured_offers.rs:329` in a full debug `rules_tests` run,
   then passed alone and on a full rerun. It is untouched here and may compare a
@@ -150,14 +148,9 @@ mana, `Game::zone_cast_cost`/`may_play_from_zone`, `ZoneEntry`.
   sideboard public in this format, or should the `Observation` hide it?
 - Event `from_zone`/`to_zone`/incarnations stay out of the v0 event tensor;
   public history v1 (`policy_history_version` 1) encodes them.
-- The tensor and text halves land before T1's sync. The learning-token guard
-  and card conversion wait for T1's unpublished authoring-layer removal, as
-  Jack Heart's steer directs ("sync onto it before reworking the encoding").
 - Item 24 adds the state the `Observation` lacked (combat assignments, lost
   abilities, spent activation limits, kept red mana, no maximum hand size).
   Spent limits encode as flags for ability indices 0–3 plus a count of later
   indices (no current card has more). `deathtouch_damage` and `was_cast` stay
   unobserved: SBAs consume the first before any decision, and the second is
   read only while its own entry resolves.
-- Scryfall ids (Jack Heart's steer) attach to card definitions, so they wait
-  for the same T1 sync as the card conversion.

@@ -147,6 +147,16 @@ checkpoints or experiment evidence.
 - Inspect a bot in the browser: `./scripts/play` (installs locked local dependencies,
   starts backend + frontend, and stops both on Ctrl-C).
 
+## Forced decisions
+
+Every game runner, benchmark and Academy session uses native trivial-decision
+skipping (`skip_trivial`, on by default); a decision with one legal action is
+never shown to a person or sent to a model or policy (Jack Heart, 2026-10-28).
+Turning it off is for explicit debugging only. Outside tests, the only code
+that does is the constructed-position fixtures listed in
+`tests/env/test_skip_forced_decisions.py`; they play no game for a person,
+model or policy.
+
 ## Testing
 
 **NEVER intentionally induce load for testing**, including debugging,
@@ -185,46 +195,56 @@ checks required by the affected package and workflow.
   can reload active pages and destroy in-page revision probes; use isolated
   ports and stable generated files for concurrent headless runs.
 
-### Typed card authoring
+### Card definitions
 
-Cards are authored once, in the set file of their first printing under
-`managym/src/cardsets/` (keys `<set>.<card>`; basics are `lea.*`), using the
-symbolic types in `managym/src/cards/authoring.rs`. Add a card to its set file's
-`cards()`. A card the typed language cannot yet express may be a native
-`CardDefinition` in that set file's `native_cards()`; it is unsupported for deck
-entry. The engine compiles typed cards in process (`managym/src/semantic/compile.rs`);
-there is no generated card JSON or IR to regenerate. Python reads current IR
-through `managym.semantic_ir_json`; rebuild the extension after card changes.
+Each card is one function in the set file of its first printing under
+`managym/src/cardsets/` (keys `<set>.<card>`; basics are `lea.*`, tokens
+`token.*`), returning the engine's own `CardDefinition` written in its rules
+types (`Effect`, `Ability`, `TargetSpec`, `TriggerCondition`, …). That value is
+the only card representation: there is no authoring language, compiler, IR or
+card JSON. Add the function to its set file's `cards()`. New behavior is a new
+rules-type variant (with a directed test in `tests/cards/<set>.rs`), never
+card-specific logic. Every definition carries `scryfall_id`, the Scryfall card
+id of the printing in its set file (`tests/cards/scryfall.rs` checks shape and
+uniqueness offline; `tests/cards/check_scryfall.py` checks names and sets
+online, never in CI). Rebuild the extension after card changes.
+
+Learning tokens derive from the same definitions (`semantic/tokens.rs`,
+`managym.learning_catalog`), so a new variant reaches the policy without a
+vocabulary edit. Every mechanic must be observable in both the observation
+tensor and the tokens: extend the exhaustive guards in
+`tests/cards/observability.rs` (keywords, permanent and player status, `Effect`,
+`TriggerCondition`, `Ability`) and give the mechanic a directed test there.
 
 Support is definition: the world pool is every defined card from every set, and
 a card is supported unless its set file marks it incomplete (`tla::INCOMPLETE`,
 with the missing behavior). Restrict to a set with `world::set_cards` /
 `managym.set_cards`, never with per-pack membership lists. Tests never qualify
 or gate a card. A test about one card goes in `managym/tests/cards/<set>.rs`, the
-set file of that card; engine rules stay in `tests/rules/`. Keep decklists separate from behavior. Keep long printed text in
-a local `text_box` binding so rustfmt can format the typed definition.
+set file of that card; engine rules stay in `tests/rules/`, and shared scenario
+helpers live in `tests/support/`. Keep decklists separate from behavior. Keep long printed text in
+a local `text_box` binding so rustfmt can format the definition.
 Default-pack `CardDefId` order lives in `cards/content_pack.rs` (`LEGACY_ORDER`).
 Card tests mirror the set files: `managym/tests/cards/<set>.rs`, one module per
-set under the single `tests/cards.rs` target. `tests/rules/` keeps engine rules
-not about one card. Both targets mount `tests/cards/support.rs` (shared drivers)
-and `tests/rules/helpers.rs` (`Scenario`). A new authored field, predicate kind or `each:` role also
-needs its entry appended to `content/semantic/current/learning_schema.json`.
+set under the single `tests/cards.rs` target. Both test targets mount
+`tests/support/` (`game.rs` builds, `play.rs` acts, `inspect.rs` reads), each
+primitive defined once.
 
 A permanent's activated abilities are `Game::activated_abilities_for` (printed,
-then granted, e.g. `Program::granted_to` from Equipment); activation, payment
+then granted, e.g. an Equipment's `AbilityGrant`); activation, payment
 and offer code indexes only that list, never `card.activated_abilities`.
 Whether a permanent has lost its abilities is `Game::has_lost_abilities`
 (until-end-of-turn loss or an Aura's `SetCharacteristics`); never read
 `Permanent.abilities_lost` alone.
 
-Activated abilities that function from hand or graveyard set `Cost.zone`
-(landcycling uses `Program::landcycling`); they are offered as
-`Action::ActivateCardAbility`. Programs compile in key order, so an ability's
-index follows its program key, not its printed position.
+Activated abilities that function from hand or graveyard set
+`ActivatedAbilityDefinition.zone` (landcycling included); they are offered as
+`Action::ActivateCardAbility`. An ability's index is its position in
+`activated_abilities`.
 
-Native fixed mana abilities on a card are additive: multiple fixed productions
+Fixed mana abilities on a card are additive: multiple fixed productions
 produce all listed colors together. A land that produces one chosen color uses
-one activated modal mana program, not multiple fixed mana programs. Verify each
+one activated modal mana ability, not multiple fixed mana abilities. Verify each
 choice by paying a real cost and checking the remaining mana.
 
 ### Etude card evaluation

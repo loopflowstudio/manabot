@@ -223,14 +223,16 @@ pub struct StaticTypeGrant {
 }
 
 /// "Enchanted creature loses all abilities and is a [creature_types] with base
-/// power and toughness P/T named [name]" (Honest Work): one effect across
+/// power and toughness P/T named [named]" (Honest Work): one effect across
 /// layers 1, 4, 6 and 7b (CR 613.1) on the exact attached creature. It
 /// replaces the creature's creature types and names, keeps its card types,
 /// supertypes and other subtypes, and leaves the source's own grants
 /// (`attached_grants`) as its only activated abilities.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct SetCharacteristics {
-    pub name: String,
+    /// The name it sets: a rules value, unlike a definition's own `name`, so
+    /// it reaches the learning tokens.
+    pub named: String,
     pub creature_types: Vec<String>,
     pub power: i32,
     pub toughness: i32,
@@ -459,6 +461,14 @@ pub struct SpellCostReduction {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CardDefinition {
+    /// `<set>.<card>`: the set file of the card's first printing and its slug.
+    /// Identity metadata, not rules: excluded from content digests and tokens.
+    #[serde(skip)]
+    pub key: &'static str,
+    /// Scryfall card-object id of the printing in `key`'s set; Oracle text,
+    /// rulings and images are reachable from it. Play never reads it.
+    #[serde(skip)]
+    pub scryfall_id: &'static str,
     /// During your turn, grant graveyard flashback (Lessons cost {1}).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub grants_flashback: bool,

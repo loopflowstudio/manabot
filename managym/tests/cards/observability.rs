@@ -1,14 +1,20 @@
-//! Every observed fact reaches the policy input (v5). The guard names, for
-//! each `Observation` field, keyword and counter kind, the column or rows that
-//! encode it, or why it is not a decision input. A new field fails to compile
-//! until it is listed; every listed column is checked against the v5 widths,
-//! and every v5 row column must be claimed. Directed tests put a game into
-//! each state and compare the named column with an otherwise equal baseline
-//! that v4 cannot tell apart. Viewer-safety tests check that hidden cards never
-//! reach the encoding.
-use crate::{
-    helpers::Scenario,
-    support::{cast, mode, setup, setup_unfunded},
+//! Every mechanic reaches the policy three ways: match state through the
+//! observation tensor (`agent::observation_encoder`, policy input v5), card
+//! rules through learning tokens (`semantic::tokens`), and both through the
+//! LLM text (`manabot/semantic/text_observation.py`, guarded in Python). The
+//! guards destructure or match exhaustively, with no wildcard, so a new
+//! keyword, counter kind, `Observation`, `Permanent` or `Player` field, or
+//! `Effect`, `Ability` or `TriggerCondition` variant does not compile until it
+//! names where the policy sees it; every listed column is checked against the
+//! v5 widths and every v5 row column must be claimed. Directed tests put a game
+//! into each state and check that the named column or token changes, against
+//! an otherwise equal baseline v4 cannot tell apart where v5 adds the column.
+//! Viewer-safety tests check hidden cards change neither.
+
+use crate::support::{
+    game::{deck, five_color_setup, five_color_unfunded_setup, move_to_hand, Scenario},
+    inspect::library_card,
+    play::{cast, choose, choose_mode, pass_until, settle},
 };
 use managym::{
     agent::{
@@ -42,7 +48,1123 @@ use managym::{
         zone::ZoneType,
     },
 };
+use managym::{
+    cards::content_pack::default_content_pack,
+    semantic::tokens::{definition_tokens, name_value, TokenKind},
+    state::{
+        ability::{
+            Ability, Effect, EffectValue, LinkedChooser, LinkedGrant, PaymentCost, StaticCondition,
+            TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+        },
+        card::{CardDefinition, CardType, Keywords},
+        mana::{Mana, ManaCost},
+        permanent::{BecomesCreature, Permanent},
+        player::Player,
+        predicate::CardPredicate,
+    },
+    Game, PlayerConfig,
+};
 use std::collections::BTreeSet;
+
+// ---------------------------------------------------------------------------
+// Where each piece of state is observed.
+
+/// How the policy sees one state field.
+#[derive(Clone, Copy, Debug)]
+enum Seen {
+    /// Permanent tensor column.
+    Permanent(usize),
+    /// Player tensor columns `start..end`.
+    Player(usize, usize),
+    /// Observed through another field named here.
+    Via(&'static str),
+    /// Never visible at a decision point, with the reason.
+    Transient(&'static str),
+    /// Object identity or bookkeeping rather than game state.
+    Identity,
+}
+
+/// Keyword → (card column, permanent column). The token is the `Keywords`
+/// field of the same name on the definition.
+fn keyword_columns(keywords: Keywords) -> [(&'static str, bool, usize, usize); 14] {
+    let Keywords {
+        flying,
+        reach,
+        haste,
+        flash,
+        vigilance,
+        trample,
+        first_strike,
+        double_strike,
+        deathtouch,
+        lifelink,
+        defender,
+        menace,
+        hexproof,
+        indestructible,
+    } = keywords;
+    [
+        ("flying", flying, 17, 10),
+        ("reach", reach, 18, 11),
+        ("haste", haste, 19, 12),
+        ("flash", flash, 28, 13),
+        ("vigilance", vigilance, 20, 14),
+        ("trample", trample, 21, 15),
+        ("first_strike", first_strike, 22, 16),
+        ("double_strike", double_strike, 23, 17),
+        ("deathtouch", deathtouch, 24, 18),
+        ("lifelink", lifelink, 25, 19),
+        ("defender", defender, 26, 20),
+        ("menace", menace, 27, 21),
+        ("hexproof", hexproof, 36, 22),
+        ("indestructible", indestructible, 38, 25),
+    ]
+}
+
+fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 26] {
+    let Permanent {
+        id: _,
+        card: _,
+        controller: _,
+        tapped: _,
+        summoning_sick: _,
+        damage: _,
+        deathtouch_damage: _,
+        temp_power: _,
+        temp_toughness: _,
+        plus1_counters: _,
+        temp_base_power: _,
+        temp_base_toughness: _,
+        counters: _,
+        cant_be_blocked_this_turn: _,
+        firebending_this_turn: _,
+        animated: _,
+        temp_keywords: _,
+        temp_subtypes: _,
+        exile_if_dies_this_turn: _,
+        abilities_lost: _,
+        attacking: _,
+        was_cast: _,
+        attached_to: _,
+        becomes_creature: _,
+        exhausted: _,
+        activated_this_turn: _,
+    } = permanent;
+    [
+        ("id", Seen::Identity),
+        ("card", Seen::Permanent(24)),
+        ("controller", Seen::Permanent(0)),
+        ("tapped", Seen::Permanent(1)),
+        ("summoning_sick", Seen::Permanent(3)),
+        ("damage", Seen::Permanent(2)),
+        (
+            "deathtouch_damage",
+            Seen::Transient("state-based actions destroy the creature before priority"),
+        ),
+        ("temp_power", Seen::Permanent(6)),
+        ("temp_toughness", Seen::Permanent(7)),
+        ("temp_base_power", Seen::Permanent(6)),
+        ("temp_base_toughness", Seen::Permanent(7)),
+        ("plus1_counters", Seen::Permanent(4)),
+        (
+            "counters",
+            Seen::Via("counter kinds other than +1/+1: see counter_column"),
+        ),
+        ("cant_be_blocked_this_turn", Seen::Permanent(5)),
+        (
+            "firebending_this_turn",
+            Seen::Permanent(PERMANENT_FIREBENDING_INDEX),
+        ),
+        ("animated", Seen::Permanent(8)),
+        (
+            "temp_keywords",
+            Seen::Via("keyword_columns: effective keywords"),
+        ),
+        ("temp_subtypes", Seen::Permanent(26)),
+        ("exile_if_dies_this_turn", Seen::Permanent(23)),
+        (
+            "abilities_lost",
+            Seen::Permanent(PERMANENT_ABILITIES_LOST_INDEX),
+        ),
+        ("attacking", Seen::Permanent(PERMANENT_ATTACKING_INDEX)),
+        (
+            "was_cast",
+            Seen::Transient("read only by entering-the-battlefield triggers as it enters"),
+        ),
+        ("attached_to", Seen::Permanent(PERMANENT_ATTACHED_INDEX)),
+        ("becomes_creature", Seen::Permanent(8)),
+        ("exhausted", Seen::Permanent(PERMANENT_USED_ABILITIES_INDEX)),
+        (
+            "activated_this_turn",
+            Seen::Permanent(PERMANENT_USED_ABILITIES_INDEX),
+        ),
+    ]
+}
+
+fn player_fields(player: &Player) -> [(&'static str, Seen); 13] {
+    let Player {
+        id: _,
+        index: _,
+        deck: _,
+        sideboard: _,
+        known_hand: _,
+        name: _,
+        life: _,
+        drew_when_empty: _,
+        no_maximum_hand_size: _,
+        alive: _,
+        mana_pool: _,
+        combat_mana_pool: _,
+        keeps_red_mana: _,
+    } = player;
+    [
+        ("id", Seen::Identity),
+        ("index", Seen::Identity),
+        ("deck", Seen::Via("zone counts (library size)")),
+        ("sideboard", Seen::Via("sideboard cards and counts")),
+        ("known_hand", Seen::Via("known_hand tensor")),
+        ("name", Seen::Identity),
+        ("life", Seen::Player(0, 1)),
+        (
+            "drew_when_empty",
+            Seen::Transient("the player loses at the next state-based check"),
+        ),
+        ("alive", Seen::Transient("the game ends")),
+        ("mana_pool", Seen::Player(28, 40)),
+        ("combat_mana_pool", Seen::Player(27, 28)),
+        (
+            "no_maximum_hand_size",
+            Seen::Player(
+                PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX,
+                PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX + 1,
+            ),
+        ),
+        (
+            "keeps_red_mana",
+            Seen::Player(PLAYER_KEEPS_RED_MANA_INDEX, PLAYER_KEEPS_RED_MANA_INDEX + 1),
+        ),
+    ]
+}
+
+/// The token every `Effect` variant contributes. No wildcard: a new variant
+/// must be named here (and given a witness below).
+fn effect_token(effect: &Effect) -> &'static str {
+    match effect {
+        Effect::CreateNonlegendaryCopy => "Effect::CreateNonlegendaryCopy",
+        Effect::ModifyControlled { .. } => "Effect::ModifyControlled",
+        Effect::OptionalPayment { .. } => "Effect::OptionalPayment",
+        Effect::Sacrifice { .. } => "Effect::Sacrifice",
+        Effect::DealDamageToController { .. } => "Effect::DealDamageToController",
+        Effect::DrainLife { .. } => "Effect::DrainLife",
+        Effect::CantBeBlockedTarget { .. } => "Effect::CantBeBlockedTarget",
+        Effect::ReturnGraveyardTarget { .. } => "Effect::ReturnGraveyardTarget",
+        Effect::MillCards { .. } => "Effect::MillCards",
+        Effect::MillAndSelect { .. } => "Effect::MillAndSelect",
+        Effect::DrainLifeValue { .. } => "Effect::DrainLifeValue",
+        Effect::TargetClause { .. } => "Effect::TargetClause",
+        Effect::SelectTargetRequirement { .. } => "Effect::SelectTargetRequirement",
+        Effect::SearchBasicLand { .. } => "Effect::SearchBasicLand",
+        Effect::OptionalDiscardDraw { .. } => "Effect::OptionalDiscardDraw",
+        Effect::DiscardTargetPlayer { .. } => "Effect::DiscardTargetPlayer",
+        Effect::Destroy { .. } => "Effect::Destroy",
+        Effect::Exile { .. } => "Effect::Exile",
+        Effect::BuffTargetValue { .. } => "Effect::BuffTargetValue",
+        Effect::ReturnToHandDrawIfControlled { .. } => "Effect::ReturnToHandDrawIfControlled",
+        Effect::ModifyTriggeringPermanent { .. } => "Effect::ModifyTriggeringPermanent",
+        Effect::Discard => "Effect::Discard",
+        Effect::DealDamageValue { .. } => "Effect::DealDamageValue",
+        Effect::PutCountersValue { .. } => "Effect::PutCountersValue",
+        Effect::AddSubtypeToTarget { .. } => "Effect::AddSubtypeToTarget",
+        Effect::ExileIfDiesThisTurn { .. } => "Effect::ExileIfDiesThisTurn",
+        Effect::IfCondition { .. } => "Effect::IfCondition",
+        Effect::ReturnToHand { .. } => "Effect::ReturnToHand",
+        Effect::DealDamage { .. } => "Effect::DealDamage",
+        Effect::CounterSpell { .. } => "Effect::CounterSpell",
+        Effect::ModifyUntilEot { .. } => "Effect::ModifyUntilEot",
+        Effect::DrawCards { .. } => "Effect::DrawCards",
+        Effect::MassDamage { .. } => "Effect::MassDamage",
+        Effect::DamageOpponentCreatures { .. } => "Effect::DamageOpponentCreatures",
+        Effect::CreateTokensValue { .. } => "Effect::CreateTokensValue",
+        Effect::ExileWithControllerToken { .. } => "Effect::ExileWithControllerToken",
+        Effect::CreateToken { .. } => "Effect::CreateToken",
+        Effect::PutCountersOnSource { .. } => "Effect::PutCountersOnSource",
+        Effect::PutCounters { .. } => "Effect::PutCounters",
+        Effect::TapSource => "Effect::TapSource",
+        Effect::UntapSource => "Effect::UntapSource",
+        Effect::CantBeBlockedThisTurnSource => "Effect::CantBeBlockedThisTurnSource",
+        Effect::GainLife { .. } => "Effect::GainLife",
+        Effect::OnNthResolutionThisTurn { .. } => "Effect::OnNthResolutionThisTurn",
+        Effect::Scry { .. } => "Effect::Scry",
+        Effect::LookAndSelect { .. } => "Effect::LookAndSelect",
+        Effect::PutTopCardsInHand { .. } => "Effect::PutTopCardsInHand",
+        Effect::Learn => "Effect::Learn",
+        Effect::Modal { .. } => "Effect::Modal",
+        Effect::CounterUnlessPays { .. } => "Effect::CounterUnlessPays",
+        Effect::IfKicked { .. } => "Effect::IfKicked",
+        Effect::IfGraveyardAtLeast { .. } => "Effect::IfGraveyardAtLeast",
+        Effect::TargetCreaturesDealPowerDamageToLastTarget => {
+            "Effect::TargetCreaturesDealPowerDamageToLastTarget"
+        }
+        Effect::Earthbend { .. } => "Effect::Earthbend",
+        Effect::ReturnSourceToBattlefieldTapped => "Effect::ReturnSourceToBattlefieldTapped",
+        Effect::ExileUntilSourceLeaves { .. } => "Effect::ExileUntilSourceLeaves",
+        Effect::AddMana { .. } => "Effect::AddMana",
+        Effect::BuffTarget { .. } => "Effect::BuffTarget",
+        Effect::UntapTarget { .. } => "Effect::UntapTarget",
+        Effect::GrantKeywordsToTarget { .. } => "Effect::GrantKeywordsToTarget",
+        Effect::IfTargetMatches { .. } => "Effect::IfTargetMatches",
+        Effect::ForEachTarget { .. } => "Effect::ForEachTarget",
+        Effect::PutCountersOnEachMatching { .. } => "Effect::PutCountersOnEachMatching",
+        Effect::SetBasePtControlled { .. } => "Effect::SetBasePtControlled",
+        Effect::AddSubtypesControlled { .. } => "Effect::AddSubtypesControlled",
+        Effect::Airbend { .. } => "Effect::Airbend",
+        Effect::AirbendAll { .. } => "Effect::AirbendAll",
+        Effect::OpponentsCastOnlyFromHand => "Effect::OpponentsCastOnlyFromHand",
+        Effect::ExileTopCardPlayThisTurn => "Effect::ExileTopCardPlayThisTurn",
+        Effect::GrantFirebendingUntilEot { .. } => "Effect::GrantFirebendingUntilEot",
+        Effect::GrantFirebendingToTarget { .. } => "Effect::GrantFirebendingToTarget",
+        Effect::ExileLinked { .. } => "Effect::ExileLinked",
+        Effect::ExileUntilNonlandCastFree { .. } => "Effect::ExileUntilNonlandCastFree",
+        Effect::CastFromHandFree { .. } => "Effect::CastFromHandFree",
+        Effect::NoMaximumHandSize => "Effect::NoMaximumHandSize",
+        Effect::ShuffleGraveyardIntoLibrary => "Effect::ShuffleGraveyardIntoLibrary",
+        Effect::OwnerPutsIntoLibrary { .. } => "Effect::OwnerPutsIntoLibrary",
+        Effect::RevealHandDiscardChosen { .. } => "Effect::RevealHandDiscardChosen",
+        Effect::SearchLandsOpponentSplits { .. } => "Effect::SearchLandsOpponentSplits",
+        Effect::PlaceTargetInLibrary { .. } => "Effect::PlaceTargetInLibrary",
+        Effect::SacrificeSource { .. } => "Effect::SacrificeSource",
+        Effect::ExileSourceSpell => "Effect::ExileSourceSpell",
+        Effect::BuffTriggeringPermanentValue { .. } => "Effect::BuffTriggeringPermanentValue",
+        Effect::DestroyCreaturesLosingAbilities { .. } => "Effect::DestroyCreaturesLosingAbilities",
+        Effect::AttachSourceTo { .. } => "Effect::AttachSourceTo",
+        Effect::ExileAttached => "Effect::ExileAttached",
+        Effect::TapAttached => "Effect::TapAttached",
+        Effect::RemoveAllCountersFromAttached => "Effect::RemoveAllCountersFromAttached",
+        Effect::DistributeCountersToTappedOpponentCreatures { .. } => {
+            "Effect::DistributeCountersToTappedOpponentCreatures"
+        }
+        Effect::ReturnGrantorToHand => "Effect::ReturnGrantorToHand",
+        Effect::ShuffleAttachedIntoLibrary => "Effect::ShuffleAttachedIntoLibrary",
+        Effect::GrantKeywordsToSource { .. } => "Effect::GrantKeywordsToSource",
+        Effect::BecomeCreatureSource { .. } => "Effect::BecomeCreatureSource",
+        Effect::SetBasePtUntilEot { .. } => "Effect::SetBasePtUntilEot",
+        Effect::BecomeCreatureTarget { .. } => "Effect::BecomeCreatureTarget",
+        Effect::SetBasePtTarget { .. } => "Effect::SetBasePtTarget",
+        Effect::ReturnSourceToHand => "Effect::ReturnSourceToHand",
+        Effect::GainLifeValue { .. } => "Effect::GainLifeValue",
+        Effect::AddOneColorManaValue { .. } => "Effect::AddOneColorManaValue",
+        Effect::AddManaValue { .. } => "Effect::AddManaValue",
+        Effect::KeepUnspentRedMana => "Effect::KeepUnspentRedMana",
+        Effect::FightLastTarget => "Effect::FightLastTarget",
+        Effect::GrantKeywordsControlled { .. } => "Effect::GrantKeywordsControlled",
+        Effect::SearchLibraryToHand { .. } => "Effect::SearchLibraryToHand",
+        Effect::TapTarget { .. } => "Effect::TapTarget",
+        Effect::RemoveCounters { .. } => "Effect::RemoveCounters",
+    }
+}
+
+/// Number of `Effect` variants named in [`effect_token`].
+const EFFECT_VARIANTS: usize = 106;
+
+/// One value of every `Effect` variant.
+fn effect_witnesses() -> Vec<Effect> {
+    let creature = CardPredicate::creature;
+    let target = || TargetSpec::Creature;
+    let value = || EffectValue::CreaturesWithCounters;
+    let draw = || vec![Effect::DrawCards { count: 1 }];
+    vec![
+        Effect::CreateNonlegendaryCopy,
+        Effect::ModifyControlled {
+            predicate: creature(),
+            power: 1,
+            toughness: 1,
+        },
+        Effect::OptionalPayment {
+            cost: PaymentCost::Waterbend { generic: 2 },
+            if_paid: draw(),
+            if_declined: vec![Effect::Discard],
+        },
+        Effect::Sacrifice {
+            predicate: creature(),
+        },
+        Effect::DealDamageToController { amount: 1 },
+        Effect::DrainLife { amount: 1 },
+        Effect::CantBeBlockedTarget { target: target() },
+        Effect::ReturnGraveyardTarget {
+            target: TargetSpec::GraveyardCardYouOwn {
+                predicate: creature(),
+            },
+            tapped_onto_battlefield: false,
+        },
+        Effect::MillCards {
+            count: 2,
+            target: None,
+        },
+        Effect::MillAndSelect {
+            count: 2,
+            predicate: creature(),
+            if_declined: draw(),
+            if_milled: None,
+        },
+        Effect::DrainLifeValue { amount: value() },
+        Effect::TargetClause {
+            requirement: TargetRequirement::one(target()),
+            effects: draw(),
+        },
+        Effect::SelectTargetRequirement { index: 0 },
+        Effect::SearchBasicLand {
+            subtype: None,
+            count: 1,
+            tapped: true,
+            untap_if_lands: None,
+            bottom_source: false,
+            to_hand: false,
+        },
+        Effect::OptionalDiscardDraw { count: 1, up_to: 1 },
+        Effect::DiscardTargetPlayer {
+            count: 1,
+            target: TargetSpec::Opponent,
+        },
+        Effect::Destroy { target: target() },
+        Effect::Exile { target: target() },
+        Effect::BuffTargetValue {
+            power: value(),
+            toughness: 0,
+            target: target(),
+        },
+        Effect::ReturnToHandDrawIfControlled { target: target() },
+        Effect::ModifyTriggeringPermanent {
+            counters: 1,
+            keywords: Keywords::default(),
+        },
+        Effect::Discard,
+        Effect::DealDamageValue {
+            amount: value(),
+            target: target(),
+        },
+        Effect::PutCountersValue {
+            count: value(),
+            target: target(),
+        },
+        Effect::AddSubtypeToTarget {
+            target: target(),
+            subtype: "Avatar".into(),
+        },
+        Effect::ExileIfDiesThisTurn { target: target() },
+        Effect::IfCondition {
+            condition: StaticCondition::YourTurn,
+            effects: draw(),
+            otherwise: vec![],
+        },
+        Effect::ReturnToHand { target: target() },
+        Effect::DealDamage {
+            amount: 1,
+            target: target(),
+        },
+        Effect::CounterSpell {
+            target: TargetSpec::Spell,
+        },
+        Effect::ModifyUntilEot {
+            power_delta: 1,
+            toughness_delta: 1,
+        },
+        Effect::DrawCards { count: 1 },
+        Effect::MassDamage { amount: 1 },
+        Effect::DamageOpponentCreatures { amount: 1 },
+        Effect::CreateTokensValue {
+            token_name: "Clue".into(),
+            count: value(),
+        },
+        Effect::ExileWithControllerToken {
+            target: target(),
+            token_name: "Clue".into(),
+        },
+        Effect::CreateToken {
+            token_name: "Clue".into(),
+            count: 1,
+            tapped_and_attacking: false,
+            attach_source: false,
+        },
+        Effect::PutCountersOnSource {
+            count: 1,
+            kind: CounterKind::PlusOnePlusOne,
+        },
+        Effect::PutCounters {
+            count: 1,
+            target: target(),
+            kind: CounterKind::Stun,
+        },
+        Effect::TapSource,
+        Effect::UntapSource,
+        Effect::CantBeBlockedThisTurnSource,
+        Effect::GainLife { amount: 1 },
+        Effect::OnNthResolutionThisTurn {
+            n: 2,
+            effect: Box::new(Effect::DrawCards { count: 1 }),
+        },
+        Effect::Scry { count: 1 },
+        Effect::LookAndSelect {
+            reveal: false,
+            look: EffectValue::Fixed(3),
+            min_select: 0,
+            max_select: 1,
+            predicate: creature(),
+        },
+        Effect::PutTopCardsInHand { count: 1 },
+        Effect::Learn,
+        Effect::Modal {
+            modes: vec![draw(), vec![Effect::Discard]],
+        },
+        Effect::CounterUnlessPays {
+            cost: ManaCost::parse("{2}"),
+        },
+        Effect::IfKicked {
+            then: draw(),
+            otherwise: vec![],
+        },
+        Effect::IfGraveyardAtLeast {
+            count: 2,
+            predicate: creature(),
+            then: draw(),
+            otherwise: vec![],
+        },
+        Effect::TargetCreaturesDealPowerDamageToLastTarget,
+        Effect::Earthbend {
+            count: EffectValue::Fixed(1),
+            target: TargetSpec::LandYouControl,
+        },
+        Effect::ReturnSourceToBattlefieldTapped,
+        Effect::ExileUntilSourceLeaves { target: target() },
+        Effect::AddMana {
+            mana: Mana::parse("R"),
+            until_end_of_combat: true,
+        },
+        Effect::BuffTarget {
+            power: 1,
+            toughness: 1,
+            target: target(),
+        },
+        Effect::UntapTarget { target: target() },
+        Effect::GrantKeywordsToTarget {
+            keywords: Keywords {
+                flying: true,
+                ..Default::default()
+            },
+            target: target(),
+        },
+        Effect::IfTargetMatches {
+            predicate: creature(),
+            then: draw(),
+        },
+        Effect::ForEachTarget { effects: draw() },
+        Effect::PutCountersOnEachMatching {
+            count: 1,
+            predicate: creature(),
+            other: true,
+        },
+        Effect::SetBasePtControlled {
+            predicate: CardPredicate {
+                card_type: Some(CardType::Creature),
+                ..Default::default()
+            },
+            power: EffectValue::X,
+            toughness: EffectValue::X,
+        },
+        Effect::AddSubtypesControlled {
+            predicate: CardPredicate {
+                card_type: Some(CardType::Land),
+                ..Default::default()
+            },
+            subtypes: vec![
+                "Plains".into(),
+                "Island".into(),
+                "Swamp".into(),
+                "Mountain".into(),
+                "Forest".into(),
+            ],
+        },
+        Effect::Airbend {
+            target: TargetSpec::Permanent {
+                predicate: CardPredicate {
+                    not_card_types: vec![CardType::Land],
+                    ..Default::default()
+                },
+            },
+        },
+        Effect::AirbendAll {
+            predicate: CardPredicate {
+                card_type: Some(CardType::Creature),
+                ..Default::default()
+            },
+        },
+        Effect::OpponentsCastOnlyFromHand,
+        Effect::ExileTopCardPlayThisTurn,
+        Effect::GrantFirebendingUntilEot { amount: 5 },
+        Effect::GrantFirebendingToTarget {
+            amount: 4,
+            target: TargetSpec::CreatureYouControl,
+        },
+        Effect::ExileLinked {
+            chooser: LinkedChooser::TargetPlayer,
+            zone: ZoneType::Battlefield,
+            predicate: CardPredicate {
+                card_type: Some(CardType::Creature),
+                ..Default::default()
+            },
+            up_to: false,
+            grant: LinkedGrant::FlashAnyMana,
+            target: TargetSpec::Opponent,
+        },
+        Effect::ExileUntilNonlandCastFree {
+            below: EffectValue::BattlefieldMatching {
+                predicate: CardPredicate {
+                    subtype: Some("Mountain".into()),
+                    ..Default::default()
+                },
+            },
+        },
+        Effect::CastFromHandFree {
+            predicate: CardPredicate {
+                not_card_types: vec![CardType::Creature, CardType::Land],
+                ..Default::default()
+            },
+        },
+        Effect::NoMaximumHandSize,
+        Effect::ShuffleGraveyardIntoLibrary,
+        Effect::OwnerPutsIntoLibrary {
+            target: TargetSpec::Permanent {
+                predicate: CardPredicate {
+                    card_types_any: vec![CardType::Creature, CardType::Enchantment],
+                    ..Default::default()
+                },
+            },
+        },
+        Effect::RevealHandDiscardChosen {
+            target: TargetSpec::Opponent,
+            predicate: CardPredicate {
+                not_card_types: vec![CardType::Land, CardType::Instant, CardType::Sorcery],
+                ..Default::default()
+            },
+        },
+        Effect::SearchLandsOpponentSplits {
+            count: 4,
+            opponent_picks: 2,
+        },
+        Effect::PlaceTargetInLibrary {
+            second_from_top: true,
+        },
+        Effect::SacrificeSource {
+            then: vec![Effect::Scry { count: 2 }],
+        },
+        Effect::ExileSourceSpell,
+        Effect::BuffTriggeringPermanentValue {
+            power: EffectValue::BattlefieldMatching {
+                predicate: CardPredicate {
+                    card_type: Some(CardType::Creature),
+                    ..Default::default()
+                },
+            },
+            toughness: EffectValue::BattlefieldMatching {
+                predicate: CardPredicate {
+                    card_type: Some(CardType::Creature),
+                    ..Default::default()
+                },
+            },
+        },
+        Effect::DestroyCreaturesLosingAbilities {
+            max_mana_value: EffectValue::X,
+        },
+        Effect::AttachSourceTo {
+            target: TargetSpec::CreatureYouControl,
+        },
+        Effect::ExileAttached,
+        Effect::TapAttached,
+        Effect::RemoveAllCountersFromAttached,
+        Effect::DistributeCountersToTappedOpponentCreatures {
+            kind: CounterKind::Stun,
+            count: 3,
+        },
+        Effect::ReturnGrantorToHand,
+        Effect::ShuffleAttachedIntoLibrary,
+        Effect::GrantKeywordsToSource {
+            keywords: Keywords {
+                lifelink: true,
+                ..Default::default()
+            },
+        },
+        Effect::BecomeCreatureSource {
+            duration: BecomesCreature::EndOfTurn,
+        },
+        Effect::SetBasePtUntilEot {
+            power: Some(5),
+            toughness: Some(2),
+        },
+        Effect::BecomeCreatureTarget {
+            target: TargetSpec::PermanentYouControl {
+                predicate: CardPredicate {
+                    token: Some(true),
+                    card_type: Some(CardType::Artifact),
+                    ..Default::default()
+                },
+            },
+            duration: BecomesCreature::EndOfTurn,
+        },
+        Effect::SetBasePtTarget {
+            target: TargetSpec::PermanentYouControl {
+                predicate: CardPredicate {
+                    token: Some(true),
+                    card_type: Some(CardType::Artifact),
+                    ..Default::default()
+                },
+            },
+            power: Some(3),
+            toughness: Some(1),
+        },
+        Effect::ReturnSourceToHand,
+        Effect::GainLifeValue {
+            amount: EffectValue::ExcessDamage,
+        },
+        Effect::AddOneColorManaValue {
+            amount: EffectValue::GreatestSharedCreatureType,
+        },
+        Effect::AddManaValue {
+            mana: Mana::parse("R"),
+            amount: EffectValue::ExcessDamage,
+        },
+        Effect::KeepUnspentRedMana,
+        Effect::FightLastTarget,
+        Effect::GrantKeywordsControlled {
+            predicate: CardPredicate {
+                card_type: Some(CardType::Creature),
+                ..Default::default()
+            },
+            keywords: Keywords {
+                indestructible: true,
+                ..Default::default()
+            },
+        },
+        Effect::SearchLibraryToHand {
+            predicate: CardPredicate {
+                subtypes_any: vec!["Lesson".into(), "Noble".into()],
+                ..Default::default()
+            },
+        },
+        Effect::TapTarget {
+            target: TargetSpec::Creature,
+        },
+        Effect::RemoveCounters {
+            up_to: 3,
+            chosen: None,
+            target: TargetSpec::Creature,
+        },
+    ]
+}
+
+/// The token every triggered-ability condition contributes.
+fn trigger_token(condition: &TriggerCondition) -> &'static str {
+    match condition {
+        TriggerCondition::WasCast { .. } => "TriggerCondition::WasCast",
+        TriggerCondition::Sacrificed { .. } => "TriggerCondition::Sacrificed",
+        TriggerCondition::OnceEachTurn { .. } => "TriggerCondition::OnceEachTurn",
+        TriggerCondition::YouCastSpell { .. } => "TriggerCondition::YouCastSpell",
+        TriggerCondition::EntersTheBattlefield { .. } => "TriggerCondition::EntersTheBattlefield",
+        TriggerCondition::Dies { .. } => "TriggerCondition::Dies",
+        TriggerCondition::Attacks { .. } => "TriggerCondition::Attacks",
+        TriggerCondition::BecomesTapped { .. } => "TriggerCondition::BecomesTapped",
+        TriggerCondition::TappedForMana { .. } => "TriggerCondition::TappedForMana",
+        TriggerCondition::BecomesTargeted { .. } => "TriggerCondition::BecomesTargeted",
+        TriggerCondition::BeginningOfYourUpkeep => "TriggerCondition::BeginningOfYourUpkeep",
+        TriggerCondition::BeginningOfYourCombat => "TriggerCondition::BeginningOfYourCombat",
+        TriggerCondition::YouDrawNthCardThisTurn { .. } => {
+            "TriggerCondition::YouDrawNthCardThisTurn"
+        }
+        TriggerCondition::ActiveIf { .. } => "TriggerCondition::ActiveIf",
+        TriggerCondition::AttacksAlone { .. } => "TriggerCondition::AttacksAlone",
+        TriggerCondition::BeginningOfYourEndStep => "TriggerCondition::BeginningOfYourEndStep",
+    }
+}
+
+fn trigger_witnesses() -> Vec<TriggerCondition> {
+    let this = || TriggerSubject::This;
+    let enters = || Box::new(TriggerCondition::EntersTheBattlefield { subject: this() });
+    vec![
+        TriggerCondition::WasCast {
+            condition: enters(),
+        },
+        TriggerCondition::Sacrificed {
+            predicate: CardPredicate::creature(),
+            controller_only: true,
+        },
+        TriggerCondition::OnceEachTurn {
+            condition: enters(),
+        },
+        TriggerCondition::YouCastSpell {
+            predicate: CardPredicate::default(),
+        },
+        TriggerCondition::EntersTheBattlefield { subject: this() },
+        TriggerCondition::Dies { subject: this() },
+        TriggerCondition::Attacks { subject: this() },
+        TriggerCondition::BecomesTapped { subject: this() },
+        TriggerCondition::TappedForMana { subject: this() },
+        TriggerCondition::BecomesTargeted { subject: this() },
+        TriggerCondition::BeginningOfYourUpkeep,
+        TriggerCondition::BeginningOfYourCombat,
+        TriggerCondition::YouDrawNthCardThisTurn { n: 2 },
+        TriggerCondition::ActiveIf {
+            active_if: StaticCondition::YourTurn,
+            condition: enters(),
+        },
+        TriggerCondition::AttacksAlone {
+            subject: TriggerSubject::AnyYouControl(CardPredicate {
+                card_type: Some(CardType::Creature),
+                ..Default::default()
+            }),
+        },
+        TriggerCondition::BeginningOfYourEndStep,
+    ]
+}
+
+fn ability_token(ability: &Ability) -> &'static str {
+    match ability {
+        Ability::Triggered { .. } => "Ability::Triggered",
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Fixtures.
+
+/// Player 0 controls one Gray Ogre; both libraries are otherwise Mountains.
+fn ogre_game() -> (Game, PermanentId) {
+    let mut game = Game::new(
+        vec![
+            PlayerConfig::new("agent", deck(&[("Gray Ogre", 4), ("Mountain", 36)])),
+            PlayerConfig::new("opponent", deck(&[("Mountain", 40)])),
+        ],
+        7,
+        false,
+    );
+    let ogre = game
+        .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
+        .unwrap();
+    (game, ogre)
+}
+
+fn observe(game: &Game, viewer: usize) -> (Observation, EncodedObservation) {
+    let observation = Observation::for_player(game, PlayerId(viewer));
+    let encoded = encode(&observation, &ObservationEncoderConfig::default()).unwrap();
+    (observation, encoded)
+}
+
+fn permanent_row(encoded: &EncodedObservation) -> &[f32] {
+    &encoded.agent_permanents[..PERMANENT_DIM_V5]
+}
+
+fn card_row<'a>(
+    game: &Game,
+    observation: &Observation,
+    encoded: &'a EncodedObservation,
+    permanent: PermanentId,
+) -> &'a [f32] {
+    let card = game.state.permanents[permanent].as_ref().unwrap().card;
+    let id = game.state.cards[card].id.0 as i32;
+    let row = observation
+        .agent_cards
+        .iter()
+        .position(|card| card.id == id)
+        .unwrap();
+    &encoded.agent_cards[row * CARD_DIM_V5..(row + 1) * CARD_DIM_V5]
+}
+
+fn changed(before: &[f32], after: &[f32]) -> Vec<usize> {
+    (0..before.len())
+        .filter(|&column| before[column] != after[column])
+        .collect()
+}
+
+fn tokens_of(definition: &CardDefinition) -> Vec<(TokenKind, i32)> {
+    definition_tokens(definition, &default_content_pack()).unwrap()
+}
+
+fn spell(effects: Vec<Effect>) -> CardDefinition {
+    CardDefinition {
+        name: "Witness".into(),
+        spell_effects: effects,
+        ..Default::default()
+    }
+}
+
+// ---------------------------------------------------------------------------
+// (a) Guards name a real place for every variant and field.
+
+#[test]
+fn every_effect_variant_reaches_the_learning_tokens() {
+    let witnesses = effect_witnesses();
+    assert_eq!(witnesses.len(), EFFECT_VARIANTS);
+    let mut names = witnesses.iter().map(effect_token).collect::<Vec<_>>();
+    names.sort_unstable();
+    names.dedup();
+    assert_eq!(names.len(), EFFECT_VARIANTS, "one witness per variant");
+    for effect in witnesses {
+        let tokens = tokens_of(&spell(vec![effect.clone()]));
+        let expected = (TokenKind::Variant, name_value(effect_token(&effect)));
+        assert!(tokens.contains(&expected), "{effect:?}");
+    }
+}
+
+#[test]
+fn every_trigger_condition_and_ability_reaches_the_learning_tokens() {
+    for condition in trigger_witnesses() {
+        let ability = Ability::Triggered {
+            condition: condition.clone(),
+            effects: vec![Effect::DrawCards { count: 1 }],
+        };
+        let definition = CardDefinition {
+            name: "Witness".into(),
+            abilities: vec![ability.clone()],
+            ..Default::default()
+        };
+        let tokens = tokens_of(&definition);
+        for name in [trigger_token(&condition), ability_token(&ability)] {
+            assert!(
+                tokens.contains(&(TokenKind::Variant, name_value(name))),
+                "{name}"
+            );
+        }
+    }
+}
+
+#[test]
+fn every_permanent_and_player_field_names_where_it_is_seen() {
+    let (game, ogre) = ogre_game();
+    let permanent = game.state.permanents[ogre].as_ref().unwrap();
+    let player = &game.state.players[0];
+    let fields = permanent_fields(permanent)
+        .into_iter()
+        .map(|(field, seen)| (field, seen, PERMANENT_DIM_V5 - 1))
+        .chain(
+            player_fields(player)
+                .into_iter()
+                .map(|(field, seen)| (field, seen, PLAYER_DIM_V5)),
+        );
+    for (field, seen, width) in fields {
+        match seen {
+            Seen::Permanent(column) => assert!(column < width, "{field}"),
+            Seen::Player(start, end) => assert!(start < end && end <= width, "{field}"),
+            Seen::Via(place) | Seen::Transient(place) => assert!(!place.is_empty(), "{field}"),
+            Seen::Identity => {}
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// (b) Directed: each mechanic moves its named column or token.
+
+#[test]
+fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens() {
+    let (base_game, ogre) = ogre_game();
+    let (base_obs, base) = observe(&base_game, 0);
+    for index in 0..14 {
+        let (name, _, card_column, permanent_column) = keyword_columns(Keywords::default())[index];
+        let mut keywords = Keywords::default();
+        set_keyword(&mut keywords, name);
+        assert!(keyword_columns(keywords)[index].1, "{name}");
+
+        let mut granted = base_game.clone();
+        granted.state.permanents[ogre]
+            .as_mut()
+            .unwrap()
+            .temp_keywords = keywords;
+        let (_, after) = observe(&granted, 0);
+        assert_eq!(
+            changed(permanent_row(&base), permanent_row(&after)),
+            [permanent_column],
+            "{name}"
+        );
+
+        let mut printed = base_game.clone();
+        let card = printed.state.permanents[ogre].as_ref().unwrap().card;
+        printed.state.cards[card].keywords = keywords;
+        let (obs, after) = observe(&printed, 0);
+        assert!(
+            changed(
+                card_row(&base_game, &base_obs, &base, ogre),
+                card_row(&printed, &obs, &after, ogre)
+            )
+            .contains(&card_column),
+            "{name}"
+        );
+
+        let definition = CardDefinition {
+            name: "Witness".into(),
+            keywords,
+            ..Default::default()
+        };
+        let tokens = tokens_of(&definition);
+        let at = tokens
+            .iter()
+            .position(|token| *token == (TokenKind::Field, name_value(name)))
+            .unwrap();
+        assert_eq!(tokens[at + 1], (TokenKind::Boolean, 1), "{name}");
+    }
+}
+
+fn set_keyword(keywords: &mut Keywords, name: &str) {
+    let flag = match name {
+        "flying" => &mut keywords.flying,
+        "reach" => &mut keywords.reach,
+        "haste" => &mut keywords.haste,
+        "flash" => &mut keywords.flash,
+        "vigilance" => &mut keywords.vigilance,
+        "trample" => &mut keywords.trample,
+        "first_strike" => &mut keywords.first_strike,
+        "double_strike" => &mut keywords.double_strike,
+        "deathtouch" => &mut keywords.deathtouch,
+        "lifelink" => &mut keywords.lifelink,
+        "defender" => &mut keywords.defender,
+        "menace" => &mut keywords.menace,
+        "hexproof" => &mut keywords.hexproof,
+        "indestructible" => &mut keywords.indestructible,
+        other => panic!("unknown keyword {other}"),
+    };
+    *flag = true;
+}
+
+#[test]
+fn each_permanent_status_moves_its_named_column() {
+    let (base_game, ogre) = ogre_game();
+    let (_, base) = observe(&base_game, 0);
+    let fields = permanent_fields(base_game.state.permanents[ogre].as_ref().unwrap());
+    let mutate = |field: &str, permanent: &mut Permanent| match field {
+        "tapped" => permanent.tapped = !permanent.tapped,
+        "summoning_sick" => permanent.summoning_sick = !permanent.summoning_sick,
+        "damage" => permanent.damage = 1,
+        "temp_power" => permanent.temp_power = 2,
+        "temp_toughness" => permanent.temp_toughness = 2,
+        "plus1_counters" => permanent.plus1_counters = 1,
+        "temp_base_power" => permanent.temp_base_power = Some(5),
+        "temp_base_toughness" => permanent.temp_base_toughness = Some(5),
+        "cant_be_blocked_this_turn" => permanent.cant_be_blocked_this_turn = true,
+        "firebending_this_turn" => permanent.firebending_this_turn = 2,
+        "animated" => permanent.animated = true,
+        "abilities_lost" => permanent.abilities_lost = true,
+        "temp_subtypes" => permanent.temp_subtypes = vec!["Avatar".into()],
+        "exile_if_dies_this_turn" => permanent.exile_if_dies_this_turn = true,
+        "attacking" => permanent.attacking = true,
+        other => panic!("no directed mutation for {other}"),
+    };
+    for (field, seen) in fields {
+        let Seen::Permanent(column) = seen else {
+            continue;
+        };
+        if matches!(field, "card" | "controller") {
+            continue; // Identity of the row itself; covered by the encoder's own tests.
+        }
+        if matches!(
+            field,
+            "attached_to" | "becomes_creature" | "exhausted" | "activated_this_turn"
+        ) {
+            // Need a real attachment, animation or ability; the directed v5
+            // tests below reach these states through play.
+            continue;
+        }
+        let mut game = base_game.clone();
+        mutate(field, game.state.permanents[ogre].as_mut().unwrap());
+        let (_, after) = observe(&game, 0);
+        assert!(
+            changed(permanent_row(&base), permanent_row(&after)).contains(&column),
+            "{field} did not move column {column}"
+        );
+    }
+}
+
+#[test]
+fn player_life_and_mana_move_their_named_columns() {
+    let (base_game, _) = ogre_game();
+    let (_, base) = observe(&base_game, 0);
+    let fields = player_fields(&base_game.state.players[0]);
+    for (field, seen) in fields {
+        let Seen::Player(start, end) = seen else {
+            continue;
+        };
+        let mut game = base_game.clone();
+        let player = &mut game.state.players[0];
+        match field {
+            "life" => player.life = 7,
+            "mana_pool" => player.mana_pool = Mana::parse("R"),
+            "combat_mana_pool" => player.combat_mana_pool = Mana::parse("R"),
+            "no_maximum_hand_size" => player.no_maximum_hand_size = true,
+            "keeps_red_mana" => player.keeps_red_mana = true,
+            other => panic!("no directed mutation for {other}"),
+        }
+        let (_, after) = observe(&game, 0);
+        let moved = changed(&base.agent_player, &after.agent_player);
+        assert!(
+            moved.iter().any(|column| (start..end).contains(column)),
+            "{field} moved {moved:?}, expected {start}..{end}"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
+// (c) Viewer safety: hidden cards change neither the tensor nor the catalog.
+
+#[test]
+fn opponent_hidden_cards_do_not_reach_the_viewer_tensor() {
+    let game = |opponent: &[(&str, usize)]| {
+        Game::new(
+            vec![
+                PlayerConfig::new("agent", deck(&[("Gray Ogre", 4), ("Mountain", 36)])),
+                PlayerConfig::new("opponent", deck(opponent)),
+            ],
+            11,
+            false,
+        )
+    };
+    let mountains = game(&[("Mountain", 40)]);
+    let ogres = game(&[("Gray Ogre", 20), ("Mountain", 20)]);
+    let hand = |game: &Game| {
+        let mut names = game
+            .state
+            .zones
+            .zone_cards(ZoneType::Hand, PlayerId(1))
+            .iter()
+            .map(|card| game.state.cards[*card].name.clone())
+            .collect::<Vec<_>>();
+        names.sort();
+        names
+    };
+    assert_ne!(hand(&mountains), hand(&ogres), "the hidden hands differ");
+    let (_, left) = observe(&mountains, 0);
+    let (_, right) = observe(&ogres, 0);
+    assert_eq!(left.agent_player, right.agent_player);
+    assert_eq!(left.opponent_player, right.opponent_player);
+    assert_eq!(left.agent_cards, right.agent_cards);
+    assert_eq!(left.opponent_cards, right.opponent_cards);
+    assert_eq!(left.opponent_permanents, right.opponent_permanents);
+    assert_eq!(left.known_hand, right.known_hand);
+    assert_eq!(left.semantic_cards, right.semantic_cards);
+}
+
+#[test]
+fn learning_tokens_never_carry_names_or_printed_text() {
+    let pack = default_content_pack();
+    for (_, definition) in pack.definition_entries() {
+        let tokens = definition_tokens(definition, &pack).unwrap();
+        for field in ["key", "scryfall_id", "name", "text_box"] {
+            assert!(
+                !tokens.contains(&(TokenKind::Field, name_value(field))),
+                "{}: {field}",
+                definition.name
+            );
+        }
+        if !definition.text_box.is_empty() {
+            assert!(!tokens.contains(&(TokenKind::Text, name_value(&definition.text_box))));
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Policy input v5: every `Observation` field.
 
 // ---------------------------------------------------------------------------
 // Guard
@@ -331,7 +1453,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
 
 /// `(keyword, card column, permanent column)`; relation rows use
 /// `RELATION_KEYWORDS_INDEX + position`. Exhaustive like [`guard`].
-fn keyword_columns() -> Vec<(&'static str, usize, usize)> {
+fn keyword_encodings() -> Vec<(&'static str, usize, usize)> {
     #[allow(dead_code)]
     fn exhaustive(value: &KeywordData) {
         let KeywordData {
@@ -406,7 +1528,7 @@ fn every_observed_field_names_its_v5_encoding_and_every_v5_column_is_claimed() {
             }
         }
     }
-    for (keyword, card, permanent) in keyword_columns() {
+    for (keyword, card, permanent) in keyword_encodings() {
         for (buffer, index) in [(Buffer::Card, card), (Buffer::Permanent, permanent)] {
             assert!(
                 index < buffer.width() && Some(index) != buffer.validity(),
@@ -479,7 +1601,7 @@ fn flat(encoded: &EncodedObservation) -> Vec<f32> {
 }
 
 /// `(side, row)` of a permanent in `viewer`'s observation; side 0 is the agent.
-fn permanent_row(s: &Scenario, viewer: usize, id: PermanentId) -> (usize, usize) {
+fn permanent_row_of(s: &Scenario, viewer: usize, id: PermanentId) -> (usize, usize) {
     let observed = s.game().state.permanents[id].as_ref().unwrap().id.0 as i32;
     let observation = Observation::for_player(s.game(), PlayerId(viewer));
     let found = [
@@ -498,7 +1620,7 @@ fn permanent_row(s: &Scenario, viewer: usize, id: PermanentId) -> (usize, usize)
 }
 
 fn permanent_value(s: &Scenario, viewer: usize, id: PermanentId, column: usize) -> f32 {
-    let (side, row) = permanent_row(s, viewer, id);
+    let (side, row) = permanent_row_of(s, viewer, id);
     let encoded = encoded(s, viewer, 5);
     let rows = if side == 0 {
         &encoded.agent_permanents
@@ -511,7 +1633,7 @@ fn permanent_value(s: &Scenario, viewer: usize, id: PermanentId, column: usize) 
 /// Object index of a permanent row, as action focus and joins use it.
 fn object_index(s: &Scenario, viewer: usize, id: PermanentId) -> usize {
     let defaults = ObservationEncoderConfig::default();
-    let (side, row) = permanent_row(s, viewer, id);
+    let (side, row) = permanent_row_of(s, viewer, id);
     2 + 2 * defaults.max_cards_per_player + side * defaults.max_permanents_per_player + row
 }
 
@@ -555,7 +1677,7 @@ fn assert_v5_sees(
 
 /// Gray Ogres for both players, tapped, in player 0's main phase.
 fn ogre_state() -> (Scenario, PermanentId) {
-    let mut s = setup_unfunded(&["Gray Ogre"]);
+    let mut s = five_color_unfunded_setup(&["Gray Ogre"]);
     let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
     s.game_mut().state.permanents[ogre].as_mut().unwrap().tapped = true;
     (s, ogre)
@@ -600,7 +1722,7 @@ fn a_stunned_tapped_creature_differs_from_an_unstunned_one_only_in_v5() {
 }
 
 fn equipped(on_first: bool) -> (Scenario, PermanentId, [PermanentId; 2]) {
-    let mut s = setup_unfunded(&["Trusty Boomerang", "Gray Ogre"]);
+    let mut s = five_color_unfunded_setup(&["Trusty Boomerang", "Gray Ogre"]);
     let first = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let second = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let boomerang = s.force_permanent_on_battlefield(0, "Trusty Boomerang");
@@ -636,11 +1758,11 @@ fn equipment_on_one_creature_differs_from_equipment_on_another_only_in_v5() {
 }
 
 fn united_front_with_x(x: usize) -> Scenario {
-    let mut s = setup(&["United Front", "Gray Ogre"]);
+    let mut s = five_color_setup(&["United Front", "Gray Ogre"]);
     s.set_player_mana_pool(0, &format!("{x}WW"));
     cast(&mut s, "United Front");
     assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
-    mode(&mut s, x);
+    choose_mode(&mut s, x);
     s
 }
 
@@ -657,7 +1779,7 @@ fn stack_x_one_and_three_differ_only_in_v5() {
 }
 
 fn toph_and_tile(toph_has_abilities: bool) -> (Scenario, PermanentId) {
-    let mut s = setup_unfunded(&["Toph, the First Metalbender", "White Lotus Tile"]);
+    let mut s = five_color_unfunded_setup(&["Toph, the First Metalbender", "White Lotus Tile"]);
     let toph = s.force_permanent_on_battlefield(0, "Toph, the First Metalbender");
     let tile = s.force_permanent_on_battlefield(0, "White Lotus Tile");
     s.game_mut().state.permanents[toph]
@@ -717,7 +1839,7 @@ fn each_temporary_subtype_reaches_its_permanent_column() {
 
 #[test]
 fn honest_work_marks_set_characteristics_and_joins_the_aura_to_its_host() {
-    let mut s = setup(&["Honest Work", "Wind Drake"]);
+    let mut s = five_color_setup(&["Honest Work", "Wind Drake"]);
     let drake = s.force_permanent_on_battlefield(1, "Wind Drake");
     assert_eq!(
         permanent_value(&s, 0, drake, PERMANENT_CHARACTERISTICS_SET_INDEX),
@@ -725,9 +1847,9 @@ fn honest_work_marks_set_characteristics_and_joins_the_aura_to_its_host() {
     );
     s.set_player_mana_pool(0, "U");
     cast(&mut s, "Honest Work");
-    crate::support::pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(managym::state::game_object::Target::Permanent(drake)));
-    crate::support::settle(&mut s);
+    settle(&mut s);
     let work = s.battlefield_permanents_named(0, "Honest Work")[0];
     assert_eq!(
         permanent_value(&s, 0, drake, PERMANENT_CHARACTERISTICS_SET_INDEX),
@@ -741,10 +1863,10 @@ fn honest_work_marks_set_characteristics_and_joins_the_aura_to_its_host() {
 
 #[test]
 fn every_keyword_reaches_its_card_permanent_and_relation_columns() {
-    let mut s = setup_unfunded(&["Gray Ogre"]);
+    let mut s = five_color_unfunded_setup(&["Gray Ogre"]);
     s.force_permanent_on_battlefield(0, "Gray Ogre");
     let observation = Observation::for_player(s.game(), PlayerId(0));
-    for (position, (keyword, card, permanent)) in keyword_columns().into_iter().enumerate() {
+    for (position, (keyword, card, permanent)) in keyword_encodings().into_iter().enumerate() {
         let mut flags = [false; KEYWORD_COUNT];
         flags[position] = true;
         let keywords = keyword_data(flags);
@@ -760,11 +1882,11 @@ fn every_keyword_reaches_its_card_permanent_and_relation_columns() {
         changed.continuation = vec![frame];
         let encoded = encode(&changed, &config(5)).unwrap();
         let card_row = &encoded.agent_cards[..CARD_DIM_V5];
-        let permanent_row = &encoded.agent_permanents[..PERMANENT_DIM_V5];
-        for (_, other_card, other_permanent) in keyword_columns() {
+        let permanent_row_of = &encoded.agent_permanents[..PERMANENT_DIM_V5];
+        for (_, other_card, other_permanent) in keyword_encodings() {
             assert_eq!(card_row[other_card] == 1.0, other_card == card, "{keyword}");
             assert_eq!(
-                permanent_row[other_permanent] == 1.0,
+                permanent_row_of[other_permanent] == 1.0,
                 other_permanent == permanent,
                 "{keyword}"
             );
@@ -802,14 +1924,18 @@ fn keyword_data(flags: [bool; KEYWORD_COUNT]) -> KeywordData {
 fn lo_and_li_grant_lifelink_to_a_lesson_on_the_stack_in_v5() {
     let lifelink = RELATION_KEYWORDS_INDEX + 9;
     let lesson = |with_lo_and_li: bool| {
-        let mut s = setup_unfunded(&["Lo and Li, Twin Tutors", "Firebending Lesson", "Gray Ogre"]);
+        let mut s = five_color_unfunded_setup(&[
+            "Lo and Li, Twin Tutors",
+            "Firebending Lesson",
+            "Gray Ogre",
+        ]);
         if with_lo_and_li {
             s.force_permanent_on_battlefield(0, "Lo and Li, Twin Tutors");
         }
         let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
         s.set_player_mana_pool(0, "R");
         cast(&mut s, "Firebending Lesson");
-        crate::support::pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+        pass_until(&mut s, ActionSpaceKind::ChooseTarget);
         assert!(s.choose_target(managym::state::game_object::Target::Permanent(ogre)));
         encoded(&s, 1, 5).relations
     };
@@ -820,7 +1946,7 @@ fn lo_and_li_grant_lifelink_to_a_lesson_on_the_stack_in_v5() {
 
 #[test]
 fn turn_number_and_seat_reach_the_player_rows() {
-    let mut s = setup_unfunded(&[]);
+    let mut s = five_color_unfunded_setup(&[]);
     let turn = |s: &Scenario, viewer: usize| {
         let encoded = encoded(s, viewer, 5);
         (
@@ -876,13 +2002,13 @@ fn definitions_seen(s: &Scenario, viewer: usize) -> BTreeSet<u32> {
 
 #[test]
 fn foretold_and_hand_cards_never_reach_the_opponents_encoding() {
-    let mut s = setup(&["Sozin's Comet", "United Front"]);
-    let comet = crate::support::library_card(&s, 0, "Sozin's Comet");
+    let mut s = five_color_setup(&["Sozin's Comet", "United Front"]);
+    let comet = library_card(&s, 0, "Sozin's Comet");
     s.game_mut().move_card(comet, ZoneType::Hand);
-    let front = crate::support::to_hand(&mut s, "United Front");
+    let front = move_to_hand(&mut s, "United Front");
     s.set_player_mana_pool(0, "3");
     s.game_mut().scenario_refresh_priority().unwrap();
-    crate::support::choose(
+    choose(
         &mut s,
         |a| matches!(a, managym::agent::action::Action::Foretell { card, .. } if *card == comet),
     );
@@ -920,7 +2046,7 @@ fn foretold_and_hand_cards_never_reach_the_opponents_encoding() {
 
 /// Two ogres for player 1 and one for player 0, in player 0's main phase.
 fn combat_state() -> (Scenario, PermanentId, [PermanentId; 2]) {
-    let mut s = setup_unfunded(&["Gray Ogre"]);
+    let mut s = five_color_unfunded_setup(&["Gray Ogre"]);
     let blocker = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let first = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let second = s.force_permanent_on_battlefield(1, "Gray Ogre");
@@ -981,7 +2107,7 @@ fn a_creature_that_lost_its_abilities_differs_only_in_v5() {
 }
 
 fn mai(exhausted: bool) -> (Scenario, PermanentId) {
-    let mut s = setup_unfunded(&["Mai, Jaded Edge"]);
+    let mut s = five_color_unfunded_setup(&["Mai, Jaded Edge"]);
     let mai = s.force_permanent_on_battlefield(1, "Mai, Jaded Edge");
     if exhausted {
         s.game_mut().state.permanents[mai]

@@ -5,17 +5,22 @@ use crate::state::{
     mana::ManaCost,
 };
 
-/// Native definitions, until the typed card language has the operations they need.
-pub(super) fn native_cards() -> Vec<CardDefinition> {
+pub(super) fn cards() -> Vec<CardDefinition> {
     vec![man_o_war()]
 }
 
 fn man_o_war() -> CardDefinition {
+    let text_box = "When this creature enters, return target creature to its owner's hand.";
+
     CardDefinition {
-        name: "Man-o'-War".to_string(),
-        mana_cost: Some(ManaCost::parse("2U")),
+        key: "vis.man_o_war",
+        scryfall_id: "4dbf9bf9-75cd-4b25-a3a1-43b7e029700b",
+        name: "Man-o'-War".into(),
+        mana_cost: Some(ManaCost::parse("{2}{U}")),
         types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Jellyfish".to_string()],
+        subtypes: vec!["Jellyfish".into()],
+        power: Some(2),
+        toughness: Some(2),
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
@@ -24,10 +29,7 @@ fn man_o_war() -> CardDefinition {
                 target: TargetSpec::Creature,
             }],
         }],
-        text_box: "When this creature enters, return target creature to its owner's hand."
-            .to_string(),
-        power: Some(2),
-        toughness: Some(2),
+        text_box: text_box.into(),
         ..Default::default()
     }
 }

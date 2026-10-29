@@ -280,7 +280,7 @@ impl Game {
     /// Aura or printed.
     pub fn permanent_name(&self, permanent_id: PermanentId) -> &str {
         match self.set_characteristics(permanent_id) {
-            Some(set) => &set.name,
+            Some(set) => &set.named,
             None => self.state.permanents[permanent_id]
                 .as_ref()
                 .map_or("", |permanent| &self.state.cards[permanent.card].name),

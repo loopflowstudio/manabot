@@ -1,15 +1,17 @@
 # TLA content
 
-TLA cards are typed Rust definitions in
+TLA cards are engine `CardDefinition` functions in
 [`managym/src/cardsets/tla.rs`](../../../managym/src/cardsets/tla.rs), with the
 fixed tokens TLA cards make. Basic lands are Alpha cards (`lea.plains` …
-`lea.forest` in `lea.rs`); TLA decks admit them as basics. Setup manifests only
-choose definition keys and counts. The engine compiles every native/learning
-projection from that source in process. Current execution uses world **w17** and
-learning schema **8**.
+`lea.forest` in `lea.rs`); TLA decks admit them as basics. TLA reprints live in
+the set that first printed them (Corrupt Court Official in `ptk.rs`, Epic
+Downfall in `eld.rs`, Lightning Strike in `ths.rs`). Setup manifests only choose
+definition keys and counts. The engine runs those definitions directly and
+derives learning tokens from them. Current execution uses world **w18** and
+learning schema **9**.
 
 `managym.content_pool("tla-pool-v1")` is the world pool: every card any set file
-defines, with definition IDs, semantic keys, world/content/compiled identity and
+defines, with definition IDs, keys, Scryfall ids, world/content identity and
 `eligible` or `unsupported` status with a reason. `managym.set_cards(["tla",
 "lea"])` narrows it to TLA cards and basics for deck generation or validation.
 Rust consumers use `semantic::content_pool`, `pool_content` and

@@ -95,7 +95,7 @@ def _new_game(
     workload: Mapping[str, Any], seed: int, game_index: int
 ) -> tuple[managym.Env, Any, list[str]]:
     configs, labels = _player_configs(workload, game_index)
-    env = managym.Env(seed=seed, skip_trivial=False)
+    env = managym.Env(seed=seed)
     observation, _ = env.reset(configs)
     return env, observation, labels
 
@@ -139,7 +139,7 @@ def _decode(
 
 
 def _bolt_root() -> managym.Env:
-    env = managym.Env(seed=18_901, skip_trivial=False)
+    env = managym.Env(seed=18_901)
     env.reset(
         [
             managym.PlayerConfig("caster", {"Lightning Bolt": 4, "Mountain": 36}),
@@ -157,7 +157,7 @@ def _bolt_root() -> managym.Env:
 
 
 def _pass_root() -> managym.Env:
-    env = managym.Env(seed=18_902, skip_trivial=False)
+    env = managym.Env(seed=18_902)
     env.reset(
         [
             managym.PlayerConfig("active", {"Gray Ogre": 4, "Mountain": 36}),
@@ -168,7 +168,7 @@ def _pass_root() -> managym.Env:
 
 
 def _attacker_root() -> managym.Env:
-    env = managym.Env(seed=18_903, skip_trivial=False)
+    env = managym.Env(seed=18_903)
     observation, _ = env.reset(
         [
             managym.PlayerConfig("active", {"Gray Ogre": 36, "Mountain": 4}),
