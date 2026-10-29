@@ -46,7 +46,7 @@ Restricted-mana text names the class, not Lesson-only (`ee9e32383`).
 ## Remaining
 
 - Gate: CLAUDE.md arena admission/monitoring suite; Academy check/build (local
-  node can't load libllhttp; CI, running on `4d3b9b066` at 2026-10-29
+  node can't load libllhttp; CI pending on the latest push at 2026-10-29
   realign); world-bound receipts T1 already flagged.
 - Land only after #394 lands; re-sync then.
 
