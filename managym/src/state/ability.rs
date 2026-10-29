@@ -278,6 +278,10 @@ pub enum Effect {
     OpponentsCastOnlyFromHand,
     /// "Exile the top card of your library. You may play that card this turn."
     ExileTopCardPlayThisTurn,
+    /// Each creature you control gains firebending until end of turn.
+    GrantFirebendingUntilEot {
+        amount: u8,
+    },
     /// A player exiles a matching card; its controller may cast it as linked.
     ExileLinked {
         chooser: LinkedChooser,
@@ -730,6 +734,7 @@ impl Effect {
             | Effect::OpponentsCastOnlyFromHand
             | Effect::ExileSourceSpell
             | Effect::ExileTopCardPlayThisTurn
+            | Effect::GrantFirebendingUntilEot { .. }
             | Effect::ExileUntilNonlandCastFree { .. }
             | Effect::CastFromHandFree { .. }
             | Effect::NoMaximumHandSize

@@ -20,6 +20,10 @@ pub struct Permanent {
     pub plus1_counters: i32,
     /// "Can't be blocked this turn" — cleared during cleanup.
     pub cant_be_blocked_this_turn: bool,
+    /// Firebending granted until end of turn ("gains firebending 5"): red
+    /// mana added when it attacks, summed over grants. Cleared at cleanup.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub firebending_this_turn: u8,
     /// Earthbend animation: this permanent is a 0/0 creature with haste in
     /// addition to its printed types (still a land). No duration — it lasts
     /// as long as the permanent does.
@@ -75,6 +79,7 @@ impl Permanent {
             temp_toughness: 0,
             plus1_counters: 0,
             cant_be_blocked_this_turn: false,
+            firebending_this_turn: 0,
             animated: false,
             temp_keywords: Keywords::default(),
             temp_subtypes: Vec::new(),
@@ -164,8 +169,13 @@ impl Permanent {
         self.temp_power = 0;
         self.temp_toughness = 0;
         self.cant_be_blocked_this_turn = false;
+        self.firebending_this_turn = 0;
         self.temp_keywords = Keywords::default();
         self.temp_subtypes.clear();
         self.activated_this_turn.clear();
     }
+}
+
+fn is_zero(value: &u8) -> bool {
+    *value == 0
 }

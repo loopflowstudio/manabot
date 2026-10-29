@@ -65,7 +65,7 @@ fn fixture() -> HashMap<String, FixtureCard> {
 }
 
 fn render_mana_cost(cost: &ManaCost) -> String {
-    let mut out = String::new();
+    let mut out = "{X}".repeat(usize::from(cost.x));
     let generic = cost.cost[Color::Generic as usize];
     if generic > 0 {
         out.push_str(&format!("{{{generic}}}"));
@@ -310,7 +310,8 @@ fn every_registered_real_card_matches_scryfall() {
             ("Menace", def.keywords.menace),
             ("Hexproof", def.keywords.hexproof),
             ("Ward", def.ward.is_some()),
-            ("Kicker", def.kicker.is_some()),
+            // A waterbend additional cost rides the kicker field unnamed.
+            ("Kicker", def.kicker.is_some() && !def.kicker_waterbend),
         ];
         for (keyword, has) in checks {
             if kw(keyword) != has {

@@ -380,6 +380,7 @@ impl Game {
     }
 
     fn check_triggers_for_event(&mut self, event: &GameEvent, sources: &[TriggerSourceSnapshot]) {
+        self.granted_firebending_triggers(event);
         let mut fired = Vec::new();
         for source in sources {
             for (ability_index, ability) in
@@ -464,6 +465,41 @@ impl Game {
                 .trigger_enqueue_counter
                 .checked_add(1)
                 .expect("trigger occurrence identity exhausted");
+        }
+    }
+
+    /// Granted firebending (CR 702.187): each attacking creature with
+    /// firebending until end of turn triggers "add that much {R} until end
+    /// of combat".
+    fn granted_firebending_triggers(&mut self, event: &GameEvent) {
+        let GameEvent::AttackersDeclared { attackers, .. } = event else {
+            return;
+        };
+        for attacker in attackers.clone() {
+            let Some(permanent) = self.state.permanents[attacker].as_ref() else {
+                continue;
+            };
+            let (amount, controller, card) = (
+                permanent.firebending_this_turn,
+                permanent.controller,
+                permanent.card,
+            );
+            if amount == 0 {
+                continue;
+            }
+            let (Some(source), Some(lki)) = (
+                self.permanent_object_ref(attacker),
+                self.snapshot_current_permanent(card),
+            ) else {
+                continue;
+            };
+            let mut mana = crate::state::mana::Mana::default();
+            mana.mana[crate::state::mana::Color::Red as usize] = amount;
+            let effect = crate::state::ability::Effect::AddMana {
+                mana,
+                until_end_of_combat: true,
+            };
+            self.enqueue_delayed_trigger(source, lki, controller, vec![effect]);
         }
     }
 

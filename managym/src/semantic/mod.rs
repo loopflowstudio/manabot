@@ -118,6 +118,7 @@ pub enum Opcode {
     CastFromHandFree = 76,
     ExileUntilNonlandCastFree = 77,
     ExileLinked = 78,
+    GrantFirebendingUntilEot = 79,
 }
 
 impl Opcode {
@@ -201,6 +202,7 @@ impl Opcode {
             76 => Opcode::CastFromHandFree,
             77 => Opcode::ExileUntilNonlandCastFree,
             78 => Opcode::ExileLinked,
+            79 => Opcode::GrantFirebendingUntilEot,
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -454,6 +456,9 @@ pub enum Step {
     },
     OpponentsCastOnlyFromHand,
     ExileTopCardPlayThisTurn,
+    GrantFirebendingUntilEot {
+        amount: usize,
+    },
     ExileLinked {
         chooser: String,
         grant: String,
@@ -1054,6 +1059,7 @@ impl<'a> BoundPack<'a> {
             | Step::AirbendAll { .. }
             | Step::OpponentsCastOnlyFromHand
             | Step::ExileTopCardPlayThisTurn
+            | Step::GrantFirebendingUntilEot { .. }
             | Step::ExileLinked { .. }
             | Step::ExileUntilNonlandCastFree { .. }
             | Step::CastFromHandFree { .. }
@@ -1395,6 +1401,9 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         },
         Opcode::OpponentsCastOnlyFromHand => Step::OpponentsCastOnlyFromHand,
         Opcode::ExileTopCardPlayThisTurn => Step::ExileTopCardPlayThisTurn,
+        Opcode::GrantFirebendingUntilEot => Step::GrantFirebendingUntilEot {
+            amount: usize_field(value, "amount")?,
+        },
         Opcode::ExileLinked => Step::ExileLinked {
             chooser: str_field(value, "chooser")?.to_owned(),
             grant: str_field(value, "grant")?.to_owned(),

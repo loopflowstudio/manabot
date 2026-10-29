@@ -352,6 +352,10 @@ pub enum Op {
     OpponentsCastOnlyFromHand,
     /// "Exile the top card of your library. You may play that card this turn."
     ExileTopCardPlayThisTurn,
+    /// "Each creature you control gains firebending until end of turn."
+    GrantFirebendingUntilEot {
+        amount: i32,
+    },
     /// "A player exiles a matching card; its controller may cast it as linked."
     ExileLinked {
         /// `you`, or `target` (the target player chooses).

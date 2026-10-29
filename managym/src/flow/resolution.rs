@@ -641,6 +641,20 @@ impl Game {
                     .shuffle(ZoneType::Library, player, &mut self.state.rng);
                 None
             }
+            Effect::GrantFirebendingUntilEot { amount } => {
+                // CR 611.2c: the creatures it affects are fixed on resolution.
+                for id in self.battlefield_permanents(frame.controller) {
+                    if !self.permanent_is_battlefield_creature(id) {
+                        continue;
+                    }
+                    self.journal_permanent(id);
+                    if let Some(permanent) = self.state.permanents[id].as_mut() {
+                        permanent.firebending_this_turn =
+                            permanent.firebending_this_turn.saturating_add(*amount);
+                    }
+                }
+                None
+            }
             Effect::NoMaximumHandSize => {
                 self.journal_player(frame.controller);
                 self.state.players[frame.controller.0].no_maximum_hand_size = true;

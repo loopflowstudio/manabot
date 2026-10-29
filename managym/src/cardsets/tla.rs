@@ -18,6 +18,7 @@ pub(super) const INCOMPLETE: &[Incomplete] = &[
     ("tla.hama_the_bloodbender", "An exiled opponent-owned permanent card can't be cast: permanent spells enter under their owner's control (no control change, CR 110.2)"),
     ("tla.lightning_strike", "Any target must include planeswalkers and battles (CR 115.4)"),
     ("tla.ran_and_shaw", "Unreviewed until T5: Flying/firebending; cast-only conditional ETB nonlegendary self copy; Dragon anthem activation."),
+    ("tla.sozins_comet", "Foretell is missing: the face-down exile special action and its later-turn {2}{R} cast need viewer-hidden exile in observation, history and determinize"),
     ("tla.suki_kyoshi_warrior", "CDA power must apply outside the battlefield (CR 604.3)"),
     ("tla.water_tribe_rallier", "Library power filter must evaluate CDAs, such as Suki's (CR 604.3)"),
 ];
@@ -172,6 +173,7 @@ pub(super) fn cards() -> Vec<Card> {
         solstice_revelations(),
         hama_the_bloodbender(),
         azula_cunning_usurper(),
+        sozins_comet(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -5462,6 +5464,27 @@ fn azula_cunning_usurper() -> Card {
             .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
         ],
         registry_name: "Azula, Cunning Usurper",
+        text_box,
+    }
+}
+
+fn sozins_comet() -> Card {
+    let text_box = "Each creature you control gains firebending 5 until end of turn. (Whenever it attacks, add {R}{R}{R}{R}{R}. This mana lasts until end of combat.)\nForetell {2}{R} (During your turn, you may pay {2} and exile this card from your hand face down. Cast it on a later turn for its foretell cost.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{3}{R}{R}"),
+            types: vec![CardType::Sorcery],
+            ..Default::default()
+        },
+        key: "tla.sozins_comet",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::GrantFirebendingUntilEot { amount: 5 }],
+        )
+        .cost(Cost::mana("{3}{R}{R}"))],
+        registry_name: "Sozin's Comet",
         text_box,
     }
 }

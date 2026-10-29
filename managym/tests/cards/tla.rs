@@ -2100,3 +2100,31 @@ fn azula_has_the_opponent_exile_and_casts_with_any_mana() {
     s.assert_life(1, 17);
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
 }
+
+/// Sozin's Comet grants firebending 5 to the creatures you control as it
+/// resolves: one attacking adds five red mana that lasts until end of combat.
+/// A creature arriving later gains nothing (CR 611.2c).
+#[test]
+fn sozins_comet_grants_firebending_five_until_end_of_turn() {
+    let mut s = setup(&["Sozin's Comet", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    ready(&mut s, ogre);
+    cast(&mut s, "Sozin's Comet");
+    settle(&mut s);
+    let late = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    ready(&mut s, late);
+    s.set_player_mana_pool(0, "");
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    for _ in 0..2 {
+        choose(&mut s, |a| {
+            matches!(a, Action::DeclareAttacker { attack: true, .. })
+        });
+    }
+    pass_until(&mut s, ActionSpaceKind::Priority);
+    while !s.game().state.stack_objects.is_empty() {
+        s.pass_priority();
+    }
+    assert_eq!(s.current_step(), StepKind::DeclareAttackers);
+    let pool = &s.game().state.players[0].combat_mana_pool;
+    assert_eq!(pool.total(), 5);
+}
