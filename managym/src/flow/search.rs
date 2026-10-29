@@ -75,6 +75,7 @@ impl Game {
                             | Decision::Discard { .. }
                             | Decision::OptionalDiscardDraw { .. }
                             | Decision::SearchBasicLand { .. }
+                            | Decision::SearchDistinctLands { .. }
                     )
             });
         if refresh {
@@ -132,11 +133,10 @@ impl Game {
         let Some(suspended) = &self.state.suspended_decision else {
             return;
         };
-        let player = suspended.decision.player();
         let revealed = suspended.decision.revealed_cards().to_vec();
-        if revealed.is_empty() {
+        let Some(player) = revealed.first().map(|card| self.state.cards[*card].owner) else {
             return;
-        }
+        };
         for card in &revealed {
             self.state.zones.move_card(*card, player, ZoneType::Library);
         }

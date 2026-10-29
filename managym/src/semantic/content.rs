@@ -1120,6 +1120,13 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         }
         Step::OpponentsCastOnlyFromHand => Effect::OpponentsCastOnlyFromHand,
         Step::ExileTopCardPlayThisTurn => Effect::ExileTopCardPlayThisTurn,
+        Step::SearchLandsOpponentSplits {
+            count,
+            opponent_picks,
+        } => Effect::SearchLandsOpponentSplits {
+            count: *count,
+            opponent_picks: *opponent_picks,
+        },
         Step::PutIntoLibrarySecondOrBottom { target } => Effect::OwnerPutsIntoLibrary {
             target: target_for(program, target)?,
         },

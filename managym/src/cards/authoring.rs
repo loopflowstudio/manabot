@@ -358,6 +358,14 @@ pub enum Op {
     PutIntoLibrarySecondOrBottom {
         target: &'static str,
     },
+    /// "Search your library for up to `count` land cards with different
+    /// names and reveal them. An opponent chooses `opponent_picks` of those
+    /// cards. Put the chosen cards into your graveyard and the rest onto the
+    /// battlefield tapped, then shuffle."
+    SearchLandsOpponentSplits {
+        count: i32,
+        opponent_picks: i32,
+    },
     /// Without a destination, a basic land onto the battlefield tapped. With
     /// `Hand`, any card of `subtype` is revealed and put into hand
     /// (landcycling: "search your library for a Plains card"), or a basic

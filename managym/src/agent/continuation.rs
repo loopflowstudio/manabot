@@ -487,6 +487,8 @@ impl Game {
                 Decision::Learn { .. } => (11, None),
                 Decision::Discard { .. } => (12, None),
                 Decision::LegendRule { .. } => (13, None),
+                Decision::SearchDistinctLands { .. } => (14, None),
+                Decision::OpponentSplitsRevealed { .. } => (15, None),
             };
             frame.decision = kind;
             frames.push(frame);

@@ -202,6 +202,23 @@ pub enum Decision {
         min_select: usize,
         max_select: usize,
     },
+    /// Search for up to `remaining` more land cards with different names,
+    /// revealing each (Elemental Teachings). The revealed cards stay in the
+    /// library until an opponent splits them (`OpponentSplitsRevealed`).
+    SearchDistinctLands {
+        player: PlayerId,
+        remaining: usize,
+        selected: Vec<CardId>,
+        opponent_picks: usize,
+    },
+    /// An opponent chooses `remaining` more of `owner`'s `revealed` library
+    /// cards for the graveyard; the rest enter tapped, then `owner` shuffles.
+    OpponentSplitsRevealed {
+        player: PlayerId,
+        owner: PlayerId,
+        revealed: Vec<CardId>,
+        remaining: usize,
+    },
     /// "Choose one —".
     Modal {
         player: PlayerId,
@@ -243,6 +260,8 @@ impl Decision {
             | Decision::Sacrifice { player, .. } => *player,
             Decision::SelectMilled { player, .. }
             | Decision::SearchBasicLand { player, .. }
+            | Decision::SearchDistinctLands { player, .. }
+            | Decision::OpponentSplitsRevealed { player, .. }
             | Decision::OptionalDiscardDraw { player, .. }
             | Decision::Scry { player, .. }
             | Decision::LookAndSelect { player, .. }
@@ -264,6 +283,8 @@ impl Decision {
             | Decision::Sacrifice { .. } => &[],
             Decision::Scry { looked, .. } => looked,
             Decision::LookAndSelect { looked, .. } => looked,
+            Decision::SearchDistinctLands { selected, .. } => selected,
+            Decision::OpponentSplitsRevealed { revealed, .. } => revealed,
             Decision::SelectMilled { .. }
             | Decision::SearchBasicLand { .. }
             | Decision::OptionalDiscardDraw { .. }
@@ -429,6 +450,37 @@ impl Game {
                     focus: source_focus,
                 }
             }
+            Decision::SearchDistinctLands { player, .. } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: self
+                    .distinct_land_search_candidates(&suspended.decision)
+                    .into_iter()
+                    .map(|card| Action::SelectCard {
+                        player: *player,
+                        card,
+                    })
+                    .chain(std::iter::once(Action::Decline { player: *player }))
+                    .collect(),
+                focus: source_focus,
+            },
+            Decision::OpponentSplitsRevealed {
+                player, revealed, ..
+            } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: revealed
+                    .iter()
+                    .map(|card| Action::SelectCard {
+                        player: *player,
+                        card: *card,
+                    })
+                    .collect(),
+                focus: revealed
+                    .iter()
+                    .map(|card| self.state.cards[*card].id)
+                    .collect(),
+            },
             Decision::Discard { player, .. } | Decision::OptionalDiscardDraw { player, .. } => {
                 let mut actions: Vec<Action> = self
                     .state
@@ -934,6 +986,74 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
+            (Decision::SearchDistinctLands { .. }, Action::SelectCard { card, .. }) => {
+                if !self
+                    .distinct_land_search_candidates(&suspended.decision)
+                    .contains(card)
+                {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("not a distinct land card in library".into()));
+                }
+                let Decision::SearchDistinctLands {
+                    remaining,
+                    selected,
+                    ..
+                } = &mut suspended.decision
+                else {
+                    unreachable!()
+                };
+                selected.push(*card);
+                *remaining -= 1;
+                if *remaining > 0 {
+                    self.state.suspended_decision = Some(suspended);
+                } else {
+                    self.finish_distinct_land_search(suspended);
+                }
+                Ok(())
+            }
+            (Decision::SearchDistinctLands { .. }, Action::Decline { .. }) => {
+                self.finish_distinct_land_search(suspended);
+                Ok(())
+            }
+            (
+                Decision::OpponentSplitsRevealed {
+                    owner,
+                    revealed,
+                    remaining,
+                    ..
+                },
+                Action::SelectCard { card, .. },
+            ) => {
+                let Some(index) = revealed.iter().position(|c| c == card) else {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("not a revealed card".into()));
+                };
+                revealed.remove(index);
+                self.move_card(*card, ZoneType::Graveyard);
+                *remaining -= 1;
+                if *remaining > 0 && !revealed.is_empty() {
+                    self.state.suspended_decision = Some(suspended);
+                    return Ok(());
+                }
+                let owner = *owner;
+                for card in std::mem::take(revealed) {
+                    self.move_card_with_entry(
+                        card,
+                        ZoneType::Battlefield,
+                        crate::flow::proposed_event::BattlefieldEntry {
+                            tapped: true,
+                            ..Default::default()
+                        },
+                    );
+                }
+                self.invalidate_mana_cache(owner);
+                self.journal_zones();
+                self.state
+                    .zones
+                    .shuffle(ZoneType::Library, owner, &mut self.state.rng);
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
             (Decision::SelectMilled { player, cards, .. }, Action::SelectCard { card, .. })
                 if cards.contains(card) =>
             {
@@ -1042,6 +1162,63 @@ impl Game {
 
     /// Move a library card to the bottom of its owner's library. Not a zone
     /// change (CR 701.26b-style reorder), so no events fire.
+    /// Library land cards whose names differ from every card already
+    /// selected by a `SearchDistinctLands` decision.
+    pub(crate) fn distinct_land_search_candidates(&self, decision: &Decision) -> Vec<CardId> {
+        let Decision::SearchDistinctLands {
+            player, selected, ..
+        } = decision
+        else {
+            return Vec::new();
+        };
+        let mut candidates: Vec<CardId> = self
+            .state
+            .zones
+            .zone_cards(ZoneType::Library, *player)
+            .iter()
+            .copied()
+            .filter(|card| {
+                let card_ref = &self.state.cards[*card];
+                card_ref.types.is_land()
+                    && !selected
+                        .iter()
+                        .any(|chosen| self.state.cards[*chosen].name == card_ref.name)
+            })
+            .collect();
+        candidates.sort_unstable_by_key(|card| (self.state.cards[*card].definition_id, *card));
+        candidates
+    }
+
+    /// The revealed lands pass to an opponent's split, or, when there are
+    /// none, the library is shuffled.
+    fn finish_distinct_land_search(&mut self, mut suspended: SuspendedResolution) {
+        let Decision::SearchDistinctLands {
+            player,
+            selected,
+            opponent_picks,
+            ..
+        } = &mut suspended.decision
+        else {
+            unreachable!()
+        };
+        let player = *player;
+        if selected.is_empty() {
+            self.journal_zones();
+            self.state
+                .zones
+                .shuffle(ZoneType::Library, player, &mut self.state.rng);
+            self.run_frame(suspended.frame);
+            return;
+        }
+        suspended.decision = Decision::OpponentSplitsRevealed {
+            player: PlayerId(1 - player.0),
+            owner: player,
+            revealed: std::mem::take(selected),
+            remaining: *opponent_picks,
+        };
+        self.state.suspended_decision = Some(suspended);
+    }
+
     pub(crate) fn put_on_bottom_of_library(&mut self, card: CardId) {
         let owner = self.state.cards[card].owner;
         // A reorder within one zone, so the zone-move inverse does not apply.

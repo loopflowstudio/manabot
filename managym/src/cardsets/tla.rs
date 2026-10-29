@@ -161,6 +161,7 @@ pub(super) fn cards() -> Vec<Card> {
         sparring_dummy(),
         lost_days(),
         serpent_of_the_pass(),
+        elemental_teachings(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -5104,6 +5105,31 @@ fn serpent_of_the_pass() -> Card {
             }),
         ],
         registry_name: "Serpent of the Pass",
+        text_box,
+    }
+}
+
+fn elemental_teachings() -> Card {
+    let text_box = "Search your library for up to four land cards with different names and reveal them. An opponent chooses two of those cards. Put the chosen cards into your graveyard and the rest onto the battlefield tapped, then shuffle.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{4}{G}"),
+            subtypes: Some(vec!["Lesson"]),
+            types: vec![CardType::Instant],
+            ..Default::default()
+        },
+        key: "tla.elemental_teachings",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::SearchLandsOpponentSplits {
+                count: 4,
+                opponent_picks: 2,
+            }],
+        )
+        .cost(Cost::mana("{4}{G}"))],
+        registry_name: "Elemental Teachings",
         text_box,
     }
 }

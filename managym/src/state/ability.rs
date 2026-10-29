@@ -252,6 +252,13 @@ pub enum Effect {
     OwnerPutsIntoLibrary {
         target: TargetSpec,
     },
+    /// Search for up to `count` land cards with different names; an
+    /// opponent puts `opponent_picks` of them into the graveyard and the rest
+    /// enter tapped (Elemental Teachings).
+    SearchLandsOpponentSplits {
+        count: usize,
+        opponent_picks: usize,
+    },
     /// Put the primary target into its owner's library, second from the top
     /// or on the bottom.
     PlaceTargetInLibrary {
@@ -663,6 +670,7 @@ impl Effect {
             | Effect::ExileSourceSpell
             | Effect::ExileTopCardPlayThisTurn
             | Effect::PlaceTargetInLibrary { .. }
+            | Effect::SearchLandsOpponentSplits { .. }
             | Effect::ModifyControlled { .. }
             | Effect::ModifyUntilEot { .. }
             | Effect::DrawCards { .. }

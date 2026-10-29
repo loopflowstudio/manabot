@@ -47,13 +47,17 @@ worktree, so new T2 cards read "unsupported" in this base until T1 lands.
   (`may_play_from_zone` gates actions and `play_land`). Opcode 69
   `exile_top_card_play_this_turn` (Zuko).
 
-## Done (slices 1–2 `648edee6b` → T1 merge `f7b59aa99`; 3 `afff1e1ed`; 4a `0d124a66e`; 4b `dea25eda8`; post-4b compress staged, uncommitted)
+## Done (slices 1–2 `648edee6b` → T1 merge `f7b59aa99`; 3 `afff1e1ed`; 4a `0d124a66e`; 4b `dea25eda8`, `d84c5f590`; T1 review `c223ea581`; slice 5/6 `43ef1210f`…)
 
-32 of 51 T2 cards are defined (checked 2026-10-28 against `allocation.jsonl`);
-19 remain undefined. T1 defined 6 (Badgermole Cub, Dai Li Agents, Haru, Toph,
-Hermitic Herbalist, Iroh, Grand Lotus), but they still sit in `tla::INCOMPLETE`
-as "Unreviewed until T2", so they remain unsupported. T2 defined 26, each witnessed
-in `tests/cards/tla.rs` with a Scryfall fixture entry: Earthbending Lesson,
+41 of 51 T2 cards are defined (2026-10-28, against `allocation.jsonl`); 10
+remain. The six T1 cards (Badgermole Cub, Dai Li Agents, Haru, Toph, Hermitic
+Herbalist, Iroh, Grand Lotus) were reviewed and left `tla::INCOMPLETE`
+(`c223ea581`): new witnesses for creature-mana green, the fifteen unordered
+two-color modes, independent earthbend returns on a doubly bent land and
+Iroh's firebending 2; the other obligations already had witnesses in
+`tests/rules/{elemental,temur,stage2}_cards.rs`. T2 defined 35, each witnessed
+in `tests/cards/tla.rs` with a Scryfall fixture entry
+(`scratch/add_fixture.py <name>` appends one): Earthbending Lesson,
 Sandbenders' Storm, Earth Village Ruffians, Geyser Leaper, Foggy Swamp
 Vinebender, Fire Nation Attacks, Rockalanche; slice 1: Canyon Crawler,
 Mongoose Lizard, Saber-Tooth Moose-Lion, Giant Koi, Rabaroo Troop, Team Avatar,
@@ -61,7 +65,9 @@ Merchant of Many Hats; slice 2: Hog-Monkey, Rough Rhino Cavalry, Rebellious
 Captives; slice 3: Barrels of Blasting Jelly, Jasmine Dragon Tea Shop, White
 Lotus Hideout, Waterbending Scroll; slice 4a: Aang, the Last Airbender,
 Airbending Lesson, Airbender's Reversal, Avatar's Wrath; slice 4b: Zuko, Exiled
-Prince.
+Prince; this pass: Aang's Iceberg, North Pole Patrol, Zuko's Conviction, Sokka,
+Bold Boomeranger, Seismic Sense, Aang's Journey, Sparring Dummy, Lost Days,
+Serpent of the Pass.
 
 ## Base: T1
 

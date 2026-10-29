@@ -2413,5 +2413,17 @@
     "colors": [
       "U"
     ]
+  },
+  "Elemental Teachings": {
+    "name": "Elemental Teachings",
+    "mana_cost": "{4}{G}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Search your library for up to four land cards with different names and reveal them. An opponent chooses two of those cards. Put the chosen cards into your graveyard and the rest onto the battlefield tapped, then shuffle.",
+    "colors": [
+      "G"
+    ]
   }
 }

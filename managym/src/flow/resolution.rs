@@ -477,6 +477,15 @@ impl Game {
                 self.restrict_opponent_to_hand(frame.controller);
                 None
             }
+            Effect::SearchLandsOpponentSplits {
+                count,
+                opponent_picks,
+            } => Some(Decision::SearchDistinctLands {
+                player: frame.controller,
+                remaining: *count,
+                selected: Vec::new(),
+                opponent_picks: *opponent_picks,
+            }),
             Effect::OwnerPutsIntoLibrary { .. } => {
                 let Some(Target::Permanent(id)) = self.present_primary_target(frame) else {
                     return None;

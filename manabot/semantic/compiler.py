@@ -107,6 +107,7 @@ class Opcode(IntEnum):
     EXILE_TOP_CARD_PLAY_THIS_TURN = 69
     SACRIFICE_SOURCE = 70
     PUT_INTO_LIBRARY_SECOND_OR_BOTTOM = 71
+    SEARCH_LANDS_OPPONENT_SPLITS = 72
 
 
 PROGRAM_KINDS = {kind.name.lower(): kind for kind in ProgramKind}
@@ -250,6 +251,7 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "exile_top_card_play_this_turn": (set(), set()),
     "sacrifice_source": ({"then"}, set()),
     "put_into_library_second_or_bottom": ({"target"}, set()),
+    "search_lands_opponent_splits": ({"count", "opponent_picks"}, set()),
     "buff_target_value": ({"power", "toughness", "target"}, set()),
     "return_to_hand_draw_if_controlled": ({"target"}, set()),
     "modify_triggering_permanent": ({"counters", "keywords"}, set()),

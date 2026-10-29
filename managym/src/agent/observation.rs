@@ -535,6 +535,14 @@ impl Observation {
                         to_hand,
                         ..
                     } => game.basic_land_search_candidates(*player, subtype, *to_hand),
+                    decision @ crate::flow::decision::Decision::SearchDistinctLands {
+                        selected,
+                        ..
+                    } => {
+                        let mut cards = selected.clone();
+                        cards.extend(game.distinct_land_search_candidates(decision));
+                        cards
+                    }
                     decision => decision.revealed_cards().to_vec(),
                 };
                 for card in cards {

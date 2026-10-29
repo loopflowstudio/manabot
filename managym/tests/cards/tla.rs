@@ -1625,3 +1625,67 @@ fn serpent_of_the_pass_is_cheaper_per_graveyard_spell_and_flashes_with_three_les
     s.set_player_mana_pool(0, "UU");
     assert!(can_cast(&mut s, serpent));
 }
+
+/// Elemental Teachings reveals up to four differently named lands; the
+/// opponent chooses two for the graveyard and the rest enter tapped.
+#[test]
+fn elemental_teachings_finds_distinct_lands_and_the_opponent_bins_two() {
+    let mut s = setup(&["Elemental Teachings"]);
+    cast(&mut s, "Elemental Teachings");
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let mut chosen = Vec::new();
+    for name in ["Forest", "Island", "Swamp", "Mountain"] {
+        let offered = offered_cards(&s);
+        assert!(chosen.iter().all(|c| !offered.contains(c)));
+        let card = *offered
+            .iter()
+            .find(|c| s.game().state.cards[**c].name == name)
+            .unwrap();
+        if name == "Island" {
+            // A second Forest is no longer offered.
+            assert!(!offered
+                .iter()
+                .any(|c| s.game().state.cards[*c].name == "Forest"));
+        }
+        choose(
+            &mut s,
+            |a| matches!(a, Action::SelectCard { card: c, .. } if *c == card),
+        );
+        chosen.push(card);
+    }
+    assert_eq!(s.action_space().player, Some(PlayerId(1)));
+    let offered = offered_cards(&s);
+    assert_eq!(offered.len(), 4);
+    for binned in &chosen[..2] {
+        choose(
+            &mut s,
+            |a| matches!(a, Action::SelectCard { card, .. } if card == binned),
+        );
+    }
+    settle(&mut s);
+    for card in &chosen[..2] {
+        assert_eq!(zone_of(&s, *card), Some(ZoneType::Graveyard));
+    }
+    for card in &chosen[2..] {
+        assert_eq!(zone_of(&s, *card), Some(ZoneType::Battlefield));
+        let id = s.game().state.card_to_permanent[*card].unwrap();
+        assert!(s.game().state.permanents[id].as_ref().unwrap().tapped);
+    }
+
+    // Stopping after one land: the opponent's choice bins it.
+    let mut s = setup(&["Elemental Teachings"]);
+    cast(&mut s, "Elemental Teachings");
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let first = offered_cards(&s)[0];
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { card, .. } if *card == first),
+    );
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { card, .. } if *card == first),
+    );
+    settle(&mut s);
+    assert_eq!(zone_of(&s, first), Some(ZoneType::Graveyard));
+}
