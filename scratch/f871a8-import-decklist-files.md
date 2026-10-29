@@ -202,6 +202,7 @@ fields. `ImportedMatch.hero`/`villain` hold `DeckImport`; consumers read
 The type is new in this branch, so no frozen evidence or released record
 changes; branch-local Academy traces may need re-import. Proof: existing
 decklist, Academy setup, checkpoint catalog and training-deck tests.
+Implemented 2026-10-28: `DeckImport(document, deck)`; the four suites pass (32).
 
 Not reopened: checkpoint `bc` `run_id`/`stage_id`/`regime_digest` links predate
 this branch, are read only for a catalog producer label, and never enter world
@@ -294,8 +295,8 @@ construction receives `config.to_rust()` (imported configs). Pool-bound
 checkpoints play imported decks; authored/Elemental ones refuse them.
 
 Training (world-validated decks, implemented): `decklist.Deck` is the one deck
-concept (counts; identity from content). `AdmittedDeck` is an import record
-exposing `.deck`. `training/decks.TrainingDecks` is run-owned data: pool key,
+concept (counts; identity from content). `DeckImport` is an import record:
+source `document` plus its admitted `deck`. `training/decks.TrainingDecks` is run-owned data: pool key,
 distinct decks, every source record; `from_documents`/`from_files` reject the
 whole fixed list upfront; `check()` re-admits decks natively at regime
 validation. Regime field `decks: {pool, files}` embeds at load. Native

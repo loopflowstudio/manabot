@@ -67,14 +67,18 @@ def test_decklist_novel_setup_resolves_same_identity_from_files(tmp_path: Path) 
         PACK,
     )
     assert imported.setup_id == reformatted.setup_id
-    assert imported.hero.main == {"Forest": 10, "Mountain": 10, "Avatar Enthusiasts": 2}
-    assert imported.hero.sideboard == {"Island": 1}
+    assert imported.hero.deck.main == {
+        "Forest": 10,
+        "Mountain": 10,
+        "Avatar Enthusiasts": 2,
+    }
+    assert imported.hero.deck.sideboard == {"Island": 1}
     assert all(
         entry.card_def_id is not None for entry in imported.hero.document.entries
     )
     assert not any(
         managym.authored_deck_setup("elemental-world-v2", key).decklist
-        == imported.hero.main
+        == imported.hero.deck.main
         for key in managym.authored_deck_keys("elemental-world-v2")
     )
     env = managym.Env(seed=7, skip_trivial=False)

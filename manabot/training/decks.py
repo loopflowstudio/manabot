@@ -17,10 +17,10 @@ from pathlib import Path
 from pydantic import Field, model_validator
 
 from manabot.decklist import (
-    AdmittedDeck,
     ContentPool,
     Deck,
     DeckDocument,
+    DeckImport,
     DeckImportError,
     admit_document,
     read_decklist,
@@ -61,7 +61,7 @@ class TrainingDecks(StrictModel):
         errors: dict[str, DeckDocument] = {}
         for index, source in enumerate(documents):
             result = admit_document(source, content, "development-v1")
-            if not isinstance(result, AdmittedDeck):
+            if not isinstance(result, DeckImport):
                 errors[str(index)] = result
                 continue
             admitted.setdefault(result.deck.identity, result.deck)

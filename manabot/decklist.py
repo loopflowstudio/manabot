@@ -124,16 +124,11 @@ class Deck(_Record):
         return managym.PlayerConfig(self.identity, self.main, self.sideboard, pack_key)
 
 
-class AdmittedDeck(_Record):
-    """One source document's admission result: the deck plus its provenance."""
+class DeckImport(_Record):
+    """One source document's admission: the admitted deck and its source record."""
 
     document: DeckDocument
-    main: dict[str, int]
-    sideboard: dict[str, int]
-
-    @property
-    def deck(self) -> Deck:
-        return Deck(main=self.main, sideboard=self.sideboard)
+    deck: Deck
 
 
 class ImportedMatch(_Record):
@@ -141,8 +136,8 @@ class ImportedMatch(_Record):
 
     pool: PoolIdentity
     ruleset: str
-    hero: AdmittedDeck
-    villain: AdmittedDeck
+    hero: DeckImport
+    villain: DeckImport
 
     @computed_field
     @property
@@ -152,8 +147,8 @@ class ImportedMatch(_Record):
             "pool": self.pool.model_dump(),
             "ruleset": self.ruleset,
             "decks": [
-                {"main": deck.main, "sideboard": deck.sideboard}
-                for deck in (self.hero, self.villain)
+                {"main": imported.deck.main, "sideboard": imported.deck.sideboard}
+                for imported in (self.hero, self.villain)
             ],
         }
         return hashlib.sha256(
@@ -166,10 +161,10 @@ class ImportedMatch(_Record):
         return MatchConfig(
             content_pack=self.pool.pack_key,
             imported_decks=self,
-            hero_deck=self.hero.main,
-            villain_deck=self.villain.main,
-            hero_sideboard=self.hero.sideboard,
-            villain_sideboard=self.villain.sideboard,
+            hero_deck=self.hero.deck.main,
+            villain_deck=self.villain.deck.main,
+            hero_sideboard=self.hero.deck.sideboard,
+            villain_sideboard=self.villain.deck.sideboard,
         )
 
     def validate_current(self) -> None:
@@ -202,10 +197,10 @@ class ImportedMatch(_Record):
         self.validate_current()
         if (
             content_pack != self.pool.pack_key
-            or hero_deck != self.hero.main
-            or villain_deck != self.villain.main
-            or hero_sideboard != self.hero.sideboard
-            or villain_sideboard != self.villain.sideboard
+            or hero_deck != self.hero.deck.main
+            or villain_deck != self.villain.deck.main
+            or hero_sideboard != self.hero.deck.sideboard
+            or villain_sideboard != self.villain.deck.sideboard
         ):
             raise ValueError("Match differs from its admitted decklist files")
 
@@ -286,7 +281,7 @@ def parse_decklist(source: str, filename: str = "deck.txt") -> DeckDocument:
 
 def admit_document(
     document: DeckDocument, pool: ContentPool, ruleset: str
-) -> AdmittedDeck | DeckDocument:
+) -> DeckImport | DeckDocument:
     import managym
 
     names: dict[str, list[PoolDefinition]] = defaultdict(list)
@@ -362,8 +357,9 @@ def admit_document(
     )
     if issues:
         return updated
-    return AdmittedDeck(
-        document=updated, main=sections["main"], sideboard=sections["sideboard"]
+    return DeckImport(
+        document=updated,
+        deck=Deck(main=sections["main"], sideboard=sections["sideboard"]),
     )
 
 
@@ -383,7 +379,7 @@ def import_match(
     }
     if errors:
         raise DeckImportError(errors)
-    assert isinstance(first, AdmittedDeck) and isinstance(second, AdmittedDeck)
+    assert isinstance(first, DeckImport) and isinstance(second, DeckImport)
     return ImportedMatch(
         pool=pool.identity(), ruleset=ruleset, hero=first, villain=second
     )

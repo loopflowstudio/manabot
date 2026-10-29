@@ -731,12 +731,12 @@ def _parse_game_config(config: Any) -> GameConfig:
     imported = None
     if "deck_import" in data:
         imported = DeckImportInput.model_validate(data["deck_import"]).admit()
-        hero_deck, villain_deck = imported.hero.main, imported.villain.main
+        hero_deck, villain_deck = imported.hero.deck.main, imported.villain.deck.main
         hero_deck_name = villain_deck_name = "imported"
         selected_pack = None
         sideboards = {
-            "hero": imported.hero.sideboard,
-            "villain": imported.villain.sideboard,
+            "hero": imported.hero.deck.sideboard,
+            "villain": imported.villain.deck.sideboard,
         }
     else:
         hero_deck, hero_deck_name = _normalize_deck(
