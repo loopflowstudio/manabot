@@ -13,3 +13,11 @@
 - **Stacked on MTG-212:** this branch merges its unlanded branch; land MTG-212
   first. Comparisons with MTG-212 should use the same 100-game prefix of its
   campaign 3, not its full prefix.
+- **Decision — continuation after the 01:40Z outage (2026-10-29, headless
+  engineering choice):** campaign 1 stopped at 29 attempts on three consecutive
+  decision-deadline failures while MTG-212 campaign 3 stopped on three
+  `RemoteProtocolError`s at the same time, i.e. an endpoint outage independent
+  of game outcomes. Campaign 2 (`first_game=29`, 71 games, ceiling = $2 −
+  campaign 1's accounted $0.634792783, no further overhead) plays the rest of
+  the same prefix. Results are reported per campaign and pooled by deal; drop
+  the pooled line if a reviewer treats the outage stop as informative.
