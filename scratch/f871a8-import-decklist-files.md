@@ -129,6 +129,13 @@ failure/capture records; unseen same-world deck at a later root; invalid
 generated deck rejected before play; world-only export/load/inspect. Bounded
 fixtures, actual collector path, no weight updates.
 
+State (2026-10-28): PR #395 head 917037b6e is pushed and stacked on #394
+(base `jack-heart/892c47-author-tla-cards`, 86ebe9ccf an ancestor). The three
+Avatar Aang face tests that failed after the 86ebe9ccf merge were replaced by the
+two-face pool fixture (e3b4f0583). 917037b6e makes failure capture read actual
+native setups whenever roots are sampled and hashes the collector's deck supply
+once.
+
 Remaining: world-bound evidence belongs to #394 and is unregenerated at
 86ebe9ccf. Check at afdb82447+ (debug `cargo test --no-fail-fast`, the CLAUDE.md
 world set + tests/semantic + training-deck + Academy decklist): only
@@ -136,6 +143,7 @@ world set + tests/semantic + training-deck + Academy decklist): only
 digest drift; identical in #394's Rust CI) and four learning-schema-version
 asserts (8 vs 3/4/7: test_elemental, test_elemental_world, test_optional_payments,
 test_sacrifice) fail. This branch's diff touches neither. Not regenerated here.
+Check at 917037b6e: decklist/training-deck/Academy decklist suites 27 passed; recovery/game-error/capture suites 83 passed.
 #394 removed every double-faced card, so face resolution is tested on a pool
 fixture with one row renamed to two faces. Run→checkpoint linkage is the existing
 TrainingRun records, not re-proved by executing a regime here.
