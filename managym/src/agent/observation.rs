@@ -569,6 +569,9 @@ impl Observation {
             }
         }
 
+        // Regular and combat mana together, as the player may spend it.
+        let mut pool = p.mana_pool.clone();
+        pool.add(&p.combat_mana_pool);
         PlayerData {
             sideboard_counts,
             remaining_sideboard_counts,
@@ -583,24 +586,13 @@ impl Observation {
                 &crate::state::predicate::CardPredicate::subtype("Lesson"),
             ) as i32,
             combat_mana: p.combat_mana_pool.total() as i32,
-            mana: std::array::from_fn(|slot| {
-                i32::from(p.mana_pool.mana[slot]) + i32::from(p.combat_mana_pool.mana[slot])
-            }),
-            lesson_mana: {
-                let (regular, combat) = (
-                    p.mana_pool.restricted_colors(),
-                    p.combat_mana_pool.restricted_colors(),
-                );
-                std::array::from_fn(|slot| i32::from(regular[slot]) + i32::from(combat[slot]))
-            },
-            restricted_mana: {
-                let mut pool = p.mana_pool.clone();
-                pool.add(&p.combat_mana_pool);
-                pool.restricted()
-                    .iter()
-                    .map(|(restriction, amounts)| RestrictedManaData::new(*restriction, *amounts))
-                    .collect()
-            },
+            mana: pool.mana.map(i32::from),
+            lesson_mana: pool.restricted_colors().map(i32::from),
+            restricted_mana: pool
+                .restricted()
+                .iter()
+                .map(|(restriction, amounts)| RestrictedManaData::new(*restriction, *amounts))
+                .collect(),
             hand_only_until: game
                 .hand_only_until(player)
                 .map(|until| game.state.players[until.0].id.0 as i32),

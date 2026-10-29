@@ -134,49 +134,29 @@ impl Game {
         }
     }
 
-    pub(crate) fn can_player_act(&self, player: PlayerId) -> bool {
-        self.state
-            .zones
+    /// Cards `player` might play at priority: their hand and graveyard, and
+    /// exiled cards they hold grants for. `priority_action_for_card` decides.
+    fn priority_candidate_cards(&self, player: PlayerId) -> impl Iterator<Item = CardId> + '_ {
+        let zones = &self.state.zones;
+        zones
             .zone_cards(ZoneType::Hand, player)
             .iter()
-            .chain(
-                self.state
-                    .zones
-                    .zone_cards(ZoneType::Graveyard, player)
-                    .iter(),
-            )
+            .chain(zones.zone_cards(ZoneType::Graveyard, player))
             .copied()
             .chain(self.exile_granted_cards(player))
+    }
+
+    pub(crate) fn can_player_act(&self, player: PlayerId) -> bool {
+        self.priority_candidate_cards(player)
             .any(|card| self.priority_action_for_card(player, card).is_some())
-            || self
-                .priority_activate_ability_actions(player)
-                .into_iter()
-                .next()
-                .is_some()
+            || !self.priority_activate_ability_actions(player).is_empty()
     }
 
     pub(crate) fn compute_player_actions(&self, player: PlayerId) -> Vec<Action> {
-        let mut actions = Vec::new();
-
-        for card in self
-            .state
-            .zones
-            .zone_cards(ZoneType::Hand, player)
-            .iter()
-            .chain(
-                self.state
-                    .zones
-                    .zone_cards(ZoneType::Graveyard, player)
-                    .iter(),
-            )
-            .copied()
-            .chain(self.exile_granted_cards(player))
-        {
-            if let Some(action) = self.priority_action_for_card(player, card) {
-                actions.push(action);
-            }
-        }
-
+        let mut actions: Vec<Action> = self
+            .priority_candidate_cards(player)
+            .filter_map(|card| self.priority_action_for_card(player, card))
+            .collect();
         actions.extend(self.priority_activate_ability_actions(player));
         actions.push(Action::PassPriority { player });
         actions

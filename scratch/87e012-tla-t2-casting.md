@@ -158,5 +158,6 @@ to `cards/{arb,tla,lea}.rs`): debug `cargo test --test cards` 293,
 Earlier v5 check: continuation-input parity v1–v5, text observation,
 experience protocol, play modes, env observation and `tests/model` pytest pass;
 `tests/eval/test_batched_eval.py` fails on T1's missing w16 `WorldVersion`.
-Compress after the merge: README names `observability` as the one non-set
-module; debug `cargo test --test cards observability` 6 pass, clippy clean.
+Compress: one `priority_candidate_cards` feeds both priority scans; player
+observations read one combined regular+combat pool. Debug `--lib`/`cards`/
+`rules_tests` 121/293/131 pass, clippy clean. Authoring layer left for T1.
