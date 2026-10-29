@@ -5,13 +5,14 @@
 
   interface Props {
     permanents: PermanentState[];
+    tablePermanents?: PermanentState[];
     focusedIds?: Set<number>;
     clickableTargets?: Map<number, number[]>;
     onSelectTarget?: (id: number) => void;
     onHoverTarget?: (id: number | null) => void;
     onPreviewCard?: (card: CardPreview | null) => void;
   }
-  let { permanents, focusedIds = new Set<number>(), clickableTargets,
+  let { permanents, tablePermanents = permanents, focusedIds = new Set<number>(), clickableTargets,
     onSelectTarget, onHoverTarget, onPreviewCard }: Props = $props();
   const groups = $derived(groupBattlefield(permanents));
   const lanes: { lane: BattlefieldLane; label: string }[] = [
@@ -24,7 +25,7 @@
 
 <div class="battlefield-grid" data-testid="battlefield">
   {#each lanes as { lane, label }}
-    <BattlefieldZone {lane} {label} permanents={groups[lane]} allPermanents={permanents}
+    <BattlefieldZone {lane} {label} permanents={groups[lane]} allPermanents={permanents} {tablePermanents}
       {focusedIds} {clickableTargets} {onSelectTarget} {onHoverTarget} {onPreviewCard} />
   {/each}
 </div>

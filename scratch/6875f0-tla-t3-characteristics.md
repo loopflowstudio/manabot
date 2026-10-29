@@ -194,6 +194,23 @@ to 116, opcodes to 106, special roles to 17). Items 18 (`c9cd80190`) and 19
 (`85650933a`) are committed; the item-19 compress is checkpointed with this realign.
 
 
+## Concept review after item 19 (2026-10-29) — item 20 done
+
+The review found Academy and the text observation dropped item 19's fields
+(Jack Heart's 2026-10-21 Academy direction; "playable through Academy").
+Item 20 renders them as labels only: `permanent-notes.ts` (counters by kind,
+"attached to X" / "X attached" across seats via `tablePermanents`, set creature
+types, granted land, firebending) feeds `Card`'s accessible name and margin
+chips; the ordered stack shows "X = n". `text_observation.py` appends the same
+fields, and stack `X = n`, only when present (existing text byte-identical).
+`_characteristics` in the projection now omits on `None`, not falsiness.
+Policy tensor encoding stays deferred to Jack Heart's PR review.
+
+Check (item 20): vitest 23 files/113 pass, `npm run check` 0 errors;
+`pytest tests/semantic/test_text_observation.py` 18 pass, `tests/academy/test_play_modes.py`
+12 pass; ruff clean. No Playwright run (component render covers the stunned and
+equipped creature); browser proof left to demo.
+
 ## Delete — do not maintain
 
 Qualification entries, `Permanent::local_power`/`local_toughness`,

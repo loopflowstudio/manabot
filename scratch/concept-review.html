@@ -3,71 +3,72 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>T3 concept review: who answers "what is this permanent now?"</title>
+<title>T3 concept review after item 19</title>
 <style>
-:root{--bg:#fbf8f2;--fg:#2b2620;--muted:#6f6556;--rule:#e2d9c8;--code:#f2ece0;--accent:#9a4b1c;--prop:#2f6b4f}
-@media (prefers-color-scheme: dark){:root{--bg:#1b1916;--fg:#ece5d8;--muted:#a89d8b;--rule:#3a352d;--code:#26231f;--accent:#e08a52;--prop:#7cc4a0}}
-body{background:var(--bg);color:var(--fg);font:16px/1.6 ui-serif,Georgia,serif;margin:0}
-main{max-width:46rem;margin:0 auto;padding:2.5rem 16px 4rem}
-h1{font-size:1.6rem;margin:0 0 .3rem}h2{font-size:1.15rem;margin:2.4rem 0 .6rem;border-top:1px solid var(--rule);padding-top:1.4rem}
-.meta{color:var(--muted);font-size:.85rem}
-pre,code{font:13px/1.5 ui-monospace,Menlo,monospace}
-pre{background:var(--code);padding:.8rem 1rem;overflow-x:auto;border-radius:4px}
-code{background:var(--code);padding:0 .25em;border-radius:3px}
-ol li,ul li{margin:.35rem 0}
-.tag{font:600 11px ui-sans-serif,system-ui;letter-spacing:.06em;text-transform:uppercase}
-.now{color:var(--muted)}.proposed{color:var(--prop)}
-.mismatch{border-left:3px solid var(--accent);padding:.2rem 0 .2rem 1rem;margin:1.2rem 0}
+  :root { color-scheme: light dark; --ink:#1d1b18; --ink2:#5d5850; --bg:#faf7f1; --line:#d8d1c4; --prop:#2f6b4f; --gap:#9a3b2a; }
+  @media (prefers-color-scheme: dark) { :root { --ink:#ece6da; --ink2:#a9a196; --bg:#1a1916; --line:#3a362f; --prop:#7fc4a0; --gap:#e08a74; } }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 Georgia, serif; }
+  main { max-width: 42rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
+  h1 { font-size:1.6rem; margin:0 0 .25rem; } h2 { font-size:1.15rem; margin:2.5rem 0 .5rem; }
+  .meta { color:var(--ink2); font-size:.85rem; }
+  code { font: .85em ui-monospace, Menlo, monospace; }
+  table { border-collapse: collapse; width:100%; font-size:.9rem; }
+  th, td { text-align:left; vertical-align:top; padding:.45rem .5rem; border-bottom:1px solid var(--line); }
+  .gap { color:var(--gap); } .prop { color:var(--prop); }
+  .call { border-left:3px solid var(--gap); padding:.25rem 0 .25rem 1rem; margin:1.5rem 0; }
+  .card { border:1px solid var(--line); border-radius:6px; padding:.6rem .8rem; margin:.5rem 0; font: .9rem ui-monospace, Menlo, monospace; }
+  ol li { margin-bottom:.5rem; }
 </style>
 </head>
-<body><main>
-<h1>Who answers "what is this permanent now?"</h1>
-<p class="meta">Task 6875f0 (TLA T3) · concept-review after slice 14 · 2026-10-29 · built from <code>managym/src/flow/statics.rs</code>, <code>managym/src/state/permanent.rs</code>, <code>managym/src/agent/observation.rs</code>, T2's <code>observation.rs</code> at <code>35404b274</code>, <code>scratch/questions.md</code>, <code>scratch/6875f0-tla-t3-characteristics.md</code></p>
+<body>
+<main>
+<h1>T3: Academy and bots should show what item 19 now observes</h1>
+<p class="meta">Task 6875f0 · step concept-review (headless) · 2026-10-29 ·
+built from <code>scratch/6875f0-tla-t3-characteristics.md</code>,
+<code>academy/ui/src/lib/components/PermanentRow.svelte</code>,
+<code>GameBoard.svelte</code>, <code>manabot/semantic/text_observation.py</code>,
+commit <code>85650933a</code></p>
 
-<p><strong>Outcome:</strong> no product choice is open. The accepted rules (one owner per fact; observations stay complete) settle two changes, recorded in the working design as the next implementation direction.</p>
+<p><strong>Outcome: the design changed, and the next step is implementation.</strong> All 49 cards are authored. Item 19 added
+counters by kind, attachment, set name and types, granted land, firebending and stack X to the
+observation. The readers that people and LLM bots actually see still drop those fields.</p>
 
-<h2>One interaction: Honest Work on a hasty creature</h2>
-<p>The opponent controls a creature with printed haste. Honest Work enchants it. The creature becomes a 1/1 Citizen named Humble Merchant that loses all abilities and has "{T}: Add {C}".</p>
-<ul>
-<li>The <strong>legend rule, power/toughness, keywords and statics</strong> read <code>Game::has_lost_abilities</code>, <code>permanent_name</code> and the 7b base. <span class="tag now">existing</span></li>
-<li><strong>Whether it can tap or attack</strong> reads <code>Permanent::can_tap</code>, which checks <code>Permanent::effective_keywords</code>. That reader sees only the flag for until-end-of-turn ability loss, so this check still uses the printed haste. <span class="tag now">existing</span></li>
-<li><strong>What a human or the bot sees</strong> is the printed name and the printed Ally tag. Stun counters, fire counters and which permanent the Aura enchants are not in the observation at all. <span class="tag now">existing</span></li>
-</ul>
-
-<div class="mismatch">
-<p><strong>The consequential mismatch.</strong> <code>Game</code> now answers "what is this permanent?" for the rules, but two readers still answer from raw <code>Permanent</code>/<code>Card</code> fields: tap and attack eligibility, and the observation. The Task requires complete observations, and Jack Heart's shared-surface direction (2026-10-21) asks the same.</p>
+<div class="call">
+<p><strong>The consequential mismatch.</strong> You cast Crashing Wave and place three stun counters.
+In Academy, the opponent's creatures look the same as before: no stun counters are shown, Glider Staff doesn't
+say which creature it equips, and the stack shows no X value. The engine observation has these fields; the board
+doesn't render them. Jack Heart's 2026-10-21 direction already settles this: Academy should make the
+viewer-safe observation understandable to a human.</p>
 </div>
 
-<h2>Before → after</h2>
-<pre>Actions        tap for mana · activate · crew · attack · read the board
-Concepts       effective characteristics (Game)   ← one authority
-APIs   before  Permanent::can_tap(card)            Permanent::effective_keywords
-               PermanentData { plus1_counters, temp_subtypes, keywords }
-       after   Game reader: Game::effective_keywords + permanent_is_creature
-               PermanentData + counters by kind, attached_to,
-               effective name / creature types, granted land types;
-               stack: announced X; spell keyword grants</pre>
-<p><span class="tag proposed">proposed</span> The observation fields follow T2's <code>CardData.face_down</code> precedent and arrive in one change after the T2 sync. Policy encoding follows the existing policy-input versioning, so frozen widths stay unchanged.</p>
+<h2>Actions, concepts and readers</h2>
+<table>
+<tr><th>What the player does</th><th>Concept</th><th>Shown now</th><th>Proposed</th></tr>
+<tr><td>Places stun counters</td><td><code>PermanentData.stun_counters</code> → view <code>counters</code></td><td class="gap">not shown</td><td class="prop">counter badge by kind</td></tr>
+<tr><td>Equips or enchants a creature</td><td><code>attached_to</code></td><td class="gap">not shown</td><td class="prop">"attached to X" on the Aura or Equipment, and the reverse on the host</td></tr>
+<tr><td>Enchants with Honest Work</td><td>set <code>name</code> / <code>creature_types</code></td><td>name only</td><td class="prop">types line as well</td></tr>
+<tr><td>Casts with X</td><td>stack <code>x</code></td><td class="gap">not shown</td><td class="prop">"X = n" beside the mode</td></tr>
+<tr><td>Uses Toph or Fire Nation Palace</td><td><code>is_granted_land</code>, <code>firebending</code></td><td class="gap">not shown</td><td class="prop">a label</td></tr>
+<tr><td>An LLM bot reads the board</td><td>text observation, permanent line</td><td class="gap">+1/+1 counters only</td><td class="prop">the same fields, added only when present</td></tr>
+</table>
 
-<h2>Checks</h2>
-<ol>
-<li>Normal path: a creature given haste by a static grant taps for mana the turn it enters.</li>
-<li>Failure: a summoning-sick, printed-haste creature under Honest Work cannot tap for {C} or attack.</li>
-<li>Recovery: when Honest Work leaves, the name, types, abilities and haste return, and the observation shows them on the next decision.</li>
-</ol>
+<h2>What it looks like (proposed)</h2>
+<div class="card">Grizzly Bears 2/2 · tapped · <span class="prop">stun 1</span></div>
+<div class="card">Glider Staff · <span class="prop">attached to Aang</span></div>
+<div class="card">Stack · Top · Crashing Wave · spell · Seat 1 · <span class="prop">X = 2</span></div>
 
-<h2>Next implementation order</h2>
-<ol>
-<li>One tap/attack-eligibility authority on <code>Game</code></li>
-<li>Secret Tunnel: stack targets capture <code>ObjectRef</code>, and LKI keeps creature types</li>
-<li>T2 sync (reconcile list in the working design)</li>
-<li>Glider Staff and Crashing Wave on T2's airbend and waterbend</li>
-<li>One observation change, including Fire Nation Palace</li>
-</ol>
+<h2>What stays fixed</h2>
+<p>This change only adds labels. It has no new actions, hides no choices, and changes no engine or IR code.
+Text-observation output for cards without the new fields stays byte-identical. Frozen policy
+widths and checkpoints are untouched.</p>
 
-<h2>Questions</h2>
+<h2>Still unresolved (not blocking)</h2>
 <ol>
-<li>None open. If you would rather ship the observation change as its own PR after T3 instead of inside it, say so: (a) inside T3, the recorded default; (b) a separate Task.</li>
+<li>Should the policy tensor encode stun and fire counters and attachment through a new policy-input version
+alongside v4? This is a training-compatibility choice, so it's recorded for your PR review. Until then, bots
+train and play T3 cards without perceiving these fields.
+<br><em>a.</em> Leave it for later · <em>b.</em> Add v5 in T3 · <em>c.</em> Add it in a separate Task</li>
 </ol>
-</main></body>
+</main>
+</body>
 </html>

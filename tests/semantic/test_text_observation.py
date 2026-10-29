@@ -208,3 +208,58 @@ def test_ally_restricted_mana_is_not_described_as_lesson_mana() -> None:
     text = capture_text_decision(env).text
     assert "Restricted mana: W 0, U 0, B 0, R 0, G 1, C 0." in text
     assert "Lesson-only" not in text and "Lesson spending" not in text
+
+
+def _redigest(payload: dict[str, object]) -> str:
+    payload.pop("digest")
+    payload["digest"] = sha256(
+        json.dumps(
+            payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+        ).encode()
+    ).hexdigest()
+    return json.dumps(payload)
+
+
+def test_effect_derived_characteristics_appear_only_when_present() -> None:
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    decision = capture_text_decision(env)
+    payload = json.loads(decision.capture_json)
+    mountain, ogre = payload["observation"]["viewer_state"]["agent_permanents"]
+    assert render_decision(_redigest(json.loads(decision.capture_json))).text == (
+        decision.text
+    )
+    ogre |= {"stun_counters": 2, "firebending": 1}
+    mountain |= {
+        "attached_to": ogre["id"],
+        "name": "Citizen",
+        "creature_types": ["Citizen"],
+        "is_granted_land": True,
+    }
+    text = render_decision(_redigest(payload)).text
+    before = decision.text.splitlines()
+    after = text.splitlines()
+    changed = [(old, new) for old, new in zip(before, after) if old != new]
+    assert len(before) == len(after) and len(changed) == 2
+    (mountain_before, mountain_after), (ogre_before, ogre_after) = changed
+    assert mountain_after == mountain_before.replace(
+        "; unlisted effective keywords false.",
+        "; attached to C2 (Gray Ogre); name set to Citizen; creature types set to"
+        " Citizen; land through an effect; unlisted effective keywords false.",
+    )
+    assert ogre_after == ogre_before.replace(
+        "; unlisted effective keywords false.",
+        "; stun counters 2; firebending 1; unlisted effective keywords false.",
+    )
+
+
+def test_stack_text_states_announced_x_only_when_present() -> None:
+    _, env = collision_branches()
+    submit_response(env, capture_text_decision(env), "A0")
+    decision = capture_text_decision(env)
+    assert "X = " not in decision.text
+    payload = json.loads(decision.capture_json)
+    payload["observation"]["viewer_state"]["stack_objects"][0]["x"] = 3
+    stack = render_decision(_redigest(payload)).text.split(
+        "Stack (native order, top to bottom):\n", 1
+    )[1]
+    assert stack.startswith("S1: ") and "; X = 3" in stack.split("\n", 1)[0]

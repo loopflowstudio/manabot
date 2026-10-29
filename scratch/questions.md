@@ -124,3 +124,8 @@ mana, `Game::zone_cast_cost`/`may_play_from_zone`, `ZoneEntry`.
   existing `exile_if_dies_this_turn` and `temp_subtypes`.
 - `manabot/sim/registration.py` admits worlds only up to w15 (w16 and w17 are
   rejected); left to the world release with the receipts.
+- Concept review after item 19: Academy and the LLM text observation render
+  item 19's fields (next implement step, settled by Jack Heart's 2026-10-21
+  Academy direction). Encoding them in the policy tensor (a new policy-input
+  version beside v4) is left for Jack Heart's PR review; bots train and play
+  T3 cards without perceiving stun/fire counters or attachment until then.

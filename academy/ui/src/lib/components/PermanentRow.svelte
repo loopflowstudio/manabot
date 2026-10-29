@@ -1,5 +1,6 @@
 <script lang="ts">
   import { copyLabel } from '$lib/decision-labels';
+  import { permanentNotes } from '$lib/permanent-notes';
   import type { CardPreview, PermanentState } from '$lib/types';
 
   import Card from './Card.svelte';
@@ -9,6 +10,8 @@
   interface Props {
     permanents?: PermanentState[];
     allPermanents?: PermanentState[];
+    /** Every visible permanent at the table, for attachments across seats. */
+    tablePermanents?: PermanentState[];
     cardWidth?: number;
     focusedIds?: Set<number>;
     clickableTargets?: Map<number, number[]>;
@@ -20,6 +23,7 @@
   let {
     permanents = [],
     allPermanents = permanents,
+    tablePermanents = allPermanents,
     cardWidth = undefined,
     focusedIds = new Set<number>(),
     clickableTargets = undefined,
@@ -46,6 +50,7 @@
       dimmed={permanent.summoning_sick}
       counters={permanent.plus1_counters}
       temporarySubtypes={permanent.temp_subtypes ?? []}
+      notes={permanentNotes(permanent, tablePermanents)}
       damage={permanent.damage}
       onSelect={() => onSelectTarget?.(permanent.id)}
       onHoverStart={() => {

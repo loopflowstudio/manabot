@@ -1,6 +1,6 @@
 <script lang="ts">
   import { copyLabel } from '$lib/decision-labels';
-  import type { CardPreview, CardState, PlayerState } from '$lib/types';
+  import type { CardPreview, CardState, PermanentState, PlayerState } from '$lib/types';
 
   import Card from './Card.svelte';
   import CardBack from './CardBack.svelte';
@@ -12,6 +12,8 @@
   interface Props {
     label: string;
     player: PlayerState;
+    /** Every visible permanent at the table, for attachments across seats. */
+    tablePermanents?: PermanentState[];
     deckName?: string | null;
     definitionNames?: Record<string, string>;
     opponent?: boolean;
@@ -25,6 +27,7 @@
   let {
     label,
     player,
+    tablePermanents = undefined,
     deckName = null,
     definitionNames = {},
     opponent = false,
@@ -170,6 +173,7 @@
         {@render rubric('Battlefield')}
         <Battlefield
           permanents={player.battlefield}
+          tablePermanents={tablePermanents ?? player.battlefield}
           {focusedIds}
           {clickableTargets}
           {onSelectTarget}
@@ -182,6 +186,7 @@
         {@render rubric('Battlefield')}
         <Battlefield
           permanents={player.battlefield}
+          tablePermanents={tablePermanents ?? player.battlefield}
           {focusedIds}
           {clickableTargets}
           {onSelectTarget}

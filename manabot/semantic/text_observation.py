@@ -551,12 +551,37 @@ class _Renderer:
                 optional += f"; temporary subtypes {', '.join(permanent.temp_subtypes)}"
             if keywords := _keywords(permanent.keywords):
                 optional += f"; effective keywords {keywords}"
+            optional += self._characteristics(permanent)
             lines.append(
                 f"{self.name(permanent.id)} [{self.definition(permanent.registry_key)}]: controller {self.name(permanent.controller_id)}; power/toughness {permanent.power}/{permanent.toughness}; damage {permanent.damage}; tapped {_yes(permanent.tapped)}; summoning sick {_yes(permanent.is_summoning_sick)}; +1/+1 counters {permanent.plus1_counters}; animated {_yes(permanent.is_animated)}; holds exile link {_yes(permanent.has_exile_link)}; cannot be blocked this turn {_yes(permanent.cant_be_blocked_this_turn)}; exile if dies this turn {_yes(permanent.exile_if_dies_this_turn)}{optional}; unlisted effective keywords false."
             )
         if not state.agent_permanents and not state.opponent_permanents:
             lines.append("Empty.")
         return lines
+
+    def _characteristics(self, permanent: managym.Permanent) -> str:
+        """Effect-derived state, rendered only when present so other text is unchanged."""
+        parts = [
+            f"{kind} counters {count}"
+            for kind, count in (
+                ("stun", permanent.stun_counters),
+                ("fire", permanent.fire_counters),
+                ("double strike", permanent.double_strike_counters),
+            )
+            if count
+        ]
+        if permanent.attached_to is not None:
+            parts.append(f"attached to {self.name(permanent.attached_to)}")
+        if permanent.name is not None:
+            parts.append(f"name set to {permanent.name}")
+        if permanent.creature_types is not None:
+            types = ", ".join(permanent.creature_types) or "none"
+            parts.append(f"creature types set to {types}")
+        if permanent.is_granted_land:
+            parts.append("land through an effect")
+        if permanent.firebending:
+            parts.append(f"firebending {permanent.firebending}")
+        return "".join(f"; {part}" for part in parts)
 
     def _definitions_lines(self) -> list[str]:
         capture = self.capture
@@ -663,6 +688,8 @@ class _Renderer:
             if item.description:
                 details.append(item.description)
             details.extend(_selectors(item.chosen_mode, item.ability_index))
+            if item.x:
+                details.append(f"X = {item.x}")
             if targets:
                 details.append("targets " + ", ".join(targets))
             lines.append(

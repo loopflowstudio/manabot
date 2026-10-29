@@ -9,13 +9,14 @@
     lane: string;
     permanents: PermanentState[];
     allPermanents: PermanentState[];
+    tablePermanents?: PermanentState[];
     focusedIds?: Set<number>;
     clickableTargets?: Map<number, number[]>;
     onSelectTarget?: (id: number) => void;
     onHoverTarget?: (id: number | null) => void;
     onPreviewCard?: (card: CardPreview | null) => void;
   }
-  let { label, lane, permanents, allPermanents, focusedIds = new Set<number>(),
+  let { label, lane, permanents, allPermanents, tablePermanents = allPermanents, focusedIds = new Set<number>(),
     clickableTargets, onSelectTarget, onHoverTarget, onPreviewCard }: Props = $props();
   let box: HTMLDivElement;
   let width = $state(120);
@@ -43,7 +44,7 @@
   <h3 class="type-rubric truncate text-ink-2" title={label}>{label} · {permanents.length}</h3>
   <div bind:this={box} class="min-h-0 overflow-hidden p-1">
     {#if permanents.length}
-      <PermanentRow permanents={visible} {allPermanents} cardWidth={layout.cardWidth}
+      <PermanentRow permanents={visible} {allPermanents} {tablePermanents} cardWidth={layout.cardWidth}
         {focusedIds} {clickableTargets} {onSelectTarget} {onHoverTarget} {onPreviewCard} />
     {:else}<p class="type-caption text-ink-3">Empty</p>{/if}
   </div>

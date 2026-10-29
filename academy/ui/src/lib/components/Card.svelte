@@ -4,7 +4,7 @@
   // A printed plate and the things a print shop does to it: turned and
   // re-set (tapped), still wet (summoning sick), tallied (damage), marked
   // for the printer (targeted), reproduced as an etching (spent), counted
-  // in brass (+1/+1).
+  // in brass (+1/+1), annotated in the margin (other effect-derived state).
   interface Props {
     name: string;
     copyDescription?: string;
@@ -17,6 +17,7 @@
     damage?: number;
     counters?: number;
     temporarySubtypes?: string[];
+    notes?: string[];
     spent?: boolean;
     size?: 'small' | 'normal';
     onSelect?: () => void;
@@ -36,6 +37,7 @@
     damage = 0,
     counters = 0,
     temporarySubtypes = [],
+    notes = [],
     spent = false,
     size = 'small',
     onSelect = undefined,
@@ -64,6 +66,7 @@
       dimmed ? 'summoning sick' : null,
       damage > 0 ? `${damage} damage` : null,
       counters > 0 ? `${counters} +1/+1 counter${counters > 1 ? 's' : ''}` : null,
+      ...notes,
     ].filter((note): note is string => note !== null),
   );
   const accessibleName = $derived(
@@ -127,6 +130,15 @@
     <span class="pointer-events-none absolute bottom-6 left-1 rounded bg-paper px-1 text-[9px] text-ink">
       {temporarySubtypes.join(', ')}
     </span>
+  {/if}
+
+  {#if notes.length > 0}
+    <!-- Margin annotations: stated in the accessible name above. -->
+    <ul class="pointer-events-none absolute left-1 right-1 top-6 flex flex-col items-start gap-px" aria-hidden="true">
+      {#each notes as note}
+        <li class="max-w-full truncate rounded bg-paper px-1 text-[8px] leading-tight text-ink">{note}</li>
+      {/each}
+    </ul>
   {/if}
 
   {#if tallies > 0}

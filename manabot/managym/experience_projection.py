@@ -124,13 +124,13 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
         if count
     }
     values: dict[str, Any] = {
-        "counters": counters,
+        "counters": counters or None,
         "attached_to": permanent.attached_to,
         "creature_types": permanent.creature_types,
-        "is_granted_land": bool(permanent.is_granted_land),
-        "firebending": int(permanent.firebending),
+        "is_granted_land": bool(permanent.is_granted_land) or None,
+        "firebending": int(permanent.firebending) or None,
     }
-    return {key: value for key, value in values.items() if value}
+    return {key: value for key, value in values.items() if value is not None}
 
 
 def _serialize_player(
