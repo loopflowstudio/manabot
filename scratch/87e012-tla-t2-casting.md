@@ -42,6 +42,18 @@ worktree, so new T2 cards read "unsupported" in this base until T1 lands.
   `opponents_cast_only_from_hand`. `Exile {target: "source"}` exiles the resolving
   spell; finalize leaves a spell that already left the stack. Targets take
   `another` ("other target", trigger source excluded); predicate `attacking`.
+- Schema 8 also gained opcodes 70 `sacrifice_source`, 71
+  `put_into_library_second_or_bottom`, 72 `search_lands_opponent_splits`
+  (decisions `SearchDistinctLands` → `OpponentSplitsRevealed`), 73
+  `reveal_hand_discard_chosen` (public `known_hand`; `DiscardFromRevealedHand`
+  offers one card per definition); fields `up_to`, `milled_any`+`then`,
+  `affinity_zone`, `opponent_picks`, `discard_card`; predicate `any_of`.
+- Targeted waterbend activations carry their target in
+  `PendingChoice::Waterbend`; a {T} ability can't waterbend-tap its source.
+- "Discard a card" cost: `PendingChoice::DiscardPayment`, before mana.
+- Conditional flash lowers to `CardDefinition.flash_if`;
+  `Game::has_instant_timing` owns timing.
+- `determinize` pins revealed cards in their owner's library.
 - Exile grants carry `cost: Option` (None = the card's mana cost) and `this_turn`
   (dropped at cleanup); lands with a grant are played from exile
   (`may_play_from_zone` gates actions and `play_land`). Opcode 69
@@ -49,66 +61,41 @@ worktree, so new T2 cards read "unsupported" in this base until T1 lands.
 
 ## Done (slices 1–2 `648edee6b` → T1 merge `f7b59aa99`; 3 `afff1e1ed`; 4a `0d124a66e`; 4b `dea25eda8`, `d84c5f590`; T1 review `c223ea581`; slice 5/6 `43ef1210f`…)
 
-41 of 51 T2 cards are defined (2026-10-28, against `allocation.jsonl`); 10
-remain. The six T1 cards (Badgermole Cub, Dai Li Agents, Haru, Toph, Hermitic
-Herbalist, Iroh, Grand Lotus) were reviewed and left `tla::INCOMPLETE`
-(`c223ea581`): new witnesses for creature-mana green, the fifteen unordered
-two-color modes, independent earthbend returns on a doubly bent land and
-Iroh's firebending 2; the other obligations already had witnesses in
-`tests/rules/{elemental,temur,stage2}_cards.rs`. T2 defined 35, each witnessed
-in `tests/cards/tla.rs` with a Scryfall fixture entry
-(`scratch/add_fixture.py <name>` appends one): Earthbending Lesson,
-Sandbenders' Storm, Earth Village Ruffians, Geyser Leaper, Foggy Swamp
-Vinebender, Fire Nation Attacks, Rockalanche; slice 1: Canyon Crawler,
-Mongoose Lizard, Saber-Tooth Moose-Lion, Giant Koi, Rabaroo Troop, Team Avatar,
-Merchant of Many Hats; slice 2: Hog-Monkey, Rough Rhino Cavalry, Rebellious
-Captives; slice 3: Barrels of Blasting Jelly, Jasmine Dragon Tea Shop, White
-Lotus Hideout, Waterbending Scroll; slice 4a: Aang, the Last Airbender,
-Airbending Lesson, Airbender's Reversal, Avatar's Wrath; slice 4b: Zuko, Exiled
-Prince; this pass: Aang's Iceberg, North Pole Patrol, Zuko's Conviction, Sokka,
-Bold Boomeranger, Seismic Sense, Aang's Journey, Sparring Dummy, Lost Days,
-Serpent of the Pass.
+44 of 51 T2 cards are defined (2026-10-28, against `allocation.jsonl`); 7
+remain (Next slices). The six T1 cards were reviewed and left `tla::INCOMPLETE`
+in `c223ea581`. Each T2-defined card has a witness in `tests/cards/tla.rs` and
+a Scryfall fixture entry (`scratch/add_fixture.py <name>` appends one);
+per-slice card lists are in the commit messages above.
 
 ## Base: T1
 
-Merged onto PR #394's head `86ebe9ccf` (qualification gate removed,
-`cards/native.rs` gone, natives in set files). T1 did not create `tests/cards/`;
-this branch's `tests/cards.rs` + `tests/cards/{support,tla}.rs` stand. Moving the
-existing per-card `tests/rules/` files (tla_cards, tla_content, temur/elemental/
-stage*/sacrifice/interaction) into `tests/cards/` stays T1's (Jack Heart's
-2026-10-29 steer); re-sync if T1 lands that move.
+Merged onto PR #394's head `86ebe9ccf`. Moving the per-card `tests/rules/`
+files into `tests/cards/` stays T1's (Jack Heart, 2026-10-29); re-sync if T1
+lands that move.
 
 ## Next slices (one PR)
 
-Slices 1–3, 4a (airbend) and Zuko are done; see Decisions.
+Remaining 7 T2 cards, each needing a casting-pipeline mechanism not built yet:
 
-0. Review the six T1 cards against their `INCOMPLETE` obligations (open
-   examples: Herbalist's unordered two-color combinations, Haru's independent
-   delayed returns, Badgermole's green on creature mana taps). Witnesses exist
-   in `tests/rules/{elemental,temur,stage2,tla_content}_cards.rs`. Close any
-   gaps, then drop each entry from `INCOMPLETE`. Until then they do not count
-   toward acceptance.
-4b. Remaining exact-zone grants, each needing a mechanism not built yet:
-   - Yue, the Moon Spirit and Solstice Revelations: cast a spell *during
-     resolution* without paying its mana cost. The cast pipeline must run
-     while a resolution is suspended (decide: nested cast decision vs. a
-     granted one-shot free cast). Solstice also exiles cards until it reaches
-     a nonland, falls back to returning the card to hand, and has flashback.
-   - Sozin's Comet: foretell special action (pay {2}, exile face down from hand;
-     exile observation must hide the face from the opponent) + later-turn grant;
-     also "gains firebending 5 until end of turn" for each creature.
-   - Hama: mill + chosen graveyard exile + grant whose cost is waterbend {X}
-     while Hama stays controlled (source-linked, own turn).
-   - Azula: opponent-chosen exiles + source-linked own-turn grant with flash
-     and any-type mana.
-5. Private search/choice (Aang's Journey, Elemental Teachings, Seismic Sense,
-   Lost Days, Dai Li Indoctrination, Sparring Dummy), additional costs
-   (Spirit Water Revival, Professor Zei, Sokka, United Front X).
-6. Not yet placed in a slice: Aang's Iceberg (linked exile, source-departure race),
-   North Pole Patrol (waterbend + tap cost exclusivity), Serpent of the Pass
-   (conditional flash, generic reduction keeping mana value), Zuko's Conviction
-   (kicker-selected graveyard return).
+- United Front: {X} spells — announce X while casting (stack object keeps it,
+  mana value includes it), `EffectValue::X`; then X Ally tokens and a counter
+  on each creature you control (`PutCountersOnEachMatching` exists).
+- Spirit Water Revival: optional additional waterbend {6} while casting (spell
+  waterbend payment), "if the additional cost was paid" branch, shuffle
+  graveyard into library, draw seven, no maximum hand size, self-exile.
+- Yue, the Moon Spirit and Solstice Revelations: cast a spell *during
+  resolution* without paying its mana cost (decide: nested cast decision vs. a
+  granted one-shot free cast). Solstice also exiles until a nonland, compares
+  mana value to Mountains you control, falls back to hand, and has flashback.
+- Sozin's Comet: foretell special action (pay {2}, exile face down from hand;
+  observation hides the face from the opponent) + later-turn cast for {2}{R};
+  "each creature you control gains firebending 5 until end of turn".
+- Hama: target opponent mills three, exile up to one noncreature nonland card
+  from their graveyard, source-linked own-turn grant paid by waterbend {X}
+  (X = its mana value).
+- Azula: opponent-chosen exiles (nontoken creature, then nonland graveyard
+  card), source-linked own-turn grant with flash and any-type mana.
 
 ## Check
 
-2026-10-28 (compress after 4b, staged): debug `cargo test --tests --no-fail-fast` passes except the pre-existing semantic-conformance pair (world/content-digest drift); `tests/cards` passes all 35; clippy and fmt are clean; the compress left IR unchanged, so the 4b extension and its 54-test pytest result still stand; the world-change Python suite and the Academy check are deferred to gate.
+2026-10-28 (after Professor Zei, `fb624ef92`+): debug `cargo test --tests --no-fail-fast` passes except the pre-existing semantic-conformance pair; clippy and fmt clean; rebuilt extension, `pytest tests/semantic/` 159 pass, 3 fail only on T1's unupdated frozen-schema assertions (`test_elemental`, `test_elemental_world`, `test_sacrifice` expect 3/7/4, bind 8 since `73865361f`); world-change Python suite and Academy check deferred to gate.

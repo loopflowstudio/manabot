@@ -54,3 +54,13 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   exiles creatures one at a time (no simultaneous-batch leave event).
 - "Other target" (`another`) is enforced for triggered abilities; activated
   abilities already never offer their source. Spells need no source check.
+- Kicked Aang's Journey runs two searches (basic land, then Shrine), each
+  shuffling, rather than one combined search; no TLA Shrine is defined yet, so
+  its witness shows the Shrine search failing to find.
+- Sokka's "artifact or Lesson" trigger uses a new `any_of` predicate (one
+  trigger even for an artifact Lesson) instead of two triggers.
+- Dai Li Indoctrination's revealed hand is public `known_hand` knowledge,
+  offered one card per definition (as `reveal_card_to_hand`).
+- Elemental Teachings with fewer than two revealed lands: the opponent bins
+  all of them.
+- T1's three frozen-schema pytest assertions (3/7/4 vs 8) are left for T1.

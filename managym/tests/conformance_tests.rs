@@ -114,9 +114,18 @@ fn render_type_line(def: &CardDefinition) -> String {
             }
         })
         .collect();
-    // BTreeSet order is the enum order; every registered card is
-    // single-typed today, so ordering nuances don't arise.
-    for card_type in &def.types.types {
+    // Printed order puts Kindred, Enchantment, Artifact and Land before
+    // Creature ("Artifact Creature"); the engine's set uses enum order.
+    let printed_rank = |card_type: &CardType| match card_type {
+        CardType::Kindred => 0,
+        CardType::Enchantment => 1,
+        CardType::Artifact => 2,
+        CardType::Land => 3,
+        _ => 4,
+    };
+    let mut types: Vec<&CardType> = def.types.types.iter().collect();
+    types.sort_by_key(|card_type| printed_rank(card_type));
+    for card_type in types {
         words.push(
             match card_type {
                 CardType::Creature => "Creature",

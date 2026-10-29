@@ -258,7 +258,7 @@ impl Game {
                     continue;
                 }
                 let affordable = if ability.waterbend {
-                    self.can_pay_waterbend_activation(player, permanent_id, &ability)
+                    self.can_pay_waterbend_activation(player, permanent_id, ability)
                 } else {
                     self.can_pay_announced_activation(
                         player,
