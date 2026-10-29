@@ -49,23 +49,81 @@ card warns that greedy decoding in thinking mode causes endless repetition and
 recommends these sampling values. This changes the treatment: sampled results
 are not comparable with, or pooled into, either greedy result.
 
+### Sampled pilot result and accepted treatment change
+
+Pilot `dddaf3001dfa` (sampled, one game, concurrency 1) was cancelled at Jack
+Heart's direction after about 93 minutes, mid-game, before its $2 cap could be
+spent without a result. Its 41 retained Qwen selections: 38 valid initially,
+2 after repair, none by fallback, and no generation-limit cutoff (every attempt
+ended with EOS). Reasoning per attempt: median 4,616 tokens, p90 7,154, max
+8,223; prompts median 5,706 tokens. Generation ran at about 33 tokens/s
+single-stream, the A6000's bandwidth ceiling for 18 GB BF16 weights, so the
+slowness was output length at concurrency 1, not a serving fault. 36 of the
+41 decisions offered two legal references. Sampling removed the greedy
+repetition failure. The game had native `skip_trivial` enabled, as every game in
+this schedule does.
+
+On 2026-10-28 Jack Heart accepted two new, never-pooled arms (`runs(arm=...)`
+in `experiments/qwen_mtg183_vllm.py`):
+
+- **`budget` (main arm, nearly all remaining budget):** the same sampling with a
+  3,072-token thinking budget. A response with no closing delimiter by then gets
+  `\n</think>\n\n` inserted by the harness (s1-style budget forcing) and
+  answers within the 4,096-token per-attempt total; 16,384-token context. Each
+  response records `forced_close_at` and the inserted token IDs; game receipts
+  count `forced_closes` separately from repairs and fallbacks.
+- **`nothink` (small labeled floor, about 10 games, well under $1, after the
+  main cohort is under way):** thinking disabled with Qwen's non-thinking
+  sampling (T 0.7, top-p 0.8, top-k 20, presence 1.5), 512 output tokens.
+
+Serving for these arms: 32 concurrent games (`--max-num-seqs 32`) and the
+checkpoint's own MTP head as a one-token speculative draft (vLLM 0.17.1
+`{"method":"mtp","num_speculative_tokens":1}`; its rejection sampler applies the
+declared top-k/top-p and presence penalty). The draft is part of the hashed
+server argv. Every Qwen attempt prints prompt, reasoning and answer tokens,
+forced close, seconds and tokens/s to job stdout, with vLLM's throughput and
+speculative-acceptance lines once a minute. Receipts also record single-choice
+Qwen decisions (not auto-resolved) and the native skip count per game.
+
 ## Stages and stopping
 
-1. **Development pilot:** one game (first schedule entry), concurrency 1.
-   Inspect completion, repairs/fallbacks, reasoning length, replay, memory,
-   latency and inclusive cost. It is not part of the scored cohort.
+1. **Short pilot per arm:** a bounded run cancelled once a few minutes of
+   decisions measure aggregate tokens/s, acceptance, reasoning per decision and
+   forced-close rate. Pilot games are never scored.
 2. **Scored cohort:** a new run reserving the first N schedule entries at a
-   declared concurrency, both fixed from pilot evidence before launch and
-   recorded below. A failed game or identity departure stops admissions;
-   admitted games settle. No replacements or retries inside a cohort.
+   declared concurrency, fixed from pilot evidence before launch and recorded
+   below. A failed game or identity departure stops admissions; admitted games
+   settle. No replacements or retries inside a cohort.
 
 Each attempt is one Etude job on one RTX A6000 48 GB allocation at no more than
 $0.60/hour, one vLLM service. Each job's cap is the $10 budget minus all earlier
 attempts' charges minus a $0.50 cleanup/ancillary reserve. Allocation absence
 and charges are reconciled after every attempt.
 
+### Budget pilot result and frozen scored cohort
+
+Pilot `139099571cbb` (budget arm, 32 games at concurrency 32, MTP draft 1) was
+cancelled after about 10 minutes of decisions. Of 86 Qwen attempts, 61 (71%)
+reached the 3,072-token budget and were force-closed; 58 of those answered in
+exactly three tokens. 80 decisions were valid initially and 6 after repair, with
+no fallback. Prompts median 2,898 tokens (early-game). Each stream generated
+about 17–19 tokens/s; vLLM reported 650–710 generated tokens/s aggregate with 32
+running requests, MTP acceptance 63–71% (mean acceptance length about 1.65) and
+37–47% KV-cache use. Projected at roughly 50 Qwen decisions and 165k generated
+tokens per game, 100 games need about 7 hours of serving.
+
+**Frozen scored cohort (declared 2026-10-29 before launch):** arm `budget`, the
+first 100 schedule entries (all of them), 32 concurrent games, MTP draft 1, job
+cap $7.00 (11-hour rental, 10-hour game watchdog), w13 campaign source as
+launched. The behavior version is the one the server acknowledges at startup;
+every game must name it and the MTG-183 digest. A failed game or identity
+departure stops admissions; admitted games settle; unattempted entries remain
+unattempted. Results are reported as this arm only.
+
 ## Attempts
 
 | Run | Stage | Cap | Outcome | Charge |
 | --- | --- | --- | --- | --- |
-| `dddaf3001dfa` | pilot, 1 game, c=1 | $2.00 | running | pending |
+| `dddaf3001dfa` | sampled pilot, 1 game, c=1 | $2.00 | cancelled mid-game; 41 Qwen selections, 0 fallbacks; pod absent | $0.566 billed through 02:00 UTC |
+| `139099571cbb` | budget pilot, 32 games, c=32, MTP 1 | $1.20 | cancelled after ~10 min of decisions (86 attempts) | pending |
+| `8f68c0bc488b` | **scored cohort**, budget, 100 games, c=32, MTP 1 | $7.00 | running | pending |
