@@ -126,6 +126,8 @@ pub enum Opcode {
     SearchLibraryToHand = 88,
     LookAtLibraryTop = 89,
     CastFromLibraryTop = 90,
+    SetCharacteristics = 91,
+    RemoveAllCounters = 92,
 }
 
 impl Opcode {
@@ -221,6 +223,8 @@ impl Opcode {
             88 => Opcode::SearchLibraryToHand,
             89 => Opcode::LookAtLibraryTop,
             90 => Opcode::CastFromLibraryTop,
+            91 => Opcode::SetCharacteristics,
+            92 => Opcode::RemoveAllCounters,
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -453,6 +457,18 @@ pub enum Step {
     /// (static).
     CastFromLibraryTop {
         predicate: Predicate,
+    },
+    /// "[target] loses all abilities and is a [subtypes] with base power and
+    /// toughness P/T named [name]" (static).
+    SetCharacteristics {
+        target: String,
+        name: String,
+        subtypes: Vec<String>,
+        power: i64,
+        toughness: i64,
+    },
+    RemoveAllCounters {
+        target: String,
     },
     /// "Enters with X [counter] counters" (static).
     EntersWithXCounters {
@@ -1184,6 +1200,8 @@ impl<'a> BoundPack<'a> {
             | Step::SearchLibraryToHand { .. }
             | Step::LookAtLibraryTop
             | Step::CastFromLibraryTop { .. }
+            | Step::SetCharacteristics { .. }
+            | Step::RemoveAllCounters { .. }
             | Step::SearchBasicLands { .. }
             | Step::Sacrifice { .. }
             | Step::DealDamageToController { .. }
@@ -1467,6 +1485,16 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         Opcode::LookAtLibraryTop => Step::LookAtLibraryTop,
         Opcode::CastFromLibraryTop => Step::CastFromLibraryTop {
             predicate: parse_predicate(object_field(value, "predicate")?)?,
+        },
+        Opcode::SetCharacteristics => Step::SetCharacteristics {
+            target: str_field(value, "target")?.to_owned(),
+            name: str_field(value, "name")?.to_owned(),
+            subtypes: str_array_field(value, "subtypes")?,
+            power: i64_field(value, "power")?,
+            toughness: i64_field(value, "toughness")?,
+        },
+        Opcode::RemoveAllCounters => Step::RemoveAllCounters {
+            target: str_field(value, "target")?.to_owned(),
         },
         Opcode::EntersWithXCounters => Step::EntersWithXCounters {
             counter: opt_str_field(value, "counter")?.map(str::to_owned),

@@ -204,6 +204,9 @@ needs its entry appended to `content/semantic/current/learning_schema.json`.
 A permanent's activated abilities are `Game::activated_abilities_for` (printed,
 then granted, e.g. `Program::granted_to` from Equipment); activation, payment
 and offer code indexes only that list, never `card.activated_abilities`.
+Whether a permanent has lost its abilities is `Game::has_lost_abilities`
+(until-end-of-turn loss or an Aura's `SetCharacteristics`); never read
+`Permanent.abilities_lost` alone.
 
 Native fixed mana abilities on a card are additive: multiple fixed productions
 produce all listed colors together. A land that produces one chosen color uses

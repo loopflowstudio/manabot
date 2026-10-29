@@ -1986,3 +1986,83 @@ fn trusty_boomerang_that_left_the_battlefield_does_not_return() {
         Some(ZoneType::Graveyard)
     );
 }
+
+/// CR 613.1 (layers 1, 4, 6, 7b): the enchanted creature becomes a 1/1
+/// Citizen named Humble Merchant, losing printed keywords and abilities
+/// granted before (Trusty Boomerang's), and keeps only "{T}: Add {C}". The
+/// entry trigger taps it and removes every counter (CR 122.8).
+#[test]
+fn honest_work_turns_the_creature_into_a_humble_merchant() {
+    let mut s = setup(&["Honest Work", "Wind Drake", "Trusty Boomerang"]);
+    let drake = s.force_permanent_on_battlefield(1, "Wind Drake");
+    let boomerang = s.force_permanent_on_battlefield(1, "Trusty Boomerang");
+    let attached = s.game().permanent_object_ref(drake);
+    let game = s.game_mut();
+    game.state.permanents[boomerang]
+        .as_mut()
+        .unwrap()
+        .attached_to = attached;
+    let permanent = game.state.permanents[drake].as_mut().unwrap();
+    permanent.change_counters(CounterKind::PlusOnePlusOne, 2);
+    permanent.change_counters(CounterKind::Stun, 1);
+    assert_eq!(s.game().effective_pt(drake), (4, 4));
+    assert!(observed_keywords(&s, drake).flying);
+
+    enchant(&mut s, "Honest Work", "U", drake);
+    assert!(tapped(&s, drake), "the entry trigger taps it");
+    for kind in CounterKind::ALL {
+        assert_eq!(counters_of(&s, drake, kind), 0, "{kind:?} removed");
+    }
+    assert_eq!(s.game().effective_pt(drake), (1, 1));
+    assert!(!observed_keywords(&s, drake).flying);
+    assert_eq!(s.game().permanent_name(drake), "Humble Merchant");
+    assert!(s.game().permanent_has_subtype(drake, "Citizen"));
+    assert!(!s.game().permanent_has_subtype(drake, "Drake"));
+
+    s.advance_to_active_step(1, StepKind::Main);
+    ready(&mut s, drake);
+    assert!(
+        !tapped(&s, drake),
+        "no stun counter remains to replace the untap"
+    );
+    s.set_player_mana_pool(1, "1");
+    assert!(
+        can_activate(&mut s, drake, 0),
+        "the merchant's mana ability"
+    );
+    assert!(
+        !can_activate(&mut s, drake, 1),
+        "the Boomerang's grant is lost"
+    );
+    s.set_player_mana_pool(1, "");
+    activate(&mut s, drake, 0);
+    choose(&mut s, |a| matches!(a, Action::ChooseMode { .. }));
+    assert_eq!(s.game().state.players[1].mana_pool, Mana::parse("C"));
+    assert!(tapped(&s, drake));
+}
+
+/// A printed mana ability goes with the rest (Llanowar Elves taps for {C},
+/// not {G}); when the Aura leaves, the creature's own characteristics return.
+#[test]
+fn honest_work_replaces_a_printed_mana_ability_until_it_leaves() {
+    let mut s = setup(&["Honest Work", "Llanowar Elves"]);
+    let elves = s.force_permanent_on_battlefield(1, "Llanowar Elves");
+    ready(&mut s, elves);
+    let green = |s: &mut Scenario| s.game_mut().cached_producible_mana(PlayerId(1));
+    assert_eq!(green(&mut s), Mana::parse("G"));
+
+    let aura = enchant(&mut s, "Honest Work", "U", elves);
+    s.game_mut().state.permanents[elves]
+        .as_mut()
+        .unwrap()
+        .tapped = false;
+    s.game_mut().invalidate_mana_cache(PlayerId(1));
+    assert_eq!(green(&mut s), Mana::default(), "no fixed {{G}} remains");
+    assert!(!s.game().permanent_has_subtype(elves, "Elf"));
+
+    let aura = card_of(&s, aura);
+    s.game_mut().move_card(aura, ZoneType::Graveyard);
+    assert_eq!(green(&mut s), Mana::parse("G"));
+    assert_eq!(s.game().permanent_name(elves), "Llanowar Elves");
+    assert!(s.game().permanent_has_subtype(elves, "Elf"));
+}

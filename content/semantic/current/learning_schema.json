@@ -73,6 +73,9 @@
       "trample": 12,
       "vigilance": 13
     },
+    "name": {
+      "Humble Merchant": 1
+    },
     "ordering": {
       "random": 1
     },
@@ -286,6 +289,7 @@
     "min_select": 32,
     "modes": 67,
     "n": 33,
+    "name": 98,
     "once_each_turn": 82,
     "or_mana": 75,
     "otherwise": 34,
@@ -411,6 +415,7 @@
     "put_counters": 5,
     "put_counters_value": 33,
     "put_top_cards_in_hand": 3,
+    "remove_all_counters": 92,
     "remove_counters": 66,
     "restrict_blocking": 12,
     "return_graveyard_target": 42,
@@ -423,6 +428,7 @@
     "search_library_to_hand": 88,
     "set_base_pt": 67,
     "set_base_pt_value": 83,
+    "set_characteristics": 91,
     "set_power_from_count": 23,
     "shuffle_into_library": 71,
     "spell_cost_reduction": 49,

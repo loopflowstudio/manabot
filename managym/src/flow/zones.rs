@@ -470,6 +470,15 @@ impl Game {
         if old_zone == Some(ZoneType::Battlefield) {
             self.handle_leaves_battlefield(departing_ref, to_zone);
         }
+        // An attachment that grants or removes abilities changes the mana
+        // its creature's controller, possibly the opponent, can produce.
+        let card_def = &self.state.cards[card];
+        if (old_zone == Some(ZoneType::Battlefield) || to_zone == ZoneType::Battlefield)
+            && (card_def.attached_characteristics.is_some() || !card_def.attached_grants.is_empty())
+        {
+            self.invalidate_mana_cache(PlayerId(0));
+            self.invalidate_mana_cache(PlayerId(1));
+        }
         true
     }
 

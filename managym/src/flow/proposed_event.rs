@@ -176,7 +176,7 @@ impl Game {
                             permanent.as_ref().map(|permanent| (index, permanent))
                         })
                 {
-                    if permanent.abilities_lost {
+                    if self.has_lost_abilities(PermanentId(index)) {
                         continue;
                     }
                     let Some(source) = self.permanent_object_ref(PermanentId(index)) else {

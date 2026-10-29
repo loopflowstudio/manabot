@@ -343,6 +343,10 @@ pub enum Effect {
     },
     /// Exile the object the source Aura or Equipment is attached to.
     ExileAttached,
+    /// Tap the object the source is attached to.
+    TapAttached,
+    /// Remove all counters from the object the source is attached to.
+    RemoveAllCountersFromAttached,
     /// Return the permanent that granted this ability to its owner's hand
     /// ("Return Trusty Boomerang"); nothing if it has left the battlefield.
     ReturnGrantorToHand,
@@ -745,6 +749,8 @@ impl Effect {
             | Effect::SetBasePtUntilEot { .. }
             | Effect::BecomeCreatureSource { .. }
             | Effect::ExileAttached
+            | Effect::TapAttached
+            | Effect::RemoveAllCountersFromAttached
             | Effect::ReturnGrantorToHand
             | Effect::ShuffleAttachedIntoLibrary
             | Effect::GainLife { .. }

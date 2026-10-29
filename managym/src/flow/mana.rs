@@ -453,7 +453,9 @@ impl PaymentModel {
 impl Game {
     /// Printed abilities, then currently granted abilities in source order,
     /// then the intrinsic mana ability of basic land types gained by an effect,
-    /// then abilities granted by attached Equipment in battlefield order.
+    /// then abilities granted by attached Equipment and Auras in battlefield
+    /// order. A permanent that has lost all abilities keeps only the grants of
+    /// the Aura that set its characteristics (Humble Merchant's "{T}: Add {C}").
     pub(crate) fn activated_abilities_for(
         &self,
         permanent: PermanentId,
@@ -461,11 +463,51 @@ impl Game {
         let Some(source) = self.state.permanents[permanent].as_ref() else {
             return Vec::new();
         };
-        if source.abilities_lost {
-            return Vec::new();
+        let lost = self.has_lost_abilities(permanent);
+        let mut abilities = Vec::new();
+        if !lost {
+            abilities = self.state.cards[source.card].activated_abilities.clone();
+            self.extend_own_abilities(permanent, &mut abilities);
         }
-        let mut abilities = self.state.cards[source.card].activated_abilities.clone();
-        for ability in &mut abilities {
+        for grantor in [PlayerId(0), PlayerId(1)]
+            .into_iter()
+            .flat_map(|player| self.battlefield_permanents(player))
+        {
+            let attachment = self.state.permanents[grantor].as_ref().unwrap();
+            let card = &self.state.cards[attachment.card];
+            if card.attached_grants.is_empty()
+                || attachment.abilities_lost
+                || (lost && card.attached_characteristics.is_none())
+                || self.attached_creature(grantor) != Some(permanent)
+            {
+                continue;
+            }
+            let grantor = self
+                .permanent_object_ref(grantor)
+                .expect("battlefield permanent has an exact identity");
+            abilities.extend(
+                card.attached_grants
+                    .iter()
+                    .enumerate()
+                    .map(|(index, ability)| ActivatedAbilityDefinition {
+                        granted_by: Some(AbilityGrant { grantor, index }),
+                        ..ability.clone()
+                    }),
+            );
+        }
+        abilities
+    }
+
+    /// Read state-dependent mana outputs of printed abilities, then add mana
+    /// abilities from `mana_grant` permanents and gained basic land types:
+    /// everything `permanent` loses with its abilities.
+    fn extend_own_abilities(
+        &self,
+        permanent: PermanentId,
+        abilities: &mut Vec<ActivatedAbilityDefinition>,
+    ) {
+        let source = self.state.permanents[permanent].as_ref().unwrap();
+        for ability in abilities.iter_mut() {
             if let Some(effect) = self.current_mana_output(&ability.effect, source.controller) {
                 ability.effect = effect;
             }
@@ -491,29 +533,6 @@ impl Game {
                 ..Default::default()
             });
         }
-        for grantor in [PlayerId(0), PlayerId(1)]
-            .into_iter()
-            .flat_map(|player| self.battlefield_permanents(player))
-        {
-            let equipment = self.state.permanents[grantor].as_ref().unwrap();
-            let grants = &self.state.cards[equipment.card].equipped_grants;
-            if grants.is_empty()
-                || equipment.abilities_lost
-                || self.attached_creature(grantor) != Some(permanent)
-            {
-                continue;
-            }
-            let grantor = self
-                .permanent_object_ref(grantor)
-                .expect("battlefield permanent has an exact identity");
-            abilities.extend(grants.iter().enumerate().map(|(index, ability)| {
-                ActivatedAbilityDefinition {
-                    granted_by: Some(AbilityGrant { grantor, index }),
-                    ..ability.clone()
-                }
-            }));
-        }
-        abilities
     }
 
     /// A land with a basic land type has "{T}: Add [its color]" (CR 305.6).
@@ -658,8 +677,10 @@ impl Game {
             .map(|permanent| {
                 let source = self.state.permanents[permanent].as_ref().unwrap();
                 let card = &self.state.cards[source.card];
-                let fixed = (source.can_tap(card) && !card.mana_abilities.is_empty())
-                    .then(|| self.fixed_source_mana(permanent));
+                let fixed = (source.can_tap(card)
+                    && !card.mana_abilities.is_empty()
+                    && !self.has_lost_abilities(permanent))
+                .then(|| self.fixed_source_mana(permanent));
                 let abilities = self
                     .activated_abilities_for(permanent)
                     .iter()
@@ -1067,6 +1088,9 @@ impl Game {
     fn fixed_source_mana(&self, permanent: PermanentId) -> Mana {
         let source = self.state.permanents[permanent].as_ref().unwrap();
         let card = &self.state.cards[source.card];
+        if self.has_lost_abilities(permanent) {
+            return Mana::default();
+        }
         let mut output = source.producible_mana(card);
         if source.can_tap(card) && !card.mana_abilities.is_empty() {
             output.add(&self.tap_mana_bonus(permanent, source.controller));
@@ -1224,11 +1248,12 @@ impl Game {
     /// Whether `player` controls a permanent replacing mana loss (CR 614.1a).
     fn unspent_mana_becomes_red(&self, player: PlayerId) -> bool {
         self.battlefield_permanents(player).into_iter().any(|id| {
-            self.state.permanents[id].as_ref().is_some_and(|permanent| {
-                self.state.cards[permanent.card]
-                    .replacement_effects
-                    .contains(&ReplacementEffect::UnspentManaBecomesRed)
-            })
+            !self.has_lost_abilities(id)
+                && self.state.permanents[id].as_ref().is_some_and(|permanent| {
+                    self.state.cards[permanent.card]
+                        .replacement_effects
+                        .contains(&ReplacementEffect::UnspentManaBecomesRed)
+                })
         })
     }
 }

@@ -79,8 +79,8 @@ impl Game {
     fn active_permanent_cards(&self, player: PlayerId) -> impl Iterator<Item = &Card> {
         self.battlefield_permanents(player)
             .into_iter()
+            .filter(|&id| !self.has_lost_abilities(id))
             .filter_map(|id| self.state.permanents[id].as_ref())
-            .filter(|permanent| !permanent.abilities_lost)
             .map(|permanent| &self.state.cards[permanent.card])
     }
 

@@ -22,6 +22,10 @@
 // (layer 6) add to printed and until-EOT keywords. Earthbend animation sets
 // base 0/0 (CR 701.66a) even on a permanent that prints P/T.
 // "Equipped/enchanted creature" effects follow the exact attached object.
+// An Aura that sets characteristics (`SetCharacteristics`) replaces the
+// enchanted creature's name and creature types, sets base P/T in layer 7b
+// before until-end-of-turn setters, and removes its abilities; timestamps
+// are not kept, so every other ability and grant goes with them.
 // Static restrictions (can't attack or block, doesn't untap, blocker limits)
 // use the same scopes.
 // A scope reads what the layers before its own determine (`ScopeView`):
@@ -35,7 +39,7 @@ use crate::{
     flow::game::Game,
     state::{
         ability::StaticCondition,
-        card::{Card, CardType, Keywords, PowerCda, Restriction, StaticScope},
+        card::{Card, CardType, Keywords, PowerCda, Restriction, SetCharacteristics, StaticScope},
         game_object::{CardId, PermanentId, PlayerId},
         predicate::CardPredicate,
         zone::ZoneType,
@@ -94,8 +98,12 @@ impl Game {
         let card = &self.state.cards[permanent.card];
 
         // Layer 7a: base P/T (characteristic-defining, or printed); an
-        // earthbent permanent is a 0/0 creature.
-        let (base_power, base_toughness) = if permanent.animated {
+        // earthbent permanent is a 0/0 creature. A characteristic-setting
+        // Aura's 7b base applies before until-EOT setters.
+        let (base_power, base_toughness) = if let Some(set) = self.set_characteristics(permanent_id)
+        {
+            (set.power, set.toughness)
+        } else if permanent.animated {
             (0, 0)
         } else {
             let power = match &card.power_cda {
@@ -239,12 +247,72 @@ impl Game {
                         }
                         let permanent_id = self.state.card_to_permanent[card_id]?;
                         let permanent = self.state.permanents[permanent_id].as_ref()?;
-                        if permanent.abilities_lost {
+                        if self.has_lost_abilities(permanent_id) {
                             return None;
                         }
                         Some((permanent_id, permanent.controller, card))
                     })
             })
+    }
+
+    /// The characteristics an Aura attached to `permanent_id` sets, if any
+    /// (the latest in battlefield order). An Aura that has itself lost its
+    /// abilities sets nothing; no further statics are read, so this never
+    /// recurses.
+    pub(crate) fn set_characteristics(
+        &self,
+        permanent_id: PermanentId,
+    ) -> Option<&SetCharacteristics> {
+        [PlayerId(0), PlayerId(1)]
+            .into_iter()
+            .flat_map(|player| self.state.zones.zone_cards(ZoneType::Battlefield, player))
+            .filter_map(|&card_id| {
+                let set = self.state.cards[card_id]
+                    .attached_characteristics
+                    .as_ref()?;
+                let source = self.state.card_to_permanent[card_id]?;
+                (!self.state.permanents[source].as_ref()?.abilities_lost
+                    && self.attached_creature(source) == Some(permanent_id))
+                .then_some(set)
+            })
+            .last()
+    }
+
+    /// Whether the permanent has lost all abilities: until end of turn
+    /// (`Permanent.abilities_lost`) or while an Aura sets its characteristics.
+    pub(crate) fn has_lost_abilities(&self, permanent_id: PermanentId) -> bool {
+        self.state.permanents[permanent_id]
+            .as_ref()
+            .is_some_and(|permanent| permanent.abilities_lost)
+            || self.set_characteristics(permanent_id).is_some()
+    }
+
+    /// The permanent's name (CR 201.2), as set by a characteristic-setting
+    /// Aura or printed.
+    pub fn permanent_name(&self, permanent_id: PermanentId) -> &str {
+        match self.set_characteristics(permanent_id) {
+            Some(set) => &set.name,
+            None => self.state.permanents[permanent_id]
+                .as_ref()
+                .map_or("", |permanent| &self.state.cards[permanent.card].name),
+        }
+    }
+
+    /// Whether the permanent has `subtype`: printed or temporarily granted.
+    /// A characteristic-setting Aura replaces its printed creature types.
+    pub fn permanent_has_subtype(&self, permanent_id: PermanentId, subtype: &str) -> bool {
+        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+            return false;
+        };
+        let printed = self.state.cards[permanent.card].has_subtype(subtype);
+        let printed = match self.set_characteristics(permanent_id) {
+            Some(set) => {
+                set.creature_types.iter().any(|s| s == subtype)
+                    || (printed && NONCREATURE_SUBTYPES.contains(&subtype))
+            }
+            None => printed,
+        };
+        printed || permanent.temp_subtypes.iter().any(|s| s == subtype)
     }
 
     /// Card types static type grants add to `target_id` (layer 4).
@@ -373,7 +441,9 @@ impl Game {
             return Vec::new();
         };
         let card = &self.state.cards[permanent.card];
-        let printed: &[String] = if card.types.is_creature() {
+        let printed: &[String] = if let Some(set) = self.set_characteristics(permanent_id) {
+            &set.creature_types
+        } else if card.types.is_creature() {
             &card.subtypes
         } else {
             &[]
@@ -448,7 +518,7 @@ impl Game {
         else {
             return Keywords::default();
         };
-        if permanent.abilities_lost {
+        if self.has_lost_abilities(permanent_id) {
             return Keywords::default();
         }
         permanent
@@ -494,7 +564,9 @@ impl Game {
         };
         let card = &self.state.cards[permanent.card];
         let flying = || match view {
-            ScopeView::Types | ScopeView::Keywords => permanent.effective_keywords(card).flying,
+            ScopeView::Types | ScopeView::Keywords => {
+                permanent.effective_keywords(card).flying && !self.has_lost_abilities(permanent_id)
+            }
             ScopeView::PowerToughness | ScopeView::Rules => {
                 self.effective_keywords(permanent_id).flying
             }
@@ -505,9 +577,7 @@ impl Game {
         {
             return false;
         }
-        let has_subtype = |name: &str| {
-            card.has_subtype(name) || permanent.temp_subtypes.iter().any(|s| s == name)
-        };
+        let has_subtype = |name: &str| self.permanent_has_subtype(permanent_id, name);
         if predicate
             .subtype
             .as_deref()

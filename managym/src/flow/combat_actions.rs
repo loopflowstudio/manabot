@@ -21,6 +21,9 @@ impl Game {
         if self.has_restriction(id, Restriction::CantAttackOrBlock) {
             return false;
         }
+        if self.has_lost_abilities(id) {
+            return true;
+        }
         self.state.cards[permanent.card]
             .combat_requires_other
             .as_ref()
@@ -285,17 +288,21 @@ impl Game {
             return false;
         }
 
-        if blocker_card
-            .blocking_restriction
-            .as_ref()
-            .is_some_and(|predicate| self.permanent_matches_predicate(attacker_id, predicate))
+        if !self.has_lost_abilities(blocker_id)
+            && blocker_card
+                .blocking_restriction
+                .as_ref()
+                .is_some_and(|predicate| self.permanent_matches_predicate(attacker_id, predicate))
         {
             return false;
         }
-        if self.state.cards[attacker.card]
-            .unblockable_if
-            .as_ref()
-            .is_some_and(|condition| self.check_static_condition(condition, attacker.controller))
+        if !self.has_lost_abilities(attacker_id)
+            && self.state.cards[attacker.card]
+                .unblockable_if
+                .as_ref()
+                .is_some_and(|condition| {
+                    self.check_static_condition(condition, attacker.controller)
+                })
         {
             return false;
         }

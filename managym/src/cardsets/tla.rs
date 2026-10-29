@@ -174,6 +174,7 @@ pub(super) fn cards() -> Vec<Card> {
         lo_and_li_twin_tutors(),
         hakoda_selfless_commander(),
         trusty_boomerang(),
+        honest_work(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -5441,6 +5442,63 @@ fn trusty_boomerang() -> Card {
             Program::equip("equip", "{1}"),
         ],
         registry_name: "Trusty Boomerang",
+        text_box,
+    }
+}
+
+fn honest_work() -> Card {
+    let text_box = "Enchant creature an opponent controls\nWhen this Aura enters, tap enchanted creature and remove all counters from it.\nEnchanted creature loses all abilities and is a Citizen with base power and toughness 1/1 and \"{T}: Add {C}\" named Humble Merchant. (It loses all other creature types and names.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{U}"),
+            subtypes: Some(vec!["Aura"]),
+            types: vec![CardType::Enchantment],
+            ..Default::default()
+        },
+        key: "tla.honest_work",
+        programs: vec![
+            Program::enchant("{U}", Selector::CreatureOpponentControls),
+            Program::new(
+                "settle",
+                ProgramKind::Triggered,
+                vec![
+                    Op::Tap {
+                        target: "each:enchanted_creature",
+                    },
+                    Op::RemoveAllCounters {
+                        target: "each:enchanted_creature",
+                    },
+                ],
+            )
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::new(
+                "humble_merchant",
+                ProgramKind::Static,
+                vec![Op::SetCharacteristics {
+                    name: "Humble Merchant",
+                    power: 1,
+                    subtypes: vec!["Citizen"],
+                    target: "each:enchanted_creature",
+                    toughness: 1,
+                }],
+            ),
+            Program::new(
+                "merchant_mana",
+                ProgramKind::Activated,
+                vec![Op::AddMana {
+                    mana: "C",
+                    until: None,
+                }],
+            )
+            .cost(Cost {
+                mana: Some("0"),
+                tap_source: Some(true),
+                ..Default::default()
+            })
+            .granted_to("each:enchanted_creature"),
+        ],
+        registry_name: "Honest Work",
         text_box,
     }
 }

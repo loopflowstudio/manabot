@@ -563,6 +563,19 @@ pub enum Op {
     CastFromLibraryTop {
         predicate: Predicate,
     },
+    /// "[target] loses all abilities and is a [subtypes] with base power and
+    /// toughness P/T named [name]" (static; the enchanted creature).
+    SetCharacteristics {
+        name: &'static str,
+        power: i32,
+        subtypes: Vec<&'static str>,
+        target: &'static str,
+        toughness: i32,
+    },
+    /// "Remove all counters from [target]."
+    RemoveAllCounters {
+        target: &'static str,
+    },
     /// "[target]'s owner shuffles it into their library."
     ShuffleIntoLibrary {
         target: &'static str,

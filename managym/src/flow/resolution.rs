@@ -136,7 +136,7 @@ impl Game {
         // A granted ability keeps its grantor's text after the grantor leaves.
         let definition = match ability.granted_by {
             Some(grant) => self.state.cards[CardId::from(grant.grantor.entity)]
-                .equipped_grants
+                .attached_grants
                 .get(grant.index),
             None => self.state.cards[ability.source_card]
                 .activated_abilities
@@ -292,6 +292,20 @@ impl Game {
             }
             Target::StackSpell(card) => self.find_spell_on_stack_index(card).is_some(),
             Target::Player(player) => self.state.players[player.0].alive,
+        }
+    }
+
+    /// The object the resolving ability's Aura or Equipment is attached to:
+    /// the one captured as an activated ability was activated, or else the
+    /// source's current attachment (a triggered ability).
+    fn frame_attached(&self, frame: &EffectFrame) -> Option<PermanentId> {
+        match frame.context_target {
+            Some(Target::Permanent(id)) => Some(id),
+            Some(_) => None,
+            None => frame
+                .source_ref
+                .and_then(|source| self.lookup_current_permanent(source).ok())
+                .and_then(|source| self.attached_permanent(source)),
         }
     }
 
@@ -890,10 +904,23 @@ impl Game {
                 }
                 None
             }
+            Effect::TapAttached => {
+                let id = self.frame_attached(frame)?;
+                self.tap_permanent(id, false);
+                None
+            }
+            Effect::RemoveAllCountersFromAttached => {
+                let id = self.frame_attached(frame)?;
+                for kind in CounterKind::ALL {
+                    let count = self.state.permanents[id].as_ref()?.counter_count(kind);
+                    if count > 0 {
+                        self.change_counters(id, kind, -count);
+                    }
+                }
+                None
+            }
             Effect::ExileAttached | Effect::ShuffleAttachedIntoLibrary => {
-                let Some(Target::Permanent(id)) = frame.context_target else {
-                    return None;
-                };
+                let id = self.frame_attached(frame)?;
                 let (card, owner) = self.state.permanents[id]
                     .as_ref()
                     .map(|permanent| (permanent.card, self.state.cards[permanent.card].owner))?;

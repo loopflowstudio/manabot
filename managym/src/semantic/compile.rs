@@ -35,7 +35,7 @@ const SOURCE_SCHEMA_VERSION: u64 = 1;
 
 /// Opcode names in numeric order: `OPCODE_NAMES[n - 1]` names opcode `n`.
 /// These numbers are learning token identities; append, never reorder.
-pub(crate) const OPCODE_NAMES: [&str; 90] = [
+pub(crate) const OPCODE_NAMES: [&str; 92] = [
     "add_mana",
     "draw_cards",
     "put_top_cards_in_hand",
@@ -126,6 +126,8 @@ pub(crate) const OPCODE_NAMES: [&str; 90] = [
     "search_library_to_hand",
     "look_at_library_top",
     "cast_from_library_top",
+    "set_characteristics",
+    "remove_all_counters",
 ];
 
 /// Program kinds in numeric order, as for [`OPCODE_NAMES`].
@@ -504,10 +506,15 @@ fn compile_program(
     // A granted ability names its grantor ("Return Trusty Boomerang"); the
     // grantee is the object the grantor is attached to.
     if let Some(grantee) = raw.get("granted_to") {
-        if kind != "activated" || string(grantee, &context)? != "each:equipped_creature" {
+        if kind != "activated"
+            || !matches!(
+                string(grantee, &context)?,
+                "each:equipped_creature" | "each:enchanted_creature"
+            )
+        {
             return malformed(
                 &context,
-                "only activated abilities grant to an equipped creature",
+                "only activated abilities grant to an equipped or enchanted creature",
             );
         }
         roles.insert("grantor".to_owned());

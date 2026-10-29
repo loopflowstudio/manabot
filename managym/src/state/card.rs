@@ -220,6 +220,20 @@ pub struct StaticTypeGrant {
     pub types: Vec<CardType>,
 }
 
+/// "Enchanted creature loses all abilities and is a [creature_types] with base
+/// power and toughness P/T named [name]" (Honest Work): one effect across
+/// layers 1, 4, 6 and 7b (CR 613.1) on the exact attached creature. It
+/// replaces the creature's creature types and names, keeps its card types,
+/// supertypes and other subtypes, and leaves the source's own grants
+/// (`attached_grants`) as its only activated abilities.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct SetCharacteristics {
+    pub name: String,
+    pub creature_types: Vec<String>,
+    pub power: i32,
+    pub toughness: i32,
+}
+
 /// A static keyword grant (CR 613.1f layer 6): "[scope] have [keywords]
 /// [as long as condition]". Applies only while the source is on the
 /// battlefield. Scopes read printed characteristics, counters and
@@ -330,7 +344,7 @@ pub struct SacrificeCost {
     pub or_mana: Option<ManaCost>,
 }
 
-/// The exact object whose `equipped_grants[index]` an ability granted to
+/// The exact object whose `attached_grants[index]` an ability granted to
 /// another permanent came from; the stack keeps it after the grantor leaves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct AbilityGrant {
@@ -403,7 +417,10 @@ pub struct CardDefinition {
     /// Activated abilities the creature this is attached to has
     /// ("Equipped creature has \"...\""), listed after its own.
     #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub equipped_grants: Vec<ActivatedAbilityDefinition>,
+    pub attached_grants: Vec<ActivatedAbilityDefinition>,
+    /// Characteristics this Aura sets on the creature it enchants.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attached_characteristics: Option<SetCharacteristics>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unblockable_if: Option<StaticCondition>,
     #[serde(skip_serializing_if = "Option::is_none")]

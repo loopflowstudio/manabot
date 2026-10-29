@@ -5,7 +5,7 @@ Brief: the Task directive (49 cards, obligations in `docs/rules/tla/allocation.j
 T2 and reconcile shared costs before landing. Every merge needs Jack Heart's review.
 Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
 
-## Done (44 of 49)
+## Done (45 of 49)
 
 Detail per slice is in each commit message (`git log 86ebe9ccf..`).
 
@@ -59,25 +59,36 @@ Detail per slice is in each commit message (`git log 86ebe9ccf..`).
      `each:creature_you_control` → `Effect::GrantKeywordsControlled`.
 
 13. Trusty Boomerang: `Program::granted_to("each:equipped_creature")` (field 97)
-   lowers an activated program into `CardDefinition.equipped_grants`;
+   lowers an activated program into `CardDefinition.attached_grants`;
    `activated_abilities_for` lists them on the attached creature after its own
    (`AbilityGrant`), and every activation path reads abilities only through it.
    `ActivatedAbilityOnStack.granted_by` carries that exact grantor object
    and grant at activation; `EffectFrame.grantor` feeds `return_to_hand` on
    special role 15 `grantor` (`Effect::ReturnGrantorToHand`, CR 400.7).
+14. Honest Work: static opcode 91 `set_characteristics` (field 98 `name`, enum
+   `name`) → `CardDefinition.attached_characteristics`; `Game::set_characteristics`
+   feeds `has_lost_abilities` (every former `Permanent.abilities_lost` read:
+   statics, keywords, triggers' LKI, replacements, combat fields, fixed and
+   activated mana), `permanent_name` (legend rule), `permanent_has_subtype` /
+   `creature_types` and 7b base P/T. `granted_to` also accepts
+   `each:enchanted_creature`; only the setter's own grants survive the loss.
+   Opcode 92 `remove_all_counters` and `tap` on the enchanted creature lower to
+   `Effect::RemoveAllCountersFromAttached` / `TapAttached`, read through
+   `frame_attached` (activation capture, else the source's attachment).
+   Moving an attachment with grants or characteristics invalidates both
+   players' mana caches.
 
-Schema 8 (unreleased, T1 precedent) appended in place: fields 85-97, predicates
-13-16, special roles 6-15, opcodes 66-90, enum `counter`, conditions 7-9,
+Schema 8 (unreleased, T1 precedent) appended in place: fields 85-98, predicates
+13-16, special roles 6-15, opcodes 66-92, enums `counter` and `name`, conditions 7-9,
 quantities 5-7, trigger_event 13, subtypes 64-74.
 `scratch/add_fixture.py` copies pinned evidence into the conformance fixture.
 
-Check (slice 13, debug): `cargo test` all targets pass (cards 52, rules_tests
-356, lib 120) except `semantic_conformance_tests` (w16 vs w15 and receipt digest
-drift, as in PR #394 CI 40819903624); clippy, fmt clean; extension rebuilt;
-`pytest tests/semantic` 158 pass, 4 fail on `schema_version == 3/4/7` asserts
-from `be2b7586b`.
+Check (slice 14, debug): `cargo test` all targets pass (cards 54, rules_tests
+356, lib 120) except `semantic_conformance_tests` (w16 vs w15, digest drift, as
+PR #394 CI 40819903624); clippy, fmt clean; extension rebuilt; `pytest
+tests/semantic` 158 pass, 4 fail on `be2b7586b`'s `schema_version` asserts.
 
-## Remaining (5 cards), suggested next slices
+## Remaining (4 cards), suggested next slices
 
 - Glider Staff (2026-10-29, deferred to the T2 sync): its entry trigger
   airbends, which T2 owns (`Op::Airbend`, exact-object cast permission,
@@ -86,14 +97,15 @@ from `be2b7586b`.
   (`StaticKeywordGrant` on `each:equipped_creature`) and `equip {2}`.
 
 - Secret Tunnel (Cave; "this land can't be blocked" is `unblockable_if` Always;
-  {T}: Add {C}): deferred from slice 10. Its "{4}, {T}: two target creatures you
-  control that share a creature type" needs two-target activated abilities —
-  `PendingChoice::ActivatedTarget` chooses one target, and its observation,
-  continuation and stale-rejection paths assume one — plus a constraint that
-  reads the first target, and partial legality at resolution (release notes:
-  the survivor needs a type the departed creature had as it left).
-- Honest Work (Aura; loses all abilities, becomes Citizen "Humble Merchant" 1/1
-  with "{T}: Add {C}" — characteristic replacement, layers 1-7b).
+  {T}: Add {C}): deferred in slice 14 (2026-10-29) as larger than a slice.
+  "{4}, {T}: two target creatures you control that share a creature type"
+  needs `ActivatedTarget` to carry `chosen` (actions, continuation
+  `clause_targets`, focus, decline once `min` is met); a target attribute
+  `shares_creature_type` offering only first targets with a partner; and
+  survivor legality against the departed creature's types as it left. The
+  last blocks: stack targets are `PermanentId` slots that lose their card on
+  departure and `ObjectLki` (Copy) has no creature types, so the stack must
+  capture target `ObjectRef`s (as `attached` does) and LKI keep types.
 - Crashing Wave (deferred from slice 11): after the T2 sync, build on T2's
   waterbend additional cost (`a1773e4e6`) and its X announcement; then "up to
   X targets" (requirement max read from X) and a resolution-time distribution

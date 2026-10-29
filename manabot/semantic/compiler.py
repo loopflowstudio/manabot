@@ -126,6 +126,8 @@ class Opcode(IntEnum):
     SEARCH_LIBRARY_TO_HAND = 88
     LOOK_AT_LIBRARY_TOP = 89
     CAST_FROM_LIBRARY_TOP = 90
+    SET_CHARACTERISTICS = 91
+    REMOVE_ALL_COUNTERS = 92
 
 
 PROGRAM_KINDS = {kind.name.lower(): kind for kind in ProgramKind}
@@ -244,6 +246,8 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "search_library_to_hand": ({"predicate"}, set()),
     "look_at_library_top": (set(), set()),
     "cast_from_library_top": ({"predicate"}, set()),
+    "set_characteristics": ({"target", "name", "subtypes", "power", "toughness"}, set()),
+    "remove_all_counters": ({"target"}, set()),
     "add_lesson_mana": ({"mana"}, set()),
     "grant_flashback": (set(), set()),
     "grant_mana": ({"predicates"}, set()),
@@ -970,11 +974,12 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
             # A granted ability names its grantor ("Return Trusty Boomerang").
             granted_to = raw_program.get("granted_to")
             if granted_to is not None and (
-                kind_name != "activated" or granted_to != "each:equipped_creature"
+                kind_name != "activated"
+                or granted_to not in {"each:equipped_creature", "each:enchanted_creature"}
             ):
                 _fail(
                     program_context,
-                    "only activated abilities grant to an equipped creature",
+                    "only activated abilities grant to an attached creature",
                 )
             instructions = _compile_instructions(
                 raw_program["ops"], f"{program_context}.ops", definition_indexes

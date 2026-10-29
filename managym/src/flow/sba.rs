@@ -23,7 +23,10 @@ impl Game {
                     .iter()
                     .any(|kind| kind.eq_ignore_ascii_case("legendary"))
                 {
-                    names.entry(&card.name).or_default().push(permanent.card);
+                    names
+                        .entry(self.permanent_name(id))
+                        .or_default()
+                        .push(permanent.card);
                 }
             }
             groups.extend(names.into_values().filter(|cards| cards.len() > 1));

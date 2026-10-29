@@ -2458,5 +2458,17 @@
     ],
     "oracle_text": "Equipped creature has \"{1}, {T}: Tap target creature. Return Trusty Boomerang to its owner's hand.\"\nEquip {1} ({1}: Attach to target creature you control. Equip only as a sorcery.)",
     "colors": []
+  },
+  "Honest Work": {
+    "name": "Honest Work",
+    "mana_cost": "{U}",
+    "type_line": "Enchantment — Aura",
+    "keywords": [
+      "Enchant"
+    ],
+    "oracle_text": "Enchant creature an opponent controls\nWhen this Aura enters, tap enchanted creature and remove all counters from it.\nEnchanted creature loses all abilities and is a Citizen with base power and toughness 1/1 and \"{T}: Add {C}\" named Humble Merchant. (It loses all other creature types and names.)",
+    "colors": [
+      "U"
+    ]
   }
 }

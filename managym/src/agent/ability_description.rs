@@ -478,6 +478,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
         TapTarget { target } => format!("Tap {}",target_description(target)),
         AttachSourceTo { target } => format!("Attach this to {}",target_description(target)),
         ExileAttached => "Exile the creature this is attached to".into(),
+        TapAttached => "Tap the creature this is attached to".into(),
+        RemoveAllCountersFromAttached => "Remove all counters from the creature this is attached to".into(),
         ReturnGrantorToHand => "Return the permanent granting this ability to its owner's hand".into(),
         ShuffleAttachedIntoLibrary => "The attached creature's owner shuffles it into their library".into(),
         RemoveCounters { up_to, chosen: None, target } => format!("Remove up to {up_to} counters from {}",target_description(target)),

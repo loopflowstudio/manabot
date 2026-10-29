@@ -17,9 +17,9 @@ use crate::{
         },
         card::{
             ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, CounterThreshold,
-            Keywords, PowerCda, ReplacementEffect, Restriction, SacrificeCost, SpellCostReduction,
-            StaticKeywordGrant, StaticPtBuff, StaticRestriction, StaticScope, StaticTypeGrant,
-            TargetCostReduction, TriggeredManaAbility,
+            Keywords, PowerCda, ReplacementEffect, Restriction, SacrificeCost, SetCharacteristics,
+            SpellCostReduction, StaticKeywordGrant, StaticPtBuff, StaticRestriction, StaticScope,
+            StaticTypeGrant, TargetCostReduction, TriggeredManaAbility,
         },
         mana::{Color, Colors, Mana, ManaCost},
         permanent::{BecomesCreature, CounterKind},
@@ -476,9 +476,9 @@ fn apply_program(
                 granted_by: None,
                 effect,
             };
-            // `granted_to` is validated as the equipped creature at compile.
+            // `granted_to` is validated as the attached creature at compile.
             if program.metadata.get("granted_to").is_some() {
-                definition.equipped_grants.push(ability);
+                definition.attached_grants.push(ability);
             } else {
                 definition.activated_abilities.push(ability);
             }
@@ -898,6 +898,20 @@ fn apply_static(definition: &mut CardDefinition, program: &Program) -> Result<()
                 unless: None,
             })
         }
+        [Step::SetCharacteristics {
+            target,
+            name,
+            subtypes,
+            power,
+            toughness,
+        }] if target == ATTACHED_AURA => {
+            definition.attached_characteristics = Some(SetCharacteristics {
+                name: name.clone(),
+                creature_types: subtypes.clone(),
+                power: i32_value(program, *power, "power")?,
+                toughness: i32_value(program, *toughness, "toughness")?,
+            })
+        }
         [Step::DoesntUntap { target }] => definition.static_restrictions.push(StaticRestriction {
             scope: static_scope(program, target)?,
             kind: Restriction::DoesntUntap,
@@ -1029,7 +1043,8 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         | Step::DoesntUntap { .. }
         | Step::CantBeBlockedByMoreThan { .. }
         | Step::AttacksDespiteDefender { .. }
-        | Step::AddCardTypes { .. } => {
+        | Step::AddCardTypes { .. }
+        | Step::SetCharacteristics { .. } => {
             return unsupported(program, "restrictions require a static program")
         }
         Step::BecomeArtifactCreature { target, duration } => {
@@ -1191,6 +1206,13 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             count: usize_value(program, *count, "scry count")?,
         },
         Step::Tap { target } if target == "source" => Effect::TapSource,
+        Step::Tap { target } if target == ATTACHED_AURA => Effect::TapAttached,
+        Step::RemoveAllCounters { target } if target == ATTACHED_AURA => {
+            Effect::RemoveAllCountersFromAttached
+        }
+        Step::RemoveAllCounters { .. } => {
+            return unsupported(program, "remove_all_counters reads the enchanted creature")
+        }
         Step::RemoveCounters { target, count } => Effect::RemoveCounters {
             up_to: i32_value(program, *count, "counter count")?,
             chosen: None,

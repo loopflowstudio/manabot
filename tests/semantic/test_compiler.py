@@ -228,6 +228,8 @@ def test_opcode_numbers_are_an_explicit_compatibility_surface() -> None:
         "SEARCH_LIBRARY_TO_HAND": 88,
         "LOOK_AT_LIBRARY_TOP": 89,
         "CAST_FROM_LIBRARY_TOP": 90,
+        "SET_CHARACTERISTICS": 91,
+        "REMOVE_ALL_COUNTERS": 92,
     }
 
 
