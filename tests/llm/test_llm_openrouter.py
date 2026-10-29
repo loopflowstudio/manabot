@@ -349,6 +349,8 @@ def test_preloaded_campaign_opponent_keeps_timing_and_model_seat_control(
     summary = play(config, tmp_path / "game", None, opponent=opponent)
     assert summary.replay_matches and summary.decisions == 8
     assert summary.mode == "random-v-checkpoint-control"
+    assert summary.opponent_sha256 == file_sha256(path)
+    assert summary.model_behavior_version is None
     assert summary.origins["checkpoint-stochastic-cpu"] > 0
     assert summary.origins["random-control"] > 0
     assert (
