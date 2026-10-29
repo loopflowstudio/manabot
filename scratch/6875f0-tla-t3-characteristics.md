@@ -88,15 +88,15 @@ from `be2b7586b`.
 - Fire Nation Palace (granted firebending; observation shape change); Glider
   Staff (airbend), Trusty Boomerang (granted activated ability).
 
-## Reconcile at sync (T2 87e012 at `83dd0cd46`, 2026-10-29)
+## Reconcile at sync (T2 87e012 at `1144d0f32`, 2026-10-29)
 
 - Both branches append to schema 8 from 86ebe9ccf with colliding numbers. T2:
   fields 85-96, predicates 13-15, subtypes 64-74, special role 6, opcodes 66-73,
   trigger_event 13, destination 2, zone 3. This branch: fields 85-96, predicates
   13-16, subtypes 64-74, special roles 6-14, opcodes 66-90, conditions 7-9,
   quantities 5-7, trigger_event 13 (`end_step_begins`), enum `counter`. T2 since
-  added opcodes 74-79, fields 97-100, quantity 5 `x`, enum `grant`, role
-  `each:creature_you_control` 7. The later lander renumbers its own entries
+  added opcodes 74-79, fields 97-101 (101 `foretell`), quantity 5 `x`, enum
+  `grant`, role `each:creature_you_control` 7. The later lander renumbers its own entries
   (append-only, contiguous).
 - X has two implementations: T2 `PendingChoice::AnnounceX` + `CastChoices.x`
   (`69c23c358`; quantity 5 `x`, field 97 `mana_x`) and this branch's
@@ -108,6 +108,9 @@ from `be2b7586b`.
   predicate reading every `CounterKind` (T2 `with_counter` 13; here `no_counters`
   14 complements it). Merge T2's `tests/cards.rs`, `support.rs`, `tla.rs` with
   these. Moving `tests/rules/tla_cards.rs` belongs to whichever PR lands it.
+- Both branches added `state::is_zero` (T2 `2673c95cd`, here `2598ddacf`); keep
+  one. T2's foretell (`1144d0f32`) adds face-down exile to observations and
+  protocol schemas; Fire Nation Palace's observation change should build on it.
 
 ## Delete — do not maintain
 
