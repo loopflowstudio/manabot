@@ -5,11 +5,12 @@ noted in the PR. Jack Heart's 2026-10-29 direction superseded the qualification
 and pool-membership choices that were here (history: `be2b7586b:scratch/questions.md`).
 
 - Old worlds run from their recorded git revision; no in-process rules shims.
-- No w17: main is w15 and w16 is this PR's unreleased world, so renames, basics
-  moving to `lea.*`, and support-by-definition all stay in w16.
-- IR keeps the retired compiler's JSON shape, built in Rust on `serde_json::Value`
-  (made byte-identity provable); lowering straight to `Step` is a later option.
-- Learning tokens come from `learning.py` over that IR; schema 8 unchanged.
+- Superseded 2026-10-29 by Jack Heart's one-representation decision (w17, no
+  JSON, tokens from `Effect`): the earlier choices to stay in w16, keep the IR's
+  JSON shape and build tokens in `learning.py`.
+- 2026-10-29: card tests are grouped inside each set file by helper family
+  (`mod stage2 { … }`), since families define same-named helpers with
+  different signatures; merging the helpers is a later cleanup.
 - 2026-10-29: the 14 setup-used incomplete TLA cards keep their definitions and
   are listed in one `tla::INCOMPLETE` const (key, missing behavior) beside
   `cards()`, rather than a field on all 269 `Card` literals. Native cards sit in
