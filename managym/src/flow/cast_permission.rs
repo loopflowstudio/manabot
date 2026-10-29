@@ -259,12 +259,9 @@ impl Game {
             return;
         }
         if let Some(object) = self.current_object_ref(card) {
-            self.add_exile_grant(grant(object));
+            let grant = grant(object);
+            self.edit_cast_permissions(|permissions| permissions.exile_grants.push(grant));
         }
-    }
-
-    fn add_exile_grant(&mut self, grant: ExileCastGrant) {
-        self.edit_cast_permissions(|permissions| permissions.exile_grants.push(grant));
     }
 
     /// "This turn" grants end in the cleanup step (CR 514.2).

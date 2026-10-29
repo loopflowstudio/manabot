@@ -117,41 +117,25 @@ and UI. Guard + directed + viewer-safety tests in
 - Observability: every mechanic in both the tensor and the learning program
   tokens, enforced by an exhaustive guard (Effect/Ability, keywords, counters,
   status fields) plus per-mechanic and viewer-safety tests. Done here for
-  observation status fields → tensor. Tokens and the Effect/Ability guard
-  depend on the representation change.
+  observation status fields → tensor; tokens and the Effect/Ability guard
+  come with the representation change.
 - One card representation: cards in engine types (`CardDefinition`/`Ability`/
-  `Effect`/`TargetSpec`) with constructor helpers; remove `cards/authoring.rs`
-  and `semantic/compile.rs`; tokens derived in Rust; world w17. The steer says
-  T1 removes the layer and T2 converts its 51 cards (no new authoring `Op`
-  variants). Observed 2026-10-29 after the sync: T1's head `e403b8a1f` still
-  has both files. Confirmed 2026-10-29 (T1 worktree plan, after `352faa968`):
-  T1's Remaining lists, in order, one card representation (convert typed
-  cards, Rust tokens, delete authoring/compile.rs, w17), the observability
-  guard, `scryfall_id`, then gate and PR394 update. T1's implement step is live.
-  T1 moved the per-card tests (225 tests in 14 set files, `tests/support/`,
-  `tests/cards/README.md`, `coverage.py`; `f9732c12f`), so question 2 is
-  settled on T1's side; T2's `tests/cards/` follows it since the
-  `f9732c12f` merge.
+  `Effect`/`TargetSpec`) with constructor helpers; `cards/authoring.rs` and
+  `semantic/compile.rs` removed; tokens derived in Rust; world w17. T1 removes
+  the layer; T2 converts its 51 cards (no new authoring `Op` variants).
 - Scryfall object id on every definition (first printing, required field),
-  offline uniqueness test and an online maintenance script beside the card
-  tests. Lands with the engine-type definitions after the sync.
+  offline uniqueness test, online maintenance script beside the card tests.
 
 ## Remaining
 
-- Next T1 sync, after T1 publishes engine-type cards/w17: the three steers
-  above, then the world gate. Last observed 2026-10-29 10:51: PR #394 head
-  still `f9732c12f`; T1's implement step still running, local head
-  `4fa385183` (adds `a80d9c349` tokens, `485c5146b` guard + Scryfall ids,
-  `fc3dd9b12` w17 docs) with uncommitted test edits across `tests/cards`
-  and `tests/rules`. (The launch steer's `be2b7586b` is an older #394 merge already in
-  T2's history.) T1 committed `167eb13d4` locally (engine-type
-  set files with Scryfall ids, `authoring.rs`/`compile.rs`/IR deleted, tokens in
-  `semantic/tokens.rs`) and has uncommitted Python follow-up work, so the sync is
-  still waiting. Conversion path: T1's `scratch/conversion/generate.py` turns
-  lowered `CardDefinition` Debug dumps into set files and reads field types from
-  `state/*.rs`. Dump T2's lowered definitions before the merge, regenerate
-  T2's set files with it on T1's helpers, and resolve set-file conflicts to that
-  output. Main's `9a62e8b39`, `2fc0af676`, `633dca159` arrive with T1's next main sync.
+- Next T1 sync, once T1 publishes engine-type cards/w17 (last observed
+  2026-10-29: PR #394 head still `f9732c12f`; T1 local head `4fa385183`, with
+  `167eb13d4` engine-type set files + Scryfall ids, `a80d9c349` tokens in
+  `semantic/tokens.rs`, `485c5146b` guard, `fc3dd9b12` w17 docs, and
+  uncommitted Python/test follow-up). Conversion: dump T2's lowered
+  `CardDefinition`s before the merge, regenerate T2's set files with T1's
+  `scratch/conversion/generate.py`, resolve set-file conflicts to that output.
+  Main's `9a62e8b39`, `2fc0af676`, `633dca159` arrive with T1's main sync.
 - Gate (not run here): CLAUDE.md arena admission/monitoring suite; full debug
   `cargo test`; Academy check/build (local node can't load libllhttp; CI).
 - Known gaps (questions.md): possible-worlds ignore foretold cards; granted
@@ -174,5 +158,6 @@ their `Payment` once; suspended-decision spaces share `select_cards`/`card_focus
 `count_battlefield_matching` serves affinity, activation reduction and
 `EffectValue::BattlefieldMatching`; `zone_cast_cost` alone applies the
 hand-only override; waterbend affordability calls `waterbend_payment_possible`
-directly (pass-through `can_pay_with_waterbend` removed). Last: debug `--lib`/`cards`/`rules_tests`
-121/293/131 pass, clippy `--all-targets` clean. Authoring layer left for T1.
+directly; exile grants push through `edit_cast_permissions` directly. Last:
+debug `--lib`/`cards`/`rules_tests` pass, clippy `--all-targets` clean.
+Authoring layer left for T1.
