@@ -211,6 +211,12 @@ def test_opcode_numbers_are_an_explicit_compatibility_surface() -> None:
         "PUT_INTO_LIBRARY_SECOND_OR_BOTTOM": 71,
         "SEARCH_LANDS_OPPONENT_SPLITS": 72,
         "REVEAL_HAND_DISCARD_CHOSEN": 73,
+        "SHUFFLE_GRAVEYARD_INTO_LIBRARY": 74,
+        "NO_MAXIMUM_HAND_SIZE": 75,
+        "CAST_FROM_HAND_FREE": 76,
+        "EXILE_UNTIL_NONLAND_CAST_FREE": 77,
+        "EXILE_LINKED": 78,
+        "GRANT_FIREBENDING_UNTIL_EOT": 79,
     }
 
 

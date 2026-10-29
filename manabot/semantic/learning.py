@@ -528,6 +528,8 @@ class _TokenBuilder:
             "zone": "zone",
             "affinity_zone": "zone",
             "controller": "controller",
+            "chooser": "controller",
+            "grant": "grant",
             "destination": "destination",
             "remainder": "remainder",
             "remainder_order": "ordering",

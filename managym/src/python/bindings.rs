@@ -1272,6 +1272,7 @@ impl From<PyManaCost> for ManaCost {
             purpose: Default::default(),
             cost,
             mana_value,
+            x: 0,
             hybrid: value
                 .hybrid
                 .into_iter()

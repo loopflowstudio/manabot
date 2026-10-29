@@ -35,6 +35,7 @@
       "target_matches": 4
     },
     "controller": {
+      "target": 2,
       "you": 1
     },
     "destination": {
@@ -44,6 +45,10 @@
     "direction": {
       "blocked_by": 2,
       "blocking": 1
+    },
+    "grant": {
+      "flash_any_mana": 2,
+      "waterbend_mana_value": 1
     },
     "duration": {
       "end_of_combat": 3,
@@ -219,6 +224,7 @@
     "zone": {
       "battlefield": 1,
       "your_graveyard": 2,
+      "graveyard": 4,
       "your_hand": 3
     }
   },
@@ -272,6 +278,9 @@
     "opponent_picks": 95,
     "discard_card": 96,
     "mana_x": 97,
+    "chooser": 98,
+    "grant": 99,
+    "below": 100,
     "max": 28,
     "max_select": 29,
     "min": 30,
@@ -426,6 +435,7 @@
   "special_roles": {
     "current_target": 2,
     "each:other_allies_you_control": 4,
+    "each:creature_you_control": 7,
     "each:other_ally_creature_you_control": 5,
     "source": 1,
     "triggering_permanent": 6,
