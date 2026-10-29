@@ -569,6 +569,7 @@ class _TokenBuilder:
             nested_context = {
                 "amount": "quantity",
                 "count": "quantity",
+                "look": "quantity",
                 "power": "quantity",
                 "toughness": "quantity",
                 "affinity": "predicate",

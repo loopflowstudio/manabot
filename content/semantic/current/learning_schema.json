@@ -186,7 +186,10 @@
       "Swamp": 47,
       "Treasure": 55,
       "Treefolk": 48,
-      "Warrior": 22
+      "Warrior": 22,
+      "Scarecrow": 72,
+      "Serpent": 73,
+      "Warlock": 74
     },
     "supertype": {
       "Legendary": 3,
@@ -266,6 +269,7 @@
     "milled_any": 93,
     "affinity_zone": 94,
     "opponent_picks": 95,
+    "discard_card": 96,
     "max": 28,
     "max_select": 29,
     "min": 30,
