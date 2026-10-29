@@ -327,11 +327,13 @@ def test_thinking_budget_requires_thinking_and_answer_room() -> None:
         InferenceConfig.model_validate(
             {**fields, "enable_thinking": None, "thinking_budget": 16}
         )
+    # Each arm's effective configuration, as the campaign writes it, is valid
+    # and keeps the file's own output allowance.
     for path, max_new_tokens, context_tokens in campaign.TREATMENTS.values():
         config = InferenceConfig.model_validate_json(path.read_text())
-        assert (config.max_new_tokens, config.context_tokens) == (
-            max_new_tokens,
-            context_tokens,
+        assert config.max_new_tokens == max_new_tokens
+        InferenceConfig.model_validate(
+            {**config.model_dump(), "context_tokens": context_tokens}
         )
 
 
