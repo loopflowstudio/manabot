@@ -145,3 +145,4 @@ cap $7.00. The MTP attempt is not pooled with it.
 | `dddaf3001dfa` | sampled pilot, 1 game, c=1 | $2.00 | cancelled mid-game; 41 Qwen selections, 0 fallbacks; pod absent | $0.566 billed through 02:00 UTC |
 | `139099571cbb` | budget pilot, 32 games, c=32, MTP 1 | $1.20 | cancelled after ~10 min of decisions (86 attempts); pod absent | ~$0.16 (estimate) |
 | `8f68c0bc488b` | scored cohort, budget, 100 games, c=32, MTP 1 | $7.00 | engine crash (MTP); 32 attempted, 0 completed, 68 unattempted; pod absent | ~$0.18 (estimate) |
+| `cdb0c09f90c6` | **scored cohort**, budget, 100 games, c=32, no MTP | $7.00 | running | pending |
