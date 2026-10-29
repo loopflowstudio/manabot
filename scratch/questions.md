@@ -20,7 +20,7 @@ and pool-membership choices that were here (history: `be2b7586b:scratch/question
   keep pre-rename keys.
 - Full TLA completion remains the eight-PR plan; no merge or new Task authorized.
 
-Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
+Main's notes at the syncs live at `6d069d6e5:scratch/questions.md` and `origin/main@633dca159:scratch/questions.md`.
 
 - 2026-10-29 (one-representation rewrite): five cards were filed under a later
   printing and moved to their first printing's set (see plan). Three are TLA
