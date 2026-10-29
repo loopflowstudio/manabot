@@ -252,6 +252,13 @@ pub enum Effect {
     OwnerPutsIntoLibrary {
         target: TargetSpec,
     },
+    /// The target player reveals their hand (it becomes public knowledge);
+    /// the effect's controller chooses a matching card and that player
+    /// discards it.
+    RevealHandDiscardChosen {
+        target: TargetSpec,
+        predicate: CardPredicate,
+    },
     /// Search for up to `count` land cards with different names; an
     /// opponent puts `opponent_picks` of them into the graveyard and the rest
     /// enter tapped (Elemental Teachings).
@@ -646,7 +653,8 @@ impl Effect {
             Effect::BuffTarget { target, .. } => Some(target),
             Effect::UntapTarget { target }
             | Effect::TapTarget { target }
-            | Effect::OwnerPutsIntoLibrary { target } => Some(target),
+            | Effect::OwnerPutsIntoLibrary { target }
+            | Effect::RevealHandDiscardChosen { target, .. } => Some(target),
             Effect::GrantKeywordsToTarget { target, .. } => Some(target),
             Effect::OnNthResolutionThisTurn { effect, .. } => effect.target_spec(),
             Effect::OptionalPayment {

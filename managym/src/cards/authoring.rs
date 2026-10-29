@@ -366,6 +366,12 @@ pub enum Op {
         count: i32,
         opponent_picks: i32,
     },
+    /// "Target [player] reveals their hand. You choose a [predicate] card
+    /// from it. That player discards that card."
+    RevealHandDiscardChosen {
+        predicate: Predicate,
+        target: &'static str,
+    },
     /// Without a destination, a basic land onto the battlefield tapped. With
     /// `Hand`, any card of `subtype` is revealed and put into hand
     /// (landcycling: "search your library for a Plains card"), or a basic

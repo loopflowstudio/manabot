@@ -93,6 +93,23 @@ impl Game {
         }
     }
 
+    /// `player` reveals their hand: every card in it becomes public
+    /// definition knowledge, as with a card revealed into hand.
+    pub(crate) fn reveal_hand(&mut self, player: PlayerId) {
+        let mut counts = std::collections::BTreeMap::new();
+        for card in self.state.zones.zone_cards(ZoneType::Hand, player).to_vec() {
+            let definition = self.state.cards[card].definition_id;
+            self.emit(GameEvent::CardRevealed {
+                owner: player,
+                definition,
+            });
+            *counts.entry(definition).or_insert(0_u32) += 1;
+        }
+        for (definition, count) in counts {
+            self.set_known_hand_count(player, definition, count);
+        }
+    }
+
     pub(crate) fn battlefield_permanents(&self, player: PlayerId) -> Vec<PermanentId> {
         self.state
             .zones

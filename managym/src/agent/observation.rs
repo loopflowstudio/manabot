@@ -535,6 +535,9 @@ impl Observation {
                         to_hand,
                         ..
                     } => game.basic_land_search_candidates(*player, subtype, *to_hand),
+                    decision @ crate::flow::decision::Decision::DiscardFromRevealedHand {
+                        ..
+                    } => game.revealed_hand_candidates(decision),
                     decision @ crate::flow::decision::Decision::SearchDistinctLands {
                         selected,
                         ..
@@ -546,7 +549,8 @@ impl Observation {
                     decision => decision.revealed_cards().to_vec(),
                 };
                 for card in cards {
-                    self.add_card(game, card, ZoneType::Library);
+                    let zone = game.state.zones.zone_of(card).unwrap_or(ZoneType::Library);
+                    self.add_card(game, card, zone);
                 }
             }
         }

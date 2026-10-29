@@ -477,6 +477,18 @@ impl Game {
                 self.restrict_opponent_to_hand(frame.controller);
                 None
             }
+            Effect::RevealHandDiscardChosen { predicate, .. } => {
+                let Some(Target::Player(owner)) = self.present_primary_target(frame) else {
+                    return None;
+                };
+                self.reveal_hand(owner);
+                let decision = Decision::DiscardFromRevealedHand {
+                    player: frame.controller,
+                    owner,
+                    predicate: predicate.clone(),
+                };
+                (!self.revealed_hand_candidates(&decision).is_empty()).then_some(decision)
+            }
             Effect::SearchLandsOpponentSplits {
                 count,
                 opponent_picks,

@@ -211,6 +211,14 @@ pub enum Decision {
         selected: Vec<CardId>,
         opponent_picks: usize,
     },
+    /// `player` chooses a card matching `predicate` from `owner`'s revealed
+    /// hand; `owner` discards it. Candidates are read from the current hand,
+    /// one per definition, so resampled physical copies stay consistent.
+    DiscardFromRevealedHand {
+        player: PlayerId,
+        owner: PlayerId,
+        predicate: CardPredicate,
+    },
     /// An opponent chooses `remaining` more of `owner`'s `revealed` library
     /// cards for the graveyard; the rest enter tapped, then `owner` shuffles.
     OpponentSplitsRevealed {
@@ -261,6 +269,7 @@ impl Decision {
             Decision::SelectMilled { player, .. }
             | Decision::SearchBasicLand { player, .. }
             | Decision::SearchDistinctLands { player, .. }
+            | Decision::DiscardFromRevealedHand { player, .. }
             | Decision::OpponentSplitsRevealed { player, .. }
             | Decision::OptionalDiscardDraw { player, .. }
             | Decision::Scry { player, .. }
@@ -287,6 +296,7 @@ impl Decision {
             Decision::OpponentSplitsRevealed { revealed, .. } => revealed,
             Decision::SelectMilled { .. }
             | Decision::SearchBasicLand { .. }
+            | Decision::DiscardFromRevealedHand { .. }
             | Decision::OptionalDiscardDraw { .. }
             | Decision::Modal { .. }
             | Decision::Learn { .. }
@@ -461,6 +471,19 @@ impl Game {
                         card,
                     })
                     .chain(std::iter::once(Action::Decline { player: *player }))
+                    .collect(),
+                focus: source_focus,
+            },
+            Decision::DiscardFromRevealedHand { player, .. } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::Discard,
+                actions: self
+                    .revealed_hand_candidates(&suspended.decision)
+                    .into_iter()
+                    .map(|card| Action::SelectCard {
+                        player: *player,
+                        card,
+                    })
                     .collect(),
                 focus: source_focus,
             },
@@ -1011,6 +1034,24 @@ impl Game {
                 }
                 Ok(())
             }
+            (
+                Decision::DiscardFromRevealedHand {
+                    owner, predicate, ..
+                },
+                Action::SelectCard { card, .. },
+            ) => {
+                if !self.state.zones.contains(*card, ZoneType::Hand, *owner)
+                    || !predicate.matches_card(&self.state.cards[*card])
+                {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError(
+                        "not a matching card in the revealed hand".into(),
+                    ));
+                }
+                self.move_card(*card, ZoneType::Graveyard);
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
             (Decision::SearchDistinctLands { .. }, Action::Decline { .. }) => {
                 self.finish_distinct_land_search(suspended);
                 Ok(())
@@ -1162,6 +1203,27 @@ impl Game {
 
     /// Move a library card to the bottom of its owner's library. Not a zone
     /// change (CR 701.26b-style reorder), so no events fire.
+    /// One hand card per matching definition for `DiscardFromRevealedHand`.
+    pub(crate) fn revealed_hand_candidates(&self, decision: &Decision) -> Vec<CardId> {
+        let Decision::DiscardFromRevealedHand {
+            owner, predicate, ..
+        } = decision
+        else {
+            return Vec::new();
+        };
+        let mut candidates: Vec<CardId> = self
+            .state
+            .zones
+            .zone_cards(ZoneType::Hand, *owner)
+            .iter()
+            .copied()
+            .filter(|card| predicate.matches_card(&self.state.cards[*card]))
+            .collect();
+        candidates.sort_unstable_by_key(|card| (self.state.cards[*card].definition_id, *card));
+        candidates.dedup_by_key(|card| self.state.cards[*card].definition_id);
+        candidates
+    }
+
     /// Library land cards whose names differ from every card already
     /// selected by a `SearchDistinctLands` decision.
     pub(crate) fn distinct_land_search_candidates(&self, decision: &Decision) -> Vec<CardId> {

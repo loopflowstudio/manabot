@@ -68,15 +68,16 @@ impl Game {
             .suspended_decision
             .as_ref()
             .is_some_and(|suspended| {
-                suspended.decision.player() == opponent
-                    && matches!(
-                        suspended.decision,
-                        Decision::Learn { .. }
-                            | Decision::Discard { .. }
-                            | Decision::OptionalDiscardDraw { .. }
-                            | Decision::SearchBasicLand { .. }
-                            | Decision::SearchDistinctLands { .. }
-                    )
+                matches!(suspended.decision, Decision::DiscardFromRevealedHand { .. })
+                    || suspended.decision.player() == opponent
+                        && matches!(
+                            suspended.decision,
+                            Decision::Learn { .. }
+                                | Decision::Discard { .. }
+                                | Decision::OptionalDiscardDraw { .. }
+                                | Decision::SearchBasicLand { .. }
+                                | Decision::SearchDistinctLands { .. }
+                        )
             });
         if refresh {
             if let Some(space) = self.suspended_decision_action_space() {

@@ -384,6 +384,7 @@
     "restrict_blocking": 12,
     "return_graveyard_target": 42,
     "return_to_hand": 14,
+    "reveal_hand_discard_chosen": 73,
     "return_to_hand_draw_if_controlled": 30,
     "sacrifice": 52,
     "put_into_library_second_or_bottom": 71,

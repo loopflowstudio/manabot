@@ -112,6 +112,7 @@ pub enum Opcode {
     SacrificeSource = 70,
     PutIntoLibrarySecondOrBottom = 71,
     SearchLandsOpponentSplits = 72,
+    RevealHandDiscardChosen = 73,
 }
 
 impl Opcode {
@@ -189,6 +190,7 @@ impl Opcode {
             70 => Opcode::SacrificeSource,
             71 => Opcode::PutIntoLibrarySecondOrBottom,
             72 => Opcode::SearchLandsOpponentSplits,
+            73 => Opcode::RevealHandDiscardChosen,
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -451,6 +453,10 @@ pub enum Step {
     SearchLandsOpponentSplits {
         count: usize,
         opponent_picks: usize,
+    },
+    RevealHandDiscardChosen {
+        target: String,
+        predicate: Predicate,
     },
     BuffTargetValue {
         power: ValueExpression,
@@ -1023,7 +1029,8 @@ impl<'a> BoundPack<'a> {
             | Step::ExileTopCardPlayThisTurn
             | Step::SacrificeSource { .. }
             | Step::PutIntoLibrarySecondOrBottom { .. }
-            | Step::SearchLandsOpponentSplits { .. } => {
+            | Step::SearchLandsOpponentSplits { .. }
+            | Step::RevealHandDiscardChosen { .. } => {
                 trace.push(TraceEvent::RuleStep(step.clone()))
             }
             Step::BuffTargetValue { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
@@ -1361,6 +1368,10 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         },
         Opcode::PutIntoLibrarySecondOrBottom => Step::PutIntoLibrarySecondOrBottom {
             target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::RevealHandDiscardChosen => Step::RevealHandDiscardChosen {
+            target: str_field(value, "target")?.to_owned(),
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
         },
         Opcode::SearchLandsOpponentSplits => Step::SearchLandsOpponentSplits {
             count: usize_field(value, "count")?,

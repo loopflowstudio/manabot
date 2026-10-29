@@ -489,6 +489,7 @@ impl Game {
                 Decision::LegendRule { .. } => (13, None),
                 Decision::SearchDistinctLands { .. } => (14, None),
                 Decision::OpponentSplitsRevealed { .. } => (15, None),
+                Decision::DiscardFromRevealedHand { .. } => (16, None),
             };
             frame.decision = kind;
             frames.push(frame);

@@ -162,6 +162,7 @@ pub(super) fn cards() -> Vec<Card> {
         lost_days(),
         serpent_of_the_pass(),
         elemental_teachings(),
+        dai_li_indoctrination(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -5130,6 +5131,46 @@ fn elemental_teachings() -> Card {
         )
         .cost(Cost::mana("{4}{G}"))],
         registry_name: "Elemental Teachings",
+        text_box,
+    }
+}
+
+fn dai_li_indoctrination() -> Card {
+    let text_box = "Choose one —\n• Target opponent reveals their hand. You choose a nonland permanent card from it. That player discards that card.\n• Earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{B}"),
+            subtypes: Some(vec!["Lesson"]),
+            types: vec![CardType::Sorcery],
+            ..Default::default()
+        },
+        key: "tla.dai_li_indoctrination",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::Modal {
+                modes: vec![
+                    vec![Op::RevealHandDiscardChosen {
+                        predicate: Predicate::NotCardTypes {
+                            values: vec![CardType::Land, CardType::Instant, CardType::Sorcery],
+                        },
+                        target: "opponent",
+                    }],
+                    vec![Op::Earthbend {
+                        count: Count::Fixed(2),
+                        target: "land",
+                    }],
+                ],
+            }],
+        )
+        .cost(Cost::mana("{1}{B}"))
+        .targets(vec![
+            Target::one("opponent", Selector::Opponent),
+            Target::one("land", Selector::LandYouControl),
+        ])
+        .inferred()],
+        registry_name: "Dai Li Indoctrination",
         text_box,
     }
 }

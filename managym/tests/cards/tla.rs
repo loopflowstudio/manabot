@@ -1689,3 +1689,62 @@ fn elemental_teachings_finds_distinct_lands_and_the_opponent_bins_two() {
     settle(&mut s);
     assert_eq!(zone_of(&s, first), Some(ZoneType::Graveyard));
 }
+
+fn put_for(s: &mut Scenario, player: usize, name: &str, zone: ZoneType) -> CardId {
+    let card = library_card(s, player, name);
+    s.game_mut().move_card(card, zone);
+    card
+}
+
+/// Dai Li Indoctrination's first mode reveals the opponent's hand (public
+/// definition knowledge) and the caster picks a nonland permanent card for
+/// them to discard; the second mode earthbends 2.
+#[test]
+fn dai_li_indoctrination_reveals_a_hand_and_discards_your_pick_or_earthbends_two() {
+    let mut s = setup(&[
+        "Dai Li Indoctrination",
+        "Gray Ogre",
+        "Lightning Strike",
+        "Aang's Iceberg",
+    ]);
+    let ogre = put_for(&mut s, 1, "Gray Ogre", ZoneType::Hand);
+    let iceberg = put_for(&mut s, 1, "Aang's Iceberg", ZoneType::Hand);
+    let strike = put_for(&mut s, 1, "Lightning Strike", ZoneType::Hand);
+    put_for(&mut s, 1, "Forest", ZoneType::Hand);
+    cast(&mut s, "Dai Li Indoctrination");
+    mode(&mut s, 0);
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    pass_until(&mut s, ActionSpaceKind::Discard);
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    let offered = offered_cards(&s);
+    assert_eq!(offered.len(), 2);
+    assert!(offered.contains(&ogre) && offered.contains(&iceberg));
+    assert_eq!(
+        s.game().state.players[1].known_hand.values().sum::<u32>(),
+        4
+    );
+    // The chooser observes the offered cards in the opponent's hand.
+    let view = managym::agent::observation::Observation::for_player(s.game(), PlayerId(0));
+    let seen: Vec<i32> = view.opponent_cards.iter().map(|c| c.id).collect();
+    for card in [ogre, iceberg] {
+        assert!(seen.contains(&(s.game().state.cards[card].id.0 as i32)));
+    }
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { card, .. } if *card == iceberg),
+    );
+    settle(&mut s);
+    assert_eq!(zone_of(&s, iceberg), Some(ZoneType::Graveyard));
+    assert_eq!(zone_of(&s, strike), Some(ZoneType::Hand));
+    assert_eq!(
+        s.game().state.players[1].known_hand.values().sum::<u32>(),
+        3
+    );
+
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    cast(&mut s, "Dai Li Indoctrination");
+    mode(&mut s, 1);
+    assert!(s.choose_target(Target::Permanent(forest)));
+    settle(&mut s);
+    assert_eq!(counters(&s, forest), 2);
+}
