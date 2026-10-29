@@ -17,12 +17,14 @@ from manabot.belief.sampling_data import collect_frozen_policy
 from manabot.belief.sampling_fit import fit_belief_sampler, save_belief_sampler
 from manabot.belief.state import ViewerHistory
 from manabot.belief.tracker import BeliefTracker
-from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.infra.identity import canonical_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
-from manabot.sim.match import _execute_game
+from manabot.sim.native_game import execute_game
 from manabot.sim.registration import PlayerRegistration, SearchSemantics
 from manabot.sim.replay import replay_games
 from manabot.sim.search import local_update
@@ -261,7 +263,7 @@ def test_arena_uses_exact_range_lifecycle_and_replays(
             ),
         )
         messages: list[tuple[str, object]] = []
-        _execute_game(
+        execute_game(
             game,
             registrations,
             {candidate.player_id: str(teacher.likelihood.checkpoint)},

@@ -15,8 +15,9 @@ import torch
 
 from academy.curated_pack import ELEMENTAL_WORLD_PACK, curated_pack_for_matchup
 from academy.server import GameSession, _parse_game_config
-from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.env.observation import ObservationEncoder
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationEncoder, ObservationSpace
 from manabot.infra.config import (
     MatchConfig,
     ModelConfig,

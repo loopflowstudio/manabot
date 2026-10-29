@@ -1,126 +1,67 @@
-"""One resident inference process per evaluation allocation.
+"""The serving child: one resident inference process per evaluation allocation.
 
-Game processes exchange owned arrays through their existing supervisor pipe.
-Only this process loads served weights. The parent multiplexes bounded requests
-and grants game slots across callbacks. FIFO policy groups flush independently;
-each row samples on CPU from its own retained decision seed.
+`InferenceRuntime` (`manabot.sim.serving_protocol`) launches `serve` as a
+`ChildProcess`; only this process imports Torch and loads served weights. Game
+children send owned arrays directly, each over its own connection, which the
+runtime hands to this process as a descriptor. Requests group by `PolicyKey`
+(checkpoint and numerics, not matchup); FIFO groups flush independently at
+`max_batch_rows` or `max_delay_seconds`.
+Each batch moves to the device in one copy per dtype, and each row samples on
+CPU from its own retained decision seed, so actions do not depend on batch
+composition.
 """
 
 from __future__ import annotations
 
 from collections import OrderedDict, deque
 from collections.abc import Callable
-from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError
 from dataclasses import dataclass
-import multiprocessing as mp
 from multiprocessing.connection import Connection
 from pathlib import Path
-import queue
-import threading
+import selectors
+import socket
 import time
-from types import TracebackType
-from typing import Any, Literal
 from uuid import uuid4
 
 import numpy as np
 import psutil
 import torch
 
-from manabot.env import Match, ObservationSpace
-from manabot.infra.config import MatchConfig, ObservationConfig
-from manabot.infra.files import atomic_json
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
+from manabot.infra.config import ObservationConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
-from manabot.model.inference import PolicyInference
+from manabot.model.inference import PolicyInference, transfer
 from manabot.model.world import validate_agent_setup
 from manabot.sim.execution import EvalExecution
-from manabot.sim.performance import EvalPerformance, allocation_cost
+from manabot.sim.performance import EvalPerformance
 from manabot.sim.registration import PlayerRegistration
+from manabot.sim.serving_protocol import (
+    DecisionReply,
+    DecisionRequest,
+    InferenceFailure,
+    PolicyAdmission,
+    PolicyKey,
+)
+from manabot.sim.threads import SERVING_BUDGET
 
 
-class InferenceFailure(RuntimeError):
-    """Infrastructure failure, never an attributed player forfeit."""
-
-
-@dataclass(frozen=True)
-class PolicyKey:
-    checkpoint: str
-    input_binding: str
-    device: str
-    dtype: str
-    deterministic: bool
-    implementation: str = "policy-inference-cpu-row-sampling-v1"
-
-    @classmethod
-    def from_registration(
-        cls, player: PlayerRegistration, execution: EvalExecution
-    ) -> PolicyKey:
-        return cls(
-            str(player.checkpoint_sha256),
-            canonical_sha256(
-                {
-                    "observation": player.observation_abi_sha256,
-                    "action": player.action_abi_sha256,
-                    "world": player.world,
-                    "content": player.content_suite,
-                    "matchup": player.matchup_sha256,
-                }
-            ),
-            execution.device,
-            execution.dtype,
-            bool(player.player_spec["deterministic"]),
-        )
-
-
-@dataclass(frozen=True)
-class DecisionRequest:
-    request_id: str
-    game_id: str
-    actor: int
-    revision: int
-    policy: PolicyKey
-    ordinal: int
-    seed: int
-    observation: dict[str, np.ndarray]
-    deadline_unix: float
-    submitted: float
-
-
-@dataclass(frozen=True)
-class DecisionReply:
-    request_id: str
-    game_id: str
-    actor: int
-    revision: int
-    ordinal: int
-    action: int
-    batch_id: str
-
-    def validate(self, request: DecisionRequest) -> None:
-        if (self.request_id, self.game_id, self.actor, self.revision, self.ordinal) != (
-            request.request_id,
-            request.game_id,
-            request.actor,
-            request.revision,
-            request.ordinal,
-        ):
-            raise InferenceFailure("stale or mismatched inference reply")
+def _verify_checkpoint_bytes(path: Path, player: PlayerRegistration) -> None:
+    if (
+        path.stat().st_size != player.checkpoint_bytes
+        or file_sha256(path) != player.checkpoint_sha256
+    ):
+        raise ValueError("checkpoint byte identity drift")
 
 
 @dataclass(frozen=True)
 class _PendingRequest:
-    identity: str
     request: DecisionRequest
+    client: Connection
     received: float
-
-
-@dataclass(frozen=True)
-class PolicyAdmission:
-    registration: PlayerRegistration
-    path: str
-    setups: tuple[MatchConfig, ...]
 
 
 @dataclass
@@ -145,24 +86,23 @@ class PolicyStore:
 
     def admit(self, admission: PolicyAdmission) -> ObservationConfig:
         player = admission.registration
-        path = Path(admission.path)
-        if (
-            path.stat().st_size != player.checkpoint_bytes
-            or file_sha256(path) != player.checkpoint_sha256
-        ):
-            raise ValueError("checkpoint byte identity drift")
+        _verify_checkpoint_bytes(Path(admission.path), player)
         if player.player_spec.get("execution") != self.execution.compute.model_dump():
             raise ValueError("registration differs from serving execution")
+        if not admission.setups:
+            raise ValueError("policy admission requires an execution setup")
         key = PolicyKey.from_registration(player, self.execution)
-        self.admissions[key] = admission
+        # Registrations of one checkpoint for other matchups share its resident
+        # policy. Each registration's own parameter count, ABI and setups are
+        # validated against it here; a reload after eviction re-verifies the
+        # bytes. Loading needs only the first admission's checkpoint path.
+        self.admissions.setdefault(key, admission)
         resident = self.get(key)
         if (
             sum(p.numel() for p in resident.agent.parameters())
             != player.parameter_count
         ):
             raise ValueError("checkpoint parameter count drift")
-        if not admission.setups:
-            raise ValueError("policy admission requires an execution setup")
         runtime = runtime_fingerprints(
             match_config=admission.setups[0], observation_space=resident.space
         )
@@ -190,11 +130,7 @@ class PolicyStore:
         admission = self.admissions[key]
         player, path = admission.registration, Path(admission.path)
         with self.perf.span("checkpoint_verification"):
-            if (
-                path.stat().st_size != player.checkpoint_bytes
-                or file_sha256(path) != key.checkpoint
-            ):
-                raise ValueError("checkpoint byte identity drift")
+            _verify_checkpoint_bytes(path, player)
         with self.perf.span("model_load"):
             agent, space = load_checkpoint(str(path))
             agent.eval()
@@ -202,8 +138,6 @@ class PolicyStore:
                 raise ValueError(
                     "shared inference rejects compound or belief checkpoints"
                 )
-            if sum(p.numel() for p in agent.parameters()) != player.parameter_count:
-                raise ValueError("checkpoint parameter count drift")
             schema = {
                 name: {"shape": list(shape), "dtype": "float32"}
                 for name, shape in sorted(space.shapes.items())
@@ -307,14 +241,16 @@ def _infer(
         perf.count("input_bytes", size)
     with torch.no_grad():
         with perf.span("input_admission_and_transfer_host", batch=batch):
-            prepared = (
-                policy.scope.prepare(tensors)
-                if store.execution.cache_catalog
-                else {k: t.to(store.execution.device) for k, t in tensors.items()}
-            )
+            if store.execution.cache_catalog:
+                prepared = policy.scope.prepare(tensors)
+                transfers = prepared.transfers
+            else:
+                prepared, transfers = transfer(
+                    tensors, torch.device(store.execution.device)
+                )
         if store.execution.device == "cuda":
             perf.count("host_to_device_bytes", size)
-            perf.count("host_to_device_calls", len(tensors))
+            perf.count("host_to_device_calls", transfers)
         with perf.span("forward_host", batch=batch):
             logits, _ = policy.agent(prepared)
         with perf.span("output_transfer_host", batch=batch):
@@ -336,9 +272,7 @@ def _infer(
     if not store.execution.cache_catalog and policy.agent.semantic_cards is not None:
         perf.count("catalog_builds")
     replies = [
-        DecisionReply(
-            r.request_id, r.game_id, r.actor, r.revision, r.ordinal, action, batch
-        )
+        DecisionReply(r.request_id, action, batch)
         for r, action in zip(requests, actions, strict=True)
     ]
     if witness is not None:
@@ -385,10 +319,69 @@ def _sample_memory(perf: EvalPerformance, execution: EvalExecution) -> None:
         perf.counters["peak_reserved_cuda_bytes"] = torch.cuda.max_memory_reserved()
 
 
-def _service(
-    connection: Connection, execution: EvalExecution, directory: Path, allocation: str
+def _profiled_infer(
+    store: PolicyStore,
+    requests: list[DecisionRequest],
+    batch: str,
+    trace: Path,
+) -> list[DecisionReply]:
+    """Run one diagnostic batch under the Torch profiler and retain its trace."""
+    perf, execution = store.perf, store.execution
+    activities = [torch.profiler.ProfilerActivity.CPU]
+    if execution.device == "cuda":
+        activities.append(torch.profiler.ProfilerActivity.CUDA)
+    with torch.profiler.profile(activities=activities, record_shapes=True) as profile:
+        if execution.device == "cuda":
+            begin, end = (
+                torch.cuda.Event(enable_timing=True),
+                torch.cuda.Event(enable_timing=True),
+            )
+            begin.record()
+        replies = _infer(store, requests, batch)
+        if execution.device == "cuda":
+            end.record()
+            end.synchronize()
+            perf.count("diagnostic_synchronizations")
+            perf.device_events.append(
+                {
+                    "batch": batch,
+                    "seconds": begin.elapsed_time(end) / 1000,
+                    "clock": "CUDA event duration; no host epoch alignment",
+                    "resource": "device stream elapsed",
+                    "scope": "diagnostic batch, includes stream gaps; not pure kernel compute",
+                }
+            )
+    profile.export_chrome_trace(str(trace))
+    perf.traces.append(str(trace))
+    perf.count("diagnostic_batches")
+    return replies
+
+
+def _reply(perf: EvalPerformance, item: _PendingRequest, message: object) -> None:
+    """A killed game cannot receive its reply; that is its supervisor's failure."""
+    try:
+        item.client.send(message)
+    except OSError:
+        perf.count("undeliverable_replies")
+
+
+def serve(
+    connection: Connection,
+    execution: EvalExecution,
+    directory: Path,
+    allocation: str,
+    handoff: int,
 ) -> None:
+    """Serving child entry; exceeding its thread budget fails the allocation.
+
+    `connection` carries the supervisor's admissions, snapshots and close.
+    `handoff` delivers one socket descriptor per game; each game sends its
+    `DecisionRequest`s on that socket and receives `(reply, error)`.
+    One selector watches all of them, so each wake-up costs only its ready
+    connections, and `service_receive` measures that per-request work.
+    """
     torch.set_num_threads(1)
+    torch.set_num_interop_threads(1)
     perf = EvalPerformance(
         allocation,
         execution.instrumentation,
@@ -396,108 +389,134 @@ def _service(
     )
     store = PolicyStore(execution, perf)
     pending: deque[_PendingRequest] = deque()
+    selector = selectors.DefaultSelector()
+    handoff_socket = socket.socket(fileno=handoff)
+    handoff_socket.setblocking(False)
+    selector.register(connection, selectors.EVENT_READ, "control")
+    selector.register(handoff_socket, selectors.EVENT_READ, "handoff")
     diagnostics = 0
     published = time.monotonic()
+
+    def control() -> bool:
+        """Handle one supervisor message; False once it closes the service."""
+        identity, kind, payload = connection.recv()
+        if kind == "close":
+            return False
+        try:
+            if kind == "admit":
+                result = store.admit(payload)
+                _sample_memory(perf, execution)
+                perf.write(directory / "serving.json")
+            else:
+                result = perf.snapshot()
+            connection.send((identity, result, None))
+        except Exception as exc:
+            perf.count("failed_admissions")
+            connection.send((identity, None, f"{type(exc).__name__}: {exc}"))
+        return True
+
+    def accept() -> None:
+        """Register every game connection handed over so far."""
+        while True:
+            try:
+                data, descriptors, _, _ = socket.recv_fds(handoff_socket, 1, 1)
+            except BlockingIOError:
+                return
+            for descriptor in descriptors:
+                selector.register(Connection(descriptor), selectors.EVENT_READ, "game")
+                perf.count("client_connections")
+                # The supervisor holds its copy until this acknowledgement.
+                handoff_socket.send(b"a")
+            if not data:
+                # The supervisor closed its end; no further games will connect.
+                selector.unregister(handoff_socket)
+                return
+
+    def request(client: Connection) -> None:
+        try:
+            message = client.recv()
+        except (EOFError, OSError):
+            # The game finished or was killed; its connection closes with it.
+            selector.unregister(client)
+            client.close()
+            return
+        pending.append(_PendingRequest(message, client, time.monotonic()))
+        perf.count("received_requests")
+
+    def receive(timeout: float) -> bool:
+        """Read each ready connection once; False once the supervisor closes."""
+        ready = selector.select(timeout)
+        started = time.monotonic()
+        for key, _ in ready:
+            if key.data == "control":
+                if not control():
+                    return False
+            elif key.data == "handoff":
+                accept()
+            else:
+                request(key.fileobj)  # type: ignore[arg-type]
+        if ready:
+            perf.measure("service_receive", time.monotonic() - started)
+        return True
+
+    def head_group() -> tuple[list[_PendingRequest], float]:
+        """The oldest request's policy group and the seconds until it is due."""
+        first = pending[0].request
+        group = [item for item in pending if item.request.policy == first.policy]
+        if len(group) >= execution.max_batch_rows:
+            return group, 0.0
+        return group, max(
+            0.0, first.submitted + execution.max_delay_seconds - time.monotonic()
+        )
+
     try:
         # Ready means the service can receive work, not that any model is loaded.
         perf.write(directory / "serving.json")
         connection.send(("ready", None, None))
         while execution.remaining() > 0:
-            # Once a group is due, continuous admissions cannot starve its flush.
-            due = bool(pending) and (
-                time.monotonic() - pending[0].request.submitted
-                >= execution.max_delay_seconds
-                or sum(r.request.policy == pending[0].request.policy for r in pending)
-                >= execution.max_batch_rows
-            )
-            if not due and connection.poll(
-                0 if pending else min(0.1, execution.remaining())
-            ):
-                identity, kind, payload = connection.recv()
-                if kind == "close":
-                    break
-                if kind == "infer":
-                    pending.append(_PendingRequest(identity, payload, time.monotonic()))
-                    perf.count("received_requests")
-                else:
-                    try:
-                        result = (
-                            store.admit(payload) if kind == "admit" else perf.snapshot()
-                        )
-                        if kind == "admit":
-                            _sample_memory(perf, execution)
-                            perf.write(directory / "serving.json")
-                        connection.send((identity, result, None))
-                    except Exception as exc:
-                        perf.count("failed_admissions")
-                        connection.send(
-                            (identity, None, f"{type(exc).__name__}: {exc}")
-                        )
-                continue
+            # A game has at most one request in flight, so one read per ready
+            # connection drains any backlog before a due group flushes.
+            wait = head_group()[1] if pending else min(0.1, execution.remaining())
+            if not receive(wait):
+                break
             if not pending:
                 continue
-            first = pending[0].request
-            compatible = [
-                item for item in pending if item.request.policy == first.policy
-            ]
-            if (
-                len(compatible) < execution.max_batch_rows
-                and time.monotonic() - first.submitted < execution.max_delay_seconds
-            ):
-                connection.poll(min(execution.max_delay_seconds, 0.001))
+            compatible, wait = head_group()
+            if wait > 0:
                 continue
             chosen = compatible[: execution.max_batch_rows]
-            ids = {item.identity for item in chosen}
-            pending = deque(item for item in pending if item.identity not in ids)
+            ids = {item.request.request_id for item in chosen}
+            pending = deque(
+                item for item in pending if item.request.request_id not in ids
+            )
             batch = uuid4().hex
             _record_dispatch(perf, chosen, batch)
+            requests = [item.request for item in chosen]
             try:
                 if diagnostics < execution.diagnostic_batches:
-                    activities = [torch.profiler.ProfilerActivity.CPU]
-                    if execution.device == "cuda":
-                        activities.append(torch.profiler.ProfilerActivity.CUDA)
-                    with torch.profiler.profile(
-                        activities=activities, record_shapes=True
-                    ) as profile:
-                        if execution.device == "cuda":
-                            begin, end = (
-                                torch.cuda.Event(enable_timing=True),
-                                torch.cuda.Event(enable_timing=True),
-                            )
-                            begin.record()
-                        replies = _infer(store, [r.request for r in chosen], batch)
-                        if execution.device == "cuda":
-                            end.record()
-                            end.synchronize()
-                            perf.count("diagnostic_synchronizations")
-                            perf.device_events.append(
-                                {
-                                    "batch": batch,
-                                    "seconds": begin.elapsed_time(end) / 1000,
-                                    "clock": "CUDA event duration; no host epoch alignment",
-                                    "resource": "device stream elapsed",
-                                    "scope": "diagnostic batch, includes stream gaps; not pure kernel compute",
-                                }
-                            )
-                    trace = directory / f"diagnostic-{diagnostics}.json"
-                    profile.export_chrome_trace(str(trace))
-                    perf.traces.append(str(trace))
-                    perf.count("diagnostic_batches")
+                    replies = _profiled_infer(
+                        store,
+                        requests,
+                        batch,
+                        directory / f"diagnostic-{diagnostics}.json",
+                    )
                     diagnostics += 1
                 else:
-                    replies = _infer(store, [r.request for r in chosen], batch)
+                    replies = _infer(store, requests, batch)
+                # Pools start lazily (CUDA, profiler); count after each batch
+                # and fail its requests, never attribute them to a player.
+                SERVING_BUDGET.account(perf.counters)
             except Exception as exc:
                 for item in chosen:
-                    connection.send(
-                        (item.identity, None, f"{type(exc).__name__}: {exc}")
-                    )
+                    _reply(perf, item, (None, f"{type(exc).__name__}: {exc}"))
                     perf.latency(
                         time.monotonic() - item.request.submitted, outcome="failed"
                     )
             else:
-                for item, reply in zip(chosen, replies, strict=True):
-                    connection.send((item.identity, reply, None))
-                    perf.latency(time.monotonic() - item.request.submitted)
+                with perf.span("reply_send", batch=batch):
+                    for item, reply in zip(chosen, replies, strict=True):
+                        _reply(perf, item, (reply, None))
+                        perf.latency(time.monotonic() - item.request.submitted)
             _sample_memory(perf, execution)
             if time.monotonic() - published >= 1:
                 perf.write(directory / "serving.json")
@@ -508,248 +527,9 @@ def _service(
         )
         store.close()
         perf.write(directory / "serving.json")
+        for key in list(selector.get_map().values()):
+            if key.data == "game":
+                key.fileobj.close()  # type: ignore[union-attr]
+        selector.close()
+        handoff_socket.close()
         connection.close()
-
-
-class InferenceRuntime:
-    """Allocation supervisor, shared by concurrent local Etude callbacks."""
-
-    def __init__(self, execution: EvalExecution, directory: Path) -> None:
-        if execution.remaining() <= 0:
-            raise ValueError("allocation deadline has expired")
-        self.execution = execution
-        self.directory = directory
-        directory.mkdir(parents=True, exist_ok=False)
-        self.identity = uuid4().hex
-        self.performance = EvalPerformance(
-            self.identity,
-            execution.instrumentation,
-            latency_boundary="game worker submission through supervisor reply validation, or observed failure; excludes return to game worker",
-        )
-        self.slots = threading.BoundedSemaphore(execution.max_active_games)
-        self._game_capacity = threading.BoundedSemaphore(execution.max_active_games * 2)
-        self._games = ThreadPoolExecutor(max_workers=execution.max_active_games)
-        self._capacity = threading.BoundedSemaphore(execution.max_active_games + 1)
-        self._lock = threading.RLock()
-        self._futures: dict[str, Future[Any]] = {}
-        self._error: str | None = None
-        self._closed = False
-        self._closing = False
-        context = mp.get_context("spawn")
-        self._connection, child = context.Pipe()
-        self.process = context.Process(
-            target=_service, args=(child, execution, directory, self.identity)
-        )
-        self.performance.write(self.directory / "allocation.json")
-        self._service_started = time.monotonic()
-        try:
-            self.process.start()
-        except BaseException as exc:
-            if self.process.pid is not None:
-                if self.process.is_alive():
-                    self.process.kill()
-                self.process.join()
-            child.close()
-            self._connection.close()
-            self._games.shutdown(wait=True, cancel_futures=True)
-            self.performance.count("failed_service_starts")
-            self.performance.record(
-                "failed_service_start", self._service_started, partitions_elapsed=False
-            )
-            self.performance.write(self.directory / "allocation.json")
-            self._write_execution(f"{type(exc).__name__}: {exc}")
-            raise
-        child.close()
-        self._reader = threading.Thread(target=self._receive, daemon=True)
-        self._reader.start()
-        self._outgoing: queue.Queue[tuple[str, str, object] | None] = queue.Queue(
-            execution.max_active_games + 2
-        )
-        # Pipe.send can block while a service is stopped. Keep it off the
-        # futures lock and caller thread so request deadlines and fail() work.
-        self._sender = threading.Thread(target=self._send, daemon=True)
-        self._sender.start()
-
-    def check(self) -> None:
-        if (
-            self._error
-            or self._closed
-            or self._closing
-            or self.execution.remaining() <= 0
-            or not self.process.is_alive()
-        ):
-            raise InferenceFailure(self._error or "inference allocation stopped")
-
-    def submit_game(self, run: Callable[[], dict[str, Any]]) -> Future[dict[str, Any]]:
-        """Bound both threads and queued games across all callbacks."""
-        while not self._game_capacity.acquire(
-            timeout=min(0.1, self.execution.remaining())
-        ):
-            self.check()
-        try:
-            self.check()
-            future = self._games.submit(run)
-        except BaseException:
-            self._game_capacity.release()
-            raise
-        future.add_done_callback(lambda _: self._game_capacity.release())
-        return future
-
-    def _send(self) -> None:
-        try:
-            while (message := self._outgoing.get()) is not None:
-                self._connection.send(message)
-        except (OSError, EOFError) as exc:
-            self.fail(f"inference send failed: {exc}")
-
-    def _receive(self) -> None:
-        try:
-            while True:
-                identity, result, error = self._connection.recv()
-                if identity == "ready":
-                    self.performance.record(
-                        "service_start_to_ready",
-                        self._service_started,
-                        partitions_elapsed=False,
-                    )
-                    self.performance.write(self.directory / "allocation.json")
-                    continue
-                with self._lock:
-                    future = self._futures.pop(identity, None)
-                if future is not None:
-                    if error:
-                        future.set_exception(InferenceFailure(error))
-                    else:
-                        future.set_result(result)
-        except (EOFError, OSError) as exc:
-            if not self._closing:
-                self.fail(f"inference service exited: {exc}")
-
-    def fail(self, message: str) -> None:
-        with self._lock:
-            self._error = message
-            for future in self._futures.values():
-                if not future.done():
-                    future.set_exception(InferenceFailure(message))
-            self._futures.clear()
-
-    def _call(self, kind: str, payload: object, timeout: float | None = None) -> Any:
-        timeout = min(
-            self.execution.request_seconds,
-            self.execution.request_seconds if timeout is None else timeout,
-            self.execution.remaining(),
-        )
-        if timeout <= 0:
-            raise InferenceFailure("inference request deadline exhausted")
-        deadline = time.monotonic() + timeout
-        if not self._capacity.acquire(timeout=timeout):
-            raise InferenceFailure("inference backpressure deadline exhausted")
-        try:
-            self.check()
-            identity = uuid4().hex
-            future: Future[Any] = Future()
-            with self._lock:
-                self._futures[identity] = future
-                self._outgoing.put_nowait((identity, kind, payload))
-            try:
-                return future.result(timeout=max(0, deadline - time.monotonic()))
-            except TimeoutError as exc:
-                self.fail("inference service request timed out")
-                raise InferenceFailure("inference service request timed out") from exc
-        finally:
-            self._capacity.release()
-
-    def admit(self, admission: PolicyAdmission) -> ObservationConfig:
-        started = time.monotonic()
-        try:
-            result = self._call("admit", admission)
-            if not isinstance(result, ObservationConfig):
-                raise InferenceFailure("invalid observation admission reply")
-            self.performance.count("completed_admissions")
-            return result
-        except BaseException:
-            self.performance.count("failed_admissions")
-            raise
-        finally:
-            # Includes startup when admission is submitted before service ready.
-            self.performance.record(
-                "admission_round_trip", started, partitions_elapsed=False
-            )
-            self.performance.write(self.directory / "allocation.json")
-
-    def infer(self, request: DecisionRequest) -> DecisionReply:
-        outcome: Literal["completed", "failed"] = "failed"
-        try:
-            result = self._call("infer", request, request.deadline_unix - time.time())
-            if not isinstance(result, DecisionReply):
-                raise InferenceFailure("invalid inference reply")
-            result.validate(request)
-            if time.time() >= request.deadline_unix:
-                raise InferenceFailure("inference reply arrived after its deadline")
-            outcome = "completed"
-            return result
-        except InferenceFailure as exc:
-            self.fail(str(exc))
-            raise
-        finally:
-            self.performance.latency(
-                time.monotonic() - request.submitted, outcome=outcome
-            )
-
-    def snapshot(self) -> dict[str, Any]:
-        result = self._call("snapshot", None)
-        if not isinstance(result, dict):
-            raise InferenceFailure("invalid serving receipt")
-        return result
-
-    def __enter__(self) -> InferenceRuntime:
-        return self
-
-    def __exit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        self.close()
-
-    def close(self) -> None:
-        if self._closed:
-            return
-        self._closing = True
-        cleanup_started = time.monotonic()
-        if self._futures:
-            self.fail("allocation closed with pending requests")
-        self._games.shutdown(wait=True, cancel_futures=True)
-        try:
-            self._outgoing.put_nowait(("close", "close", None))
-        except queue.Full:
-            self.fail("inference shutdown queue saturated")
-        self.process.join(timeout=min(5, self.execution.remaining()))
-        if self.process.is_alive():
-            self.process.kill()
-            self.process.join()
-        self._reader.join(timeout=1)
-        try:
-            self._outgoing.put_nowait(None)
-        except queue.Full:
-            pass
-        self._sender.join(timeout=1)
-        self._closed = True
-        self._connection.close()
-        self.performance.record("cleanup", cleanup_started, partitions_elapsed=False)
-        self.performance.write(self.directory / "allocation.json")
-
-        self._write_execution(self._error)
-
-    def _write_execution(self, error: str | None) -> None:
-        """Retain the same allocation identity and cost boundary on every exit."""
-        atomic_json(
-            self.directory / "execution.json",
-            {
-                "allocation_id": self.identity,
-                "execution": self.execution.model_dump(),
-                "cost": allocation_cost(time.monotonic() - self.performance.started),
-                "error": error,
-            },
-        )

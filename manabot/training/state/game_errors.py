@@ -22,8 +22,8 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
 from manabot.decklist import deck_identity
-from manabot.env import Match
 from manabot.env.failures import read_failure
+from manabot.env.match import Match
 from manabot.env.replay import (
     ReplayAgreement,
     matches_retained_error,

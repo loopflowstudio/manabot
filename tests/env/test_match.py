@@ -175,7 +175,8 @@ def test_custom_setup_does_not_infer_sideboard():
 
 
 def test_reset_replacement_preserves_sideboard_on_auto_reset():
-    from manabot.env import Env, ObservationSpace
+    from manabot.env.env import Env
+    from manabot.env.observation import ObservationSpace
     from manabot.infra.config import MatchConfig
 
     first = Match(MatchConfig(hero_deck={"Island": 8}, villain_deck={"Mountain": 8}))

@@ -14,7 +14,7 @@ from typing import Any, Literal
 
 import numpy as np
 
-from manabot.eval.execution import bind_execution
+from manabot.eval.execution import bind_execution, is_served, resolve_execution
 from manabot.eval.models import EvaluationKey
 from manabot.infra.config import MatchConfig
 from manabot.infra.files import atomic_json
@@ -30,13 +30,14 @@ from manabot.sim.matchup import (
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import ReplayReceipt, write_trace
-from manabot.sim.serving import (
+from manabot.sim.serving_protocol import (
     InferenceFailure,
     InferenceRuntime,
     PolicyAdmission,
 )
 from manabot.sim.supervision import replay_retained
-from manabot.verify.util import INTERACTIVE_DECK
+from manabot.sim.threads import ProcessCensus, group_worker_budget
+from manabot.verify.games import INTERACTIVE_DECK
 from managym import WORLD_VERSION
 
 MatchupMode = Literal["cross", "mirrors", "all"]
@@ -146,14 +147,6 @@ def play_cell(
                 raise ValueError(
                     "mirrors require explicit checkpoint deck repetition admission"
                 )
-    if inference is not None:
-        if execution is not None and execution != inference.execution:
-            raise ValueError("conflicting execution declaration")
-        execution = inference.execution
-    if execution is not None:
-        key, (player_a, player_b) = bind_execution(key, (player_a, player_b), execution)
-    elif any("execution" in p.player_spec for p in (player_a, player_b)):
-        raise ValueError("shared registration requires its declared runtime")
     mode_legs = (
         range(8)
         if matchup_mode == "all"
@@ -164,6 +157,12 @@ def play_cell(
     if legs is not None and (not legs or not set(legs) <= set(mode_legs)):
         raise ValueError("selected legs must be a nonempty subset of the mode's legs")
     played_legs = tuple(mode_legs) if legs is None else tuple(sorted(set(legs)))
+    # Checkpoint players are served under a declared allocation, else scalar.
+    execution = resolve_execution(execution, inference)
+    if execution is not None:
+        key, (player_a, player_b) = bind_execution(key, (player_a, player_b), execution)
+    elif any("execution" in p.player_spec for p in (player_a, player_b)):
+        raise ValueError("shared registration requires its declared runtime")
     games: list[dict[str, Any]] = []
     rows: list[dict[str, Any]] = []
     replay_receipts: list[dict[str, Any]] = []
@@ -258,7 +257,7 @@ def play_cell(
                     for game, _, _ in work[: len(played_legs)]
                 )
                 for registration in (player_a, player_b):
-                    if registration.runner_kind == "checkpoint":
+                    if is_served(registration):
                         config = runtime.admit(
                             PolicyAdmission(
                                 registration,
@@ -475,6 +474,14 @@ def play_cell(
         ]
         perf.counters["unattempted_games"] = len(unattempted)
         atomic_json(out_dir / "unattempted.json", unattempted)
+        # Every receipt carries this worker's own census, while the runtime's
+        # game threads are still alive, so calibration can attribute them.
+        ProcessCensus.take().record(
+            perf.counters,
+            group_worker_budget(
+                runtime.execution.max_active_games if runtime is not None else None
+            ),
+        )
         if not games:
             perf.write(out_dir / "performance.json")
             raise InferenceFailure("allocation stopped before any game started")

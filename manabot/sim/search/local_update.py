@@ -41,7 +41,7 @@ from manabot.belief.state import (
     condition_belief,
     query_mass,
 )
-from manabot.env import Env
+from manabot.env.env import Env
 from manabot.model.world import validate_agent_setup
 from manabot.sim.search.branch import SelectedFullCloneBackend
 from manabot.sim.search.compound import (

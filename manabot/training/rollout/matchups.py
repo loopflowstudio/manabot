@@ -9,7 +9,7 @@ Elemental uniform sampling instead belongs to native game roots, not stream stra
 import json
 from typing import Literal
 
-from manabot.env import Match
+from manabot.env.match import Match
 from manabot.infra.config import MatchConfig
 import managym
 

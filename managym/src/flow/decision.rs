@@ -30,6 +30,16 @@ pub enum FrameFinalize {
     Spell { card: CardId },
 }
 
+/// A chosen target's clause and eligibility at resolution start (CR 608.2b).
+/// Keep illegal slots: positional instructions must not reinterpret another
+/// chosen object as the final target. Presence is checked separately on use.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct ResolutionTarget {
+    pub target: Target,
+    pub requirement: usize,
+    pub legal: bool,
+}
+
 /// Everything a resolving spell/ability needs while its effects execute,
 /// including what's left to do if it suspends for a decision.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -47,10 +57,8 @@ pub struct EffectFrame {
     pub resolutions_this_turn: u32,
     /// Whether the resolving spell was kicked.
     pub kicked: bool,
-    /// Chosen targets, in requirement order.
-    pub targets: Vec<Target>,
-    /// Requirement index for each chosen target (multi-target spells).
-    pub target_req_indices: Vec<usize>,
+    /// Chosen slots, with eligibility retained across instructions and choices.
+    pub targets: Vec<ResolutionTarget>,
     pub active_requirement: usize,
     /// Trigger-context object (e.g. the spell that targeted a warded
     /// permanent) — used as the primary target when none was chosen.
@@ -68,26 +76,20 @@ impl EffectFrame {
         }
     }
 
-    /// Chosen targets for the active clause, or all targets for legacy frames
-    /// without clause indices. Trigger context is not a chosen target.
-    pub fn active_targets(&self) -> impl Iterator<Item = Target> + '_ {
+    /// Eligible chosen slots for the active clause, in original order.
+    pub fn active_targets(&self) -> impl Iterator<Item = ResolutionTarget> + '_ {
         self.targets
             .iter()
-            .enumerate()
-            .filter_map(|(index, target)| {
-                (self.target_req_indices.is_empty()
-                    || self.target_req_indices.get(index) == Some(&self.active_requirement))
-                .then_some(*target)
-            })
+            .copied()
+            .filter(|slot| slot.legal && slot.requirement == self.active_requirement)
     }
 
-    /// The first target in the active clause. Only legacy frames without
-    /// clause indices may fall back to the trigger-context object.
+    /// Trigger context is untargeted; it cannot replace an illegal chosen slot.
     pub fn primary_target(&self) -> Option<Target> {
-        self.active_targets().next().or_else(|| {
-            self.context_target
-                .filter(|_| self.target_req_indices.is_empty())
-        })
+        self.active_targets()
+            .next()
+            .map(|slot| slot.target)
+            .or_else(|| self.context_target.filter(|_| self.targets.is_empty()))
     }
 }
 
@@ -279,7 +281,6 @@ impl Game {
                 resolutions_this_turn: 0,
                 kicked: false,
                 targets: Vec::new(),
-                target_req_indices: Vec::new(),
                 active_requirement: 0,
                 context_target: None,
                 queue: VecDeque::new(),
@@ -1062,7 +1063,6 @@ mod learn_tests {
             resolutions_this_turn: 0,
             kicked: false,
             targets: vec![],
-            target_req_indices: vec![],
             active_requirement: 0,
             context_target: None,
             queue: VecDeque::from([Effect::Learn]),
@@ -1815,7 +1815,6 @@ mod payment_tests {
             resolutions_this_turn: 0,
             kicked: false,
             targets: vec![],
-            target_req_indices: vec![],
             active_requirement: 0,
             context_target: None,
             queue: VecDeque::from([

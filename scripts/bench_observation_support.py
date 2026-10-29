@@ -20,7 +20,7 @@ from typing import Any
 import numpy as np
 import torch
 
-from manabot.env import VectorEnv
+from manabot.env.vector_env import VectorEnv
 import manabot.managym._managym as native
 from manabot.semantic.decision_contract import SemanticDecisionContract
 import managym

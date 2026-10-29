@@ -11,7 +11,8 @@ import torch
 
 from experiments.ataraxos_move import ataraxos_move_scalar
 from manabot.decklist import deck_identity
-from manabot.env import Match, ObservationSpace, Reward
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint

@@ -35,22 +35,19 @@ from typing import Any, Callable
 import numpy as np
 import torch
 
-from manabot.env import (
-    Env,
-    Match,
-    ObservationSpace,
-    Reward,
-    build_opponent_policy,
-)
-from manabot.env.single_agent_env import RandomPolicy
-
-from .util import (
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
+from manabot.env.single_agent_env import RandomPolicy, build_opponent_policy
+from manabot.verify.games import (
     INTERACTIVE_DECK,
     STANDARD_DECK,
+    winner_from_info_or_obs,
+)
+from manabot.verify.util import (
     build_verification_config,
     step_with_fallback,
     suppress_truncation_logs,
-    winner_from_info_or_obs,
 )
 
 HERO = 0
@@ -94,7 +91,7 @@ class GameProfile:
 
 
 def _untrained_agent(observation_space: ObservationSpace, config, seed: int):
-    from manabot.model import ActorCritic
+    from manabot.model.actor_critic import ActorCritic
 
     torch.manual_seed(seed)
     agent = ActorCritic(observation_space, config.agent)

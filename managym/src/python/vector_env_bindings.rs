@@ -320,6 +320,22 @@ impl PyVectorEnv {
     }
 }
 
+/// Buffer width binds 32-column v2/v3 versus 33-column v4 semantics in scalar/vector collectors.
+#[cfg(feature = "python")]
+pub(super) fn buffer_input_version(buffers: &Bound<'_, PyDict>) -> PyResult<u8> {
+    let Some(relations) = buffers.get_item("relations")? else {
+        return Ok(1);
+    };
+    let shape: Vec<usize> = relations.getattr("shape")?.extract()?;
+    match shape.last() {
+        Some(&crate::agent::continuation::LEGACY_RELATION_DIM) => Ok(3),
+        Some(&crate::agent::continuation::RELATION_DIM) => Ok(4),
+        _ => Err(PyValueError::new_err(
+            "unsupported continuation relation width",
+        )),
+    }
+}
+
 #[cfg(feature = "python")]
 fn event_buffer_config(
     buffers: &Bound<'_, PyDict>,
@@ -330,7 +346,7 @@ fn event_buffer_config(
         .ok_or_else(|| PyValueError::new_err("missing events"))?
         .getattr("shape")?
         .extract()?;
-    config.relations = buffers.contains("relations")?;
+    config.policy_input_version = buffer_input_version(buffers)?;
     config.policy_history = shape.last() == Some(&crate::agent::policy_history::HISTORY_DIM);
     if config.policy_history {
         if shape.len() != 3
@@ -354,7 +370,7 @@ fn read_observation_buffers(
     c: &ObservationEncoderConfig,
 ) -> PyResult<ObservationBuffers> {
     Ok(ObservationBuffers {
-        relations: if c.relations {
+        relations: if c.policy_input_version >= 2 {
             Some(
                 require_numpy_array(
                     buffers,
@@ -362,7 +378,7 @@ fn read_observation_buffers(
                     &[
                         n,
                         crate::agent::continuation::RELATION_ROWS,
-                        crate::agent::continuation::RELATION_DIM,
+                        c.relation_dim(),
                     ],
                     "float32",
                 )?

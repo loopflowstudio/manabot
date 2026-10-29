@@ -19,7 +19,9 @@ from etude.train.run import track
 import numpy as np
 
 # Local imports
-from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RuntimeConfig, SimulationConfig
 from manabot.infra.log import getLogger, setGlobalLogLevel
 from manabot.infra.runtime import seed_random
