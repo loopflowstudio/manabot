@@ -37,7 +37,7 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   a discard-cost ability refers to its card's graveyard object after costs.
 - Restricted mana rides the `lesson_mana`/`lesson` observation fields (now any
   Lesson/Shrine/Ally restriction, totals only); Academy reads "Restricted
-  mana", `manabot-text-4` still "Lesson-only" (relabel needs a version bump).
+  mana", `manabot-text-5` "Restricted mana"; per-class detail is deferred.
   `PlayerVitals` ≤ 40 bytes, `UndoEntry` ≤ 72.
 - Avatar's Wrath's hand-only restriction ends at its caster's next untap and
   blocks flashback too; mass airbend exiles one at a time. `another` is

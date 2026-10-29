@@ -197,3 +197,14 @@ def test_stack_text_uses_exact_native_links_over_frozen_card_ids() -> None:
     ]
     assert "no current object link" in stack
     assert "targets clause 1: D" in stack
+
+
+def test_ally_restricted_mana_is_not_described_as_lesson_mana() -> None:
+    env = priority_root((), ("Jasmine Dragon Tea Shop",))
+    submit_response(env, capture_text_decision(env), "A0")
+    modes = capture_text_decision(env)
+    green = next(a for a in modes.actions if "Add {G}" in a.description)
+    submit_response(env, modes, green.reference)
+    text = capture_text_decision(env).text
+    assert "Restricted mana: W 0, U 0, B 0, R 0, G 1, C 0." in text
+    assert "Lesson-only" not in text and "Lesson spending" not in text

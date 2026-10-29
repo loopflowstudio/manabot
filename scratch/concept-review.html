@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>TLA Authoring Review</title>
+<title>T2 concept review: restricted mana</title>
 <style>
 :root{--bg:#fbf8f2;--fg:#2b2620;--muted:#6f6556;--rule:#e2d9c8;--code:#f2ece0;--accent:#9a4b1c;--prop:#2f6b4f}
 @media (prefers-color-scheme: dark){:root{--bg:#1b1916;--fg:#ece5d8;--muted:#a89d8b;--rule:#3a352d;--code:#26231f;--accent:#e08a52;--prop:#7cc4a0}}
@@ -12,98 +12,64 @@ main{max-width:46rem;margin:0 auto;padding:2.5rem 16px 4rem}
 h1{font-size:1.6rem;margin:0 0 .3rem}h2{font-size:1.15rem;margin:2.4rem 0 .6rem;border-top:1px solid var(--rule);padding-top:1.4rem}
 .meta{color:var(--muted);font-size:.85rem}
 pre,code{font:13px/1.5 ui-monospace,Menlo,monospace}
-pre{background:var(--code);padding:.8rem 1rem;overflow-x:auto;border-radius:4px}
+pre{background:var(--code);padding:.8rem 1rem;overflow-x:auto;border-radius:4px;white-space:pre-wrap}
 code{background:var(--code);padding:0 .25em;border-radius:3px}
-ol.flow{padding-left:1.4rem}ol.flow li{margin:.35rem 0}
 .tag{font:600 11px ui-sans-serif,system-ui;letter-spacing:.06em;text-transform:uppercase}
 .now{color:var(--muted)}.proposed{color:var(--prop)}
 .mismatch{border-left:3px solid var(--accent);padding:.2rem 0 .2rem 1rem;margin:1.2rem 0}
-.q li{margin:.6rem 0}
+ol.q li{margin:.6rem 0}
 </style>
 </head>
 <body><main>
-<h1>Where does a TLA card's behavior compile?</h1>
-<p class="meta">Task 892c47 · concept-review · 2026-10-28 · built from <code>managym/src/cardsets/{authoring,tla}.rs</code>, <code>scripts/compile_current_content.py</code>, <code>manabot/semantic/content.py</code>, <code>managym/src/semantic/{mod,content,pool}.rs</code>, <code>content/semantic/README.md</code></p>
+<h1>Restricted mana is still called "Lesson" where the model reads it</h1>
+<p class="meta">Task 87e012 (TLA T2) · concept-review · 2026-10-29 · built from <code>managym/src/state/mana.rs</code>, <code>managym/src/agent/observation.rs</code>, <code>manabot/semantic/text_observation.py</code>, <code>academy/ui/src/lib/components/PlayerArea.svelte</code>, <code>managym/src/flow/cast_permission.rs</code>, <code>scratch/87e012-tla-t2-casting.md</code></p>
 
-<p><strong>Decision needed:</strong> cards are now written in Rust, but they still run through the Python compiler before the engine can execute them. Should PR394 ship that intermediate shape, or should the engine read its own definitions first?</p>
+<p><strong>Decision recorded:</strong> T2 changed the concept from "Lesson mana" to "restricted mana" (Lesson, Shrine or Ally), but the text observation still names the old one. The acceptance criteria already settle the fix ("observations stay viewer-safe and complete"). Bump the text observation to <code>manabot-text-5</code> with truthful generic labels. Nothing here waits on you; the questions at the end are for your PR review.</p>
 
-<h2>One interaction: add Cunning Maneuver</h2>
-<p><span class="tag now">Existing at 544ae312c</span></p>
-<ol class="flow">
-<li>Write <code>fn cunning_maneuver() -&gt; Card</code> in <code>tla.rs</code> and add it to <code>cards()</code>.</li>
-<li>Run <code>uv run python -m scripts.compile_current_content</code>:
-  <ol type="a">
-  <li><code>cargo run --example export_cards</code> serializes every Card → <code>generated/cards.json</code></li>
-  <li>The Python <code>manabot.semantic</code> compiler resolves references and emits <code>generated/*.ir.json</code>, coverage and eligibility</li>
-  </ol></li>
-<li>Rebuild the extension with maturin. <code>semantic/mod.rs</code> embeds the IR through <code>include_str!</code>, so the engine executes the card only after this <em>second</em> Rust build.</li>
-<li>Write a directed witness in <code>managym/tests/rules/</code>, then add a hand-written <code>qualifications.json</code> entry with the closure hash.</li>
+<h2>One interaction: tap Jasmine Dragon Tea Shop for Ally mana</h2>
+<p><span class="tag now">Existing at 65544f0ff</span></p>
+<ol>
+<li>The player activates the Tea Shop's colored ability. The engine adds one green mana restricted to <code>ManaUse</code> Ally spells and Ally abilities (<code>state/mana.rs</code>).</li>
+<li>The observation puts it in <code>PlayerData.lesson_mana</code>. The field's comment says it holds any restriction.</li>
+<li>Academy renders <code>· Restricted mana: G</code>. That is correct.</li>
+<li>An LLM agent reads the text observation:</li>
 </ol>
-<pre>Op::CreateToken { count: 1, definition_ref: "sacrifice.clue", .. }
-Target::one("creature", Selector::Creature)
-Op::ModifyPt { target: "creature", power: 3, toughness: 1, .. }</pre>
+<pre>Mana pool: W 0, U 0, B 0, R 0, G 0, C 0.
+Lesson-only mana: W 0, U 0, B 0, R 0, G 1, C 0. ...
+... output mode 2: {G} (Lesson spending context)</pre>
+<div class="mismatch"><strong>Mismatch.</strong> The engine has one concept, restricted mana. The browser names it correctly, but the model is told something false: this mana pays only for Allies, never for Lessons. White Lotus Hideout's Lesson/Shrine mana gets the same wrong label. The legal action list is still correct, so the model can still act. The observation, though, contradicts the rules it is acting under.</div>
 
-<div class="mismatch">
-<p><strong>The mismatch.</strong> The card is written in Rust but isn't executed as Rust. Its links to other parts are strings (<code>"creature"</code>, <code>"sacrifice.clue"</code>), and only the Python step resolves them. A typo therefore compiles cleanly in Rust and fails one language later. The loop is Rust → JSON → Python → JSON → Rust, with two cargo builds per edit.</p>
-</div>
+<h2>Actions → concepts → APIs</h2>
+<p><span class="tag now">Before</span></p>
+<pre>add restricted mana  →  Mana.restricted (ManaUse classes)  →  PlayerData.lesson_mana
+                                                            ├ Academy: "Restricted mana"
+                                                            └ manabot-text-4: "Lesson-only mana",
+                                                              "(Lesson spending context)"</pre>
+<p><span class="tag proposed">Proposed (next implement)</span></p>
+<pre>add restricted mana  →  Mana.restricted (ManaUse classes)  →  PlayerData.lesson_mana (wire name kept)
+                                                            ├ Academy: "Restricted mana"
+                                                            └ manabot-text-5: "Restricted mana",
+                                                              "(restricted spending)"</pre>
+<p>Kept unchanged: the <code>lesson_mana</code> name in the experience protocol, Python stubs and Academy types; opcode <code>add_lesson_mana</code>; vector columns 34 and up. These are compatibility surfaces, and their doc comments already say what they hold. <code>manabot-text-4</code> output is not rewritten.</p>
 
-<p><span class="tag proposed">Jack Heart, 2026-10-28</span> No official JSON/YAML card format is needed unless it is much more compact. It isn't: <code>cards.json</code> has 7,235 lines, while the Rust source has 4,733. Rust is the only card representation. <code>cards.json</code> is an intermediate file and should go away when the engine lowers Rust directly.</p>
-
-<h2>Recovery today</h2>
+<h2>Challenge</h2>
 <ul>
-<li>Typo in a target or token name: <code>cargo</code> passes; the Python compiler reports the missing reference. Fix the Rust and rerun.</li>
-<li>A qualified card's clauses change: <code>stale qualification for tla.x: review changed clauses</code>. This is intentional because a hash must not be refreshed without review. The author still has to compute the new hash themselves.</li>
-<li>Generation stops partway through: derived files may be partly updated. Fix the cause, regenerate and run <code>--check</code>.</li>
+<li><strong>Normal path:</strong> Herbalist's Lesson mana reads "Restricted mana" under text-5. That is less specific than before, but still true. The legal actions show it can pay for the Lesson.</li>
+<li><strong>Failure:</strong> without the bump, any LLM evaluation of TLA decks with the Tea Shop or Hideout reads false text. Changing the wording without a bump would silently change what <code>manabot-text-4</code> means.</li>
+<li><strong>Counterexample that would overturn this:</strong> a decision where the model must know <em>which</em> restriction applies before the legal actions reveal it. Mana empties between steps, so I found none. If one turns up, per-class detail is needed (question 1).</li>
 </ul>
 
-<h2>Proposed alternative</h2>
-<p><span class="tag proposed">Proposed, not accepted</span></p>
-<ol class="flow">
-<li>Write the Rust function. Token and target references become typed handles, such as <code>tokens::CLUE</code> or a <code>let creature = target(...)</code> binding, so a typo fails in <code>cargo check</code>.</li>
-<li>The engine lowers <code>cardsets::catalog()</code> directly into <code>CardDefinition</code>. One build gives you a playable card.</li>
-<li>The generator script asks Rust to emit IR, coverage and eligibility for learning and Academy, and still checks them in and verifies freshness. Python reads IR but no longer compiles current cards.</li>
-<li>Qualification stays independent, and the stale error prints the new closure hash next to the clauses that changed.</li>
-</ol>
-<p><strong>What must survive:</strong> the current IR/source hashes for w16 (or a deliberate new world version), frozen historical packs and their Python compiler path, the <code>content_pool</code> API D1 depends on, independent witnesses, and explicit unsupported-card eligibility.<br>
-<strong>What would invalidate it:</strong> if learning or Academy needs compiler information that only Python produces, or if moving lowering into Rust changes the IR bytes for w16, which would force a world bump.</p>
+<h2>Checked and kept</h2>
+<p><code>ExileCastGrant</code> terms with <code>HandOnly</code> overrides; the foretold grant as the only authority for a face-down card (<code>Game::is_foretold</code>), with <code>ZoneEntry.face_down</code> as the move event and <code>CardData.face_down</code> derived from it; <code>CastChoices</code>; <code>ActivationSource</code>; <code>Decision::CastWithoutPaying</code>.</p>
 
-<h2>Where things live (Jack's question)</h2>
-<p><span class="tag now">Existing</span> The files in <code>content/semantic/current/generated/</code> are named after <em>setups</em>, not worlds. Each one is a deck or test configuration compiled separately: <code>two_deck</code>, <code>temur</code>, <code>sacrifice</code>, <code>elemental_world</code>, <code>pool</code>, <code>tla</code> and five others. There are 12 setups, each with an IR file and a coverage file. A world is a version label, w16, recorded inside them. <code>cardsets/</code> currently mixes three kinds of files:</p>
-<pre>cardsets/
-  authoring.rs          the card language (types), not a set
-  tla.rs                typed cards, new style
-  authored_support.rs   34 non-TLA cards, new style, not a set
-  alpha.rs elemental.rs sacrifice.rs temur.rs mkm.rs ...   old native CardRegistry style
-                        (elemental/sacrifice/temur are deck names, not sets)</pre>
-<p>The same card can therefore be defined more than once. I verified Lightning Bolt in <code>alpha.rs</code> and <code>authored_support.rs</code>, Clue in <code>sacrifice.rs</code>, <code>authored_support.rs</code> and <code>tla.rs</code>, and Forest in three files. Semantic keys also carry deck names, such as <code>temur.forest</code> and <code>sacrifice.clue</code>.</p>
-<p><span class="tag proposed">Proposed</span></p>
-<pre>managym/src/cards/language.rs   (was cardsets/authoring.rs)
-managym/src/cardsets/           one file per real set, one definition per card
-  tla.rs  alpha.rs  m21.rs  ...  (Lightning Bolt, Forest, Clue each once)
-content/
-  setups.json  qualifications.json  inventory.json
-  generated/w16.ir.json  w16.coverage.json  eligibility.json   (one world, setups select from it)
-content/semantic/{v1,w11,...}/  frozen history, untouched</pre>
-<p>Changing keys from deck names to set names, such as <code>temur.forest → core.forest</code>, would change the IR and source hashes. That requires a deliberate new world, not a hidden rename.</p>
-
-<h2>Questions</h2>
+<h2>Questions for your PR review</h2>
 <ol class="q">
-<li>Where should this change land?
-  <ol type="a">
-  <li>Ship PR394 as it is and track direct Rust lowering in a follow-up Task. <em>(recommended: PR394 already removes hand-written JSON and keeps hashes stable)</em></li>
-  <li>Make it part of PR394 before demo acceptance.</li>
-  <li>Keep the Python compiler permanently as the checked IR contract.</li>
-  </ol></li>
-<li>Should references be typed handles instead of strings?
-  <ol type="a"><li>Yes, together with direct lowering.</li><li>Yes, now in PR394, while Python remains the compiler.</li><li>No, strings are clear enough.</li></ol></li>
-<li>Should the stale-qualification error print the new hash and the changed clauses?
-  <ol type="a"><li>Yes.</li><li>No, an author who must compute it reviews more carefully.</li></ol></li>
-<li>Should <code>cardsets/</code> contain only real set files, with each card defined once?
-  <ol type="a"><li>Yes, and migrate the old native-style sets into the typed language too, accepting a new world (w17) for the key change.</li><li>Yes for layout only: move the language out and name support cards by set, while keeping w16 keys.</li><li>Not now.</li></ol></li>
-<li>Should generated output be one IR per world, with setups selecting from it, rather than one IR per setup?
-  <ol type="a"><li>Yes.</li><li>No, per-setup files are useful as review diffs.</li></ol></li>
-<li>Should PR394 include the layout and lowering cleanup, or should both move to follow-up Task(s)?
-  <ol type="a"><li>Use follow-up Task(s); PR394 ships as it is. <em>(recommended)</em></li><li>Include them in PR394.</li></ol></li>
+<li>Restricted-mana detail for agents:
+  <br>a) generic "Restricted mana" in text-5 (recorded direction)
+  <br>b) per-class breakdown, which needs capture/policy v5</li>
+<li>Rename the Rust-internal names (<code>Op::lesson_mana</code>, <code>PlayerData.lesson_mana</code>) to "restricted":
+  <br>a) no, the names are documented (recorded)
+  <br>b) yes, Rust-internal only, keeping the wire names</li>
 </ol>
 </main></body>
 </html>
