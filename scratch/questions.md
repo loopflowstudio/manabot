@@ -1,89 +1,59 @@
-# bb4160 unresolved decisions — 2026-10-28
+# bb4160 decisions and assumptions — 2026-10-29
 
-The current accepted outcome, implementation and remaining work are in
-`scratch/bb4160-evaluate-qwen-versus.md`.
+The accepted outcome, current evidence and ordered remaining work live in
+`scratch/bb4160-evaluate-qwen-versus.md`; treatment declarations and attempt
+accounting live in `experiments/protocols/qwen-mtg183-bb4160.md`.
 
-- **World choice ACCEPTED (Jack Heart, 2026-10-28):** run the exact MTG-183
-  checkpoint in a separately pinned **historical w13** experiment (w13
-  source/native build, w13 decks, policy-input v1). Label all results as w13
-  evidence. Do not weaken w14 admission or relabel the checkpoint. Paid
-  evaluation within the $10 budget is unblocked by this decision.
-- **Treatment choice (2026-10-28, reversible):** Qwen's model-card thinking
-  sampling (T=1.0, top-p 0.95, top-k 20, presence 1.5) under the accepted 16k/
-  65k/1800 s limits, after both greedy treatments failed by repetition/limits.
-  Declared in `experiments/protocols/qwen-mtg183-bb4160.md`; not pooled with
-  MTG-188 greedy results.
-- **Memory gap:** `.lf/wave/training/` and its child memories are absent. The
-  supplied chapter is the available objective; no other Wave is substituted.
-- **Service identity implementation choice, 2026-10-28:** derive the sole vLLM
-  served name from the existing behavior hash. Its base argv excludes that
-  derived argument to avoid a circular hash; the complete command is retained
-  separately. Model-list acknowledgement and completion model checks bind the
-  supervised service declaration, not independently measured GPU weight bytes.
-  This world-independent work does not settle the matchup decision.
+## Accepted direction
 
-Original checkpoint evidence and the full directive are preserved in
+Jack Heart accepted historical w13 for the exact MTG-183 checkpoint on
+2026-10-28, preserving current-world admission and the cumulative $10 ceiling.
+That evening he stopped the long sampled pilot and prioritized budget-forced
+thinking, with a small separately labeled no-thinking floor (~10 games, well
+under $1). Short pilots precede frozen cohorts; report reasoning by decision kind.
+Concurrency 32 and MTP were accepted subject to pinned-vLLM support and hashed
+argv. The mixed-decode MTP crash leaves the replacement cohort without MTP;
+no vLLM upgrade is accepted. Native `skip_trivial` stays ON for all Qwen games.
+
+Stop admissions on failure, settle admitted games, then reconcile final receipts,
+all 100 scheduled IDs, inclusive charges and allocation deletion before another
+commitment. The plan's 06:57 UTC snapshot is interim, not settlement or replay
+qualification. `budget-64k` remains unlaunched. These constraints are unchanged.
+
+## Reversible choices and limits
+
+- **No-thinking pilot (2026-10-29):** $0.80, one game/concurrency one, no MTP,
+  five-minute decision deadline, original non-thinking sampling, 512 output
+  tokens and 16k context. Preserve 15-minute acquisition and 45-minute
+  setup/delivery reserves, leaving 20 minutes of gameplay. Reject caps without
+  a complete decision window. This replaces the arbitrary 1.5-hour minimum,
+  changes no running cohort and establishes neither qualification nor final
+  infeasibility. Launch remains after final cohort reconciliation.
+- **Service identity (2026-10-28):** derive the served name from the behavior
+  hash, excluding that derived argument from base argv to avoid circularity.
+  Retain complete argv separately. Acknowledgement binds the supervised
+  declaration, not independently measured GPU weight bytes.
+- **Process integration (2026-10-29):** bounded supervisor threads and one
+  `ChildProcess` per game; resident and one-shot inference share that child owner.
+  Keep the outer watchdog process group for descendant cleanup. Historical
+  failed terminal selections remain evidence even when close errors prevented
+  their summary counter increment. Frozen running source remains unchanged.
+- **Capacity estimates:** the supplied architecture estimate was 32 KB KV/token
+  over eight full-attention layers, ~50 MB linear-attention state/sequence and
+  ~18 GB BF16 weights. Projected 9 GB state at ~7k tokens/sequence and
+  900–1200 aggregate tokens/s were planning estimates. Measured single-stream
+  ~34 tokens/s and ~5k reasoning tokens/decision support a bandwidth explanation
+  without excluding runtime/cache defects. The early MTP pilot's 650–710 tokens/s
+  does not establish late-game context fit or 100-game affordability.
+- **Memory gap:** `.lf/wave/training/` and child memories are absent. Use the
+  supplied chapter; do not substitute a Wave or create accepted memory.
+
+## Historical references
+
+Full original directive and checkpoint evidence:
 `02fccd93e1983319d355a1866c101d7d0e01565b:scratch/bb4160-evaluate-qwen-versus.md`
-and `02fccd93e1983319d355a1866c101d7d0e01565b:scratch/questions.md`.
-Obsolete MTG-207 notes remain at
-`c5d406e3d2a701525c15c8500a30f7da7896cc40:scratch/questions.md`.
-
-- **Treatment change ACCEPTED (Jack Heart, 2026-10-28 ~19:00 PT):** the 16k
-  sampled-thinking pilot `dddaf3001dfa` ran ~160 s per Qwen decision (~35/160
-  decisions after 93 min, ~$1) and would exhaust its $2 cap without a game. Stop
-  it, reconcile its charge, and spend the remaining budget on two separately
-  declared, never-pooled treatments: (1) budget-forced thinking (~3k thinking
-  tokens, then insert `</think>` and let Qwen answer; the forced close is
-  recorded per decision, not counted as fallback) at ~8 concurrent games;
-  (2) a no-thinking arm as a cheap labeled baseline. Short pilot each before a
-  frozen cohort. Report reasoning length by decision kind to show where tokens go.
-  Amended (Jack Heart, same evening): budget-forced thinking is the main arm and
-  gets nearly all of the budget. The no-thinking arm is only a small labeled
-  floor (~10 games, well under $1), run after the reasoning cohort is under way;
-  it is a comparison point, not a candidate for the headline result.
-Accepted serving direction from Jack Heart's session (2026-10-28; inference
-analysis of pinned Qwen3.5-9B config c2022362), with subsequent evidence limits:
-
-- Architecture: hybrid, only 8/32 layers full attention (4 KV heads x 256) => KV = 32 KB/token; 24 linear-attention layers carry ~50 MB fp32 state/seq. Weights ~18 GB bf16. Single-stream decode is weight-bandwidth bound (~40 tok/s ceiling on A6000; 34 measured) — no KV-cache bug. The pilot's slowness is ~5k tokens/decision x concurrency 1.
-- Run the budget-forced cohort at concurrency 32 (existing `le=32` cap; `--max-num-seqs 32`). Memory: 32 x (~7k tokens x 32 KB + 50 MB) ~ 9 GB, fits easily. Decode stays weight-bound to ~batch 64, so aggregate should reach ~900-1200 tok/s.
-- MTP was accepted subject to pinned-vLLM support and a declared hashed argv.
-  The `mtp` method passed the pilot but crashed the scored cohort's mixed
-  speculative/plain decode batch. The replacement cohort disables it; no vLLM
-  upgrade is accepted. Pilot success did not qualify full-game serving.
-- The accepted short concurrency-32 pilot measured 650–710 aggregate tokens/s
-  with MTP; its early-game prompts did not establish late-game context fit.
-  The no-MTP cohort remains incomplete. Earlier 100-game cost/time projections
-  are estimates, not an affordable remaining commitment or a completed outcome.
-- Native `skip_trivial` ON for every Qwen game (standing rule). The campaign already set it via `experiments/qwen_mtg183.py`; the pilot did not pay for forced decisions. `GameConfig.skip_trivial` now defaults to True (Jack Heart: "we should basically never set skip_trivial=False").
-
-The plan's Remaining execution and qualification section retains the 2026-10-29
-06:43 UTC cohort and billing snapshot, manifest references and pending cleanup.
-Preserve settle-admitted-games and reconcile the current cohort before another
-commitment; log progress is not final outcome/replay evidence.
-
-Reversible floor choice (2026-10-29): declare a five-minute decision deadline
-for a $0.80 no-thinking pilot, one game/concurrency one; keep sampling, 512
-output tokens, 16k context and all identities. The constructor retains its
-15-minute acquisition and 45-minute setup/delivery reserves, leaving 20 minutes
-of gameplay. It rejects caps lacking a complete decision admission window.
-This replaces the arbitrary 1.5-hour minimum; it does not change the running
-cohort. Controlled schedule checks pass. No floor was launched: final cohort
-reconciliation is required before the next commitment. An affordable pilot
-configuration is not full-game qualification or final infeasibility.
-`budget-64k` remains unlaunched.
-
-Reversible implementation choice (2026-10-29): use bounded supervisor threads
-with one `ChildProcess` per admitted game, preserving the outer campaign process
-group and watchdog for descendant cleanup. Resident and one-shot inference use
-the same child owner. Frozen running source is unchanged. Historical close errors
-can leave exactly one failed terminal selection outside the summary counter;
-the offline reader recognizes that case without rewriting evidence or inferring
-successful play. No new paid attempt was launched.
-
-## Sync resolution — 2026-10-28
-
-Preserved this branch's bb4160 decisions. Main's MTG-193 questions and
-assumptions remain at
-`6d069d6e5f0755b392c796aaf6d754913e8996c2:scratch/questions.md`;
-they are historical context for shared evaluation, not new bb4160 direction
-or an additional rental budget.
+and the same commit's `scratch/questions.md`. Detailed subsequent choices:
+`f01fd6a4554b2880b48c77b1b657ed040851313c:scratch/questions.md`.
+Obsolete MTG-207 notes: `c5d406e3d2a701525c15c8500a30f7da7896cc40:scratch/questions.md`.
+Main's MTG-193 assumptions: `6d069d6e5f0755b392c796aaf6d754913e8996c2:scratch/questions.md`;
+these supply historical context, not new direction or rental authority.

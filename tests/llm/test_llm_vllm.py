@@ -140,6 +140,26 @@ class Reply:
         pass
 
 
+def _completion(
+    body: dict[str, object], tokens: list[int], *, finish_reason: str = "stop"
+) -> Reply:
+    """Echo the request binding; token IDs remain the only answer authority."""
+    return Reply(
+        {
+            "model": body["model"],
+            "choices": [
+                {
+                    "index": 0,
+                    "text": "untrusted server text is not used",
+                    "finish_reason": finish_reason,
+                    "prompt_token_ids": body["prompt"],
+                    "token_ids": tokens,
+                }
+            ],
+        }
+    )
+
+
 def _serving(served: str) -> Callable[[str, float], Reply]:
     """A model list naming one served behavior route."""
 
@@ -181,26 +201,16 @@ def test_exact_tokens_and_untrusted_server_reply(
             raise TimeoutError("fixture transport deadline")
         if failure == "late":
             monkeypatch.setattr(vllm_runtime.time, "monotonic", lambda: deadline)
-        reply = Reply(
-            {
-                "model": "other-version" if failure == "model" else body["model"],
-                "choices": [
-                    {
-                        "index": 0,
-                        "text": "untrusted server text is not used",
-                        "finish_reason": "stop",
-                        "prompt_token_ids": [99]
-                        if failure == "prompt"
-                        else list(prompt.token_ids),
-                        "token_ids": [4, 2, 3]
-                        if failure == "terminator"
-                        else [4] * 9
-                        if failure == "limit"
-                        else [4, 2, 3, 1],
-                    }
-                ],
-            }
-        )
+        if failure == "model":
+            body["model"] = "other-version"
+        if failure == "prompt":
+            body["prompt"] = [99]
+        tokens = [4, 2, 3, 1]
+        if failure == "terminator":
+            tokens.pop()
+        elif failure == "limit":
+            tokens = [4] * 9
+        reply = _completion(body, tokens)
         if failure == "missing-model":
             del reply.payload["model"]
         return reply
@@ -243,13 +253,7 @@ def test_sampled_requests_send_the_declared_treatment_and_prompt_seed(
     def request(req: Request, timeout: float) -> Reply:
         body = json.loads(req.data or b"{}")
         bodies.append(body)
-        choice = {
-            "index": 0,
-            "finish_reason": "stop",
-            "prompt_token_ids": body["prompt"],
-            "token_ids": [4, 2, 3, 1],
-        }
-        return Reply({"model": body["model"], "choices": [choice]})
+        return _completion(body, [4, 2, 3, 1])
 
     monkeypatch.setattr(vllm_runtime, "urlopen", request)
     first = sampled.encode((Message(role="user", content="A0"),))
@@ -296,13 +300,10 @@ def test_budget_forcing_closes_unfinished_reasoning(
         body = json.loads(req.data or b"{}")
         bodies.append(body)
         tokens = replies[len(bodies) - 1]
-        choice = {
-            "index": 0,
-            "finish_reason": "stop" if tokens and tokens[-1] == 1 else "length",
-            "prompt_token_ids": body["prompt"],
-            "token_ids": tokens,
-        }
-        return Reply({"model": body["model"], "choices": [choice]})
+        assert tokens is not None
+        return _completion(
+            body, tokens, finish_reason="stop" if tokens[-1] == 1 else "length"
+        )
 
     monkeypatch.setattr(vllm_runtime, "urlopen", request)
     prompt = budgeted.encode((Message(role="user", content="A0"),))
@@ -549,19 +550,7 @@ def test_long_reasoning_budget_preserves_deals_and_reaches_server(
         body = json.loads(req.data or b"{}")
         assert body["max_tokens"] == 16384
         assert 1700 < timeout <= 1800
-        return Reply(
-            {
-                "model": body["model"],
-                "choices": [
-                    {
-                        "index": 0,
-                        "finish_reason": "stop",
-                        "prompt_token_ids": body["prompt"],
-                        "token_ids": [4, 2, 3, 1],
-                    }
-                ],
-            }
-        )
+        return _completion(body, [4, 2, 3, 1])
 
     monkeypatch.setattr(vllm_runtime, "urlopen", request)
     prompt = runtime.encode((Message(role="user", content="A0"),))

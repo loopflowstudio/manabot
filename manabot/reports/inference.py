@@ -426,9 +426,7 @@ class Distribution:
     p50: float | None
     p95: float | None
     maximum: float | None
-    method: str = (
-        "sorted[floor((n-1)*q)]; seconds; retained observations, not random sampling"
-    )
+    method: str
 
 
 def _distribution(
@@ -492,25 +490,25 @@ def _generation_tokens(
     }
 
 
-def _behavior_version(selections: list[_Selection]) -> str | None:
-    versions = {s.behavior_version for s in selections if s.behavior_version}
-    if len(versions) > 1:
-        raise ValueError("LLM receipts changed behavior version")
-    return next(iter(versions)) if versions else None
-
-
-def _selection_latencies(
-    selections: list[_Selection], population: int
-) -> dict[str, dict[str, JsonValue]]:
-    """Use the same population rules for a game and a sequential session.
+def _selection_statistics(
+    corpus: list[tuple[Path, _Selection]], population: int
+) -> dict[str, JsonValue]:
+    """Project the same selection evidence for a game or a multi-game session.
 
     Selection success, selection failure, and generation attempts are distinct;
     generation host failures include unfinished calls with no retained response.
     """
+    selections = [selection for _, selection in corpus]
+    versions = {s.behavior_version for s in selections if s.behavior_version}
+    if len(versions) > 1:
+        raise ValueError("LLM receipts changed behavior version")
     successful = [s for s in selections if s.selected_reference is not None]
     failed = [s for s in selections if s.failure is not None]
     generations = [a for s in selections for a in s.attempts]
     return {
+        "behavior_version": next(iter(versions), None),
+        "unversioned_selections": sum(s.behavior_version is None for s in selections),
+        "generation_tokens": _generation_tokens(corpus),
         "selection_latency": asdict(
             _distribution(
                 [s.seconds for s in successful],
@@ -1006,8 +1004,8 @@ def project_llm(root: Path) -> dict[str, Any]:
             "unknown_selections": len(selections) - len(successful) - len(failed),
             "generation_attempts": len(generations),
         },
-        **_selection_latencies(
-            [s for _, s in selections],
+        **_selection_statistics(
+            selections,
             selection_population
             if selection_population is not None
             else len(selections),
@@ -1016,11 +1014,6 @@ def project_llm(root: Path) -> dict[str, Any]:
         "device_memory": device,
         "config": config,
         "inference_config": identity.model_dump() if identity else None,
-        "behavior_version": _behavior_version([s for _, s in selections]),
-        "unversioned_selections": sum(
-            s.behavior_version is None for _, s in selections
-        ),
-        "generation_tokens": _generation_tokens(selections),
         "runtime": runtime,
         "corpus": [str(p.relative_to(root)) for p, _ in selections],
         "evidence": [f.model_dump() for f in files],
@@ -1261,16 +1254,11 @@ def _project_llm_sequence(root: Path) -> dict[str, Any]:
         "observed_status": status,
         "failure": next((p["failure"] for p in parts if p["failure"]), None),
         "coverage": coverage,
-        **_selection_latencies([s for _, s in selections], len(selections)),
+        **_selection_statistics(selections, len(selections)),
         "metrics": metrics,
         "device_memory": _device_memory(root / "gpu-memory.csv"),
         "config": {"games": [p["config"] for p in parts]},
         "inference_config": identities[0].model_dump() if identities else None,
-        "behavior_version": _behavior_version([s for _, s in selections]),
-        "unversioned_selections": sum(
-            s.behavior_version is None for _, s in selections
-        ),
-        "generation_tokens": _generation_tokens(selections),
         "runtime": parts[0]["runtime"] if parts else None,
         "corpus": [str(p.relative_to(root)) for p, _ in selections],
         "evidence": [f.model_dump() for f in files],

@@ -59,9 +59,10 @@ initial selections, 2 after repair, and 1 interrupted selection, with no fallbac
 There are 43 attempts, 42 with responses; received responses ended with EOS.
 Reasoning per received attempt: median 4,616 tokens, p90 7,154, max
 8,223; prompts median 5,706 tokens. Generation ran at about 33 tokens/s
-single-stream, the A6000's bandwidth ceiling for 18 GB BF16 weights, so the
-slowness was output length at concurrency 1, not a serving fault. 36 of the
-41 decisions offered two legal references. No greedy-style repetition failure
+single-stream. This is consistent with bandwidth-limited decoding of 18 GB
+BF16 weights and costly long output at concurrency 1; it does not independently
+rule out a serving fault. 36 of the 41 decisions offered two legal references.
+No greedy-style repetition failure
 was observed in these received responses; this incomplete pilot does not
 establish full-game reasoning quality. The game had native `skip_trivial`
 enabled, as every game in this schedule does.
@@ -108,14 +109,17 @@ and charges are reconciled after every attempt.
 ### Budget pilot result and frozen scored cohort
 
 Pilot `139099571cbb` (budget arm, 32 games at concurrency 32, MTP draft 1) was
-cancelled after about 10 minutes of decisions. Of 86 Qwen attempts, 61 (71%)
+cancelled after about 10 minutes of decisions. The early log sample used to
+declare the cohort is retained here; final archive totals below supersede it
+for reporting. Of 86 Qwen attempts in that sample, 61 (71%)
 reached the 3,072-token budget and were force-closed; 58 of those answered in
 exactly three tokens. 80 decisions were valid initially and 6 after repair, with
 no fallback. Prompts median 2,898 tokens (early-game). Each stream generated
 about 17–19 tokens/s; vLLM reported 650–710 generated tokens/s aggregate with 32
 running requests, MTP acceptance 63–71% (mean acceptance length about 1.65) and
 37–47% KV-cache use. Projected at roughly 50 Qwen decisions and 165k generated
-tokens per game, 100 games need about 7 hours of serving.
+tokens per game, 100 games need about 7 hours of serving. This was a prelaunch
+projection, not demonstrated affordability or complete-game qualification.
 
 **Frozen scored cohort (declared 2026-10-29 before launch):** arm `budget`, the
 first 100 schedule entries (all of them), 32 concurrent games, MTP draft 1, job
@@ -134,7 +138,7 @@ num_spec_decodes: 31`, `gdn_attn.py:310`). Nine games received HTTP 500; the
 other 23 then failed while closing their inference worker (`Cannot close a
 process while it is still running`), a harness defect that masked the runtime
 failure. No game completed, 68 entries were unattempted, and its receipts stay
-under its run ID. MTP is therefore unusable with this model in the pinned vLLM;
+under its run ID. MTP is therefore unqualified for this campaign in pinned vLLM;
 upgrading vLLM is outside this budget. The session now waits for its killed
 worker before closing.
 
@@ -150,7 +154,7 @@ cap $7.00. The MTP attempt is not pooled with it.
 | `dddaf3001dfa` | sampled pilot, 1 game, c=1 | $2.00 | 1 admitted/canceled, 0 completed; pod absent | $1.11978240 provider billed |
 | `139099571cbb` | budget pilot, 32 games, c=32, MTP 1 | $1.20 | 32 admitted/canceled, 0 completed; pod absent | $0.16946718 provider billed |
 | `8f68c0bc488b` | scored cohort, budget, 100 games, c=32, MTP 1 | $7.00 | 32 failed, 0 completed, 68 unattempted; pod absent | $0.18681270 provider billed |
-| `cdb0c09f90c6` | **scored cohort**, budget, 100 games, c=32, no MTP | $7.00 | running, admissions stopped; 30 complete/3 failed/16 pending in logs | $1.71744001 provider billed through whole hours at snapshot; not final |
+| `cdb0c09f90c6` | **scored cohort**, budget, 100 games, c=32, no MTP | $7.00 | running, admissions stopped; 33 complete/3 failed/13 pending in logs | $1.86418125 provider billed through whole hours at snapshot; not final |
 
 ### Retained evidence and reporting (2026-10-29)
 
@@ -169,26 +173,31 @@ targets response. Generated reasoning floor-index p50/max: priority 4,606/8,223,
 declare-blockers 5,853/5,853, targets 3,903/3,903. These distributions include
 repairs; the interrupted attempt stays in the denominator with an unknown split.
 
-The 06:43 UTC refreshed log still shows the replacement cohort running: 49
-admitted games, 30 completed, 3 failed and 16 unsettled; 51 schedule entries
+The 06:57 UTC refreshed log still shows the replacement cohort running: 49
+admitted games, 33 completed, 3 failed and 13 unsettled; 51 schedule entries
 remain unattempted. No admission follows the first failure. These are log
 observations, not final game/replay receipts. Etude still retains zero output
 files. The bounded 30-second refresh ended incomplete; a shorter refresh had
 hit a storage retrieval deadline. Final W/L/D, replay qualification and failure
 classification remain unavailable. The existing run continues to settle its
-admitted games under the frozen watchdog; this pass started no rental, watcher
+admitted games under the frozen watchdog; finalization is externally blocked
+until these games settle and the outputs become available; this pass started no rental, watcher
 or controller.
 
-Direct RunPod reads at 06:40:55 UTC again confirmed the first three pods absent
+Direct RunPod reads at 06:57:37 UTC again confirmed the first three pods absent
 and their bills totaling **$1.47606228455**. The current cohort pod remains
-present; its whole-hour provider bills total **$1.71744000551**, excluding the
+present; its whole-hour provider bills total **$1.86418124684**, excluding the
 current partial hour and unknown ancillary charges. The rental deadline remains
 2026-10-29 14:04 UTC. Provider totals supersede understated launcher estimates;
 frozen launcher receipts remain unchanged. The manifest-published
-`experiments/data/bb4160/accounting-20261029T064055Z.json` retains these readings,
-output counts and transfer-coverage gaps. Its `cohort_log` links the later
-06:43:19 UTC log snapshot and all admitted/pending game IDs. Inclusive cost and
-useful games/dollar remain uncertified until final settlement and cleanup.
+`experiments/data/bb4160/accounting-20261029T065737Z.json` retains these readings,
+output counts and transfer-coverage gaps. Its `cohort_log` links the 06:57:17 UTC
+log snapshot and partitions all 100 IDs into 33 complete,
+3 failed, 13 pending and 51 unattempted entries. The admitted prefix matches
+the retained unchanged schedule. The provider revised its earlier 05:00-hour
+bill upward; whole-hour snapshots alone are not final inclusive accounting.
+Inclusive cost and useful games/dollar remain uncertified until final settlement
+and cleanup.
 
 The earlier accounting snapshot remains at
 `experiments/data/bb4160/accounting-20261029T0620.json`. Keeping the current $7
