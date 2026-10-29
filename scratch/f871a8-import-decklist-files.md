@@ -279,6 +279,17 @@ Noted, not a change: the collector and native `VectorEnv` still hold training
 decks in a field named `uniform_roster`; it no longer gates admission
 (`set_training_decks` admits and replaces at any time), so the name is internal.
 
+### Concept review at d447c2a42 (2026-10-28, headless Graph step)
+
+No change and no open product choice. Remaining `root_match` readers
+(fingerprints, collector construction, frozen-opponent/compound/selection/belief
+stages, monitoring, study) cannot act on a deck run's behalf: the `references`
+validator admits deck regimes only for current-self single-producer self-play,
+and authored-matchup consumers reject deck runs by name. The native
+`RootRoster.distinct` flag and `uniform_roster` field separate the frozen
+Elemental roster from replaceable training decks internally; users never learn
+that distinction. Deferred items (Academy 1a, `bc` producer links) unchanged.
+
 ## Accepted direction — Jack Heart, 2026-10-28
 
 Implement, test, refine and publish one cohesive PR for review; stop before merge.
