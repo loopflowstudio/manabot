@@ -101,7 +101,7 @@ from `be2b7586b`.
   one-at-a-time choice, as Heartless Act).
 - Fire Nation Palace (granted firebending; observation shape change).
 
-## Reconcile at sync (T2 87e012 at `1144d0f32`, 2026-10-29)
+## Reconcile at sync (T2 87e012 at `65544f0ff`, 2026-10-29)
 
 - Both branches append to schema 8 from 86ebe9ccf with colliding numbers. T2:
   fields 85-96, predicates 13-15, subtypes 64-74, special role 6, opcodes 66-73,
@@ -125,6 +125,12 @@ from `be2b7586b`.
 - Both branches added `state::is_zero` (T2 `2673c95cd`, here `2598ddacf`); keep
   one. T2's foretell (`1144d0f32`) adds face-down exile to observations and
   protocol schemas; Fire Nation Palace's observation change should build on it.
+- T2 renamed `BattlefieldEntry` → `ZoneEntry` (`face_down`, `controller`);
+  carry this branch's `x` onto it. T2 keys battlefield zones by controller
+  (`431a31f65`) and lets `move_card_with_entry` alone invalidate the mana cache
+  for moves (`35404b274`); keep this branch's invalidations for non-move
+  changes (attach, counters, `abilities_lost`, `temp_subtypes`,
+  `becomes_creature`), which alter mana output without a move.
 
 ## Delete — do not maintain
 
