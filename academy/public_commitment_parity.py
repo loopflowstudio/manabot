@@ -495,7 +495,7 @@ def _source_manifest() -> dict[str, Any]:
         "managym/src/decision.rs",
         "managym/src/possible_worlds.rs",
         "managym/src/python/bindings.rs",
-        "managym/tests/cards/tla.rs",
+        "managym/tests/cards/stx.rs",
         "scripts/verify-public-commitment-parity",
         "tests/belief/test_player.py",
         "tests/belief/test_tracker.py",

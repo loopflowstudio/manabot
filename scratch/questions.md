@@ -5,11 +5,17 @@ noted in the PR. Jack Heart's 2026-10-29 direction superseded the qualification
 and pool-membership choices that were here (history: `be2b7586b:scratch/questions.md`).
 
 - Old worlds run from their recorded git revision; no in-process rules shims.
-- T1: no w17 (main is w15; renames, basics moving to `lea.*` and support by
-  definition stay in w16). T3 later takes w17.
-- IR keeps the retired compiler's JSON shape, built in Rust on `serde_json::Value`
-  (made byte-identity provable); lowering straight to `Step` is a later option.
-- Learning tokens come from `learning.py` over that IR; schema 8 unchanged.
+- Superseded 2026-10-29 by Jack Heart's one-representation decision (w17, no
+  JSON, tokens from `Effect`): the earlier choices to stay in w16, keep the IR's
+  JSON shape and build tokens in `learning.py`.
+- 2026-10-29 (sync onto T1 `f9732c12f`): T1 and T3 each filed card tests by set.
+  This branch keeps T3's flat layout (`cards/support.rs` drivers, `rules/helpers.rs`
+  `Scenario`, `rules/tla_mechanics.rs`, `cards/{fin,mkm,tokens}.rs`) because its
+  tests carry T3's engine changes; T1's `tests/support/` families, `mod stage2 { … }`
+  grouping, `soi.rs`, `zen.rs` and `rules/engine_events.rs` hold only tests already
+  present here. Strixhaven-card tests moved to `cards/stx.rs` and coverage
+  evidence identifiers were flattened to match. Revisit if T1's grouped layout
+  should win when T1 lands.
 - 2026-10-29: the 14 setup-used incomplete TLA cards keep their definitions and
   are listed in one `tla::INCOMPLETE` const (key, missing behavior) beside
   `cards()`, rather than a field on all 269 `Card` literals. Native cards sit in

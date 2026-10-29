@@ -289,6 +289,31 @@ pub fn hand_of(s: &Scenario, player: usize) -> Vec<CardId> {
         .clone()
 }
 
+pub fn library(s: &Scenario, player: usize) -> Vec<CardId> {
+    s.game()
+        .state
+        .zones
+        .zone_cards(ZoneType::Library, PlayerId(player))
+        .clone()
+}
+
+/// The card of the spell named `name` on the stack.
+pub fn stack_spell_card(s: &Scenario, name: &str) -> CardId {
+    s.game()
+        .state
+        .stack_objects
+        .iter()
+        .find_map(|object| match object {
+            managym::state::stack_object::StackObject::Spell(spell)
+                if s.game().state.cards[spell.card].name == name =>
+            {
+                Some(spell.card)
+            }
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("no {name} spell on the stack"))
+}
+
 /// Move every card in a player's hand back to their library (test setup —
 /// removes castable noise so `PriorityCastSpell` is unambiguous).
 pub fn clear_hand(s: &mut Scenario, player: usize) {

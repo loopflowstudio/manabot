@@ -77,35 +77,35 @@ The 65 predecessor-owned cards retain their directed rule mappings:
 
 | Selected cards | Directed rule evidence |
 | --- | --- |
-| All 42 combat/Learn cards | [Elemental combat contracts](../elemental-combat.md), `managym/tests/cards/`, one file per set |
-| All 17 sacrifice/landfall cards | [Sacrifice contracts](../elemental-sacrifice.md), `managym/tests/cards/`, one file per set |
-| All six Temur cards | [Temur contracts](../elemental-temur.md), `managym/tests/cards/`, one file per set |
+| All 42 combat/Learn cards | [Elemental combat contracts](../elemental-combat.md), card tests under `managym/tests/cards/` |
+| All 17 sacrifice/landfall cards | [Sacrifice contracts](../elemental-sacrifice.md), card tests under `managym/tests/cards/` |
+| All six Temur cards | [Temur contracts](../elemental-temur.md), card tests under `managym/tests/cards/` |
 
 The other 24 selected nonbasic cards are audited on the same surviving rules
 path, rather than assuming that registration proves complete support:
 
 | Selected cards | Behavior and directed owner |
 | --- | --- |
-| Accumulate Wisdom | Bounded look/select, Lesson graveyard threshold; `cards/tla.rs` |
-| Allies at Last | Ally affinity, controlled-creature power and target legality; `cards/tla.rs` |
-| Badgermole Cub | Earthbend and tapping-for-mana bonus, excluding waterbend taps; `cards/tla.rs` |
-| Compassionate Healer | Tap-triggered life and scry; `cards/tla.rs` |
-| Water Tribe Rallier | Waterbend payment and creature selection; `cards/tla.rs` |
-| White Lotus Reinforcements | Other-Allies anthem and stacking; `cards/tla.rs` |
-| Divide by Zero; Igneous Inspiration; Pop Quiz | Printed interaction/draw followed by Learn; `cards/tla.rs` and retained Learn tests |
-| Dragonfly Swarm; Fire Nation Cadets | Noncreature/Lesson triggers, firebending and scope; `cards/tla.rs` |
-| Earth Kingdom Jailer | Exact-object exile link and return; `cards/tla.rs` |
-| Fancy Footwork; Yip Yip! | Untap, target count, temporary stats and keywords; `cards/tla.rs` |
-| Firebending Lesson | Kicker payment, two/five damage and affordability; `cards/tla.rs` |
-| Forecasting Fortune Teller | Entry Clue and sacrifice-to-draw lifecycle; `cards/tla.rs` |
-| It'll Quench Ya! | Counter-unless payment and Lesson identity; `cards/tla.rs` |
-| Invasion Reinforcements | Flash casting on the opponent's turn; `cards/tla.rs` |
-| Jeong Jeong's Deserters | Target trigger, counter and lethal SBA; `cards/tla.rs` |
-| Otter-Penguin | Second-draw payoff and turn reset; `cards/tla.rs` |
-| South Pole Voyager | Independent second-resolution draw; `cards/tla.rs` |
-| Gran-Gran | Mandatory loot on tapping and conditional noncreature generic reduction; `cards/tla.rs` |
-| Combustion Technique | Graveyard-counted damage, object-local death exile, expiry and rollback; `cards/tla.rs` |
-| Enter the Avatar State | Controlled target, Avatar type addition and all four temporary keywords; `cards/tla.rs` |
+| Accumulate Wisdom | Bounded look/select, Lesson graveyard threshold; `tests/cards/tla.rs` |
+| Allies at Last | Ally affinity, controlled-creature power and target legality; `tests/cards/tla.rs` |
+| Badgermole Cub | Earthbend and tapping-for-mana bonus, excluding waterbend taps; `tests/cards/tla.rs` |
+| Compassionate Healer | Tap-triggered life and scry; `tests/cards/tla.rs` |
+| Water Tribe Rallier | Waterbend payment and creature selection; `tests/cards/tla.rs` |
+| White Lotus Reinforcements | Other-Allies anthem and stacking; `tests/cards/tla.rs` |
+| Divide by Zero; Igneous Inspiration; Pop Quiz | Printed interaction/draw followed by Learn; `tests/cards/stx.rs` and retained Learn tests |
+| Dragonfly Swarm; Fire Nation Cadets | Noncreature/Lesson triggers, firebending and scope; `tests/cards/tla.rs` |
+| Earth Kingdom Jailer | Exact-object exile link and return; `tests/cards/tla.rs` |
+| Fancy Footwork; Yip Yip! | Untap, target count, temporary stats and keywords; `tests/cards/tla.rs` |
+| Firebending Lesson | Kicker payment, two/five damage and affordability; `tests/cards/tla.rs` |
+| Forecasting Fortune Teller | Entry Clue and sacrifice-to-draw lifecycle; `tests/cards/tla.rs` |
+| It'll Quench Ya! | Counter-unless payment and Lesson identity; `tests/cards/tla.rs` |
+| Invasion Reinforcements | Flash casting on the opponent's turn; `tests/cards/tla.rs` |
+| Jeong Jeong's Deserters | Target trigger, counter and lethal SBA; `tests/cards/tla.rs` |
+| Otter-Penguin | Second-draw payoff and turn reset; `tests/cards/tla.rs` |
+| South Pole Voyager | Independent second-resolution draw; `tests/cards/tla.rs` |
+| Gran-Gran | Mandatory loot on tapping and conditional noncreature generic reduction; `tests/cards/tla.rs` |
+| Combustion Technique | Graveyard-counted damage, object-local death exile, expiry and rollback; `tests/cards/tla.rs` |
+| Enter the Avatar State | Controlled target, Avatar type addition and all four temporary keywords; `tests/cards/tla.rs` (with its new incarnation/cleanup case) |
 
 The last three lacked compiled admission. Typed instructions now lower their
 existing mandatory discard and death-exile rules, and close Enter the Avatar

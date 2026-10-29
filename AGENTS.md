@@ -200,7 +200,8 @@ Support is definition: the world pool is every defined card from every set, and
 a card is supported unless its set file marks it incomplete (`tla::INCOMPLETE`,
 with the missing behavior). Restrict to a set with `world::set_cards` /
 `managym.set_cards`, never with per-pack membership lists. Tests never qualify
-or gate a card. Keep decklists separate from behavior. Keep long printed text in
+or gate a card. A test about one card goes in `managym/tests/cards/<set>.rs`, the
+set file of that card; engine rules stay in `tests/rules/`. Keep decklists separate from behavior. Keep long printed text in
 a local `text_box` binding so rustfmt can format the typed definition.
 Default-pack `CardDefId` order lives in `cards/content_pack.rs` (`LEGACY_ORDER`).
 Card tests mirror the set files: `managym/tests/cards/<set>.rs`, one module per
