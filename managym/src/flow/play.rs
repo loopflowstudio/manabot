@@ -119,10 +119,7 @@ impl Game {
             let count = if card_ref.cost_reduction_in_graveyard {
                 self.count_graveyard_matching(player, predicate)
             } else {
-                self.battlefield_permanents(player)
-                    .into_iter()
-                    .filter(|id| self.permanent_matches_predicate(*id, predicate))
-                    .count()
+                self.count_battlefield_matching(player, predicate)
             };
             cost = cost.reduced_generic(u8::try_from(count).unwrap_or(u8::MAX));
         }

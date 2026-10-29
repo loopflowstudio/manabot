@@ -42,11 +42,9 @@ impl Game {
                             .is_some_and(|p| p.plus1_counters > 0)
                 })
                 .count() as i32,
-            EffectValue::BattlefieldMatching { predicate } => self
-                .battlefield_permanents(controller)
-                .into_iter()
-                .filter(|id| self.permanent_matches_predicate(*id, predicate))
-                .count() as i32,
+            EffectValue::BattlefieldMatching { predicate } => {
+                self.count_battlefield_matching(controller, predicate) as i32
+            }
             EffectValue::GraveyardMatching { base, predicate } => {
                 base.saturating_add(self.count_graveyard_matching(controller, predicate) as i32)
             }

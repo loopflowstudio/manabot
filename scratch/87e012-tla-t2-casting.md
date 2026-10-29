@@ -158,12 +158,11 @@ to `cards/{arb,tla,lea}.rs`): debug `cargo test --test cards` 293,
 Earlier v5 check: continuation-input parity v1–v5, text observation,
 experience protocol, play modes, env observation and `tests/model` pytest pass;
 `tests/eval/test_batched_eval.py` fails on T1's missing w16 `WorldVersion`.
-Compress: one `priority_candidate_cards` feeds both priority scans; player
-observations read one combined regular+combat pool. Debug `--lib`/`cards`/
-`rules_tests` 121/293/131 pass, clippy clean. Authoring layer left for T1.
-Compress 2: `Game::check_activation_terms` owns the turn/life terms for
-permanent and card activations and both offer scans (card offers had skipped
-the life check). Debug `--lib`/`cards`/`rules_tests` 121/293/131, clippy clean.
-Compress 3: permanent activation offers build their `Payment` once;
-suspended-decision spaces share `select_cards`/`card_focus`. Debug
-`--lib`/`cards`/`rules_tests` 121/293/131, clippy clean.
+Compress passes (through 2026-10-29): `priority_candidate_cards` feeds both
+priority scans; one combined regular+combat restricted pool for observations;
+`Game::check_activation_terms` owns turn/life terms for permanent and card
+activations (card offers had skipped the life check); permanent offers build
+their `Payment` once; suspended-decision spaces share `select_cards`/`card_focus`;
+`count_battlefield_matching` serves affinity, activation reduction and
+`EffectValue::BattlefieldMatching`. Last: debug `--lib`/`cards`/`rules_tests`
+121/293/131 pass, clippy `--all-targets` clean. Authoring layer left for T1.

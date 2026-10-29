@@ -267,6 +267,19 @@ impl Game {
         self.invalidate_mana_cache(controller);
     }
 
+    /// Count permanents a player controls matching a predicate (e.g.
+    /// "for each Island you control").
+    pub(crate) fn count_battlefield_matching(
+        &self,
+        player: PlayerId,
+        predicate: &CardPredicate,
+    ) -> usize {
+        self.battlefield_permanents(player)
+            .into_iter()
+            .filter(|id| self.permanent_matches_predicate(*id, predicate))
+            .count()
+    }
+
     /// Count cards in a player's graveyard matching a predicate (e.g.
     /// "Lesson cards in your graveyard").
     pub(crate) fn count_graveyard_matching(

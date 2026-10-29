@@ -486,11 +486,7 @@ impl Game {
     ) {
         ability.mana_cost.purpose = purpose;
         if let Some(predicate) = &ability.cost_reduction_per {
-            let count = self
-                .battlefield_permanents(controller)
-                .into_iter()
-                .filter(|permanent| self.permanent_matches_predicate(*permanent, predicate))
-                .count();
+            let count = self.count_battlefield_matching(controller, predicate);
             ability.mana_cost = ability
                 .mana_cost
                 .reduced_generic(u8::try_from(count).unwrap_or(u8::MAX));
