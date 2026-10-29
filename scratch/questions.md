@@ -17,7 +17,7 @@ no vLLM upgrade is accepted. Native `skip_trivial` stays ON for all Qwen games.
 
 Stop admissions on failure, settle admitted games, then reconcile final receipts,
 all 100 scheduled IDs, inclusive charges and allocation deletion before another
-commitment. The plan's 06:57 UTC snapshot is interim, not settlement or replay
+commitment. The plan's 07:14 UTC snapshot is interim, not settlement or replay
 qualification. `budget-64k` remains unlaunched. These constraints are unchanged.
 
 ## Reversible choices and limits

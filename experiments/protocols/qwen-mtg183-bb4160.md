@@ -80,6 +80,11 @@ in `experiments/qwen_mtg183_vllm.py`):
   main cohort is under way):** thinking disabled with Qwen's non-thinking
   sampling (T 0.7, top-p 0.8, top-k 20, presence 1.5), 512 output tokens.
 
+The later accepted settlement ordering supersedes the original no-thinking
+timing above: final cohort receipts, all 100 scheduled IDs, inclusive charges
+and allocation deletion precede another commitment. The bounded pilot below
+is declared but unlaunched; an affordable scored floor is not yet frozen.
+
 Initial serving declaration: 32 concurrent games (`--max-num-seqs 32`) and the
 checkpoint's own MTP head as a one-token speculative draft (vLLM 0.17.1
 `{"method":"mtp","num_speculative_tokens":1}`; its rejection sampler applies the
@@ -154,7 +159,7 @@ cap $7.00. The MTP attempt is not pooled with it.
 | `dddaf3001dfa` | sampled pilot, 1 game, c=1 | $2.00 | 1 admitted/canceled, 0 completed; pod absent | $1.11978240 provider billed |
 | `139099571cbb` | budget pilot, 32 games, c=32, MTP 1 | $1.20 | 32 admitted/canceled, 0 completed; pod absent | $0.16946718 provider billed |
 | `8f68c0bc488b` | scored cohort, budget, 100 games, c=32, MTP 1 | $7.00 | 32 failed, 0 completed, 68 unattempted; pod absent | $0.18681270 provider billed |
-| `cdb0c09f90c6` | **scored cohort**, budget, 100 games, c=32, no MTP | $7.00 | running, admissions stopped; 33 complete/3 failed/13 pending in logs | $1.86418125 provider billed through whole hours at snapshot; not final |
+| `cdb0c09f90c6` | **scored cohort**, budget, 100 games, c=32, no MTP | $7.00 | running, admissions stopped; 37 complete/3 failed/9 pending in logs | $2.01204356 provider billed through whole hours at snapshot; not final |
 
 ### Retained evidence and reporting (2026-10-29)
 
@@ -173,27 +178,27 @@ targets response. Generated reasoning floor-index p50/max: priority 4,606/8,223,
 declare-blockers 5,853/5,853, targets 3,903/3,903. These distributions include
 repairs; the interrupted attempt stays in the denominator with an unknown split.
 
-The 06:57 UTC refreshed log still shows the replacement cohort running: 49
-admitted games, 33 completed, 3 failed and 13 unsettled; 51 schedule entries
+The latest retained log, at 07:14 UTC, shows the replacement cohort running: 49
+admitted games, 37 completed, 3 failed and 9 unsettled; 51 schedule entries
 remain unattempted. No admission follows the first failure. These are log
 observations, not final game/replay receipts. Etude still retains zero output
-files. The bounded 30-second refresh ended incomplete; a shorter refresh had
-hit a storage retrieval deadline. Final W/L/D, replay qualification and failure
-classification remain unavailable. The existing run continues to settle its
-admitted games under the frozen watchdog; finalization is externally blocked
-until these games settle and the outputs become available; this pass started no rental, watcher
-or controller.
+files at that read. The bounded refresh retrieved the live log without a
+retrieval error; the stream remains unfinished. Final W/L/D, replay qualification
+and failure classification remain unavailable. The frozen stopping rule allows
+admitted games to settle under the watchdog. These dated observations do not
+establish the run's later status or terminal evidence coverage.
 
-Direct RunPod reads at 06:57:37 UTC again confirmed the first three pods absent
+Direct RunPod reads for the 07:14:23 UTC snapshot again confirmed the first three pods absent
 and their bills totaling **$1.47606228455**. The current cohort pod remains
-present; its whole-hour provider bills total **$1.86418124684**, excluding the
+present; its whole-hour provider bills total **$2.01204355841**, excluding the
 current partial hour and unknown ancillary charges. The rental deadline remains
 2026-10-29 14:04 UTC. Provider totals supersede understated launcher estimates;
 frozen launcher receipts remain unchanged. The manifest-published
-`experiments/data/bb4160/accounting-20261029T065737Z.json` retains these readings,
-output counts and transfer-coverage gaps. Its `cohort_log` links the 06:57:17 UTC
-log snapshot and partitions all 100 IDs into 33 complete,
-3 failed, 13 pending and 51 unattempted entries. The admitted prefix matches
+`experiments/data/bb4160/accounting-20261029T071423Z.json` retains these readings,
+output counts and transfer-coverage gaps. Its `cohort_log` links the 07:14 UTC
+log snapshot and partitions all 100 IDs into 37 complete,
+3 failed, 9 pending and 51 unattempted entries. Games 6, 92, 85 and 25 completed
+since the retained 06:57 snapshot; admissions and failures are unchanged. The admitted prefix matches
 the retained unchanged schedule. The provider revised its earlier 05:00-hour
 bill upward; whole-hour snapshots alone are not final inclusive accounting.
 Inclusive cost and useful games/dollar remain uncertified until final settlement

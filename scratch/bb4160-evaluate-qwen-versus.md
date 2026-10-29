@@ -1,10 +1,12 @@
 # Qwen versus MTG-183 with vLLM and explicit policy versions
 
 Accepted direction: Jack Heart, 2026-10-28, in MTG-209's primary conversation.
-Reconciled 2026-10-29 against checkout `f01fd6a4554b2880b48c77b1b657ed040851313c`,
-including merged main `6d069d6e5f0755b392c796aaf6d754913e8996c2`. Etude status
-at 06:57 UTC still reports the cohort running on `cfcd947042c4`;
-the latest retained game counts and provider reads are from 06:57 UTC. Final settlement is not yet available. The original directive
+Reconciled 2026-10-29 against checkout `e2a1e3bf2fc38c574d9715ab9473848b71a7d4bc`,
+including merged main `6d069d6e5f0755b392c796aaf6d754913e8996c2`. The latest
+retained status, game counts and provider reads are from 07:14 UTC, when a live
+refresh reported the cohort running on `cfcd947042c4`. Final settlement is not
+evidenced.
+The original directive
 is preserved in this file at `02fccd93e1983319d355a1866c101d7d0e01565b`.
 
 ## Accepted outcome and constraints
@@ -59,45 +61,57 @@ repairs/fallbacks, startup-inclusive useful games/dollar, latency, token through
 whole-device memory, all attempt costs/failures and cleanup. Token throughput or
 random-fallback completions alone cannot establish useful Qwen play.
 
-## What exists
+## Implementation and ownership
 
-The schema/session/selection change replaces unbound LLM IPC on the existing
-pipe. `RuntimeIdentity.behavior_version` hashes the full pinned inference
-configuration, including limits and fallback seed, together with the reported
-runtime/template/configuration. There is no separate configuration version.
-The worker reports its runtime identity; the parent derives the version from it.
-Requests carry a unique ID and progress echoes it. The parent checks ID, version,
-configuration, runtime, decision and deadline before forwarding progress. Protocol failures
-retire the session. Selection receipts retain the version, including when nested
-in game evidence; historical receipts may omit it and retain an unknown version.
-Canonical hashing remains local to the schema, without training/native imports.
+- **Identity and admission:** `RuntimeIdentity.behavior_version` hashes the full
+  inference configuration (including limits, sampling and fallback seed) and
+  reported runtime/template. Hashing stays in the schema without training/native
+  imports. The parent derives the version from the worker's reported identity;
+  each request has a unique ID. Before forwarding progress, the session checks
+  ID, version, configuration, runtime, decision and deadline. Failure retires
+  the session; `SelectionResult.invalidate` revokes actions but retains evidence.
+  Historical receipts without versions remain unknown.
+- **Service:** the behavior hash is the sole served name, acknowledged through
+  `/v1/models` at startup and client admission and checked on completions. Base
+  argv participates in the hash; the derived name is excluded to avoid circularity.
+  `vllm-command.json` retains the full argv. Startup reads the separately pinned
+  tokenizer. This binds the supervised declaration, not measured GPU weight bytes.
+- **Frozen players:** `CheckpointOpponent` verifies bytes and world admission.
+  `GameSummary` retains `model_behavior_version` for resident sessions and
+  `opponent_sha256` before opponent admission. Hosted/random/historical model
+  versions remain absent. The campaign freezes the acknowledged server version
+  before admitting games; a receipt cannot redefine it. Changed identities or
+  played games missing either identity stop admissions and remain in results;
+  failed preparation may omit identities. There is no session/campaign resume:
+  a new Etude attempt re-runs admission from its frozen schedule.
+- **Treatments and accounting:** inference files own sampling and token limits;
+  `Treatment` adds only a declared context override. `runs()` resolves Campaign
+  fields and sizes hours/watchdog from the cap. `_ADMISSION_RESERVE_SECONDS`
+  owns the constructor/admission reserve. `tokenization` owns pinned tokenizer
+  loading, EOS and budget forcing. Seeded sampling reaches both runtimes;
+  Transformers rejects unsupported presence penalties. `_record_inference_usage`
+  counts all attempts and inserted tokens; offline reports count generated tokens
+  separately. `single_choice_decisions`, `skipped_trivial`, forced-close receipts
+  and per-attempt `QWEN`/relayed `VLLM` logs support interpretation.
+- **Processes:** bounded supervisor threads own one `ChildProcess` per game;
+  resident sessions and one-shot inference reuse that child owner without
+  re-importing parent main. Typed IPC leaves persisted evidence as JSON.
+  Sequential admission acknowledgement, scheduled-game binding, hard deadlines,
+  evidence retention and reaping remain required. One-shot loading deadlines
+  differ from resident decision deadlines. The outer watchdog process group
+  cleans descendants; interrupted admissions remain canceled, distinct from
+  failures and unattempted games. Concurrency and stop-on-failure queues reuse
+  the existing campaign. `PolicyKey` still owns structured-policy identity;
+  no training or native execution changes are introduced.
+- **Reports:** `_selection_statistics` assembles identity coverage, token counts
+  and latency distributions for games and sequences. The historical reader
+  stays independent of executable admission/native imports. Missing splits and
+  versions remain unknown; failures stay in denominators. Exactly one failed,
+  uncommitted terminal selection can exceed a historical close-error summary's
+  counter, without implying success or rewriting evidence.
 
-The vLLM server now exposes the existing behavior hash as its sole served name.
-Startup and client admission require `/v1/models` acknowledgement; requests use
-that route and completions require the same returned model. Missing/mismatched
-models and late replies fail without an action. The existing session retires on
-runtime failure. Base argv participates in the hash; the derived name is excluded
-to avoid circularity, and `vllm-command.json` retains the full launch command.
-Startup reads the separately pinned tokenizer snapshot. This binds the supervised
-service declaration, not independently measured GPU weight bytes.
-`InferenceConfig` supports explicit seeded sampling as well as greedy decoding.
-`CheckpointOpponent` retains a digest and validates admission.
-`GameSummary` now binds both players: `model_behavior_version` (resident
-sessions only; hosted/random/historical receipts leave it absent) and
-`opponent_sha256`, recorded before opponent admission so failed admissions keep
-it. The vLLM campaign freezes the cohort's model behavior version from the
-acknowledged server identity before admission and stops admission, retaining the
-game, when a receipt names a different behavior version or opponent digest.
-Played games missing either identity also stop admission; failed preparation may
-omit identities. The first game cannot establish or replace the expected version.
-There is no resume path to re-check: each campaign is one Etude attempt and
-sessions cannot resume; a new attempt re-runs admission from the frozen schedule. Native execution and training behavior are unchanged.
-
-The existing campaign already has bounded game concurrency, retained admissions,
-stop-on-failure queue handling and process cleanup. These are reuse points, not
-newly completed behavior-version features. `PolicyKey` remains the structured
-policy identity owner; no parallel trainer or mutable alias has been introduced.
-No new producer/consumer framework is justified for this frozen-player evaluation.
+These review changes do not alter the running rental's source `cfcd947042c4`.
+Native `skip_trivial` remains ON for every Qwen campaign (Jack Heart, 2026-10-28).
 
 ## Accepted world decision and execution path (Jack Heart, 2026-10-28)
 
@@ -116,41 +130,6 @@ policy-input v1, 196,482 parameters), `tests/llm` 129 passed. Launch commits
 are cherry-picked from this branch onto the campaign branch; it is never merged.
 
 Treatment and attempts live in `experiments/protocols/qwen-mtg183-bb4160.md`.
-Seeded sampling (`InferenceConfig.decoding="sampled"` + `Sampling`) reaches
-both runtimes; Transformers rejects a presence penalty rather than substituting.
-`runs()` sizes the job's hours and watchdog from its dollar cap.
-
-## Implementation ownership
-
-- `RuntimeIdentity.behavior_version` owns hashing; `tokenization` owns pinned
-  tokenizer resolution, EOS and budget forcing; `SelectionResult.invalidate`
-  revokes failed actions while retaining evidence. The acknowledged service
-  identity freezes the cohort before admission. No parallel trainer, mutable
-  policy alias or separate configuration version is needed.
-- Treatment files own token limits and sampling. `Treatment` adds only an
-  explicit context override; `runs()` resolves the saved Campaign fields.
-  `_ADMISSION_RESERVE_SECONDS` owns the shared constructor/admission reserve.
-  `_record_inference_usage` owns attempt totals and diagnostics, including
-  inserted tokens; offline reports distinguish generated tokens.
-- Bounded supervisor threads own one `ChildProcess` per admitted game. Resident
-  sessions and one-shot inference use the same child owner, avoiding parent-main
-  re-imports. Typed replies replace redundant JSON IPC; persisted evidence stays
-  JSON. Sequential admission acknowledgement, frozen scheduled-game binding,
-  hard deadlines, evidence retention and reaping remain required. The outer
-  watchdog process group owns descendant cleanup. Interrupted admissions retain
-  their IDs as canceled; failures and unattempted games stay distinct.
-- `_selection_statistics` assembles identity coverage, token counts and latency
-  distributions for both game and sequence reports. The historical reader stays
-  independent of executable admission and native imports. Missing splits/versions
-  remain unknown, and failed attempts stay in denominators. Exactly one failed,
-  uncommitted terminal selection may exceed a historical close-error summary's
-  counter; this never implies successful play or rewrites evidence.
-
-The review implementation does not change source `cfcd947042c4` on the running
-rental. One-shot loading deadlines and resident decision deadlines remain distinct.
-Native `skip_trivial` defaults ON (Jack Heart, 2026-10-28); every Qwen campaign
-already enabled it. `single_choice_decisions`, `skipped_trivial`, forced-close
-receipts and per-attempt `QWEN`/relayed `VLLM` logs support interpretation.
 
 Recovered evidence is manifest-published under `experiments/data/bb4160/`:
 the sampled pilot and all 64 budget-pilot/MTP archives. The protocol and each
@@ -166,8 +145,10 @@ qualify the pending no-MTP cohort.
 Removed: unbound IPC, redundant IPC JSON, the game supervisor's two-state loop,
 duplicate treatment-limit owners, and separate game/sequence assembly of selection
 statistics. Shared lightweight child and completion fixtures retain the surviving
-failure checks. No further deletion target is identified for settlement; frozen
-attempts, logs, receipts and artifact bytes remain evidence.
+failure checks. The duplicated implementation sections above are consolidated
+by owner so constraints need updating in only one place. No further code deletion
+target is identified; frozen attempts, logs, receipts and artifact bytes remain
+evidence.
 
 Detailed implementation history remains at
 `f01fd6a4554b2880b48c77b1b657ed040851313c:scratch/bb4160-evaluate-qwen-versus.md`;
@@ -176,61 +157,48 @@ earlier removal rationale is at
 
 ## Remaining execution and qualification
 
-1. **Scored budget cohort `cdb0c09f90c6`** remains running. The refreshed retained
-   log at 2026-10-29 06:57 UTC has 49 admissions, 33 completions, 3 failures and
-   13 unsettled games; 51 schedule entries remain unattempted. No admissions
-   follow the first failure. The new accounting snapshot partitions all 100 IDs into
-   completed, failed, pending and unattempted sets and checks the admitted
-   prefix against the retained unchanged schedule. This is interim log accounting,
-   not terminal reconciliation. Etude retained zero output files at the accounting read;
-   the status-only refresh does not establish new output coverage. The frozen
-   rule remains: stop admission on failure and settle admitted games.
-   Remaining evidence is final campaign/results receipts, all admitted game
-   archives and their replay receipts, verified and manifest-published. The
-   frozen 100-entry schedule must reconcile to completed, failed, canceled and
-   unattempted IDs with no unsettled or silently replaced entries. Logs alone
-   cannot qualify final W/L/D, replay coverage or failure causes.
-2. **Accounting and cleanup:** direct provider reads still confirm all three
-   ended pods absent and $1.47606228455 billed for them at 06:57 UTC. The current
-   pod was present; its whole-hour bills totaled $1.86418124684. Partial-hour
-   and ancillary charges are unknown. Published `accounting-20261029T065737Z.json` retains
-   provider bills, rental deadline, output count and transfer-coverage gaps,
-   alongside the associated log under `experiments/data/bb4160/`. The active
-   rental deadline is 14:04 UTC; no new rental, controller or watcher was started.
-   Final inclusive accounting and current pod deletion remain outstanding.
-   The provider revised the earlier 05:00 hour upward; retained whole-hour
-   snapshots are not immutable final bills. The $7 commitment remains held.
-   Finalization is externally blocked while the 13 admitted games are active
-   and Etude retains zero outputs. Canceling them or deleting their allocation
-   now would violate the accepted settle-admitted-games rule. No new rental,
-   controller or persistent monitor was started by this pass.
-3. **No-thinking floor:** a bounded $0.80 pilot is now constructible with
+Latest retained evidence: `experiments/data/bb4160/accounting-20261029T071423Z.json`
+and its linked log are manifest-published. At 07:14 UTC, `cdb0c09f90c6` was running:
+49 admitted, 37 complete, 3 failed, 9 unsettled and 51 unattempted. The disjoint
+sets cover all 100 scheduled IDs and the admitted prefix matches the unchanged
+schedule. Games 6, 92, 85 and 25 completed since 06:57 without new admissions or
+failures; none were admitted after the first failure. Unsettled IDs were
+13, 41, 60, 69, 70, 76, 77, 89 and 98. Etude retained zero output files at the
+read; the successful bounded log refresh establishes no terminal coverage.
+
+The same snapshot retains provider reads and transfer gaps: three ended pods
+absent, $1.47606228455 billed; current pod present, $2.01204355841 billed through
+whole hours, rental deadline 14:04 UTC. Partial-hour and ancillary charges are
+unknown. The provider revised its earlier 05:00 bill upward, so these snapshots
+are not final inclusive bills. The $7 commitment and $0.50 reserve remain held,
+leaving $1.02393771545 uncommitted.
+
+1. **Settle and reconcile before another commitment.** Obtain current status,
+   preserve stopped admissions and let admitted games settle under the frozen
+   watchdog. Recover, verify and manifest-publish final campaign/results receipts,
+   every admitted game archive and replay receipt. Check the full schedule and
+   frozen player/runtime identities; partition all 100 IDs into completed, failed,
+   canceled and unattempted with no unsettled or replaced entries. Reconcile
+   inclusive charges and verify allocation deletion. Neither logs nor a terminal
+   status establishes receipt recovery, W/L/D, replay qualification, failure
+   causes or final billing. Short early-game pilots did not qualify full-game
+   16k context; classify failures from final receipts. `budget-64k` remains
+   unlaunched and unqualified.
+2. **Qualify the no-thinking floor.** The bounded pilot is constructible with
    `runs(..., arm="nothink", games=1, concurrency=1, attempt_usd="0.80",
-   decision_seconds=300)`. It preserves 15 minutes of machine acquisition and
-   45 minutes of setup/delivery reserves, leaving 20 minutes of gameplay.
-   The deadline reaches the saved inference configuration and behavior identity.
-   Configuration checks pass, but no GPU pilot or scored floor has run. This
-   is a declared new deadline, not qualification from the thinking arm. The
-   $1.02393771545 uncommitted balance covers this pilot alone; the requested
-   settlement/billing ordering still prevents a new commitment now. After
-   settlement, qualify the pilot before freezing an affordable floor cohort;
-   final budget-limited infeasibility has not been established. The pilot cap
-   alone does not reserve a second allocation for the scored floor: its size
-   depends on final charges, measured startup/game costs and cleanup headroom.
-   An infeasibility conclusion needs reconciled bounds, incorporating any pilot
-   failure and remaining repair cost, not another deferral. The approximately ten-game
-   floor remains a goal, with no scored size accepted or frozen yet.
-4. **Late-game context fit:** short early-game pilots did not qualify full-game
-   16k context. Final receipts are still required to classify every failure.
-   `budget-64k` remains unlaunched and unqualified; it does not replace the
-   frozen cohort's evidence.
-5. **Final outcome and review:** final outcome accounting, retained replay,
-   initially valid/repair/fallback counts, per-kind generated reasoning lengths,
-   latency, throughput, whole-device memory, startup-inclusive useful
-   games/dollar and cleanup remain execution work. The report must separate
-   each treatment and preserve missing coverage as unknown.
-   Gate owns mixed-report builder/Perf and broader replay/review checks.
-   Publication remains the caller's boundary; no PR is recorded.
+   decision_seconds=300)`: 15 minutes for acquisition, 45 for setup/delivery,
+   20 for gameplay. The saved configuration and behavior hash retain the new
+   deadline. Configuration checks pass; no GPU pilot or scored floor has run.
+   After settlement, qualify answer completion, replay, context fit and measured
+   startup/game cost before freezing an affordable scored cohort. The uncommitted
+   balance covers the pilot alone, not a second allocation. Approximately ten
+   games remains the goal; no scored size is frozen. Final budget-limited
+   infeasibility needs reconciled costs, cleanup headroom and measured results,
+   including pilot failures and remaining repair costs; it is not established.
+3. **Report and publish.** Produce the outcome and metrics required above,
+   separating treatments and preserving unknown coverage. Gate owns mixed-report
+   builder/Perf and broader replay/review checks. A reviewable published change
+   remains required; no PR is recorded.
 
 ## Adopted and deferred ideas; related work
 
@@ -248,8 +216,10 @@ Main's shared evaluation/serving and collection work (MTG-193) is now present at
 open-overlap/base description is obsolete. It introduces the child-process owner
 and preserves LLM-only offline reporting through lazy evaluation projection.
 This Task adds no structured-policy training or shared serving changes.
-The last captured MTG-175 / PR #383 state was open at `d0f48ca96` on 2026-10-28;
-its current delivery was not re-queried. MTG-212 owns the separate Jev/OpenRouter
+The locally available main reference remains `6d069d6e5`; remote changes were
+not refreshed in this reconciliation. The last captured MTG-175 / PR #383 state
+was open at `d0f48ca96` on 2026-10-28; its current delivery was not re-queried.
+MTG-212 owns the separate Jev/OpenRouter
 comparison. The accepted directive includes MTG-210's relevant version-accounting
 scope here and leaves MTG-211's controlled verifiers proposal for later.
 MTG-191/192 remain canceled historical campaigns; no competing Task or execution
@@ -275,11 +245,11 @@ integration on a review branch does not change a running attempt's frozen source
 An affordable pilot configuration alone does not establish an affordable scored
 cohort; both setup windows and the remaining cleanup reserve affect that decision.
 
-Service admission and completion checks are implemented with controlled fixtures;
-the earlier mismatch fixture preserves all five IPC reply checks and wrong-admission
-coverage. The fresh-process LLM-only reader import boundary passes for sampled
-receipts. Gate still owns the actual mixed-report builder/Perf proof and broader
-native replay checks. Current cohort settlement, final inclusive billing and allocation cleanup remain
-pending; stopped-attempt provider billing and deletion are reconciled.
+Validation retained from the preceding implementation: 128 vLLM/receipt tests,
+focused Ruff/compile checks, the sampled fresh-process import boundary and the
+artifact-untracked test passed. The 07:14 audit verified snapshot digests/sizes,
+the frozen schedule, 49-game admission prefix, disjoint 100-ID accounting and
+stopped admissions. Documentation consolidation changes none of those bytes or
+behaviors; these results remain applicable without rerun.
 
-Check: `uv run --extra dev --extra artifacts --extra reports pytest tests/llm/test_llm_vllm.py tests/eval/test_inference_receipts.py -q` — 128 passed; focused Ruff/compile checks passed. Prior artifact publication checks remain applicable. Gate owns mixed-report/Perf and broader review; execution still owns final settlement, inclusive accounting, cleanup and floor qualification.
+Check: `git diff --check && lf context` — passed; scratch within 12,000 tokens/98,304 bytes. Gate owns mixed-report/Perf and broader review; execution owns settlement, inclusive billing, cleanup and floor qualification.
