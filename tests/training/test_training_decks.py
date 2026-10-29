@@ -121,7 +121,7 @@ def test_fixed_list_is_checked_upfront_and_keeps_every_source() -> None:
     assert "broken.txt:1" in str(error.value) and "broken.txt:2" in str(error.value)
     with pytest.raises(DeckImportError) as unsupported:
         TrainingDecks.from_documents(
-            documents + [parse_decklist("1 Rocky Rebuke", "unsupported.txt")], PACK
+            documents + [parse_decklist("1 Accumulate Wisdom", "unsupported.txt")], PACK
         )
     assert any(
         issue.code == "unsupported"

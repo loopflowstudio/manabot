@@ -210,12 +210,16 @@ adaptive weights or speculative curriculum framework.
   reassignment and curriculum experiments; PR389/19d240 owns shared simulation
   and evaluation APIs. MTG-177 owns target-resolution changes.
 
-Content base: PR #394 (Task 892c47) at be2b7586b, merged here at 541365b28
-(6f8b2231e) and 2f7f7c09c, replacing the 1e0d3c998 copy. #394 supplies typed Rust
-cards, one world (w16), first-printing card keys, and support defined by a set
-file's definition (no qualification gate); `content_pool` keeps its shape with
-eligibility derived from that check. Importer code relies on no hard-coded keys
-or qualification data. Generated content and world-bound evidence are #394's.
+Content base: PR #394 (Task 892c47) at 86ebe9ccf, merged here on 2026-10-28
+after the earlier be2b7586b merges (541365b28, 2f7f7c09c), replacing the
+1e0d3c998 copy. 2f7f7c09c carried only be2b7586b; the first-printing card keys
+and qualification-gate removal arrived with 86ebe9ccf. #394 supplies typed Rust
+cards, one world (w16), first-printing keys (`lea.forest`) and support defined by
+a set file's definition; defined-but-incomplete TLA cards are listed in
+`tla::INCOMPLETE` and are unsupported, and undefined cards are unknown, not
+unsupported pool rows. `content_pool` keeps its shape. Importer code relies on no
+hard-coded keys or qualification data; this branch's unsupported-card fixtures
+use Accumulate Wisdom. Generated content and world-bound evidence are #394's.
 
 Training overlap reviewed at PR383 d0f48ca96 and PR389 c85470a59; scoped coordination
 is retained in Task 1d7884 comment 2c523295-b690-4e45-a989-1dd37b91cabb. Adaptive
@@ -263,17 +267,15 @@ failure/capture records; unseen same-world deck at a later root; invalid
 generated deck rejected before play; world-only export/load/inspect. Bounded
 fixtures, actual collector path, no weight updates.
 
-Remaining: world-bound evidence for w16 belongs to #394 and is red on its own
-CI at be2b7586b — `semantic_conformance_tests` (w15 conformance root vs w16;
-`ur-vs-gw-5eed` digest drift), `test_elemental_world` (programs 8 vs 7),
-`test_compiler` content-pack bindings, `test_rules_inventory`, and the w15 Academy
-choice-navigation/Learn fixtures (local `test_choice_navigation` 7,
-`test_learn_setup` 5; #394's Academy UI e2e fails on the same fixtures). Not
-regenerated here: #394 still has uncommitted world changes (qualification
-removal), so w16 evidence generated now would duplicate its owner and go stale.
-Integrate #394's next head, then publish #395 with base = #394's branch.
-Run→checkpoint linkage is existing TrainingRun records, not re-proved by
-executing a regime here.
+Remaining: world-bound evidence for w16 belongs to #394 and is unregenerated at
+86ebe9ccf — locally `test_elemental_world` (schema 8 vs 7) and the
+`test_authored_match_authority` release-stack receipt (byte-identical to #394's
+test) fail; earlier runs also showed `semantic_conformance_tests`, `test_compiler`,
+`test_rules_inventory` and the w15 Academy choice-navigation/Learn fixtures. Not
+regenerated here, to avoid duplicating #394's owner. Publish #395 with base =
+#394's branch (it currently targets main) once #394's evidence is regenerated or
+its head moves again. Run→checkpoint linkage is existing TrainingRun records,
+not re-proved by executing a regime here.
 
 ## Delete — do not maintain
 
@@ -329,12 +331,11 @@ The manifest references `.lf/wave/engine/GOAL.md` and `MEMORY.md`, but neither
 exists in this checkout. The supplied Task, accepted design and dated Steers
 provide the implementation scope; Wave context was not reconstructed.
 
-Check — 2026-10-28 at 2f7f7c09c (+ wording): debug `cargo test --no-fail-fast`
-598 passed, 2 failed (#394 conformance above); affected Python set (decklist,
-Academy decklist/catalog/advice, training decks/self-play/Elemental uniform/
-matchups, mirror admission, world, current content, env match, boundaries, and the
-CLAUDE.md world-change set) 191 passed, 1 failed (`test_elemental_world`, #394);
-this branch fixes #394's `test_monitor_evaluation` failures.
+Check — 2026-10-28 after merging 86ebe9ccf: debug `cargo test --lib` deck_admission/
+training_decks/content/pool 11 passed; branch-changed Python tests plus boundaries,
+current content and the CLAUDE.md world-change set 189 passed, 2 failed (#394's
+`test_elemental_world`, `test_authored_match_authority`); training decks 8 passed
+after the fixture fix. Full debug cargo suite deferred to gate.
 
 Compress (2026-10-28): native `deck_admission::development_rejection` is the one
 "player deck under development-v1" rejection, shared by game creation and

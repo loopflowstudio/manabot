@@ -2,16 +2,32 @@
 //! Edit these typed definitions; `semantic::compile` lowers them in process.
 use crate::cards::authoring::{
     Card, CardType, Characteristics, Color, Condition, Controller, Cost, Destination, Direction,
-    Duration, Event, Keyword, Op, Payment, Predicate, PrintedPower, Program, ProgramKind, Quantity,
-    Remainder, RemainderOrder, Sacrifice, Selector, Subject, Target, Trigger, Until, Zone,
+    Duration, Event, Incomplete, Keyword, Op, Payment, Predicate, PrintedPower, Program,
+    ProgramKind, Quantity, Remainder, RemainderOrder, Sacrifice, Selector, Subject, Target,
+    Trigger, Until, Zone,
 };
+/// Defined cards whose behavior is incomplete. The fixed setups that name them
+/// still run them; the world does not support them for deck entry until their
+/// batch completes the missing behavior.
+pub(super) const INCOMPLETE: &[Incomplete] = &[
+    ("tla.accumulate_wisdom", "Controller must order the library remainder (CR 401.4); it is randomized"),
+    ("tla.badgermole_cub", "Unreviewed until T2: ETB earthbend; creature mana taps add green; waterbend taps do not produce mana."),
+    ("tla.cat_gator", "Any target must include planeswalkers and battles (CR 115.4)"),
+    ("tla.dai_li_agents", "Unreviewed until T2: Two earthbend clauses may share target; attack drain counts creatures with counters."),
+    ("tla.dragonfly_swarm", "Unreviewed until T4: Flying; spell-and-ability ward; graveyard CDA power; conditional death draw."),
+    ("tla.great_divide_guide", "Unreviewed until T3: Continuous any-color mana grant to lands and Allies; source removal and creature sickness."),
+    ("tla.haru_hidden_talent", "Unreviewed until T2: Another Ally entry earthbend; repeated targets and independent delayed returns."),
+    ("tla.hermitic_herbalist", "Unreviewed until T2: Any-color one mana or all unordered two-color combinations restricted to Lesson casting."),
+    ("tla.iroh_grand_lotus", "Unreviewed until T2: Firebending; own-turn graveyard flashback grants differing by Lesson type; retention after source leaves."),
+    ("tla.lightning_strike", "Any target must include planeswalkers and battles (CR 115.4)"),
+    ("tla.ran_and_shaw", "Unreviewed until T5: Flying/firebending; cast-only conditional ETB nonlegendary self copy; Dragon anthem activation."),
+    ("tla.suki_kyoshi_warrior", "CDA power must apply outside the battlefield (CR 604.3)"),
+    ("tla.toph_the_blind_bandit", "Unreviewed until T2: ETB earthbend; CDA power counts counters on controlled lands."),
+    ("tla.water_tribe_rallier", "Library power filter must evaluate CDAs, such as Suki's (CR 604.3)"),
+];
+
 pub(super) fn cards() -> Vec<Card> {
     vec![
-        plains(),
-        swamp(),
-        forest(),
-        island(),
-        mountain(),
         abandon_attachments(),
         azula_always_lies(),
         boomerang_basics(),
@@ -3670,62 +3686,6 @@ fn draw_land(
                 ..Default::default()
             }),
         ],
-        registry_name,
-        text_box,
-    }
-}
-
-fn plains() -> Card {
-    let text_box = "({T}: Add {W}.)";
-
-    basic_land("tla.plains", "Plains", text_box, "W")
-}
-
-fn swamp() -> Card {
-    let text_box = "({T}: Add {B}.)";
-
-    basic_land("tla.swamp", "Swamp", text_box, "B")
-}
-
-fn forest() -> Card {
-    let text_box = "({T}: Add {G}.)";
-
-    basic_land("tla.forest", "Forest", text_box, "G")
-}
-
-fn island() -> Card {
-    let text_box = "({T}: Add {U}.)";
-
-    basic_land("tla.island", "Island", text_box, "U")
-}
-
-fn mountain() -> Card {
-    let text_box = "({T}: Add {R}.)";
-
-    basic_land("tla.mountain", "Mountain", text_box, "R")
-}
-
-fn basic_land(
-    key: &'static str,
-    registry_name: &'static str,
-    text_box: &'static str,
-    mana: &'static str,
-) -> Card {
-    Card {
-        characteristics: Characteristics {
-            subtypes: Some(vec![registry_name]),
-            types: vec![CardType::Land],
-            keywords: Some(vec![]),
-            token: Some(false),
-            supertypes: Some(vec!["basic"]),
-            ..Default::default()
-        },
-        key,
-        programs: vec![Program::new(
-            "p0",
-            ProgramKind::Mana,
-            vec![Op::AddMana { mana, until: None }],
-        )],
         registry_name,
         text_box,
     }

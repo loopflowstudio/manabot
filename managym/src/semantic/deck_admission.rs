@@ -169,7 +169,7 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
-        let unsupported = BTreeMap::from([("Airbending Lesson".into(), 1)]);
+        let unsupported = BTreeMap::from([("Accumulate Wisdom".into(), 1)]);
         let issues = admit_deck("tla-pool-v1", &main, &unsupported, DEVELOPMENT_RULESET).unwrap();
         assert!(issues
             .iter()

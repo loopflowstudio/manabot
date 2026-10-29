@@ -16,16 +16,17 @@ and convergence status are in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
 1. **`src/agent/`**: RL-facing API (`Env`, action spaces, observations)
 2. **`src/flow/`**: Game progression (turns, priority, combat)
 3. **`src/state/`**: Core game state (cards, players, zones, mana)
-4. **`src/cardsets/`**: Card set files (one per printed set); **`src/cards/`**: the card language, `ContentPack`, remaining native cards
+4. **`src/cardsets/`**: Card set files (one per printed set); **`src/cards/`**: the card language, `ContentPack`, rules fixtures
 5. **`src/infra/`**: Logging and profiler infrastructure
 6. **`src/python/`**: PyO3 bindings and Rust→Python conversions
 
-Cards are typed functions in their set's file under `src/cardsets/`; symbolic
-authoring types live in `src/cards/authoring.rs`. `src/world.rs` owns
-`WORLD_VERSION` and the card/deck support check. `src/semantic/compile.rs`
-compiles them in process into the IR the runtime lowers and the learning projection
-reads (`managym.semantic_ir_json`); nothing is generated on disk. Keep decklist data and independent qualification evidence separate
-from card behavior; see [the authoring contract](../content/semantic/README.md).
+Cards are typed functions in the file of their first printing's set under
+`src/cardsets/`; symbolic authoring types live in `src/cards/authoring.rs`.
+`src/world.rs` owns `WORLD_VERSION`, the card/deck support check (defined and
+not marked incomplete) and the set filter. `src/semantic/compile.rs` compiles
+them in process into the IR the runtime lowers and the learning projection reads
+(`managym.semantic_ir_json`); nothing is generated on disk. Keep decklist data
+separate from card behavior; see [the authoring contract](../content/semantic/README.md).
 
 Dependencies flow: python → agent → flow → state/infra.
 

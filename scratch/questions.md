@@ -41,4 +41,4 @@
 
 - 2026-10-28: rebuilt on PR #394 (be2b7586b, typed Rust cards, one world,
   first-printing card keys, no qualification gate) per Jack Heart, replacing the
-  1e0d3c998 content copy. #394's notes remain at be2b7586b:scratch/questions.md.
+  1e0d3c998 content copy. #394's notes remain at 86ebe9ccf:scratch/questions.md.

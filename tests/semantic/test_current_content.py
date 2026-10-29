@@ -1,6 +1,6 @@
-"""Current cards compile natively; qualifications cannot survive clause edits.
+"""Current cards compile natively and the world pool reports their support.
 
-Clause-edit and missing-token rejection are native tests in
+Unresolved-reference and missing-token rejection are native tests in
 `managym/src/semantic/compile.rs`; these checks cover the Python consumers.
 """
 
@@ -64,23 +64,42 @@ def test_unknown_pack_has_no_current_ir() -> None:
         "Water Tribe Rallier",
     ],
 )
-def test_cards_with_unresolved_clause_prerequisites_stay_out_of_pool(name: str) -> None:
+def test_cards_marked_incomplete_are_unsupported(name: str) -> None:
     pool = managym.content_pool("tla-pool-v1")
     entry = next(row for row in pool["definitions"] if row["registry_name"] == name)
-    assert entry["card_def_id"] is not None  # Preserved authored availability.
+    assert entry["card_def_id"] is not None  # Fixed setups still run them.
     assert entry["eligibility"] == "unsupported"
     assert entry["reason"]
 
 
 @pytest.mark.parametrize(
-    "name", ["Wartime Protestors", "Master Piandao", "Gran-Gran", "Allies at Last"]
+    "name",
+    [
+        "Wartime Protestors",
+        "Master Piandao",
+        "Gran-Gran",
+        "Allies at Last",
+        "Forest",
+        "Pop Quiz",
+    ],
 )
-def test_reviewed_cards_are_eligible_in_the_native_pool(name: str) -> None:
+def test_defined_cards_are_eligible_in_the_world_pool(name: str) -> None:
     pool = managym.content_pool("tla-pool-v1")
     entry = next(row for row in pool["definitions"] if row["registry_name"] == name)
     assert entry["card_def_id"] is not None
     assert entry["eligibility"] == "eligible"
     assert entry["reason"] is None
+
+
+def test_set_filter_narrows_the_world_pool_by_key_prefix() -> None:
+    tla = {row["registry_name"] for row in managym.set_cards(["tla"])}
+    with_basics = {row["registry_name"] for row in managym.set_cards(["tla", "lea"])}
+    assert "Avatar Enthusiasts" in tla and "Forest" not in tla
+    assert "Forest" in with_basics and "Pop Quiz" not in with_basics
+    assert all(
+        row["semantic_key"].startswith(("tla.", "lea."))
+        for row in managym.set_cards(["tla", "lea"])
+    )
 
 
 def test_current_projections_preserve_every_historical_setup_count() -> None:
