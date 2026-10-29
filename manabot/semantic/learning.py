@@ -574,6 +574,7 @@ class _TokenBuilder:
                 "condition": "condition",
                 "if": "condition",
                 "predicate": "predicate",
+                "milled_any": "predicate",
                 "predicates": "predicate",
                 "selector": "selector",
                 "subject": "subject",

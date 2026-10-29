@@ -380,7 +380,7 @@ pub enum Step {
     },
     LookAndSelect {
         reveal: bool,
-        look: i64,
+        look: Amount,
         min_select: i64,
         max_select: i64,
         destination: String,
@@ -479,6 +479,8 @@ pub enum Step {
         count: usize,
         predicate: Predicate,
         if_declined: Vec<Step>,
+        milled_any: Option<Predicate>,
+        then: Vec<Step>,
     },
     DrainLifeValue {
         amount: ValueExpression,
@@ -941,7 +943,7 @@ impl<'a> BoundPack<'a> {
             }),
             Step::LookAndSelect {
                 reveal: _,
-                look,
+                look: Amount::Fixed(look),
                 min_select,
                 max_select,
                 destination,
@@ -952,6 +954,7 @@ impl<'a> BoundPack<'a> {
                 max_select: *max_select,
                 destination: destination.clone(),
             }),
+            Step::LookAndSelect { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
             Step::Branch {
                 condition,
                 then,
@@ -1238,7 +1241,7 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         },
         Opcode::LookAndSelect => Step::LookAndSelect {
             reveal: opt_bool_field(value, "reveal")?.unwrap_or(false),
-            look: i64_field(value, "look")?,
+            look: Amount::parse(field(value, "look")?)?,
             min_select: i64_field(value, "min_select")?,
             max_select: i64_field(value, "max_select")?,
             destination: str_field(value, "destination")?.to_owned(),
@@ -1381,6 +1384,11 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
             count: usize_field(value, "count")?,
             predicate: parse_predicate(object_field(value, "predicate")?)?,
             if_declined: parse_steps(array_field(value, "if_declined")?)?,
+            milled_any: value.get("milled_any").map(parse_predicate).transpose()?,
+            then: match value.get("then") {
+                None => Vec::new(),
+                Some(_) => parse_steps(array_field(value, "then")?)?,
+            },
         },
         Opcode::DrainLifeValue => Step::DrainLifeValue {
             amount: ValueExpression::parse(object_field(value, "amount")?)?,

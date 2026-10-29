@@ -2350,5 +2350,44 @@
       "R",
       "U"
     ]
+  },
+  "Seismic Sense": {
+    "name": "Seismic Sense",
+    "mana_cost": "{G}",
+    "type_line": "Sorcery — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Look at the top X cards of your library, where X is the number of lands you control. You may reveal a creature or land card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Aang's Journey": {
+    "name": "Aang's Journey",
+    "mana_cost": "{2}",
+    "type_line": "Sorcery — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Kicker"
+    ],
+    "oracle_text": "Kicker {2} (You may pay an additional {2} as you cast this spell.)\nSearch your library for a basic land card. If this spell was kicked, instead search your library for a basic land card and a Shrine card. Reveal those cards, put them into your hand, then shuffle.\nYou gain 2 life.",
+    "colors": []
+  },
+  "Sparring Dummy": {
+    "name": "Sparring Dummy",
+    "mana_cost": "{1}{G}",
+    "type_line": "Artifact Creature — Scarecrow",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [
+      "Mill",
+      "Defender"
+    ],
+    "oracle_text": "Defender\n{T}: Mill a card. You may put a land card milled this way into your hand. You gain 2 life if a Lesson card is milled this way. (To mill a card, put the top card of your library into your graveyard.)",
+    "colors": [
+      "G"
+    ]
   }
 }

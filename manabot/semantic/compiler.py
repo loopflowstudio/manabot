@@ -257,7 +257,7 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "exile_with_controller_token": ({"target", "definition_ref"}, set()),
     "damage_opponent_creatures": ({"amount"}, set()),
     "mill_cards": ({"count"}, set()),
-    "mill_and_select": ({"count", "predicate", "if_declined"}, set()),
+    "mill_and_select": ({"count", "predicate", "if_declined"}, {"milled_any", "then"}),
     "drain_life_value": ({"amount"}, set()),
     "counter_spell": ({"target"}, set()),
     "cant_be_blocked_target": ({"target"}, set()),

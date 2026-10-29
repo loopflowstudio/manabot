@@ -12,8 +12,8 @@ use crate::{
     cards::content_pack::{CompiledSemanticManifest, ContentPack},
     state::{
         ability::{
-            Ability, Effect, EffectValue, StaticCondition, TargetRequirement, TargetSpec,
-            TriggerCondition, TriggerSubject,
+            Ability, Effect, EffectValue, MilledBonus, StaticCondition, TargetRequirement,
+            TargetSpec, TriggerCondition, TriggerSubject,
         },
         card::{
             ActivatedAbilityDefinition, ActivationZone, CardDefinition, CardType, CardTypes,
@@ -983,7 +983,7 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             predicate,
         } if destination == "hand" => Effect::LookAndSelect {
             reveal: *reveal,
-            look: usize_value(program, *look, "look count")?,
+            look: amount_value(program, look, "look count")?,
             min_select: usize_value(program, *min_select, "minimum selection")?,
             max_select: usize_value(program, *max_select, "maximum selection")?,
             predicate: predicate_card(predicate)?,
@@ -1166,10 +1166,19 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             count,
             predicate,
             if_declined,
+            milled_any,
+            then,
         } => Effect::MillAndSelect {
             count: *count,
             predicate: predicate_card(predicate)?,
             if_declined: lower_steps(pack, program, if_declined)?,
+            if_milled: match milled_any {
+                None => None,
+                Some(predicate) => Some(MilledBonus {
+                    predicate: predicate_card(predicate)?,
+                    effects: lower_steps(pack, program, then)?,
+                }),
+            },
         },
         Step::DrainLifeValue { amount } => Effect::DrainLifeValue {
             amount: amount.lower()?,

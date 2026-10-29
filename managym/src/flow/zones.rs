@@ -56,8 +56,9 @@ impl Game {
             subtype: subtype.clone(),
             ..Default::default()
         };
-        // Landcycling finds any card of the subtype ("a Plains card").
-        if !to_hand {
+        // Landcycling finds any card of the subtype ("a Plains card"); a
+        // search to hand without a subtype is for "a basic land card".
+        if !to_hand || subtype.is_none() {
             predicate.card_type = Some(crate::state::card::CardType::Land);
             predicate.supertype = Some("basic".into());
         }

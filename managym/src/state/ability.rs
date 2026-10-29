@@ -184,6 +184,8 @@ pub enum Effect {
         count: usize,
         predicate: CardPredicate,
         if_declined: Vec<Effect>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        if_milled: Option<MilledBonus>,
     },
     DrainLifeValue {
         amount: EffectValue,
@@ -374,7 +376,7 @@ pub enum Effect {
     LookAndSelect {
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         reveal: bool,
-        look: usize,
+        look: EffectValue,
         min_select: usize,
         max_select: usize,
         predicate: CardPredicate,
@@ -481,6 +483,13 @@ pub enum Effect {
         predicate: CardPredicate,
         other: bool,
     },
+}
+
+/// Effects that run when any card milled by the same instruction matches.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct MilledBonus {
+    pub predicate: CardPredicate,
+    pub effects: Vec<Effect>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]

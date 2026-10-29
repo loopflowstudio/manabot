@@ -156,6 +156,9 @@ pub(super) fn cards() -> Vec<Card> {
         north_pole_patrol(),
         zuko_s_conviction(),
         sokka_bold_boomeranger(),
+        seismic_sense(),
+        aang_s_journey(),
+        sparring_dummy(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -867,7 +870,7 @@ fn master_piandao() -> Card {
             ProgramKind::Triggered,
             vec![Op::LookAndSelect {
                 destination: Destination::Hand,
-                look: 4,
+                look: Count::Fixed(4),
                 max_select: 1,
                 min_select: 0,
                 predicate: Predicate::SubtypesAny {
@@ -1100,6 +1103,8 @@ fn ostrich_horse() -> Card {
                 predicate: Predicate::CardType {
                     value: CardType::Land,
                 },
+                milled_any: None,
+                then: Vec::new(),
             }],
         )
         .trigger(Trigger::new(Event::EntersBattlefield, Subject::This))],
@@ -2087,7 +2092,7 @@ fn accumulate_wisdom() -> Card {
                 },
                 otherwise: vec![Op::LookAndSelect {
                     destination: Destination::Hand,
-                    look: 3,
+                    look: Count::Fixed(3),
                     max_select: 1,
                     min_select: 1,
                     predicate: Predicate::Any,
@@ -3418,7 +3423,7 @@ fn water_tribe_rallier() -> Card {
             ProgramKind::Activated,
             vec![Op::LookAndSelect {
                 destination: Destination::Hand,
-                look: 4,
+                look: Count::Fixed(4),
                 max_select: 1,
                 min_select: 0,
                 predicate: Predicate::All {
@@ -4898,6 +4903,123 @@ fn sokka_bold_boomeranger() -> Card {
             }),
         ],
         registry_name: "Sokka, Bold Boomeranger",
+        text_box,
+    }
+}
+
+fn seismic_sense() -> Card {
+    let text_box = "Look at the top X cards of your library, where X is the number of lands you control. You may reveal a creature or land card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{G}"),
+            subtypes: Some(vec!["Lesson"]),
+            types: vec![CardType::Sorcery],
+            ..Default::default()
+        },
+        key: "tla.seismic_sense",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::LookAndSelect {
+                destination: Destination::Hand,
+                look: Count::Of(Quantity::BattlefieldMatching {
+                    predicate: Predicate::CardType {
+                        value: CardType::Land,
+                    },
+                }),
+                max_select: 1,
+                min_select: 0,
+                predicate: Predicate::TypesAny {
+                    values: vec![CardType::Creature, CardType::Land],
+                },
+                reveal: Some(true),
+                remainder: Some(Remainder::LibraryBottom),
+                remainder_order: Some(RemainderOrder::Random),
+            }],
+        )
+        .cost(Cost::mana("{G}"))],
+        registry_name: "Seismic Sense",
+        text_box,
+    }
+}
+
+fn aang_s_journey() -> Card {
+    let text_box = "Kicker {2} (You may pay an additional {2} as you cast this spell.)\nSearch your library for a basic land card. If this spell was kicked, instead search your library for a basic land card and a Shrine card. Reveal those cards, put them into your hand, then shuffle.\nYou gain 2 life.";
+    let basic = || Op::SearchBasicLand {
+        destination: Some(Destination::Hand),
+        subtype: None,
+    };
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}"),
+            subtypes: Some(vec!["Lesson"]),
+            types: vec![CardType::Sorcery],
+            ..Default::default()
+        },
+        key: "tla.aang_s_journey",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![
+                Op::Branch {
+                    condition: Condition::Kicked,
+                    otherwise: vec![basic()],
+                    then: vec![
+                        basic(),
+                        Op::SearchBasicLand {
+                            destination: Some(Destination::Hand),
+                            subtype: Some("Shrine"),
+                        },
+                    ],
+                },
+                Op::GainLife { amount: 2 },
+            ],
+        )
+        .cost(Cost {
+            mana: Some("{2}"),
+            kicker: Some("{2}"),
+            ..Default::default()
+        })],
+        registry_name: "Aang's Journey",
+        text_box,
+    }
+}
+
+fn sparring_dummy() -> Card {
+    let text_box = "Defender\n{T}: Mill a card. You may put a land card milled this way into your hand. You gain 2 life if a Lesson card is milled this way. (To mill a card, put the top card of your library into your graveyard.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{G}"),
+            subtypes: Some(vec!["Scarecrow"]),
+            types: vec![CardType::Artifact, CardType::Creature],
+            keywords: Some(vec![Keyword::Defender]),
+            power: Some(PrintedPower::Fixed(1)),
+            toughness: Some(3),
+            ..Default::default()
+        },
+        key: "tla.sparring_dummy",
+        programs: vec![Program::new(
+            "train",
+            ProgramKind::Activated,
+            vec![Op::MillAndSelect {
+                count: 1,
+                if_declined: Vec::new(),
+                predicate: Predicate::CardType {
+                    value: CardType::Land,
+                },
+                milled_any: Some(Predicate::Subtype { value: "Lesson" }),
+                then: vec![Op::GainLife { amount: 2 }],
+            }],
+        )
+        .cost(Cost {
+            mana: Some("0"),
+            tap_source: Some(true),
+            ..Default::default()
+        })],
+        registry_name: "Sparring Dummy",
         text_box,
     }
 }

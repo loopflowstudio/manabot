@@ -332,10 +332,18 @@ impl Game {
                 count,
                 predicate,
                 if_declined,
+                if_milled,
             } => {
                 let cards = self.library_top(frame.controller, *count);
                 for card in &cards {
                     self.move_card(*card, ZoneType::Graveyard);
+                }
+                if let Some(bonus) = if_milled.as_ref().filter(|bonus| {
+                    cards
+                        .iter()
+                        .any(|card| bonus.predicate.matches_card(&self.state.cards[*card]))
+                }) {
+                    frame.prepend_effects(bonus.effects.iter().cloned());
                 }
                 let cards: Vec<_> = cards
                     .into_iter()
@@ -795,7 +803,8 @@ impl Game {
                 max_select,
                 predicate,
             } => {
-                let looked = self.library_top(frame.controller, *look);
+                let look = self.effect_value(look, frame.controller).max(0) as usize;
+                let looked = self.library_top(frame.controller, look);
                 if looked.is_empty() {
                     return None;
                 }

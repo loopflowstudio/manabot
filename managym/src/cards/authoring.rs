@@ -352,7 +352,8 @@ pub enum Op {
     },
     /// Without a destination, a basic land onto the battlefield tapped. With
     /// `Hand`, any card of `subtype` is revealed and put into hand
-    /// (landcycling: "search your library for a Plains card").
+    /// (landcycling: "search your library for a Plains card"), or a basic
+    /// land card when `subtype` is absent.
     SearchBasicLand {
         #[serde(skip_serializing_if = "Option::is_none")]
         destination: Option<Destination>,
@@ -402,7 +403,7 @@ pub enum Op {
     },
     LookAndSelect {
         destination: Destination,
-        look: i32,
+        look: Count,
         max_select: i32,
         min_select: i32,
         predicate: Predicate,
@@ -424,10 +425,17 @@ pub enum Op {
     Destroy {
         target: &'static str,
     },
+    /// Mill, then you may put a milled card matching `predicate` into hand.
+    /// `then` runs if any milled card matches `milled_any` ("You gain 2 life
+    /// if a Lesson card is milled this way").
     MillAndSelect {
         count: i32,
         if_declined: Vec<Op>,
         predicate: Predicate,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        milled_any: Option<Predicate>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        then: Vec<Op>,
     },
     CounterSpell {
         target: &'static str,
@@ -726,6 +734,7 @@ pub enum CardType {
 #[serde(rename_all = "snake_case")]
 pub enum Keyword {
     Deathtouch,
+    Defender,
     FirstStrike,
     Flash,
     Flying,

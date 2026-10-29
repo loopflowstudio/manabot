@@ -83,7 +83,11 @@ fn cr_603_5_optional_draw_is_chosen_at_resolution() {
     s.advance_to_active_step(0, StepKind::Main);
     let source = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let card = s.game().state.permanents[source].as_ref().unwrap().card;
-    queue_effects(&mut s, card, vec![Effect::OptionalDiscardDraw { count: 1, up_to: 1 }]);
+    queue_effects(
+        &mut s,
+        card,
+        vec![Effect::OptionalDiscardDraw { count: 1, up_to: 1 }],
+    );
     let hand = s.zone_size(0, ZoneType::Hand);
     s.pass_priority();
     assert_eq!(s.game().state.stack_objects.len(), 1);

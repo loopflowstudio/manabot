@@ -1432,3 +1432,131 @@ fn sokka_discards_up_to_two_then_draws_that_many_and_grows_on_artifacts_and_less
     settle(&mut s);
     assert_eq!(hand(&s).len(), 1);
 }
+
+/// Seismic Sense looks at one card per land you control (an earthbent land
+/// still counts; opponents' lands do not) and may take a creature or land.
+#[test]
+fn seismic_sense_looks_at_cards_equal_to_your_lands_and_takes_a_creature_or_land() {
+    let mut s = setup(&["Seismic Sense", "Gray Ogre", "Lightning Strike"]);
+    for _ in 0..3 {
+        s.force_permanent_on_battlefield(0, "Forest");
+    }
+    s.force_permanent_on_battlefield(1, "Forest");
+    let ogre = library_card(&s, 0, "Gray Ogre");
+    let strike = library_card(&s, 0, "Lightning Strike");
+    let below = library_card(&s, 0, "Island");
+    put_on_top(&mut s, below);
+    put_on_top(&mut s, ogre);
+    put_on_top(&mut s, strike);
+    cast(&mut s, "Seismic Sense");
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let selectable: Vec<_> = s
+        .action_space()
+        .actions
+        .iter()
+        .filter_map(|a| match a {
+            Action::SelectCard { card, .. } => Some(*card),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        selectable.len(),
+        2,
+        "the Ogre and the Island, not the Strike"
+    );
+    assert!(selectable.contains(&ogre) && selectable.contains(&below));
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { card, .. } if *card == ogre),
+    );
+    settle(&mut s);
+    assert_eq!(zone_of(&s, ogre), Some(ZoneType::Hand));
+    let library = s
+        .game()
+        .state
+        .zones
+        .zone_cards(ZoneType::Library, PlayerId(0))
+        .to_vec();
+    assert!(library[..2].contains(&strike) && library[..2].contains(&below));
+}
+
+fn offered_cards(s: &Scenario) -> Vec<CardId> {
+    s.action_space()
+        .actions
+        .iter()
+        .filter_map(|a| match a {
+            Action::SelectCard { card, .. } => Some(*card),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Aang's Journey finds only a basic land, reveals it into hand and gains 2
+/// life; kicked, it also searches for a Shrine card (none in this library, so
+/// that search fails to find).
+#[test]
+fn aangs_journey_finds_a_basic_land_and_kicked_also_a_shrine() {
+    for kicked in [false, true] {
+        let mut s = setup(&["Aang's Journey", "Gray Ogre"]);
+        cast(&mut s, "Aang's Journey");
+        assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
+        if kicked {
+            choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+        } else {
+            choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+        }
+        pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+        let offered = offered_cards(&s);
+        assert_eq!(offered.len(), 80, "every basic land, no Gray Ogre");
+        assert!(offered
+            .iter()
+            .all(|c| s.game().state.cards[*c].types.is_land()));
+        choose(
+            &mut s,
+            |a| matches!(a, Action::SelectCard { card, .. } if *card == offered[0]),
+        );
+        if kicked {
+            assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
+            assert!(offered_cards(&s).is_empty());
+        }
+        settle(&mut s);
+        assert_eq!(zone_of(&s, offered[0]), Some(ZoneType::Hand));
+        s.assert_life(0, 22);
+    }
+}
+
+/// Sparring Dummy cannot attack. Its {T} mills one card: a milled land may go
+/// to hand, and a milled Lesson gains 2 life.
+#[test]
+fn sparring_dummy_mills_a_land_to_hand_or_a_lesson_for_two_life() {
+    let mut s = setup(&["Sparring Dummy", "Earthbending Lesson", "Gray Ogre"]);
+    let dummy = s.force_permanent_on_battlefield(0, "Sparring Dummy");
+    ready(&mut s, dummy);
+    let card = s.game().state.permanents[dummy].as_ref().unwrap().card;
+    assert!(s.game().state.cards[card].keywords.defender);
+
+    let forest = library_card(&s, 0, "Forest");
+    put_on_top(&mut s, forest);
+    activate(&mut s, dummy, 0);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { card, .. } if *card == forest),
+    );
+    settle(&mut s);
+    assert_eq!(zone_of(&s, forest), Some(ZoneType::Hand));
+    s.assert_life(0, 20);
+
+    for (name, life) in [("Earthbending Lesson", 22), ("Gray Ogre", 22)] {
+        s.game_mut().state.permanents[dummy]
+            .as_mut()
+            .unwrap()
+            .tapped = false;
+        let milled = library_card(&s, 0, name);
+        put_on_top(&mut s, milled);
+        activate(&mut s, dummy, 0);
+        settle(&mut s);
+        assert_eq!(zone_of(&s, milled), Some(ZoneType::Graveyard));
+        s.assert_life(0, life);
+    }
+}

@@ -377,7 +377,13 @@ fn effect_description(effect: &Effect) -> Option<String> {
         ReturnGraveyardTarget { target, tapped_onto_battlefield: false } => format!("Return {} to your hand",target_description(target)),
         ReturnGraveyardTarget { target, tapped_onto_battlefield: true } => format!("Put {} onto the battlefield tapped",target_description(target)),
         MillCards { count } => format!("Mill {count} cards"),
-        MillAndSelect { count, predicate, if_declined } => format!("Mill {count} cards. You may return a {} milled this way to your hand. Otherwise: {}",predicate_description(predicate,"card"),effects_description(if_declined)),
+        MillAndSelect { count, predicate, if_declined, if_milled } => {
+            let mut text = format!("Mill {count} cards. You may return a {} milled this way to your hand. Otherwise: {}",predicate_description(predicate,"card"),effects_description(if_declined));
+            if let Some(bonus) = if_milled {
+                text.push_str(&format!(". If a {} is milled this way: {}", predicate_description(&bonus.predicate, "card"), effects_description(&bonus.effects)));
+            }
+            text
+        }
         TargetClause { requirement, effects } => format!("Choose {}–{} {} for this clause: {}",requirement.min,requirement.max,target_description(&requirement.spec),effects_description(effects)),
         SearchBasicLand { subtype, to_hand: true, .. } => format!("Search your library for a {} card, reveal it, put it into your hand, then shuffle",subtype.as_deref().unwrap_or("land")),
         SearchBasicLand { subtype, count, tapped, untap_if_lands, bottom_source, .. } => {
@@ -431,7 +437,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         GainLife { amount } => format!("You gain {amount} life"),
         OnNthResolutionThisTurn { n, effect } => format!("If this is resolution {n} of this ability this turn: {}",effects_description(std::slice::from_ref(effect))),
         Scry { count } => format!("Scry {count}"),
-        LookAndSelect { reveal, look, min_select, max_select, predicate } => format!("{} the top {look} cards of your library. Put {min_select}–{max_select} {} from among them into your hand and the rest on the bottom in a random order",if *reveal { "Reveal" } else { "Look at" },predicate_description(predicate,"cards")),
+        LookAndSelect { reveal, look, min_select, max_select, predicate } => format!("{} the top {} cards of your library. Put {min_select}–{max_select} {} from among them into your hand and the rest on the bottom in a random order",if *reveal { "Reveal" } else { "Look at" },value_description(look),predicate_description(predicate,"cards")),
         PutTopCardsInHand { count } => format!("Put the top {count} cards of your library into your hand"),
         Learn => "Learn: you may reveal a Lesson you own from outside the game and put it into your hand, or discard a card to draw a card, or decline".into(),
         Modal { modes } => format!("Choose one — {}",modes.iter().enumerate().map(|(i,m)| format!("({}) {}",i+1,effects_description(m))).collect::<Vec<_>>().join("; ")),
