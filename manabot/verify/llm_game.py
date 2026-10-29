@@ -55,7 +55,9 @@ class GameConfig(BaseModel):
     max_seconds: float = Field(default=3600, gt=0)
     deck: dict[str, int] = {"Mountain": 24, "Gray Ogre": 24, "Lightning Bolt": 12}
     match: MatchConfig | None = None
-    skip_trivial: bool = False
+    # Forced decisions (one legal action) are resolved natively, never sent to a
+    # model. Disable only to exercise forced-decision paths themselves.
+    skip_trivial: bool = True
     opponent_checkpoint: Path | None = None
     # Stop before another decision after this reported spend. An in-flight
     # decision (including its repair) can exceed the threshold; this is no hard cap.
