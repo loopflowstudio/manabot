@@ -27,40 +27,39 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
 ## T2 (87e012) — 2026-10-29 operator choices
 
 - Printed flashback plus Iroh's grant: the grant's cost is used (dominant for
-  every TLA card; a non-dominated alternative would need a cost choice).
-- No schema 9 yet: schema 8 appended subtypes/fields/predicates per slice.
-  Airbend appended opcodes 66–68 (and field `except`, predicate `attacking`)
-  to schema 8 too: main is schema 7, so 8 is unreleased like w16, and
-  `max_opcode[8]` moved 65 → 68 rather than opening schema 9.
-  Landcycling reuses `search_basic_land` (any card of the subtype) and
-  restricted mana reuses opcode 56 with `spend_only`; a distinct
-  `search_library` or restricted `add_mana` opcode would be schema 9.
-- Card abilities get their own action variant (`ActivateCardAbility`) sharing
-  `PriorityActivateAbility`, rather than widening `ActivateAbility`.
-- A discard-cost ability refers to its card's graveyard object after costs
-  (Team Avatar's damage source), standing in for the hand object's LKI.
-- World stays w16 while T2 only adds cards; bump when existing rules change.
-- Observation `lesson_mana`, `ManaOutput.lesson` and the continuation `lesson`
-  flag keep names and widths but carry all restricted mana. The flag is set
-  when the payment's purpose names a Lesson/Shrine/Ally spell or ability
-  source, so in w16 it now also fires for Ally spells and Ally abilities
-  (before: Lesson spells only); acceptable while w16 is unreleased. The policy sees restricted totals, not which
-  restriction; Academy reads "Restricted mana"; `manabot-text-4` still says
-  "Lesson-only mana" (relabel needs a representation version bump).
-- `PlayerVitals` bound 32 → 40 bytes (boxed restricted classes); `UndoEntry`
-  ≤ 72. Non-tap mana abilities are admitted when `once_each_turn` bounds them.
-- Avatar's Wrath's hand-only restriction ends at the start of its caster's
-  next untap step and blocks flashback as well as exile grants. Mass airbend
-  exiles creatures one at a time (no simultaneous-batch leave event).
-- "Other target" (`another`) is enforced for triggered abilities; activated
-  abilities already never offer their source. Spells need no source check.
-- Kicked Aang's Journey runs two searches (basic land, then Shrine), each
-  shuffling, rather than one combined search; no TLA Shrine is defined yet, so
-  its witness shows the Shrine search failing to find.
-- Sokka's "artifact or Lesson" trigger uses a new `any_of` predicate (one
-  trigger even for an artifact Lesson) instead of two triggers.
-- Dai Li Indoctrination's revealed hand is public `known_hand` knowledge,
-  offered one card per definition (as `reveal_card_to_hand`).
-- Elemental Teachings with fewer than two revealed lands: the opponent bins
-  all of them.
+  every TLA card).
+- No schema 9: main is schema 7, so unreleased schema 8 grows append-only
+  (opcodes 66–79, fields incl. `mana_x`/`chooser`/`grant`/`below`, quantity
+  `x`, enum `grant`, role `each:creature_you_control`). Landcycling reuses
+  `search_basic_land`; restricted mana reuses opcode 56 with `spend_only`.
+  World stays w16 while T2 only adds cards.
+- Card abilities use `ActivateCardAbility` (sharing `PriorityActivateAbility`);
+  a discard-cost ability refers to its card's graveyard object after costs.
+- Restricted mana rides the `lesson_mana`/`lesson` observation fields (now any
+  Lesson/Shrine/Ally restriction, totals only); Academy reads "Restricted
+  mana", `manabot-text-4` still "Lesson-only" (relabel needs a version bump).
+  `PlayerVitals` ≤ 40 bytes, `UndoEntry` ≤ 72.
+- Avatar's Wrath's hand-only restriction ends at its caster's next untap and
+  blocks flashback too; mass airbend exiles one at a time. `another` is
+  enforced for triggers (activations never offer their source).
+- Kicked Aang's Journey runs two searches (no TLA Shrine is defined yet).
+  Sokka's trigger uses `any_of`. Dai Li's revealed hand is public
+  `known_hand`, one offer per definition. Elemental Teachings with fewer than
+  two lands: the opponent bins all.
 - T1's three frozen-schema pytest assertions (3/7/4 vs 8) are left for T1.
+- X is offered as `ChooseMode { mode: X }` (Modal, stage `mode`), 0 through
+  the largest payable value. Spirit Water Revival's "waterbend {6}" is
+  `Cost { kicker, waterbend: true }` → `kicker_waterbend`; "if the additional
+  cost was paid" is `kicked`.
+- Free casts during resolution (Yue, Solstice) are a nested cast decision,
+  `Decision::CastWithoutPaying` (hand spells derived at offer time, or the
+  exiled card; plus Decline), not a one-shot grant. Choosing finishes the
+  effect, then casts with `CastChoices.free`; valid because the free cast is
+  each card's last instruction.
+- Hama/Azula: one opcode 78 `exile_linked` creates the source-linked grant at
+  exile (Azula's static folds into it); "any type of mana" prices the cast as
+  generic equal to mana value. Opponent-owned permanent cards stay uncastable
+  (no control change) — both are in `tla::INCOMPLETE`. Sozin's Comet is listed
+  incomplete for foretell rather than shipping a visible face-down card.
+- Text observation admits stages `revealed_hand`, `split_revealed`,
+  `free_cast`, `linked_exile`.

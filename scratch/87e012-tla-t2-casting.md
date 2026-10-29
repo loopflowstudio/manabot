@@ -54,18 +54,24 @@ worktree, so new T2 cards read "unsupported" in this base until T1 lands.
 - Conditional flash lowers to `CardDefinition.flash_if`;
   `Game::has_instant_timing` owns timing.
 - `determinize` pins revealed cards in their owner's library.
+- Cast-time announcements are one `CastChoices { kicked, x, free }` threaded
+  through `PendingChoice` and `Payment::Spell` (flattened in serialization);
+  `PendingChoice::Waterbend` carries any `Payment`; `can_cast_with` /
+  `can_pay_cast` own castability for priority and free-cast offers.
 - Exile grants carry `cost: Option` (None = the card's mana cost) and `this_turn`
-  (dropped at cleanup); lands with a grant are played from exile
+  (dropped at cleanup), plus `source` (live while its controller controls it),
+  `own_turn_only`, `waterbend`, `flash`, `any_mana`, `after_turn`; lands with a grant are played from exile
   (`may_play_from_zone` gates actions and `play_land`). Opcode 69
   `exile_top_card_play_this_turn` (Zuko).
 
-## Done (slices 1–2 `648edee6b` → T1 merge `f7b59aa99`; 3 `afff1e1ed`; 4a `0d124a66e`; 4b `dea25eda8`, `d84c5f590`; T1 review `c223ea581`; slice 5/6 `43ef1210f`…)
+## Done (slices 1–2 `648edee6b` → T1 merge `f7b59aa99`; 3 `afff1e1ed`; 4a `0d124a66e`; 4b `dea25eda8`, `d84c5f590`; T1 review `c223ea581`; slice 5/6 `43ef1210f`…`a51887616`; casting `69c23c358`…`104b85caf`)
 
-44 of 51 T2 cards are defined (2026-10-28, against `allocation.jsonl`); 7
-remain (Next slices). The six T1 cards were reviewed, witnessed and dropped
-from `tla::INCOMPLETE` in `c223ea581`. Each T2-defined card has a witness in `tests/cards/tla.rs` and
-a Scryfall fixture entry (`scratch/add_fixture.py <name>` appends one);
-per-slice card lists are in the commit messages above.
+All 51 T2 cards are defined (2026-10-29, against `allocation.jsonl`). Three
+are listed in `tla::INCOMPLETE`: Sozin's Comet (foretell), Hama and Azula
+(an exiled opponent-owned permanent card can't be cast). Each T2-defined card
+has a witness in `tests/cards/tla.rs` and a Scryfall fixture entry
+(`scratch/add_fixture.py <name>` appends one); per-slice card lists are in the
+commit messages above.
 
 ## Base: T1
 
@@ -75,27 +81,21 @@ lands that move.
 
 ## Next slices (one PR)
 
-Remaining 7 T2 cards, each needing a casting-pipeline mechanism not built yet:
-
-- United Front: {X} spells — announce X while casting (stack object keeps it,
-  mana value includes it), `EffectValue::X`; then X Ally tokens and a counter
-  on each creature you control (`PutCountersOnEachMatching` exists).
-- Spirit Water Revival: optional additional waterbend {6} while casting (spell
-  waterbend payment), "if the additional cost was paid" branch, shuffle
-  graveyard into library, draw seven, no maximum hand size, self-exile.
-- Yue, the Moon Spirit and Solstice Revelations: cast a spell *during
-  resolution* without paying its mana cost (decide: nested cast decision vs. a
-  granted one-shot free cast). Solstice also exiles until a nonland, compares
-  mana value to Mountains you control, falls back to hand, and has flashback.
-- Sozin's Comet: foretell special action (pay {2}, exile face down from hand;
-  observation hides the face from the opponent) + later-turn cast for {2}{R};
-  "each creature you control gains firebending 5 until end of turn".
-- Hama: target opponent mills three, exile up to one noncreature nonland card
-  from their graveyard, source-linked own-turn grant paid by waterbend {X}
-  (X = its mana value).
-- Azula: opponent-chosen exiles (nontoken creature, then nonland graveyard
-  card), source-linked own-turn grant with flash and any-type mana.
+- Foretell (Sozin's Comet): special action from hand during your turn (pay
+  {2}, exile face down, no stack), then an exile grant with `after_turn` and
+  cost {2}{R}. The face must be hidden from the opponent everywhere it leaks
+  today: `Observation` exile listing (`populate_cards`), the public
+  `CardMoved` arrival in `policy_history::record` and `Observation::event_data`
+  (per-event, not per-viewer), `determinize` (resample like hidden hand
+  cards), and Academy views. Then drop it from `tla::INCOMPLETE`.
+- Control change for permanent spells cast from another player's cards
+  (Hama, Azula): battlefield zones are keyed by owner, so a permanent enters
+  under its owner's control; `exile_grant` refuses those cards until then.
 
 ## Check
 
-2026-10-28 compress (discard-cost payment, discard-draw arms): debug `cargo test --test cards --test rules_tests --lib` passes; clippy and fmt clean. Earlier full debug run (`fb624ef92`): all pass except the pre-existing semantic-conformance pair; `pytest tests/semantic/` fails only T1's frozen-schema assertions (expect 3/7/4, bind 8). World-change Python suite and Academy check deferred to gate.
+2026-10-29 casting slices: full debug `cargo test` passes except the
+pre-existing semantic-conformance pair; clippy (incl. `--features python`) and
+fmt clean; `pytest tests/semantic/` fails only T1's three frozen-schema
+assertions (expect 3/7/4, bind 8). World-change Python suite and Academy check
+deferred to gate.
