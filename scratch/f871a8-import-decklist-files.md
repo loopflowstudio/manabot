@@ -185,6 +185,28 @@ checkpoints are rejected with their world diagnostic. docs/decklist-import.md
 and questions.md updated. Not the deferred 1a redesign.
 Working screen: `scratch/concept-review.html`.
 
+### Concept review at 012f1a725 (2026-10-28, headless Graph step)
+
+World binding, run-owned `TrainingDecks`, native `set_training_decks` (admits
+each submitted deck, no roster permission) and checkpoint/sim/Academy admission
+match the accepted model. One residue of the rejected deck-kind distinction
+remains, settled by "one deck concept" and "one owner for each fact":
+`decklist.AdmittedDeck` is named as a kind of deck and stores its own
+`main`/`sideboard` beside a derived `Deck`; `ImportedMatch` and Academy read
+those copies (`imported.hero.main`, server.py:734).
+
+Next implement direction: rename it to the import record it is,
+`DeckImport(document: DeckDocument, deck: Deck)`, with no duplicate count
+fields. `ImportedMatch.hero`/`villain` hold `DeckImport`; consumers read
+`.deck.main`/`.deck.sideboard`; `setup_id` keeps its value (same payload).
+The type is new in this branch, so no frozen evidence or released record
+changes; branch-local Academy traces may need re-import. Proof: existing
+decklist, Academy setup, checkpoint catalog and training-deck tests.
+
+Not reopened: checkpoint `bc` `run_id`/`stage_id`/`regime_digest` links predate
+this branch, are read only for a catalog producer label, and never enter world
+compatibility (recorded deferral in questions.md). No open product choice.
+
 ## Accepted direction — Jack Heart, 2026-10-28
 
 Implement, test, refine and publish one cohesive PR for review; stop before merge.

@@ -1,35 +1,45 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Checkpoints bind worlds · Manabot concept review</title><style>
 :root{color-scheme:light dark;--bg:#faf8f3;--ink:#282d29;--muted:#5d675f;--line:#ccd2c9;--wash:#eef0e9;--accent:#2b6847;--warn:#8a4b14}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 system-ui,sans-serif}main{max-width:860px;margin:auto;padding:34px 25px 65px}h1{font:500 clamp(30px,5vw,44px)/1.15 Georgia,serif;margin:17px 0}h2{font-size:22px;margin:32px 0 12px}p{margin:10px 0 16px}.meta{font-size:13px;color:var(--muted);overflow-wrap:anywhere}.lead{font-size:20px}.note{border-left:3px solid var(--warn);padding-left:18px}.prop{border-left:3px dashed var(--accent);padding-left:18px}code{font:.9em ui-monospace,monospace;overflow-wrap:anywhere}pre{background:var(--wash);padding:18px;font:14px/1.6 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;font-size:15px}td,th{padding:11px 10px 11px 0;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}th{font-weight:600}em.tag{font-style:normal;font-size:13px;color:var(--muted)}footer{border-top:1px solid var(--line);padding-top:16px;margin-top:30px}@media(prefers-color-scheme:dark){:root{--bg:#1c211e;--ink:#ecefe6;--muted:#b4beb5;--line:#4d5a4f;--wash:#29332b;--accent:#a2d7ae;--warn:#e7b07a}}@media(max-width:520px){main{padding:24px 16px}table{font-size:13px}pre{font-size:12px;padding:12px}}
 </style></head><body><main>
-<p class="meta">Task f871a8 · concept-review (headless Graph step) · 2026-10-28 · at 821824996 · built from <code>scratch/f871a8-import-decklist-files.md</code>, <code>manabot/infra/config.py</code>, <code>manabot/sim/rollout.py</code>, <code>academy/server.py</code>, <code>academy/villain.py</code>, <code>docs/decklist-import.md</code></p>
-<h1>Imported decks still refuse every checkpoint</h1>
-<p class="lead">Outcome: <strong>the design changed</strong>. Jack Heart's world-bound decision already settles this, so it goes back to implement. No approval is needed.</p>
+<p class="meta">Task f871a8 · concept-review (headless Graph step) · 2026-10-28 · at 012f1a725 · built from <code>scratch/f871a8-import-decklist-files.md</code>, <code>manabot/decklist.py</code>, <code>manabot/training/decks.py</code>, <code>managym/src/agent/vector_env.rs</code>, <code>manabot/model/catalog.py</code>, <code>academy/server.py</code></p>
+<h1>An imported deck is still a kind of deck</h1>
+<p class="lead">Outcome: <strong>the design changed</strong>. Jack Heart's “one deck concept” decision settles this, so it goes back to implement. No approval is needed.</p>
 
 <h2>Actions → concepts → APIs</h2>
 <table>
 <tr><th>Action</th><th>Concept</th><th>API</th></tr>
-<tr><td>Train on decklists</td><td>Deck; run-owned supply</td><td><code>TrainingDecks</code> → native admission at each root <em class="tag">existing</em></td></tr>
-<tr><td>Export the model</td><td>Checkpoint bound to a world</td><td><code>save_checkpoint(content_pool=…)</code> → <code>pool_world</code> <em class="tag">existing</em></td></tr>
-<tr><td>Simulate that model on imported decks</td><td>World admits the deck</td><td><code>validate_agent_setup</code> in <code>sim/rollout.py</code> <em class="tag">existing</em>, but blocked first by <code>validate_imported_players</code></td></tr>
-<tr><td>Play it in Academy on imported decks</td><td>Same</td><td><code>CheckpointVillain(player_configs=…)</code> <em class="tag">existing</em>, but blocked first in <code>server.py:734</code></td></tr>
+<tr><td>Import a decklist file</td><td>Source document → deck</td><td><code>parse_decklist</code> → <code>admit_document</code> → <code>AdmittedDeck</code> <em class="tag">existing</em></td></tr>
+<tr><td>Train on decklists</td><td>Deck; run-owned supply</td><td><code>TrainingDecks</code> → native <code>set_training_decks</code> <em class="tag">existing, matches design</em></td></tr>
+<tr><td>Export / load the model</td><td>Checkpoint bound to a world</td><td><code>pool_world</code>; <code>validate_agent_setup</code> <em class="tag">existing, matches design</em></td></tr>
+<tr><td>Play imported decks in sim or Academy</td><td>World admits the deck</td><td><code>ImportedMatch</code> → <code>MatchConfig</code> <em class="tag">existing</em></td></tr>
 </table>
 
 <h2>The mismatch</h2>
 <div class="note">
-<pre>SimulationConfig.validate_imported_players:
-  if match.imported_decks and player not in {"random", "default"}:
-    raise "…checkpoint setup admission is not available"</pre>
-<p>That admission now exists. The checkpoint this PR teaches you to produce cannot be simulated on imported decks from its own pool. The accepted decision says: “use any decklists admitted to that same world for play or evaluation.”</p>
+<pre>class AdmittedDeck:            # “the deck plus its provenance”
+    document: DeckDocument
+    main: dict[str, int]       # a second copy of the deck's counts
+    sideboard: dict[str, int]
+    @property
+    def deck(self) -&gt; Deck: ...
+
+academy/server.py:734   imported.hero.main, imported.villain.main</pre>
+<p>Jack Heart rejected separate kinds of deck: a deck is a deck, whatever its source. <code>AdmittedDeck</code> is named as a kind of deck and stores the counts a second time. Code reads either copy.</p>
 </div>
 
 <h2>After <em class="tag">proposed</em></h2>
 <div class="prop">
-<p>Delete the sim special case and rely on the shared world check: a pool-bound checkpoint is admitted, and an Elemental or authored checkpoint is rejected with its world diagnostic. In Academy, do the same only if every imported <code>CheckpointVillain</code> (start, fork, reconnect, rematch) receives the imported setup. Otherwise keep Academy's refusal but reword it to name the Academy limitation. This is not the deferred 1a redesign.</p>
-<p>Proof: untrained fixture checkpoint exported with <code>content_pool="tla-pool-v1"</code> plays a sim game on two imported files; an authored checkpoint on the same files is rejected; existing random/default and Academy import tests stay green. No weight updates.</p>
+<pre>class DeckImport:
+    document: DeckDocument
+    deck: Deck
+
+ImportedMatch.hero / .villain: DeckImport
+consumers read imported.hero.deck.main</pre>
+<p><code>setup_id</code> keeps its value because the payload is the same. The type is new in this branch, so no frozen evidence changes. Proof: the existing decklist, Academy setup, checkpoint catalog and training-deck tests.</p>
 </div>
 
-<h2>Not reopened</h2>
-<p>Checkpoint <code>extra</code> still carries opaque <code>run_id</code>/<code>stage_id</code>/<code>regime_digest</code> producer links. They do not affect compatibility. Moving them touches all producer admission and is recorded as a separate change in <code>scratch/questions.md</code>.</p>
+<h2>Checked and left alone</h2>
+<p>Native supply admits every submitted deck and needs no roster permission. Checkpoints carry no decks or sampler. The checkpoint <code>bc</code> run/stage/regime links predate this branch. Only a catalog label reads them, and they never affect compatibility. That deferral is recorded in <code>questions.md</code>.</p>
 
-<footer><h2>Questions</h2><p>None. The accepted decision settles this.</p></footer>
+<footer><p>No open product choices, so there are no questions. Next step: implement the rename.</p></footer>
 </main></body></html>
