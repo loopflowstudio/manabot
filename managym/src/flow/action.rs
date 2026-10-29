@@ -52,6 +52,9 @@ impl Game {
                 }
                 Some(label)
             }
+            Action::Foretell { card, .. } => {
+                Some(format!("Foretell {}", self.state.cards[*card].name))
+            }
             Action::ChooseMode { mode, .. } => {
                 match &self.state.suspended_decision.as_ref()?.decision {
                     Decision::ManaChoice { choices, .. } => {
@@ -281,6 +284,14 @@ impl Game {
             }
         }
         actions.extend(self.priority_card_ability_actions(player));
+        actions.extend(
+            self.state
+                .zones
+                .zone_cards(ZoneType::Hand, player)
+                .iter()
+                .filter(|card| self.can_foretell(player, **card))
+                .map(|&card| Action::Foretell { player, card }),
+        );
         actions
     }
 
@@ -647,6 +658,12 @@ impl Game {
                 card,
                 ability_index,
             } => self.activate_card_ability_action(*player, *card, *ability_index),
+            Action::Foretell { player, card } => {
+                if self.state.priority.holder != *player {
+                    return Err(AgentError("player does not have priority".to_string()));
+                }
+                self.foretell(*player, *card)
+            }
             Action::ChooseTarget { player, target } => {
                 let target = *target;
                 if matches!(

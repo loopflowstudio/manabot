@@ -38,6 +38,15 @@
   const hiddenHandCount = $derived(
     player.hand_hidden_count ?? player.zone_counts.HAND ?? player.hand.length,
   );
+  // Another player's face-down exiled cards are counted, never listed.
+  const exileCount = $derived(Math.max(player.zone_counts.EXILE ?? 0, player.exile.length));
+  const hiddenExileCount = $derived(exileCount - player.exile.length);
+
+  function exileDescription(card: CardState): string {
+    const copy = copyLabel(player.exile, card.id);
+    if (!card.face_down) return copy;
+    return copy ? `foretold, face down, ${copy}` : 'foretold, face down';
+  }
 
   // The bar wears its deck's colors at full Magic saturation — G→W for
   // Allies, U→R for Lessons. Like the banner and the card plates it is a
@@ -232,14 +241,19 @@
       </div>
     </div>
 
-    {#if player.exile.length > 0}
+    {#if exileCount > 0}
       <div class="staff">
-        {@render rubric(`Exile (${player.exile.length})`)}
+        {@render rubric(`Exile (${exileCount})`)}
         <div class="flex flex-wrap items-end gap-2">
+          {#if hiddenExileCount > 0}
+            <div class="type-caption px-1 py-1 text-ink-3">
+              {hiddenExileCount} face-down {hiddenExileCount === 1 ? 'card' : 'cards'}
+            </div>
+          {/if}
           {#each player.exile as card}
             <Card
               name={card.name}
-              copyDescription={copyLabel(player.exile, card.id)}
+              copyDescription={exileDescription(card)}
               power={card.types.is_creature ? card.power : null}
               toughness={card.types.is_creature ? card.toughness : null}
               focused={focusedIds.has(card.id)}

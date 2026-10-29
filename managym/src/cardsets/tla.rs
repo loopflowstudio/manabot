@@ -18,7 +18,6 @@ pub(super) const INCOMPLETE: &[Incomplete] = &[
     ("tla.hama_the_bloodbender", "An exiled opponent-owned permanent card can't be cast: permanent spells enter under their owner's control (no control change, CR 110.2)"),
     ("tla.lightning_strike", "Any target must include planeswalkers and battles (CR 115.4)"),
     ("tla.ran_and_shaw", "Unreviewed until T5: Flying/firebending; cast-only conditional ETB nonlegendary self copy; Dragon anthem activation."),
-    ("tla.sozins_comet", "Foretell is missing: the face-down exile special action and its later-turn {2}{R} cast need viewer-hidden exile in observation, history and determinize"),
     ("tla.suki_kyoshi_warrior", "CDA power must apply outside the battlefield (CR 604.3)"),
     ("tla.water_tribe_rallier", "Library power filter must evaluate CDAs, such as Suki's (CR 604.3)"),
 ];
@@ -5483,7 +5482,10 @@ fn sozins_comet() -> Card {
             ProgramKind::Spell,
             vec![Op::GrantFirebendingUntilEot { amount: 5 }],
         )
-        .cost(Cost::mana("{3}{R}{R}"))],
+        .cost(Cost {
+            foretell: Some("{2}{R}"),
+            ..Cost::mana("{3}{R}{R}")
+        })],
         registry_name: "Sozin's Comet",
         text_box,
     }

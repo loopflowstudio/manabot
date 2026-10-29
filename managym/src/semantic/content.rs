@@ -380,6 +380,7 @@ fn apply_program(
             definition.kicker = cost.kicker;
             definition.kicker_waterbend = cost.waterbend;
             definition.flashback = cost.flashback;
+            definition.foretell = cost.foretell;
             definition.cost_reduction_per = cost.affinity;
             definition.cost_reduction_in_graveyard = cost.affinity_in_graveyard;
             definition.targeting = match opt_str_field(&program.metadata, "target_binding")? {
@@ -482,6 +483,7 @@ struct ProgramCost {
     mana: Option<ManaCost>,
     kicker: Option<ManaCost>,
     flashback: Option<ManaCost>,
+    foretell: Option<ManaCost>,
     affinity: Option<CardPredicate>,
     affinity_in_graveyard: bool,
     sacrifice: Option<SacrificeCost>,
@@ -511,6 +513,7 @@ fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
         mana: opt_str_field(value, "mana")?.map(ManaCost::parse),
         kicker: opt_str_field(value, "kicker")?.map(ManaCost::parse),
         flashback: opt_str_field(value, "flashback")?.map(ManaCost::parse),
+        foretell: opt_str_field(value, "foretell")?.map(ManaCost::parse),
         affinity: value.get("affinity").map(predicate_value).transpose()?,
         affinity_in_graveyard: match opt_str_field(value, "affinity_zone")? {
             None | Some("battlefield") => false,

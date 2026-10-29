@@ -397,6 +397,11 @@ pub struct CardDefinition {
     /// for this cost, then exiled instead of going anywhere else.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub flashback: Option<ManaCost>,
+    /// Printed foretell (CR 702.143): during its owner's turn it may be
+    /// exiled face down from hand for {2}, then cast on a later turn for
+    /// this cost.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub foretell: Option<ManaCost>,
     /// Ward (CR 702.21): "counter [the targeting spell] unless its
     /// controller pays [cost]". Synthesized into a BecomesTargeted
     /// triggered ability at registration.

@@ -172,6 +172,10 @@ pub struct Cost {
     /// Printed flashback (CR 702.34) on a spell program: its graveyard cost.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub flashback: Option<&'static str>,
+    /// Printed foretell (CR 702.143) on a spell program: the cost to cast it
+    /// from exile on a later turn after foretelling it from hand for {2}.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub foretell: Option<&'static str>,
     /// An activated ability of a card outside the battlefield functions only
     /// from this zone (CR 113.6); absent means the battlefield.
     #[serde(skip_serializing_if = "Option::is_none")]

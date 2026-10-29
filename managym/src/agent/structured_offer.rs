@@ -1946,9 +1946,9 @@ fn search_offer_verb(action: &Action) -> OfferVerb {
     match action {
         Action::PlayLand { .. } => OfferVerb::PlayLand,
         Action::CastSpell { .. } => OfferVerb::Cast,
-        Action::ActivateAbility { .. } | Action::ActivateCardAbility { .. } => {
-            OfferVerb::ActivateAbility
-        }
+        Action::ActivateAbility { .. }
+        | Action::ActivateCardAbility { .. }
+        | Action::Foretell { .. } => OfferVerb::ActivateAbility,
         Action::PassPriority { .. } => OfferVerb::PassPriority,
         Action::DeclareAttacker { .. } => OfferVerb::DeclareAttacker,
         Action::DeclareBlocker { .. } => OfferVerb::DeclareBlocker,

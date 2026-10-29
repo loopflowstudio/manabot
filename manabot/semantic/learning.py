@@ -561,7 +561,15 @@ class _TokenBuilder:
             self.emit("integer", value)
             return
         if isinstance(value, str):
-            if field in {"mana", "mana_cost", "kicker", "flashback", "cost", "or_mana"}:
+            if field in {
+                "mana",
+                "mana_cost",
+                "kicker",
+                "flashback",
+                "foretell",
+                "cost",
+                "or_mana",
+            }:
                 self.mana(value, f"{context}.{field}")
             elif field in {"role", "sources", "target", "except"}:
                 self.role(value, roles)

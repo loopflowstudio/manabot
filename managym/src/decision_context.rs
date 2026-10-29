@@ -135,7 +135,8 @@ impl Game {
                             Action::PlayLand { .. }
                             | Action::CastSpell { .. }
                             | Action::ActivateAbility { .. }
-                            | Action::ActivateCardAbility { .. } => "source",
+                            | Action::ActivateCardAbility { .. }
+                            | Action::Foretell { .. } => "source",
                             Action::DeclareBlocker { .. } if index > 0 => "target",
                             Action::ChooseTarget { .. } => "target",
                             _ => "choice",

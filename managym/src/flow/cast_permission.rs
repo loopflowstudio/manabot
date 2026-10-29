@@ -9,9 +9,13 @@
 // A `HandOnly` restriction ("can't cast spells from anywhere other than
 // their hands") overrides every non-hand casting permission, including
 // graveyard flashback, until the start of its controller's next turn.
+// Foretell (CR 702.143) exiles a card face down with a grant marked
+// `foretold`: the grant is also the authority for that card being hidden
+// from every player but its owner.
 
 use crate::{
-    flow::game::Game,
+    agent::action::AgentError,
+    flow::{game::Game, proposed_event::ZoneEntry},
     state::{
         ability::LinkedGrant,
         game_object::{CardId, ObjectRef, PermanentId, PlayerId},
@@ -50,6 +54,9 @@ pub struct ExileCastGrant {
     /// Usable only on a turn after this one ("cast it on a later turn").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub after_turn: Option<u32>,
+    /// Foretold: the card lies face down and is cast for its foretell cost.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub foretold: bool,
 }
 
 impl ExileCastGrant {
@@ -67,6 +74,7 @@ impl ExileCastGrant {
             flash: false,
             any_mana: false,
             after_turn: None,
+            foretold: false,
         }
     }
 }
@@ -95,6 +103,9 @@ impl CastPermissions {
 /// Airbend's alternative cost (CR 701.65a).
 const AIRBEND_COST: &str = "{2}";
 
+/// The cost of the foretell special action (CR 702.143a).
+pub(crate) const FORETELL_ACTION_COST: &str = "{2}";
+
 impl Game {
     /// Airbend the permanent: exile it and, unless it was a token, let its
     /// owner cast that exiled card for {2}.
@@ -118,6 +129,94 @@ impl Game {
                 ..ExileCastGrant::new(object, player)
             });
         }
+    }
+
+    /// Whether `player` may foretell `card` now: a card with foretell in
+    /// their hand, during their turn, with {2} available (CR 702.143a).
+    pub(crate) fn can_foretell(&self, player: PlayerId, card: CardId) -> bool {
+        self.active_player() == player
+            && self.state.cards[card].foretell.is_some()
+            && self.state.zones.contains(card, ZoneType::Hand, player)
+            && self.can_pay_mana_cost(player, &ManaCost::parse(FORETELL_ACTION_COST))
+    }
+
+    /// The foretell special action: pay {2} and exile `card` face down
+    /// without using the stack. Its owner may cast it on a later turn for
+    /// its foretell cost.
+    pub(crate) fn foretell(&mut self, player: PlayerId, card: CardId) -> Result<(), AgentError> {
+        if !self.can_foretell(player, card) {
+            return Err(AgentError("card cannot be foretold now".into()));
+        }
+        let cost = ManaCost::parse(FORETELL_ACTION_COST);
+        self.produce_mana(player, &cost)?;
+        self.spend_mana(player, &cost)?;
+        let turn = self.state.turn.turn_number;
+        self.move_card_with_entry(
+            card,
+            ZoneType::Exile,
+            ZoneEntry {
+                face_down: true,
+                ..ZoneEntry::default()
+            },
+        );
+        if self.state.zones.zone_of(card) == Some(ZoneType::Exile) {
+            if let Some(object) = self.current_object_ref(card) {
+                self.add_exile_grant(ExileCastGrant {
+                    after_turn: Some(turn),
+                    foretold: true,
+                    ..ExileCastGrant::new(object, player)
+                });
+            }
+        }
+        self.state.priority.on_non_pass_action(self.active_player());
+        Ok(())
+    }
+
+    /// Whether `card` is a foretold card lying face down in exile, hidden
+    /// from everyone but its owner.
+    pub(crate) fn is_foretold(&self, card: CardId) -> bool {
+        self.foretold_grant(card).is_some()
+    }
+
+    fn foretold_grant(&self, card: CardId) -> Option<&ExileCastGrant> {
+        if self.state.zones.zone_of(card) != Some(ZoneType::Exile) {
+            return None;
+        }
+        let object = self.current_object_ref(card)?;
+        self.state
+            .cast_permissions
+            .exile_grants
+            .iter()
+            .find(|grant| grant.foretold && grant.object == object)
+    }
+
+    /// Determinization: hidden card `new` becomes `player`'s foretold card
+    /// in place of `old`, which rejoins the hidden pool. The caller assigns
+    /// `old` to the hand or library.
+    pub(crate) fn resample_foretold(&mut self, player: PlayerId, old: CardId, new: CardId) {
+        let (Some(from), Some(to)) = (self.current_object_ref(old), self.current_object_ref(new))
+        else {
+            return;
+        };
+        self.state.zones.replace_face_down_exile(player, old, new);
+        self.edit_cast_permissions(|permissions| {
+            for grant in &mut permissions.exile_grants {
+                if grant.object == from {
+                    grant.object = to;
+                }
+            }
+        });
+    }
+
+    /// `player`'s face-down foretold cards in exile.
+    pub(crate) fn foretold_cards(&self, player: PlayerId) -> Vec<CardId> {
+        self.state
+            .zones
+            .zone_cards(ZoneType::Exile, player)
+            .iter()
+            .copied()
+            .filter(|card| self.is_foretold(*card))
+            .collect()
     }
 
     /// Exile `card` linked to `source`: while `player` controls `source`,
@@ -266,10 +365,15 @@ impl Game {
             return None;
         }
         let grant = self.exile_grant(player, card)?;
-        let cost = grant
-            .cost
-            .clone()
-            .or_else(|| self.state.cards[card].mana_cost.clone())?;
+        let definition = &self.state.cards[card];
+        let cost = if grant.foretold {
+            definition.foretell.clone()?
+        } else {
+            grant
+                .cost
+                .clone()
+                .or_else(|| definition.mana_cost.clone())?
+        };
         // Any type of mana pays every pip, as generic (CR 609.4b-style).
         Some(if grant.any_mana {
             ManaCost::default().with_generic(cost.mana_value)

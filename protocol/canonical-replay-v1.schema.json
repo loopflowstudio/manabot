@@ -935,6 +935,10 @@
     "LegacyCardView": {
       "type": "object",
       "properties": {
+        "face_down": {
+          "description": "Foretold and face down in exile; only its owner's views list it.",
+          "type": "boolean"
+        },
         "id": {
           "type": "integer",
           "format": "uint32",

@@ -412,6 +412,7 @@ class Card:
     card_types: CardTypes
     keywords: Keywords
     mana_cost: ManaCost
+    face_down: bool
 
 class SideboardCard:
     candidate_id: int

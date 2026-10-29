@@ -6,7 +6,6 @@ use crate::{
         turn::{PhaseKind, StepKind},
     },
     state::{
-        card::Card,
         game_object::{CardId, ObjectId, PlayerId, Target},
         mana::ManaCost,
         permanent::Permanent,
@@ -94,6 +93,9 @@ pub struct CardData {
     pub keywords: KeywordData,
     #[serde(deserialize_with = "super::observation_json::mana_cost")]
     pub mana_cost: ManaCost,
+    /// Foretold and face down in exile; listed only for its owner.
+    #[serde(default)]
+    pub face_down: bool,
 }
 
 /// An owned outside-game copy. The candidate is private to this viewer and
@@ -560,7 +562,10 @@ impl Observation {
                 self.add_card(game, *card, ZoneType::Graveyard);
             }
             for card in game.state.zones.zone_cards(ZoneType::Exile, player) {
-                self.add_card(game, *card, ZoneType::Exile);
+                // A foretold card is face down: only its owner sees it.
+                if player == agent_player || !game.is_foretold(*card) {
+                    self.add_card(game, *card, ZoneType::Exile);
+                }
             }
         }
 
@@ -597,8 +602,7 @@ impl Observation {
         card_id: crate::state::game_object::CardId,
         zone: ZoneType,
     ) {
-        let card = &game.state.cards[card_id];
-        let card_data = Self::card_data(game, card, zone);
+        let card_data = Self::card_data(game, card_id, zone);
 
         if card_data.owner_id == self.agent.id {
             self.agent_cards.push(card_data);
@@ -648,7 +652,8 @@ impl Observation {
         self.add_card(game, permanent.card, ZoneType::Battlefield);
     }
 
-    fn card_data(game: &Game, card: &Card, zone: ZoneType) -> CardData {
+    fn card_data(game: &Game, card_id: CardId, zone: ZoneType) -> CardData {
+        let card = &game.state.cards[card_id];
         CardData {
             zone,
             owner_id: game.state.players[card.owner.0].id.0 as i32,
@@ -691,6 +696,7 @@ impl Observation {
             },
             keywords: KeywordData::from_keywords(&card.keywords),
             mana_cost: card.mana_cost.clone().unwrap_or_default(),
+            face_down: zone == ZoneType::Exile && game.is_foretold(card_id),
         }
     }
 
@@ -811,11 +817,13 @@ impl Observation {
                 from,
                 to,
                 controller,
+                face_down,
             } => {
                 let mut data = Self::card_event_data(EventType::CardMoved, *card, *controller);
                 data.from_zone = from.map_or(-1, |zone| zone as i32);
                 data.to_zone = *to as i32;
-                if from.is_none() && *to == ZoneType::Hand {
+                // Outside cards and face-down arrivals name no public object.
+                if (from.is_none() && *to == ZoneType::Hand) || *face_down {
                     data.source_kind = EventEntityKind::None as i32;
                     data.source_id = -1;
                 }
@@ -1042,7 +1050,9 @@ impl Observation {
             Action::PlayLand { card, .. } | Action::CastSpell { card, .. } => {
                 vec![game.state.cards[card].id]
             }
-            Action::ActivateCardAbility { card, .. } => vec![game.state.cards[card].id],
+            Action::ActivateCardAbility { card, .. } | Action::Foretell { card, .. } => {
+                vec![game.state.cards[card].id]
+            }
             Action::ActivateAbility { permanent, .. } => game.state.permanents[*permanent]
                 .as_ref()
                 .map(|perm| vec![perm.id])
@@ -1208,6 +1218,9 @@ impl Observation {
                     .iter()
                     .map(|pip| [pip[0] as u8, pip[1] as u8])
                     .collect::<Vec<_>>());
+            }
+            if card.face_down {
+                value["face_down"] = json!(true);
             }
             value
         }

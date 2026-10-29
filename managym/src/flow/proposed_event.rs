@@ -14,10 +14,16 @@ use crate::{
     },
 };
 
+/// How a card enters its new zone.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub(crate) struct BattlefieldEntry {
+pub(crate) struct ZoneEntry {
+    /// Battlefield: enters tapped.
     pub tapped: bool,
+    /// Battlefield: enters with this many +1/+1 counters.
     pub plus_one_counters: i32,
+    /// Exile: enters face down (foretell, CR 702.143a), so the move is
+    /// secret from everyone but its owner (CR 406.3).
+    pub face_down: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -56,7 +62,7 @@ pub(crate) enum ProposedEvent {
         object: Option<ObjectRef>,
         from: Option<ZoneType>,
         to: ZoneType,
-        entry: BattlefieldEntry,
+        entry: ZoneEntry,
     },
 }
 
@@ -95,6 +101,12 @@ impl Game {
         let replacements = self.collect_replacements(&event);
         for replacement in replacements {
             Self::apply_replacement(&mut event, &replacement.effect);
+        }
+        // Only exile receives a card face down; a redirected move is face up.
+        if let ProposedEvent::ZoneMove { to, entry, .. } = &mut event {
+            if *to != ZoneType::Exile {
+                entry.face_down = false;
+            }
         }
 
         self.commit_proposed_event(event)
@@ -135,7 +147,9 @@ impl Game {
                 if self.state.cards.get(card.0).is_none()
                     || self.state.zones.zone_of(*card) != *from
                     || *from == Some(*to)
-                    || (*to != ZoneType::Battlefield && *entry != BattlefieldEntry::default())
+                    || (*to != ZoneType::Battlefield
+                        && (entry.tapped || entry.plus_one_counters != 0))
+                    || (*to != ZoneType::Exile && entry.face_down)
                 {
                     return false;
                 }
@@ -297,7 +311,7 @@ impl Game {
                     object: Some(target),
                     from: Some(ZoneType::Battlefield),
                     to: ZoneType::Graveyard,
-                    entry: BattlefieldEntry::default(),
+                    entry: ZoneEntry::default(),
                 })
             }
             ProposedEvent::CounterChange {
@@ -366,7 +380,7 @@ impl Game {
             object: Some(object),
             from,
             to,
-            entry: BattlefieldEntry::default(),
+            entry: ZoneEntry::default(),
         })
     }
 }
@@ -380,7 +394,7 @@ mod tests {
         state::{game_object::PlayerId, player::PlayerConfig, zone::ZoneType},
     };
 
-    use super::{BattlefieldEntry, CounterKind, ProposedEvent};
+    use super::{CounterKind, ProposedEvent, ZoneEntry};
 
     fn game_with_ogre() -> (Game, crate::state::game_object::PermanentId) {
         let deck = BTreeMap::from([("Gray Ogre".to_string(), 16), ("Mountain".to_string(), 24)]);
@@ -423,7 +437,7 @@ mod tests {
             object: Some(stale),
             from: Some(ZoneType::Battlefield),
             to: ZoneType::Exile,
-            entry: BattlefieldEntry::default(),
+            entry: ZoneEntry::default(),
         }));
         assert_eq!(game.current_object_ref(card), Some(current));
         assert_eq!(

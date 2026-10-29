@@ -656,6 +656,7 @@ impl Game {
                     from,
                     to,
                     controller,
+                    ..
                 },
             ) => {
                 let entered = *to == ZoneType::Battlefield && *from != Some(ZoneType::Battlefield);
@@ -676,6 +677,7 @@ impl Game {
                     from,
                     to,
                     controller,
+                    ..
                 },
             ) => {
                 let died = *from == Some(ZoneType::Battlefield) && *to == ZoneType::Graveyard;

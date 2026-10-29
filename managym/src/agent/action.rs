@@ -61,6 +61,13 @@ pub enum Action {
         card: CardId,
         ability_index: usize,
     },
+    /// The foretell special action (CR 702.143a): pay {2} and exile this
+    /// card from hand face down. Same action type as `ActivateCardAbility`
+    /// (a card ability functioning from hand); its focus is the card.
+    Foretell {
+        player: PlayerId,
+        card: CardId,
+    },
     PassPriority {
         player: PlayerId,
     },
@@ -123,9 +130,9 @@ impl Action {
             Action::ChooseTrigger { .. } => ActionType::ChooseTrigger,
             Action::PlayLand { .. } => ActionType::PriorityPlayLand,
             Action::CastSpell { .. } => ActionType::PriorityCastSpell,
-            Action::ActivateAbility { .. } | Action::ActivateCardAbility { .. } => {
-                ActionType::PriorityActivateAbility
-            }
+            Action::ActivateAbility { .. }
+            | Action::ActivateCardAbility { .. }
+            | Action::Foretell { .. } => ActionType::PriorityActivateAbility,
             Action::PassPriority { .. } => ActionType::PriorityPassPriority,
             Action::DeclareAttacker { .. } => ActionType::DeclareAttacker,
             Action::DeclareBlocker { .. } => ActionType::DeclareBlocker,

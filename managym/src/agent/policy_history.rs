@@ -65,6 +65,9 @@ fn card_reference(game: &Game, card: CardId) -> HistoryReference {
     let Some(zone) = game.state.zones.zone_of(card).filter(|zone| public(*zone)) else {
         return HistoryReference::Unavailable;
     };
+    if game.is_foretold(card) {
+        return HistoryReference::Unavailable;
+    }
     let data = &game.state.cards[card];
     HistoryReference::Card {
         definition: data.definition_id.0,
@@ -136,8 +139,19 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
     }
     let unknown = HistoryReference::Unavailable;
     let (kind, amount, source, targets) = match event {
-        GameEvent::CardMoved { card, to, .. } if public(*to) => {
-            (Arrival, 0, card_reference(game, *card), vec![unknown])
+        GameEvent::CardMoved {
+            card,
+            to,
+            face_down,
+            ..
+        } if public(*to) => {
+            // A face-down arrival is public, but not which card it was.
+            let source = if *face_down {
+                unknown.clone()
+            } else {
+                card_reference(game, *card)
+            };
+            (Arrival, 0, source, vec![unknown])
         }
         GameEvent::DamageDealt {
             source,

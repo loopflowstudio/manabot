@@ -5,7 +5,7 @@ use crate::{
     flow::{
         event::GameEvent,
         game::{CastChoices, Game},
-        proposed_event::{BattlefieldEntry, ProposedEvent},
+        proposed_event::{ProposedEvent, ZoneEntry},
     },
     state::{
         game_object::{CardId, Incarnation, ObjectRef, PermanentId, PlayerId, Target},
@@ -231,9 +231,9 @@ impl Game {
         self.move_card_with_entry(
             card_id,
             ZoneType::Battlefield,
-            BattlefieldEntry {
+            ZoneEntry {
                 tapped: tapped_and_attacking,
-                ..BattlefieldEntry::default()
+                ..ZoneEntry::default()
             },
         );
 
@@ -333,14 +333,14 @@ impl Game {
     }
 
     pub fn move_card(&mut self, card: CardId, to_zone: ZoneType) {
-        self.move_card_with_entry(card, to_zone, BattlefieldEntry::default());
+        self.move_card_with_entry(card, to_zone, ZoneEntry::default());
     }
 
     pub(crate) fn move_card_with_entry(
         &mut self,
         card: CardId,
         to_zone: ZoneType,
-        entry: BattlefieldEntry,
+        entry: ZoneEntry,
     ) {
         let from = self.state.zones.zone_of(card);
         let to_zone = if from == Some(ZoneType::Stack) && to_zone != ZoneType::Exile
@@ -366,7 +366,7 @@ impl Game {
         departing_ref: Option<ObjectRef>,
         old_zone: Option<ZoneType>,
         to_zone: ZoneType,
-        entry: BattlefieldEntry,
+        entry: ZoneEntry,
     ) -> bool {
         let owner = self.state.cards[card].owner;
 
@@ -380,7 +380,7 @@ impl Game {
             // Public departures remove one known minimum, regardless of which
             // identical copy left. A secret departure invalidates all facts:
             // retaining a definition-specific decrement would leak that card.
-            if to_zone == ZoneType::Library {
+            if to_zone == ZoneType::Library || entry.face_down {
                 let definitions: Vec<_> = self.state.players[owner.0]
                     .known_hand
                     .keys()
@@ -453,6 +453,7 @@ impl Game {
             from: old_zone,
             to: to_zone,
             controller: event_controller,
+            face_down: entry.face_down,
         };
         self.emit(event);
         if old_zone == Some(ZoneType::Battlefield) {

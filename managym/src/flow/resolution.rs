@@ -319,9 +319,9 @@ impl Game {
                         self.move_card_with_entry(
                             card,
                             ZoneType::Battlefield,
-                            crate::flow::proposed_event::BattlefieldEntry {
+                            crate::flow::proposed_event::ZoneEntry {
                                 tapped: true,
-                                ..crate::flow::proposed_event::BattlefieldEntry::default()
+                                ..crate::flow::proposed_event::ZoneEntry::default()
                             },
                         );
                         self.invalidate_mana_cache(frame.controller);
@@ -1106,9 +1106,9 @@ impl Game {
                     self.move_card_with_entry(
                         card,
                         ZoneType::Battlefield,
-                        crate::flow::proposed_event::BattlefieldEntry {
+                        crate::flow::proposed_event::ZoneEntry {
                             tapped: true,
-                            ..crate::flow::proposed_event::BattlefieldEntry::default()
+                            ..crate::flow::proposed_event::ZoneEntry::default()
                         },
                     );
                     let owner = self.state.cards[card].owner;

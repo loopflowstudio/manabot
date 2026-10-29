@@ -49,7 +49,9 @@ def enum_name(enum_type: type[IntEnum], value: Any) -> str:
 
 
 def _serialize_card(card: managym.Card) -> dict[str, Any]:
+    face_down = {"face_down": True} if card.face_down else {}
     return {
+        **face_down,
         "id": int(card.id),
         "registry_key": int(card.registry_key),
         "name": card.name,
@@ -419,11 +421,23 @@ def _redact_hand(player_state: dict[str, Any]) -> None:
     player_state["hand"] = []
 
 
+def _redact_face_down_exile(player_state: dict[str, Any]) -> None:
+    """Remove foretold cards: only their owner may see a face-down card."""
+    exile = player_state.get("exile")
+    if isinstance(exile, list):
+        player_state["exile"] = [
+            card
+            for card in exile
+            if not (isinstance(card, dict) and card.get("face_down"))
+        ]
+
+
 def redact_observation(observation: dict[str, Any]) -> None:
     """Strip the opponent's hidden information from a serialized observation.
 
     Mutates in place. Only chooser-visible library candidates can be projected;
-    opponent hands, inspection cards and private continuation details are removed.
+    opponent hands, face-down exiled cards, inspection cards and private
+    continuation details are removed.
     """
     if not isinstance(observation, dict):
         return
@@ -442,5 +456,6 @@ def redact_observation(observation: dict[str, Any]) -> None:
     opponent = observation.get("opponent")
     if isinstance(opponent, dict):
         _redact_hand(opponent)
+        _redact_face_down_exile(opponent)
         opponent.pop("sideboard", None)
         opponent.pop("inspected", None)

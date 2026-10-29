@@ -237,6 +237,18 @@ impl ZoneManager {
         cards.shuffle(rng);
     }
 
+    /// Put hidden card `new` where `player`'s face-down exiled card `old`
+    /// lies. `old` is left zoneless until the caller reassigns it to the
+    /// hand or library with [`ZoneManager::reassign_hidden`].
+    pub(crate) fn replace_face_down_exile(&mut self, player: PlayerId, old: CardId, new: CardId) {
+        if let Some(slot) = self.exile[player.0].iter_mut().find(|card| **card == old) {
+            *slot = new;
+        }
+        self.ensure_slot(new);
+        self.card_zones[new.0] = Some(ZoneType::Exile);
+        self.card_zones[old.0] = None;
+    }
+
     /// Reassign `player`'s hand and library to exactly `new_hand` and
     /// `new_library`, updating `card_zones` for every card. Used by exact
     /// possible-world materialization: the caller chooses which physical

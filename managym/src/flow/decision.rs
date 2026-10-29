@@ -864,7 +864,7 @@ impl Game {
                         self.move_card_with_entry(
                             *card,
                             ZoneType::Battlefield,
-                            crate::flow::proposed_event::BattlefieldEntry {
+                            crate::flow::proposed_event::ZoneEntry {
                                 tapped: *tapped,
                                 ..Default::default()
                             },
@@ -1196,7 +1196,7 @@ impl Game {
                     self.move_card_with_entry(
                         card,
                         ZoneType::Battlefield,
-                        crate::flow::proposed_event::BattlefieldEntry {
+                        crate::flow::proposed_event::ZoneEntry {
                             tapped: true,
                             ..Default::default()
                         },

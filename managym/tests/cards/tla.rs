@@ -8,8 +8,12 @@ use crate::{
     },
 };
 use managym::{
-    agent::action::{Action, ActionSpaceKind, ActionType},
-    flow::turn::StepKind,
+    agent::{
+        action::{Action, ActionSpaceKind, ActionType},
+        observation::{EventEntityKind, Observation},
+        policy_history::HistoryReference,
+    },
+    flow::{event::GameEvent, turn::StepKind},
     state::{
         game_object::{CardId, PermanentId, PlayerId, Target},
         mana::{ManaCost, ManaUse},
@@ -2127,4 +2131,123 @@ fn sozins_comet_grants_firebending_five_until_end_of_turn() {
     assert_eq!(s.current_step(), StepKind::DeclareAttackers);
     let pool = &s.game().state.players[0].combat_mana_pool;
     assert_eq!(pool.total(), 5);
+}
+
+fn foretell_offered(s: &mut Scenario, card: CardId) -> bool {
+    s.game_mut().scenario_refresh_priority().unwrap();
+    s.action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::Foretell { card: c, .. } if *c == card))
+}
+
+/// Foretell (CR 702.143a): during its owner's turn, pay {2} and exile Sozin's
+/// Comet face down without using the stack. Only its owner sees which card it
+/// is; the move is public, its identity is not. On a later turn its owner
+/// casts it for {2}{R}.
+#[test]
+fn sozins_comet_foretells_face_down_and_casts_on_a_later_turn() {
+    let mut s = setup(&["Sozin's Comet"]);
+    let comet = library_card(&s, 0, "Sozin's Comet");
+    s.game_mut().move_card(comet, ZoneType::Hand);
+    s.set_player_mana_pool(0, "3");
+    assert!(foretell_offered(&mut s, comet));
+    s.drain_events();
+    choose(
+        &mut s,
+        |a| matches!(a, Action::Foretell { card, .. } if *card == comet),
+    );
+    assert_eq!(s.game().state.zones.zone_of(comet), Some(ZoneType::Exile));
+    assert!(s.game().state.stack_objects.is_empty());
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 1);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+
+    // The arrival is public but names no card.
+    let events = s.drain_events();
+    assert!(events.iter().any(
+        |e| matches!(e, GameEvent::CardMoved { card, face_down: true, .. } if *card == comet)
+    ));
+    let recent = Observation::new(s.game(), &events).recent_events;
+    let arrival = recent
+        .iter()
+        .find(|e| e.to_zone == ZoneType::Exile as i32)
+        .expect("exile arrival");
+    assert_eq!(arrival.source_kind, EventEntityKind::None as i32);
+
+    let id = s.game().state.cards[comet].id.0 as i32;
+    let owner = Observation::for_player(s.game(), PlayerId(0));
+    assert!(owner.agent_cards.iter().any(|c| c.id == id && c.face_down));
+    let opponent = Observation::for_player(s.game(), PlayerId(1));
+    assert!(opponent.opponent_cards.iter().all(|c| c.id != id));
+    assert_eq!(opponent.opponent.zone_counts[ZoneType::Exile as usize], 1);
+    let definition = s.game().state.cards[comet].definition_id.0;
+    assert!(opponent.policy_history.iter().all(|row| !matches!(
+        row.source,
+        HistoryReference::Card { definition: d, .. } if d == definition
+    )));
+
+    // Not castable this turn; castable for {2}{R} on its owner's next turn.
+    s.set_player_mana_pool(0, "20RRRR");
+    assert!(!can_cast(&mut s, comet));
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    s.set_player_mana_pool(0, "2R");
+    assert!(can_cast(&mut s, comet));
+    cast_card(&mut s, comet);
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.zones.zone_of(comet),
+        Some(ZoneType::Graveyard)
+    );
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+}
+
+/// Foretell is a special action of its owner's turn only: holding priority
+/// during another player's turn is not enough.
+#[test]
+fn foretell_is_unavailable_on_an_opponents_turn() {
+    let mut s = setup(&["Sozin's Comet"]);
+    let comet = library_card(&s, 1, "Sozin's Comet");
+    s.game_mut().move_card(comet, ZoneType::Hand);
+    s.set_player_mana_pool(1, "20");
+    s.pass_priority();
+    assert_eq!(s.action_space().player, Some(PlayerId(1)));
+    assert!(!foretell_offered(&mut s, comet));
+}
+
+/// Determinization resamples an opponent's face-down foretold card from the
+/// unseen cards with foretell, keeping its grant on the exiled card.
+#[test]
+fn determinize_resamples_an_opponents_foretold_card() {
+    let mut s = setup(&["Sozin's Comet", "Gray Ogre"]);
+    let comet = library_card(&s, 0, "Sozin's Comet");
+    s.game_mut().move_card(comet, ZoneType::Hand);
+    assert!(foretell_offered(&mut s, comet));
+    choose(
+        &mut s,
+        |a| matches!(a, Action::Foretell { card, .. } if *card == comet),
+    );
+    let mut resampled = false;
+    for seed in 0..32 {
+        let mut game = s.game().clone();
+        game.determinize(PlayerId(1), seed);
+        let exiled = game
+            .state
+            .zones
+            .zone_cards(ZoneType::Exile, PlayerId(0))
+            .clone();
+        assert_eq!(exiled.len(), 1);
+        let foretold = exiled[0];
+        assert_eq!(game.state.cards[foretold].name, "Sozin's Comet");
+        let grant = &game.state.cast_permissions.exile_grants[0];
+        assert_eq!(Some(grant.object), game.current_object_ref(foretold));
+        resampled |= foretold != comet;
+        if foretold != comet {
+            assert!(matches!(
+                game.state.zones.zone_of(comet),
+                Some(ZoneType::Hand | ZoneType::Library)
+            ));
+        }
+    }
+    assert!(resampled);
 }

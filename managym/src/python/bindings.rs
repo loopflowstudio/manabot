@@ -1329,6 +1329,9 @@ pub struct PyCard {
     pub keywords: PyKeywords,
     #[pyo3(get, set)]
     pub mana_cost: PyManaCost,
+    /// Foretold and face down in exile (listed only for its owner).
+    #[pyo3(get, set)]
+    pub face_down: bool,
 }
 
 #[cfg(feature = "python")]
@@ -1352,6 +1355,7 @@ impl From<CardData> for PyCard {
             card_types: value.card_types.into(),
             keywords: value.keywords.into(),
             mana_cost: value.mana_cost.into(),
+            face_down: value.face_down,
         }
     }
 }
@@ -1377,6 +1381,7 @@ impl From<PyCard> for CardData {
             card_types: value.card_types.into(),
             keywords: value.keywords.into(),
             mana_cost: value.mana_cost.into(),
+            face_down: value.face_down,
         }
     }
 }

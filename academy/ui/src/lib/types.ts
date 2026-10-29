@@ -26,6 +26,8 @@ export interface CardState {
   toughness: number;
   mana_value: number;
   types: CardTypes;
+  /** Foretold and face down in exile; only its owner's views list it. */
+  face_down?: boolean;
 }
 
 export interface PermanentState {

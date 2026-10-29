@@ -281,6 +281,7 @@
     "chooser": 98,
     "grant": 99,
     "below": 100,
+    "foretell": 101,
     "max": 28,
     "max_select": 29,
     "min": 30,

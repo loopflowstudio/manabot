@@ -1039,6 +1039,7 @@ mod tests {
             is_lesson: false,
             ward_cost: 0,
             kicker_cost: 0,
+            face_down: false,
             card_types: CardTypeData {
                 is_castable: true,
                 is_permanent: true,

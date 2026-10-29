@@ -2131,6 +2131,11 @@
     "LegacyCardView": {
       "additionalProperties": false,
       "properties": {
+        "face_down": {
+          "default": false,
+          "title": "Face Down",
+          "type": "boolean"
+        },
         "id": {
           "maximum": 4294967295,
           "minimum": 0,
