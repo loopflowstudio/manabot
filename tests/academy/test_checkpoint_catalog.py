@@ -148,7 +148,7 @@ def test_replaced_checkpoint_cannot_replace_playable_match(runs: Path) -> None:
     assert game.current_recovery("explicit_resync")["frame"] == before
 
 
-def _deck_import() -> dict:
+def _deck_import() -> dict[str, object]:
     return {
         "pack_key": "tla-pool-v1",
         "hero": {"source": "10 Forest\n10 Mountain\n2 Avatar Enthusiasts"},
