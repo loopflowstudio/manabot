@@ -84,7 +84,22 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   card order; T2-only primitives joined `support/` (`cast_card`,
   `activate_card`, `move_from_library`, `can_activate[_card]`,
   `offered_targets`, `offered_cards`, `zone_of`), each defined once.
-- Gaps: possible-worlds ignore foretold cards (concept review 5 settles it
-  as T2 work: implied by viewer safety); granted land plays of another
+- Gaps: granted land plays of another
   player's card would enter under its owner (unreachable: no T2 grant lets a player play another player's land). (Academy's card face now prints
   and names exhausted / once-each-turn / granted firebending, text-5 wording.)
+- Possible worlds v3 (2026-10-29): foretold slots are ordered (each has its
+  own foretell turn), so the fill factor is `P(m, F)`, not `C(m, F)`; the
+  ratio is constant across worlds. Materialization picks the slot set
+  uniformly but keeps an already-foretold chosen card in place, so slot
+  assignment is not uniform over orderings. Not yet foretold-aware (follow-up
+  for belief owners): `PhysicalHandSampler`'s hypergeometric prior and
+  `BeliefState.draw_unknown`/hidden-draw convolution in `belief/range.py`
+  still treat every pool card as hand-or-library, as does the library
+  count row in `belief/encoding.py` (pool − hand). `Game::determinize` passes
+  an already-foretold card as `new` to `resample_foretold` when F ≥ 2, which
+  `replace_face_down_exile` cannot swap correctly; unreachable in T2 decks
+  with one foretold card at a time, but worth a fix.
+- `rules_tests::structured_offer_rejects_fabricated_and_stale_ids_without_mutation`
+  failed 2 of 9 full `rules_tests` runs (Debug output of the root changed
+  after a rejected stale submission); passes alone and in 7 later runs. It
+  touches no possible-world code; likely order/timing-dependent shared state.

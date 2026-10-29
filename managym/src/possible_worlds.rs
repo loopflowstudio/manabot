@@ -3,11 +3,14 @@
 //
 // managym owns the hidden hand-count hypothesis domain, the exact
 // compatible-deal measure, and deterministic materialization into exact Game
-// branches. manabot beliefs, learned inference, and normalized distributions
+// branches. The opponent's unseen pool is Hand ∪ Library ∪ face-down foretold
+// cards, matching `Game::determinize`: the viewer sees how many cards are
+// foretold, never which, so a world fixes only the hand and its weight counts
+// every way to fill the foretold slots from the foretell-bearing remainder. manabot beliefs, learned inference, and normalized distributions
 // over this domain are out of scope; weights here are exact combinatorial
 // counts, never probabilities.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 
 use rand::seq::SliceRandom;
 use rand::SeedableRng;
@@ -25,7 +28,7 @@ use crate::{
 
 /// Canonical serialization contract for a viewer-relative possible-world
 /// space. Increment when identity or projection field inclusion changes.
-pub const POSSIBLE_WORLD_SPACE_VERSION: u16 = 2;
+pub const POSSIBLE_WORLD_SPACE_VERSION: u16 = 3;
 
 /// Stable, viewer-meaningful identity for a canonical query. Equivalent query
 /// constructions share one canonical form and therefore one digest.
@@ -53,6 +56,14 @@ fn digest_of(value: &impl serde::Serialize) -> WorldQueryDigest {
     WorldQueryDigest(blake3::hash(&bytes))
 }
 
+/// Ordered ways to fill `k` distinguishable slots from `n` cards.
+fn falling(n: u32, k: u32) -> u128 {
+    if k > n {
+        return 0;
+    }
+    (0..k).fold(1, |acc, i| acc * (n - i) as u128)
+}
+
 /// Exact binomial coefficient for the compatible-deal measure. The two-deck
 /// pool keeps `n <= 40`, so `u128` is ample and the incremental formula is
 /// exact at every step.
@@ -70,12 +81,15 @@ fn binom(n: u32, k: u32) -> u128 {
 
 /// One opponent-hand card-**name** multiset of the public hand size, drawn from
 /// the opponent's unseen pool. The weight is the number of physical `CardId`
-/// deals that yield this name-multiset, not a probability.
+/// deals that yield this name-multiset with every foretold slot filled by a
+/// foretell-bearing card, not a probability.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct PossibleWorld {
     /// Name multiset of the hypothesized hand (only names with count > 0).
     pub hand: BTreeMap<String, u32>,
-    /// Exact multivariate-hypergeometric count `Π C(n_i, k_i)`.
+    /// Exact count `Π C(n_i, k_i) · P(m, F)`: hand deals over residual copies
+    /// times ordered fills of the `F` foretold slots from the `m`
+    /// foretell-bearing cards the hand leaves.
     pub weight: u128,
 }
 
@@ -182,14 +196,15 @@ impl WorldQuery {
     /// Fold tautologies and impossibilities against `space`'s pool.
     pub fn canonicalize(&self, space: &PossibleWorldSpace) -> CanonicalWorldQuery {
         let minimum = |name: &str| space.known_hand.get(name).copied().unwrap_or(0);
-        let unknown_slots = space.hand_size - space.known_hand.values().sum::<u32>();
+        // Foretold slots can make a pool copy unreachable, so the bound comes
+        // from the enumerated support rather than the pool alone.
         let maximum = |name: &str| {
             space
-                .pool
-                .get(name)
-                .copied()
+                .worlds
+                .iter()
+                .map(|world| world.hand.get(name).copied().unwrap_or(0))
+                .max()
                 .unwrap_or(0)
-                .min(minimum(name) + unknown_slots)
         };
         match self {
             WorldQuery::True => CanonicalWorldQuery::True,
@@ -358,6 +373,28 @@ pub struct HiddenHandConstraints {
     pub hand_size: u32,
     pub pool: BTreeMap<String, u32>,
     pub known_hand: BTreeMap<String, u32>,
+    /// Public count of the opponent's face-down foretold cards.
+    pub foretold: u32,
+    /// Pool names that carry foretell and so may fill a foretold slot.
+    pub foretell: BTreeSet<String>,
+}
+
+/// The opponent's unseen cards: Hand ∪ Library ∪ face-down foretold exile.
+fn unseen_cards(game: &Game, opponent: PlayerId) -> Vec<CardId> {
+    let mut cards: Vec<CardId> = [ZoneType::Hand, ZoneType::Library]
+        .into_iter()
+        .flat_map(|zone| game.state.zones.zone_cards(zone, opponent).iter().copied())
+        .collect();
+    cards.extend(game.foretold_cards(opponent));
+    cards
+}
+
+fn unseen_pool(game: &Game, opponent: PlayerId) -> BTreeMap<String, u32> {
+    let mut pool = BTreeMap::new();
+    for card in unseen_cards(game, opponent) {
+        *pool.entry(game.state.cards[card].name.clone()).or_insert(0) += 1;
+    }
+    pool
 }
 
 impl HiddenHandConstraints {
@@ -367,12 +404,13 @@ impl HiddenHandConstraints {
             "viewer must name a player"
         );
         let opponent = PlayerId((viewer.0 + 1) % 2);
-        let mut pool: BTreeMap<String, u32> = BTreeMap::new();
-        for zone in [ZoneType::Hand, ZoneType::Library] {
-            for &card in game.state.zones.zone_cards(zone, opponent) {
-                *pool.entry(game.state.cards[card].name.clone()).or_insert(0) += 1;
-            }
-        }
+        let pool = unseen_pool(game, opponent);
+        let foretell = unseen_cards(game, opponent)
+            .into_iter()
+            .filter(|card| game.state.cards[*card].foretell.is_some())
+            .map(|card| game.state.cards[card].name.clone())
+            .collect();
+        let foretold = game.foretold_cards(opponent).len() as u32;
         let hand_size = game.state.zones.size(ZoneType::Hand, opponent) as u32;
         let source_observation = game
             .semantic_observation(viewer)
@@ -392,6 +430,8 @@ impl HiddenHandConstraints {
             hand_size,
             pool,
             known_hand,
+            foretold,
+            foretell,
         }
     }
 }
@@ -473,16 +513,14 @@ impl HiddenHandConstraints {
         let mut branch = source.clone();
         let opponent = self.opponent;
 
-        // Group the opponent's Hand ∪ Library CardIds by name, sorted ascending
-        // so the lowest CardIds of each name go to the hand deterministically.
+        // Group the opponent's unseen CardIds by name, sorted ascending so
+        // the lowest CardIds of each name go to the hand deterministically.
         let mut by_name: BTreeMap<String, Vec<CardId>> = BTreeMap::new();
-        for zone in [ZoneType::Hand, ZoneType::Library] {
-            for &card in branch.state.zones.zone_cards(zone, opponent) {
-                by_name
-                    .entry(branch.state.cards[card].name.clone())
-                    .or_default()
-                    .push(card);
-            }
+        for card in unseen_cards(&branch, opponent) {
+            by_name
+                .entry(branch.state.cards[card].name.clone())
+                .or_default()
+                .push(card);
         }
         for cards in by_name.values_mut() {
             cards.sort_unstable_by_key(|c| c.0);
@@ -505,6 +543,28 @@ impl HiddenHandConstraints {
         new_hand.sort_unstable_by_key(|c| c.0);
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         new_library.shuffle(&mut rng);
+
+        // Fill the foretold slots with the first foretell-bearing cards of the
+        // seeded remainder. A chosen card already foretold keeps its slot, so
+        // no exile slot is ever read while another one holds the same card;
+        // the rest replace the slots whose card was not chosen.
+        let slots = branch.foretold_cards(opponent);
+        let mut chosen = Vec::with_capacity(slots.len());
+        new_library.retain(|card| {
+            let take = chosen.len() < slots.len() && branch.state.cards[*card].foretell.is_some();
+            if take {
+                chosen.push(*card);
+            }
+            !take
+        });
+        if chosen.len() != slots.len() {
+            return Err(MaterializeError::InconsistentWorld);
+        }
+        let mut incoming = chosen.iter().filter(|card| !slots.contains(card));
+        for &old in slots.iter().filter(|old| !chosen.contains(old)) {
+            let new = *incoming.next().expect("one incoming card per vacated slot");
+            branch.resample_foretold(opponent, old, new);
+        }
 
         branch
             .state
@@ -569,6 +629,7 @@ pub struct PossibleWorldSpaceProjection {
     pub hand_size: u32,
     pub pool: BTreeMap<String, u32>,
     pub known_hand: BTreeMap<String, u32>,
+    pub foretold: u32,
     pub total_weight: String,
     pub worlds: Vec<PossibleWorldProjection>,
 }
@@ -603,14 +664,15 @@ struct PossibleWorldSpaceIdentity<'a> {
     hand_size: u32,
     pool: &'a BTreeMap<String, u32>,
     known_hand: &'a BTreeMap<String, u32>,
+    foretold: u32,
     worlds: &'a [PossibleWorld],
     total_weight: String,
 }
 
 /// A viewer-relative, revision-bound space over the opponent's hand-count
 /// domain. Built from any live `Game` state; the decklist is implicit (the
-/// unseen pool is the names of opponent cards in Hand ∪ Library, so public
-/// cards are excluded by construction).
+/// unseen pool is the names of opponent cards in Hand ∪ Library ∪ face-down
+/// foretold exile, so public cards are excluded by construction).
 #[derive(Clone, Debug)]
 pub struct PossibleWorldSpace {
     viewer: PlayerId,
@@ -619,6 +681,8 @@ pub struct PossibleWorldSpace {
     hand_size: u32,
     pool: BTreeMap<String, u32>,
     known_hand: BTreeMap<String, u32>,
+    foretold: u32,
+    foretell: BTreeSet<String>,
     worlds: Vec<PossibleWorld>,
     total_weight: u128,
 }
@@ -644,6 +708,7 @@ impl PossibleWorldSpace {
         &self.pool
     }
 
+    /// Sum of world weights. Without foretold cards this is
     /// `C(N - |K|, H - |K|)`: deals over residual copies after known counts K.
     pub fn total_weight(&self) -> u128 {
         self.total_weight
@@ -666,6 +731,7 @@ impl PossibleWorldSpace {
             hand_size: self.hand_size,
             pool: &self.pool,
             known_hand: &self.known_hand,
+            foretold: self.foretold,
             worlds: &self.worlds,
             total_weight: self.total_weight.to_string(),
         };
@@ -685,6 +751,7 @@ impl PossibleWorldSpace {
             hand_size: self.hand_size,
             pool: self.pool.clone(),
             known_hand: self.known_hand.clone(),
+            foretold: self.foretold,
             total_weight: self.total_weight.to_string(),
             worlds: self
                 .worlds
@@ -744,18 +811,10 @@ impl PossibleWorldSpace {
     }
 
     /// Build the space for `viewer` from a live `Game`. The opponent is the
-    /// other player; the unseen pool is the opponent's Hand ∪ Library name
-    /// multiset; `H` is the opponent's current hand size.
+    /// other player; the unseen pool is the opponent's Hand ∪ Library ∪
+    /// foretold name multiset; `H` is the opponent's current hand size.
     pub fn for_viewer(game: &Game, viewer: PlayerId) -> Self {
-        let constraints = HiddenHandConstraints::for_viewer(game, viewer);
-        Self::from_parts(
-            constraints.viewer,
-            constraints.opponent,
-            constraints.source_observation,
-            constraints.hand_size,
-            constraints.pool,
-            constraints.known_hand,
-        )
+        Self::from_constraints(HiddenHandConstraints::for_viewer(game, viewer))
     }
 
     /// Build the space directly from a pool. Used by weight/canonicalization
@@ -774,24 +833,29 @@ impl PossibleWorldSpace {
             viewer: viewer.0 as u8,
             viewer_state_hash: "fixture".to_string(),
         };
-        Self::from_parts(
+        Self::from_constraints(HiddenHandConstraints {
             viewer,
             opponent,
             source_observation,
             hand_size,
             pool,
-            BTreeMap::new(),
-        )
+            known_hand: BTreeMap::new(),
+            foretold: 0,
+            foretell: BTreeSet::new(),
+        })
     }
 
-    fn from_parts(
-        viewer: PlayerId,
-        opponent: PlayerId,
-        source_observation: ObservationIdentity,
-        hand_size: u32,
-        pool: BTreeMap<String, u32>,
-        known_hand: BTreeMap<String, u32>,
-    ) -> Self {
+    fn from_constraints(constraints: HiddenHandConstraints) -> Self {
+        let HiddenHandConstraints {
+            viewer,
+            opponent,
+            source_observation,
+            hand_size,
+            pool,
+            known_hand,
+            foretold,
+            foretell,
+        } = constraints;
         let mut residual = pool.clone();
         for (name, count) in &known_hand {
             *residual
@@ -799,7 +863,6 @@ impl PossibleWorldSpace {
                 .expect("known definition belongs to pool") -= count;
         }
         let unknown_slots = hand_size - known_hand.values().sum::<u32>();
-        let total_weight = binom(residual.values().copied().sum(), unknown_slots);
         let names: Vec<_> = residual.into_iter().collect();
         let mut worlds = Vec::new();
         let mut current: BTreeMap<String, u32> = BTreeMap::new();
@@ -808,7 +871,14 @@ impl PossibleWorldSpace {
             for (name, count) in &known_hand {
                 *world.hand.entry(name.clone()).or_insert(0) += count;
             }
+            let bearers = foretell
+                .iter()
+                .map(|name| pool[name] - world.hand.get(name).copied().unwrap_or(0))
+                .sum();
+            world.weight *= falling(bearers, foretold);
         }
+        worlds.retain(|world| world.weight > 0);
+        let total_weight = worlds.iter().map(|world| world.weight).sum();
         Self {
             viewer,
             opponent,
@@ -816,6 +886,8 @@ impl PossibleWorldSpace {
             hand_size,
             pool,
             known_hand,
+            foretold,
+            foretell,
             worlds,
             total_weight,
         }
@@ -876,9 +948,10 @@ impl PossibleWorldSpace {
 
     /// Materialize `world` into an exact `Game` branch of `source`.
     ///
-    /// Clones the source, reassigns only the opponent's hand+library split to
-    /// match the world (lowest `CardId`s of each name to hand; seeded library
-    /// shuffle), using ordinary hidden-zone reassignment. The
+    /// Clones the source, reassigns only the opponent's hidden split to match
+    /// the world (lowest `CardId`s of each name to hand; seeded library
+    /// shuffle; foretold slots refilled from the seeded remainder's
+    /// foretell-bearing cards), using ordinary hidden-zone reassignment.
     /// Public zones and any suspended-decision revealed library cards are
     /// preserved. The viewer's unknown library order is shuffled from the
     /// same seed, as is the opponent's remaining library. Deterministic per
@@ -977,6 +1050,8 @@ impl PossibleWorldSpace {
             hand_size: self.hand_size,
             pool: self.pool.clone(),
             known_hand: self.known_hand.clone(),
+            foretold: self.foretold,
+            foretell: self.foretell.clone(),
         }
         .materialize_validated(source, world, seed, mode)
     }
@@ -994,16 +1069,11 @@ impl PossibleWorldSpace {
                 return Err(MaterializeError::StaleSource);
             }
         }
-        let mut current_pool = BTreeMap::new();
-        for zone in [ZoneType::Hand, ZoneType::Library] {
-            for &card in source.state.zones.zone_cards(zone, self.opponent) {
-                *current_pool
-                    .entry(source.state.cards[card].name.clone())
-                    .or_insert(0) += 1;
-            }
-        }
         let current_hand_size = source.state.zones.size(ZoneType::Hand, self.opponent) as u32;
-        if current_pool != self.pool || current_hand_size != self.hand_size {
+        if unseen_pool(source, self.opponent) != self.pool
+            || current_hand_size != self.hand_size
+            || source.foretold_cards(self.opponent).len() as u32 != self.foretold
+        {
             return Err(MaterializeError::StaleSource);
         }
         Ok(())

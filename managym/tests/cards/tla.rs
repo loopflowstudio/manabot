@@ -30,6 +30,7 @@ use managym::{
     },
     decision::Command,
     flow::{event::GameEvent, turn::StepKind},
+    possible_worlds::{viewer_observation, PossibleWorldSpace},
     semantic::setups::authored_pack,
     state::{
         game_object::{CardId, PermanentId, PlayerId, Target},
@@ -4413,6 +4414,69 @@ fn determinize_resamples_an_opponents_foretold_card() {
                 Some(ZoneType::Hand | ZoneType::Library)
             ));
         }
+    }
+    assert!(resampled);
+}
+
+/// The possible-world space counts an opponent's foretold card among the
+/// unseen cards: worlds fix only the hand, each weighted by the ways to fill
+/// the face-down slot with a Sozin's Comet the hand leaves. Which copy was
+/// foretold changes neither the space nor its weights, and materialized
+/// branches refill the slot rather than keeping the real card.
+#[test]
+fn possible_worlds_resample_an_opponents_foretold_card() {
+    let foretell_one = |first: bool| {
+        let mut s = five_color_setup(&["Sozin's Comet"]);
+        let a = library_card(&s, 0, "Sozin's Comet");
+        s.game_mut().move_card(a, ZoneType::Hand);
+        let b = library_card(&s, 0, "Sozin's Comet");
+        s.game_mut().move_card(b, ZoneType::Hand);
+        let foretold = if first { a } else { b };
+        assert!(foretell_offered(&mut s, foretold));
+        choose(
+            &mut s,
+            |a| matches!(a, Action::Foretell { card, .. } if *card == foretold),
+        );
+        (s, foretold)
+    };
+    let (s, comet) = foretell_one(true);
+    let (twin, _) = foretell_one(false);
+    let viewer = PlayerId(1);
+    let space = PossibleWorldSpace::for_viewer(s.game(), viewer);
+    assert_eq!(
+        space.projection(),
+        PossibleWorldSpace::for_viewer(twin.game(), viewer).projection()
+    );
+
+    // 80 basics and 4 comets are unseen; one card is in hand, one comet is
+    // foretold: 4 ways to fill the slot, then 83 hands.
+    let projection = space.projection();
+    assert_eq!(projection.foretold, 1);
+    assert_eq!(space.pool()["Sozin's Comet"], 4);
+    assert_eq!(space.total_weight(), 4 * 83);
+    let with_comet = space
+        .worlds()
+        .iter()
+        .find(|world| world.hand.get("Sozin's Comet") == Some(&1))
+        .expect("a world holds a comet");
+    assert_eq!(with_comet.weight, 4 * 3);
+
+    let observation = viewer_observation(s.game(), viewer);
+    let mut resampled = false;
+    for seed in 0..32 {
+        let branch = space.materialize(s.game(), with_comet, seed).unwrap();
+        assert_eq!(viewer_observation(&branch, viewer), observation);
+        let exiled = branch
+            .state
+            .zones
+            .zone_cards(ZoneType::Exile, PlayerId(0))
+            .clone();
+        assert_eq!(exiled.len(), 1);
+        let foretold = exiled[0];
+        assert_eq!(branch.state.cards[foretold].name, "Sozin's Comet");
+        let grant = &branch.state.cast_permissions.exile_grants[0];
+        assert_eq!(Some(grant.object), branch.current_object_ref(foretold));
+        resampled |= foretold != comet;
     }
     assert!(resampled);
 }

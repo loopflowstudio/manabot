@@ -42,25 +42,28 @@ status fields; T2's observation-row guard and viewer-safety tests sit beside it
 in `tests/cards/observability.rs`; Python text/encoder parity test for the new
 permanent column. JSON protocol schemas regenerated. WORLDS.md w18.
 Restricted-mana text names the class, not Lesson-only (`ee9e32383`).
+Possible worlds (concept review 5): the unseen pool is Hand ∪ Library ∪ the
+opponent's face-down foretold cards; the public `foretold` count rides on
+`HiddenHandConstraints` and the space projection. A world's weight is
+`Π C(n_i, k_i) · P(m, F)` (ordered fills of the F distinguishable slots from
+the m foretell-bearing cards the hand leaves); zero-weight hands are dropped
+and `Has`/`Lacks`/`Q` bounds come from the support. Materialization refills
+the slots from the seeded remainder with `resample_foretold` (a chosen card
+already foretold keeps its slot). `POSSIBLE_WORLD_SPACE_VERSION` 3 in Rust and
+Python (`managym.possible-world-space/v3`); Python `library_size` excludes
+foretold cards.
 Academy's card face prints and names the three T2 permanent statuses (used
 exhaust, used once-each-turn, granted firebending) in text-5 wording
 (`Card.svelte` via `PermanentRow.svelte`, `61d7e1d89`).
 
 ## Remaining
 
-- Next implement (concept review 5): the possible-world space
-  (`possible_worlds.rs`) must treat the opponent's foretold cards as unseen,
-  as `Game::determinize` does. Today its pool is Hand ∪ Library, so it leaves
-  out the foretold card's identity (the viewer could infer it) and every
-  branch keeps the real face-down card. Add foretold cards to the pool. Weight
-  each hand composition by the exact count of compatible deals, multiplied by
-  the ways to fill the face-down slots from the foretell-bearing remainder.
-  Materialize those slots with `resample_foretold`. Bump
-  `POSSIBLE_WORLD_SPACE_VERSION`, and add a directed test using Sozin's Comet.
-- Gate: CLAUDE.md arena admission/monitoring suite; Academy vitest suite; world-bound receipts T1 already flagged.
+- Gate: CLAUDE.md arena admission/monitoring suite; Academy vitest suite; world-bound receipts T1 already flagged, plus `tests/belief/test_state.py` w7 belief receipts under possible-world v3; the `'relations'` KeyError in belief runtime/agent tests.
 - Land only after #394 lands; re-sync then.
 
 ## Check
+
+2026-10-29 implement (possible worlds v3): `possible_worlds_resample_an_opponents_foretold_card` passes; debug cards 304, lib 121, rules 131 + 2 ignored (one intermittent `structured_offer_rejects_fabricated_and_stale_ids_without_mutation` failure in 2 of 9 runs, see questions), possible_worlds 8, prepared 3; clippy `-D warnings` and fmt clean; extension rebuilt. Pytest belief state/range/tracker/runtime + learn contract 59 pass, 2 fail: `test_native_projection_preserves_canonical_receipt_bytes` (w7 receipt moves with the v3 schema identity; gate's world-bound receipts) and `test_manabot_player_generates_belief_before_ordinary_action` (`KeyError: 'relations'` in `actor_critic.py`, also hit by `test_belief_agent`; outside possible worlds, not checked against HEAD).
 
 2026-10-29 compress (after Academy statuses): nothing to reduce in `Card.svelte`/`PermanentRow.svelte` and its test; scratch 9518/12000 tokens; no checks rerun.
 

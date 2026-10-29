@@ -64,6 +64,7 @@ class FakeEngine:
                 "hand_size": self.space.hand_size,
                 "pool": dict(self.space.pool),
                 "known_hand": dict(self.space.known_hand),
+                "foretold": 0,
                 "total_weight": str(self.space.total_weight),
                 "worlds": [
                     {
