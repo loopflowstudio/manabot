@@ -56,6 +56,8 @@ RELATION_X_INDEX = 33
 RELATION_KEYWORDS_INDEX = 34  # 14 granted spell keywords, KeywordData order
 PLAYER_TURN_INDEX = 40
 PLAYER_SEAT_INDEX = 41
+PLAYER_KEEPS_RED_MANA_INDEX = 42
+PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX = 43
 CARD_FACE_DOWN_INDEX = 40
 PERMANENT_STUN_INDEX = 27
 PERMANENT_FIRE_INDEX = 28
@@ -68,6 +70,15 @@ PERMANENT_FIREBENDING_INDEX = 33
 PERMANENT_TEMP_SUBTYPES_INDEX = 34
 TEMP_SUBTYPES = ("Plains", "Island", "Swamp", "Mountain", "Forest", "Construct")
 PERMANENT_OTHER_TEMP_SUBTYPES_INDEX = 40
+PERMANENT_ATTACKING_INDEX = 41
+# Object index + 1 of the attacker this creature blocks: a join.
+PERMANENT_BLOCKING_INDEX = 42
+PERMANENT_ABILITIES_LOST_INDEX = 43
+PERMANENT_USED_ABILITIES_INDEX = 44
+USED_ABILITY_FLAGS = 4
+PERMANENT_OTHER_USED_ABILITIES_INDEX = 48
+# Permanent columns that hold object links (joins), in model parameter order.
+PERMANENT_LINK_INDEXES = (PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX)
 KEYWORD_FIELDS = (
     "flying",
     "reach",
@@ -122,10 +133,10 @@ class ObservationEncoder:
         # Define dimensions for players, cards, permanents.
         # Player: life + is_active + zones + phase/step one-hots + gy
         # lessons + until-end-of-combat mana + pooled and spend-restricted colors;
-        # v5: turn number and seat.
+        # v5: turn number, seat, kept red mana, no maximum hand size.
         self.player_dim = (
             2 + self.num_zones + self.num_phases + self.num_steps + 14
-        ) + 2 * self.shows_everything
+        ) + 4 * self.shows_everything
         # Card: zone one-hot + is_mine + P/T + mana value + 6 type flags +
         # 12 keywords + is_token/is_ally/is_lesson tags + ward flag/cost +
         # kicker flag/cost + hexproof + outside + indestructible + legendary;
@@ -141,8 +152,9 @@ class ObservationEncoder:
         # (printed + until-EOT grants), death-to-exile replacement, definition,
         # temporary Avatar subtype; v5: stun/fire/double-strike counters,
         # attachment join, effect-set characteristics, granted land,
-        # firebending, temporary subtypes; validity.
-        self.permanent_dim = 42 if self.shows_everything else 28
+        # firebending, temporary subtypes, attacking, blocking join, lost
+        # abilities, used activations; validity.
+        self.permanent_dim = 50 if self.shows_everything else 28
         self.event_dim = 12 if config.policy_history_version == 1 else 7
 
         # Preserve attack/decline independently of action family and focus.
@@ -298,10 +310,14 @@ class ObservationEncoder:
                 ("opponent_permanents", obs.opponent_permanents),
             ):
                 for row, perm in enumerate(perms):
-                    if perm.attached_to is not None:
-                        out[key][row, PERMANENT_ATTACHED_INDEX] = (
-                            self.object_to_index.get(perm.attached_to, -1) + 1
-                        )
+                    for column, linked in (
+                        (PERMANENT_ATTACHED_INDEX, perm.attached_to),
+                        (PERMANENT_BLOCKING_INDEX, perm.blocking),
+                    ):
+                        if linked is not None:
+                            out[key][row, column] = (
+                                self.object_to_index.get(linked, -1) + 1
+                            )
 
         # Validity masks
         out["agent_player_valid"] = np.ones((1,), dtype=np.float32)
@@ -454,6 +470,8 @@ class ObservationEncoder:
             arr[PLAYER_TURN_INDEX] = float(turn.turn_number) / 20.0
             # Seat 0 is on the play.
             arr[PLAYER_SEAT_INDEX] = float(player.player_index)
+            arr[PLAYER_KEEPS_RED_MANA_INDEX] = float(player.keeps_red_mana)
+            arr[PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX] = float(player.no_maximum_hand_size)
 
         self.object_to_index[player.id] = self.current_object_index
         self.current_object_index += 1
@@ -612,6 +630,14 @@ class ObservationEncoder:
                 subtype != "Avatar" and subtype not in TEMP_SUBTYPES
                 for subtype in perm.temp_subtypes
             )
+            arr[PERMANENT_ATTACKING_INDEX] = float(perm.attacking)
+            # PERMANENT_BLOCKING_INDEX is written once every object is indexed.
+            arr[PERMANENT_ABILITIES_LOST_INDEX] = float(perm.abilities_lost)
+            for index in perm.used_abilities:
+                if index < USED_ABILITY_FLAGS:
+                    arr[PERMANENT_USED_ABILITIES_INDEX + index] = 1.0
+                else:
+                    arr[PERMANENT_OTHER_USED_ABILITIES_INDEX] += 1.0
         # Set validity flag (permanent exists)
         arr[-1] = 1.0
         return arr

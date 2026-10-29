@@ -24,12 +24,15 @@ use managym::{
         },
         observation_encoder::{
             encode, EncodedObservation, ObservationEncoderConfig, CARD_DIM_V5,
-            CARD_FACE_DOWN_INDEX, PERMANENT_ATTACHED_INDEX, PERMANENT_CHARACTERISTICS_SET_INDEX,
-            PERMANENT_DIM_V5, PERMANENT_DOUBLE_STRIKE_COUNTERS_INDEX, PERMANENT_FIREBENDING_INDEX,
+            CARD_FACE_DOWN_INDEX, PERMANENT_ABILITIES_LOST_INDEX, PERMANENT_ATTACHED_INDEX,
+            PERMANENT_ATTACKING_INDEX, PERMANENT_BLOCKING_INDEX,
+            PERMANENT_CHARACTERISTICS_SET_INDEX, PERMANENT_DIM_V5,
+            PERMANENT_DOUBLE_STRIKE_COUNTERS_INDEX, PERMANENT_FIREBENDING_INDEX,
             PERMANENT_FIRE_INDEX, PERMANENT_GRANTED_LAND_INDEX,
-            PERMANENT_OTHER_TEMP_SUBTYPES_INDEX, PERMANENT_STUN_INDEX,
-            PERMANENT_TEMP_SUBTYPES_INDEX, PLAYER_DIM_V5, PLAYER_SEAT_INDEX, PLAYER_TURN_INDEX,
-            TEMP_SUBTYPES,
+            PERMANENT_OTHER_TEMP_SUBTYPES_INDEX, PERMANENT_OTHER_USED_ABILITIES_INDEX,
+            PERMANENT_STUN_INDEX, PERMANENT_TEMP_SUBTYPES_INDEX, PERMANENT_USED_ABILITIES_INDEX,
+            PLAYER_DIM_V5, PLAYER_KEEPS_RED_MANA_INDEX, PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX,
+            PLAYER_SEAT_INDEX, PLAYER_TURN_INDEX, TEMP_SUBTYPES, USED_ABILITY_FLAGS,
         },
     },
     flow::turn::StepKind,
@@ -158,6 +161,8 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         known_hand => [Rows("known_hand")],
         sideboard_counts => [Excluded(HIDDEN_SIDEBOARD)],
         remaining_sideboard_counts => [Excluded(HIDDEN_SIDEBOARD)],
+        keeps_red_mana => [column(Player, PLAYER_KEEPS_RED_MANA_INDEX)],
+        no_maximum_hand_size => [column(Player, PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX)],
     }));
     fields.extend(encoding!(CardData {
         zone => [Columns(Card, 0, 7)],
@@ -228,6 +233,13 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         creature_types => [column(Permanent, PERMANENT_CHARACTERISTICS_SET_INDEX)],
         is_granted_land => [column(Permanent, PERMANENT_GRANTED_LAND_INDEX)],
         firebending => [column(Permanent, PERMANENT_FIREBENDING_INDEX)],
+        attacking => [column(Permanent, PERMANENT_ATTACKING_INDEX)],
+        blocking => [Join(Permanent, PERMANENT_BLOCKING_INDEX)],
+        abilities_lost => [column(Permanent, PERMANENT_ABILITIES_LOST_INDEX)],
+        used_abilities => [
+            Columns(Permanent, PERMANENT_USED_ABILITIES_INDEX, USED_ABILITY_FLAGS),
+            column(Permanent, PERMANENT_OTHER_USED_ABILITIES_INDEX),
+        ],
     }));
     fields.extend(encoding!(StackObjectData {
         description => [Definition],
@@ -511,6 +523,18 @@ fn assert_v5_alone_sees(
     id: PermanentId,
     column: usize,
 ) {
+    assert_v5_sees(baseline, changed, viewer, id, column, 1);
+}
+
+/// As [`assert_v5_alone_sees`], when the change also shows in other v5 columns.
+fn assert_v5_sees(
+    baseline: &Scenario,
+    changed: &Scenario,
+    viewer: usize,
+    id: PermanentId,
+    column: usize,
+    v5_differences: usize,
+) {
     assert_eq!(
         flat(&encoded(baseline, viewer, 4)),
         flat(&encoded(changed, viewer, 4)),
@@ -521,14 +545,12 @@ fn assert_v5_alone_sees(
         permanent_value(changed, viewer, id, column),
     );
     assert_ne!(before, after, "v5 column {column} misses the change");
-    let differing: Vec<usize> = flat(&encoded(baseline, viewer, 5))
+    let differing = flat(&encoded(baseline, viewer, 5))
         .iter()
         .zip(flat(&encoded(changed, viewer, 5)))
-        .enumerate()
-        .filter(|(_, (a, b))| **a != *b)
-        .map(|(index, _)| index)
-        .collect();
-    assert_eq!(differing.len(), 1, "only the named column differs");
+        .filter(|(a, b)| **a != *b)
+        .count();
+    assert_eq!(differing, v5_differences, "v5 columns that differ");
 }
 
 /// Gray Ogres for both players, tapped, in player 0's main phase.
@@ -653,7 +675,8 @@ fn a_toph_granted_land_differs_from_an_ungranted_one_in_v5() {
         permanent_value(&granted, 0, tile, PERMANENT_GRANTED_LAND_INDEX),
         1.0
     );
-    assert_v5_alone_sees(&plain, &granted, 0, tile, PERMANENT_GRANTED_LAND_INDEX);
+    // Toph's own lost abilities are the other difference.
+    assert_v5_sees(&plain, &granted, 0, tile, PERMANENT_GRANTED_LAND_INDEX, 2);
 }
 
 #[test]
@@ -889,4 +912,129 @@ fn foretold_and_hand_cards_never_reach_the_opponents_encoding() {
         .0
         .iter()
         .all(|row| row[CARD_FACE_DOWN_INDEX] == 0.0));
+}
+
+// ---------------------------------------------------------------------------
+// Combat, lost abilities, used activations and player state
+// ---------------------------------------------------------------------------
+
+/// Two ogres for player 1 and one for player 0, in player 0's main phase.
+fn combat_state() -> (Scenario, PermanentId, [PermanentId; 2]) {
+    let mut s = setup_unfunded(&["Gray Ogre"]);
+    let blocker = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let first = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let second = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    (s, blocker, [first, second])
+}
+
+fn declare(
+    s: &mut Scenario,
+    attackers: &[PermanentId],
+    blocks: Option<(PermanentId, PermanentId)>,
+) {
+    for attacker in attackers {
+        s.game_mut().state.permanents[*attacker]
+            .as_mut()
+            .unwrap()
+            .attacking = true;
+    }
+    s.game_mut().state.combat = Some(managym::flow::combat::CombatState {
+        attackers: attackers.to_vec(),
+        attacker_to_blockers: blocks
+            .map(|(attacker, blocker)| (attacker, vec![blocker]))
+            .into_iter()
+            .collect(),
+        ..Default::default()
+    });
+}
+
+#[test]
+fn attacking_creatures_differ_from_idle_ones_only_in_v5() {
+    let (idle, _, [first, _]) = combat_state();
+    let (mut attacking, ..) = combat_state();
+    declare(&mut attacking, &[first], None);
+    assert_v5_alone_sees(&idle, &attacking, 0, first, PERMANENT_ATTACKING_INDEX);
+}
+
+#[test]
+fn blocking_one_attacker_differs_from_blocking_another_only_in_v5() {
+    let (mut on_first, blocker, [first, second]) = combat_state();
+    let (mut on_second, ..) = combat_state();
+    declare(&mut on_first, &[first, second], Some((first, blocker)));
+    declare(&mut on_second, &[first, second], Some((second, blocker)));
+    assert_eq!(
+        permanent_value(&on_first, 0, blocker, PERMANENT_BLOCKING_INDEX),
+        (object_index(&on_first, 0, first) + 1) as f32
+    );
+    assert_v5_alone_sees(&on_first, &on_second, 0, blocker, PERMANENT_BLOCKING_INDEX);
+}
+
+#[test]
+fn a_creature_that_lost_its_abilities_differs_only_in_v5() {
+    let (baseline, ogre) = ogre_state();
+    let (mut changed, _) = ogre_state();
+    changed.game_mut().state.permanents[ogre]
+        .as_mut()
+        .unwrap()
+        .abilities_lost = true;
+    assert_v5_alone_sees(&baseline, &changed, 0, ogre, PERMANENT_ABILITIES_LOST_INDEX);
+}
+
+fn mai(exhausted: bool) -> (Scenario, PermanentId) {
+    let mut s = setup_unfunded(&["Mai, Jaded Edge"]);
+    let mai = s.force_permanent_on_battlefield(1, "Mai, Jaded Edge");
+    if exhausted {
+        s.game_mut().state.permanents[mai]
+            .as_mut()
+            .unwrap()
+            .exhausted
+            .push(0);
+    }
+    (s, mai)
+}
+
+#[test]
+fn a_spent_exhaust_ability_differs_from_an_unused_one_only_in_v5() {
+    let (unused, mai_id) = mai(false);
+    let (spent, _) = mai(true);
+    assert_eq!(
+        permanent_value(&spent, 0, mai_id, PERMANENT_USED_ABILITIES_INDEX),
+        1.0,
+        "Mai's only activated ability is exhaust"
+    );
+    assert_eq!(
+        permanent_value(&spent, 0, mai_id, PERMANENT_OTHER_USED_ABILITIES_INDEX),
+        0.0
+    );
+    assert_v5_alone_sees(&unused, &spent, 0, mai_id, PERMANENT_USED_ABILITIES_INDEX);
+}
+
+#[test]
+fn kept_red_mana_and_no_hand_size_reach_the_player_rows_only_in_v5() {
+    for column in [
+        PLAYER_KEEPS_RED_MANA_INDEX,
+        PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX,
+    ] {
+        let (baseline, _) = ogre_state();
+        let (mut changed, _) = ogre_state();
+        let player = &mut changed.game_mut().state.players[1];
+        if column == PLAYER_KEEPS_RED_MANA_INDEX {
+            player.keeps_red_mana = true;
+        } else {
+            player.no_maximum_hand_size = true;
+        }
+        assert_eq!(
+            flat(&encoded(&baseline, 0, 4)),
+            flat(&encoded(&changed, 0, 4))
+        );
+        let (before, after) = (encoded(&baseline, 0, 5), encoded(&changed, 0, 5));
+        assert_eq!(before.agent_player, after.agent_player);
+        assert_eq!(
+            (
+                before.opponent_player[column],
+                after.opponent_player[column]
+            ),
+            (0.0, 1.0)
+        );
+    }
 }

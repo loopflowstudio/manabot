@@ -340,6 +340,10 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "creature_types": "creature types set to",
         "is_granted_land": "land through an effect",
         "firebending": "firebending",
+        "attacking": "attacking",
+        "blocking": "blocking",
+        "abilities_lost": "has lost all abilities",
+        "used_abilities": "used-up abilities",
     },
     managym.Card: {
         "id": "the card's alias",
@@ -388,6 +392,8 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "known_hand": "known hand",
         "sideboard_counts": "Initial sideboard",
         "remaining_sideboard_counts": "Owned outside-game candidates",
+        "keeps_red_mana": "Keeps unspent red mana",
+        "no_maximum_hand_size": "No maximum hand size",
     },
     managym.Turn: {
         "turn_number": "Turn",
@@ -403,3 +409,27 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
 def test_every_observed_field_has_llm_text(kind: type) -> None:
     observed = {name for name in dir(kind) if not name.startswith("_")}
     assert observed == set(_TEXT_FIELDS[kind])
+
+
+def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    decision = capture_text_decision(env)
+    payload = json.loads(decision.capture_json)
+    state = payload["observation"]["viewer_state"]
+    mountain, ogre = state["agent_permanents"]
+    ogre |= {"attacking": True, "abilities_lost": True, "used_abilities": [0]}
+    mountain |= {"blocking": ogre["id"]}
+    state["agent"] |= {"keeps_red_mana": True, "no_maximum_hand_size": True}
+    text = render_decision(_redigest(payload)).text
+    assert "; blocking C2 (Gray Ogre);" in text
+    assert "; attacking; has lost all abilities; used-up abilities 1;" in text
+    assert "Keeps unspent red mana until end of turn.\nNo maximum hand size." in text
+    for absent in (
+        "attacking",
+        "blocking",
+        "lost all",
+        "used-up",
+        "Keeps",
+        "hand size",
+    ):
+        assert absent not in decision.text

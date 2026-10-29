@@ -121,12 +121,32 @@ Check (item 23): cargo fmt/clippy clean; `cards` observability 13 pass, lib
 model/sim/env/belief 379 pass with 3 failures that also fail at HEAD (belief
 fixture lacks `relations`; belief receipt bound to the world), text 25 pass.
 
+24. Missing observation state (2026-10-29): `PermanentData.attacking`,
+   `blocking` (the attacker from `CombatState.attacker_to_blockers`),
+   `abilities_lost` (`has_lost_abilities`), `used_abilities` (indices in
+   `activated_abilities_for` whose `activation_used`), `PlayerData.
+   keeps_red_mana` and `no_maximum_hand_size`; serde-omitted at defaults,
+   PyO3 and `.pyi`. V5 edited in place: permanent 50 (attacking 41, blocking
+   join 42, abilities lost 43, used-ability flags 44–47 for indices 0–3,
+   later-index count 48), player 44 (kept red mana 42, no maximum hand size
+   43). The model's link join covers both permanent links
+   (`PERMANENT_LINK_INDEXES`, `link_to_target`/`link_from_target`). Text and
+   both guards list them; directed Rust tests for attacking, blocking A vs B,
+   lost abilities, spent exhaust and player flags.
+
+Check (items 23–24, debug): fmt/clippy clean; `cargo test --no-fail-fast` all
+pass except `semantic_conformance_tests` (2, w15 receipts, known); cards 367
+incl. observability 18. Pytest world/observation suite plus model, sim, env,
+belief, verify, text and play modes: 690 pass. 19 fail and 5 error, all on world-release
+evidence (registration literal stops at w15, w17 checkpoint binding, frozen
+digests and `schema_version`) or pre-existing failures (belief fixture without
+`relations`, synthetic rollout definitions, conditional-search digest), which
+also fail at `752c75ef7~1`.
+
 ## Remaining
 
-- Item 24: observe state the `Observation` still lacks: combat assignments
-  (`attacking`, blocked attacker), lost abilities (`has_lost_abilities`),
-  used-up activations (exhaust / once each turn), `Player.keeps_red_mana`
-  and `no_maximum_hand_size`; then their v5 columns, text and guard rows.
+- Academy protocol views (`LegacyPermanentView`/`LegacyPlayerView`, the six
+  schemas, `types.ts`) and display for item 24's fields.
 - After T1 (PR #394) publishes its authoring-layer removal: sync, convert
   this batch's cards to engine-type definitions (no new authoring `Op`s), add
   the learning-token half of the guard over `Effect`/`Ability`, and Scryfall

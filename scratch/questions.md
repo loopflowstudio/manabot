@@ -161,3 +161,13 @@ mana, `Game::zone_cast_cost`/`may_play_from_zone`, `ZoneEntry`.
 - The tensor and text halves land before T1's sync. The learning-token guard
   and card conversion wait for T1's unpublished authoring-layer removal, as
   Jack Heart's steer directs ("sync onto it before reworking the encoding").
+- Item 24 adds the state the `Observation` lacked (combat assignments, lost
+  abilities, spent activation limits, kept red mana, no maximum hand size).
+  Spent limits encode as flags for ability indices 0–3 plus a count of later
+  indices (no current card has more). `deathtouch_damage` and `was_cast` stay
+  unobserved: SBAs consume the first before any decision, and the second is
+  read only while its own entry resolves.
+- Academy protocol views and schemas for item 24's fields are left as a
+  follow-up: Academy is not one of the three encodings Jack Heart named.
+- Scryfall ids (Jack Heart's steer) attach to card definitions, so they wait
+  for the same T1 sync as the card conversion.

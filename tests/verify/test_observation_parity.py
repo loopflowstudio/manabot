@@ -313,7 +313,7 @@ def test_elemental_indestructible_encoding_preserves_outside_and_definition_colu
     for key, value in expected.items():
         np.testing.assert_array_equal(actual[key], value, err_msg=key)
     assert actual["agent_cards"].shape[-1] == 42
-    assert actual["agent_permanents"].shape[-1] == 42
+    assert actual["agent_permanents"].shape[-1] == 50
     assert actual["agent_cards"][0, 38] == 1
     assert actual["agent_cards"][0, 37] == 0
     assert actual["agent_permanents"][0, 25] == 1
@@ -393,7 +393,12 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     mine.name, mine.creature_types = "Humble Merchant", ["Citizen"]
     mine.is_granted_land, mine.firebending = True, 4
     mine.temp_subtypes = ["Island", "Construct", "Citizen"]
+    mine.attacking, mine.blocking, mine.abilities_lost = True, theirs.id, True
+    mine.used_abilities = [1, 5]
     obs.agent_permanents = [mine]
+    agent = obs.agent
+    agent.keeps_red_mana = agent.no_maximum_hand_size = True
+    obs.agent = agent
     cards = obs.agent_cards
     cards[0].face_down = True
     obs.agent_cards = cards
@@ -406,7 +411,12 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     row = actual["agent_permanents"][0]
     host = 2 + 2 * encoder.cards_per_player + encoder.perms_per_player
     np.testing.assert_allclose(
-        row[27:42], [0.1, 0.2, 0.3, host + 1, 1, 1, 0.4, 0, 1, 0, 0, 0, 1, 1, 1]
+        row[27:50],
+        [0.1, 0.2, 0.3, host + 1, 1, 1, 0.4, 0, 1, 0, 0, 0, 1, 1]
+        + [1, host + 1, 1, 0, 1, 0, 0, 1, 1],
+    )
+    np.testing.assert_allclose(
+        actual["agent_player"][0, 40:], [obs.turn.turn_number / 20, 0, 1, 1]
     )
     assert actual["agent_cards"][0, 40] == 1 and actual["agent_cards"][0, 41] == 1
     v4 = env.encode_observation(obs, 4)

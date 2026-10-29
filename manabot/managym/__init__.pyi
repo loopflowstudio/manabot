@@ -391,6 +391,8 @@ class Player:
     known_hand: Dict[int, int]
     sideboard_counts: Dict[int, int]
     remaining_sideboard_counts: Dict[int, int]
+    keeps_red_mana: bool
+    no_maximum_hand_size: bool
     combat_mana: int
     mana: tuple[int, int, int, int, int, int]
     lesson_mana: tuple[int, int, int, int, int, int]
@@ -448,6 +450,10 @@ class Permanent:
     is_granted_land: bool
     # Firebending gained until end of turn.
     firebending: int
+    attacking: bool
+    blocking: int | None
+    abilities_lost: bool
+    used_abilities: list[int]
 
 class Turn:
     turn_number: int

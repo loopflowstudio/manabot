@@ -49,6 +49,12 @@ pub struct PlayerData {
     pub known_hand: BTreeMap<u32, u32>,
     pub sideboard_counts: BTreeMap<u32, u32>,
     pub remaining_sideboard_counts: BTreeMap<u32, u32>,
+    /// Unspent red mana stays until end of turn (The Last Agni Kai).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub keeps_red_mana: bool,
+    /// No maximum hand size for the rest of the game (CR 402.2).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub no_maximum_hand_size: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -290,6 +296,20 @@ pub struct PermanentData {
     /// Firebending gained until end of turn (Sozin's Comet, Fire Nation Palace).
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub firebending: i32,
+    /// Attacking in the current combat (CR 506.4).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub attacking: bool,
+    /// The attacking creature this one blocks (CR 509.1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocking: Option<i32>,
+    /// It has lost all abilities (CR 613.1f), until end of turn or while an
+    /// Aura sets its characteristics.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub abilities_lost: bool,
+    /// Activated abilities (indices in its ability list) whose limit is
+    /// spent: exhaust (CR 702.177a) or once each turn (CR 602.5b).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub used_abilities: Vec<usize>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -572,6 +592,8 @@ impl Observation {
                 .iter()
                 .map(|(definition, count)| (definition.0, *count))
                 .collect(),
+            keeps_red_mana: p.keeps_red_mana,
+            no_maximum_hand_size: p.no_maximum_hand_size,
         }
     }
 
@@ -746,6 +768,23 @@ impl Observation {
             is_granted_land: game.permanent_is_land(perm_id)
                 && !game.state.cards[permanent.card].types.is_land(),
             firebending: i32::from(permanent.firebending_this_turn),
+            attacking: permanent.attacking,
+            blocking: game.state.combat.as_ref().and_then(|combat| {
+                combat
+                    .attacker_to_blockers
+                    .iter()
+                    .find(|(_, blockers)| blockers.contains(&perm_id))
+                    .and_then(|(attacker, _)| game.state.permanents[*attacker].as_ref())
+                    .map(|attacker| attacker.id.0 as i32)
+            }),
+            abilities_lost: game.has_lost_abilities(perm_id),
+            used_abilities: game
+                .activated_abilities_for(perm_id)
+                .iter()
+                .enumerate()
+                .filter(|(index, ability)| permanent.activation_used(*index, ability))
+                .map(|(index, _)| index)
+                .collect(),
         };
 
         if permanent.controller.0 == self.agent.player_index as usize {

@@ -489,6 +489,11 @@ class _Renderer:
                 + f". Until-end-of-combat mana total: {player.combat_mana}.",
                 f"Lessons in graveyard: {player.graveyard_lessons}.",
             ]
+            # Effect-derived player state, present only when it applies.
+            if player.keeps_red_mana:
+                lines.append("Keeps unspent red mana until end of turn.")
+            if player.no_maximum_hand_size:
+                lines.append("No maximum hand size.")
             for label, quantities in (
                 ("Publicly known hand minima", player.known_hand),
                 ("Initial sideboard", player.sideboard_counts),
@@ -583,6 +588,15 @@ class _Renderer:
             parts.append("land through an effect")
         if permanent.firebending:
             parts.append(f"firebending {permanent.firebending}")
+        if permanent.attacking:
+            parts.append("attacking")
+        if permanent.blocking is not None:
+            parts.append(f"blocking {self.name(permanent.blocking)}")
+        if permanent.abilities_lost:
+            parts.append("has lost all abilities")
+        if permanent.used_abilities:
+            used = ", ".join(str(index + 1) for index in permanent.used_abilities)
+            parts.append(f"used-up abilities {used}")
         return "".join(f"; {part}" for part in parts)
 
     def _definitions_lines(self) -> list[str]:

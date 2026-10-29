@@ -12,8 +12,8 @@ import torch.nn as nn
 
 # Local imports
 from manabot.env.observation import (
-    PERMANENT_ATTACHED_INDEX,
     PERMANENT_DEFINITION_INDEX,
+    PERMANENT_LINK_INDEXES,
     RELATION_VALID_INDEX,
     ObservationSpace,
 )
@@ -69,11 +69,10 @@ class ActorCritic(nn.Module):
             )
         player_dim = enc.player_dim
         card_dim = enc.card_dim
-        # Definition IDs and v5 attachment links are categorical joins, never
+        # Definition IDs and v5 permanent links are categorical joins, never
         # numeric permanent features.
-        self._join_columns = (PERMANENT_DEFINITION_INDEX,) + (
-            (PERMANENT_ATTACHED_INDEX,) if enc.shows_everything else ()
-        )
+        self._link_columns = PERMANENT_LINK_INDEXES if enc.shows_everything else ()
+        self._join_columns = (PERMANENT_DEFINITION_INDEX, *self._link_columns)
         perm_dim = enc.permanent_dim - len(self._join_columns)
         action_dim = enc.action_dim
         self.max_focus_objects = enc.max_focus_objects
@@ -227,24 +226,22 @@ class ActorCritic(nn.Module):
             else None
         )
 
-        # Policy input v5 links each Aura/Equipment to its host. The join
-        # exchanges pre-attention embeddings both ways: the attachment reads
-        # its host and the host reads (summed) attachments, so an Equipment's
-        # effect and an Honest Work host's set characteristics reach both
-        # objects. Zero weights start additive; skip_init draws no RNG.
-        self.attachment_to_host: nn.Linear | None = None
-        self.host_to_attachment: nn.Linear | None = None
+        # Policy input v5 links permanents to other objects: an Aura or
+        # Equipment to its host, a blocker to the attacker it blocks. Each
+        # link exchanges pre-attention embeddings both ways: the linked
+        # permanent reads its target and the target reads (summed) linked
+        # permanents, so an Equipment's effect, an Honest Work host's set
+        # characteristics and a blocking assignment reach both objects. Zero
+        # weights start additive; skip_init draws no RNG.
+        self.link_from_target = nn.ModuleList()
+        self.link_to_target = nn.ModuleList()
         self._permanents_start = 2 + 2 * enc.cards_per_player
-        if enc.shows_everything:
-            self.attachment_to_host = torch.nn.utils.skip_init(
-                nn.Linear, embed_dim, embed_dim
-            )
-            self.host_to_attachment = torch.nn.utils.skip_init(
-                nn.Linear, embed_dim, embed_dim
-            )
-            for layer in (self.attachment_to_host, self.host_to_attachment):
+        for _ in self._link_columns:
+            for layers in (self.link_from_target, self.link_to_target):
+                layer = torch.nn.utils.skip_init(nn.Linear, embed_dim, embed_dim)
                 nn.init.zeros_(layer.weight)
                 nn.init.zeros_(layer.bias)
+                layers.append(layer)
 
         # When True, forward() stashes raw pre-mask logits on
         # self.last_raw_logits for offline diagnosis. Off by default: the
@@ -581,8 +578,8 @@ class ActorCritic(nn.Module):
             )
 
         objects = torch.cat(object_parts, dim=1)
-        if self.attachment_to_host is not None:
-            objects = self._join_attachments(obs, objects)
+        if self._link_columns:
+            objects = self._join_permanent_links(obs, objects)
         # History and current continuation both inform objects and focus-free actions.
         shared_context = None
         frame_context = None
@@ -631,38 +628,41 @@ class ActorCritic(nn.Module):
         validity = torch.cat(validity_parts, dim=1)
         return objects, is_agent, validity, shared_context, frame_context
 
-    def _join_attachments(
+    def _join_permanent_links(
         self, obs: Dict[str, torch.Tensor], objects: torch.Tensor
     ) -> torch.Tensor:
-        """Add each host's embedding to its attachments and theirs to it.
+        """Add each link target's embedding to its linked permanents and theirs to it.
 
-        Links are object index + 1 (zero: unattached) into `objects` [B,N,D].
+        Links are object index + 1 (zero: none) into `objects` [B,N,D].
         """
-        assert self.attachment_to_host is not None
-        assert self.host_to_attachment is not None
-        links = torch.cat(
-            [
-                obs[key][..., PERMANENT_ATTACHED_INDEX]
-                for key in ("agent_permanents", "opponent_permanents")
-            ],
-            dim=1,
-        )
-        if not (
-            (links == links.floor()) & (links >= 0) & (links <= objects.shape[1])
-        ).all():
-            raise ValueError("invalid attachment object reference")
         start = self._permanents_start
-        permanents = objects[:, start : start + links.shape[1]]
-        attached = (links > 0).unsqueeze(-1)
-        hosts = (links.long() - 1).clamp_min(0).unsqueeze(-1).expand_as(permanents)
-        from_host = self.host_to_attachment(objects.gather(1, hosts))
-        to_host = torch.zeros_like(objects).scatter_add(
-            1, hosts, self.attachment_to_host(permanents).masked_fill(~attached, 0)
-        )
-        to_host[:, start : start + links.shape[1]] += from_host.masked_fill(
-            ~attached, 0
-        )
-        return objects + to_host
+        delta = torch.zeros_like(objects)
+        for column, from_target, to_target in zip(
+            self._link_columns, self.link_from_target, self.link_to_target
+        ):
+            links = torch.cat(
+                [
+                    obs[key][..., column]
+                    for key in ("agent_permanents", "opponent_permanents")
+                ],
+                dim=1,
+            )
+            if not (
+                (links == links.floor()) & (links >= 0) & (links <= objects.shape[1])
+            ).all():
+                raise ValueError("invalid permanent link object reference")
+            permanents = objects[:, start : start + links.shape[1]]
+            linked = (links > 0).unsqueeze(-1)
+            targets = (
+                (links.long() - 1).clamp_min(0).unsqueeze(-1).expand_as(permanents)
+            )
+            delta = delta.scatter_add(
+                1, targets, to_target(permanents).masked_fill(~linked, 0)
+            )
+            delta[:, start : start + links.shape[1]] += from_target(
+                objects.gather(1, targets)
+            ).masked_fill(~linked, 0)
+        return objects + delta
 
     def _generic_definitions(
         self, ids: torch.Tensor, admitted: torch.Tensor | None = None

@@ -597,7 +597,7 @@ fn resolution_eligibility_distinguishes_identical_present_observations() {
             .unwrap()
             .relations;
             for (row, old) in native
-                .as_chunks::<33>()
+                .as_chunks::<{ crate::agent::continuation::RELATION_DIM_V5 }>()
                 .0
                 .iter()
                 .zip(legacy.as_chunks::<32>().0)
@@ -605,7 +605,7 @@ fn resolution_eligibility_distinguishes_identical_present_observations() {
                 assert_eq!(&row[..32], old);
             }
             let target_rows = native
-                .as_chunks::<33>()
+                .as_chunks::<{ crate::agent::continuation::RELATION_DIM_V5 }>()
                 .0
                 .iter()
                 .filter(|r| r[0] == 2.0 && r[3] == 5.0)

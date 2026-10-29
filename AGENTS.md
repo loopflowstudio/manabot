@@ -115,7 +115,8 @@ checkpoints or experiment evidence.
   weaken types merely to silence one.
 - Native scalar/vector observation buffers bind continuation input semantics by
   relation width: v2/v3 have 32 columns, v4 has 33, v5 has 48; validity
-  remains column 31. V5 also widens player, card and permanent rows to 42.
+  remains column 31. V5 also widens player rows to 44, card rows to 42 and
+  permanent rows to 50.
   Preserve the frozen widths and derive buffers from `ObservationSpace`.
 - New observation state reaches the policy input (native and Python encoders
   in parity), the LLM text observation and the learning tokens in the change

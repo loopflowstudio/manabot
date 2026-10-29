@@ -1006,6 +1006,10 @@ pub struct PyPlayer {
     #[pyo3(get)]
     pub remaining_sideboard_counts: BTreeMap<u32, u32>,
     #[pyo3(get, set)]
+    pub keeps_red_mana: bool,
+    #[pyo3(get, set)]
+    pub no_maximum_hand_size: bool,
+    #[pyo3(get, set)]
     pub combat_mana: i32,
     #[pyo3(get)]
     pub mana: [i32; 6],
@@ -1027,6 +1031,8 @@ impl From<PlayerData> for PyPlayer {
             known_hand: value.known_hand,
             sideboard_counts: value.sideboard_counts,
             remaining_sideboard_counts: value.remaining_sideboard_counts,
+            keeps_red_mana: value.keeps_red_mana,
+            no_maximum_hand_size: value.no_maximum_hand_size,
             combat_mana: value.combat_mana,
             mana: value.mana,
             lesson_mana: value.lesson_mana,
@@ -1053,6 +1059,8 @@ impl From<PyPlayer> for PlayerData {
             known_hand: value.known_hand,
             sideboard_counts: value.sideboard_counts,
             remaining_sideboard_counts: value.remaining_sideboard_counts,
+            keeps_red_mana: value.keeps_red_mana,
+            no_maximum_hand_size: value.no_maximum_hand_size,
             combat_mana: value.combat_mana,
             mana: value.mana,
             lesson_mana: value.lesson_mana,
@@ -1461,6 +1469,16 @@ pub struct PyPermanent {
     /// Firebending gained until end of turn.
     #[pyo3(get, set)]
     pub firebending: i32,
+    #[pyo3(get, set)]
+    pub attacking: bool,
+    /// The attacker this creature blocks.
+    #[pyo3(get, set)]
+    pub blocking: Option<i32>,
+    #[pyo3(get, set)]
+    pub abilities_lost: bool,
+    /// Activated abilities whose exhaust or once-each-turn limit is spent.
+    #[pyo3(get, set)]
+    pub used_abilities: Vec<usize>,
 }
 
 #[cfg(feature = "python")]
@@ -1490,6 +1508,10 @@ impl From<PermanentData> for PyPermanent {
             creature_types: value.creature_types,
             is_granted_land: value.is_granted_land,
             firebending: value.firebending,
+            attacking: value.attacking,
+            blocking: value.blocking,
+            abilities_lost: value.abilities_lost,
+            used_abilities: value.used_abilities,
         }
     }
 }
@@ -1521,6 +1543,10 @@ impl From<PyPermanent> for PermanentData {
             creature_types: value.creature_types,
             is_granted_land: value.is_granted_land,
             firebending: value.firebending,
+            attacking: value.attacking,
+            blocking: value.blocking,
+            abilities_lost: value.abilities_lost,
+            used_abilities: value.used_abilities,
         }
     }
 }

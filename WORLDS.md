@@ -62,11 +62,14 @@ effect-derived fields, omitted at their defaults: a permanent's counters by
 kind, attachment, set name and creature types (`is_ally` reads them), granted
 land type and firebending; a stack object's announced X and a spell's granted
 keywords. Policy input v5 (the new default; v1–v4 stay byte-frozen for their
-checkpoints) encodes every observed fact: player rows gain turn number and
-seat (42 columns), card rows face down (42), permanent rows counters by kind,
-an attachment join, effect-set characteristics, granted land, firebending and
-temporary subtypes (42), and relation rows a frame's X and a spell's granted
-keywords (48). `managym/tests/cards/observability.rs` names each field's
+checkpoints) encodes every observed fact: player rows gain turn number, seat,
+kept red mana and no maximum hand size (44 columns), card rows face down
+(42), permanent rows counters by kind, an attachment join, effect-set
+characteristics, granted land, firebending, temporary subtypes, attacking, a
+blocking join, lost abilities and spent activation limits (50), and relation
+rows a frame's X and a spell's granted keywords (48). Observations add
+`attacking`, `blocking`, `abilities_lost` and `used_abilities` to permanents
+and `keeps_red_mana` and `no_maximum_hand_size` to players. `managym/tests/cards/observability.rs` names each field's
 columns. Action shapes are unchanged.
 
 ## w16: one card authority (not yet frozen)

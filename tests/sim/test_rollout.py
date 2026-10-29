@@ -11,8 +11,8 @@ import torch
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import (
-    PERMANENT_ATTACHED_INDEX,
     PERMANENT_DEFINITION_INDEX,
+    PERMANENT_LINK_INDEXES,
     ObservationSpace,
 )
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
@@ -114,7 +114,7 @@ class TestBatchedSampler:
         buffers["semantic_cards"].fill(0)
         for key in ("agent_permanents", "opponent_permanents"):
             buffers[key][..., PERMANENT_DEFINITION_INDEX] = 0
-            buffers[key][..., PERMANENT_ATTACHED_INDEX] = 0
+            buffers[key][..., list(PERMANENT_LINK_INDEXES)] = 0
         valid = np.zeros_like(buffers["actions_valid"])
         valid[:, :5] = (rng.random((batch, 5)) < 0.6).astype(np.float32)
         valid[np.arange(batch), rng.integers(0, 5, batch)] = 1.0

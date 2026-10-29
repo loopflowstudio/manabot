@@ -14,14 +14,18 @@ pub const PERMANENT_DIM: usize = 28;
 /// Policy input v5 encodes every `Observation` fact (CR state an effect sets
 /// included) by appending columns before each row's validity flag: player
 /// turn number and seat; card face-down; permanent counters by kind,
-/// attachment, effect-set characteristics, granted land, firebending and
-/// temporary subtypes. Relation rows gain X and granted spell keywords.
-pub const PLAYER_DIM_V5: usize = 42;
+/// attachment, effect-set characteristics, granted land, firebending,
+/// temporary subtypes, combat assignments, lost abilities and used
+/// activations; players also keep red mana and hand-size freedom. Relation
+/// rows gain X and granted spell keywords.
+pub const PLAYER_DIM_V5: usize = 44;
 pub const PLAYER_TURN_INDEX: usize = 40;
 pub const PLAYER_SEAT_INDEX: usize = 41;
+pub const PLAYER_KEEPS_RED_MANA_INDEX: usize = 42;
+pub const PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX: usize = 43;
 pub const CARD_DIM_V5: usize = 42;
 pub const CARD_FACE_DOWN_INDEX: usize = 40;
-pub const PERMANENT_DIM_V5: usize = 42;
+pub const PERMANENT_DIM_V5: usize = 50;
 pub const PERMANENT_STUN_INDEX: usize = 27;
 pub const PERMANENT_FIRE_INDEX: usize = 28;
 pub const PERMANENT_DOUBLE_STRIKE_COUNTERS_INDEX: usize = 29;
@@ -45,6 +49,15 @@ pub const TEMP_SUBTYPES: [&str; 6] = [
     "Construct",
 ];
 pub const PERMANENT_OTHER_TEMP_SUBTYPES_INDEX: usize = 40;
+pub const PERMANENT_ATTACKING_INDEX: usize = 41;
+/// Object index + 1 of the attacker this creature blocks; a join.
+pub const PERMANENT_BLOCKING_INDEX: usize = 42;
+pub const PERMANENT_ABILITIES_LOST_INDEX: usize = 43;
+/// Spent activation limits: one flag per ability index below
+/// `USED_ABILITY_FLAGS`, then a count of any later index.
+pub const PERMANENT_USED_ABILITIES_INDEX: usize = 44;
+pub const USED_ABILITY_FLAGS: usize = 4;
+pub const PERMANENT_OTHER_USED_ABILITIES_INDEX: usize = 48;
 pub const ACTION_TYPE_DIM: usize = 17;
 /// Declaration choice is separate from its family: attack and decline must
 /// have distinct policy inputs even when they focus the same permanent.
@@ -579,10 +592,13 @@ pub fn encode_into(
                 .iter_mut()
                 .zip(permanents)
             {
-                row[PERMANENT_ATTACHED_INDEX] = permanent
-                    .attached_to
-                    .and_then(|host| object_to_index.get(&host))
-                    .map_or(0.0, |index| (index + 1) as f32);
+                let link = |object: Option<i32>| {
+                    object
+                        .and_then(|object| object_to_index.get(&object))
+                        .map_or(0.0, |index| (index + 1) as f32)
+                };
+                row[PERMANENT_ATTACHED_INDEX] = link(permanent.attached_to);
+                row[PERMANENT_BLOCKING_INDEX] = link(permanent.blocking);
             }
         }
     }
@@ -677,6 +693,8 @@ fn encode_player_features(
         out[PLAYER_TURN_INDEX] = turn.turn_number as f32 / 20.0;
         // Seat 0 is on the play.
         out[PLAYER_SEAT_INDEX] = player.player_index as f32;
+        out[PLAYER_KEEPS_RED_MANA_INDEX] = bool_to_f32(player.keeps_red_mana);
+        out[PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX] = bool_to_f32(player.no_maximum_hand_size);
     }
 
     object_to_index.insert(player.id, *current_object_index);
@@ -837,6 +855,16 @@ fn encode_permanent_features(
             .iter()
             .filter(|s| *s != "Avatar" && !TEMP_SUBTYPES.contains(&s.as_str()))
             .count() as f32;
+        out[PERMANENT_ATTACKING_INDEX] = bool_to_f32(permanent.attacking);
+        // PERMANENT_BLOCKING_INDEX is written once every object is indexed.
+        out[PERMANENT_ABILITIES_LOST_INDEX] = bool_to_f32(permanent.abilities_lost);
+        for index in &permanent.used_abilities {
+            if *index < USED_ABILITY_FLAGS {
+                out[PERMANENT_USED_ABILITIES_INDEX + index] = 1.0;
+            } else {
+                out[PERMANENT_OTHER_USED_ABILITIES_INDEX] += 1.0;
+            }
+        }
     }
     out[config.permanent_dim() - 1] = 1.0;
 }
@@ -1044,6 +1072,8 @@ mod tests {
                 known_hand: Default::default(),
                 sideboard_counts: Default::default(),
                 remaining_sideboard_counts: Default::default(),
+                keeps_red_mana: false,
+                no_maximum_hand_size: false,
                 combat_mana: 0,
                 mana: [0; 6],
                 lesson_mana: [0; 6],
@@ -1066,6 +1096,8 @@ mod tests {
                 known_hand: Default::default(),
                 sideboard_counts: Default::default(),
                 remaining_sideboard_counts: Default::default(),
+                keeps_red_mana: false,
+                no_maximum_hand_size: false,
                 combat_mana: 0,
                 mana: [0; 6],
                 lesson_mana: [0; 6],
