@@ -24,6 +24,8 @@
   a repeatable challenge to the User under a protocol fixed before scoring",
   which reads like evaluation. Moving it to an eval objective is Jack's choice;
   this Task changes no objective.
+- Second pass after implement: no further change; no live `.lf/wave/{intelligence,rules}`
+  pointers remain.
 
 # bb4160 decisions and assumptions — 2026-10-29
 

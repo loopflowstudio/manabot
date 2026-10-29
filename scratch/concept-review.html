@@ -18,8 +18,8 @@ h1{font-size:1.5rem;margin:0 0 .25rem}h2{font-size:1.1rem;margin-top:2.25rem}
 built from <code>.lf/wave/*</code>, <code>wave/README.md</code>, <code>docs/ARCHITECTURE.md</code>,
 <code>scratch/questions.md</code>, Jack Heart's eval-split steer</p>
 
-<p><strong>Decision for implement:</strong> mark the old <code>wave/</code> tree as historical and point it at the
-current Waves. No product choice blocks this.</p>
+<p><strong>Outcome (second pass, after <code>4dc25ad61</code>):</strong> nothing to change. The mismatch below is
+implemented; no product choice blocks the Task.</p>
 
 <h2>Actions → concepts → state</h2>
 <p>Someone looking for “what owns this work” opens a Wave's goal and memory. The concepts are four Waves
@@ -31,7 +31,7 @@ lf reads them from <code>.lf/wave/&lt;name&gt;/</code>; ids and Linear initiativ
 <p><code>wave/README.md</code>: “Manabot's work is organized into <strong>waves</strong>…” then a table of
 <code>intelligence/</code>, <code>rules/</code>, <code>game/</code>, with intelligence owning “arena evaluation”.
 Nothing says this tree is historical or where the live Waves are.</p></div>
-<div class="prop"><p class="tag">Proposed</p>
+<div class="prop"><p class="tag">Implemented (4dc25ad61)</p>
 <p>An opening note: this is the historical Wave tree, kept because frozen experiments, code comments and
 evidence cite its paths. Current Waves live in <code>.lf/wave/</code>: academy, engine, eval, training.
 Nothing in <code>wave/</code> is renamed or moved.</p></div>
@@ -41,6 +41,8 @@ Nothing in <code>wave/</code> is renamed or moved.</p></div>
 <li>Rules → engine, intelligence → training, eval memory split (Jack's steer) — consistent with ARCHITECTURE.</li>
 <li>Remaining <code>wave/intelligence</code> and <code>wave/rules</code> references cite historical files that exist.</li>
 <li>No eval or academy GOAL.md: no objective has been set.</li>
+<li>No live pointer to <code>.lf/wave/intelligence</code> or <code>.lf/wave/rules</code> remains. ARCHITECTURE's
+history-encoder link to <code>wave/intelligence/MEMORY.md</code> cites the historical file, which exists.</li>
 </ul>
 
 <h2>Questions (none blocking)</h2>
