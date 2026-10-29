@@ -320,10 +320,6 @@ impl ActivatedAbilityDefinition {
     }
 }
 
-fn is_zero(value: &u32) -> bool {
-    *value == 0
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct SacrificeCost {
     pub predicate: CardPredicate,
@@ -340,7 +336,7 @@ pub struct ActivatedAbilityDefinition {
     /// "Activate only as a sorcery" (CR 602.5d).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub sorcery_timing: bool,
-    #[serde(skip_serializing_if = "is_zero")]
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub life_cost: u32,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub tap_source: bool,
@@ -362,13 +358,9 @@ pub struct ActivatedAbilityDefinition {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub crew: Option<i32>,
     /// The least X the activation may announce ("X can't be 0", CR 107.3).
-    #[serde(skip_serializing_if = "is_zero_u8")]
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub x_min: u8,
     pub effect: Effect,
-}
-
-fn is_zero_u8(value: &u8) -> bool {
-    *value == 0
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]

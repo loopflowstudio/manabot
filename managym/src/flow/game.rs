@@ -71,7 +71,7 @@ pub enum Payment {
         card: CardId,
         kicked: bool,
         /// The announced value of X (CR 601.2b).
-        #[serde(skip_serializing_if = "is_zero")]
+        #[serde(skip_serializing_if = "crate::state::is_zero")]
         x: u8,
         mode: Option<usize>,
         targets: Vec<Target>,
@@ -124,7 +124,7 @@ pub enum PendingChoice {
         player: PlayerId,
         card: CardId,
         kicked: bool,
-        #[serde(skip_serializing_if = "is_zero")]
+        #[serde(skip_serializing_if = "crate::state::is_zero")]
         x: u8,
     },
     /// Choosing targets for requirement `requirement_index` of the card's
@@ -133,7 +133,7 @@ pub enum PendingChoice {
         player: PlayerId,
         card: CardId,
         kicked: bool,
-        #[serde(skip_serializing_if = "is_zero")]
+        #[serde(skip_serializing_if = "crate::state::is_zero")]
         x: u8,
         mode: Option<usize>,
         requirement_index: usize,
@@ -161,13 +161,9 @@ pub enum PendingChoice {
         /// at the end).
         remaining_generic: u8,
         /// The announced value of X, already included in `remaining_generic`.
-        #[serde(skip_serializing_if = "is_zero")]
+        #[serde(skip_serializing_if = "crate::state::is_zero")]
         x: u8,
     },
-}
-
-fn is_zero(value: &u8) -> bool {
-    *value == 0
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

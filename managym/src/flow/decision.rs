@@ -46,10 +46,6 @@ pub struct ResolutionTarget {
     pub legal: bool,
 }
 
-fn is_zero(value: &u8) -> bool {
-    *value == 0
-}
-
 /// Everything a resolving spell/ability needs while its effects execute,
 /// including what's left to do if it suspends for a decision.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -68,7 +64,7 @@ pub struct EffectFrame {
     /// Whether the resolving spell was kicked.
     pub kicked: bool,
     /// The resolving spell's announced X (CR 107.3m); 0 otherwise.
-    #[serde(skip_serializing_if = "is_zero")]
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub x: u8,
     /// Chosen slots, with eligibility retained across instructions and choices.
     pub targets: Vec<ResolutionTarget>,

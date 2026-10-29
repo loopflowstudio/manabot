@@ -44,12 +44,8 @@ pub struct ManaCost {
     pub hybrid: Vec<[Color; 2]>,
     /// Number of {X} symbols. X is zero everywhere but the stack (CR 107.3,
     /// 202.3e), so it adds nothing to `mana_value`; `with_x` fixes its value.
-    #[serde(skip_serializing_if = "is_zero_u8")]
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub x: u8,
-}
-
-fn is_zero_u8(value: &u8) -> bool {
-    *value == 0
 }
 
 impl ManaCost {

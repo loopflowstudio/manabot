@@ -20,13 +20,9 @@ pub struct SpellOnStack {
     /// Whether the kicker cost was paid while casting (CR 702.33).
     pub kicked: bool,
     /// The announced value of X (CR 601.2b); 0 for spells without {X}.
-    #[serde(skip_serializing_if = "is_zero")]
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub x: u8,
     pub mode: Option<usize>,
-}
-
-fn is_zero(value: &u8) -> bool {
-    *value == 0
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -44,7 +40,7 @@ pub struct ActivatedAbilityOnStack {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attached: Option<ObjectRef>,
     /// The announced value of X (CR 602.2b, 601.2b).
-    #[serde(skip_serializing_if = "is_zero")]
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub x: u8,
 }
 

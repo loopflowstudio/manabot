@@ -41,11 +41,11 @@ impl CounterKind {
 /// state hashes of games without them are unchanged.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct Counters {
-    #[serde(skip_serializing_if = "is_zero")]
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub stun: i32,
-    #[serde(skip_serializing_if = "is_zero")]
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub fire: i32,
-    #[serde(skip_serializing_if = "is_zero")]
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub double_strike: i32,
 }
 
@@ -67,10 +67,6 @@ impl Counters {
         };
         *count = count.saturating_add(delta).max(0);
     }
-}
-
-fn is_zero(value: &i32) -> bool {
-    *value == 0
 }
 
 /// How long a type-changing effect makes a noncreature permanent an artifact

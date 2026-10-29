@@ -9,7 +9,7 @@ use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::game::{Game, PendingChoice},
     state::{
-        game_object::{CardId, PlayerId},
+        game_object::{CardId, ObjectId, PlayerId},
         mana::Mana,
         zone::ZoneType,
     },
@@ -480,39 +480,23 @@ impl Game {
                 player,
                 card,
                 kicked,
-            } => Some(ActionSpace {
-                player: Some(*player),
-                kind: ActionSpaceKind::Modal,
-                actions: self
-                    .legal_x_values(*player, *card, *kicked)
-                    .into_iter()
-                    .map(|x| Action::ChooseMode {
-                        player: *player,
-                        mode: usize::from(x),
-                    })
-                    .collect(),
-                focus: vec![self.state.cards[card].id],
-            }),
+            } => Some(x_action_space(
+                *player,
+                self.legal_x_values(*player, *card, *kicked),
+                vec![self.state.cards[card].id],
+            )),
             PendingChoice::ActivationX {
                 player,
                 permanent,
                 ability_index,
-            } => Some(ActionSpace {
-                player: Some(*player),
-                kind: ActionSpaceKind::Modal,
-                actions: self
-                    .legal_activation_x_values(*player, *permanent, *ability_index)
-                    .into_iter()
-                    .map(|x| Action::ChooseMode {
-                        player: *player,
-                        mode: usize::from(x),
-                    })
-                    .collect(),
-                focus: self.state.permanents[*permanent]
+            } => Some(x_action_space(
+                *player,
+                self.legal_activation_x_values(*player, *permanent, *ability_index),
+                self.state.permanents[*permanent]
                     .as_ref()
                     .map(|perm| vec![perm.id])
                     .unwrap_or_default(),
-            }),
+            )),
             PendingChoice::KickerChoice { player, card } => Some(ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::PayOrNot,
@@ -750,5 +734,21 @@ impl Game {
                 self.waterbend_tap_action(*player, *permanent)
             }
         }
+    }
+}
+
+/// Announcing X offers each payable value as a `ChooseMode` whose mode is X.
+fn x_action_space(player: PlayerId, values: Vec<u8>, focus: Vec<ObjectId>) -> ActionSpace {
+    ActionSpace {
+        player: Some(player),
+        kind: ActionSpaceKind::Modal,
+        actions: values
+            .into_iter()
+            .map(|x| Action::ChooseMode {
+                player,
+                mode: usize::from(x),
+            })
+            .collect(),
+        focus,
     }
 }
