@@ -525,13 +525,18 @@ class OpenRouterSession:
         wire_messages: list[dict[str, object]] = []
         for index, message in enumerate(messages):
             if index == 0 and self.config.cache_prompt:
+                # Only a prefix shared by later decisions is worth a cache
+                # write; without one, the whole message is the cached block.
+                split = message.cache_prefix_chars or len(message.content)
                 content: object = [
                     {
                         "type": "text",
-                        "text": message.content,
+                        "text": message.content[:split],
                         "cache_control": {"type": "ephemeral"},
                     }
                 ]
+                if split < len(message.content):
+                    content.append({"type": "text", "text": message.content[split:]})
             else:
                 content = message.content
             wire_messages.append({"role": message.role, "content": content})

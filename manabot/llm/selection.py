@@ -76,6 +76,11 @@ def decision_messages(
     return (
         Message(
             role="user",
+            cache_prefix_chars=(
+                None
+                if decision.cache_prefix_chars is None
+                else len(instruction) + decision.cache_prefix_chars
+            ),
             content=(
                 instruction
                 + decision.text

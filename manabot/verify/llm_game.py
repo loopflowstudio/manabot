@@ -7,7 +7,7 @@ is retained before the next decision. One game cannot establish playing strength
 
 import argparse
 from collections import Counter
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 import json
@@ -222,10 +222,13 @@ def play(
     *,
     progress_path: Path | None = None,
     opponent: CheckpointOpponent | None = None,
+    encoder: Callable[[TextDecision], DecisionInput] | None = None,
 ) -> GameSummary:
     """Run once; failures never reset the game or retry uncertain execution.
 
-    A missing session selects random actions for the model seat.
+    A missing session selects random actions for the model seat. An encoder
+    replaces the `manabot-text-2` model input; it must keep the capture's
+    references, which still bind every Command.
     Native trivial-decision skipping is declared and identical for both seats.
     """
     out.mkdir(parents=True, exist_ok=False)
@@ -306,15 +309,24 @@ def play(
                         )
                     if summary.reported_cost_usd >= config.max_reported_cost_usd:
                         raise RuntimeError("reported spend threshold reached")
-                supplied = DecisionInput(
-                    text=decision.text,
-                    legal_references=tuple(a.reference for a in decision.actions),
-                    action_descriptions={
-                        a.reference: a.description for a in decision.actions
-                    },
-                    representation_id=decision.representation_version,
-                    source_identity={"capture_digest": decision.capture_digest},
+                supplied = (
+                    encoder(decision)
+                    if encoder is not None
+                    else DecisionInput(
+                        text=decision.text,
+                        legal_references=tuple(a.reference for a in decision.actions),
+                        action_descriptions={
+                            a.reference: a.description for a in decision.actions
+                        },
+                        representation_id=decision.representation_version,
+                        source_identity={"capture_digest": decision.capture_digest},
+                    )
                 )
+                if supplied.legal_references != tuple(
+                    a.reference for a in decision.actions
+                ):
+                    raise ValueError("encoder changed the legal references")
+                retain(step / "model_input.txt", supplied.text)
 
                 def progress(result: "SelectionResult | OpenRouterResult") -> None:
                     retain(step / "selection.json", result.model_dump_json(indent=2))

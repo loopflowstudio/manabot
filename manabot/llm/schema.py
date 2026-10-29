@@ -27,6 +27,11 @@ class DecisionInput(Record):
     action_descriptions: dict[str, str] | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    # Characters of `text` that stay identical across a game's decisions; chat
+    # transports may cache that prefix as its own block. The text is unchanged.
+    cache_prefix_chars: int | None = Field(
+        default=None, ge=1, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def validate_references(self) -> "DecisionInput":
@@ -69,6 +74,10 @@ class InferenceConfig(Record):
 class Message(Record):
     role: Literal["user", "assistant"]
     content: str
+    # Stable leading characters of `content` a provider cache may reuse.
+    cache_prefix_chars: int | None = Field(
+        default=None, ge=1, exclude_if=lambda value: value is None
+    )
 
 
 class EncodedPrompt(Record):
