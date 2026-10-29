@@ -51,5 +51,4 @@ Restricted-mana text names the class, not Lesson-only (`ee9e32383`).
 
 ## Check
 
-2026-10-29, after the T1 sync: see the last line of this file.
 2026-10-29 after syncing T1 `8790821da`: debug `cargo test --no-fail-fast` passes except the known semantic-conformance pair (cards 303, rules 131 + 2 ignored, lib 121); clippy `-D warnings` with and without `python` and fmt clean; pytest env/observation, continuation input, experience protocol, play modes, optional payments, text observation 123 pass. Arena admission suite left for gate.
