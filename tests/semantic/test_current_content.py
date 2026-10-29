@@ -67,7 +67,6 @@ def test_unknown_pack_has_no_learning_catalog() -> None:
 def test_cards_marked_incomplete_are_unsupported(name: str) -> None:
     pool = managym.content_pool("world")
     entry = next(row for row in pool["definitions"] if row["registry_name"] == name)
-    assert entry["card_def_id"] is not None  # Fixed setups still run them.
     assert entry["eligibility"] == "unsupported"
     assert entry["reason"]
 
@@ -86,7 +85,6 @@ def test_cards_marked_incomplete_are_unsupported(name: str) -> None:
 def test_defined_cards_are_eligible_in_the_world_pool(name: str) -> None:
     pool = managym.content_pool("world")
     entry = next(row for row in pool["definitions"] if row["registry_name"] == name)
-    assert entry["card_def_id"] is not None
     assert entry["eligibility"] == "eligible"
     assert entry["reason"] is None
 

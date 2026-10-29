@@ -25,15 +25,11 @@ pub(crate) use setups::content_pack_for_authored_match;
 /// A content catalog request that cannot be satisfied: an unknown pack,
 /// setup or card, or a definition the learning tokens cannot encode.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ContentError {
-    Malformed(String),
-}
+pub struct ContentError(pub String);
 
 impl std::fmt::Display for ContentError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ContentError::Malformed(message) => write!(f, "{message}"),
-        }
+        f.write_str(&self.0)
     }
 }
 

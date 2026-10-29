@@ -35,7 +35,6 @@ def bind_policy_catalog(pack_key: str) -> BoundSemanticPack:
                 "registry_name": row["registry_name"],
             }
             for row in pool["definitions"]
-            if row["card_def_id"] is not None
         ],
     }
     pack = BoundSemanticPack.bind(manifest)

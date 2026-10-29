@@ -239,7 +239,7 @@ impl<'p> TokenWriter<'p> {
 
     fn integer(&mut self, value: i64) -> Result<(), ContentError> {
         let value = i32::try_from(value)
-            .map_err(|_| ContentError::Malformed(format!("integer {value} exceeds i32")))?;
+            .map_err(|_| ContentError(format!("integer {value} exceeds i32")))?;
         self.push(TokenKind::Integer, value);
         Ok(())
     }
@@ -247,12 +247,12 @@ impl<'p> TokenWriter<'p> {
 
 impl ser::Error for ContentError {
     fn custom<T: std::fmt::Display>(message: T) -> Self {
-        ContentError::Malformed(message.to_string())
+        ContentError(message.to_string())
     }
 }
 
 fn unsupported<T>(what: &str) -> Result<T, ContentError> {
-    Err(ContentError::Malformed(format!(
+    Err(ContentError(format!(
         "learning tokens do not encode {what}"
     )))
 }
@@ -307,9 +307,10 @@ impl<'a, 'p> ser::Serializer for &'a mut TokenWriter<'p> {
     }
     fn serialize_str(self, value: &str) -> Result<(), ContentError> {
         if self.field == Some("token_name") {
-            let row = self.pack.definition_id(value).ok_or_else(|| {
-                ContentError::Malformed(format!("token {value:?} is not in the pack"))
-            })?;
+            let row = self
+                .pack
+                .definition_id(value)
+                .ok_or_else(|| ContentError(format!("token {value:?} is not in the pack")))?;
             let CardDefId(row) = row;
             self.tokens
                 .push((TokenKind::DefinitionRef, 0, Some(row as i32)));

@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Literal, Optional, Tuple, TypedDict
 import numpy as np
 
 class PoolDefinition(TypedDict):
-    card_def_id: int | None
+    card_def_id: int
     key: str | None
     scryfall_id: str | None
     registry_name: str

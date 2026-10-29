@@ -13,8 +13,6 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
-use serde::{Deserialize, Serialize};
-
 use super::{setups::authored_packs, ContentError};
 use crate::{
     cards::content_pack::{default_content_pack, ContentPack},
@@ -22,28 +20,25 @@ use crate::{
     state::card::CardDefId,
 };
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Eligibility {
     Eligible,
     Unsupported,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug)]
 pub struct PoolDefinition {
-    #[serde(skip_deserializing)]
-    pub card_def_id: Option<CardDefId>,
+    pub card_def_id: CardDefId,
     /// Set-file key (`tla.avatar_enthusiasts`); `None` for rules fixtures.
     pub key: Option<String>,
     /// Scryfall card-object id of the definition's printing.
-    #[serde(default)]
     pub scryfall_id: Option<String>,
     pub registry_name: String,
     pub eligibility: Eligibility,
     pub reason: Option<String>,
 }
 
-#[derive(Clone, Debug, Serialize)]
+#[derive(Clone, Debug)]
 pub struct ContentPool {
     pub pack_key: String,
     pub world_version: String,
@@ -75,7 +70,7 @@ impl PoolRuntime {
                         .map(|reason| reason.to_string())
                 };
                 PoolDefinition {
-                    card_def_id: Some(card_def_id),
+                    card_def_id,
                     key: (!definition.key.is_empty()).then(|| definition.key.to_owned()),
                     scryfall_id: (!definition.scryfall_id.is_empty())
                         .then(|| definition.scryfall_id.to_owned()),
@@ -139,7 +134,7 @@ pub fn pool_content(pack_key: &str) -> Result<Arc<ContentPack>, ContentError> {
 fn pool_runtime(pack_key: &str) -> Result<&'static PoolRuntime, ContentError> {
     pools()?
         .get(pack_key)
-        .ok_or_else(|| ContentError::Malformed(format!("unknown content pool {pack_key:?}")))
+        .ok_or_else(|| ContentError(format!("unknown content pool {pack_key:?}")))
 }
 
 #[cfg(test)]
@@ -162,7 +157,7 @@ mod tests {
         let avatar = row(&pool, "Avatar Enthusiasts");
         assert_eq!(avatar.eligibility, Eligibility::Eligible);
         assert_eq!(
-            avatar.card_def_id,
+            Some(avatar.card_def_id),
             content.definition_id("Avatar Enthusiasts")
         );
         // Every defined card is in the world pool, whatever its set.
@@ -173,7 +168,7 @@ mod tests {
         );
         let marked = row(&pool, "Cat-Gator");
         assert_eq!(marked.eligibility, Eligibility::Unsupported);
-        assert!(marked.card_def_id.is_some() && marked.reason.is_some());
+        assert!(marked.reason.is_some());
         assert_eq!(row(&pool, "Ally").eligibility, Eligibility::Unsupported);
         let fixture = row(&pool, "Crossroads of Destiny");
         assert_eq!(fixture.eligibility, Eligibility::Unsupported);
@@ -182,7 +177,7 @@ mod tests {
         let default = default_content_pack();
         assert!(Arc::ptr_eq(&content, &default));
         assert_eq!(
-            avatar.card_def_id,
+            Some(avatar.card_def_id),
             default.definition_id("Avatar Enthusiasts")
         );
         assert!(content_pool("missing-pool").is_err());

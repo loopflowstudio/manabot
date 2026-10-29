@@ -3668,7 +3668,7 @@ fn pool_rows<'py>(
     let definitions = PyList::empty_bound(py);
     for row in rows {
         let item = PyDict::new_bound(py);
-        item.set_item("card_def_id", row.card_def_id.map(|id| id.0))?;
+        item.set_item("card_def_id", row.card_def_id.0)?;
         item.set_item("key", row.key)?;
         item.set_item("scryfall_id", row.scryfall_id)?;
         item.set_item("registry_name", row.registry_name)?;
