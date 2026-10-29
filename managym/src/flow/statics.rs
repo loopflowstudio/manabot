@@ -19,6 +19,7 @@
 // These additive layer-7c terms commute. Layer 7d switches P/T, and is not
 // represented here; neither are general timestamp/dependency interactions.
 // Static keyword grants (layer 6) add to printed and until-EOT keywords.
+// "Equipped creature" effects follow the Equipment's exact attached object.
 // Scopes match printed characteristics, animation, counters and temporary
 // subtypes (never power). A P/T scope's flying test reads effective
 // keywords; a keyword-grant scope's reads only non-static keywords. Neither
@@ -194,6 +195,7 @@ impl Game {
         };
         let (predicate, other, with_counters) = match scope {
             StaticScope::This => return source_id == target_id,
+            StaticScope::Equipped => return self.equipped_creature(source_id) == Some(target_id),
             StaticScope::OtherYouControl(predicate) => (predicate, true, false),
             StaticScope::YouControl(predicate) => (predicate, false, false),
             StaticScope::YouControlWithCounters(predicate) => (predicate, false, true),
@@ -213,6 +215,14 @@ impl Game {
                 target.effective_keywords(card).flying
             }
         })
+    }
+
+    /// The creature an Equipment is attached to, if that exact object is
+    /// still a battlefield creature.
+    pub(crate) fn equipped_creature(&self, equipment: PermanentId) -> Option<PermanentId> {
+        let attached = self.state.permanents[equipment].as_ref()?.attached_to?;
+        let creature = self.lookup_current_permanent(attached).ok()?;
+        self.permanent_is_creature(creature).then_some(creature)
     }
 
     /// Distinct creature types of a battlefield creature (CR 205.3m): printed

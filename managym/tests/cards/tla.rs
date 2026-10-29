@@ -532,3 +532,114 @@ fn turtle_duck_sets_base_power_and_gains_trample_until_end_of_turn() {
     assert_eq!(s.game().effective_pt(duck), (1, 5));
     assert!(!observed_keywords(&s, duck).trample);
 }
+
+fn ready(s: &mut Scenario, id: PermanentId) {
+    s.game_mut().state.permanents[id]
+        .as_mut()
+        .unwrap()
+        .summoning_sick = false;
+}
+
+fn equip(s: &mut Scenario, equipment: PermanentId, creature: PermanentId) {
+    activate(s, equipment, 0);
+    assert!(s.choose_target(Target::Permanent(creature)));
+    settle(s);
+}
+
+fn battlefield_token(s: &Scenario, player: usize) -> PermanentId {
+    s.game()
+        .state
+        .zones
+        .zone_cards(ZoneType::Battlefield, PlayerId(player))
+        .iter()
+        .find(|card| s.game().state.cards[**card].is_token)
+        .and_then(|card| s.game().state.card_to_permanent[*card])
+        .expect("a token")
+}
+
+/// CR 702.6a, 301.5: the token enters, then the Fan attaches to it; equip
+/// moves it at sorcery timing only, and the bonus follows the Equipment.
+#[test]
+fn kyoshi_battle_fan_attaches_to_its_ally_token_then_equips_at_sorcery_speed() {
+    let mut s = setup(&["Kyoshi Battle Fan", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.set_player_mana_pool(0, "2");
+    let fan = cast(&mut s, "Kyoshi Battle Fan");
+    settle(&mut s);
+    let fan = s.game().state.card_to_permanent[fan].expect("fan entered");
+    let ally = battlefield_token(&s, 0);
+    assert_eq!(s.game().effective_pt(ally), (2, 1));
+
+    s.set_player_mana_pool(0, "2");
+    equip(&mut s, fan, ogre);
+    assert_eq!(s.game().effective_pt(ally), (1, 1));
+    assert_eq!(s.game().effective_pt(ogre), (3, 2));
+
+    s.advance_to_active_step(1, StepKind::Main);
+    s.set_player_mana_pool(0, "2");
+    assert!(
+        !can_activate(&mut s, fan, 0),
+        "equip only as a sorcery on your own turn"
+    );
+}
+
+/// CR 704.5n: an Equipment whose creature leaves stays on the battlefield,
+/// unattached.
+#[test]
+fn meteor_sword_destroys_a_permanent_and_stays_when_its_creature_dies() {
+    let mut s = setup(&["Meteor Sword", "Gray Ogre"]);
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let ours = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.set_player_mana_pool(0, "7");
+    let sword = cast(&mut s, "Meteor Sword");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(theirs)));
+    settle(&mut s);
+    assert!(s.game().state.permanents[theirs].is_none());
+    let sword = s.game().state.card_to_permanent[sword].expect("sword entered");
+
+    s.set_player_mana_pool(0, "3");
+    equip(&mut s, sword, ours);
+    assert_eq!(s.game().effective_pt(ours), (5, 5));
+
+    mark_damage(&mut s, ours, 5);
+    s.pass_priority();
+    assert!(s.game().state.permanents[ours].is_none(), "lethal damage");
+    let sword = s.game().state.permanents[sword].as_ref().expect("stays");
+    assert_eq!(sword.attached_to, None);
+}
+
+/// Flash; the enters trigger attaches to a creature you control and grants
+/// double strike until end of turn, while +1/+1 lasts while attached.
+#[test]
+fn twin_blades_attaches_on_entry_and_grants_double_strike_this_turn() {
+    let mut s = setup(&["Twin Blades", "Gray Ogre"]);
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let ours = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    ready(&mut s, ours);
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    s.set_player_mana_pool(0, "2R");
+    cast(&mut s, "Twin Blades");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(
+        !s.choose_target(Target::Permanent(theirs)),
+        "only a creature you control"
+    );
+    assert!(s.choose_target(Target::Permanent(ours)));
+    settle(&mut s);
+    assert_eq!(s.game().effective_pt(ours), (3, 3));
+    assert!(observed_keywords(&s, ours).double_strike);
+
+    s.game_mut().state.permanents[theirs]
+        .as_mut()
+        .unwrap()
+        .tapped = true;
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    s.declare_attack();
+    s.advance_to_active_step(0, StepKind::End);
+    s.assert_life(1, 14);
+
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().effective_pt(ours), (3, 3));
+    assert!(!observed_keywords(&s, ours).double_strike);
+}

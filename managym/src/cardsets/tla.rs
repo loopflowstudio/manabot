@@ -146,6 +146,9 @@ pub(super) fn cards() -> Vec<Card> {
         heartless_act(),
         flexible_waterbender(),
         turtle_duck(),
+        kyoshi_battle_fan(),
+        meteor_sword(),
+        twin_blades(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -4222,6 +4225,105 @@ fn turtle_duck() -> Card {
         )
         .cost(Cost::mana("{3}"))],
         registry_name: "Turtle-Duck",
+        text_box,
+    }
+}
+
+fn kyoshi_battle_fan() -> Card {
+    let text_box = "When this Equipment enters, create a 1/1 white Ally creature token, then attach this Equipment to it.\nEquipped creature gets +1/+0.\nEquip {2} ({2}: Attach to target creature you control. Equip only as a sorcery.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}"),
+            subtypes: Some(vec!["Equipment"]),
+            types: vec![CardType::Artifact],
+            ..Default::default()
+        },
+        key: "tla.kyoshi_battle_fan",
+        programs: vec![
+            Program::new(
+                "enters",
+                ProgramKind::Triggered,
+                vec![Op::CreateTokenAttached {
+                    count: 1,
+                    definition_ref: "token.ally",
+                    attach_source: true,
+                }],
+            )
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::equipped_pt("equipped", 1, 0),
+            Program::equip("equip", "{2}"),
+        ],
+        registry_name: "Kyoshi Battle Fan",
+        text_box,
+    }
+}
+
+fn meteor_sword() -> Card {
+    let text_box = "When this Equipment enters, destroy target permanent.\nEquipped creature gets +3/+3.\nEquip {3} ({3}: Attach to target creature you control. Equip only as a sorcery.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{7}"),
+            subtypes: Some(vec!["Equipment"]),
+            types: vec![CardType::Artifact],
+            ..Default::default()
+        },
+        key: "tla.meteor_sword",
+        programs: vec![
+            Program::new(
+                "enters",
+                ProgramKind::Triggered,
+                vec![Op::Destroy {
+                    target: "permanent",
+                }],
+            )
+            .targets(vec![Target::one(
+                "permanent",
+                Selector::Permanent {
+                    predicate: Predicate::Any,
+                },
+            )])
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::equipped_pt("equipped", 3, 3),
+            Program::equip("equip", "{3}"),
+        ],
+        registry_name: "Meteor Sword",
+        text_box,
+    }
+}
+
+fn twin_blades() -> Card {
+    let text_box = "Flash\nWhen this Equipment enters, attach it to target creature you control. That creature gains double strike until end of turn.\nEquipped creature gets +1/+1.\nEquip {2} ({2}: Attach to target creature you control. Equip only as a sorcery.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{R}"),
+            subtypes: Some(vec!["Equipment"]),
+            types: vec![CardType::Artifact],
+            keywords: Some(vec![Keyword::Flash]),
+            ..Default::default()
+        },
+        key: "tla.twin_blades",
+        programs: vec![
+            Program::new(
+                "enters",
+                ProgramKind::Triggered,
+                vec![
+                    Op::Attach { target: "creature" },
+                    Op::GrantKeywords {
+                        duration: Duration::EndOfTurn,
+                        keywords: vec![Keyword::DoubleStrike],
+                        target: "creature",
+                    },
+                ],
+            )
+            .targets(vec![Target::one("creature", Selector::CreatureYouControl)])
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::equipped_pt("equipped", 1, 1),
+            Program::equip("equip", "{2}"),
+        ],
+        registry_name: "Twin Blades",
         text_box,
     }
 }

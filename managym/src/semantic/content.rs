@@ -819,6 +819,7 @@ fn static_scope(program: &Program, target: &str) -> Result<StaticScope, IrError>
             not_subtypes: vec!["Human".into()],
             ..creature()
         }),
+        "each:equipped_creature" => StaticScope::Equipped,
         _ => return unsupported(program, &format!("unsupported static scope {target:?}")),
     })
 }
@@ -908,13 +909,22 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             count: usize_value(program, *count, "hand count")?,
         },
         Step::CreateToken {
+            count,
+            attach_source: true,
+            ..
+        } if *count != 1 => {
+            return unsupported(program, "an Equipment attaches to one created token")
+        }
+        Step::CreateToken {
             definition_index,
             count,
             tapped_and_attacking,
+            attach_source,
         } => Effect::CreateToken {
             token_name: token_name(pack, *definition_index)?,
             count: usize_value(program, *count, "token count")?,
             tapped_and_attacking: *tapped_and_attacking,
+            attach_source: *attach_source,
         },
         Step::PutCounters {
             target,
@@ -973,6 +983,9 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             target: target_for(program, target)?,
         },
         Step::Tap { target } => Effect::TapTarget {
+            target: target_for(program, target)?,
+        },
+        Step::Attach { target } => Effect::AttachSourceTo {
             target: target_for(program, target)?,
         },
         Step::Untap { target } if target == "source" => Effect::UntapSource,

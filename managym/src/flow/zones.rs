@@ -194,11 +194,17 @@ impl Game {
     /// Create a token from a registered token definition under `controller`'s
     /// control. Tokens are full cards in `GameState::cards`; state-based
     /// actions remove them once they leave the battlefield (CR 704.5d).
-    pub fn create_token(&mut self, name: &str, controller: PlayerId, tapped_and_attacking: bool) {
+    /// Returns the token's permanent, absent if it did not stay on the battlefield.
+    pub fn create_token(
+        &mut self,
+        name: &str,
+        controller: PlayerId,
+        tapped_and_attacking: bool,
+    ) -> Option<PermanentId> {
         let object_id = self.state.id_gen.next_id();
         let Some(card) = self.state.content.instantiate(name, controller, object_id) else {
             debug_assert!(false, "unknown token definition: {name}");
-            return;
+            return None;
         };
         debug_assert!(card.is_token, "created token must be a token definition");
 
@@ -231,6 +237,7 @@ impl Game {
             }
         }
         self.invalidate_mana_cache(controller);
+        self.state.card_to_permanent[card_id]
     }
 
     /// Count cards in a player's graveyard matching a predicate (e.g.

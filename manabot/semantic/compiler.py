@@ -103,6 +103,7 @@ class Opcode(IntEnum):
     OPTIONAL_PAYMENT = 65
     REMOVE_COUNTERS = 66
     SET_BASE_PT = 67
+    ATTACH = 68
 
 
 PROGRAM_KINDS = {kind.name.lower(): kind for kind in ProgramKind}
@@ -194,6 +195,7 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "add_subtype": ({"target", "subtype"}, set()),
     "remove_counters": ({"target", "count"}, set()),
     "set_base_pt": ({"target", "duration"}, {"power", "toughness"}),
+    "attach": ({"target"}, set()),
     "add_lesson_mana": ({"mana"}, set()),
     "grant_flashback": (set(), set()),
     "grant_mana": ({"predicates"}, set()),
@@ -212,7 +214,10 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "add_mana": ({"mana"}, {"until"}),
     "draw_cards": ({"count"}, set()),
     "put_top_cards_in_hand": ({"count"}, set()),
-    "create_token": ({"definition_ref", "count"}, {"tapped_and_attacking"}),
+    "create_token": (
+        {"definition_ref", "count"},
+        {"tapped_and_attacking", "attach_source"},
+    ),
     "put_counters": ({"target", "count"}, {"counter"}),
     "gain_life": ({"amount"}, set()),
     "scry": ({"count"}, set()),
@@ -624,6 +629,8 @@ def _validate_instruction_scalars(
         _string(instruction["subtype"], context)
     if "tapped_and_attacking" in instruction:
         _boolean(instruction["tapped_and_attacking"], f"{context}.tapped_and_attacking")
+    if "attach_source" in instruction:
+        _boolean(instruction["attach_source"], f"{context}.attach_source")
     if "reveal" in instruction:
         _boolean(instruction["reveal"], context)
     if "keywords" in instruction:

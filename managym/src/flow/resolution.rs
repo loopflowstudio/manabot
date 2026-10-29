@@ -640,9 +640,20 @@ impl Game {
                 token_name,
                 count,
                 tapped_and_attacking,
+                attach_source,
             } => {
                 for _ in 0..*count {
-                    self.create_token(token_name, frame.controller, *tapped_and_attacking);
+                    let token =
+                        self.create_token(token_name, frame.controller, *tapped_and_attacking);
+                    if let (true, Some(token)) = (*attach_source, token) {
+                        self.attach_source_to(frame, token);
+                    }
+                }
+                None
+            }
+            Effect::AttachSourceTo { .. } => {
+                if let Target::Permanent(permanent_id) = self.present_primary_target(frame)? {
+                    self.attach_source_to(frame, permanent_id);
                 }
                 None
             }
@@ -1035,6 +1046,17 @@ impl Game {
         frame
             .source_ref
             .and_then(|source| self.lookup_current_permanent(source).ok())
+    }
+
+    /// Attach the source Equipment to a battlefield creature (CR 701.3). It
+    /// does nothing once the Equipment has left the battlefield.
+    fn attach_source_to(&mut self, frame: &EffectFrame, permanent_id: PermanentId) {
+        let Some(object) = self.permanent_object_ref(permanent_id) else {
+            return;
+        };
+        if let Some(equipment) = self.source_permanent_mut(frame) {
+            equipment.attached_to = Some(object);
+        }
     }
 
     fn source_permanent_mut(&mut self, frame: &EffectFrame) -> Option<&mut Permanent> {

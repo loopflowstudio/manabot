@@ -103,6 +103,7 @@ pub enum Opcode {
     OptionalPayment = 65,
     RemoveCounters = 66,
     SetBasePt = 67,
+    Attach = 68,
 }
 
 impl Opcode {
@@ -175,6 +176,7 @@ impl Opcode {
             65 => Opcode::OptionalPayment,
             66 => Opcode::RemoveCounters,
             67 => Opcode::SetBasePt,
+            68 => Opcode::Attach,
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -300,6 +302,10 @@ pub enum Step {
         toughness: Option<i64>,
         duration: String,
     },
+    /// Attach the source Equipment to `target` (CR 701.3).
+    Attach {
+        target: String,
+    },
 
     SearchBasicLands {
         count: usize,
@@ -333,6 +339,8 @@ pub enum Step {
         definition_index: usize,
         count: i64,
         tapped_and_attacking: bool,
+        /// "then attach this Equipment to it".
+        attach_source: bool,
     },
     PutCounters {
         target: String,
@@ -872,6 +880,7 @@ impl<'a> BoundPack<'a> {
                 definition_index,
                 count,
                 tapped_and_attacking,
+                ..
             } => {
                 let definition = self.definition_id(*definition_index).ok_or_else(|| {
                     IrError::Malformed(format!(
@@ -981,6 +990,7 @@ impl<'a> BoundPack<'a> {
             | Step::OptionalPayment { .. }
             | Step::RemoveCounters { .. }
             | Step::SetBasePt { .. }
+            | Step::Attach { .. }
             | Step::SearchBasicLands { .. }
             | Step::Sacrifice { .. }
             | Step::DealDamageToController { .. }
@@ -1180,6 +1190,7 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
             definition_index: usize_field(value, "definition_index")?,
             count: i64_field(value, "count")?,
             tapped_and_attacking: opt_bool_field(value, "tapped_and_attacking")?.unwrap_or(false),
+            attach_source: opt_bool_field(value, "attach_source")?.unwrap_or(false),
         },
         Opcode::PutCounters => Step::PutCounters {
             target: str_field(value, "target")?.to_owned(),
@@ -1191,6 +1202,9 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         },
         Opcode::Scry => Step::Scry {
             count: i64_field(value, "count")?,
+        },
+        Opcode::Attach => Step::Attach {
+            target: str_field(value, "target")?.to_owned(),
         },
         Opcode::Tap => Step::Tap {
             target: str_field(value, "target")?.to_owned(),

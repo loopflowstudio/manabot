@@ -181,6 +181,8 @@ pub enum StaticScope {
     YouControl(CardPredicate),
     /// "[predicate] you control with +1/+1 counters on them" (Badgermole).
     YouControlWithCounters(CardPredicate),
+    /// "Equipped creature": the creature the source is attached to.
+    Equipped,
 }
 
 /// A static continuous P/T effect (CR 613.3c layer 7c): "[scope] get(s)

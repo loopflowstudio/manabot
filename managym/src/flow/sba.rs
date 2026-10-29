@@ -148,6 +148,25 @@ impl Game {
             self.emit_observation_event(GameEvent::PermanentsDied { objects: died });
         }
 
+        // CR 704.5n — An Equipment attached to an object that is gone or is
+        // no longer a creature becomes unattached and stays on the battlefield.
+        let detached: Vec<PermanentId> = self
+            .state
+            .permanents
+            .iter()
+            .enumerate()
+            .filter(|(_, permanent)| permanent.as_ref().is_some_and(|p| p.attached_to.is_some()))
+            .map(|(index, _)| PermanentId(index))
+            .filter(|&id| self.equipped_creature(id).is_none())
+            .collect();
+        for permanent_id in detached {
+            self.journal_permanent(permanent_id);
+            if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
+                permanent.attached_to = None;
+            }
+            performed = true;
+        }
+
         // CR 704.5d — A token in a zone other than the battlefield ceases to
         // exist. This runs after the move to the graveyard, so death triggers
         // from tokens have already been enqueued.

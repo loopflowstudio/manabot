@@ -49,3 +49,8 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
 - Slice 4 took the base P/T layer over X costs (X choice is a new agent decision).
   `set_base_pt` lowers only for the source until end of turn; Katara, Water
   Tribe's Hope needs X and a team role, Honest Work needs Auras.
+- Slice 5 (Equipment): attachment is not in the observation (P/T and keywords
+  show its effect); adding it is a shape change for a later observation version.
+  Kyoshi Battle Fan's "create, then attach" is a `create_token` field rather
+  than a created-object reference; the authoring variant avoids touching every
+  `CreateToken` literal.

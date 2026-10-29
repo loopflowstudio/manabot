@@ -287,6 +287,12 @@ pub enum Effect {
         token_name: String,
         count: usize,
         tapped_and_attacking: bool,
+        /// "then attach this Equipment to it" (one token).
+        attach_source: bool,
+    },
+    /// Attach the source Equipment to the target creature (CR 701.3).
+    AttachSourceTo {
+        target: TargetSpec,
     },
     /// Put `count` counters of `kind` on the source permanent.
     PutCountersOnSource {
@@ -580,6 +586,7 @@ impl Effect {
             Effect::BuffTarget { target, .. } => Some(target),
             Effect::UntapTarget { target }
             | Effect::TapTarget { target }
+            | Effect::AttachSourceTo { target }
             | Effect::RemoveCounters { target, .. } => Some(target),
             Effect::GrantKeywordsToTarget { target, .. } => Some(target),
             Effect::OnNthResolutionThisTurn { effect, .. } => effect.target_spec(),

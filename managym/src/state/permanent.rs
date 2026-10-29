@@ -1,6 +1,6 @@
 use super::{
     card::{Card, Keywords},
-    game_object::{CardId, ObjectId, PlayerId},
+    game_object::{CardId, ObjectId, ObjectRef, PlayerId},
     mana::Mana,
 };
 
@@ -102,6 +102,10 @@ pub struct Permanent {
     pub exhausted_abilities: Vec<usize>,
     /// True only for this incarnation entering as a resolving cast spell.
     pub was_cast: bool,
+    /// The exact object this Equipment is attached to (CR 301.5). State-based
+    /// actions clear it once that object is gone or no longer a creature.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attached_to: Option<ObjectRef>,
 }
 
 impl Permanent {
@@ -128,6 +132,7 @@ impl Permanent {
             attacking: false,
             exhausted_abilities: Vec::new(),
             was_cast: false,
+            attached_to: None,
         }
     }
 

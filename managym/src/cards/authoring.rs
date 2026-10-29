@@ -102,6 +102,36 @@ impl Program {
         .trigger(Trigger::new(Event::Attacks, Subject::This))
     }
 
+    /// "Equip [mana]": attach to target creature you control, only as a
+    /// sorcery (CR 702.6a).
+    pub fn equip(key: &'static str, mana: &'static str) -> Self {
+        Self::new(
+            key,
+            ProgramKind::Activated,
+            vec![Op::Attach { target: "creature" }],
+        )
+        .cost(Cost {
+            sorcery_timing: Some(true),
+            ..Cost::mana(mana)
+        })
+        .targets(vec![Target::one("creature", Selector::CreatureYouControl)])
+    }
+
+    /// "Equipped creature gets +P/+T."
+    pub fn equipped_pt(key: &'static str, power: i32, toughness: i32) -> Self {
+        Self::new(
+            key,
+            ProgramKind::Static,
+            vec![Op::ModifyPt {
+                duration: Duration::Static,
+                power,
+                target: "each:equipped_creature",
+                toughness,
+                per_creature_type_max: None,
+            }],
+        )
+    }
+
     pub fn new(key: &'static str, kind: ProgramKind, ops: Vec<Op>) -> Self {
         Self {
             key,
@@ -334,9 +364,21 @@ pub enum Op {
         #[serde(skip_serializing_if = "Option::is_none")]
         tapped_and_attacking: Option<bool>,
     },
+    /// "Create a [token], then attach this Equipment to it." The IR is a
+    /// one-token `create_token` with `attach_source`.
+    #[serde(rename = "create_token")]
+    CreateTokenAttached {
+        count: i32,
+        definition_ref: &'static str,
+        attach_source: bool,
+    },
     CreateTokensValue {
         count: Quantity,
         definition_ref: &'static str,
+    },
+    /// Attach the source Equipment to the target creature.
+    Attach {
+        target: &'static str,
     },
     Scry {
         count: i32,
@@ -612,6 +654,7 @@ pub enum CardType {
 pub enum Keyword {
     Deathtouch,
     Defender,
+    DoubleStrike,
     FirstStrike,
     Flash,
     Flying,
