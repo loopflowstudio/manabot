@@ -143,6 +143,8 @@ Compress (after item 25): encoder card/permanent rows via `chunks_exact_mut`;
 the model's numeric permanent columns computed once. Debug `cargo test --lib
 agent::` 31 and `observability` 18 pass; pytest tests/model 176 pass. Native
 parity against a rebuilt `.so` is left to gate.
+Compress rerun (no code change since): scratch trimmed of superseded "observations
+don't show" notes and the stale support-map pointer.
 Check (item 25): vitest 115 pass, `npm run check` 0 errors (nvm node 24); pytest
 play modes, experience/study/advice/replay/server protocol 89 pass; text
 observation 29 pass; debug `experience_protocol_tests` 5 pass.
