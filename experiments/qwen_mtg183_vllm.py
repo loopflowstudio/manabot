@@ -32,6 +32,9 @@ TREATMENTS: dict[str, tuple[Path, int, int]] = {
     "sampled": (Path("configs/llm/qwen3.5-9b-reasoning-sampled.json"), 16_384, 65_536),
     # Main arm: 3,072 reasoning tokens, then a forced close and the answer.
     "budget": (Path("configs/llm/qwen3.5-9b-reasoning-budget.json"), 4096, 16_384),
+    # The same arm with room for late-game prompts: cohort cdb0c09f90c6 stopped
+    # when a 157-decision game's prompt outgrew the 16,384-token context.
+    "budget-64k": (Path("configs/llm/qwen3.5-9b-reasoning-budget.json"), 4096, 65_536),
     # Small labeled floor: Qwen's non-thinking sampling.
     "nothink": (Path("configs/llm/qwen3.5-9b-instruct-sampled.json"), 512, 16_384),
 }
