@@ -201,6 +201,20 @@ pub struct StaticPtBuff {
     /// creature-type count, capped at this value.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub per_creature_type_max: Option<i32>,
+    /// "+P/+T for each color among [predicate] permanents you control"
+    /// (Earthen Ally): the bonus is multiplied by that color count.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub per_color_among: Option<CardPredicate>,
+}
+
+/// A static type-adding effect (CR 613.1d layer 4): "[scope] are [types] in
+/// addition to their other types" (Toph, the First Metalbender). It grants no
+/// abilities. Scopes read printed types only, so type computation never
+/// recurses.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct StaticTypeGrant {
+    pub scope: StaticScope,
+    pub types: Vec<CardType>,
 }
 
 /// A static keyword grant (CR 613.1f layer 6): "[scope] have [keywords]
@@ -245,6 +259,8 @@ pub enum Restriction {
     CantAttackOrBlock,
     /// CR 502.3.
     DoesntUntap,
+    /// "Can't be blocked by more than one creature" (CR 509.1b).
+    CantBeBlockedByMoreThanOne,
 }
 
 /// Declarative replacement/prevention effects supported by the curated
@@ -419,6 +435,13 @@ pub struct CardDefinition {
     /// creature" (CR 613.1d), read by `Permanent::animated_creature`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub creature_with_counters: Option<CounterThreshold>,
+    /// Static type grants this card projects while on the battlefield.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub static_type_grants: Vec<StaticTypeGrant>,
+    /// "This creature can attack as though it didn't have defender" while
+    /// the condition holds for its controller (Platypus-Bear).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attacks_despite_defender: Option<StaticCondition>,
     /// Replacement/prevention definitions consumed by the proposed-event
     /// pipeline. Empty vectors are omitted so existing content-pack digests
     /// remain stable until production content actually adopts the feature.

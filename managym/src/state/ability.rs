@@ -70,6 +70,7 @@ pub enum TriggerCondition {
     /// "At the beginning of your upkeep."
     BeginningOfYourUpkeep,
     BeginningOfYourCombat,
+    BeginningOfYourEndStep,
     /// "Whenever you draw your Nth card each turn." The per-player draw
     /// count resets every turn (see `TurnState::cards_drawn_this_turn`).
     YouDrawNthCardThisTurn {
@@ -346,6 +347,22 @@ pub enum Effect {
     SetBasePtUntilEot {
         power: Option<i32>,
         toughness: Option<i32>,
+    },
+    /// The target permanent becomes an artifact creature (CR 613.1d).
+    BecomeCreatureTarget {
+        target: TargetSpec,
+        duration: BecomesCreature,
+    },
+    /// The target permanent has base power and/or toughness until end of turn.
+    SetBasePtTarget {
+        target: TargetSpec,
+        power: Option<i32>,
+        toughness: Option<i32>,
+    },
+    /// Earthbend with a count read as the ability resolves.
+    EarthbendValue {
+        target: TargetSpec,
+        count: EffectValue,
     },
     /// Resolving player gains `amount` life.
     GainLife {
@@ -625,7 +642,10 @@ impl Effect {
             Effect::DealDamage { target, .. } => Some(target),
             Effect::CounterSpell { target } => Some(target),
             Effect::PutCounters { target, .. } => Some(target),
-            Effect::Earthbend { target, .. } => Some(target),
+            Effect::Earthbend { target, .. }
+            | Effect::EarthbendValue { target, .. }
+            | Effect::BecomeCreatureTarget { target, .. }
+            | Effect::SetBasePtTarget { target, .. } => Some(target),
             Effect::ExileUntilSourceLeaves { target } => Some(target),
             Effect::BuffTarget { target, .. } => Some(target),
             Effect::UntapTarget { target }

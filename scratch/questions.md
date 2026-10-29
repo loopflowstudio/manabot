@@ -46,12 +46,19 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   power, one at a time, and stops once covered (tapping extra or 0-power creatures
   is legal but omitted). A completed crew then follows the ordinary {0} payment,
   which offers mana abilities when the player has any (as for Earth Kingdom
-  Protectors). Summoning sickness is set at entry for creatures and Vehicles
-  only, so other noncreature permanents animated later (none in TLA so far) could
-  attack the turn they enter. The observed `is_animated` now means "a creature
+  Protectors). The observed `is_animated` now means "a creature
   only through an effect" (unchanged for existing content).
 - Slice 8 (mana): state-dependent mana outputs are read when the ability is
   offered, not after its costs are paid; no current cost changes the reading.
   A single fixed output is still offered as a one-option `ChooseMode`, like other
   activated mana abilities. White Lotus Tile with X = 0 taps for nothing. Great
   Divide Guide's earlier tests stay in `tests/rules/temur_cards.rs` (T1's move).
+- Slice 9 (effective characteristics): Toph's granted land type is read by
+  predicates, "land you control" targets and land-counter CDAs, but not by the
+  observation's `is_land` (printed types; a later shape change). Granted types
+  are not retained in last known information. Summoning sickness is set at entry for
+  creatures and Vehicles only (marking every permanent would change existing
+  state hashes and observations), so a Clue The Mechanist animates the turn it
+  was created can attack. Flopsie's
+  limit refuses a second blocker during the one-at-a-time declaration rather
+  than repairing it afterwards as menace does.

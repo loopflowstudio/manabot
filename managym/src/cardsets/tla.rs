@@ -158,6 +158,12 @@ pub(super) fn cards() -> Vec<Card> {
         raucous_audience(),
         white_lotus_tile(),
         the_lion_turtle(),
+        earthen_ally(),
+        flopsie_bumi_s_buddy(),
+        the_boulder_ready_to_rumble(),
+        platypus_bear(),
+        toph_the_first_metalbender(),
+        the_mechanist_aerial_artisan(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -206,6 +212,7 @@ fn azula_always_lies() -> Card {
                             target: "target_0",
                             toughness: -1,
                             per_creature_type_max: None,
+                            per_color_among: None,
                         }],
                         role: "target_0",
                     }],
@@ -225,6 +232,7 @@ fn azula_always_lies() -> Card {
                                 target: "target_2",
                                 toughness: -1,
                                 per_creature_type_max: None,
+                                per_color_among: None,
                             }],
                             role: "target_2",
                         },
@@ -948,6 +956,7 @@ fn momo_friendly_flier() -> Card {
                     target: "source",
                     toughness: 1,
                     per_creature_type_max: None,
+                    per_color_among: None,
                 }],
             )
             .trigger(Trigger::new(
@@ -1010,6 +1019,7 @@ fn octopus_form() -> Card {
                     target: "target_0",
                     toughness: 1,
                     per_creature_type_max: None,
+                    per_color_among: None,
                 },
                 Op::GrantKeywords {
                     duration: Duration::EndOfTurn,
@@ -2347,6 +2357,7 @@ fn cunning_maneuver() -> Card {
                     target: "creature",
                     toughness: 1,
                     per_creature_type_max: None,
+                    per_color_among: None,
                 },
                 Op::CreateToken {
                     count: 1,
@@ -2608,6 +2619,7 @@ fn fancy_footwork() -> Card {
                         target: "current_target",
                         toughness: 2,
                         per_creature_type_max: None,
+                        per_color_among: None,
                     },
                 ],
                 role: "creatures",
@@ -2661,6 +2673,7 @@ fn fire_nation_cadets() -> Card {
                     target: "source",
                     toughness: 0,
                     per_creature_type_max: None,
+                    per_color_among: None,
                 }],
             )
             .cost(Cost::mana("2")),
@@ -2769,6 +2782,7 @@ fn first_time_flyer() -> Card {
                     target: "source",
                     toughness: 1,
                     per_creature_type_max: None,
+                    per_color_among: None,
                 }],
             }],
         )],
@@ -3039,6 +3053,7 @@ fn otter_penguin() -> Card {
                     target: "source",
                     toughness: 2,
                     per_creature_type_max: None,
+                    per_color_among: None,
                 },
                 Op::RestrictBlocking {
                     duration: Duration::EndOfTurn,
@@ -3078,6 +3093,7 @@ fn pillar_launch() -> Card {
                     target: "creature",
                     toughness: 2,
                     per_creature_type_max: None,
+                    per_color_among: None,
                 },
                 Op::GrantKeywords {
                     duration: Duration::EndOfTurn,
@@ -3460,6 +3476,7 @@ fn white_lotus_reinforcements() -> Card {
                 target: "each:other_allies_you_control",
                 toughness: 1,
                 per_creature_type_max: None,
+                per_color_among: None,
             }],
         )],
         registry_name: "White Lotus Reinforcements",
@@ -3488,6 +3505,7 @@ fn yip_yip() -> Card {
                     target: "ally",
                     toughness: 2,
                     per_creature_type_max: None,
+                    per_color_among: None,
                 },
                 Op::Branch {
                     condition: Condition::TargetMatches {
@@ -3893,6 +3911,7 @@ fn air_nomad_legacy() -> Card {
                     target: "each:creature_you_control_with_flying",
                     toughness: 1,
                     per_creature_type_max: None,
+                    per_color_among: None,
                 }],
             ),
         ],
@@ -3962,6 +3981,7 @@ fn diligent_zookeeper() -> Card {
                 target: "each:non_human_creature_you_control",
                 toughness: 1,
                 per_creature_type_max: Some(10),
+                per_color_among: None,
             }],
         )],
         registry_name: "Diligent Zookeeper",
@@ -4441,6 +4461,7 @@ fn swampsnare_trap() -> Card {
                     target: "each:enchanted_creature",
                     toughness: -3,
                     per_creature_type_max: None,
+                    per_color_among: None,
                 }],
             ),
         ],
@@ -4740,6 +4761,288 @@ fn the_lion_turtle() -> Card {
             }),
         ],
         registry_name: "The Lion-Turtle",
+        text_box,
+    }
+}
+
+fn earthen_ally() -> Card {
+    let text_box = "This creature gets +1/+0 for each color among Allies you control.\n{2}{W}{U}{B}{R}{G}: Earthbend 5. (Target land you control becomes a 0/0 creature with haste that's still a land. Put five +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{G}"),
+            subtypes: Some(vec!["Human", "Soldier", "Ally"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(0)),
+            toughness: Some(2),
+            ..Default::default()
+        },
+        key: "tla.earthen_ally",
+        programs: vec![
+            Program::new(
+                "ally_colors",
+                ProgramKind::Static,
+                vec![Op::ModifyPt {
+                    duration: Duration::Static,
+                    power: 1,
+                    target: "source",
+                    toughness: 0,
+                    per_creature_type_max: None,
+                    per_color_among: Some(Predicate::Subtype { value: "Ally" }),
+                }],
+            ),
+            Program::new(
+                "earthbend",
+                ProgramKind::Activated,
+                vec![Op::Earthbend {
+                    count: 5,
+                    target: "land",
+                }],
+            )
+            .cost(Cost::mana("{2}{W}{U}{B}{R}{G}"))
+            .targets(vec![Target::one("land", Selector::LandYouControl)]),
+        ],
+        registry_name: "Earthen Ally",
+        text_box,
+    }
+}
+
+fn flopsie_bumi_s_buddy() -> Card {
+    let text_box = "When Flopsie enters, put a +1/+1 counter on each creature you control.\nEach creature you control with power 4 or greater can't be blocked by more than one creature.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{4}{G}{G}"),
+            subtypes: Some(vec!["Ape", "Goat"]),
+            types: vec![CardType::Creature],
+            supertypes: Some(vec!["Legendary"]),
+            power: Some(PrintedPower::Fixed(4)),
+            toughness: Some(4),
+            ..Default::default()
+        },
+        key: "tla.flopsie_bumi_s_buddy",
+        programs: vec![
+            Program::new(
+                "enters",
+                ProgramKind::Triggered,
+                vec![Op::PutCounters {
+                    count: 1,
+                    counter: None,
+                    target: "each:creature_you_control",
+                }],
+            )
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::new(
+                "one_blocker",
+                ProgramKind::Static,
+                vec![Op::CantBeBlockedByMoreThan {
+                    count: 1,
+                    predicate: Predicate::PowerAtLeast { value: 4 },
+                }],
+            ),
+        ],
+        registry_name: "Flopsie, Bumi's Buddy",
+        text_box,
+    }
+}
+
+fn the_boulder_ready_to_rumble() -> Card {
+    let text_box = "Whenever The Boulder attacks, earthbend X, where X is the number of creatures you control with power 4 or greater. (Target land you control becomes a 0/0 creature with haste that's still a land. Put X +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{3}{G}"),
+            subtypes: Some(vec!["Human", "Warrior", "Performer"]),
+            types: vec![CardType::Creature],
+            supertypes: Some(vec!["Legendary"]),
+            power: Some(PrintedPower::Fixed(4)),
+            toughness: Some(4),
+            ..Default::default()
+        },
+        key: "tla.the_boulder_ready_to_rumble",
+        programs: vec![Program::new(
+            "attacks",
+            ProgramKind::Triggered,
+            vec![Op::EarthbendValue {
+                count: Quantity::BattlefieldMatching {
+                    predicate: Predicate::All {
+                        predicates: vec![
+                            Predicate::CardType {
+                                value: CardType::Creature,
+                            },
+                            Predicate::PowerAtLeast { value: 4 },
+                        ],
+                    },
+                },
+                target: "land",
+            }],
+        )
+        .targets(vec![Target::one("land", Selector::LandYouControl)])
+        .trigger(Trigger::new(Event::Attacks, Subject::This))],
+        registry_name: "The Boulder, Ready to Rumble",
+        text_box,
+    }
+}
+
+fn platypus_bear() -> Card {
+    let text_box = "Defender\nWhen this creature enters, mill two cards. (Put the top two cards of your library into your graveyard.)\nAs long as there is a Lesson card in your graveyard, this creature can attack as though it didn't have defender.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{G/U}"),
+            subtypes: Some(vec!["Platypus", "Bear"]),
+            types: vec![CardType::Creature],
+            keywords: Some(vec![Keyword::Defender]),
+            power: Some(PrintedPower::Fixed(2)),
+            toughness: Some(3),
+            ..Default::default()
+        },
+        key: "tla.platypus_bear",
+        programs: vec![
+            Program::new(
+                "enters",
+                ProgramKind::Triggered,
+                vec![Op::MillCards { count: 2 }],
+            )
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::new(
+                "lesson_attack",
+                ProgramKind::Static,
+                vec![Op::Branch {
+                    condition: Condition::GraveyardAtLeast {
+                        count: 1,
+                        predicate: Predicate::Subtype { value: "Lesson" },
+                    },
+                    otherwise: vec![],
+                    then: vec![Op::AttacksDespiteDefender { target: "source" }],
+                }],
+            ),
+        ],
+        registry_name: "Platypus-Bear",
+        text_box,
+    }
+}
+
+fn toph_the_first_metalbender() -> Card {
+    let text_box = "Nontoken artifacts you control are lands in addition to their other types. (They don't gain the ability to {T} for mana.)\nAt the beginning of your end step, earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{R}{G}{W}"),
+            subtypes: Some(vec!["Human", "Warrior", "Ally"]),
+            types: vec![CardType::Creature],
+            supertypes: Some(vec!["Legendary"]),
+            power: Some(PrintedPower::Fixed(3)),
+            toughness: Some(3),
+            ..Default::default()
+        },
+        key: "tla.toph_the_first_metalbender",
+        programs: vec![
+            Program::new(
+                "metal_lands",
+                ProgramKind::Static,
+                vec![Op::AddCardTypes {
+                    predicate: Predicate::All {
+                        predicates: vec![
+                            Predicate::CardType {
+                                value: CardType::Artifact,
+                            },
+                            Predicate::Token { value: false },
+                        ],
+                    },
+                    types: vec![CardType::Land],
+                }],
+            ),
+            Program::new(
+                "end_step",
+                ProgramKind::Triggered,
+                vec![Op::Earthbend {
+                    count: 2,
+                    target: "land",
+                }],
+            )
+            .targets(vec![Target::one("land", Selector::LandYouControl)])
+            .trigger(Trigger::new(Event::EndStepBegins, Subject::This)),
+        ],
+        registry_name: "Toph, the First Metalbender",
+        text_box,
+    }
+}
+
+fn the_mechanist_aerial_artisan() -> Card {
+    let text_box = "Whenever you cast a noncreature spell, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")\n{T}: Until end of turn, target artifact token you control becomes a 3/1 Construct artifact creature with flying.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{U}"),
+            subtypes: Some(vec!["Human", "Artificer", "Ally"]),
+            types: vec![CardType::Creature],
+            supertypes: Some(vec!["Legendary"]),
+            power: Some(PrintedPower::Fixed(1)),
+            toughness: Some(3),
+            ..Default::default()
+        },
+        key: "tla.the_mechanist_aerial_artisan",
+        programs: vec![
+            Program::new(
+                "clue",
+                ProgramKind::Triggered,
+                vec![Op::CreateToken {
+                    count: 1,
+                    definition_ref: "token.clue",
+                    tapped_and_attacking: None,
+                }],
+            )
+            .trigger(Trigger {
+                predicate: Some(Predicate::NotCardTypes {
+                    values: vec![CardType::Creature],
+                }),
+                ..Trigger::new(Event::CastSpell, Subject::This)
+            }),
+            Program::new(
+                "animate",
+                ProgramKind::Activated,
+                vec![
+                    Op::BecomeArtifactCreature {
+                        duration: Some(Duration::EndOfTurn),
+                        target: "artifact",
+                    },
+                    Op::SetBasePt {
+                        duration: Duration::EndOfTurn,
+                        power: Some(3),
+                        target: "artifact",
+                        toughness: Some(1),
+                    },
+                    Op::AddSubtype {
+                        subtype: "Construct",
+                        target: "artifact",
+                    },
+                    Op::GrantKeywords {
+                        duration: Duration::EndOfTurn,
+                        keywords: vec![Keyword::Flying],
+                        target: "artifact",
+                    },
+                ],
+            )
+            .cost(Cost {
+                tap_source: Some(true),
+                ..Cost::mana("0")
+            })
+            .targets(vec![Target::one(
+                "artifact",
+                Selector::PermanentYouControl {
+                    predicate: Predicate::All {
+                        predicates: vec![
+                            Predicate::CardType {
+                                value: CardType::Artifact,
+                            },
+                            Predicate::Token { value: true },
+                        ],
+                    },
+                },
+            )]),
+        ],
+        registry_name: "The Mechanist, Aerial Artisan",
         text_box,
     }
 }

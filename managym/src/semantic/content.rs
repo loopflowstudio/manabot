@@ -18,8 +18,8 @@ use crate::{
         card::{
             ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, CounterThreshold,
             Keywords, PowerCda, ReplacementEffect, Restriction, SacrificeCost, SpellCostReduction,
-            StaticKeywordGrant, StaticPtBuff, StaticRestriction, StaticScope, TargetCostReduction,
-            TriggeredManaAbility,
+            StaticKeywordGrant, StaticPtBuff, StaticRestriction, StaticScope, StaticTypeGrant,
+            TargetCostReduction, TriggeredManaAbility,
         },
         mana::{Color, Colors, Mana, ManaCost},
         permanent::{BecomesCreature, CounterKind},
@@ -657,6 +657,7 @@ fn program_trigger(program: &Program) -> Result<TriggerCondition, IrError> {
         "becomes_targeted" => TriggerCondition::BecomesTargeted { subject },
         "upkeep_begins" => TriggerCondition::BeginningOfYourUpkeep,
         "combat_begins" => TriggerCondition::BeginningOfYourCombat,
+        "end_step_begins" => TriggerCondition::BeginningOfYourEndStep,
         "cast_spell" => TriggerCondition::YouCastSpell {
             predicate: predicate_value(object_field(trigger, "predicate")?)?,
         },
@@ -757,6 +758,7 @@ fn apply_static(definition: &mut CardDefinition, program: &Program) -> Result<()
             power: *power,
             toughness: *toughness,
             per_creature_type_max: None,
+            per_color_among: None,
         }),
         [Step::SetPowerFromCount {
             zone,
@@ -802,8 +804,31 @@ fn apply_static(definition: &mut CardDefinition, program: &Program) -> Result<()
             };
             apply_static_effect(definition, program, step, Some(lower_condition(condition)?))?;
         }
-        [step @ (Step::ModifyPt { .. } | Step::GrantKeywords { .. })] => {
+        [step @ (Step::ModifyPt { .. }
+        | Step::GrantKeywords { .. }
+        | Step::AttacksDespiteDefender { .. })] => {
             apply_static_effect(definition, program, step, None)?
+        }
+        [Step::CantBeBlockedByMoreThan {
+            count: 1,
+            predicate,
+        }] => {
+            let mut scope = CardPredicate::creature();
+            merge_predicate(&mut scope, predicate)?;
+            definition.static_restrictions.push(StaticRestriction {
+                scope: StaticScope::YouControl(scope),
+                kind: Restriction::CantBeBlockedByMoreThanOne,
+                unless: None,
+            })
+        }
+        [Step::AddCardTypes { predicate, types }] => {
+            definition.static_type_grants.push(StaticTypeGrant {
+                scope: StaticScope::YouControl(predicate_card(predicate)?),
+                types: types
+                    .iter()
+                    .map(|name| card_type(name))
+                    .collect::<Result<_, _>>()?,
+            })
         }
         [Step::Branch {
             condition,
@@ -853,6 +878,7 @@ fn apply_static_effect(
             toughness,
             duration,
             per_creature_type_max,
+            per_color_among,
         } if duration == "static" => definition.static_pt_buffs.push(StaticPtBuff {
             scope: static_scope(program, target)?,
             condition,
@@ -861,7 +887,11 @@ fn apply_static_effect(
             per_creature_type_max: per_creature_type_max
                 .map(|max| i32_value(program, max, "creature-type maximum"))
                 .transpose()?,
+            per_color_among: per_color_among.as_ref().map(predicate_card).transpose()?,
         }),
+        Step::AttacksDespiteDefender { target } if target == "source" => {
+            definition.attacks_despite_defender = Some(condition.unwrap_or(StaticCondition::Always))
+        }
         Step::GrantKeywords {
             target,
             keywords: names,
@@ -874,7 +904,7 @@ fn apply_static_effect(
         _ => {
             return unsupported(
                 program,
-                "static effect must be a static P/T or keyword grant",
+                "static effect must be a static P/T, keyword grant or defender exemption",
             )
         }
     }
@@ -941,25 +971,32 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
                 "mana and flashback grants require a static program",
             )
         }
-        Step::CantAttackOrBlock { .. } | Step::DoesntUntap { .. } => {
+        Step::CantAttackOrBlock { .. }
+        | Step::DoesntUntap { .. }
+        | Step::CantBeBlockedByMoreThan { .. }
+        | Step::AttacksDespiteDefender { .. }
+        | Step::AddCardTypes { .. } => {
             return unsupported(program, "restrictions require a static program")
         }
-        Step::BecomeArtifactCreature { target, duration } if target == "source" => {
-            Effect::BecomeCreatureSource {
-                duration: match duration.as_deref() {
-                    Some("end_of_turn") => BecomesCreature::EndOfTurn,
-                    None => BecomesCreature::Incarnation,
-                    Some(other) => {
-                        return unsupported(
-                            program,
-                            &format!("unsupported animation duration {other:?}"),
-                        )
-                    }
-                },
+        Step::BecomeArtifactCreature { target, duration } => {
+            let duration = match duration.as_deref() {
+                Some("end_of_turn") => BecomesCreature::EndOfTurn,
+                None => BecomesCreature::Incarnation,
+                Some(other) => {
+                    return unsupported(
+                        program,
+                        &format!("unsupported animation duration {other:?}"),
+                    )
+                }
+            };
+            if target == "source" {
+                Effect::BecomeCreatureSource { duration }
+            } else {
+                Effect::BecomeCreatureTarget {
+                    target: target_for(program, target)?,
+                    duration,
+                }
             }
-        }
-        Step::BecomeArtifactCreature { .. } => {
-            return unsupported(program, "only the source becomes an artifact creature")
         }
         Step::Exile { target } if target == ATTACHED_AURA => Effect::ExileAttached,
         Step::ShuffleIntoLibrary { target } if target == ATTACHED_AURA => {
@@ -1114,6 +1151,7 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             toughness,
             duration,
             per_creature_type_max: None,
+            per_color_among: None,
         } if duration == "end_of_turn" && target == "source" => Effect::ModifyUntilEot {
             power_delta: i32_value(program, *power, "power")?,
             toughness_delta: i32_value(program, *toughness, "toughness")?,
@@ -1124,6 +1162,7 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             toughness,
             duration,
             per_creature_type_max: None,
+            per_color_among: None,
         } if duration == "end_of_turn" => Effect::BuffTarget {
             power: i32_value(program, *power, "power")?,
             toughness: i32_value(program, *toughness, "toughness")?,
@@ -1142,11 +1181,22 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
                 .map(|t| i32_value(program, t, "base toughness"))
                 .transpose()?,
         },
+        Step::SetBasePt {
+            target,
+            power,
+            toughness,
+            duration,
+        } if duration == "end_of_turn" => Effect::SetBasePtTarget {
+            target: target_for(program, target)?,
+            power: power
+                .map(|p| i32_value(program, p, "base power"))
+                .transpose()?,
+            toughness: toughness
+                .map(|t| i32_value(program, t, "base toughness"))
+                .transpose()?,
+        },
         Step::SetBasePt { .. } => {
-            return unsupported(
-                program,
-                "base P/T is set only on the source until end of turn",
-            )
+            return unsupported(program, "base P/T is set only until end of turn")
         }
         Step::ModifyPt { duration, .. } => {
             return unsupported(program, &format!("unsupported P/T duration {duration:?}"))
@@ -1271,6 +1321,10 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         Step::Earthbend { target, count } => Effect::Earthbend {
             target: target_for(program, target)?,
             count: i32_value(program, *count, "earthbend count")?,
+        },
+        Step::EarthbendValue { target, count } => Effect::EarthbendValue {
+            target: target_for(program, target)?,
+            count: count.lower()?,
         },
         Step::ExileUntilSourceLeaves { target } => Effect::ExileUntilSourceLeaves {
             target: target_for(program, target)?,
@@ -1427,6 +1481,7 @@ fn merge_predicate(result: &mut CardPredicate, predicate: &Predicate) -> Result<
     match predicate {
         Predicate::Flying => result.flying = true,
         Predicate::NoCounters => result.no_counters = true,
+        Predicate::Token(token) => set_once(&mut result.token, *token, "token")?,
         Predicate::PowerAtLeast(value) => set_once(
             &mut result.min_power,
             i32::try_from(*value).map_err(|_| IrError::Malformed("power exceeds i32".into()))?,

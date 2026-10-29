@@ -211,6 +211,10 @@ def test_opcode_numbers_are_an_explicit_compatibility_surface() -> None:
         "SHUFFLE_INTO_LIBRARY": 71,
         "BECOME_ARTIFACT_CREATURE": 72,
         "ADD_MANA_OF_ONE_COLOR": 73,
+        "EARTHBEND_VALUE": 74,
+        "CANT_BE_BLOCKED_BY_MORE_THAN": 75,
+        "ATTACKS_DESPITE_DEFENDER": 76,
+        "ADD_CARD_TYPES": 77,
     }
 
 

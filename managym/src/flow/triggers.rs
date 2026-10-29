@@ -11,6 +11,7 @@ use crate::{
     },
     state::{
         ability::{Ability, TargetSpec, TriggerCondition, TriggerSubject},
+        card::CardType,
         game_object::{CardId, ObjectLki, ObjectRef, PermanentId, PlayerId, Target},
         stack_object::{StackObject, TriggeredAbilityOnStack},
         zone::ZoneType,
@@ -723,6 +724,12 @@ impl Game {
                 GameEvent::StepStarted {
                     step: StepKind::Upkeep,
                 },
+            )
+            | (
+                TriggerCondition::BeginningOfYourEndStep,
+                GameEvent::StepStarted {
+                    step: StepKind::End,
+                },
             ) => self.active_player() == source_controller,
             (
                 TriggerCondition::YouDrawNthCardThisTurn { n },
@@ -759,7 +766,7 @@ impl Game {
             predicate.matches(
                 &self.state.cards[moved_card],
                 self.state.cards[moved_card].power.unwrap_or(0),
-                animated,
+                if animated { &[CardType::Creature] } else { &[] },
             )
         };
         match subject {

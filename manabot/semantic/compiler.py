@@ -109,6 +109,10 @@ class Opcode(IntEnum):
     SHUFFLE_INTO_LIBRARY = 71
     BECOME_ARTIFACT_CREATURE = 72
     ADD_MANA_OF_ONE_COLOR = 73
+    EARTHBEND_VALUE = 74
+    CANT_BE_BLOCKED_BY_MORE_THAN = 75
+    ATTACKS_DESPITE_DEFENDER = 76
+    ADD_CARD_TYPES = 77
 
 
 PROGRAM_KINDS = {kind.name.lower(): kind for kind in ProgramKind}
@@ -154,6 +158,7 @@ TRIGGER_EVENTS = {
     "upkeep_begins",
     "combat_begins",
     "cast_spell",
+    "end_step_begins",
 }
 SUBJECT_KINDS = {"another_you_control", "any_you_control", "this"}
 SELECTOR_KINDS = {
@@ -208,6 +213,10 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "shuffle_into_library": ({"target"}, set()),
     "become_artifact_creature": ({"target"}, {"duration"}),
     "add_mana_of_one_color": ({"amount"}, set()),
+    "earthbend_value": ({"target", "count"}, set()),
+    "cant_be_blocked_by_more_than": ({"count", "predicate"}, set()),
+    "attacks_despite_defender": ({"target"}, set()),
+    "add_card_types": ({"predicate", "types"}, set()),
     "add_lesson_mana": ({"mana"}, set()),
     "grant_flashback": (set(), set()),
     "grant_mana": ({"predicates"}, set()),
@@ -235,7 +244,10 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "scry": ({"count"}, set()),
     "tap": ({"target"}, set()),
     "untap": ({"target"}, set()),
-    "modify_pt": ({"target", "power", "toughness", "duration"}, {"per_creature_type_max"}),
+    "modify_pt": (
+        {"target", "power", "toughness", "duration"},
+        {"per_creature_type_max", "per_color_among"},
+    ),
     "grant_keywords": ({"target", "keywords", "duration"}, set()),
     "restrict_blocking": ({"target", "duration", "predicate"}, set()),
     "deal_damage": ({"amount", "target"}, set()),
@@ -596,6 +608,7 @@ def _validate_instruction_scalars(
                 ("create_tokens_value", "count"),
                 ("drain_life_value", "amount"),
                 ("add_mana_of_one_color", "amount"),
+                ("earthbend_value", "count"),
             }:
                 _validate_value_expression(instruction[field], f"{context}.{field}")
             else:

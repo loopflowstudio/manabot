@@ -13,6 +13,9 @@ pub struct CardPredicate {
     /// so card-only matching ignores it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub no_counters: bool,
+    /// A token (`Some(true)`) or a nontoken (`Some(false)`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub token: Option<bool>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub subtypes_any: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -61,14 +64,17 @@ impl CardPredicate {
     /// Match against a card, substituting `power` (e.g. a permanent's
     /// effective power including counters and until-EOT modifiers).
     pub fn matches_card_with_power(&self, card: &Card, power: i32) -> bool {
-        self.matches(card, power, false)
+        self.matches(card, power, &[])
     }
 
     /// Full matching: `power` substitutes the card's printed power and
-    /// `animated_creature` treats the card as having the creature type in
-    /// addition to its printed types (earthbent lands).
-    pub fn matches(&self, card: &Card, power: i32, animated_creature: bool) -> bool {
+    /// `added_types` are card types the object has in addition to its printed
+    /// types (an animated land's creature type, a granted land type).
+    pub fn matches(&self, card: &Card, power: i32, added_types: &[CardType]) -> bool {
         if self.flying && !card.keywords.flying {
+            return false;
+        }
+        if self.token.is_some_and(|token| token != card.is_token) {
             return false;
         }
         if !self.subtypes_any.is_empty() && !self.subtypes_any.iter().any(|s| card.has_subtype(s)) {
@@ -88,8 +94,7 @@ impl CardPredicate {
             return false;
         }
         let has_type = |card_type: CardType| {
-            card.types.types.contains(&card_type)
-                || (animated_creature && card_type == CardType::Creature)
+            card.types.types.contains(&card_type) || added_types.contains(&card_type)
         };
         if let Some(card_type) = self.card_type {
             if !has_type(card_type) {

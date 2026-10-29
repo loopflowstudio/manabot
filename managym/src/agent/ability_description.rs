@@ -95,6 +95,7 @@ fn condition_description(condition: &TriggerCondition) -> String {
         ),
         TriggerCondition::BeginningOfYourUpkeep => "At the beginning of your upkeep".into(),
         TriggerCondition::BeginningOfYourCombat => "At the beginning of your combat".into(),
+        TriggerCondition::BeginningOfYourEndStep => "At the beginning of your end step".into(),
         TriggerCondition::YouDrawNthCardThisTurn { n } => {
             format!("When you draw card {n} this turn")
         }
@@ -150,6 +151,7 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     let CardPredicate {
         flying,
         no_counters,
+        token,
         subtypes_any,
         not_subtypes,
         supertype,
@@ -166,6 +168,9 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
         terms.push("flying".into());
     }
     terms.extend(supertype.iter().cloned());
+    if *token == Some(false) {
+        terms.push("nontoken".into());
+    }
     terms.extend(
         not_card_types
             .iter()
@@ -191,6 +196,9 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     }
     if kind.is_none() || noun != "permanent" {
         terms.push(noun.into());
+    }
+    if *token == Some(true) {
+        terms.push("token".into());
     }
     if let Some(n) = min_power {
         terms.push(format!("with power at least {n}"));
@@ -425,6 +433,9 @@ fn effect_description(effect: &Effect) -> Option<String> {
         CantBeBlockedThisTurnSource => "This can't be blocked this turn".into(),
         GrantKeywordsToSource { keywords } => format!("This gains {} until end of turn",keywords_description(keywords)),
         SetBasePtUntilEot { power, toughness } => format!("This has base {} until end of turn",base_pt_description(*power,*toughness)),
+        BecomeCreatureTarget { target, duration } => format!("{} becomes an artifact creature{}",target_description(target),match duration { BecomesCreature::EndOfTurn => " until end of turn", BecomesCreature::Incarnation => "" }),
+        SetBasePtTarget { target, power, toughness } => format!("{} has base {} until end of turn",target_description(target),base_pt_description(*power,*toughness)),
+        EarthbendValue { target, count } => format!("Earthbend X {}, where X is {}: it becomes a 0/0 creature with haste that's still a land; put X +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped",target_description(target),value_description(count)),
         BecomeCreatureSource { duration } => match duration {
             BecomesCreature::EndOfTurn => "This becomes an artifact creature until end of turn".into(),
             BecomesCreature::Incarnation => "This becomes an artifact creature".into(),

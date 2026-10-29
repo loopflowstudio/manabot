@@ -194,10 +194,6 @@ impl Permanent {
                 && !self.effective_keywords(card).haste))
     }
 
-    pub fn can_attack(&self, card: &Card) -> bool {
-        self.is_creature(card) && !self.effective_keywords(card).defender && self.can_tap(card)
-    }
-
     pub fn can_block(&self, card: &Card) -> bool {
         self.is_creature(card) && !self.tapped
     }

@@ -109,6 +109,10 @@ pub enum Opcode {
     ShuffleIntoLibrary = 71,
     BecomeArtifactCreature = 72,
     AddManaOfOneColor = 73,
+    EarthbendValue = 74,
+    CantBeBlockedByMoreThan = 75,
+    AttacksDespiteDefender = 76,
+    AddCardTypes = 77,
 }
 
 impl Opcode {
@@ -187,6 +191,10 @@ impl Opcode {
             71 => Opcode::ShuffleIntoLibrary,
             72 => Opcode::BecomeArtifactCreature,
             73 => Opcode::AddManaOfOneColor,
+            74 => Opcode::EarthbendValue,
+            75 => Opcode::CantBeBlockedByMoreThan,
+            76 => Opcode::AttacksDespiteDefender,
+            77 => Opcode::AddCardTypes,
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -253,6 +261,8 @@ pub enum Predicate {
     Flying,
     /// "with no counters on it" (any kind, CR 122).
     NoCounters,
+    /// A token (`true`) or a nontoken (`false`).
+    Token(bool),
     TypesAny(Vec<String>),
     SubtypesAny(Vec<String>),
     NotSubtypes(Vec<String>),
@@ -352,6 +362,27 @@ pub enum Step {
     AddManaOfOneColor {
         amount: ValueExpression,
     },
+    /// "Earthbend X", X read as the ability resolves.
+    EarthbendValue {
+        target: String,
+        count: ValueExpression,
+    },
+    /// "Each creature you control [predicate] can't be blocked by more than
+    /// `count` creatures" (static).
+    CantBeBlockedByMoreThan {
+        count: i64,
+        predicate: Predicate,
+    },
+    /// "[target] can attack as though it didn't have defender" (static).
+    AttacksDespiteDefender {
+        target: String,
+    },
+    /// "[predicate] permanents you control are [types] in addition to their
+    /// other types" (static).
+    AddCardTypes {
+        predicate: Predicate,
+        types: Vec<String>,
+    },
 
     SearchBasicLands {
         count: usize,
@@ -413,6 +444,8 @@ pub enum Step {
         duration: String,
         /// Multiply by the affected creature's creature-type count, capped.
         per_creature_type_max: Option<i64>,
+        /// Multiply by the number of colors among matching permanents you control.
+        per_color_among: Option<Predicate>,
     },
     GrantKeywords {
         target: String,
@@ -1050,6 +1083,10 @@ impl<'a> BoundPack<'a> {
             | Step::ShuffleIntoLibrary { .. }
             | Step::BecomeArtifactCreature { .. }
             | Step::AddManaOfOneColor { .. }
+            | Step::EarthbendValue { .. }
+            | Step::CantBeBlockedByMoreThan { .. }
+            | Step::AttacksDespiteDefender { .. }
+            | Step::AddCardTypes { .. }
             | Step::SearchBasicLands { .. }
             | Step::Sacrifice { .. }
             | Step::DealDamageToController { .. }
@@ -1285,6 +1322,21 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         Opcode::AddManaOfOneColor => Step::AddManaOfOneColor {
             amount: ValueExpression::parse(object_field(value, "amount")?)?,
         },
+        Opcode::EarthbendValue => Step::EarthbendValue {
+            target: str_field(value, "target")?.to_owned(),
+            count: ValueExpression::parse(object_field(value, "count")?)?,
+        },
+        Opcode::CantBeBlockedByMoreThan => Step::CantBeBlockedByMoreThan {
+            count: i64_field(value, "count")?,
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
+        },
+        Opcode::AttacksDespiteDefender => Step::AttacksDespiteDefender {
+            target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::AddCardTypes => Step::AddCardTypes {
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
+            types: str_array_field(value, "types")?,
+        },
         Opcode::Tap => Step::Tap {
             target: str_field(value, "target")?.to_owned(),
         },
@@ -1297,6 +1349,10 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
             toughness: i64_field(value, "toughness")?,
             duration: str_field(value, "duration")?.to_owned(),
             per_creature_type_max: opt_i64_field(value, "per_creature_type_max")?,
+            per_color_among: value
+                .get("per_color_among")
+                .map(parse_predicate)
+                .transpose()?,
         },
         Opcode::GrantKeywords => Step::GrantKeywords {
             target: str_field(value, "target")?.to_owned(),
@@ -1556,6 +1612,10 @@ fn parse_predicate(value: &Value) -> Result<Predicate, IrError> {
         ),
         "flying" => Predicate::Flying,
         "no_counters" => Predicate::NoCounters,
+        "token" => Predicate::Token(
+            opt_bool_field(value, "value")?
+                .ok_or_else(|| IrError::Malformed("token predicate needs a value".into()))?,
+        ),
         "types_any" => Predicate::TypesAny(str_array_field(value, "values")?),
         "subtypes_any" => Predicate::SubtypesAny(str_array_field(value, "values")?),
         "not_subtypes" => Predicate::NotSubtypes(str_array_field(value, "values")?),

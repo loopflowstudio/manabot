@@ -5,7 +5,7 @@ Brief: the Task directive (49 cards, obligations in `docs/rules/tla/allocation.j
 T2 and reconcile shared costs before landing. Every merge needs Jack Heart's review.
 Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
 
-## Done (28 of 49)
+## Done (34 of 49)
 
 1. Locations (Abandoned Air Temple, Agna Qel'a, Ba Sing Se, Realm of Koh):
    `ReplacementEffect::EntersTappedUnlessControls`; `Predicate::Supertype`;
@@ -13,11 +13,11 @@ Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
 2. Static grants (Air Nomad Legacy, Badgermole, Diligent Zookeeper, Foggy Swamp
    Hunters, The Walls of Ba Sing Se): `StaticKeywordGrant` read by
    `Game::effective_keywords`; one `static_scope_applies`; `per_creature_type_max`.
-   Static haste/defender grants still miss `Permanent::can_tap/can_attack`.
+   Static haste grants still miss `Permanent::can_tap`.
 3. Typed counters (Rowdy Snowballers, Mai, Heartless Act): `CounterKind`, stun in
    `Permanent::untap`, `Cost.exhaust`, `Predicate::NoCounters`, opcode 66.
 4. Base P/T, layer 7b (Flexible Waterbender, Turtle-Duck): opcode 67 `set_base_pt`
-   (source, end of turn only).
+   (end of turn only).
 5. Equipment (Kyoshi Battle Fan, Meteor Sword, Twin Blades): `Permanent.attached_to`,
    opcode 68 `attach`, `create_token.attach_source`, SBA 704.5n.
 6. Auras (Path to Redemption, Watery Grasp, Swampsnare Trap): `Program::enchant`
@@ -26,17 +26,14 @@ Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
    abilities capture the attached object before costs (opcode 71);
    `cost_reduction_if_targets`.
 7. Vehicles (Fire Nation Warship, Invasion Submersible, Tundra Tank, War Balloon):
-   - `Permanent.becomes_creature: Option<BecomesCreature{EndOfTurn, Incarnation}>`
-     (longer wins; cleanup clears EndOfTurn) and `CardDefinition.creature_with_counters`
-     feed `Permanent::animated_creature`, which `is_creature`, predicate matching,
-     trigger subjects, LKI and the observed `is_animated` all read.
-   - Opcode 72 `become_artifact_creature` (source; `end_of_turn`, absent =
-     incarnation, or `static` under a `source_counters_at_least` branch).
-   - `Program::crew` / `Cost.crew` → `ActivatedAbilityDefinition.crew`;
-     `PendingChoice::Crew` offers other untapped positive-power creatures as
-     LookAndSelect `SelectCard`, tapping each at once until power is covered.
-   - Vehicles enter summoning sick (CR 302.6); `Target.another` →
-     `TargetRequirement.another` excludes the source from trigger targets.
+   - `Permanent.becomes_creature` (EndOfTurn < Incarnation) and
+     `CardDefinition.creature_with_counters` feed `Permanent::animated_creature`,
+     read by `is_creature`, predicates, trigger subjects, LKI and `is_animated`.
+   - Opcode 72 `become_artifact_creature` (`end_of_turn`, absent = incarnation,
+     or `static` under `source_counters_at_least`).
+   - `Cost.crew` → `PendingChoice::Crew` taps other positive-power creatures
+     (LookAndSelect) until power is covered. Vehicles enter summoning sick;
+     `Target.another` excludes the source from trigger targets.
 
 8. Mana (Great Divide Guide reviewed and its `INCOMPLETE` entry dropped; Raucous
    Audience, White Lotus Tile, The Lion-Turtle):
@@ -48,24 +45,35 @@ Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
    - `StaticRestriction.unless`, authored as a static `branch` with empty `then`
      and `cant_attack_or_block` in `otherwise`.
 
-Schema 8 (unreleased, T1 precedent) appended in place: fields 85-92, predicates
-13-14, special roles 6-12, opcodes 66-73, enum `counter`, conditions 7-8,
-quantity 5, subtypes 64-69.
+9. Effective characteristics (Earthen Ally, Flopsie, The Boulder, Platypus-Bear,
+   Toph the First Metalbender, The Mechanist):
+   - `ScopeView` (Types → Keywords → PowerToughness → Rules) says what a static
+     scope reads; `permanent_matches_predicate` is the Rules view. Restriction
+     scopes now read effective power (Flopsie).
+   - Layer 4 `StaticTypeGrant` (opcode 77 `add_card_types`) read through
+     `Game::permanent_is_land` and predicate matching; predicate 15 `token`.
+   - Field 93 `per_color_among`; opcodes 74 `earthbend_value`, 75
+     `cant_be_blocked_by_more_than` (structured blocker offer goes sequential,
+     as for menace), 76 `attacks_despite_defender` (read by
+     `Game::permanent_can_attack`, which reads static defender too);
+     trigger_event 13 `end_step_begins`.
+   - `become_artifact_creature` and `set_base_pt` lower for targets too
+     (`BecomeCreatureTarget`, `SetBasePtTarget`); earthbent permanents have
+     base 0/0 even if they print P/T.
+
+Schema 8 (unreleased, T1 precedent) appended in place: fields 85-93, predicates
+13-15, special roles 6-12, opcodes 66-77, enum `counter`, conditions 7-8,
+quantity 5, trigger_event 13, subtypes 64-74.
 `scratch/add_fixture.py` copies pinned evidence into the conformance fixture.
 
-Check (slice 8, debug): `cargo test` all targets pass (cards 33, rules_tests 356,
+Check (slice 9, debug): `cargo test` all targets pass (cards 39, rules_tests 356,
 lib 119) except `semantic_conformance_tests` (world w16 vs w15 and receipt digest
 drift; fails in PR #394 CI run 40819903624); clippy, fmt clean; extension rebuilt;
 `pytest tests/semantic` 158 pass, 4 fail on `schema_version == 3/4/7` asserts,
-inherited from `be2b7586b` (test files unchanged since it). Slice 8 compress
-(creature_types inlined, one-color X via `repeat`, test imports): debug cards 33,
-rules_tests 356, lib 119 pass; clippy clean; no IR change, so no rebuild.
+inherited from `be2b7586b`.
 
-## Remaining (21 cards), suggested next slices
+## Remaining (15 cards), suggested next slices
 
-- Effective-characteristic reads: Earthen Ally, Flopsie (team counters; blocker
-  restriction by effective power), The Boulder, Platypus-Bear, Toph (artifacts gain
-  land type), The Mechanist (temporary animation — `becomes_creature` may fit).
 - Mana remainder: Energybending (lands gain all basic land types until end of
   turn: effective subtypes plus derived mana), Ozai (unspent mana becomes red
   instead of emptying; flying/indestructible while six or more unspent), Secret
@@ -85,9 +93,9 @@ rules_tests 356, lib 119 pass; clippy clean; no IR change, so no rebuild.
 - T1 (892c47) deletions reconciled at sync 86ebe9ccf.
 - Both branches append to schema 8 from 86ebe9ccf with colliding numbers. T2:
   fields 85-94, predicates 13-15, subtypes 64-71, special role 6, opcodes 66-71,
-  trigger_event 13, destination 2, zone 3. This branch: fields 85-92, predicates
-  13-14, subtypes 64-69, special roles 6-12, opcodes 66-73, conditions 7-8,
-  quantity 5, enum `counter`. The later lander renumbers its own entries
+  trigger_event 13, destination 2, zone 3. This branch: fields 85-93, predicates
+  13-15, subtypes 64-74, special roles 6-12, opcodes 66-77, conditions 7-8,
+  quantity 5, trigger_event 13 (`end_step_begins`), enum `counter`. The later lander renumbers its own entries
   (append-only, contiguous).
 - Keep one exhaust field and gate (T2 field 87, here 89) and one with-counters
   predicate reading every `CounterKind` (T2 `with_counter` 13; here `no_counters`
@@ -97,4 +105,5 @@ rules_tests 356, lib 119 pass; clippy clean; no IR change, so no rebuild.
 ## Delete — do not maintain
 
 Qualification entries, `Permanent::local_power`/`local_toughness`,
-`StaticScope::Equipped` and `Game::equipped_creature` are gone; do not restore them.
+`StaticScope::Equipped`, `Game::equipped_creature` and `Permanent::can_attack`
+are gone; do not restore them.

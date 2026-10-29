@@ -27,6 +27,7 @@ fn savor() -> Card {
                     target: "target_0",
                     toughness: -2,
                     per_creature_type_max: None,
+                    per_color_among: None,
                 },
                 Op::CreateToken {
                     count: 1,

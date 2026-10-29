@@ -78,6 +78,7 @@ impl Program {
                 target: "source",
                 toughness: 1,
                 per_creature_type_max: None,
+                per_color_among: None,
             }],
         )
         .trigger(Trigger {
@@ -140,6 +141,7 @@ impl Program {
                 target: "each:equipped_creature",
                 toughness,
                 per_creature_type_max: None,
+                per_color_among: None,
             }],
         )
     }
@@ -349,6 +351,9 @@ pub enum Op {
         /// "for each of its creature types, to a maximum of N" (static only).
         #[serde(skip_serializing_if = "Option::is_none")]
         per_creature_type_max: Option<i32>,
+        /// "for each color among [predicate] permanents you control" (static only).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        per_color_among: Option<Predicate>,
     },
     /// "[target] has base power and toughness P/T"; an absent value leaves
     /// that base unchanged.
@@ -388,6 +393,11 @@ pub enum Op {
     },
     Earthbend {
         count: i32,
+        target: &'static str,
+    },
+    /// "Earthbend X", X read as the ability resolves.
+    EarthbendValue {
+        count: Quantity,
         target: &'static str,
     },
     DrainLifeValue {
@@ -457,6 +467,23 @@ pub enum Op {
         #[serde(skip_serializing_if = "Option::is_none")]
         duration: Option<Duration>,
         target: &'static str,
+    },
+    /// "Each creature you control [predicate] can't be blocked by more than
+    /// `count` creatures" (static).
+    CantBeBlockedByMoreThan {
+        count: i32,
+        predicate: Predicate,
+    },
+    /// "[target] can attack as though it didn't have defender" (static,
+    /// usually under a branch condition).
+    AttacksDespiteDefender {
+        target: &'static str,
+    },
+    /// "[predicate] permanents you control are [types] in addition to their
+    /// other types" (static, CR 613.1d). Abilities are not granted.
+    AddCardTypes {
+        predicate: Predicate,
+        types: Vec<CardType>,
     },
     /// "Add X mana of any one color", X read when the mana ability resolves.
     AddManaOfOneColor {
@@ -639,19 +666,45 @@ impl Op {
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Predicate {
-    NotCardTypes { values: Vec<CardType> },
-    Subtype { value: &'static str },
-    Supertype { value: &'static str },
-    All { predicates: Vec<Predicate> },
-    CardType { value: CardType },
-    PowerAtMost { value: i32 },
-    ManaValueAtLeast { value: i32 },
-    SubtypesAny { values: Vec<&'static str> },
+    NotCardTypes {
+        values: Vec<CardType>,
+    },
+    Subtype {
+        value: &'static str,
+    },
+    Supertype {
+        value: &'static str,
+    },
+    All {
+        predicates: Vec<Predicate>,
+    },
+    CardType {
+        value: CardType,
+    },
+    PowerAtMost {
+        value: i32,
+    },
+    ManaValueAtLeast {
+        value: i32,
+    },
+    SubtypesAny {
+        values: Vec<&'static str>,
+    },
     Flying,
     NoCounters,
-    NotSubtypes { values: Vec<&'static str> },
-    TypesAny { values: Vec<CardType> },
-    PowerAtLeast { value: i32 },
+    NotSubtypes {
+        values: Vec<&'static str>,
+    },
+    TypesAny {
+        values: Vec<CardType>,
+    },
+    PowerAtLeast {
+        value: i32,
+    },
+    /// A token (`true`) or a nontoken (`false`) object.
+    Token {
+        value: bool,
+    },
     Any,
 }
 
@@ -822,6 +875,7 @@ pub enum Event {
     CastSpell,
     Dies,
     DrawNthCard,
+    EndStepBegins,
     EntersBattlefield,
     Sacrificed,
     TappedForMana,

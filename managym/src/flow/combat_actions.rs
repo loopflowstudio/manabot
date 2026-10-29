@@ -41,11 +41,10 @@ impl Game {
         }
 
         let has_vigilance = {
-            let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+            if self.state.permanents[permanent_id].is_none() {
                 return Err(AgentError("attacker permanent not found".to_string()));
-            };
-            let card = &self.state.cards[permanent.card];
-            if !permanent.can_attack(card) || !self.combat_condition_met(permanent_id) {
+            }
+            if !self.permanent_can_attack(permanent_id) {
                 return Err(AgentError("permanent cannot attack".to_string()));
             }
             self.effective_keywords(permanent_id).vigilance
@@ -226,15 +225,32 @@ impl Game {
     pub(crate) fn eligible_attackers(&self, player: PlayerId) -> Vec<PermanentId> {
         let mut out = Vec::new();
         for permanent_id in self.battlefield_permanents(player) {
-            let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
-                continue;
-            };
-            let card = &self.state.cards[permanent.card];
-            if permanent.can_attack(card) && self.combat_condition_met(permanent_id) {
+            if self.permanent_can_attack(permanent_id) {
                 out.push(permanent_id);
             }
         }
         out
+    }
+
+    /// Whether a permanent can be declared as an attacker (CR 508.1a):
+    /// a creature that can tap, without defender unless an effect lets it
+    /// attack as though it didn't have defender (Platypus-Bear).
+    fn permanent_can_attack(&self, permanent_id: PermanentId) -> bool {
+        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+            return false;
+        };
+        let card = &self.state.cards[permanent.card];
+        let defender_applies = self.effective_keywords(permanent_id).defender
+            && card
+                .attacks_despite_defender
+                .as_ref()
+                .is_none_or(|condition| {
+                    !self.check_static_condition(condition, permanent.controller)
+                });
+        permanent.is_creature(card)
+            && permanent.can_tap(card)
+            && !defender_applies
+            && self.combat_condition_met(permanent_id)
     }
 
     pub(crate) fn eligible_blockers(&self, player: PlayerId) -> Vec<PermanentId> {
@@ -284,6 +300,17 @@ impl Game {
             return false;
         }
         if attacker.cant_be_blocked_this_turn {
+            return false;
+        }
+        // Blockers are declared one at a time; a second blocker is refused.
+        if self.has_restriction(attacker_id, Restriction::CantBeBlockedByMoreThanOne)
+            && self
+                .state
+                .combat
+                .as_ref()
+                .and_then(|combat| combat.attacker_to_blockers.get(&attacker_id))
+                .is_some_and(|blockers| blockers.iter().any(|&other| other != blocker_id))
+        {
             return false;
         }
 

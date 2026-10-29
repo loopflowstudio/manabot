@@ -570,6 +570,25 @@ impl Game {
                 }
                 None
             }
+            Effect::BecomeCreatureTarget { duration, .. } => {
+                if let Some(Target::Permanent(id)) = self.present_primary_target(frame) {
+                    self.journal_permanent(id);
+                    let permanent = self.state.permanents[id].as_mut()?;
+                    permanent.becomes_creature = permanent.becomes_creature.max(Some(*duration));
+                }
+                None
+            }
+            Effect::SetBasePtTarget {
+                power, toughness, ..
+            } => {
+                if let Some(Target::Permanent(id)) = self.present_primary_target(frame) {
+                    self.journal_permanent(id);
+                    let permanent = self.state.permanents[id].as_mut()?;
+                    permanent.temp_base_power = power.or(permanent.temp_base_power);
+                    permanent.temp_base_toughness = toughness.or(permanent.temp_base_toughness);
+                }
+                None
+            }
             Effect::BecomeCreatureSource { duration } => {
                 if let Some(permanent) = self.source_permanent_mut(frame) {
                     permanent.becomes_creature = permanent.becomes_creature.max(Some(*duration));
@@ -609,6 +628,16 @@ impl Game {
                 self.execute_frame_effect(
                     &Effect::DealDamage {
                         amount,
+                        target: target.clone(),
+                    },
+                    frame,
+                )
+            }
+            Effect::EarthbendValue { count, target } => {
+                let count = self.effect_value(count, frame.controller);
+                self.execute_frame_effect(
+                    &Effect::Earthbend {
+                        count,
                         target: target.clone(),
                     },
                     frame,
@@ -1207,8 +1236,7 @@ impl Game {
                 permanent.controller != controller && self.permanent_is_creature(id)
             }
             TargetSpec::LandYouControl => {
-                permanent.controller == controller
-                    && self.state.cards[permanent.card].types.is_land()
+                permanent.controller == controller && self.permanent_is_land(id)
             }
             TargetSpec::SpellOrPermanent { min_mana_value } => {
                 self.card_mana_value(permanent.card) >= *min_mana_value

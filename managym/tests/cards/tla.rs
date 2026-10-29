@@ -1198,3 +1198,238 @@ fn the_lion_turtle_waits_for_three_lessons_to_fight() {
     );
     assert!(!tapped(&s, turtle), "vigilance");
 }
+
+/// CR 105.2: the bonus counts each color among Allies you control once,
+/// including its own green; a non-Ally or an opponent's Ally adds nothing.
+/// The five-color activation earthbends 5.
+#[test]
+fn earthen_ally_grows_with_ally_colors_and_earthbends_five() {
+    let mut s = setup(&["Earthen Ally", "Toph, the First Metalbender", "Gray Ogre"]);
+    let ally = s.force_permanent_on_battlefield(0, "Earthen Ally");
+    assert_eq!(s.game().effective_pt(ally), (1, 2));
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.force_permanent_on_battlefield(1, "Toph, the First Metalbender");
+    assert_eq!(s.game().effective_pt(ally), (1, 2));
+    s.force_permanent_on_battlefield(0, "Toph, the First Metalbender");
+    assert_eq!(s.game().effective_pt(ally), (3, 2), "green, red and white");
+
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    s.set_player_mana_pool(0, "2WUBRG");
+    activate(&mut s, ally, 0);
+    assert!(s.choose_target(Target::Permanent(forest)));
+    settle(&mut s);
+    assert_eq!(counters(&s, forest), 5);
+    assert_eq!(s.game().effective_pt(forest), (5, 5));
+}
+
+/// Declare every offered attacker.
+fn attack_with_all(s: &mut Scenario) {
+    s.advance_until(
+        |s| s.action_space().kind == ActionSpaceKind::DeclareAttacker,
+        "attackers".into(),
+    );
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        choose(s, |a| {
+            matches!(a, Action::DeclareAttacker { attack: true, .. })
+        });
+    }
+}
+
+/// Whether the current blocker may block `attacker`.
+fn may_block(s: &Scenario, attacker: PermanentId) -> bool {
+    has_action(
+        s,
+        |a| matches!(a, Action::DeclareBlocker { attacker: Some(target), .. } if *target == attacker),
+    )
+}
+
+/// The entry trigger counters each creature you control. CR 509.1b: a
+/// creature you control with effective power 4 or more takes one blocker at
+/// most; a smaller one can still be blocked by two.
+#[test]
+fn flopsie_counters_your_team_and_limits_big_attackers_to_one_blocker() {
+    let mut s = setup(&["Flopsie, Bumi's Buddy", "Gray Ogre", "Llanowar Elves"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.set_player_mana_pool(0, "4GG");
+    let flopsie = cast(&mut s, "Flopsie, Bumi's Buddy");
+    settle(&mut s);
+    let flopsie = s.game().state.card_to_permanent[flopsie].expect("entered");
+    assert_eq!(counters(&s, flopsie), 1);
+    assert_eq!(counters(&s, ogre), 1);
+    assert_eq!(counters(&s, theirs), 0);
+    for _ in 0..3 {
+        s.force_permanent_on_battlefield(1, "Llanowar Elves");
+    }
+    ready(&mut s, flopsie);
+    ready(&mut s, ogre);
+
+    attack_with_all(&mut s);
+    s.advance_until(
+        |s| s.action_space().kind == ActionSpaceKind::DeclareBlocker,
+        "blockers".into(),
+    );
+    assert!(may_block(&s, flopsie));
+    choose(
+        &mut s,
+        |a| matches!(a, Action::DeclareBlocker { attacker: Some(target), .. } if *target == flopsie),
+    );
+    assert!(!may_block(&s, flopsie), "a second blocker is refused");
+    assert!(may_block(&s, ogre));
+    choose(
+        &mut s,
+        |a| matches!(a, Action::DeclareBlocker { attacker: Some(target), .. } if *target == ogre),
+    );
+    assert!(may_block(&s, ogre), "a 3/3 can be blocked by two");
+}
+
+/// X counts creatures you control with effective power 4 or more as the
+/// trigger resolves, including The Boulder and a countered Ogre.
+#[test]
+fn the_boulder_earthbends_for_each_four_power_creature_on_attack() {
+    let mut s = setup(&["The Boulder, Ready to Rumble", "Gray Ogre"]);
+    let boulder = s.force_permanent_on_battlefield(0, "The Boulder, Ready to Rumble");
+    let big = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    add_counters(&mut s, big, CounterKind::PlusOnePlusOne, 2);
+    add_counters(&mut s, theirs, CounterKind::PlusOnePlusOne, 2);
+    ready(&mut s, boulder);
+
+    s.advance_until(
+        |s| s.action_space().kind == ActionSpaceKind::DeclareAttacker,
+        "attackers".into(),
+    );
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        choose(&mut s, |a| {
+            matches!(a, Action::DeclareAttacker { permanent, attack, .. }
+                if *attack == (*permanent == boulder))
+        });
+    }
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(forest)));
+    settle(&mut s);
+    assert_eq!(counters(&s, forest), 2);
+}
+
+/// CR 702.3b: defender stops the Bear attacking until a Lesson card is in
+/// your graveyard; it still has defender. Its entry mills two.
+#[test]
+fn platypus_bear_mills_two_and_attacks_once_a_lesson_is_in_your_graveyard() {
+    let mut s = setup(&["Platypus-Bear", "Abandon Attachments"]);
+    s.set_player_mana_pool(0, "1G");
+    let bear = cast(&mut s, "Platypus-Bear");
+    let library = s.game().state.zones.size(ZoneType::Library, PlayerId(0));
+    settle(&mut s);
+    let bear = s.game().state.card_to_permanent[bear].expect("entered");
+    assert_eq!(
+        s.game().state.zones.size(ZoneType::Library, PlayerId(0)),
+        library - 2
+    );
+    let graveyard = s
+        .game()
+        .state
+        .zones
+        .zone_cards(ZoneType::Graveyard, PlayerId(0))
+        .to_vec();
+    assert_eq!(graveyard.len(), 2);
+    for card in graveyard {
+        s.game_mut().move_card(card, ZoneType::Exile);
+    }
+    ready(&mut s, bear);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    assert!(!offered_in_combat(&s, bear), "defender");
+
+    let lesson = library_card(&s, 0, "Abandon Attachments");
+    s.game_mut().move_card(lesson, ZoneType::Graveyard);
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    assert!(offered_in_combat(&s, bear));
+    assert!(observed_keywords(&s, bear).defender);
+}
+
+/// CR 205.1b, 613.1d: your nontoken artifacts are also lands, so earthbend
+/// can target them, and an earthbent one is a 0/0 before counters. A token
+/// artifact and an opponent's artifact are not lands. The end-step trigger
+/// is only yours.
+#[test]
+fn toph_makes_your_nontoken_artifacts_lands_and_earthbends_at_your_end_step() {
+    let mut s = setup(&["Toph, the First Metalbender", "White Lotus Tile"]);
+    s.force_permanent_on_battlefield(0, "Toph, the First Metalbender");
+    let tile = s.force_permanent_on_battlefield(0, "White Lotus Tile");
+    let theirs = s.force_permanent_on_battlefield(1, "White Lotus Tile");
+    let clue = s
+        .game_mut()
+        .create_token("Clue", PlayerId(0), false)
+        .expect("clue");
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+
+    s.advance_until(
+        |s| s.action_space().kind == ActionSpaceKind::ChooseTarget,
+        "end step trigger".into(),
+    );
+    assert_eq!(s.current_step(), StepKind::End);
+    let offered = |s: &Scenario, id: PermanentId| {
+        has_action(s, |a| {
+            matches!(a, Action::ChooseTarget { target, .. }
+            if *target == Target::Permanent(id))
+        })
+    };
+    assert!(offered(&s, tile) && offered(&s, forest));
+    assert!(!offered(&s, clue), "tokens stay nonland");
+    assert!(!offered(&s, theirs), "only artifacts you control");
+    assert!(s.choose_target(Target::Permanent(tile)));
+    settle(&mut s);
+    assert!(is_creature(&s, tile));
+    assert_eq!(s.game().effective_pt(tile), (2, 2));
+
+    s.advance_to_active_step(1, StepKind::End);
+    assert_ne!(
+        s.action_space().kind,
+        ActionSpaceKind::ChooseTarget,
+        "not on an opponent's end step"
+    );
+}
+
+/// A noncreature spell makes a Clue; a creature spell does not. Until end of
+/// turn the tapped Mechanist makes an artifact token you control a 3/1
+/// Construct artifact creature with flying; nontoken artifacts can't be
+/// chosen.
+#[test]
+fn the_mechanist_makes_clues_and_flies_them_until_end_of_turn() {
+    let mut s = setup(&[
+        "The Mechanist, Aerial Artisan",
+        "Abandon Attachments",
+        "Llanowar Elves",
+        "White Lotus Tile",
+    ]);
+    let mechanist = s.force_permanent_on_battlefield(0, "The Mechanist, Aerial Artisan");
+    let tile = s.force_permanent_on_battlefield(0, "White Lotus Tile");
+    ready(&mut s, mechanist);
+    s.set_player_mana_pool(0, "1U");
+    cast(&mut s, "Abandon Attachments");
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
+    s.set_player_mana_pool(0, "G");
+    cast(&mut s, "Llanowar Elves");
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
+
+    let clue = battlefield_token(&s, 0);
+    activate(&mut s, mechanist, 0);
+    assert!(!s.choose_target(Target::Permanent(tile)));
+    assert!(s.choose_target(Target::Permanent(clue)));
+    settle(&mut s);
+    assert!(tapped(&s, mechanist));
+    assert!(is_creature(&s, clue));
+    assert_eq!(s.game().effective_pt(clue), (3, 1));
+    assert!(observed_keywords(&s, clue).flying);
+    assert!(observed(&s, clue)
+        .temp_subtypes
+        .contains(&"Construct".to_owned()));
+
+    s.advance_to_active_step(1, StepKind::Main);
+    assert!(!is_creature(&s, clue), "until end of turn");
+    assert!(!observed_keywords(&s, clue).flying);
+}
