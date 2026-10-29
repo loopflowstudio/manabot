@@ -553,12 +553,8 @@ impl Game {
             }
             Effect::SetBasePtUntilEot { power, toughness } => {
                 if let Some(permanent) = self.source_permanent_mut(frame) {
-                    if power.is_some() {
-                        permanent.temp_base_power = *power;
-                    }
-                    if toughness.is_some() {
-                        permanent.temp_base_toughness = *toughness;
-                    }
+                    permanent.temp_base_power = power.or(permanent.temp_base_power);
+                    permanent.temp_base_toughness = toughness.or(permanent.temp_base_toughness);
                 }
                 None
             }

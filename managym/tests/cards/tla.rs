@@ -486,10 +486,6 @@ fn heartless_act_removes_up_to_three_counters_of_chosen_kinds() {
     assert_eq!(counters(&s, ogre), 2);
 }
 
-fn pt(s: &Scenario, id: PermanentId) -> (i32, i32) {
-    s.game().effective_pt(id)
-}
-
 /// CR 613.4b-c: the waterbend setter replaces the printed base; a +1/+1
 /// counter still applies on top of it, and the setter ends at cleanup.
 #[test]
@@ -501,7 +497,7 @@ fn flexible_waterbender_sets_base_pt_under_counters_until_end_of_turn() {
         s.force_permanent_on_battlefield(0, "Gray Ogre"),
     ];
     add_counters(&mut s, bender, CounterKind::PlusOnePlusOne, 1);
-    assert_eq!(pt(&s, bender), (3, 6));
+    assert_eq!(s.game().effective_pt(bender), (3, 6));
 
     s.set_player_mana_pool(0, "1");
     activate(&mut s, bender, 0);
@@ -511,10 +507,10 @@ fn flexible_waterbender_sets_base_pt_under_counters_until_end_of_turn() {
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     settle(&mut s);
     assert!(helpers.iter().all(|helper| tapped(&s, *helper)));
-    assert_eq!(pt(&s, bender), (6, 3));
+    assert_eq!(s.game().effective_pt(bender), (6, 3));
 
     s.advance_to_active_step(1, StepKind::Main);
-    assert_eq!(pt(&s, bender), (3, 6));
+    assert_eq!(s.game().effective_pt(bender), (3, 6));
 }
 
 /// Only base power changes; toughness keeps its printed base, and trample
@@ -529,10 +525,10 @@ fn turtle_duck_sets_base_power_and_gains_trample_until_end_of_turn() {
     s.set_player_mana_pool(0, "3");
     activate(&mut s, duck, 0);
     settle(&mut s);
-    assert_eq!(pt(&s, duck), (5, 5));
+    assert_eq!(s.game().effective_pt(duck), (5, 5));
     assert!(observed_keywords(&s, duck).trample);
 
     s.advance_to_active_step(1, StepKind::Main);
-    assert_eq!(pt(&s, duck), (1, 5));
+    assert_eq!(s.game().effective_pt(duck), (1, 5));
     assert!(!observed_keywords(&s, duck).trample);
 }

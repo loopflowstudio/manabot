@@ -43,7 +43,7 @@ Schema 8 (unreleased, T1 precedent) appended in place: fields 85-89, predicates
 (Ranger, Wall, Turtle). Card tests drive through `tests/cards/support.rs`;
 `scratch/add_fixture.py` copies pinned evidence into the conformance fixture.
 
-Check (slice 4, debug): `cargo test` all targets pass except known
+Check (slice 4, debug; compress re-ran `cards` 17/17 + clippy): `cargo test` all targets pass except known
 `semantic_conformance_tests` (world w16 vs evidence w15, content digest drift; from
 T1); `cards` 17/17, lib 119, `rules_tests` 356; clippy, fmt clean; Python
 compiler/learning projection/current content 41/41 after rebuilding the extension.
