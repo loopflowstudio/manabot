@@ -2,7 +2,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use super::{
     ability::{Ability, Effect, StaticCondition, TargetRequirement, TargetSpec},
-    game_object::{ObjectId, PermanentId, PlayerId},
+    game_object::{ObjectId, ObjectRef, PlayerId},
     mana::{Color, Colors, Mana, ManaCost},
     permanent::CounterKind,
     predicate::CardPredicate,
@@ -330,11 +330,11 @@ pub struct SacrificeCost {
     pub or_mana: Option<ManaCost>,
 }
 
-/// The battlefield permanent whose `equipped_grants[index]` an ability
-/// granted to another permanent came from.
+/// The exact object whose `equipped_grants[index]` an ability granted to
+/// another permanent came from; the stack keeps it after the grantor leaves.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct AbilityGrant {
-    pub grantor: PermanentId,
+    pub grantor: ObjectRef,
     pub index: usize,
 }
 

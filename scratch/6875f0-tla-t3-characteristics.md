@@ -62,7 +62,7 @@ Detail per slice is in each commit message (`git log 86ebe9ccf..`).
    lowers an activated program into `CardDefinition.equipped_grants`;
    `activated_abilities_for` lists them on the attached creature after its own
    (`AbilityGrant`), and every activation path reads abilities only through it.
-   `ActivatedAbilityOnStack.granted_by` (`StackGrant`) fixes the grantor object
+   `ActivatedAbilityOnStack.granted_by` carries that exact grantor object
    and grant at activation; `EffectFrame.grantor` feeds `return_to_hand` on
    special role 15 `grantor` (`Effect::ReturnGrantorToHand`, CR 400.7).
 

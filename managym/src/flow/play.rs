@@ -17,7 +17,7 @@ use crate::{
         card::Card,
         game_object::{CardId, PermanentId, PlayerId, Target},
         mana::ManaCost,
-        stack_object::{ActivatedAbilityOnStack, StackGrant, StackObject},
+        stack_object::{ActivatedAbilityOnStack, StackObject},
         zone::ZoneType,
     },
 };
@@ -1424,15 +1424,6 @@ impl Game {
             }
         }
 
-        let granted_by = match ability.granted_by {
-            Some(grant) => Some(StackGrant {
-                grantor: self
-                    .permanent_object_ref(grant.grantor)
-                    .ok_or_else(|| AgentError("missing ability grantor identity".into()))?,
-                index: grant.index,
-            }),
-            None => None,
-        };
         let id = self.state.id_gen.next_id();
         self.push_to_stack(StackObject::ActivatedAbility(ActivatedAbilityOnStack {
             id,
@@ -1444,7 +1435,7 @@ impl Game {
             targets,
             attached,
             x,
-            granted_by,
+            granted_by: ability.granted_by,
         }));
         self.state.priority.on_non_pass_action(self.active_player());
         Ok(())

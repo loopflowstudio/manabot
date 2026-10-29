@@ -503,6 +503,9 @@ impl Game {
             {
                 continue;
             }
+            let grantor = self
+                .permanent_object_ref(grantor)
+                .expect("battlefield permanent has an exact identity");
             abilities.extend(grants.iter().enumerate().map(|(index, ability)| {
                 ActivatedAbilityDefinition {
                     granted_by: Some(AbilityGrant { grantor, index }),
