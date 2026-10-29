@@ -38,15 +38,14 @@ def test_strata_balance_decks_and_play_order() -> None:
             assert not any(a == b for a, b in cells)
 
 
-def test_mirror_admission_requires_exact_roster_and_explicit_option() -> None:
+def test_mirror_admission_requires_exact_authored_roster() -> None:
     base = Match(selected_match())
     space = ObservationSpace()
     agent = ActorCritic(space, ModelConfig(hidden_dim=8, num_attention_heads=2))
     agent.world_binding = checkpoint_world(base.to_rust(), space)
     mirror = stream_matches(base, 12, "mirrors-balanced")[0]
-    with pytest.raises(ValueError, match="setup differs"):
-        validate_agent_setup(agent, mirror.to_rust())
-    validate_agent_setup(agent, mirror.to_rust(), allow_deck_repetition=True)
+    # The pack binding admits any authored pair native reset admits.
+    validate_agent_setup(agent, mirror.to_rust())
     changed = mirror.config.model_copy(deep=True)
     changed.hero_sideboard = {}
     with pytest.raises(ValueError, match="outside checkpoint"):
@@ -100,5 +99,7 @@ def test_authored_mirrors_keep_complete_content_manifest() -> None:
         assert engine.content_pack_manifest() == expected
         wrong = mirror.to_rust()
         wrong[0].content_pack = None
-        with pytest.raises(RuntimeError, match="explicit pack"):
+        with pytest.raises(
+            RuntimeError, match="explicit content pool requires two players"
+        ):
             engine.reset(wrong)

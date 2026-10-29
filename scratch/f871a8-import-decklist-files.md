@@ -164,6 +164,14 @@ keeps its exact pair binding. Proof: a pair-trained complexity-pack checkpoint
 executes a different authored pair from the same pack; a historical pair binding
 still loads and still rejects other pairs; another pack's setup still rejects.
 
+Implemented 2026-10-28: `checkpoint_world` binds the complete authored roster
+for any compiled authored pack when the actual setups are authored, marked
+`setup_binding: authored-pack-v1` (Elemental stays unmarked; its digests are
+frozen). `expected_world` reads unmarked non-Elemental compiled bindings with
+the historical `_pair_world` reader. `validate_agent_setup` admits any roster
+pair; the pack must be explicit unless it is the pack's own distinct pair that
+native reset infers. Scenario replay compares via `expected_world`.
+
 Recorded deferrals, not reopened here: checkpoint `bc` extra still carries
 run/regime producer links (questions.md); sim/Academy imported-setup consumers
 still refuse checkpoint opponents. Neither constrains world compatibility of a
@@ -338,4 +346,4 @@ The manifest references `.lf/wave/engine/GOAL.md` and `MEMORY.md`, but neither
 exists in this checkout. The supplied Task, accepted design and dated Steers
 provide the implementation scope; Wave context was not reconstructed.
 
-Check — 2026-10-28 after merging main 6d069d6e5 (package `__init__` re-exports removed; fixed `tests/training/test_training_decks.py` imports): `uv run --extra dev pytest tests/training/test_training_decks.py tests/model/test_world.py tests/model/test_catalog.py tests/training/test_elemental_uniform.py tests/semantic/test_decklist_import.py tests/academy/test_decklist_setup.py tests/test_package_boundaries.py -q`: 59 passed; ruff clean. Earlier pre-merge runs (model/self_play/catalog/recovery 236 passed; debug `cargo test --lib vector_env` 13 passed) are not repeated; gate owns full suites on the merged tree, including debug Rust after main's continuation/encoder changes.
+Check — 2026-10-28 authored-pack binding: `uv run --extra dev pytest` over tests/model/test_world.py, test_catalog.py, training/test_training_decks.py (the four approval proofs), test_matchups.py, eval/test_mirror_admission.py, semantic/test_elemental_world.py, policy_catalog/attack_choice/categorical_value, belief runtime/player/sampling_data, academy/test_watch.py, test_elemental_uniform.py, test_package_boundaries.py: all pass except four failures that predate this pass (verified against c42bf4934 without it): EvaluationRow `arena_key.world` literal stops at w15 while the world is w16 (test_mirror_arena_plays_all_seats_and_replays ×2), Elemental program count 8 vs 7 (test_elemental_world.py:151), belief runtime `KeyError: 'relations'` (test_runtime.py). Gate owns them with the full suites and debug Rust. Two stale native-message regexes ("explicit pack") were updated.

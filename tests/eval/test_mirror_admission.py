@@ -36,7 +36,7 @@ def test_selected_leg_layout_preserves_cross_setups() -> None:
             selected_decks(leg)
 
 
-def test_authored_mirrors_keep_compiled_manifest_and_strict_roster() -> None:
+def test_authored_mirrors_keep_compiled_manifest_and_exact_roster() -> None:
     base = Match(selected_match())
     binding = checkpoint_world(base.to_rust(), ObservationSpace())
     agent = SimpleNamespace(world_binding=binding)
@@ -45,9 +45,8 @@ def test_authored_mirrors_keep_compiled_manifest_and_strict_roster() -> None:
     expected = engine.content_pack_manifest()
     for deck in ("ur_lessons", "gw_allies"):
         mirror = Match(MatchConfig.authored("ur-lessons-vs-gw-allies", deck, deck))
-        with pytest.raises(ValueError, match="setup differs"):
-            validate_agent_setup(agent, mirror.to_rust())
-        validate_agent_setup(agent, mirror.to_rust(), allow_deck_repetition=True)
+        # The pack binding admits authored mirrors; native reset decides them.
+        validate_agent_setup(agent, mirror.to_rust())
         engine.reset(mirror.to_rust())
         assert engine.content_pack_manifest() == expected
         engine.reset(mirror.swapped().to_rust())
@@ -55,7 +54,9 @@ def test_authored_mirrors_keep_compiled_manifest_and_strict_roster() -> None:
 
         configs = mirror.to_rust()
         configs[0].content_pack = None
-        with pytest.raises(RuntimeError, match="explicit pack"):
+        with pytest.raises(
+            RuntimeError, match="explicit content pool requires two players"
+        ):
             engine.reset(configs)
         with pytest.raises(ValueError, match="explicit content pack"):
             validate_agent_setup(agent, configs, allow_deck_repetition=True)

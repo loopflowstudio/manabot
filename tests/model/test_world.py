@@ -2,6 +2,7 @@
 
 from copy import deepcopy
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 import torch
@@ -12,7 +13,14 @@ from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
-from manabot.model.world import checkpoint_world, validate_checkpoint_world
+from manabot.model.world import (
+    AUTHORED_PACK_BINDING,
+    _pair_world,
+    checkpoint_world,
+    validate_agent_setup,
+    validate_checkpoint_world,
+)
+import managym
 
 
 def selected_match():
@@ -135,9 +143,7 @@ def test_loaded_consumers_reject_another_actual_setup(tmp_path, consumer):
 
 
 @pytest.mark.parametrize("deck", ["ur_lessons", "gw_allies"])
-def test_mirror_checkpoint_reload_preserves_explicit_native_pack(
-    tmp_path: Path, deck: str
-) -> None:
+def test_mirror_checkpoint_binds_whole_authored_pack(tmp_path: Path, deck: str) -> None:
     space = ObservationSpace()
     match = Match(MatchConfig.authored("ur-lessons-vs-gw-allies", deck, deck))
     payload = checkpoint()
@@ -146,6 +152,69 @@ def test_mirror_checkpoint_reload_preserves_explicit_native_pack(
     torch.save(payload, path)
     agent, _ = load_checkpoint(str(path))
     assert agent.world_binding == payload["world_binding"]
+    assert agent.world_binding["setup_binding"] == AUTHORED_PACK_BINDING
     validate_checkpoint_world(payload, space, match.to_rust())
+    validate_checkpoint_world(payload, space, selected_match().to_rust())
+
+
+COMPLEXITY = "mtg122-complexity-v1"
+
+
+def _complexity(left: str, right: str) -> list[managym.PlayerConfig]:
+    return Match(MatchConfig.authored(COMPLEXITY, left, right)).to_rust()
+
+
+def _historical_pair(configs: list[managym.PlayerConfig], space) -> dict:
+    """The unversioned pair binding every authored-pack checkpoint carried before."""
+    engine = managym.Env(seed=0)
+    engine.reset(configs)
+    return _pair_world(configs, engine.content_pack_manifest(), space)
+
+
+def test_pair_trained_pack_checkpoint_runs_any_authored_pair() -> None:
+    space = ObservationSpace()
+    binding = checkpoint_world(_complexity("l1_swift", "l1_heavy"), space)
+    assert binding["setup_binding"] == AUTHORED_PACK_BINDING
+    assert len(binding["setups"]) == len(managym.authored_deck_keys(COMPLEXITY))
+    agent = SimpleNamespace(world_binding=binding)
+    for left, right in [("gw_allies", "l2_heavy"), ("ur_lessons", "ur_lessons")]:
+        configs = _complexity(left, right)
+        validate_agent_setup(agent, configs)
+        assert validate_checkpoint_world({"world_binding": binding}, space, configs)
+    assert validate_checkpoint_world({"world_binding": binding}, space) == binding
+
+    unauthored = _complexity("gw_allies", "l2_heavy")
+    unauthored[1] = Match().to_rust()[0]
+    with pytest.raises(ValueError, match="outside checkpoint"):
+        validate_agent_setup(agent, unauthored)
+    # The same lists under another pack's selection are another world.
+    with pytest.raises(ValueError, match="content pack"):
+        validate_agent_setup(agent, selected_match().to_rust())
+    with pytest.raises(ValueError, match="world/setup/input|invalid setup"):
+        validate_checkpoint_world(
+            {"world_binding": binding}, space, selected_match().to_rust()
+        )
+    unmarked = deepcopy(binding)
+    del unmarked["setup_binding"]
     with pytest.raises(ValueError, match="world/setup/input"):
-        validate_checkpoint_world(payload, space, selected_match().to_rust())
+        validate_checkpoint_world({"world_binding": unmarked}, space)
+
+
+def test_historical_pair_binding_keeps_its_pair() -> None:
+    space = ObservationSpace()
+    trained = _complexity("l1_swift", "l1_heavy")
+    binding = _historical_pair(trained, space)
+    assert "setup_binding" not in binding
+    assert validate_checkpoint_world({"world_binding": binding}, space) == binding
+    validate_checkpoint_world({"world_binding": binding}, space, trained)
+    agent = SimpleNamespace(world_binding=binding)
+    validate_agent_setup(agent, list(reversed(trained)))
+    other = _complexity("gw_allies", "l2_heavy")
+    with pytest.raises(ValueError, match="setup differs"):
+        validate_agent_setup(agent, other)
+    with pytest.raises(ValueError, match="world/setup/input"):
+        validate_checkpoint_world({"world_binding": binding}, space, other)
+    mirror = _complexity("l1_swift", "l1_swift")
+    with pytest.raises(ValueError, match="setup differs"):
+        validate_agent_setup(agent, mirror)
+    validate_agent_setup(agent, mirror, allow_deck_repetition=True)
