@@ -1163,7 +1163,7 @@ impl Game {
         spec: &TargetSpec,
         controller: PlayerId,
     ) -> bool {
-        let Some(permanent) = self.state.permanents.get(id.0).and_then(|p| p.as_ref()) else {
+        let Some(permanent) = self.state.permanents[id].as_ref() else {
             return false;
         };
         match spec {
