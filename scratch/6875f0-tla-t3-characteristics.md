@@ -89,10 +89,10 @@ kept the IR; cards, rules, lib, clippy re-run.
   Trusty Boomerang (granted activated ability); Razor Rings, The Last Agni Kai
   (excess damage); Hakoda.
 
-## Reconcile at sync (T2 87e012 at `67c532c3c`, read 2026-10-28)
+## Reconcile at sync (T2 87e012 at local `d5b9b8fa2`, read 2026-10-29)
 
 - Both branches append to schema 8 from 86ebe9ccf with colliding numbers. T2:
-  fields 85-94, predicates 13-15, subtypes 64-71, special role 6, opcodes 66-71,
+  fields 85-96, predicates 13-15, subtypes 64-74, special role 6, opcodes 66-73,
   trigger_event 13, destination 2, zone 3. This branch: fields 85-93, predicates
   13-15, subtypes 64-74, special roles 6-12, opcodes 66-77, conditions 7-8,
   quantity 5, trigger_event 13 (`end_step_begins`), enum `counter`. The later lander renumbers its own entries
