@@ -1,3 +1,16 @@
+# MTG-214 Wave rename assumptions — 2026-10-29
+
+- `.lf/wave/rules` → `.lf/wave/engine`: lf's `engine` Wave owns the Rules
+  chapter Projects and the same Linear initiative. Added the engine Wave id
+  (`74d9efbc…`) to its GOAL frontmatter, matching training's explicit id.
+- Academy and eval have empty lf goals and no checked-in files; none created.
+  Only training gets `config.yaml` (`workflow: iterate`), as directed.
+- The top-level `wave/` tree (old `pm:` charters, numbered plans) is historical
+  and cited by frozen experiments and code comments; left unrenamed, as are
+  `.lf/chapters/` records and wave body prose.
+- Live doc pointers moved to `.lf/wave/{engine,training}`. ARCHITECTURE now
+  assigns evaluation to Eval (previously Intelligence); reversible.
+
 # bb4160 decisions and assumptions — 2026-10-29
 
 The accepted outcome, current evidence and ordered remaining work live in

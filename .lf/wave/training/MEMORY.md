@@ -1,4 +1,4 @@
-# intelligence wave memory
+# training wave memory
 
 ## Hosted decision comparisons (MTG-212, 2026-10-28)
 

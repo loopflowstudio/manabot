@@ -62,7 +62,7 @@ those historical executions.
   default deserve a separate decision; this cleanup does not silently alter
   its proof contract.
 - `.lf/config.yaml`, current `.lf/wave/` state and referenced `.lf/chapters/`
-  records remain. The chapter records are linked by the Rules Wave; they are
+  records remain. The chapter records are linked by the Engine Wave; they are
   accepted planning evidence, not process scratch. Current rules-specific and
   Academy flows remain discoverable. The optional-payments Task still has an
   unsettled recorded Flow, so its authored flow is retained.

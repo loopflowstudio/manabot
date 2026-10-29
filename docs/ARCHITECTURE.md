@@ -126,7 +126,7 @@ The labels in this document are precise:
 | Boundary | Current main | In flight | Target |
 |---|---|---|---|
 | Match authority | managym `Game`/`GameState` own rules mutation, while the Academy server separately owns match IDs, revisions, accepted commands, and historical decision bookkeeping. | — | One managym `MatchAuthority` owns match identity, revision, execution, committed Commands/events, replay, observation, and forks. |
-| Decisions | `ActionSpace` and `step(index)` are authoritative internally. `StructuredOfferSet`/`AtomicCommand` are a narrow bridge; Academy has a separate protocol `Command` and lowering context. | Structured command and compiled-semantic work continues in Rules. | A revision-bound semantic `DecisionFrame` and atomic `Command` are the common contract. Positional indices are private acceleration only. |
+| Decisions | `ActionSpace` and `step(index)` are authoritative internally. `StructuredOfferSet`/`AtomicCommand` are a narrow bridge; Academy has a separate protocol `Command` and lowering context. | Structured command and compiled-semantic work continues in Engine. | A revision-bound semantic `DecisionFrame` and atomic `Command` are the common contract. Positional indices are private acceleration only. |
 | Observation | managym projects viewer-safe snapshots and recent events. Rust and Python separately encode fixed tensors with caps. | Semantic-program projection and structured decoding extend the visible input. | One canonical managym `Observation` composes identity, current viewer state, ordered event increment, and current decision. Model tensors and memory are derived. |
 | Possible worlds | managym owns `PossibleWorldSpace`, the typed `WorldQuery` grammar, the compatible-deal measure, and materialization; INT-9's exact hand-range tracker, likelihood updates, and weighted sampling landed 2026-07-18 (instrument only — no calibration measurement, no live-path consumer, `RulesProviderGap` open at unadmitted boundaries). | — | manabot owns normalized priors and learned beliefs over the managym domain, live-tracked during real play and measured for calibration. |
 | Planning | Flat Monte Carlo and determinized PUCT search private world branches and aggregate at the root. | INT-9 improves world weighting, not tree information consistency. | A viewer-rooted `PlanningProblem` accepts a belief and queries and returns aligned full strategy distributions. Determinized PUCT remains honestly named; later information-set planners are separate implementations. |
@@ -672,11 +672,11 @@ separate claims to measure.
 
 ## Roadmaps and detailed contracts
 
-The immediate provider work is prioritized in the [Rules
-goal](../wave/rules/GOAL.md) and the [results-first
-roadmap](plans/results-first-roadmap.md). Rules owns changes to managym
-authority; Intelligence owns manabot beliefs, planning, learning, opponents,
-and evaluation. Cross-wave work is integrated through runnable consumer slices,
+The immediate provider work is prioritized in the [Engine
+goal](../.lf/wave/engine/GOAL.md) and the [results-first
+roadmap](plans/results-first-roadmap.md). Engine owns changes to managym
+authority; Training owns manabot beliefs, planning, learning and opponents;
+Eval owns evaluation. Cross-wave work is integrated through runnable consumer slices,
 not by duplicating provider APIs.
 
 Detailed existing contracts remain authoritative within their narrower scope:

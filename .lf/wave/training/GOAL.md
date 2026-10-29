@@ -4,7 +4,7 @@ linear:
   initiative: 427144c1-6896-40e1-a23e-6e7fe9bc9fc4
 ---
 
-# Intelligence
+# Training
 
 ## Objective
 
