@@ -16,9 +16,9 @@ use crate::{
             TriggerCondition, TriggerSubject,
         },
         card::{
-            ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keywords, PowerCda,
-            ReplacementEffect, SacrificeCost, SpellCostReduction, StaticPtBuff, StaticScope,
-            TriggeredManaAbility,
+            ActivatedAbilityDefinition, ActivationZone, CardDefinition, CardType, CardTypes,
+            Keywords, PowerCda, ReplacementEffect, SacrificeCost, SpellCostReduction, StaticPtBuff,
+            StaticScope, TriggeredManaAbility,
         },
         mana::{Color, Colors, Mana, ManaCost},
         player::PlayerConfig,
@@ -28,8 +28,8 @@ use crate::{
 
 use super::{
     array_field, object_field, opt_bool_field, opt_str_field, parse_condition, str_array_field,
-    str_field, u64_field, Condition, Definition, IrError, Predicate, Program, SemanticPack, Step,
-    ValueExpression,
+    str_field, u64_field, Amount, Condition, Definition, IrError, Predicate, Program, SemanticPack,
+    Step, ValueExpression,
 };
 
 #[derive(Clone)]
@@ -377,6 +377,7 @@ fn apply_program(
             }
             definition.sacrifice_cost = cost.sacrifice;
             definition.kicker = cost.kicker;
+            definition.flashback = cost.flashback;
             definition.cost_reduction_per = cost.affinity;
             definition.targeting = match opt_str_field(&program.metadata, "target_binding")? {
                 None | Some("explicit") => targeting,
@@ -424,12 +425,34 @@ fn apply_program(
         "activated" => {
             let cost = program_cost(program)?;
             let effects = lower_steps(pack, program, &program.steps)?;
-            let [effect] = effects.as_slice() else {
-                return unsupported(program, "activated ability must lower to one effect");
+            let zone = match cost.zone.as_deref() {
+                None | Some("battlefield") => ActivationZone::Battlefield,
+                Some("your_hand") => ActivationZone::Hand,
+                Some("your_graveyard") => ActivationZone::Graveyard,
+                Some(other) => {
+                    return unsupported(program, &format!("unsupported activation zone {other:?}"))
+                }
             };
+            if cost.discard_source && zone != ActivationZone::Hand {
+                return Err(malformed(
+                    program,
+                    "discarding the source requires a hand ability",
+                ));
+            }
+            if zone != ActivationZone::Battlefield
+                && (cost.tap_source
+                    || cost.sacrifice_source
+                    || cost.waterbend
+                    || cost.sacrifice.is_some())
+            {
+                return unsupported(program, "permanent costs on a card outside the battlefield");
+            }
             definition
                 .activated_abilities
                 .push(ActivatedAbilityDefinition {
+                    zone,
+                    discard_source: cost.discard_source,
+                    exhaust: cost.exhaust,
                     sacrifice: cost.sacrifice,
                     own_turn_only: cost.own_turn_only,
                     life_cost: cost.life,
@@ -439,7 +462,7 @@ fn apply_program(
                         .ok_or_else(|| malformed(program, "activated ability has no mana cost"))?,
                     sacrifice_source: cost.sacrifice_source,
                     waterbend: cost.waterbend,
-                    effect: effect.clone(),
+                    effects,
                 });
         }
         "static" => apply_static(definition, program)?,
@@ -452,6 +475,7 @@ fn apply_program(
 struct ProgramCost {
     mana: Option<ManaCost>,
     kicker: Option<ManaCost>,
+    flashback: Option<ManaCost>,
     affinity: Option<CardPredicate>,
     sacrifice: Option<SacrificeCost>,
     own_turn_only: bool,
@@ -459,6 +483,9 @@ struct ProgramCost {
     sacrifice_source: bool,
     tap_source: bool,
     waterbend: bool,
+    zone: Option<String>,
+    discard_source: bool,
+    exhaust: bool,
 }
 
 fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
@@ -474,6 +501,7 @@ fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
     Ok(ProgramCost {
         mana: opt_str_field(value, "mana")?.map(ManaCost::parse),
         kicker: opt_str_field(value, "kicker")?.map(ManaCost::parse),
+        flashback: opt_str_field(value, "flashback")?.map(ManaCost::parse),
         affinity: value.get("affinity").map(predicate_value).transpose()?,
         sacrifice: value
             .get("sacrifice")
@@ -506,6 +534,9 @@ fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
         tap_source: opt_bool_field(value, "tap_source")?.unwrap_or(false),
         sacrifice_source: opt_bool_field(value, "sacrifice_source")?.unwrap_or(false),
         waterbend: opt_bool_field(value, "waterbend")?.unwrap_or(false),
+        zone: opt_str_field(value, "zone")?.map(str::to_owned),
+        discard_source: opt_bool_field(value, "discard_source")?.unwrap_or(false),
+        exhaust: opt_bool_field(value, "exhaust")?.unwrap_or(false),
     })
 }
 
@@ -595,6 +626,7 @@ fn program_trigger(program: &Program) -> Result<TriggerCondition, IrError> {
         "enters_battlefield" => TriggerCondition::EntersTheBattlefield { subject },
         "dies" => TriggerCondition::Dies { subject },
         "attacks" => TriggerCondition::Attacks { subject },
+        "attacks_alone" => TriggerCondition::AttacksAlone { subject },
         "becomes_tapped" => TriggerCondition::BecomesTapped { subject },
         "tapped_for_mana" => TriggerCondition::TappedForMana { subject },
         "becomes_targeted" => TriggerCondition::BecomesTargeted { subject },
@@ -901,6 +933,13 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             target,
             keywords: names,
             duration,
+        } if duration == "end_of_turn" && target == "source" => Effect::GrantKeywordsToSource {
+            keywords: keywords(names)?,
+        },
+        Step::GrantKeywords {
+            target,
+            keywords: names,
+            duration,
         } if duration == "end_of_turn" => Effect::GrantKeywordsToTarget {
             keywords: keywords(names)?,
             target: target_for(program, target)?,
@@ -928,6 +967,7 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             amount: i32_value(program, *amount, "damage")?,
             target: target_for(program, target)?,
         },
+        Step::ReturnToHand { target } if target == "source" => Effect::ReturnSourceToHand,
         Step::ReturnToHand { target } => Effect::ReturnToHand {
             target: target_for(program, target)?,
         },
@@ -1000,7 +1040,7 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         },
         Step::Earthbend { target, count } => Effect::Earthbend {
             target: target_for(program, target)?,
-            count: i32_value(program, *count, "earthbend count")?,
+            count: amount_value(program, count, "earthbend count")?,
         },
         Step::ExileUntilSourceLeaves { target } => Effect::ExileUntilSourceLeaves {
             target: target_for(program, target)?,
@@ -1017,6 +1057,7 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             tapped: *tapped,
             untap_if_lands: *untap_if_lands,
             bottom_source: *bottom_source,
+            to_hand: false,
         },
         Step::Sacrifice { predicate } => Effect::Sacrifice {
             predicate: predicate_card(predicate)?,
@@ -1027,12 +1068,13 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         Step::DrainLife { amount } => Effect::DrainLife {
             amount: i32::try_from(*amount).map_err(|_| malformed(program, "drain exceeds i32"))?,
         },
-        Step::SearchBasicLand { subtype } => Effect::SearchBasicLand {
+        Step::SearchBasicLand { subtype, to_hand } => Effect::SearchBasicLand {
             subtype: subtype.clone(),
             count: 1,
             tapped: true,
             untap_if_lands: None,
             bottom_source: false,
+            to_hand: *to_hand,
         },
         Step::OptionalDiscardDraw { count } => Effect::OptionalDiscardDraw { count: *count },
         Step::DiscardTargetPlayer { count, target } => Effect::DiscardTargetPlayer {
@@ -1049,11 +1091,22 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             power,
             toughness,
             target,
+        } if target == "triggering_permanent" => Effect::BuffTriggeringPermanentValue {
+            power: power.lower()?,
+            toughness: amount_value(program, toughness, "toughness")?,
+        },
+        Step::BuffTargetValue {
+            power,
+            toughness: Amount::Fixed(toughness),
+            target,
         } => Effect::BuffTargetValue {
             power: power.lower()?,
-            toughness: *toughness,
+            toughness: i32_value(program, *toughness, "toughness")?,
             target: target_for(program, target)?,
         },
+        Step::BuffTargetValue { .. } => {
+            return unsupported(program, "variable toughness needs the triggering permanent")
+        }
         Step::ReturnToHandDrawIfControlled { target } => Effect::ReturnToHandDrawIfControlled {
             target: target_for(program, target)?,
         },
@@ -1153,6 +1206,7 @@ fn predicate_card(predicate: &Predicate) -> Result<CardPredicate, IrError> {
 fn merge_predicate(result: &mut CardPredicate, predicate: &Predicate) -> Result<(), IrError> {
     match predicate {
         Predicate::Flying => result.flying = true,
+        Predicate::WithCounter => result.with_counter = true,
         Predicate::PowerAtLeast(value) => set_once(
             &mut result.min_power,
             i32::try_from(*value).map_err(|_| IrError::Malformed("power exceeds i32".into()))?,
@@ -1289,6 +1343,13 @@ fn usize_value(program: &Program, value: i64, name: &str) -> Result<usize, IrErr
 
 fn i32_value(program: &Program, value: i64, name: &str) -> Result<i32, IrError> {
     i32::try_from(value).map_err(|_| malformed(program, &format!("{name} exceeds i32")))
+}
+
+fn amount_value(program: &Program, amount: &Amount, name: &str) -> Result<EffectValue, IrError> {
+    match amount {
+        Amount::Fixed(value) => Ok(EffectValue::Fixed(i32_value(program, *value, name)?)),
+        Amount::Value(value) => value.lower(),
+    }
 }
 
 fn malformed(program: &Program, message: &str) -> IrError {

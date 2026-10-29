@@ -4,16 +4,19 @@
 // Casting is a staged pipeline driven by `PendingChoice`:
 //   kicker choice (optional) -> spell mode (if any) -> targets per clause -> payment.
 // Waterbend activations run their own payment sub-decision before the
-// ability reaches the stack.
+// ability reaches the stack. Activations name an `ActivationSource`: a
+// permanent, or a card whose ability functions from its owner's hand or
+// graveyard (cycling, "return this card from your graveyard").
 
 use crate::{
     agent::action::AgentError,
     flow::{
         event::GameEvent,
-        game::{Game, Payment, PendingChoice},
+        game::{ActivationSource, Game, Payment, PendingChoice},
     },
     state::{
         ability::TargetRequirement,
+        card::{ActivatedAbilityDefinition, ActivationZone},
         game_object::{CardId, PermanentId, PlayerId, Target},
         mana::ManaCost,
         stack_object::{ActivatedAbilityOnStack, StackObject},
@@ -51,20 +54,26 @@ impl Game {
         self.can_pay_automatic_mana(player, cost)
     }
 
-    /// Iroh's continuous grant is restricted to its controller's turn.
+    /// The graveyard casting cost of `card` for its owner, if any (CR 702.34).
+    /// Iroh's continuous grant applies only on its controller's turn; printed
+    /// flashback applies whenever the card's timing permits. When both apply,
+    /// the grant is used: in TLA it never costs more than a printed flashback
+    /// (a Lesson's {1}, or a spell's own mana cost).
     pub(crate) fn flashback_cost(&self, player: PlayerId, card: CardId) -> Option<ManaCost> {
         let definition = &self.state.cards[card];
-        if self.active_player() != player
-            || !definition.types.is_spell()
+        if !definition.types.is_spell()
             || !self.state.zones.contains(card, ZoneType::Graveyard, player)
-            || !self.battlefield_permanents(player).iter().any(|id| {
-                let source = self.state.permanents[*id].as_ref().unwrap();
-                self.state.cards[source.card].grants_flashback
-            })
         {
             return None;
         }
-        if definition.has_subtype("Lesson") {
+        let granted = self.active_player() == player
+            && self.battlefield_permanents(player).iter().any(|id| {
+                let source = self.state.permanents[*id].as_ref().unwrap();
+                self.state.cards[source.card].grants_flashback
+            });
+        if !granted {
+            definition.flashback.clone()
+        } else if definition.has_subtype("Lesson") {
             Some(ManaCost::parse("{1}"))
         } else {
             definition.mana_cost.clone()
@@ -611,11 +620,19 @@ impl Game {
             return Err(AgentError("invalid ability index".to_string()));
         };
 
+        if ability.zone != ActivationZone::Battlefield {
+            return Err(AgentError(
+                "ability does not function on the battlefield".into(),
+            ));
+        }
         if ability.mana_choices().is_some() {
             return self.activate_mana_ability(player, permanent_id, ability_index);
         }
         if ability.own_turn_only && self.active_player() != player {
             return Err(AgentError("activation requires your turn".into()));
+        }
+        if ability.exhaust && permanent.exhausted.contains(&ability_index) {
+            return Err(AgentError("exhaust ability was already activated".into()));
         }
         if ability.tap_source && !permanent.can_tap(&self.state.cards[source_card]) {
             return Err(AgentError("source cannot tap".into()));
@@ -623,24 +640,9 @@ impl Game {
         if self.state.players[player.0].life < ability.life_cost as i32 {
             return Err(AgentError("cannot pay life cost".into()));
         }
-        if ability.effect.target_spec().is_some() {
-            if crate::state::ability::effect_target_requirements(std::slice::from_ref(
-                &ability.effect,
-            ))
-            .first()
-            .is_some_and(|requirement| requirement.min > 0)
-                && self
-                    .activated_ability_targets(player, permanent_id, ability_index)
-                    .is_empty()
-            {
-                return Err(AgentError("no legal ability targets".into()));
-            }
-            self.pending_choice = Some(PendingChoice::ActivatedTarget {
-                player,
-                permanent: permanent_id,
-                ability_index,
-            });
-            return Ok(());
+        let source = ActivationSource::Permanent(permanent_id);
+        if ability.target_spec().is_some() {
+            return self.begin_activated_targets(player, source, ability_index, &ability);
         }
 
         // Waterbend costs open a payment sub-decision instead of paying
@@ -656,28 +658,111 @@ impl Game {
             return Ok(());
         }
 
-        self.begin_activation_payment(player, permanent_id, ability_index, Vec::new())
+        self.begin_activation_payment(player, source, ability_index, Vec::new())
+    }
+
+    /// Activate an ability of a card in `player`'s hand or graveyard. Only
+    /// abilities printed for that zone function there (CR 113.6).
+    pub(crate) fn activate_card_ability_action(
+        &mut self,
+        player: PlayerId,
+        card: CardId,
+        ability_index: usize,
+    ) -> Result<(), AgentError> {
+        if self.state.priority.holder != player {
+            return Err(AgentError("player does not have priority".to_string()));
+        }
+        let ability = self
+            .card_ability_in_zone(player, card, ability_index)
+            .ok_or_else(|| AgentError("no ability of this card functions here".into()))?;
+        if ability.own_turn_only && self.active_player() != player {
+            return Err(AgentError("activation requires your turn".into()));
+        }
+        if self.state.players[player.0].life < ability.life_cost as i32 {
+            return Err(AgentError("cannot pay life cost".into()));
+        }
+        let source = ActivationSource::Card(card);
+        if ability.target_spec().is_some() {
+            return self.begin_activated_targets(player, source, ability_index, &ability);
+        }
+        self.begin_activation_payment(player, source, ability_index, Vec::new())
+    }
+
+    /// The ability at `ability_index` of `card` when the card is in the
+    /// zone of `player`'s that the ability functions from.
+    pub(crate) fn card_ability_in_zone(
+        &self,
+        player: PlayerId,
+        card: CardId,
+        ability_index: usize,
+    ) -> Option<ActivatedAbilityDefinition> {
+        let ability = self.state.cards[card]
+            .activated_abilities
+            .get(ability_index)?;
+        (ability.zone != ActivationZone::Battlefield
+            && self.state.zones.contains(card, ability.zone.zone(), player))
+        .then(|| ability.clone())
+    }
+
+    /// The definition an activation of `source` uses; `None` once the
+    /// source no longer exists where the ability functions.
+    pub(crate) fn activation_ability(
+        &self,
+        source: ActivationSource,
+        ability_index: usize,
+    ) -> Option<ActivatedAbilityDefinition> {
+        match source {
+            ActivationSource::Permanent(permanent) => self
+                .activated_abilities_for(permanent)
+                .get(ability_index)
+                .cloned(),
+            ActivationSource::Card(card) => {
+                let owner = self.state.cards[card].owner;
+                self.card_ability_in_zone(owner, card, ability_index)
+            }
+        }
+    }
+
+    fn begin_activated_targets(
+        &mut self,
+        player: PlayerId,
+        source: ActivationSource,
+        ability_index: usize,
+        ability: &ActivatedAbilityDefinition,
+    ) -> Result<(), AgentError> {
+        if ability.requires_target()
+            && self
+                .activated_ability_targets(player, source, ability_index)
+                .is_empty()
+        {
+            return Err(AgentError("no legal ability targets".into()));
+        }
+        self.pending_choice = Some(PendingChoice::ActivatedTarget {
+            player,
+            source,
+            ability_index,
+        });
+        Ok(())
     }
 
     pub(crate) fn activated_ability_targets(
         &self,
         player: PlayerId,
-        permanent: PermanentId,
+        source: ActivationSource,
         ability_index: usize,
     ) -> Vec<Target> {
-        let Some(source) = self.state.permanents[permanent].as_ref() else {
+        let Some(ability) = self.activation_ability(source, ability_index) else {
             return Vec::new();
         };
-        let Some(ability) = self.state.cards[source.card]
-            .activated_abilities
-            .get(ability_index)
-        else {
-            return Vec::new();
-        };
-        ability.effect.target_spec().map_or_else(Vec::new, |spec| {
+        ability.target_spec().map_or_else(Vec::new, |spec| {
             self.legal_targets_for_spec(spec, player)
                 .into_iter()
-                .filter(|target| *target != Target::Permanent(permanent))
+                .filter(|target| match source {
+                    ActivationSource::Permanent(permanent) => {
+                        *target != Target::Permanent(permanent)
+                    }
+                    ActivationSource::Card(_) => true,
+                })
                 .collect()
         })
     }
@@ -685,26 +770,19 @@ impl Game {
     pub(crate) fn decline_activated_target(&mut self, player: PlayerId) -> Result<(), AgentError> {
         let Some(PendingChoice::ActivatedTarget {
             player: chooser,
-            permanent,
+            source,
             ability_index,
         }) = self.pending_choice
         else {
             return Err(AgentError("no activated target pending".into()));
         };
-        let source = self.state.permanents[permanent]
-            .as_ref()
+        let ability = self
+            .activation_ability(source, ability_index)
             .ok_or_else(|| AgentError("missing activation source".into()))?;
-        let ability = &self.state.cards[source.card].activated_abilities[ability_index];
-        if chooser != player
-            || !crate::state::ability::effect_target_requirements(std::slice::from_ref(
-                &ability.effect,
-            ))
-            .first()
-            .is_some_and(|requirement| requirement.min == 0)
-        {
+        if chooser != player || !ability.target_is_optional() {
             return Err(AgentError("target required".into()));
         }
-        self.begin_activation_payment(player, permanent, ability_index, Vec::new())
+        self.begin_activation_payment(player, source, ability_index, Vec::new())
     }
 
     pub(crate) fn choose_activated_target(
@@ -714,7 +792,7 @@ impl Game {
     ) -> Result<(), AgentError> {
         let Some(PendingChoice::ActivatedTarget {
             player: chooser,
-            permanent,
+            source,
             ability_index,
         }) = self.pending_choice
         else {
@@ -722,12 +800,12 @@ impl Game {
         };
         if player != chooser
             || !self
-                .activated_ability_targets(player, permanent, ability_index)
+                .activated_ability_targets(player, source, ability_index)
                 .contains(&target)
         {
             return Err(AgentError("illegal activated target".into()));
         }
-        self.begin_activation_payment(player, permanent, ability_index, vec![target])
+        self.begin_activation_payment(player, source, ability_index, vec![target])
     }
 
     pub(crate) fn payment_candidates(
@@ -740,7 +818,7 @@ impl Game {
             .into_iter()
             .filter(|id| {
                 !cost.another
-                    || !matches!(payment, Payment::Activation { permanent, .. } if permanent == id)
+                    || !matches!(payment, Payment::Activation { source: ActivationSource::Permanent(permanent), .. } if permanent == id)
             })
             .collect()
     }
@@ -748,20 +826,18 @@ impl Game {
     fn begin_activation_payment(
         &mut self,
         player: PlayerId,
-        permanent: PermanentId,
+        source: ActivationSource,
         ability_index: usize,
         targets: Vec<Target>,
     ) -> Result<(), AgentError> {
-        let source = self.state.permanents[permanent]
-            .as_ref()
-            .ok_or_else(|| AgentError("missing source".into()))?;
-        let cost = self.state.cards[source.card].activated_abilities[ability_index]
-            .sacrifice
-            .clone();
+        let cost = self
+            .activation_ability(source, ability_index)
+            .ok_or_else(|| AgentError("missing source".into()))?
+            .sacrifice;
         self.begin_payment(
             player,
             Payment::Activation {
-                permanent,
+                source,
                 ability_index,
                 targets,
             },
@@ -838,16 +914,13 @@ impl Game {
                 .effective_spell_cost(player, *card, *kicked)
                 .unwrap_or_default(),
             Payment::Activation {
-                permanent,
+                source,
                 ability_index,
                 ..
             } => {
-                let source = self.state.permanents[*permanent]
-                    .as_ref()
-                    .expect("pending activation source");
-                self.state.cards[source.card].activated_abilities[*ability_index]
+                self.activation_ability(*source, *ability_index)
+                    .expect("pending activation source")
                     .mana_cost
-                    .clone()
             }
         };
         match alternative {
@@ -923,17 +996,25 @@ impl Game {
                 Ok(())
             }
             Payment::Activation {
-                permanent,
+                source,
                 ability_index,
                 targets,
             } => {
-                let source = self.state.permanents[permanent].as_ref().ok_or_else(|| {
-                    AgentError("activation source sacrificed as another cost".into())
-                })?;
-                let life =
-                    self.state.cards[source.card].activated_abilities[ability_index].life_cost;
+                let life = self
+                    .activation_ability(source, ability_index)
+                    .ok_or_else(|| {
+                        AgentError("activation source sacrificed as another cost".into())
+                    })?
+                    .life_cost;
                 self.change_life(player, -(life as i32));
-                self.push_activated_ability(player, permanent, ability_index, targets)
+                match source {
+                    ActivationSource::Permanent(permanent) => {
+                        self.push_activated_ability(player, permanent, ability_index, targets)
+                    }
+                    ActivationSource::Card(card) => {
+                        self.push_card_activated_ability(player, card, ability_index, targets)
+                    }
+                }
             }
         }
     }
@@ -1086,6 +1167,12 @@ impl Game {
             }
             self.tap_permanent(permanent_id, false);
         }
+        if ability.exhaust {
+            self.journal_permanent(permanent_id);
+            if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
+                permanent.exhausted.push(ability_index);
+            }
+        }
         if ability.sacrifice_source {
             // CR 601.2h, 602.2b — Costs are paid on activation; sacrificing
             // moves the source to its owner's graveyard immediately.
@@ -1099,6 +1186,41 @@ impl Game {
             controller: player,
             source_definition_id,
             source_card,
+            source_ref,
+            ability_index,
+            targets,
+        }));
+        self.state.priority.on_non_pass_action(self.active_player());
+        Ok(())
+    }
+
+    /// Costs are paid: discard the source if the ability says so (CR 602.2b)
+    /// and put the ability on the stack. It exists independently of the card
+    /// (CR 113.7a) and refers to the card by its identity after costs.
+    fn push_card_activated_ability(
+        &mut self,
+        player: PlayerId,
+        card: CardId,
+        ability_index: usize,
+        targets: Vec<Target>,
+    ) -> Result<(), AgentError> {
+        let ability = self
+            .card_ability_in_zone(player, card, ability_index)
+            .ok_or_else(|| AgentError("activation source left its zone".into()))?;
+        if ability.discard_source {
+            self.move_card(card, ZoneType::Graveyard);
+        }
+        // The card as it stands once costs are paid: a discarded source is
+        // referenced in the graveyard, where "it" still deals its damage.
+        let source_ref = self
+            .current_object_ref(card)
+            .ok_or_else(|| AgentError("missing activation source identity".into()))?;
+        let id = self.state.id_gen.next_id();
+        self.push_to_stack(StackObject::ActivatedAbility(ActivatedAbilityOnStack {
+            id,
+            controller: player,
+            source_definition_id: self.state.cards[card].definition_id,
+            source_card: card,
             source_ref,
             ability_index,
             targets,

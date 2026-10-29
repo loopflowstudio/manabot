@@ -64,6 +64,15 @@ pub struct GameState {
     pub content: Arc<ContentPack>,
 }
 
+/// The object whose activated ability is being activated: a battlefield
+/// permanent, or a card in its owner's hand or graveyard (CR 602.1, 113.6).
+/// Card abilities index the card's printed `activated_abilities`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum ActivationSource {
+    Permanent(PermanentId),
+    Card(CardId),
+}
+
 /// A fully announced spell or activation waiting for selected costs.
 #[derive(Clone, Debug, serde::Serialize)]
 pub enum Payment {
@@ -75,7 +84,7 @@ pub enum Payment {
         target_req_indices: Vec<usize>,
     },
     Activation {
-        permanent: PermanentId,
+        source: ActivationSource,
         ability_index: usize,
         targets: Vec<Target>,
     },
@@ -99,7 +108,7 @@ pub enum PendingChoice {
     },
     ActivatedTarget {
         player: PlayerId,
-        permanent: PermanentId,
+        source: ActivationSource,
         ability_index: usize,
     },
     /// "You may pay the kicker cost" (CR 601.2b) — asked before targeting.

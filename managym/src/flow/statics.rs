@@ -207,8 +207,12 @@ impl Game {
         if predicate.flying && !self.effective_keywords(permanent_id).flying {
             return false;
         }
+        if predicate.with_counter && permanent.plus1_counters <= 0 {
+            return false;
+        }
         let mut predicate = predicate.clone();
         predicate.flying = false;
+        predicate.with_counter = false;
         let has_subtype = |name: &str| {
             card.has_subtype(name) || permanent.temp_subtypes.iter().any(|s| s == name)
         };

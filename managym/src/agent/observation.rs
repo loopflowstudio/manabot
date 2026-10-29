@@ -397,7 +397,8 @@ impl Observation {
                                 _ => None,
                             },
                             ability_index: match action {
-                                Action::ActivateAbility { ability_index, .. } => {
+                                Action::ActivateAbility { ability_index, .. }
+                                | Action::ActivateCardAbility { ability_index, .. } => {
                                     Some(*ability_index)
                                 }
                                 _ => None,
@@ -523,8 +524,11 @@ impl Observation {
             if suspended.decision.player() == agent_player {
                 let cards = match &suspended.decision {
                     crate::flow::decision::Decision::SearchBasicLand {
-                        player, subtype, ..
-                    } => game.basic_land_search_candidates(*player, subtype),
+                        player,
+                        subtype,
+                        to_hand,
+                        ..
+                    } => game.basic_land_search_candidates(*player, subtype, *to_hand),
                     decision => decision.revealed_cards().to_vec(),
                 };
                 for card in cards {
@@ -1020,6 +1024,7 @@ impl Observation {
             Action::PlayLand { card, .. } | Action::CastSpell { card, .. } => {
                 vec![game.state.cards[card].id]
             }
+            Action::ActivateCardAbility { card, .. } => vec![game.state.cards[card].id],
             Action::ActivateAbility { permanent, .. } => game.state.permanents[*permanent]
                 .as_ref()
                 .map(|perm| vec![perm.id])
@@ -1083,7 +1088,11 @@ impl Observation {
                             Some(*card)
                         }
                         Some(crate::flow::game::PendingChoice::ActivatedTarget {
-                            permanent,
+                            source: crate::flow::game::ActivationSource::Card(card),
+                            ..
+                        }) => Some(*card),
+                        Some(crate::flow::game::PendingChoice::ActivatedTarget {
+                            source: crate::flow::game::ActivationSource::Permanent(permanent),
                             ..
                         })
                         | Some(crate::flow::game::PendingChoice::Waterbend { permanent, .. }) => {

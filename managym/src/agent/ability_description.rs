@@ -82,6 +82,9 @@ fn condition_description(condition: &TriggerCondition) -> String {
             "When one or more {} you control attack",
             predicate_description(predicate, "permanents")
         ),
+        TriggerCondition::AttacksAlone { subject } => {
+            format!("When {} attacks alone", subject_description(subject))
+        }
         TriggerCondition::BecomesTapped { subject } => {
             format!("When {} becomes tapped", subject_description(subject))
         }
@@ -144,6 +147,7 @@ fn card_type(t: CardType) -> &'static str {
 fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     let CardPredicate {
         flying,
+        with_counter,
         subtypes_any,
         not_subtypes,
         supertype,
@@ -195,6 +199,9 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     if let Some(n) = min_mana_value {
         terms.push(format!("with mana value at least {n}"));
     }
+    if *with_counter {
+        terms.push("with a +1/+1 counter on it".into());
+    }
     terms.join(" ")
 }
 
@@ -230,6 +237,7 @@ fn target_description(t: &TargetSpec) -> String {
 
 fn value_description(value: &EffectValue) -> String {
     match value {
+        EffectValue::Fixed(value) => value.to_string(),
         EffectValue::CreaturesWithCounters => {
             "the number of creatures you control with +1/+1 counters".into()
         }
@@ -353,7 +361,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
         MillCards { count } => format!("Mill {count} cards"),
         MillAndSelect { count, predicate, if_declined } => format!("Mill {count} cards. You may return a {} milled this way to your hand. Otherwise: {}",predicate_description(predicate,"card"),effects_description(if_declined)),
         TargetClause { requirement, effects } => format!("Choose {}–{} {} for this clause: {}",requirement.min,requirement.max,target_description(&requirement.spec),effects_description(effects)),
-        SearchBasicLand { subtype, count, tapped, untap_if_lands, bottom_source } => {
+        SearchBasicLand { subtype, to_hand: true, .. } => format!("Search your library for a {} card, reveal it, put it into your hand, then shuffle",subtype.as_deref().unwrap_or("land")),
+        SearchBasicLand { subtype, count, tapped, untap_if_lands, bottom_source, .. } => {
             let mut text = format!("Search your library for up to {count} basic {} cards and put them onto the battlefield{}. Then shuffle",subtype.as_deref().unwrap_or("land"),if *tapped { " tapped" } else { "" });
             if let Some(n) = untap_if_lands { text.push_str(&format!(". Untap those lands if you control at least {n} lands")); }
             if *bottom_source { text.push_str(". Put this on the bottom of its owner's library"); }
@@ -365,6 +374,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         Exile { target } => format!("Exile {}",target_description(target)),
         BuffTargetValue { power, toughness, target } => format!("{} gets +X/{toughness:+} until end of turn, where X is {}",target_description(target),value_description(power)),
         ReturnToHandDrawIfControlled { target } => format!("Return {} to its owner's hand. If you controlled it, draw a card",target_description(target)),
+        BuffTriggeringPermanentValue { power, toughness } => format!("It gets +X/+Y until end of turn, where X is {} and Y is {}",value_description(power),value_description(toughness)),
         ModifyTriggeringPermanent { counters, keywords } => {
             let mut text = format!("Put {counters} +1/+1 counters on the permanent that caused this trigger");
             let keywords = keywords_description(keywords);
@@ -390,6 +400,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
         PutCountersOnSource { count } => format!("Put {count} +1/+1 counters on this"),
         PutCounters { count, target } => format!("Put {count} +1/+1 counters on {}",target_description(target)),
         TapSource => "Tap this".into(), UntapSource => "Untap this".into(),
+        GrantKeywordsToSource { keywords } => format!("This gains {} until end of turn",keywords_description(keywords)),
+        ReturnSourceToHand => "Return this card from your graveyard to your hand".into(),
         CantBeBlockedThisTurnSource => "This can't be blocked this turn".into(),
         GainLife { amount } => format!("You gain {amount} life"),
         OnNthResolutionThisTurn { n, effect } => format!("If this is resolution {n} of this ability this turn: {}",effects_description(std::slice::from_ref(effect))),
@@ -402,7 +414,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         IfKicked { then, otherwise } => format!("If kicked: {}. Otherwise: {}",effects_description(then),effects_description(otherwise)),
         IfGraveyardAtLeast { count, predicate, then, otherwise } => format!("If your graveyard has at least {count} {}: {}. Otherwise: {}",predicate_description(predicate,"cards"),effects_description(then),effects_description(otherwise)),
         TargetCreaturesDealPowerDamageToLastTarget => "Each chosen creature except the last target deals damage equal to its power to the last target".into(),
-        Earthbend { count, target } => format!("Earthbend {count} {}: it becomes a 0/0 creature with haste that's still a land; put {count} +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped",target_description(target)),
+        Earthbend { count, target } => { let count = value_description(count); format!("Earthbend {count} {}: it becomes a 0/0 creature with haste that's still a land; put {count} +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped",target_description(target)) },
         ReturnSourceToBattlefieldTapped => "Return this card to the battlefield tapped".into(),
         ExileUntilSourceLeaves { target } => format!("Exile up to one {} until this leaves the battlefield, only if this is still on the battlefield",target_description(target)),
         AddMana { mana, until_end_of_combat } => format!("Add {}{}",mana_description(mana),if *until_end_of_combat { ". This mana lasts until end of combat" } else { "" }),

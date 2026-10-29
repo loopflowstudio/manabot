@@ -418,6 +418,7 @@ impl Game {
                     matches!(
                         effect,
                         crate::state::ability::Effect::ModifyTriggeringPermanent { .. }
+                            | crate::state::ability::Effect::BuffTriggeringPermanentValue { .. }
                     )
                 }) {
                 match event {
@@ -426,6 +427,9 @@ impl Game {
                         to: ZoneType::Battlefield,
                         ..
                     } => self.state.card_to_permanent[*card].map(Target::Permanent),
+                    GameEvent::AttackersDeclared { attackers, .. } if attackers.len() == 1 => {
+                        Some(Target::Permanent(attackers[0]))
+                    }
                     _ => None,
                 }
             } else {
@@ -662,6 +666,32 @@ impl Game {
                             .any(|attacker| self.permanent_matches_predicate(*attacker, predicate))
                 }
             },
+            (
+                TriggerCondition::AttacksAlone { subject },
+                GameEvent::AttackersDeclared { player, attackers },
+            ) => {
+                let [attacker] = attackers.as_slice() else {
+                    return false;
+                };
+                match subject {
+                    TriggerSubject::This => self
+                        .state
+                        .card_to_permanent
+                        .get(source_card.0)
+                        .copied()
+                        .flatten()
+                        .is_some_and(|permanent_id| permanent_id == *attacker),
+                    TriggerSubject::AnotherYouControl(predicate) => {
+                        *player == source_controller
+                            && self.permanent_is_other(*attacker, source_card)
+                            && self.permanent_matches_predicate(*attacker, predicate)
+                    }
+                    TriggerSubject::AnyYouControl(predicate) => {
+                        *player == source_controller
+                            && self.permanent_matches_predicate(*attacker, predicate)
+                    }
+                }
+            }
             (
                 TriggerCondition::BecomesTapped { subject },
                 GameEvent::PermanentTapped { permanent, .. },

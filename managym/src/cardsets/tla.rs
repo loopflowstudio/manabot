@@ -1,9 +1,10 @@
 //! Current TLA cards and their fixed tokens.
 //! Edit these typed definitions; `semantic::compile` lowers them in process.
 use crate::cards::authoring::{
-    Card, CardType, Characteristics, Color, Condition, Controller, Cost, Destination, Direction,
-    Duration, Event, Keyword, Op, Payment, Predicate, PrintedPower, Program, ProgramKind, Quantity,
-    Remainder, RemainderOrder, Sacrifice, Selector, Subject, Target, Trigger, Until, Zone,
+    Card, CardType, Characteristics, Color, Condition, Controller, Cost, Count, Destination,
+    Direction, Duration, Event, Keyword, Op, Payment, Predicate, PrintedPower, Program,
+    ProgramKind, Quantity, Remainder, RemainderOrder, Sacrifice, Selector, Subject, Target,
+    Trigger, Until, Zone,
 };
 pub(super) fn cards() -> Vec<Card> {
     vec![
@@ -116,6 +117,23 @@ pub(super) fn cards() -> Vec<Card> {
         monk(),
         soldier(),
         spirit(),
+        earthbending_lesson(),
+        sandbenders_storm(),
+        earth_village_ruffians(),
+        geyser_leaper(),
+        foggy_swamp_vinebender(),
+        fire_nation_attacks(),
+        rockalanche(),
+        canyon_crawler(),
+        mongoose_lizard(),
+        saber_tooth_moose_lion(),
+        giant_koi(),
+        rabaroo_troop(),
+        team_avatar(),
+        merchant_of_many_hats(),
+        hog_monkey(),
+        rough_rhino_cavalry(),
+        rebellious_captives(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -351,14 +369,14 @@ fn dai_li_agents() -> Card {
                 vec![
                     Op::TargetClause {
                         body: vec![Op::Earthbend {
-                            count: 1,
+                            count: Count::Fixed(1),
                             target: "target_0",
                         }],
                         role: "target_0",
                     },
                     Op::TargetClause {
                         body: vec![Op::Earthbend {
-                            count: 1,
+                            count: Count::Fixed(1),
                             target: "target_1",
                         }],
                         role: "target_1",
@@ -627,7 +645,7 @@ fn haru_hidden_talent() -> Card {
             "trigger_0",
             ProgramKind::Triggered,
             vec![Op::Earthbend {
-                count: 1,
+                count: Count::Fixed(1),
                 target: "target_0",
             }],
         )
@@ -1140,7 +1158,10 @@ fn shared_roots() -> Card {
         programs: vec![Program::new(
             "spell",
             ProgramKind::Spell,
-            vec![Op::SearchBasicLand { subtype: None }],
+            vec![Op::SearchBasicLand {
+                destination: None,
+                subtype: None,
+            }],
         )
         .cost(Cost::mana("{1}{G}"))
         .inferred()],
@@ -1245,7 +1266,7 @@ fn toph_the_blind_bandit() -> Card {
                 "trigger_0",
                 ProgramKind::Triggered,
                 vec![Op::Earthbend {
-                    count: 2,
+                    count: Count::Fixed(2),
                     target: "target_0",
                 }],
             )
@@ -2152,7 +2173,7 @@ fn badgermole_cub() -> Card {
                 "earthbend",
                 ProgramKind::Triggered,
                 vec![Op::Earthbend {
-                    count: 1,
+                    count: Count::Fixed(1),
                     target: "land",
                 }],
             )
@@ -3727,6 +3748,617 @@ fn basic_land(
             vec![Op::AddMana { mana, until: None }],
         )],
         registry_name,
+        text_box,
+    }
+}
+
+fn earthbending_lesson() -> Card {
+    let text_box = "Earthbend 4. (Target land you control becomes a 0/0 creature with haste that's still a land. Put four +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{3}{G}"),
+            subtypes: Some(vec!["Lesson"]),
+            types: vec![CardType::Sorcery],
+            ..Default::default()
+        },
+        key: "tla.earthbending_lesson",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::Earthbend {
+                count: Count::Fixed(4),
+                target: "land",
+            }],
+        )
+        .cost(Cost::mana("{3}{G}"))
+        .targets(vec![Target::one("land", Selector::LandYouControl)])
+        .inferred()],
+        registry_name: "Earthbending Lesson",
+        text_box,
+    }
+}
+
+fn sandbenders_storm() -> Card {
+    let text_box = "Choose one —\n• Destroy target creature with power 4 or greater.\n• Earthbend 3. (Target land you control becomes a 0/0 creature with haste that's still a land. Put three +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{3}{W}"),
+            types: vec![CardType::Instant],
+            ..Default::default()
+        },
+        key: "tla.sandbenders_storm",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::Modal {
+                modes: vec![
+                    vec![Op::Destroy { target: "creature" }],
+                    vec![Op::Earthbend {
+                        count: Count::Fixed(3),
+                        target: "land",
+                    }],
+                ],
+            }],
+        )
+        .cost(Cost::mana("{3}{W}"))
+        .targets(vec![
+            Target::one(
+                "creature",
+                Selector::Permanent {
+                    predicate: Predicate::All {
+                        predicates: vec![
+                            Predicate::CardType {
+                                value: CardType::Creature,
+                            },
+                            Predicate::PowerAtLeast { value: 4 },
+                        ],
+                    },
+                },
+            ),
+            Target::one("land", Selector::LandYouControl),
+        ])
+        .inferred()],
+        registry_name: "Sandbenders' Storm",
+        text_box,
+    }
+}
+
+fn earth_village_ruffians() -> Card {
+    let text_box = "When this creature dies, earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{B/G}"),
+            subtypes: Some(vec!["Human", "Soldier", "Rogue"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(3)),
+            toughness: Some(1),
+            ..Default::default()
+        },
+        key: "tla.earth_village_ruffians",
+        programs: vec![Program::new(
+            "dies",
+            ProgramKind::Triggered,
+            vec![Op::Earthbend {
+                count: Count::Fixed(2),
+                target: "land",
+            }],
+        )
+        .targets(vec![Target::one("land", Selector::LandYouControl)])
+        .trigger(Trigger::new(Event::Dies, Subject::This))],
+        registry_name: "Earth Village Ruffians",
+        text_box,
+    }
+}
+
+fn geyser_leaper() -> Card {
+    let text_box = "Flying\nWaterbend {4}: Draw a card, then discard a card. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{4}{U}"),
+            subtypes: Some(vec!["Human", "Warrior", "Ally"]),
+            types: vec![CardType::Creature],
+            keywords: Some(vec![Keyword::Flying]),
+            power: Some(PrintedPower::Fixed(4)),
+            toughness: Some(3),
+            ..Default::default()
+        },
+        key: "tla.geyser_leaper",
+        programs: vec![Program::new(
+            "loot",
+            ProgramKind::Activated,
+            vec![Op::DrawCards { count: 1 }, Op::Discard],
+        )
+        .cost(Cost {
+            mana: Some("{4}"),
+            waterbend: Some(true),
+            ..Default::default()
+        })],
+        registry_name: "Geyser Leaper",
+        text_box,
+    }
+}
+
+fn foggy_swamp_vinebender() -> Card {
+    let text_box = "This creature can't be blocked by creatures with power 2 or less.\nWaterbend {5}: Put a +1/+1 counter on this creature. Activate only during your turn. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{3}{G}"),
+            subtypes: Some(vec!["Human", "Plant", "Ally"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(4)),
+            toughness: Some(3),
+            ..Default::default()
+        },
+        key: "tla.foggy_swamp_vinebender",
+        programs: vec![
+            Program::new(
+                "evasion",
+                ProgramKind::Static,
+                vec![Op::BlockingRestriction {
+                    direction: Direction::BlockedBy,
+                    predicate: Predicate::PowerAtMost { value: 2 },
+                }],
+            ),
+            Program::new(
+                "grow",
+                ProgramKind::Activated,
+                vec![Op::PutCounters {
+                    count: 1,
+                    target: "source",
+                }],
+            )
+            .cost(Cost {
+                mana: Some("{5}"),
+                waterbend: Some(true),
+                own_turn_only: Some(true),
+                ..Default::default()
+            }),
+        ],
+        registry_name: "Foggy Swamp Vinebender",
+        text_box,
+    }
+}
+
+fn fire_nation_attacks() -> Card {
+    let text_box = "Create two 2/2 red Soldier creature tokens with firebending 1. (Whenever a creature with firebending 1 attacks, add {R}. This mana lasts until end of combat.)\nFlashback {8}{R} (You may cast this card from your graveyard for its flashback cost. Then exile it.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{4}{R}"),
+            types: vec![CardType::Instant],
+            ..Default::default()
+        },
+        key: "tla.fire_nation_attacks",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::CreateToken {
+                count: 2,
+                definition_ref: "token.soldier",
+                tapped_and_attacking: None,
+            }],
+        )
+        .cost(Cost {
+            mana: Some("{4}{R}"),
+            flashback: Some("{8}{R}"),
+            ..Default::default()
+        })],
+        registry_name: "Fire Nation Attacks",
+        text_box,
+    }
+}
+
+fn rockalanche() -> Card {
+    let text_box = "Earthbend X, where X is the number of Forests you control. (Target land you control becomes a 0/0 creature with haste that's still a land. Put X +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)\nFlashback {5}{G} (You may cast this card from your graveyard for its flashback cost. Then exile it.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{G}"),
+            subtypes: Some(vec!["Lesson"]),
+            types: vec![CardType::Sorcery],
+            ..Default::default()
+        },
+        key: "tla.rockalanche",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::Earthbend {
+                count: Count::Of(Quantity::BattlefieldMatching {
+                    predicate: Predicate::Subtype { value: "Forest" },
+                }),
+                target: "land",
+            }],
+        )
+        .cost(Cost {
+            mana: Some("{2}{G}"),
+            flashback: Some("{5}{G}"),
+            ..Default::default()
+        })
+        .targets(vec![Target::one("land", Selector::LandYouControl)])
+        .inferred()],
+        registry_name: "Rockalanche",
+        text_box,
+    }
+}
+
+fn canyon_crawler() -> Card {
+    let text_box = "Deathtouch\nWhen this creature enters, create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")\nSwampcycling {2} ({2}, Discard this card: Search your library for a Swamp card, reveal it, put it into your hand, then shuffle.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{4}{B}{B}"),
+            subtypes: Some(vec!["Spider", "Beast"]),
+            types: vec![CardType::Creature],
+            keywords: Some(vec![Keyword::Deathtouch]),
+            power: Some(PrintedPower::Fixed(6)),
+            toughness: Some(6),
+            ..Default::default()
+        },
+        key: "tla.canyon_crawler",
+        programs: vec![
+            Program::new(
+                "food",
+                ProgramKind::Triggered,
+                vec![Op::CreateToken {
+                    count: 1,
+                    definition_ref: "token.food",
+                    tapped_and_attacking: Some(false),
+                }],
+            )
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::landcycling("swampcycling", "{2}", "Swamp"),
+        ],
+        registry_name: "Canyon Crawler",
+        text_box,
+    }
+}
+
+fn mongoose_lizard() -> Card {
+    let text_box = "Menace (This creature can't be blocked except by two or more creatures.)\nWhen this creature enters, it deals 1 damage to any target.\nMountaincycling {2} ({2}, Discard this card: Search your library for a Mountain card, reveal it, put it into your hand, then shuffle.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{4}{R}{R}"),
+            subtypes: Some(vec!["Mongoose", "Lizard"]),
+            types: vec![CardType::Creature],
+            keywords: Some(vec![Keyword::Menace]),
+            power: Some(PrintedPower::Fixed(5)),
+            toughness: Some(6),
+            ..Default::default()
+        },
+        key: "tla.mongoose_lizard",
+        programs: vec![
+            Program::new(
+                "ping",
+                ProgramKind::Triggered,
+                vec![Op::DealDamage {
+                    amount: 1,
+                    target: "target_0",
+                }],
+            )
+            .targets(vec![Target::one("target_0", Selector::CreatureOrPlayer)])
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::landcycling("mountaincycling", "{2}", "Mountain"),
+        ],
+        registry_name: "Mongoose Lizard",
+        text_box,
+    }
+}
+
+fn saber_tooth_moose_lion() -> Card {
+    let text_box = "Reach\nForestcycling {2} ({2}, Discard this card: Search your library for a Forest card, reveal it, put it into your hand, then shuffle.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{4}{G}{G}"),
+            subtypes: Some(vec!["Elk", "Cat"]),
+            types: vec![CardType::Creature],
+            keywords: Some(vec![Keyword::Reach]),
+            power: Some(PrintedPower::Fixed(7)),
+            toughness: Some(7),
+            ..Default::default()
+        },
+        key: "tla.saber_tooth_moose_lion",
+        programs: vec![Program::landcycling("forestcycling", "{2}", "Forest")],
+        registry_name: "Saber-Tooth Moose-Lion",
+        text_box,
+    }
+}
+
+fn giant_koi() -> Card {
+    let text_box = "Waterbend {3}: This creature can't be blocked this turn. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)\nIslandcycling {2} ({2}, Discard this card: Search your library for an Island card, reveal it, put it into your hand, then shuffle.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{4}{U}{U}"),
+            subtypes: Some(vec!["Fish"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(5)),
+            toughness: Some(7),
+            ..Default::default()
+        },
+        key: "tla.giant_koi",
+        programs: vec![
+            Program::new(
+                "unblockable",
+                ProgramKind::Activated,
+                vec![Op::RestrictBlocking {
+                    duration: Duration::EndOfTurn,
+                    predicate: Predicate::Any,
+                    target: "source",
+                }],
+            )
+            .cost(Cost {
+                mana: Some("{3}"),
+                waterbend: Some(true),
+                ..Default::default()
+            }),
+            Program::landcycling("islandcycling", "{2}", "Island"),
+        ],
+        registry_name: "Giant Koi",
+        text_box,
+    }
+}
+
+fn rabaroo_troop() -> Card {
+    let text_box = "Landfall — Whenever a land you control enters, this creature gains flying until end of turn and you gain 1 life.\nPlainscycling {2} ({2}, Discard this card: Search your library for a Plains card, reveal it, put it into your hand, then shuffle.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{3}{W}{W}"),
+            subtypes: Some(vec!["Rabbit", "Kangaroo"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(3)),
+            toughness: Some(5),
+            ..Default::default()
+        },
+        key: "tla.rabaroo_troop",
+        programs: vec![
+            Program::new(
+                "landfall",
+                ProgramKind::Triggered,
+                vec![
+                    Op::GrantKeywords {
+                        duration: Duration::EndOfTurn,
+                        keywords: vec![Keyword::Flying],
+                        target: "source",
+                    },
+                    Op::GainLife { amount: 1 },
+                ],
+            )
+            .trigger(Trigger::new(
+                Event::EntersBattlefield,
+                Subject::AnyYouControl {
+                    predicate: Predicate::CardType {
+                        value: CardType::Land,
+                    },
+                },
+            )),
+            Program::landcycling("plainscycling", "{2}", "Plains"),
+        ],
+        registry_name: "Rabaroo Troop",
+        text_box,
+    }
+}
+
+fn team_avatar() -> Card {
+    let text_box = "Whenever a creature you control attacks alone, it gets +X/+X until end of turn, where X is the number of creatures you control.\n{2}{W}, Discard this card: It deals damage equal to the number of creatures you control to target creature.";
+    let creatures_you_control = || Quantity::BattlefieldMatching {
+        predicate: Predicate::CardType {
+            value: CardType::Creature,
+        },
+    };
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{W}"),
+            types: vec![CardType::Enchantment],
+            ..Default::default()
+        },
+        key: "tla.team_avatar",
+        programs: vec![
+            Program::new(
+                "attacks_alone",
+                ProgramKind::Triggered,
+                vec![Op::BuffTargetValue {
+                    power: creatures_you_control(),
+                    target: "triggering_permanent",
+                    toughness: Count::Of(creatures_you_control()),
+                }],
+            )
+            .trigger(Trigger::new(
+                Event::AttacksAlone,
+                Subject::AnyYouControl {
+                    predicate: Predicate::CardType {
+                        value: CardType::Creature,
+                    },
+                },
+            )),
+            Program::new(
+                "discard_damage",
+                ProgramKind::Activated,
+                vec![Op::DealDamageValue {
+                    amount: creatures_you_control(),
+                    target: "target_0",
+                }],
+            )
+            .cost(Cost {
+                mana: Some("{2}{W}"),
+                zone: Some(Zone::YourHand),
+                discard_source: Some(true),
+                ..Default::default()
+            })
+            .targets(vec![Target::one("target_0", Selector::Creature)]),
+        ],
+        registry_name: "Team Avatar",
+        text_box,
+    }
+}
+
+fn merchant_of_many_hats() -> Card {
+    let text_box = "{2}{B}: Return this card from your graveyard to your hand.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{B}"),
+            subtypes: Some(vec!["Human", "Peasant", "Ally"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(2)),
+            toughness: Some(2),
+            ..Default::default()
+        },
+        key: "tla.merchant_of_many_hats",
+        programs: vec![Program::new(
+            "return",
+            ProgramKind::Activated,
+            vec![Op::ReturnToHand { target: "source" }],
+        )
+        .cost(Cost {
+            mana: Some("{2}{B}"),
+            zone: Some(Zone::YourGraveyard),
+            ..Default::default()
+        })],
+        registry_name: "Merchant of Many Hats",
+        text_box,
+    }
+}
+
+fn hog_monkey() -> Card {
+    let text_box = "At the beginning of combat on your turn, target creature you control with a +1/+1 counter on it gains menace until end of turn. (It can't be blocked except by two or more creatures.)\nExhaust — {5}: Put two +1/+1 counters on this creature. (Activate each exhaust ability only once.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{B}"),
+            subtypes: Some(vec!["Boar", "Monkey"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(3)),
+            toughness: Some(2),
+            ..Default::default()
+        },
+        key: "tla.hog_monkey",
+        programs: vec![
+            Program::new(
+                "combat_menace",
+                ProgramKind::Triggered,
+                vec![Op::GrantKeywords {
+                    duration: Duration::EndOfTurn,
+                    keywords: vec![Keyword::Menace],
+                    target: "target_0",
+                }],
+            )
+            .targets(vec![Target::one(
+                "target_0",
+                Selector::PermanentYouControl {
+                    predicate: Predicate::All {
+                        predicates: vec![
+                            Predicate::CardType {
+                                value: CardType::Creature,
+                            },
+                            Predicate::WithCounter,
+                        ],
+                    },
+                },
+            )])
+            .trigger(Trigger::new(Event::CombatBegins, Subject::This)),
+            Program::new(
+                "exhaust",
+                ProgramKind::Activated,
+                vec![Op::PutCounters {
+                    count: 2,
+                    target: "source",
+                }],
+            )
+            .cost(Cost {
+                mana: Some("{5}"),
+                exhaust: Some(true),
+                ..Default::default()
+            }),
+        ],
+        registry_name: "Hog-Monkey",
+        text_box,
+    }
+}
+
+fn rough_rhino_cavalry() -> Card {
+    let text_box = "Firebending 2 (Whenever this creature attacks, add {R}{R}. This mana lasts until end of combat.)\nExhaust — {8}: Put two +1/+1 counters on this creature. It gains trample until end of turn. (Activate each exhaust ability only once.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{4}{R}"),
+            subtypes: Some(vec!["Human", "Mercenary"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(5)),
+            toughness: Some(5),
+            ..Default::default()
+        },
+        key: "tla.rough_rhino_cavalry",
+        programs: vec![
+            Program::firebending("firebending", "RR"),
+            Program::new(
+                "exhaust",
+                ProgramKind::Activated,
+                vec![
+                    Op::PutCounters {
+                        count: 2,
+                        target: "source",
+                    },
+                    Op::GrantKeywords {
+                        duration: Duration::EndOfTurn,
+                        keywords: vec![Keyword::Trample],
+                        target: "source",
+                    },
+                ],
+            )
+            .cost(Cost {
+                mana: Some("{8}"),
+                exhaust: Some(true),
+                ..Default::default()
+            }),
+        ],
+        registry_name: "Rough Rhino Cavalry",
+        text_box,
+    }
+}
+
+fn rebellious_captives() -> Card {
+    let text_box = "Exhaust — {6}: Put two +1/+1 counters on this creature, then earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped. Activate each exhaust ability only once.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{G}"),
+            subtypes: Some(vec!["Human", "Peasant", "Ally"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(2)),
+            toughness: Some(2),
+            ..Default::default()
+        },
+        key: "tla.rebellious_captives",
+        programs: vec![Program::new(
+            "exhaust",
+            ProgramKind::Activated,
+            vec![
+                Op::PutCounters {
+                    count: 2,
+                    target: "source",
+                },
+                Op::Earthbend {
+                    count: Count::Fixed(2),
+                    target: "land",
+                },
+            ],
+        )
+        .cost(Cost {
+            mana: Some("{6}"),
+            exhaust: Some(true),
+            ..Default::default()
+        })
+        .targets(vec![Target::one("land", Selector::LandYouControl)])],
+        registry_name: "Rebellious Captives",
         text_box,
     }
 }

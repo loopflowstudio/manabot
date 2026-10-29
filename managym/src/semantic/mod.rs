@@ -234,6 +234,7 @@ pub enum Predicate {
     PowerAtLeast(i64),
     ManaValueAtLeast(u8),
     Flying,
+    WithCounter,
     TypesAny(Vec<String>),
     SubtypesAny(Vec<String>),
     NotSubtypes(Vec<String>),
@@ -377,7 +378,7 @@ pub enum Step {
     },
     Earthbend {
         target: String,
-        count: i64,
+        count: Amount,
     },
     ExileUntilSourceLeaves {
         target: String,
@@ -393,6 +394,7 @@ pub enum Step {
     },
     SearchBasicLand {
         subtype: Option<String>,
+        to_hand: bool,
     },
     OptionalDiscardDraw {
         count: usize,
@@ -409,7 +411,7 @@ pub enum Step {
     },
     BuffTargetValue {
         power: ValueExpression,
-        toughness: i32,
+        toughness: Amount,
         target: String,
     },
     ReturnToHandDrawIfControlled {
@@ -934,10 +936,14 @@ impl<'a> BoundPack<'a> {
                     self.run_steps(body, context, trace)?;
                 }
             }
-            Step::Earthbend { target, count } => trace.push(TraceEvent::Earthbend {
+            Step::Earthbend {
+                target,
+                count: Amount::Fixed(count),
+            } => trace.push(TraceEvent::Earthbend {
                 target: target.clone(),
                 count: *count,
             }),
+            Step::Earthbend { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
             Step::ExileUntilSourceLeaves { target } => {
                 trace.push(TraceEvent::ExileUntilSourceLeaves(target.clone()))
             }
@@ -1207,7 +1213,7 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         },
         Opcode::Earthbend => Step::Earthbend {
             target: str_field(value, "target")?.to_owned(),
-            count: i64_field(value, "count")?,
+            count: Amount::parse(field(value, "count")?)?,
         },
         Opcode::ExileUntilSourceLeaves => Step::ExileUntilSourceLeaves {
             target: str_field(value, "target")?.to_owned(),
@@ -1254,6 +1260,15 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
                     ))
                 }
             },
+            to_hand: match opt_str_field(value, "destination")? {
+                None => false,
+                Some("hand") => true,
+                Some(other) => {
+                    return Err(IrError::Malformed(format!(
+                        "unsupported search destination {other:?}"
+                    )))
+                }
+            },
         },
         Opcode::OptionalDiscardDraw => Step::OptionalDiscardDraw {
             count: usize_field(value, "count")?,
@@ -1270,8 +1285,7 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         },
         Opcode::BuffTargetValue => Step::BuffTargetValue {
             power: ValueExpression::parse(object_field(value, "power")?)?,
-            toughness: i32::try_from(i64_field(value, "toughness")?)
-                .map_err(|_| IrError::Malformed("integer exceeds i32".into()))?,
+            toughness: Amount::parse(field(value, "toughness")?)?,
             target: str_field(value, "target")?.to_owned(),
         },
         Opcode::ReturnToHandDrawIfControlled => Step::ReturnToHandDrawIfControlled {
@@ -1415,6 +1429,7 @@ fn parse_predicate(value: &Value) -> Result<Predicate, IrError> {
                 .map_err(|_| IrError::Malformed("mana value exceeds u8".into()))?,
         ),
         "flying" => Predicate::Flying,
+        "with_counter" => Predicate::WithCounter,
         "types_any" => Predicate::TypesAny(str_array_field(value, "values")?),
         "subtypes_any" => Predicate::SubtypesAny(str_array_field(value, "values")?),
         "not_subtypes" => Predicate::NotSubtypes(str_array_field(value, "values")?),
@@ -1511,6 +1526,22 @@ pub enum ValueExpression {
     GraveyardMatching { base: i32, predicate: Predicate },
     CardsDrawnMinus(u32),
 }
+/// A printed integer or a resolution-time [`ValueExpression`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Amount {
+    Fixed(i64),
+    Value(ValueExpression),
+}
+
+impl Amount {
+    fn parse(value: &Value) -> Result<Self, IrError> {
+        match value.as_i64() {
+            Some(fixed) => Ok(Self::Fixed(fixed)),
+            None => ValueExpression::parse(value).map(Self::Value),
+        }
+    }
+}
+
 impl ValueExpression {
     fn parse(value: &Value) -> Result<Self, IrError> {
         Ok(match str_field(value, "kind")? {

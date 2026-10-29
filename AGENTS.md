@@ -189,6 +189,10 @@ regenerate. Python reads current IR through `managym.semantic_ir_json`; rebuild
 the extension after card changes. Keep decklists and independent qualification
 receipts separate from behavior. Keep long printed text in a local `text_box`
 binding so rustfmt can format the typed definition.
+Activated abilities that function from hand or graveyard set `Cost.zone`
+(landcycling uses `Program::landcycling`); they are offered as
+`Action::ActivateCardAbility`. Programs compile in key order, so an ability's
+index follows its program key, not its printed position.
 
 Native fixed mana abilities on a card are additive: multiple fixed productions
 produce all listed colors together. A land that produces one chosen color uses

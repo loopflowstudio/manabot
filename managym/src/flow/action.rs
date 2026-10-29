@@ -5,7 +5,7 @@ use crate::agent::ability_description::{mana_description, trigger_description};
 
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
-    flow::game::{Game, PendingChoice},
+    flow::game::{ActivationSource, Game, PendingChoice},
     state::{
         game_object::{CardId, PlayerId},
         mana::Mana,
@@ -105,6 +105,10 @@ impl Game {
                     Some(format!("Sacrifice {}", self.state.cards[*card].name))
                 } else if let Some(suspended) = &self.state.suspended_decision {
                     match &suspended.decision {
+                        Decision::SearchBasicLand { to_hand: true, .. } => Some(format!(
+                            "Reveal {} and put it into your hand",
+                            self.state.cards[*card].name
+                        )),
                         Decision::SearchBasicLand { tapped, .. } => Some(format!(
                             "Put {} onto the battlefield{}",
                             self.state.cards[*card].name,
@@ -178,19 +182,20 @@ impl Game {
                 .iter()
                 .enumerate()
             {
-                if ability.effect.target_spec().is_some()
-                    && crate::state::ability::effect_target_requirements(std::slice::from_ref(
-                        &ability.effect,
-                    ))
-                    .first()
-                    .is_some_and(|requirement| requirement.min > 0)
-                    && self
-                        .activated_ability_targets(player, permanent_id, ability_index)
-                        .is_empty()
+                if ability.zone != crate::state::card::ActivationZone::Battlefield
+                    || (ability.requires_target()
+                        && self
+                            .activated_ability_targets(
+                                player,
+                                ActivationSource::Permanent(permanent_id),
+                                ability_index,
+                            )
+                            .is_empty())
                 {
                     continue;
                 }
                 if (ability.own_turn_only && self.active_player() != player)
+                    || (ability.exhaust && permanent.exhausted.contains(&ability_index))
                     || self.state.players[player.0].life < ability.life_cost as i32
                 {
                     continue;
@@ -207,7 +212,7 @@ impl Game {
                 }
                 if let Some(cost) = &ability.sacrifice {
                     let payment = crate::flow::game::Payment::Activation {
-                        permanent: permanent_id,
+                        source: ActivationSource::Permanent(permanent_id),
                         ability_index,
                         targets: Vec::new(),
                     };
@@ -244,7 +249,7 @@ impl Game {
                         player,
                         &ability.mana_cost,
                         &crate::flow::game::Payment::Activation {
-                            permanent: permanent_id,
+                            source: ActivationSource::Permanent(permanent_id),
                             ability_index,
                             targets: Vec::new(),
                         },
@@ -257,6 +262,46 @@ impl Game {
                         permanent: permanent_id,
                         ability_index,
                     });
+                }
+            }
+        }
+        actions.extend(self.priority_card_ability_actions(player));
+        actions
+    }
+
+    /// Abilities that function from `player`'s hand or graveyard. Their
+    /// costs are mana, life and discarding the card itself.
+    fn priority_card_ability_actions(&self, player: PlayerId) -> Vec<Action> {
+        let mut actions = Vec::new();
+        for zone in [ZoneType::Hand, ZoneType::Graveyard] {
+            for &card in self.state.zones.zone_cards(zone, player) {
+                for ability_index in 0..self.state.cards[card].activated_abilities.len() {
+                    let Some(ability) = self.card_ability_in_zone(player, card, ability_index)
+                    else {
+                        continue;
+                    };
+                    let source = ActivationSource::Card(card);
+                    if (ability.own_turn_only && self.active_player() != player)
+                        || (ability.requires_target()
+                            && self
+                                .activated_ability_targets(player, source, ability_index)
+                                .is_empty())
+                    {
+                        continue;
+                    }
+                    let payment = crate::flow::game::Payment::Activation {
+                        source,
+                        ability_index,
+                        targets: Vec::new(),
+                    };
+                    if self.can_pay_announced_activation(player, &ability.mana_cost, &payment, None)
+                    {
+                        actions.push(Action::ActivateCardAbility {
+                            player,
+                            card,
+                            ability_index,
+                        });
+                    }
                 }
             }
         }
@@ -395,25 +440,19 @@ impl Game {
             }
             PendingChoice::ActivatedTarget {
                 player,
-                permanent,
+                source,
                 ability_index,
             } => {
                 let mut actions: Vec<_> = self
-                    .activated_ability_targets(*player, *permanent, *ability_index)
+                    .activated_ability_targets(*player, *source, *ability_index)
                     .into_iter()
                     .map(|target| Action::ChooseTarget {
                         player: *player,
                         target,
                     })
                     .collect();
-                let source = self.state.permanents[*permanent].as_ref()?;
-                let ability = &self.state.cards[source.card].activated_abilities[*ability_index];
-                if crate::state::ability::effect_target_requirements(std::slice::from_ref(
-                    &ability.effect,
-                ))
-                .first()
-                .is_some_and(|requirement| requirement.min == 0)
-                {
+                let ability = self.activation_ability(*source, *ability_index)?;
+                if ability.target_is_optional() {
                     actions.push(Action::Decline { player: *player });
                 }
                 Some(ActionSpace {
@@ -550,6 +589,11 @@ impl Game {
                     self.activate_ability_action(*player, *permanent, *ability_index)
                 }
             }
+            Action::ActivateCardAbility {
+                player,
+                card,
+                ability_index,
+            } => self.activate_card_ability_action(*player, *card, *ability_index),
             Action::ChooseTarget { player, target } => {
                 let target = *target;
                 if matches!(

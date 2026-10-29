@@ -460,7 +460,7 @@ impl Game {
             {
                 abilities.push(ActivatedAbilityDefinition {
                     tap_source: true,
-                    effect: Effect::any_color_mana(),
+                    effects: vec![Effect::any_color_mana()],
                     ..Default::default()
                 });
             }
@@ -580,15 +580,14 @@ impl Game {
         ) = &self.pending_choice
         {
             if let crate::flow::game::Payment::Activation {
-                permanent,
+                source,
                 ability_index,
                 ..
             } = payment.as_ref()
             {
-                let source = self.state.permanents[*permanent].as_ref().unwrap();
-                life = life.saturating_sub(
-                    self.state.cards[source.card].activated_abilities[*ability_index].life_cost,
-                );
+                if let Some(ability) = self.activation_ability(*source, *ability_index) {
+                    life = life.saturating_sub(ability.life_cost);
+                }
             }
         }
         let mut model = PaymentModel { sources, life };
@@ -604,7 +603,7 @@ impl Game {
     ) -> Option<SourceReservation> {
         match payment {
             crate::flow::game::Payment::Activation {
-                permanent,
+                source: crate::flow::game::ActivationSource::Permanent(permanent),
                 ability_index,
                 ..
             } => {
@@ -615,7 +614,7 @@ impl Game {
                     sacrifice: ability.tap_source || ability.sacrifice_source,
                 })
             }
-            crate::flow::game::Payment::Spell { .. } => None,
+            _ => None,
         }
     }
 
@@ -797,14 +796,15 @@ impl Game {
             model.reserve(reservation);
         }
         if let crate::flow::game::Payment::Activation {
-            permanent,
+            source,
             ability_index,
             ..
         } = payment
         {
-            let source = self.state.permanents[*permanent].as_ref().unwrap();
-            let life = self.state.cards[source.card].activated_abilities[*ability_index].life_cost;
-            let Some(remaining) = model.life.checked_sub(life) else {
+            let Some(ability) = self.activation_ability(*source, *ability_index) else {
+                return false;
+            };
+            let Some(remaining) = model.life.checked_sub(ability.life_cost) else {
                 return false;
             };
             model.life = remaining;

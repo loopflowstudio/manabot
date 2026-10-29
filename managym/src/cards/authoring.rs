@@ -97,6 +97,26 @@ impl Program {
         .trigger(Trigger::new(Event::Attacks, Subject::This))
     }
 
+    /// Landcycling (CR 702.29e): "[mana], Discard this card: Search your
+    /// library for a [subtype] card, reveal it, put it into your hand, then
+    /// shuffle." It functions only from its owner's hand.
+    pub fn landcycling(key: &'static str, mana: &'static str, subtype: &'static str) -> Self {
+        Self::new(
+            key,
+            ProgramKind::Activated,
+            vec![Op::SearchBasicLand {
+                destination: Some(Destination::Hand),
+                subtype: Some(subtype),
+            }],
+        )
+        .cost(Cost {
+            mana: Some(mana),
+            zone: Some(Zone::YourHand),
+            discard_source: Some(true),
+            ..Cost::default()
+        })
+    }
+
     pub fn new(key: &'static str, kind: ProgramKind, ops: Vec<Op>) -> Self {
         Self {
             key,
@@ -146,6 +166,19 @@ pub struct Cost {
     pub affinity: Option<Predicate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kicker: Option<&'static str>,
+    /// Printed flashback (CR 702.34) on a spell program: its graveyard cost.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flashback: Option<&'static str>,
+    /// An activated ability of a card outside the battlefield functions only
+    /// from this zone (CR 113.6); absent means the battlefield.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub zone: Option<Zone>,
+    /// "Discard this card" as an activation cost; requires `zone: YourHand`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub discard_source: Option<bool>,
+    /// Exhaust (CR 702.177a): "Activate only once."
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exhaust: Option<bool>,
 }
 
 impl Cost {
@@ -263,7 +296,7 @@ pub enum Op {
         target: &'static str,
     },
     Earthbend {
-        count: i32,
+        count: Count,
         target: &'static str,
     },
     DrainLifeValue {
@@ -285,16 +318,23 @@ pub enum Op {
     Exile {
         target: &'static str,
     },
+    /// Without a destination, a basic land onto the battlefield tapped. With
+    /// `Hand`, any card of `subtype` is revealed and put into hand
+    /// (landcycling: "search your library for a Plains card").
     SearchBasicLand {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        destination: Option<Destination>,
         subtype: Option<&'static str>,
     },
     DrawCards {
         count: i32,
     },
+    /// `target` may be `triggering_permanent`: the creature whose event
+    /// fired the trigger ("it gets +X/+X").
     BuffTargetValue {
         power: Quantity,
         target: &'static str,
-        toughness: i32,
+        toughness: Count,
     },
     CreateToken {
         count: i32,
@@ -487,6 +527,7 @@ pub enum Predicate {
     ManaValueAtLeast { value: i32 },
     SubtypesAny { values: Vec<&'static str> },
     Flying,
+    WithCounter,
     NotSubtypes { values: Vec<&'static str> },
     TypesAny { values: Vec<CardType> },
     PowerAtLeast { value: i32 },
@@ -512,6 +553,15 @@ pub enum Condition {
         predicate: Predicate,
         role: &'static str,
     },
+}
+
+/// A printed number or a resolution-time quantity ("earthbend X, where X is…").
+/// Fixed counts serialize as plain integers.
+#[derive(Serialize)]
+#[serde(untagged)]
+pub enum Count {
+    Fixed(i32),
+    Of(Quantity),
 }
 
 #[derive(Serialize)]
@@ -625,10 +675,14 @@ pub enum Duration {
 #[serde(rename_all = "snake_case")]
 pub enum Event {
     Attacks,
+    /// Exactly one creature was declared as an attacker (CR 506.5).
+    AttacksAlone,
     BecomesTapped,
     BecomesTargeted,
     CastEnters,
     CastSpell,
+    /// "At the beginning of combat on your turn."
+    CombatBegins,
     Dies,
     DrawNthCard,
     EntersBattlefield,
@@ -672,6 +726,7 @@ pub enum Controller {
 pub enum Zone {
     Battlefield,
     YourGraveyard,
+    YourHand,
 }
 
 #[derive(Serialize)]

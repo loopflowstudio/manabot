@@ -34,6 +34,10 @@ pub struct Permanent {
     pub attacking: bool,
     /// True only for this incarnation entering as a resolving cast spell.
     pub was_cast: bool,
+    /// Exhaust abilities (indices into the card's activated abilities) this
+    /// object has activated; a new object starts fresh (CR 400.7).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub exhausted: Vec<usize>,
 }
 
 impl Permanent {
@@ -56,6 +60,7 @@ impl Permanent {
             exile_if_dies_this_turn: false,
             attacking: false,
             was_cast: false,
+            exhausted: Vec::new(),
         }
     }
 

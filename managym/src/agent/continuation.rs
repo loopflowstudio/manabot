@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     flow::{
         decision::{Decision, SuspendedResolution},
-        game::{Game, Payment, PendingChoice},
+        game::{ActivationSource, Game, Payment, PendingChoice},
     },
     state::{
         ability::PaymentCost,
@@ -139,6 +139,15 @@ impl Game {
         self.current_object_ref(card)
             .map(|object| self.visible_reference(object, viewer))
             .unwrap_or_default()
+    }
+
+    fn activation_reference(&self, source: ActivationSource, viewer: PlayerId) -> VisibleReference {
+        match source {
+            ActivationSource::Permanent(permanent) => {
+                self.target_reference(Target::Permanent(permanent), viewer)
+            }
+            ActivationSource::Card(card) => self.card_reference(card, viewer),
+        }
     }
 
     pub(crate) fn target_reference(&self, target: Target, viewer: PlayerId) -> VisibleReference {
@@ -353,11 +362,11 @@ impl Game {
                 frame.source = self.card_reference(*card, viewer)
             }
             PendingChoice::ActivatedTarget {
-                permanent,
+                source,
                 ability_index,
                 ..
             } => {
-                frame.source = self.target_reference(Target::Permanent(*permanent), viewer);
+                frame.source = self.activation_reference(*source, viewer);
                 frame.ability = Some(*ability_index);
             }
             PendingChoice::Waterbend {
@@ -504,11 +513,11 @@ impl Game {
                 frame.targets = self.clause_targets(targets, target_req_indices, viewer);
             }
             Payment::Activation {
-                permanent,
+                source,
                 ability_index,
                 targets,
             } => {
-                frame.source = self.target_reference(Target::Permanent(*permanent), viewer);
+                frame.source = self.activation_reference(*source, viewer);
                 frame.ability = Some(*ability_index);
                 frame.targets = self.clause_targets(targets, &[], viewer);
             }

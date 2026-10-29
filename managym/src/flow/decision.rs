@@ -166,6 +166,8 @@ pub enum Decision {
         untap_if_lands: Option<usize>,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         bottom_source: bool,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        to_hand: bool,
         #[serde(skip_serializing_if = "Vec::is_empty")]
         selected: Vec<CardId>,
     },
@@ -394,10 +396,13 @@ impl Game {
                 focus: source_focus,
             },
             Decision::SearchBasicLand {
-                player, subtype, ..
+                player,
+                subtype,
+                to_hand,
+                ..
             } => {
                 let mut actions: Vec<Action> = self
-                    .basic_land_search_candidates(*player, subtype)
+                    .basic_land_search_candidates(*player, subtype, *to_hand)
                     .into_iter()
                     .map(|card| Action::SelectCard {
                         player: *player,
@@ -673,6 +678,7 @@ impl Game {
                     tapped,
                     untap_if_lands,
                     bottom_source,
+                    to_hand,
                     selected,
                 },
                 Action::SelectCard { .. } | Action::Decline { .. },
@@ -680,20 +686,24 @@ impl Game {
                 let player = *player;
                 if let Action::SelectCard { card, .. } = action {
                     if !self
-                        .basic_land_search_candidates(player, subtype)
+                        .basic_land_search_candidates(player, subtype, *to_hand)
                         .contains(card)
                     {
                         self.state.suspended_decision = Some(suspended);
-                        return Err(AgentError("not a matching basic land in library".into()));
+                        return Err(AgentError("not a matching card in library".into()));
                     }
-                    self.move_card_with_entry(
-                        *card,
-                        ZoneType::Battlefield,
-                        crate::flow::proposed_event::BattlefieldEntry {
-                            tapped: *tapped,
-                            ..Default::default()
-                        },
-                    );
+                    if *to_hand {
+                        self.reveal_card_to_hand(*card, player);
+                    } else {
+                        self.move_card_with_entry(
+                            *card,
+                            ZoneType::Battlefield,
+                            crate::flow::proposed_event::BattlefieldEntry {
+                                tapped: *tapped,
+                                ..Default::default()
+                            },
+                        );
+                    }
                     selected.push(*card);
                     *remaining -= 1;
                     if *remaining > 0 {

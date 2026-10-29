@@ -1920,5 +1920,265 @@
       "R",
       "W"
     ]
+  },
+  "Earth Village Ruffians": {
+    "name": "Earth Village Ruffians",
+    "mana_cost": "{2}{B/G}",
+    "type_line": "Creature — Human Soldier Rogue",
+    "power": "3",
+    "toughness": "1",
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "When this creature dies, earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)",
+    "colors": [
+      "B",
+      "G"
+    ]
+  },
+  "Earthbending Lesson": {
+    "name": "Earthbending Lesson",
+    "mana_cost": "{3}{G}",
+    "type_line": "Sorcery — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "Earthbend 4. (Target land you control becomes a 0/0 creature with haste that's still a land. Put four +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Fire Nation Attacks": {
+    "name": "Fire Nation Attacks",
+    "mana_cost": "{4}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flashback"
+    ],
+    "oracle_text": "Create two 2/2 red Soldier creature tokens with firebending 1. (Whenever a creature with firebending 1 attacks, add {R}. This mana lasts until end of combat.)\nFlashback {8}{R} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Foggy Swamp Vinebender": {
+    "name": "Foggy Swamp Vinebender",
+    "mana_cost": "{3}{G}",
+    "type_line": "Creature — Human Plant Ally",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [
+      "Waterbend"
+    ],
+    "oracle_text": "This creature can't be blocked by creatures with power 2 or less.\nWaterbend {5}: Put a +1/+1 counter on this creature. Activate only during your turn. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Geyser Leaper": {
+    "name": "Geyser Leaper",
+    "mana_cost": "{4}{U}",
+    "type_line": "Creature — Human Warrior Ally",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Waterbend"
+    ],
+    "oracle_text": "Flying\nWaterbend {4}: Draw a card, then discard a card. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Sandbenders' Storm": {
+    "name": "Sandbenders' Storm",
+    "mana_cost": "{3}{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "Choose one —\n• Destroy target creature with power 4 or greater.\n• Earthbend 3. (Target land you control becomes a 0/0 creature with haste that's still a land. Put three +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Rockalanche": {
+    "name": "Rockalanche",
+    "mana_cost": "{2}{G}",
+    "type_line": "Sorcery — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Earthbend",
+      "Flashback"
+    ],
+    "oracle_text": "Earthbend X, where X is the number of Forests you control. (Target land you control becomes a 0/0 creature with haste that's still a land. Put X +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)\nFlashback {5}{G} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Rabaroo Troop": {
+    "name": "Rabaroo Troop",
+    "mana_cost": "{3}{W}{W}",
+    "type_line": "Creature — Rabbit Kangaroo",
+    "power": "3",
+    "toughness": "5",
+    "keywords": [
+      "Plainscycling",
+      "Landcycling",
+      "Typecycling",
+      "Cycling",
+      "Landfall"
+    ],
+    "oracle_text": "Landfall — Whenever a land you control enters, this creature gains flying until end of turn and you gain 1 life.\nPlainscycling {2} ({2}, Discard this card: Search your library for a Plains card, reveal it, put it into your hand, then shuffle.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Team Avatar": {
+    "name": "Team Avatar",
+    "mana_cost": "{2}{W}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Whenever a creature you control attacks alone, it gets +X/+X until end of turn, where X is the number of creatures you control.\n{2}{W}, Discard this card: It deals damage equal to the number of creatures you control to target creature.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Giant Koi": {
+    "name": "Giant Koi",
+    "mana_cost": "{4}{U}{U}",
+    "type_line": "Creature — Fish",
+    "power": "5",
+    "toughness": "7",
+    "keywords": [
+      "Islandcycling",
+      "Landcycling",
+      "Typecycling",
+      "Waterbend",
+      "Cycling"
+    ],
+    "oracle_text": "Waterbend {3}: This creature can't be blocked this turn. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)\nIslandcycling {2} ({2}, Discard this card: Search your library for an Island card, reveal it, put it into your hand, then shuffle.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Canyon Crawler": {
+    "name": "Canyon Crawler",
+    "mana_cost": "{4}{B}{B}",
+    "type_line": "Creature — Spider Beast",
+    "power": "6",
+    "toughness": "6",
+    "keywords": [
+      "Landcycling",
+      "Food",
+      "Typecycling",
+      "Cycling",
+      "Swampcycling",
+      "Deathtouch"
+    ],
+    "oracle_text": "Deathtouch\nWhen this creature enters, create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")\nSwampcycling {2} ({2}, Discard this card: Search your library for a Swamp card, reveal it, put it into your hand, then shuffle.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Merchant of Many Hats": {
+    "name": "Merchant of Many Hats",
+    "mana_cost": "{1}{B}",
+    "type_line": "Creature — Human Peasant Ally",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "{2}{B}: Return this card from your graveyard to your hand.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Mongoose Lizard": {
+    "name": "Mongoose Lizard",
+    "mana_cost": "{4}{R}{R}",
+    "type_line": "Creature — Mongoose Lizard",
+    "power": "5",
+    "toughness": "6",
+    "keywords": [
+      "Mountaincycling",
+      "Landcycling",
+      "Menace",
+      "Typecycling",
+      "Cycling"
+    ],
+    "oracle_text": "Menace (This creature can't be blocked except by two or more creatures.)\nWhen this creature enters, it deals 1 damage to any target.\nMountaincycling {2} ({2}, Discard this card: Search your library for a Mountain card, reveal it, put it into your hand, then shuffle.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Saber-Tooth Moose-Lion": {
+    "name": "Saber-Tooth Moose-Lion",
+    "mana_cost": "{4}{G}{G}",
+    "type_line": "Creature — Elk Cat",
+    "power": "7",
+    "toughness": "7",
+    "keywords": [
+      "Reach",
+      "Landcycling",
+      "Forestcycling",
+      "Typecycling",
+      "Cycling"
+    ],
+    "oracle_text": "Reach\nForestcycling {2} ({2}, Discard this card: Search your library for a Forest card, reveal it, put it into your hand, then shuffle.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Hog-Monkey": {
+    "name": "Hog-Monkey",
+    "mana_cost": "{2}{B}",
+    "type_line": "Creature — Boar Monkey",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Exhaust"
+    ],
+    "oracle_text": "At the beginning of combat on your turn, target creature you control with a +1/+1 counter on it gains menace until end of turn. (It can't be blocked except by two or more creatures.)\nExhaust — {5}: Put two +1/+1 counters on this creature. (Activate each exhaust ability only once.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Rough Rhino Cavalry": {
+    "name": "Rough Rhino Cavalry",
+    "mana_cost": "{4}{R}",
+    "type_line": "Creature — Human Mercenary",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Exhaust",
+      "Firebending"
+    ],
+    "oracle_text": "Firebending 2 (Whenever this creature attacks, add {R}{R}. This mana lasts until end of combat.)\nExhaust — {8}: Put two +1/+1 counters on this creature. It gains trample until end of turn. (Activate each exhaust ability only once.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Rebellious Captives": {
+    "name": "Rebellious Captives",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Human Peasant Ally",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Exhaust",
+      "Earthbend"
+    ],
+    "oracle_text": "Exhaust — {6}: Put two +1/+1 counters on this creature, then earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped. Activate each exhaust ability only once.)",
+    "colors": [
+      "G"
+    ]
   }
 }

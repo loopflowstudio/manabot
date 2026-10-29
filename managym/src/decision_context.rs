@@ -134,7 +134,8 @@ impl Game {
                         let role = match action {
                             Action::PlayLand { .. }
                             | Action::CastSpell { .. }
-                            | Action::ActivateAbility { .. } => "source",
+                            | Action::ActivateAbility { .. }
+                            | Action::ActivateCardAbility { .. } => "source",
                             Action::DeclareBlocker { .. } if index > 0 => "target",
                             Action::ChooseTarget { .. } => "target",
                             _ => "choice",

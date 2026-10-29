@@ -91,6 +91,7 @@ fn field_trip() -> Card {
             ProgramKind::Spell,
             vec![
                 Op::SearchBasicLand {
+                    destination: None,
                     subtype: Some("Forest"),
                 },
                 Op::Learn,

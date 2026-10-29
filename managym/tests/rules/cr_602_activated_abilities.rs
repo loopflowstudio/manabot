@@ -200,10 +200,10 @@ fn cr_602_policy_preserves_ability_index_and_resolution() {
         let card = s.game().state.permanents[shivan].as_ref().unwrap().card;
         // Detach this scenario's printed definition; no production card is added.
         let mut second = s.game().state.cards[card].activated_abilities[0].clone();
-        second.effect = Effect::ModifyUntilEot {
+        second.effects = vec![Effect::ModifyUntilEot {
             power_delta: 0,
             toughness_delta: 1,
-        };
+        }];
         s.game_mut().state.cards[card]
             .activated_abilities
             .push(second);

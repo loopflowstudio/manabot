@@ -1,10 +1,13 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use super::{
-    ability::{Ability, Effect, StaticCondition, TargetRequirement},
+    ability::{
+        effect_target_requirements, Ability, Effect, StaticCondition, TargetRequirement, TargetSpec,
+    },
     game_object::{ObjectId, PlayerId},
     mana::{Color, Colors, Mana, ManaCost},
     predicate::CardPredicate,
+    zone::ZoneType,
 };
 
 /// Stable index of an immutable card definition in a [`ContentPack`](crate::cards::content_pack::ContentPack).
@@ -212,7 +215,10 @@ pub enum ReplacementEffect {
 
 impl ActivatedAbilityDefinition {
     pub fn mana_choices(&self) -> Option<Vec<Mana>> {
-        match &self.effect {
+        let [effect] = self.effects.as_slice() else {
+            return None;
+        };
+        match effect {
             Effect::AddMana {
                 mana,
                 until_end_of_combat: false,
@@ -230,10 +236,58 @@ impl ActivatedAbilityDefinition {
             _ => None,
         }
     }
+
+    /// Whether the first target chosen on activation (CR 602.2b, 601.2c) is
+    /// required (`Some(true)`) or "up to one" (`Some(false)`); `None` when the
+    /// ability has no targets.
+    fn first_target_required(&self) -> Option<bool> {
+        effect_target_requirements(&self.effects)
+            .first()
+            .map(|requirement| requirement.min > 0)
+    }
+
+    /// The activation cannot proceed without choosing a target.
+    pub fn requires_target(&self) -> bool {
+        self.first_target_required() == Some(true)
+    }
+
+    /// The activation may decline its target ("up to one").
+    pub fn target_is_optional(&self) -> bool {
+        self.first_target_required() == Some(false)
+    }
+
+    pub fn target_spec(&self) -> Option<&TargetSpec> {
+        self.effects.iter().find_map(Effect::target_spec)
+    }
 }
 
 fn is_zero(value: &u32) -> bool {
     *value == 0
+}
+
+fn is_battlefield(zone: &ActivationZone) -> bool {
+    *zone == ActivationZone::Battlefield
+}
+
+/// Where an activated ability can be activated from (CR 113.6, 602.1).
+/// Abilities of cards outside the battlefield function only from the zone
+/// their text names, or where their cost (discarding this card) requires.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+pub enum ActivationZone {
+    #[default]
+    Battlefield,
+    Hand,
+    Graveyard,
+}
+
+impl ActivationZone {
+    pub fn zone(self) -> ZoneType {
+        match self {
+            Self::Battlefield => ZoneType::Battlefield,
+            Self::Hand => ZoneType::Hand,
+            Self::Graveyard => ZoneType::Graveyard,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -245,6 +299,16 @@ pub struct SacrificeCost {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct ActivatedAbilityDefinition {
+    /// Omitted for battlefield abilities so existing definition digests hold.
+    #[serde(skip_serializing_if = "is_battlefield")]
+    pub zone: ActivationZone,
+    /// Discard this card as an activation cost (cycling, CR 702.29); only
+    /// hand abilities carry it.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub discard_source: bool,
+    /// Exhaust: each object may activate this ability only once (CR 702.177a).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub exhaust: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sacrifice: Option<SacrificeCost>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -262,7 +326,8 @@ pub struct ActivatedAbilityDefinition {
     /// activating player controls, {1} per permanent tapped. Taps count as
     /// cost payment rather than a mana ability (CR 702.177).
     pub waterbend: bool,
-    pub effect: Effect,
+    /// Resolution effects in printed order ("draw a card, then discard a card").
+    pub effects: Vec<Effect>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -312,6 +377,10 @@ pub struct CardDefinition {
     pub targeting: Vec<TargetRequirement>,
     /// Kicker (CR 702.33): optional additional cost chosen while casting.
     pub kicker: Option<ManaCost>,
+    /// Printed flashback (CR 702.34): castable from its owner's graveyard
+    /// for this cost, then exiled instead of going anywhere else.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flashback: Option<ManaCost>,
     /// Ward (CR 702.21): "counter [the targeting spell] unless its
     /// controller pays [cost]". Synthesized into a BecomesTargeted
     /// triggered ability at registration.

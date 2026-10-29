@@ -52,6 +52,11 @@ pub enum TriggerCondition {
     Attacks {
         subject: TriggerSubject,
     },
+    /// "Whenever [subject] attacks alone": exactly one creature was
+    /// declared as an attacker (CR 506.5). The attacker is the context.
+    AttacksAlone {
+        subject: TriggerSubject,
+    },
     /// "Whenever [subject] becomes tapped."
     BecomesTapped {
         subject: TriggerSubject,
@@ -116,6 +121,7 @@ pub enum TriggerSubject {
 /// A resolution-time quantity relative to the effect controller.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum EffectValue {
+    Fixed(i32),
     CreaturesWithCounters,
     BattlefieldMatching { predicate: CardPredicate },
     GraveyardMatching { base: i32, predicate: CardPredicate },
@@ -200,6 +206,10 @@ pub enum Effect {
         untap_if_lands: Option<usize>,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         bottom_source: bool,
+        /// Landcycling: any card of `subtype` (not only a basic land) is
+        /// revealed and put into hand instead of onto the battlefield.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        to_hand: bool,
     },
     OptionalDiscardDraw {
         count: usize,
@@ -226,6 +236,12 @@ pub enum Effect {
     ModifyTriggeringPermanent {
         counters: i32,
         keywords: Keywords,
+    },
+    /// The permanent whose event fired the trigger gets +X/+Y until end of
+    /// turn, with X and Y computed on resolution.
+    BuffTriggeringPermanentValue {
+        power: EffectValue,
+        toughness: EffectValue,
     },
     Discard,
     DealDamageValue {
@@ -302,6 +318,13 @@ pub enum Effect {
     UntapSource,
     /// The source permanent can't be blocked this turn.
     CantBeBlockedThisTurnSource,
+    /// The source permanent gains `keywords` until end of turn.
+    GrantKeywordsToSource {
+        keywords: Keywords,
+    },
+    /// "Return this card from your graveyard to your hand": only the exact
+    /// graveyard object the ability came from (CR 400.7).
+    ReturnSourceToHand,
     /// Resolving player gains `amount` life.
     GainLife {
         amount: i32,
@@ -372,7 +395,7 @@ pub enum Effect {
     /// delayed trigger returns it to the battlefield tapped when it dies
     /// or is exiled.
     Earthbend {
-        count: i32,
+        count: EffectValue,
         target: TargetSpec,
     },
     /// Delayed-trigger payload (earthbend): return the source card from
@@ -539,7 +562,8 @@ impl Effect {
             | Effect::ReturnToHandDrawIfControlled { target } => Some(target),
             Effect::SearchBasicLand { .. }
             | Effect::OptionalDiscardDraw { .. }
-            | Effect::ModifyTriggeringPermanent { .. } => None,
+            | Effect::ModifyTriggeringPermanent { .. }
+            | Effect::BuffTriggeringPermanentValue { .. } => None,
             Effect::DealDamageValue { target, .. }
             | Effect::PutCountersValue { target, .. }
             | Effect::ExileIfDiesThisTurn { target }
@@ -583,6 +607,8 @@ impl Effect {
             | Effect::TapSource
             | Effect::UntapSource
             | Effect::CantBeBlockedThisTurnSource
+            | Effect::GrantKeywordsToSource { .. }
+            | Effect::ReturnSourceToHand
             | Effect::GainLife { .. }
             | Effect::Scry { .. }
             | Effect::LookAndSelect { .. }

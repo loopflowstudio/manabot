@@ -1,7 +1,7 @@
 //! Modern Horizons.
 use crate::cards::authoring::{
-    Card, CardType, Characteristics, Cost, Duration, Keyword, Op, Program, ProgramKind, Quantity,
-    Selector, Target,
+    Card, CardType, Characteristics, Cost, Count, Duration, Keyword, Op, Program, ProgramKind,
+    Quantity, Selector, Target,
 };
 
 pub(super) fn cards() -> Vec<Card> {
@@ -26,7 +26,7 @@ fn fists_of_flame() -> Card {
                 Op::BuffTargetValue {
                     power: Quantity::CardsDrawnMinus { subtract: 0 },
                     target: "target_0",
-                    toughness: 0,
+                    toughness: Count::Fixed(0),
                 },
                 Op::GrantKeywords {
                     duration: Duration::EndOfTurn,

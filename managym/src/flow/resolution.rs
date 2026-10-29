@@ -25,6 +25,7 @@ use crate::{
 impl Game {
     fn effect_value(&self, value: &EffectValue, controller: PlayerId) -> i32 {
         match value {
+            EffectValue::Fixed(value) => *value,
             EffectValue::CreaturesWithCounters => self
                 .battlefield_permanents(controller)
                 .into_iter()
@@ -120,7 +121,7 @@ impl Game {
             return;
         };
 
-        let effects = vec![definition.effect];
+        let effects = definition.effects;
         let requirements = crate::state::ability::effect_target_requirements(&effects);
         let Some(targets) =
             self.resolution_targets(&ability.targets, &[], &requirements, ability.controller)
@@ -378,6 +379,7 @@ impl Game {
                 tapped,
                 untap_if_lands,
                 bottom_source,
+                to_hand,
             } => Some(Decision::SearchBasicLand {
                 player: frame.controller,
                 subtype: subtype.clone(),
@@ -385,6 +387,7 @@ impl Game {
                 tapped: *tapped,
                 untap_if_lands: *untap_if_lands,
                 bottom_source: *bottom_source,
+                to_hand: *to_hand,
                 selected: Vec::new(),
             }),
             Effect::OptionalDiscardDraw { count } => Some(Decision::OptionalDiscardDraw {
@@ -442,6 +445,19 @@ impl Game {
                 if controlled {
                     frame.queue.push_front(Effect::DrawCards { count: 1 });
                 }
+                None
+            }
+            Effect::BuffTriggeringPermanentValue { power, toughness } => {
+                let Some(Target::Permanent(id)) = frame.context_target else {
+                    return None;
+                };
+                self.permanent_object_ref(id)?;
+                let power = self.effect_value(power, frame.controller);
+                let toughness = self.effect_value(toughness, frame.controller);
+                self.journal_permanent(id);
+                let permanent = self.state.permanents[id].as_mut()?;
+                permanent.temp_power += power;
+                permanent.temp_toughness += toughness;
                 None
             }
             Effect::ModifyTriggeringPermanent { counters, keywords } => {
@@ -659,6 +675,23 @@ impl Game {
                 }
                 None
             }
+            Effect::GrantKeywordsToSource { keywords } => {
+                if let Some(permanent) = self.source_permanent_mut(frame) {
+                    permanent.temp_keywords = permanent.temp_keywords.union(keywords);
+                }
+                None
+            }
+            Effect::ReturnSourceToHand => {
+                let card = frame.source?;
+                let owner = self.state.cards[card].owner;
+                if frame.source_ref.is_some()
+                    && self.current_object_ref(card) == frame.source_ref
+                    && self.state.zones.contains(card, ZoneType::Graveyard, owner)
+                {
+                    self.reveal_card_to_hand(card, owner);
+                }
+                None
+            }
             Effect::CantBeBlockedThisTurnSource => {
                 if let Some(permanent) = self.source_permanent_mut(frame) {
                     permanent.cant_be_blocked_this_turn = true;
@@ -789,6 +822,7 @@ impl Game {
                 None
             }
             Effect::Earthbend { count, .. } => {
+                let count = self.effect_value(count, frame.controller);
                 let chosen = self.present_primary_target(frame)?;
                 let Target::Permanent(permanent_id) = chosen else {
                     return None;
@@ -803,7 +837,7 @@ impl Game {
                     permanent.animated = true;
                     permanent.controller
                 };
-                if !self.change_plus_one_counters_on_object(watched, *count) {
+                if !self.change_plus_one_counters_on_object(watched, count) {
                     return None;
                 }
                 // Delayed trigger: when it dies or is exiled, return it to

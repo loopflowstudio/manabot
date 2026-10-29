@@ -655,8 +655,10 @@ fn check_references(
             let Some(reference) = instruction.get(field).and_then(Value::as_str) else {
                 continue;
             };
-            let builtin = matches!(reference, "source" | "controller" | "triggering_spell")
-                || (current_target && reference == "current_target")
+            let builtin = matches!(
+                reference,
+                "source" | "controller" | "triggering_spell" | "triggering_permanent"
+            ) || (current_target && reference == "current_target")
                 || reference.starts_with("each:");
             if !builtin && !roles.contains(reference) {
                 return malformed(

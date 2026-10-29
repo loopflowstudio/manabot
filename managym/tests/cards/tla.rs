@@ -1,0 +1,708 @@
+//! TLA (Avatar: The Last Airbender) card behavior. Each test drives legal
+//! actions through the same typed programs as the world pool.
+use crate::{
+    helpers::Scenario,
+    support::{
+        activate, activate_card, can_activate, can_activate_card, can_cast, cast, cast_card,
+        choose, counters, library_card, mode, offered_targets, pass_until, ready, settle, setup,
+    },
+};
+use managym::{
+    agent::action::{Action, ActionSpaceKind, ActionType},
+    flow::turn::StepKind,
+    state::{
+        game_object::{CardId, PermanentId, PlayerId, Target},
+        zone::ZoneType,
+    },
+};
+
+fn is_land_creature(s: &Scenario, id: PermanentId) -> bool {
+    s.game().state.permanents[id].as_ref().unwrap().animated
+}
+
+/// Earthbend N: only lands you control are offered; the land becomes a 0/0
+/// creature that is still a land, with N +1/+1 counters.
+#[test]
+fn earthbending_lesson_animates_only_an_own_land_with_four_counters() {
+    let mut s = setup(&["Earthbending Lesson"]);
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    let opposing = s.force_permanent_on_battlefield(1, "Forest");
+    cast(&mut s, "Earthbending Lesson");
+    let targets = offered_targets(&s);
+    assert!(targets.contains(&Target::Permanent(forest)));
+    assert!(!targets.contains(&Target::Permanent(opposing)));
+    assert!(s.choose_target(Target::Permanent(forest)));
+    settle(&mut s);
+    assert!(is_land_creature(&s, forest));
+    assert_eq!(counters(&s, forest), 4);
+    assert_eq!(s.game().effective_pt(forest), (4, 4));
+    let land = s.game().state.permanents[forest].as_ref().unwrap().card;
+    assert_eq!(
+        s.game().state.zones.zone_of(land),
+        Some(ZoneType::Battlefield)
+    );
+}
+
+/// Modes choose distinct targets; the destroy mode accepts only creatures with
+/// power 4 or greater, judged on current power.
+#[test]
+fn sandbenders_storm_destroys_large_creatures_or_earthbends_three() {
+    let mut s = setup(&["Sandbenders' Storm", "Gray Ogre", "Craw Wurm"]);
+    let small = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let large = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    cast(&mut s, "Sandbenders' Storm");
+    mode(&mut s, 0);
+    let targets = offered_targets(&s);
+    assert!(targets.contains(&Target::Permanent(large)));
+    assert!(!targets.contains(&Target::Permanent(small)));
+    assert!(s.choose_target(Target::Permanent(large)));
+    settle(&mut s);
+    assert!(s.game().state.permanents[large].is_none());
+    assert!(s.game().state.permanents[small].is_some());
+
+    // A pumped Ogre has power 4 and becomes a legal destroy target.
+    s.game_mut().state.permanents[small]
+        .as_mut()
+        .unwrap()
+        .plus1_counters = 2;
+    cast(&mut s, "Sandbenders' Storm");
+    mode(&mut s, 0);
+    assert!(offered_targets(&s).contains(&Target::Permanent(small)));
+    assert!(s.choose_target(Target::Permanent(small)));
+    settle(&mut s);
+    assert!(s.game().state.permanents[small].is_none());
+
+    let plains = s.force_permanent_on_battlefield(0, "Plains");
+    cast(&mut s, "Sandbenders' Storm");
+    mode(&mut s, 1);
+    assert!(s.choose_target(Target::Permanent(plains)));
+    settle(&mut s);
+    assert!(is_land_creature(&s, plains));
+    assert_eq!(counters(&s, plains), 3);
+}
+
+/// A dies trigger still earthbends after its source left the battlefield.
+#[test]
+fn earth_village_ruffians_earthbends_two_when_it_dies() {
+    let mut s = setup(&["Earth Village Ruffians", "Lightning Strike"]);
+    let ruffians = s.force_permanent_on_battlefield(0, "Earth Village Ruffians");
+    let swamp = s.force_permanent_on_battlefield(0, "Swamp");
+    cast(&mut s, "Lightning Strike");
+    assert!(s.choose_target(Target::Permanent(ruffians)));
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.game().state.permanents[ruffians].is_none());
+    assert_eq!(offered_targets(&s), vec![Target::Permanent(swamp)]);
+    assert!(s.choose_target(Target::Permanent(swamp)));
+    settle(&mut s);
+    assert!(is_land_creature(&s, swamp));
+    assert_eq!(counters(&s, swamp), 2);
+}
+
+/// Hybrid {B/G} is payable with either color.
+#[test]
+fn earth_village_ruffians_hybrid_cost_accepts_black_or_green() {
+    for pool in ["2B", "2G"] {
+        let mut s = setup(&["Earth Village Ruffians"]);
+        s.set_player_mana_pool(0, pool);
+        cast(&mut s, "Earth Village Ruffians");
+        assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+        settle(&mut s);
+        assert_eq!(
+            s.battlefield_permanents_named(0, "Earth Village Ruffians")
+                .len(),
+            1
+        );
+    }
+}
+
+/// Waterbend {4} may be paid with creature taps (which make no mana); the
+/// resolution draws first, then requires a discard from the new hand.
+#[test]
+fn geyser_leaper_waterbends_to_draw_then_discard() {
+    let mut s = setup(&["Geyser Leaper", "Gray Ogre"]);
+    let leaper = s.force_permanent_on_battlefield(0, "Geyser Leaper");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.set_player_mana_pool(0, "3");
+    assert!(can_activate(&mut s, leaper));
+    activate(&mut s, leaper, 0);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);
+    assert!(s.choose_waterbend_tap(ogre));
+    assert!(s.take_action_by_type(ActionType::PayCost));
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    assert!(s.game().state.permanents[ogre].as_ref().unwrap().tapped);
+    let library = s.zone_size(0, ZoneType::Library);
+    pass_until(&mut s, ActionSpaceKind::Discard);
+    assert_eq!(s.zone_size(0, ZoneType::Library), library - 1);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), 1);
+    s.step_action(0);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), 0);
+    assert_eq!(s.zone_size(0, ZoneType::Graveyard), 1);
+    assert!(s.game().state.stack_objects.is_empty());
+}
+
+/// Activation is restricted to its controller's turn; blockers with current
+/// power 2 or less cannot block it.
+#[test]
+fn foggy_swamp_vinebender_grows_on_own_turn_and_evades_small_blockers() {
+    let mut s = setup(&["Foggy Swamp Vinebender", "Gray Ogre", "Hill Giant"]);
+    let vinebender = s.force_permanent_on_battlefield(0, "Foggy Swamp Vinebender");
+    ready(&mut s, vinebender);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let pumped = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let giant = s.force_permanent_on_battlefield(1, "Hill Giant");
+    s.game_mut().state.permanents[pumped]
+        .as_mut()
+        .unwrap()
+        .plus1_counters = 1;
+
+    s.set_player_mana_pool(0, "5");
+    activate(&mut s, vinebender, 0);
+    if s.action_space().kind == ActionSpaceKind::Waterbend {
+        assert!(s.take_action_by_type(ActionType::PayCost));
+    }
+    settle(&mut s);
+    assert_eq!(counters(&s, vinebender), 1);
+
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    choose(
+        &mut s,
+        |a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == vinebender),
+    );
+    for _ in 0..10 {
+        if s.action_space().kind == ActionSpaceKind::DeclareBlocker {
+            break;
+        }
+        s.advance_default_action();
+    }
+    let can_block = |s: &Scenario, blocker: PermanentId| {
+        s.action_space().actions.iter().any(|a| {
+            matches!(a, Action::DeclareBlocker { blocker: b, attacker: Some(at), .. }
+            if *b == blocker && *at == vinebender)
+        })
+    };
+    // Blocker declaration offers one blocker at a time; read every offer.
+    let mut seen = Vec::new();
+    for _ in 0..3 {
+        assert_eq!(s.action_space().kind, ActionSpaceKind::DeclareBlocker);
+        for id in [ogre, pumped, giant] {
+            if can_block(&s, id) {
+                seen.push(id);
+            }
+        }
+        let current = s.action_space().actions.iter().find_map(|a| match a {
+            Action::DeclareBlocker { blocker, .. } => Some(*blocker),
+            _ => None,
+        });
+        choose(&mut s, |a| {
+            matches!(a, Action::DeclareBlocker { attacker: None, .. })
+        });
+        if current.is_none() || s.action_space().kind != ActionSpaceKind::DeclareBlocker {
+            break;
+        }
+    }
+    assert!(!seen.contains(&ogre));
+    assert!(seen.contains(&pumped));
+    assert!(seen.contains(&giant));
+
+    // Not on the opponent's turn, even while holding priority there.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.pass_priority();
+    assert_eq!(s.game().active_player(), PlayerId(1));
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    s.set_player_mana_pool(0, "5");
+    assert!(!can_activate(&mut s, vinebender));
+}
+
+/// Printed flashback (CR 702.34): the graveyard copy costs {8}{R}, may be cast
+/// at instant speed on either turn, and is exiled as it resolves.
+#[test]
+fn fire_nation_attacks_makes_firebending_soldiers_and_flashes_back_once() {
+    let mut s = setup(&["Fire Nation Attacks"]);
+    s.set_player_mana_pool(0, "4R");
+    let spell = cast(&mut s, "Fire Nation Attacks");
+    settle(&mut s);
+    let soldiers = s.battlefield_permanents_named(0, "Soldier");
+    assert_eq!(soldiers.len(), 2);
+    assert_eq!(s.game().effective_pt(soldiers[0]), (2, 2));
+    assert_eq!(
+        s.game().state.zones.zone_of(spell),
+        Some(ZoneType::Graveyard)
+    );
+
+    // {4}{R} pays the printed cost but not the flashback cost.
+    s.set_player_mana_pool(0, "4R");
+    assert!(!can_cast(&mut s, spell));
+
+    // On the opponent's turn, with priority, the instant flashes back.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.pass_priority();
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    s.set_player_mana_pool(0, "8R");
+    assert!(can_cast(&mut s, spell));
+    cast_card(&mut s, spell);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Soldier").len(), 4);
+    assert_eq!(s.game().state.zones.zone_of(spell), Some(ZoneType::Exile));
+}
+
+/// Soldier tokens attack for firebending 1: one red mana until end of combat.
+#[test]
+fn fire_nation_attacks_soldiers_add_red_when_attacking() {
+    let mut s = setup(&["Fire Nation Attacks"]);
+    cast(&mut s, "Fire Nation Attacks");
+    settle(&mut s);
+    let soldiers = s.battlefield_permanents_named(0, "Soldier");
+    for soldier in &soldiers {
+        ready(&mut s, *soldier);
+    }
+    s.set_player_mana_pool(0, "");
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    // Attackers are offered one at a time: attack with the first, hold the other.
+    choose(&mut s, |a| {
+        matches!(a, Action::DeclareAttacker { attack: true, .. })
+    });
+    choose(&mut s, |a| {
+        matches!(a, Action::DeclareAttacker { attack: false, .. })
+    });
+    pass_until(&mut s, ActionSpaceKind::Priority);
+    while !s.game().state.stack_objects.is_empty() {
+        s.pass_priority();
+    }
+    assert_eq!(s.current_step(), StepKind::DeclareAttackers);
+    assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 1);
+}
+
+/// X counts Forests you control on resolution, including an earthbent Forest
+/// and excluding other lands and opponents' Forests; flashback reuses it.
+#[test]
+fn rockalanche_earthbends_by_forests_you_control_and_flashes_back() {
+    let mut s = setup(&["Rockalanche"]);
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    s.force_permanent_on_battlefield(0, "Forest");
+    s.force_permanent_on_battlefield(0, "Plains");
+    s.force_permanent_on_battlefield(1, "Forest");
+    let spell = cast(&mut s, "Rockalanche");
+    assert!(s.choose_target(Target::Permanent(forest)));
+    // A third Forest arriving before resolution counts.
+    s.force_permanent_on_battlefield(0, "Forest");
+    settle(&mut s);
+    assert!(is_land_creature(&s, forest));
+    assert_eq!(counters(&s, forest), 3);
+    assert_eq!(
+        s.game().state.zones.zone_of(spell),
+        Some(ZoneType::Graveyard)
+    );
+
+    let plains = s.battlefield_permanents_named(0, "Plains")[0];
+    s.set_player_mana_pool(0, "5G");
+    assert!(can_cast(&mut s, spell));
+    cast_card(&mut s, spell);
+    assert!(s.choose_target(Target::Permanent(plains)));
+    settle(&mut s);
+    assert_eq!(counters(&s, plains), 3);
+    assert_eq!(s.game().state.zones.zone_of(spell), Some(ZoneType::Exile));
+}
+
+/// Put a library copy of `name` into player 0's `zone`.
+fn put(s: &mut Scenario, name: &str, zone: ZoneType) -> CardId {
+    let id = library_card(s, 0, name);
+    s.game_mut().move_card(id, zone);
+    id
+}
+
+/// Printed keywords plus those granted until end of turn.
+fn keywords(s: &Scenario, id: PermanentId) -> managym::state::card::Keywords {
+    let permanent = s.game().state.permanents[id].as_ref().unwrap();
+    s.game().state.cards[permanent.card]
+        .keywords
+        .union(&permanent.temp_keywords)
+}
+
+fn cycling_index(s: &Scenario, card: CardId) -> usize {
+    s.game().state.cards[card]
+        .activated_abilities
+        .iter()
+        .position(|ability| ability.discard_source)
+        .unwrap()
+}
+
+fn zone_of(s: &Scenario, card: CardId) -> Option<ZoneType> {
+    s.game().state.zones.zone_of(card)
+}
+
+/// Landcycling (CR 702.29e) functions only from hand: {2} and discarding the
+/// card are costs, the search offers only cards of the land subtype, and the
+/// found card is revealed into hand before the library is shuffled.
+#[test]
+fn landcyclers_discard_for_two_and_find_their_basic_type() {
+    for (name, subtype) in [
+        ("Canyon Crawler", "Swamp"),
+        ("Mongoose Lizard", "Mountain"),
+        ("Saber-Tooth Moose-Lion", "Forest"),
+        ("Giant Koi", "Island"),
+        ("Rabaroo Troop", "Plains"),
+    ] {
+        let mut s = setup(&[name]);
+        let card = put(&mut s, name, ZoneType::Hand);
+        s.set_player_mana_pool(0, "1");
+        assert!(!can_activate_card(&mut s, card), "{name} costs {{2}}");
+        s.set_player_mana_pool(0, "2");
+        // Programs compile in key order; cycling is the card's only hand ability.
+        let index = cycling_index(&s, card);
+        activate_card(&mut s, card, index);
+        assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+        assert_eq!(zone_of(&s, card), Some(ZoneType::Graveyard), "{name}");
+        assert_eq!(s.game().state.stack_objects.len(), 1);
+
+        let library = s.zone_size(0, ZoneType::Library);
+        pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+        let offered: Vec<CardId> = s
+            .action_space()
+            .actions
+            .iter()
+            .filter_map(|a| match a {
+                Action::SelectCard { card, .. } => Some(*card),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(offered.len(), 16, "{name}: every {subtype} in the library");
+        assert!(offered.iter().all(|c| s.game().state.cards[*c]
+            .subtypes
+            .iter()
+            .any(|t| t == subtype)));
+        choose(
+            &mut s,
+            |a| matches!(a, Action::SelectCard { card, .. } if *card == offered[0]),
+        );
+        assert_eq!(zone_of(&s, offered[0]), Some(ZoneType::Hand));
+        assert_eq!(s.zone_size(0, ZoneType::Library), library - 1);
+        let definition = s.game().state.cards[offered[0]].definition_id;
+        assert_eq!(
+            s.game().state.players[0].known_hand.get(&definition),
+            Some(&1)
+        );
+        settle(&mut s);
+
+        // On the battlefield the cycling ability does not function.
+        let permanent = s.force_permanent_on_battlefield(0, name);
+        s.set_player_mana_pool(0, "2");
+        s.game_mut().scenario_refresh_priority().unwrap();
+        assert!(!s.action_space().actions.iter().any(|a| matches!(
+            a,
+            Action::ActivateAbility { permanent: p, ability_index, .. }
+                if *p == permanent && *ability_index == index
+        )));
+    }
+}
+
+/// Cycling is an activated ability, so it is available at instant speed on
+/// the opponent's turn.
+#[test]
+fn landcycling_works_on_the_opponents_turn() {
+    let mut s = setup(&["Saber-Tooth Moose-Lion"]);
+    let card = put(&mut s, "Saber-Tooth Moose-Lion", ZoneType::Hand);
+    s.advance_to_active_step(1, StepKind::Main);
+    s.pass_priority();
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    s.set_player_mana_pool(0, "2");
+    assert!(can_activate_card(&mut s, card));
+}
+
+#[test]
+fn canyon_crawler_has_deathtouch_and_makes_food_on_entering() {
+    let mut s = setup(&["Canyon Crawler"]);
+    s.set_player_mana_pool(0, "4BB");
+    cast(&mut s, "Canyon Crawler");
+    settle(&mut s);
+    let crawler = s.battlefield_permanents_named(0, "Canyon Crawler")[0];
+    assert!(keywords(&s, crawler).deathtouch);
+    assert_eq!(s.game().effective_pt(crawler), (6, 6));
+    let food = s.battlefield_permanents_named(0, "Food");
+    assert_eq!(food.len(), 1);
+    let food_card = s.game().state.permanents[food[0]].as_ref().unwrap().card;
+    assert!(s.game().state.cards[food_card].types.is_artifact());
+}
+
+#[test]
+fn mongoose_lizard_deals_one_damage_to_any_target_on_entering() {
+    let mut s = setup(&["Mongoose Lizard", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    cast(&mut s, "Mongoose Lizard");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    let targets = offered_targets(&s);
+    assert!(targets.contains(&Target::Player(PlayerId(1))));
+    assert!(targets.contains(&Target::Permanent(ogre)));
+    let life = s.life(1);
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    settle(&mut s);
+    assert_eq!(s.life(1), life - 1);
+    let lizard = s.battlefield_permanents_named(0, "Mongoose Lizard")[0];
+    assert!(keywords(&s, lizard).menace);
+}
+
+#[test]
+fn saber_tooth_moose_lion_has_reach() {
+    let mut s = setup(&["Saber-Tooth Moose-Lion"]);
+    let lion = s.force_permanent_on_battlefield(0, "Saber-Tooth Moose-Lion");
+    assert!(keywords(&s, lion).reach);
+    assert_eq!(s.game().effective_pt(lion), (7, 7));
+}
+
+/// Waterbend {3} may be paid by tapping creatures; the Koi then can't be
+/// blocked this turn.
+#[test]
+fn giant_koi_waterbends_to_become_unblockable() {
+    let mut s = setup(&["Giant Koi", "Gray Ogre"]);
+    let koi = s.force_permanent_on_battlefield(0, "Giant Koi");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.set_player_mana_pool(0, "2");
+    let card = s.game().state.permanents[koi].as_ref().unwrap().card;
+    let unblockable = 1 - cycling_index(&s, card);
+    activate(&mut s, koi, unblockable);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);
+    assert!(s.choose_waterbend_tap(ogre));
+    assert!(s.take_action_by_type(ActionType::PayCost));
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    settle(&mut s);
+    assert!(
+        s.game().state.permanents[koi]
+            .as_ref()
+            .unwrap()
+            .cant_be_blocked_this_turn
+    );
+}
+
+/// Landfall counts only lands its controller's side gains; the flying grant
+/// lasts until end of turn.
+#[test]
+fn rabaroo_troop_landfall_grants_flying_and_one_life() {
+    let mut s = setup(&["Rabaroo Troop"]);
+    let troop = s.force_permanent_on_battlefield(0, "Rabaroo Troop");
+    let life = s.life(0);
+    s.force_permanent_on_battlefield(1, "Plains");
+    settle(&mut s);
+    assert_eq!(s.life(0), life);
+    assert!(!keywords(&s, troop).flying);
+
+    let plains = put(&mut s, "Plains", ZoneType::Hand);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    choose(
+        &mut s,
+        |a| matches!(a, Action::PlayLand { card, .. } if *card == plains),
+    );
+    settle(&mut s);
+    assert_eq!(s.life(0), life + 1);
+    assert!(keywords(&s, troop).flying);
+
+    s.advance_to_active_step(1, StepKind::Main);
+    assert!(!keywords(&s, troop).flying);
+}
+
+/// "Attacks alone" fires only when exactly one creature is declared; X counts
+/// creatures you control on resolution.
+#[test]
+fn team_avatar_buffs_a_creature_attacking_alone() {
+    for attackers in [1, 2] {
+        let mut s = setup(&["Team Avatar", "Gray Ogre"]);
+        s.force_permanent_on_battlefield(0, "Team Avatar");
+        let first = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        let second = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        let third = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        for id in [first, second, third] {
+            ready(&mut s, id);
+        }
+        s.advance_to_active_step(0, StepKind::DeclareAttackers);
+        for declared in 0..3 {
+            choose(
+                &mut s,
+                |a| matches!(a, Action::DeclareAttacker { attack, .. } if *attack == (declared < attackers)),
+            );
+        }
+        pass_until(&mut s, ActionSpaceKind::Priority);
+        while !s.game().state.stack_objects.is_empty() {
+            s.pass_priority();
+        }
+        // Alone, the attacker gets +3/+3 (three creatures); otherwise no
+        // creature changes.
+        let buffed: Vec<_> = [first, second, third]
+            .into_iter()
+            .map(|id| s.game().effective_pt(id))
+            .collect();
+        let expected = usize::from(attackers == 1);
+        assert_eq!(
+            buffed.iter().filter(|pt| **pt == (5, 5)).count(),
+            expected,
+            "{attackers} attacking: {buffed:?}"
+        );
+        assert_eq!(
+            buffed.iter().filter(|pt| **pt == (2, 2)).count(),
+            3 - expected
+        );
+    }
+}
+
+/// From hand only: {2}{W} and discarding Team Avatar pay for damage equal to
+/// the creatures you control, to a target creature.
+#[test]
+fn team_avatar_discards_from_hand_to_deal_damage_per_creature() {
+    let mut s = setup(&["Team Avatar", "Gray Ogre", "Craw Wurm"]);
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let wurm = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    let avatar = put(&mut s, "Team Avatar", ZoneType::Hand);
+    s.set_player_mana_pool(0, "2");
+    assert!(!can_activate_card(&mut s, avatar));
+    s.set_player_mana_pool(0, "2W");
+    activate_card(&mut s, avatar, 0);
+    let targets = offered_targets(&s);
+    assert!(targets.contains(&Target::Permanent(wurm)));
+    assert!(!targets.contains(&Target::Player(PlayerId(1))));
+    assert!(s.choose_target(Target::Permanent(wurm)));
+    assert_eq!(zone_of(&s, avatar), Some(ZoneType::Graveyard));
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    // A third creature arriving before resolution counts.
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
+    settle(&mut s);
+    assert_eq!(s.game().state.permanents[wurm].as_ref().unwrap().damage, 3);
+
+    // From the battlefield or graveyard the ability does not function.
+    let enchantment = s.force_permanent_on_battlefield(0, "Team Avatar");
+    s.set_player_mana_pool(0, "2W");
+    assert!(!can_activate(&mut s, enchantment));
+    assert!(!can_activate_card(&mut s, avatar));
+}
+
+/// Graveyard-only (CR 113.6): returns that exact card; a card that left and
+/// came back is a new object and the old activation does nothing.
+#[test]
+fn merchant_of_many_hats_returns_itself_from_the_graveyard() {
+    let mut s = setup(&["Merchant of Many Hats"]);
+    let merchant = put(&mut s, "Merchant of Many Hats", ZoneType::Hand);
+    s.set_player_mana_pool(0, "2B");
+    assert!(!can_activate_card(&mut s, merchant));
+    s.game_mut().move_card(merchant, ZoneType::Graveyard);
+    assert!(can_activate_card(&mut s, merchant));
+    s.set_player_mana_pool(0, "2");
+    assert!(!can_activate_card(&mut s, merchant));
+    s.set_player_mana_pool(0, "2B");
+    activate_card(&mut s, merchant, 0);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, merchant), Some(ZoneType::Hand));
+    let definition = s.game().state.cards[merchant].definition_id;
+    assert_eq!(
+        s.game().state.players[0].known_hand.get(&definition),
+        Some(&1)
+    );
+
+    // Leaving the graveyard in response makes the ability's object stale.
+    s.game_mut().move_card(merchant, ZoneType::Graveyard);
+    s.set_player_mana_pool(0, "2B");
+    activate_card(&mut s, merchant, 0);
+    s.game_mut().move_card(merchant, ZoneType::Exile);
+    s.game_mut().move_card(merchant, ZoneType::Graveyard);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, merchant), Some(ZoneType::Graveyard));
+
+    let permanent = s.force_permanent_on_battlefield(0, "Merchant of Many Hats");
+    assert!(
+        s.game().state.cards[s.game().state.permanents[permanent].as_ref().unwrap().card]
+            .types
+            .is_creature()
+    );
+    assert!(!can_activate(&mut s, permanent));
+}
+
+/// Exhaust (CR 702.177a): once activated, this object never offers the
+/// ability again, even after it resolves; a new object starts fresh.
+#[test]
+fn hog_monkey_exhausts_once_for_two_counters() {
+    let mut s = setup(&["Hog-Monkey"]);
+    let monkey = s.force_permanent_on_battlefield(0, "Hog-Monkey");
+    s.set_player_mana_pool(0, "4");
+    assert!(!can_activate(&mut s, monkey));
+    s.set_player_mana_pool(0, "10");
+    activate(&mut s, monkey, 0);
+    assert!(!can_activate(&mut s, monkey), "not even in response");
+    settle(&mut s);
+    assert_eq!(counters(&s, monkey), 2);
+    assert_eq!(s.game().effective_pt(monkey), (5, 4));
+    assert!(!can_activate(&mut s, monkey));
+
+    let card = s.game().state.permanents[monkey].as_ref().unwrap().card;
+    s.game_mut().move_card(card, ZoneType::Hand);
+    s.game_mut().move_card(card, ZoneType::Battlefield);
+    let again = s.battlefield_permanents_named(0, "Hog-Monkey")[0];
+    assert!(can_activate(&mut s, again));
+}
+
+/// At the beginning of combat on its controller's turn, only creatures they
+/// control with a +1/+1 counter are targets; the target gains menace.
+#[test]
+fn hog_monkey_gives_menace_to_a_creature_with_a_counter_at_combat() {
+    let mut s = setup(&["Hog-Monkey", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(0, "Hog-Monkey");
+    let plain = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let countered = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let opposing = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    for id in [countered, opposing] {
+        s.game_mut().state.permanents[id]
+            .as_mut()
+            .unwrap()
+            .plus1_counters = 1;
+    }
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert_eq!(offered_targets(&s), vec![Target::Permanent(countered)]);
+    assert!(s.choose_target(Target::Permanent(countered)));
+    settle(&mut s);
+    assert!(keywords(&s, countered).menace);
+    assert!(!keywords(&s, plain).menace);
+}
+
+#[test]
+fn rough_rhino_cavalry_firebends_two_and_exhausts_for_counters_and_trample() {
+    let mut s = setup(&["Rough Rhino Cavalry"]);
+    let rhino = s.force_permanent_on_battlefield(0, "Rough Rhino Cavalry");
+    s.set_player_mana_pool(0, "8");
+    activate(&mut s, rhino, 0);
+    settle(&mut s);
+    assert_eq!(counters(&s, rhino), 2);
+    assert!(keywords(&s, rhino).trample);
+    s.set_player_mana_pool(0, "8");
+    assert!(!can_activate(&mut s, rhino));
+
+    ready(&mut s, rhino);
+    s.set_player_mana_pool(0, "");
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    choose(&mut s, |a| {
+        matches!(a, Action::DeclareAttacker { attack: true, .. })
+    });
+    pass_until(&mut s, ActionSpaceKind::Priority);
+    while !s.game().state.stack_objects.is_empty() {
+        s.pass_priority();
+    }
+    assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 2);
+}
+
+/// Counters go on the Captives, then earthbend 2 animates a land you control.
+#[test]
+fn rebellious_captives_exhausts_to_grow_and_earthbend_two() {
+    let mut s = setup(&["Rebellious Captives"]);
+    let captives = s.force_permanent_on_battlefield(0, "Rebellious Captives");
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    let opposing = s.force_permanent_on_battlefield(1, "Forest");
+    s.set_player_mana_pool(0, "6");
+    activate(&mut s, captives, 0);
+    let targets = offered_targets(&s);
+    assert!(targets.contains(&Target::Permanent(forest)));
+    assert!(!targets.contains(&Target::Permanent(opposing)));
+    assert!(s.choose_target(Target::Permanent(forest)));
+    settle(&mut s);
+    assert_eq!(counters(&s, captives), 2);
+    assert!(is_land_creature(&s, forest));
+    assert_eq!(counters(&s, forest), 2);
+    s.set_player_mana_pool(0, "6");
+    assert!(!can_activate(&mut s, captives));
+}

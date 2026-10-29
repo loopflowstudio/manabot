@@ -1952,7 +1952,9 @@ fn search_offer_verb(action: &Action) -> OfferVerb {
     match action {
         Action::PlayLand { .. } => OfferVerb::PlayLand,
         Action::CastSpell { .. } => OfferVerb::Cast,
-        Action::ActivateAbility { .. } => OfferVerb::ActivateAbility,
+        Action::ActivateAbility { .. } | Action::ActivateCardAbility { .. } => {
+            OfferVerb::ActivateAbility
+        }
         Action::PassPriority { .. } => OfferVerb::PassPriority,
         Action::DeclareAttacker { .. } => OfferVerb::DeclareAttacker,
         Action::DeclareBlocker { .. } => OfferVerb::DeclareBlocker,

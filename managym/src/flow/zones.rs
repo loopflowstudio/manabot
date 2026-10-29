@@ -50,13 +50,17 @@ impl Game {
         &self,
         player: PlayerId,
         subtype: &Option<String>,
+        to_hand: bool,
     ) -> Vec<CardId> {
-        let predicate = CardPredicate {
-            card_type: Some(crate::state::card::CardType::Land),
-            supertype: Some("basic".into()),
+        let mut predicate = CardPredicate {
             subtype: subtype.clone(),
             ..Default::default()
         };
+        // Landcycling finds any card of the subtype ("a Plains card").
+        if !to_hand {
+            predicate.card_type = Some(crate::state::card::CardType::Land);
+            predicate.supertype = Some("basic".into());
+        }
         let mut candidates: Vec<CardId> = self
             .state
             .zones

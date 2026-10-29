@@ -8,7 +8,7 @@ use managym::{
         turn::StepKind,
     },
     state::{
-        ability::{Effect, TargetSpec},
+        ability::{Effect, EffectValue, TargetSpec},
         game_object::{CardId, PlayerId},
         zone::ZoneType,
     },
@@ -115,7 +115,7 @@ fn audit_earthbend_return_does_not_follow_a_second_zone_change() {
         &mut s,
         card,
         vec![Effect::Earthbend {
-            count: 1,
+            count: EffectValue::Fixed(1),
             target: TargetSpec::LandYouControl,
         }],
     );
