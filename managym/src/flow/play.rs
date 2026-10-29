@@ -1053,14 +1053,8 @@ impl Game {
         if payer != player {
             return Err(AgentError("wrong player for crew payment".into()));
         }
-        let crew = self
-            .crew_candidates(player, permanent)
-            .into_iter()
-            .find(|id| {
-                self.state.permanents[*id]
-                    .as_ref()
-                    .is_some_and(|p| p.card == card)
-            })
+        let crew = self.state.card_to_permanent[card]
+            .filter(|id| self.crew_candidates(player, permanent).contains(id))
             .ok_or_else(|| AgentError("creature cannot crew".into()))?;
         let remaining_power = remaining_power - self.effective_power(crew);
         self.tap_permanent(crew, false);

@@ -15,8 +15,8 @@ use managym::{
 use super::{
     helpers::Scenario,
     support::{
-        activate, can_activate, cast, choose, counters, counters_of, has_action, pass_until,
-        play_land, settle, setup, tapped, to_hand,
+        activate, can_activate, card_of, cast, choose, counters, counters_of, has_action,
+        pass_until, play_land, settle, setup, tapped, to_hand,
     },
 };
 
@@ -226,8 +226,8 @@ fn the_walls_of_ba_sing_se_protect_other_permanents_you_control() {
     assert!(observed_keywords(&s, land).indestructible);
     assert!(!observed_keywords(&s, theirs).indestructible);
 
-    let ogre_card = s.game().state.permanents[ogre].as_ref().unwrap().card;
-    let theirs_card = s.game().state.permanents[theirs].as_ref().unwrap().card;
+    let ogre_card = card_of(&s, ogre);
+    let theirs_card = card_of(&s, theirs);
     mark_damage(&mut s, ogre, 5);
     mark_damage(&mut s, theirs, 5);
     s.pass_priority();
@@ -240,7 +240,7 @@ fn the_walls_of_ba_sing_se_protect_other_permanents_you_control() {
         Some(ZoneType::Graveyard)
     );
 
-    let walls_card = s.game().state.permanents[walls].as_ref().unwrap().card;
+    let walls_card = card_of(&s, walls);
     s.game_mut().move_card(walls_card, ZoneType::Graveyard);
     mark_damage(&mut s, ogre, 5);
     s.game_mut().scenario_refresh_priority().unwrap();
@@ -706,8 +706,8 @@ fn path_to_redemption_pacifies_then_exiles_for_an_ally_on_your_turn() {
     assert!(!offered_in_combat(&s, theirs), "can't attack");
 
     s.advance_to_active_step(0, StepKind::Main);
-    let theirs_card = s.game().state.permanents[theirs].as_ref().unwrap().card;
-    let path_card = s.game().state.permanents[path].as_ref().unwrap().card;
+    let theirs_card = card_of(&s, theirs);
+    let path_card = card_of(&s, path);
     s.set_player_mana_pool(0, "5");
     activate(&mut s, path, 0);
     settle(&mut s);
@@ -725,7 +725,7 @@ fn path_to_redemption_follows_its_creature_to_the_graveyard() {
     let mut s = setup(&["Path to Redemption", "Gray Ogre"]);
     let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let path = enchant(&mut s, "Path to Redemption", "1W", theirs);
-    let path_card = s.game().state.permanents[path].as_ref().unwrap().card;
+    let path_card = card_of(&s, path);
     mark_damage(&mut s, theirs, 2);
     s.pass_priority();
     assert!(s.game().state.permanents[theirs].is_none(), "lethal damage");
@@ -775,14 +775,14 @@ fn watery_grasp_holds_a_creature_tapped_then_shuffles_it_away() {
         .unwrap()
         .tapped = true;
     let grasp = enchant(&mut s, "Watery Grasp", "U", theirs);
-    let grasp_card = s.game().state.permanents[grasp].as_ref().unwrap().card;
+    let grasp_card = card_of(&s, grasp);
 
     s.advance_to_active_step(1, StepKind::Main);
     assert!(tapped(&s, theirs), "doesn't untap");
     assert!(helpers.iter().all(|helper| !tapped(&s, *helper)));
 
     s.advance_to_active_step(0, StepKind::Main);
-    let theirs_card = s.game().state.permanents[theirs].as_ref().unwrap().card;
+    let theirs_card = card_of(&s, theirs);
     let library = s.zone_size(1, ZoneType::Library);
     s.set_player_mana_pool(0, "3");
     activate(&mut s, grasp, 0);
@@ -848,7 +848,7 @@ fn is_creature(s: &Scenario, id: PermanentId) -> bool {
 
 /// Tap `creature` toward the pending crew cost.
 fn crew_with(s: &mut Scenario, creature: PermanentId) {
-    let card = s.game().state.permanents[creature].as_ref().unwrap().card;
+    let card = card_of(s, creature);
     assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
     choose(
         s,
@@ -872,7 +872,7 @@ fn fire_nation_warship_crews_until_end_of_turn_and_leaves_a_clue() {
     activate(&mut s, ship, 0);
     assert!(
         !has_action(&s, |a| matches!(a, Action::SelectCard { card, .. }
-            if *card == s.game().state.permanents[ship].as_ref().unwrap().card)),
+            if *card == card_of(&s, ship))),
         "a Vehicle doesn't crew itself"
     );
     crew_with(&mut s, first);
@@ -897,7 +897,7 @@ fn fire_nation_warship_crews_until_end_of_turn_and_leaves_a_clue() {
     crew_with(&mut s, first);
     crew_with(&mut s, second);
     settle(&mut s);
-    let ship_card = s.game().state.permanents[ship].as_ref().unwrap().card;
+    let ship_card = card_of(&s, ship);
     mark_damage(&mut s, ship, 4);
     s.pass_priority();
     settle(&mut s);
@@ -906,10 +906,7 @@ fn fire_nation_warship_crews_until_end_of_turn_and_leaves_a_clue() {
         Some(ZoneType::Graveyard)
     );
     let clue = battlefield_token(&s, 0);
-    assert_eq!(
-        s.game().state.cards[s.game().state.permanents[clue].as_ref().unwrap().card].name,
-        "Clue"
-    );
+    assert_eq!(s.game().state.cards[card_of(&s, clue)].name, "Clue");
 }
 
 /// CR 302.6: a Vehicle that came under your control this turn can't attack
@@ -977,7 +974,7 @@ fn war_balloon_flies_once_it_has_three_fire_counters() {
 fn invasion_submersible_bounces_another_permanent_then_surfaces_once() {
     let mut s = setup(&["Invasion Submersible", "Gray Ogre"]);
     let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
-    let theirs_card = s.game().state.permanents[theirs].as_ref().unwrap().card;
+    let theirs_card = card_of(&s, theirs);
     let helpers = [
         s.force_permanent_on_battlefield(0, "Gray Ogre"),
         s.force_permanent_on_battlefield(0, "Gray Ogre"),

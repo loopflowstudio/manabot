@@ -766,13 +766,7 @@ fn jet_freedom_fighter() -> Card {
                     role: "target_0",
                 }],
             )
-            .targets(vec![Target {
-                another: None,
-                max: 2,
-                min: 0,
-                role: "target_0",
-                selector: Selector::Creature,
-            }])
+            .targets(vec![Target::up_to(2, "target_0", Selector::Creature)])
             .trigger(Trigger::new(Event::Dies, Subject::This)),
         ],
         registry_name: "Jet, Freedom Fighter",
@@ -1340,12 +1334,10 @@ fn true_ancestry() -> Card {
             ],
         )
         .cost(Cost::mana("{1}{G}"))
-        .targets(vec![Target {
-            another: None,
-            max: 1,
-            min: 0,
-            role: "target_0",
-            selector: Selector::GraveyardCardYouOwn {
+        .targets(vec![Target::up_to(
+            1,
+            "target_0",
+            Selector::GraveyardCardYouOwn {
                 predicate: Predicate::TypesAny {
                     values: vec![
                         CardType::Artifact,
@@ -1357,7 +1349,7 @@ fn true_ancestry() -> Card {
                     ],
                 },
             },
-        }])
+        )])
         .inferred()],
         registry_name: "True Ancestry",
         text_box,
@@ -1587,17 +1579,15 @@ fn curious_farm_animals() -> Card {
                 sacrifice_source: Some(true),
                 ..Default::default()
             })
-            .targets(vec![Target {
-                another: None,
-                max: 1,
-                min: 0,
-                role: "target_0",
-                selector: Selector::Permanent {
+            .targets(vec![Target::up_to(
+                1,
+                "target_0",
+                Selector::Permanent {
                     predicate: Predicate::TypesAny {
                         values: vec![CardType::Artifact, CardType::Enchantment],
                     },
                 },
-            }])
+            )])
             .inferred(),
         ],
         registry_name: "Curious Farm Animals",
@@ -2140,13 +2130,7 @@ fn allies_at_last() -> Card {
             ..Default::default()
         })
         .targets(vec![
-            Target {
-                another: None,
-                max: 2,
-                min: 0,
-                role: "allies",
-                selector: Selector::CreatureYouControl,
-            },
+            Target::up_to(2, "allies", Selector::CreatureYouControl),
             Target::one("victim", Selector::CreatureOpponentControls),
         ])],
         registry_name: "Allies at Last",
@@ -2454,12 +2438,10 @@ fn earth_kingdom_jailer() -> Card {
             ProgramKind::Triggered,
             vec![Op::ExileUntilSourceLeaves { target: "prisoner" }],
         )
-        .targets(vec![Target {
-            another: None,
-            max: 1,
-            min: 0,
-            role: "prisoner",
-            selector: Selector::PermanentOpponentControls {
+        .targets(vec![Target::up_to(
+            1,
+            "prisoner",
+            Selector::PermanentOpponentControls {
                 min_mana_value: 3,
                 types_any: vec![
                     CardType::Artifact,
@@ -2467,7 +2449,7 @@ fn earth_kingdom_jailer() -> Card {
                     CardType::Enchantment,
                 ],
             },
-        }])
+        )])
         .trigger(Trigger::new(Event::EntersBattlefield, Subject::This))],
         registry_name: "Earth Kingdom Jailer",
         text_box,
@@ -2542,13 +2524,11 @@ fn earth_kingdom_soldier() -> Card {
                 role: "creatures",
             }],
         )
-        .targets(vec![Target {
-            another: None,
-            max: 2,
-            min: 0,
-            role: "creatures",
-            selector: Selector::CreatureYouControl,
-        }])
+        .targets(vec![Target::up_to(
+            2,
+            "creatures",
+            Selector::CreatureYouControl,
+        )])
         .trigger(Trigger::new(Event::EntersBattlefield, Subject::This))],
         registry_name: "Earth Kingdom Soldier",
         text_box,
@@ -2633,11 +2613,8 @@ fn fancy_footwork() -> Card {
         )
         .cost(Cost::mana("2W"))
         .targets(vec![Target {
-            another: None,
-            max: 2,
             min: 1,
-            role: "creatures",
-            selector: Selector::Creature,
+            ..Target::up_to(2, "creatures", Selector::Creature)
         }])],
         registry_name: "Fancy Footwork",
         text_box,
@@ -4524,17 +4501,16 @@ fn invasion_submersible() -> Card {
                     role: "target_0",
                 }],
             )
-            .targets(vec![Target {
-                another: Some(true),
-                max: 1,
-                min: 0,
-                role: "target_0",
-                selector: Selector::Permanent {
+            .targets(vec![Target::up_to(
+                1,
+                "target_0",
+                Selector::Permanent {
                     predicate: Predicate::NotCardTypes {
                         values: vec![CardType::Land],
                     },
                 },
-            }])
+            )
+            .another()])
             .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
             Program::new(
                 "surface",

@@ -275,6 +275,23 @@ impl Target {
             selector,
         }
     }
+
+    /// "Up to `max` targets".
+    pub fn up_to(max: i32, role: &'static str, selector: Selector) -> Self {
+        Self {
+            min: 0,
+            max,
+            ..Self::one(role, selector)
+        }
+    }
+
+    /// "Another target": the source can't be chosen.
+    pub fn another(self) -> Self {
+        Self {
+            another: Some(true),
+            ..self
+        }
+    }
 }
 
 #[derive(Serialize)]

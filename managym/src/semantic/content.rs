@@ -925,19 +925,17 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             return unsupported(program, "restrictions require a static program")
         }
         Step::BecomeArtifactCreature { target, duration } if target == "source" => {
-            match duration.as_deref() {
-                Some("end_of_turn") => Effect::BecomeCreatureSource {
-                    duration: BecomesCreature::EndOfTurn,
+            Effect::BecomeCreatureSource {
+                duration: match duration.as_deref() {
+                    Some("end_of_turn") => BecomesCreature::EndOfTurn,
+                    None => BecomesCreature::Incarnation,
+                    Some(other) => {
+                        return unsupported(
+                            program,
+                            &format!("unsupported animation duration {other:?}"),
+                        )
+                    }
                 },
-                None => Effect::BecomeCreatureSource {
-                    duration: BecomesCreature::Incarnation,
-                },
-                Some(other) => {
-                    return unsupported(
-                        program,
-                        &format!("unsupported animation duration {other:?}"),
-                    )
-                }
             }
         }
         Step::BecomeArtifactCreature { .. } => {

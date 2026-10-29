@@ -135,6 +135,11 @@ pub fn pass_until(s: &mut Scenario, kind: ActionSpaceKind) {
     assert_eq!(s.action_space().kind, kind);
 }
 
+/// The card a battlefield permanent represents.
+pub fn card_of(s: &Scenario, id: PermanentId) -> CardId {
+    s.game().state.permanents[id].as_ref().unwrap().card
+}
+
 pub fn tapped(s: &Scenario, id: PermanentId) -> bool {
     s.game().state.permanents[id].as_ref().unwrap().tapped
 }
