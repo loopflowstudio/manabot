@@ -246,7 +246,7 @@ pub struct PermanentData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub creature_types: Option<Vec<String>>,
     /// A land only through an effect (a static land-type grant).
-    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub is_granted_land: bool,
     /// Firebending gained until end of turn (Sozin's Comet, Fire Nation Palace).
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
@@ -666,6 +666,7 @@ impl Observation {
         permanent: &Permanent,
     ) {
         let (power, toughness) = game.effective_pt(perm_id);
+        let set_characteristics = game.set_characteristics(perm_id);
         let pdat = PermanentData {
             id: permanent.id.0 as i32,
             registry_key: game.state.cards[permanent.card].registry_key.0 as i32,
@@ -696,10 +697,8 @@ impl Observation {
                 .attached_to
                 .and_then(|object| game.object_event_ref(object))
                 .map(|object| object.entity.0 as i32),
-            name: game
-                .set_characteristics(perm_id)
-                .map(|set| set.name.clone()),
-            creature_types: game.set_characteristics(perm_id).map(|_| {
+            name: set_characteristics.map(|set| set.name.clone()),
+            creature_types: set_characteristics.map(|_| {
                 game.creature_types(perm_id)
                     .into_iter()
                     .map(str::to_owned)
@@ -815,7 +814,7 @@ impl Observation {
             granted_keywords: match stack_object {
                 StackObject::Spell(spell) => {
                     let keywords = game.spell_keywords(spell.card, spell.controller);
-                    (keywords != crate::state::card::Keywords::default())
+                    (!crate::state::is_zero(&keywords))
                         .then(|| KeywordData::from_keywords(&keywords))
                 }
                 _ => None,

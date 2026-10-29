@@ -159,6 +159,10 @@ Protocol schema tests and `pytest tests/semantic` pass but for 3 frozen
 Academy `test_ur_lessons_increment` / study bench fail on w13 pins and the stale
 study source closure — all world-release evidence, left to gate.
 
+Compress after item 19: both firebending effects share `Game::grant_firebending`;
+`add_permanent` reads `set_characteristics` once; bool omission uses `Not::not`.
+Debug: clippy/fmt clean, lib 122, cards 125, rules_tests 356 (serialization unchanged).
+
 ## Remaining
 
 None of the 49 cards. World release items (registration literal, receipts,
@@ -184,9 +188,10 @@ and **one observation change before landing.** The acceptance criteria say obser
    frozen widths are unchanged), and the world/observation validation in
    CLAUDE.md applies.
 
-Realign after item 18 (2026-10-29): PR #398 head still `16dfd3dbb`, PR #394 head
+Realign after item 19 (2026-10-29): PR #398 head still `16dfd3dbb`, PR #394 head
 still `86ebe9ccf`, `origin/main` fully contained; schema 8 ids contiguous (fields
-to 116, opcodes to 106, special roles to 17); item 18 is uncommitted in the worktree.
+to 116, opcodes to 106, special roles to 17). Items 18 (`c9cd80190`) and 19
+(`85650933a`) are committed; the item-19 compress is checkpointed with this realign.
 
 
 ## Delete — do not maintain

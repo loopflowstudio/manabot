@@ -366,6 +366,15 @@ impl Game {
             .filter(|target| self.target_is_present(*target))
     }
 
+    /// Firebending until end of turn adds to any the permanent already has.
+    fn grant_firebending(&mut self, id: PermanentId, amount: u8) {
+        self.journal_permanent(id);
+        if let Some(permanent) = self.state.permanents[id].as_mut() {
+            permanent.firebending_this_turn =
+                permanent.firebending_this_turn.saturating_add(amount);
+        }
+    }
+
     /// Execute one effect. Returns a decision to suspend on, or None if the
     /// effect completed. Branching effects push their branch onto the front
     /// of the frame's queue.
@@ -737,21 +746,13 @@ impl Game {
                     if !self.permanent_is_battlefield_creature(id) {
                         continue;
                     }
-                    self.journal_permanent(id);
-                    if let Some(permanent) = self.state.permanents[id].as_mut() {
-                        permanent.firebending_this_turn =
-                            permanent.firebending_this_turn.saturating_add(*amount);
-                    }
+                    self.grant_firebending(id, *amount);
                 }
                 None
             }
             Effect::GrantFirebendingToTarget { amount, .. } => {
                 if let Some(Target::Permanent(id)) = self.present_primary_target(frame) {
-                    self.journal_permanent(id);
-                    if let Some(permanent) = self.state.permanents[id].as_mut() {
-                        permanent.firebending_this_turn =
-                            permanent.firebending_this_turn.saturating_add(*amount);
-                    }
+                    self.grant_firebending(id, *amount);
                 }
                 None
             }
