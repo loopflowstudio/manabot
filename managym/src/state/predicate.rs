@@ -9,6 +9,10 @@ use super::card::{Card, CardType};
 pub struct CardPredicate {
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub flying: bool,
+    /// "with no counters on it". Only battlefield permanents carry counters,
+    /// so card-only matching ignores it.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub no_counters: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub subtypes_any: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]

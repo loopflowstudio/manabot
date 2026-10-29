@@ -47,6 +47,7 @@ fn tireless_tracker() -> Card {
                 ProgramKind::Triggered,
                 vec![Op::PutCounters {
                     count: 1,
+                    counter: None,
                     target: "source",
                 }],
             )

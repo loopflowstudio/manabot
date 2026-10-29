@@ -17,7 +17,7 @@ Ba Sing Se, Realm of Koh. Shared machinery, no new opcode:
 - Activated programs with several instructions lower to one `IfCondition{Always}`.
 - `each:creature_you_control` role → `PutCountersOnEachMatching` (Flopsie reuses it).
 - Learning schema 8 (unreleased, T1 precedent) gains fields 85/86, predicate 13,
-  special role 6; `learning.py` maps supertype values and the new predicate field.
+  special role 6 (slice 3: fields 88/89, predicate 14, opcode 66, enum `counter`); `learning.py` maps supertype values and the new predicate field.
 
 Slice 2, static grants/anthems (9 of 49): Air Nomad Legacy, Badgermole, Diligent
 Zookeeper, Foggy Swamp Hunters, The Walls of Ba Sing Se.
@@ -38,35 +38,67 @@ Zookeeper, Foggy Swamp Hunters, The Walls of Ba Sing Se.
 - Not covered: static haste/defender grants still miss `Permanent::can_tap/can_attack`
   (no current card grants them statically).
 
-Card tests drive through `tests/cards/support.rs` (`to_hand`, `play_land`, `cast`).
+Slice 3, typed counters (12 of 49): Rowdy Snowballers, Mai, Jaded Edge, Heartless Act.
+- `state::permanent::CounterKind` {+1/+1, stun, fire, double strike} replaces the
+  crate-private proposal enum; `Permanent.counters` holds non-+1/+1 kinds;
+  `counter_count`/`change_counters`/`has_counters` are the one accessor.
+  `ProposedEvent::CounterChange` commits any kind.
+- Stun (CR 122.1d) lives in `Permanent::untap`, so every untap path obeys it;
+  a double strike counter feeds `Permanent::effective_keywords` (CR 122.1b).
+  "With counters" scopes and quantities now read every kind.
+- `put_counters.counter` (field 88, enum `counter`); `Effect::TapTarget`
+  (`tap` with a target); `Cost.exhaust` (field 89) → `exhausted_abilities`
+  per incarnation, gated in legal actions and activation (CR 702.177a).
+- `Predicate::NoCounters` (predicate 14); opcode 66 `remove_counters` lowers to
+  `Effect::RemoveCounters`, a repeated resolution `Decision::Modal` (one counter
+  of a present kind, or stop).
 
-Check (compress, 2026-10-28): debug `cards` 11/11, `rules_tests` 356; clippy clean.
-Earlier: debug `cargo test` passes except `semantic_conformance_tests` (base world w16
-vs w15 evidence, inherited from T1); `cards` 11/11; clippy clean; learning projection 9/9.
+Card tests drive through `tests/cards/support.rs` (`to_hand`, `play_land`, `cast`,
+`counters_of`). `scratch/add_fixture.py` copies pinned evidence into the
+conformance fixture.
 
-## Remaining (40 cards), suggested next slices
+Check (implement, slice 3): debug `cargo test` passes except the known
+`semantic_conformance_tests` (w16 vs w15, inherited from T1); `cards` 15/15,
+`rules_tests` 356; clippy clean; learning projection/compiler/current-content 41/41
+after rebuilding the extension. Slice 2's Ranger and Wall subtypes lacked schema
+entries (projection failed); appended as subtypes 64/65.
+
+## Remaining (37 cards), suggested next slices
 
 - Fire Nation Palace: granted firebending until EOT. Needs a permanent-local grant,
   an attack trigger via inline effects, and an observation field (shape change).
 - Lo and Li: needs a Lesson-or-Noble library tutor and lifelink on Lesson spells
   (stack-source keywords in `damage.rs::source_keywords`); the Noble grant is a role.
-- Counters as typed kinds (stun, fire, double strike, removal): Rowdy Snowballers,
-  Crashing Wave, Fated Firepower, Heartless Act, Mai, War Balloon.
+- X costs (typed counters now exist): Fated Firepower (X entry fire counters;
+  damage-addition replacement for sources you control, ordered with others),
+  Crashing Wave (waterbend {X} additional cost; up to X targets; distribute three
+  stun counters among tapped opposing creatures). Neither X nor distribution exists.
 - Base P/T setting layers: Flexible Waterbender, Turtle-Duck, Katara, Honest Work.
 - Attachments/Equipment/Vehicles/crew: Glider Staff, Kyoshi Battle Fan, Meteor Sword,
   Trusty Boomerang, Twin Blades, Path to Redemption, Swampsnare Trap, Watery Grasp,
-  Fire Nation Warship, Invasion Submersible, Tundra Tank, War Balloon.
+  Fire Nation Warship, Invasion Submersible, Tundra Tank, War Balloon ({1}: fire
+  counter is ready; needs crew and a counter-threshold animation static).
 - Mana: Great Divide Guide (defined; summoning-sick grant check), Raucous Audience,
   White Lotus Tile, Energybending, Ozai, The Lion-Turtle, Secret Tunnel.
-- The rest per allocation rows.
+- Effective-characteristic reads: Earthen Ally (power by Ally colors), Flopsie
+  (team counters reuse slice 1's role; blocker restriction by effective power),
+  The Boulder (count four-power creatures), Platypus-Bear (attack despite
+  defender), Toph (artifacts gain land type), The Mechanist (temporary animation).
+- Excess damage: Razor Rings, The Last Agni Kai (mana until end of turn).
+- Others: Day of Black Sun (X, ability removal before destroy), Hakoda (private
+  top-card look, cast Ally from library, mass indestructible).
+
+Static grants/anthems (feedback's first slice) are done except Lo and Li, which
+needs tutor and stack-source keyword work above.
 
 ## Reconcile at sync (observed 2026-10-28 in sibling worktrees, uncommitted)
 
-- T1 (892c47) is deleting `qualifications.json` and `cards/native.rs`: keep the
-  deletion and drop this slice's four qualification entries with it.
+- T1 (892c47) deleted `qualifications.json` and `cards/native.rs`; reconciled at
+  sync 86ebe9ccf (entries dropped, TLA basics now `lea.*`).
 - T2 (87e012) also appends to schema 8 and took field 85 (`flashback`), which
   collides with `enters_tapped_unless: 85`; the later lander renumbers
-  (keep 85..N contiguous, append-only).
+  (keep 85..N contiguous, append-only). Same for opcode 66, predicate 14 and
+  subtypes 64/65 if T2 appends them too.
 - T2 also created `tests/cards.rs`, `tests/cards/support.rs` and `tla.rs`
   independently; merge into one `support.rs` (this one's `cast`/`to_hand`/
   `play_land` plus T2's helpers) and one `tla.rs`. T1 has no `tests/cards/` yet;

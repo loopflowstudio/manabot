@@ -10,6 +10,7 @@ use crate::{
         ability::{Effect, TargetRequirement, TargetSpec},
         card::{ActivatedAbilityDefinition, CardType, Keywords},
         game_object::{CardId, PermanentId, PlayerId, Target},
+        permanent::CounterKind,
         player::PlayerConfig,
         predicate::CardPredicate,
         stack_object::{ActivatedAbilityOnStack, StackObject, TriggeredAbilityOnStack},
@@ -295,6 +296,7 @@ fn resolution_same_object_can_be_illegal_for_only_one_clause() {
                         TargetSpec::Creature,
                         vec![Effect::PutCounters {
                             count: 2,
+                            kind: CounterKind::PlusOnePlusOne,
                             target: TargetSpec::Creature,
                         }],
                     ),
@@ -341,6 +343,7 @@ fn resolution_characteristics_changed_by_earlier_instruction_do_not_retarget() {
                         },
                         Effect::PutCounters {
                             count: 2,
+                            kind: CounterKind::PlusOnePlusOne,
                             target: spec,
                         },
                     ],

@@ -620,6 +620,9 @@ impl Game {
         if ability.sorcery_timing && !self.can_cast_sorceries(player) {
             return Err(AgentError("activation requires sorcery timing".into()));
         }
+        if ability.exhaust && permanent.exhausted(ability_index) {
+            return Err(AgentError("exhaust ability already activated".into()));
+        }
         if ability.tap_source && !permanent.can_tap(&self.state.cards[source_card]) {
             return Err(AgentError("source cannot tap".into()));
         }
@@ -1094,6 +1097,12 @@ impl Game {
             // moves the source to its owner's graveyard immediately.
             self.sacrifice_permanent(permanent_id);
             self.invalidate_mana_cache(player);
+        }
+        if ability.exhaust {
+            self.journal_permanent(permanent_id);
+            if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
+                permanent.exhausted_abilities.push(ability_index);
+            }
         }
 
         let id = self.state.id_gen.next_id();

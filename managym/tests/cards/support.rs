@@ -6,6 +6,7 @@ use managym::{
     flow::turn::StepKind,
     state::{
         game_object::{CardId, PermanentId, PlayerId},
+        permanent::CounterKind,
         zone::ZoneType,
     },
 };
@@ -143,4 +144,11 @@ pub fn counters(s: &Scenario, id: PermanentId) -> i32 {
         .as_ref()
         .unwrap()
         .plus1_counters
+}
+
+pub fn counters_of(s: &Scenario, id: PermanentId, kind: CounterKind) -> i32 {
+    s.game().state.permanents[id]
+        .as_ref()
+        .unwrap()
+        .counter_count(kind)
 }

@@ -1,5 +1,6 @@
 use super::card::Keywords;
 use super::mana::{Mana, ManaCost};
+use super::permanent::CounterKind;
 use super::predicate::CardPredicate;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -287,13 +288,15 @@ pub enum Effect {
         count: usize,
         tapped_and_attacking: bool,
     },
-    /// Put `count` +1/+1 counters on the source permanent.
+    /// Put `count` counters of `kind` on the source permanent.
     PutCountersOnSource {
         count: i32,
+        kind: CounterKind,
     },
-    /// Put `count` +1/+1 counters on the target.
+    /// Put `count` counters of `kind` on the target.
     PutCounters {
         count: i32,
+        kind: CounterKind,
         target: TargetSpec,
     },
     /// Tap the source permanent.
@@ -400,6 +403,18 @@ pub enum Effect {
     },
     /// Untap the target.
     UntapTarget {
+        target: TargetSpec,
+    },
+    /// Tap the target.
+    TapTarget {
+        target: TargetSpec,
+    },
+    /// "Remove up to `up_to` counters from [target]." With `chosen` unset the
+    /// controller picks a present kind or stops; with it set, one counter of
+    /// that kind is removed and the choice repeats for `up_to - 1`.
+    RemoveCounters {
+        up_to: i32,
+        chosen: Option<CounterKind>,
         target: TargetSpec,
     },
     /// The target gains the set keywords until end of turn.
@@ -553,7 +568,9 @@ impl Effect {
             Effect::Earthbend { target, .. } => Some(target),
             Effect::ExileUntilSourceLeaves { target } => Some(target),
             Effect::BuffTarget { target, .. } => Some(target),
-            Effect::UntapTarget { target } => Some(target),
+            Effect::UntapTarget { target }
+            | Effect::TapTarget { target }
+            | Effect::RemoveCounters { target, .. } => Some(target),
             Effect::GrantKeywordsToTarget { target, .. } => Some(target),
             Effect::OnNthResolutionThisTurn { effect, .. } => effect.target_spec(),
             Effect::OptionalPayment {

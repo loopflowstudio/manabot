@@ -14,7 +14,7 @@ use crate::{
     state::{
         ability::{Ability, Effect, EffectValue, PaymentCost, TargetRequirement, TargetSpec},
         game_object::{CardId, PermanentId, PlayerId, Target},
-        permanent::Permanent,
+        permanent::{CounterKind, Permanent},
         stack_object::{
             ActivatedAbilityOnStack, SpellOnStack, StackObject, TriggeredAbilityOnStack,
         },
@@ -32,7 +32,7 @@ impl Game {
                     self.permanent_is_battlefield_creature(*id)
                         && self.state.permanents[*id]
                             .as_ref()
-                            .is_some_and(|p| p.plus1_counters > 0)
+                            .is_some_and(|p| p.has_counters())
                 })
                 .count() as i32,
             EffectValue::BattlefieldMatching { predicate } => self
@@ -581,6 +581,7 @@ impl Game {
                 self.execute_frame_effect(
                     &Effect::PutCounters {
                         count,
+                        kind: CounterKind::PlusOnePlusOne,
                         target: target.clone(),
                     },
                     frame,
@@ -632,16 +633,16 @@ impl Game {
                 }
                 None
             }
-            Effect::PutCountersOnSource { count } => {
+            Effect::PutCountersOnSource { count, kind } => {
                 if let Some(permanent_id) = self.source_permanent_id(frame) {
-                    self.change_plus_one_counters(permanent_id, *count);
+                    self.change_counters(permanent_id, *kind, *count);
                 }
                 None
             }
-            Effect::PutCounters { count, .. } => {
+            Effect::PutCounters { count, kind, .. } => {
                 let chosen = self.present_primary_target(frame)?;
                 if let Target::Permanent(permanent_id) = chosen {
-                    self.change_plus_one_counters(permanent_id, *count);
+                    self.change_counters(permanent_id, *kind, *count);
                 }
                 None
             }
@@ -891,6 +892,47 @@ impl Game {
                         let controller = permanent.controller;
                         self.invalidate_mana_cache(controller);
                     }
+                }
+                None
+            }
+            Effect::RemoveCounters {
+                up_to,
+                chosen,
+                target,
+            } => {
+                let Target::Permanent(permanent_id) = self.present_primary_target(frame)? else {
+                    return None;
+                };
+                let mut up_to = *up_to;
+                if let Some(kind) = chosen {
+                    self.change_counters(permanent_id, *kind, -1);
+                    up_to -= 1;
+                }
+                let permanent = self.state.permanents[permanent_id].as_ref()?;
+                let mut modes: Vec<Vec<Effect>> = CounterKind::ALL
+                    .into_iter()
+                    .filter(|kind| up_to > 0 && permanent.counter_count(*kind) > 0)
+                    .map(|kind| {
+                        vec![Effect::RemoveCounters {
+                            up_to,
+                            chosen: Some(kind),
+                            target: target.clone(),
+                        }]
+                    })
+                    .collect();
+                if modes.is_empty() {
+                    return None;
+                }
+                // "Up to": stopping is always a legal choice.
+                modes.push(Vec::new());
+                Some(Decision::Modal {
+                    player: frame.controller,
+                    modes,
+                })
+            }
+            Effect::TapTarget { .. } => {
+                if let Target::Permanent(permanent_id) = self.present_primary_target(frame)? {
+                    self.tap_permanent(permanent_id, false);
                 }
                 None
             }

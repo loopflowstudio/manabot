@@ -9,6 +9,7 @@ use crate::state::{
     },
     card::{Card, CardType, Keywords},
     mana::{Mana, ManaCost},
+    permanent::CounterKind,
     predicate::CardPredicate,
 };
 
@@ -144,6 +145,7 @@ fn card_type(t: CardType) -> &'static str {
 fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     let CardPredicate {
         flying,
+        no_counters,
         subtypes_any,
         not_subtypes,
         supertype,
@@ -195,7 +197,19 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     if let Some(n) = min_mana_value {
         terms.push(format!("with mana value at least {n}"));
     }
+    if *no_counters {
+        terms.push("with no counters on it".into());
+    }
     terms.join(" ")
+}
+
+pub(crate) fn counter_description(kind: CounterKind) -> &'static str {
+    match kind {
+        CounterKind::PlusOnePlusOne => "+1/+1",
+        CounterKind::Stun => "stun",
+        CounterKind::Fire => "fire",
+        CounterKind::DoubleStrike => "double strike",
+    }
 }
 
 fn target_description(t: &TargetSpec) -> String {
@@ -388,8 +402,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
         CreateTokensValue { token_name, count } => format!("Create X {token_name} tokens, where X is {}",value_description(count)),
         ExileWithControllerToken { target, token_name } => format!("Exile {}. Its controller creates a {token_name} token",target_description(target)),
         CreateToken { token_name, count, tapped_and_attacking } => format!("Create {count} {token_name} token{}{}",if *count == 1 { "" } else { "s" },if *tapped_and_attacking { " tapped and attacking" } else { "" }),
-        PutCountersOnSource { count } => format!("Put {count} +1/+1 counters on this"),
-        PutCounters { count, target } => format!("Put {count} +1/+1 counters on {}",target_description(target)),
+        PutCountersOnSource { count, kind } => format!("Put {count} {} counters on this",counter_description(*kind)),
+        PutCounters { count, kind, target } => format!("Put {count} {} counters on {}",counter_description(*kind),target_description(target)),
         TapSource => "Tap this".into(), UntapSource => "Untap this".into(),
         CantBeBlockedThisTurnSource => "This can't be blocked this turn".into(),
         GainLife { amount } => format!("You gain {amount} life"),
@@ -409,6 +423,9 @@ fn effect_description(effect: &Effect) -> Option<String> {
         AddMana { mana, until_end_of_combat } => format!("Add {}{}",mana_description(mana),if *until_end_of_combat { ". This mana lasts until end of combat" } else { "" }),
         BuffTarget { power, toughness, target } => format!("{} gets {power:+}/{toughness:+} until end of turn",target_description(target)),
         UntapTarget { target } => format!("Untap {}",target_description(target)),
+        TapTarget { target } => format!("Tap {}",target_description(target)),
+        RemoveCounters { up_to, chosen: None, target } => format!("Remove up to {up_to} counters from {}",target_description(target)),
+        RemoveCounters { chosen: Some(kind), target, .. } => format!("Remove a {} counter from {}",counter_description(*kind),target_description(target)),
         GrantKeywordsToTarget { keywords, target } => format!("{} gains {} until end of turn",target_description(target),keywords_description(keywords)),
         IfTargetMatches { predicate, then } => format!("If that target is a {}: {}",predicate_description(predicate,"permanent"),effects_description(then)),
         ForEachTarget { effects } => format!("For each chosen target: {}",effects_description(effects)),

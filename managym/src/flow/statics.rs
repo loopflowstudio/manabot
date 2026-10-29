@@ -194,7 +194,7 @@ impl Game {
         };
         if target.controller != controller
             || (other && source_id == target_id)
-            || (with_counters && target.plus1_counters <= 0)
+            || (with_counters && !target.has_counters())
         {
             return false;
         }
@@ -317,7 +317,7 @@ impl Game {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return false;
         };
-        if predicate.flying && !flying() {
+        if (predicate.flying && !flying()) || (predicate.no_counters && permanent.has_counters()) {
             return false;
         }
         let card = &self.state.cards[permanent.card];

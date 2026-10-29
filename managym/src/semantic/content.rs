@@ -21,6 +21,7 @@ use crate::{
             StaticScope, TriggeredManaAbility,
         },
         mana::{Color, Colors, Mana, ManaCost},
+        permanent::CounterKind,
         player::PlayerConfig,
         predicate::CardPredicate,
     },
@@ -452,6 +453,7 @@ fn apply_program(
                         .ok_or_else(|| malformed(program, "activated ability has no mana cost"))?,
                     sacrifice_source: cost.sacrifice_source,
                     waterbend: cost.waterbend,
+                    exhaust: cost.exhaust,
                     effect,
                 });
         }
@@ -473,6 +475,7 @@ struct ProgramCost {
     sacrifice_source: bool,
     tap_source: bool,
     waterbend: bool,
+    exhaust: bool,
 }
 
 fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
@@ -521,6 +524,7 @@ fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
         tap_source: opt_bool_field(value, "tap_source")?.unwrap_or(false),
         sacrifice_source: opt_bool_field(value, "sacrifice_source")?.unwrap_or(false),
         waterbend: opt_bool_field(value, "waterbend")?.unwrap_or(false),
+        exhaust: opt_bool_field(value, "exhaust")?.unwrap_or(false),
     })
 }
 
@@ -819,6 +823,15 @@ fn static_scope(program: &Program, target: &str) -> Result<StaticScope, IrError>
     })
 }
 
+/// Authored counter kind; absence is the +1/+1 counter.
+fn counter_kind(program: &Program, counter: &Option<String>) -> Result<CounterKind, IrError> {
+    match counter.as_deref() {
+        None => Ok(CounterKind::PlusOnePlusOne),
+        Some(name) => CounterKind::parse(name)
+            .ok_or_else(|| malformed(program, &format!("unknown counter kind {name:?}"))),
+    }
+}
+
 fn lower_steps(
     pack: &SemanticPack,
     program: &Program,
@@ -903,10 +916,19 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             count: usize_value(program, *count, "token count")?,
             tapped_and_attacking: *tapped_and_attacking,
         },
-        Step::PutCounters { target, count } if target == "source" => Effect::PutCountersOnSource {
+        Step::PutCounters {
+            target,
+            count,
+            counter,
+        } if target == "source" => Effect::PutCountersOnSource {
             count: i32_value(program, *count, "counter count")?,
+            kind: counter_kind(program, counter)?,
         },
-        Step::PutCounters { target, count } if target == "each:other_ally_creature_you_control" => {
+        Step::PutCounters {
+            target,
+            count,
+            counter: None,
+        } if target == "each:other_ally_creature_you_control" => {
             Effect::PutCountersOnEachMatching {
                 count: i32_value(program, *count, "counter count")?,
                 predicate: CardPredicate {
@@ -917,17 +939,27 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
                 other: true,
             }
         }
-        Step::PutCounters { target, count } if target == "each:creature_you_control" => {
-            Effect::PutCountersOnEachMatching {
-                count: i32_value(program, *count, "counter count")?,
-                predicate: CardPredicate::creature(),
-                other: false,
-            }
-        }
-        Step::PutCounters { target, count } => Effect::PutCounters {
+        Step::PutCounters {
+            target,
+            count,
+            counter: None,
+        } if target == "each:creature_you_control" => Effect::PutCountersOnEachMatching {
             count: i32_value(program, *count, "counter count")?,
+            predicate: CardPredicate::creature(),
+            other: false,
+        },
+        Step::PutCounters {
+            target,
+            count,
+            counter,
+        } if !target.starts_with("each:") => Effect::PutCounters {
+            count: i32_value(program, *count, "counter count")?,
+            kind: counter_kind(program, counter)?,
             target: target_for(program, target)?,
         },
+        Step::PutCounters { .. } => {
+            return unsupported(program, "typed counters on each matching permanent")
+        }
         Step::GainLife { amount } => Effect::GainLife {
             amount: i32_value(program, *amount, "life amount")?,
         },
@@ -935,9 +967,14 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             count: usize_value(program, *count, "scry count")?,
         },
         Step::Tap { target } if target == "source" => Effect::TapSource,
-        Step::Tap { target } => {
-            return unsupported(program, &format!("cannot tap target {target:?}"))
-        }
+        Step::RemoveCounters { target, count } => Effect::RemoveCounters {
+            up_to: i32_value(program, *count, "counter count")?,
+            chosen: None,
+            target: target_for(program, target)?,
+        },
+        Step::Tap { target } => Effect::TapTarget {
+            target: target_for(program, target)?,
+        },
         Step::Untap { target } if target == "source" => Effect::UntapSource,
         Step::Untap { target } => Effect::UntapTarget {
             target: target_for(program, target)?,
@@ -1222,6 +1259,7 @@ fn predicate_card(predicate: &Predicate) -> Result<CardPredicate, IrError> {
 fn merge_predicate(result: &mut CardPredicate, predicate: &Predicate) -> Result<(), IrError> {
     match predicate {
         Predicate::Flying => result.flying = true,
+        Predicate::NoCounters => result.no_counters = true,
         Predicate::PowerAtLeast(value) => set_once(
             &mut result.min_power,
             i32::try_from(*value).map_err(|_| IrError::Malformed("power exceeds i32".into()))?,

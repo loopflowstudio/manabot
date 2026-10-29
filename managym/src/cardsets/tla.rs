@@ -1,8 +1,8 @@
 //! Current TLA cards and their fixed tokens.
 //! Edit these typed definitions; `semantic::compile` lowers them in process.
 use crate::cards::authoring::{
-    Card, CardType, Characteristics, Color, Condition, Controller, Cost, Destination, Direction,
-    Duration, Event, Incomplete, Keyword, Op, Payment, Predicate, PrintedPower, Program,
+    Card, CardType, Characteristics, Color, Condition, Controller, Cost, CounterKind, Destination,
+    Direction, Duration, Event, Incomplete, Keyword, Op, Payment, Predicate, PrintedPower, Program,
     ProgramKind, Quantity, Remainder, RemainderOrder, Sacrifice, Selector, Subject, Target,
     Trigger, Until, Zone,
 };
@@ -141,6 +141,9 @@ pub(super) fn cards() -> Vec<Card> {
         diligent_zookeeper(),
         foggy_swamp_hunters(),
         the_walls_of_ba_sing_se(),
+        rowdy_snowballers(),
+        mai_jaded_edge(),
+        heartless_act(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -195,6 +198,7 @@ fn azula_always_lies() -> Card {
                     vec![Op::TargetClause {
                         body: vec![Op::PutCounters {
                             count: 1,
+                            counter: None,
                             target: "target_1",
                         }],
                         role: "target_1",
@@ -213,6 +217,7 @@ fn azula_always_lies() -> Card {
                         Op::TargetClause {
                             body: vec![Op::PutCounters {
                                 count: 1,
+                                counter: None,
                                 target: "target_3",
                             }],
                             role: "target_3",
@@ -741,6 +746,7 @@ fn jet_freedom_fighter() -> Card {
                     body: vec![Op::ForEachTarget {
                         body: vec![Op::PutCounters {
                             count: 1,
+                            counter: None,
                             target: "target_0",
                         }],
                         role: "target_0",
@@ -781,6 +787,7 @@ fn knowledge_seeker() -> Card {
                 ProgramKind::Triggered,
                 vec![Op::PutCounters {
                     count: 1,
+                    counter: None,
                     target: "source",
                 }],
             )
@@ -1031,6 +1038,7 @@ fn origin_of_metalbending() -> Card {
                     vec![
                         Op::PutCounters {
                             count: 1,
+                            counter: None,
                             target: "target_1",
                         },
                         Op::GrantKeywords {
@@ -1080,6 +1088,7 @@ fn ostrich_horse() -> Card {
                 count: 3,
                 if_declined: vec![Op::PutCounters {
                     count: 1,
+                    counter: None,
                     target: "source",
                 }],
                 predicate: Predicate::CardType {
@@ -2149,6 +2158,7 @@ fn avatar_enthusiasts() -> Card {
             ProgramKind::Triggered,
             vec![Op::PutCounters {
                 count: 1,
+                counter: None,
                 target: "source",
             }],
         )
@@ -2228,6 +2238,7 @@ fn boar_q_pine() -> Card {
             ProgramKind::Triggered,
             vec![Op::PutCounters {
                 count: 1,
+                counter: None,
                 target: "source",
             }],
         )
@@ -2506,6 +2517,7 @@ fn earth_kingdom_soldier() -> Card {
                 body: vec![Op::ForEachTarget {
                     body: vec![Op::PutCounters {
                         count: 1,
+                        counter: None,
                         target: "creatures",
                     }],
                     role: "creatures",
@@ -2545,6 +2557,7 @@ fn earth_kings_lieutenant() -> Card {
                 ProgramKind::Triggered,
                 vec![Op::PutCounters {
                     count: 1,
+                    counter: None,
                     target: "each:other_ally_creature_you_control",
                 }],
             )
@@ -2554,6 +2567,7 @@ fn earth_kings_lieutenant() -> Card {
                 ProgramKind::Triggered,
                 vec![Op::PutCounters {
                     count: 1,
+                    counter: None,
                     target: "source",
                 }],
             )
@@ -2679,6 +2693,7 @@ fn fire_sages() -> Card {
                 ProgramKind::Activated,
                 vec![Op::PutCounters {
                     count: 1,
+                    counter: None,
                     target: "source",
                 }],
             )
@@ -2919,6 +2934,7 @@ fn jeong_jeongs_deserters() -> Card {
             ProgramKind::Triggered,
             vec![Op::PutCounters {
                 count: 1,
+                counter: None,
                 target: "beneficiary",
             }],
         )
@@ -3681,6 +3697,7 @@ fn abandoned_air_temple() -> Card {
             ProgramKind::Activated,
             vec![Op::PutCounters {
                 count: 1,
+                counter: None,
                 target: "each:creature_you_control",
             }],
         )
@@ -4010,6 +4027,129 @@ fn the_walls_of_ba_sing_se() -> Card {
             }],
         )],
         registry_name: "The Walls of Ba Sing Se",
+        text_box,
+    }
+}
+
+fn rowdy_snowballers() -> Card {
+    let text_box = "When this creature enters, tap target creature an opponent controls and put a stun counter on it. (If a permanent with a stun counter would become untapped, remove one from it instead.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{U}"),
+            subtypes: Some(vec!["Human", "Peasant", "Ally"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(2)),
+            toughness: Some(2),
+            ..Default::default()
+        },
+        key: "tla.rowdy_snowballers",
+        programs: vec![Program::new(
+            "stun_on_entry",
+            ProgramKind::Triggered,
+            vec![
+                Op::Tap { target: "target_0" },
+                Op::PutCounters {
+                    count: 1,
+                    counter: Some(CounterKind::Stun),
+                    target: "target_0",
+                },
+            ],
+        )
+        .targets(vec![Target::one(
+            "target_0",
+            Selector::CreatureOpponentControls,
+        )])
+        .trigger(Trigger::new(Event::EntersBattlefield, Subject::This))],
+        registry_name: "Rowdy Snowballers",
+        text_box,
+    }
+}
+
+fn mai_jaded_edge() -> Card {
+    let text_box = "Prowess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)\nExhaust — {3}: Put a double strike counter on Mai. (Activate each exhaust ability only once.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{R}"),
+            subtypes: Some(vec!["Human", "Noble"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(1)),
+            toughness: Some(3),
+            supertypes: Some(vec!["legendary"]),
+            ..Default::default()
+        },
+        key: "tla.mai_jaded_edge",
+        programs: vec![
+            Program::prowess("prowess"),
+            Program::new(
+                "exhaust_double_strike",
+                ProgramKind::Activated,
+                vec![Op::PutCounters {
+                    count: 1,
+                    counter: Some(CounterKind::DoubleStrike),
+                    target: "source",
+                }],
+            )
+            .cost(Cost {
+                mana: Some("3"),
+                exhaust: Some(true),
+                ..Default::default()
+            }),
+        ],
+        registry_name: "Mai, Jaded Edge",
+        text_box,
+    }
+}
+
+fn heartless_act() -> Card {
+    let text_box = "Choose one —\n• Destroy target creature with no counters on it.\n• Remove up to three counters from target creature.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{B}"),
+            types: vec![CardType::Instant],
+            ..Default::default()
+        },
+        key: "tla.heartless_act",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::Modal {
+                modes: vec![
+                    vec![Op::TargetClause {
+                        body: vec![Op::Destroy { target: "target_0" }],
+                        role: "target_0",
+                    }],
+                    vec![Op::TargetClause {
+                        body: vec![Op::RemoveCounters {
+                            count: 3,
+                            target: "target_1",
+                        }],
+                        role: "target_1",
+                    }],
+                ],
+            }],
+        )
+        .cost(Cost::mana("{1}{B}"))
+        .targets(vec![
+            Target::one(
+                "target_0",
+                Selector::Permanent {
+                    predicate: Predicate::All {
+                        predicates: vec![
+                            Predicate::CardType {
+                                value: CardType::Creature,
+                            },
+                            Predicate::NoCounters,
+                        ],
+                    },
+                },
+            ),
+            Target::one("target_1", Selector::Creature),
+        ])
+        .inferred()],
+        registry_name: "Heartless Act",
         text_box,
     }
 }

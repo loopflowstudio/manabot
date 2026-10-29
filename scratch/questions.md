@@ -26,9 +26,8 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
 
 ## T3 (6875f0) assumptions — 2026-10-29
 
-- Support at this base still reads `qualifications.json`; the four new lands get
-  entries there so the world supports them. Jack Heart's steer says tests never
-  gate support; those entries go away when T1's gate removal is synced.
+- Support is by definition since the T1 sync (86ebe9ccf); the four lands'
+  qualification entries went with `qualifications.json`.
 - Per the same steer, only this batch's new tests went to `managym/tests/cards/`;
   moving T1's existing per-card tests is left to T1/PR #394 to avoid conflicts.
 - Conditional entry reads the card owner's battlefield (cards enter under owner
@@ -38,3 +37,12 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   left to T1's world release rather than regenerated here.
 - Zookeeper's creature-type count excludes a fixed noncreature-subtype list rather
   than a creature-type registry (none exists); revisit if a pool card breaks it.
+- Non-+1/+1 counters (stun, fire, double strike) live in `Permanent.counters`,
+  serialized only when present, beside `plus1_counters`; state hashes and the
+  frozen observation width are unchanged. Observations do not yet show stun or
+  fire counters (double strike shows as a keyword); adding them is a shape change
+  left for a later observation version.
+- Heartless Act's "remove up to three counters" is a repeated resolution-time
+  modal choice (one counter of a present kind, or stop); the caster chooses.
+- Exhaust is recorded per incarnation (`exhausted_abilities`); CR 702.177b
+  "haven't activated an exhaust ability this turn" effects are not modeled.

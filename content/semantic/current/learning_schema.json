@@ -37,6 +37,11 @@
     "controller": {
       "you": 1
     },
+    "counter": {
+      "double_strike": 1,
+      "fire": 2,
+      "stun": 3
+    },
     "destination": {
       "hand": 1
     },
@@ -74,6 +79,7 @@
       "card_type": 3,
       "flying": 7,
       "mana_value_at_least": 8,
+      "no_counters": 14,
       "not_card_types": 4,
       "not_subtypes": 9,
       "power_at_least": 10,
@@ -166,6 +172,7 @@
       "Pirate": 44,
       "Plains": 18,
       "Porcupine": 58,
+      "Ranger": 64,
       "Rebel": 45,
       "Scout": 19,
       "Seal": 20,
@@ -175,6 +182,7 @@
       "Swamp": 47,
       "Treasure": 55,
       "Treefolk": 48,
+      "Wall": 65,
       "Warrior": 22
     },
     "supertype": {
@@ -218,6 +226,7 @@
     "controller_only": 81,
     "cost": 7,
     "count": 8,
+    "counter": 88,
     "counters": 62,
     "definition_ref": 9,
     "destination": 10,
@@ -226,6 +235,7 @@
     "enters_tapped": 84,
     "enters_tapped_unless": 85,
     "event": 12,
+    "exhaust": 89,
     "first_on_own_turn": 64,
     "generic": 65,
     "if": 13,
@@ -356,6 +366,7 @@
     "put_counters": 5,
     "put_counters_value": 33,
     "put_top_cards_in_hand": 3,
+    "remove_counters": 66,
     "restrict_blocking": 12,
     "return_graveyard_target": 42,
     "return_to_hand": 14,

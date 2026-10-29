@@ -101,6 +101,7 @@ pub enum Opcode {
     ExileIfDies = 63,
     AddSubtype = 64,
     OptionalPayment = 65,
+    RemoveCounters = 66,
 }
 
 impl Opcode {
@@ -171,6 +172,7 @@ impl Opcode {
             63 => Opcode::ExileIfDies,
             64 => Opcode::AddSubtype,
             65 => Opcode::OptionalPayment,
+            66 => Opcode::RemoveCounters,
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -235,6 +237,8 @@ pub enum Predicate {
     PowerAtLeast(i64),
     ManaValueAtLeast(u8),
     Flying,
+    /// "with no counters on it" (any kind, CR 122).
+    NoCounters,
     TypesAny(Vec<String>),
     SubtypesAny(Vec<String>),
     NotSubtypes(Vec<String>),
@@ -281,6 +285,11 @@ pub enum Step {
         if_paid: Vec<Step>,
         if_declined: Vec<Step>,
     },
+    /// "Remove up to `count` counters from [target]", any kinds.
+    RemoveCounters {
+        target: String,
+        count: i64,
+    },
 
     SearchBasicLands {
         count: usize,
@@ -318,6 +327,8 @@ pub enum Step {
     PutCounters {
         target: String,
         count: i64,
+        /// Counter kind name; absent means +1/+1.
+        counter: Option<String>,
     },
     GainLife {
         amount: i64,
@@ -863,7 +874,7 @@ impl<'a> BoundPack<'a> {
                     tapped_and_attacking: *tapped_and_attacking,
                 });
             }
-            Step::PutCounters { target, count } => trace.push(TraceEvent::PutCounters {
+            Step::PutCounters { target, count, .. } => trace.push(TraceEvent::PutCounters {
                 target: target.clone(),
                 count: *count,
             }),
@@ -958,6 +969,7 @@ impl<'a> BoundPack<'a> {
             | Step::CreateNonlegendaryCopy
             | Step::ModifyControlled { .. }
             | Step::OptionalPayment { .. }
+            | Step::RemoveCounters { .. }
             | Step::SearchBasicLands { .. }
             | Step::Sacrifice { .. }
             | Step::DealDamageToController { .. }
@@ -1089,6 +1101,10 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
             subtype: str_field(value, "subtype")?.to_owned(),
         },
         Opcode::GrantFlashback => Step::GrantFlashback,
+        Opcode::RemoveCounters => Step::RemoveCounters {
+            target: str_field(value, "target")?.to_owned(),
+            count: i64_field(value, "count")?,
+        },
         Opcode::GrantMana => Step::GrantMana {
             predicates: array_field(value, "predicates")?
                 .iter()
@@ -1151,6 +1167,7 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         Opcode::PutCounters => Step::PutCounters {
             target: str_field(value, "target")?.to_owned(),
             count: i64_field(value, "count")?,
+            counter: opt_str_field(value, "counter")?.map(str::to_owned),
         },
         Opcode::GainLife => Step::GainLife {
             amount: i64_field(value, "amount")?,
@@ -1424,6 +1441,7 @@ fn parse_predicate(value: &Value) -> Result<Predicate, IrError> {
                 .map_err(|_| IrError::Malformed("mana value exceeds u8".into()))?,
         ),
         "flying" => Predicate::Flying,
+        "no_counters" => Predicate::NoCounters,
         "types_any" => Predicate::TypesAny(str_array_field(value, "values")?),
         "subtypes_any" => Predicate::SubtypesAny(str_array_field(value, "values")?),
         "not_subtypes" => Predicate::NotSubtypes(str_array_field(value, "values")?),

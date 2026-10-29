@@ -7,6 +7,7 @@ use managym::{
     flow::turn::StepKind,
     state::{
         game_object::{PermanentId, PlayerId, Target},
+        permanent::CounterKind,
         zone::ZoneType,
     },
 };
@@ -14,8 +15,8 @@ use managym::{
 use super::{
     helpers::Scenario,
     support::{
-        activate, can_activate, cast, choose, counters, has_action, pass_until, play_land, settle,
-        setup, tapped, to_hand,
+        activate, can_activate, cast, choose, counters, counters_of, has_action, pass_until,
+        play_land, settle, setup, tapped, to_hand,
     },
 };
 
@@ -357,4 +358,130 @@ fn foggy_swamp_hunters_gain_lifelink_and_menace_after_two_draws() {
         !observed_keywords(&s, hunters).lifelink,
         "only its controller's draws count"
     );
+}
+
+/// CR 122.1d: the stun counter replaces the target's next untap, then is gone.
+#[test]
+fn rowdy_snowballers_stun_replaces_the_next_untap() {
+    let mut s = setup(&["Rowdy Snowballers", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.set_player_mana_pool(0, "2U");
+    cast(&mut s, "Rowdy Snowballers");
+    s.pass_priority();
+    s.choose_target(Target::Permanent(ogre));
+    settle(&mut s);
+    assert!(tapped(&s, ogre));
+    assert_eq!(counters_of(&s, ogre, CounterKind::Stun), 1);
+
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert!(
+        tapped(&s, ogre),
+        "the untap step removes the stun counter instead"
+    );
+    assert_eq!(counters_of(&s, ogre, CounterKind::Stun), 0);
+
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert!(!tapped(&s, ogre), "the next untap step untaps it");
+}
+
+/// CR 702.177a, 122.1b: exhaust activates once; the double strike counter
+/// grants double strike for as long as it remains.
+#[test]
+fn mai_jaded_edge_exhausts_into_a_double_strike_counter() {
+    let mut s = setup(&["Mai, Jaded Edge"]);
+    let mai = s.force_permanent_on_battlefield(0, "Mai, Jaded Edge");
+    assert!(!observed_keywords(&s, mai).double_strike);
+    s.set_player_mana_pool(0, "3");
+    activate(&mut s, mai, 0);
+    settle(&mut s);
+    assert_eq!(counters_of(&s, mai, CounterKind::DoubleStrike), 1);
+    assert!(observed_keywords(&s, mai).double_strike);
+
+    s.set_player_mana_pool(0, "3");
+    assert!(!can_activate(&mut s, mai, 0), "exhaust activates only once");
+
+    s.game_mut().state.permanents[mai]
+        .as_mut()
+        .unwrap()
+        .summoning_sick = false;
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    s.declare_attack();
+    s.advance_to_active_step(0, StepKind::End);
+    s.assert_life(1, 18);
+}
+
+fn choose_mode(s: &mut Scenario, mode: usize) {
+    choose(
+        s,
+        |a| matches!(a, Action::ChooseMode { mode: m, .. } if *m == mode),
+    );
+}
+
+fn add_counters(s: &mut Scenario, id: PermanentId, kind: CounterKind, count: i32) {
+    s.game_mut().state.permanents[id]
+        .as_mut()
+        .unwrap()
+        .change_counters(kind, count);
+}
+
+#[test]
+fn heartless_act_destroys_only_a_creature_with_no_counters() {
+    let mut s = setup(&["Heartless Act", "Gray Ogre"]);
+    let plain = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let stunned = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    add_counters(&mut s, stunned, CounterKind::Stun, 1);
+    s.set_player_mana_pool(0, "1B");
+    cast(&mut s, "Heartless Act");
+    choose_mode(&mut s, 0);
+    assert!(
+        !s.choose_target(Target::Permanent(stunned)),
+        "a stun counter is a counter"
+    );
+    assert!(s.choose_target(Target::Permanent(plain)));
+    settle(&mut s);
+    assert!(s.game().state.permanents[plain].is_none());
+    assert!(s.game().state.permanents[stunned].is_some());
+}
+
+/// The caster chooses each removed counter's kind and may stop early.
+#[test]
+fn heartless_act_removes_up_to_three_counters_of_chosen_kinds() {
+    let mut s = setup(&["Heartless Act", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    add_counters(&mut s, ogre, CounterKind::PlusOnePlusOne, 2);
+    add_counters(&mut s, ogre, CounterKind::Stun, 2);
+    s.set_player_mana_pool(0, "1B");
+    cast(&mut s, "Heartless Act");
+    choose_mode(&mut s, 1);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    // Modes: +1/+1, stun, stop.
+    assert_eq!(s.action_space().actions.len(), 3);
+    choose_mode(&mut s, 1);
+    choose_mode(&mut s, 1);
+    // Stun counters are gone; only +1/+1 and stop remain.
+    assert_eq!(s.action_space().actions.len(), 2);
+    choose_mode(&mut s, 1);
+    settle(&mut s);
+    assert_eq!(counters_of(&s, ogre, CounterKind::Stun), 0);
+    assert_eq!(counters(&s, ogre), 2);
+
+    let mut s = setup(&["Heartless Act", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    add_counters(&mut s, ogre, CounterKind::PlusOnePlusOne, 5);
+    s.set_player_mana_pool(0, "1B");
+    cast(&mut s, "Heartless Act");
+    choose_mode(&mut s, 1);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    for _ in 0..3 {
+        choose_mode(&mut s, 0);
+    }
+    assert_eq!(
+        s.action_space().kind,
+        ActionSpaceKind::Priority,
+        "three is the limit"
+    );
+    assert_eq!(counters(&s, ogre), 2);
 }

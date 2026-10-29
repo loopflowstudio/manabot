@@ -287,8 +287,12 @@ pub struct ActivatedAbilityDefinition {
     /// Waterbend cost (CR-style alternative payment): the generic part of
     /// `mana_cost` may be paid by tapping untapped artifacts/creatures the
     /// activating player controls, {1} per permanent tapped. Taps count as
-    /// cost payment rather than a mana ability (CR 702.177).
+    /// cost payment rather than a mana ability (CR 701.67).
     pub waterbend: bool,
+    /// "Exhaust — [Cost]: [Effect]": activate only once per incarnation
+    /// (CR 702.177a); `Permanent::exhausted_abilities` records activations.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub exhaust: bool,
     pub effect: Effect,
 }
 

@@ -10,6 +10,7 @@ use crate::{
     state::{
         card::ReplacementEffect,
         game_object::{CardId, EntityId, ObjectRef, PermanentId, PlayerId},
+        permanent::CounterKind,
         zone::ZoneType,
     },
 };
@@ -24,11 +25,6 @@ pub(crate) struct BattlefieldEntry {
 pub(crate) enum ProposedDamageTarget {
     Player(PlayerId),
     Object(ObjectRef),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum CounterKind {
-    PlusOnePlusOne,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -313,7 +309,7 @@ impl Game {
             }
             ProposedEvent::CounterChange {
                 target,
-                kind: CounterKind::PlusOnePlusOne,
+                kind,
                 delta,
             } => {
                 let Ok(permanent_id) = self.lookup_current_permanent(target) else {
@@ -323,9 +319,7 @@ impl Game {
                 let Some(permanent) = self.state.permanents[permanent_id].as_mut() else {
                     return false;
                 };
-                let old = permanent.plus1_counters;
-                permanent.plus1_counters = old.saturating_add(delta).max(0);
-                permanent.plus1_counters != old
+                permanent.change_counters(kind, delta)
             }
             ProposedEvent::ZoneMove {
                 card,
@@ -342,10 +336,23 @@ impl Game {
         permanent_id: PermanentId,
         delta: i32,
     ) -> bool {
+        self.change_counters(permanent_id, CounterKind::PlusOnePlusOne, delta)
+    }
+
+    pub(crate) fn change_counters(
+        &mut self,
+        permanent_id: PermanentId,
+        kind: CounterKind,
+        delta: i32,
+    ) -> bool {
         let Some(target) = self.permanent_object_ref(permanent_id) else {
             return false;
         };
-        self.change_plus_one_counters_on_object(target, delta)
+        self.apply_proposed_event(ProposedEvent::CounterChange {
+            target,
+            kind,
+            delta,
+        })
     }
 
     /// Exact-object counter mutation for rules continuations.

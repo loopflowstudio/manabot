@@ -154,6 +154,9 @@ pub struct Cost {
     /// "Activate only as a sorcery" (CR 602.5d).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sorcery_timing: Option<bool>,
+    /// "Exhaust — [Cost]": activate only once (CR 702.177a).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exhaust: Option<bool>,
 }
 
 impl Cost {
@@ -255,8 +258,16 @@ pub enum Op {
         #[serde(skip_serializing_if = "Option::is_none")]
         per_creature_type_max: Option<i32>,
     },
+    /// Remove up to `count` counters of any kinds, chosen one at a time.
+    RemoveCounters {
+        count: i32,
+        target: &'static str,
+    },
     PutCounters {
         count: i32,
+        /// Absent for +1/+1 counters.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        counter: Option<CounterKind>,
         target: &'static str,
     },
     ReturnToHandDrawIfControlled {
@@ -499,6 +510,7 @@ pub enum Predicate {
     ManaValueAtLeast { value: i32 },
     SubtypesAny { values: Vec<&'static str> },
     Flying,
+    NoCounters,
     NotSubtypes { values: Vec<&'static str> },
     TypesAny { values: Vec<CardType> },
     PowerAtLeast { value: i32 },
@@ -601,6 +613,15 @@ pub enum Keyword {
     Reach,
     Trample,
     Vigilance,
+}
+
+/// Counter kinds other than +1/+1 (CR 122).
+#[derive(Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CounterKind {
+    DoubleStrike,
+    Fire,
+    Stun,
 }
 
 #[derive(Serialize)]

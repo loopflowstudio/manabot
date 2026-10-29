@@ -1,7 +1,9 @@
 // action.rs
 // Player action computation and action space construction.
 
-use crate::agent::ability_description::{mana_description, trigger_description};
+use crate::agent::ability_description::{
+    counter_description, mana_description, trigger_description,
+};
 
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
@@ -68,6 +70,9 @@ impl Game {
                         [Effect::SearchBasicLand { .. }] => {
                             Some("Search your library for a basic land".into())
                         }
+                        [Effect::RemoveCounters {
+                            chosen: Some(kind), ..
+                        }] => Some(format!("Remove a {} counter", counter_description(*kind))),
                         _ => None,
                     },
                     _ => None,
@@ -192,6 +197,7 @@ impl Game {
                 }
                 if (ability.own_turn_only && self.active_player() != player)
                     || (ability.sorcery_timing && !self.can_cast_sorceries(player))
+                    || (ability.exhaust && permanent.exhausted(ability_index))
                     || self.state.players[player.0].life < ability.life_cost as i32
                 {
                     continue;
