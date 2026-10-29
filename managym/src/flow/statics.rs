@@ -210,9 +210,19 @@ impl Game {
         if predicate.with_counter && permanent.plus1_counters <= 0 {
             return false;
         }
+        if predicate.attacking
+            && !self
+                .state
+                .combat
+                .as_ref()
+                .is_some_and(|combat| combat.attackers.contains(&permanent_id))
+        {
+            return false;
+        }
         let mut predicate = predicate.clone();
         predicate.flying = false;
         predicate.with_counter = false;
+        predicate.attacking = false;
         let has_subtype = |name: &str| {
             card.has_subtype(name) || permanent.temp_subtypes.iter().any(|s| s == name)
         };

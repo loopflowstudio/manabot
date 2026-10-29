@@ -12,6 +12,7 @@ use rand_chacha::ChaCha8Rng;
 use crate::{
     agent::{action::ActionSpace, behavior_tracker::BehaviorTracker},
     flow::{
+        cast_permission::CastPermissions,
         combat::CombatState,
         decision::SuspendedResolution,
         event_log::EventLog,
@@ -170,6 +171,7 @@ enum UndoEntry {
     TriggerPlacement(Box<Option<TriggerPlacement>>),
     DelayedTriggers(Vec<DelayedTrigger>),
     ExileLinks(Vec<ExileLink>),
+    CastPermissions(Box<CastPermissions>),
     SuspendedDecision(Box<Option<SuspendedResolution>>),
     TriggerEnqueueCounter(u64),
     ActionSpace(Box<Option<ActionSpace>>),
@@ -209,6 +211,11 @@ impl UndoEntry {
             Self::PendingTriggers(values) => vec_bytes(values),
             Self::DelayedTriggers(values) => vec_bytes(values),
             Self::ExileLinks(values) => vec_bytes(values),
+            Self::CastPermissions(values) => {
+                size_of::<CastPermissions>()
+                    + vec_bytes(&values.exile_grants)
+                    + vec_bytes(&values.hand_only)
+            }
             Self::ActionSpace(space) => (**space).as_ref().map_or(0, |space| {
                 size_of::<ActionSpace>() + vec_bytes(&space.actions) + vec_bytes(&space.focus)
             }),
@@ -302,6 +309,7 @@ impl UndoEntry {
             Self::TriggerPlacement(old) => game.state.trigger_placement = *old,
             Self::DelayedTriggers(old) => game.state.delayed_triggers = old,
             Self::ExileLinks(old) => game.state.exile_links = old,
+            Self::CastPermissions(old) => game.state.cast_permissions = *old,
             Self::SuspendedDecision(old) => game.state.suspended_decision = *old,
             Self::TriggerEnqueueCounter(old) => game.state.trigger_enqueue_counter = old,
             Self::ActionSpace(old) => game.current_action_space = *old,
@@ -688,6 +696,12 @@ impl Game {
 
     pub(crate) fn journal_exile_links(&mut self) {
         self.record_undo(UndoEntry::ExileLinks(self.state.exile_links.clone()));
+    }
+
+    pub(crate) fn journal_cast_permissions(&mut self) {
+        self.record_undo(UndoEntry::CastPermissions(Box::new(
+            self.state.cast_permissions.clone(),
+        )));
     }
 
     pub(crate) fn journal_suspended_decision(&mut self) {

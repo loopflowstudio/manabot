@@ -28,6 +28,12 @@ pub(crate) struct TriggerSourceSnapshot {
 }
 
 impl Game {
+    /// Whether `target` is the exact permanent whose ability triggered.
+    fn is_trigger_source(&self, trigger: &PendingTrigger, target: Target) -> bool {
+        matches!(target, Target::Permanent(id)
+            if trigger.source_ref.is_some() && self.permanent_object_ref(id) == trigger.source_ref)
+    }
+
     fn trigger_requirements(
         &self,
         trigger: &PendingTrigger,
@@ -69,6 +75,7 @@ impl Game {
             .any(|(chosen, index)| *index == trigger.requirement_index && *chosen == target);
         if trigger.controller != player
             || duplicate
+            || (requirement.another && self.is_trigger_source(trigger, target))
             || !self.target_is_legal(target, &requirement.spec, player)
         {
             return Err(AgentError("illegal trigger target".into()));
@@ -156,6 +163,9 @@ impl Game {
                 let legal: Vec<_> = self
                     .legal_targets_for_spec(&requirement.spec, trigger.controller)
                     .into_iter()
+                    .filter(|target| {
+                        !(requirement.another && self.is_trigger_source(&trigger, *target))
+                    })
                     .filter(|target| {
                         !trigger.targets.iter().zip(&trigger.target_req_indices).any(
                             |(chosen, index)| {

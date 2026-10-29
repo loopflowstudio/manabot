@@ -29,6 +29,9 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
 - Printed flashback plus Iroh's grant: the grant's cost is used (dominant for
   every TLA card; a non-dominated alternative would need a cost choice).
 - No schema 9 yet: schema 8 appended subtypes/fields/predicates per slice.
+  Airbend appended opcodes 66–68 (and field `except`, predicate `attacking`)
+  to schema 8 too: main is schema 7, so 8 is unreleased like w16, and
+  `max_opcode[8]` moved 65 → 68 rather than opening schema 9.
   Landcycling reuses `search_basic_land` (any card of the subtype) and
   restricted mana reuses opcode 56 with `spend_only`; a distinct
   `search_library` or restricted `add_mana` opcode would be schema 9.
@@ -46,3 +49,8 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   "Lesson-only mana" (relabel needs a representation version bump).
 - `PlayerVitals` bound 32 → 40 bytes (boxed restricted classes); `UndoEntry`
   ≤ 72. Non-tap mana abilities are admitted when `once_each_turn` bounds them.
+- Avatar's Wrath's hand-only restriction ends at the start of its caster's
+  next untap step and blocks flashback as well as exile grants. Mass airbend
+  exiles creatures one at a time (no simultaneous-batch leave event).
+- "Other target" (`another`) is enforced for triggered abilities; activated
+  abilities already never offer their source. Spells need no source check.

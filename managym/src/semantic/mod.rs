@@ -105,6 +105,9 @@ pub enum Opcode {
     ExileIfDies = 63,
     AddSubtype = 64,
     OptionalPayment = 65,
+    Airbend = 66,
+    AirbendAll = 67,
+    OpponentsCastOnlyFromHand = 68,
 }
 
 impl Opcode {
@@ -175,6 +178,9 @@ impl Opcode {
             63 => Opcode::ExileIfDies,
             64 => Opcode::AddSubtype,
             65 => Opcode::OptionalPayment,
+            66 => Opcode::Airbend,
+            67 => Opcode::AirbendAll,
+            68 => Opcode::OpponentsCastOnlyFromHand,
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -239,6 +245,7 @@ pub enum Predicate {
     ManaValueAtLeast(u8),
     Flying,
     WithCounter,
+    Attacking,
     TypesAny(Vec<String>),
     SubtypesAny(Vec<String>),
     NotSubtypes(Vec<String>),
@@ -416,6 +423,14 @@ pub enum Step {
     Exile {
         target: String,
     },
+    Airbend {
+        target: String,
+    },
+    AirbendAll {
+        except: String,
+        predicate: Predicate,
+    },
+    OpponentsCastOnlyFromHand,
     BuffTargetValue {
         power: ValueExpression,
         toughness: Amount,
@@ -976,7 +991,10 @@ impl<'a> BoundPack<'a> {
             Step::OptionalDiscardDraw { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
             Step::DiscardTargetPlayer { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
             Step::Destroy { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
-            Step::Exile { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::Exile { .. }
+            | Step::Airbend { .. }
+            | Step::AirbendAll { .. }
+            | Step::OpponentsCastOnlyFromHand => trace.push(TraceEvent::RuleStep(step.clone())),
             Step::BuffTargetValue { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
             Step::ReturnToHandDrawIfControlled { .. } => {
                 trace.push(TraceEvent::RuleStep(step.clone()))
@@ -1294,6 +1312,14 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         Opcode::Exile => Step::Exile {
             target: str_field(value, "target")?.to_owned(),
         },
+        Opcode::Airbend => Step::Airbend {
+            target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::AirbendAll => Step::AirbendAll {
+            except: str_field(value, "except")?.to_owned(),
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
+        },
+        Opcode::OpponentsCastOnlyFromHand => Step::OpponentsCastOnlyFromHand,
         Opcode::BuffTargetValue => Step::BuffTargetValue {
             power: ValueExpression::parse(object_field(value, "power")?)?,
             toughness: Amount::parse(field(value, "toughness")?)?,
@@ -1441,6 +1467,7 @@ fn parse_predicate(value: &Value) -> Result<Predicate, IrError> {
         ),
         "flying" => Predicate::Flying,
         "with_counter" => Predicate::WithCounter,
+        "attacking" => Predicate::Attacking,
         "types_any" => Predicate::TypesAny(str_array_field(value, "values")?),
         "subtypes_any" => Predicate::SubtypesAny(str_array_field(value, "values")?),
         "not_subtypes" => Predicate::NotSubtypes(str_array_field(value, "values")?),

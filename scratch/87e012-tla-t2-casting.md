@@ -32,8 +32,18 @@ worktree, so new T2 cards read "unsupported" in this base until T1 lands.
   usable class spends first. Opcode 56 `add_lesson_mana` takes optional
   `spend_only` (omitted = Lesson spells). `cost_reduction_per` (Cost
   `affinity`) reduces generic activation cost.
+- Casting outside hand: `flow/cast_permission.rs` owns `GameState.cast_permissions`
+  — exact-`ObjectRef` exile grants (stale once the card leaves exile) and
+  `HandOnly` restrictions that override every non-hand permission until the
+  restricter's next untap. `Game::zone_cast_cost` is the one non-hand cost
+  authority (graveyard flashback, exile grants). Hash omits the field when empty.
+- Airbend = opcodes 66 `airbend {target}`, 67 `airbend_all {except, predicate}`
+  (inside a target clause; spares the chosen target), 68
+  `opponents_cast_only_from_hand`. `Exile {target: "source"}` exiles the resolving
+  spell; finalize leaves a spell that already left the stack. Targets take
+  `another` ("other target", trigger source excluded); predicate `attacking`.
 
-## Done (slices 1–2 at `648edee6b`, merged onto T1 at `f7b59aa99`; slice 3 uncommitted)
+## Done (slices 1–2 at `648edee6b`, merged onto T1 at `f7b59aa99`; slice 3 `afff1e1ed`)
 
 T1 defined 7 (Badgermole Cub, Dai Li Agents, Haru, Toph, Hermitic Herbalist,
 Iroh, Grand Lotus; witnesses in `tests/rules/`). T2 defined 17, each witnessed
@@ -43,7 +53,8 @@ Vinebender, Fire Nation Attacks, Rockalanche; slice 1: Canyon Crawler,
 Mongoose Lizard, Saber-Tooth Moose-Lion, Giant Koi, Rabaroo Troop, Team Avatar,
 Merchant of Many Hats; slice 2: Hog-Monkey, Rough Rhino Cavalry, Rebellious
 Captives; slice 3: Barrels of Blasting Jelly, Jasmine Dragon Tea Shop, White
-Lotus Hideout, Waterbending Scroll. 28 of 51 defined; 23 remain.
+Lotus Hideout, Waterbending Scroll; slice 4a: Aang, the Last Airbender,
+Airbending Lesson, Airbender's Reversal, Avatar's Wrath. 32 of 51 defined; 19 remain.
 
 ## Base: T1
 
@@ -56,11 +67,11 @@ stage*/sacrifice/interaction) into `tests/cards/` stays T1's (Jack Heart's
 
 ## Next slices (one PR)
 
-Slices 1–3 (card-zone activation, exhaust, restricted mana) are done; see Decisions.
+Slices 1–3 and 4a (airbend) are done; see Decisions.
 
-4. Next — airbend (exile + cast-for-{2} permission): Aang, Airbending Lesson,
-   Airbender's Reversal, Avatar's Wrath; exact-zone grants (Azula, Zuko, Hama,
-   Yue, Solstice Revelations, Sozin's Comet foretell).
+4b. Next — exact-zone grants extending `CastPermissions` (duration, own-turn,
+   flash, any-mana, land play, free cast during resolution): Zuko, Azula, Hama,
+   Yue, Solstice Revelations, Sozin's Comet foretell.
 5. Private search/choice (Aang's Journey, Elemental Teachings, Seismic Sense,
    Lost Days, Dai Li Indoctrination, Sparring Dummy), additional costs
    (Spirit Water Revival, Professor Zei, Sokka, United Front X).
@@ -71,4 +82,5 @@ Slices 1–3 (card-zone activation, exhaust, restricted mana) are done; see Deci
 
 ## Check
 
+2026-10-28 (slice 4a): debug `cargo test --tests --no-fail-fast` passes except the pre-existing semantic-conformance pair; `tests/cards` 34 pass; clippy/fmt clean; extension rebuilt; learning/current-content/package-boundary/optional-payments/policy-catalog pytest pass (stale `schema_version == 7` assertion fixed to 8). Earlier
 2026-10-28 (slice 3 + compress, realign): debug `cargo test --tests --no-fail-fast` passes except the pre-existing semantic-conformance pair (world/content-digest drift); `tests/cards` 29 pass; clippy/fmt clean; cp312 extension rebuilt on the final Rust and learning/current-content/package-boundary pytest 60 pass; world-change Python suite and Academy check deferred to gate.

@@ -12,6 +12,9 @@ pub struct CardPredicate {
     /// "with a +1/+1 counter on it": only permanents carry counters.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub with_counter: bool,
+    /// "attacking": only permanents declared as attackers this combat.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub attacking: bool,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub subtypes_any: Vec<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -67,7 +70,7 @@ impl CardPredicate {
     /// `animated_creature` treats the card as having the creature type in
     /// addition to its printed types (earthbent lands).
     pub fn matches(&self, card: &Card, power: i32, animated_creature: bool) -> bool {
-        if self.with_counter || (self.flying && !card.keywords.flying) {
+        if self.with_counter || self.attacking || (self.flying && !card.keywords.flying) {
             return false;
         }
         if !self.subtypes_any.is_empty() && !self.subtypes_any.iter().any(|s| card.has_subtype(s)) {

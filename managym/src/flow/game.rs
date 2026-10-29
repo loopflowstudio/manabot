@@ -10,6 +10,7 @@ use crate::{
     cards::content_pack::ContentPack,
     decision::ObjectCandidateAddress,
     flow::{
+        cast_permission::CastPermissions,
         combat::CombatState,
         decision::SuspendedResolution,
         event::GameEvent,
@@ -56,6 +57,8 @@ pub struct GameState {
     pub delayed_triggers: Vec<DelayedTrigger>,
     /// "Exiled until [source] leaves the battlefield" linkages (Jailer).
     pub exile_links: Vec<ExileLink>,
+    /// Exact-object casting grants (airbend) and hand-only restrictions.
+    pub cast_permissions: CastPermissions,
     /// A resolution paused on a mid-resolution player decision.
     pub suspended_decision: Option<SuspendedResolution>,
     pub trigger_enqueue_counter: u64,
@@ -228,6 +231,7 @@ impl Game {
             trigger_placement,
             delayed_triggers,
             exile_links,
+            cast_permissions,
             suspended_decision,
             trigger_enqueue_counter,
             rng,
@@ -255,6 +259,7 @@ impl Game {
                 trigger_placement: trigger_placement.clone(),
                 delayed_triggers: delayed_triggers.clone(),
                 exile_links: exile_links.clone(),
+                cast_permissions: cast_permissions.clone(),
                 suspended_decision: suspended_decision.clone(),
                 trigger_enqueue_counter: *trigger_enqueue_counter,
                 rng: rng.clone(),

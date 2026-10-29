@@ -63,6 +63,7 @@ impl Game {
         let definition = &self.state.cards[card];
         if !definition.types.is_spell()
             || !self.state.zones.contains(card, ZoneType::Graveyard, player)
+            || self.casts_only_from_hand(player)
         {
             return None;
         }
@@ -80,6 +81,16 @@ impl Game {
         }
     }
 
+    /// The cost `player` may pay to cast `card` from outside their hand:
+    /// graveyard flashback or an exact-object exile grant.
+    pub(crate) fn zone_cast_cost(&self, player: PlayerId, card: CardId) -> Option<ManaCost> {
+        match self.state.zones.zone_of(card)? {
+            ZoneType::Graveyard => self.flashback_cost(player, card),
+            ZoneType::Exile => self.exile_cast_cost(player, card),
+            _ => None,
+        }
+    }
+
     /// The cost to cast `card` right now: base (+ kicker if `kicked`),
     /// with affinity-style reductions applied (CR 601.2f).
     pub(crate) fn effective_spell_cost(
@@ -89,10 +100,10 @@ impl Game {
         kicked: bool,
     ) -> Option<ManaCost> {
         let card_ref = &self.state.cards[card];
-        let mut cost = if self.state.zones.zone_of(card) == Some(ZoneType::Graveyard) {
-            self.flashback_cost(player, card)?
-        } else {
+        let mut cost = if self.state.zones.zone_of(card) == Some(ZoneType::Hand) {
             card_ref.mana_cost.clone()?
+        } else {
+            self.zone_cast_cost(player, card)?
         };
         cost.purpose = ManaUse::spell(card_ref.subtypes.iter().map(String::as_str));
         if kicked {
@@ -170,7 +181,7 @@ impl Game {
         };
 
         if !self.state.zones.contains(card, ZoneType::Hand, player)
-            && self.flashback_cost(player, card).is_none()
+            && self.zone_cast_cost(player, card).is_none()
         {
             return Err(AgentError("card is not in a permitted casting zone".into()));
         }

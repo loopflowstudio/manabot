@@ -101,6 +101,9 @@ class Opcode(IntEnum):
     EXILE_IF_DIES = 63
     ADD_SUBTYPE = 64
     OPTIONAL_PAYMENT = 65
+    AIRBEND = 66
+    AIRBEND_ALL = 67
+    OPPONENTS_CAST_ONLY_FROM_HAND = 68
 
 
 PROGRAM_KINDS = {kind.name.lower(): kind for kind in ProgramKind}
@@ -172,6 +175,7 @@ PREDICATE_KINDS = {
     "power_at_least",
     "mana_value_at_least",
     "flying",
+    "attacking",
     "types_any",
     "subtypes_any",
     "not_subtypes",
@@ -236,6 +240,9 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "discard_target_player": ({"count", "target"}, set()),
     "destroy": ({"target"}, set()),
     "exile": ({"target"}, set()),
+    "airbend": ({"target"}, set()),
+    "airbend_all": ({"except", "predicate"}, set()),
+    "opponents_cast_only_from_hand": (set(), set()),
     "buff_target_value": ({"power", "toughness", "target"}, set()),
     "return_to_hand_draw_if_controlled": ({"target"}, set()),
     "modify_triggering_permanent": ({"counters", "keywords"}, set()),

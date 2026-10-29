@@ -214,6 +214,9 @@ pub struct Target {
     pub min: i32,
     pub role: &'static str,
     pub selector: Selector,
+    /// "other target": the ability's source object is not a legal choice.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub another: bool,
 }
 
 impl Target {
@@ -223,6 +226,7 @@ impl Target {
             max: 1,
             role,
             selector,
+            another: false,
         }
     }
 }
@@ -321,6 +325,20 @@ pub enum Op {
     Exile {
         target: &'static str,
     },
+    /// Airbend (CR 701.65): exile the target; while that exact card stays
+    /// exiled, its owner may cast it for {2} rather than its mana cost.
+    Airbend {
+        target: &'static str,
+    },
+    /// Airbend every permanent matching `predicate` except the object chosen
+    /// for the `except` role, if any (Avatar's Wrath).
+    AirbendAll {
+        except: &'static str,
+        predicate: Predicate,
+    },
+    /// "Until your next turn, your opponents can't cast spells from anywhere
+    /// other than their hands."
+    OpponentsCastOnlyFromHand,
     /// Without a destination, a basic land onto the battlefield tapped. With
     /// `Hand`, any card of `subtype` is revealed and put into hand
     /// (landcycling: "search your library for a Plains card").
@@ -559,18 +577,40 @@ pub struct SpendOnly {
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Predicate {
-    NotCardTypes { values: Vec<CardType> },
-    Subtype { value: &'static str },
-    All { predicates: Vec<Predicate> },
-    CardType { value: CardType },
-    PowerAtMost { value: i32 },
-    ManaValueAtLeast { value: i32 },
-    SubtypesAny { values: Vec<&'static str> },
+    NotCardTypes {
+        values: Vec<CardType>,
+    },
+    Subtype {
+        value: &'static str,
+    },
+    All {
+        predicates: Vec<Predicate>,
+    },
+    CardType {
+        value: CardType,
+    },
+    PowerAtMost {
+        value: i32,
+    },
+    ManaValueAtLeast {
+        value: i32,
+    },
+    SubtypesAny {
+        values: Vec<&'static str>,
+    },
     Flying,
     WithCounter,
-    NotSubtypes { values: Vec<&'static str> },
-    TypesAny { values: Vec<CardType> },
-    PowerAtLeast { value: i32 },
+    /// An attacking creature (CR 508.1k); only permanents in combat match.
+    Attacking,
+    NotSubtypes {
+        values: Vec<&'static str>,
+    },
+    TypesAny {
+        values: Vec<CardType>,
+    },
+    PowerAtLeast {
+        value: i32,
+    },
     Any,
 }
 

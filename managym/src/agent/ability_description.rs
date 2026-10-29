@@ -148,6 +148,7 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     let CardPredicate {
         flying,
         with_counter,
+        attacking,
         subtypes_any,
         not_subtypes,
         supertype,
@@ -201,6 +202,9 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     }
     if *with_counter {
         terms.push("with a +1/+1 counter on it".into());
+    }
+    if *attacking {
+        terms.insert(0, "attacking".into());
     }
     terms.join(" ")
 }
@@ -373,6 +377,10 @@ fn effect_description(effect: &Effect) -> Option<String> {
         DiscardTargetPlayer { count, target } => format!("{} discards {count} cards",target_description(target)),
         Destroy { target } => format!("Destroy {}",target_description(target)),
         Exile { target } => format!("Exile {}",target_description(target)),
+        Airbend { target } => format!("Airbend {}. Its owner may cast it from exile for {{2}}",target_description(target)),
+        AirbendAll { predicate } => format!("Airbend all other {}. Their owners may cast them from exile for {{2}}", predicate_description(predicate,"permanents")),
+        OpponentsCastOnlyFromHand => "Until your next turn, your opponents can't cast spells from anywhere other than their hands".to_string(),
+        ExileSourceSpell => "Exile this spell".to_string(),
         BuffTargetValue { power, toughness, target } => format!("{} gets +X/{toughness:+} until end of turn, where X is {}",target_description(target),value_description(power)),
         ReturnToHandDrawIfControlled { target } => format!("Return {} to its owner's hand. If you controlled it, draw a card",target_description(target)),
         BuffTriggeringPermanentValue { power, toughness } => format!("It gets +X/+Y until end of turn, where X is {} and Y is {}",value_description(power),value_description(toughness)),

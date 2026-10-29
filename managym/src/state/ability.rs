@@ -224,6 +224,21 @@ pub enum Effect {
     Exile {
         target: TargetSpec,
     },
+    /// Airbend (CR 701.65): exile the target; its owner may cast that exact
+    /// exiled card for {2} rather than its mana cost.
+    Airbend {
+        target: TargetSpec,
+    },
+    /// Airbend every battlefield permanent matching `predicate` other than
+    /// the clause's chosen target, if any.
+    AirbendAll {
+        predicate: CardPredicate,
+    },
+    /// Until the controller's next turn, opponents cast spells only from
+    /// their hands.
+    OpponentsCastOnlyFromHand,
+    /// The resolving spell exiles itself instead of going to the graveyard.
+    ExileSourceSpell,
     BuffTargetValue {
         power: EffectValue,
         toughness: i32,
@@ -493,6 +508,9 @@ pub struct TargetRequirement {
     pub spec: TargetSpec,
     pub min: usize,
     pub max: usize,
+    /// "other target": the ability's own source object is not a candidate.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub another: bool,
 }
 
 impl TargetRequirement {
@@ -501,11 +519,17 @@ impl TargetRequirement {
             spec,
             min: 1,
             max: 1,
+            another: false,
         }
     }
 
     pub fn up_to(max: usize, spec: TargetSpec) -> Self {
-        Self { spec, min: 0, max }
+        Self {
+            spec,
+            min: 0,
+            max,
+            another: false,
+        }
     }
 }
 
@@ -558,6 +582,7 @@ impl Effect {
             | Effect::DiscardTargetPlayer { target, .. }
             | Effect::Destroy { target }
             | Effect::Exile { target }
+            | Effect::Airbend { target }
             | Effect::BuffTargetValue { target, .. }
             | Effect::ReturnToHandDrawIfControlled { target } => Some(target),
             Effect::SearchBasicLand { .. }
@@ -596,6 +621,9 @@ impl Effect {
                 then.iter().find_map(|effect| effect.target_spec())
             }
             Effect::CreateNonlegendaryCopy
+            | Effect::AirbendAll { .. }
+            | Effect::OpponentsCastOnlyFromHand
+            | Effect::ExileSourceSpell
             | Effect::ModifyControlled { .. }
             | Effect::ModifyUntilEot { .. }
             | Effect::DrawCards { .. }
@@ -648,6 +676,7 @@ pub fn effect_target_requirements(effects: &[Effect]) -> Vec<TargetRequirement> 
                     spec: spec.clone(),
                     min: usize::from(!optional),
                     max: 1,
+                    another: false,
                 }]
             })
             .unwrap_or_default()

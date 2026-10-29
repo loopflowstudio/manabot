@@ -422,6 +422,42 @@ impl Game {
                 }
                 None
             }
+            Effect::Airbend { .. } => {
+                if let Some(Target::Permanent(id)) = self.present_primary_target(frame) {
+                    self.airbend_permanent(id);
+                }
+                None
+            }
+            Effect::AirbendAll { predicate } => {
+                let exempt = match self.present_primary_target(frame) {
+                    Some(Target::Permanent(id)) => Some(id),
+                    _ => None,
+                };
+                let chosen: Vec<_> = [PlayerId(0), PlayerId(1)]
+                    .into_iter()
+                    .flat_map(|player| self.battlefield_permanents(player))
+                    .filter(|id| {
+                        Some(*id) != exempt && self.permanent_matches_predicate(*id, predicate)
+                    })
+                    .collect();
+                for id in chosen {
+                    self.airbend_permanent(id);
+                }
+                None
+            }
+            Effect::OpponentsCastOnlyFromHand => {
+                self.restrict_opponent_to_hand(frame.controller);
+                None
+            }
+            Effect::ExileSourceSpell => {
+                if let Some(card) = frame
+                    .source
+                    .filter(|card| self.find_spell_on_stack_index(*card).is_some())
+                {
+                    self.move_card(card, ZoneType::Exile);
+                }
+                None
+            }
             Effect::BuffTargetValue {
                 power,
                 toughness,

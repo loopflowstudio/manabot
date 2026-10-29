@@ -902,3 +902,190 @@ fn waterbending_scroll_draws_for_one_less_per_island() {
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 1);
     assert!(s.game().state.permanents[scroll].as_ref().unwrap().tapped);
 }
+
+fn card_of(s: &Scenario, id: PermanentId) -> CardId {
+    s.game().state.permanents[id].as_ref().unwrap().card
+}
+
+/// Airbend exiles the target and lets its owner, and only its owner, cast
+/// that exiled card for {2} instead of its mana cost. Lands are not offered.
+#[test]
+fn airbending_lesson_exiles_and_owner_recasts_for_two() {
+    let mut s = setup(&["Airbending Lesson", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let land = s.force_permanent_on_battlefield(1, "Mountain");
+    let ogre_card = card_of(&s, ogre);
+    let hand = s
+        .game()
+        .state
+        .zones
+        .zone_cards(ZoneType::Hand, PlayerId(0))
+        .len();
+    let lesson = cast(&mut s, "Airbending Lesson");
+    assert!(!offered_targets(&s).contains(&Target::Permanent(land)));
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.zones.zone_of(ogre_card),
+        Some(ZoneType::Exile)
+    );
+    assert_eq!(
+        s.game()
+            .state
+            .zones
+            .zone_cards(ZoneType::Hand, PlayerId(0))
+            .len(),
+        hand + 1
+    );
+    assert_eq!(
+        s.game().state.zones.zone_of(lesson),
+        Some(ZoneType::Graveyard)
+    );
+    // The airbender's controller cannot cast the opponent's card.
+    assert!(!can_cast(&mut s, ogre_card));
+
+    s.advance_to_active_step(1, StepKind::Main);
+    // {2} casts Gray Ogre ({2}{R}) from exile.
+    s.set_player_mana_pool(1, "2");
+    assert!(can_cast(&mut s, ogre_card));
+    cast_card(&mut s, ogre_card);
+    assert_eq!(s.game().state.players[1].mana_pool.total(), 0);
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(1, "Gray Ogre").len(), 1);
+}
+
+/// The permission belongs to the exact exiled object: once the card leaves
+/// exile, a later return to exile does not restore it.
+#[test]
+fn airbend_permission_ends_when_the_card_leaves_exile() {
+    let mut s = setup(&["Airbending Lesson", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let ogre_card = card_of(&s, ogre);
+    cast(&mut s, "Airbending Lesson");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    s.set_player_mana_pool(0, "2");
+    assert!(can_cast(&mut s, ogre_card));
+    s.game_mut().move_card(ogre_card, ZoneType::Graveyard);
+    s.game_mut().move_card(ogre_card, ZoneType::Exile);
+    assert!(!can_cast(&mut s, ogre_card));
+}
+
+/// Aang's entry airbends up to one other nonland permanent; casting a Lesson
+/// gives Aang lifelink until end of turn.
+#[test]
+fn aang_airbends_another_permanent_and_gains_lifelink_from_lessons() {
+    let mut s = setup(&["Aang, the Last Airbender", "Airbending Lesson", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let land = s.force_permanent_on_battlefield(1, "Plains");
+    let ogre_card = card_of(&s, ogre);
+    cast(&mut s, "Aang, the Last Airbender");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    let aang = s.battlefield_permanents_named(0, "Aang, the Last Airbender")[0];
+    let targets = offered_targets(&s);
+    assert!(targets.contains(&Target::Permanent(ogre)));
+    assert!(!targets.contains(&Target::Permanent(aang)));
+    assert!(!targets.contains(&Target::Permanent(land)));
+    assert!(s
+        .action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::Decline { .. })));
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.zones.zone_of(ogre_card),
+        Some(ZoneType::Exile)
+    );
+
+    assert!(!keywords(&s, aang).lifelink);
+    let blocker = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    cast(&mut s, "Airbending Lesson");
+    assert!(s.choose_target(Target::Permanent(blocker)));
+    // The cast trigger resolves above the Lesson.
+    settle(&mut s);
+    assert!(keywords(&s, aang).lifelink);
+    s.advance_to_active_step(1, StepKind::Main);
+    assert!(!keywords(&s, aang).lifelink);
+}
+
+/// Mode one destroys only an attacking creature; mode two airbends a creature
+/// its caster controls, which can then be recast for {2}.
+#[test]
+fn airbenders_reversal_destroys_an_attacker_or_airbends_your_creature() {
+    let mut s = setup(&["Airbender's Reversal", "Gray Ogre"]);
+    let attacker = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let idle = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    ready(&mut s, attacker);
+    ready(&mut s, idle);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        choose(&mut s, |a| {
+            matches!(a, Action::DeclareAttacker { permanent, attack, .. }
+                if *attack == (*permanent == attacker))
+        });
+    }
+    pass_until(&mut s, ActionSpaceKind::Priority);
+    s.set_player_mana_pool(0, "20WWWW");
+    cast(&mut s, "Airbender's Reversal");
+    mode(&mut s, 0);
+    let targets = offered_targets(&s);
+    assert!(targets.contains(&Target::Permanent(attacker)));
+    assert!(!targets.contains(&Target::Permanent(idle)));
+    assert!(s.choose_target(Target::Permanent(attacker)));
+    settle(&mut s);
+    assert!(s.game().state.permanents[attacker].is_none());
+
+    s.set_player_mana_pool(0, "20WWWW");
+    let idle_card = card_of(&s, idle);
+    cast(&mut s, "Airbender's Reversal");
+    mode(&mut s, 1);
+    assert!(s.choose_target(Target::Permanent(idle)));
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.zones.zone_of(idle_card),
+        Some(ZoneType::Exile)
+    );
+    s.advance_to_active_step(0, StepKind::Main);
+    s.set_player_mana_pool(0, "2");
+    assert!(can_cast(&mut s, idle_card));
+}
+
+/// Avatar's Wrath spares its optional target, airbends every other creature,
+/// exiles itself, and stops opponents casting from outside their hands until
+/// its caster's next turn; the caster may recast their own creatures at once.
+#[test]
+fn avatars_wrath_spares_one_and_restricts_opponents_until_your_next_turn() {
+    let mut s = setup(&["Avatar's Wrath", "Gray Ogre", "Craw Wurm"]);
+    let spared = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let own = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let wurm = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    let land = s.force_permanent_on_battlefield(1, "Forest");
+    let (own_card, wurm_card) = (card_of(&s, own), card_of(&s, wurm));
+    let wrath = cast(&mut s, "Avatar's Wrath");
+    assert!(s.choose_target(Target::Permanent(spared)));
+    settle(&mut s);
+    assert!(s.game().state.permanents[spared].is_some());
+    assert!(s.game().state.permanents[land].is_some());
+    assert_eq!(
+        s.game().state.zones.zone_of(own_card),
+        Some(ZoneType::Exile)
+    );
+    assert_eq!(
+        s.game().state.zones.zone_of(wurm_card),
+        Some(ZoneType::Exile)
+    );
+    assert_eq!(s.game().state.zones.zone_of(wrath), Some(ZoneType::Exile));
+
+    s.set_player_mana_pool(0, "2");
+    assert!(can_cast(&mut s, own_card));
+
+    s.advance_to_active_step(1, StepKind::Main);
+    s.set_player_mana_pool(1, "20GGGG");
+    assert!(!can_cast(&mut s, wurm_card));
+
+    s.advance_to_active_step(0, StepKind::Main);
+    s.advance_to_active_step(1, StepKind::Main);
+    s.set_player_mana_pool(1, "2");
+    assert!(can_cast(&mut s, wurm_card));
+}

@@ -1083,9 +1083,22 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         Step::Destroy { target } => Effect::Destroy {
             target: target_for(program, target)?,
         },
+        Step::Exile { target } if target == "source" => Effect::ExileSourceSpell,
         Step::Exile { target } => Effect::Exile {
             target: target_for(program, target)?,
         },
+        Step::Airbend { target } => Effect::Airbend {
+            target: target_for(program, target)?,
+        },
+        Step::AirbendAll { except, predicate } => {
+            if except != "current_target" {
+                return unsupported(program, "airbend_all excepts its clause's target");
+            }
+            Effect::AirbendAll {
+                predicate: predicate_card(predicate)?,
+            }
+        }
+        Step::OpponentsCastOnlyFromHand => Effect::OpponentsCastOnlyFromHand,
         Step::BuffTargetValue {
             power,
             toughness,
@@ -1206,6 +1219,7 @@ fn merge_predicate(result: &mut CardPredicate, predicate: &Predicate) -> Result<
     match predicate {
         Predicate::Flying => result.flying = true,
         Predicate::WithCounter => result.with_counter = true,
+        Predicate::Attacking => result.attacking = true,
         Predicate::PowerAtLeast(value) => set_once(
             &mut result.min_power,
             i32::try_from(*value).map_err(|_| IrError::Malformed("power exceeds i32".into()))?,
@@ -1378,6 +1392,7 @@ fn parse_target_requirement(
             .map_err(|_| malformed(program, "target min exceeds usize"))?,
         max: usize::try_from(u64_field(target, "max")?)
             .map_err(|_| malformed(program, "target max exceeds usize"))?,
+        another: opt_bool_field(target, "another")?.unwrap_or(false),
     })
 }
 

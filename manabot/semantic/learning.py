@@ -200,7 +200,7 @@ class LearningSchema:
 
         opcodes = _validate_id_map(raw.get("opcodes"), "learning_schema.opcodes")
         # Frozen schemas admit only the opcode prefix available at publication.
-        max_opcode = {2: 23, 3: 50, 4: 55, 5: 61, 6: 64, 7: 65, 8: 65}[version]
+        max_opcode = {2: 23, 3: 50, 4: 55, 5: 61, 6: 64, 7: 65, 8: 68}[version]
         expected_opcodes = {
             opcode.name.lower(): int(opcode)
             for opcode in Opcode
@@ -559,7 +559,7 @@ class _TokenBuilder:
         if isinstance(value, str):
             if field in {"mana", "mana_cost", "kicker", "flashback", "cost", "or_mana"}:
                 self.mana(value, f"{context}.{field}")
-            elif field in {"role", "sources", "target"}:
+            elif field in {"role", "sources", "target", "except"}:
                 self.role(value, roles)
             else:
                 self.enum(self._domain_for_string(field, value, context), value)
@@ -738,7 +738,10 @@ class _TokenBuilder:
                     )
                 self.field(field)
                 self.value(field, target[field], context="target", roles=roles)
-            unknown = set(target) - {"role", "min", "max", "selector"}
+            if "another" in target:
+                self.field("another")
+                self.value("another", target["another"], context="target", roles=roles)
+            unknown = set(target) - {"role", "min", "max", "selector", "another"}
             if unknown:
                 raise SemanticProjectionError(
                     f"program.targets[{index}]: unknown fields {sorted(unknown)}"

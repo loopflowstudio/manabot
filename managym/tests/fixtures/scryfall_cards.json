@@ -1,4 +1,19 @@
 {
+  "Aang, the Last Airbender": {
+    "name": "Aang, the Last Airbender",
+    "mana_cost": "{3}{W}",
+    "type_line": "Legendary Creature — Human Avatar Ally",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Flying",
+      "Airbend"
+    ],
+    "oracle_text": "Flying\nWhen Aang enters, airbend up to one other target nonland permanent. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)\nWhenever you cast a Lesson spell, Aang gains lifelink until end of turn.",
+    "colors": [
+      "W"
+    ]
+  },
   "Abandon Attachments": {
     "name": "Abandon Attachments",
     "mana_cost": "{1}{U/R}",
@@ -22,6 +37,34 @@
     "oracle_text": "Look at the top three cards of your library. Put one of those cards into your hand and the rest on the bottom of your library in any order. Put each of those cards into your hand instead if there are three or more Lesson cards in your graveyard.",
     "colors": [
       "U"
+    ]
+  },
+  "Airbender's Reversal": {
+    "name": "Airbender's Reversal",
+    "mana_cost": "{1}{W}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Airbend"
+    ],
+    "oracle_text": "Choose one —\n• Destroy target attacking creature.\n• Airbend target creature you control. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Airbending Lesson": {
+    "name": "Airbending Lesson",
+    "mana_cost": "{2}{W}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Airbend"
+    ],
+    "oracle_text": "Airbend target nonland permanent. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)\nDraw a card.",
+    "colors": [
+      "W"
     ]
   },
   "Allies at Last": {
@@ -58,6 +101,20 @@
     "toughness": "2",
     "keywords": [],
     "oracle_text": "Whenever another Ally you control enters, put a +1/+1 counter on this creature.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Avatar's Wrath": {
+    "name": "Avatar's Wrath",
+    "mana_cost": "{2}{W}{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Airbend"
+    ],
+    "oracle_text": "Choose up to one target creature, then airbend all other creatures. (Exile them. While each one is exiled, its owner may cast it for {2} rather than its mana cost.)\nUntil your next turn, your opponents can't cast spells from anywhere other than their hands.\nExile Avatar's Wrath.",
     "colors": [
       "W"
     ]

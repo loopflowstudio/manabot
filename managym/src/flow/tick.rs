@@ -235,6 +235,7 @@ impl Game {
             StepKind::Untap => {
                 // CR 502.2 — Active player untaps permanents they control.
                 let active = self.active_player();
+                self.expire_cast_restrictions(active);
                 self.mark_permanents_not_summoning_sick(active);
                 self.untap_all_permanents(active);
                 None

@@ -153,6 +153,10 @@ pub(super) fn cards() -> Vec<Card> {
         jasmine_dragon_tea_shop(),
         white_lotus_hideout(),
         waterbending_scroll(),
+        aang_the_last_airbender(),
+        airbending_lesson(),
+        airbenders_reversal(),
+        avatars_wrath(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -759,6 +763,7 @@ fn jet_freedom_fighter() -> Card {
                 }],
             )
             .targets(vec![Target {
+                another: false,
                 max: 2,
                 min: 0,
                 role: "target_0",
@@ -1330,6 +1335,7 @@ fn true_ancestry() -> Card {
         )
         .cost(Cost::mana("{1}{G}"))
         .targets(vec![Target {
+            another: false,
             max: 1,
             min: 0,
             role: "target_0",
@@ -1576,6 +1582,7 @@ fn curious_farm_animals() -> Card {
                 ..Default::default()
             })
             .targets(vec![Target {
+                another: false,
                 max: 1,
                 min: 0,
                 role: "target_0",
@@ -2128,6 +2135,7 @@ fn allies_at_last() -> Card {
         })
         .targets(vec![
             Target {
+                another: false,
                 max: 2,
                 min: 0,
                 role: "allies",
@@ -2438,6 +2446,7 @@ fn earth_kingdom_jailer() -> Card {
             vec![Op::ExileUntilSourceLeaves { target: "prisoner" }],
         )
         .targets(vec![Target {
+            another: false,
             max: 1,
             min: 0,
             role: "prisoner",
@@ -2524,6 +2533,7 @@ fn earth_kingdom_soldier() -> Card {
             }],
         )
         .targets(vec![Target {
+            another: false,
             max: 2,
             min: 0,
             role: "creatures",
@@ -2610,6 +2620,7 @@ fn fancy_footwork() -> Card {
         )
         .cost(Cost::mana("2W"))
         .targets(vec![Target {
+            another: false,
             max: 2,
             min: 1,
             role: "creatures",
@@ -4488,6 +4499,175 @@ fn waterbending_scroll() -> Card {
             ..Default::default()
         })],
         registry_name: "Waterbending Scroll",
+        text_box,
+    }
+}
+
+fn nonland_permanent() -> Selector {
+    Selector::Permanent {
+        predicate: Predicate::NotCardTypes {
+            values: vec![CardType::Land],
+        },
+    }
+}
+
+fn aang_the_last_airbender() -> Card {
+    let text_box = "Flying\nWhen Aang enters, airbend up to one other target nonland permanent. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)\nWhenever you cast a Lesson spell, Aang gains lifelink until end of turn.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{3}{W}"),
+            subtypes: Some(vec!["Human", "Avatar", "Ally"]),
+            supertypes: Some(vec!["Legendary"]),
+            types: vec![CardType::Creature],
+            keywords: Some(vec![Keyword::Flying]),
+            power: Some(PrintedPower::Fixed(3)),
+            toughness: Some(2),
+            ..Default::default()
+        },
+        key: "tla.aang_the_last_airbender",
+        programs: vec![
+            Program::new(
+                "enters",
+                ProgramKind::Triggered,
+                vec![Op::TargetClause {
+                    role: "permanent",
+                    body: vec![Op::Airbend {
+                        target: "current_target",
+                    }],
+                }],
+            )
+            .targets(vec![Target {
+                min: 0,
+                another: true,
+                ..Target::one("permanent", nonland_permanent())
+            }])
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::new(
+                "lesson_cast",
+                ProgramKind::Triggered,
+                vec![Op::GrantKeywords {
+                    duration: Duration::EndOfTurn,
+                    keywords: vec![Keyword::Lifelink],
+                    target: "source",
+                }],
+            )
+            .trigger(Trigger {
+                predicate: Some(Predicate::Subtype { value: "Lesson" }),
+                ..Trigger::new(Event::CastSpell, Subject::This)
+            }),
+        ],
+        registry_name: "Aang, the Last Airbender",
+        text_box,
+    }
+}
+
+fn airbending_lesson() -> Card {
+    let text_box = "Airbend target nonland permanent. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)\nDraw a card.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{W}"),
+            subtypes: Some(vec!["Lesson"]),
+            types: vec![CardType::Instant],
+            ..Default::default()
+        },
+        key: "tla.airbending_lesson",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![
+                Op::Airbend {
+                    target: "permanent",
+                },
+                Op::DrawCards { count: 1 },
+            ],
+        )
+        .cost(Cost::mana("{2}{W}"))
+        .targets(vec![Target::one("permanent", nonland_permanent())])
+        .inferred()],
+        registry_name: "Airbending Lesson",
+        text_box,
+    }
+}
+
+fn airbenders_reversal() -> Card {
+    let text_box = "Choose one —\n• Destroy target attacking creature.\n• Airbend target creature you control. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{W}"),
+            subtypes: Some(vec!["Lesson"]),
+            types: vec![CardType::Instant],
+            ..Default::default()
+        },
+        key: "tla.airbender_s_reversal",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::Modal {
+                modes: vec![
+                    vec![Op::Destroy { target: "attacker" }],
+                    vec![Op::Airbend { target: "own" }],
+                ],
+            }],
+        )
+        .cost(Cost::mana("{1}{W}"))
+        .targets(vec![
+            Target::one(
+                "attacker",
+                Selector::Permanent {
+                    predicate: Predicate::All {
+                        predicates: vec![
+                            Predicate::CardType {
+                                value: CardType::Creature,
+                            },
+                            Predicate::Attacking,
+                        ],
+                    },
+                },
+            ),
+            Target::one("own", Selector::CreatureYouControl),
+        ])
+        .inferred()],
+        registry_name: "Airbender's Reversal",
+        text_box,
+    }
+}
+
+fn avatars_wrath() -> Card {
+    let text_box = "Choose up to one target creature, then airbend all other creatures. (Exile them. While each one is exiled, its owner may cast it for {2} rather than its mana cost.)\nUntil your next turn, your opponents can't cast spells from anywhere other than their hands.\nExile Avatar's Wrath.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{W}{W}"),
+            types: vec![CardType::Sorcery],
+            ..Default::default()
+        },
+        key: "tla.avatar_s_wrath",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![
+                Op::TargetClause {
+                    role: "spared",
+                    body: vec![Op::AirbendAll {
+                        except: "current_target",
+                        predicate: Predicate::CardType {
+                            value: CardType::Creature,
+                        },
+                    }],
+                },
+                Op::OpponentsCastOnlyFromHand,
+                Op::Exile { target: "source" },
+            ],
+        )
+        .cost(Cost::mana("{2}{W}{W}"))
+        .targets(vec![Target {
+            min: 0,
+            ..Target::one("spared", Selector::Creature)
+        }])],
+        registry_name: "Avatar's Wrath",
         text_box,
     }
 }

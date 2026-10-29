@@ -136,6 +136,7 @@ impl Game {
                     .iter(),
             )
             .copied()
+            .chain(self.castable_exiled_cards(player))
             .any(|card| self.priority_action_for_card(player, card).is_some())
             || self
                 .priority_activate_ability_actions(player)
@@ -159,6 +160,7 @@ impl Game {
                     .iter(),
             )
             .copied()
+            .chain(self.castable_exiled_cards(player))
         {
             if let Some(action) = self.priority_action_for_card(player, card) {
                 actions.push(action);
@@ -311,7 +313,7 @@ impl Game {
     fn priority_action_for_card(&self, player: PlayerId, card_id: CardId) -> Option<Action> {
         let card = &self.state.cards[card_id];
         if self.state.zones.zone_of(card_id) != Some(ZoneType::Hand)
-            && self.flashback_cost(player, card_id).is_none()
+            && self.zone_cast_cost(player, card_id).is_none()
         {
             return None;
         }
