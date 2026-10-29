@@ -178,7 +178,8 @@ there can finish here.
 | `dddaf3001dfa` | sampled pilot, 1 game, c=1 | $2.00 | 1 admitted/canceled, 0 completed; pod absent | $1.11978240 provider billed |
 | `139099571cbb` | budget pilot, 32 games, c=32, MTP 1 | $1.20 | 32 admitted/canceled, 0 completed; pod absent | $0.16946718 provider billed |
 | `8f68c0bc488b` | scored cohort, budget, 100 games, c=32, MTP 1 | $7.00 | 32 failed, 0 completed, 68 unattempted; pod absent | $0.18681270 provider billed |
-| `cdb0c09f90c6` | **scored cohort**, budget, 100 games, c=32, no MTP | $7.00 | running at 07:27; admissions stopped; 42 complete/3 failed/4 pending in 07:25 log | $2.01204356 provider billed at 07:14 snapshot; not refreshed or final |
+| `cdb0c09f90c6` | **scored cohort (outcome)**, budget, 16k context, c=32, no MTP | $7.00 | 49 admitted: 45 completed and replay-verified (Qwen 3–42), 4 failed on context overflow; 51 unattempted; pod absent | $2.50293426 provider billed through 08:00 UTC (final hour included) |
+| `81769c1a29c7` | scored cohort, budget-64k, c=32, no MTP | $4.80 | stopped by Jack Heart at 14:42 UTC: 81 admitted, 51 completed and replay-verified (Qwen 1–50), 30 canceled unsettled, 19 unattempted; pod absent | $3.00333582 provider billed through 14:00 UTC; final partial hour unbilled at 14:47 (launcher estimate $3.43) |
 
 ### Retained evidence and reporting (2026-10-29)
 
@@ -302,4 +303,57 @@ covers orphaned inference descendants. New campaign receipts distinguish failed,
 canceled and unattempted games; watchdog interruption retains canceled admission
 IDs. These repairs do not retroactively describe source `cfcd947042c4` running
 on the current rental. Broader mixed-report/Perf and review checks remain with gate.
-| `81769c1a29c7` | **scored cohort**, budget-64k, 100 games, c=32, no MTP | $4.80 | running | pending |
+
+## Outcome (2026-10-29)
+
+Jack Heart stopped execution after `cdb0c09f90c6`; no further paid cohorts.
+**The outcome is `cdb0c09f90c6`: Qwen3.5-9B, sampled reasoning budget-forced at
+3,072 tokens, won 3 and lost 42 completed w13 games against MTG-183 update 5950**
+(no draws; 45/45 replay-verified; Qwen 1–19 on the play seat, 2–23 on the draw).
+Each completed game is a distinct ordered deck pair. Qwen's wins: game 27
+(gw v uw, 128 decisions), 64 (ur v ub, 190) and 89 (wb v wr, 124). For
+reference, Haiku 5.5 went 51–49 against the same w13 opponent in MTG-212; the two
+models, encodings and harnesses differ, so that is context, not a matched
+comparison.
+
+Biases and limits of the 3–42:
+
+- **Selection and censoring.** Only 49 of the 100 scheduled entries were
+  admitted (a shuffled prefix, so the deck pairs are not a chosen subset), and
+  the four long games that hit `ContextOverflow` (168–203 decisions) are missing
+  from the record. Completed games are therefore biased toward shorter games; if
+  long games were ones Qwen was surviving, the true rate is somewhat higher.
+  Treating all four as Qwen wins would give at most 7–42.
+- **Treatment, not unrestricted Qwen.** 1,929 of 2,240 generations (86%) were
+  force-closed at the budget; answers then followed the inserted delimiter.
+  Repairs were rare (26) and there was one fallback; no single-choice decision
+  reached Qwen (478 forced decisions resolved natively). Reasoning was cut on
+  most decisions, so this is the strength of this budget, not of Qwen with
+  unbounded thinking. Priority decisions (pass versus act, median two legal
+  choices) took 66% of attempts and of reasoning tokens.
+- **Encoding.** Every Qwen run used the frozen `manabot-text-2` input. The
+  MTG-212 encoding experiments (labelled/systematic/player/board/library
+  variants, stable card block first) are unmerged on `jack/jev-encoding-w13`
+  (`6d5b0466e`) with no recorded findings; their effect on Qwen is untested, not
+  ruled out.
+- **One game per cell, w13 only.** The heterogeneous grid is descriptive; it is
+  not a matchup or Elo estimate, and it says nothing about current-world (w14)
+  play.
+
+The stopped `budget-64k` cohort is reported separately and never pooled: 51
+completed and replay-verified, Qwen 1–50 (win: game 93, wr v rb, 212 decisions),
+no failures, 30 long games canceled unsettled when Jack Heart stopped the run.
+It has the same short-game bias, more strongly.
+
+Serving measurements (budget arm, A6000, 32 concurrent games, no MTP): vLLM
+730–800 generated tokens/s at full occupancy; selection latency p50 210 s, p95
+230 s (16k) and 249/266 s (64k); 2,971 output tokens per generation; whole-device
+peak 41,975 MiB (16k) and 39,364 MiB (64k) of 49,140. The 16k cohort ran 18,225 s of campaign wall for 45 useful games: 18 useful games
+per dollar of its own billed rental ($0.056 per game, startup included). Across
+every bb4160 attempt, provider bills total **$6.98** so far ($1.11978 + $0.16947 + $0.18681 + $2.50293 + $3.00334), plus
+81769c1a29c7's final partial hour (about $0.45 at $0.59/hour) and unknown
+ancillary storage, so the outcome cost about $0.16 per useful game inclusive
+(about $0.08 counting both cohorts' 96 completed games). All five pods were absent at the provider at 14:47 UTC. The
+$10 ceiling was not exceeded.
+
+The no-thinking floor was never launched: Jack Heart's stop decision preceded it.

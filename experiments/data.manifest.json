@@ -990,6 +990,246 @@
    "sha256": "25be0a7df01b51485b61f630d12b8526cf704e3e7123893b602f65ce6678390d",
    "bytes": 9412
   },
+  "experiments/data/bb4160/81769c1a29c7/campaign.json": {
+   "sha256": "2f180f5c2de4beee7c12ace1d6aea233f5a08f7605bfc617aad715c79b349fc6",
+   "bytes": 655
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-001.tar.gz": {
+   "sha256": "6d706ed032f1bbb155d136faba3a1be7cd3c2b2595d479f59da301ef2e680246",
+   "bytes": 2279785
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-006.tar.gz": {
+   "sha256": "94f4a90b5a466e0b69ec6c4fda30b93a933fc526ebeb51e80aa98f238807471d",
+   "bytes": 1400809
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-007.tar.gz": {
+   "sha256": "1ae6c1d7926a3a4be08942260ed53842e308f7739903c37b04c69b61cde1ed99",
+   "bytes": 3241974
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-009.tar.gz": {
+   "sha256": "c684a59590be80be26d7520410f59370395f5c60b00c339992a67c127c497e5e",
+   "bytes": 3309813
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-011.tar.gz": {
+   "sha256": "0a66ab4e0bc41dd79df7d1dd6d59d3a5087983dd7cc73d475f971fbb1d150f05",
+   "bytes": 1087630
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-015.tar.gz": {
+   "sha256": "43ff83d89793635e553077d121807c2b047120713807024a3a6258f82c9af1a6",
+   "bytes": 2495540
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-016.tar.gz": {
+   "sha256": "80062cb660aef2a5193bc84acdfc2929401e3b6abbd79fabd66966b31d73d5bf",
+   "bytes": 1440142
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-018.tar.gz": {
+   "sha256": "3e360a5a3979a0abefebbb6ca30319d33c6e9697c71354f6994bebfe0c3b67e7",
+   "bytes": 2303393
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-019.tar.gz": {
+   "sha256": "4eb8a2dc073a41bf24fee62b864a7d083471ad37fc5c7a80597a5b31678b7ddb",
+   "bytes": 1353977
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-021.tar.gz": {
+   "sha256": "08ceeaba11f3bb0abd0a155cae2494b5d9ea898f6540f8d3582dae7cce712e29",
+   "bytes": 4392324
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-022.tar.gz": {
+   "sha256": "fbdd93ed3eba749a666b37d230b7a0b3b4b38a2d65d11ced337e8f2e37104572",
+   "bytes": 2036382
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-024.tar.gz": {
+   "sha256": "b37f2b3720a775a04a39ce4366087f3e48fdc1d0af175743fb97370b7b414654",
+   "bytes": 2805656
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-025.tar.gz": {
+   "sha256": "557f17cb07f8c5c70a3d1b91e6855bad489914b632b10c74dabd58fae02608cc",
+   "bytes": 3215502
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-027.tar.gz": {
+   "sha256": "4c42265b4d92012f37f0c69143ae20ea4debb421269c2a00c61f8bf22e20c671",
+   "bytes": 3769386
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-028.tar.gz": {
+   "sha256": "c04ad994ce78750fdfc5aede2f119feae33ac381f37a6d7f0bea9771f9e5eeb1",
+   "bytes": 2311641
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-032.tar.gz": {
+   "sha256": "93549b6d0e7aaeef60f154c872c14793ab337eafabc802f29457e144b8e1ef41",
+   "bytes": 2278456
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-033.tar.gz": {
+   "sha256": "3e51d47f0ae478d767eb1d4e285f0882fff4278653693f19911309b00191e946",
+   "bytes": 2936587
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-034.tar.gz": {
+   "sha256": "b246c0e0c98c93f974b047b041b0718d5913959ff5f47df691d35c1908a02d98",
+   "bytes": 4064735
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-035.tar.gz": {
+   "sha256": "9f4e2fdb1d8f0fec1af40c00b275efd9028afeefde1744d02eac0be3afad19a0",
+   "bytes": 2392641
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-037.tar.gz": {
+   "sha256": "fa2e0e10eb4fca2341723b140b491ee5dd4acfc0a030ff9ddd6fc76bcc632582",
+   "bytes": 1412582
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-038.tar.gz": {
+   "sha256": "4c7d1416a20c3c5703f050153537a844b8c9bd1d17be4ec3bc2425311205c894",
+   "bytes": 2271741
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-039.tar.gz": {
+   "sha256": "6dc04f24e2900c982cfa67fb9b367d3a1b736f5971d344a8867ad812cf369671",
+   "bytes": 2635685
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-041.tar.gz": {
+   "sha256": "0e0c6ce8b665847003d194ef146fa8090504338b8ccac6d4613abd90dd35344a",
+   "bytes": 4769635
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-045.tar.gz": {
+   "sha256": "b7adf52e7991d81a3386d955630f764ef6e735589d903f4d182555ae9fd8caa4",
+   "bytes": 2323051
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-049.tar.gz": {
+   "sha256": "607ff31368173bf9e37032d3b22ab2fa2b32a0de1794d97adfa040da9d0acb5c",
+   "bytes": 2452730
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-052.tar.gz": {
+   "sha256": "c12ff4a4700fd9cb5727803e0017115d004e082a79ab3b49d27c34c157ec91d3",
+   "bytes": 3469238
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-054.tar.gz": {
+   "sha256": "22a5ce64ba7f22db8272b94a8f074f78ffe2ec1aea36dc1b619bbfef494199aa",
+   "bytes": 2930074
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-060.tar.gz": {
+   "sha256": "9bca0306d8c9d2963e17433b077fbb45f9d397f8ecf70180814ccc472a759b69",
+   "bytes": 4032713
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-062.tar.gz": {
+   "sha256": "0c57e5922369caac0c19289d3603b6b4753b8a59169b172bdf6f9373bc6b9876",
+   "bytes": 5702771
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-063.tar.gz": {
+   "sha256": "f76ee6180b5ed2ca6fa2e40740a98f443adbaf4d7091ac7c3880e98f90eee7f1",
+   "bytes": 4301668
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-064.tar.gz": {
+   "sha256": "e8110c92c91ed4f3f49610a05f5b799522a50ff40415782f95dd8cb6efc3dba2",
+   "bytes": 4212111
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-065.tar.gz": {
+   "sha256": "94842f478a409f2bd405ca619d0885844238ff740dae7b962fa2c16fdede9157",
+   "bytes": 7379506
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-069.tar.gz": {
+   "sha256": "613a8d6b48c0fde2a5531df354341dc5f0815e680e019e59499f0f10971d6440",
+   "bytes": 1993570
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-070.tar.gz": {
+   "sha256": "a6ea5286444e537561c32a333e31d6f89a2a97b559a3d8f3ca28b70cf9b41e3b",
+   "bytes": 1780131
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-072.tar.gz": {
+   "sha256": "33cc4ce0bc5c1b19401be9576490a08980f597bb02122708737cd66b692cf576",
+   "bytes": 2732484
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-073.tar.gz": {
+   "sha256": "c9d0eaf0b29ab50f782fda135cbbfc08bce54e0d502917a745e9dec41ff19952",
+   "bytes": 3129680
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-075.tar.gz": {
+   "sha256": "611b404cfb530d4896870f02259e63a1bd7908ea8d7731076c12f52590f9a435",
+   "bytes": 5361929
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-076.tar.gz": {
+   "sha256": "98389497cf4703511e509ddcc490e37ce4717582d53528171fe18cd4ded5d863",
+   "bytes": 1905605
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-079.tar.gz": {
+   "sha256": "ad789b051dadf2b0db9bafe3b7011f62ca98ca940bf689da3b69430e15baee7c",
+   "bytes": 4527799
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-080.tar.gz": {
+   "sha256": "1e1611cb65ec7458e8274a3572795cb9a7e43da668286656d7cf8d22ede7acf1",
+   "bytes": 2868300
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-082.tar.gz": {
+   "sha256": "bd7c212a48b56ce2eb6d95696c53f8ae8c95a755cedfbed88b02624b720b8a81",
+   "bytes": 2294629
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-083.tar.gz": {
+   "sha256": "3b192ce9e02822d852d7ceeb5b1d26bb3e370ecf4a59ec65e363b156a58caee7",
+   "bytes": 6980784
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-085.tar.gz": {
+   "sha256": "4bd4f5af937ec4aef069e169a6fa8fa6092bc12f219855ec7ff6de15f9f51e76",
+   "bytes": 3741267
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-088.tar.gz": {
+   "sha256": "eca571c7dcea6d082e5f75bd7c66f910130f5e1276cfc471a5cf4297f5cca81d",
+   "bytes": 2475372
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-089.tar.gz": {
+   "sha256": "679a5c5d4854f25fe8deb2c4ad215ee2a932e52105ee8097abc24bb29ac6a7d5",
+   "bytes": 4815256
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-090.tar.gz": {
+   "sha256": "7ffd067df3ff9d4689318c921432d03c9eff8dffd17ec7dde1211b30ab5ab4c1",
+   "bytes": 1114423
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-091.tar.gz": {
+   "sha256": "ef826e921f9985e016ac1df0ba5e4eee107d209c5a8aa061dc31f8e8a9c6d230",
+   "bytes": 1702504
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-092.tar.gz": {
+   "sha256": "829999caaeec098346c13665cad710255c27536ac100acb1372588b3cba0ef29",
+   "bytes": 2576363
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-093.tar.gz": {
+   "sha256": "97f08becb165673478ed16c3114edadb29df00d2dbcc33aef13cfe16fc775f17",
+   "bytes": 4069825
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-096.tar.gz": {
+   "sha256": "45bab721c34f007f296aaa4fd8e3d5bbddd5015bb4258128d3428c50f226b8d7",
+   "bytes": 3573766
+  },
+  "experiments/data/bb4160/81769c1a29c7/games/game-098.tar.gz": {
+   "sha256": "ae5177a423823ceb425560a86b771fe7934fda811f2b6eae90888eeefac6f1dd",
+   "bytes": 1703430
+  },
+  "experiments/data/bb4160/81769c1a29c7/gpu-memory.csv": {
+   "sha256": "231f66d23fb324599b0b2b59fbf2a61ea0e3426f1bd2e6c5e6a511edfc151138",
+   "bytes": 2717800
+  },
+  "experiments/data/bb4160/81769c1a29c7/inference.json": {
+   "sha256": "e844d6115d67ac01b0537928cf43efa6789eba1c911591a13e0ef20e99423bc9",
+   "bytes": 582
+  },
+  "experiments/data/bb4160/81769c1a29c7/readiness.json": {
+   "sha256": "e4e6b75cd9d8d7a78836f46ccc2c10b8b212f56e04bc8b4d25cc017c589dd37d",
+   "bytes": 123
+  },
+  "experiments/data/bb4160/81769c1a29c7/reasoning-by-kind.txt": {
+   "sha256": "68ce30ec8f02d4976ceef66f36abc383070c56f53c282d59af4108bb27757802",
+   "bytes": 2100
+  },
+  "experiments/data/bb4160/81769c1a29c7/results.json": {
+   "sha256": "14eb97b533280a8b5fc27003dd6c166fcc2582cc56fc87c2e08d97d0f8fd7ba5",
+   "bytes": 414105
+  },
+  "experiments/data/bb4160/81769c1a29c7/stdout-progress.txt": {
+   "sha256": "3de82a333c9e1a50305a5562444684392e9fc11b35b588af212e1100d176cd47",
+   "bytes": 525537
+  },
+  "experiments/data/bb4160/81769c1a29c7/vllm-command.json": {
+   "sha256": "c05d7a1b334a8a18852fbccd8da59f60335ed254a9f6ce337849471e5659be9a",
+   "bytes": 764
+  },
+  "experiments/data/bb4160/81769c1a29c7/vllm-identity.json": {
+   "sha256": "b5ee0da90276d3a9d6af676620247a53bd9c5d4e6d4b452bf7aa5a263231eb07",
+   "bytes": 9323
+  },
   "experiments/data/bb4160/8f68c0bc488b/cache.json": {
    "sha256": "5a61629350ffeec903cf5f2351c19e9da88f26fd5a496636e4d496b5ed7ee89c",
    "bytes": 1239
@@ -1202,6 +1442,18 @@
    "sha256": "38e96a8e8a20b543f8016da2cfc99e815f19df4591c1e8ea6fcce7011e9ea89f",
    "bytes": 5700
   },
+  "experiments/data/bb4160/analysis/admit.py": {
+   "sha256": "71f2624310f0b1f2cbb4f02297b7fc75676defdc5f9373074a3af05796898eaa",
+   "bytes": 1117
+  },
+  "experiments/data/bb4160/analysis/kinds.py": {
+   "sha256": "e6f26ee3a2b57d91aca45a82e16808abcdcb14a4c010c9ddd70a8638c89c7372",
+   "bytes": 1920
+  },
+  "experiments/data/bb4160/analysis/summarize.py": {
+   "sha256": "a79bbfda16231d6186fb7d984e88c196e0f7c6df898ccb50fc0561b8e0b715c7",
+   "bytes": 2376
+  },
   "experiments/data/bb4160/cdb0c09f90c6-log-20261029T064319Z.txt": {
    "sha256": "9e14119780a1a859c8e9b4c98885890f2c59235b9732aa3afd5cd3402581c8f3",
    "bytes": 335863
@@ -1217,6 +1469,246 @@
   "experiments/data/bb4160/cdb0c09f90c6-log-20261029T072713Z.txt": {
    "sha256": "dbeb40770088e7e220e82d58b98b484398f763f173b98ecf1851adb788c76386",
    "bytes": 369328
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/campaign-wall.json": {
+   "sha256": "4470633ff1338a03b118a18c8ba2d9c2e22ecb30648146cda1921cb7d8aa7c1a",
+   "bytes": 175
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/campaign.json": {
+   "sha256": "dd51937f7718c4071cc4ade2aa52501d8db8de9c05e99f0e6fdb27dd292eed14",
+   "bytes": 511
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-001.tar.gz": {
+   "sha256": "fd123ee0443a9eca5a88f412669795b129bb2a957d13dc8abe7dbfa80064c88d",
+   "bytes": 4025424
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-006.tar.gz": {
+   "sha256": "bc31c9edf0cb0c9b4f8aaff24fd923aa8325e855ac4dd1a4edab7730ce3fec98",
+   "bytes": 2378349
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-007.tar.gz": {
+   "sha256": "01afd35316e2e9257e0a4eab56cd8c894c22263591199f9b60117d46686f928e",
+   "bytes": 2250660
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-008.tar.gz": {
+   "sha256": "d71cb217afa65889c48f704c719136977a118fa90f0d80592c2b17e0dec9ca02",
+   "bytes": 2824419
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-009.tar.gz": {
+   "sha256": "55f67e1677dc5f6486130853ba34435d5b96a8df0cdcb0f7bd0a20ffa21a3ad5",
+   "bytes": 1711032
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-011.tar.gz": {
+   "sha256": "b30a42e10531a14d20a27b1ed363984e48ec610a151f98bac33875379ead232d",
+   "bytes": 2193774
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-013.tar.gz": {
+   "sha256": "bc8d4acded8da6053d5999b692c0eac6313934e80a79fa6c71017f0a557b2451",
+   "bytes": 4724168
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-015.tar.gz": {
+   "sha256": "18c55df170bde1d26501b21314238ed6cfa9819408a3a4fcf261c742583ac7d6",
+   "bytes": 3336167
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-016.tar.gz": {
+   "sha256": "45471d5d465b3b80ff692a4b89fee854045483452d85de23da5bac639746b9a5",
+   "bytes": 1407719
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-018.tar.gz": {
+   "sha256": "af3529b99d2782fe87c98db5e902b827cb9c6a092cc2aeb441563e4ca930b13b",
+   "bytes": 2091008
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-019.tar.gz": {
+   "sha256": "8494bd1aeac3ec23f5a654637faef930dc2a1b8cfd0abd2d8fac7a4c9b2c3f5f",
+   "bytes": 2106804
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-022.tar.gz": {
+   "sha256": "4b1608a55b359f808604558dd0bbeb2e3ced5d34dda1192d4cfbd72e05574a40",
+   "bytes": 1638447
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-025.tar.gz": {
+   "sha256": "4fa58fac560b71921b599bb8f2b02d27d9a563a63715d96508358288fb47597b",
+   "bytes": 3799020
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-027.tar.gz": {
+   "sha256": "60ffc9e39aba58f3737a5415f2fdb0daa5ac3ee1f7a8bf881110a8e988bedbd7",
+   "bytes": 3797607
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-028.tar.gz": {
+   "sha256": "65f384dbedbf794d3d6ad5d224c87a304a119528b6663e8dbd37d44ab75cdd34",
+   "bytes": 1886714
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-032.tar.gz": {
+   "sha256": "1378ea373f6fb1b9a238867a87a59a56575a85949b116c2d4e0dec2de8f5742d",
+   "bytes": 2640378
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-033.tar.gz": {
+   "sha256": "95d3c0f57d813f2f2fdcc004f078f2e0e8dd2afabcae9e279b58fcd724c0eaff",
+   "bytes": 4306576
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-034.tar.gz": {
+   "sha256": "a229d1294d03fee302bdfa46602b80ee0227a91f95cc6fcd30fbbc5af28dab32",
+   "bytes": 2735697
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-035.tar.gz": {
+   "sha256": "b2bb3e17453f49f6fe557490d5ae8179c1ae7f80beb774af7b543ea8a6ac431d",
+   "bytes": 2710578
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-037.tar.gz": {
+   "sha256": "c85a01575d16e80f3467e1e02c6c62c4c12c843dfafd9a49a6248edc4309bdfe",
+   "bytes": 3276556
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-038.tar.gz": {
+   "sha256": "d16bd099c8469b6aa128e262f998b5753305be1aa39b42ebd82bf6a975b6881d",
+   "bytes": 2447374
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-041.tar.gz": {
+   "sha256": "79714b0fca15be570d4f5d8fa3cd2cd23238c57dafab851b1d423a4b6445534a",
+   "bytes": 4106994
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-045.tar.gz": {
+   "sha256": "c21b9cdffcb11b4f7715e024f94df3e51cb1ca17128f51b72f60119795e3b345",
+   "bytes": 3225162
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-049.tar.gz": {
+   "sha256": "c51b987c9aa1cc931f4236d62b160adbc2e5ee9d7794cdd558d1a97902641aa0",
+   "bytes": 1704135
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-052.tar.gz": {
+   "sha256": "de50c51421ed89ba069bd8c2060d0041e6cbde6a12f9cd08990eb8615b493c0b",
+   "bytes": 4176052
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-053.tar.gz": {
+   "sha256": "48d8c4fb96b9dcead5bfc84f3d18307962aefe7c9650fa573451d1cb94517d7d",
+   "bytes": 4742517
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-054.tar.gz": {
+   "sha256": "ee16031e517cba4d968f8338ea86e4ed3feb4a2fdf5baf48c04ea6e9b7ea5c4d",
+   "bytes": 2988929
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-060.tar.gz": {
+   "sha256": "b884a154dadd33739d7ce9ecea95a5b419f4c2224493c561cb06db0363de6696",
+   "bytes": 3544095
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-062.tar.gz": {
+   "sha256": "3b7b4531ca461090eab81b63e9c2ccf670a682c02c5355a783b084ed48b9a809",
+   "bytes": 3376827
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-064.tar.gz": {
+   "sha256": "989db946f73738faf8da2e78eafcdb71e337349436fbd453aa24d8881d356009",
+   "bytes": 5154388
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-065.tar.gz": {
+   "sha256": "2b123a4f03518adbe0eaec9e495ed7e7bb2ba3ee3a01e26456f410f125b4e600",
+   "bytes": 5520045
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-069.tar.gz": {
+   "sha256": "5cb2639f3bbcf6462bec68d3fa7281640f131540be1a0c9a8cc39f2f0c136703",
+   "bytes": 2856964
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-070.tar.gz": {
+   "sha256": "1b2e9656e3c041cc2c59d7388ee33cb1c60488c66a6c37720133e90396887d08",
+   "bytes": 4313992
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-072.tar.gz": {
+   "sha256": "97c7e8c0dafd97d0b0299cd2777ef82ace41cc65aeafb8099173a353e4dfa183",
+   "bytes": 1218121
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-073.tar.gz": {
+   "sha256": "87c25507b39466fb2d1dd95104df2d2d502d955a8e361e87735ab00f05cc177f",
+   "bytes": 3253229
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-075.tar.gz": {
+   "sha256": "832d32a9c453eb42663eecae3fad7cf5556d4d989c87fe1bf6d1a8abab9403d5",
+   "bytes": 4516789
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-076.tar.gz": {
+   "sha256": "c24f323fb8ed09c4e59697fdf6191daaa8638f613f137fa24a43ec8ad2aff16d",
+   "bytes": 2158149
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-077.tar.gz": {
+   "sha256": "27dd0a0911df1c47c3c48f14157f19954b82fa51e4f526e5cff97a9d9b4ccbb6",
+   "bytes": 6328931
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-079.tar.gz": {
+   "sha256": "5e308a72ca21186a78d28221917e4771c3063dc34e3857d03e50f5be25465489",
+   "bytes": 3345703
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-080.tar.gz": {
+   "sha256": "68baabe49308f8e59cb661cacc8fe97663237d9f34eeb9c12706567a511562cb",
+   "bytes": 5089114
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-082.tar.gz": {
+   "sha256": "6654f4442408a1fa528aa30d3c5c7617c50deadee5324b4b2ca475a95dbaccd4",
+   "bytes": 1426721
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-083.tar.gz": {
+   "sha256": "64c7016a512487478b5fc442d754c13d5c92524482a55f7721bc10e8c2ab72a2",
+   "bytes": 4501884
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-085.tar.gz": {
+   "sha256": "7f670444f4972b5e4ef932fc1df205ffabf316c89bc421f67e5de02dae1bddec",
+   "bytes": 4186542
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-089.tar.gz": {
+   "sha256": "41ae3b45b646e7051dd64f87bc09f7b9eb8147097697fdc0f1c85d478a0ede10",
+   "bytes": 4481801
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-091.tar.gz": {
+   "sha256": "1297932df667852228e2eba525e24229251577635ad64188c3ee6af4d5eb528b",
+   "bytes": 2445368
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-092.tar.gz": {
+   "sha256": "04d5ed4b433a461b38978144ccaab598929750999482f9eacdc330546f370b1c",
+   "bytes": 3005817
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-093.tar.gz": {
+   "sha256": "960f0640db4a460dbc29e6cf4834ee02cc08ec63d6eaed52ac25bd5ddf018641",
+   "bytes": 2498563
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-096.tar.gz": {
+   "sha256": "cdb934ff86b8901969a480f577f8f34b15c0c883e4639a079ba55683f93c72cf",
+   "bytes": 3074001
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/games/game-098.tar.gz": {
+   "sha256": "b120ca8a9f1f4d3300e827697039659d66aba6f2e6f47f3a524f93fa33b1d2a2",
+   "bytes": 5168009
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/gpu-memory.csv": {
+   "sha256": "2ef8210da06b1fd900ae7e49e4ef110f23826e28abc50cebadaab91da24bcd11",
+   "bytes": 2047373
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/inference.json": {
+   "sha256": "7be6c2facae02b372f8827a4d153d331e8432c9128c631cbd674cf1d5b634723",
+   "bytes": 582
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/readiness.json": {
+   "sha256": "cd12a7d3dcc1e24fa55a2d5b9952515043f4b7ed76301a47f28d45b051eb3619",
+   "bytes": 123
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/reasoning-by-kind.txt": {
+   "sha256": "56ae8baefc777fdb0080e70f6102335bee1deccd029df4d58ab1707b7015450c",
+   "bytes": 2310
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/results.json": {
+   "sha256": "54961851a0196d1480c41f24794e529df6322588668ae743dddcc8db399b3bb2",
+   "bytes": 403597
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/stdout-progress.txt": {
+   "sha256": "080c256f4f8022536d4af461626565c0bca844710ad93fa4b923008adab8281b",
+   "bytes": 373696
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/vllm-command.json": {
+   "sha256": "0c7451d17ad7066f242f58f28eb380bc6b92c47a4f04509da985a3ebe96b47a4",
+   "bytes": 764
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/vllm-identity.json": {
+   "sha256": "45c358f3a58e7bf40598a6f2e69b76dea5753dab3955466dda6842abf225636e",
+   "bytes": 9323
+  },
+  "experiments/data/bb4160/cdb0c09f90c6/vllm.log": {
+   "sha256": "78324281a7999cc0a36b6c4c5fed8c9b4605868651f21775a9e654c2d7246857",
+   "bytes": 818121
   },
   "experiments/data/bb4160/dddaf3001dfa/campaign.json": {
    "sha256": "ad163d01965177f0e9c4001ac546feaa2c4c46fc0a7f8c8c826defb38488974f",

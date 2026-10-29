@@ -64,3 +64,14 @@ and the same commit's `scratch/questions.md`. Detailed subsequent choices:
 Obsolete MTG-207 notes: `c5d406e3d2a701525c15c8500a30f7da7896cc40:scratch/questions.md`.
 Main's MTG-193 assumptions: `6d069d6e5f0755b392c796aaf6d754913e8996c2:scratch/questions.md`;
 these supply historical context, not new direction or rental authority.
+
+- **Stop decision (Jack Heart, 2026-10-29 ~14:35 UTC):** after `cdb0c09f90c6`
+  (Qwen 3-42 vs MTG-183; Haiku 5.5 was 51-49 on the same w13 opponent), cancel
+  `budget-64k` `81769c1a29c7` (cancelled at ~$3.43 launcher estimate; pod
+  absent). No further paid cohorts. Reconcile final provider charges and write up
+  3-42 (with its selection bias and context-overflow failures) as the outcome.
+- **Encoding caveat:** every Qwen run used the frozen `manabot-text-2` input. The
+  MTG-212 encoding experiments (labelled/systematic/player/board/library variants,
+  stable card block first for prefix caching) live unmerged on
+  `jack/jev-encoding-w13` (`6d5b0466e`) with no recorded findings yet. Report this
+  as untested for Qwen, not as a ruled-out cause.
