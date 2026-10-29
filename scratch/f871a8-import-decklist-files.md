@@ -239,6 +239,32 @@ admission; setup → roster membership). `validate_agent_setup` checks seat coun
 and explicit pack, then delegates; `_admit_setups` rejects unbound checkpoints,
 then calls the shared rule. No second pool rule remains in `state/admission.py`.
 
+### Concept review at 8dcfa33b9 (2026-10-28, headless Graph step)
+
+World validation, the one `Deck`, run-owned `TrainingDecks`, native
+`set_training_decks`/reset admission and the shared `validate_agent_decks` rule
+match the accepted model. One residue contradicts "the run records the decks
+used" and the earlier record that `root_match` "is never serialized": **a deck
+run's identities still name a representative pair as its matchup.**
+`_runtime_identities` calls `runtime_fingerprints(match_config=regime.root_match)`,
+so `run.identities` (run.json, every failure capture, recovery comparison)
+carries `matchup` = the first two sorted decks and `matchup_sha256` of that
+pair. Study/arena registration (`study.py` `_IDENTITY_KEYS`, player
+`matchup_sha256`) would then label a deck-trained checkpoint with a pair it was
+not specifically trained on. The run's actual setup record is the deck supply.
+
+Next implement direction (settled; no product choice): a deck run's runtime
+identities replace `matchup`/`matchup_sha256` with the supply identity
+(`training_decks_sha256` = `TrainingDecks.digest`, plus pool key); content/
+observation/action identities still come from opening the pool. Recovery
+compares that identity. Authored-matchup consumers (monitoring, study arenas,
+card evaluation) that require `matchup_sha256` reject a deck run with an
+explicit diagnostic instead of reading a surrogate; they gain no deck-run path
+here. Authored and Elemental runs and frozen evidence keep their identities
+unchanged. Proof: a bounded deck-run setup records no `matchup` and the supply
+digest; changed decks still reject resume; an authored run's identities are
+byte-identical to before.
+
 Noted, not a change: the collector and native `VectorEnv` still hold training
 decks in a field named `uniform_roster`; it no longer gates admission
 (`set_training_decks` admits and replaces at any time), so the name is internal.

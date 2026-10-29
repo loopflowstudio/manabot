@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Concept review — one rule for who may play a deck run</title>
+<title>Concept review — a deck run names its decks, not a surrogate pair</title>
 <style>
   :root { color-scheme: light dark; --fg:#1d1b18; --bg:#faf8f4; --mute:#6b655c; --line:#ddd6ca; --prop:#2f6b4f; --old:#9a3b2f; --code:#f0ece4; }
   @media (prefers-color-scheme: dark) { :root { --fg:#ebe6dd; --bg:#1a1916; --mute:#a39d92; --line:#3a3731; --prop:#7fc4a0; --old:#e08a7c; --code:#26241f; } }
@@ -25,52 +25,48 @@
 <body>
 <main>
 <header>
-  <p>Task f871a8 · Import decklist files · concept-review (headless Graph step) · 2026-10-28 · HEAD 59648dc59</p>
-  <p>Built from <code>scratch/f871a8-import-decklist-files.md</code>, <code>manabot/model/world.py</code>, <code>manabot/training/state/admission.py</code>, <code>manabot/training/regime.py</code>, <code>manabot/training/decks.py</code>, <code>manabot/training/rollout/collection.py</code></p>
+  <p>Task f871a8 · Import decklist files · concept-review (headless Graph step) · 2026-10-28 · HEAD 8dcfa33b9</p>
+  <p>Built from <code>scratch/f871a8-import-decklist-files.md</code>, <code>manabot/training/execution.py</code>, <code>manabot/infra/provenance.py</code>, <code>manabot/training/regime.py</code>, <code>manabot/training/decks.py</code>, <code>manabot/experiment/study.py</code>, <code>managym/src/agent/vector_env.rs</code></p>
 </header>
 
-<h1>Decision: who may play a deck run should have one answer, in the world module</h1>
-<p>No product choice is open. Jack Heart's accepted model already settles this: deck admission is shared world behavior, with one owner per fact. The next implement pass should merge a duplicated rule.</p>
+<h1>Decision: a deck run's record should identify its decks, not a representative pair</h1>
+<p>No product choice is open. Jack Heart's accepted model already settles this: the run records the decks it used, and each fact has one owner. The next implement pass removes a surrogate identity.</p>
 
 <h2>Actions → concepts → APIs</h2>
-<pre>Supply decklists        → Deck (counts)          → TrainingDecks.from_files / regime.decks
-Train on them           → native roots            → VectorEnv.set_training_decks (admits each)
-Export / load the model → world (pool descriptor) → pool_world / validate_checkpoint_world
-Play or evaluate        → any pool-admitted deck  → validate_agent_setup
-Continue from a producer→ same question as above  → state/admission._admit_setups   ← mismatch</pre>
+<pre>Supply decklists        → Deck (counts)            → TrainingDecks.from_files / regime.decks
+Train on them           → native roots             → VectorEnv.set_training_decks, reset admission
+Export / load the model → world (pool descriptor)  → pool_world / validate_checkpoint_world
+Play or evaluate        → any pool-admitted deck   → validate_agent_decks
+Record / resume the run → run identities           → _runtime_identities(root_match)   &lt;- mismatch</pre>
 
 <h2>The mismatch</h2>
 <div class="old">
-<p class="tag">Existing</p>
-<p>Producer admission answers "may this checkpoint play these decks?" with its own rule:</p>
-<pre>binding = getattr(agent, "world_binding", None) or {}
-if binding.get("content_pool", {}).get("pack_key") != regime.decks.pool:
-    raise ValueError("training decks require a checkpoint bound to their pool")
-regime.decks.check()</pre>
-<p>That restates <code>validate_agent_setup</code>'s pool branch outside <code>model/world.py</code>, and they already disagree at the edges: an unbound checkpoint passes one and fails the other. They also give different diagnostics.</p>
+<p class="tag">Existing behavior</p>
+<p><code>TrainingRegime.root_match</code> derives the first two sorted decks so a game can be opened. The design records that pair as &ldquo;never serialized&rdquo;, but <code>_runtime_identities</code> passes it to <code>runtime_fingerprints</code>, which writes it into <code>run.identities</code>:</p>
+<pre>"matchup":        {hero: &lt;deck 1&gt;, villain: &lt;deck 2&gt;, ...}
+"matchup_sha256": sha256(that pair)</pre>
+<p>That lands in run.json, every failure capture and recovery comparison. Study and arena registration read <code>matchup_sha256</code> as the setup a player trained on.</p>
 </div>
 <div class="prop">
-<p class="tag">Proposed</p>
-<pre># model/world.py
-def validate_agent_decks(agent, players) -&gt; None:
-    """May this checkpoint play every one of these decks?"""
-
-# validate_agent_setup: two-seat + explicit-pack checks, then validate_agent_decks
-# state/admission._admit_setups (deck regime):
-validate_agent_decks(agent, regime.decks.players())</pre>
-<p>A pool binding requires every deck to belong to the bound pool and pass native admission. A setup binding requires every deck to be in its roster. Admission still rejects unbound checkpoints explicitly, as it requires anyway.</p>
+<p class="tag">Proposed (next implement)</p>
+<pre>"training_decks":        {"pool": "tla-pool-v1", "sha256": TrainingDecks.digest}
+# no "matchup" / "matchup_sha256" for a deck run</pre>
+<p>Content, observation and action identities still come from opening the pool. Resume compares the supply identity. Consumers that only handle authored matchups (monitoring, study arenas, card evaluation) reject a deck run with an explicit diagnostic and do not read a surrogate. Authored runs, Elemental runs and frozen evidence keep the identities they have now.</p>
 </div>
 
-<h2>Checked and unchanged</h2>
-<ul>
-  <li>A deck regime's only setup record is its decks; <code>root_match</code> is derived and never serialized.</li>
-  <li>Checkpoints bind the pool's world only. Play, sim and Academy admit any deck that pool admits.</li>
-  <li>The collector and native env still name the deck field <code>uniform_roster</code>. That is internal; it no longer gates admission.</li>
-</ul>
+<h2>Normal path, failure, recovery</h2>
+<ol>
+  <li>Normal: a three-deck run records the pool and the supply digest. Each game's actual pair is still recorded per game attempt.</li>
+  <li>Failure: changing one decklist on resume changes the supply digest and is rejected, as it is now through <code>decks_digest</code>.</li>
+  <li>Counterexample to check: an authored run's identities must stay byte-identical, because frozen evidence compares <code>matchup_sha256</code>.</li>
+</ol>
+
+<h2>Unchanged, recorded elsewhere</h2>
+<p>The checkpoint <code>bc</code> producer links are deferred (questions.md). The internal name <code>uniform_roster</code> no longer gates admission. The Academy draft redesign (1a) is accepted but deferred.</p>
 
 <h2>Questions</h2>
 <ol>
-  <li>None for a person. The outcome is that the design changed, so the next step is implement.</li>
+  <li>None open. The accepted decisions settle this direction.</li>
 </ol>
 </main>
 </body>
