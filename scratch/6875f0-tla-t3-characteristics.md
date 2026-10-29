@@ -143,6 +143,11 @@ digests and `schema_version`) or pre-existing failures (belief fixture without
 `relations`, synthetic rollout definitions, conditional-search digest), which
 also fail at `752c75ef7~1`.
 
+Compress (items 23–24): the Rust link closure is hoisted out of the row loop; the
+unused Python `KEYWORD_FIELDS` is removed and relation keywords fill
+`row[RELATION_KEYWORDS_INDEX:]`. `cards observability` 18 pass; parity,
+continuation and attachment-join pytest 25 pass.
+
 ## Remaining
 
 - Academy protocol views (`LegacyPermanentView`/`LegacyPlayerView`, the six

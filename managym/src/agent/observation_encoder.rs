@@ -582,6 +582,11 @@ pub fn encode_into(
     );
     if config.shows_everything() {
         // Hosts may be listed after their attachments, so links follow indexing.
+        let link = |object: Option<i32>| {
+            object
+                .and_then(|object| object_to_index.get(&object))
+                .map_or(0.0, |index| (index + 1) as f32)
+        };
         for (permanents, out) in [
             (&obs.agent_permanents, &mut *out.agent_permanents),
             (&obs.opponent_permanents, &mut *out.opponent_permanents),
@@ -592,11 +597,6 @@ pub fn encode_into(
                 .iter_mut()
                 .zip(permanents)
             {
-                let link = |object: Option<i32>| {
-                    object
-                        .and_then(|object| object_to_index.get(&object))
-                        .map_or(0.0, |index| (index + 1) as f32)
-                };
                 row[PERMANENT_ATTACHED_INDEX] = link(permanent.attached_to);
                 row[PERMANENT_BLOCKING_INDEX] = link(permanent.blocking);
             }

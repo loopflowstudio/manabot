@@ -79,22 +79,6 @@ USED_ABILITY_FLAGS = 4
 PERMANENT_OTHER_USED_ABILITIES_INDEX = 48
 # Permanent columns that hold object links (joins), in model parameter order.
 PERMANENT_LINK_INDEXES = (PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX)
-KEYWORD_FIELDS = (
-    "flying",
-    "reach",
-    "haste",
-    "flash",
-    "vigilance",
-    "trample",
-    "first_strike",
-    "double_strike",
-    "deathtouch",
-    "lifelink",
-    "defender",
-    "menace",
-    "hexproof",
-    "indestructible",
-)
 
 
 # -----------------------------------------------------------------------------
@@ -110,13 +94,12 @@ class ObservationEncoder:
     def __init__(self, config: ObservationConfig) -> None:
         self.config = config
         self.shows_everything = config.policy_input_version >= 5
-        self.relation_dim = (
-            RELATION_DIM_V5
-            if self.shows_everything
-            else RELATION_DIM
-            if config.policy_input_version >= 4
-            else LEGACY_RELATION_DIM
-        )
+        if self.shows_everything:
+            self.relation_dim = RELATION_DIM_V5
+        elif config.policy_input_version >= 4:
+            self.relation_dim = RELATION_DIM
+        else:
+            self.relation_dim = LEGACY_RELATION_DIM
         self.cards_per_player = config.max_cards_per_player
         self.perms_per_player = config.max_permanents_per_player
         self.max_actions = config.max_actions
@@ -394,9 +377,8 @@ class ObservationEncoder:
             row[RELATION_VALID_INDEX] = 1
             if self.shows_everything:
                 row[RELATION_X_INDEX] = frame.x
-                row[RELATION_KEYWORDS_INDEX : RELATION_KEYWORDS_INDEX + 14] = (
-                    frame.granted_keywords
-                )
+                # Granted keywords fill the row's remaining columns.
+                row[RELATION_KEYWORDS_INDEX:] = frame.granted_keywords
             rows.append(row)
             for ordinal, target in enumerate(frame.targets, 1):
                 target_row = row.copy()
