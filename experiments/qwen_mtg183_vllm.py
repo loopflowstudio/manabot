@@ -336,7 +336,17 @@ def runs(
     ceiling = Decimal(attempt_usd)
     if not ceiling.is_finite() or not Decimal("0") < ceiling <= Decimal("9.40"):
         raise ValueError("attempt_usd must be positive and at most 9.40")
-    config = Campaign(inference=SAMPLED_INFERENCE, games=games, concurrency=concurrency)
+    # The cap must cover the whole rental at the on-demand's $0.60/hour ceiling.
+    # Setup, server startup and delivery take the last 45 minutes of the window.
+    hours = min(11.0, float(ceiling / Decimal("0.60")))
+    if hours < 1.5:
+        raise ValueError("attempt_usd must cover at least 1.5 rental hours")
+    config = Campaign(
+        inference=SAMPLED_INFERENCE,
+        games=games,
+        concurrency=concurrency,
+        seconds=min(10 * 3600, hours * 3600 - 2700),
+    )
     job = original.runs(native_artifact, native_source)
     return job.model_copy(
         update={
@@ -345,6 +355,7 @@ def runs(
             "config": config.model_dump_json(),
             "setup": "sh scripts/qwen-mtg183-vllm-setup.sh",
             "max_usd": ceiling,
+            "max_hours": hours,
         }
     )
 
