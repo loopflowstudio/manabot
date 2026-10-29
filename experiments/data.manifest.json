@@ -32982,6 +32982,78 @@
    "sha256": "f7388d3acb9e877575facec3cf48548e76f54979e673298e4203efd20fe38dd6",
    "bytes": 17056
   },
+  "experiments/data/mtg212-jev/REPORT.md": {
+   "sha256": "0d5861786b51cd4188a1e8c4ab786d69256f6d5725cb495af8c2536bf47116c5",
+   "bytes": 5668
+  },
+  "experiments/data/mtg212-jev/campaign-1.tar.gz": {
+   "sha256": "40d9073bf97579a48e6a34ae942b388b72d14765a51d051829e2e82b32b6fc21",
+   "bytes": 18348489
+  },
+  "experiments/data/mtg212-jev/campaign-2.tar.gz": {
+   "sha256": "adf4826c01350f8d07ae67ffdc3a57e2dba166741635f3ef4a3acd35f7a6c68c",
+   "bytes": 3111294
+  },
+  "experiments/data/mtg212-jev/campaign-3.tar.gz": {
+   "sha256": "0f4232f39dedf2469962dea9b991c7d27d19dd6d3afd6988d57ba6c3f29ead83",
+   "bytes": 221509243
+  },
+  "experiments/data/mtg212-jev/evidence/billing-bound.json": {
+   "sha256": "e407a78a37c3548d31635b1688e000b265ccdbdb2c6818fd05b9a365164681a5",
+   "bytes": 1143
+  },
+  "experiments/data/mtg212-jev/evidence/finalize.sh": {
+   "sha256": "5e0db73e05a88c67e11725fbb6b114e087dc02d2fb8839392fc96bfc6b5df7af",
+   "bytes": 682
+  },
+  "experiments/data/mtg212-jev/evidence/freeze.py": {
+   "sha256": "9ab6d9b15a5db24ac5e96fba2bbbaef61c57988ff3fbdda9c22c25242062d087",
+   "bytes": 1743
+  },
+  "experiments/data/mtg212-jev/evidence/openrouter-jev-1.14-endpoints-20261028.json": {
+   "sha256": "e95ee387c4bb60e207c04553675cccf44bdacce35d75d3dfbb7de9eefa7f2705",
+   "bytes": 1241
+  },
+  "experiments/data/mtg212-jev/evidence/probe.py": {
+   "sha256": "e848c04943f02c444396ef3578a9cdd7e21527d1a51574d697083aa77be0cec4",
+   "bytes": 1401
+  },
+  "experiments/data/mtg212-jev/evidence/protocol-v2.json": {
+   "sha256": "c41dc4e40f104878141ec846ba1c400e2329cc87993ea946e9d661cc660eebc6",
+   "bytes": 2090
+  },
+  "experiments/data/mtg212-jev/evidence/protocol-v3.json": {
+   "sha256": "44f997074576ab10bdd6d69943599f15e1f32d39c65bdbf63d42a0655e005ead",
+   "bytes": 2123
+  },
+  "experiments/data/mtg212-jev/evidence/protocol.json": {
+   "sha256": "eec33d3ccaa2f2760810938923d668c55f4cddc44ab82649a01ba524068fc4a6",
+   "bytes": 2064
+  },
+  "experiments/data/mtg212-jev/evidence/report.py": {
+   "sha256": "3785c8bbba830c55a191888363662c26b07f343d2101c5c7cbf795fc83038bcb",
+   "bytes": 13004
+  },
+  "experiments/data/mtg212-jev/evidence/w13-package-d7b98a487..627698fc1.patch": {
+   "sha256": "3b5632785bcaa0fc659df13275da10a3dcc14cc70c7bd1fd85ee89be15c01b22",
+   "bytes": 137352
+  },
+  "experiments/data/mtg212-jev/evidence/w13-package-d7b98a487..d5250d99e.patch": {
+   "sha256": "c7e2477e70268ff0e422ad0eb369704032828c259a7bccd445fd23abbe069add",
+   "bytes": 130988
+  },
+  "experiments/data/mtg212-jev/evidence/w13-package-d7b98a487..fa6a5de68.patch": {
+   "sha256": "df046ef2df1dd1d81eacda2ba60bc770d60bf1e3441f8a3831ed39fc69650523",
+   "bytes": 136057
+  },
+  "experiments/data/mtg212-jev/probe.tar.gz": {
+   "sha256": "02811787a50bf91dfa9dc0a2ab60e15562a33b39e49efc4f4dde70ffe9a79ab5",
+   "bytes": 242301
+  },
+  "experiments/data/mtg212-jev/summary.json": {
+   "sha256": "0c21f7a8cea227700c43503be6a1a78f1e3c361a7ff20cdb64c702d1c824a15f",
+   "bytes": 3151
+  },
   "experiments/data/opcode-alignment-v1.json": {
    "sha256": "f645e2b876253be1357794bef82fd827f0089cdeb7170c7c376ffb43eeb64a5c",
    "bytes": 562310

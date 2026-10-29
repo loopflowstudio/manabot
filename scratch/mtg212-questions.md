@@ -48,3 +48,10 @@ Current evidence and implementation: [mtg212.md](mtg212.md).
   requests (≤3) and replays the same frozen schedule from game one as a new
   cohort; campaign 1's 11 attempts stay separate and unpooled. Review may prefer
   fresh deal seeds for cohort 2, or a different treatment of transport failures.
+- **Campaign 3 is the reported cohort (2026-10-29, reversible engineering
+  choice):** it stopped at 127 attempts (124 valid) after three consecutive
+  `RemoteProtocolError` games at 00:21–00:23Z, while another Task's Jev
+  campaign shared the key. No cohort 4 was launched: it would need a fourth
+  protocol revision and replay the schedule from game one. About $7.6 of the
+  $10 remains; Jack Heart may authorize a further cohort (e.g. the unattempted
+  schedule suffix as new, unpooled evidence).
