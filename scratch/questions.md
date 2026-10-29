@@ -58,8 +58,11 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   each card's last instruction.
 - Hama/Azula: one opcode 78 `exile_linked` creates the source-linked grant at
   exile (Azula's static folds into it); "any type of mana" prices the cast as
-  generic equal to mana value. Opponent-owned permanent cards stay uncastable
-  (no control change) — both are in `tla::INCOMPLETE`. Sozin's Comet is listed
-  incomplete for foretell rather than shipping a visible face-down card.
+  generic equal to mana value. Control change is T2's, not T3's: only the
+  battlefield holder and resolution's entry controller change.
+- Foretell is `PriorityActivateAbility` (no new action type or offer verb;
+  Academy labels it "Foretell X"). A face-down move is hidden from history
+  and events for both players (they are not per viewer). Possible-worlds
+  constraints still ignore foretold cards (not a leak; prior slightly off).
 - Text observation admits stages `revealed_hand`, `split_revealed`,
   `free_cast`, `linked_exile`.
