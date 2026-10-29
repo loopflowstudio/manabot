@@ -50,6 +50,8 @@ Restricted-mana text names the class, not Lesson-only (`ee9e32383`).
 
 ## Check
 
+2026-10-29 compress (after Academy statuses): nothing to reduce in `Card.svelte`/`PermanentRow.svelte` and its test; scratch 9518/12000 tokens; no checks rerun.
+
 2026-10-29 implement (concept review 4): `Card.svelte` prints and names exhaust/once-each-turn/granted-firebending statuses in text-5 wording, fed from `PermanentRow.svelte`; `PermanentRow.svelte.test.ts` 2 pass; Academy `npm run check` 0 errors and `npm run build` pass (after `npm ci`, node 26 runs).
 
 2026-10-29 realign: plan matches code (51 T2 cards allocated; none in `tla::INCOMPLETE`); T1 head unchanged since `01e8f9975`; no checks rerun.
