@@ -1,6 +1,6 @@
 # T2 — TLA casting, costs, zone permissions and private zones (Task 87e012)
 
-Stacked on T1 (892c47, PR #394, synced at head `8790821da`); T2 is PR #398.
+Stacked on T1 (892c47, PR #394, synced at its head `01e8f9975` via `4d3b9b066`); T2 is PR #398.
 Task directive lists the 51 cards and obligations; allocation in
 `docs/rules/tla/allocation.jsonl` (`planned_pr: T2`). Every merge needs Jack
 Heart's review; don't arm T2's merge while #394 is open. Status: implementation
@@ -46,10 +46,13 @@ Restricted-mana text names the class, not Lesson-only (`ee9e32383`).
 ## Remaining
 
 - Gate: CLAUDE.md arena admission/monitoring suite; Academy check/build (local
-  node can't load libllhttp; CI); world-bound receipts T1 already flagged.
+  node can't load libllhttp; CI, running on `4d3b9b066` at 2026-10-29
+  realign); world-bound receipts T1 already flagged.
 - Land only after #394 lands; re-sync then.
 
 ## Check
+
+2026-10-29 realign: plan matches code (51 T2 cards allocated; none in `tla::INCOMPLETE`); T1 head unchanged since `01e8f9975`; no checks rerun.
 
 2026-10-29 compress: removed orphaned `tests/support/casting.rs`; TLA any-color/two-color mana modes use `one_mana_of_any_color`/`two_mana_in_any_combination` (same mode order). Debug `cargo test --test cards` 303, rules 131 + 2 ignored, content_pack 3; clippy `-D warnings` clean.
 
