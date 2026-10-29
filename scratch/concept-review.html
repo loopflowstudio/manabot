@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>T3 concept review after item 20 — card-test layout</title>
+<title>T3 concept review after item 21 — finish the card-test move</title>
 <style>
   :root { color-scheme: light dark; --fg:#1d1b18; --bg:#faf8f4; --mute:#6b655c; --line:#ddd6ca; --prop:#7a4b00; --code:#efe9df; }
   @media (prefers-color-scheme: dark) { :root { --fg:#ece7de; --bg:#1a1916; --mute:#a39b8e; --line:#3a362f; --prop:#f0b45a; --code:#26241f; } }
@@ -22,32 +22,31 @@
 <body><main>
 <header>
   <p>Task 6875f0 · TLA T3 · concept-review step (headless) · 2026-10-29</p>
-  <p>Built from <code>scratch/6875f0-tla-t3-characteristics.md</code>, <code>scratch/questions.md</code>, <code>AGENTS.md</code>, <code>managym/tests/cards.rs</code>, <code>managym/tests/rules/*</code>, commits <code>a1d67b416</code>, <code>12c1aae3b</code></p>
+  <p>Built from <code>scratch/6875f0-tla-t3-characteristics.md</code>, Jack Heart's 2026-10-29 card-test steer, <code>CLAUDE.md</code>, <code>managym/tests/cards.rs</code>, <code>managym/tests/rules/{mod,tla_content,tla_mechanics}.rs</code>, <code>managym/tests/cards/support.rs</code>, commit <code>9cf2f4e71</code>.</p>
 </header>
 
-<h1>Card tests should sit where the docs say they do</h1>
-<p>Item 20 (Academy and text labels for effect-derived characteristics) matches the accepted model: the labels repeat shared observation fields, hide no choice and reveal nothing new. No change is needed there.</p>
-<p>One mismatch remains. Jack Heart's 2026-10-29 steer already settles it, so this review records it as implement direction and asks no new question.</p>
+<h1>One card's tests live with its set. One file still breaks that rule.</h1>
+<p><strong>Decision:</strong> none needed. Jack Heart's steer already settles this. Outcome: <em>the design changed</em>, so the loop goes back to implement for item 22.</p>
 
-<h2>The mismatch</h2>
+<h2>Actions → concepts → APIs</h2>
 <table>
-  <tr><th></th><th>Before (verified)</th><th>After (proposed)</th></tr>
-  <tr><td>Contributor's action</td><td>Looks for a card's tests. Finds T3's under <code>tests/cards/tla.rs</code> and T1's and earlier sets' under <code>tests/rules/*_cards.rs</code>, grouped by stage.</td><td>Opens <code>tests/cards/&lt;set&gt;.rs</code>, which mirrors <code>src/cardsets/&lt;set&gt;.rs</code>.</td></tr>
-  <tr><td>Concept</td><td>Two homes for per-card evidence. AGENTS.md on this branch already describes only one.</td><td>A single home for each card's tests. <code>tests/rules/</code> holds engine machinery that is not about one card.</td></tr>
-  <tr><td>Code</td><td><code>tests/cards.rs</code> declares only <code>tla</code></td><td>One <code>mod</code> for each set. Shared helpers live in <code>cards/support.rs</code> or <code>rules/helpers.rs</code>.</td></tr>
+<tr><th>A contributor wants to…</th><th>Concept</th><th>Where it lives</th></tr>
+<tr><td>see how a card behaves</td><td>Card test</td><td><code>tests/cards/&lt;set&gt;.rs</code>, mirroring <code>src/cardsets/&lt;set&gt;.rs</code></td></tr>
+<tr><td>see how a rule behaves across cards</td><td>Rule test</td><td><code>tests/rules/cr_*.rs</code>, <code>tla_mechanics.rs</code></td></tr>
+<tr><td>drive a scenario</td><td>Shared driver</td><td><code>tests/cards/support.rs</code> (both targets mount it)</td></tr>
+<tr><td>know whether a card is supported</td><td>Definition</td><td>the set file alone; tests never decide support</td></tr>
 </table>
 
+<h2>The mismatch</h2>
+<p>Before (now): <code>tests/rules/tla_content.rs</code> has 37 tests. Almost all of them test one TLA card, for example <code>allies_at_last_…</code>, <code>water_tribe_captain_…</code>, <code>momo_…</code> and <code>piandao_…</code>. It also defines its own <code>choose</code>, <code>activate</code>, <code>tapped</code>, <code>can_cast</code>, <code>enter</code> and <code>keywords</code> beside the shared drivers. To find a TLA card's tests, you have to look in two folders.</p>
 <div class="proposed">
-<p><strong>Item 21:</strong> a move-only commit. Each test about one card moves to the set file of that card's first printing. Tests that cover machinery across cards stay where they are (<code>tla_content.rs</code>, <code>cr_*</code>). Assertions do not change, and the debug <code>cargo test</code> counts must match before and after. Emptied files are deleted. If PR #394 moves these tests first, the sync takes its layout. Tests and coverage never gate support.</p>
+<p>After (item 22, move-only): each of those tests goes to <code>tests/cards/tla.rs</code>, or to <code>tokens.rs</code> for token templates. A test that really covers a rule goes to the matching <code>cr_*.rs</code> or to <code>tla_mechanics.rs</code>. <code>tla_content.rs</code> and its <code>mod</code> line are deleted. Tests use the drivers in <code>support.rs</code>, and renamed pairs that do the same thing (<code>activate_named</code>, <code>enter_settled</code>, <code>ready_named</code>, <code>cast_available</code>) are merged. The debug test total stays at 481.</p>
 </div>
-
-<h2>Still deferred, not blocking</h2>
-<p>Jack Heart's PR review will decide whether the policy tensor encodes item 19's fields (stun and fire counters, attachment). That is a new policy-input version or a later Task. Until then, bots play without perceiving them.</p>
+<p><code>tla_mechanics.rs</code> stays where it is. Its tests use vanilla, injected or fixture-only cards to check engine mechanics, so they are not about one printed card.</p>
 
 <h2>Questions</h2>
 <ol>
-  <li>Card-test split: (a) move every per-card test now, as proposed; (b) move only the TLA tests in <code>tla_cards.rs</code> and leave the other sets to PR #394.</li>
-  <li>Policy tensor for item 19's fields: (a) a policy-input version bump in T3; (b) a later Task.</li>
+<li>None block this loop. Whether to encode item 19's fields in the policy tensor stays with your PR review: (a) bump the policy-input version in T3, or (b) do it in a later Task.</li>
 </ol>
 </main></body>
 </html>

@@ -26,5 +26,4 @@ pub mod structured_offers;
 #[allow(dead_code)]
 #[path = "../cards/support.rs"]
 pub mod support;
-pub mod tla_content;
 pub mod tla_mechanics;

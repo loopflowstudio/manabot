@@ -159,9 +159,8 @@ Protocol schema tests and `pytest tests/semantic` pass but for 3 frozen
 Academy `test_ur_lessons_increment` / study bench fail on w13 pins and the stale
 study source closure — all world-release evidence, left to gate.
 
-Compress after item 19: both firebending effects share `Game::grant_firebending`;
-`add_permanent` reads `set_characteristics` once; bool omission uses `Not::not`.
-Debug: clippy/fmt clean, lib 122, cards 125, rules_tests 356 (serialization unchanged).
+Compress after item 19 (`57742379c`): shared `Game::grant_firebending`; one
+`set_characteristics` read in `add_permanent`.
 
 21. Card-test layout (Jack Heart's 2026-10-29 steer; done, move-only): the
    per-card tests of eight `tests/rules/` files now sit in `tests/cards/<set>.rs`
@@ -170,14 +169,27 @@ Debug: clippy/fmt clean, lib 122, cards 125, rules_tests 356 (serialization unch
    colliding helpers were renamed, not merged. Cross-card machinery is in
    `rules/tla_mechanics.rs`. Check (debug): clippy/fmt clean; cards 312 +
    rules_tests 169 = 481 (was 125 + 356); only the w15 receipt failures.
-   Compress: `battlefield_card` folded into `card_of`; support helpers build on
-   each other (`can_cast`→`can_cast_now`, `cast_available`→`cast_card`,
-   `ready_named`→`ready`, `cast_and_resolve`→`resolve`, readers via
-   `permanent_state`). Debug: clippy/fmt clean, cards 312, rules_tests 169.
+   Compress (`d261acf7a`): support helpers build on one another.
+   PR #394 (head `86ebe9ccf`, an ancestor) keeps the old layout; this move stands.
+
+## Done after item 21
+
+22. Card-test move finished (move-only, concept review after item 21 applying
+   Jack Heart's steer): all 37 `rules/tla_content.rs` tests are in
+   `cards/tla.rs` (TLA's own tokens are TLA cards; `tokens.rs` is the other
+   sets' tokens; keyword sweeps across TLA cards are per-card evidence). The
+   file and its `mod` line are gone. Local drivers became support's: `choose`,
+   `activate`, `tapped`, `can_cast_now`, and a shared `enter` that
+   `enter_settled` now builds on. `activate` refreshes only a priority space, so
+   `activate_named` is `permanent` + `activate`. `tla.rs`'s `keywords` reads
+   `Permanent::effective_keywords`. `tla_mechanics.rs` stays (vanilla, injected
+   or fixture-only cards). Check (debug): fmt/clippy clean; cards 349 +
+   rules_tests 132 = 481; one intermittent, untouched `structured_offers`
+   failure (`scratch/questions.md`).
 
 ## Remaining
 
-No implement item remains; all 49 cards are done. World release items (registration
+All 49 cards are done; next is gate. World release items (registration
 literal, receipts, frozen asserts) belong to the stack's world release, not this
 slice. Browser proof of the stunned and equipped creature is left to demo. Policy
 tensor encoding of item 19's fields is undecided: Jack Heart's PR review chooses

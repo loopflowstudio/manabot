@@ -130,8 +130,11 @@ mana, `Game::zone_cast_cost`/`may_play_from_zone`, `ZoneEntry`.
   2026-10-21 Academy direction). Encoding them in the policy tensor (a new policy-input
   version beside v4) is left for Jack Heart's PR review; bots train and play
   T3 cards without perceiving stun/fire counters or attachment until then.
-- Item 21 left `rules/tla_content.rs` in place as directed, though most of its
-  tests are per-card TLA tests; moving them and merging the renamed drivers
-  (`activate_named`, `enter_settled`, `ur_lessons_setup`, ...) into one set is
-  a follow-up. Multi-set tests went to the first card named (`landfall_*` →
-  `fin.rs`).
+- Item 22 moved all of `rules/tla_content.rs` into `cards/tla.rs` and merged its
+  drivers into `cards/support.rs`. Multi-set tests went to the first card named
+  (`landfall_*` → `fin.rs`). TLA's fixed tokens are TLA cards, so their tests
+  stay in `tla.rs` (assumed reading of "tokens go to tokens.rs").
+- `rules::structured_offers::structured_offer_rejects_fabricated_and_stale_ids_without_mutation`
+  failed once at `structured_offers.rs:329` in a full debug `rules_tests` run,
+  then passed alone and on a full rerun. It is untouched here and may compare a
+  nondeterministic `Debug` rendering. Gate should watch for it.

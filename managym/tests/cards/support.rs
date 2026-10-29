@@ -135,8 +135,11 @@ pub fn can_activate_any(s: &mut Scenario, source: PermanentId) -> bool {
     )
 }
 
+/// Activate ability `index` of `source`, refreshing a priority space first.
 pub fn activate(s: &mut Scenario, source: PermanentId, index: usize) {
-    s.game_mut().scenario_refresh_priority().unwrap();
+    if s.action_space().kind == ActionSpaceKind::Priority {
+        s.game_mut().scenario_refresh_priority().unwrap();
+    }
     choose(s, |a| {
         matches!(a, Action::ActivateAbility { permanent, ability_index, .. }
             if *permanent == source && *ability_index == index)
@@ -309,10 +312,18 @@ pub fn cast_and_resolve(s: &mut Scenario) {
     resolve(s);
 }
 
-pub fn enter_settled(s: &mut Scenario, name: &str) -> CardId {
+/// Put a library copy of `name` onto player 0's battlefield and refresh priority.
+pub fn enter(s: &mut Scenario, name: &str) -> PermanentId {
     let id = library_card(s, 0, name);
     s.game_mut().move_card(id, ZoneType::Battlefield);
     s.game_mut().scenario_refresh_priority().unwrap();
+    s.game().state.card_to_permanent[id].unwrap()
+}
+
+/// [`enter`], then resolve any entry triggers.
+pub fn enter_settled(s: &mut Scenario, name: &str) -> CardId {
+    let entered = enter(s, name);
+    let id = card_of(s, entered);
     if !s.game().state.pending_triggers.is_empty() {
         s.pass_priority();
     }
@@ -322,13 +333,7 @@ pub fn enter_settled(s: &mut Scenario, name: &str) -> CardId {
 
 pub fn activate_named(s: &mut Scenario, name: &str, index: usize) {
     let source = permanent(s, name);
-    if s.action_space().kind == ActionSpaceKind::Priority {
-        s.game_mut().scenario_refresh_priority().unwrap();
-    }
-    choose(
-        s,
-        |action| matches!(action, Action::ActivateAbility { permanent, ability_index, .. } if *permanent == source && *ability_index == index),
-    );
+    activate(s, source, index);
 }
 
 pub fn ready_named(s: &mut Scenario, name: &str) {
