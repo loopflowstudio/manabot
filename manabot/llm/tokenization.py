@@ -1,5 +1,7 @@
 """Pinned chat encoding and lossless response decoding shared by LLM backends."""
 
+from collections.abc import Callable
+
 from huggingface_hub import snapshot_download
 from transformers import AutoTokenizer, PreTrainedTokenizerBase
 
@@ -89,4 +91,51 @@ def decode_response(
         finish_reason="eos" if ended else "length",
         reasoning_tokens=reasoning_tokens,
         answer_tokens=answer_tokens,
+    )
+
+
+# Continue the given token IDs with at most this many generated tokens.
+type Complete = Callable[[tuple[int, ...], int], tuple[int, ...]]
+
+# Qwen's template renders the end of reasoning as "\n</think>\n\n" before the answer.
+_FORCED_CLOSE = "\n</think>\n\n"
+
+
+def generate_response(
+    complete: Complete,
+    tokenizer: PreTrainedTokenizerBase,
+    config: InferenceConfig,
+    prompt: EncodedPrompt,
+    eos_ids: set[int],
+) -> GeneratedResponse:
+    """Generate one response, forcing the thinking boundary at its budget.
+
+    Budget forcing (Muennighoff et al., 2025, "s1: Simple test-time scaling")
+    stops unfinished reasoning by appending the closing delimiter; the model then
+    answers from that prefix. Responses that close or end within the budget are
+    returned unchanged. Inserted tokens count toward max_new_tokens.
+    """
+    budget = config.thinking_budget
+    if budget is None:
+        tokens = complete(prompt.token_ids, config.max_new_tokens)
+        return decode_response(tokenizer, tokens, eos_ids, config.enable_thinking)
+    thought = complete(prompt.token_ids, budget)
+    (close,) = tokenizer.encode("</think>", add_special_tokens=False)
+    if (thought and thought[-1] in eos_ids) or len(thought) < budget:
+        return decode_response(tokenizer, thought, eos_ids, True)
+    inserted: tuple[int, ...] = ()
+    if close not in thought:
+        inserted = tuple(tokenizer.encode(_FORCED_CLOSE, add_special_tokens=False))
+        if inserted.count(close) != 1:
+            raise ValueError("forced close must contain one closing delimiter")
+    head = thought + inserted
+    allowance = config.max_new_tokens - len(head)
+    if allowance <= 0:
+        raise ValueError("thinking budget leaves no answer allowance")
+    rest = complete(prompt.token_ids + head, allowance)
+    response = decode_response(tokenizer, head + rest, eos_ids, True)
+    if not inserted:
+        return response
+    return response.model_copy(
+        update={"forced_close_at": len(thought), "inserted_token_ids": inserted}
     )

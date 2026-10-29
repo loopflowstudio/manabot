@@ -25,9 +25,9 @@ from manabot.llm.schema import (
     RuntimeIdentity,
 )
 from manabot.llm.tokenization import (
-    decode_response,
     encode_prompt,
     eos_token_ids,
+    generate_response,
     load_tokenizer,
 )
 
@@ -127,27 +127,34 @@ class TransformersRuntime:
         return encode_prompt(self.tokenizer, self.config, messages)
 
     def generate(self, prompt: EncodedPrompt, deadline: float) -> GeneratedResponse:
+        return generate_response(
+            lambda tokens, limit: self._complete(tokens, limit, deadline),
+            self.tokenizer,
+            self.config,
+            prompt,
+            self.eos_ids,
+        )
+
+    def _complete(
+        self, token_ids: tuple[int, ...], limit: int, deadline: float
+    ) -> tuple[int, ...]:
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise TimeoutError("decision deadline exhausted before generation")
-        inputs = torch.tensor(
-            [prompt.token_ids], dtype=torch.long, device=self.config.device
-        )
+        inputs = torch.tensor([token_ids], dtype=torch.long, device=self.config.device)
         if self.config.sampling is not None:
             # The worker process owns this runtime, so the global generator is
             # reseeded from the exact prompt immediately before each draw.
-            torch.manual_seed(self.config.sampling.request_seed(prompt.token_ids))
+            torch.manual_seed(self.config.sampling.request_seed(token_ids))
         with torch.inference_mode():
             output = self.model.generate(
                 input_ids=inputs,
                 attention_mask=torch.ones_like(inputs),
                 generation_config=self.generation,
+                max_new_tokens=limit,
                 max_time=remaining,
             )
-        tokens = tuple(int(token) for token in output[0, inputs.shape[1] :].tolist())
-        return decode_response(
-            self.tokenizer, tokens, self.eos_ids, self.config.enable_thinking
-        )
+        return tuple(int(token) for token in output[0, inputs.shape[1] :].tolist())
 
     def peak_gpu_bytes(self) -> int | None:
         # CPU has no GPU measurement; zero would incorrectly claim one.
