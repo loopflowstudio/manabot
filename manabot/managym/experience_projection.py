@@ -129,6 +129,10 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
         "creature_types": permanent.creature_types,
         "is_granted_land": bool(permanent.is_granted_land) or None,
         "firebending": int(permanent.firebending) or None,
+        "attacking": bool(permanent.attacking) or None,
+        "blocking": permanent.blocking,
+        "abilities_lost": bool(permanent.abilities_lost) or None,
+        "used_abilities": list(permanent.used_abilities) or None,
     }
     return {key: value for key, value in values.items() if value is not None}
 
@@ -198,6 +202,8 @@ def _serialize_player(
             str(key): int(count)
             for key, count in player.remaining_sideboard_counts.items()
         },
+        **({"keeps_red_mana": True} if player.keeps_red_mana else {}),
+        **({"no_maximum_hand_size": True} if player.no_maximum_hand_size else {}),
         "hand": grouped_cards["HAND"],
         "graveyard": grouped_cards["GRAVEYARD"],
         "exile": grouped_cards["EXILE"],

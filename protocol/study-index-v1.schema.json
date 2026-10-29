@@ -1109,6 +1109,10 @@
     "LegacyPermanentView": {
       "type": "object",
       "properties": {
+        "abilities_lost": {
+          "description": "It has lost all abilities.",
+          "type": "boolean"
+        },
         "attached_to": {
           "description": "The permanent this Aura or Equipment is attached to.",
           "type": [
@@ -1118,11 +1122,24 @@
           "format": "uint32",
           "minimum": 0
         },
+        "attacking": {
+          "description": "Attacking in the current combat.",
+          "type": "boolean"
+        },
         "base_power": {
           "$ref": "#/$defs/RequiredNullable5"
         },
         "base_toughness": {
           "$ref": "#/$defs/RequiredNullable5"
+        },
+        "blocking": {
+          "description": "The attacking permanent this one blocks.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
         },
         "controller_id": {
           "type": "integer",
@@ -1214,6 +1231,15 @@
               "type": "null"
             }
           ]
+        },
+        "used_abilities": {
+          "description": "Activated abilities (indices in its ability list) whose limit is spent.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
         }
       },
       "additionalProperties": false,
@@ -1290,6 +1316,10 @@
         "is_agent": {
           "type": "boolean"
         },
+        "keeps_red_mana": {
+          "description": "Unspent red mana stays until end of turn.",
+          "type": "boolean"
+        },
         "known_hand": {
           "type": "object",
           "additionalProperties": {
@@ -1330,6 +1360,10 @@
           },
           "maxItems": 6,
           "minItems": 6
+        },
+        "no_maximum_hand_size": {
+          "description": "No maximum hand size for the rest of the game.",
+          "type": "boolean"
         },
         "player_index": {
           "type": "integer",

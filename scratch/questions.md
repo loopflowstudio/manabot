@@ -116,22 +116,13 @@ mana, `Game::zone_cast_cost`/`may_play_from_zone`, `ZoneEntry`.
   applied at resolution). The required waterbend {X} adds to the total cost,
   not the mana value; a free cast still pays it with X = 0. Kicker and a
   required additional cost on one spell are rejected at compile time.
-- Item 19 (observation change, with Fire Nation Palace): the new fields are
-  observation, protocol-view and Academy-type data only, like T2's `face_down`;
-  no policy tensor column and no new policy-input version, so frozen widths and
-  checkpoints are untouched. Encoding them for policies is a later choice.
-  Name/creature types appear only while an effect sets them; spell keyword
+- Item 19 (with Fire Nation Palace): Name/creature types appear only while an effect sets them; spell keyword
   grants reach `Observation`, not the Academy stack view. `.pyi` now also lists `Permanent`'s
   existing `exile_if_dies_this_turn` and `temp_subtypes`.
 - `manabot/sim/registration.py` admits worlds only up to w15 (w16 and w17 are
   rejected); left to the world release with the receipts.
-- Concept review after item 19: Academy and the LLM text observation render
-  item 19's fields (done in item 20 `a1d67b416`, settled by Jack Heart's
-  2026-10-21 Academy direction). Encoding them in the policy tensor (a new policy-input
-  version beside v4) is left for Jack Heart's PR review; bots train and play
-  T3 cards without perceiving stun/fire counters or attachment until then.
-  Superseded 2026-10-29: Jack Heart chose full policy encoding in T3 (policy
-  input v5, item 23).
+- Item 19's "no policy encoding" choice was superseded 2026-10-29 by Jack
+  Heart's full policy encoding (policy input v5, item 23).
 - Item 22 moved all of `rules/tla_content.rs` into `cards/tla.rs` and merged its
   drivers into `cards/support.rs`. Multi-set tests went to the first card named
   (`landfall_*` → `fin.rs`). TLA's fixed tokens are TLA cards, so their tests

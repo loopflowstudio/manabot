@@ -296,6 +296,68 @@ def test_face_down_card_text_appears_only_when_present() -> None:
     assert len(changed) == 1 and "; face down;" in changed[0][1]
 
 
+def _card_line(text: str, alias: str) -> str:
+    return next(line for line in text.splitlines() if line.startswith(f"{alias} ("))
+
+
+def _foretell(env: managym.Env) -> None:
+    decision = capture_text_decision(env)
+    foretell = next(a for a in decision.actions if "Foretell" in a.description)
+    submit_response(env, decision, foretell.reference)
+
+
+def test_foretell_is_an_ability_offer_naming_the_card() -> None:
+    env = priority_root(("Sozin's Comet",), ("Mountain",) * 6)
+    actions = capture_text_decision(env).text.split("Legal actions:\n", 1)[1]
+    assert actions.splitlines() == [
+        "A0 — Cast C1 (Sozin's Comet).",
+        "A1 — Activate ability of C1 (Sozin's Comet). Native description:"
+        " Foretell Sozin's Comet.",
+        "A2 — Pass priority.",
+    ]
+    _foretell(env)
+    decision = capture_text_decision(env)
+    assert "; zone exile; " in _card_line(decision.text, "C1")
+    assert "; face down; " in _card_line(decision.text, "C1")
+    assert [a.description for a in decision.actions] == ["Pass priority"]
+
+
+def test_a_foretold_card_is_cast_from_exile_on_a_later_turn() -> None:
+    env = priority_root(("Sozin's Comet",), ("Mountain",) * 6)
+    _foretell(env)
+    for _ in range(200):
+        decision = capture_text_decision(env)
+        if (
+            "Turn 3. Phase: first main." in decision.text
+            and "Active player: You. Acting player: You." in decision.text
+        ):
+            break
+        passing = next(
+            (a for a in decision.actions if a.description == "Pass priority"),
+            decision.actions[0],
+        )
+        submit_response(env, decision, passing.reference)
+    else:
+        raise AssertionError("the owner's next main phase was not reached")
+    cast = next(a for a in decision.actions if a.description.startswith("Cast "))
+    alias = cast.description.removeprefix("Cast ").split(" ", 1)[0]
+    assert cast.description == f"Cast {alias} (Sozin's Comet)"
+    line = _card_line(decision.text, alias)
+    assert "; zone exile; " in line and "; face down; " in line
+
+
+def test_an_ally_is_cast_from_the_visible_top_of_the_library() -> None:
+    env = priority_root((), ("Hakoda, Selfless Commander",) + ("Plains",) * 4)
+    decision = capture_text_decision(env)
+    assert decision.actions[0].description == "Cast C1 (Hakoda, Selfless Commander)"
+    assert "; zone library; " in _card_line(decision.text, "C1")
+    submit_response(env, decision, decision.actions[0].reference)
+    stack = capture_text_decision(env).text.split(
+        "Stack (native order, top to bottom):\n", 1
+    )[1]
+    assert stack.startswith("S1: spell [D2]; controller You; source C2 (Hakoda,")
+
+
 _KEYWORDS = (
     "flying",
     "reach",

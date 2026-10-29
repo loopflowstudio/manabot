@@ -334,6 +334,14 @@ class LegacyPermanentView(ProtocolModel):
     )
     is_granted_land: bool = Field(default=False, exclude_if=lambda value: not value)
     firebending: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    attacking: bool = Field(default=False, exclude_if=lambda value: not value)
+    blocking: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    abilities_lost: bool = Field(default=False, exclude_if=lambda value: not value)
+    used_abilities: list[UInt32] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
 
 
 class SideboardCardView(ProtocolModel):
@@ -379,6 +387,10 @@ class LegacyPlayerView(ProtocolModel):
     hand_hidden_count: UInt32 | None = Field(
         default=None,
         exclude_if=lambda value: value is None,
+    )
+    keeps_red_mana: bool = Field(default=False, exclude_if=lambda value: not value)
+    no_maximum_hand_size: bool = Field(
+        default=False, exclude_if=lambda value: not value
     )
     hand: list[LegacyCardView]
     graveyard: list[LegacyCardView]

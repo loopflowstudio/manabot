@@ -57,6 +57,14 @@ export interface PermanentState {
   is_granted_land?: boolean;
   /** Firebending gained until end of turn. */
   firebending?: number;
+  /** Attacking in the current combat. */
+  attacking?: boolean;
+  /** The attacking permanent this one blocks. */
+  blocking?: number;
+  /** It has lost all abilities. */
+  abilities_lost?: boolean;
+  /** Activated abilities (indices in its ability list) whose limit is spent. */
+  used_abilities?: number[];
 }
 
 export interface SideboardCard {
@@ -84,6 +92,10 @@ export interface PlayerState {
   zone_counts: Record<string, number>;
   library_count: number;
   hand_hidden_count?: number;
+  /** Unspent red mana stays until end of turn. */
+  keeps_red_mana?: boolean;
+  /** No maximum hand size for the rest of the game. */
+  no_maximum_hand_size?: boolean;
   hand: CardState[];
   graveyard: CardState[];
   exile: CardState[];

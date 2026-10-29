@@ -24,5 +24,11 @@ export function permanentNotes(permanent: PermanentState, table: PermanentState[
       : null,
     permanent.is_granted_land ? 'land through an effect' : null,
     permanent.firebending ? `firebending ${permanent.firebending}` : null,
+    permanent.attacking ? 'attacking' : null,
+    permanent.blocking !== undefined ? `blocking ${named(permanent.blocking)}` : null,
+    permanent.abilities_lost ? 'has lost all abilities' : null,
+    permanent.used_abilities?.length
+      ? `used-up abilities ${permanent.used_abilities.map(index => index + 1).join(', ')}`
+      : null,
   ].filter((note): note is string => note !== null);
 }

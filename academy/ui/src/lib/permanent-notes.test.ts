@@ -36,4 +36,13 @@ describe('permanent notes', () => {
     expect(permanentNotes(land, [land])).toEqual(['land through an effect']);
     expect(permanentNotes(zuko, [zuko])).toEqual(['firebending 2']);
   });
+
+  it('states combat assignments, lost abilities and spent activation limits', () => {
+    const attacker = permanent(6, 'Bear', { attacking: true });
+    const blocker = permanent(7, 'Wall', { controller_id: 1, blocking: 6 });
+    const blank = permanent(8, 'Turtle', { abilities_lost: true, used_abilities: [0, 2] });
+    expect(permanentNotes(attacker, [attacker, blocker])).toEqual(['attacking']);
+    expect(permanentNotes(blocker, [attacker, blocker])).toEqual(['blocking Bear']);
+    expect(permanentNotes(blank, [blank])).toEqual(['has lost all abilities', 'used-up abilities 1, 3']);
+  });
 });

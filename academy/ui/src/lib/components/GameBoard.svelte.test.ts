@@ -14,3 +14,18 @@ it('states the announced X on an ordered stack entry only when present', () => {
   expect(top).toContain('X = 3');
   expect(second).not.toContain('X =');
 });
+
+it('states kept red mana and hand-size freedom only for the player they apply to', () => {
+  const observation = structuredClone(fixture.recovery.frame.projection) as Observation;
+  observation.agent.mana = [0, 0, 0, 1, 0, 0];
+  observation.agent.keeps_red_mana = true;
+  observation.agent.no_maximum_hand_size = true;
+  const body = render(GameBoard, { props: { observation } }).body;
+  expect(body.match(/Keeps unspent red mana until end of turn/g)).toHaveLength(1);
+  expect(body.match(/data-testid="no-maximum-hand-size"/g)).toHaveLength(1);
+  delete observation.agent.keeps_red_mana;
+  delete observation.agent.no_maximum_hand_size;
+  const plain = render(GameBoard, { props: { observation } }).body;
+  expect(plain).not.toContain('Keeps unspent red mana');
+  expect(plain).not.toContain('No maximum hand size');
+});

@@ -2270,6 +2270,11 @@
     "LegacyPermanentView": {
       "additionalProperties": false,
       "properties": {
+        "abilities_lost": {
+          "default": false,
+          "title": "Abilities Lost",
+          "type": "boolean"
+        },
         "attached_to": {
           "anyOf": [
             {
@@ -2283,6 +2288,11 @@
           ],
           "default": null,
           "title": "Attached To"
+        },
+        "attacking": {
+          "default": false,
+          "title": "Attacking",
+          "type": "boolean"
         },
         "base_power": {
           "anyOf": [
@@ -2309,6 +2319,20 @@
             }
           ],
           "title": "Base Toughness"
+        },
+        "blocking": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Blocking"
         },
         "controller_id": {
           "maximum": 4294967295,
@@ -2454,6 +2478,15 @@
             }
           ],
           "default": null
+        },
+        "used_abilities": {
+          "items": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Used Abilities",
+          "type": "array"
         }
       },
       "required": [
@@ -2550,6 +2583,11 @@
         },
         "is_agent": {
           "title": "Is Agent",
+          "type": "boolean"
+        },
+        "keeps_red_mana": {
+          "default": false,
+          "title": "Keeps Red Mana",
           "type": "boolean"
         },
         "known_hand": {
@@ -2664,6 +2702,11 @@
           ],
           "default": null,
           "title": "Mana"
+        },
+        "no_maximum_hand_size": {
+          "default": false,
+          "title": "No Maximum Hand Size",
+          "type": "boolean"
         },
         "player_index": {
           "maximum": 255,

@@ -359,6 +359,18 @@ pub struct LegacyPermanentView {
     /// Firebending gained until end of turn.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub firebending: u32,
+    /// Attacking in the current combat.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub attacking: bool,
+    /// The attacking permanent this one blocks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocking: Option<u32>,
+    /// It has lost all abilities.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub abilities_lost: bool,
+    /// Activated abilities (indices in its ability list) whose limit is spent.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub used_abilities: Vec<u32>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
@@ -400,6 +412,12 @@ pub struct LegacyPlayerView {
     pub sideboard: Vec<SideboardCardView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hand_hidden_count: Option<u32>,
+    /// Unspent red mana stays until end of turn.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub keeps_red_mana: bool,
+    /// No maximum hand size for the rest of the game.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub no_maximum_hand_size: bool,
     pub hand: Vec<LegacyCardView>,
     pub graveyard: Vec<LegacyCardView>,
     pub exile: Vec<LegacyCardView>,

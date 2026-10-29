@@ -105,6 +105,7 @@
     <p class="type-caption py-1" data-testid="mana-pool">{label} mana: {manaText(player.mana)}
       {#if player.lesson_mana?.some(Boolean)} · Restricted mana: {manaText(player.lesson_mana)}{/if}
       {#if player.combat_mana} · {player.combat_mana} mana expires at end of combat{/if}
+      {#if player.keeps_red_mana} · Keeps unspent red mana until end of turn{/if}
     </p>
   {:else}<p class="type-caption text-ink-2">Mana details not recorded.</p>{/if}
   <!-- The player bar, in the manner of a chess clock plate: identity at
@@ -121,6 +122,9 @@
         </h2>
       </div>
       <div class={`flex items-baseline gap-4 ${pieColors.length > 0 ? 'text-[#f8f1e0]' : ''}`}>
+        {#if player.no_maximum_hand_size}
+          <span class={`type-caption ${pieColors.length > 0 ? 'text-[#f8f1e0]/75' : 'text-ink-2'}`} data-testid="no-maximum-hand-size">No maximum hand size</span>
+        {/if}
         <span class={`type-caption ${pieColors.length > 0 ? 'text-[#f8f1e0]/75' : 'text-ink-2'}`}>Library {player.library_count}</span>
         <div
           class={`flex items-baseline gap-1.5 ${focusedIds.has(player.id) ? `rounded outline-2 outline-offset-4 ${pieColors.length > 0 ? 'outline-[#f8f1e0]' : 'outline-action'}` : ''}`}

@@ -1,8 +1,8 @@
 # T3 — characteristics, counters, replacements, attachments (Task 6875f0)
 
 Brief: the Task directive (49 cards, obligations in `docs/rules/tla/allocation.jsonl`,
-`planned_pr == "T3"`). Stacked on T1 (892c47, PR #394 head `86ebe9ccf`) and synced onto T2
-(87e012, PR #398 head `16dfd3dbb`). Every merge needs Jack Heart's review.
+`planned_pr == "T3"`). Stacked on T1 (892c47, PR #394; last synced at head `e403b8a1f`,
+merge `e5f26e23b`) and synced onto T2 (87e012, PR #398 head `16dfd3dbb`). Every merge needs Jack Heart's review.
 Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
 
 ## Done (49 of 49)
@@ -50,21 +50,9 @@ seats via `tablePermanents`, set creature types, granted land, firebending) feed
 `Card`'s accessible name and margin chips, and the ordered stack shows "X = n".
 `text_observation.py` appends the same fields only when they are present, so
 existing text is byte-identical. `_characteristics` in the projection omits on
-`None`, not falsiness. Compress: `tablePermanents` is required through
-PlayerArea → Battlefield → BattlefieldZone (GameBoard always supplies it); only
-`PermanentRow` defaults it.
-
-Check (item 20 + compress): vitest 23 files/113 pass, `npm run check` 0 errors
-(nvm node 24; Homebrew node 25.8 lacks llhttp); `pytest
-tests/semantic/test_text_observation.py` 18 pass, `tests/academy/test_play_modes.py`
-12 pass; ruff clean. No Playwright run.
-
-Concept review after item 22 (2026-10-29): the layout matches Jack Heart's steer.
-`tests/cards/<set>.rs` mirrors `src/cardsets/`, and `cards.rs` mounts one module per
-set. TLA card names left in `tests/rules/` are witnesses for CR rules
-(`cr_400_7_*`, `dragonfly_sba_scenario`, structured offers) or deck filler for the
-full-deck replay, not single-card tests. The steer allows a coverage README or
-script but does not require one; nothing to change. Next: gate.
+`None`, not falsiness. Academy checks use nvm node 24 (Homebrew node 25.8 lacks llhttp). TLA card
+names left in `tests/rules/` are CR-rule witnesses or deck filler, not
+single-card tests (concept review after item 22).
 
 ## Delete — do not maintain
 
@@ -107,19 +95,9 @@ Scryfall id.
      like the definition); zero-initialized `attachment_to_host` /
      `host_to_attachment` exchange pre-attention embeddings both ways, v5 only.
    - LLM text adds "face down" and stack "granted keywords" (present-only).
-   - Tests: `managym/tests/cards/observability.rs` (guard with exhaustive
-     field patterns and every-column-claimed check; directed pairs that v4
-     cannot tell apart: stun, each counter kind, Equipment on A vs B, stack X
-     1 vs 3, Toph-granted land, firebending, temporary subtypes, keywords;
-     Honest Work join; Lo and Li spell lifelink; turn/seat; viewer safety for
-     foretold and hand cards). Python: v5 native = reference parity over
-     seeded T3 games reaching every new column, mutated-field parity,
-     attachment join, text guard over every pyclass field.
-
-Check (item 23): cargo fmt/clippy clean; `cards` observability 13 pass, lib
-`agent::` pass; pytest parity/observation/continuation/action identity 100,
-model/sim/env/belief 379 pass with 3 failures that also fail at HEAD (belief
-fixture lacks `relations`; belief receipt bound to the world), text 25 pass.
+   - Tests: `managym/tests/cards/observability.rs` (exhaustive guard; directed
+     pairs v4 cannot tell apart; viewer safety); Python native = reference
+     parity, attachment join, text guard over every pyclass field.
 
 24. Missing observation state (2026-10-29): `PermanentData.attacking`,
    `blocking` (the attacker from `CombatState.attacker_to_blockers`),
@@ -134,27 +112,33 @@ fixture lacks `relations`; belief receipt bound to the world), text 25 pass.
    both guards list them; directed Rust tests for attacking, blocking A vs B,
    lost abilities, spent exhaust and player flags.
 
-Check (items 23–24, debug): fmt/clippy clean; `cargo test --no-fail-fast` all
-pass except `semantic_conformance_tests` (2, w15 receipts, known); cards 367
-incl. observability 18. Pytest world/observation suite plus model, sim, env,
-belief, verify, text and play modes: 690 pass. 19 fail and 5 error, all on world-release
-evidence (registration literal stops at w15, w17 checkpoint binding, frozen
-digests and `schema_version`) or pre-existing failures (belief fixture without
-`relations`, synthetic rollout definitions, conditional-search digest), which
-also fail at `752c75ef7~1`.
 
-Compress (items 23–24): the Rust link closure is hoisted out of the row loop; the
-unused Python `KEYWORD_FIELDS` is removed and relation keywords fill
-`row[RELATION_KEYWORDS_INDEX:]`. `cards observability` 18 pass; parity,
-continuation and attachment-join pytest 25 pass.
+25. Academy and LLM text for item 24 (2026-10-29): `LegacyPermanentView`
+   gains `attacking`, `blocking`, `abilities_lost`, `used_abilities`;
+   `LegacyPlayerView` gains `keeps_red_mana`, `no_maximum_hand_size` (Rust,
+   Pydantic, six schemas regenerated, `types.ts`, projection omits at
+   defaults). `permanent-notes.ts` labels "attacking", "blocking X", "has lost
+   all abilities", "used-up abilities 1, 3" (the LLM text's words);
+   PlayerArea states kept red mana beside the mana pool and "No maximum hand
+   size" in the player bar. Directed LLM-text tests for the Foretell offer,
+   casting a foretold card on a later turn and casting an Ally from Hakoda's
+   library top; a live projection test for attack and block.
 
 ## Remaining
 
-- Academy protocol views (`LegacyPermanentView`/`LegacyPlayerView`, the six
-  schemas, `types.ts`) and display for item 24's fields.
 - After T1 (PR #394) publishes its authoring-layer removal: sync, convert
   this batch's cards to engine-type definitions (no new authoring `Op`s), add
   the learning-token half of the guard over `Effect`/`Ability`, and Scryfall
-  ids. Unpublished at PR #394 head `e403b8a1f` (2026-10-29).
-- World release items (registration literal, receipts, frozen asserts) and
-  browser proof as before.
+  ids. Still unpublished at `e403b8a1f`; T1's plan does not list the removal
+  or Scryfall ids, so the wait has no visible owner on T1's side.
+- World release items (registration literal stops at w15, w15 conformance
+  receipts, frozen `schema_version`/digest asserts, w13 pins) and browser proof.
+
+Check (items 23–24, debug, before the e403b8a1f merge): `cargo test --no-fail-fast`
+passes except `semantic_conformance_tests` (w15 receipts); pytest world/observation,
+model, sim, env, belief, verify, text, play modes 690 pass, 19 fail + 5 error, all
+world-release evidence or failing at `752c75ef7~1` too. The merge touched only
+`world.rs` (T1's one-pool-read support check): debug `cargo test --lib world::` 2 pass.
+Check (item 25): vitest 115 pass, `npm run check` 0 errors (nvm node 24); pytest
+play modes, experience/study/advice/replay/server protocol 89 pass; text
+observation 29 pass; debug `experience_protocol_tests` 5 pass.
