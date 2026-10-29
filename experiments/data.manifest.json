@@ -2498,6 +2498,166 @@
    "sha256": "af7557764779326ca1a218c273e09e5823674b1a9817ad5f09e7aec40db54f5d",
    "bytes": 1492
   },
+  "experiments/data/jev-encoding/REPORT.md": {
+   "sha256": "d35388e88140bbb577f07f0cc6f3810000f47fdf60c37391b5e8156ac297cae4",
+   "bytes": 7837
+  },
+  "experiments/data/jev-encoding/evidence/NOTES.md": {
+   "sha256": "6c20f614293c4bf4905ec0edb43775056e41ca713190fbc929dd537bddf7a09b",
+   "bytes": 5314
+  },
+  "experiments/data/jev-encoding/evidence/check.py": {
+   "sha256": "f7e9d0177af4d0291d045a1aac300564a6486d3067891926b9884747f5dded1e",
+   "bytes": 1443
+  },
+  "experiments/data/jev-encoding/evidence/haiku-labels-h0.log": {
+   "sha256": "27dd515b100ac2b95d20f43c7b3bcf18029a9278c5d0776c045f236160181685",
+   "bytes": 14180
+  },
+  "experiments/data/jev-encoding/evidence/haiku-labels-h32.log": {
+   "sha256": "14c799e406c23cae661fc1f5a597ab55219977aedc621ebe18c53866bdb12457",
+   "bytes": 12794
+  },
+  "experiments/data/jev-encoding/evidence/haiku-probe.log": {
+   "sha256": "dce7c8b28c127f8fbf3ffded90f913c1fe548bb8fecfd8a788dd9843c2944235",
+   "bytes": 968
+  },
+  "experiments/data/jev-encoding/evidence/labels.jsonl": {
+   "sha256": "9fcf4303a6c7b188b9d1eb05d15cbc8a0e204524d8d63018c477ec1119456859",
+   "bytes": 2259177
+  },
+  "experiments/data/jev-encoding/evidence/report.py": {
+   "sha256": "8e93379fed8a37905c9e49cf545ca51234f39826f835555f04ee39a7da812947",
+   "bytes": 6008
+  },
+  "experiments/data/jev-encoding/evidence/screen-1-superseded.jsonl": {
+   "sha256": "87c37fcb4e3503b04ac9d58550929e9236a9cfa2d2a0973bc80d73a5805f4b23",
+   "bytes": 291905
+  },
+  "experiments/data/jev-encoding/evidence/screen-1.log": {
+   "sha256": "74328226857e6136ca52416bbba639e7f00f95850c4b37b41671aaa8783c51ee",
+   "bytes": 447
+  },
+  "experiments/data/jev-encoding/evidence/screen-2-blocked-unsent.jsonl": {
+   "sha256": "7332100ec605b7b5e51aec02b8f670eada54c4827828ba34a5b1f788e5add49f",
+   "bytes": 943377
+  },
+  "experiments/data/jev-encoding/evidence/screen-2.jsonl": {
+   "sha256": "c1d6104b75d942939794cf0c93458a68af68ca7a2940f94dbf3f2a9f64980b58",
+   "bytes": 828803
+  },
+  "experiments/data/jev-encoding/evidence/screen-2.log": {
+   "sha256": "da67682156d2b8d06030122d3c53c20f7bd6a1270a2e9ef04361a14b46f7839a",
+   "bytes": 1157
+  },
+  "experiments/data/jev-encoding/evidence/screen-3.jsonl": {
+   "sha256": "bfb60b4da3174847d0e8ee4b8b3b326b0bf7a722b9e4649a200c3d13c4344b35",
+   "bytes": 426714
+  },
+  "experiments/data/jev-encoding/evidence/screen-3.log": {
+   "sha256": "a68d7994af0653de1e06724aed3daa86ed8c928bad9bba400a3213a09a0dc383",
+   "bytes": 602
+  },
+  "experiments/data/jev-encoding/evidence/screen-4.jsonl": {
+   "sha256": "fc00f20012fbb01a4ed43a6a43dec65bba019d1b5bfae5ef3a26ce2ac6d258f9",
+   "bytes": 425115
+  },
+  "experiments/data/jev-encoding/evidence/screen-4.log": {
+   "sha256": "8cc86b25e5e7f6ba22e938364b002c16044bf485a53501d2a589ca1f136e15d6",
+   "bytes": 602
+  },
+  "experiments/data/jev-encoding/evidence/screen-5.jsonl": {
+   "sha256": "94e514fd3b1b5c98e3bec219529c843cb284f379a1f6d6aba35af98f646dc683",
+   "bytes": 423793
+  },
+  "experiments/data/jev-encoding/evidence/screen-5.log": {
+   "sha256": "50c74670e1f241d8864702fc1f467793cf865de55fb17882f81cc28390a8e043",
+   "bytes": 602
+  },
+  "experiments/data/jev-encoding/evidence/screen-6.jsonl": {
+   "sha256": "8a97f99e6d39a195f1a2ad9cb2fad7a04a1b83fe1a65ba207eec89d89c017cab",
+   "bytes": 138906
+  },
+  "experiments/data/jev-encoding/evidence/screen-6.log": {
+   "sha256": "8a2a01492d5dac32f8eb86c4d116e75fc1b128401f1f2e37207a90fbed601f88",
+   "bytes": 236
+  },
+  "experiments/data/jev-encoding/evidence/screen-7.jsonl": {
+   "sha256": "f6208c226bcdb4e9adc25bd981c0fb656568d2757981b680cee3bb16de6ac63c",
+   "bytes": 284334
+  },
+  "experiments/data/jev-encoding/evidence/screen-7.log": {
+   "sha256": "dc592b06b61ef9e7895e0d1f8f90989892055685c9961b3777a9d0209292def9",
+   "bytes": 417
+  },
+  "experiments/data/jev-encoding/evidence/screen-analysis.txt": {
+   "sha256": "e4a836bbde21d64c1994887d7cb91c33af4c78aea6eac523cacc4b641156a0fa",
+   "bytes": 4044
+  },
+  "experiments/data/jev-encoding/evidence/spend-2.sqlite": {
+   "sha256": "60ff49137f15a77c52d2af19aa91b517dc6cc9871efa11d25a4ae0e87b070597",
+   "bytes": 1662976
+  },
+  "experiments/data/jev-encoding/evidence/spend.sqlite": {
+   "sha256": "3ff2545ac4aaaf750dc77374e1d498faa910a3c2a3bcc4d9a620c31959607ac9",
+   "bytes": 204800
+  },
+  "experiments/data/jev-encoding/haiku-board-legend-h32-retry.tar.gz": {
+   "sha256": "d851368f9d176f9ff61562a53987d08d14e62188a7e3687a5d2d21cd46fabf2d",
+   "bytes": 19079522
+  },
+  "experiments/data/jev-encoding/haiku-board-legend-h32.tar.gz": {
+   "sha256": "9fce3f49da7fed4a45962003623da702776858e64f8505fcc1de8c66b1671100",
+   "bytes": 26818852
+  },
+  "experiments/data/jev-encoding/haiku-labels-h0.tar.gz": {
+   "sha256": "507c39d588ccbe5e8bca5f90a426fc9cb9fa8d0bde5e8912a409513e02674836",
+   "bytes": 53036145
+  },
+  "experiments/data/jev-encoding/haiku-labels-h32.tar.gz": {
+   "sha256": "5e7789b9763447059c5b316acaded3769dd1b6e59fae993434dc8bde4f22b7f0",
+   "bytes": 50894193
+  },
+  "experiments/data/jev-encoding/haiku-player-legend-h32-retry.tar.gz": {
+   "sha256": "1b1a5d8e521226e2d88f2b67e1faf8f691be0aceeeaa2fb4dbe66e6d31dffb4d",
+   "bytes": 10281430
+  },
+  "experiments/data/jev-encoding/haiku-player-legend-h32.tar.gz": {
+   "sha256": "b2f7eff5fd1387abb2f6e68aba601f0a1b7ebe53fbf2c3707b5e89b833ea3b91",
+   "bytes": 40121586
+  },
+  "experiments/data/jev-encoding/haiku-probe.tar.gz": {
+   "sha256": "c05bb998105c6ec04ea879b50c22dc2e3c57ac65e9723253de3894a81a95a298",
+   "bytes": 3218241
+  },
+  "experiments/data/jev-encoding/haiku-systematic-legend-h32-retry.tar.gz": {
+   "sha256": "f99ff811b10180b9e68cc6311a492c3ab2663fd5cab9bb95847bd03a3584b172",
+   "bytes": 5115665
+  },
+  "experiments/data/jev-encoding/haiku-systematic-legend-h32.tar.gz": {
+   "sha256": "ee953c92ae1bbff4e3e0756f4d0ce968febfbc059509beefca3fa4d1bcd99ca8",
+   "bytes": 43861911
+  },
+  "experiments/data/jev-encoding/haiku-trimmed-h32-deep.tar.gz": {
+   "sha256": "a36ebd7e2614132ee0a83995138b3d72d05bd40c0b20b01df664dce0a083dc20",
+   "bytes": 299742244
+  },
+  "experiments/data/jev-encoding/haiku-trimmed-h32.tar.gz": {
+   "sha256": "191f9386a38a0a85168a34d2695c37a58defc0f300b6cdd5ef7b827d645badec",
+   "bytes": 46376537
+  },
+  "experiments/data/jev-encoding/jev-labels-h32.tar.gz": {
+   "sha256": "6682604807c10a59da71d63ec65f1f19c959aac826633f53bbf9dd8806d45d59",
+   "bytes": 162092398
+  },
+  "experiments/data/jev-encoding/jev-systematic-legend-h32.tar.gz": {
+   "sha256": "bbea0b7a73fc24e5f3aa050e67f244246074830146fd453b9d6f7f33806fddbd",
+   "bytes": 133662861
+  },
+  "experiments/data/jev-encoding/summary.json": {
+   "sha256": "a2a5e0c594ad6fc61301e6c5018b7165dc9f089adbf5b4e89c28ef024446ba23",
+   "bytes": 4911
+  },
   "experiments/data/jev-heuristic/archives/campaign-1.tar.gz": {
    "sha256": "d641f23cdeb8481fb51b72f1ad13f64c43f51a468b668f54cf6bb8026df02838",
    "bytes": 61954987
