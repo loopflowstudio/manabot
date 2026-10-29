@@ -9,7 +9,7 @@ from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.semantic.compiler import compile_paths, pretty_json
-from manabot.semantic.learning import BoundSemanticPack, LearningSchema
+from manabot.semantic.learning import BoundSemanticPack
 import managym
 
 BASE = Path("content/semantic/v1")
@@ -38,15 +38,10 @@ def test_sacrifice_live_manifest_binds_every_learning_program() -> None:
     )
     manifest = env.content_pack_manifest()
     binding = BoundSemanticPack.bind(manifest)
-    assert binding.schema.raw["schema_version"] == 4
+    assert binding.schema.raw["schema_version"] == 9
     assert len(binding.definition_row_by_card_def_id) == 27
     padded = binding.pad_catalog()
     assert padded
-    # Existing artifacts retain exactly their original opcode vocabulary.
-    assert (
-        len(LearningSchema.load("content/semantic/w7/learning_schema.json").opcodes)
-        == 50
-    )
 
 
 def test_sacrifice_game_uses_the_training_observation_path() -> None:

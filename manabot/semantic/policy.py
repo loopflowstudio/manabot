@@ -212,15 +212,8 @@ class SemanticDecisionAdapter:
         env: Any,
         *,
         schema_path: str = str(DEFAULT_SCHEMA_PATH),
-        ir_path: str | None = None,
     ) -> "SemanticDecisionAdapter":
-        return cls(
-            BoundSemanticPack.from_env(
-                env,
-                schema_path=schema_path,
-                ir_path=ir_path,
-            )
-        )
+        return cls(BoundSemanticPack.from_env(env, schema_path=schema_path))
 
     def bind(
         self,

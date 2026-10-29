@@ -3597,6 +3597,14 @@ fn learning_catalog(py: Python<'_>, pack_key: Option<&str>) -> PyResult<PyObject
     let out = PyDict::new_bound(py);
     out.set_item("pack_key", pack_key)?;
     out.set_item("content_digest", content.content_digest())?;
+    // Binding only: names join a manifest's CardDefIds to catalog rows.
+    out.set_item(
+        "registry_names",
+        content
+            .definitions()
+            .map(|definition| definition.name.clone())
+            .collect::<Vec<_>>(),
+    )?;
     out.set_item("token_kind", catalog.token_kind)?;
     out.set_item("token_value", catalog.token_value)?;
     out.set_item("definition_offsets", catalog.definition_offsets)?;
@@ -3615,6 +3623,14 @@ fn learning_catalog(py: Python<'_>, pack_key: Option<&str>) -> PyResult<PyObject
         catalog.definition_ref_target_rows,
     )?;
     Ok(out.into())
+}
+
+/// The stable token value the learning catalog uses for a Rust name
+/// (`"Effect::DealDamage"`, a field, or a printed category such as `"Ally"`).
+#[cfg(feature = "python")]
+#[pyfunction]
+fn learning_token_value(name: &str) -> i32 {
+    crate::semantic::tokens::name_value(name)
 }
 
 #[cfg(feature = "python")]
@@ -3778,6 +3794,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(content_pool, m)?)?;
     m.add_function(wrap_pyfunction!(set_cards, m)?)?;
     m.add_function(wrap_pyfunction!(learning_catalog, m)?)?;
+    m.add_function(wrap_pyfunction!(learning_token_value, m)?)?;
     m.add_function(wrap_pyfunction!(unsupported_cards, m)?)?;
     m.add_function(wrap_pyfunction!(validate_observation_json, m)?)?;
     m.add_function(wrap_pyfunction!(parse_continuation_frames_json, m)?)?;

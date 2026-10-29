@@ -420,7 +420,7 @@ def test_jeong_matchup_uses_session_scoped_pack_identity(isolated_traces):
     )
     assert session.env is not None
     manifest = session.env.content_pack_manifest()
-    assert manifest["compiled_semantics"]["pack_key"] == "tla-jeong-increment-v1"
+    assert manifest["pack_key"] == "tla-jeong-increment-v1"
     assert session.content_hash == manifest["content_digest"]
     assert session.content_hash != UNVERSIONED_CONTENT_HASH
     assert session.asset_manifest_hash == server.JEONG_INCREMENT_PACK.manifest_sha256

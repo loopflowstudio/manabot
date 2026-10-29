@@ -73,8 +73,9 @@ pub struct LearningCatalog {
     pub definition_ref_target_rows: Vec<i32>,
 }
 
-/// Fields that identify or print a card rather than describe its rules.
-const IDENTITY_FIELDS: [&str; 4] = ["key", "scryfall_id", "name", "text_box"];
+/// Fields that name or print a card rather than describe its rules. (`key`
+/// and `scryfall_id` are not serialized at all.)
+const IDENTITY_FIELDS: [&str; 2] = ["name", "text_box"];
 
 /// Fields encoded as their own program spans instead of characteristics.
 const PROGRAM_FIELDS: [&str; 6] = [

@@ -15,7 +15,6 @@ from .learning import (
     SemanticArtifactHeader,
     SemanticProjectionError,
     UnadmittedDefinitionError,
-    UnknownOpcodeError,
     UnknownSchemaError,
 )
 from .policy import (
@@ -44,7 +43,6 @@ __all__ = [
     "SemanticProjectionError",
     "SubjectBinding",
     "UnadmittedDefinitionError",
-    "UnknownOpcodeError",
     "UnknownSchemaError",
     "compile_source",
     "validate_fixtures",
