@@ -174,8 +174,10 @@ checks required by the affected package and workflow.
 
 ### Typed card authoring
 
-Current TLA cards are authored in `managym/src/cardsets/tla.rs`, using the
-symbolic types in `authoring.rs`. The engine compiles them in process
+Cards are authored once, in their printed set's file under
+`managym/src/cardsets/` (keys `<set>.<card>`), using the symbolic types in
+`managym/src/cards/authoring.rs`. Add a card to its set file's `cards()`; do
+not add native registrations (`cards/native.rs` only shrinks). The engine compiles them in process
 (`managym/src/semantic/compile.rs`); there is no generated card JSON or IR to
 regenerate. Python reads current IR through `managym.semantic_ir_json`; rebuild
 the extension after card changes. Keep decklists and independent qualification

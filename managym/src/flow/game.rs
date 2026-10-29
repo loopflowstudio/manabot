@@ -7,7 +7,7 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::{
     agent::{action::ActionSpace, behavior_tracker::BehaviorTracker},
-    cardsets::alpha::ContentPack,
+    cards::content_pack::ContentPack,
     decision::ObjectCandidateAddress,
     flow::{
         combat::CombatState,

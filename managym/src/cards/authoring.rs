@@ -681,31 +681,9 @@ pub enum Direction {
     Blocking,
 }
 
-/// Export membership beside definitions so no second hand-maintained catalog can drift.
+/// Every current definition, plus the TLA fixed tokens that every pool carries.
 #[derive(Serialize)]
 pub struct Catalog {
     pub definitions: Vec<Card>,
-    pub native_roots: Vec<&'static str>,
     pub token_templates: Vec<&'static str>,
-}
-
-pub fn catalog() -> Catalog {
-    let mut definitions = super::tla::cards();
-    let native_roots = definitions
-        .iter()
-        .filter(|card| card.characteristics.token != Some(true))
-        .map(|card| card.key)
-        .collect();
-    let token_templates = definitions
-        .iter()
-        .filter(|card| card.characteristics.token == Some(true))
-        .map(|card| card.key)
-        .collect();
-    definitions.extend(super::authored_support::cards());
-    definitions.sort_by_key(|card| card.key);
-    Catalog {
-        definitions,
-        native_roots,
-        token_templates,
-    }
 }

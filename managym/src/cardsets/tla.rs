@@ -1,12 +1,17 @@
 //! Current TLA cards and their fixed tokens.
 //! Edit these typed definitions; `semantic::compile` lowers them in process.
-use super::authoring::{
+use crate::cards::authoring::{
     Card, CardType, Characteristics, Color, Condition, Controller, Cost, Destination, Direction,
     Duration, Event, Keyword, Op, Payment, Predicate, PrintedPower, Program, ProgramKind, Quantity,
     Remainder, RemainderOrder, Sacrifice, Selector, Subject, Target, Trigger, Until, Zone,
 };
 pub(super) fn cards() -> Vec<Card> {
     vec![
+        plains(),
+        swamp(),
+        forest(),
+        island(),
+        mountain(),
         abandon_attachments(),
         azula_always_lies(),
         boomerang_basics(),
@@ -123,7 +128,7 @@ fn abandon_attachments() -> Card {
             types: vec![CardType::Instant],
             ..Default::default()
         },
-        key: "elemental.abandon_attachments",
+        key: "tla.abandon_attachments",
         programs: vec![Program::new(
             "spell",
             ProgramKind::Spell,
@@ -146,7 +151,7 @@ fn azula_always_lies() -> Card {
             types: vec![CardType::Instant],
             ..Default::default()
         },
-        key: "elemental.azula_always_lies",
+        key: "tla.azula_always_lies",
         programs: vec![Program::new(
             "spell",
             ProgramKind::Spell,
@@ -212,7 +217,7 @@ fn boomerang_basics() -> Card {
             types: vec![CardType::Sorcery],
             ..Default::default()
         },
-        key: "elemental.boomerang_basics",
+        key: "tla.boomerang_basics",
         programs: vec![Program::new(
             "spell",
             ProgramKind::Spell,
@@ -246,7 +251,7 @@ fn cat_gator() -> Card {
             toughness: Some(2),
             ..Default::default()
         },
-        key: "elemental.cat_gator",
+        key: "tla.cat_gator",
         programs: vec![Program::new(
             "trigger_0",
             ProgramKind::Triggered,
@@ -276,7 +281,7 @@ fn combustion_technique() -> Card {
             token: Some(false),
             ..Default::default()
         },
-        key: "elemental.combustion_technique",
+        key: "tla.combustion_technique",
         programs: vec![Program::new(
             "p0",
             ProgramKind::Spell,
@@ -310,7 +315,7 @@ fn corrupt_court_official() -> Card {
             toughness: Some(1),
             ..Default::default()
         },
-        key: "elemental.corrupt_court_official",
+        key: "tla.corrupt_court_official",
         programs: vec![Program::new(
             "trigger_0",
             ProgramKind::Triggered,
@@ -338,7 +343,7 @@ fn dai_li_agents() -> Card {
             toughness: Some(4),
             ..Default::default()
         },
-        key: "elemental.dai_li_agents",
+        key: "tla.dai_li_agents",
         programs: vec![
             Program::new(
                 "trigger_0",
@@ -392,7 +397,7 @@ fn deserter_s_disciple() -> Card {
             toughness: Some(2),
             ..Default::default()
         },
-        key: "elemental.deserter_s_disciple",
+        key: "tla.deserter_s_disciple",
         programs: vec![Program::new(
             "activate_0",
             ProgramKind::Activated,
@@ -435,7 +440,7 @@ fn enter_the_avatar_state() -> Card {
             token: Some(false),
             ..Default::default()
         },
-        key: "elemental.enter_the_avatar_state",
+        key: "tla.enter_the_avatar_state",
         programs: vec![Program::new(
             "p0",
             ProgramKind::Spell,
@@ -472,7 +477,7 @@ fn epic_downfall() -> Card {
             types: vec![CardType::Sorcery],
             ..Default::default()
         },
-        key: "elemental.epic_downfall",
+        key: "tla.epic_downfall",
         programs: vec![Program::new(
             "spell",
             ProgramKind::Spell,
@@ -511,7 +516,7 @@ fn foggy_swamp_spirit_keeper() -> Card {
             toughness: Some(4),
             ..Default::default()
         },
-        key: "elemental.foggy_swamp_spirit_keeper",
+        key: "tla.foggy_swamp_spirit_keeper",
         programs: vec![Program::new(
             "trigger_0",
             ProgramKind::Triggered,
@@ -539,7 +544,7 @@ fn gather_the_white_lotus() -> Card {
             types: vec![CardType::Sorcery],
             ..Default::default()
         },
-        key: "elemental.gather_the_white_lotus",
+        key: "tla.gather_the_white_lotus",
         programs: vec![Program::new(
             "spell",
             ProgramKind::Spell,
@@ -548,7 +553,7 @@ fn gather_the_white_lotus() -> Card {
                     count: Quantity::BattlefieldMatching {
                         predicate: Predicate::Subtype { value: "Plains" },
                     },
-                    definition_ref: "sacrifice.ally",
+                    definition_ref: "token.ally",
                 },
                 Op::Scry { count: 2 },
             ],
@@ -575,7 +580,7 @@ fn gran_gran() -> Card {
             supertypes: Some(vec!["Legendary"]),
             ..Default::default()
         },
-        key: "elemental.gran_gran",
+        key: "tla.gran_gran",
         programs: vec![
             Program::new(
                 "p0",
@@ -617,7 +622,7 @@ fn haru_hidden_talent() -> Card {
             supertypes: Some(vec!["legendary"]),
             ..Default::default()
         },
-        key: "elemental.haru_hidden_talent",
+        key: "tla.haru_hidden_talent",
         programs: vec![Program::new(
             "trigger_0",
             ProgramKind::Triggered,
@@ -648,7 +653,7 @@ fn iroh_s_demonstration() -> Card {
             types: vec![CardType::Sorcery],
             ..Default::default()
         },
-        key: "elemental.iroh_s_demonstration",
+        key: "tla.iroh_s_demonstration",
         programs: vec![Program::new(
             "spell",
             ProgramKind::Spell,
@@ -683,7 +688,7 @@ fn jet_freedom_fighter() -> Card {
             supertypes: Some(vec!["legendary"]),
             ..Default::default()
         },
-        key: "elemental.jet_freedom_fighter",
+        key: "tla.jet_freedom_fighter",
         programs: vec![
             Program::new(
                 "trigger_0",
@@ -742,7 +747,7 @@ fn knowledge_seeker() -> Card {
             toughness: Some(1),
             ..Default::default()
         },
-        key: "elemental.knowledge_seeker",
+        key: "tla.knowledge_seeker",
         programs: vec![
             Program::new(
                 "trigger_0",
@@ -761,7 +766,7 @@ fn knowledge_seeker() -> Card {
                 ProgramKind::Triggered,
                 vec![Op::CreateToken {
                     count: 1,
-                    definition_ref: "sacrifice.clue",
+                    definition_ref: "token.clue",
                     tapped_and_attacking: Some(false),
                 }],
             )
@@ -781,7 +786,7 @@ fn lightning_strike() -> Card {
             types: vec![CardType::Instant],
             ..Default::default()
         },
-        key: "elemental.lightning_strike",
+        key: "tla.lightning_strike",
         programs: vec![Program::new(
             "spell",
             ProgramKind::Spell,
@@ -812,7 +817,7 @@ fn master_piandao() -> Card {
             supertypes: Some(vec!["legendary"]),
             ..Default::default()
         },
-        key: "elemental.master_piandao",
+        key: "tla.master_piandao",
         programs: vec![Program::new(
             "trigger_0",
             ProgramKind::Triggered,
@@ -848,14 +853,14 @@ fn messenger_hawk() -> Card {
             toughness: Some(2),
             ..Default::default()
         },
-        key: "elemental.messenger_hawk",
+        key: "tla.messenger_hawk",
         programs: vec![
             Program::new(
                 "trigger_0",
                 ProgramKind::Triggered,
                 vec![Op::CreateToken {
                     count: 1,
-                    definition_ref: "sacrifice.clue",
+                    definition_ref: "token.clue",
                     tapped_and_attacking: Some(false),
                 }],
             )
@@ -889,7 +894,7 @@ fn momo_friendly_flier() -> Card {
             supertypes: Some(vec!["legendary"]),
             ..Default::default()
         },
-        key: "elemental.momo_friendly_flier",
+        key: "tla.momo_friendly_flier",
         programs: vec![
             Program::new(
                 "trigger_0",
@@ -950,7 +955,7 @@ fn octopus_form() -> Card {
             types: vec![CardType::Instant],
             ..Default::default()
         },
-        key: "elemental.octopus_form",
+        key: "tla.octopus_form",
         programs: vec![Program::new(
             "spell",
             ProgramKind::Spell,
@@ -987,7 +992,7 @@ fn origin_of_metalbending() -> Card {
             types: vec![CardType::Instant],
             ..Default::default()
         },
-        key: "elemental.origin_of_metalbending",
+        key: "tla.origin_of_metalbending",
         programs: vec![Program::new(
             "spell",
             ProgramKind::Spell,
@@ -1038,7 +1043,7 @@ fn ostrich_horse() -> Card {
             toughness: Some(1),
             ..Default::default()
         },
-        key: "elemental.ostrich_horse",
+        key: "tla.ostrich_horse",
         programs: vec![Program::new(
             "trigger_0",
             ProgramKind::Triggered,
@@ -1070,7 +1075,7 @@ fn ozai_s_cruelty() -> Card {
             types: vec![CardType::Sorcery],
             ..Default::default()
         },
-        key: "elemental.ozai_s_cruelty",
+        key: "tla.ozai_s_cruelty",
         programs: vec![Program::new(
             "spell",
             ProgramKind::Spell,
@@ -1105,13 +1110,13 @@ fn pretending_poxbearers() -> Card {
             toughness: Some(1),
             ..Default::default()
         },
-        key: "elemental.pretending_poxbearers",
+        key: "tla.pretending_poxbearers",
         programs: vec![Program::new(
             "trigger_0",
             ProgramKind::Triggered,
             vec![Op::CreateToken {
                 count: 1,
-                definition_ref: "sacrifice.ally",
+                definition_ref: "token.ally",
                 tapped_and_attacking: Some(false),
             }],
         )
@@ -1131,7 +1136,7 @@ fn shared_roots() -> Card {
             types: vec![CardType::Sorcery],
             ..Default::default()
         },
-        key: "elemental.shared_roots",
+        key: "tla.shared_roots",
         programs: vec![Program::new(
             "spell",
             ProgramKind::Spell,
@@ -1154,7 +1159,7 @@ fn sokka_s_haiku() -> Card {
             types: vec![CardType::Instant],
             ..Default::default()
         },
-        key: "elemental.sokka_s_haiku",
+        key: "tla.sokka_s_haiku",
         programs: vec![Program::new(
             "spell",
             ProgramKind::Spell,
@@ -1201,7 +1206,7 @@ fn tiger_dillo() -> Card {
             toughness: Some(3),
             ..Default::default()
         },
-        key: "elemental.tiger_dillo",
+        key: "tla.tiger_dillo",
         programs: vec![Program::new(
             "combat_eligibility",
             ProgramKind::Static,
@@ -1234,7 +1239,7 @@ fn toph_the_blind_bandit() -> Card {
             supertypes: Some(vec!["legendary"]),
             ..Default::default()
         },
-        key: "elemental.toph_the_blind_bandit",
+        key: "tla.toph_the_blind_bandit",
         programs: vec![
             Program::new(
                 "trigger_0",
@@ -1267,7 +1272,7 @@ fn true_ancestry() -> Card {
             types: vec![CardType::Sorcery],
             ..Default::default()
         },
-        key: "elemental.true_ancestry",
+        key: "tla.true_ancestry",
         programs: vec![Program::new(
             "spell",
             ProgramKind::Spell,
@@ -1278,7 +1283,7 @@ fn true_ancestry() -> Card {
                 },
                 Op::CreateToken {
                     count: 1,
-                    definition_ref: "sacrifice.clue",
+                    definition_ref: "token.clue",
                     tapped_and_attacking: Some(false),
                 },
             ],
@@ -1320,7 +1325,7 @@ fn uncle_iroh() -> Card {
             supertypes: Some(vec!["legendary"]),
             ..Default::default()
         },
-        key: "elemental.uncle_iroh",
+        key: "tla.uncle_iroh",
         programs: vec![
             Program::firebending("trigger_0", "R"),
             Program::new(
@@ -1352,7 +1357,7 @@ fn wartime_protestors() -> Card {
             toughness: Some(4),
             ..Default::default()
         },
-        key: "elemental.wartime_protestors",
+        key: "tla.wartime_protestors",
         programs: vec![Program::new(
             "trigger_0",
             ProgramKind::Triggered,
@@ -1382,12 +1387,12 @@ fn zuko_s_exile() -> Card {
             types: vec![CardType::Instant],
             ..Default::default()
         },
-        key: "elemental.zuko_s_exile",
+        key: "tla.zuko_s_exile",
         programs: vec![Program::new(
             "spell",
             ProgramKind::Spell,
             vec![Op::ExileWithControllerToken {
-                definition_ref: "sacrifice.clue",
+                definition_ref: "token.clue",
                 target: "target_0",
             }],
         )
@@ -1425,7 +1430,7 @@ fn ally() -> Card {
             colors: Some(vec![Color::W]),
             ..Default::default()
         },
-        key: "sacrifice.ally",
+        key: "token.ally",
         programs: vec![],
         registry_name: "Ally",
         text_box,
@@ -1447,7 +1452,7 @@ fn callous_inspector() -> Card {
             supertypes: Some(vec![]),
             ..Default::default()
         },
-        key: "sacrifice.callous_inspector",
+        key: "tla.callous_inspector",
         programs: vec![Program::new(
             "p0",
             ProgramKind::Triggered,
@@ -1455,7 +1460,7 @@ fn callous_inspector() -> Card {
                 Op::DealDamageToController { amount: 1 },
                 Op::CreateToken {
                     count: 1,
-                    definition_ref: "sacrifice.clue",
+                    definition_ref: "token.clue",
                     tapped_and_attacking: Some(false),
                 },
             ],
@@ -1478,7 +1483,7 @@ fn clue() -> Card {
             supertypes: Some(vec![]),
             ..Default::default()
         },
-        key: "sacrifice.clue",
+        key: "token.clue",
         programs: vec![Program::new(
             "p0",
             ProgramKind::Activated,
@@ -1509,7 +1514,7 @@ fn curious_farm_animals() -> Card {
             supertypes: Some(vec![]),
             ..Default::default()
         },
-        key: "sacrifice.curious_farm_animals",
+        key: "tla.curious_farm_animals",
         programs: vec![
             Program::new(
                 "p0",
@@ -1560,7 +1565,7 @@ fn cycle_of_renewal() -> Card {
             supertypes: Some(vec![]),
             ..Default::default()
         },
-        key: "sacrifice.cycle_of_renewal",
+        key: "tla.cycle_of_renewal",
         programs: vec![Program::new(
             "p0",
             ProgramKind::Spell,
@@ -1597,7 +1602,7 @@ fn deadly_precision() -> Card {
             supertypes: Some(vec![]),
             ..Default::default()
         },
-        key: "sacrifice.deadly_precision",
+        key: "tla.deadly_precision",
         programs: vec![Program::new(
             "p0",
             ProgramKind::Spell,
@@ -1633,7 +1638,7 @@ fn food() -> Card {
             supertypes: Some(vec![]),
             ..Default::default()
         },
-        key: "sacrifice.food",
+        key: "token.food",
         programs: vec![Program::new(
             "p0",
             ProgramKind::Activated,
@@ -1665,14 +1670,14 @@ fn june_bounty_hunter() -> Card {
             supertypes: Some(vec!["Legendary"]),
             ..Default::default()
         },
-        key: "sacrifice.june_bounty_hunter",
+        key: "tla.june_bounty_hunter",
         programs: vec![
             Program::new(
                 "p0",
                 ProgramKind::Activated,
                 vec![Op::CreateToken {
                     count: 1,
-                    definition_ref: "sacrifice.clue",
+                    definition_ref: "token.clue",
                     tapped_and_attacking: Some(false),
                 }],
             )
@@ -1714,14 +1719,14 @@ fn tolls_of_war() -> Card {
             supertypes: Some(vec![]),
             ..Default::default()
         },
-        key: "sacrifice.tolls_of_war",
+        key: "tla.tolls_of_war",
         programs: vec![
             Program::new(
                 "p0",
                 ProgramKind::Triggered,
                 vec![Op::CreateToken {
                     count: 1,
-                    definition_ref: "sacrifice.clue",
+                    definition_ref: "token.clue",
                     tapped_and_attacking: Some(false),
                 }],
             )
@@ -1731,7 +1736,7 @@ fn tolls_of_war() -> Card {
                 ProgramKind::Triggered,
                 vec![Op::CreateToken {
                     count: 1,
-                    definition_ref: "sacrifice.ally",
+                    definition_ref: "token.ally",
                     tapped_and_attacking: Some(false),
                 }],
             )
@@ -1763,14 +1768,14 @@ fn unlucky_cabbage_merchant() -> Card {
             supertypes: Some(vec![]),
             ..Default::default()
         },
-        key: "sacrifice.unlucky_cabbage_merchant",
+        key: "tla.unlucky_cabbage_merchant",
         programs: vec![
             Program::new(
                 "p0",
                 ProgramKind::Triggered,
                 vec![Op::CreateToken {
                     count: 1,
-                    definition_ref: "sacrifice.food",
+                    definition_ref: "token.food",
                     tapped_and_attacking: Some(false),
                 }],
             )
@@ -1816,7 +1821,7 @@ fn great_divide_guide() -> Card {
             supertypes: Some(vec![]),
             ..Default::default()
         },
-        key: "temur.great_divide_guide",
+        key: "tla.great_divide_guide",
         programs: vec![Program::new(
             "p0",
             ProgramKind::Static,
@@ -1849,7 +1854,7 @@ fn hermitic_herbalist() -> Card {
             supertypes: Some(vec![]),
             ..Default::default()
         },
-        key: "temur.hermitic_herbalist",
+        key: "tla.hermitic_herbalist",
         programs: vec![
             Program::new(
                 "p0",
@@ -1910,7 +1915,7 @@ fn iroh_grand_lotus() -> Card {
             supertypes: Some(vec!["legendary"]),
             ..Default::default()
         },
-        key: "temur.iroh_grand_lotus",
+        key: "tla.iroh_grand_lotus",
         programs: vec![
             Program::firebending("p0", "RR"),
             Program::new("p1", ProgramKind::Static, vec![Op::GrantFlashback]),
@@ -1935,7 +1940,7 @@ fn ran_and_shaw() -> Card {
             supertypes: Some(vec!["legendary"]),
             ..Default::default()
         },
-        key: "temur.ran_and_shaw",
+        key: "tla.ran_and_shaw",
         programs: vec![
             Program::firebending("p0", "RR"),
             Program::new(
@@ -1990,7 +1995,7 @@ fn waterbending_lesson() -> Card {
             supertypes: Some(vec![]),
             ..Default::default()
         },
-        key: "temur.waterbending_lesson",
+        key: "tla.waterbending_lesson",
         programs: vec![Program::new(
             "p0",
             ProgramKind::Spell,
@@ -2302,7 +2307,7 @@ fn cunning_maneuver() -> Card {
                 },
                 Op::CreateToken {
                     count: 1,
-                    definition_ref: "sacrifice.clue",
+                    definition_ref: "token.clue",
                     tapped_and_attacking: None,
                 },
             ],
@@ -2755,7 +2760,7 @@ fn forecasting_fortune_teller() -> Card {
             ProgramKind::Triggered,
             vec![Op::CreateToken {
                 count: 1,
-                definition_ref: "sacrifice.clue",
+                definition_ref: "token.clue",
                 tapped_and_attacking: None,
             }],
         )
@@ -2827,7 +2832,7 @@ fn invasion_reinforcements() -> Card {
             ProgramKind::Triggered,
             vec![Op::CreateToken {
                 count: 1,
-                definition_ref: "sacrifice.ally",
+                definition_ref: "token.ally",
                 tapped_and_attacking: None,
             }],
         )
@@ -2915,7 +2920,7 @@ fn kyoshi_warriors() -> Card {
             ProgramKind::Triggered,
             vec![Op::CreateToken {
                 count: 1,
-                definition_ref: "sacrifice.ally",
+                definition_ref: "token.ally",
                 tapped_and_attacking: None,
             }],
         )
@@ -3151,7 +3156,7 @@ fn suki_kyoshi_warrior() -> Card {
                 ProgramKind::Triggered,
                 vec![Op::CreateToken {
                     count: 1,
-                    definition_ref: "sacrifice.ally",
+                    definition_ref: "token.ally",
                     tapped_and_attacking: Some(true),
                 }],
             )
@@ -3228,7 +3233,7 @@ fn treetop_freedom_fighters() -> Card {
             ProgramKind::Triggered,
             vec![Op::CreateToken {
                 count: 1,
-                definition_ref: "sacrifice.ally",
+                definition_ref: "token.ally",
                 tapped_and_attacking: None,
             }],
         )
@@ -3665,6 +3670,62 @@ fn draw_land(
                 ..Default::default()
             }),
         ],
+        registry_name,
+        text_box,
+    }
+}
+
+fn plains() -> Card {
+    let text_box = "({T}: Add {W}.)";
+
+    basic_land("tla.plains", "Plains", text_box, "W")
+}
+
+fn swamp() -> Card {
+    let text_box = "({T}: Add {B}.)";
+
+    basic_land("tla.swamp", "Swamp", text_box, "B")
+}
+
+fn forest() -> Card {
+    let text_box = "({T}: Add {G}.)";
+
+    basic_land("tla.forest", "Forest", text_box, "G")
+}
+
+fn island() -> Card {
+    let text_box = "({T}: Add {U}.)";
+
+    basic_land("tla.island", "Island", text_box, "U")
+}
+
+fn mountain() -> Card {
+    let text_box = "({T}: Add {R}.)";
+
+    basic_land("tla.mountain", "Mountain", text_box, "R")
+}
+
+fn basic_land(
+    key: &'static str,
+    registry_name: &'static str,
+    text_box: &'static str,
+    mana: &'static str,
+) -> Card {
+    Card {
+        characteristics: Characteristics {
+            subtypes: Some(vec![registry_name]),
+            types: vec![CardType::Land],
+            keywords: Some(vec![]),
+            token: Some(false),
+            supertypes: Some(vec!["basic"]),
+            ..Default::default()
+        },
+        key,
+        programs: vec![Program::new(
+            "p0",
+            ProgramKind::Mana,
+            vec![Op::AddMana { mana, until: None }],
+        )],
         registry_name,
         text_box,
     }

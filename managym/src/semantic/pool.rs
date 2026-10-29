@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{compile, IrError, SemanticPack};
 use crate::{
-    cardsets::alpha::{CompiledSemanticManifest, ContentPack},
+    cards::content_pack::{CompiledSemanticManifest, ContentPack},
     state::card::CardDefId,
 };
 

@@ -25,6 +25,9 @@ class ContentPool(TypedDict):
     definitions: list[PoolDefinition]
 
 def content_pool(pack_key: str) -> ContentPool: ...
+def unsupported_cards(names: list[str]) -> list[str]:
+    """Distinct names the current world does not support for deck entry."""
+
 def semantic_ir_json(pack_key: str) -> str:
     """Canonical IR compiled natively from the typed set definitions."""
 

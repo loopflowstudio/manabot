@@ -7,19 +7,19 @@
         "cards": [
           {
             "count": 2,
-            "definition": "elemental.tiger_dillo"
+            "definition": "tla.tiger_dillo"
           },
           {
             "count": 2,
-            "definition": "elemental.ostrich_horse"
+            "definition": "tla.ostrich_horse"
           },
           {
             "count": 1,
-            "definition": "elemental.uncle_iroh"
+            "definition": "tla.uncle_iroh"
           },
           {
             "count": 1,
-            "definition": "elemental.giant_cindermaw"
+            "definition": "bro.giant_cindermaw"
           },
           {
             "count": 1,
@@ -27,27 +27,27 @@
           },
           {
             "count": 1,
-            "definition": "elemental.toph_the_blind_bandit"
+            "definition": "tla.toph_the_blind_bandit"
           },
           {
             "count": 1,
-            "definition": "elemental.deserter_s_disciple"
+            "definition": "tla.deserter_s_disciple"
           },
           {
             "count": 1,
-            "definition": "elemental.wartime_protestors"
+            "definition": "tla.wartime_protestors"
           },
           {
             "count": 1,
-            "definition": "elemental.gnarled_professor"
+            "definition": "stx.gnarled_professor"
           },
           {
             "count": 1,
-            "definition": "elemental.monastery_swiftspear"
+            "definition": "ktk.monastery_swiftspear"
           },
           {
             "count": 2,
-            "definition": "elemental.lightning_strike"
+            "definition": "tla.lightning_strike"
           },
           {
             "count": 2,
@@ -55,11 +55,11 @@
           },
           {
             "count": 2,
-            "definition": "elemental.fists_of_flame"
+            "definition": "mh1.fists_of_flame"
           },
           {
             "count": 1,
-            "definition": "elemental.enthusiastic_study"
+            "definition": "stx.enthusiastic_study"
           },
           {
             "count": 1,
@@ -67,27 +67,27 @@
           },
           {
             "count": 1,
-            "definition": "elemental.field_trip"
+            "definition": "stx.field_trip"
           },
           {
             "count": 1,
-            "definition": "elemental.origin_of_metalbending"
+            "definition": "tla.origin_of_metalbending"
           },
           {
             "count": 1,
-            "definition": "elemental.shared_roots"
+            "definition": "tla.shared_roots"
           },
           {
             "count": 8,
-            "definition": "temur.forest"
+            "definition": "tla.forest"
           },
           {
             "count": 7,
-            "definition": "temur.mountain"
+            "definition": "tla.mountain"
           },
           {
             "count": 2,
-            "definition": "sacrifice.fabled_passage"
+            "definition": "eld.fabled_passage"
           }
         ],
         "key": "elemental_gr",
@@ -98,15 +98,15 @@
           },
           {
             "count": 1,
-            "definition": "elemental.combustion_technique"
+            "definition": "tla.combustion_technique"
           },
           {
             "count": 1,
-            "definition": "elemental.origin_of_metalbending"
+            "definition": "tla.origin_of_metalbending"
           },
           {
             "count": 1,
-            "definition": "elemental.zuko_s_exile"
+            "definition": "tla.zuko_s_exile"
           }
         ]
       },
@@ -135,7 +135,7 @@
           },
           {
             "count": 1,
-            "definition": "elemental.haru_hidden_talent"
+            "definition": "tla.haru_hidden_talent"
           },
           {
             "count": 1,
@@ -143,11 +143,11 @@
           },
           {
             "count": 2,
-            "definition": "elemental.ostrich_horse"
+            "definition": "tla.ostrich_horse"
           },
           {
             "count": 1,
-            "definition": "elemental.professor_of_symbology"
+            "definition": "stx.professor_of_symbology"
           },
           {
             "count": 1,
@@ -167,42 +167,42 @@
           },
           {
             "count": 1,
-            "definition": "elemental.enter_the_avatar_state"
+            "definition": "tla.enter_the_avatar_state"
           },
           {
             "count": 1,
-            "definition": "elemental.origin_of_metalbending"
+            "definition": "tla.origin_of_metalbending"
           },
           {
             "count": 1,
-            "definition": "elemental.true_ancestry"
+            "definition": "tla.true_ancestry"
           },
           {
             "count": 8,
-            "definition": "sacrifice.plains"
+            "definition": "tla.plains"
           },
           {
             "count": 7,
-            "definition": "temur.forest"
+            "definition": "tla.forest"
           },
           {
             "count": 2,
-            "definition": "sacrifice.fabled_passage"
+            "definition": "eld.fabled_passage"
           }
         ],
         "key": "elemental_gw",
         "sideboard": [
           {
             "count": 1,
-            "definition": "elemental.origin_of_metalbending"
+            "definition": "tla.origin_of_metalbending"
           },
           {
             "count": 1,
-            "definition": "elemental.enter_the_avatar_state"
+            "definition": "tla.enter_the_avatar_state"
           },
           {
             "count": 1,
-            "definition": "elemental.zuko_s_exile"
+            "definition": "tla.zuko_s_exile"
           }
         ]
       },
@@ -215,7 +215,7 @@
           },
           {
             "count": 1,
-            "definition": "elemental.gran_gran"
+            "definition": "tla.gran_gran"
           },
           {
             "count": 2,
@@ -223,11 +223,11 @@
           },
           {
             "count": 1,
-            "definition": "elemental.deserter_s_disciple"
+            "definition": "tla.deserter_s_disciple"
           },
           {
             "count": 1,
-            "definition": "elemental.monastery_swiftspear"
+            "definition": "ktk.monastery_swiftspear"
           },
           {
             "count": 3,
@@ -251,31 +251,31 @@
           },
           {
             "count": 2,
-            "definition": "elemental.abandon_attachments"
+            "definition": "tla.abandon_attachments"
           },
           {
             "count": 1,
-            "definition": "elemental.combustion_technique"
+            "definition": "tla.combustion_technique"
           },
           {
             "count": 1,
-            "definition": "elemental.lightning_strike"
+            "definition": "tla.lightning_strike"
           },
           {
             "count": 1,
-            "definition": "elemental.octopus_form"
+            "definition": "tla.octopus_form"
           },
           {
             "count": 8,
-            "definition": "temur.mountain"
+            "definition": "tla.mountain"
           },
           {
             "count": 7,
-            "definition": "temur.island"
+            "definition": "tla.island"
           },
           {
             "count": 2,
-            "definition": "sacrifice.fabled_passage"
+            "definition": "eld.fabled_passage"
           }
         ],
         "key": "elemental_ur",
@@ -290,11 +290,11 @@
           },
           {
             "count": 1,
-            "definition": "elemental.combustion_technique"
+            "definition": "tla.combustion_technique"
           },
           {
             "count": 1,
-            "definition": "elemental.zuko_s_exile"
+            "definition": "tla.zuko_s_exile"
           }
         ]
       },
@@ -307,7 +307,7 @@
           },
           {
             "count": 2,
-            "definition": "elemental.knowledge_seeker"
+            "definition": "tla.knowledge_seeker"
           },
           {
             "count": 3,
@@ -315,19 +315,19 @@
           },
           {
             "count": 1,
-            "definition": "elemental.foggy_swamp_spirit_keeper"
+            "definition": "tla.foggy_swamp_spirit_keeper"
           },
           {
             "count": 1,
-            "definition": "elemental.gran_gran"
+            "definition": "tla.gran_gran"
           },
           {
             "count": 1,
-            "definition": "sacrifice.june_bounty_hunter"
+            "definition": "tla.june_bounty_hunter"
           },
           {
             "count": 2,
-            "definition": "elemental.eyetwitch"
+            "definition": "stx.eyetwitch"
           },
           {
             "count": 1,
@@ -339,23 +339,23 @@
           },
           {
             "count": 1,
-            "definition": "elemental.abandon_attachments"
+            "definition": "tla.abandon_attachments"
           },
           {
             "count": 1,
-            "definition": "sacrifice.deadly_dispute"
+            "definition": "afr.deadly_dispute"
           },
           {
             "count": 2,
-            "definition": "elemental.power_word_kill"
+            "definition": "afr.power_word_kill"
           },
           {
             "count": 1,
-            "definition": "elemental.savor"
+            "definition": "blb.savor"
           },
           {
             "count": 1,
-            "definition": "elemental.epic_downfall"
+            "definition": "tla.epic_downfall"
           },
           {
             "count": 1,
@@ -363,15 +363,15 @@
           },
           {
             "count": 8,
-            "definition": "temur.island"
+            "definition": "tla.island"
           },
           {
             "count": 7,
-            "definition": "sacrifice.swamp"
+            "definition": "tla.swamp"
           },
           {
             "count": 2,
-            "definition": "sacrifice.fabled_passage"
+            "definition": "eld.fabled_passage"
           }
         ],
         "key": "elemental_ub",
@@ -382,11 +382,11 @@
           },
           {
             "count": 1,
-            "definition": "elemental.ozai_s_cruelty"
+            "definition": "tla.ozai_s_cruelty"
           },
           {
             "count": 1,
-            "definition": "elemental.zuko_s_exile"
+            "definition": "tla.zuko_s_exile"
           }
         ]
       },
@@ -395,15 +395,15 @@
         "cards": [
           {
             "count": 1,
-            "definition": "elemental.spectral_sailor"
+            "definition": "m20.spectral_sailor"
           },
           {
             "count": 2,
-            "definition": "elemental.messenger_hawk"
+            "definition": "tla.messenger_hawk"
           },
           {
             "count": 1,
-            "definition": "elemental.momo_friendly_flier"
+            "definition": "tla.momo_friendly_flier"
           },
           {
             "count": 3,
@@ -423,7 +423,7 @@
           },
           {
             "count": 2,
-            "definition": "elemental.professor_of_symbology"
+            "definition": "stx.professor_of_symbology"
           },
           {
             "count": 2,
@@ -431,7 +431,7 @@
           },
           {
             "count": 2,
-            "definition": "elemental.boomerang_basics"
+            "definition": "tla.boomerang_basics"
           },
           {
             "count": 1,
@@ -447,19 +447,19 @@
           },
           {
             "count": 1,
-            "definition": "elemental.enter_the_avatar_state"
+            "definition": "tla.enter_the_avatar_state"
           },
           {
             "count": 8,
-            "definition": "sacrifice.plains"
+            "definition": "tla.plains"
           },
           {
             "count": 7,
-            "definition": "temur.island"
+            "definition": "tla.island"
           },
           {
             "count": 2,
-            "definition": "sacrifice.fabled_passage"
+            "definition": "eld.fabled_passage"
           }
         ],
         "key": "elemental_uw",
@@ -474,7 +474,7 @@
           },
           {
             "count": 1,
-            "definition": "elemental.zuko_s_exile"
+            "definition": "tla.zuko_s_exile"
           }
         ]
       },
@@ -483,55 +483,55 @@
         "cards": [
           {
             "count": 2,
-            "definition": "temur.hermitic_herbalist"
+            "definition": "tla.hermitic_herbalist"
           },
           {
             "count": 1,
-            "definition": "temur.great_divide_guide"
+            "definition": "tla.great_divide_guide"
           },
           {
             "count": 1,
-            "definition": "temur.iroh_grand_lotus"
+            "definition": "tla.iroh_grand_lotus"
           },
           {
             "count": 1,
-            "definition": "temur.ran_and_shaw"
+            "definition": "tla.ran_and_shaw"
           },
           {
             "count": 1,
-            "definition": "elemental.gnarled_professor"
+            "definition": "stx.gnarled_professor"
           },
           {
             "count": 1,
-            "definition": "elemental.gran_gran"
+            "definition": "tla.gran_gran"
           },
           {
             "count": 1,
-            "definition": "sacrifice.unlucky_cabbage_merchant"
+            "definition": "tla.unlucky_cabbage_merchant"
           },
           {
             "count": 2,
-            "definition": "elemental.ostrich_horse"
+            "definition": "tla.ostrich_horse"
           },
           {
             "count": 1,
-            "definition": "elemental.toph_the_blind_bandit"
+            "definition": "tla.toph_the_blind_bandit"
           },
           {
             "count": 1,
-            "definition": "elemental.field_trip"
+            "definition": "stx.field_trip"
           },
           {
             "count": 1,
-            "definition": "elemental.shared_roots"
+            "definition": "tla.shared_roots"
           },
           {
             "count": 1,
-            "definition": "sacrifice.cycle_of_renewal"
+            "definition": "tla.cycle_of_renewal"
           },
           {
             "count": 1,
-            "definition": "temur.waterbending_lesson"
+            "definition": "tla.waterbending_lesson"
           },
           {
             "count": 1,
@@ -539,7 +539,7 @@
           },
           {
             "count": 1,
-            "definition": "elemental.abandon_attachments"
+            "definition": "tla.abandon_attachments"
           },
           {
             "count": 1,
@@ -547,54 +547,54 @@
           },
           {
             "count": 1,
-            "definition": "elemental.combustion_technique"
+            "definition": "tla.combustion_technique"
           },
           {
             "count": 1,
-            "definition": "elemental.true_ancestry"
+            "definition": "tla.true_ancestry"
           },
           {
             "count": 1,
-            "definition": "temur.prophetic_prism"
+            "definition": "arb.prophetic_prism"
           },
           {
             "count": 1,
-            "definition": "elemental.zuko_s_exile"
+            "definition": "tla.zuko_s_exile"
           },
           {
             "count": 5,
-            "definition": "temur.forest"
+            "definition": "tla.forest"
           },
           {
             "count": 5,
-            "definition": "temur.island"
+            "definition": "tla.island"
           },
           {
             "count": 3,
-            "definition": "temur.mountain"
+            "definition": "tla.mountain"
           },
           {
             "count": 3,
-            "definition": "sacrifice.fabled_passage"
+            "definition": "eld.fabled_passage"
           },
           {
             "count": 2,
-            "definition": "sacrifice.prismatic_vista"
+            "definition": "mh1.prismatic_vista"
           }
         ],
         "key": "elemental_ug",
         "sideboard": [
           {
             "count": 1,
-            "definition": "elemental.origin_of_metalbending"
+            "definition": "tla.origin_of_metalbending"
           },
           {
             "count": 1,
-            "definition": "elemental.iroh_s_demonstration"
+            "definition": "tla.iroh_s_demonstration"
           },
           {
             "count": 1,
-            "definition": "elemental.sokka_s_haiku"
+            "definition": "tla.sokka_s_haiku"
           }
         ]
       },
@@ -615,19 +615,19 @@
           },
           {
             "count": 2,
-            "definition": "elemental.professor_of_symbology"
+            "definition": "stx.professor_of_symbology"
           },
           {
             "count": 1,
-            "definition": "elemental.deserter_s_disciple"
+            "definition": "tla.deserter_s_disciple"
           },
           {
             "count": 1,
-            "definition": "elemental.jet_freedom_fighter"
+            "definition": "tla.jet_freedom_fighter"
           },
           {
             "count": 1,
-            "definition": "elemental.wartime_protestors"
+            "definition": "tla.wartime_protestors"
           },
           {
             "count": 1,
@@ -635,7 +635,7 @@
           },
           {
             "count": 1,
-            "definition": "elemental.master_piandao"
+            "definition": "tla.master_piandao"
           },
           {
             "count": 1,
@@ -643,7 +643,7 @@
           },
           {
             "count": 3,
-            "definition": "elemental.lightning_strike"
+            "definition": "tla.lightning_strike"
           },
           {
             "count": 1,
@@ -663,23 +663,23 @@
           },
           {
             "count": 1,
-            "definition": "elemental.enthusiastic_study"
+            "definition": "stx.enthusiastic_study"
           },
           {
             "count": 1,
-            "definition": "elemental.gather_the_white_lotus"
+            "definition": "tla.gather_the_white_lotus"
           },
           {
             "count": 8,
-            "definition": "sacrifice.plains"
+            "definition": "tla.plains"
           },
           {
             "count": 7,
-            "definition": "temur.mountain"
+            "definition": "tla.mountain"
           },
           {
             "count": 2,
-            "definition": "sacrifice.fabled_passage"
+            "definition": "eld.fabled_passage"
           }
         ],
         "key": "elemental_wr",
@@ -690,11 +690,11 @@
           },
           {
             "count": 1,
-            "definition": "elemental.enter_the_avatar_state"
+            "definition": "tla.enter_the_avatar_state"
           },
           {
             "count": 1,
-            "definition": "elemental.zuko_s_exile"
+            "definition": "tla.zuko_s_exile"
           }
         ]
       },
@@ -703,23 +703,23 @@
         "cards": [
           {
             "count": 2,
-            "definition": "elemental.pretending_poxbearers"
+            "definition": "tla.pretending_poxbearers"
           },
           {
             "count": 1,
-            "definition": "sacrifice.curious_farm_animals"
+            "definition": "tla.curious_farm_animals"
           },
           {
             "count": 1,
-            "definition": "sacrifice.callous_inspector"
+            "definition": "tla.callous_inspector"
           },
           {
             "count": 2,
-            "definition": "elemental.eyetwitch"
+            "definition": "stx.eyetwitch"
           },
           {
             "count": 2,
-            "definition": "elemental.professor_of_symbology"
+            "definition": "stx.professor_of_symbology"
           },
           {
             "count": 1,
@@ -731,35 +731,35 @@
           },
           {
             "count": 2,
-            "definition": "elemental.corrupt_court_official"
+            "definition": "tla.corrupt_court_official"
           },
           {
             "count": 1,
-            "definition": "sacrifice.june_bounty_hunter"
+            "definition": "tla.june_bounty_hunter"
           },
           {
             "count": 2,
-            "definition": "sacrifice.deadly_precision"
+            "definition": "tla.deadly_precision"
           },
           {
             "count": 1,
-            "definition": "sacrifice.deadly_dispute"
+            "definition": "afr.deadly_dispute"
           },
           {
             "count": 1,
-            "definition": "sacrifice.tolls_of_war"
+            "definition": "tla.tolls_of_war"
           },
           {
             "count": 1,
-            "definition": "sacrifice.bastion_of_remembrance"
+            "definition": "iko.bastion_of_remembrance"
           },
           {
             "count": 1,
-            "definition": "elemental.savor"
+            "definition": "blb.savor"
           },
           {
             "count": 1,
-            "definition": "elemental.power_word_kill"
+            "definition": "afr.power_word_kill"
           },
           {
             "count": 1,
@@ -767,30 +767,30 @@
           },
           {
             "count": 8,
-            "definition": "sacrifice.plains"
+            "definition": "tla.plains"
           },
           {
             "count": 7,
-            "definition": "sacrifice.swamp"
+            "definition": "tla.swamp"
           },
           {
             "count": 2,
-            "definition": "sacrifice.fabled_passage"
+            "definition": "eld.fabled_passage"
           }
         ],
         "key": "elemental_wb",
         "sideboard": [
           {
             "count": 1,
-            "definition": "elemental.enter_the_avatar_state"
+            "definition": "tla.enter_the_avatar_state"
           },
           {
             "count": 1,
-            "definition": "elemental.ozai_s_cruelty"
+            "definition": "tla.ozai_s_cruelty"
           },
           {
             "count": 1,
-            "definition": "elemental.zuko_s_exile"
+            "definition": "tla.zuko_s_exile"
           }
         ]
       },
@@ -799,27 +799,27 @@
         "cards": [
           {
             "count": 1,
-            "definition": "sacrifice.callous_inspector"
+            "definition": "tla.callous_inspector"
           },
           {
             "count": 4,
-            "definition": "elemental.corrupt_court_official"
+            "definition": "tla.corrupt_court_official"
           },
           {
             "count": 2,
-            "definition": "elemental.eyetwitch"
+            "definition": "stx.eyetwitch"
           },
           {
             "count": 1,
-            "definition": "sacrifice.mayhem_devil"
+            "definition": "war.mayhem_devil"
           },
           {
             "count": 1,
-            "definition": "sacrifice.june_bounty_hunter"
+            "definition": "tla.june_bounty_hunter"
           },
           {
             "count": 1,
-            "definition": "elemental.deserter_s_disciple"
+            "definition": "tla.deserter_s_disciple"
           },
           {
             "count": 1,
@@ -827,7 +827,7 @@
           },
           {
             "count": 1,
-            "definition": "elemental.cat_gator"
+            "definition": "tla.cat_gator"
           },
           {
             "count": 3,
@@ -835,7 +835,7 @@
           },
           {
             "count": 2,
-            "definition": "elemental.lightning_strike"
+            "definition": "tla.lightning_strike"
           },
           {
             "count": 1,
@@ -843,31 +843,31 @@
           },
           {
             "count": 2,
-            "definition": "sacrifice.deadly_precision"
+            "definition": "tla.deadly_precision"
           },
           {
             "count": 1,
-            "definition": "sacrifice.deadly_dispute"
+            "definition": "afr.deadly_dispute"
           },
           {
             "count": 1,
-            "definition": "sacrifice.weaponize_the_monsters"
+            "definition": "iko.weaponize_the_monsters"
           },
           {
             "count": 1,
-            "definition": "elemental.savor"
+            "definition": "blb.savor"
           },
           {
             "count": 8,
-            "definition": "sacrifice.swamp"
+            "definition": "tla.swamp"
           },
           {
             "count": 7,
-            "definition": "temur.mountain"
+            "definition": "tla.mountain"
           },
           {
             "count": 2,
-            "definition": "sacrifice.fabled_passage"
+            "definition": "eld.fabled_passage"
           }
         ],
         "key": "elemental_rb",
@@ -878,15 +878,15 @@
           },
           {
             "count": 1,
-            "definition": "elemental.combustion_technique"
+            "definition": "tla.combustion_technique"
           },
           {
             "count": 1,
-            "definition": "elemental.ozai_s_cruelty"
+            "definition": "tla.ozai_s_cruelty"
           },
           {
             "count": 1,
-            "definition": "elemental.zuko_s_exile"
+            "definition": "tla.zuko_s_exile"
           }
         ]
       },
@@ -895,23 +895,23 @@
         "cards": [
           {
             "count": 1,
-            "definition": "sacrifice.sazh_s_chocobo"
+            "definition": "fin.sazh_s_chocobo"
           },
           {
             "count": 1,
-            "definition": "sacrifice.tireless_tracker"
+            "definition": "soi.tireless_tracker"
           },
           {
             "count": 1,
-            "definition": "sacrifice.tireless_provisioner"
+            "definition": "lci.tireless_provisioner"
           },
           {
             "count": 1,
-            "definition": "sacrifice.lotus_cobra"
+            "definition": "zen.lotus_cobra"
           },
           {
             "count": 1,
-            "definition": "sacrifice.unlucky_cabbage_merchant"
+            "definition": "tla.unlucky_cabbage_merchant"
           },
           {
             "count": 1,
@@ -919,90 +919,90 @@
           },
           {
             "count": 1,
-            "definition": "elemental.toph_the_blind_bandit"
+            "definition": "tla.toph_the_blind_bandit"
           },
           {
             "count": 1,
-            "definition": "elemental.dai_li_agents"
+            "definition": "tla.dai_li_agents"
           },
           {
             "count": 2,
-            "definition": "elemental.corrupt_court_official"
+            "definition": "tla.corrupt_court_official"
           },
           {
             "count": 1,
-            "definition": "sacrifice.callous_inspector"
+            "definition": "tla.callous_inspector"
           },
           {
             "count": 1,
-            "definition": "sacrifice.june_bounty_hunter"
+            "definition": "tla.june_bounty_hunter"
           },
           {
             "count": 2,
-            "definition": "elemental.ostrich_horse"
+            "definition": "tla.ostrich_horse"
           },
           {
             "count": 1,
-            "definition": "sacrifice.cycle_of_renewal"
+            "definition": "tla.cycle_of_renewal"
           },
           {
             "count": 1,
-            "definition": "elemental.field_trip"
+            "definition": "stx.field_trip"
           },
           {
             "count": 1,
-            "definition": "elemental.true_ancestry"
+            "definition": "tla.true_ancestry"
           },
           {
             "count": 1,
-            "definition": "elemental.origin_of_metalbending"
+            "definition": "tla.origin_of_metalbending"
           },
           {
             "count": 2,
-            "definition": "sacrifice.deadly_precision"
+            "definition": "tla.deadly_precision"
           },
           {
             "count": 1,
-            "definition": "sacrifice.deadly_dispute"
+            "definition": "afr.deadly_dispute"
           },
           {
             "count": 1,
-            "definition": "elemental.savor"
+            "definition": "blb.savor"
           },
           {
             "count": 1,
-            "definition": "elemental.power_word_kill"
+            "definition": "afr.power_word_kill"
           },
           {
             "count": 6,
-            "definition": "temur.forest"
+            "definition": "tla.forest"
           },
           {
             "count": 6,
-            "definition": "sacrifice.swamp"
+            "definition": "tla.swamp"
           },
           {
             "count": 3,
-            "definition": "sacrifice.fabled_passage"
+            "definition": "eld.fabled_passage"
           },
           {
             "count": 2,
-            "definition": "sacrifice.prismatic_vista"
+            "definition": "mh1.prismatic_vista"
           }
         ],
         "key": "elemental_bg",
         "sideboard": [
           {
             "count": 1,
-            "definition": "elemental.azula_always_lies"
+            "definition": "tla.azula_always_lies"
           },
           {
             "count": 1,
-            "definition": "elemental.ozai_s_cruelty"
+            "definition": "tla.ozai_s_cruelty"
           },
           {
             "count": 1,
-            "definition": "elemental.zuko_s_exile"
+            "definition": "tla.zuko_s_exile"
           }
         ]
       }
@@ -1016,11 +1016,11 @@
         "cards": [
           {
             "count": 9,
-            "definition": "temur.island"
+            "definition": "tla.island"
           },
           {
             "count": 8,
-            "definition": "temur.mountain"
+            "definition": "tla.mountain"
           },
           {
             "count": 2,
@@ -1092,11 +1092,11 @@
         "cards": [
           {
             "count": 9,
-            "definition": "sacrifice.plains"
+            "definition": "tla.plains"
           },
           {
             "count": 8,
-            "definition": "temur.forest"
+            "definition": "tla.forest"
           },
           {
             "count": 2,
@@ -1168,23 +1168,23 @@
         "cards": [
           {
             "count": 9,
-            "definition": "temur.mountain"
+            "definition": "tla.mountain"
           },
           {
             "count": 8,
-            "definition": "sacrifice.plains"
+            "definition": "tla.plains"
           },
           {
             "count": 8,
-            "definition": "research.savannah_lions"
+            "definition": "lea.savannah_lions"
           },
           {
             "count": 8,
-            "definition": "research.glory_seeker"
+            "definition": "ons.glory_seeker"
           },
           {
             "count": 7,
-            "definition": "research.hill_giant"
+            "definition": "lea.hill_giant"
           }
         ],
         "key": "l1_swift",
@@ -1195,23 +1195,23 @@
         "cards": [
           {
             "count": 9,
-            "definition": "temur.mountain"
+            "definition": "tla.mountain"
           },
           {
             "count": 8,
-            "definition": "sacrifice.plains"
+            "definition": "tla.plains"
           },
           {
             "count": 4,
-            "definition": "research.savannah_lions"
+            "definition": "lea.savannah_lions"
           },
           {
             "count": 8,
-            "definition": "research.glory_seeker"
+            "definition": "ons.glory_seeker"
           },
           {
             "count": 11,
-            "definition": "research.hill_giant"
+            "definition": "lea.hill_giant"
           }
         ],
         "key": "l1_heavy",
@@ -1222,27 +1222,27 @@
         "cards": [
           {
             "count": 9,
-            "definition": "temur.mountain"
+            "definition": "tla.mountain"
           },
           {
             "count": 8,
-            "definition": "sacrifice.plains"
+            "definition": "tla.plains"
           },
           {
             "count": 6,
-            "definition": "research.savannah_lions"
+            "definition": "lea.savannah_lions"
           },
           {
             "count": 5,
-            "definition": "research.glory_seeker"
+            "definition": "ons.glory_seeker"
           },
           {
             "count": 4,
-            "definition": "research.hill_giant"
+            "definition": "lea.hill_giant"
           },
           {
             "count": 4,
-            "definition": "research.lightning_bolt"
+            "definition": "lea.lightning_bolt"
           },
           {
             "count": 4,
@@ -1257,27 +1257,27 @@
         "cards": [
           {
             "count": 9,
-            "definition": "temur.mountain"
+            "definition": "tla.mountain"
           },
           {
             "count": 8,
-            "definition": "sacrifice.plains"
+            "definition": "tla.plains"
           },
           {
             "count": 2,
-            "definition": "research.savannah_lions"
+            "definition": "lea.savannah_lions"
           },
           {
             "count": 5,
-            "definition": "research.glory_seeker"
+            "definition": "ons.glory_seeker"
           },
           {
             "count": 8,
-            "definition": "research.hill_giant"
+            "definition": "lea.hill_giant"
           },
           {
             "count": 4,
-            "definition": "research.lightning_bolt"
+            "definition": "lea.lightning_bolt"
           },
           {
             "count": 4,
@@ -1297,107 +1297,107 @@
         "cards": [
           {
             "count": 1,
-            "definition": "elemental.abandon_attachments"
+            "definition": "tla.abandon_attachments"
           },
           {
             "count": 1,
-            "definition": "elemental.azula_always_lies"
+            "definition": "tla.azula_always_lies"
           },
           {
             "count": 1,
-            "definition": "elemental.boomerang_basics"
+            "definition": "tla.boomerang_basics"
           },
           {
             "count": 1,
-            "definition": "elemental.cat_gator"
+            "definition": "tla.cat_gator"
           },
           {
             "count": 1,
-            "definition": "elemental.corrupt_court_official"
+            "definition": "tla.corrupt_court_official"
           },
           {
             "count": 1,
-            "definition": "elemental.dai_li_agents"
+            "definition": "tla.dai_li_agents"
           },
           {
             "count": 1,
-            "definition": "elemental.deserter_s_disciple"
+            "definition": "tla.deserter_s_disciple"
           },
           {
             "count": 1,
-            "definition": "elemental.enthusiastic_study"
+            "definition": "stx.enthusiastic_study"
           },
           {
             "count": 1,
-            "definition": "elemental.epic_downfall"
+            "definition": "tla.epic_downfall"
           },
           {
             "count": 1,
-            "definition": "elemental.eyetwitch"
+            "definition": "stx.eyetwitch"
           },
           {
             "count": 1,
-            "definition": "elemental.field_trip"
+            "definition": "stx.field_trip"
           },
           {
             "count": 1,
-            "definition": "elemental.fists_of_flame"
+            "definition": "mh1.fists_of_flame"
           },
           {
             "count": 1,
-            "definition": "elemental.foggy_swamp_spirit_keeper"
+            "definition": "tla.foggy_swamp_spirit_keeper"
           },
           {
             "count": 1,
-            "definition": "elemental.gather_the_white_lotus"
+            "definition": "tla.gather_the_white_lotus"
           },
           {
             "count": 1,
-            "definition": "elemental.giant_cindermaw"
+            "definition": "bro.giant_cindermaw"
           },
           {
             "count": 1,
-            "definition": "elemental.gnarled_professor"
+            "definition": "stx.gnarled_professor"
           },
           {
             "count": 1,
-            "definition": "elemental.haru_hidden_talent"
+            "definition": "tla.haru_hidden_talent"
           },
           {
             "count": 1,
-            "definition": "elemental.iroh_s_demonstration"
+            "definition": "tla.iroh_s_demonstration"
           },
           {
             "count": 1,
-            "definition": "elemental.jet_freedom_fighter"
+            "definition": "tla.jet_freedom_fighter"
           },
           {
             "count": 1,
-            "definition": "elemental.knowledge_seeker"
+            "definition": "tla.knowledge_seeker"
           },
           {
             "count": 1,
-            "definition": "elemental.lightning_strike"
+            "definition": "tla.lightning_strike"
           },
           {
             "count": 5,
-            "definition": "sacrifice.plains"
+            "definition": "tla.plains"
           },
           {
             "count": 5,
-            "definition": "temur.island"
+            "definition": "tla.island"
           },
           {
             "count": 5,
-            "definition": "sacrifice.swamp"
+            "definition": "tla.swamp"
           },
           {
             "count": 5,
-            "definition": "temur.mountain"
+            "definition": "tla.mountain"
           },
           {
             "count": 5,
-            "definition": "temur.forest"
+            "definition": "tla.forest"
           }
         ],
         "key": "elemental_left"
@@ -1407,107 +1407,107 @@
         "cards": [
           {
             "count": 1,
-            "definition": "elemental.master_piandao"
+            "definition": "tla.master_piandao"
           },
           {
             "count": 1,
-            "definition": "elemental.messenger_hawk"
+            "definition": "tla.messenger_hawk"
           },
           {
             "count": 1,
-            "definition": "elemental.momo_friendly_flier"
+            "definition": "tla.momo_friendly_flier"
           },
           {
             "count": 1,
-            "definition": "elemental.monastery_swiftspear"
+            "definition": "ktk.monastery_swiftspear"
           },
           {
             "count": 1,
-            "definition": "elemental.octopus_form"
+            "definition": "tla.octopus_form"
           },
           {
             "count": 1,
-            "definition": "elemental.origin_of_metalbending"
+            "definition": "tla.origin_of_metalbending"
           },
           {
             "count": 1,
-            "definition": "elemental.ostrich_horse"
+            "definition": "tla.ostrich_horse"
           },
           {
             "count": 1,
-            "definition": "elemental.ozai_s_cruelty"
+            "definition": "tla.ozai_s_cruelty"
           },
           {
             "count": 1,
-            "definition": "elemental.power_word_kill"
+            "definition": "afr.power_word_kill"
           },
           {
             "count": 1,
-            "definition": "elemental.pretending_poxbearers"
+            "definition": "tla.pretending_poxbearers"
           },
           {
             "count": 1,
-            "definition": "elemental.professor_of_symbology"
+            "definition": "stx.professor_of_symbology"
           },
           {
             "count": 1,
-            "definition": "elemental.savor"
+            "definition": "blb.savor"
           },
           {
             "count": 1,
-            "definition": "elemental.shared_roots"
+            "definition": "tla.shared_roots"
           },
           {
             "count": 1,
-            "definition": "elemental.sokka_s_haiku"
+            "definition": "tla.sokka_s_haiku"
           },
           {
             "count": 1,
-            "definition": "elemental.spectral_sailor"
+            "definition": "m20.spectral_sailor"
           },
           {
             "count": 1,
-            "definition": "elemental.tiger_dillo"
+            "definition": "tla.tiger_dillo"
           },
           {
             "count": 1,
-            "definition": "elemental.toph_the_blind_bandit"
+            "definition": "tla.toph_the_blind_bandit"
           },
           {
             "count": 1,
-            "definition": "elemental.true_ancestry"
+            "definition": "tla.true_ancestry"
           },
           {
             "count": 1,
-            "definition": "elemental.uncle_iroh"
+            "definition": "tla.uncle_iroh"
           },
           {
             "count": 1,
-            "definition": "elemental.wartime_protestors"
+            "definition": "tla.wartime_protestors"
           },
           {
             "count": 1,
-            "definition": "elemental.zuko_s_exile"
+            "definition": "tla.zuko_s_exile"
           },
           {
             "count": 5,
-            "definition": "sacrifice.plains"
+            "definition": "tla.plains"
           },
           {
             "count": 5,
-            "definition": "temur.island"
+            "definition": "tla.island"
           },
           {
             "count": 5,
-            "definition": "sacrifice.swamp"
+            "definition": "tla.swamp"
           },
           {
             "count": 5,
-            "definition": "temur.mountain"
+            "definition": "tla.mountain"
           },
           {
             "count": 5,
-            "definition": "temur.forest"
+            "definition": "tla.forest"
           }
         ],
         "key": "elemental_right"
@@ -1522,19 +1522,19 @@
         "cards": [
           {
             "count": 2,
-            "definition": "elemental.tiger_dillo"
+            "definition": "tla.tiger_dillo"
           },
           {
             "count": 2,
-            "definition": "elemental.ostrich_horse"
+            "definition": "tla.ostrich_horse"
           },
           {
             "count": 1,
-            "definition": "elemental.uncle_iroh"
+            "definition": "tla.uncle_iroh"
           },
           {
             "count": 1,
-            "definition": "elemental.giant_cindermaw"
+            "definition": "bro.giant_cindermaw"
           },
           {
             "count": 1,
@@ -1542,27 +1542,27 @@
           },
           {
             "count": 1,
-            "definition": "elemental.toph_the_blind_bandit"
+            "definition": "tla.toph_the_blind_bandit"
           },
           {
             "count": 1,
-            "definition": "elemental.deserter_s_disciple"
+            "definition": "tla.deserter_s_disciple"
           },
           {
             "count": 1,
-            "definition": "elemental.wartime_protestors"
+            "definition": "tla.wartime_protestors"
           },
           {
             "count": 1,
-            "definition": "elemental.gnarled_professor"
+            "definition": "stx.gnarled_professor"
           },
           {
             "count": 1,
-            "definition": "elemental.monastery_swiftspear"
+            "definition": "ktk.monastery_swiftspear"
           },
           {
             "count": 2,
-            "definition": "elemental.lightning_strike"
+            "definition": "tla.lightning_strike"
           },
           {
             "count": 2,
@@ -1570,11 +1570,11 @@
           },
           {
             "count": 2,
-            "definition": "elemental.fists_of_flame"
+            "definition": "mh1.fists_of_flame"
           },
           {
             "count": 1,
-            "definition": "elemental.enthusiastic_study"
+            "definition": "stx.enthusiastic_study"
           },
           {
             "count": 1,
@@ -1582,27 +1582,27 @@
           },
           {
             "count": 1,
-            "definition": "elemental.field_trip"
+            "definition": "stx.field_trip"
           },
           {
             "count": 1,
-            "definition": "elemental.origin_of_metalbending"
+            "definition": "tla.origin_of_metalbending"
           },
           {
             "count": 1,
-            "definition": "elemental.shared_roots"
+            "definition": "tla.shared_roots"
           },
           {
             "count": 8,
-            "definition": "temur.forest"
+            "definition": "tla.forest"
           },
           {
             "count": 7,
-            "definition": "temur.mountain"
+            "definition": "tla.mountain"
           },
           {
             "count": 2,
-            "definition": "sacrifice.fabled_passage"
+            "definition": "eld.fabled_passage"
           }
         ],
         "key": "elemental_gr",
@@ -1613,15 +1613,15 @@
           },
           {
             "count": 1,
-            "definition": "elemental.combustion_technique"
+            "definition": "tla.combustion_technique"
           },
           {
             "count": 1,
-            "definition": "elemental.origin_of_metalbending"
+            "definition": "tla.origin_of_metalbending"
           },
           {
             "count": 1,
-            "definition": "elemental.zuko_s_exile"
+            "definition": "tla.zuko_s_exile"
           }
         ]
       },
@@ -1650,7 +1650,7 @@
           },
           {
             "count": 1,
-            "definition": "elemental.haru_hidden_talent"
+            "definition": "tla.haru_hidden_talent"
           },
           {
             "count": 1,
@@ -1658,11 +1658,11 @@
           },
           {
             "count": 2,
-            "definition": "elemental.ostrich_horse"
+            "definition": "tla.ostrich_horse"
           },
           {
             "count": 1,
-            "definition": "elemental.professor_of_symbology"
+            "definition": "stx.professor_of_symbology"
           },
           {
             "count": 1,
@@ -1682,42 +1682,42 @@
           },
           {
             "count": 1,
-            "definition": "elemental.enter_the_avatar_state"
+            "definition": "tla.enter_the_avatar_state"
           },
           {
             "count": 1,
-            "definition": "elemental.origin_of_metalbending"
+            "definition": "tla.origin_of_metalbending"
           },
           {
             "count": 1,
-            "definition": "elemental.true_ancestry"
+            "definition": "tla.true_ancestry"
           },
           {
             "count": 8,
-            "definition": "sacrifice.plains"
+            "definition": "tla.plains"
           },
           {
             "count": 7,
-            "definition": "temur.forest"
+            "definition": "tla.forest"
           },
           {
             "count": 2,
-            "definition": "sacrifice.fabled_passage"
+            "definition": "eld.fabled_passage"
           }
         ],
         "key": "elemental_gw",
         "sideboard": [
           {
             "count": 1,
-            "definition": "elemental.origin_of_metalbending"
+            "definition": "tla.origin_of_metalbending"
           },
           {
             "count": 1,
-            "definition": "elemental.enter_the_avatar_state"
+            "definition": "tla.enter_the_avatar_state"
           },
           {
             "count": 1,
-            "definition": "elemental.zuko_s_exile"
+            "definition": "tla.zuko_s_exile"
           }
         ]
       },
@@ -1730,7 +1730,7 @@
           },
           {
             "count": 1,
-            "definition": "elemental.gran_gran"
+            "definition": "tla.gran_gran"
           },
           {
             "count": 2,
@@ -1738,11 +1738,11 @@
           },
           {
             "count": 1,
-            "definition": "elemental.deserter_s_disciple"
+            "definition": "tla.deserter_s_disciple"
           },
           {
             "count": 1,
-            "definition": "elemental.monastery_swiftspear"
+            "definition": "ktk.monastery_swiftspear"
           },
           {
             "count": 3,
@@ -1766,31 +1766,31 @@
           },
           {
             "count": 2,
-            "definition": "elemental.abandon_attachments"
+            "definition": "tla.abandon_attachments"
           },
           {
             "count": 1,
-            "definition": "elemental.combustion_technique"
+            "definition": "tla.combustion_technique"
           },
           {
             "count": 1,
-            "definition": "elemental.lightning_strike"
+            "definition": "tla.lightning_strike"
           },
           {
             "count": 1,
-            "definition": "elemental.octopus_form"
+            "definition": "tla.octopus_form"
           },
           {
             "count": 8,
-            "definition": "temur.mountain"
+            "definition": "tla.mountain"
           },
           {
             "count": 7,
-            "definition": "temur.island"
+            "definition": "tla.island"
           },
           {
             "count": 2,
-            "definition": "sacrifice.fabled_passage"
+            "definition": "eld.fabled_passage"
           }
         ],
         "key": "elemental_ur",
@@ -1805,11 +1805,11 @@
           },
           {
             "count": 1,
-            "definition": "elemental.combustion_technique"
+            "definition": "tla.combustion_technique"
           },
           {
             "count": 1,
-            "definition": "elemental.zuko_s_exile"
+            "definition": "tla.zuko_s_exile"
           }
         ]
       },
@@ -1822,7 +1822,7 @@
           },
           {
             "count": 2,
-            "definition": "elemental.knowledge_seeker"
+            "definition": "tla.knowledge_seeker"
           },
           {
             "count": 3,
@@ -1830,19 +1830,19 @@
           },
           {
             "count": 1,
-            "definition": "elemental.foggy_swamp_spirit_keeper"
+            "definition": "tla.foggy_swamp_spirit_keeper"
           },
           {
             "count": 1,
-            "definition": "elemental.gran_gran"
+            "definition": "tla.gran_gran"
           },
           {
             "count": 1,
-            "definition": "sacrifice.june_bounty_hunter"
+            "definition": "tla.june_bounty_hunter"
           },
           {
             "count": 2,
-            "definition": "elemental.eyetwitch"
+            "definition": "stx.eyetwitch"
           },
           {
             "count": 1,
@@ -1854,23 +1854,23 @@
           },
           {
             "count": 1,
-            "definition": "elemental.abandon_attachments"
+            "definition": "tla.abandon_attachments"
           },
           {
             "count": 1,
-            "definition": "sacrifice.deadly_dispute"
+            "definition": "afr.deadly_dispute"
           },
           {
             "count": 2,
-            "definition": "elemental.power_word_kill"
+            "definition": "afr.power_word_kill"
           },
           {
             "count": 1,
-            "definition": "elemental.savor"
+            "definition": "blb.savor"
           },
           {
             "count": 1,
-            "definition": "elemental.epic_downfall"
+            "definition": "tla.epic_downfall"
           },
           {
             "count": 1,
@@ -1878,15 +1878,15 @@
           },
           {
             "count": 8,
-            "definition": "temur.island"
+            "definition": "tla.island"
           },
           {
             "count": 7,
-            "definition": "sacrifice.swamp"
+            "definition": "tla.swamp"
           },
           {
             "count": 2,
-            "definition": "sacrifice.fabled_passage"
+            "definition": "eld.fabled_passage"
           }
         ],
         "key": "elemental_ub",
@@ -1897,11 +1897,11 @@
           },
           {
             "count": 1,
-            "definition": "elemental.ozai_s_cruelty"
+            "definition": "tla.ozai_s_cruelty"
           },
           {
             "count": 1,
-            "definition": "elemental.zuko_s_exile"
+            "definition": "tla.zuko_s_exile"
           }
         ]
       },
@@ -1910,15 +1910,15 @@
         "cards": [
           {
             "count": 1,
-            "definition": "elemental.spectral_sailor"
+            "definition": "m20.spectral_sailor"
           },
           {
             "count": 2,
-            "definition": "elemental.messenger_hawk"
+            "definition": "tla.messenger_hawk"
           },
           {
             "count": 1,
-            "definition": "elemental.momo_friendly_flier"
+            "definition": "tla.momo_friendly_flier"
           },
           {
             "count": 3,
@@ -1938,7 +1938,7 @@
           },
           {
             "count": 2,
-            "definition": "elemental.professor_of_symbology"
+            "definition": "stx.professor_of_symbology"
           },
           {
             "count": 2,
@@ -1946,7 +1946,7 @@
           },
           {
             "count": 2,
-            "definition": "elemental.boomerang_basics"
+            "definition": "tla.boomerang_basics"
           },
           {
             "count": 1,
@@ -1962,19 +1962,19 @@
           },
           {
             "count": 1,
-            "definition": "elemental.enter_the_avatar_state"
+            "definition": "tla.enter_the_avatar_state"
           },
           {
             "count": 8,
-            "definition": "sacrifice.plains"
+            "definition": "tla.plains"
           },
           {
             "count": 7,
-            "definition": "temur.island"
+            "definition": "tla.island"
           },
           {
             "count": 2,
-            "definition": "sacrifice.fabled_passage"
+            "definition": "eld.fabled_passage"
           }
         ],
         "key": "elemental_uw",
@@ -1989,7 +1989,7 @@
           },
           {
             "count": 1,
-            "definition": "elemental.zuko_s_exile"
+            "definition": "tla.zuko_s_exile"
           }
         ]
       },
@@ -1998,55 +1998,55 @@
         "cards": [
           {
             "count": 2,
-            "definition": "temur.hermitic_herbalist"
+            "definition": "tla.hermitic_herbalist"
           },
           {
             "count": 1,
-            "definition": "temur.great_divide_guide"
+            "definition": "tla.great_divide_guide"
           },
           {
             "count": 1,
-            "definition": "temur.iroh_grand_lotus"
+            "definition": "tla.iroh_grand_lotus"
           },
           {
             "count": 1,
-            "definition": "temur.ran_and_shaw"
+            "definition": "tla.ran_and_shaw"
           },
           {
             "count": 1,
-            "definition": "elemental.gnarled_professor"
+            "definition": "stx.gnarled_professor"
           },
           {
             "count": 1,
-            "definition": "elemental.gran_gran"
+            "definition": "tla.gran_gran"
           },
           {
             "count": 1,
-            "definition": "sacrifice.unlucky_cabbage_merchant"
+            "definition": "tla.unlucky_cabbage_merchant"
           },
           {
             "count": 2,
-            "definition": "elemental.ostrich_horse"
+            "definition": "tla.ostrich_horse"
           },
           {
             "count": 1,
-            "definition": "elemental.toph_the_blind_bandit"
+            "definition": "tla.toph_the_blind_bandit"
           },
           {
             "count": 1,
-            "definition": "elemental.field_trip"
+            "definition": "stx.field_trip"
           },
           {
             "count": 1,
-            "definition": "elemental.shared_roots"
+            "definition": "tla.shared_roots"
           },
           {
             "count": 1,
-            "definition": "sacrifice.cycle_of_renewal"
+            "definition": "tla.cycle_of_renewal"
           },
           {
             "count": 1,
-            "definition": "temur.waterbending_lesson"
+            "definition": "tla.waterbending_lesson"
           },
           {
             "count": 1,
@@ -2054,7 +2054,7 @@
           },
           {
             "count": 1,
-            "definition": "elemental.abandon_attachments"
+            "definition": "tla.abandon_attachments"
           },
           {
             "count": 1,
@@ -2062,54 +2062,54 @@
           },
           {
             "count": 1,
-            "definition": "elemental.combustion_technique"
+            "definition": "tla.combustion_technique"
           },
           {
             "count": 1,
-            "definition": "elemental.true_ancestry"
+            "definition": "tla.true_ancestry"
           },
           {
             "count": 1,
-            "definition": "temur.prophetic_prism"
+            "definition": "arb.prophetic_prism"
           },
           {
             "count": 1,
-            "definition": "elemental.zuko_s_exile"
+            "definition": "tla.zuko_s_exile"
           },
           {
             "count": 5,
-            "definition": "temur.forest"
+            "definition": "tla.forest"
           },
           {
             "count": 5,
-            "definition": "temur.island"
+            "definition": "tla.island"
           },
           {
             "count": 3,
-            "definition": "temur.mountain"
+            "definition": "tla.mountain"
           },
           {
             "count": 3,
-            "definition": "sacrifice.fabled_passage"
+            "definition": "eld.fabled_passage"
           },
           {
             "count": 2,
-            "definition": "sacrifice.prismatic_vista"
+            "definition": "mh1.prismatic_vista"
           }
         ],
         "key": "elemental_ug",
         "sideboard": [
           {
             "count": 1,
-            "definition": "elemental.origin_of_metalbending"
+            "definition": "tla.origin_of_metalbending"
           },
           {
             "count": 1,
-            "definition": "elemental.iroh_s_demonstration"
+            "definition": "tla.iroh_s_demonstration"
           },
           {
             "count": 1,
-            "definition": "elemental.sokka_s_haiku"
+            "definition": "tla.sokka_s_haiku"
           }
         ]
       },
@@ -2130,19 +2130,19 @@
           },
           {
             "count": 2,
-            "definition": "elemental.professor_of_symbology"
+            "definition": "stx.professor_of_symbology"
           },
           {
             "count": 1,
-            "definition": "elemental.deserter_s_disciple"
+            "definition": "tla.deserter_s_disciple"
           },
           {
             "count": 1,
-            "definition": "elemental.jet_freedom_fighter"
+            "definition": "tla.jet_freedom_fighter"
           },
           {
             "count": 1,
-            "definition": "elemental.wartime_protestors"
+            "definition": "tla.wartime_protestors"
           },
           {
             "count": 1,
@@ -2150,7 +2150,7 @@
           },
           {
             "count": 1,
-            "definition": "elemental.master_piandao"
+            "definition": "tla.master_piandao"
           },
           {
             "count": 1,
@@ -2158,7 +2158,7 @@
           },
           {
             "count": 3,
-            "definition": "elemental.lightning_strike"
+            "definition": "tla.lightning_strike"
           },
           {
             "count": 1,
@@ -2178,23 +2178,23 @@
           },
           {
             "count": 1,
-            "definition": "elemental.enthusiastic_study"
+            "definition": "stx.enthusiastic_study"
           },
           {
             "count": 1,
-            "definition": "elemental.gather_the_white_lotus"
+            "definition": "tla.gather_the_white_lotus"
           },
           {
             "count": 8,
-            "definition": "sacrifice.plains"
+            "definition": "tla.plains"
           },
           {
             "count": 7,
-            "definition": "temur.mountain"
+            "definition": "tla.mountain"
           },
           {
             "count": 2,
-            "definition": "sacrifice.fabled_passage"
+            "definition": "eld.fabled_passage"
           }
         ],
         "key": "elemental_wr",
@@ -2205,11 +2205,11 @@
           },
           {
             "count": 1,
-            "definition": "elemental.enter_the_avatar_state"
+            "definition": "tla.enter_the_avatar_state"
           },
           {
             "count": 1,
-            "definition": "elemental.zuko_s_exile"
+            "definition": "tla.zuko_s_exile"
           }
         ]
       },
@@ -2218,23 +2218,23 @@
         "cards": [
           {
             "count": 2,
-            "definition": "elemental.pretending_poxbearers"
+            "definition": "tla.pretending_poxbearers"
           },
           {
             "count": 1,
-            "definition": "sacrifice.curious_farm_animals"
+            "definition": "tla.curious_farm_animals"
           },
           {
             "count": 1,
-            "definition": "sacrifice.callous_inspector"
+            "definition": "tla.callous_inspector"
           },
           {
             "count": 2,
-            "definition": "elemental.eyetwitch"
+            "definition": "stx.eyetwitch"
           },
           {
             "count": 2,
-            "definition": "elemental.professor_of_symbology"
+            "definition": "stx.professor_of_symbology"
           },
           {
             "count": 1,
@@ -2246,35 +2246,35 @@
           },
           {
             "count": 2,
-            "definition": "elemental.corrupt_court_official"
+            "definition": "tla.corrupt_court_official"
           },
           {
             "count": 1,
-            "definition": "sacrifice.june_bounty_hunter"
+            "definition": "tla.june_bounty_hunter"
           },
           {
             "count": 2,
-            "definition": "sacrifice.deadly_precision"
+            "definition": "tla.deadly_precision"
           },
           {
             "count": 1,
-            "definition": "sacrifice.deadly_dispute"
+            "definition": "afr.deadly_dispute"
           },
           {
             "count": 1,
-            "definition": "sacrifice.tolls_of_war"
+            "definition": "tla.tolls_of_war"
           },
           {
             "count": 1,
-            "definition": "sacrifice.bastion_of_remembrance"
+            "definition": "iko.bastion_of_remembrance"
           },
           {
             "count": 1,
-            "definition": "elemental.savor"
+            "definition": "blb.savor"
           },
           {
             "count": 1,
-            "definition": "elemental.power_word_kill"
+            "definition": "afr.power_word_kill"
           },
           {
             "count": 1,
@@ -2282,30 +2282,30 @@
           },
           {
             "count": 8,
-            "definition": "sacrifice.plains"
+            "definition": "tla.plains"
           },
           {
             "count": 7,
-            "definition": "sacrifice.swamp"
+            "definition": "tla.swamp"
           },
           {
             "count": 2,
-            "definition": "sacrifice.fabled_passage"
+            "definition": "eld.fabled_passage"
           }
         ],
         "key": "elemental_wb",
         "sideboard": [
           {
             "count": 1,
-            "definition": "elemental.enter_the_avatar_state"
+            "definition": "tla.enter_the_avatar_state"
           },
           {
             "count": 1,
-            "definition": "elemental.ozai_s_cruelty"
+            "definition": "tla.ozai_s_cruelty"
           },
           {
             "count": 1,
-            "definition": "elemental.zuko_s_exile"
+            "definition": "tla.zuko_s_exile"
           }
         ]
       },
@@ -2314,27 +2314,27 @@
         "cards": [
           {
             "count": 1,
-            "definition": "sacrifice.callous_inspector"
+            "definition": "tla.callous_inspector"
           },
           {
             "count": 4,
-            "definition": "elemental.corrupt_court_official"
+            "definition": "tla.corrupt_court_official"
           },
           {
             "count": 2,
-            "definition": "elemental.eyetwitch"
+            "definition": "stx.eyetwitch"
           },
           {
             "count": 1,
-            "definition": "sacrifice.mayhem_devil"
+            "definition": "war.mayhem_devil"
           },
           {
             "count": 1,
-            "definition": "sacrifice.june_bounty_hunter"
+            "definition": "tla.june_bounty_hunter"
           },
           {
             "count": 1,
-            "definition": "elemental.deserter_s_disciple"
+            "definition": "tla.deserter_s_disciple"
           },
           {
             "count": 1,
@@ -2342,7 +2342,7 @@
           },
           {
             "count": 1,
-            "definition": "elemental.cat_gator"
+            "definition": "tla.cat_gator"
           },
           {
             "count": 3,
@@ -2350,7 +2350,7 @@
           },
           {
             "count": 2,
-            "definition": "elemental.lightning_strike"
+            "definition": "tla.lightning_strike"
           },
           {
             "count": 1,
@@ -2358,31 +2358,31 @@
           },
           {
             "count": 2,
-            "definition": "sacrifice.deadly_precision"
+            "definition": "tla.deadly_precision"
           },
           {
             "count": 1,
-            "definition": "sacrifice.deadly_dispute"
+            "definition": "afr.deadly_dispute"
           },
           {
             "count": 1,
-            "definition": "sacrifice.weaponize_the_monsters"
+            "definition": "iko.weaponize_the_monsters"
           },
           {
             "count": 1,
-            "definition": "elemental.savor"
+            "definition": "blb.savor"
           },
           {
             "count": 8,
-            "definition": "sacrifice.swamp"
+            "definition": "tla.swamp"
           },
           {
             "count": 7,
-            "definition": "temur.mountain"
+            "definition": "tla.mountain"
           },
           {
             "count": 2,
-            "definition": "sacrifice.fabled_passage"
+            "definition": "eld.fabled_passage"
           }
         ],
         "key": "elemental_rb",
@@ -2393,15 +2393,15 @@
           },
           {
             "count": 1,
-            "definition": "elemental.combustion_technique"
+            "definition": "tla.combustion_technique"
           },
           {
             "count": 1,
-            "definition": "elemental.ozai_s_cruelty"
+            "definition": "tla.ozai_s_cruelty"
           },
           {
             "count": 1,
-            "definition": "elemental.zuko_s_exile"
+            "definition": "tla.zuko_s_exile"
           }
         ]
       },
@@ -2410,23 +2410,23 @@
         "cards": [
           {
             "count": 1,
-            "definition": "sacrifice.sazh_s_chocobo"
+            "definition": "fin.sazh_s_chocobo"
           },
           {
             "count": 1,
-            "definition": "sacrifice.tireless_tracker"
+            "definition": "soi.tireless_tracker"
           },
           {
             "count": 1,
-            "definition": "sacrifice.tireless_provisioner"
+            "definition": "lci.tireless_provisioner"
           },
           {
             "count": 1,
-            "definition": "sacrifice.lotus_cobra"
+            "definition": "zen.lotus_cobra"
           },
           {
             "count": 1,
-            "definition": "sacrifice.unlucky_cabbage_merchant"
+            "definition": "tla.unlucky_cabbage_merchant"
           },
           {
             "count": 1,
@@ -2434,90 +2434,90 @@
           },
           {
             "count": 1,
-            "definition": "elemental.toph_the_blind_bandit"
+            "definition": "tla.toph_the_blind_bandit"
           },
           {
             "count": 1,
-            "definition": "elemental.dai_li_agents"
+            "definition": "tla.dai_li_agents"
           },
           {
             "count": 2,
-            "definition": "elemental.corrupt_court_official"
+            "definition": "tla.corrupt_court_official"
           },
           {
             "count": 1,
-            "definition": "sacrifice.callous_inspector"
+            "definition": "tla.callous_inspector"
           },
           {
             "count": 1,
-            "definition": "sacrifice.june_bounty_hunter"
+            "definition": "tla.june_bounty_hunter"
           },
           {
             "count": 2,
-            "definition": "elemental.ostrich_horse"
+            "definition": "tla.ostrich_horse"
           },
           {
             "count": 1,
-            "definition": "sacrifice.cycle_of_renewal"
+            "definition": "tla.cycle_of_renewal"
           },
           {
             "count": 1,
-            "definition": "elemental.field_trip"
+            "definition": "stx.field_trip"
           },
           {
             "count": 1,
-            "definition": "elemental.true_ancestry"
+            "definition": "tla.true_ancestry"
           },
           {
             "count": 1,
-            "definition": "elemental.origin_of_metalbending"
+            "definition": "tla.origin_of_metalbending"
           },
           {
             "count": 2,
-            "definition": "sacrifice.deadly_precision"
+            "definition": "tla.deadly_precision"
           },
           {
             "count": 1,
-            "definition": "sacrifice.deadly_dispute"
+            "definition": "afr.deadly_dispute"
           },
           {
             "count": 1,
-            "definition": "elemental.savor"
+            "definition": "blb.savor"
           },
           {
             "count": 1,
-            "definition": "elemental.power_word_kill"
+            "definition": "afr.power_word_kill"
           },
           {
             "count": 6,
-            "definition": "temur.forest"
+            "definition": "tla.forest"
           },
           {
             "count": 6,
-            "definition": "sacrifice.swamp"
+            "definition": "tla.swamp"
           },
           {
             "count": 3,
-            "definition": "sacrifice.fabled_passage"
+            "definition": "eld.fabled_passage"
           },
           {
             "count": 2,
-            "definition": "sacrifice.prismatic_vista"
+            "definition": "mh1.prismatic_vista"
           }
         ],
         "key": "elemental_bg",
         "sideboard": [
           {
             "count": 1,
-            "definition": "elemental.azula_always_lies"
+            "definition": "tla.azula_always_lies"
           },
           {
             "count": 1,
-            "definition": "elemental.ozai_s_cruelty"
+            "definition": "tla.ozai_s_cruelty"
           },
           {
             "count": 1,
-            "definition": "elemental.zuko_s_exile"
+            "definition": "tla.zuko_s_exile"
           }
         ]
       }
@@ -2531,11 +2531,11 @@
         "card_count": 41,
         "cards": [
           {
-            "definition": "temur.island",
+            "definition": "tla.island",
             "count": 9
           },
           {
-            "definition": "temur.mountain",
+            "definition": "tla.mountain",
             "count": 8
           },
           {
@@ -2593,11 +2593,11 @@
         "card_count": 40,
         "cards": [
           {
-            "definition": "sacrifice.plains",
+            "definition": "tla.plains",
             "count": 9
           },
           {
-            "definition": "temur.forest",
+            "definition": "tla.forest",
             "count": 8
           },
           {
@@ -2668,91 +2668,91 @@
         "cards": [
           {
             "count": 1,
-            "definition": "sacrifice.bastion_of_remembrance"
+            "definition": "iko.bastion_of_remembrance"
           },
           {
             "count": 1,
-            "definition": "sacrifice.callous_inspector"
+            "definition": "tla.callous_inspector"
           },
           {
             "count": 1,
-            "definition": "sacrifice.curious_farm_animals"
+            "definition": "tla.curious_farm_animals"
           },
           {
             "count": 1,
-            "definition": "sacrifice.cycle_of_renewal"
+            "definition": "tla.cycle_of_renewal"
           },
           {
             "count": 1,
-            "definition": "sacrifice.deadly_dispute"
+            "definition": "afr.deadly_dispute"
           },
           {
             "count": 1,
-            "definition": "sacrifice.deadly_precision"
+            "definition": "tla.deadly_precision"
           },
           {
             "count": 1,
-            "definition": "sacrifice.fabled_passage"
+            "definition": "eld.fabled_passage"
           },
           {
             "count": 1,
-            "definition": "sacrifice.june_bounty_hunter"
+            "definition": "tla.june_bounty_hunter"
           },
           {
             "count": 1,
-            "definition": "sacrifice.lotus_cobra"
+            "definition": "zen.lotus_cobra"
           },
           {
             "count": 1,
-            "definition": "sacrifice.mayhem_devil"
+            "definition": "war.mayhem_devil"
           },
           {
             "count": 1,
-            "definition": "sacrifice.prismatic_vista"
+            "definition": "mh1.prismatic_vista"
           },
           {
             "count": 1,
-            "definition": "sacrifice.sazh_s_chocobo"
+            "definition": "fin.sazh_s_chocobo"
           },
           {
             "count": 1,
-            "definition": "sacrifice.tireless_provisioner"
+            "definition": "lci.tireless_provisioner"
           },
           {
             "count": 1,
-            "definition": "sacrifice.tireless_tracker"
+            "definition": "soi.tireless_tracker"
           },
           {
             "count": 1,
-            "definition": "sacrifice.tolls_of_war"
+            "definition": "tla.tolls_of_war"
           },
           {
             "count": 1,
-            "definition": "sacrifice.unlucky_cabbage_merchant"
+            "definition": "tla.unlucky_cabbage_merchant"
           },
           {
             "count": 1,
-            "definition": "sacrifice.weaponize_the_monsters"
+            "definition": "iko.weaponize_the_monsters"
           },
           {
             "count": 4,
-            "definition": "sacrifice.plains"
+            "definition": "tla.plains"
           },
           {
             "count": 4,
-            "definition": "temur.island"
+            "definition": "tla.island"
           },
           {
             "count": 5,
-            "definition": "temur.mountain"
+            "definition": "tla.mountain"
           },
           {
             "count": 5,
-            "definition": "sacrifice.swamp"
+            "definition": "tla.swamp"
           },
           {
             "count": 5,
-            "definition": "temur.forest"
+            "definition": "tla.forest"
           }
         ],
         "key": "sacrifice_left"
@@ -2762,91 +2762,91 @@
         "cards": [
           {
             "count": 1,
-            "definition": "sacrifice.bastion_of_remembrance"
+            "definition": "iko.bastion_of_remembrance"
           },
           {
             "count": 1,
-            "definition": "sacrifice.callous_inspector"
+            "definition": "tla.callous_inspector"
           },
           {
             "count": 1,
-            "definition": "sacrifice.curious_farm_animals"
+            "definition": "tla.curious_farm_animals"
           },
           {
             "count": 1,
-            "definition": "sacrifice.cycle_of_renewal"
+            "definition": "tla.cycle_of_renewal"
           },
           {
             "count": 1,
-            "definition": "sacrifice.deadly_dispute"
+            "definition": "afr.deadly_dispute"
           },
           {
             "count": 1,
-            "definition": "sacrifice.deadly_precision"
+            "definition": "tla.deadly_precision"
           },
           {
             "count": 1,
-            "definition": "sacrifice.fabled_passage"
+            "definition": "eld.fabled_passage"
           },
           {
             "count": 1,
-            "definition": "sacrifice.june_bounty_hunter"
+            "definition": "tla.june_bounty_hunter"
           },
           {
             "count": 1,
-            "definition": "sacrifice.lotus_cobra"
+            "definition": "zen.lotus_cobra"
           },
           {
             "count": 1,
-            "definition": "sacrifice.mayhem_devil"
+            "definition": "war.mayhem_devil"
           },
           {
             "count": 1,
-            "definition": "sacrifice.prismatic_vista"
+            "definition": "mh1.prismatic_vista"
           },
           {
             "count": 1,
-            "definition": "sacrifice.sazh_s_chocobo"
+            "definition": "fin.sazh_s_chocobo"
           },
           {
             "count": 1,
-            "definition": "sacrifice.tireless_provisioner"
+            "definition": "lci.tireless_provisioner"
           },
           {
             "count": 1,
-            "definition": "sacrifice.tireless_tracker"
+            "definition": "soi.tireless_tracker"
           },
           {
             "count": 1,
-            "definition": "sacrifice.tolls_of_war"
+            "definition": "tla.tolls_of_war"
           },
           {
             "count": 1,
-            "definition": "sacrifice.unlucky_cabbage_merchant"
+            "definition": "tla.unlucky_cabbage_merchant"
           },
           {
             "count": 1,
-            "definition": "sacrifice.weaponize_the_monsters"
+            "definition": "iko.weaponize_the_monsters"
           },
           {
             "count": 4,
-            "definition": "sacrifice.plains"
+            "definition": "tla.plains"
           },
           {
             "count": 4,
-            "definition": "temur.island"
+            "definition": "tla.island"
           },
           {
             "count": 5,
-            "definition": "temur.mountain"
+            "definition": "tla.mountain"
           },
           {
             "count": 5,
-            "definition": "sacrifice.swamp"
+            "definition": "tla.swamp"
           },
           {
             "count": 5,
-            "definition": "temur.forest"
+            "definition": "tla.forest"
           }
         ],
         "key": "sacrifice_right"
@@ -2861,39 +2861,39 @@
         "cards": [
           {
             "count": 3,
-            "definition": "temur.great_divide_guide"
+            "definition": "tla.great_divide_guide"
           },
           {
             "count": 3,
-            "definition": "temur.hermitic_herbalist"
+            "definition": "tla.hermitic_herbalist"
           },
           {
             "count": 3,
-            "definition": "temur.iroh_grand_lotus"
+            "definition": "tla.iroh_grand_lotus"
           },
           {
             "count": 3,
-            "definition": "temur.prophetic_prism"
+            "definition": "arb.prophetic_prism"
           },
           {
             "count": 3,
-            "definition": "temur.ran_and_shaw"
+            "definition": "tla.ran_and_shaw"
           },
           {
             "count": 3,
-            "definition": "temur.waterbending_lesson"
+            "definition": "tla.waterbending_lesson"
           },
           {
             "count": 8,
-            "definition": "temur.forest"
+            "definition": "tla.forest"
           },
           {
             "count": 7,
-            "definition": "temur.island"
+            "definition": "tla.island"
           },
           {
             "count": 7,
-            "definition": "temur.mountain"
+            "definition": "tla.mountain"
           }
         ],
         "key": "temur_left",
@@ -2904,39 +2904,39 @@
         "cards": [
           {
             "count": 3,
-            "definition": "temur.great_divide_guide"
+            "definition": "tla.great_divide_guide"
           },
           {
             "count": 3,
-            "definition": "temur.hermitic_herbalist"
+            "definition": "tla.hermitic_herbalist"
           },
           {
             "count": 3,
-            "definition": "temur.iroh_grand_lotus"
+            "definition": "tla.iroh_grand_lotus"
           },
           {
             "count": 3,
-            "definition": "temur.prophetic_prism"
+            "definition": "arb.prophetic_prism"
           },
           {
             "count": 3,
-            "definition": "temur.ran_and_shaw"
+            "definition": "tla.ran_and_shaw"
           },
           {
             "count": 3,
-            "definition": "temur.waterbending_lesson"
+            "definition": "tla.waterbending_lesson"
           },
           {
             "count": 8,
-            "definition": "temur.forest"
+            "definition": "tla.forest"
           },
           {
             "count": 7,
-            "definition": "temur.island"
+            "definition": "tla.island"
           },
           {
             "count": 7,
-            "definition": "temur.mountain"
+            "definition": "tla.mountain"
           }
         ],
         "key": "temur_right",
@@ -2966,11 +2966,11 @@
         ],
         "cards": [
           {
-            "definition": "temur.island",
+            "definition": "tla.island",
             "count": 9
           },
           {
-            "definition": "temur.mountain",
+            "definition": "tla.mountain",
             "count": 8
           },
           {
@@ -3038,11 +3038,11 @@
         ],
         "cards": [
           {
-            "definition": "sacrifice.plains",
+            "definition": "tla.plains",
             "count": 9
           },
           {
-            "definition": "temur.forest",
+            "definition": "tla.forest",
             "count": 8
           },
           {
@@ -3109,7 +3109,7 @@
         "card_count": 40,
         "cards": [
           {
-            "definition": "sacrifice.plains",
+            "definition": "tla.plains",
             "count": 24
           },
           {
@@ -3127,7 +3127,7 @@
         "card_count": 40,
         "cards": [
           {
-            "definition": "temur.mountain",
+            "definition": "tla.mountain",
             "count": 24
           },
           {

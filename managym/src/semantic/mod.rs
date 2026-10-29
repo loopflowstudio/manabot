@@ -28,7 +28,7 @@ use std::sync::OnceLock;
 
 use serde_json::Value;
 
-use crate::cardsets::alpha::ContentPack;
+use crate::cards::content_pack::ContentPack;
 use crate::state::{ability::PaymentCost, card::CardDefId, mana::ManaCost};
 
 /// Stable numeric opcodes. These mirror `manabot.semantic.compiler.Opcode` and
@@ -653,7 +653,7 @@ impl SemanticPack {
             .get_or_init(|| {
                 compile::presets()?
                     .iter()
-                    .filter(|preset| !matches!(preset.as_str(), "pool" | "tla"))
+                    .filter(|preset| preset.as_str() != "pool")
                     .map(|preset| Self::current(preset))
                     .collect()
             })
@@ -662,7 +662,7 @@ impl SemanticPack {
     }
 
     /// One current preset, compiled in process from the typed set definitions:
-    /// an authored setup named in `setups.json`, `pool` or `tla`.
+    /// an authored setup named in `setups.json`, or `pool`.
     pub fn current(preset: &str) -> Result<Self, IrError> {
         Self::from_value(compile::document(preset)?)
     }

@@ -74,7 +74,7 @@ def test_actual_viewer_projection_hides_determinized_private_cards_and_binds_ref
     ally_row = next(
         row
         for row, definition in enumerate(pack.ir.definitions)
-        if definition["semantic_key"] == "sacrifice.ally"
+        if definition["semantic_key"] == "token.ally"
     )
     padded_catalog = pack.pad_catalog()
     targets = padded_catalog["definition_ref_target_rows"][program_row]

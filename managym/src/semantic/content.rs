@@ -9,7 +9,7 @@ use std::{
 use serde_json::Value;
 
 use crate::{
-    cardsets::alpha::{CompiledSemanticManifest, ContentPack},
+    cards::content_pack::{CompiledSemanticManifest, ContentPack},
     state::{
         ability::{
             Ability, Effect, EffectValue, StaticCondition, TargetRequirement, TargetSpec,
@@ -184,19 +184,12 @@ mod catalog_tests {
             .unwrap();
         assert_eq!(runtime.setups.len(), 6);
         let semantic = SemanticPack::current("complexity").unwrap();
-        for key in [
-            "research.savannah_lions",
-            "research.glory_seeker",
-            "research.hill_giant",
-        ] {
+        for key in ["lea.savannah_lions", "ons.glory_seeker", "lea.hill_giant"] {
             let definition = semantic
                 .definitions
                 .iter()
                 .find(|d| d.semantic_key == key)
                 .unwrap();
-            assert!(ContentPack::default()
-                .definition_id(&definition.registry_name)
-                .is_none());
             assert!(!semantic
                 .programs
                 .iter()
@@ -258,7 +251,7 @@ impl SemanticPack {
         ))
     }
 
-    fn lower_definitions(&self) -> Result<Vec<CardDefinition>, IrError> {
+    pub(crate) fn lower_definitions(&self) -> Result<Vec<CardDefinition>, IrError> {
         let mut definitions = Vec::with_capacity(self.definitions.len());
         for definition in &self.definitions {
             let mut compiled = compile_characteristics(definition)?;
@@ -309,17 +302,6 @@ impl SemanticPack {
         key: &str,
     ) -> Result<std::collections::BTreeMap<String, usize>, IrError> {
         Ok(self.player_config(key, key)?.decklist)
-    }
-}
-
-impl ContentPack {
-    pub(crate) fn register_current_tla(&mut self) {
-        let pack = SemanticPack::current("tla").expect("current TLA definitions compile");
-        // Lower once, then register each pristine definition exactly once. In
-        // particular, registration is the sole materializer of ward triggers.
-        for definition in pack.lower_definitions().expect("checked TLA programs") {
-            self.register_card(definition);
-        }
     }
 }
 

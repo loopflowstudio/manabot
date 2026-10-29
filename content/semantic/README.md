@@ -1,10 +1,12 @@
 # Semantic content
 
-Current TLA cards are authored as typed Rust functions in
-[`managym/src/cardsets/tla.rs`](../../managym/src/cardsets/tla.rs).
-[`authoring.rs`](../../managym/src/cardsets/authoring.rs) defines symbolic programs,
-costs, targets, predicates and characteristics; `authored_support.rs` supplies the
-non-TLA definitions needed by current setups. Card text is presentation only.
+Every current card is a typed Rust function in its printed set's file under
+[`managym/src/cardsets/`](../../managym/src/cardsets/) (`tla.rs`, `stx.rs`,
+`lea.rs`, …), defined once and keyed by set (`tla.forest`, `stx.pop_quiz`;
+tokens made outside TLA are `token.*` in `tokens.rs`).
+[`cards/authoring.rs`](../../managym/src/cards/authoring.rs) defines symbolic
+programs, costs, targets, predicates and characteristics. Card text is
+presentation only.
 
 The engine compiles those definitions in process
 ([`semantic/compile.rs`](../../managym/src/semantic/compile.rs)): it resolves
@@ -41,9 +43,9 @@ that identity, native IDs, semantic keys and eligibility without starting a game
 Policy binding validates the native receipt before those IDs reach an encoder.
 
 Exact authored setups select their compiled runtime through the shared native
-catalog. Explicit selection also supports repeated-deck matches. The generic
-native registry lowers its TLA cards from the same current definitions and retains
-non-TLA registrations. Independent directed rules tests witness behavior;
+catalog. Explicit selection also supports repeated-deck matches. The default
+content pack registers every typed definition through the same lowering, plus
+the few native cards that still lack one (`managym/src/cards/native.rs`). Independent directed rules tests witness behavior;
 comparisons between two projections of the same authoring source are not rules
 evidence.
 

@@ -20,7 +20,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    cardsets::alpha::default_content_pack,
+    cards::content_pack::default_content_pack,
     flow::{game::Game, search::mix_seed},
     state::player::PlayerConfig,
 };
@@ -110,7 +110,7 @@ impl Orientation {
     fn source_digest(self) -> String {
         blake3::hash(self.source_bytes()).to_hex().to_string()
     }
-    fn content(self) -> Result<Arc<crate::cardsets::alpha::ContentPack>, String> {
+    fn content(self) -> Result<Arc<crate::cards::content_pack::ContentPack>, String> {
         match self {
             Self::ElementalWorldGrVsUg | Self::ElementalWorldUgVsGr => Ok(Arc::new(
                 crate::semantic::SemanticPack::current("optional_payments")

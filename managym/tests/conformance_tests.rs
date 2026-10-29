@@ -26,7 +26,7 @@
 
 use std::collections::{BTreeSet, HashMap};
 
-use managym::cardsets::alpha::CardRegistry;
+use managym::cards::content_pack::CardRegistry;
 use managym::semantic::SemanticPack;
 use managym::state::card::{CardDefinition, CardType};
 use managym::state::mana::{Color, ManaCost};

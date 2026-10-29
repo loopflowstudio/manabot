@@ -6,7 +6,7 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::{
     agent::behavior_tracker::BehaviorTracker,
-    cardsets::alpha::{default_content_pack, ContentPack},
+    cards::content_pack::{default_content_pack, ContentPack},
     flow::{
         game::{Game, GameState},
         priority::PriorityState,

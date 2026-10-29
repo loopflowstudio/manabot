@@ -9,7 +9,7 @@
 //!
 //! Principal entry points:
 //! - [`document`]: the compiled IR for one current preset (a setup in
-//!   `setups.json`, or `pool` / `tla`), shared by every consumer in the process.
+//!   `setups.json`, or `pool`: every card), shared by every consumer in the process.
 //! - [`qualified`]: definitions whose reviewed qualification still matches the
 //!   exact authored closure it was reviewed against.
 //!
@@ -27,7 +27,7 @@ use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
 use super::IrError;
-use crate::cardsets::authoring;
+use crate::cardsets;
 
 const SETUPS: &str = include_str!("../../../content/semantic/current/setups.json");
 const QUALIFICATIONS: &str = include_str!("../../../content/semantic/current/qualifications.json");
@@ -139,7 +139,6 @@ struct Catalog {
     /// Serialized typed definitions by semantic key.
     definitions: BTreeMap<String, Value>,
     setups: BTreeMap<String, Value>,
-    native_roots: BTreeSet<String>,
     token_templates: BTreeSet<String>,
 }
 
@@ -147,7 +146,7 @@ fn catalog() -> Result<&'static Catalog, IrError> {
     static CATALOG: OnceLock<Result<Catalog, IrError>> = OnceLock::new();
     CATALOG
         .get_or_init(|| {
-            let typed = authoring::catalog();
+            let typed = cardsets::catalog();
             let mut definitions = BTreeMap::new();
             let mut names = BTreeSet::new();
             for card in &typed.definitions {
@@ -162,7 +161,6 @@ fn catalog() -> Result<&'static Catalog, IrError> {
             Ok(Catalog {
                 definitions,
                 setups: serde_json::from_str(SETUPS).map_err(serialization)?,
-                native_roots: typed.native_roots.iter().map(|k| k.to_string()).collect(),
                 token_templates: typed
                     .token_templates
                     .iter()
@@ -198,19 +196,16 @@ impl Catalog {
 
     fn source(&self, preset: &str) -> Result<Value, IrError> {
         let (mut source, roots) = match preset {
-            "pool" | "tla" => {
-                let roots = if preset == "tla" {
-                    self.native_roots.clone()
-                } else {
-                    self.definitions
-                        .iter()
-                        .filter(|(key, row)| !is_token(row) && !key.starts_with("research."))
-                        .map(|(key, _)| key.clone())
-                        .collect()
-                };
+            "pool" => {
+                let roots = self
+                    .definitions
+                    .iter()
+                    .filter(|(_, row)| !is_token(row))
+                    .map(|(key, _)| key.clone())
+                    .collect::<BTreeSet<_>>();
                 let source = json!({
                     "schema_version": SOURCE_SCHEMA_VERSION,
-                    "pack_key": format!("tla-{preset}-v1"),
+                    "pack_key": "tla-pool-v1",
                     "decks": [],
                     "pool": roots,
                     "token_templates": self.token_templates,
@@ -270,10 +265,10 @@ fn is_token(definition: &Value) -> bool {
 // ---------------------------------------------------------------------------
 // Public entry points.
 
-/// Every current preset: authored setups plus the `pool` and `tla` catalogs.
+/// Every current preset: authored setups plus the whole-world `pool`.
 pub fn presets() -> Result<Vec<String>, IrError> {
     let mut presets = catalog()?.setups.keys().cloned().collect::<Vec<_>>();
-    presets.extend(["pool".to_owned(), "tla".to_owned()]);
+    presets.push("pool".to_owned());
     Ok(presets)
 }
 
