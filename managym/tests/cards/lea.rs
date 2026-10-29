@@ -1,8 +1,10 @@
-// Tests for interaction spells: card-draw effects (Ancestral Recall) and
-// mass damage (Pyroclasm), plus their interaction with the stack.
-
+//! Limited Edition Alpha (`src/cardsets/lea.rs`).
+use crate::{
+    helpers::{counterspell_deck, island_deck, recall_deck, Scenario},
+    support::{activate_named, enter_settled, permanent, ready_named, setup},
+};
 use managym::{
-    agent::action::ActionType,
+    agent::action::{Action, ActionType},
     flow::turn::StepKind,
     state::{
         game_object::{PlayerId, Target},
@@ -10,7 +12,44 @@ use managym::{
     },
 };
 
-use super::helpers::*;
+#[test]
+fn an_announced_tap_cannot_be_used_to_fund_itself() {
+    use managym::state::{ability::Effect, card::ActivatedAbilityDefinition, mana::ManaCost};
+
+    for tap_source in [false, true] {
+        let mut s = setup(&["Llanowar Elves"]);
+        let elves_card = enter_settled(&mut s, "Llanowar Elves");
+        ready_named(&mut s, "Llanowar Elves");
+        let elves = permanent(&s, "Llanowar Elves");
+        s.game_mut().state.cards[elves_card]
+            .activated_abilities
+            .push(ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("1"),
+                tap_source,
+                sacrifice_source: true,
+                effects: vec![Effect::DrawCards { count: 1 }],
+                ..Default::default()
+            });
+        s.set_player_mana_pool(0, "0");
+        s.game_mut().scenario_refresh_priority().unwrap();
+        assert_eq!(
+            s.action_space().actions.iter().any(
+                |a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == elves)
+            ),
+            !tap_source
+        );
+        if !tap_source {
+            activate_named(&mut s, "Llanowar Elves", 0);
+            assert!(s.game().state.permanents[elves].is_none());
+            assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+            assert_eq!(
+                s.game().state.stack_objects.len(),
+                1,
+                "the nonmana parent ability uses the stack"
+            );
+        }
+    }
+}
 
 /// CR 121.1 — Resolving a draw spell moves cards from library to hand.
 #[test]
@@ -69,38 +108,6 @@ fn ancestral_recall_decking_loses_game() {
 
     s.assert_game_over();
     s.assert_winner(1);
-}
-
-/// Pyroclasm deals 2 damage to each creature on both sides; creatures with
-/// toughness <= 2 die via state-based actions, tougher ones survive.
-#[test]
-fn pyroclasm_kills_small_creatures_on_both_sides() {
-    let mut s = Scenario::new(pyroclasm_deck(), ogre_deck(), 1213);
-
-    // Two mountains over two turns to afford 1R.
-    s.advance_to_active_step(0, StepKind::Main);
-    s.force_cards_in_hand(0, "Mountain", 2);
-    assert!(s.take_action_by_type(ActionType::PriorityPlayLand));
-    s.advance_to_active_step(1, StepKind::Main);
-    s.advance_to_active_step(0, StepKind::Main);
-    assert!(s.take_action_by_type(ActionType::PriorityPlayLand));
-
-    // Board: 2/2 ogres on both sides, one 0/8 wall for player 0.
-    s.force_permanent_on_battlefield(0, "Gray Ogre");
-    s.force_permanent_on_battlefield(0, "Wall of Stone");
-    s.force_permanent_on_battlefield(1, "Gray Ogre");
-    assert_eq!(s.battlefield_permanents_named(0, "Gray Ogre").len(), 1);
-    assert_eq!(s.battlefield_permanents_named(1, "Gray Ogre").len(), 1);
-
-    s.force_card_in_hand(0, "Pyroclasm");
-    assert!(s.take_action_by_type(ActionType::PriorityCastSpell));
-    s.pass_priority();
-    s.pass_priority();
-
-    // Both ogres (toughness 2) die; the wall (toughness 8) survives.
-    assert!(s.battlefield_permanents_named(0, "Gray Ogre").is_empty());
-    assert!(s.battlefield_permanents_named(1, "Gray Ogre").is_empty());
-    assert_eq!(s.battlefield_permanents_named(0, "Wall of Stone").len(), 1);
 }
 
 /// CR 405 — Counterspell can counter a draw spell on the stack; no cards

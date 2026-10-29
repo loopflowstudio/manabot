@@ -7,7 +7,7 @@ printed text is presentation data and never supplies executable behavior.
 
 ## Native behavioral coverage
 
-Directed cases live in `managym/tests/rules/elemental_cards.rs`. The following
+Directed cases live in `managym/tests/cards/` (one file per set). The following
 mapping identifies the behaviors asserted rather than claiming exhaustive
 Magic rules coverage.
 

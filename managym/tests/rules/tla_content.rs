@@ -1,8 +1,8 @@
 //! Independent TLA clause outcomes through the same typed programs as the pool.
 //! Directed legal actions cover costs, choices, combat and effect lifetimes.
 use super::{
-    elemental_cards::{card, cast, counters, pass_until, permanent, pin_top, settle, setup},
     helpers::Scenario,
+    support::{cast, counters, library_card, pass_until, permanent, pin_top, settle, setup},
 };
 use managym::{
     agent::{
@@ -35,7 +35,7 @@ fn activate(s: &mut Scenario, source: PermanentId, index: usize) {
 }
 
 fn enter(s: &mut Scenario, name: &str) -> PermanentId {
-    let id = card(s, 0, name);
+    let id = library_card(s, 0, name);
     s.game_mut().move_card(id, ZoneType::Battlefield);
     s.game_mut().scenario_refresh_priority().unwrap();
     s.game().state.card_to_permanent[id].unwrap()
@@ -232,7 +232,7 @@ fn fire_sages_counter_cost_and_firebending_mana_lifetime() {
 fn yuyan_rummage_may_be_declined_or_discard_then_draw() {
     for discard in [false, true] {
         let mut s = setup(&["Yuyan Archers", "Gray Ogre"]);
-        let chosen = card(&s, 0, "Gray Ogre");
+        let chosen = library_card(&s, 0, "Gray Ogre");
         s.game_mut().move_card(chosen, ZoneType::Hand);
         cast(&mut s, "Yuyan Archers");
         pass_until(&mut s, ActionSpaceKind::Discard);
@@ -369,7 +369,7 @@ fn draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card() {
             let land = enter(&mut s, name);
             assert!(tapped(&s, land), "{name} enters tapped");
             s.set_player_mana_pool(0, if color == 'U' { "2" } else { "0" });
-            let id = card(&s, 0, spell);
+            let id = library_card(&s, 0, spell);
             s.game_mut().move_card(id, ZoneType::Hand);
             s.game_mut().scenario_refresh_priority().unwrap();
             assert!(!can_cast(&s, id));
@@ -467,7 +467,7 @@ fn walltop_intervening_lesson_condition_is_checked_at_death_and_resolution() {
             let sentries = s.force_permanent_on_battlefield(0, "Walltop Sentries");
             let key = keywords(&s, sentries);
             assert!(key.reach && key.deathtouch);
-            let lesson = card(&s, 0, "Firebending Lesson");
+            let lesson = library_card(&s, 0, "Firebending Lesson");
             if lesson_at_death {
                 s.game_mut().move_card(lesson, ZoneType::Graveyard);
             }
@@ -716,7 +716,7 @@ fn rallier_reveals_only_the_selected_card_and_can_decline() {
 fn cadets_keep_announced_firebending_after_last_lesson_leaves() {
     let mut s = setup(&["Fire Nation Cadets", "Firebending Lesson"]);
     let cadets = s.force_permanent_on_battlefield(0, "Fire Nation Cadets");
-    let lesson = card(&s, 0, "Firebending Lesson");
+    let lesson = library_card(&s, 0, "Firebending Lesson");
     s.game_mut().move_card(lesson, ZoneType::Graveyard);
     s.game_mut().state.permanents[cadets]
         .as_mut()
@@ -999,7 +999,7 @@ fn merchant_successful_search_is_optional_and_returns_source_before_shuffle() {
     activate(&mut s, food, 0);
     pass_until(&mut s, ActionSpaceKind::Modal);
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
-    let forest = card(&s, 0, "Forest");
+    let forest = library_card(&s, 0, "Forest");
     choose(
         &mut s,
         |a| matches!(a, Action::SelectCard { card, .. } if *card == forest),
@@ -1021,8 +1021,8 @@ fn shared_roots_search_can_find_or_decline_without_leaking_the_library() {
         let mut s = setup(&["Shared Roots", "Rumble Arena"]);
         cast(&mut s, "Shared Roots");
         pass_until(&mut s, ActionSpaceKind::LookAndSelect);
-        let forest = card(&s, 0, "Forest");
-        let nonbasic = card(&s, 0, "Rumble Arena");
+        let forest = library_card(&s, 0, "Forest");
+        let nonbasic = library_card(&s, 0, "Rumble Arena");
         assert!(!s
             .action_space()
             .actions
@@ -1141,8 +1141,8 @@ fn momo_excludes_lemurs_and_opponents_turn_and_its_pump_expires() {
     let mut s = setup(&["Momo, Friendly Flier", "Messenger Hawk"]);
     let momo = s.force_permanent_on_battlefield(0, "Momo, Friendly Flier");
     let other = s.force_permanent_on_battlefield(1, "Momo, Friendly Flier");
-    let lemur = card(&s, 0, "Momo, Friendly Flier");
-    let hawk = card(&s, 0, "Messenger Hawk");
+    let lemur = library_card(&s, 0, "Momo, Friendly Flier");
+    let hawk = library_card(&s, 0, "Messenger Hawk");
     s.game_mut().move_card(lemur, ZoneType::Hand);
     s.game_mut().move_card(hawk, ZoneType::Hand);
     s.set_player_mana_pool(0, "1");
@@ -1168,7 +1168,7 @@ fn momo_excludes_lemurs_and_opponents_turn_and_its_pump_expires() {
     assert_eq!(s.game().effective_power(other), 1);
     s.advance_to_active_step(1, StepKind::Main);
     assert_eq!(s.game().effective_power(momo), 1);
-    let next = card(&s, 0, "Messenger Hawk");
+    let next = library_card(&s, 0, "Messenger Hawk");
     s.game_mut().move_card(next, ZoneType::Hand);
     s.game_mut().state.cards[next].keywords.flash = true;
     s.set_player_mana_pool(0, "1U");

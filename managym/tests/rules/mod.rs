@@ -15,21 +15,16 @@ pub mod cr_608_resolution;
 pub mod cr_614_replacement;
 pub mod cr_702_keywords;
 pub mod cr_704_sba;
-pub mod elemental_cards;
 pub mod event_observations;
+// Shared with the per-card tests; this crate uses only part of it.
+#[allow(dead_code)]
 pub mod helpers;
-pub mod interaction_spells;
 pub mod presentation_events;
-pub mod stage2_cards;
-pub mod stage3_cards;
 pub mod structured_attacker_offers;
 pub mod structured_offers;
-pub mod tla_cards;
-
-pub mod ur_lessons_increment;
-
-pub mod sacrifice_cards;
-
-pub mod temur_cards;
-
+// Shared with the per-card tests; this crate uses only part of it.
+#[allow(dead_code)]
+#[path = "../cards/support.rs"]
+pub mod support;
 pub mod tla_content;
+pub mod tla_mechanics;

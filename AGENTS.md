@@ -198,7 +198,8 @@ a local `text_box` binding so rustfmt can format the typed definition.
 Default-pack `CardDefId` order lives in `cards/content_pack.rs` (`LEGACY_ORDER`).
 Card tests mirror the set files: `managym/tests/cards/<set>.rs`, one module per
 set under the single `tests/cards.rs` target. `tests/rules/` keeps engine rules
-not about one card. A new authored field, predicate kind or `each:` role also
+not about one card. Both targets mount `tests/cards/support.rs` (shared drivers)
+and `tests/rules/helpers.rs` (`Scenario`). A new authored field, predicate kind or `each:` role also
 needs its entry appended to `content/semantic/current/learning_schema.json`.
 
 A permanent's activated abilities are `Game::activated_abilities_for` (printed,
