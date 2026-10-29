@@ -82,3 +82,9 @@ with the pre-change extension (none new; `test_compiler` binding test fixed).
 Compress (2026-10-29): `world::unsupported_cards` reads the pool once and
 `supports_card` delegates to it; unused `world::card` removed (pool rows carry
 the reason). `cargo test --lib world::` 2/2, clippy clean; gate owns full suites.
+
+Realign (2026-10-29): plan and code agree; no upstream main changes since the
+sync. Stale qualification wording removed from `delivery-plan.json` and the
+historical scratch notes. Native set-file cards being unsupported for deck entry
+is an operator choice (questions.md) against Jack Heart's "all supported"
+wording; review at demo. Check: `delivery-plan.json` parses; no test reads it.
