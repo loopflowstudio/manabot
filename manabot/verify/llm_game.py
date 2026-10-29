@@ -91,6 +91,13 @@ class GameSummary(BaseModel):
     output_tokens: int = 0
     token_split_attempts: int = 0
     generation_attempts: int = 0
+    # Attempts whose reasoning reached the thinking budget and was closed by the
+    # harness; these still answer and are not fallbacks.
+    forced_closes: int = 0
+    # Model decisions offered exactly one legal reference despite native skipping.
+    single_choice_decisions: int = 0
+    # Forced decisions the native environment resolved without any player.
+    skipped_trivial: int | None = None
     llm_phases: dict[str, float] = Field(default_factory=dict)
 
     prompt_tokens: int = 0
@@ -330,6 +337,7 @@ def play(
                 progress(result)
                 summary.model_decisions += 1
                 summary.model_latencies.append(result.seconds)
+                summary.single_choice_decisions += len(supplied.legal_references) == 1
                 if isinstance(result, SelectionResult):
                     for attempt in result.attempts:
                         summary.generation_attempts += 1
@@ -351,6 +359,24 @@ def play(
                                 attempt.response.reasoning_tokens or 0
                             )
                             summary.answer_tokens += attempt.response.answer_tokens or 0
+                            summary.forced_closes += (
+                                attempt.response.forced_close_at is not None
+                            )
+                            # Measured per attempt so slow decoding is visible
+                            # while a campaign runs, not inferred afterward.
+                            seconds = attempt.generation_seconds or 0
+                            print(
+                                f"QWEN {out.name} decision={summary.decisions} "
+                                f"legal={len(supplied.legal_references)} "
+                                f"prompt={attempt.prompt_tokens} "
+                                f"reasoning={attempt.response.reasoning_tokens} "
+                                f"answer={attempt.response.answer_tokens} "
+                                f"forced={attempt.response.forced_close_at is not None} "
+                                f"seconds={seconds:.1f} "
+                                f"tok/s={len(attempt.response.token_ids) / seconds if seconds else 0:.1f} "
+                                f"origin={result.origin}",
+                                flush=True,
+                            )
                 else:
                     _record_hosted_usage(summary, result)
                 if result.failure is not None:
@@ -422,6 +448,8 @@ def play(
         summary.failure = f"{type(error).__name__}: {error}"
     finally:
         summary.game_seconds = time.monotonic() - started
+        if env is not None:
+            summary.skipped_trivial = env.skip_trivial_count()
         if env is not None and replay is not None:
             summary.final_digest = env.state_digest()
         summary.origins = dict(origins)

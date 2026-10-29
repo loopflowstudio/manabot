@@ -25,7 +25,16 @@ from experiments import qwen_mtg183 as original
 from manabot.llm.schema import InferenceConfig, RuntimeIdentity
 from manabot.verify.llm_game import GameSummary, _write
 
-SAMPLED_INFERENCE = Path("configs/llm/qwen3.5-9b-reasoning-sampled.json")
+# Declared bb4160 treatments: base inference file and the campaign's effective
+# per-attempt output and context limits. Arms are never pooled.
+TREATMENTS: dict[str, tuple[Path, int, int]] = {
+    # Development pilot dddaf3001dfa: unbounded sampled reasoning.
+    "sampled": (Path("configs/llm/qwen3.5-9b-reasoning-sampled.json"), 16_384, 65_536),
+    # Main arm: 3,072 reasoning tokens, then a forced close and the answer.
+    "budget": (Path("configs/llm/qwen3.5-9b-reasoning-budget.json"), 4096, 16_384),
+    # Small labeled floor: Qwen's non-thinking sampling.
+    "nothink": (Path("configs/llm/qwen3.5-9b-instruct-sampled.json"), 512, 16_384),
+}
 
 
 class Campaign(original.Campaign):
@@ -34,6 +43,8 @@ class Campaign(original.Campaign):
     # A prefix of the frozen shuffled schedule: 1 for a development pilot.
     games: int = Field(default=100, ge=1, le=100)
     concurrency: int = Field(default=8, ge=1, le=32)
+    # Draft tokens from the checkpoint's own MTP head; None serves without it.
+    speculative_tokens: int | None = Field(default=None, ge=1, le=4)
     decision_seconds: float = Field(default=1800, gt=0, le=1800)
     # Games share the campaign watchdog instead of a shorter per-game cutoff.
     game_seconds: float = Field(default=10 * 3600, gt=0, le=10 * 3600)
@@ -291,7 +302,9 @@ def run(config: Campaign) -> None:
     )
     started = time.monotonic()
     try:
-        with VLLMServer(inference, out, config.concurrency) as server:
+        with VLLMServer(
+            inference, out, config.concurrency, config.speculative_tokens
+        ) as server:
             _write(
                 out / "readiness.json",
                 json.dumps(
@@ -325,17 +338,21 @@ def runs(
     native_artifact: str,
     native_source: str,
     attempt_usd: str = "9.40",
+    arm: str = "budget",
     games: int = 100,
-    concurrency: int = 8,
+    concurrency: int = 32,
+    speculative_tokens: int = 0,
 ) -> Job:
-    """The sampled w13 treatment; deduct every earlier allocation from the cap.
+    """One declared arm on the w13 tree; deduct every earlier allocation from the cap.
 
     Launch only from the pinned w13 campaign tree: native source equality and
     checkpoint world admission both reject the current world.
+    `speculative_tokens=0` serves without the MTP draft head.
     """
     ceiling = Decimal(attempt_usd)
     if not ceiling.is_finite() or not Decimal("0") < ceiling <= Decimal("9.40"):
         raise ValueError("attempt_usd must be positive and at most 9.40")
+    inference, max_new_tokens, context_tokens = TREATMENTS[arm]
     # The cap must cover the whole rental at the on-demand's $0.60/hour ceiling,
     # including its 15-minute machine setup allowance. Environment setup, server
     # startup and delivery take the last 45 minutes of the job window.
@@ -343,15 +360,19 @@ def runs(
     if hours < 1.5:
         raise ValueError("attempt_usd must cover at least 1.5 rental hours")
     config = Campaign(
-        inference=SAMPLED_INFERENCE,
+        inference=inference,
         games=games,
         concurrency=concurrency,
+        speculative_tokens=speculative_tokens or None,
+        max_new_tokens=max_new_tokens,
+        context_tokens=context_tokens,
         seconds=min(10 * 3600, hours * 3600 - 2700),
     )
     job = original.runs(native_artifact, native_source)
+    mtp = f"-mtp{speculative_tokens}" if speculative_tokens else ""
     return job.model_copy(
         update={
-            "name": f"bb4160-w13-qwen-vllm-sampled-v-mtg183-u5950-g{games}-c{concurrency}",
+            "name": f"bb4160-w13-qwen-vllm-{arm}-v-mtg183-u5950-g{games}-c{concurrency}{mtp}",
             "command": "uv run python -m etude.call --function experiments.qwen_mtg183_vllm:run",
             "config": config.model_dump_json(),
             "setup": "sh scripts/qwen-mtg183-vllm-setup.sh",

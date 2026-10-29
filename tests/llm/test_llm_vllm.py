@@ -53,6 +53,19 @@ def test_server_uses_its_own_virtual_environment(
     assert Path(probe.stdout.strip()) == tmp_path / ".venv-vllm"
 
 
+def test_speculative_draft_is_part_of_the_declared_server() -> None:
+    config = InferenceConfig.model_validate_json(
+        campaign.TREATMENTS["budget"][0].read_text()
+    )
+    plain = vllm_server.server_command(config, "fixture", 32)
+    drafted = vllm_server.server_command(config, "fixture", 32, 1)
+    assert "--speculative-config" not in plain
+    assert drafted[len(plain) :] == [
+        "--speculative-config",
+        '{"method":"mtp","num_speculative_tokens":1}',
+    ]
+
+
 @pytest.fixture
 def runtime(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -246,6 +259,80 @@ def test_sampled_requests_send_the_declared_treatment_and_prompt_seed(
     assert (body["min_p"], body["presence_penalty"]) == (0, 1.5)
     assert body["seed"] == bodies[1]["seed"] != bodies[2]["seed"]
     assert body["seed"] == sampling.request_seed(first.token_ids)
+
+
+@pytest.mark.parametrize(
+    ("first", "second", "forced"),
+    [
+        # Unfinished reasoning at the budget: insert the close, then answer.
+        ([4, 4, 4], [3, 1], True),
+        # Closed within the budget but the answer was cut: continue unchanged.
+        ([4, 2, 3], [1], False),
+        # Finished within the budget: one request.
+        ([2, 3, 1], None, False),
+    ],
+)
+def test_budget_forcing_closes_unfinished_reasoning(
+    runtime: vllm_runtime.VLLMRuntime,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    first: list[int],
+    second: list[int] | None,
+    forced: bool,
+) -> None:
+    config = runtime.config.model_copy(update={"thinking_budget": 3})
+    monkeypatch.setattr(
+        vllm_runtime, "urlopen", _serving(runtime.identity.behavior_version(config))
+    )
+    budgeted = vllm_runtime.VLLMRuntime(
+        config, identity_path=tmp_path / "identity.json"
+    )
+    replies = [first, second]
+    bodies: list[dict[str, object]] = []
+
+    def request(req: Request, timeout: float) -> Reply:
+        body = json.loads(req.data or b"{}")
+        bodies.append(body)
+        tokens = replies[len(bodies) - 1]
+        choice = {
+            "index": 0,
+            "finish_reason": "stop" if tokens and tokens[-1] == 1 else "length",
+            "prompt_token_ids": body["prompt"],
+            "token_ids": tokens,
+        }
+        return Reply({"model": body["model"], "choices": [choice]})
+
+    monkeypatch.setattr(vllm_runtime, "urlopen", request)
+    prompt = budgeted.encode((Message(role="user", content="A0"),))
+    response = budgeted.generate(prompt, time.monotonic() + 10)
+    assert len(bodies) == (1 if second is None else 2)
+    assert bodies[0]["max_tokens"] == 3
+    inserted = (2,) if forced else ()
+    head = tuple(first) + inserted
+    if second is not None:
+        assert bodies[1]["prompt"] == [*prompt.token_ids, *head]
+        assert bodies[1]["max_tokens"] == 8 - len(head)
+    assert response.token_ids == head + tuple(second or ())
+    assert response.text.endswith("A0") and response.finish_reason == "eos"
+    assert response.forced_close_at == (3 if forced else None)
+    assert response.inserted_token_ids == inserted
+    assert response.answer_tokens == 1
+
+
+def test_thinking_budget_requires_thinking_and_answer_room() -> None:
+    fields = json.loads(campaign.original.INFERENCE.read_text())
+    with pytest.raises(ValueError, match="thinking budget"):
+        InferenceConfig.model_validate({**fields, "thinking_budget": 2048})
+    with pytest.raises(ValueError, match="thinking budget"):
+        InferenceConfig.model_validate(
+            {**fields, "enable_thinking": None, "thinking_budget": 16}
+        )
+    for path, max_new_tokens, context_tokens in campaign.TREATMENTS.values():
+        config = InferenceConfig.model_validate_json(path.read_text())
+        assert (config.max_new_tokens, config.context_tokens) == (
+            max_new_tokens,
+            context_tokens,
+        )
 
 
 def test_sampled_decoding_requires_its_settings() -> None:

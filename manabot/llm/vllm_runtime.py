@@ -23,9 +23,9 @@ from manabot.llm.schema import (
     RuntimeIdentity,
 )
 from manabot.llm.tokenization import (
-    decode_response,
     encode_prompt,
     eos_token_ids,
+    generate_response,
     load_tokenizer,
 )
 
@@ -107,6 +107,18 @@ class VLLMRuntime:
         return encode_prompt(self.tokenizer, self.config, messages)
 
     def generate(self, prompt: EncodedPrompt, deadline: float) -> GeneratedResponse:
+        return generate_response(
+            lambda tokens, limit: self._complete(tokens, limit, deadline),
+            self.tokenizer,
+            self.config,
+            prompt,
+            self.eos_ids,
+        )
+
+    def _complete(
+        self, token_ids: tuple[int, ...], limit: int, deadline: float
+    ) -> tuple[int, ...]:
+        """One exact-token request; the reply must bind this prompt and route."""
         remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise TimeoutError("decision deadline exhausted before server request")
@@ -119,13 +131,13 @@ class VLLMRuntime:
                 "top_p": sampling.top_p,
                 "top_k": sampling.top_k,
                 "min_p": sampling.min_p,
-                "seed": sampling.request_seed(prompt.token_ids),
+                "seed": sampling.request_seed(token_ids),
             }
         )
         body = {
             "model": self.behavior_version,
-            "prompt": list(prompt.token_ids),
-            "max_tokens": self.config.max_new_tokens,
+            "prompt": list(token_ids),
+            "max_tokens": limit,
             **decoding,
             "repetition_penalty": 1,
             "presence_penalty": 0 if sampling is None else sampling.presence_penalty,
@@ -151,23 +163,18 @@ class VLLMRuntime:
         if reply.model != self.behavior_version:
             raise ValueError("vLLM response has a different behavior version")
         choice = reply.choices[0]
-        if choice.index != 0 or tuple(choice.prompt_token_ids) != prompt.token_ids:
+        if choice.index != 0 or tuple(choice.prompt_token_ids) != token_ids:
             raise ValueError("vLLM response does not bind the exact submitted prompt")
         tokens = tuple(choice.token_ids)
-        if len(tokens) > self.config.max_new_tokens or any(
-            token < 0 for token in tokens
-        ):
+        if len(tokens) > limit or any(token < 0 for token in tokens):
             raise ValueError(
                 "vLLM returned invalid token IDs or exceeded the output bound"
             )
-        decoded = decode_response(
-            self.tokenizer, tokens, self.eos_ids, self.config.enable_thinking
-        )
         if choice.finish_reason not in ("stop", "length"):
             raise RuntimeError(f"vLLM generation ended with {choice.finish_reason}")
-        if (choice.finish_reason == "stop") != (decoded.finish_reason == "eos"):
+        if (choice.finish_reason == "stop") != (tokens[-1] in self.eos_ids):
             raise ValueError("vLLM finish reason and retained EOS token disagree")
-        return decoded
+        return tokens
 
     def peak_gpu_bytes(self) -> None:
         # The client cannot observe the server allocator. Device sampling is separate.

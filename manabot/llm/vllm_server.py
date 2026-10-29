@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import signal
 import subprocess
+import threading
 import time
 from types import TracebackType
 from urllib.error import URLError
@@ -24,12 +25,30 @@ from manabot.llm.tokenization import load_tokenizer
 from manabot.llm.vllm_runtime import SERVICE_PORT, SERVICE_URL, verify_service
 
 
-def server_command(config: InferenceConfig, model: str, concurrency: int) -> list[str]:
+def server_command(
+    config: InferenceConfig,
+    model: str,
+    concurrency: int,
+    speculative_tokens: int | None = None,
+) -> list[str]:
     """No remote template, prefix reuse, quantization or generation defaults.
 
-    This is the base argv; the derived behavior route is appended after
-    identity hashing.
+    `speculative_tokens` enables the checkpoint's own multi-token-prediction
+    head as a draft; rejection sampling keeps the target distribution, but the
+    server argv, and so the behavior version, records it. This is the base argv;
+    the derived behavior route is appended after identity hashing.
     """
+    speculative = (
+        []
+        if speculative_tokens is None
+        else [
+            "--speculative-config",
+            json.dumps(
+                {"method": "mtp", "num_speculative_tokens": speculative_tokens},
+                separators=(",", ":"),
+            ),
+        ]
+    )
     return [
         "uv",
         "run",
@@ -62,16 +81,25 @@ def server_command(config: InferenceConfig, model: str, concurrency: int) -> lis
         "vllm",
         "--max-num-batched-tokens",
         "4096",
+        *speculative,
     ]
 
 
 class VLLMServer(AbstractContextManager["VLLMServer"]):
-    def __init__(self, config: InferenceConfig, out: Path, concurrency: int) -> None:
+    def __init__(
+        self,
+        config: InferenceConfig,
+        out: Path,
+        concurrency: int,
+        speculative_tokens: int | None = None,
+    ) -> None:
         self.process: subprocess.Popen[bytes] | None = None
         self.out = out
         self.log = (out / "vllm.log").open("wb")
         self.config = config
         self.concurrency = concurrency
+        self.speculative_tokens = speculative_tokens
+        self._stop = threading.Event()
 
     def __enter__(self) -> "VLLMServer":
         started = time.monotonic()
@@ -83,7 +111,9 @@ class VLLMServer(AbstractContextManager["VLLMServer"]):
                 local_files_only=True,
             )
             tokenizer = load_tokenizer(self.config, offline=True)
-            command = server_command(self.config, model, self.concurrency)
+            command = server_command(
+                self.config, model, self.concurrency, self.speculative_tokens
+            )
             # Query the separate server interpreter, not the client's packages.
             probe = subprocess.run(
                 command[: command.index("-m")]
@@ -145,6 +175,9 @@ class VLLMServer(AbstractContextManager["VLLMServer"]):
                                 f"vLLM server healthy after {self.seconds:.3f}s",
                                 flush=True,
                             )
+                            threading.Thread(
+                                target=self._relay_metrics, daemon=True
+                            ).start()
                             return self
                 except (URLError, TimeoutError):
                     pass
@@ -154,7 +187,27 @@ class VLLMServer(AbstractContextManager["VLLMServer"]):
             self.close()
             raise
 
+    def _relay_metrics(self, interval: float = 60) -> None:
+        """Copy vLLM's periodic throughput and speculative-acceptance lines to stdout.
+
+        Job stdout is retrievable while the campaign runs; vllm.log arrives only
+        with the outputs. At most one line of each kind per interval.
+        """
+        last: dict[str, float] = {}
+        with (self.out / "vllm.log").open("r", errors="replace") as log:
+            while not self._stop.is_set():
+                line = log.readline()
+                if not line:
+                    self._stop.wait(1)
+                    continue
+                for kind in ("throughput", "SpecDecoding"):
+                    now = time.monotonic()
+                    if kind in line and now - last.get(kind, -interval) >= interval:
+                        last[kind] = now
+                        print(f"VLLM {line.strip()}", flush=True)
+
     def close(self) -> None:
+        self._stop.set()
         if self.process is not None:
             for sig in (signal.SIGTERM, signal.SIGKILL):
                 try:

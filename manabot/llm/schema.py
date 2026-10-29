@@ -71,6 +71,10 @@ class InferenceConfig(Record):
     # Explicit thinking uses Qwen's closing </think> delimiter; the final answer
     # alone must be one legal reference. None preserves the historical protocol.
     enable_thinking: bool | None = None
+    # Budget forcing: after this many generated tokens without a closing
+    # delimiter, the harness inserts one and the model writes its answer within
+    # the rest of max_new_tokens. Each response records the forced close.
+    thinking_budget: int | None = Field(default=None, gt=0, strict=True)
 
     @model_validator(mode="after")
     def validate_budget(self) -> "InferenceConfig":
@@ -78,6 +82,13 @@ class InferenceConfig(Record):
             raise ValueError("context must leave room for the prompt")
         if (self.decoding == "sampled") != (self.sampling is not None):
             raise ValueError("sampled decoding requires exactly its sampling settings")
+        if self.thinking_budget is not None and (
+            self.enable_thinking is not True
+            or self.thinking_budget >= self.max_new_tokens
+        ):
+            raise ValueError(
+                "a thinking budget requires enabled thinking and answer tokens"
+            )
         return self
 
 
@@ -98,6 +109,10 @@ class GeneratedResponse(Record):
     finish_reason: Literal["eos", "length"]
     reasoning_tokens: int | None = Field(default=None, ge=0)
     answer_tokens: int | None = Field(default=None, ge=0)
+    # Budget forcing: token_ids[forced_close_at:][:len(inserted_token_ids)] were
+    # inserted by the harness, not generated; every other token was generated.
+    forced_close_at: int | None = Field(default=None, ge=0)
+    inserted_token_ids: tuple[int, ...] = ()
 
 
 class RuntimeIdentity(Record):
