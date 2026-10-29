@@ -60,21 +60,18 @@ def validate_agent_setup(
     binding = getattr(agent, "world_binding", None)
     if binding is None:
         return
-    pack_key = bound_pack(binding)
-    if "content_pool" in binding:
-        if len(player_configs) != 2:
-            raise ValueError("execution requires two decks")
-        validate_agent_decks(agent, player_configs)
-        return
+    pooled = "content_pool" in binding
     actual = _setups(player_configs)
-    if not _binds_roster(binding) and not allow_deck_repetition:
+    if not pooled and not _binds_roster(binding) and not allow_deck_repetition:
         if actual != binding["setups"]:
             raise ValueError("checkpoint setup differs from the execution match")
         return
-
     if len(actual) != 2:
         raise ValueError("execution requires two decks")
     validate_agent_decks(agent, player_configs)
+    if pooled:
+        return
+    pack_key = bound_pack(binding)
     # Native reset admits any pair of a pack's authored decks, mirrors included;
     # the Python side checks roster membership and the selected pack only.
     if pack_key in _ROSTER_PACKS:

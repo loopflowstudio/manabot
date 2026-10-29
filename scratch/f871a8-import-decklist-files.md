@@ -252,6 +252,10 @@ keeps seat count and explicit-pack checks and delegates deck membership;
 Check: focused training-decks/matchups/world/catalog/import/mirror tests, 64
 passed (incl. authored-bound checkpoint rejected for a deck regime). Full
 affected suites and debug Rust remain for gate.
+Compress: `validate_agent_setup` runs seat count and the shared deck rule once
+for both binding forms. World/mirror/catalog/pool `-k` sweep: 148 passed;
+9 failures (academy/test_learn_setup, semantic learning projection, temur,
+elemental_world) fail identically without the change — for gate.
 
 Noted, not a change: the collector and native `VectorEnv` still hold training
 decks in a field named `uniform_roster`; it no longer gates admission
