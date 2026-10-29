@@ -1,5 +1,11 @@
 # wave/
 
+> **Historical.** This is the earlier Wave tree, kept in place because frozen
+> experiments, code comments and evidence cite its paths. The current Waves
+> live under `.lf/wave/`: academy, [engine](../.lf/wave/engine/GOAL.md),
+> eval and [training](../.lf/wave/training/GOAL.md). The text and table below
+> describe the organization as it was.
+
 Manabot's work is organized into **waves**: focused portfolios with a charter
 (`GOAL.md`), running context (`MEMORY.md`), and numbered working documents.
 A wave owns a surface and its contracts; tasks that change another wave's
