@@ -178,16 +178,26 @@ checks required by the affected package and workflow.
   can reload active pages and destroy in-page revision probes; use isolated
   ports and stable generated files for concurrent headless runs.
 
-### Typed card authoring
+### Card definitions
 
-Cards are authored once, in the set file of their first printing under
-`managym/src/cardsets/` (keys `<set>.<card>`; basics are `lea.*`), using the
-symbolic types in `managym/src/cards/authoring.rs`. Add a card to its set file's
-`cards()`. A card the typed language cannot yet express may be a native
-`CardDefinition` in that set file's `native_cards()`; it is unsupported for deck
-entry. The engine compiles typed cards in process (`managym/src/semantic/compile.rs`);
-there is no generated card JSON or IR to regenerate. Python reads current IR
-through `managym.semantic_ir_json`; rebuild the extension after card changes.
+Each card is one function in the set file of its first printing under
+`managym/src/cardsets/` (keys `<set>.<card>`; basics are `lea.*`, tokens
+`token.*`), returning the engine's own `CardDefinition` written in its rules
+types (`Effect`, `Ability`, `TargetSpec`, `TriggerCondition`, …). That value is
+the only card representation: there is no authoring language, compiler, IR or
+card JSON. Add the function to its set file's `cards()`. New behavior is a new
+rules-type variant (with a directed test in `tests/cards/<set>.rs`), never
+card-specific logic. Every definition carries `scryfall_id`, the Scryfall card
+id of the printing in its set file (`tests/cards/scryfall.rs` checks shape and
+uniqueness offline; `tests/cards/check_scryfall.py` checks names and sets
+online, never in CI). Rebuild the extension after card changes.
+
+Learning tokens derive from the same definitions (`semantic/tokens.rs`,
+`managym.learning_catalog`), so a new variant reaches the policy without a
+vocabulary edit. Every mechanic must be observable in both the observation
+tensor and the tokens: extend the exhaustive guards in
+`tests/cards/observability.rs` (keywords, permanent and player status, `Effect`,
+`TriggerCondition`, `Ability`) and give the mechanic a directed test there.
 
 Support is definition: the world pool is every defined card from every set, and
 a card is supported unless its set file marks it incomplete (`tla::INCOMPLETE`,
@@ -196,7 +206,7 @@ with the missing behavior). Restrict to a set with `world::set_cards` /
 or gate a card. A test about one card goes in `managym/tests/cards/<set>.rs`, the
 set file of that card; engine rules stay in `tests/rules/`, and shared scenario
 helpers live in `tests/support/`. Keep decklists separate from behavior. Keep long printed text in
-a local `text_box` binding so rustfmt can format the typed definition.
+a local `text_box` binding so rustfmt can format the definition.
 Default-pack `CardDefId` order lives in `cards/content_pack.rs` (`LEGACY_ORDER`).
 
 Native fixed mana abilities on a card are additive: multiple fixed productions

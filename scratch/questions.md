@@ -24,3 +24,23 @@ and pool-membership choices that were here (history: `be2b7586b:scratch/question
 - Full TLA completion remains the eight-PR plan; no merge or new Task authorized.
 
 Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
+
+- 2026-10-29 (one-representation rewrite): five cards were filed under a later
+  printing and moved to their first printing's set (see plan). Three are TLA
+  reprints (Corrupt Court Official, Epic Downfall, Lightning Strike), so
+  `set_cards(["tla"])` no longer lists them; a TLA-legal filter would need
+  printings, not first-printing key prefixes. Followed Jack Heart's
+  first-printing rule; flag for f871a8 deck validation.
+- 2026-10-29: `key` and `scryfall_id` are `#[serde(skip)]` — identity metadata,
+  not rules — so content and state digests stay equal to w16's and digest-bound
+  fixtures keep validating.
+- 2026-10-29: learning token values are stable blake3 hashes of Rust/printed
+  names (no vocabulary file); the policy builds its vocabulary from observed
+  (kind, value) pairs as before.
+- 2026-10-29: D1/f871a8 interface change: `ContentPool.compiled_semantics`
+  (IR/source hashes) is gone; manifests carry `pack_key`; rows add
+  `scryfall_id`; `IrError` is `ContentError`. `content_pool`/`pool_content`/
+  `Eligibility` otherwise unchanged.
+- 2026-10-29: the Python offline compiler (`manabot/semantic/compiler.py`) and its
+  frozen-source tests stay as the reader/reproducer of frozen v1–w11 IR; nothing
+  current reads it.

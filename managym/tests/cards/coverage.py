@@ -20,7 +20,6 @@ from managym import content_pool
 
 MANAGYM = Path(__file__).resolve().parents[2]
 TESTS = MANAGYM / "tests"
-CARDSETS = MANAGYM / "src" / "cardsets"
 WORLD_POOL = "tla-pool-v1"
 
 
@@ -31,15 +30,6 @@ class CardCoverage:
     supported: bool
     own_tests: list[str] = field(default_factory=list)
     other_tests: int = 0
-
-
-def _native_sets() -> dict[str, str]:
-    """Set code of each native definition, read from its set file."""
-    sets: dict[str, str] = {}
-    for path in sorted(CARDSETS.glob("*.rs")):
-        for name in re.findall(r'name: "([^"]+)"\.to_string\(\)', path.read_text()):
-            sets.setdefault(name, path.stem)
-    return sets
 
 
 def _test_functions(path: Path) -> list[tuple[str, set[str]]]:
@@ -55,11 +45,9 @@ def _test_functions(path: Path) -> list[tuple[str, set[str]]]:
 
 
 def coverage() -> list[CardCoverage]:
-    native = _native_sets()
     cards: dict[str, CardCoverage] = {}
     for row in content_pool(WORLD_POOL)["definitions"]:
-        key = row["semantic_key"]
-        set_code = key.split(".")[0] if key else native.get(row["registry_name"], "?")
+        set_code = row["semantic_key"].split(".")[0]
         if set_code == "token":
             continue
         cards[row["registry_name"]] = CardCoverage(
