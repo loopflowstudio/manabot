@@ -141,12 +141,9 @@ def authored_matchup_sha256(identities: Mapping[str, Any], consumer: str) -> str
         raise ValueError(
             f"{consumer} requires an authored matchup; this run sampled training "
             f"decks {identities['training_decks_sha256']} from pool "
-            f"{identities.get('content_pool')}"
+            f"{identities['content_pool']}"
         )
-    value = identities["matchup_sha256"]
-    if not isinstance(value, str):
-        raise ValueError(f"{consumer} requires a recorded matchup_sha256")
-    return value
+    return identities["matchup_sha256"]
 
 
 def validate_runtime_fingerprints(

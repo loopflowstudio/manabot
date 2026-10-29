@@ -269,7 +269,8 @@ Implemented 2026-10-28: `_runtime_identities` replaces the pair with
 `content_pool` + `training_decks_sha256`; recovery compares them through the
 existing identity equality. `manabot.infra.provenance.authored_matchup_sha256`
 is the one reader for authored-matchup consumers (monitoring, study
-calibration/resume/arenas, attack arena) and rejects deck runs by name. Card
+calibration/arenas, attack arena) and rejects deck runs by name; `run_study`
+rejects deck recipes before training instead of after it. Card
 evaluation fingerprints its own authored matrix and reads no run identity.
 Check: `pytest tests/training/test_training_decks.py -k supply_not_a_pair` passes.
 

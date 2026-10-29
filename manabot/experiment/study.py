@@ -575,9 +575,11 @@ def run_study(
             atomic_json(out / "resolved-plan.json", plan.model_dump(mode="json"))
     if len({recipe.id.replace("_", "-") for recipe in recipes}) != len(recipes):
         raise ValueError("recipe IDs collide after arena normalization")
+    # Arenas register players against one authored matchup; reject a deck
+    # supply before training rather than after it.
+    if any(recipe.decks is not None for recipe in recipes):
+        raise ValueError("study arena requires authored matchups, not training decks")
     if resume or (plan is not None and plan.protocol.purpose == "scientific"):
-        for run in resumed_runs:
-            authored_matchup_sha256(run.identities, "study resume")
         current = runtime_fingerprints(
             protocol.training_seeds[0],
             match_config=recipes[0].root_match,
