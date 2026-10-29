@@ -737,8 +737,14 @@ pub enum Direction {
 }
 
 /// Every current definition, plus the TLA fixed tokens that every pool carries.
-#[derive(Serialize)]
 pub struct Catalog {
     pub definitions: Vec<Card>,
     pub token_templates: Vec<&'static str>,
+    /// Definitions marked incomplete in their set file.
+    pub incomplete: Vec<Incomplete>,
 }
+
+/// A defined card whose behavior is known to be incomplete: `(key, missing
+/// behavior)`. It still runs in the fixed setups that name it, but the world
+/// does not support it for deck entry.
+pub type Incomplete = (&'static str, &'static str);

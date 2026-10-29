@@ -10,8 +10,8 @@
 //! Principal entry points:
 //! - [`document`]: the compiled IR for one current preset (a setup in
 //!   `setups.json`, or `pool`: every card), shared by every consumer in the process.
-//! - [`qualified`]: definitions whose reviewed qualification still matches the
-//!   exact authored closure it was reviewed against.
+//! - [`incomplete`]: defined cards whose behavior is known to be incomplete,
+//!   with the reason; every other defined card is supported.
 //!
 //! The IR keeps the shape of the retired offline compiler
 //! (`manabot/semantic/compiler.py`), so historical frozen IR stays readable by
@@ -22,7 +22,6 @@ use std::{
     sync::OnceLock,
 };
 
-use serde::Deserialize;
 use serde_json::{json, Map, Value};
 use sha2::{Digest, Sha256};
 
@@ -30,8 +29,6 @@ use super::IrError;
 use crate::cardsets;
 
 const SETUPS: &str = include_str!("../../../content/semantic/current/setups.json");
-const QUALIFICATIONS: &str = include_str!("../../../content/semantic/current/qualifications.json");
-const INVENTORY: &str = include_str!("../../../content/semantic/current/inventory.json");
 
 pub const IR_SCHEMA_VERSION: u64 = 1;
 const SOURCE_SCHEMA_VERSION: u64 = 1;
@@ -120,19 +117,7 @@ const PROGRAM_KINDS: [&str; 6] = [
 const NESTED: [&str; 5] = ["then", "otherwise", "body", "if_paid", "if_declined"];
 
 // ---------------------------------------------------------------------------
-// Catalog: every typed definition plus the setup and qualification data.
-
-#[derive(Deserialize)]
-struct Qualification {
-    closure_hash: String,
-    witnesses: Vec<String>,
-}
-
-#[derive(Deserialize)]
-struct InventoryRow {
-    registry_name: String,
-    faces: Vec<String>,
-}
+// Catalog: every typed definition plus the setup data.
 
 #[derive(Clone)]
 struct Catalog {
@@ -140,6 +125,8 @@ struct Catalog {
     definitions: BTreeMap<String, Value>,
     setups: BTreeMap<String, Value>,
     token_templates: BTreeSet<String>,
+    /// Reasons by semantic key for definitions marked incomplete.
+    incomplete: BTreeMap<String, String>,
 }
 
 fn catalog() -> Result<&'static Catalog, IrError> {
@@ -165,6 +152,11 @@ fn catalog() -> Result<&'static Catalog, IrError> {
                     .token_templates
                     .iter()
                     .map(|k| k.to_string())
+                    .collect(),
+                incomplete: typed
+                    .incomplete
+                    .iter()
+                    .map(|(key, reason)| (key.to_string(), reason.to_string()))
                     .collect(),
             })
         })
@@ -302,71 +294,11 @@ pub fn document_for_pack(pack_key: &str) -> Result<&'static Value, IrError> {
     )))
 }
 
-/// Semantic keys whose qualification is current. A qualification binds its
-/// independent witnesses to the exact serialized closure they reviewed: any
-/// edit to a qualified card (or a token/definition it creates) rejects the
-/// whole catalog until a reviewer re-examines the behavior.
-pub fn qualified() -> Result<&'static BTreeSet<String>, IrError> {
-    static QUALIFIED: OnceLock<Result<BTreeSet<String>, IrError>> = OnceLock::new();
-    QUALIFIED
-        .get_or_init(|| {
-            let qualifications: BTreeMap<String, Qualification> =
-                serde_json::from_str(QUALIFICATIONS).map_err(serialization)?;
-            check_qualifications(catalog()?, &qualifications)?;
-            Ok(qualifications.into_keys().collect())
-        })
-        .as_ref()
-        .map_err(Clone::clone)
-}
-
-/// Printed names in the reviewed inventory, including unimplemented cards.
-pub fn inventory() -> Result<&'static BTreeSet<String>, IrError> {
-    static NAMES: OnceLock<Result<BTreeSet<String>, IrError>> = OnceLock::new();
-    NAMES
-        .get_or_init(|| {
-            Ok(inventory_rows()?
-                .into_iter()
-                .map(|row| row.registry_name)
-                .collect())
-        })
-        .as_ref()
-        .map_err(Clone::clone)
-}
-
-fn inventory_rows() -> Result<Vec<InventoryRow>, IrError> {
-    serde_json::from_str(INVENTORY).map_err(serialization)
-}
-
-fn check_qualifications(
-    catalog: &Catalog,
-    qualifications: &BTreeMap<String, Qualification>,
-) -> Result<(), IrError> {
-    let multi_face = inventory_rows()?
-        .into_iter()
-        .filter(|row| row.faces.len() != 1)
-        .map(|row| row.registry_name)
-        .collect::<BTreeSet<_>>();
-    for (key, qualification) in qualifications {
-        let context = format!("qualification[{key}]");
-        let definition = catalog
-            .definitions
-            .get(key)
-            .ok_or_else(|| IrError::Malformed(format!("{context}: unknown definition")))?;
-        let closure = catalog.closure(&BTreeSet::from([key.clone()]))?;
-        if sha256(&Value::Array(closure)) != qualification.closure_hash {
-            return malformed(&context, "stale qualification: review changed clauses");
-        }
-        if is_token(definition) {
-            return malformed(&context, "a token cannot qualify for deck entry");
-        }
-        if multi_face.contains(string(&definition["registry_name"], &context)?) {
-            return malformed(&context, "requires unsupported face lifecycle");
-        }
-        if qualification.witnesses.is_empty() {
-            return malformed(&context, "has no independent witnesses");
-        }
-    }
-    Ok(())
+/// Reasons by semantic key for defined cards whose behavior is incomplete.
+/// They run in the fixed setups that name them but are not supported for deck
+/// entry; every other defined card is supported.
+pub fn incomplete() -> Result<&'static BTreeMap<String, String>, IrError> {
+    Ok(&catalog()?.incomplete)
 }
 
 /// Canonical compact JSON digest shared with the learning projection: sorted
@@ -836,7 +768,6 @@ mod tests {
             let declared = unhashed.as_object_mut().unwrap().remove("ir_hash").unwrap();
             assert_eq!(declared, json!(sha256(&unhashed)), "{preset}");
         }
-        assert!(!qualified().unwrap().is_empty());
     }
 
     #[test]
@@ -873,24 +804,5 @@ mod tests {
         catalog.definitions.remove(&ally);
         let error = catalog.source("two_deck").unwrap_err().to_string();
         assert!(error.contains("missing content definition"), "{error}");
-    }
-
-    #[test]
-    fn edited_card_or_token_clause_rejects_stale_review() {
-        let qualifications: BTreeMap<String, Qualification> =
-            serde_json::from_str(QUALIFICATIONS).unwrap();
-        for name in ["Avatar Enthusiasts", "Ally"] {
-            let mut catalog = catalog().unwrap().clone();
-            let (_, definition) = definition_named(&mut catalog, name);
-            if name == "Ally" {
-                definition["characteristics"]["power"] = json!(7);
-            } else {
-                definition["programs"] = json!([]);
-            }
-            let error = check_qualifications(&catalog, &qualifications)
-                .unwrap_err()
-                .to_string();
-            assert!(error.contains("stale qualification"), "{name}: {error}");
-        }
     }
 }

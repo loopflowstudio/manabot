@@ -1,65 +1,80 @@
-# TLA cards — direct Rust cards and one world (accepted 2026-10-28)
+# TLA cards — direct Rust cards and one world
 
 Task 892c47 updates PR394 and stops at demo; merge, auto-merge, paid compute,
-training and follow-up launches are not authorized. Direction: Jack Heart's
-accepted "Direct Rust cards and worlds" in
-[tla-rust-authoring-direction.md](tla-rust-authoring-direction.md). The earlier
-Rust → cards.json → Python compiler → IR JSON → include_str! pipeline and its
-review/recovery notes are history at `544ae312c:scratch/892c47-author-tla-cards.md`.
-D1/f871a8 keeps parser, construction, `admit_deck` and consumer input; the
-`content_pool`/`pool_content`/`Eligibility` API is unchanged.
+training and follow-up launches are not authorized. D1/f871a8 keeps parser,
+construction, `admit_deck` and consumer input; the `content_pool`/`pool_content`/
+`Eligibility` API shape stays as D1 uses it. History of the superseded JSON
+pipeline: `544ae312c:scratch/892c47-author-tla-cards.md`.
 
-## Implemented (2026-10-28)
+## Accepted direction
 
-1. **In-process compile** (`2b34e4964`): `managym/src/semantic/compile.rs` lowers the
-   typed definitions to IR in memory (references, token closure, target roles,
-   opcodes, hashes, qualification check). Proven identical to every removed
-   checked-in IR (incl. ir/source hashes) and eligibility before deletion.
-   Deleted: `content/semantic/current/generated/*`, `export_cards.rs`,
-   `scripts/compile_current_content.py`, `manabot/semantic/content.py`.
-   Python reads `managym.semantic_ir_json(pack_key)`; `CURRENT_IR_PATHS` →
-   `CURRENT_PACK_KEYS`. `compiler.py` remains only for frozen v1/w7–w11 checks.
-2. **Set files and keys**: `cardsets/` holds one file per printed set (tla, stx,
-   mh1, bro, blb, ktk, afr, m20, iko, eld, zen, war, fin, lci, soi, arb, ons,
-   lea) plus `tokens.rs`; keys are `<set>.<card>` / `token.*`. Set attribution
-   for uncertain cards was checked on Scryfall/retail listings. Qualification
-   hashes were refreshed only after a test proved every reviewed closure
-   byte-identical once the rename is undone. `pool` now holds every non-token
-   card (research cards included; still unsupported); the unused `tla` preset
-   and `native_roots` are gone.
-3. **One default pack**: native duplicates (elemental/sacrifice/temur files,
-   STX Learn spells, basics, Lightning Bolt) deleted; the default pack registers
-   all typed definitions. `cards/` holds the language (`authoring.rs`),
-   `content_pack.rs` (from `cardsets/alpha.rs`) and `native.rs`: cards still
-   lacking a typed op (Ancestral Recall, Pyroclasm, Man-o'-War, Waterfall
-   Aerialist ward, Proft's Eidetic Memory, legacy vanilla/keyword creatures,
-   Crossroads fixture). Legacy `CardDefId` prefix preserved by slot order.
-4. **World**: `managym/src/world.rs` owns `WORLD_VERSION` (w16), `supports_card`,
-   `unsupported_cards` (Python `managym.unsupported_cards`). WORLDS.md gains w16
-   and "run an old world from its git revision".
+- 2026-10-28, Jack Heart — direct Rust cards, one current world
+  ([tla-rust-authoring-direction.md](tla-rust-authoring-direction.md)).
+- 2026-10-29, Jack Heart — **every card lives in the set file of its first
+  printing.** Basics move from `tla.*` to `lea.plains` etc. (TLA decks still admit
+  them). The native-only cards in `cards/native.rs` move to their first-printing
+  set files, so `cardsets/` is the one place a card is filed; `native.rs` keeps
+  only `CardDefId` slot ordering if still needed. Keep the rename-equivalence
+  proof and the `content_pool` API that D1/f871a8 uses.
+- 2026-10-29, Jack Heart (corrects the same steer's item 3, which had limited
+  the pool to TLA + basics) — **the world's pool is every card a set file
+  defines, all supported.** Restricting to TLA is a deck generation/validation
+  filter selected by set (key prefix such as `tla.*`); Jack may train on a wider
+  pool. Remove per-pack membership or eligibility lists that only encode "which
+  set". Keep a simple way to ask for the cards of one or several sets.
+- 2026-10-29, Jack Heart — **"simplify simplify simplify"; replaces the
+  qualification model.** Remove `qualifications.json`, closure hashes, generated
+  eligibility and the review-record gate. A card is supported in the current
+  world when its set file defines it; the world's support check answers from
+  that alone. An incomplete TLA card is either not defined yet (its T2–T7 batch
+  authors it) or carries one explicit incomplete marker beside its Rust
+  definition when a fixed setup needs it — whichever leaves less machinery. Rules
+  tests stay ordinary tests; coverage notes are plain docs under `docs/rules/tla/`
+  or beside tests, never engine data. Pool eligibility derives from the support
+  check. Delete code, docs and tests that existed only for the gate.
+
+- 2026-10-29, Jack Heart — **card tests get a folder mirroring `cardsets/`**:
+  one test file per set (e.g. `managym/tests/cards/tla.rs`, `lea.rs`, `stx.rs`,
+  via one `tests/cards.rs` entry), per-card rules tests moved there from
+  `managym/tests/rules/`; `tests/rules` keeps engine-rule tests. The folder may
+  hold a coverage README and a report script (which cards have tests). Tests and
+  coverage never qualify or gate a card.
+
+## Implemented
+
+1. In-process compile of typed set definitions to IR (`semantic/compile.rs`);
+   keys `<set>.<card>` in first-printing set files; one default pack.
+2. Support by definition (2026-10-29 direction): `qualifications.json`,
+   `inventory.json`, `t1-clause-review.json`, `Qualification`/`qualified()`/
+   `check_qualifications`/`inventory()` and their tests are gone.
+   `world::supports_card` = typed definition not in `tla::INCOMPLETE` (14 cards,
+   each with its missing behavior). Pool rows: tokens and incomplete cards
+   unsupported; the world pool also lists native set-file cards as unsupported
+   (no IR, not in `pool_content`). `world::set_cards(&["tla","lea"])` /
+   `managym.set_cards` filter by key prefix. `tla-pool-v1` key kept for D1.
+3. Basics are `lea.plains`…`lea.forest`. Proof (`scratch/prove_basic_rename.py`
+   over dumps of all 10 packs before/after): every IR equivalent apart from the
+   rename; default-pack digest and `CardDefId` manifest unchanged.
+4. `cards/native.rs` deleted. Native cards live in first-printing set files'
+   `native_cards()` (lea, por, isd, ori, sth, rtr, grn, ice, vis, stx, mkm; sets
+   checked on Scryfall); Crossroads of Destiny in `cards/fixtures.rs` (still in
+   the default pack, which tests and `manabot/verify` build games from);
+   `LEGACY_ORDER`/`TRAILING_ORDER` in `content_pack.rs`.
+5. Docs rewritten: `content/semantic/README.md`, `docs/rules/tla/README.md`,
+   `managym/README.md`, AGENTS.md typed-card section, WORLDS.md.
 
 ## Remaining
 
-- Migrate `cards/native.rs` into set files (needs new ops: target-player draw,
-  damage each creature, defender, ward, conditional combat trigger) — not done.
-- Gate/CI: full debug cargo, Clippy, world-change Python suite, conformance
-  receipts (semantic-kernel corpus is still w15 — pre-existing failure),
-  authored-match receipt (pre-existing stale keys), `test_semantic_cards`
-  zero-logit failure (seen with identical IR; not shown pre-existing).
-- Demo: human review of the set layout and world check; `scratch/demo.html`
-  describes the superseded pipeline and needs replacing.
+1. Card-test folder (2026-10-29 steer above). The per-card files in
+   `tests/rules/` mix sets per test (e.g. `tla_content.rs`: 19/37 tests name LEA
+   and TLA cards), so assign each test to the card it is about, move shared
+   helpers, keep engine-rule tests in `tests/rules`, add the coverage README and
+   report script.
+2. `scripts/refresh_card_fixture.py` still scrapes old `register_card` patterns;
+   point it at the native pool (`managym.content_pool`) instead.
+3. Gate, PR394 update, demo.
 
-## Delete — do not maintain
-
-Done in compress: `current/presentation.json` and its frozen-IR text fallback
-(lowering IR without `text_box` now fails closed; the optional-payment test uses
-current IR); `compiler.py`'s pool/token/text/enters_tapped additions (reverted to
-main — only frozen sources use it). Next: `cards/native.rs` entries as their ops
-land in set files.
-
-PR394 updated at `6f8b2231e` (title/body rewritten; auto-merge unset).
-Check: debug `cargo test --no-fail-fast` — only the pre-existing w15 conformance pair
-fails (two stale test refs fixed and re-run); clippy clean; rebuilt cp312 extension;
-103 Python consumer tests pass, `test_optional_payments` fails on a pre-existing schema-7 assertion.
-Compress: semantic_ir/conformance/content_pack/lib semantic debug tests, test_temur
-(schema assertion now tracks the current schema), test_current_content, test_policy_catalog pass.
+Check: debug `cargo test --no-fail-fast` — only the known w15 semantic-conformance
+pair fails; clippy/fmt clean. Focused pytest (semantic, academy, eval admission,
+monitor, policy catalog, package boundaries): 42 failures, all identical at HEAD
+with the pre-change extension (none new; `test_compiler` binding test fixed).

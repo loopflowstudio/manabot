@@ -3615,8 +3615,27 @@ fn content_pool(py: Python<'_>, pack_key: &str) -> PyResult<PyObject> {
     compiled.set_item("ir_hash", pool.compiled_semantics.ir_hash)?;
     compiled.set_item("source_hash", pool.compiled_semantics.source_hash)?;
     out.set_item("compiled_semantics", compiled)?;
+    out.set_item("definitions", pool_rows(py, pool.definitions)?)?;
+    Ok(out.into())
+}
+
+/// World pool rows for typed cards whose key prefix is one of `sets`, such as
+/// `["tla", "lea"]` for TLA cards with Alpha's basic lands.
+#[cfg(feature = "python")]
+#[pyfunction]
+fn set_cards(py: Python<'_>, sets: Vec<String>) -> PyResult<PyObject> {
+    let sets = sets.iter().map(String::as_str).collect::<Vec<_>>();
+    let rows = crate::world::set_cards(&sets).map_err(|e| PyValueError::new_err(e.to_string()))?;
+    Ok(pool_rows(py, rows)?.into())
+}
+
+#[cfg(feature = "python")]
+fn pool_rows<'py>(
+    py: Python<'py>,
+    rows: Vec<crate::semantic::PoolDefinition>,
+) -> PyResult<Bound<'py, PyList>> {
     let definitions = PyList::empty_bound(py);
-    for row in pool.definitions {
+    for row in rows {
         let item = PyDict::new_bound(py);
         item.set_item("card_def_id", row.card_def_id.map(|id| id.0))?;
         item.set_item("semantic_key", row.semantic_key)?;
@@ -3631,8 +3650,7 @@ fn content_pool(py: Python<'_>, pack_key: &str) -> PyResult<PyObject> {
         item.set_item("reason", row.reason)?;
         definitions.append(item)?;
     }
-    out.set_item("definitions", definitions)?;
-    Ok(out.into())
+    Ok(definitions)
 }
 
 #[cfg(feature = "python")]
@@ -3747,6 +3765,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(authored_deck_setup, m)?)?;
     m.add_function(wrap_pyfunction!(authored_deck_keys, m)?)?;
     m.add_function(wrap_pyfunction!(content_pool, m)?)?;
+    m.add_function(wrap_pyfunction!(set_cards, m)?)?;
     m.add_function(wrap_pyfunction!(semantic_ir_json, m)?)?;
     m.add_function(wrap_pyfunction!(unsupported_cards, m)?)?;
     m.add_function(wrap_pyfunction!(validate_observation_json, m)?)?;

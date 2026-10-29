@@ -25,6 +25,9 @@ class ContentPool(TypedDict):
     definitions: list[PoolDefinition]
 
 def content_pool(pack_key: str) -> ContentPool: ...
+def set_cards(sets: list[str]) -> list[PoolDefinition]:
+    """World pool rows for typed cards whose key prefix is in ``sets``."""
+
 def unsupported_cards(names: list[str]) -> list[str]:
     """Distinct names the current world does not support for deck entry."""
 
