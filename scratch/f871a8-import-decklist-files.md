@@ -105,11 +105,11 @@ pass exact resume. Adaptive curriculum and deck generation remain future work.
 
 ### Implementation consequence and proof
 
-At c76c814ae, `checkpoint_world` embeds both `setups` from the training collection
-and `deck_collection`, and `validate_agent_setup` uses those setups as an allowlist.
-Checkpoint/catalog code imports `DeckCollection` and re-admits its source records.
-That is the wrong ownership for the accepted model. Merely weakening the roster
-check while leaving regime/corpus dependencies in the model is insufficient.
+Before this pass (c76c814ae), `checkpoint_world` embedded training `setups` and
+`deck_collection`, and `validate_agent_setup` used those setups as an allowlist;
+checkpoint/catalog code re-admitted `DeckCollection` source records. That
+coupling was removed (1b71de345); merely weakening the roster check would not
+have been sufficient.
 
 Remove this coupling from the current portable model path. Derive world binding
 from a world/content descriptor, not a representative training match. Move corpus
@@ -304,5 +304,4 @@ The manifest references `.lf/wave/engine/GOAL.md` and `MEMORY.md`, but neither
 exists in this checkout. The supplied Task, accepted design and dated Steers
 provide the implementation scope; Wave context was not reconstructed.
 
-Check — 2026-10-28 corrections: `uv run --extra dev pytest tests/training/test_training_decks.py tests/model/test_world.py tests/model/test_catalog.py tests/training/test_elemental_uniform.py tests/semantic/test_decklist_import.py tests/academy/test_decklist_setup.py tests/test_package_boundaries.py tests/academy/test_advice.py::test_default_play_import_does_not_require_training_dependencies -q`: 60 passed; tests/model + self_play + checkpoint catalog + learning_state/game_errors/recovery: 236 passed after registering `decks` in experiment ownership; `cargo test --lib vector_env` (debug) 13 passed; clippy and ruff clean; release extension rebuilt and atomically installed.
-Compress — 2026-10-28: one deck-admission loop (`model.world.admit_pool_decks`) now serves both `TrainingDecks.check` and pool-bound `validate_agent_setup`; dropped unused `match_config` indices and a redundant regime branch. Focused suite above (minus advice test): 58 passed; ruff clean. Gate owns full suites.
+Check — 2026-10-28 after merging main 6d069d6e5 (package `__init__` re-exports removed; fixed `tests/training/test_training_decks.py` imports): `uv run --extra dev pytest tests/training/test_training_decks.py tests/model/test_world.py tests/model/test_catalog.py tests/training/test_elemental_uniform.py tests/semantic/test_decklist_import.py tests/academy/test_decklist_setup.py tests/test_package_boundaries.py -q`: 59 passed; ruff clean. Earlier pre-merge runs (model/self_play/catalog/recovery 236 passed; debug `cargo test --lib vector_env` 13 passed) are not repeated; gate owns full suites on the merged tree, including debug Rust after main's continuation/encoder changes.

@@ -20,8 +20,9 @@ from manabot.decklist import (
     DeckImportError,
     parse_decklist,
 )
-from manabot.env import Match, ObservationSpace, Reward
 from manabot.env.failures import CaptureScope, FailureEvidence, capture_scope
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
