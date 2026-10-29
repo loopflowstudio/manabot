@@ -21,7 +21,7 @@ use crate::{
 /// Exact battlefield source facts used while matching one or more committed
 /// events. SBA batches reuse one sorted snapshot so simultaneous departures
 /// see the same pre-batch abilities (CR 603.6c, 704.3).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct TriggerSourceSnapshot {
     card: CardId,
     controller: PlayerId,
@@ -274,6 +274,7 @@ impl Game {
     fn place_triggered_ability_on_stack(&mut self, trigger: PendingTrigger) {
         let source_definition_id = trigger
             .source_lki
+            .as_ref()
             .map(|lki| lki.definition_id)
             .unwrap_or(self.state.cards[trigger.source_card].definition_id);
         let id = self.state.id_gen.next_id();
@@ -409,7 +410,12 @@ impl Game {
                         event,
                     )
                 {
-                    fired.push((source.card, ability_index, source.controller, source.lki));
+                    fired.push((
+                        source.card,
+                        ability_index,
+                        source.controller,
+                        source.lki.clone(),
+                    ));
                 }
             }
         }
@@ -534,12 +540,14 @@ impl Game {
         {
             let on_battlefield = self.state.zones.zone_of(*card) == Some(ZoneType::Battlefield);
             if !on_battlefield && !self.state.cards[*card].abilities.is_empty() {
-                let source_lki = self
-                    .state
-                    .object_lki
-                    .iter()
-                    .rev()
-                    .find_map(|(object_ref, lki)| (object_ref.entity.0 == card.0).then_some(*lki));
+                let source_lki =
+                    self.state
+                        .object_lki
+                        .iter()
+                        .rev()
+                        .find_map(|(object_ref, lki)| {
+                            (object_ref.entity.0 == card.0).then(|| lki.clone())
+                        });
                 if let Some(lki) = source_lki {
                     sources.push(TriggerSourceSnapshot {
                         card: *card,

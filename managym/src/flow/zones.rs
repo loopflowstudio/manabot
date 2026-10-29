@@ -511,7 +511,7 @@ impl Game {
             for trigger in watching {
                 match trigger.kind {
                     crate::flow::trigger::DelayedTriggerKind::ReturnToBattlefieldTapped => {
-                        if let Some(source_lki) = self.object_lki(trigger.watched).copied() {
+                        if let Some(source_lki) = self.object_lki(trigger.watched).cloned() {
                             self.enqueue_delayed_trigger(
                                 trigger.watched,
                                 source_lki,

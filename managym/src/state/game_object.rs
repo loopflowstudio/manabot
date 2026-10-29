@@ -61,9 +61,16 @@ pub enum ObjectLookupError {
 /// This deliberately stores identity and mutable facts, not a cloned card
 /// definition. `definition_id` resolves through the match's immutable
 /// `ContentPack` and does not clone card semantics into mutable state.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ObjectLki {
     pub keywords: crate::state::card::Keywords,
+    /// Its creature types as it last existed (CR 608.2h), sorted; read when
+    /// a departed target's partners must share one (Secret Tunnel).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub creature_types: Vec<String>,
+    /// The battlefield slot it occupied, so a departed `Target::Permanent`
+    /// finds its last known information.
+    pub permanent: PermanentId,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub animated_creature: bool,
     /// The object had lost all abilities, so it triggers nothing as it leaves.

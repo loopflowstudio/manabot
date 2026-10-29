@@ -198,14 +198,11 @@ impl Game {
                 .iter()
                 .enumerate()
             {
-                if ability.effect.target_spec().is_some()
-                    && crate::state::ability::effect_target_requirements(std::slice::from_ref(
-                        &ability.effect,
-                    ))
-                    .first()
+                if self
+                    .activation_target_requirement(permanent_id, ability_index)
                     .is_some_and(|requirement| requirement.min > 0)
                     && self
-                        .activated_ability_targets(player, permanent_id, ability_index)
+                        .activated_ability_targets(player, permanent_id, ability_index, &[])
                         .is_empty()
                 {
                     continue;
@@ -440,25 +437,18 @@ impl Game {
                 player,
                 permanent,
                 ability_index,
+                chosen,
             } => {
                 let mut actions: Vec<_> = self
-                    .activated_ability_targets(*player, *permanent, *ability_index)
+                    .activated_ability_targets(*player, *permanent, *ability_index, chosen)
                     .into_iter()
                     .map(|target| Action::ChooseTarget {
                         player: *player,
                         target,
                     })
                     .collect();
-                let ability = self
-                    .activated_abilities_for(*permanent)
-                    .get(*ability_index)?
-                    .clone();
-                if crate::state::ability::effect_target_requirements(std::slice::from_ref(
-                    &ability.effect,
-                ))
-                .first()
-                .is_some_and(|requirement| requirement.min == 0)
-                {
+                let requirement = self.activation_target_requirement(*permanent, *ability_index)?;
+                if chosen.len() >= requirement.min {
                     actions.push(Action::Decline { player: *player });
                 }
                 Some(ActionSpace {

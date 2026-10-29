@@ -186,10 +186,12 @@ impl Game {
     fn resolve_triggered_ability(&mut self, triggered: TriggeredAbilityOnStack) {
         let source_card = triggered
             .source_lki
+            .as_ref()
             .map(|lki| lki.card)
             .unwrap_or(triggered.source_card);
         let source_controller = triggered
             .source_lki
+            .as_ref()
             .map(|lki| lki.controller)
             .unwrap_or(triggered.controller);
         let (effects, ability_key) = if let Some(effects) = triggered.inline_effects {
@@ -262,7 +264,7 @@ impl Game {
         requirements: &[TargetRequirement],
         controller: PlayerId,
     ) -> Option<Vec<ResolutionTarget>> {
-        let slots: Vec<_> = targets
+        let mut slots: Vec<_> = targets
             .iter()
             .enumerate()
             .map(|(index, target)| {
@@ -276,7 +278,49 @@ impl Game {
                 }
             })
             .collect();
+        for (index, requirement) in requirements.iter().enumerate() {
+            if requirement.shares_creature_type {
+                self.require_shared_creature_type(&mut slots, index);
+            }
+        }
         (slots.is_empty() || slots.iter().any(|slot| slot.legal)).then_some(slots)
+    }
+
+    /// "That share a creature type" (CR 608.2b): a target stays legal only
+    /// while it shares a creature type with each other target of its clause.
+    /// A departed target counts with its creature types as it last existed
+    /// on the battlefield (CR 608.2h), and is itself illegal.
+    fn require_shared_creature_type(&self, slots: &mut [ResolutionTarget], requirement: usize) {
+        // `None` marks a slot of another clause.
+        let types: Vec<Option<Vec<String>>> = slots
+            .iter()
+            .map(|slot| {
+                (slot.requirement == requirement).then(|| match slot.target {
+                    Target::Permanent(id) if self.permanent_object_ref(id).is_some() => self
+                        .creature_types(id)
+                        .into_iter()
+                        .map(String::from)
+                        .collect(),
+                    Target::Permanent(id) => self
+                        .departed_permanent_lki(id)
+                        .map(|lki| lki.creature_types.clone())
+                        .unwrap_or_default(),
+                    _ => Vec::new(),
+                })
+            })
+            .collect();
+        for (index, slot) in slots.iter_mut().enumerate() {
+            if slot.requirement != requirement {
+                continue;
+            }
+            let own = types[index].as_deref().unwrap_or_default();
+            slot.legal &= types.iter().enumerate().all(|(other, theirs)| {
+                other == index
+                    || theirs
+                        .as_ref()
+                        .is_none_or(|theirs| theirs.iter().any(|t| own.contains(t)))
+            });
+        }
     }
 
     /// Instructions cannot act on an object that has left its expected zone

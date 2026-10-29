@@ -224,6 +224,9 @@ impl UndoEntry {
                         + vec_bytes(chosen_req_indices)
                         + vec_bytes(legal_targets)
                 }
+                Some(PendingChoice::ActivatedTarget { chosen, .. }) => {
+                    size_of::<PendingChoice>() + vec_bytes(chosen)
+                }
                 Some(_) => size_of::<PendingChoice>(),
                 None => 0,
             },
@@ -575,7 +578,7 @@ impl Game {
     pub(crate) fn journal_object_lki(&mut self, object: ObjectRef) {
         self.record_undo(UndoEntry::ObjectLki(
             object,
-            self.state.object_lki.get(&object).copied().map(Box::new),
+            self.state.object_lki.get(&object).cloned().map(Box::new),
         ));
     }
 

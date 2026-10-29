@@ -2470,5 +2470,13 @@
     "colors": [
       "U"
     ]
+  },
+  "Secret Tunnel": {
+    "name": "Secret Tunnel",
+    "mana_cost": "",
+    "type_line": "Land — Cave",
+    "keywords": [],
+    "oracle_text": "This land can't be blocked.\n{T}: Add {C}.\n{4}, {T}: Two target creatures you control that share a creature type can't be blocked this turn.",
+    "colors": []
   }
 }

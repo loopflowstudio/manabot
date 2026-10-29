@@ -794,14 +794,10 @@ impl Game {
             });
             return Ok(());
         }
-        if ability.effect.target_spec().is_some() {
-            if crate::state::ability::effect_target_requirements(std::slice::from_ref(
-                &ability.effect,
-            ))
-            .first()
-            .is_some_and(|requirement| requirement.min > 0)
+        if let Some(requirement) = self.activation_target_requirement(permanent_id, ability_index) {
+            if requirement.min > 0
                 && self
-                    .activated_ability_targets(player, permanent_id, ability_index)
+                    .activated_ability_targets(player, permanent_id, ability_index, &[])
                     .is_empty()
             {
                 return Err(AgentError("no legal ability targets".into()));
@@ -810,6 +806,7 @@ impl Game {
                 player,
                 permanent: permanent_id,
                 ability_index,
+                chosen: Vec::new(),
             });
             return Ok(());
         }
@@ -907,51 +904,94 @@ impl Game {
         Ok(())
     }
 
+    /// The targeting clause of an activated ability (CR 602.2b, 601.2c);
+    /// activated abilities have at most one.
+    pub(crate) fn activation_target_requirement(
+        &self,
+        permanent: PermanentId,
+        ability_index: usize,
+    ) -> Option<TargetRequirement> {
+        let abilities = self.activated_abilities_for(permanent);
+        let effect = &abilities.get(ability_index)?.effect;
+        effect.target_spec()?;
+        crate::state::ability::effect_target_requirements(std::slice::from_ref(effect))
+            .into_iter()
+            .next()
+    }
+
+    /// Targets the activation can choose next, given those already `chosen`.
+    /// Under "that share a creature type", a target is offered only with
+    /// the chosen ones and, while the minimum is unmet, a remaining partner.
     pub(crate) fn activated_ability_targets(
         &self,
         player: PlayerId,
         permanent: PermanentId,
         ability_index: usize,
+        chosen: &[Target],
     ) -> Vec<Target> {
-        let Some(ability) = self
-            .activated_abilities_for(permanent)
-            .get(ability_index)
-            .cloned()
-        else {
+        let Some(requirement) = self.activation_target_requirement(permanent, ability_index) else {
             return Vec::new();
         };
-        ability.effect.target_spec().map_or_else(Vec::new, |spec| {
-            self.legal_targets_for_spec(spec, player)
-                .into_iter()
-                .filter(|target| *target != Target::Permanent(permanent))
-                .collect()
-        })
+        let candidates: Vec<Target> = self
+            .legal_targets_for_spec(&requirement.spec, player)
+            .into_iter()
+            .filter(|target| *target != Target::Permanent(permanent) && !chosen.contains(target))
+            .collect();
+        if !requirement.shares_creature_type {
+            return candidates;
+        }
+        let needs_partner = chosen.len() + 1 < requirement.min;
+        candidates
+            .iter()
+            .copied()
+            .filter(|target| {
+                let with = |extra: &[Target]| {
+                    self.targets_share_creature_type(chosen.iter().chain([target]).chain(extra))
+                };
+                with(&[])
+                    && (!needs_partner
+                        || candidates.iter().any(|partner| {
+                            partner != target && with(std::slice::from_ref(partner))
+                        }))
+            })
+            .collect()
     }
 
+    /// Whether the permanents among `targets` have a creature type in common
+    /// ("that share a creature type").
+    fn targets_share_creature_type<'a>(&self, targets: impl Iterator<Item = &'a Target>) -> bool {
+        let mut common: Option<Vec<&str>> = None;
+        for target in targets {
+            let Target::Permanent(id) = target else {
+                return false;
+            };
+            let types = self.creature_types(*id);
+            common = Some(match common {
+                None => types,
+                Some(common) => common.into_iter().filter(|t| types.contains(t)).collect(),
+            });
+        }
+        common.is_some_and(|common| !common.is_empty())
+    }
+
+    /// Finish choosing activation targets once the clause's minimum is met.
     pub(crate) fn decline_activated_target(&mut self, player: PlayerId) -> Result<(), AgentError> {
         let Some(PendingChoice::ActivatedTarget {
             player: chooser,
             permanent,
             ability_index,
-        }) = self.pending_choice
+            chosen,
+        }) = self.pending_choice.clone()
         else {
             return Err(AgentError("no activated target pending".into()));
         };
-        let ability = self
-            .activated_abilities_for(permanent)
-            .get(ability_index)
-            .cloned()
+        let requirement = self
+            .activation_target_requirement(permanent, ability_index)
             .ok_or_else(|| AgentError("missing activation source".into()))?;
-        if chooser != player
-            || !crate::state::ability::effect_target_requirements(std::slice::from_ref(
-                &ability.effect,
-            ))
-            .first()
-            .is_some_and(|requirement| requirement.min == 0)
-        {
+        if chooser != player || chosen.len() < requirement.min {
             return Err(AgentError("target required".into()));
         }
-        self.begin_activation_payment(player, permanent, ability_index, Vec::new())
+        self.begin_activation_payment(player, permanent, ability_index, chosen)
     }
 
     pub(crate) fn choose_activated_target(
@@ -963,18 +1003,36 @@ impl Game {
             player: chooser,
             permanent,
             ability_index,
-        }) = self.pending_choice
+            mut chosen,
+        }) = self.pending_choice.clone()
         else {
             return Err(AgentError("no activated target pending".into()));
         };
         if player != chooser
             || !self
-                .activated_ability_targets(player, permanent, ability_index)
+                .activated_ability_targets(player, permanent, ability_index, &chosen)
                 .contains(&target)
         {
             return Err(AgentError("illegal activated target".into()));
         }
-        self.begin_activation_payment(player, permanent, ability_index, vec![target])
+        let requirement = self
+            .activation_target_requirement(permanent, ability_index)
+            .ok_or_else(|| AgentError("missing activation source".into()))?;
+        chosen.push(target);
+        if chosen.len() >= requirement.max
+            || self
+                .activated_ability_targets(player, permanent, ability_index, &chosen)
+                .is_empty()
+        {
+            return self.begin_activation_payment(player, permanent, ability_index, chosen);
+        }
+        self.pending_choice = Some(PendingChoice::ActivatedTarget {
+            player,
+            permanent,
+            ability_index,
+            chosen,
+        });
+        Ok(())
     }
 
     pub(crate) fn payment_candidates(

@@ -216,7 +216,7 @@ impl Game {
                     .source_ref
                     .map(|r| self.visible_reference(r, viewer))
                     .unwrap_or_default();
-                source.definition = Some(trigger.source_lki.map_or(
+                source.definition = Some(trigger.source_lki.as_ref().map_or(
                     self.state.cards[trigger.source_card].definition_id.0,
                     |lki| lki.definition_id.0,
                 ));
@@ -356,9 +356,15 @@ impl Game {
             PendingChoice::ActivatedTarget {
                 permanent,
                 ability_index,
+                chosen,
                 ..
+            } => {
+                frame.source = self.target_reference(Target::Permanent(*permanent), viewer);
+                frame.ability = Some(*ability_index);
+                frame.active_clause = Some(0);
+                frame.targets = self.clause_targets(chosen, &[], viewer);
             }
-            | PendingChoice::ActivationX {
+            PendingChoice::ActivationX {
                 permanent,
                 ability_index,
                 ..

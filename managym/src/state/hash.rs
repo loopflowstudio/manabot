@@ -197,7 +197,7 @@ impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
             .collect();
         let object_lki = object_lki
             .iter()
-            .map(|(&object_ref, &lki)| (object_ref, lki))
+            .map(|(&object_ref, lki)| (object_ref, lki.clone()))
             .collect();
         let mut rng = rng.clone();
         let mut rng_probe = [0_u64; 8];

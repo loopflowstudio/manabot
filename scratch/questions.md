@@ -79,3 +79,9 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   that already invalidate the mana cache; a grant whose condition flips without
   a move leaves the cache stale until the next invalidation, as other
   condition-dependent statics already do.
+- Secret Tunnel (item 16): a departed target's LKI is found by the battlefield
+  slot it occupied (`ObjectLki.permanent`) instead of capturing target
+  `ObjectRef`s on the stack, as the concept review suggested; slots are never
+  reused, so both name the same object and the stack shape stays unchanged.
+  With more than two targets, "share a creature type" means one type common to
+  all, and the first-pick partner check is pairwise (exact for two).

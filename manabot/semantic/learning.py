@@ -749,11 +749,19 @@ class _TokenBuilder:
                     )
                 self.field(field)
                 self.value(field, target[field], context="target", roles=roles)
-            # Optional, so targets without it keep their token streams.
-            if "another" in target:
-                self.field("another")
-                self.value("another", target["another"], context="target", roles=roles)
-            unknown = set(target) - {"role", "min", "max", "selector", "another"}
+            # Optional, so targets without them keep their token streams.
+            for field in ("another", "shares_creature_type"):
+                if field in target:
+                    self.field(field)
+                    self.value(field, target[field], context="target", roles=roles)
+            unknown = set(target) - {
+                "role",
+                "min",
+                "max",
+                "selector",
+                "another",
+                "shares_creature_type",
+            }
             if unknown:
                 raise SemanticProjectionError(
                     f"program.targets[{index}]: unknown fields {sorted(unknown)}"

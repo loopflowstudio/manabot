@@ -100,10 +100,13 @@ pub enum PendingChoice {
         payment: Box<Payment>,
         cost: Box<crate::state::card::SacrificeCost>,
     },
+    /// Choosing the activation's targets one at a time (CR 602.2b, 601.2c);
+    /// `chosen` holds those already selected for its single clause.
     ActivatedTarget {
         player: PlayerId,
         permanent: PermanentId,
         ability_index: usize,
+        chosen: Vec<Target>,
     },
     /// "You may pay the kicker cost" (CR 601.2b) — asked before targeting.
     KickerChoice { player: PlayerId, card: CardId },

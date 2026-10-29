@@ -175,6 +175,7 @@ pub(super) fn cards() -> Vec<Card> {
         hakoda_selfless_commander(),
         trusty_boomerang(),
         honest_work(),
+        secret_tunnel(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -5499,6 +5500,61 @@ fn honest_work() -> Card {
             .granted_to("each:enchanted_creature"),
         ],
         registry_name: "Honest Work",
+        text_box,
+    }
+}
+
+fn secret_tunnel() -> Card {
+    let text_box = "This land can't be blocked.\n{T}: Add {C}.\n{4}, {T}: Two target creatures you control that share a creature type can't be blocked this turn.";
+
+    Card {
+        characteristics: Characteristics {
+            subtypes: Some(vec!["Cave"]),
+            types: vec![CardType::Land],
+            ..Default::default()
+        },
+        key: "tla.secret_tunnel",
+        programs: vec![
+            Program::new(
+                "unblockable",
+                ProgramKind::Static,
+                vec![Op::UnblockableIf {
+                    condition: Condition::Always,
+                }],
+            ),
+            Program::new(
+                "mana",
+                ProgramKind::Mana,
+                vec![Op::AddMana {
+                    mana: "C",
+                    until: None,
+                }],
+            ),
+            Program::new(
+                "tunnel",
+                ProgramKind::Activated,
+                vec![Op::TargetClause {
+                    body: vec![Op::ForEachTarget {
+                        body: vec![Op::CantBeBlockedTarget {
+                            target: "creatures",
+                        }],
+                        role: "creatures",
+                    }],
+                    role: "creatures",
+                }],
+            )
+            .cost(Cost {
+                mana: Some("4"),
+                tap_source: Some(true),
+                ..Default::default()
+            })
+            .targets(vec![Target {
+                min: 2,
+                ..Target::up_to(2, "creatures", Selector::CreatureYouControl)
+            }
+            .sharing_creature_type()]),
+        ],
+        registry_name: "Secret Tunnel",
         text_box,
     }
 }

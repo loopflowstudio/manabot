@@ -2112,3 +2112,100 @@ fn a_static_haste_grant_lets_a_creature_tap_the_turn_it_enters() {
     add_counters(&mut s, elves, CounterKind::PlusOnePlusOne, 1);
     assert_eq!(mana(&mut s), Mana::parse("G"));
 }
+
+fn unblockable(s: &Scenario, id: PermanentId) -> bool {
+    s.game().state.permanents[id]
+        .as_ref()
+        .unwrap()
+        .cant_be_blocked_this_turn
+}
+
+fn offers_target(s: &Scenario, id: PermanentId) -> bool {
+    has_action(
+        s,
+        |a| matches!(a, Action::ChooseTarget { target, .. } if *target == Target::Permanent(id)),
+    )
+}
+
+/// CR 601.2c, 602.2b: both targets must share a creature type, so only
+/// creatures with a partner are offered first, then only that partner;
+/// two targets are required, so there is no early finish.
+#[test]
+fn secret_tunnel_makes_two_creatures_sharing_a_type_unblockable() {
+    let mut s = setup(&[
+        "Secret Tunnel",
+        "Deserter's Disciple",
+        "Earth Kingdom Soldier",
+        "Gray Ogre",
+    ]);
+    let tunnel = s.force_permanent_on_battlefield(0, "Secret Tunnel");
+    let soldier = s.force_permanent_on_battlefield(0, "Earth Kingdom Soldier");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    assert_eq!(
+        s.game_mut().cached_producible_mana(PlayerId(0)),
+        Mana::parse("C")
+    );
+    s.set_player_mana_pool(0, "4");
+    assert!(!can_activate(&mut s, tunnel, 0), "no two share a type");
+
+    let disciple = s.force_permanent_on_battlefield(0, "Deserter's Disciple");
+    assert!(can_activate(&mut s, tunnel, 0));
+    activate(&mut s, tunnel, 0);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
+    assert!(offers_target(&s, soldier) && offers_target(&s, disciple));
+    assert!(!offers_target(&s, ogre), "the Ogre has no partner");
+    assert!(s.choose_target(Target::Permanent(soldier)));
+    assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
+    assert!(offers_target(&s, disciple) && !offers_target(&s, soldier));
+    assert!(!has_action(&s, |a| matches!(a, Action::Decline { .. })));
+    assert!(s.choose_target(Target::Permanent(disciple)));
+    settle(&mut s);
+
+    assert!(tapped(&s, tunnel));
+    assert!(unblockable(&s, soldier) && unblockable(&s, disciple));
+    assert!(!unblockable(&s, ogre));
+}
+
+/// CR 608.2b, 608.2h: when one target leaves, the other is still legal
+/// because it shares a creature type with the departed creature as it last
+/// existed, so the ability resolves for it.
+#[test]
+fn secret_tunnel_survivor_shares_with_the_departed_target() {
+    let mut s = setup(&[
+        "Secret Tunnel",
+        "Deserter's Disciple",
+        "Earth Kingdom Soldier",
+    ]);
+    let tunnel = s.force_permanent_on_battlefield(0, "Secret Tunnel");
+    let soldier = s.force_permanent_on_battlefield(0, "Earth Kingdom Soldier");
+    let disciple = s.force_permanent_on_battlefield(0, "Deserter's Disciple");
+    s.set_player_mana_pool(0, "4");
+    activate(&mut s, tunnel, 0);
+    assert!(s.choose_target(Target::Permanent(soldier)));
+    assert!(s.choose_target(Target::Permanent(disciple)));
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+
+    let card = card_of(&s, disciple);
+    s.game_mut().move_card(card, ZoneType::Graveyard);
+    settle(&mut s);
+    assert!(unblockable(&s, soldier));
+}
+
+/// CR 509.1b: once animated, the land itself can't be blocked.
+#[test]
+fn secret_tunnel_cannot_be_blocked_once_animated() {
+    let mut s = setup(&["Secret Tunnel", "Gray Ogre"]);
+    let tunnel = s.force_permanent_on_battlefield(0, "Secret Tunnel");
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let land = s.game_mut().state.permanents[tunnel].as_mut().unwrap();
+    land.animated = true;
+    land.summoning_sick = false;
+    add_counters(&mut s, tunnel, CounterKind::PlusOnePlusOne, 2);
+
+    declare_attackers(&mut s, &[tunnel]);
+    s.advance_until(
+        |s| s.action_space().kind == ActionSpaceKind::DeclareBlocker,
+        "blockers".into(),
+    );
+    assert!(!may_block(&s, tunnel));
+}

@@ -439,7 +439,7 @@ impl Game {
     /// Distinct creature types of a battlefield creature (CR 205.3m): printed
     /// subtypes of a printed creature plus temporarily granted subtypes, less
     /// noncreature subtypes. Animated lands keep only granted types.
-    fn creature_types(&self, permanent_id: PermanentId) -> Vec<&str> {
+    pub(crate) fn creature_types(&self, permanent_id: PermanentId) -> Vec<&str> {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return Vec::new();
         };

@@ -609,6 +609,10 @@ pub struct TargetRequirement {
     /// "Another target": the source object can't be chosen.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub another: bool,
+    /// "[N] target creatures that share a creature type" (CR 115.1, 608.2b):
+    /// every chosen target must share one creature type with the others.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub shares_creature_type: bool,
     pub spec: TargetSpec,
     pub min: usize,
     pub max: usize,
@@ -618,6 +622,7 @@ impl TargetRequirement {
     pub fn one(spec: TargetSpec) -> Self {
         Self {
             another: false,
+            shares_creature_type: false,
             spec,
             min: 1,
             max: 1,
@@ -626,10 +631,9 @@ impl TargetRequirement {
 
     pub fn up_to(max: usize, spec: TargetSpec) -> Self {
         Self {
-            another: false,
-            spec,
             min: 0,
             max,
+            ..Self::one(spec)
         }
     }
 }
@@ -796,10 +800,8 @@ pub fn effect_target_requirements(effects: &[Effect]) -> Vec<TargetRequirement> 
                     .iter()
                     .any(|effect| matches!(effect, Effect::ExileUntilSourceLeaves { .. }));
                 vec![TargetRequirement {
-                    another: false,
-                    spec: spec.clone(),
                     min: usize::from(!optional),
-                    max: 1,
+                    ..TargetRequirement::one(spec.clone())
                 }]
             })
             .unwrap_or_default()

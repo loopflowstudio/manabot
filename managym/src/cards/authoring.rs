@@ -278,6 +278,9 @@ pub struct Target {
     pub min: i32,
     pub role: &'static str,
     pub selector: Selector,
+    /// "That share a creature type": the chosen targets must share one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub shares_creature_type: Option<bool>,
 }
 
 impl Target {
@@ -288,6 +291,7 @@ impl Target {
             max: 1,
             role,
             selector,
+            shares_creature_type: None,
         }
     }
 
@@ -304,6 +308,14 @@ impl Target {
     pub fn another(self) -> Self {
         Self {
             another: Some(true),
+            ..self
+        }
+    }
+
+    /// "That share a creature type": the chosen targets must share one.
+    pub fn sharing_creature_type(self) -> Self {
+        Self {
+            shares_creature_type: Some(true),
             ..self
         }
     }

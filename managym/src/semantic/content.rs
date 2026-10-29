@@ -1777,6 +1777,7 @@ fn parse_target_requirement(
 ) -> Result<TargetRequirement, IrError> {
     Ok(TargetRequirement {
         another: opt_bool_field(target, "another")?.unwrap_or(false),
+        shares_creature_type: opt_bool_field(target, "shares_creature_type")?.unwrap_or(false),
         spec: target_spec(object_field(target, "selector")?)?,
         min: usize::try_from(u64_field(target, "min")?)
             .map_err(|_| malformed(program, "target min exceeds usize"))?,

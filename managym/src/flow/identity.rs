@@ -75,6 +75,12 @@ impl Game {
         let definition = &self.state.cards[card];
         Some(ObjectLki {
             keywords: self.effective_keywords(permanent_id),
+            creature_types: self
+                .creature_types(permanent_id)
+                .into_iter()
+                .map(String::from)
+                .collect(),
+            permanent: permanent_id,
             animated_creature: permanent.animated_creature(definition),
             abilities_lost: self.has_lost_abilities(permanent_id),
             object_ref,
@@ -89,6 +95,15 @@ impl Game {
 
     pub fn object_lki(&self, object_ref: ObjectRef) -> Option<&ObjectLki> {
         self.state.object_lki.get(&object_ref)
+    }
+
+    /// Last known information of the object that occupied a battlefield
+    /// slot, once it has left.
+    pub(crate) fn departed_permanent_lki(&self, permanent_id: PermanentId) -> Option<&ObjectLki> {
+        self.state
+            .object_lki
+            .values()
+            .find(|lki| lki.permanent == permanent_id)
     }
 
     /// Capture the stable viewer identity for a current or departed object.

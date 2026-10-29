@@ -5,7 +5,7 @@ Brief: the Task directive (49 cards, obligations in `docs/rules/tla/allocation.j
 T2 and reconcile shared costs before landing. Every merge needs Jack Heart's review.
 Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
 
-## Done (45 of 49)
+## Done (46 of 49)
 
 Per-slice detail: `git log 86ebe9ccf..`.
 
@@ -84,18 +84,28 @@ Per-slice detail: `git log 86ebe9ccf..`.
    `abilities_lost` check in `Permanent::effective_keywords` are gone. Tests:
    `honest_work_takes_haste_from_a_summoning_sick_merchant`,
    `a_static_haste_grant_lets_a_creature_tap_the_turn_it_enters`.
+16. Secret Tunnel: target field 99 `shares_creature_type`
+   (`TargetRequirement.shares_creature_type`, authoring `sharing_creature_type()`,
+   `learning.py` optional target field); subtype 75 `Cave`.
+   `PendingChoice::ActivatedTarget.chosen` (actions, continuation clause 0
+   targets, decline once `min` is met) via `Game::activation_target_requirement`
+   and `activated_ability_targets(.., chosen)`, which offers a first target
+   only with a partner. `resolution_targets` applies
+   `require_shared_creature_type`; a departed target counts with
+   `ObjectLki.creature_types`, found by `ObjectLki.permanent` through
+   `departed_permanent_lki` (no stack shape change; `ObjectLki` is now Clone).
 
-Schema 8 (unreleased, T1 precedent) appended in place: fields 85-98, predicates
+Schema 8 (unreleased, T1 precedent) appended in place: fields 85-99, predicates
 13-16, special roles 6-15, opcodes 66-92, enums `counter` and `name`, conditions 7-9,
-quantities 5-7, trigger_event 13, subtypes 64-74.
+quantities 5-7, trigger_event 13, subtypes 64-75.
 `scratch/add_fixture.py` copies pinned evidence into the conformance fixture.
 
-Check (slice 14, debug; cards 54, rules_tests 356 at `6ef2ab513`): `cargo test`
+Check (items 15-16, debug; cards 59, rules_tests 356): `cargo test`
 all targets pass (lib 120) except `semantic_conformance_tests` (w16 vs w15, digest drift, as
 PR #394 CI 40819903624); clippy, fmt clean; extension rebuilt; `pytest
 tests/semantic` 158 pass, 4 fail on `be2b7586b`'s `schema_version` asserts.
 
-## Remaining (4 cards), suggested next slices
+## Remaining (3 cards), suggested next slices
 
 - Glider Staff (2026-10-29, deferred to the T2 sync): its entry trigger
   airbends, which T2 owns (`Op::Airbend`, exact-object cast permission,
@@ -103,16 +113,6 @@ tests/semantic` 158 pass, 4 fail on `be2b7586b`'s `schema_version` asserts.
   sync it needs only that op plus `equipped_pt` 1/1, an equipped flying grant
   (`StaticKeywordGrant` on `each:equipped_creature`) and `equip {2}`.
 
-- Secret Tunnel (Cave; "this land can't be blocked" is `unblockable_if` Always;
-  {T}: Add {C}): deferred in slice 14 (2026-10-29) as larger than a slice.
-  "{4}, {T}: two target creatures you control that share a creature type"
-  needs `ActivatedTarget` to carry `chosen` (actions, continuation
-  `clause_targets`, focus, decline once `min` is met); a target attribute
-  `shares_creature_type` offering only first targets with a partner; and
-  survivor legality against the departed creature's types as it left. The
-  last blocks: stack targets are `PermanentId` slots that lose their card on
-  departure and `ObjectLki` (Copy) has no creature types, so the stack must
-  capture target `ObjectRef`s (as `attached` does) and LKI keep types.
 - Crashing Wave (deferred from slice 11): after the T2 sync, build on T2's
   waterbend additional cost (`a1773e4e6`) and its X announcement; then "up to
   X targets" (requirement max read from X) and a resolution-time distribution
@@ -149,8 +149,8 @@ Two consequences follow from that rule and the Task's acceptance criteria, with 
    frozen widths are unchanged), and the world/observation validation in
    CLAUDE.md applies.
 
-Next implement order: (1) done (item 15); (2) Secret Tunnel's stack
-target `ObjectRef` capture and LKI creature types (not blocked by T2); (3) the T2
+Next implement order: (1) and (2) done (items 15, 16: tap authority, Secret
+Tunnel); (3) the T2
 sync per the list below; (4) Glider Staff and Crashing Wave on T2's airbend and
 waterbend; (5) the observation change with Fire Nation Palace.
 
@@ -158,8 +158,8 @@ waterbend; (5) the observation change with Fire Nation Palace.
 
 - Both branches append to schema 8 from 86ebe9ccf with colliding numbers. T2:
   fields 85-96, predicates 13-15, subtypes 64-74, special role 6, opcodes 66-73,
-  trigger_event 13, destination 2, zone 3. This branch: fields 85-97 (97
-  `granted_to`), predicates 13-16, subtypes 64-74, special roles 6-15 (15
+  trigger_event 13, destination 2, zone 3. This branch: fields 85-99 (97
+  `granted_to`, 98 `name`, 99 `shares_creature_type`), predicates 13-16, subtypes 64-75 (75 `Cave`), special roles 6-15 (15
   `grantor`), opcodes 66-90, conditions 7-9,
   quantities 5-7, trigger_event 13 (`end_step_begins`), enum `counter`. T2 since
   added opcodes 74-79, fields 97-101 (101 `foretell`), quantity 5 `x`, enum
