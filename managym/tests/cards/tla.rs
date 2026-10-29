@@ -5001,7 +5001,7 @@ mod ur_lessons {
         },
         decision::Command,
         flow::turn::StepKind,
-        semantic::SemanticPack,
+        semantic::setups::authored_pack,
         state::{
             game_object::{PlayerId, Target},
             zone::ZoneType,
@@ -5339,7 +5339,7 @@ mod ur_lessons {
 
     #[test]
     fn revised_forty_card_deck_completes_and_replays_every_command_exactly() {
-        let semantic = SemanticPack::current("two_deck").unwrap();
+        let semantic = authored_pack("two_deck").unwrap();
         let mut ur = semantic
             .player_config("UR candidate", "ur_lessons")
             .unwrap();

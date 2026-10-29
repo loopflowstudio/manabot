@@ -1,0 +1,902 @@
+{
+ "afr.deadly_dispute": {
+  "first_set": "afr",
+  "id": "7373fe95-ad1c-44b9-8c7f-464ce8cbffc6",
+  "name": "Deadly Dispute",
+  "released": "2021-07-23"
+ },
+ "afr.power_word_kill": {
+  "first_set": "afr",
+  "id": "395b6ce4-143f-4eed-b565-98aa3d6208ef",
+  "name": "Power Word Kill",
+  "released": "2021-07-23"
+ },
+ "arb.prophetic_prism": {
+  "first_set": "roe",
+  "id": "cfb90d44-8cb1-4b83-b2f2-92c19d6304fb",
+  "name": "Prophetic Prism",
+  "released": "2010-04-23"
+ },
+ "blb.savor": {
+  "first_set": "blb",
+  "id": "1397f689-dca1-4d35-864b-92c5606afb9a",
+  "name": "Savor",
+  "released": "2024-08-02"
+ },
+ "bro.giant_cindermaw": {
+  "first_set": "bro",
+  "id": "1349465f-d29f-4d4b-a653-f4388574c336",
+  "name": "Giant Cindermaw",
+  "released": "2022-11-18"
+ },
+ "eld.fabled_passage": {
+  "first_set": "eld",
+  "id": "b841bfa8-7c17-4df2-8466-780ab9a4a53a",
+  "name": "Fabled Passage",
+  "released": "2019-10-04"
+ },
+ "fin.sazh_s_chocobo": {
+  "first_set": "fin",
+  "id": "dda6b4d0-1b60-46b0-b321-b9ffe15afff4",
+  "name": "Sazh's Chocobo",
+  "released": "2025-06-13"
+ },
+ "grn.healer_s_hawk": {
+  "first_set": "grn",
+  "id": "3313bd5c-b657-47a3-822a-dd0d9165492a",
+  "name": "Healer's Hawk",
+  "released": "2018-10-05"
+ },
+ "ice.pyroclasm": {
+  "first_set": "ice",
+  "id": "88040748-ad76-4b9a-bd4e-87e5980e9816",
+  "name": "Pyroclasm",
+  "released": "1995-06-03"
+ },
+ "iko.bastion_of_remembrance": {
+  "first_set": "iko",
+  "id": "2dd354dd-939e-4b1a-8ed6-fe89a7fd64bf",
+  "name": "Bastion of Remembrance",
+  "released": "2020-04-24"
+ },
+ "iko.weaponize_the_monsters": {
+  "first_set": "iko",
+  "id": "68bba622-a0ab-4c0e-88b1-9120690ea5a0",
+  "name": "Weaponize the Monsters",
+  "released": "2020-04-24"
+ },
+ "isd.typhoid_rats": {
+  "first_set": "isd",
+  "id": "4490ce65-c73a-4809-abd1-ccc3175bd2a4",
+  "name": "Typhoid Rats",
+  "released": "2011-09-30"
+ },
+ "ktk.monastery_swiftspear": {
+  "first_set": "ktk",
+  "id": "b81c6c8b-a9cf-4866-89ba-7f8ad077b836",
+  "name": "Monastery Swiftspear",
+  "released": "2014-09-26"
+ },
+ "lci.tireless_provisioner": {
+  "first_set": "mh2",
+  "id": "5c5be54d-660e-42ab-b5ea-5e1cf3bad0bc",
+  "name": "Tireless Provisioner",
+  "released": "2021-06-18"
+ },
+ "lea.ancestral_recall": {
+  "first_set": "lea",
+  "id": "70e7ddf2-5604-41e7-bb9d-ddd03d3e9d0b",
+  "name": "Ancestral Recall",
+  "released": "1993-08-05"
+ },
+ "lea.counterspell": {
+  "first_set": "lea",
+  "id": "0df55e3f-14de-46ef-b6b1-616618724d9e",
+  "name": "Counterspell",
+  "released": "1993-08-05"
+ },
+ "lea.craw_wurm": {
+  "first_set": "lea",
+  "id": "bfed1a95-bd67-4e16-a781-81866028af2f",
+  "name": "Craw Wurm",
+  "released": "1993-08-05"
+ },
+ "lea.forest": {
+  "first_set": "lea",
+  "id": "6f1c8cb0-38eb-408b-94e8-16db83999b3b",
+  "name": "Forest",
+  "released": "1993-08-05"
+ },
+ "lea.giant_spider": {
+  "first_set": "lea",
+  "id": "77636b4c-faea-4bf5-b88c-dd5bb88dc930",
+  "name": "Giant Spider",
+  "released": "1993-08-05"
+ },
+ "lea.gray_ogre": {
+  "first_set": "lea",
+  "id": "73ae5276-b607-4f23-a9d2-e8cc7b8e3693",
+  "name": "Gray Ogre",
+  "released": "1993-08-05"
+ },
+ "lea.hill_giant": {
+  "first_set": "lea",
+  "id": "0ddb98e8-13fe-4786-83f7-b72c56db135a",
+  "name": "Hill Giant",
+  "released": "1993-08-05"
+ },
+ "lea.island": {
+  "first_set": "lea",
+  "id": "90a57c0e-fa61-45ef-955d-d296403967d5",
+  "name": "Island",
+  "released": "1993-08-05"
+ },
+ "lea.lightning_bolt": {
+  "first_set": "lea",
+  "id": "d573ef03-4730-45aa-93dd-e45ac1dbaf4a",
+  "name": "Lightning Bolt",
+  "released": "1993-08-05"
+ },
+ "lea.llanowar_elves": {
+  "first_set": "lea",
+  "id": "d4f1cc9e-4f99-4c26-ac1b-8ef069fa8ceb",
+  "name": "Llanowar Elves",
+  "released": "1993-08-05"
+ },
+ "lea.mountain": {
+  "first_set": "lea",
+  "id": "eace2c85-976c-425e-9800-5a6ccbd91b56",
+  "name": "Mountain",
+  "released": "1993-08-05"
+ },
+ "lea.plains": {
+  "first_set": "lea",
+  "id": "b1623d57-4729-4796-b3f7-f1837a05c6ed",
+  "name": "Plains",
+  "released": "1993-08-05"
+ },
+ "lea.savannah_lions": {
+  "first_set": "lea",
+  "id": "d05b92bd-797e-413f-a8b0-32e0937a1ee0",
+  "name": "Savannah Lions",
+  "released": "1993-08-05"
+ },
+ "lea.serra_angel": {
+  "first_set": "lea",
+  "id": "f8ac5006-91bd-4803-93da-f87cf196dd2f",
+  "name": "Serra Angel",
+  "released": "1993-08-05"
+ },
+ "lea.shivan_dragon": {
+  "first_set": "lea",
+  "id": "fefbf149-f988-4f8b-9f53-56f5878116a6",
+  "name": "Shivan Dragon",
+  "released": "1993-08-05"
+ },
+ "lea.swamp": {
+  "first_set": "lea",
+  "id": "6176936d-72e2-4205-8871-4c5a4f1cb2d8",
+  "name": "Swamp",
+  "released": "1993-08-05"
+ },
+ "lea.wall_of_stone": {
+  "first_set": "lea",
+  "id": "140e567c-6e4a-42b0-8084-d6c9695ae802",
+  "name": "Wall of Stone",
+  "released": "1993-08-05"
+ },
+ "lea.war_mammoth": {
+  "first_set": "lea",
+  "id": "c8d6081e-f686-4263-a0a2-21c0d9af5fdb",
+  "name": "War Mammoth",
+  "released": "1993-08-05"
+ },
+ "m20.spectral_sailor": {
+  "first_set": "m20",
+  "id": "67483891-36d1-46f2-8b4f-b8b7bd54bdcc",
+  "name": "Spectral Sailor",
+  "released": "2019-07-12"
+ },
+ "mh1.fists_of_flame": {
+  "first_set": "mh1",
+  "id": "4fa3c0d8-0a3e-43b0-b81e-a3d22ce6a4b2",
+  "name": "Fists of Flame",
+  "released": "2019-06-14"
+ },
+ "mh1.prismatic_vista": {
+  "first_set": "mh1",
+  "id": "e37da81e-be12-45a2-9128-376f1ad7b3e8",
+  "name": "Prismatic Vista",
+  "released": "2019-06-14"
+ },
+ "mkm.proft_s_eidetic_memory": {
+  "first_set": "mkm",
+  "id": "af5b29b3-974c-4200-8df8-b072c11e1600",
+  "name": "Proft's Eidetic Memory",
+  "released": "2024-02-09"
+ },
+ "ons.glory_seeker": {
+  "first_set": "ons",
+  "id": "9047075e-9fca-484d-bb79-32c0d6821281",
+  "name": "Glory Seeker",
+  "released": "2002-10-07"
+ },
+ "ori.boggart_brute": {
+  "first_set": "ori",
+  "id": "9d735ebf-61a4-4507-9399-6d32c8903ded",
+  "name": "Boggart Brute",
+  "released": "2015-07-17"
+ },
+ "por.raging_goblin": {
+  "first_set": "por",
+  "id": "fed57a17-7847-4e60-bc40-4452880f12a3",
+  "name": "Raging Goblin",
+  "released": "1997-05-01"
+ },
+ "por.wind_drake": {
+  "first_set": "por",
+  "id": "5486d2dc-9a5d-4f58-a5ec-d94de54b852f",
+  "name": "Wind Drake",
+  "released": "1997-05-01"
+ },
+ "rtr.fencing_ace": {
+  "first_set": "rtr",
+  "id": "a42d3066-f4ec-4d28-83ab-e48141206c72",
+  "name": "Fencing Ace",
+  "released": "2012-10-05"
+ },
+ "soi.tireless_tracker": {
+  "first_set": "soi",
+  "id": "ee8e9928-d9b2-4570-adb8-44b34115decd",
+  "name": "Tireless Tracker",
+  "released": "2016-04-08"
+ },
+ "sth.youthful_knight": {
+  "first_set": "sth",
+  "id": "fcd3b7a7-c5e8-4179-ade3-31625620f3a9",
+  "name": "Youthful Knight",
+  "released": "1998-03-02"
+ },
+ "stx.divide_by_zero": {
+  "first_set": "stx",
+  "id": "1958d96e-ec44-48ab-80b1-5b01a24ac7b8",
+  "name": "Divide by Zero",
+  "released": "2021-04-23"
+ },
+ "stx.enthusiastic_study": {
+  "first_set": "stx",
+  "id": "543c64ff-2c51-4a63-a940-dc8645717c85",
+  "name": "Enthusiastic Study",
+  "released": "2021-04-23"
+ },
+ "stx.eyetwitch": {
+  "first_set": "stx",
+  "id": "1f4d1bb6-cb8f-4d01-9879-0b3a0585cbf4",
+  "name": "Eyetwitch",
+  "released": "2021-04-23"
+ },
+ "stx.field_trip": {
+  "first_set": "stx",
+  "id": "f235060a-eb49-4a73-bb5f-01228c3c4070",
+  "name": "Field Trip",
+  "released": "2021-04-23"
+ },
+ "stx.gnarled_professor": {
+  "first_set": "stx",
+  "id": "a32338e8-1f6a-49b9-bd93-26578adab6b3",
+  "name": "Gnarled Professor",
+  "released": "2021-04-23"
+ },
+ "stx.igneous_inspiration": {
+  "first_set": "stx",
+  "id": "5781ad7b-dc1b-4cc1-9e72-6e714b9ba1de",
+  "name": "Igneous Inspiration",
+  "released": "2021-04-23"
+ },
+ "stx.pop_quiz": {
+  "first_set": "stx",
+  "id": "d16892d8-9d10-45de-ab79-0e645c4b5588",
+  "name": "Pop Quiz",
+  "released": "2021-04-23"
+ },
+ "stx.professor_of_symbology": {
+  "first_set": "stx",
+  "id": "f427cf73-9f5e-4ef5-bc4f-29ffbfda9d57",
+  "name": "Professor of Symbology",
+  "released": "2021-04-23"
+ },
+ "stx.waterfall_aerialist": {
+  "first_set": "stx",
+  "id": "7bc6966c-18d9-4675-9594-6f0b2d11c405",
+  "name": "Waterfall Aerialist",
+  "released": "2021-04-23"
+ },
+ "tla.abandon_attachments": {
+  "first_set": "tla",
+  "id": "74ca45a4-97ab-4255-9129-884e8b42b984",
+  "name": "Abandon Attachments",
+  "released": "2025-11-21"
+ },
+ "tla.accumulate_wisdom": {
+  "first_set": "tla",
+  "id": "a6335319-6c92-40d4-ab2d-c06c79049c30",
+  "name": "Accumulate Wisdom",
+  "released": "2025-11-21"
+ },
+ "tla.airship_engine_room": {
+  "first_set": "tla",
+  "id": "0b98ba34-f251-4bd0-9d75-1d4445be5cfd",
+  "name": "Airship Engine Room",
+  "released": "2025-11-21"
+ },
+ "tla.allies_at_last": {
+  "first_set": "tla",
+  "id": "11a77897-2aba-4a9b-bbe6-1768ca9f12cb",
+  "name": "Allies at Last",
+  "released": "2025-11-21"
+ },
+ "tla.avatar_enthusiasts": {
+  "first_set": "tla",
+  "id": "7292e5f2-d5a1-4e39-8f75-eba471819f04",
+  "name": "Avatar Enthusiasts",
+  "released": "2025-11-21"
+ },
+ "tla.azula_always_lies": {
+  "first_set": "tla",
+  "id": "416b9207-a2af-44d1-9b87-4943f6e46d42",
+  "name": "Azula Always Lies",
+  "released": "2025-11-21"
+ },
+ "tla.badgermole_cub": {
+  "first_set": "tla",
+  "id": "340c5799-4964-44dd-8c48-8f3f3aba5211",
+  "name": "Badgermole Cub",
+  "released": "2025-11-21"
+ },
+ "tla.boar_q_pine": {
+  "first_set": "tla",
+  "id": "087a445c-5f63-45d6-83e8-20d22650db20",
+  "name": "Boar-q-pine",
+  "released": "2025-11-21"
+ },
+ "tla.boiling_rock_prison": {
+  "first_set": "tla",
+  "id": "1c2e2220-54d1-4180-93a0-964e3b0ba8b8",
+  "name": "Boiling Rock Prison",
+  "released": "2025-11-21"
+ },
+ "tla.boomerang_basics": {
+  "first_set": "tla",
+  "id": "17ab958a-abc6-472e-ad6a-97c731d89c74",
+  "name": "Boomerang Basics",
+  "released": "2025-11-21"
+ },
+ "tla.callous_inspector": {
+  "first_set": "tla",
+  "id": "17ab958a-abc6-472e-ad6a-97c731d89c74",
+  "name": "Callous Inspector",
+  "released": "2025-11-21"
+ },
+ "tla.cat_gator": {
+  "first_set": "tla",
+  "id": "17ab958a-abc6-472e-ad6a-97c731d89c74",
+  "name": "Cat-Gator",
+  "released": "2025-11-21"
+ },
+ "tla.cat_owl": {
+  "first_set": "tla",
+  "id": "17ab958a-abc6-472e-ad6a-97c731d89c74",
+  "name": "Cat-Owl",
+  "released": "2025-11-21"
+ },
+ "tla.combustion_technique": {
+  "first_set": "tla",
+  "id": "17ab958a-abc6-472e-ad6a-97c731d89c74",
+  "name": "Combustion Technique",
+  "released": "2025-11-21"
+ },
+ "tla.compassionate_healer": {
+  "first_set": "tla",
+  "id": "88d5f8fd-d4de-4e64-9b74-e53719ffbcdc",
+  "name": "Compassionate Healer",
+  "released": "2025-11-21"
+ },
+ "tla.corrupt_court_official": {
+  "first_set": "ptk",
+  "id": "9d3ba2e3-e680-47cd-81c5-555deea7d00f",
+  "name": "Corrupt Court Official",
+  "released": "1999-05-01"
+ },
+ "tla.cunning_maneuver": {
+  "first_set": "tla",
+  "id": "0ff7c993-ba29-43b0-9639-7c4bc0292fa2",
+  "name": "Cunning Maneuver",
+  "released": "2025-11-21"
+ },
+ "tla.curious_farm_animals": {
+  "first_set": "tla",
+  "id": "2402d759-84b6-41d2-ad78-9333974e9222",
+  "name": "Curious Farm Animals",
+  "released": "2025-11-21"
+ },
+ "tla.cycle_of_renewal": {
+  "first_set": "tla",
+  "id": "233f4a05-057b-48f4-8f56-8d4a060a40e4",
+  "name": "Cycle of Renewal",
+  "released": "2025-11-21"
+ },
+ "tla.dai_li_agents": {
+  "first_set": "tla",
+  "id": "9ddb8715-341b-400a-b6eb-f3f90518157c",
+  "name": "Dai Li Agents",
+  "released": "2025-11-21"
+ },
+ "tla.deadly_precision": {
+  "first_set": "tla",
+  "id": "4661daf6-d960-4278-8946-70948efaf99d",
+  "name": "Deadly Precision",
+  "released": "2025-11-21"
+ },
+ "tla.deserter_s_disciple": {
+  "first_set": "tla",
+  "id": "14f2ed5a-042b-4cce-82ad-cfb4bd511d98",
+  "name": "Deserter's Disciple",
+  "released": "2025-11-21"
+ },
+ "tla.dragonfly_swarm": {
+  "first_set": "tla",
+  "id": "16be5cc4-b15a-4c5e-8a6e-05c87b519127",
+  "name": "Dragonfly Swarm",
+  "released": "2025-11-21"
+ },
+ "tla.earth_kingdom_jailer": {
+  "first_set": "tla",
+  "id": "9207362c-3605-4794-803f-ad1d0175fcca",
+  "name": "Earth Kingdom Jailer",
+  "released": "2025-11-21"
+ },
+ "tla.earth_kingdom_protectors": {
+  "first_set": "tla",
+  "id": "d263472e-1d75-4cb9-8f7b-986fa22bc841",
+  "name": "Earth Kingdom Protectors",
+  "released": "2025-11-21"
+ },
+ "tla.earth_kingdom_soldier": {
+  "first_set": "tla",
+  "id": "2d543d35-945a-4ffa-beb7-7c5d4f894f79",
+  "name": "Earth Kingdom Soldier",
+  "released": "2025-11-21"
+ },
+ "tla.earth_kings_lieutenant": {
+  "first_set": "tla",
+  "id": "4533d155-5c56-41a5-9d76-2d1414ac47c9",
+  "name": "Earth King's Lieutenant",
+  "released": "2025-11-21"
+ },
+ "tla.enter_the_avatar_state": {
+  "first_set": "tla",
+  "id": "a8f3d2cb-d073-4df8-8769-49612628a377",
+  "name": "Enter the Avatar State",
+  "released": "2025-11-21"
+ },
+ "tla.epic_downfall": {
+  "first_set": "eld",
+  "id": "63da83fe-fa59-40cb-a42e-e1b14b650bc8",
+  "name": "Epic Downfall",
+  "released": "2019-10-04"
+ },
+ "tla.fancy_footwork": {
+  "first_set": "tla",
+  "id": "9c59f8c5-4063-4e5a-b684-fde175c4a981",
+  "name": "Fancy Footwork",
+  "released": "2025-11-21"
+ },
+ "tla.fire_nation_cadets": {
+  "first_set": "tla",
+  "id": "1a3a862c-9c9a-41cd-94d1-2d0cff22a6cd",
+  "name": "Fire Nation Cadets",
+  "released": "2025-11-21"
+ },
+ "tla.fire_sages": {
+  "first_set": "tla",
+  "id": "71a9fa44-306f-417a-a9d9-991aff95025c",
+  "name": "Fire Sages",
+  "released": "2025-11-21"
+ },
+ "tla.firebending_lesson": {
+  "first_set": "tla",
+  "id": "fa940e68-010e-4b68-be8a-555d7068f7b4",
+  "name": "Firebending Lesson",
+  "released": "2025-11-21"
+ },
+ "tla.first_time_flyer": {
+  "first_set": "tla",
+  "id": "ea22d29d-3a62-4ae2-91d5-21a678be9b48",
+  "name": "First-Time Flyer",
+  "released": "2025-11-21"
+ },
+ "tla.foggy_bottom_swamp": {
+  "first_set": "tla",
+  "id": "226af626-873d-4bd2-b889-000f8316786f",
+  "name": "Foggy Bottom Swamp",
+  "released": "2025-11-21"
+ },
+ "tla.foggy_swamp_spirit_keeper": {
+  "first_set": "tla",
+  "id": "cd624be9-e960-4485-a8a9-2d5f2dd51777",
+  "name": "Foggy Swamp Spirit Keeper",
+  "released": "2025-11-21"
+ },
+ "tla.forecasting_fortune_teller": {
+  "first_set": "tla",
+  "id": "023e7ad4-6af0-4f29-a716-27a313974227",
+  "name": "Forecasting Fortune Teller",
+  "released": "2025-11-21"
+ },
+ "tla.gather_the_white_lotus": {
+  "first_set": "tla",
+  "id": "96e2b3d0-f060-4f3c-9d12-a0444b202008",
+  "name": "Gather the White Lotus",
+  "released": "2025-11-21"
+ },
+ "tla.glider_kids": {
+  "first_set": "tla",
+  "id": "0613afb5-4cee-4132-8adf-404767ed8d07",
+  "name": "Glider Kids",
+  "released": "2025-11-21"
+ },
+ "tla.gran_gran": {
+  "first_set": "tla",
+  "id": "fa434b41-e5f7-4989-865a-95db67b05cb1",
+  "name": "Gran-Gran",
+  "released": "2025-11-21"
+ },
+ "tla.great_divide_guide": {
+  "first_set": "tla",
+  "id": "cc3063ec-5ea6-46c1-8331-c740cbaf6c76",
+  "name": "Great Divide Guide",
+  "released": "2025-11-21"
+ },
+ "tla.haru_hidden_talent": {
+  "first_set": "tla",
+  "id": "9657a0c0-2c26-4331-8e62-f032265a01af",
+  "name": "Haru, Hidden Talent",
+  "released": "2025-11-21"
+ },
+ "tla.hermitic_herbalist": {
+  "first_set": "tla",
+  "id": "5d0ee441-a057-41b5-abb8-dc86864ac248",
+  "name": "Hermitic Herbalist",
+  "released": "2025-11-21"
+ },
+ "tla.iguana_parrot": {
+  "first_set": "tla",
+  "id": "7faa3e3d-c08a-4908-85ef-1370d3f90815",
+  "name": "Iguana Parrot",
+  "released": "2025-11-21"
+ },
+ "tla.invasion_reinforcements": {
+  "first_set": "tla",
+  "id": "b8845bba-d116-43cd-8ae0-e553f3324d66",
+  "name": "Invasion Reinforcements",
+  "released": "2025-11-21"
+ },
+ "tla.iroh_grand_lotus": {
+  "first_set": "tla",
+  "id": "879b73d3-4552-4fdc-baee-c4d097ae9a4f",
+  "name": "Iroh, Grand Lotus",
+  "released": "2025-11-21"
+ },
+ "tla.iroh_s_demonstration": {
+  "first_set": "tla",
+  "id": "18d15fed-1f8f-4407-a221-a47ce75001a8",
+  "name": "Iroh's Demonstration",
+  "released": "2025-11-21"
+ },
+ "tla.itll_quench_ya": {
+  "first_set": "tla",
+  "id": "47c25e41-f43c-4447-81b5-b9631448bd29",
+  "name": "It'll Quench Ya!",
+  "released": "2025-11-21"
+ },
+ "tla.jeong_jeongs_deserters": {
+  "first_set": "tla",
+  "id": "060966f9-5e56-4512-9ef3-2b216daf093c",
+  "name": "Jeong Jeong's Deserters",
+  "released": "2025-11-21"
+ },
+ "tla.jet_freedom_fighter": {
+  "first_set": "tla",
+  "id": "060966f9-5e56-4512-9ef3-2b216daf093c",
+  "name": "Jet, Freedom Fighter",
+  "released": "2025-11-21"
+ },
+ "tla.june_bounty_hunter": {
+  "first_set": "tla",
+  "id": "060966f9-5e56-4512-9ef3-2b216daf093c",
+  "name": "June, Bounty Hunter",
+  "released": "2025-11-21"
+ },
+ "tla.knowledge_seeker": {
+  "first_set": "tla",
+  "id": "060966f9-5e56-4512-9ef3-2b216daf093c",
+  "name": "Knowledge Seeker",
+  "released": "2025-11-21"
+ },
+ "tla.kyoshi_village": {
+  "first_set": "tla",
+  "id": "060966f9-5e56-4512-9ef3-2b216daf093c",
+  "name": "Kyoshi Village",
+  "released": "2025-11-21"
+ },
+ "tla.kyoshi_warriors": {
+  "first_set": "tla",
+  "id": "211045e1-85c7-4088-b830-a2afa0fe520b",
+  "name": "Kyoshi Warriors",
+  "released": "2025-11-21"
+ },
+ "tla.lightning_strike": {
+  "first_set": "ths",
+  "id": "bbb03f2e-2b92-4aa1-afae-301ed5d151d3",
+  "name": "Lightning Strike",
+  "released": "2013-09-27"
+ },
+ "tla.master_piandao": {
+  "first_set": "tla",
+  "id": "3e4a042c-f2a6-45e7-9444-acd1ca838b87",
+  "name": "Master Piandao",
+  "released": "2025-11-21"
+ },
+ "tla.meditation_pools": {
+  "first_set": "tla",
+  "id": "cc078fc6-4470-473f-9e24-d2c470e09141",
+  "name": "Meditation Pools",
+  "released": "2025-11-21"
+ },
+ "tla.messenger_hawk": {
+  "first_set": "tla",
+  "id": "6a2946c0-0a40-4cdb-92c8-af2bafecca09",
+  "name": "Messenger Hawk",
+  "released": "2025-11-21"
+ },
+ "tla.misty_palms_oasis": {
+  "first_set": "tla",
+  "id": "7cc29ddb-8f44-4493-985d-2fac35f9f34d",
+  "name": "Misty Palms Oasis",
+  "released": "2025-11-21"
+ },
+ "tla.momo_friendly_flier": {
+  "first_set": "tla",
+  "id": "c472ef84-a632-4ad7-853c-60588a7a4b12",
+  "name": "Momo, Friendly Flier",
+  "released": "2025-11-21"
+ },
+ "tla.north_pole_gates": {
+  "first_set": "tla",
+  "id": "bcf7b9da-d35d-4338-b4d9-83e47dc058ee",
+  "name": "North Pole Gates",
+  "released": "2025-11-21"
+ },
+ "tla.octopus_form": {
+  "first_set": "tla",
+  "id": "ce96a826-53a0-4029-bf34-46779d133b13",
+  "name": "Octopus Form",
+  "released": "2025-11-21"
+ },
+ "tla.omashu_city": {
+  "first_set": "tla",
+  "id": "c21e413b-96ed-4ded-b567-f1647074ce5f",
+  "name": "Omashu City",
+  "released": "2025-11-21"
+ },
+ "tla.origin_of_metalbending": {
+  "first_set": "tla",
+  "id": "25749f9a-260d-4bdc-bd28-429c12faa4a5",
+  "name": "Origin of Metalbending",
+  "released": "2025-11-21"
+ },
+ "tla.ostrich_horse": {
+  "first_set": "tla",
+  "id": "5ca3fd45-9301-44ef-afc0-4d7999d66d36",
+  "name": "Ostrich-Horse",
+  "released": "2025-11-21"
+ },
+ "tla.otter_penguin": {
+  "first_set": "tla",
+  "id": "480b6279-bb34-4b3f-a639-868b52af92b9",
+  "name": "Otter-Penguin",
+  "released": "2025-11-21"
+ },
+ "tla.ozai_s_cruelty": {
+  "first_set": "tla",
+  "id": "22cad680-d46a-4589-a633-b6ee9a78d61e",
+  "name": "Ozai's Cruelty",
+  "released": "2025-11-21"
+ },
+ "tla.pillar_launch": {
+  "first_set": "tla",
+  "id": "f177e9cc-0c41-417d-9215-5ff23a1a0657",
+  "name": "Pillar Launch",
+  "released": "2025-11-21"
+ },
+ "tla.pretending_poxbearers": {
+  "first_set": "tla",
+  "id": "d1af91a5-8681-4a05-910d-96f7a819bfaa",
+  "name": "Pretending Poxbearers",
+  "released": "2025-11-21"
+ },
+ "tla.ran_and_shaw": {
+  "first_set": "tla",
+  "id": "6436e2d0-989f-47e3-90bc-9cde82a2ddb4",
+  "name": "Ran and Shaw",
+  "released": "2025-11-21"
+ },
+ "tla.rumble_arena": {
+  "first_set": "tla",
+  "id": "3f5d2c38-663c-4f64-8cfc-c102462e82ef",
+  "name": "Rumble Arena",
+  "released": "2025-11-21"
+ },
+ "tla.serpents_pass": {
+  "first_set": "tla",
+  "id": "ad87bff5-9b8c-44e4-a6d3-8cc71be9640a",
+  "name": "Serpent's Pass",
+  "released": "2025-11-21"
+ },
+ "tla.shared_roots": {
+  "first_set": "tla",
+  "id": "e7847ba5-e85e-417f-96c0-aef2e6f83994",
+  "name": "Shared Roots",
+  "released": "2025-11-21"
+ },
+ "tla.sokka_s_haiku": {
+  "first_set": "tla",
+  "id": "004be4bc-ac3c-4026-8d36-f4687ab18c70",
+  "name": "Sokka's Haiku",
+  "released": "2025-11-21"
+ },
+ "tla.south_pole_voyager": {
+  "first_set": "tla",
+  "id": "4b5ad895-be8d-476b-91ca-22fad7a3cc58",
+  "name": "South Pole Voyager",
+  "released": "2025-11-21"
+ },
+ "tla.suki_kyoshi_warrior": {
+  "first_set": "tla",
+  "id": "3e311480-04f8-4b8f-938e-1cc6d06b9902",
+  "name": "Suki, Kyoshi Warrior",
+  "released": "2025-11-21"
+ },
+ "tla.sun_blessed_peak": {
+  "first_set": "tla",
+  "id": "ae04c862-095f-41d2-8aef-21036d5a0cdc",
+  "name": "Sun-Blessed Peak",
+  "released": "2025-11-21"
+ },
+ "tla.tiger_dillo": {
+  "first_set": "tla",
+  "id": "067bd117-04e6-410e-89c4-6d431d627751",
+  "name": "Tiger-Dillo",
+  "released": "2025-11-21"
+ },
+ "tla.tiger_seal": {
+  "first_set": "tla",
+  "id": "7aef2891-1269-4a1a-acea-0aa37ef544c4",
+  "name": "Tiger-Seal",
+  "released": "2025-11-21"
+ },
+ "tla.tolls_of_war": {
+  "first_set": "tla",
+  "id": "d822b9ad-a787-4355-88c2-07ae2bd3a78e",
+  "name": "Tolls of War",
+  "released": "2025-11-21"
+ },
+ "tla.toph_the_blind_bandit": {
+  "first_set": "tla",
+  "id": "ff68fa7b-8065-407b-a8b4-bfbb14f1c99c",
+  "name": "Toph, the Blind Bandit",
+  "released": "2025-11-21"
+ },
+ "tla.treetop_freedom_fighters": {
+  "first_set": "tla",
+  "id": "a9394200-7ffc-440f-8b5f-c08b7930133c",
+  "name": "Treetop Freedom Fighters",
+  "released": "2025-11-21"
+ },
+ "tla.true_ancestry": {
+  "first_set": "tla",
+  "id": "8c55b333-dc8b-4332-895b-eec5eb45543f",
+  "name": "True Ancestry",
+  "released": "2025-11-21"
+ },
+ "tla.uncle_iroh": {
+  "first_set": "tla",
+  "id": "5c88672c-0eba-4e93-a0ec-30bbb1bb7661",
+  "name": "Uncle Iroh",
+  "released": "2025-11-21"
+ },
+ "tla.unlucky_cabbage_merchant": {
+  "first_set": "tla",
+  "id": "0a838009-b115-4497-b35d-682e41ead7db",
+  "name": "Unlucky Cabbage Merchant",
+  "released": "2025-11-21"
+ },
+ "tla.walltop_sentries": {
+  "first_set": "tla",
+  "id": "e55f1c63-58f6-4e2b-aaeb-f2d5faca47a2",
+  "name": "Walltop Sentries",
+  "released": "2025-11-21"
+ },
+ "tla.wandering_musicians": {
+  "first_set": "tla",
+  "id": "3da81dbd-dc80-47ff-a33b-270d23a24e0a",
+  "name": "Wandering Musicians",
+  "released": "2025-11-21"
+ },
+ "tla.wartime_protestors": {
+  "first_set": "tla",
+  "id": "bac81940-d717-49ff-83b2-16a22bb2c988",
+  "name": "Wartime Protestors",
+  "released": "2025-11-21"
+ },
+ "tla.water_tribe_captain": {
+  "first_set": "tla",
+  "id": "0a0cdf97-1927-47c6-8ef1-29969e3567ee",
+  "name": "Water Tribe Captain",
+  "released": "2025-11-21"
+ },
+ "tla.water_tribe_rallier": {
+  "first_set": "tla",
+  "id": "0a0cdf97-1927-47c6-8ef1-29969e3567ee",
+  "name": "Water Tribe Rallier",
+  "released": "2025-11-21"
+ },
+ "tla.waterbending_lesson": {
+  "first_set": "tla",
+  "id": "0a0cdf97-1927-47c6-8ef1-29969e3567ee",
+  "name": "Waterbending Lesson",
+  "released": "2025-11-21"
+ },
+ "tla.white_lotus_reinforcements": {
+  "first_set": "tla",
+  "id": "0a0cdf97-1927-47c6-8ef1-29969e3567ee",
+  "name": "White Lotus Reinforcements",
+  "released": "2025-11-21"
+ },
+ "tla.yip_yip": {
+  "first_set": "tla",
+  "id": "0a0cdf97-1927-47c6-8ef1-29969e3567ee",
+  "name": "Yip Yip!",
+  "released": "2025-11-21"
+ },
+ "tla.yuyan_archers": {
+  "first_set": "tla",
+  "id": "99244462-a996-4a5b-91fb-947045647d6d",
+  "name": "Yuyan Archers",
+  "released": "2025-11-21"
+ },
+ "tla.zuko_s_exile": {
+  "first_set": "tla",
+  "id": "9090b055-3406-4fed-a8c6-3f6353a9600e",
+  "name": "Zuko's Exile",
+  "released": "2025-11-21"
+ },
+ "vis.man_o_war": {
+  "first_set": "vis",
+  "id": "4dbf9bf9-75cd-4b25-a3a1-43b7e029700b",
+  "name": "Man-o'-War",
+  "released": "1997-02-03"
+ },
+ "war.mayhem_devil": {
+  "first_set": "war",
+  "id": "17416926-168b-49b3-9231-acbb8f8a1d13",
+  "name": "Mayhem Devil",
+  "released": "2019-05-03"
+ },
+ "zen.lotus_cobra": {
+  "first_set": "zen",
+  "id": "19adde22-e5eb-4815-beb6-c520b3274cc9",
+  "name": "Lotus Cobra",
+  "released": "2009-10-02"
+ }
+}

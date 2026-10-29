@@ -1,11 +1,11 @@
-//! Versioned content eligibility shared by deck import and native admission.
+//! Content eligibility shared by deck import and native admission.
 //!
-//! Every pack key names compiled content with one descriptor row per
-//! definition. A defined card is eligible unless its set file marks it
-//! incomplete ([`compile::incomplete`]); tokens are never deck entries. The
-//! world pool also lists the native set-file cards, which have no semantic
-//! program, as unsupported. Setup construction policy belongs to the admission
-//! caller, not this catalog.
+//! Every pack key names one [`ContentPack`] with one descriptor row per
+//! definition. The world pool ([`crate::world::WORLD_POOL`]) holds every card
+//! a set file defines; authored setups hold their decks' cards. A defined card
+//! is eligible unless its set file marks it incomplete
+//! ([`cardsets::incomplete`]); tokens are never deck entries. Setup
+//! construction policy belongs to the admission caller, not this catalog.
 
 use std::{
     collections::BTreeMap,
@@ -14,12 +14,8 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use super::{compile, IrError, SemanticPack};
-use crate::{
-    cards::content_pack::{CompiledSemanticManifest, ContentPack},
-    cardsets,
-    state::card::CardDefId,
-};
+use super::{setups::authored_packs, ContentError};
+use crate::{cards::content_pack::ContentPack, cardsets, state::card::CardDefId};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -43,7 +39,6 @@ pub struct ContentPool {
     pub pack_key: String,
     pub world_version: String,
     pub content_digest: String,
-    pub compiled_semantics: CompiledSemanticManifest,
     pub definitions: Vec<PoolDefinition>,
 }
 
@@ -53,100 +48,87 @@ struct PoolRuntime {
 }
 
 impl PoolRuntime {
-    fn compile(
-        semantic: &SemanticPack,
-        incomplete: &BTreeMap<String, String>,
-        native: &[String],
-    ) -> Result<Self, IrError> {
-        let content = Arc::new(semantic.compile_content_pack()?);
-        let mut definitions = BTreeMap::new();
-        for definition in &semantic.definitions {
-            let reason = if definition.characteristics["token"] == true {
-                Some("A token, created by its card; not a deck entry".to_owned())
-            } else {
-                incomplete.get(&definition.semantic_key).cloned()
-            };
-            definitions.insert(
-                definition.registry_name.clone(),
+    fn describe(pack_key: &str, content: Arc<ContentPack>) -> Self {
+        let incomplete = cardsets::incomplete()
+            .iter()
+            .copied()
+            .collect::<BTreeMap<_, _>>();
+        let definitions = content
+            .definition_entries()
+            .map(|(card_def_id, definition)| {
+                let reason = if definition.is_token {
+                    Some("A token, created by its card; not a deck entry".to_owned())
+                } else {
+                    incomplete
+                        .get(definition.key)
+                        .map(|reason| reason.to_string())
+                };
                 PoolDefinition {
-                    card_def_id: content.definition_id(&definition.registry_name),
-                    semantic_key: Some(definition.semantic_key.clone()),
-                    registry_name: definition.registry_name.clone(),
+                    card_def_id: Some(card_def_id),
+                    semantic_key: Some(definition.key.to_owned()),
+                    registry_name: definition.name.clone(),
                     eligibility: if reason.is_none() {
                         Eligibility::Eligible
                     } else {
                         Eligibility::Unsupported
                     },
                     reason,
-                },
-            );
-        }
-        for name in native {
-            definitions.insert(
-                name.clone(),
-                PoolDefinition {
-                    card_def_id: None,
-                    semantic_key: None,
-                    registry_name: name.clone(),
-                    eligibility: Eligibility::Unsupported,
-                    reason: Some("Native definition without a semantic program".into()),
-                },
-            );
-        }
+                }
+            })
+            .collect::<Vec<_>>();
+        let mut definitions = definitions;
+        definitions.sort_by(|a, b| a.registry_name.cmp(&b.registry_name));
         let manifest = content.manifest();
-        let descriptor = ContentPool {
-            pack_key: semantic.pack_key.clone(),
-            world_version: manifest.world_version,
-            content_digest: manifest.content_digest,
-            compiled_semantics: manifest.compiled_semantics.expect("compiled pool"),
-            definitions: definitions.into_values().collect(),
-        };
-        Ok(Self {
+        Self {
+            descriptor: ContentPool {
+                pack_key: pack_key.to_owned(),
+                world_version: manifest.world_version,
+                content_digest: manifest.content_digest,
+                definitions,
+            },
             content,
-            descriptor,
-        })
+        }
     }
 }
 
-fn pools() -> Result<&'static BTreeMap<String, PoolRuntime>, IrError> {
-    static POOLS: OnceLock<Result<BTreeMap<String, PoolRuntime>, IrError>> = OnceLock::new();
+fn pools() -> Result<&'static BTreeMap<String, PoolRuntime>, ContentError> {
+    static POOLS: OnceLock<Result<BTreeMap<String, PoolRuntime>, ContentError>> = OnceLock::new();
     POOLS
         .get_or_init(|| {
-            let incomplete = compile::incomplete()?;
-            let native = cardsets::native_cards()
-                .into_iter()
-                .map(|definition| definition.name)
-                .collect::<Vec<_>>();
-            let world = SemanticPack::current("pool")?;
-            let world_runtime = PoolRuntime::compile(&world, incomplete, &native)?;
-            SemanticPack::catalog()?
-                .iter()
-                .map(|semantic| {
-                    let runtime = PoolRuntime::compile(semantic, incomplete, &[])?;
-                    Ok((semantic.pack_key.clone(), runtime))
-                })
-                .chain([Ok((world.pack_key.clone(), world_runtime))])
-                .collect()
+            let world = crate::world::WORLD_POOL;
+            let mut pools = BTreeMap::new();
+            let content = Arc::new(ContentPack::from_definitions(
+                Some(world.to_owned()),
+                cardsets::catalog().to_vec(),
+            ));
+            pools.insert(world.to_owned(), PoolRuntime::describe(world, content));
+            for pack in authored_packs()? {
+                pools.insert(
+                    pack.pack_key.clone(),
+                    PoolRuntime::describe(&pack.pack_key, Arc::clone(&pack.content)),
+                );
+            }
+            Ok(pools)
         })
         .as_ref()
         .map_err(Clone::clone)
 }
 
 /// Describe every card of a pack and whether it is supported, without admitting a deck.
-pub fn content_pool(pack_key: &str) -> Result<ContentPool, IrError> {
+pub fn content_pool(pack_key: &str) -> Result<ContentPool, ContentError> {
     Ok(pool_runtime(pack_key)?.descriptor.clone())
 }
 
-/// The same compiled content whose IDs and digest the descriptor exposes.
-/// Callers must check every submitted definition's eligibility before use.
-pub fn pool_content(pack_key: &str) -> Result<Arc<ContentPack>, IrError> {
+/// The same content whose IDs and digest the descriptor exposes. Callers must
+/// check every submitted definition's eligibility before use.
+pub fn pool_content(pack_key: &str) -> Result<Arc<ContentPack>, ContentError> {
     Ok(Arc::clone(&pool_runtime(pack_key)?.content))
 }
 
-fn pool_runtime(pack_key: &str) -> Result<&'static PoolRuntime, IrError> {
+fn pool_runtime(pack_key: &str) -> Result<&'static PoolRuntime, ContentError> {
     pools()?
         .get(pack_key)
-        .ok_or_else(|| IrError::Malformed(format!("unknown content pool {pack_key:?}")))
+        .ok_or_else(|| ContentError::Malformed(format!("unknown content pool {pack_key:?}")))
 }
 
 #[cfg(test)]
@@ -174,13 +156,14 @@ mod tests {
         );
         // Every defined card is in the world pool, whatever its set.
         assert_eq!(row(&pool, "Pop Quiz").eligibility, Eligibility::Eligible);
+        assert_eq!(
+            row(&pool, "Counterspell").eligibility,
+            Eligibility::Eligible
+        );
         let marked = row(&pool, "Cat-Gator");
         assert_eq!(marked.eligibility, Eligibility::Unsupported);
         assert!(marked.card_def_id.is_some() && marked.reason.is_some());
         assert_eq!(row(&pool, "Ally").eligibility, Eligibility::Unsupported);
-        let native = row(&pool, "Counterspell");
-        assert_eq!(native.eligibility, Eligibility::Unsupported);
-        assert!(native.card_def_id.is_none());
         assert!(pool
             .definitions
             .iter()

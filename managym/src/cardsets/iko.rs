@@ -1,93 +1,76 @@
 //! Ikoria: Lair of Behemoths.
-use crate::cards::authoring::{
-    Card, CardType, Characteristics, Cost, Event, Op, Predicate, Program, ProgramKind, Sacrifice,
-    Selector, Subject, Target, Trigger,
+use crate::state::{
+    ability::{Ability, Effect, TargetSpec, TriggerCondition, TriggerSubject},
+    card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, SacrificeCost},
+    mana::ManaCost,
+    predicate::CardPredicate,
 };
 
-pub(super) fn cards() -> Vec<Card> {
+pub(super) fn cards() -> Vec<CardDefinition> {
     vec![bastion_of_remembrance(), weaponize_the_monsters()]
 }
 
-fn bastion_of_remembrance() -> Card {
+fn bastion_of_remembrance() -> CardDefinition {
     let text_box = "When this enchantment enters, create a 1/1 white Human Soldier creature token.\nWhenever a creature you control dies, each opponent loses 1 life and you gain 1 life.";
 
-    Card {
-        characteristics: Characteristics {
-            mana_cost: Some("2B"),
-            subtypes: Some(vec![]),
-            types: vec![CardType::Enchantment],
-            keywords: Some(vec![]),
-            token: Some(false),
-            supertypes: Some(vec![]),
-            ..Default::default()
-        },
+    CardDefinition {
         key: "iko.bastion_of_remembrance",
-        programs: vec![
-            Program::new(
-                "p0",
-                ProgramKind::Triggered,
-                vec![Op::CreateToken {
-                    count: 1,
-                    definition_ref: "token.human_soldier",
-                    tapped_and_attacking: Some(false),
-                }],
-            )
-            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
-            Program::new(
-                "p1",
-                ProgramKind::Triggered,
-                vec![Op::DrainLife { amount: 1 }],
-            )
-            .trigger(Trigger::new(
-                Event::Dies,
-                Subject::AnyYouControl {
-                    predicate: Predicate::CardType {
-                        value: CardType::Creature,
-                    },
+        scryfall_id: "2dd354dd-939e-4b1a-8ed6-fe89a7fd64bf",
+        name: "Bastion of Remembrance".into(),
+        mana_cost: Some(ManaCost::parse("{2}{B}")),
+        types: CardTypes::new([CardType::Enchantment]),
+        abilities: vec![
+            Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
                 },
-            )),
+                effects: vec![Effect::CreateToken {
+                    token_name: "Human Soldier".into(),
+                    count: 1,
+                    tapped_and_attacking: false,
+                }],
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::AnyYouControl(CardPredicate {
+                        card_type: Some(CardType::Creature),
+                        ..Default::default()
+                    }),
+                },
+                effects: vec![Effect::DrainLife { amount: 1 }],
+            },
         ],
-        registry_name: "Bastion of Remembrance",
-        text_box,
+        text_box: text_box.into(),
+        ..Default::default()
     }
 }
 
-fn weaponize_the_monsters() -> Card {
+fn weaponize_the_monsters() -> CardDefinition {
     let text_box = "{2}, Sacrifice a creature: This enchantment deals 2 damage to any target.";
 
-    Card {
-        characteristics: Characteristics {
-            mana_cost: Some("R"),
-            subtypes: Some(vec![]),
-            types: vec![CardType::Enchantment],
-            keywords: Some(vec![]),
-            token: Some(false),
-            supertypes: Some(vec![]),
-            ..Default::default()
-        },
+    CardDefinition {
         key: "iko.weaponize_the_monsters",
-        programs: vec![Program::new(
-            "p0",
-            ProgramKind::Activated,
-            vec![Op::DealDamage {
-                amount: 2,
-                target: "target_0",
-            }],
-        )
-        .cost(Cost {
-            mana: Some("2"),
-            sacrifice: Some(Sacrifice {
+        scryfall_id: "68bba622-a0ab-4c0e-88b1-9120690ea5a0",
+        name: "Weaponize the Monsters".into(),
+        mana_cost: Some(ManaCost::parse("{R}")),
+        types: CardTypes::new([CardType::Enchantment]),
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            sacrifice: Some(SacrificeCost {
+                predicate: CardPredicate {
+                    card_type: Some(CardType::Creature),
+                    ..Default::default()
+                },
                 another: false,
                 or_mana: None,
-                predicate: Predicate::CardType {
-                    value: CardType::Creature,
-                },
             }),
+            mana_cost: ManaCost::parse("{2}"),
+            effect: Effect::DealDamage {
+                amount: 2,
+                target: TargetSpec::CreatureOrPlayer,
+            },
             ..Default::default()
-        })
-        .targets(vec![Target::one("target_0", Selector::CreatureOrPlayer)])
-        .inferred()],
-        registry_name: "Weaponize the Monsters",
-        text_box,
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
     }
 }

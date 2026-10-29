@@ -1,25 +1,26 @@
 //! Onslaught.
-use crate::cards::authoring::{Card, CardType, Characteristics, PrintedPower};
+use crate::state::{
+    card::{CardDefinition, CardType, CardTypes},
+    mana::ManaCost,
+};
 
-pub(super) fn cards() -> Vec<Card> {
+pub(super) fn cards() -> Vec<CardDefinition> {
     vec![glory_seeker()]
 }
 
-fn glory_seeker() -> Card {
+fn glory_seeker() -> CardDefinition {
     let text_box = "";
 
-    Card {
-        characteristics: Characteristics {
-            mana_cost: Some("1W"),
-            subtypes: Some(vec!["Human", "Soldier"]),
-            types: vec![CardType::Creature],
-            power: Some(PrintedPower::Fixed(2)),
-            toughness: Some(2),
-            ..Default::default()
-        },
+    CardDefinition {
         key: "ons.glory_seeker",
-        programs: vec![],
-        registry_name: "Glory Seeker",
-        text_box,
+        scryfall_id: "9047075e-9fca-484d-bb79-32c0d6821281",
+        name: "Glory Seeker".into(),
+        mana_cost: Some(ManaCost::parse("{1}{W}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Human".into(), "Soldier".into()],
+        power: Some(2),
+        toughness: Some(2),
+        text_box: text_box.into(),
+        ..Default::default()
     }
 }
