@@ -27,6 +27,9 @@ from manabot.llm.schema import InferenceConfig, RuntimeIdentity
 from manabot.sim.child import ChildProcess
 from manabot.verify.llm_game import GameSummary, _write
 
+# Leave this much campaign time after a full decision window at every admission.
+_ADMISSION_RESERVE_SECONDS = 120
+
 
 @dataclass(frozen=True)
 class Treatment:
@@ -50,8 +53,8 @@ TREATMENTS: dict[str, Treatment] = {
     "sampled": Treatment(Path("configs/llm/qwen3.5-9b-reasoning-sampled.json")),
     # Main arm: 3,072 reasoning tokens, then a forced close and the answer.
     "budget": Treatment(Path("configs/llm/qwen3.5-9b-reasoning-budget.json")),
-    # The same arm with room for late-game prompts: cohort cdb0c09f90c6 stopped
-    # when a 157-decision game's prompt outgrew the 16,384-token context.
+    # Separately declared room for late-game prompts; never changes an
+    # admitted cohort's context limit.
     "budget-64k": Treatment(
         Path("configs/llm/qwen3.5-9b-reasoning-budget.json"), context_tokens=65_536
     ),
@@ -138,7 +141,7 @@ def _play_game(
         factory = partial(VLLMRuntime, identity_path=out / "vllm-identity.json")
         with InferenceSession(inference, load_seconds=60, factory=factory) as session:
             startup = time.monotonic() - started
-            remaining = deadline - time.time() - 120
+            remaining = deadline - time.time() - _ADMISSION_RESERVE_SECONDS
             if remaining < inference.deadline_seconds:
                 raise TimeoutError("campaign reserve reached before game admission")
             summary = play(
@@ -292,7 +295,10 @@ def worker(config: Campaign, out: Path) -> None:
 
         def admit() -> None:
             nonlocal stop_reason
-            if deadline - time.time() < config.decision_seconds + 120:
+            if (
+                deadline - time.time()
+                < config.decision_seconds + _ADMISSION_RESERVE_SECONDS
+            ):
                 stop_reason = "campaign time reserve reached"
                 return
             game = next(queued, None)
@@ -429,12 +435,15 @@ def runs(
     games: int = 100,
     concurrency: int = 32,
     speculative_tokens: int = 0,
+    decision_seconds: float | None = None,
 ) -> Job:
     """One declared arm on the w13 tree; deduct every earlier allocation from the cap.
 
     Launch only from the pinned w13 campaign tree: native source equality and
     checkpoint world admission both reject the current world.
     `speculative_tokens=0` serves without the MTP draft head.
+    A shorter decision deadline is a declared treatment, retained in inference
+    receipts and the behavior identity; it never changes an existing cohort.
     """
     ceiling = Decimal(attempt_usd)
     if not ceiling.is_finite() or not Decimal("0") < ceiling <= Decimal("9.40"):
@@ -445,16 +454,23 @@ def runs(
     # including its 15-minute machine setup allowance. Environment setup, server
     # startup and delivery take the last 45 minutes of the job window.
     hours = min(11.0, float(ceiling / Decimal("0.60")) - 0.25)
-    if hours < 1.5:
-        raise ValueError("attempt_usd must cover at least 1.5 rental hours")
+    seconds = min(10 * 3600, hours * 3600 - 2700)
+    deadline = (
+        inference.deadline_seconds if decision_seconds is None else decision_seconds
+    )
+    if seconds <= deadline + _ADMISSION_RESERVE_SECONDS:
+        raise ValueError(
+            "attempt_usd must cover setup, cleanup and a complete decision admission"
+        )
     config = Campaign(
         inference=treatment.inference,
         games=games,
         concurrency=concurrency,
         speculative_tokens=speculative_tokens or None,
+        decision_seconds=deadline,
         max_new_tokens=inference.max_new_tokens,
         context_tokens=inference.context_tokens,
-        seconds=min(10 * 3600, hours * 3600 - 2700),
+        seconds=seconds,
     )
     job = original.runs(native_artifact, native_source)
     mtp = f"-mtp{speculative_tokens}" if speculative_tokens else ""

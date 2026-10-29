@@ -193,6 +193,44 @@ def _game_mode(
     return f"{model}-v-{'checkpoint' if checkpoint else 'random'}"
 
 
+def _record_inference_usage(
+    summary: GameSummary, result: SelectionResult, *, game: str
+) -> None:
+    """Retain attempt totals and live diagnostics, including repairs and failures.
+
+    Output and split totals preserve the receipt's token counts, including any
+    inserted closing delimiter. Offline reports separately count generated tokens.
+    """
+    for attempt in result.attempts:
+        summary.generation_attempts += 1
+        summary.output_tokens += attempt.output_tokens or 0
+        for name in ("encode_seconds", "generation_seconds", "validation_seconds"):
+            seconds = getattr(attempt, name)
+            if seconds is not None:
+                summary.llm_phases[name] = summary.llm_phases.get(name, 0) + seconds
+        response = attempt.response
+        if response is None:
+            continue
+        summary.token_split_attempts += response.reasoning_tokens is not None
+        summary.reasoning_tokens += response.reasoning_tokens or 0
+        summary.answer_tokens += response.answer_tokens or 0
+        summary.forced_closes += response.forced_close_at is not None
+        # Measured per attempt so slow decoding is visible during a campaign.
+        seconds = attempt.generation_seconds or 0
+        print(
+            f"QWEN {game} decision={summary.decisions} "
+            f"legal={len(result.decision.legal_references)} "
+            f"prompt={attempt.prompt_tokens} "
+            f"reasoning={response.reasoning_tokens} "
+            f"answer={response.answer_tokens} "
+            f"forced={response.forced_close_at is not None} "
+            f"seconds={seconds:.1f} "
+            f"tok/s={len(response.token_ids) / seconds if seconds else 0:.1f} "
+            f"origin={result.origin}",
+            flush=True,
+        )
+
+
 def _record_hosted_usage(summary: GameSummary, result: "OpenRouterResult") -> None:
     """Account for every attempt, including repairs and failed requests.
 
@@ -341,44 +379,7 @@ def play(
                 summary.model_latencies.append(result.seconds)
                 summary.single_choice_decisions += len(supplied.legal_references) == 1
                 if isinstance(result, SelectionResult):
-                    for attempt in result.attempts:
-                        summary.generation_attempts += 1
-                        summary.output_tokens += attempt.output_tokens or 0
-                        for name in (
-                            "encode_seconds",
-                            "generation_seconds",
-                            "validation_seconds",
-                        ):
-                            seconds = getattr(attempt, name)
-                            if seconds is not None:
-                                summary.llm_phases[name] = (
-                                    summary.llm_phases.get(name, 0) + seconds
-                                )
-                        if attempt.response is not None:
-                            if attempt.response.reasoning_tokens is not None:
-                                summary.token_split_attempts += 1
-                            summary.reasoning_tokens += (
-                                attempt.response.reasoning_tokens or 0
-                            )
-                            summary.answer_tokens += attempt.response.answer_tokens or 0
-                            summary.forced_closes += (
-                                attempt.response.forced_close_at is not None
-                            )
-                            # Measured per attempt so slow decoding is visible
-                            # while a campaign runs, not inferred afterward.
-                            seconds = attempt.generation_seconds or 0
-                            print(
-                                f"QWEN {out.name} decision={summary.decisions} "
-                                f"legal={len(supplied.legal_references)} "
-                                f"prompt={attempt.prompt_tokens} "
-                                f"reasoning={attempt.response.reasoning_tokens} "
-                                f"answer={attempt.response.answer_tokens} "
-                                f"forced={attempt.response.forced_close_at is not None} "
-                                f"seconds={seconds:.1f} "
-                                f"tok/s={len(attempt.response.token_ids) / seconds if seconds else 0:.1f} "
-                                f"origin={result.origin}",
-                                flush=True,
-                            )
+                    _record_inference_usage(summary, result, game=out.name)
                 else:
                     _record_hosted_usage(summary, result)
                 if result.failure is not None:

@@ -61,9 +61,10 @@ Reasoning per received attempt: median 4,616 tokens, p90 7,154, max
 8,223; prompts median 5,706 tokens. Generation ran at about 33 tokens/s
 single-stream, the A6000's bandwidth ceiling for 18 GB BF16 weights, so the
 slowness was output length at concurrency 1, not a serving fault. 36 of the
-41 decisions offered two legal references. Sampling removed the greedy
-repetition failure. The game had native `skip_trivial` enabled, as every game in
-this schedule does.
+41 decisions offered two legal references. No greedy-style repetition failure
+was observed in these received responses; this incomplete pilot does not
+establish full-game reasoning quality. The game had native `skip_trivial`
+enabled, as every game in this schedule does.
 
 On 2026-10-28 Jack Heart accepted two new, never-pooled arms (`runs(arm=...)`
 in `experiments/qwen_mtg183_vllm.py`):
@@ -149,7 +150,7 @@ cap $7.00. The MTP attempt is not pooled with it.
 | `dddaf3001dfa` | sampled pilot, 1 game, c=1 | $2.00 | 1 admitted/canceled, 0 completed; pod absent | $1.11978240 provider billed |
 | `139099571cbb` | budget pilot, 32 games, c=32, MTP 1 | $1.20 | 32 admitted/canceled, 0 completed; pod absent | $0.16946718 provider billed |
 | `8f68c0bc488b` | scored cohort, budget, 100 games, c=32, MTP 1 | $7.00 | 32 failed, 0 completed, 68 unattempted; pod absent | $0.18681270 provider billed |
-| `cdb0c09f90c6` | **scored cohort**, budget, 100 games, c=32, no MTP | $7.00 | running, admissions stopped; final receipts unavailable | $1.47195755 provider billed through whole hours at snapshot; not final |
+| `cdb0c09f90c6` | **scored cohort**, budget, 100 games, c=32, no MTP | $7.00 | running, admissions stopped; 30 complete/3 failed/16 pending in logs | $1.71744001 provider billed through whole hours at snapshot; not final |
 
 ### Retained evidence and reporting (2026-10-29)
 
@@ -168,32 +169,56 @@ targets response. Generated reasoning floor-index p50/max: priority 4,606/8,223,
 declare-blockers 5,853/5,853, targets 3,903/3,903. These distributions include
 repairs; the interrupted attempt stays in the denominator with an unknown split.
 
-At 06:20:40 UTC the replacement cohort remained running. Its incomplete retained
-log contains 49 admissions, 24 completed games, 2 failed games and 23 unsettled
-admissions, leaving 51 unattempted schedule entries. No admissions follow the
-first failure. These are log observations, not final game/replay receipts.
-Etude has recorded no output files yet, so final W/L/D, replay qualification,
-late-game failures and completed-cohort performance cannot be recovered yet.
-The existing bounded run is left to settle admitted games; this implementation
-pass started no rental, watcher or controller.
+The 06:43 UTC refreshed log still shows the replacement cohort running: 49
+admitted games, 30 completed, 3 failed and 16 unsettled; 51 schedule entries
+remain unattempted. No admission follows the first failure. These are log
+observations, not final game/replay receipts. Etude still retains zero output
+files. The bounded 30-second refresh ended incomplete; a shorter refresh had
+hit a storage retrieval deadline. Final W/L/D, replay qualification and failure
+classification remain unavailable. The existing run continues to settle its
+admitted games under the frozen watchdog; this pass started no rental, watcher
+or controller.
 
-Direct RunPod reads confirmed the first three pods absent and returned whole-hour
-bills totaling **$1.47606228455**. Retained launcher costs understate the second
-and third attempts; the provider totals supersede those estimates, not the frozen
-receipts. `experiments/data/bb4160/accounting-20261029T0620.json` retains the
-observation time, per-hour amounts, allocation identities, deletion times and
-launcher comparison. The current pod remains present. Its final partial hour,
-cleanup and non-pod ancillary charges are unknown; inclusive cost and useful
-games/dollar are therefore not certified.
+Direct RunPod reads at 06:40:55 UTC again confirmed the first three pods absent
+and their bills totaling **$1.47606228455**. The current cohort pod remains
+present; its whole-hour provider bills total **$1.71744000551**, excluding the
+current partial hour and unknown ancillary charges. The rental deadline remains
+2026-10-29 14:04 UTC. Provider totals supersede understated launcher estimates;
+frozen launcher receipts remain unchanged. The manifest-published
+`experiments/data/bb4160/accounting-20261029T064055Z.json` retains these readings,
+output counts and transfer-coverage gaps. Its `cohort_log` links the later
+06:43:19 UTC log snapshot and all admitted/pending game IDs. Inclusive cost and
+useful games/dollar remain uncertified until final settlement and cleanup.
 
-Keeping the current $7 cap and $0.50 cleanup/ancillary reserve leaves at most
-**$1.02393771545** uncommitted. The constructor's $1.05 minimum exceeds that by
-$0.02606228455 and also exceeds the accepted well-under-$1 floor intent. Thus
-there is no affordable no-thinking commitment on the current path before
-settlement. This is a budget-limited deferral, not evidence that no-thinking was
-run or that a shorter launch has been qualified. `budget-64k` remains unlaunched;
-its declaration at `8f2711df3` diagnoses late-game 16k context overflow and does
-not change the running cohort.
+The earlier accounting snapshot remains at
+`experiments/data/bb4160/accounting-20261029T0620.json`. Keeping the current $7
+commitment and $0.50 reserve leaves **$1.02393771545** uncommitted. The previous
+$1.05 constructor minimum was a software constraint, not proof of final
+budget-limited infeasibility. `budget-64k` remains unlaunched; its declaration
+at `8f2711df3` diagnoses late-game 16k overflow without changing this cohort.
+
+### Bounded no-thinking pilot declaration (unlaunched)
+
+Declared 2026-10-29 before any no-thinking execution: one pilot game, concurrency
+one, no MTP, `arm="nothink"`, `attempt_usd="0.80"`, `decision_seconds=300`.
+The pinned w13 matchup, non-thinking sampling, 512-token output and 16k context
+remain as above. The five-minute deadline includes the single protocol repair,
+reaches the saved inference configuration and changes the behavior hash. Pilot
+outcomes are not scored or pooled with any cohort. This is a prospective bound,
+not measured full-game feasibility.
+
+The constructor now requires room for one full decision plus the 120-second
+admission reserve instead of a fixed 1.5-hour minimum. At the $0.60/hour ceiling,
+$0.80 buys 80 minutes: 15 minutes of machine acquisition, 45 minutes reserved for
+setup/startup/delivery, and 20 minutes of gameplay. It refuses a $0.80 run with
+the original 1,800-second decision deadline. Controlled checks verify both the
+rental bound and the effective saved deadline; the current scored run is unchanged.
+
+This pilot fits the remaining uncommitted balance, but the requested final-cohort
+reconciliation must precede another commitment. No pilot has been launched,
+no ten-game floor is frozen, and final budget-limited infeasibility has not been
+established. After settlement, the pilot must qualify answer completion, replay,
+context fit and observed cost before an affordable floor cohort is declared.
 
 ### Receipt recovery and process integration
 

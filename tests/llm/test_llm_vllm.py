@@ -2,6 +2,7 @@
 
 from concurrent.futures import Future
 from contextlib import nullcontext
+from decimal import Decimal
 from functools import partial
 import json
 from pathlib import Path
@@ -747,6 +748,45 @@ def test_attempt_beyond_remaining_budget_is_refused_before_launch(
         campaign.runs(
             str(tmp_path / "absent.json"), str(tmp_path / "absent.json"), attempt_usd
         )
+
+
+def test_small_nothink_pilot_retains_its_deadline_and_rental_bound(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def native_job(native_artifact: str, native_source: str) -> Job:
+        return Job(command="fixture", max_hours=11)
+
+    monkeypatch.setattr(campaign.original, "runs", native_job)
+    job = campaign.runs(
+        "unused",
+        "unused",
+        attempt_usd="0.80",
+        arm="nothink",
+        games=1,
+        concurrency=1,
+        decision_seconds=300,
+    )
+    assert job.config is not None
+    config = campaign.Campaign.model_validate_json(job.config)
+    games = campaign._prepare_schedule(config, tmp_path)
+    effective = InferenceConfig.model_validate_json(
+        games[0].config.inference.read_text()
+    )
+    assert len(games) == 1
+    assert effective.enable_thinking is False
+    assert effective.deadline_seconds == 300
+    assert effective.max_new_tokens == 512
+    assert config.seconds == pytest.approx(1200)
+    assert config.seconds > effective.deadline_seconds + 120
+    # Include machine acquisition as well as the job's setup/delivery reserve.
+    assert (job.max_hours + 0.25) * 0.60 == pytest.approx(0.80)
+    assert job.max_usd == Decimal("0.80")
+
+
+@pytest.mark.parametrize("attempt_usd", ["0.60", "0.80", "0.92"])
+def test_rental_without_a_full_decision_window_is_refused(attempt_usd: str) -> None:
+    with pytest.raises(ValueError, match="complete decision admission"):
+        campaign.runs("absent", "absent", attempt_usd=attempt_usd, arm="nothink")
 
 
 def test_collection_waits_for_game_owner_to_finish(tmp_path: Path) -> None:

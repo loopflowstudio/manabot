@@ -56,15 +56,21 @@ analysis of pinned Qwen3.5-9B config c2022362), with subsequent evidence limits:
   are estimates, not an affordable remaining commitment or a completed outcome.
 - Native `skip_trivial` ON for every Qwen game (standing rule). The campaign already set it via `experiments/qwen_mtg183.py`; the pilot did not pay for forced decisions. `GameConfig.skip_trivial` now defaults to True (Jack Heart: "we should basically never set skip_trivial=False").
 
-Open execution constraints, reconciled 2026-10-29 06:20 UTC: the no-MTP cohort
-is still settling (49 admitted, 24 completed, 2 failed, 23 pending in logs;
-final outputs unavailable). Preserve the frozen settle-admitted-games rule.
-Direct provider bills for the three ended attempts total $1.47606228455 and all
-three pods are absent. Retained launcher estimates understate two attempts.
-Current $7 commitment plus $0.50 reserve leaves $1.02393771545, below the no-thinking
-constructor's $1.05 minimum; no floor commitment is affordable before settlement.
-The current pod, final billing and ancillary costs remain unsettled. `budget-64k`
-is unlaunched. Full details and published receipt paths are in the protocol.
+The plan's Remaining execution and qualification section retains the 2026-10-29
+06:43 UTC cohort and billing snapshot, manifest references and pending cleanup.
+Preserve settle-admitted-games and reconcile the current cohort before another
+commitment; log progress is not final outcome/replay evidence.
+
+Reversible floor choice (2026-10-29): declare a five-minute decision deadline
+for a $0.80 no-thinking pilot, one game/concurrency one; keep sampling, 512
+output tokens, 16k context and all identities. The constructor retains its
+15-minute acquisition and 45-minute setup/delivery reserves, leaving 20 minutes
+of gameplay. It rejects caps lacking a complete decision admission window.
+This replaces the arbitrary 1.5-hour minimum; it does not change the running
+cohort. Controlled schedule checks pass. No floor was launched: final cohort
+reconciliation is required before the next commitment. An affordable pilot
+configuration is not full-game qualification or final infeasibility.
+`budget-64k` remains unlaunched.
 
 Reversible implementation choice (2026-10-29): use bounded supervisor threads
 with one `ChildProcess` per admitted game, preserving the outer campaign process
