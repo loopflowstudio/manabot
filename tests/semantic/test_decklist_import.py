@@ -254,28 +254,37 @@ def test_decklist_setup_bound_checkpoint_rejects_imported_files(
         simulate_models(load_player(str(path)), load_player("random"), config)
 
 
-@pytest.mark.parametrize(
-    "name", ["Avatar Aang", "Avatar Aang // Aang, Master of Elements"]
-)
-def test_decklist_double_faced_identity_is_known_but_unsupported(name: str) -> None:
-    with pytest.raises(DeckImportError) as caught:
-        import_match(
-            parse_decklist(f"10 Forest\n1 {name}"), parse_decklist(VILLAIN), PACK
-        )
-    assert any(
-        issue.code == "unsupported" and issue.line == 2
-        for issue in caught.value.documents["hero"].issues
+def _double_faced_pool() -> ContentPool:
+    """The pool with one defined card renamed to a two-face registry name."""
+    pool = ContentPool.load(PACK)
+    card = next(row for row in pool.definitions if row.registry_name == "Forest")
+    return pool.model_copy(
+        update={
+            "definitions": (
+                *(row for row in pool.definitions if row is not card),
+                card.model_copy(update={"registry_name": "Front Face // Back Face"}),
+            )
+        }
     )
+
+
+@pytest.mark.parametrize("name", ["Front Face", "Front Face // Back Face"])
+def test_decklist_double_faced_entry_resolves_by_front_or_full_name(name: str) -> None:
+    result = admit_document(
+        parse_decklist(f"10 Island\n1 {name}"), _double_faced_pool(), "development-v1"
+    )
+    assert isinstance(result, DeckDocument)
+    assert [entry.name for entry in result.entries] == [
+        "Island",
+        "Front Face // Back Face",
+    ]
+    # Native admission still rejects the synthetic name; resolution is Python's.
+    assert not any(issue.code in {"ambiguous", "face"} for issue in result.issues)
 
 
 def test_decklist_reverse_face_is_not_a_separate_card() -> None:
-    with pytest.raises(DeckImportError) as caught:
-        import_match(
-            parse_decklist("10 Forest\n1 Aang, Master of Elements"),
-            parse_decklist(VILLAIN),
-            PACK,
-        )
-    assert any(
-        issue.code == "face" and issue.line == 2
-        for issue in caught.value.documents["hero"].issues
+    result = admit_document(
+        parse_decklist("10 Island\n1 Back Face"), _double_faced_pool(), "development-v1"
     )
+    assert isinstance(result, DeckDocument)
+    assert any(issue.code == "face" and issue.line == 2 for issue in result.issues)

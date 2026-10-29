@@ -267,15 +267,16 @@ failure/capture records; unseen same-world deck at a later root; invalid
 generated deck rejected before play; world-only export/load/inspect. Bounded
 fixtures, actual collector path, no weight updates.
 
-Remaining: world-bound evidence for w16 belongs to #394 and is unregenerated at
-86ebe9ccf — locally `test_elemental_world` (schema 8 vs 7) and the
-`test_authored_match_authority` release-stack receipt (byte-identical to #394's
-test) fail; earlier runs also showed `semantic_conformance_tests`, `test_compiler`,
-`test_rules_inventory` and the w15 Academy choice-navigation/Learn fixtures. Not
-regenerated here, to avoid duplicating #394's owner. Publish #395 with base =
-#394's branch (it currently targets main) once #394's evidence is regenerated or
-its head moves again. Run→checkpoint linkage is existing TrainingRun records,
-not re-proved by executing a regime here.
+Remaining: world-bound evidence belongs to #394 and is unregenerated at
+86ebe9ccf. Check at afdb82447+ (debug `cargo test --no-fail-fast`, the CLAUDE.md
+world set + tests/semantic + training-deck + Academy decklist): only
+`semantic_conformance_tests` (w15 manifest "different world", ur-vs-gw-5eed
+digest drift; identical in #394's Rust CI) and four learning-schema-version
+asserts (8 vs 3/4/7: test_elemental, test_elemental_world, test_optional_payments,
+test_sacrifice) fail. This branch's diff touches neither. Not regenerated here.
+#394 removed every double-faced card, so face resolution is tested on a pool
+fixture with one row renamed to two faces. Run→checkpoint linkage is the existing
+TrainingRun records, not re-proved by executing a regime here.
 
 ## Delete — do not maintain
 
