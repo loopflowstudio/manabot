@@ -190,22 +190,14 @@ Working screen: `scratch/concept-review.html`.
 World binding, run-owned `TrainingDecks`, native `set_training_decks` (admits
 each submitted deck, no roster permission) and checkpoint/sim/Academy admission
 match the accepted model. One residue of the rejected deck-kind distinction
-remains, settled by "one deck concept" and "one owner for each fact":
-`decklist.AdmittedDeck` is named as a kind of deck and stores its own
-`main`/`sideboard` beside a derived `Deck`; `ImportedMatch` and Academy read
-those copies (`imported.hero.main`, server.py:734).
-
-Next implement direction: rename it to the import record it is,
-`DeckImport(document: DeckDocument, deck: Deck)`, with no duplicate count
-fields. `ImportedMatch.hero`/`villain` hold `DeckImport`; consumers read
-`.deck.main`/`.deck.sideboard`; `setup_id` keeps its value (same payload).
-The type is new in this branch, so no frozen evidence or released record
-changes; branch-local Academy traces may need re-import. Proof: existing
-decklist, Academy setup, checkpoint catalog and training-deck tests.
-Implemented 2026-10-28: `DeckImport(document, deck)`; the four suites pass (32).
-Compress: `ImportedMatch.validate_setup(content_pack, hero: Deck, villain: Deck)`
-compares `Deck` values; `setup_id` hashes `Deck.model_dump()` (same payload).
-Four suites + package boundaries: 39 passed.
+remained, settled by "one deck concept" and "one owner for each fact": an
+`AdmittedDeck` that stored its own `main`/`sideboard` beside a derived `Deck`.
+Implemented at 7411ed5d9/91a000fd1: it is now the import record
+`DeckImport(document: DeckDocument, deck: Deck)` with no duplicate counts;
+`ImportedMatch.hero`/`villain` hold it, consumers read `.deck`, and
+`validate_setup(content_pack, hero: Deck, villain: Deck)` compares `Deck`
+values. `setup_id` keeps its payload. The type is branch-local, so no frozen
+evidence changes; branch-local Academy traces may need re-import.
 
 Not reopened: checkpoint `bc` `run_id`/`stage_id`/`regime_digest` links predate
 this branch, are read only for a catalog producer label, and never enter world
@@ -385,4 +377,4 @@ The manifest references `.lf/wave/engine/GOAL.md` and `MEMORY.md`, but neither
 exists in this checkout. The supplied Task, accepted design and dated Steers
 provide the implementation scope; Wave context was not reconstructed.
 
-Check — 2026-10-28 at 915c1b3a6: `uv run --extra dev pytest tests/semantic/test_decklist_import.py tests/academy/test_checkpoint_catalog.py tests/model/test_world.py -q`: 41 passed. Earlier at 63c9f6bf5 the training/matchup/mirror/catalog set passed (39); pre-existing failures (Elemental program count 8 vs 7 at test_elemental_world.py:151, belief runtime `KeyError: 'relations'`) reproduce at c42bf4934 without this work; gate owns them with full suites and debug Rust.
+Check — 2026-10-28 at 91a000fd1: `uv run --extra dev pytest tests/semantic/test_decklist_import.py tests/academy/test_decklist_setup.py tests/academy/test_checkpoint_catalog.py tests/training/test_training_decks.py tests/test_package_boundaries.py -q`: 39 passed. Earlier at 63c9f6bf5 the training/matchup/mirror/catalog set passed (39); pre-existing failures (Elemental program count 8 vs 7 at test_elemental_world.py:151, belief runtime `KeyError: 'relations'`) reproduce at c42bf4934 without this work; gate owns them with full suites and debug Rust.
