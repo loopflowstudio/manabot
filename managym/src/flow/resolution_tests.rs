@@ -70,7 +70,7 @@ fn stack(
         // own requirements, so its printed targeting must not apply.
         game.state.cards[card].spell_effects = effects;
         game.state.cards[card].targeting = Vec::new();
-        game.push_spell_to_stack(card, controller, targets, indices, false);
+        game.push_spell_to_stack(card, controller, targets, indices, false, 0);
         return;
     }
     let source = game
@@ -98,6 +98,7 @@ fn stack(
                 ability_index: 0,
                 targets,
                 attached: None,
+                x: 0,
             })
         }
         Entry::Triggered => StackObject::TriggeredAbility(TriggeredAbilityOnStack {

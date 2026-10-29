@@ -276,6 +276,7 @@ fn value_description(value: &EffectValue) -> String {
         EffectValue::CardsDrawnMinus { subtract } => {
             format!("the number of cards you have drawn this turn minus {subtract} (minimum zero)")
         }
+        EffectValue::X => "X".into(),
     }
 }
 
@@ -297,11 +298,10 @@ pub(crate) fn mana_description(mana: &Mana) -> String {
 }
 
 fn cost_description(cost: &ManaCost) -> String {
-    let mut text = if cost.cost[6] > 0 {
-        format!("{{{}}}", cost.cost[6])
-    } else {
-        String::new()
-    };
+    let mut text = "{X}".repeat(usize::from(cost.x));
+    if cost.cost[6] > 0 {
+        text.push_str(&format!("{{{}}}", cost.cost[6]));
+    }
     for (i, symbol) in ["W", "U", "B", "R", "G", "C"].into_iter().enumerate() {
         for _ in 0..cost.cost[i] {
             text.push_str(&format!("{{{symbol}}}"));
@@ -381,6 +381,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         SelectTargetRequirement { .. } => return None,
         CreateNonlegendaryCopy => "Create a nonlegendary token copy of this".into(),
         ModifyControlled { predicate, power, toughness } => format!("{} you control get {power:+}/{toughness:+} until end of turn", predicate_description(predicate,"permanents")),
+        SetBasePtControlled { predicate, power, toughness } => format!("{} you control have base power and toughness {}/{} until end of turn", predicate_description(predicate,"permanents"), value_description(power), value_description(toughness)),
         AddSubtypesControlled { predicate, subtypes } => format!("{} you control gain {} until end of turn", predicate_description(predicate,"permanents"), subtypes.join(", ")),
         OptionalPayment { cost, if_paid, if_declined } => {
             let cost = match cost { PaymentCost::Mana(m) => cost_description(m), PaymentCost::Waterbend { generic } => format!("waterbend {generic}") };
@@ -427,6 +428,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         ModifyUntilEot { power_delta, toughness_delta } => format!("This gets {power_delta:+}/{toughness_delta:+} until end of turn"),
         DrawCards { count } => format!("Draw {count} cards"),
         MassDamage { amount } => format!("Deal {amount} damage to each creature"),
+        DestroyCreaturesLosingAbilities { max_mana_value } => format!("Each creature with mana value {} or less loses all abilities until end of turn. Destroy those creatures", value_description(max_mana_value)),
         DamageOpponentCreatures { amount } => format!("Deal {amount} damage to each creature your opponents control"),
         CreateTokensValue { token_name, count } => format!("Create X {token_name} tokens, where X is {}",value_description(count)),
         ExileWithControllerToken { target, token_name } => format!("Exile {}. Its controller creates a {token_name} token",target_description(target)),

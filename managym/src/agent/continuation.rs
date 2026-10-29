@@ -345,7 +345,8 @@ impl Game {
                 frame.active_clause = Some(*requirement_index);
                 frame.targets = self.clause_targets(chosen, chosen_req_indices, viewer);
             }
-            PendingChoice::SpellMode { card, kicked, .. } => {
+            PendingChoice::SpellMode { card, kicked, .. }
+            | PendingChoice::SpellX { card, kicked, .. } => {
                 frame.source = self.card_reference(*card, viewer);
                 frame.kicked = *kicked;
             }
@@ -353,6 +354,11 @@ impl Game {
                 frame.source = self.card_reference(*card, viewer)
             }
             PendingChoice::ActivatedTarget {
+                permanent,
+                ability_index,
+                ..
+            }
+            | PendingChoice::ActivationX {
                 permanent,
                 ability_index,
                 ..
@@ -376,7 +382,7 @@ impl Game {
                 frame.waterbend = true;
                 let mut cost = self.activated_abilities_for(*permanent)[*ability_index]
                     .mana_cost
-                    .clone();
+                    .with_x(0);
                 cost.cost[6] = *remaining_generic;
                 frame.cost(&cost);
             }
@@ -502,6 +508,7 @@ impl Game {
                 mode,
                 targets,
                 target_req_indices,
+                ..
             } => {
                 frame.source = self.card_reference(*card, viewer);
                 frame.kicked = *kicked;

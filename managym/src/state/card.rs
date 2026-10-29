@@ -285,6 +285,13 @@ pub enum ReplacementEffect {
     EntersTappedUnlessControls { predicate: CardPredicate },
     /// This object enters with +1/+1 counters already present (CR 614.1c).
     EntersWithPlusOneCounters { count: i32 },
+    /// This object enters with X counters of `kind`, X being the value
+    /// announced as it was cast, otherwise 0 (CR 107.3m, 614.1c).
+    EntersWithXCounters { kind: CounterKind },
+    /// Damage a source this permanent's controller controls would deal to
+    /// an opponent or a permanent an opponent controls is increased by the
+    /// number of `kind` counters on this permanent (CR 614.1a).
+    OpponentDamagePlusCounters { kind: CounterKind },
     /// While this permanent is on the battlefield, unspent mana its
     /// controller would lose as a step or phase ends becomes red instead
     /// (CR 106.4, 614.1a). Read by `Game::clear_mana_pools`.
@@ -354,7 +361,14 @@ pub struct ActivatedAbilityDefinition {
     /// with total power N or greater (CR 702.122a).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub crew: Option<i32>,
+    /// The least X the activation may announce ("X can't be 0", CR 107.3).
+    #[serde(skip_serializing_if = "is_zero_u8")]
+    pub x_min: u8,
     pub effect: Effect,
+}
+
+fn is_zero_u8(value: &u8) -> bool {
+    *value == 0
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]

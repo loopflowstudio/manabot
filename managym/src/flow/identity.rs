@@ -76,6 +76,7 @@ impl Game {
         Some(ObjectLki {
             keywords: self.effective_keywords(permanent_id),
             animated_creature: permanent.animated_creature(definition),
+            abilities_lost: permanent.abilities_lost,
             object_ref,
             card,
             from_zone: ZoneType::Battlefield,

@@ -166,6 +166,9 @@ pub(super) fn cards() -> Vec<Card> {
         the_mechanist_aerial_artisan(),
         energybending(),
         ozai_the_phoenix_king(),
+        fated_firepower(),
+        day_of_black_sun(),
+        katara_water_tribe_s_hope(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -5116,6 +5119,110 @@ fn ozai_the_phoenix_king() -> Card {
             ),
         ],
         registry_name: "Ozai, the Phoenix King",
+        text_box,
+    }
+}
+
+fn fated_firepower() -> Card {
+    let text_box = "Flash\nThis enchantment enters with X fire counters on it.\nIf a source you control would deal damage to an opponent or a permanent an opponent controls, it deals that much damage plus an amount of damage equal to the number of fire counters on this enchantment instead.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{X}{R}{R}{R}"),
+            types: vec![CardType::Enchantment],
+            keywords: Some(vec![Keyword::Flash]),
+            ..Default::default()
+        },
+        key: "tla.fated_firepower",
+        programs: vec![
+            Program::new(
+                "fire_counters",
+                ProgramKind::Static,
+                vec![Op::EntersWithXCounters {
+                    counter: CounterKind::Fire,
+                }],
+            ),
+            Program::new(
+                "firepower",
+                ProgramKind::Static,
+                vec![Op::OpponentDamagePlusCounters {
+                    counter: CounterKind::Fire,
+                }],
+            ),
+        ],
+        registry_name: "Fated Firepower",
+        text_box,
+    }
+}
+
+fn day_of_black_sun() -> Card {
+    let text_box = "Each creature with mana value X or less loses all abilities until end of turn. Destroy those creatures.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{X}{B}{B}"),
+            types: vec![CardType::Sorcery],
+            ..Default::default()
+        },
+        key: "tla.day_of_black_sun",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::DestroyCreaturesLosingAbilities {
+                max_mana_value: Quantity::X,
+            }],
+        )
+        .cost(Cost::mana("{X}{B}{B}"))],
+        registry_name: "Day of Black Sun",
+        text_box,
+    }
+}
+
+fn katara_water_tribe_s_hope() -> Card {
+    let text_box = "Vigilance\nWhen Katara enters, create a 1/1 white Ally creature token.\nWaterbend {X}: Creatures you control have base power and toughness X/X until end of turn. X can't be 0. Activate only during your turn. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{W}{U}{U}"),
+            subtypes: Some(vec!["Human", "Warrior", "Ally"]),
+            types: vec![CardType::Creature],
+            supertypes: Some(vec!["Legendary"]),
+            keywords: Some(vec![Keyword::Vigilance]),
+            power: Some(PrintedPower::Fixed(3)),
+            toughness: Some(3),
+            ..Default::default()
+        },
+        key: "tla.katara_water_tribe_s_hope",
+        programs: vec![
+            Program::new(
+                "ally",
+                ProgramKind::Triggered,
+                vec![Op::CreateToken {
+                    count: 1,
+                    definition_ref: "token.ally",
+                    tapped_and_attacking: Some(false),
+                }],
+            )
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::new(
+                "waterbend",
+                ProgramKind::Activated,
+                vec![Op::SetBasePtValue {
+                    duration: Duration::EndOfTurn,
+                    power: Quantity::X,
+                    target: "each:creature_you_control",
+                    toughness: Quantity::X,
+                }],
+            )
+            .cost(Cost {
+                mana: Some("{X}"),
+                waterbend: Some(true),
+                own_turn_only: Some(true),
+                x_min: Some(1),
+                ..Default::default()
+            }),
+        ],
+        registry_name: "Katara, Water Tribe's Hope",
         text_box,
     }
 }

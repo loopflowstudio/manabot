@@ -460,6 +460,9 @@ impl Game {
         let Some(source) = self.state.permanents[permanent].as_ref() else {
             return Vec::new();
         };
+        if source.abilities_lost {
+            return Vec::new();
+        }
         let mut abilities = self.state.cards[source.card].activated_abilities.clone();
         for ability in &mut abilities {
             if let Some(effect) = self.current_mana_output(&ability.effect, source.controller) {
@@ -548,7 +551,7 @@ impl Game {
                 Some(branch[0].clone())
             }
             Effect::AddOneColorManaValue { amount } => {
-                let amount = self.effect_value(amount, controller).max(0) as usize;
+                let amount = self.effect_value(amount, controller, 0).max(0) as usize;
                 if amount == 0 {
                     return Some(Effect::AddMana {
                         mana: Mana::default(),

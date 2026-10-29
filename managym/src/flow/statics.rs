@@ -217,6 +217,9 @@ impl Game {
                         }
                         let permanent_id = self.state.card_to_permanent[card_id]?;
                         let permanent = self.state.permanents[permanent_id].as_ref()?;
+                        if permanent.abilities_lost {
+                            return None;
+                        }
                         Some((permanent_id, permanent.controller, card))
                     })
             })
@@ -409,6 +412,9 @@ impl Game {
         else {
             return Keywords::default();
         };
+        if permanent.abilities_lost {
+            return Keywords::default();
+        }
         permanent
             .effective_keywords(&self.state.cards[permanent.card])
             .union(&self.static_keyword_bonus(permanent_id))

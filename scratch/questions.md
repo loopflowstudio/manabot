@@ -70,3 +70,10 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   the proposed-event pipeline (no other mana-loss replacements exist); it
   applies while Ozai is on the battlefield as the step ends. Secret Tunnel is
   deferred (two-target activation).
+- Slice 11 (X): the X choice reuses the Modal space (`ChooseMode`, mode =
+  X, labelled "X = n"); observations don't show the announced X (later shape
+  change). Offered X stops at the first unpayable value, capped at 20. Fated
+  Firepower's increase applies after prevention and doubling (the affected
+  player's best order; no ordering choice is offered). Ability loss ignores
+  timestamps (all keywords go, counters' included); CDAs still apply. Crashing
+  Wave is deferred (spell waterbend and stun distribution).

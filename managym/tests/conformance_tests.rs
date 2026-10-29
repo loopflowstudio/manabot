@@ -65,7 +65,7 @@ fn fixture() -> HashMap<String, FixtureCard> {
 }
 
 fn render_mana_cost(cost: &ManaCost) -> String {
-    let mut out = String::new();
+    let mut out = "{X}".repeat(usize::from(cost.x));
     let generic = cost.cost[Color::Generic as usize];
     if generic > 0 {
         out.push_str(&format!("{{{generic}}}"));

@@ -1493,3 +1493,171 @@ fn ozai_keeps_unspent_mana_as_red_and_flies_on_six() {
     s.advance_to_active_step(1, StepKind::Main);
     assert_eq!(pool(&s).total(), 0);
 }
+
+/// CR 601.2b, 107.3m: X is announced as the spell is cast, offering each
+/// value its total cost can pay, and the permanent enters with that many
+/// fire counters. Damage your sources deal to an opponent or their
+/// permanents gains one per fire counter; damage to your own creature is
+/// unchanged.
+#[test]
+fn fated_firepower_enters_with_x_fire_counters_and_adds_them_to_damage() {
+    let mut s = setup(&[
+        "Fated Firepower",
+        "Typhoid Rats",
+        "Wind Drake",
+        "Gray Ogre",
+        "Firebending Lesson",
+    ]);
+    let rats = s.force_permanent_on_battlefield(0, "Typhoid Rats");
+    let drake = s.force_permanent_on_battlefield(1, "Wind Drake");
+    s.game_mut().state.permanents[rats]
+        .as_mut()
+        .unwrap()
+        .summoning_sick = false;
+
+    s.set_player_mana_pool(0, "RRR2");
+    cast(&mut s, "Fated Firepower");
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+    let offered: Vec<usize> = s
+        .action_space()
+        .actions
+        .iter()
+        .filter_map(|a| match a {
+            Action::ChooseMode { mode, .. } => Some(*mode),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(offered, vec![0, 1, 2], "every payable X");
+    choose_mode(&mut s, 2);
+    settle(&mut s);
+    assert_eq!(pool(&s).total(), 0, "X = 2 paid with the generic mana");
+    let firepower = s.battlefield_permanents_named(0, "Fated Firepower")[0];
+    assert_eq!(counters_of(&s, firepower, CounterKind::Fire), 2);
+
+    declare_attackers(&mut s, &[rats]);
+    s.advance_until(
+        |s| s.action_space().kind == ActionSpaceKind::DeclareBlocker,
+        "blockers".into(),
+    );
+    while s.action_space().kind == ActionSpaceKind::DeclareBlocker {
+        choose(&mut s, |a| {
+            matches!(a, Action::DeclareBlocker { attacker: None, .. })
+        });
+    }
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    assert_eq!(s.game().state.players[1].life, 17, "1 combat damage + 2");
+
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let lesson_damage = |s: &mut Scenario, target: PermanentId| {
+        s.set_player_mana_pool(0, "R");
+        cast(s, "Firebending Lesson");
+        pass_until(s, ActionSpaceKind::ChooseTarget);
+        assert!(s.choose_target(Target::Permanent(target)));
+        s.drain_events();
+        settle(s);
+        s.drain_events()
+            .iter()
+            .find_map(|event| match event {
+                GameEvent::DamageDealt { amount, .. } => Some(*amount),
+                _ => None,
+            })
+            .unwrap()
+    };
+    assert_eq!(
+        lesson_damage(&mut s, ogre),
+        2,
+        "your own creature: unchanged"
+    );
+    assert_eq!(lesson_damage(&mut s, drake), 4, "their creature: 2 + 2");
+}
+
+/// Day of Black Sun: each creature with mana value X or less loses all
+/// abilities until end of turn and is destroyed. Indestructible is lost
+/// with the rest, and dies triggers don't fire (release notes); a
+/// creature with greater mana value is untouched.
+#[test]
+fn day_of_black_sun_strips_and_destroys_creatures_with_mana_value_x_or_less() {
+    let mut s = setup(&[
+        "Day of Black Sun",
+        "Curious Farm Animals",
+        "Pretending Poxbearers",
+        "Wind Drake",
+    ]);
+    let animals = s.force_permanent_on_battlefield(1, "Curious Farm Animals");
+    let poxbearers = s.force_permanent_on_battlefield(0, "Pretending Poxbearers");
+    let drake = s.force_permanent_on_battlefield(1, "Wind Drake");
+    s.game_mut().state.permanents[poxbearers]
+        .as_mut()
+        .unwrap()
+        .temp_keywords
+        .indestructible = true;
+
+    s.set_player_mana_pool(0, "BB22");
+    cast(&mut s, "Day of Black Sun");
+    choose_mode(&mut s, 2);
+    settle(&mut s);
+
+    assert!(s.game().state.permanents[animals].is_none());
+    assert!(
+        s.game().state.permanents[poxbearers].is_none(),
+        "indestructible lost"
+    );
+    assert!(s.game().state.permanents[drake].is_some(), "mana value 3");
+    assert_eq!(s.game().state.players[1].life, 20, "no dies trigger");
+    assert!(s.battlefield_permanents_named(0, "Ally").is_empty());
+    assert!(
+        !s.game().state.permanents[drake]
+            .as_ref()
+            .unwrap()
+            .abilities_lost
+    );
+}
+
+/// Katara's entry makes an Ally. Waterbend {X} announces X (never 0, at
+/// most what mana and tappable creatures can pay) and sets the base P/T of
+/// the creatures you control as it resolves; counters still apply, the
+/// opponent's creatures are untouched, and it lasts until end of turn.
+#[test]
+fn katara_waterbends_x_to_set_your_creatures_base_pt() {
+    let mut s = setup(&["Katara, Water Tribe's Hope", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    add_counters(&mut s, ogre, CounterKind::PlusOnePlusOne, 1);
+    s.set_player_mana_pool(0, "2WUU");
+    cast(&mut s, "Katara, Water Tribe's Hope");
+    settle(&mut s);
+    let katara = s.battlefield_permanents_named(0, "Katara, Water Tribe's Hope")[0];
+    let ally = s.battlefield_permanents_named(0, "Ally")[0];
+
+    s.set_player_mana_pool(0, "1");
+    activate(&mut s, katara, 0);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+    let offered: Vec<usize> = s
+        .action_space()
+        .actions
+        .iter()
+        .filter_map(|a| match a {
+            Action::ChooseMode { mode, .. } => Some(*mode),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        offered,
+        vec![1, 2, 3, 4],
+        "three taps and one mana; X can't be 0"
+    );
+    choose_mode(&mut s, 2);
+    assert!(s.choose_waterbend_tap(ally));
+    assert!(s.choose_waterbend_tap(ogre));
+    settle(&mut s);
+    assert_eq!(pool(&s), Mana::parse("1"), "two taps paid X = 2");
+    assert_eq!(s.game().effective_pt(katara), (2, 2));
+    assert_eq!(s.game().effective_pt(ally), (2, 2));
+    assert_eq!(s.game().effective_pt(ogre), (3, 3), "counter still applies");
+    assert_eq!(s.game().effective_pt(theirs), (2, 2));
+
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().effective_pt(ally), (1, 1));
+    s.set_player_mana_pool(0, "5");
+    assert!(!can_activate(&mut s, katara, 0), "only during your turn");
+}

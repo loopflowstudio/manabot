@@ -311,6 +311,7 @@ impl Game {
             Some(PendingChoice::Crew { .. }) =>
                 ("additional_cost", "Choose a creature to tap for crew. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the crew number."),
             Some(PendingChoice::SpellMode { .. }) => ("mode", "Choose a spell mode."),
+            Some(PendingChoice::SpellX { .. } | PendingChoice::ActivationX { .. }) => ("announcement", "Choose the value of X. Each choice is a value the announced total cost can pay."),
             Some(PendingChoice::KickerChoice { .. }) => ("additional_cost", "Choose whether to include the kicker cost."),
             None => match space.kind {
                 crate::agent::action::ActionSpaceKind::DeclareAttacker => ("declare_attackers", "Choose each attack declaration, including the legal nonparticipation offers. Submitted declarations are committed."),

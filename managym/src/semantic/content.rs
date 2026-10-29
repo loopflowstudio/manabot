@@ -452,6 +452,13 @@ fn apply_program(
                     otherwise: Vec::new(),
                 },
             };
+            // X is announced, then paid through the waterbend payment; no
+            // other payment or targeting path carries it.
+            if cost.mana.as_ref().is_some_and(|mana| mana.x > 0)
+                && (!cost.waterbend || effect.target_spec().is_some())
+            {
+                return unsupported(program, "X activation cost needs waterbend and no targets");
+            }
             definition
                 .activated_abilities
                 .push(ActivatedAbilityDefinition {
@@ -467,6 +474,7 @@ fn apply_program(
                     waterbend: cost.waterbend,
                     exhaust: cost.exhaust,
                     crew: cost.crew,
+                    x_min: cost.x_min,
                     effect,
                 });
         }
@@ -491,6 +499,7 @@ struct ProgramCost {
     waterbend: bool,
     exhaust: bool,
     crew: Option<i32>,
+    x_min: u8,
 }
 
 fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
@@ -553,6 +562,15 @@ fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
         sacrifice_source: opt_bool_field(value, "sacrifice_source")?.unwrap_or(false),
         waterbend: opt_bool_field(value, "waterbend")?.unwrap_or(false),
         exhaust: opt_bool_field(value, "exhaust")?.unwrap_or(false),
+        x_min: value
+            .get("x_min")
+            .map(|v| {
+                v.as_u64()
+                    .and_then(|n| u8::try_from(n).ok())
+                    .ok_or_else(|| malformed(program, "invalid least X"))
+            })
+            .transpose()?
+            .unwrap_or(0),
         crew: value
             .get("crew")
             .map(|power| {
@@ -725,6 +743,20 @@ fn apply_static(definition: &mut CardDefinition, program: &Program) -> Result<()
         [Step::UnspentManaBecomesRed] => definition
             .replacement_effects
             .push(ReplacementEffect::UnspentManaBecomesRed),
+        [Step::EntersWithXCounters { counter }] => {
+            definition
+                .replacement_effects
+                .push(ReplacementEffect::EntersWithXCounters {
+                    kind: counter_kind(program, counter)?,
+                })
+        }
+        [Step::OpponentDamagePlusCounters { counter }] => {
+            definition
+                .replacement_effects
+                .push(ReplacementEffect::OpponentDamagePlusCounters {
+                    kind: counter_kind(program, counter)?,
+                })
+        }
         [Step::CombatRequiresOther { predicate }] => {
             definition.combat_requires_other = Some(predicate_card(predicate)?)
         }
@@ -1208,6 +1240,24 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         Step::SetBasePt { .. } => {
             return unsupported(program, "base P/T is set only until end of turn")
         }
+        Step::SetBasePtValue {
+            target,
+            power,
+            toughness,
+            duration,
+        } if duration == "end_of_turn" && target == "each:creature_you_control" => {
+            Effect::SetBasePtControlled {
+                predicate: CardPredicate::creature(),
+                power: power.lower()?,
+                toughness: toughness.lower()?,
+            }
+        }
+        Step::SetBasePtValue { .. } => {
+            return unsupported(
+                program,
+                "set_base_pt_value sets creatures you control until end of turn",
+            )
+        }
         Step::ModifyPt { duration, .. } => {
             return unsupported(program, &format!("unsupported P/T duration {duration:?}"))
         }
@@ -1332,6 +1382,11 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             target: target_for(program, target)?,
             count: i32_value(program, *count, "earthbend count")?,
         },
+        Step::DestroyCreaturesLosingAbilities { max_mana_value } => {
+            Effect::DestroyCreaturesLosingAbilities {
+                max_mana_value: max_mana_value.lower()?,
+            }
+        }
         Step::EarthbendValue { target, count } => Effect::EarthbendValue {
             target: target_for(program, target)?,
             count: count.lower()?,
@@ -1460,6 +1515,8 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         },
         Step::PreventLifeGain
         | Step::UnspentManaBecomesRed
+        | Step::EntersWithXCounters { .. }
+        | Step::OpponentDamagePlusCounters { .. }
         | Step::CombatRequiresOther { .. }
         | Step::BlockingRestriction { .. }
         | Step::PowerFromLandCounters
@@ -1708,6 +1765,7 @@ impl ValueExpression {
                 subtract: *subtract,
             },
             Self::GreatestSharedCreatureType => EffectValue::GreatestSharedCreatureType,
+            Self::X => EffectValue::X,
         })
     }
 }

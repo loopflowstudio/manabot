@@ -140,6 +140,8 @@ pub enum EffectValue {
     /// The greatest number of creatures you control that share a creature
     /// type (CR 205.3m).
     GreatestSharedCreatureType,
+    /// The resolving spell's announced X (CR 107.3m).
+    X,
 }
 
 /// A resolving obligation, distinct from the effects chosen by its outcome.
@@ -167,6 +169,14 @@ pub enum Effect {
         predicate: CardPredicate,
         power: i32,
         toughness: i32,
+    },
+    /// Permanents the resolving player controls matching `predicate` have
+    /// base power and toughness set until end of turn (CR 613.4b); the
+    /// affected set is fixed as the effect resolves (CR 611.2c).
+    SetBasePtControlled {
+        predicate: CardPredicate,
+        power: EffectValue,
+        toughness: EffectValue,
     },
     /// Permanents the resolving player controls matching `predicate` gain
     /// `subtypes` until end of turn (Energybending).
@@ -294,6 +304,12 @@ pub enum Effect {
         count: usize,
     },
     /// Deal `amount` damage to each creature on the battlefield. No target.
+    /// Each creature with mana value at most `max_mana_value` loses all
+    /// abilities until end of turn, then those creatures are destroyed
+    /// simultaneously (Day of Black Sun).
+    DestroyCreaturesLosingAbilities {
+        max_mana_value: EffectValue,
+    },
     MassDamage {
         amount: i32,
     },
@@ -681,10 +697,12 @@ impl Effect {
             }
             Effect::CreateNonlegendaryCopy
             | Effect::ModifyControlled { .. }
+            | Effect::SetBasePtControlled { .. }
             | Effect::AddSubtypesControlled { .. }
             | Effect::ModifyUntilEot { .. }
             | Effect::DrawCards { .. }
             | Effect::MassDamage { .. }
+            | Effect::DestroyCreaturesLosingAbilities { .. }
             | Effect::DamageOpponentCreatures { .. }
             | Effect::CreateTokensValue { .. }
             | Effect::CreateToken { .. }

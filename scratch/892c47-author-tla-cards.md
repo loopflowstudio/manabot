@@ -1,63 +1,16 @@
-# TLA cards — direct Rust cards and one world
+# TLA cards — T1 (parent PR #394, Task 892c47)
 
+T1 is this branch's stacked parent; its full plan is at
+`e18d14e41:scratch/892c47-author-tla-cards.md` (unchanged here since the sync).
 Task 892c47 updates PR394 and stops at demo; merge, auto-merge, paid compute,
-training and follow-up launches are not authorized. D1/f871a8 keeps parser,
-construction, `admit_deck` and consumer input; the `content_pool`/`pool_content`/
-`Eligibility` API shape stays as D1 uses it. History of the superseded JSON
-pipeline: `544ae312c:scratch/892c47-author-tla-cards.md`.
+training and follow-up launches are not authorized.
 
-## Accepted direction
+Jack Heart's 2026-10-28/29 directions recorded there — direct Rust cards in one
+world, every card in its first-printing set file, support by definition (no
+qualification model), and the `managym/tests/cards/` folder mirroring
+`cardsets/` — are now in CLAUDE.md ("Typed card authoring").
 
-- 2026-10-28, Jack Heart — direct Rust cards, one current world
-  ([tla-rust-authoring-direction.md](tla-rust-authoring-direction.md)).
-- 2026-10-29, Jack Heart — **every card lives in the set file of its first
-  printing.** Basics move from `tla.*` to `lea.plains` etc. (TLA decks still admit
-  them). The native-only cards in `cards/native.rs` move to their first-printing
-  set files, so `cardsets/` is the one place a card is filed; `native.rs` keeps
-  only `CardDefId` slot ordering if still needed. Keep the rename-equivalence
-  proof and the `content_pool` API that D1/f871a8 uses.
-- 2026-10-29, Jack Heart (corrects the same steer's item 3, which had limited
-  the pool to TLA + basics) — **the world's pool is every card a set file
-  defines, all supported.** Restricting to TLA is a deck generation/validation
-  filter selected by set (key prefix such as `tla.*`); Jack may train on a wider
-  pool. Remove per-pack membership or eligibility lists that only encode "which
-  set". Keep a simple way to ask for the cards of one or several sets.
-- 2026-10-29, Jack Heart — **"simplify simplify simplify"; replaces the
-  qualification model.** Remove `qualifications.json`, closure hashes, generated
-  eligibility and the review-record gate. A card is supported in the current
-  world when its set file defines it; the world's support check answers from
-  that alone. An incomplete TLA card is either not defined yet (its T2–T7 batch
-  authors it) or carries one explicit incomplete marker beside its Rust
-  definition when a fixed setup needs it — whichever leaves less machinery. Rules
-  tests stay ordinary tests; coverage notes are plain docs under `docs/rules/tla/`
-  or beside tests, never engine data. Pool eligibility derives from the support
-  check. Delete code, docs and tests that existed only for the gate.
-
-- 2026-10-29, Jack Heart — **card tests get a folder mirroring `cardsets/`**:
-  one test file per set (e.g. `managym/tests/cards/tla.rs`, `lea.rs`, `stx.rs`,
-  via one `tests/cards.rs` entry), per-card rules tests moved there from
-  `managym/tests/rules/`; `tests/rules` keeps engine-rule tests. The folder may
-  hold a coverage README and a report script (which cards have tests). Tests and
-  coverage never qualify or gate a card.
-
-## Implemented
-
-Typed set files compiled in process, support by definition (`tla::INCOMPLETE`),
-`lea.*` basics, native cards in first-printing set files, docs rewritten. Details
-and the basic-rename proof: `86ebe9ccf:scratch/892c47-author-tla-cards.md`.
-
-## Remaining
-
-1. Card-test folder (2026-10-29 steer above). The per-card files in
-   `tests/rules/` mix sets per test (e.g. `tla_content.rs`: 19/37 tests name LEA
-   and TLA cards), so assign each test to the card it is about, move shared
-   helpers, keep engine-rule tests in `tests/rules`, add the coverage README and
-   report script.
-2. `scripts/refresh_card_fixture.py` still scrapes old `register_card` patterns;
-   point it at the native pool (`managym.content_pool`) instead.
-3. Gate, PR394 update, demo.
-
-Check: debug `cargo test --no-fail-fast` — only the known w15 semantic-conformance
-pair fails; clippy/fmt clean. Focused pytest (semantic, academy, eval admission,
-monitor, policy catalog, package boundaries): 42 failures, all identical at HEAD
-with the pre-change extension (none new; `test_compiler` binding test fixed).
+T1's remaining work (its own PR): move per-card tests out of `tests/rules/`
+with a coverage README and report script; point
+`scripts/refresh_card_fixture.py` at `managym.content_pool`; gate, PR394 update,
+demo.

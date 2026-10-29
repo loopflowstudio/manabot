@@ -70,6 +70,9 @@ pub enum Payment {
     Spell {
         card: CardId,
         kicked: bool,
+        /// The announced value of X (CR 601.2b).
+        #[serde(skip_serializing_if = "is_zero")]
+        x: u8,
         mode: Option<usize>,
         targets: Vec<Target>,
         target_req_indices: Vec<usize>,
@@ -82,7 +85,7 @@ pub enum Payment {
 }
 
 /// Cast-time / activation-time choice pipeline. Casting a spell walks
-/// KickerChoice? -> ChooseTargets (per requirement) -> payment; activating a
+/// KickerChoice? -> SpellX? -> SpellMode? -> ChooseTargets (per requirement) -> payment; activating a
 /// waterbend ability walks Waterbend until the cost is paid.
 #[derive(Clone, Debug, serde::Serialize)]
 pub enum PendingChoice {
@@ -104,10 +107,25 @@ pub enum PendingChoice {
     },
     /// "You may pay the kicker cost" (CR 601.2b) — asked before targeting.
     KickerChoice { player: PlayerId, card: CardId },
+    /// Announcing the value of X for an activated ability (CR 602.2b,
+    /// 601.2b) before its waterbend cost is paid.
+    ActivationX {
+        player: PlayerId,
+        permanent: PermanentId,
+        ability_index: usize,
+    },
+    /// Announcing the value of X (CR 601.2b) — after kicker, before modes.
+    SpellX {
+        player: PlayerId,
+        card: CardId,
+        kicked: bool,
+    },
     SpellMode {
         player: PlayerId,
         card: CardId,
         kicked: bool,
+        #[serde(skip_serializing_if = "is_zero")]
+        x: u8,
     },
     /// Choosing targets for requirement `requirement_index` of the card's
     /// `target_requirements()` (CR 601.2c).
@@ -115,6 +133,8 @@ pub enum PendingChoice {
         player: PlayerId,
         card: CardId,
         kicked: bool,
+        #[serde(skip_serializing_if = "is_zero")]
+        x: u8,
         mode: Option<usize>,
         requirement_index: usize,
         chosen: Vec<Target>,
@@ -140,7 +160,14 @@ pub enum PendingChoice {
         /// Generic mana still owed (colored components are paid with mana
         /// at the end).
         remaining_generic: u8,
+        /// The announced value of X, already included in `remaining_generic`.
+        #[serde(skip_serializing_if = "is_zero")]
+        x: u8,
     },
+}
+
+fn is_zero(value: &u8) -> bool {
+    *value == 0
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

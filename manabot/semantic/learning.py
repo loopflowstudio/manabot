@@ -200,7 +200,7 @@ class LearningSchema:
 
         opcodes = _validate_id_map(raw.get("opcodes"), "learning_schema.opcodes")
         # Frozen schemas admit only the opcode prefix available at publication.
-        max_opcode = {2: 23, 3: 50, 4: 55, 5: 61, 6: 64, 7: 65, 8: 79}[version]
+        max_opcode = {2: 23, 3: 50, 4: 55, 5: 61, 6: 64, 7: 65, 8: 83}[version]
         expected_opcodes = {
             opcode.name.lower(): int(opcode)
             for opcode in Opcode
@@ -410,6 +410,7 @@ class _TokenBuilder:
         "R": "mana_r",
         "G": "mana_g",
         "C": "mana_c",
+        "X": "mana_x",
     }
 
     def __init__(self, schema: LearningSchema, ir: SemanticIr):
@@ -487,7 +488,7 @@ class _TokenBuilder:
         if digits:
             counts["generic"] += int(digits)
         self.structure("mana_begin")
-        for component in ("generic", "W", "U", "B", "R", "G", "C"):
+        for component in ("generic", "W", "U", "B", "R", "G", "C", "X"):
             count = counts[component]
             if count:
                 self.field(self._MANA_FIELDS[component])
@@ -570,6 +571,8 @@ class _TokenBuilder:
                 "amount": "quantity",
                 "count": "quantity",
                 "power": "quantity",
+                "toughness": "quantity",
+                "max_mana_value": "quantity",
                 "affinity": "predicate",
                 "condition": "condition",
                 "enters_tapped_unless": "predicate",

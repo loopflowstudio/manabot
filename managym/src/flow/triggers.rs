@@ -390,7 +390,7 @@ impl Game {
 
     fn check_triggers_for_event(&mut self, event: &GameEvent, sources: &[TriggerSourceSnapshot]) {
         let mut fired = Vec::new();
-        for source in sources {
+        for source in sources.iter().filter(|source| !source.lki.abilities_lost) {
             for (ability_index, ability) in
                 self.state.cards[source.card].abilities.iter().enumerate()
             {

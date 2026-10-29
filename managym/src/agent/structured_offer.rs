@@ -865,6 +865,7 @@ impl Game {
             permanent,
             ability_index,
             remaining_generic,
+            x,
         }) = self.pending_choice
         else {
             return Err(StructuredOfferError::WrongDecision);
@@ -895,6 +896,7 @@ impl Game {
             .get(ability_index)
             .ok_or(StructuredOfferError::WrongDecision)?
             .mana_cost
+            .with_x(x)
             .with_generic(remaining_generic);
         let max = legal_taps.len().min(usize::from(remaining_generic));
         let min = (0..=max)

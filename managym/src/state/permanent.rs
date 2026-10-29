@@ -53,6 +53,20 @@ impl Counters {
     pub fn is_empty(&self) -> bool {
         *self == Self::default()
     }
+
+    /// Add `delta` counters of a kind other than +1/+1, clamped at zero.
+    pub fn add(&mut self, kind: CounterKind, delta: i32) {
+        let count = match kind {
+            CounterKind::PlusOnePlusOne => {
+                debug_assert!(false, "+1/+1 counters live in Permanent::plus1_counters");
+                return;
+            }
+            CounterKind::Stun => &mut self.stun,
+            CounterKind::Fire => &mut self.fire,
+            CounterKind::DoubleStrike => &mut self.double_strike,
+        };
+        *count = count.saturating_add(delta).max(0);
+    }
 }
 
 fn is_zero(value: &i32) -> bool {
@@ -107,6 +121,10 @@ pub struct Permanent {
     pub temp_subtypes: Vec<String>,
     /// Object-local replacement, removed at cleanup or when this incarnation leaves.
     pub exile_if_dies_this_turn: bool,
+    /// "Loses all abilities until end of turn" (CR 613.1f): no keywords,
+    /// triggered, activated, static or replacement abilities; cleared at cleanup.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub abilities_lost: bool,
     pub attacking: bool,
     /// Exhaust abilities this incarnation has activated (CR 702.177a).
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -147,6 +165,7 @@ impl Permanent {
             temp_keywords: Keywords::default(),
             temp_subtypes: Vec::new(),
             exile_if_dies_this_turn: false,
+            abilities_lost: false,
             attacking: false,
             exhausted_abilities: Vec::new(),
             was_cast: false,
@@ -174,6 +193,9 @@ impl Permanent {
     /// Printed keywords plus until-EOT grants plus animation (earthbent
     /// lands have haste).
     pub fn effective_keywords(&self, card: &Card) -> Keywords {
+        if self.abilities_lost {
+            return Keywords::default();
+        }
         let mut keywords = card.keywords.union(&self.temp_keywords);
         if self.animated {
             keywords.haste = true;
@@ -268,6 +290,7 @@ impl Permanent {
 
     pub fn clear_temporary_modifiers(&mut self) {
         self.exile_if_dies_this_turn = false;
+        self.abilities_lost = false;
         self.temp_power = 0;
         self.temp_toughness = 0;
         self.temp_base_power = None;

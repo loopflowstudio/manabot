@@ -23,8 +23,10 @@ use crate::{
 };
 
 impl Game {
-    pub(crate) fn effect_value(&self, value: &EffectValue, controller: PlayerId) -> i32 {
+    /// `x` is the resolving spell's announced X (0 for anything else).
+    pub(crate) fn effect_value(&self, value: &EffectValue, controller: PlayerId, x: u8) -> i32 {
         match value {
+            EffectValue::X => i32::from(x),
             EffectValue::CreaturesWithCounters => self
                 .battlefield_permanents(controller)
                 .into_iter()
@@ -97,6 +99,7 @@ impl Game {
             controller: spell.controller,
             resolutions_this_turn: 0,
             kicked: spell.kicked,
+            x: spell.x,
             targets,
             active_requirement: 0,
             context_target: None,
@@ -151,6 +154,7 @@ impl Game {
             controller: ability.controller,
             resolutions_this_turn: 0,
             kicked: false,
+            x: ability.x,
             targets,
             active_requirement: 0,
             context_target: attached,
@@ -216,6 +220,7 @@ impl Game {
             controller: source_controller,
             resolutions_this_turn,
             kicked: false,
+            x: 0,
             targets,
             active_requirement: 0,
             context_target: triggered.context,
@@ -344,7 +349,7 @@ impl Game {
                 }
             }
             Effect::DrainLifeValue { amount } => {
-                let amount = self.effect_value(amount, frame.controller).max(0);
+                let amount = self.effect_value(amount, frame.controller, frame.x).max(0);
                 self.change_life(PlayerId(1 - frame.controller.0), -amount);
                 self.gain_life(frame.controller, amount);
                 None
@@ -363,7 +368,7 @@ impl Game {
                 None
             }
             Effect::CreateTokensValue { token_name, count } => {
-                let count = self.effect_value(count, frame.controller).max(0) as usize;
+                let count = self.effect_value(count, frame.controller, frame.x).max(0) as usize;
                 for _ in 0..count {
                     self.create_token(token_name, frame.controller, false);
                 }
@@ -433,7 +438,7 @@ impl Game {
                 target,
             } => self.execute_frame_effect(
                 &Effect::BuffTarget {
-                    power: self.effect_value(power, frame.controller),
+                    power: self.effect_value(power, frame.controller, frame.x),
                     toughness: *toughness,
                     target: target.clone(),
                 },
@@ -539,6 +544,23 @@ impl Game {
                 }
                 None
             }
+            Effect::SetBasePtControlled {
+                predicate,
+                power,
+                toughness,
+            } => {
+                let power = self.effect_value(power, frame.controller, frame.x);
+                let toughness = self.effect_value(toughness, frame.controller, frame.x);
+                for id in self.battlefield_permanents(frame.controller) {
+                    if self.permanent_matches_predicate(id, predicate) {
+                        self.journal_permanent(id);
+                        let permanent = self.state.permanents[id].as_mut()?;
+                        permanent.temp_base_power = Some(power);
+                        permanent.temp_base_toughness = Some(toughness);
+                    }
+                }
+                None
+            }
             Effect::AddSubtypesControlled {
                 predicate,
                 subtypes,
@@ -632,7 +654,7 @@ impl Game {
                 None
             }
             Effect::DealDamageValue { amount, target } => {
-                let amount = self.effect_value(amount, frame.controller);
+                let amount = self.effect_value(amount, frame.controller, frame.x);
                 self.execute_frame_effect(
                     &Effect::DealDamage {
                         amount,
@@ -642,7 +664,7 @@ impl Game {
                 )
             }
             Effect::EarthbendValue { count, target } => {
-                let count = self.effect_value(count, frame.controller);
+                let count = self.effect_value(count, frame.controller, frame.x);
                 self.execute_frame_effect(
                     &Effect::Earthbend {
                         count,
@@ -652,7 +674,7 @@ impl Game {
                 )
             }
             Effect::PutCountersValue { count, target } => {
-                let count = self.effect_value(count, frame.controller);
+                let count = self.effect_value(count, frame.controller, frame.x);
                 self.execute_frame_effect(
                     &Effect::PutCounters {
                         count,
@@ -680,6 +702,41 @@ impl Game {
                 // Drawing from an empty library sets `drew_when_empty`; the player
                 // loses via state-based actions (CR 704.5c), same as the draw step.
                 self.draw_cards(frame.controller, *count);
+                None
+            }
+            Effect::DestroyCreaturesLosingAbilities { max_mana_value } => {
+                let max = self.effect_value(max_mana_value, frame.controller, frame.x);
+                let creatures: Vec<PermanentId> = [PlayerId(0), PlayerId(1)]
+                    .into_iter()
+                    .flat_map(|player| self.battlefield_permanents(player))
+                    .filter(|id| {
+                        self.permanent_is_creature(*id)
+                            && self.state.permanents[*id].as_ref().is_some_and(|p| {
+                                let card = &self.state.cards[p.card];
+                                card.mana_cost
+                                    .as_ref()
+                                    .map_or(0, |c| i32::from(c.mana_value))
+                                    <= max
+                            })
+                    })
+                    .collect();
+                for id in &creatures {
+                    self.journal_permanent(*id);
+                    if let Some(permanent) = self.state.permanents[*id].as_mut() {
+                        permanent.abilities_lost = true;
+                    }
+                }
+                // One simultaneous destruction: leave-the-battlefield abilities
+                // look back at creatures that had already lost them (CR 603.10a).
+                let objects: Vec<_> = creatures
+                    .into_iter()
+                    .filter_map(|id| self.permanent_object_ref(id))
+                    .collect();
+                let sources = self.snapshot_trigger_sources();
+                for object in objects {
+                    self.destroy_object(object);
+                }
+                self.process_game_events_with_sources(&sources);
                 None
             }
             Effect::MassDamage { amount } => {
@@ -1076,6 +1133,7 @@ impl Game {
                         controller: frame.controller,
                         resolutions_this_turn: frame.resolutions_this_turn,
                         kicked: frame.kicked,
+                        x: frame.x,
                         targets: vec![ResolutionTarget {
                             requirement: 0,
                             ..target

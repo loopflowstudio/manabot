@@ -115,6 +115,10 @@ class Opcode(IntEnum):
     ADD_CARD_TYPES = 77
     ADD_SUBTYPES_CONTROLLED = 78
     UNSPENT_MANA_BECOMES_RED = 79
+    DESTROY_CREATURES_LOSING_ABILITIES = 80
+    ENTERS_WITH_X_COUNTERS = 81
+    OPPONENT_DAMAGE_PLUS_COUNTERS = 82
+    SET_BASE_PT_VALUE = 83
 
 
 PROGRAM_KINDS = {kind.name.lower(): kind for kind in ProgramKind}
@@ -222,6 +226,10 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "add_card_types": ({"predicate", "types"}, set()),
     "add_subtypes_controlled": ({"predicate", "subtypes"}, set()),
     "unspent_mana_becomes_red": (set(), set()),
+    "destroy_creatures_losing_abilities": ({"max_mana_value"}, set()),
+    "enters_with_x_counters": ({"counter"}, set()),
+    "opponent_damage_plus_counters": ({"counter"}, set()),
+    "set_base_pt_value": ({"target", "power", "toughness", "duration"}, set()),
     "add_lesson_mana": ({"mana"}, set()),
     "grant_flashback": (set(), set()),
     "grant_mana": ({"predicates"}, set()),
@@ -580,6 +588,7 @@ def _validate_value_expression(value: Any, context: str) -> None:
         "graveyard_matching": {"predicate", "base"},
         "cards_drawn_minus": {"subtract"},
         "greatest_shared_creature_type": set(),
+        "x": set(),
     }
     if kind not in fields:
         _fail(context, f"unknown quantity {kind!r}")
@@ -597,6 +606,7 @@ def _validate_instruction_scalars(
         "amount",
         "count",
         "look",
+        "max_mana_value",
         "max_select",
         "min_select",
         "power",
@@ -614,6 +624,9 @@ def _validate_instruction_scalars(
                 ("drain_life_value", "amount"),
                 ("add_mana_of_one_color", "amount"),
                 ("earthbend_value", "count"),
+                ("destroy_creatures_losing_abilities", "max_mana_value"),
+                ("set_base_pt_value", "power"),
+                ("set_base_pt_value", "toughness"),
             }:
                 _validate_value_expression(instruction[field], f"{context}.{field}")
             else:

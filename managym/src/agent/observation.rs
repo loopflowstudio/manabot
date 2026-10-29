@@ -1079,6 +1079,7 @@ impl Observation {
                     .and_then(|suspended| suspended.frame.source)
                     .or(match &game.pending_choice {
                         Some(crate::flow::game::PendingChoice::SpellMode { card, .. })
+                        | Some(crate::flow::game::PendingChoice::SpellX { card, .. })
                         | Some(crate::flow::game::PendingChoice::KickerChoice { card, .. })
                         | Some(crate::flow::game::PendingChoice::ChooseTargets { card, .. }) => {
                             Some(*card)
@@ -1088,6 +1089,9 @@ impl Observation {
                             ..
                         })
                         | Some(crate::flow::game::PendingChoice::Waterbend { permanent, .. })
+                        | Some(crate::flow::game::PendingChoice::ActivationX {
+                            permanent, ..
+                        })
                         | Some(crate::flow::game::PendingChoice::Crew { permanent, .. }) => {
                             game.state.permanents[*permanent]
                                 .as_ref()

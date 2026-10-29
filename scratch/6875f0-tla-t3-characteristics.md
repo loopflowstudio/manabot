@@ -5,7 +5,7 @@ Brief: the Task directive (49 cards, obligations in `docs/rules/tla/allocation.j
 T2 and reconcile shared costs before landing. Every merge needs Jack Heart's review.
 Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
 
-## Done (36 of 49)
+## Done (39 of 49)
 
 1. Locations (Abandoned Air Temple, Agna Qel'a, Ba Sing Se, Realm of Koh):
    `ReplacementEffect::EntersTappedUnlessControls`; `Predicate::Supertype`;
@@ -72,19 +72,33 @@ Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
    - Condition 9 `unspent_mana_at_least` → `StaticCondition::UnspentManaAtLeast`
      (both pools).
 
-Schema 8 (unreleased, T1 precedent) appended in place: fields 85-93, predicates
-13-15, special roles 6-12, opcodes 66-79, enum `counter`, conditions 7-9,
-quantity 5, trigger_event 13, subtypes 64-74.
+11. X costs (Fated Firepower, Day of Black Sun, Katara, Water Tribe's Hope):
+   - `ManaCost.x` counts {X} (0 off the stack, CR 202.3e); `with_x` pays it.
+     `PendingChoice::SpellX` (after kicker, before modes) and `ActivationX`
+     (before waterbend) offer payable values as Modal `ChooseMode { mode: X }`;
+     X rides `Payment::Spell`, `SpellOnStack`, `ActivatedAbilityOnStack`,
+     `PendingChoice::Waterbend` and `EffectFrame` (serialized only if nonzero).
+     Quantity 6 `x`; field 95 `mana_x`; cost field 96 `x_min`. X activations
+     must waterbend without targets (lowering rejects others).
+   - Opcodes 81 `enters_with_x_counters` (`BattlefieldEntry.x`/`counters`) and
+     82 `opponent_damage_plus_counters` (source-controller side, applied last).
+   - Opcode 80 `destroy_creatures_losing_abilities` (field 94 `max_mana_value`):
+     `Permanent.abilities_lost` (keywords, activated, static, replacement and
+     triggered abilities, with `ObjectLki.abilities_lost`), one destroy batch.
+   - Opcode 83 `set_base_pt_value` (team role) → `Effect::SetBasePtControlled`.
+
+Schema 8 (unreleased, T1 precedent) appended in place: fields 85-96, predicates
+13-15, special roles 6-12, opcodes 66-83, enum `counter`, conditions 7-9,
+quantities 5-6, trigger_event 13, subtypes 64-74.
 `scratch/add_fixture.py` copies pinned evidence into the conformance fixture.
 
-Check (slice 10, debug): `cargo test` all targets pass (cards 41, rules_tests
-356, lib 119) except `semantic_conformance_tests` (w16 vs w15 and receipt digest
-drift, as in PR #394 CI 40819903624); clippy, fmt clean; extension
-rebuilt; `pytest tests/semantic` 158 pass, 4 fail on `schema_version == 3/4/7`
-asserts from `be2b7586b`. Cards 41/41 after
-`dadcc6d8e`.
+Check (slice 11, debug): `cargo test` all targets pass (cards 44, rules_tests
+356, lib 120) except `semantic_conformance_tests` (w16 vs w15 and receipt digest
+drift, as in PR #394 CI 40819903624); clippy, fmt clean; extension rebuilt;
+`pytest tests/semantic` 158 pass, 4 fail on `schema_version == 3/4/7` asserts
+from `be2b7586b`.
 
-## Remaining (13 cards), suggested next slices
+## Remaining (10 cards), suggested next slices
 
 - Secret Tunnel (Cave; "this land can't be blocked" is `unblockable_if` Always;
   {T}: Add {C}): deferred from slice 10. Its "{4}, {T}: two target creatures you
@@ -95,8 +109,11 @@ asserts from `be2b7586b`. Cards 41/41 after
   the survivor needs a type the departed creature had as it left).
 - Honest Work (Aura; loses all abilities, becomes Citizen "Humble Merchant" 1/1
   with "{T}: Add {C}" — characteristic replacement, layers 1-7b).
-- X costs: Fated Firepower, Crashing Wave, Katara Water Tribe's Hope (team role
-  on `set_base_pt`), Day of Black Sun.
+- Crashing Wave (deferred from slice 11): waterbend {X} as a spell's
+  additional cost (spell-side waterbend payment does not exist; carry X from
+  `SpellX` into it), "up to X targets" (requirement max read from X), then a
+  resolution-time distribution of three stun counters among tapped creatures
+  opponents control (repeated one-at-a-time choice, as Heartless Act).
 - Fire Nation Palace (granted firebending; observation shape change); Lo and Li
   (stack-source keywords in `damage.rs::source_keywords`); Glider Staff (airbend),
   Trusty Boomerang (granted activated ability); Razor Rings, The Last Agni Kai
@@ -106,9 +123,9 @@ asserts from `be2b7586b`. Cards 41/41 after
 
 - Both branches append to schema 8 from 86ebe9ccf with colliding numbers. T2:
   fields 85-96, predicates 13-15, subtypes 64-74, special role 6, opcodes 66-73,
-  trigger_event 13, destination 2, zone 3. This branch: fields 85-93, predicates
-  13-15, subtypes 64-74, special roles 6-12, opcodes 66-79, conditions 7-9,
-  quantity 5, trigger_event 13 (`end_step_begins`), enum `counter`. The later lander renumbers its own entries
+  trigger_event 13, destination 2, zone 3. This branch: fields 85-96, predicates
+  13-15, subtypes 64-74, special roles 6-12, opcodes 66-83, conditions 7-9,
+  quantities 5-6, trigger_event 13 (`end_step_begins`), enum `counter`. The later lander renumbers its own entries
   (append-only, contiguous).
 - Keep one exhaust field and gate (T2 field 87, here 89) and one with-counters
   predicate reading every `CounterKind` (T2 `with_counter` 13; here `no_counters`

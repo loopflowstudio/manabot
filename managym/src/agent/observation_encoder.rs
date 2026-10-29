@@ -1059,6 +1059,7 @@ mod tests {
                 cost: [0; 7],
                 mana_value,
                 hybrid: Vec::new(),
+                x: 0,
             },
         }
     }

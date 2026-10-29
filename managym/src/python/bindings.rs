@@ -1272,6 +1272,7 @@ impl From<PyManaCost> for ManaCost {
             spend_on_lesson: false,
             cost,
             mana_value,
+            x: 0,
             hybrid: value
                 .hybrid
                 .into_iter()

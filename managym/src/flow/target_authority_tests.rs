@@ -44,8 +44,8 @@ fn fixture() -> (Game, CardId, CardId, Target, Target) {
     };
     let bolt = card_named("Lightning Bolt");
     let ogre_spell = card_named("Gray Ogre");
-    game.push_spell_to_stack(bolt, PlayerId(1), vec![], vec![], false);
-    game.push_spell_to_stack(ogre_spell, PlayerId(1), vec![], vec![], false);
+    game.push_spell_to_stack(bolt, PlayerId(1), vec![], vec![], false, 0);
+    game.push_spell_to_stack(ogre_spell, PlayerId(1), vec![], vec![], false, 0);
     (
         game,
         bolt,
@@ -238,7 +238,7 @@ fn recast_spell_resolves_before_the_old_targeted_ability() {
         .unwrap();
     assert!(game.flush_triggers().is_none());
     game.move_card(ogre, ZoneType::Hand);
-    game.push_spell_to_stack(ogre, PlayerId(1), vec![], vec![], false);
+    game.push_spell_to_stack(ogre, PlayerId(1), vec![], vec![], false, 0);
     assert_ne!(game.current_object_ref(ogre).unwrap(), original);
 
     // CR 405.2 / 608.2b: the recast object is above the older ability, so

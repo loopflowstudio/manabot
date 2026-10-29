@@ -66,6 +66,9 @@ pub struct ObjectLki {
     pub keywords: crate::state::card::Keywords,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub animated_creature: bool,
+    /// The object had lost all abilities, so it triggers nothing as it leaves.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub abilities_lost: bool,
     pub object_ref: ObjectRef,
     pub card: CardId,
     pub from_zone: ZoneType,

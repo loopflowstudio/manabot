@@ -217,6 +217,10 @@ def test_opcode_numbers_are_an_explicit_compatibility_surface() -> None:
         "ADD_CARD_TYPES": 77,
         "ADD_SUBTYPES_CONTROLLED": 78,
         "UNSPENT_MANA_BECOMES_RED": 79,
+        "DESTROY_CREATURES_LOSING_ABILITIES": 80,
+        "ENTERS_WITH_X_COUNTERS": 81,
+        "OPPONENT_DAMAGE_PLUS_COUNTERS": 82,
+        "SET_BASE_PT_VALUE": 83,
     }
 
 

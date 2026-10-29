@@ -46,6 +46,10 @@ pub struct ResolutionTarget {
     pub legal: bool,
 }
 
+fn is_zero(value: &u8) -> bool {
+    *value == 0
+}
+
 /// Everything a resolving spell/ability needs while its effects execute,
 /// including what's left to do if it suspends for a decision.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -63,6 +67,9 @@ pub struct EffectFrame {
     pub resolutions_this_turn: u32,
     /// Whether the resolving spell was kicked.
     pub kicked: bool,
+    /// The resolving spell's announced X (CR 107.3m); 0 otherwise.
+    #[serde(skip_serializing_if = "is_zero")]
+    pub x: u8,
     /// Chosen slots, with eligibility retained across instructions and choices.
     pub targets: Vec<ResolutionTarget>,
     pub active_requirement: usize,
@@ -287,6 +294,7 @@ impl Game {
                 controller: decision.player(),
                 resolutions_this_turn: 0,
                 kicked: false,
+                x: 0,
                 targets: Vec::new(),
                 active_requirement: 0,
                 context_target: None,
@@ -313,7 +321,14 @@ impl Game {
         if let FrameFinalize::Spell { card, attach_to } = frame.finalize {
             let is_permanent = self.state.cards[card].types.is_permanent();
             if is_permanent {
-                self.move_card(card, ZoneType::Battlefield);
+                self.move_card_with_entry(
+                    card,
+                    ZoneType::Battlefield,
+                    crate::flow::proposed_event::BattlefieldEntry {
+                        x: frame.x,
+                        ..Default::default()
+                    },
+                );
                 if let Some(permanent_id) = self.state.card_to_permanent[card] {
                     self.journal_permanent(permanent_id);
                     if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
@@ -1075,6 +1090,7 @@ mod learn_tests {
             controller: PlayerId(0),
             resolutions_this_turn: 0,
             kicked: false,
+            x: 0,
             targets: vec![],
             active_requirement: 0,
             context_target: None,
@@ -1827,6 +1843,7 @@ mod payment_tests {
             controller: PlayerId(0),
             resolutions_this_turn: 0,
             kicked: false,
+            x: 0,
             targets: vec![],
             active_requirement: 0,
             context_target: None,

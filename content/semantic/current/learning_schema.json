@@ -98,7 +98,8 @@
       "cards_drawn_minus": 4,
       "creatures_with_counters": 1,
       "graveyard_matching": 3,
-      "greatest_shared_creature_type": 5
+      "greatest_shared_creature_type": 5,
+      "x": 6
     },
     "remainder": {
       "library_bottom": 1
@@ -273,7 +274,9 @@
     "mana_r": 24,
     "mana_u": 25,
     "mana_w": 26,
+    "mana_x": 95,
     "max": 28,
+    "max_mana_value": 94,
     "max_select": 29,
     "min": 30,
     "min_mana_value": 31,
@@ -321,6 +324,7 @@
     "value": 57,
     "values": 58,
     "waterbend": 59,
+    "x_min": 96,
     "zone": 60
   },
   "identity_modes": {
@@ -363,6 +367,7 @@
     "deal_damage_value": 32,
     "deal_power_damage": 22,
     "destroy": 27,
+    "destroy_creatures_losing_abilities": 80,
     "discard": 62,
     "discard_target_player": 26,
     "doesnt_untap": 70,
@@ -371,6 +376,7 @@
     "draw_cards": 2,
     "earthbend": 20,
     "earthbend_value": 74,
+    "enters_with_x_counters": 81,
     "exile": 28,
     "exile_if_dies": 63,
     "exile_until_source_leaves": 21,
@@ -388,6 +394,7 @@
     "modify_controlled": 60,
     "modify_pt": 10,
     "modify_triggering_permanent": 31,
+    "opponent_damage_plus_counters": 82,
     "optional_discard_draw": 25,
     "optional_payment": 65,
     "power_from_land_counters": 48,
@@ -405,6 +412,7 @@
     "search_basic_land": 24,
     "search_basic_lands": 51,
     "set_base_pt": 67,
+    "set_base_pt_value": 83,
     "set_power_from_count": 23,
     "shuffle_into_library": 71,
     "spell_cost_reduction": 49,

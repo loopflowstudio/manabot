@@ -42,6 +42,14 @@ pub struct ManaCost {
     /// Omission keeps frozen ordinary-cost manifests byte-for-byte stable.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub hybrid: Vec<[Color; 2]>,
+    /// Number of {X} symbols. X is zero everywhere but the stack (CR 107.3,
+    /// 202.3e), so it adds nothing to `mana_value`; `with_x` fixes its value.
+    #[serde(skip_serializing_if = "is_zero_u8")]
+    pub x: u8,
+}
+
+fn is_zero_u8(value: &u8) -> bool {
+    *value == 0
 }
 
 impl ManaCost {
@@ -87,10 +95,16 @@ impl ManaCost {
                     for (slot, amount) in out.cost.iter_mut().zip(part.cost) {
                         *slot = slot.saturating_add(amount);
                     }
+                    out.x += part.x;
                 }
                 continue;
             }
 
+            if ch == 'X' {
+                out.x += 1;
+                chars.next();
+                continue;
+            }
             let slot = match ch {
                 'W' => Color::White,
                 'U' => Color::Blue,
@@ -115,6 +129,17 @@ impl ManaCost {
             out.cost[i] = out.cost[i].saturating_add(other.cost[i]);
         }
         out.hybrid.extend_from_slice(&other.hybrid);
+        out.x = out.x.saturating_add(other.x);
+        out.update_mana_value();
+        out
+    }
+
+    /// This cost with each {X} paid as `value` generic mana (CR 601.2f).
+    pub fn with_x(&self, value: u8) -> ManaCost {
+        let mut out = self.clone();
+        out.cost[Color::Generic as usize] =
+            out.generic().saturating_add(self.x.saturating_mul(value));
+        out.x = 0;
         out.update_mana_value();
         out
     }
@@ -424,6 +449,15 @@ mod tests {
         assert_eq!(kicked.mana_value, 6);
         assert!(Mana::parse("2RRWG").can_pay(&kicked));
         assert_eq!(kicked.with_generic(0).mana_value, 4);
+    }
+
+    #[test]
+    fn x_counts_zero_until_its_value_is_chosen() {
+        let cost = ManaCost::parse("{X}{R}{R}{R}");
+        assert_eq!((cost.x, cost.mana_value), (1, 3));
+        let paid = cost.with_x(2);
+        assert_eq!((paid.x, paid.mana_value, paid.generic()), (0, 5, 2));
+        assert_eq!(ManaCost::parse("{X}{X}{B}").with_x(3).generic(), 6);
     }
 
     #[test]

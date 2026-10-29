@@ -2362,5 +2362,43 @@
       "B",
       "R"
     ]
+  },
+  "Fated Firepower": {
+    "name": "Fated Firepower",
+    "mana_cost": "{X}{R}{R}{R}",
+    "type_line": "Enchantment",
+    "keywords": [
+      "Flash"
+    ],
+    "oracle_text": "Flash\nThis enchantment enters with X fire counters on it.\nIf a source you control would deal damage to an opponent or a permanent an opponent controls, it deals that much damage plus an amount of damage equal to the number of fire counters on this enchantment instead.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Day of Black Sun": {
+    "name": "Day of Black Sun",
+    "mana_cost": "{X}{B}{B}",
+    "type_line": "Sorcery",
+    "keywords": [],
+    "oracle_text": "Each creature with mana value X or less loses all abilities until end of turn. Destroy those creatures.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Katara, Water Tribe's Hope": {
+    "name": "Katara, Water Tribe's Hope",
+    "mana_cost": "{2}{W}{U}{U}",
+    "type_line": "Legendary Creature — Human Warrior Ally",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Vigilance",
+      "Waterbend"
+    ],
+    "oracle_text": "Vigilance\nWhen Katara enters, create a 1/1 white Ally creature token.\nWaterbend {X}: Creatures you control have base power and toughness X/X until end of turn. X can't be 0. Activate only during your turn. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+    "colors": [
+      "U",
+      "W"
+    ]
   }
 }

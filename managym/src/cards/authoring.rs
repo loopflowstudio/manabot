@@ -224,6 +224,9 @@ pub struct Cost {
     /// "Crew N" (CR 702.122a).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub crew: Option<i32>,
+    /// The least X the activation may announce ("X can't be 0").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub x_min: Option<i32>,
 }
 
 #[derive(Serialize)]
@@ -494,6 +497,29 @@ pub enum Op {
     /// "If you would lose unspent mana, that mana becomes red instead"
     /// (static, CR 106.4, 614).
     UnspentManaBecomesRed,
+    /// "Each creature with mana value [max_mana_value] or less loses all
+    /// abilities until end of turn. Destroy those creatures."
+    DestroyCreaturesLosingAbilities {
+        max_mana_value: Quantity,
+    },
+    /// "[target] have base power and toughness [power]/[toughness]" with
+    /// resolution-time values (CR 613.4b).
+    SetBasePtValue {
+        duration: Duration,
+        power: Quantity,
+        target: &'static str,
+        toughness: Quantity,
+    },
+    /// "This permanent enters with X [counter] counters on it" (static).
+    EntersWithXCounters {
+        counter: CounterKind,
+    },
+    /// "If a source you control would deal damage to an opponent or a
+    /// permanent an opponent controls, it deals that much damage plus the
+    /// number of [counter] counters on this permanent instead" (static).
+    OpponentDamagePlusCounters {
+        counter: CounterKind,
+    },
     /// "Add X mana of any one color", X read when the mana ability resolves.
     AddManaOfOneColor {
         amount: Quantity,
@@ -743,6 +769,8 @@ pub enum Quantity {
     },
     /// The greatest number of creatures you control that share a creature type.
     GreatestSharedCreatureType,
+    /// The value of X announced as the spell was cast (CR 107.3m).
+    X,
 }
 
 #[derive(Serialize)]

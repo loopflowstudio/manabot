@@ -21,6 +21,9 @@ use crate::{
     },
 };
 
+/// Largest X offered when announcing a spell's X (CR 601.2b).
+const MAX_X: u8 = 20;
+
 #[derive(Default)]
 struct TargetSelection {
     requirement_index: usize,
@@ -71,8 +74,8 @@ impl Game {
         }
     }
 
-    /// The cost to cast `card` right now: base (+ kicker if `kicked`),
-    /// with affinity-style reductions applied (CR 601.2f). `targets` are the
+    /// The cost to cast `card` right now: base with each {X} paid as `x`
+    /// (+ kicker if `kicked`), with affinity-style reductions applied (CR 601.2f). `targets` are the
     /// chosen targets; before they are chosen (`None`), a target-dependent
     /// reduction applies if some legal target would earn it.
     pub(crate) fn effective_spell_cost(
@@ -80,6 +83,7 @@ impl Game {
         player: PlayerId,
         card: CardId,
         kicked: bool,
+        x: u8,
         targets: Option<&[Target]>,
     ) -> Option<ManaCost> {
         let card_ref = &self.state.cards[card];
@@ -87,7 +91,8 @@ impl Game {
             self.flashback_cost(player, card)?
         } else {
             card_ref.mana_cost.clone()?
-        };
+        }
+        .with_x(x);
         cost.spend_on_lesson = card_ref.has_subtype("Lesson");
         if kicked {
             if let Some(kicker) = &card_ref.kicker {
@@ -207,7 +212,7 @@ impl Game {
         // CR 601.2b — Optional additional costs (kicker) are chosen before
         // targets. Only offer the choice when the kicked cost is payable.
         if self.state.cards[card].kicker.is_some() {
-            let kicked_cost = self.effective_spell_cost(player, card, true, None);
+            let kicked_cost = self.effective_spell_cost(player, card, true, 0, None);
             if kicked_cost.is_some_and(|cost| self.can_pay_with_mana_abilities(player, &cost, None))
             {
                 self.pending_choice = Some(PendingChoice::KickerChoice { player, card });
@@ -215,7 +220,7 @@ impl Game {
             }
         }
 
-        self.begin_mode_selection(player, card, false)
+        self.announce_x(player, card, false)
     }
 
     /// Resolve the pending kicker choice, then continue the pipeline.
@@ -235,7 +240,63 @@ impl Game {
             return Err(AgentError("wrong player for kicker choice".to_string()));
         }
         self.pending_choice = None;
-        self.begin_mode_selection(player, card, pay)
+        self.announce_x(player, card, pay)
+    }
+
+    /// Values of X `player` could pay for `card` (CR 601.2b, 601.2f).
+    /// Larger values need more mana, so the search stops at the first value
+    /// that can't be paid.
+    pub(crate) fn legal_x_values(&self, player: PlayerId, card: CardId, kicked: bool) -> Vec<u8> {
+        (0..=MAX_X)
+            .map_while(|x| {
+                self.effective_spell_cost(player, card, kicked, x, None)
+                    .filter(|cost| self.can_pay_with_mana_abilities(player, cost, None))
+                    .map(|_| x)
+            })
+            .collect()
+    }
+
+    /// CR 601.2b — A spell with {X} in its cost announces X after optional
+    /// costs and before modes and targets.
+    fn announce_x(
+        &mut self,
+        player: PlayerId,
+        card: CardId,
+        kicked: bool,
+    ) -> Result<(), AgentError> {
+        if self.state.cards[card]
+            .mana_cost
+            .as_ref()
+            .is_some_and(|cost| cost.x > 0)
+        {
+            if self.legal_x_values(player, card, kicked).is_empty() {
+                return Err(AgentError("no payable value of X".into()));
+            }
+            self.pending_choice = Some(PendingChoice::SpellX {
+                player,
+                card,
+                kicked,
+            });
+            return Ok(());
+        }
+        self.begin_mode_selection(player, card, kicked, 0)
+    }
+
+    pub(crate) fn choose_x_action(&mut self, player: PlayerId, x: usize) -> Result<(), AgentError> {
+        let Some(PendingChoice::SpellX {
+            player: chooser,
+            card,
+            kicked,
+        }) = self.pending_choice
+        else {
+            return Err(AgentError("no value of X is pending".into()));
+        };
+        let x = u8::try_from(x).map_err(|_| AgentError("illegal value of X".into()))?;
+        if chooser != player || !self.legal_x_values(player, card, kicked).contains(&x) {
+            return Err(AgentError("illegal value of X".into()));
+        }
+        self.pending_choice = None;
+        self.begin_mode_selection(player, card, kicked, x)
     }
 
     pub(crate) fn legal_spell_modes(&self, player: PlayerId, card: CardId) -> Vec<usize> {
@@ -262,6 +323,7 @@ impl Game {
         player: PlayerId,
         card: CardId,
         kicked: bool,
+        x: u8,
     ) -> Result<(), AgentError> {
         if self.state.cards[card].spell_modes().is_some() {
             if self.legal_spell_modes(player, card).is_empty() {
@@ -271,10 +333,11 @@ impl Game {
                 player,
                 card,
                 kicked,
+                x,
             });
             return Ok(());
         }
-        self.advance_target_selection(player, card, kicked, None, TargetSelection::default())
+        self.advance_target_selection(player, card, kicked, x, None, TargetSelection::default())
     }
 
     pub(crate) fn spell_mode_action(
@@ -286,6 +349,7 @@ impl Game {
             player: chooser,
             card,
             kicked,
+            x,
         }) = self.pending_choice
         else {
             return Err(AgentError("no spell mode is pending".into()));
@@ -293,7 +357,14 @@ impl Game {
         if chooser != player || !self.legal_spell_modes(player, card).contains(&mode) {
             return Err(AgentError("illegal spell mode".into()));
         }
-        self.advance_target_selection(player, card, kicked, Some(mode), TargetSelection::default())
+        self.advance_target_selection(
+            player,
+            card,
+            kicked,
+            x,
+            Some(mode),
+            TargetSelection::default(),
+        )
     }
 
     /// Move the casting pipeline to `requirement_index`, skipping
@@ -304,6 +375,7 @@ impl Game {
         player: PlayerId,
         card: CardId,
         kicked: bool,
+        x: u8,
         mode: Option<usize>,
         selection: TargetSelection,
     ) -> Result<(), AgentError> {
@@ -315,7 +387,16 @@ impl Game {
         let requirements = self.state.cards[card].target_requirements_for_mode(mode);
         loop {
             let Some(requirement) = requirements.get(requirement_index) else {
-                return self.finish_casting(player, card, kicked, mode, chosen, chosen_req_indices);
+                let cost = self.state.cards[card].sacrifice_cost.clone();
+                let payment = Payment::Spell {
+                    card,
+                    kicked,
+                    x,
+                    mode,
+                    targets: chosen,
+                    target_req_indices: chosen_req_indices,
+                };
+                return self.begin_payment(player, payment, cost);
             };
             let legal = self
                 .remaining_legal_targets(
@@ -328,7 +409,7 @@ impl Game {
                 )
                 .into_iter()
                 .filter(|target| {
-                    self.target_leaves_cost_payable(player, card, kicked, &chosen, *target)
+                    self.target_leaves_cost_payable(player, card, kicked, x, &chosen, *target)
                 })
                 .collect::<Vec<_>>();
             if legal.is_empty() {
@@ -342,6 +423,7 @@ impl Game {
                 player,
                 card,
                 kicked,
+                x,
                 mode,
                 requirement_index,
                 chosen,
@@ -359,6 +441,7 @@ impl Game {
         player: PlayerId,
         card: CardId,
         kicked: bool,
+        x: u8,
         chosen: &[Target],
         target: Target,
     ) -> bool {
@@ -366,7 +449,7 @@ impl Game {
             return true;
         }
         let targets: Vec<Target> = chosen.iter().copied().chain([target]).collect();
-        self.effective_spell_cost(player, card, kicked, Some(&targets))
+        self.effective_spell_cost(player, card, kicked, x, Some(&targets))
             .is_some_and(|cost| self.can_pay_with_mana_abilities(player, &cost, None))
     }
 
@@ -401,6 +484,7 @@ impl Game {
             player: chooser,
             card,
             kicked,
+            x,
             mode,
             requirement_index,
             chosen,
@@ -416,6 +500,7 @@ impl Game {
                 player: chooser,
                 card,
                 kicked,
+                x,
                 mode,
                 requirement_index,
                 chosen,
@@ -429,6 +514,7 @@ impl Game {
                 player: chooser,
                 card,
                 kicked,
+                x,
                 mode,
                 requirement_index,
                 chosen,
@@ -455,6 +541,7 @@ impl Game {
                 player,
                 card,
                 kicked,
+                x,
                 mode,
                 TargetSelection {
                     requirement_index: requirement_index + 1,
@@ -477,6 +564,7 @@ impl Game {
                 player,
                 card,
                 kicked,
+                x,
                 mode,
                 TargetSelection {
                     requirement_index: requirement_index + 1,
@@ -489,6 +577,7 @@ impl Game {
             player,
             card,
             kicked,
+            x,
             mode,
             requirement_index,
             chosen,
@@ -505,6 +594,7 @@ impl Game {
             player: chooser,
             card,
             kicked,
+            x,
             mode,
             requirement_index,
             chosen,
@@ -519,6 +609,7 @@ impl Game {
                 player: chooser,
                 card,
                 kicked,
+                x,
                 mode,
                 requirement_index,
                 chosen,
@@ -539,6 +630,7 @@ impl Game {
                 player: chooser,
                 card,
                 kicked,
+                x,
                 mode,
                 requirement_index,
                 chosen,
@@ -553,35 +645,13 @@ impl Game {
             player,
             card,
             kicked,
+            x,
             mode,
             TargetSelection {
                 requirement_index: requirement_index + 1,
                 chosen,
                 chosen_req_indices,
             },
-        )
-    }
-
-    fn finish_casting(
-        &mut self,
-        player: PlayerId,
-        card: CardId,
-        kicked: bool,
-        mode: Option<usize>,
-        targets: Vec<Target>,
-        target_req_indices: Vec<usize>,
-    ) -> Result<(), AgentError> {
-        let cost = self.state.cards[card].sacrifice_cost.clone();
-        self.begin_payment(
-            player,
-            Payment::Spell {
-                card,
-                kicked,
-                mode,
-                targets,
-                target_req_indices,
-            },
-            cost,
         )
     }
 
@@ -592,6 +662,7 @@ impl Game {
         targets: Vec<Target>,
         target_req_indices: Vec<usize>,
         kicked: bool,
+        x: u8,
     ) -> Result<(), AgentError> {
         let owner = self.state.cards[card].owner;
         if owner != player {
@@ -600,7 +671,7 @@ impl Game {
         self.journal_turn();
         self.state.turn.spells_cast[player.0].push(card);
         // CR 601.2i — A cast spell is put onto the stack.
-        self.push_spell_to_stack(card, player, targets.clone(), target_req_indices, kicked);
+        self.push_spell_to_stack(card, player, targets.clone(), target_req_indices, kicked, x);
         self.emit(GameEvent::SpellCast {
             card,
             targets: targets.clone(),
@@ -673,6 +744,20 @@ impl Game {
         if self.state.players[player.0].life < ability.life_cost as i32 {
             return Err(AgentError("cannot pay life cost".into()));
         }
+        if ability.mana_cost.x > 0 {
+            if self
+                .legal_activation_x_values(player, permanent_id, ability_index)
+                .is_empty()
+            {
+                return Err(AgentError("no payable value of X".into()));
+            }
+            self.pending_choice = Some(PendingChoice::ActivationX {
+                player,
+                permanent: permanent_id,
+                ability_index,
+            });
+            return Ok(());
+        }
         if ability.effect.target_spec().is_some() {
             if crate::state::ability::effect_target_requirements(std::slice::from_ref(
                 &ability.effect,
@@ -715,11 +800,75 @@ impl Game {
                 permanent: permanent_id,
                 ability_index,
                 remaining_generic: generic,
+                x: 0,
             });
             return Ok(());
         }
 
         self.begin_activation_payment(player, permanent_id, ability_index, Vec::new())
+    }
+
+    /// Values of X from the ability's least X that its waterbend cost can
+    /// pay (CR 602.2b, 601.2f).
+    pub(crate) fn legal_activation_x_values(
+        &self,
+        player: PlayerId,
+        permanent: PermanentId,
+        ability_index: usize,
+    ) -> Vec<u8> {
+        let Some(ability) = self
+            .activated_abilities_for(permanent)
+            .get(ability_index)
+            .cloned()
+        else {
+            return Vec::new();
+        };
+        (ability.x_min..=MAX_X)
+            .map_while(|x| {
+                self.can_pay_with_waterbend(player, &ability.mana_cost.with_x(x))
+                    .then_some(x)
+            })
+            .collect()
+    }
+
+    /// Announce X for the pending activation, then pay its waterbend cost.
+    pub(crate) fn choose_activation_x_action(
+        &mut self,
+        player: PlayerId,
+        x: usize,
+    ) -> Result<(), AgentError> {
+        let Some(PendingChoice::ActivationX {
+            player: chooser,
+            permanent,
+            ability_index,
+        }) = self.pending_choice
+        else {
+            return Err(AgentError("no value of X is pending".into()));
+        };
+        let x = u8::try_from(x).map_err(|_| AgentError("illegal value of X".into()))?;
+        if chooser != player
+            || !self
+                .legal_activation_x_values(player, permanent, ability_index)
+                .contains(&x)
+        {
+            return Err(AgentError("illegal value of X".into()));
+        }
+        let generic = self.activated_abilities_for(permanent)[ability_index]
+            .mana_cost
+            .with_x(x)
+            .generic();
+        if generic == 0 {
+            self.pending_choice = None;
+            return self.finish_waterbend(player, permanent, ability_index, 0, x);
+        }
+        self.pending_choice = Some(PendingChoice::Waterbend {
+            player,
+            permanent,
+            ability_index,
+            remaining_generic: generic,
+            x,
+        });
+        Ok(())
     }
 
     pub(crate) fn activated_ability_targets(
@@ -900,10 +1049,11 @@ impl Game {
             Payment::Spell {
                 card,
                 kicked,
+                x,
                 targets,
                 ..
             } => self
-                .effective_spell_cost(player, *card, *kicked, Some(targets))
+                .effective_spell_cost(player, *card, *kicked, *x, Some(targets))
                 .unwrap_or_default(),
             Payment::Activation {
                 permanent,
@@ -979,11 +1129,12 @@ impl Game {
             Payment::Spell {
                 card,
                 kicked,
+                x,
                 mode,
                 targets,
                 target_req_indices,
             } => {
-                self.cast_spell(player, card, targets, target_req_indices, kicked)?;
+                self.cast_spell(player, card, targets, target_req_indices, kicked, x)?;
                 if let Some(StackObject::Spell(spell)) = self.state.stack_objects.last_mut() {
                     spell.mode = mode;
                 }
@@ -1001,7 +1152,7 @@ impl Game {
                 let life =
                     self.state.cards[source.card].activated_abilities[ability_index].life_cost;
                 self.change_life(player, -(life as i32));
-                self.push_activated_ability(player, permanent, ability_index, targets)
+                self.push_activated_ability(player, permanent, ability_index, targets, 0)
             }
         }
     }
@@ -1105,6 +1256,7 @@ impl Game {
             permanent,
             ability_index,
             remaining_generic,
+            x,
         }) = self.pending_choice
         else {
             return Err(AgentError("no waterbend payment is pending".to_string()));
@@ -1126,13 +1278,14 @@ impl Game {
         let remaining_generic = remaining_generic - 1;
 
         if remaining_generic == 0 {
-            return self.finish_waterbend(player, permanent, ability_index, remaining_generic);
+            return self.finish_waterbend(player, permanent, ability_index, remaining_generic, x);
         }
         self.pending_choice = Some(PendingChoice::Waterbend {
             player,
             permanent,
             ability_index,
             remaining_generic,
+            x,
         });
         Ok(())
     }
@@ -1147,6 +1300,7 @@ impl Game {
             permanent,
             ability_index,
             remaining_generic,
+            x,
         }) = self.pending_choice
         else {
             return Err(AgentError("no waterbend payment is pending".to_string()));
@@ -1154,7 +1308,7 @@ impl Game {
         if payer != player {
             return Err(AgentError("wrong player for waterbend payment".to_string()));
         }
-        self.finish_waterbend(player, permanent, ability_index, remaining_generic)
+        self.finish_waterbend(player, permanent, ability_index, remaining_generic, x)
     }
 
     fn finish_waterbend(
@@ -1163,6 +1317,7 @@ impl Game {
         permanent_id: PermanentId,
         ability_index: usize,
         remaining_generic: u8,
+        x: u8,
     ) -> Result<(), AgentError> {
         let Some(_) = self.state.permanents[permanent_id].as_ref() else {
             self.pending_choice = None;
@@ -1178,13 +1333,13 @@ impl Game {
         };
 
         // Pay the colored components plus the unpaid generic remainder.
-        let remainder = ability.mana_cost.with_generic(remaining_generic);
+        let remainder = ability.mana_cost.with_x(x).with_generic(remaining_generic);
         if remainder.mana_value > 0 {
             self.produce_mana(player, &remainder)?;
             self.spend_mana(player, &remainder)?;
         }
         self.pending_choice = None;
-        self.push_activated_ability(player, permanent_id, ability_index, Vec::new())
+        self.push_activated_ability(player, permanent_id, ability_index, Vec::new(), x)
     }
 
     /// Costs are paid: put the activated ability on the stack (handling
@@ -1195,6 +1350,7 @@ impl Game {
         permanent_id: PermanentId,
         ability_index: usize,
         targets: Vec<Target>,
+        x: u8,
     ) -> Result<(), AgentError> {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return Err(AgentError("source permanent does not exist".to_string()));
@@ -1242,6 +1398,7 @@ impl Game {
             ability_index,
             targets,
             attached,
+            x,
         }));
         self.state.priority.on_non_pass_action(self.active_player());
         Ok(())

@@ -463,7 +463,7 @@ mod tests {
             let mut game = game();
             game.scenario_clear_hand(PlayerId(0));
             game.scenario_clear_hand(PlayerId(1));
-            game.push_spell_to_stack(source, PlayerId(0), vec![], vec![], false);
+            game.push_spell_to_stack(source, PlayerId(0), vec![], vec![], false, 0);
             game.move_card(destination, ZoneType::Battlefield);
             let target = game.state.card_to_permanent[destination].unwrap();
             game.emit(GameEvent::SpellCast {

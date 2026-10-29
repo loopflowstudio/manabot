@@ -287,6 +287,7 @@ impl Game {
         targets: Vec<Target>,
         target_req_indices: Vec<usize>,
         kicked: bool,
+        x: u8,
     ) {
         let cast_from = self.state.zones.zone_of(card).expect("cast source zone");
         let flashback = cast_from == ZoneType::Graveyard;
@@ -304,6 +305,7 @@ impl Game {
                 targets,
                 target_req_indices,
                 kicked,
+                x,
                 mode: None,
             }));
     }
@@ -428,6 +430,7 @@ impl Game {
             permanent.was_cast = was_cast;
             permanent.tapped = entry.tapped;
             permanent.plus1_counters = entry.plus_one_counters.max(0);
+            permanent.counters = entry.counters;
             event_controller = permanent.controller;
             self.state.permanents.push(Some(permanent));
             if self.state.card_to_permanent.len() <= card.0 {

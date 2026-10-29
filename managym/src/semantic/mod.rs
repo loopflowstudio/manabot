@@ -115,6 +115,10 @@ pub enum Opcode {
     AddCardTypes = 77,
     AddSubtypesControlled = 78,
     UnspentManaBecomesRed = 79,
+    DestroyCreaturesLosingAbilities = 80,
+    EntersWithXCounters = 81,
+    OpponentDamagePlusCounters = 82,
+    SetBasePtValue = 83,
 }
 
 impl Opcode {
@@ -199,6 +203,10 @@ impl Opcode {
             77 => Opcode::AddCardTypes,
             78 => Opcode::AddSubtypesControlled,
             79 => Opcode::UnspentManaBecomesRed,
+            80 => Opcode::DestroyCreaturesLosingAbilities,
+            81 => Opcode::EntersWithXCounters,
+            82 => Opcode::OpponentDamagePlusCounters,
+            83 => Opcode::SetBasePtValue,
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -395,6 +403,27 @@ pub enum Step {
     },
     /// "If you would lose unspent mana, that mana becomes red instead" (static).
     UnspentManaBecomesRed,
+    /// Creatures with mana value at most `max_mana_value` lose all abilities
+    /// until end of turn, then are destroyed.
+    DestroyCreaturesLosingAbilities {
+        max_mana_value: ValueExpression,
+    },
+    /// Set base P/T to resolution-time values.
+    SetBasePtValue {
+        target: String,
+        power: ValueExpression,
+        toughness: ValueExpression,
+        duration: String,
+    },
+    /// "Enters with X [counter] counters" (static).
+    EntersWithXCounters {
+        counter: Option<String>,
+    },
+    /// Opponent-directed damage from your sources is increased by this
+    /// permanent's [counter] counters (static).
+    OpponentDamagePlusCounters {
+        counter: Option<String>,
+    },
 
     SearchBasicLands {
         count: usize,
@@ -1105,6 +1134,10 @@ impl<'a> BoundPack<'a> {
             | Step::AddCardTypes { .. }
             | Step::AddSubtypesControlled { .. }
             | Step::UnspentManaBecomesRed
+            | Step::DestroyCreaturesLosingAbilities { .. }
+            | Step::EntersWithXCounters { .. }
+            | Step::OpponentDamagePlusCounters { .. }
+            | Step::SetBasePtValue { .. }
             | Step::SearchBasicLands { .. }
             | Step::Sacrifice { .. }
             | Step::DealDamageToController { .. }
@@ -1361,6 +1394,21 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
             subtypes: str_array_field(value, "subtypes")?,
         },
         Opcode::UnspentManaBecomesRed => Step::UnspentManaBecomesRed,
+        Opcode::DestroyCreaturesLosingAbilities => Step::DestroyCreaturesLosingAbilities {
+            max_mana_value: ValueExpression::parse(object_field(value, "max_mana_value")?)?,
+        },
+        Opcode::SetBasePtValue => Step::SetBasePtValue {
+            target: str_field(value, "target")?.to_owned(),
+            power: ValueExpression::parse(object_field(value, "power")?)?,
+            toughness: ValueExpression::parse(object_field(value, "toughness")?)?,
+            duration: str_field(value, "duration")?.to_owned(),
+        },
+        Opcode::EntersWithXCounters => Step::EntersWithXCounters {
+            counter: opt_str_field(value, "counter")?.map(str::to_owned),
+        },
+        Opcode::OpponentDamagePlusCounters => Step::OpponentDamagePlusCounters {
+            counter: opt_str_field(value, "counter")?.map(str::to_owned),
+        },
         Opcode::Tap => Step::Tap {
             target: str_field(value, "target")?.to_owned(),
         },
@@ -1744,12 +1792,14 @@ pub enum ValueExpression {
     GraveyardMatching { base: i32, predicate: Predicate },
     CardsDrawnMinus(u32),
     GreatestSharedCreatureType,
+    X,
 }
 impl ValueExpression {
     fn parse(value: &Value) -> Result<Self, IrError> {
         Ok(match str_field(value, "kind")? {
             "creatures_with_counters" => Self::CreaturesWithCounters,
             "greatest_shared_creature_type" => Self::GreatestSharedCreatureType,
+            "x" => Self::X,
             "battlefield_matching" => {
                 Self::BattlefieldMatching(parse_predicate(object_field(value, "predicate")?)?)
             }

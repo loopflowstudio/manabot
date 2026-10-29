@@ -54,6 +54,14 @@ impl Game {
                 }
                 Some(label)
             }
+            Action::ChooseMode { mode, .. }
+                if matches!(
+                    self.pending_choice,
+                    Some(PendingChoice::SpellX { .. } | PendingChoice::ActivationX { .. })
+                ) =>
+            {
+                Some(format!("X = {mode}"))
+            }
             Action::ChooseMode { mode, .. } => {
                 match &self.state.suspended_decision.as_ref()?.decision {
                     Decision::ManaChoice { choices, .. } => {
@@ -253,7 +261,7 @@ impl Game {
                     continue;
                 }
                 let affordable = if ability.waterbend {
-                    self.can_pay_with_waterbend(player, &ability.mana_cost)
+                    self.can_pay_with_waterbend(player, &ability.mana_cost.with_x(ability.x_min))
                 } else {
                     self.can_pay_announced_activation(
                         player,
@@ -318,7 +326,7 @@ impl Game {
             }
         }
 
-        match self.effective_spell_cost(player, card_id, false, None) {
+        match self.effective_spell_cost(player, card_id, false, 0, None) {
             Some(cost) => {
                 // Castability gating sees pooled mana too — until-end-of-
                 // combat mana (firebending) must make spells castable.
@@ -326,6 +334,7 @@ impl Game {
                     let payment = crate::flow::game::Payment::Spell {
                         card: card_id,
                         kicked: false,
+                        x: 0,
                         mode: None,
                         targets: Vec::new(),
                         target_req_indices: Vec::new(),
@@ -467,6 +476,43 @@ impl Game {
                     .collect(),
                 focus: vec![self.state.cards[card].id],
             }),
+            PendingChoice::SpellX {
+                player,
+                card,
+                kicked,
+            } => Some(ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::Modal,
+                actions: self
+                    .legal_x_values(*player, *card, *kicked)
+                    .into_iter()
+                    .map(|x| Action::ChooseMode {
+                        player: *player,
+                        mode: usize::from(x),
+                    })
+                    .collect(),
+                focus: vec![self.state.cards[card].id],
+            }),
+            PendingChoice::ActivationX {
+                player,
+                permanent,
+                ability_index,
+            } => Some(ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::Modal,
+                actions: self
+                    .legal_activation_x_values(*player, *permanent, *ability_index)
+                    .into_iter()
+                    .map(|x| Action::ChooseMode {
+                        player: *player,
+                        mode: usize::from(x),
+                    })
+                    .collect(),
+                focus: self.state.permanents[*permanent]
+                    .as_ref()
+                    .map(|perm| vec![perm.id])
+                    .unwrap_or_default(),
+            }),
             PendingChoice::KickerChoice { player, card } => Some(ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::PayOrNot,
@@ -516,6 +562,7 @@ impl Game {
                 permanent,
                 ability_index,
                 remaining_generic,
+                x,
             } => {
                 let cost = self.state.permanents[*permanent]
                     .as_ref()
@@ -524,7 +571,7 @@ impl Game {
                             .activated_abilities
                             .get(*ability_index)
                     })
-                    .map(|ability| ability.mana_cost.clone())?;
+                    .map(|ability| ability.mana_cost.with_x(*x))?;
                 let remainder = cost.with_generic(*remaining_generic);
                 let candidates = self.waterbend_candidates(*player);
 
@@ -622,6 +669,16 @@ impl Game {
                 if matches!(self.pending_choice, Some(PendingChoice::SpellMode { .. })) =>
             {
                 self.spell_mode_action(*player, *mode)
+            }
+            Action::ChooseMode { player, mode }
+                if matches!(self.pending_choice, Some(PendingChoice::SpellX { .. })) =>
+            {
+                self.choose_x_action(*player, *mode)
+            }
+            Action::ChooseMode { player, mode }
+                if matches!(self.pending_choice, Some(PendingChoice::ActivationX { .. })) =>
+            {
+                self.choose_activation_x_action(*player, *mode)
             }
             Action::SelectCard { player, card }
                 if matches!(
