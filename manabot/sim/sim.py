@@ -415,25 +415,15 @@ def simulate_models(
     villain_player: Player,
     sim_config: Optional[SimulationConfig] = None,
 ) -> GameStats:
-    """
-    Evaluate models in parallel by running multiple games simultaneously.
-
-    Args:
-        hero_player: Player for hero position
-        villain_player: Player for villain position
-        eval_hypers: Evaluation hyperparameters
-
-    Returns:
-        GameStats with results
-    """
+    """Run games in parallel threads after admitting each model to the match setup."""
     logger = getLogger("manabot.sim.sim").getChild("simulate_parallel")
 
     # Set up hyperparameters
     sim_config = sim_config or SimulationConfig()
-    # Every model player is admitted against the actual setup before any game.
-    players = Match(sim_config.match).to_rust()
+    player_configs = Match(sim_config.match).to_rust()
     for player in (hero_player, villain_player):
-        validate_agent_setup(getattr(player, "agent", None), players)
+        if isinstance(player, ModelPlayer):
+            validate_agent_setup(player.agent, player_configs)
 
     # Determine number of threads (capped by games and CPU cores)
     num_threads = min(sim_config.num_threads, sim_config.num_games)
