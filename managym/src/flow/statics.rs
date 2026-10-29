@@ -27,6 +27,8 @@
 // keywords; a keyword-grant scope's reads only non-static keywords. Neither
 // computation can recurse.
 
+use std::collections::BTreeMap;
+
 use crate::{
     flow::game::Game,
     state::{
@@ -129,9 +131,9 @@ impl Game {
                 {
                     continue;
                 }
-                let times = buff
-                    .per_creature_type_max
-                    .map_or(1, |max| self.creature_type_count(target_id).min(max));
+                let times = buff.per_creature_type_max.map_or(1, |max| {
+                    (self.creature_types(target_id).len() as i32).min(max)
+                });
                 power += buff.power * times;
                 toughness += buff.toughness * times;
             }
@@ -255,10 +257,6 @@ impl Game {
         })
     }
 
-    fn creature_type_count(&self, permanent_id: PermanentId) -> i32 {
-        self.creature_types(permanent_id).len() as i32
-    }
-
     /// Distinct creature types of a battlefield creature (CR 205.3m): printed
     /// subtypes of a printed creature, less noncreature subtypes, plus
     /// temporarily granted subtypes. Animated lands keep only granted types.
@@ -285,7 +283,7 @@ impl Game {
     /// The greatest number of creatures `controller` controls that share one
     /// creature type (White Lotus Tile); zero when none has a creature type.
     pub(crate) fn greatest_shared_creature_type(&self, controller: PlayerId) -> usize {
-        let mut counts: std::collections::BTreeMap<&str, usize> = Default::default();
+        let mut counts: BTreeMap<&str, usize> = Default::default();
         for id in self.battlefield_permanents(controller) {
             if self.permanent_is_creature(id) {
                 for creature_type in self.creature_types(id) {

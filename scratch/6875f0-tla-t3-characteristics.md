@@ -57,7 +57,9 @@ Check (slice 8, debug): `cargo test` all targets pass (cards 33, rules_tests 356
 lib 119) except `semantic_conformance_tests` (world w16 vs w15 and receipt digest
 drift; fails in PR #394 CI run 40819903624); clippy, fmt clean; extension rebuilt;
 `pytest tests/semantic` 158 pass, 4 fail on `schema_version == 3/4/7` asserts,
-inherited from `be2b7586b` (test files unchanged since it).
+inherited from `be2b7586b` (test files unchanged since it). Slice 8 compress
+(creature_types inlined, one-color X via `repeat`, test imports): debug cards 33,
+rules_tests 356, lib 119 pass; clippy clean; no IR change, so no rebuild.
 
 ## Remaining (21 cards), suggested next slices
 

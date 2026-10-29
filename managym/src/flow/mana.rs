@@ -505,22 +505,16 @@ impl Game {
                 Some(branch[0].clone())
             }
             Effect::AddOneColorManaValue { amount } => {
-                let amount = self.effect_value(amount, controller).max(0) as u32;
+                let amount = self.effect_value(amount, controller).max(0) as usize;
                 if amount == 0 {
                     return Some(Effect::AddMana {
                         mana: Mana::default(),
                         until_end_of_combat: false,
                     });
                 }
-                Some(Effect::mana_choice(["W", "U", "B", "R", "G"].map(
-                    |color| {
-                        let mut mana = Mana::default();
-                        for _ in 0..amount {
-                            mana.add(&Mana::parse(color));
-                        }
-                        mana
-                    },
-                )))
+                Some(Effect::mana_choice(
+                    ["W", "U", "B", "R", "G"].map(|color| Mana::parse(&color.repeat(amount))),
+                ))
             }
             _ => None,
         }

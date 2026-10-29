@@ -7,6 +7,7 @@ use managym::{
     flow::{event::GameEvent, turn::StepKind},
     state::{
         game_object::{PermanentId, PlayerId, Target},
+        mana::Mana,
         permanent::CounterKind,
         zone::ZoneType,
     },
@@ -16,7 +17,7 @@ use super::{
     helpers::Scenario,
     support::{
         activate, can_activate, card_of, cast, choose, counters, counters_of, has_action,
-        pass_until, play_land, settle, setup, tapped, to_hand,
+        library_card, pass_until, play_land, settle, setup, tapped, to_hand,
     },
 };
 
@@ -1007,7 +1008,7 @@ fn invasion_submersible_bounces_another_permanent_then_surfaces_once() {
     assert!(!can_activate(&mut s, sub, 0), "exhaust");
 }
 
-fn pool(s: &Scenario) -> managym::state::mana::Mana {
+fn pool(s: &Scenario) -> Mana {
     s.game().state.players[0].mana_pool.clone()
 }
 
@@ -1027,7 +1028,7 @@ fn great_divide_guide_grants_lands_and_allies_any_color() {
 
     activate(&mut s, forest, 0);
     choose_mode(&mut s, 0);
-    assert_eq!(pool(&s), managym::state::mana::Mana::parse("W"));
+    assert_eq!(pool(&s), Mana::parse("W"));
     cast(&mut s, "Healer's Hawk");
     settle(&mut s);
     assert_eq!(s.battlefield_permanents_named(0, "Healer's Hawk").len(), 1);
@@ -1063,7 +1064,7 @@ fn raucous_audience_adds_more_with_a_four_power_creature() {
     add_counters(&mut s, theirs, CounterKind::PlusOnePlusOne, 2);
     activate(&mut s, audience, 0);
     choose_mode(&mut s, 0);
-    assert_eq!(pool(&s), managym::state::mana::Mana::parse("G"));
+    assert_eq!(pool(&s), Mana::parse("G"));
 
     untap(&mut s, audience);
     s.set_player_mana_pool(0, "0");
@@ -1125,7 +1126,7 @@ fn white_lotus_tile_adds_one_color_for_the_largest_shared_type() {
     untap(&mut s, tile);
     activate(&mut s, tile, 0);
     choose_mode(&mut s, 1);
-    assert_eq!(pool(&s), managym::state::mana::Mana::parse("UU"));
+    assert_eq!(pool(&s), Mana::parse("UU"));
 
     s.game_mut().state.permanents[elves]
         .as_mut()
@@ -1135,7 +1136,7 @@ fn white_lotus_tile_adds_one_color_for_the_largest_shared_type() {
     untap(&mut s, tile);
     activate(&mut s, tile, 0);
     choose_mode(&mut s, 3);
-    assert_eq!(pool(&s), managym::state::mana::Mana::parse("RRR"));
+    assert_eq!(pool(&s), Mana::parse("RRR"));
 }
 
 /// CR 508.1c, 509.1b: the Lion-Turtle can neither attack nor block until
@@ -1155,7 +1156,7 @@ fn the_lion_turtle_waits_for_three_lessons_to_fight() {
     ready(&mut s, turtle);
     activate(&mut s, turtle, 0);
     choose_mode(&mut s, 2);
-    assert_eq!(pool(&s), managym::state::mana::Mana::parse("B"));
+    assert_eq!(pool(&s), Mana::parse("B"));
     untap(&mut s, turtle);
 
     s.advance_until(
@@ -1172,7 +1173,7 @@ fn the_lion_turtle_waits_for_three_lessons_to_fight() {
     assert!(!offered_in_combat(&s, turtle), "can't block");
 
     for _ in 0..3 {
-        let lesson = super::support::library_card(&s, 0, "Waterbending Lesson");
+        let lesson = library_card(&s, 0, "Waterbending Lesson");
         s.game_mut().move_card(lesson, ZoneType::Graveyard);
     }
     s.advance_to_active_step(1, StepKind::Main);
