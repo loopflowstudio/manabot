@@ -114,3 +114,6 @@ Check (item 26, debug): `cargo test --no-fail-fast` passes except the w15
 `semantic_conformance_tests` pair; clippy `--all-targets -D warnings` clean.
 pytest: model+semantic+verify parity 374, CLAUDE.md world suite 66, Academy
 play/protocol 66, env+verify 182 pass.
+Compress (after 26): one keyword-column table (`keyword_columns`) in
+`observability.rs`; `tla.rs` uses the shared support helpers. `cargo test --test
+cards` 378 pass, clippy clean.
