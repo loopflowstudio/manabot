@@ -158,10 +158,10 @@ def test_same_effect_encodes_identically_across_cards() -> None:
 
 def test_definition_tokens_do_not_depend_on_the_pack() -> None:
     small = BoundSemanticPack.bind(_manifest())
-    world = BoundSemanticPack.bind(_manifest(pack_key="tla-pool-v1"))
+    world = BoundSemanticPack.bind(_manifest(pack_key="world"))
     for name in ("Forest", "Igneous Inspiration", "Invasion Reinforcements"):
         assert _card_tokens(small, _row(small, name)) == _card_tokens(
-            world, _row(world, name, "tla-pool-v1")
+            world, _row(world, name, "world")
         )
 
 

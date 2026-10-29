@@ -1,6 +1,6 @@
 //! Every mechanic reaches the policy twice: match state through observation
 //! tensor columns (`agent::observation_encoder`), card rules through learning
-//! tokens (`semantic::tokens`). The guards below destructure or match
+//! tokens (`cards::tokens`). The guards below destructure or match
 //! exhaustively, with no wildcard, so a new keyword, permanent or player
 //! status, `Effect`, `Ability` or `TriggerCondition` variant does not compile
 //! until it names where the policy sees it. Directed tests then put a game in
@@ -15,7 +15,7 @@ use managym::{
         observation_encoder::{CARD_DIM, PERMANENT_DIM, PLAYER_DIM},
     },
     cards::content_pack::default_content_pack,
-    semantic::tokens::{definition_tokens, name_value, TokenKind},
+    cards::tokens::{definition_tokens, name_value, TokenKind},
     state::{
         ability::{
             Ability, Effect, EffectValue, PaymentCost, StaticCondition, TargetRequirement,

@@ -7,7 +7,7 @@ import numpy as np
 
 class PoolDefinition(TypedDict):
     card_def_id: int | None
-    semantic_key: str | None
+    key: str | None
     scryfall_id: str | None
     registry_name: str
     eligibility: Literal["eligible", "unsupported"]

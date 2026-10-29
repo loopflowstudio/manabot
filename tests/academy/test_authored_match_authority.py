@@ -47,13 +47,9 @@ def test_release_stack_authored_match_receipt_is_terminal_and_authoritative():
 
     _, programs = _program_index()
     admitted = set(programs)
-    encountered = {
-        program["semantic_key"] for program in checked["encountered_typed_programs"]
-    }
+    encountered = {program["key"] for program in checked["encountered_typed_programs"]}
     referenced = {
-        semantic_key
-        for decision in decisions
-        for semantic_key in decision["encountered_programs"]
+        key for decision in decisions for key in decision["encountered_programs"]
     }
     assert encountered == referenced
     assert encountered

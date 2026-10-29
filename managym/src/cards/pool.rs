@@ -1,11 +1,12 @@
 //! Content eligibility shared by deck import and native admission.
 //!
 //! Every pack key names one [`ContentPack`] with one descriptor row per
-//! definition. The world pool ([`crate::world::WORLD_POOL`]) holds every card
-//! a set file defines; authored setups hold their decks' cards. A defined card
-//! is eligible unless its set file marks it incomplete
-//! ([`cardsets::incomplete`]); tokens are never deck entries. Setup
-//! construction policy belongs to the admission caller, not this catalog.
+//! definition. The world pool ([`crate::world::WORLD_POOL`]) describes the
+//! default pack, so it shares that pack's `CardDefId`s and digest; authored
+//! setups hold their decks' cards. A defined card is eligible unless its set
+//! file marks it incomplete ([`cardsets::incomplete`]); tokens and rules
+//! fixtures are never deck entries. Setup construction policy belongs to the
+//! admission caller, not this catalog.
 
 use std::{
     collections::BTreeMap,
@@ -15,7 +16,11 @@ use std::{
 use serde::{Deserialize, Serialize};
 
 use super::{setups::authored_packs, ContentError};
-use crate::{cards::content_pack::ContentPack, cardsets, state::card::CardDefId};
+use crate::{
+    cards::content_pack::{default_content_pack, ContentPack},
+    cardsets,
+    state::card::CardDefId,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -28,7 +33,8 @@ pub enum Eligibility {
 pub struct PoolDefinition {
     #[serde(skip_deserializing)]
     pub card_def_id: Option<CardDefId>,
-    pub semantic_key: Option<String>,
+    /// Set-file key (`tla.avatar_enthusiasts`); `None` for rules fixtures.
+    pub key: Option<String>,
     /// Scryfall card-object id of the definition's printing.
     #[serde(default)]
     pub scryfall_id: Option<String>,
@@ -61,6 +67,8 @@ impl PoolRuntime {
             .map(|(card_def_id, definition)| {
                 let reason = if definition.is_token {
                     Some("A token, created by its card; not a deck entry".to_owned())
+                } else if definition.key.is_empty() {
+                    Some("A rules fixture, not a printed card".to_owned())
                 } else {
                     incomplete
                         .get(definition.key)
@@ -68,8 +76,9 @@ impl PoolRuntime {
                 };
                 PoolDefinition {
                     card_def_id: Some(card_def_id),
-                    semantic_key: Some(definition.key.to_owned()),
-                    scryfall_id: Some(definition.scryfall_id.to_owned()),
+                    key: (!definition.key.is_empty()).then(|| definition.key.to_owned()),
+                    scryfall_id: (!definition.scryfall_id.is_empty())
+                        .then(|| definition.scryfall_id.to_owned()),
                     registry_name: definition.name.clone(),
                     eligibility: if reason.is_none() {
                         Eligibility::Eligible
@@ -100,11 +109,10 @@ fn pools() -> Result<&'static BTreeMap<String, PoolRuntime>, ContentError> {
         .get_or_init(|| {
             let world = crate::world::WORLD_POOL;
             let mut pools = BTreeMap::new();
-            let content = Arc::new(ContentPack::from_definitions(
-                Some(world.to_owned()),
-                cardsets::catalog().to_vec(),
-            ));
-            pools.insert(world.to_owned(), PoolRuntime::describe(world, content));
+            pools.insert(
+                world.to_owned(),
+                PoolRuntime::describe(world, default_content_pack()),
+            );
             for pack in authored_packs()? {
                 pools.insert(
                     pack.pack_key.clone(),
@@ -147,7 +155,7 @@ mod tests {
 
     #[test]
     fn descriptor_joins_runtime_ids_and_rejects_unknown_pool() {
-        let pool = content_pool("tla-pool-v1").unwrap();
+        let pool = content_pool(crate::world::WORLD_POOL).unwrap();
         let content = pool_content(&pool.pack_key).unwrap();
         assert_eq!(pool.world_version, crate::WORLD_VERSION);
         assert_eq!(pool.content_digest, content.content_digest());
@@ -167,10 +175,16 @@ mod tests {
         assert_eq!(marked.eligibility, Eligibility::Unsupported);
         assert!(marked.card_def_id.is_some() && marked.reason.is_some());
         assert_eq!(row(&pool, "Ally").eligibility, Eligibility::Unsupported);
-        assert!(pool
-            .definitions
-            .iter()
-            .all(|d| d.registry_name != "Crossroads of Destiny"));
+        let fixture = row(&pool, "Crossroads of Destiny");
+        assert_eq!(fixture.eligibility, Eligibility::Unsupported);
+        assert!(fixture.key.is_none());
+        // The world pool is the default pack: same ids, same digest.
+        let default = default_content_pack();
+        assert!(Arc::ptr_eq(&content, &default));
+        assert_eq!(
+            avatar.card_def_id,
+            default.definition_id("Avatar Enthusiasts")
+        );
         assert!(content_pool("missing-pool").is_err());
 
         let baseline = content_pool("tla-baseline-v1").unwrap();

@@ -1,7 +1,7 @@
 """Current packs bind learning catalogs and the world pool reports support.
 
 Setup and token-closure rejection are native tests in
-`managym/src/semantic/setups.rs`; these checks cover the Python consumers.
+`managym/src/cards/setups.rs`; these checks cover the Python consumers.
 """
 
 import json
@@ -33,7 +33,7 @@ def _manifest(pack_key: str) -> dict:
 
 
 def test_all_current_packs_bind_learning_projections() -> None:
-    pack_keys = {setup["pack_key"] for setup in SETUPS.values()} | {"tla-pool-v1"}
+    pack_keys = {setup["pack_key"] for setup in SETUPS.values()} | {"world"}
     assert CURRENT_PACK_KEYS <= pack_keys
     for pack_key in sorted(pack_keys):
         manifest = _manifest(pack_key)
@@ -65,7 +65,7 @@ def test_unknown_pack_has_no_learning_catalog() -> None:
     ],
 )
 def test_cards_marked_incomplete_are_unsupported(name: str) -> None:
-    pool = managym.content_pool("tla-pool-v1")
+    pool = managym.content_pool("world")
     entry = next(row for row in pool["definitions"] if row["registry_name"] == name)
     assert entry["card_def_id"] is not None  # Fixed setups still run them.
     assert entry["eligibility"] == "unsupported"
@@ -84,7 +84,7 @@ def test_cards_marked_incomplete_are_unsupported(name: str) -> None:
     ],
 )
 def test_defined_cards_are_eligible_in_the_world_pool(name: str) -> None:
-    pool = managym.content_pool("tla-pool-v1")
+    pool = managym.content_pool("world")
     entry = next(row for row in pool["definitions"] if row["registry_name"] == name)
     assert entry["card_def_id"] is not None
     assert entry["eligibility"] == "eligible"
@@ -97,7 +97,7 @@ def test_set_filter_narrows_the_world_pool_by_key_prefix() -> None:
     assert "Avatar Enthusiasts" in tla and "Forest" not in tla
     assert "Forest" in with_basics and "Pop Quiz" not in with_basics
     assert all(
-        row["semantic_key"].startswith(("tla.", "lea."))
+        row["key"].startswith(("tla.", "lea."))
         for row in managym.set_cards(["tla", "lea"])
     )
 
@@ -161,8 +161,8 @@ def test_baseline_card_executes_shared_commands_and_forks_with_learning_and_acad
     bound = BoundSemanticPack.from_env(env)
     policy = bind_policy_catalog("tla-baseline-v1")
     assert bound.semantic_pack_hash == policy.semantic_pack_hash
-    full_pool = bind_policy_catalog("tla-pool-v1")
-    assert full_pool.pack_key == "tla-pool-v1"
+    full_pool = bind_policy_catalog("world")
+    assert full_pool.pack_key == "world"
     pool = managym.content_pool("tla-baseline-v1")
     assert pool["content_digest"] == env.content_pack_manifest()["content_digest"]
     assert (

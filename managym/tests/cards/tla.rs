@@ -26,9 +26,9 @@ use managym::{
         action::{Action, ActionSpaceKind, ActionType},
         observation::Observation,
     },
+    cards::setups::authored_pack,
     decision::Command,
     flow::turn::StepKind,
-    semantic::setups::authored_pack,
     state::{
         game_object::{CardId, PermanentId, PlayerId, Target},
         mana::Mana,

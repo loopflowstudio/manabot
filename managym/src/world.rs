@@ -16,13 +16,14 @@
 
 use std::collections::BTreeSet;
 
-use crate::semantic::{content_pool, ContentError, Eligibility, PoolDefinition};
+use crate::cards::{content_pool, ContentError, Eligibility, PoolDefinition};
 
 /// Rules and observation/action meaning; see `WORLDS.md` for compatibility.
 pub const WORLD_VERSION: &str = "w17";
 
-/// The pool holding every card this world defines, from every set.
-pub const WORLD_POOL: &str = "tla-pool-v1";
+/// The pool describing the default pack: every card this world defines, from
+/// every set, with the default pack's `CardDefId`s and digest.
+pub const WORLD_POOL: &str = "world";
 
 /// Whether this world supports `name` for deck entry. Unknown names are
 /// unsupported rather than errors.
@@ -60,7 +61,7 @@ pub fn set_cards(sets: &[&str]) -> Result<Vec<PoolDefinition>, ContentError> {
         .definitions
         .into_iter()
         .filter(|row| {
-            row.semantic_key.as_deref().is_some_and(|key| {
+            row.key.as_deref().is_some_and(|key| {
                 key.split_once('.')
                     .is_some_and(|(set, _)| sets.contains(&set))
             })

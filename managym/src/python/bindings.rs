@@ -3570,8 +3570,8 @@ impl PyEnv {
 }
 
 #[cfg(feature = "python")]
-fn authored_pack(pack_key: &str) -> PyResult<&'static crate::semantic::setups::AuthoredPack> {
-    crate::semantic::setups::authored_pack_for_key(pack_key)
+fn authored_pack(pack_key: &str) -> PyResult<&'static crate::cards::setups::AuthoredPack> {
+    crate::cards::setups::authored_pack_for_key(pack_key)
         .map_err(|error| PyValueError::new_err(error.to_string()))
 }
 
@@ -3592,11 +3592,11 @@ fn unsupported_cards(names: Vec<String>) -> PyResult<Vec<String>> {
 #[pyo3(signature = (pack_key=None))]
 fn learning_catalog(py: Python<'_>, pack_key: Option<&str>) -> PyResult<PyObject> {
     let content = match pack_key {
-        Some(key) => crate::semantic::pool_content(key)
+        Some(key) => crate::cards::pool_content(key)
             .map_err(|error| PyValueError::new_err(error.to_string()))?,
         None => crate::cards::content_pack::default_content_pack(),
     };
-    let catalog = crate::semantic::tokens::learning_catalog(&content)
+    let catalog = crate::cards::tokens::learning_catalog(&content)
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
     let out = PyDict::new_bound(py);
     out.set_item("pack_key", pack_key)?;
@@ -3634,14 +3634,14 @@ fn learning_catalog(py: Python<'_>, pack_key: Option<&str>) -> PyResult<PyObject
 #[cfg(feature = "python")]
 #[pyfunction]
 fn learning_token_value(name: &str) -> i32 {
-    crate::semantic::tokens::name_value(name)
+    crate::cards::tokens::name_value(name)
 }
 
 #[cfg(feature = "python")]
 #[pyfunction]
 fn content_pool(py: Python<'_>, pack_key: &str) -> PyResult<PyObject> {
-    let pool = crate::semantic::content_pool(pack_key)
-        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let pool =
+        crate::cards::content_pool(pack_key).map_err(|e| PyValueError::new_err(e.to_string()))?;
     let out = PyDict::new_bound(py);
     out.set_item("pack_key", pool.pack_key)?;
     out.set_item("world_version", pool.world_version)?;
@@ -3663,20 +3663,20 @@ fn set_cards(py: Python<'_>, sets: Vec<String>) -> PyResult<PyObject> {
 #[cfg(feature = "python")]
 fn pool_rows<'py>(
     py: Python<'py>,
-    rows: Vec<crate::semantic::PoolDefinition>,
+    rows: Vec<crate::cards::PoolDefinition>,
 ) -> PyResult<Bound<'py, PyList>> {
     let definitions = PyList::empty_bound(py);
     for row in rows {
         let item = PyDict::new_bound(py);
         item.set_item("card_def_id", row.card_def_id.map(|id| id.0))?;
-        item.set_item("semantic_key", row.semantic_key)?;
+        item.set_item("key", row.key)?;
         item.set_item("scryfall_id", row.scryfall_id)?;
         item.set_item("registry_name", row.registry_name)?;
         item.set_item(
             "eligibility",
             match row.eligibility {
-                crate::semantic::Eligibility::Eligible => "eligible",
-                crate::semantic::Eligibility::Unsupported => "unsupported",
+                crate::cards::Eligibility::Eligible => "eligible",
+                crate::cards::Eligibility::Unsupported => "unsupported",
             },
         )?;
         item.set_item("reason", row.reason)?;

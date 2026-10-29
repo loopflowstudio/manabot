@@ -16617,10 +16617,10 @@
         138,
         141
       ],
+      "key": "lea.forest.mana.0",
       "kind": "mana",
       "program_index": 0,
-      "registry_name": "Forest",
-      "semantic_key": "lea.forest.mana.0"
+      "registry_name": "Forest"
     },
     {
       "definition_index": 1,
@@ -16643,10 +16643,10 @@
         138,
         141
       ],
+      "key": "lea.island.mana.0",
       "kind": "mana",
       "program_index": 1,
-      "registry_name": "Island",
-      "semantic_key": "lea.island.mana.0"
+      "registry_name": "Island"
     },
     {
       "definition_index": 2,
@@ -16666,10 +16666,10 @@
         121,
         141
       ],
+      "key": "lea.mountain.mana.0",
       "kind": "mana",
       "program_index": 2,
-      "registry_name": "Mountain",
-      "semantic_key": "lea.mountain.mana.0"
+      "registry_name": "Mountain"
     },
     {
       "definition_index": 3,
@@ -16709,10 +16709,10 @@
         136,
         141
       ],
+      "key": "lea.plains.mana.0",
       "kind": "mana",
       "program_index": 3,
-      "registry_name": "Plains",
-      "semantic_key": "lea.plains.mana.0"
+      "registry_name": "Plains"
     },
     {
       "definition_index": 4,
@@ -16723,10 +16723,10 @@
         30,
         41
       ],
+      "key": "stx.divide_by_zero.spell.0",
       "kind": "spell",
       "program_index": 4,
-      "registry_name": "Divide by Zero",
-      "semantic_key": "stx.divide_by_zero.spell.0"
+      "registry_name": "Divide by Zero"
     },
     {
       "definition_index": 5,
@@ -16743,10 +16743,10 @@
         117,
         141
       ],
+      "key": "stx.igneous_inspiration.spell.0",
       "kind": "spell",
       "program_index": 5,
-      "registry_name": "Igneous Inspiration",
-      "semantic_key": "stx.igneous_inspiration.spell.0"
+      "registry_name": "Igneous Inspiration"
     },
     {
       "definition_index": 7,
@@ -16754,10 +16754,10 @@
       "encountered_revisions": [
         117
       ],
+      "key": "tla.accumulate_wisdom.spell.0",
       "kind": "spell",
       "program_index": 7,
-      "registry_name": "Accumulate Wisdom",
-      "semantic_key": "tla.accumulate_wisdom.spell.0"
+      "registry_name": "Accumulate Wisdom"
     },
     {
       "definition_index": 9,
@@ -16786,10 +16786,10 @@
         133,
         141
       ],
+      "key": "tla.badgermole_cub.triggered.0",
       "kind": "triggered",
       "program_index": 9,
-      "registry_name": "Badgermole Cub",
-      "semantic_key": "tla.badgermole_cub.triggered.0"
+      "registry_name": "Badgermole Cub"
     },
     {
       "definition_index": 9,
@@ -16818,10 +16818,10 @@
         133,
         141
       ],
+      "key": "tla.badgermole_cub.triggered_mana.1",
       "kind": "triggered_mana",
       "program_index": 10,
-      "registry_name": "Badgermole Cub",
-      "semantic_key": "tla.badgermole_cub.triggered_mana.1"
+      "registry_name": "Badgermole Cub"
     },
     {
       "definition_index": 10,
@@ -16839,10 +16839,10 @@
         132,
         141
       ],
+      "key": "tla.compassionate_healer.triggered.0",
       "kind": "triggered",
       "program_index": 11,
-      "registry_name": "Compassionate Healer",
-      "semantic_key": "tla.compassionate_healer.triggered.0"
+      "registry_name": "Compassionate Healer"
     },
     {
       "definition_index": 12,
@@ -16851,10 +16851,10 @@
         114,
         126
       ],
+      "key": "tla.earth_kingdom_jailer.triggered.0",
       "kind": "triggered",
       "program_index": 14,
-      "registry_name": "Earth Kingdom Jailer",
-      "semantic_key": "tla.earth_kingdom_jailer.triggered.0"
+      "registry_name": "Earth Kingdom Jailer"
     },
     {
       "definition_index": 13,
@@ -16870,10 +16870,10 @@
         138,
         139
       ],
+      "key": "tla.earth_kings_lieutenant.triggered.0",
       "kind": "triggered",
       "program_index": 15,
-      "registry_name": "Earth King's Lieutenant",
-      "semantic_key": "tla.earth_kings_lieutenant.triggered.0"
+      "registry_name": "Earth King's Lieutenant"
     },
     {
       "definition_index": 13,
@@ -16889,10 +16889,10 @@
         138,
         139
       ],
+      "key": "tla.earth_kings_lieutenant.triggered.1",
       "kind": "triggered",
       "program_index": 16,
-      "registry_name": "Earth King's Lieutenant",
-      "semantic_key": "tla.earth_kings_lieutenant.triggered.1"
+      "registry_name": "Earth King's Lieutenant"
     },
     {
       "definition_index": 16,
@@ -16904,10 +16904,10 @@
         100,
         141
       ],
+      "key": "tla.firebending_lesson.spell.0",
       "kind": "spell",
       "program_index": 20,
-      "registry_name": "Firebending Lesson",
-      "semantic_key": "tla.firebending_lesson.spell.0"
+      "registry_name": "Firebending Lesson"
     },
     {
       "definition_index": 18,
@@ -16922,10 +16922,10 @@
         119,
         141
       ],
+      "key": "tla.forecasting_fortune_teller.triggered.0",
       "kind": "triggered",
       "program_index": 21,
-      "registry_name": "Forecasting Fortune Teller",
-      "semantic_key": "tla.forecasting_fortune_teller.triggered.0"
+      "registry_name": "Forecasting Fortune Teller"
     },
     {
       "definition_index": 19,
@@ -16934,10 +16934,10 @@
         136,
         138
       ],
+      "key": "tla.invasion_reinforcements.triggered.0",
       "kind": "triggered",
       "program_index": 22,
-      "registry_name": "Invasion Reinforcements",
-      "semantic_key": "tla.invasion_reinforcements.triggered.0"
+      "registry_name": "Invasion Reinforcements"
     },
     {
       "definition_index": 20,
@@ -16945,10 +16945,10 @@
       "encountered_revisions": [
         21
       ],
+      "key": "tla.itll_quench_ya.spell.0",
       "kind": "spell",
       "program_index": 23,
-      "registry_name": "It'll Quench Ya!",
-      "semantic_key": "tla.itll_quench_ya.spell.0"
+      "registry_name": "It'll Quench Ya!"
     },
     {
       "definition_index": 23,
@@ -16960,10 +16960,10 @@
         138,
         139
       ],
+      "key": "tla.south_pole_voyager.triggered.0",
       "kind": "triggered",
       "program_index": 26,
-      "registry_name": "South Pole Voyager",
-      "semantic_key": "tla.south_pole_voyager.triggered.0"
+      "registry_name": "South Pole Voyager"
     },
     {
       "definition_index": 24,
@@ -16977,10 +16977,10 @@
         134,
         141
       ],
+      "key": "tla.suki_kyoshi_warrior.triggered.0",
       "kind": "triggered",
       "program_index": 27,
-      "registry_name": "Suki, Kyoshi Warrior",
-      "semantic_key": "tla.suki_kyoshi_warrior.triggered.0"
+      "registry_name": "Suki, Kyoshi Warrior"
     },
     {
       "definition_index": 25,
@@ -17002,10 +17002,10 @@
         111,
         116
       ],
+      "key": "tla.tiger_seal.triggered.0",
       "kind": "triggered",
       "program_index": 28,
-      "registry_name": "Tiger-Seal",
-      "semantic_key": "tla.tiger_seal.triggered.0"
+      "registry_name": "Tiger-Seal"
     },
     {
       "definition_index": 25,
@@ -17027,10 +17027,10 @@
         111,
         116
       ],
+      "key": "tla.tiger_seal.triggered.1",
       "kind": "triggered",
       "program_index": 29,
-      "registry_name": "Tiger-Seal",
-      "semantic_key": "tla.tiger_seal.triggered.1"
+      "registry_name": "Tiger-Seal"
     },
     {
       "definition_index": 26,
@@ -17064,10 +17064,10 @@
         102,
         141
       ],
+      "key": "tla.water_tribe_rallier.activated.0",
       "kind": "activated",
       "program_index": 30,
-      "registry_name": "Water Tribe Rallier",
-      "semantic_key": "tla.water_tribe_rallier.activated.0"
+      "registry_name": "Water Tribe Rallier"
     },
     {
       "definition_index": 28,
@@ -17075,10 +17075,10 @@
       "encountered_revisions": [
         23
       ],
+      "key": "tla.yip_yip.spell.0",
       "kind": "spell",
       "program_index": 31,
-      "registry_name": "Yip Yip!",
-      "semantic_key": "tla.yip_yip.spell.0"
+      "registry_name": "Yip Yip!"
     },
     {
       "definition_index": 30,
@@ -17086,10 +17086,10 @@
       "encountered_revisions": [
         59
       ],
+      "key": "token.clue.activated.0",
       "kind": "activated",
       "program_index": 32,
-      "registry_name": "Clue",
-      "semantic_key": "token.clue.activated.0"
+      "registry_name": "Clue"
     }
   ],
   "identity": {

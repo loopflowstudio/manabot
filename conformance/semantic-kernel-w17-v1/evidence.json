@@ -1,0 +1,171 @@
+{
+  "schema_version": 1,
+  "contract_id": "manabot.semantic-kernel-conformance.v1",
+  "matchup_source_digest": "e998a100250a88436ce305ce6925bedae358794eb0a4c17568120e7b09b2b30e",
+  "content_digest": "a10594babb1782b78fb595f5db57b3a586badf5a853007a9d5f4496c6f367323",
+  "reference": "reference/explicit-step-v1",
+  "optimized": "optimized/skip-trivial-v1",
+  "limitation": "Both executors share low-level rules/card primitives; this is not a second Comprehensive Rules engine.",
+  "replays": [
+    {
+      "case_id": "ur-vs-gw-5eed",
+      "orientation": "ur_lessons_vs_gw_allies",
+      "commands": 107,
+      "outcome": "terminal",
+      "final_state_hash": "v10:5f9b8eefc26fa3b72f7a069938f7b44c562db9a31ccd273722ca27722cadc98f"
+    },
+    {
+      "case_id": "gw-vs-ur-5eee",
+      "orientation": "gw_allies_vs_ur_lessons",
+      "commands": 48,
+      "outcome": "terminal",
+      "final_state_hash": "v10:6150587b3cd0219f6e6a2c132b4dac49cc89a228d5e6271d680f404a702bcf85"
+    },
+    {
+      "case_id": "ur-vs-gw-5eef",
+      "orientation": "ur_lessons_vs_gw_allies",
+      "commands": 154,
+      "outcome": "terminal",
+      "final_state_hash": "v10:5606c66fa8fa4ee7d94389afc666f03e993e301d918c16068cad03939bf9533f"
+    },
+    {
+      "case_id": "gw-vs-ur-5ef0",
+      "orientation": "gw_allies_vs_ur_lessons",
+      "commands": 221,
+      "outcome": "terminal",
+      "final_state_hash": "v10:9fbfed313974346a61e7a8353b0f3b4405ebab53b1cd913f32a109afb703ab61"
+    },
+    {
+      "case_id": "elemental-161",
+      "orientation": "elemental_left_vs_right",
+      "commands": 129,
+      "outcome": "terminal",
+      "final_state_hash": "v10:921f6f9a73f4ce6b9914fcfce1bd1d5b7d8492770f83f121821bc535f10990e8"
+    },
+    {
+      "case_id": "elemental-162",
+      "orientation": "elemental_right_vs_left",
+      "commands": 80,
+      "outcome": "terminal",
+      "final_state_hash": "v10:cb84184f42e1dcd89b3730bb73bc16ac4091e320e1b82c915fa72939138a632d"
+    },
+    {
+      "case_id": "elemental-163",
+      "orientation": "elemental_left_vs_right",
+      "commands": 135,
+      "outcome": "terminal",
+      "final_state_hash": "v10:5dbf868c0029493ec8883c3416290e07cc8f2f830cb6961a2f4578cbcb8904d2"
+    },
+    {
+      "case_id": "elemental-164",
+      "orientation": "elemental_right_vs_left",
+      "commands": 196,
+      "outcome": "terminal",
+      "final_state_hash": "v10:eefa88cb45af3a2d71a9412e38d61f5c50e10c427ed8ce6eadebfcf301a1c78c"
+    },
+    {
+      "case_id": "sacrifice-162",
+      "orientation": "sacrifice_left_vs_right",
+      "commands": 154,
+      "outcome": "terminal",
+      "final_state_hash": "v10:6987bf6dc354410304e6e0037646a12ef204d0f6b9096f330d058db417b89881"
+    },
+    {
+      "case_id": "sacrifice-163",
+      "orientation": "sacrifice_right_vs_left",
+      "commands": 243,
+      "outcome": "terminal",
+      "final_state_hash": "v10:2187b3a3104f00eac8b42bfdb7baf83985c03750cb54a5659fc8eadf864ce937"
+    },
+    {
+      "case_id": "temur-163",
+      "orientation": "temur_left_vs_right",
+      "commands": 606,
+      "outcome": "terminal",
+      "final_state_hash": "v10:337b039c13f419ac9f15ba4163b2fe76e8a4df2387bf35afbf5fb15ffe86e499"
+    },
+    {
+      "case_id": "temur-164",
+      "orientation": "temur_right_vs_left",
+      "commands": 934,
+      "outcome": "terminal",
+      "final_state_hash": "v10:56eed75f4b93c291437180550a65fb59d605e90db54d96b833b86f7777febf61"
+    },
+    {
+      "case_id": "elemental-world-gr_vs_ug",
+      "orientation": "elemental_world_gr_vs_ug",
+      "commands": 198,
+      "outcome": "terminal",
+      "final_state_hash": "v10:78b985786d120910c38f2a99a0c3c4cde626c64dca09cc90554ec9101dd71c92"
+    },
+    {
+      "case_id": "elemental-world-ug_vs_gr",
+      "orientation": "elemental_world_ug_vs_gr",
+      "commands": 196,
+      "outcome": "terminal",
+      "final_state_hash": "v10:e64dbd76e877ec17ee159e5841da6736b4facdf9fe56d70f9fc8d4a7fa49303b"
+    }
+  ],
+  "exercised_prompt_kinds": [
+    "ChooseTarget",
+    "DeclareAttacker",
+    "DeclareBlocker",
+    "Discard",
+    "Learn",
+    "LookAndSelect",
+    "Modal",
+    "OrderTriggers",
+    "PayOrNot",
+    "Priority",
+    "Scry",
+    "Waterbend"
+  ],
+  "exercised_action_types": [
+    "ChooseMode",
+    "ChooseTarget",
+    "ChooseTrigger",
+    "DeclareAttacker",
+    "DeclareBlocker",
+    "DeclineChoice",
+    "LearnDiscard",
+    "PayCost",
+    "PriorityActivateAbility",
+    "PriorityCastSpell",
+    "PriorityPassPriority",
+    "PriorityPlayLand",
+    "ScryBottom",
+    "ScryKeep",
+    "SelectCard",
+    "TapForCost"
+  ],
+  "property_checks": [
+    "fresh_same_seed_semantic_tapes_are_identical",
+    "semantic_action_lookup_is_independent_of_diagnostic_index",
+    "nonterminal_prompts_are_nonempty",
+    "cloned_sibling_does_not_mutate_root"
+  ],
+  "metamorphic_checks": [
+    "explicit_singletons_equal_trivial_step_collapse",
+    "equal_content_pack_reallocation_preserves_trace",
+    "compatibility_card_renames_preserve_trace",
+    "fresh_and_cloned_roots_preserve_trace"
+  ],
+  "fuzz": {
+    "seed": 24301,
+    "cases": 32,
+    "max_commands": 512
+  },
+  "phase_revision": "553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d",
+  "phase_status_counts": {
+    "excluded": 7,
+    "match": 3,
+    "mismatch": 5
+  },
+  "phase_mismatches": [
+    "mana-suki-hybrid",
+    "continuous-suki-and-dragonfly",
+    "conditional-cadets-firebending",
+    "card-flow-learn-and-bottom-order",
+    "ward-trigger-scope"
+  ]
+}

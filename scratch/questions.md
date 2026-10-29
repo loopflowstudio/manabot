@@ -10,9 +10,8 @@ and pool-membership choices that were here (history: `be2b7586b:scratch/question
   JSON shape and build tokens in `learning.py`.
 - 2026-10-29: the 14 setup-used incomplete TLA cards keep their definitions and
   are listed in one `tla::INCOMPLETE` const (key, missing behavior) beside
-  `cards()`, rather than a field on all 269 `Card` literals. Native cards sit in
-  set files as native `CardDefinition`s and are unsupported (no IR, so not in
-  `pool_content`). Crossroads of Destiny moved to `cards/fixtures.rs` but stays
+  `cards()`, rather than a field on every definition. Since the one-representation
+  rewrite every non-token definition outside `INCOMPLETE` is eligible. Crossroads of Destiny moved to `cards/fixtures.rs` but stays
   in the default pack, because Rust integration tests and `manabot/verify` build
   games from it. D1 keeps the `tla-pool-v1` key; `set_cards` is the set filter.
   Undefined TLA cards are no longer listed as unsupported pool rows.
@@ -45,3 +44,12 @@ Main's notes at the syncs live at `6d069d6e5:scratch/questions.md` and `origin/m
   they were (Corrupt Court Official with Ozai's Cruelty in `cards/tla.rs`, Epic
   Downfall with Power Word Kill in `cards/afr.rs`); Lightning Strike has no test
   of its own, so no `ptk.rs`/`ths.rs` test files exist yet.
+- 2026-10-29 (concept review): world pool key becomes `"world"` (not per-world
+  `"w17"`), describing the default pack; row `semantic_key` becomes `key`.
+  Coordinate with f871a8 in one comment. The v1 coverage gate is left for a later
+  Task rather than PR394.
+
+- 2026-10-29 (assumption): superseded corpora now without consumers
+  (`semantic-kernel-w15-v1`, `authored-match-w11-v1`, `authored-match-parity-w11-v1`,
+  `public-commitment-parity-v1`) stay in the tree like w12–w14; archiving them
+  to S3 is a separate publish step, not done here.

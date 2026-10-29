@@ -1,5 +1,5 @@
 //! Current TLA cards and their fixed tokens.
-//! Edit these typed definitions; `semantic::compile` lowers them in process.
+//! Each card is one function returning its engine `CardDefinition`.
 use crate::state::{
     ability::{
         Ability, Effect, EffectValue, PaymentCost, StaticCondition, TargetRequirement, TargetSpec,

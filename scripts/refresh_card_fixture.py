@@ -24,7 +24,7 @@ import urllib.request
 from managym import content_pool
 
 REPO = Path(__file__).resolve().parent.parent
-WORLD_POOL = "tla-pool-v1"
+WORLD_POOL = "world"
 FIXTURE = REPO / "managym" / "tests" / "fixtures" / "scryfall_cards.json"
 
 USER_AGENT = "manabot-research/0.1 (jackstah@gmail.com)"
@@ -47,15 +47,13 @@ FIELDS = [
 def registered_names() -> list[str]:
     """Every real card name in the world pool, sorted.
 
-    The pool lists every card a set file defines, typed or native. Token
-    definitions (`token.*` keys) are not real cards; rules fixtures such as
-    Crossroads of Destiny never enter the pool.
+    The pool lists every card a set file defines. Token definitions
+    (`token.*` keys) are not real cards, and rules fixtures such as Crossroads
+    of Destiny have no key.
     """
-    rows = content_pool(WORLD_POOL)["definitions"]
+    rows = [row for row in content_pool(WORLD_POOL)["definitions"] if row["key"]]
     tokens = sorted(
-        row["registry_name"]
-        for row in rows
-        if (row["semantic_key"] or "").startswith("token.")
+        row["registry_name"] for row in rows if row["key"].startswith("token.")
     )
     if tokens:
         print(f"skipping tokens (no fixture entry): {', '.join(tokens)}")

@@ -31,22 +31,12 @@ from .replay_index import (
 ROOT = Path(__file__).parents[1]
 RECEIPT_PATH = (
     ROOT
-    / "conformance/authored-match-parity-w11-v1/release-live-headless-replay-seed-0.json"
+    / "conformance/authored-match-parity-w17-v1/release-live-headless-replay-seed-0.json"
 )
-AUTHORITY_SHA256 = "78d533368335094f7720c942229dc2cd2a1bcbc9d4e2a70d9b7fa34727fa7f2b"
-TERMINAL_STATE = "3f34856d96bdee401c8b50bb02fe0aa2443adeb80053bbe90b96ea97813ec0b2"
+AUTHORITY_SHA256 = "d4dc54c1376a563868f294bb7e9345aaced0da0321d7961b844404aaaadb1dda"
+TERMINAL_STATE = "73eaf2e04b2ce1504420d8a4825a922230c82f7ceecf286c2bce828e992a1b2a"
 
-COMMAND_COUNT = 156
-HISTORICAL_AUTHORITY_SHA256 = (
-    "57f5e2d1a482831e4e1edeb69632c0b34030d2e8ee701eab9b13b484c6937147"
-)
-HISTORICAL_TERMINAL_STATE = (
-    "e48de247d72f816cee9de64d596c79504e16564e003f65bf86d65ac887ae2de7"
-)
-HISTORICAL_RECEIPT_PATH = (
-    ROOT
-    / "conformance/authored-match-parity-v1/release-live-headless-replay-seed-0.json"
-)
+COMMAND_COUNT = 142
 
 
 def _json_bytes(value: object) -> bytes:
@@ -625,7 +615,7 @@ def _run_live(
 
 def _source_manifest() -> dict[str, Any]:
     paths = {
-        "conformance/authored-match-w11-v1/release-stack-ur-vs-gw-seed-0.json",
+        "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
         "content/semantic/current/setups.json",
         "academy/curated_pack.py",
         "academy/authored_match_parity.py",

@@ -22,9 +22,6 @@ SEMANTIC_PACK_KEY = "ur-lessons-vs-gw-allies"
 DEFAULT_RECEIPT_PATH = (
     ROOT / "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json"
 )
-HISTORICAL_RECEIPT_PATH = (
-    ROOT / "conformance/authored-match-v1/release-stack-ur-vs-gw-seed-0.json"
-)
 FIXED_TIME = "2026-07-17T00:00:00+00:00"
 MATCH_SEED = 0
 POLICY_SEED = 0
@@ -111,14 +108,14 @@ def _program_index() -> tuple[
             kind = kind_names[catalog["token_value"][first]]
             row = {
                 "program_index": int(program_index),
-                "semantic_key": f"{definition['semantic_key']}.{kind}.{ordinal}",
+                "key": f"{definition['key']}.{kind}.{ordinal}",
                 "kind": kind,
                 "definition_index": definition_index,
-                "definition_key": str(definition["semantic_key"]),
+                "definition_key": str(definition["key"]),
                 "registry_name": str(definition["registry_name"]),
             }
             by_definition[definition_index].append(row)
-            by_key[row["semantic_key"]] = row
+            by_key[row["key"]] = row
     return dict(by_definition), by_key
 
 
@@ -295,13 +292,13 @@ def _ledger(
 
         encountered_programs = sorted(
             {
-                program["semantic_key"]
+                program["key"]
                 for definition_id in transition.encountered_definition_ids
                 for program in programs_by_definition.get(definition_id, [])
             }
         )
-        for semantic_key in encountered_programs:
-            program_revisions[semantic_key].add(transition.from_revision)
+        for key in encountered_programs:
+            program_revisions[key].add(transition.from_revision)
         semantic_events = [
             {"ordinal": event_ordinal, **event}
             for event_ordinal, event in enumerate(transition.semantic_events)
@@ -353,11 +350,11 @@ def generate_authored_match_receipt() -> dict[str, Any]:
     ledger, program_revisions = _ledger(session, programs_by_definition)
 
     encountered_programs = []
-    for semantic_key, revisions in sorted(
+    for key, revisions in sorted(
         program_revisions.items(),
         key=lambda item: programs_by_key[item[0]]["program_index"],
     ):
-        row = deepcopy(programs_by_key[semantic_key])
+        row = deepcopy(programs_by_key[key])
         row["encountered_revisions"] = sorted(revisions)
         encountered_programs.append(row)
 

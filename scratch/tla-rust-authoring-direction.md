@@ -48,5 +48,7 @@ with the world.
 
 Later accepted refinements (2026-10-29, Jack Heart): every card in its
 first-printing set file, support by definition instead of qualification, one
-world pool with set filters. Recorded in
+world pool with set filters, and one card representation in engine types (no
+generated card artifacts, which supersedes the first section's generate-and-check-in
+direction). Recorded in
 [892c47-author-tla-cards.md](892c47-author-tla-cards.md).
