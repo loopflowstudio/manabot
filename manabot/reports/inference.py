@@ -674,11 +674,27 @@ def project_llm(root: Path) -> dict[str, Any]:
             ):
                 raise ValueError("Command/transition binding mismatch")
             committed += 1
+    # A historical session-close error could interrupt decide() after its final
+    # failed selection was journaled but before model_decisions was incremented.
+    # Admit only that exact uncommitted terminal decision, never arbitrary excess
+    # files or a successful action beyond a final summary's population.
+    terminal_failure = bool(
+        summary
+        and summary.failure is not None
+        and selections
+        and selections[-1][0].parent.name == f"decision-{summary.decisions:05d}"
+        and selections[-1][1].failure is not None
+        and not selections[-1][0].with_name("command.json").exists()
+    )
     if observed and (
-        len(selections) > observed.model_decisions + (1 if summary is None else 0)
+        len(selections)
+        > observed.model_decisions + int(summary is None or terminal_failure)
         or committed > observed.decisions + (1 if summary is None else 0)
     ):
         raise ValueError("retained counts exceed summary population")
+    selection_population = (
+        max(observed.model_decisions, len(selections)) if observed else None
+    )
     for path, selection in selections:
         capture = path.with_name("capture.json")
         if capture.exists() and selection.decision.source_identity.get(
@@ -977,7 +993,7 @@ def project_llm(root: Path) -> dict[str, Any]:
         "coverage": {
             "summary": summary is not None,
             "selection_files": len(selections),
-            "selection_population": observed.model_decisions if observed else None,
+            "selection_population": selection_population,
             "command_files": len(commands),
             "committed_commands": committed,
             "command_population": observed.decisions if observed else None,
@@ -992,7 +1008,9 @@ def project_llm(root: Path) -> dict[str, Any]:
         },
         **_selection_latencies(
             [s for _, s in selections],
-            observed.model_decisions if observed else len(selections),
+            selection_population
+            if selection_population is not None
+            else len(selections),
         ),
         "metrics": {k: asdict(v) for k, v in metrics.items()},
         "device_memory": device,

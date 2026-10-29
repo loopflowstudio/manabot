@@ -1,9 +1,10 @@
 # Qwen versus MTG-183 with vLLM and explicit policy versions
 
 Accepted direction: Jack Heart, 2026-10-28, in MTG-209's primary conversation.
-Reconciled 2026-10-28 against implementation commit
-`02fccd93e1983319d355a1866c101d7d0e01565b` and the retained preflight result.
-The original directive is preserved at that commit in this file.
+Reconciled 2026-10-29 against checkout `41f33aae3938ece3cc96bcf78e66352d15aa4149`,
+including merged main `6d069d6e5f0755b392c796aaf6d754913e8996c2`, and Etude's
+incomplete retained snapshot observed at 06:20 UTC. The original directive is
+preserved in this file at `02fccd93e1983319d355a1866c101d7d0e01565b`.
 
 ## Accepted outcome and constraints
 
@@ -45,7 +46,8 @@ admitted, completed, failed, canceled and unattempted games have distinct counts
 
 The quality contract retains complete viewer-safe observations and legal choices,
 native Command binding, stale rejection, EOS/thinking evidence and replay.
-Reasoning remains enabled; prompt truncation, weight quantization or opponent
+Reasoning remains enabled in the main arm; Jack Heart accepted a separate small
+no-thinking floor on 2026-10-28. Prompt truncation, weight quantization or opponent
 changes are not silent optimization options. Material quality tradeoffs require
 an explicit treatment and, when consequential, an accepted decision. Sampling,
 batching, caching and answer-completion experiments remain in scope. The known
@@ -103,30 +105,30 @@ pinned **historical w13** experiment; results are w13 evidence. Main keeps w14
 admission (the preflight's `checkpoint requires an explicit compatible w14 world
 binding` rejection still reproduces on this branch).
 
-Implemented 2026-10-28: campaign branch `jack-heart/bb4160-w13-campaign` = this
-branch plus `git revert e742e8bff` (the w14 commit; the only conflict was
-scratch). Its engine/content source equals `f5e7289b1a6d`, which built the
+Implemented 2026-10-28: campaign branch `jack-heart/bb4160-w13-campaign` was
+derived from this Task before the main sync, with `git revert e742e8bff` (w14).
+The launched no-MTP run pins source `cfcd947042c4`; its engine/content source
+equals `f5e7289b1a6d`, which built the
 reused Linux native input `1d1b674f…` (6,555,520 bytes). Locally on that tree:
 checkpoint bytes verified from R2, all 100 scheduled games admitted (w13,
 policy-input v1, 196,482 parameters), `tests/llm` 129 passed. Launch commits
 are cherry-picked from this branch onto the campaign branch; it is never merged.
-The Etude launcher database is schema 11 again, so SDK 0.2.10 launches.
 
 Treatment and attempts live in `experiments/protocols/qwen-mtg183-bb4160.md`.
 Seeded sampling (`InferenceConfig.decoding="sampled"` + `Sampling`) reaches
 both runtimes; Transformers rejects a presence penalty rather than substituting.
 `runs()` sizes the job's hours and watchdog from its dollar cap.
 
-## Delete — do not maintain
+## Ownership and completed simplification
 
 The campaign treatment table no longer repeats the inference files' output and
 context limits. `Treatment` names the file and any explicit context override;
 `runs()` resolves those into the existing Campaign fields before schedule
 preparation. The saved schedule/configuration remain the worker's authority.
-The four declared arms retain their existing effective values. No obsolete code,
-exclusive fixtures or pending deletion targets remain.
+The four declared arms retain their existing effective values. This removes
+duplicated limit ownership without changing a frozen treatment.
 
-Preserve the surviving ownership boundaries: `RuntimeIdentity.behavior_version`
+The surviving ownership boundaries are: `RuntimeIdentity.behavior_version`
 owns hashing; `tokenization` owns pinned tokenizer resolution, EOS and budget
 forcing; `SelectionResult.invalidate` revokes failed actions while retaining
 evidence. The acknowledged service identity freezes the cohort before admission.
@@ -139,7 +141,22 @@ Earlier removals and their rationale are retained at
 
 ## Remaining implementation and execution
 
-Implemented and qualified: w13 campaign tree and admission; seeded sampling;
+### Delete — do not maintain
+
+No remaining deletion targets. The spawn/Pipe and ProcessPoolExecutor paths
+have been replaced by `ChildProcess` and bounded supervisor threads. Runtime
+admission, reply bindings, deadlines, pending evidence and retirement remain on
+that path; there is no compatibility executor to maintain.
+
+Internal one-shot and game replies now use typed records on the existing
+Connection, as resident-session replies already do. Redundant JSON transport
+and the game supervisor's two-state loop are removed; persisted receipts remain
+JSON. The game handshake is sequential, with unchanged admission acknowledgement,
+scheduled-game binding and hard deadline. Lifecycle tests share lightweight child
+fixtures instead of importing the native test module in an inference child,
+and verify reaping for one-shot success, timeout and exit.
+
+Implemented: w13 campaign tree and admission; seeded sampling;
 budget forcing (`thinking_budget`, `generate_response`, per-response
 `forced_close_at`/`inserted_token_ids`, game `forced_closes`); per-attempt
 `QWEN` and relayed `VLLM` stdout lines; `single_choice_decisions` and
@@ -147,19 +164,40 @@ budget forcing (`thinking_budget`, `generate_response`, per-response
 in `runs()`. Attempts, charges and the frozen cohort are in
 `experiments/protocols/qwen-mtg183-bb4160.md`.
 
-1. **Scored budget cohort `cdb0c09f90c6`** (100 games, c=32, no MTP, $7.00 cap):
-   still running at 2026-10-29 05:50 UTC, with admissions stopped after a failed
-   game and admitted games settling. `8f68c0bc488b` finished with 32 failed games,
-   68 unattempted and no completion; its cleanup receipt confirms deletion.
-   The existing `budget-64k` declaration is a possible separate treatment, not
-   a launched replacement. Final reconciliation precedes further commitments.
-2. **No-thinking floor:** about 10 games, after the cohort, labeled, well under
-   $1 (minimum job cap $1.05 for the 1.5-hour window).
-3. **Evidence and delivery:** publish run outputs with
-   `uv run --extra artifacts python -m manabot.data publish <path>`, commit the
-   manifest, report W/L/D, replay, initial/repair/fallback/forced-close counts,
-   reasoning by decision kind, latency, tokens/s, memory and inclusive cost.
-   Note in the PR that skip_trivial was already enabled by the schedule.
+1. **Scored budget cohort `cdb0c09f90c6`** (100 games, c=32, no MTP, $7 cap):
+   still running at 2026-10-29 06:20:40 UTC. The retained log now has 49 admissions,
+   24 completions, 2 failures and 23 unsettled admissions, with 51 unattempted.
+   Admissions stopped on failure. Etude has no recorded output files yet;
+   final game/replay receipts cannot be recovered before the existing run settles.
+   No new rental, watcher or controller was started in this implementation pass.
+2. **Accounting and cleanup:** direct RunPod bills total $1.47606228455 for
+   the three stopped attempts, and all three pods are verified absent. The
+   provider totals supersede the understated retained launcher costs. The active
+   cohort has $1.47195755 whole-hour billing at the retained snapshot, with its
+   partial hour, cleanup and ancillary costs still unknown. The narrowed provider
+   receipt is published at `experiments/data/bb4160/accounting-20261029T0620.json`.
+   Final inclusive costs and current allocation deletion remain outstanding.
+3. **No-thinking floor:** reserving the current $7 commitment and $0.50 ancillary
+   headroom leaves only $1.02393771545, below the constructor's $1.05 minimum.
+   The floor is budget-deferred until settlement; no shorter bounded launch is
+   qualified. `budget-64k` remains unlaunched, never pooled with the current arm.
+4. **Process integration implemented:** game supervisors use bounded threads and
+   `ChildProcess`; resident sessions and one-shot inference use the same child
+   owner. Children avoid re-executing parent main, acknowledge game admission,
+   reject wrong/late replies, retain pending evidence and reap on failures.
+   Games retain the outer watchdog's process group for descendant cleanup.
+   New receipts distinguish failed/canceled/unattempted games and retain IDs of
+   interrupted admissions. This is review-branch code, not the launched source.
+5. **Recovered evidence:** 64 budget-pilot/MTP game archives and their receipts
+   are digest verified and manifest-published. Pilot: 95 initial, 3 repaired,
+   0 fallback, 32 interrupted selections (130 files); MTP: 106 initial, 5 repaired,
+   0 fallback, 32 failed (143 files), 0 completed games. Per-kind reasoning and
+   token evidence are in each `receipt-accounting.json` and the protocol. The
+   pilot vLLM log failed fetch identity validation and remains unverified.
+   The offline reader now counts exactly the extra failed terminal selection
+   left by historical close errors; frozen bytes are unchanged. Final no-MTP
+   W/L/D, replay qualification and inclusive games/dollar still require its output.
+   No PR is recorded; publication remains the caller's later boundary.
 
 Historical reporting is implemented for sampled and budget-forced receipts,
 including generated reasoning length by retained continuation stage, inserted
@@ -196,11 +234,13 @@ cancellation. Raw receipts were unavailable in the research checkout. These
 retained reports do not establish a matched backend ranking or healthy reasoning
 configuration, and new claims require verified evidence.
 
-On 2026-10-28, GitHub still reports PR #389 / MTG-193 open at `064d2395c`
-(shared evaluation/serving and collection) and PR #383 / MTG-175 open at
-`d0f48ca96` (curriculum/learning). Main remains `c5d406e3d`, this Task's base.
-Their shared-code decisions remain reserved; this work changes no structured-policy
-training or shared serving implementation. MTG-212 owns the separate Jev/OpenRouter
+Main's shared evaluation/serving and collection work (MTG-193) is now present at
+`6d069d6e5f0755b392c796aaf6d754913e8996c2`, merged by `41f33aae3`; the former
+open-overlap/base description is obsolete. It introduces the child-process owner
+and preserves LLM-only offline reporting through lazy evaluation projection.
+This Task adds no structured-policy training or shared serving changes.
+The last captured MTG-175 / PR #383 state was open at `d0f48ca96` on 2026-10-28;
+its current delivery was not re-queried. MTG-212 owns the separate Jev/OpenRouter
 comparison. The accepted directive includes MTG-210's relevant version-accounting
 scope here and leaves MTG-211's controlled verifiers proposal for later.
 MTG-191/192 remain canceled historical campaigns; no competing Task or execution
@@ -212,8 +252,8 @@ The supplied training chapter seeks repeatable playable checkpoints, full-game
 improvement and repeatable human wins, with frozen identities and complete attempt
 accounting. A session protocol proof satisfies none of those scientific outcomes.
 The selected `.lf/wave/training/` directory, GOAL.md, MEMORY.md and child memories
-are absent from this checkout; the Wave API reports an empty goal. Thus memory
-coverage and size cannot be certified, and no substitute Wave was chosen or
+are absent from this checkout; the earlier Wave API read reported an empty goal.
+Thus memory coverage and size cannot be certified, and no substitute Wave was chosen or
 memory created. Scratch is within both configured limits.
 
 Proposed durable lessons for that missing memory: admission must precede rental;
@@ -225,7 +265,7 @@ Service admission and completion checks are implemented with controlled fixtures
 the earlier mismatch fixture preserves all five IPC reply checks and wrong-admission
 coverage. The fresh-process LLM-only reader import boundary passes for sampled
 receipts. Gate still owns the actual mixed-report builder/Perf proof and broader
-native replay checks. Current cohort settlement, budget reconciliation and final
-allocation cleanup remain pending.
+native replay checks. Current cohort settlement, final inclusive billing and allocation cleanup remain
+pending; stopped-attempt provider billing and deletion are reconciled.
 
-Check: `uv run --extra dev --extra artifacts pytest tests/llm/test_llm_vllm.py -q` — 51 passed (2026-10-29); all four arms retain their declared inference settings through job construction and schedule freezing. Ruff and diff checks pass. Gate owns broader acceptance, including the mixed-report builder/Perf proof; earlier reader/runtime qualification remains in git.
+Check: `uv run --extra dev --extra artifacts pytest tests/llm/test_llm_runner.py tests/llm/test_llm_session.py tests/llm/test_llm_vllm.py tests/llm/test_llm_native_game.py -q` — 77 process/vLLM checks passed; all 6 native-game checks passed on focused rerun after rebuilding the stale local extension with `uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels` and atomic installation. Changed-file Ruff checks pass. Reused reporting results: failed-terminal/pending-work 5 passed, artifact-untracked passed, offline reporting-boundary 2 passed. Gate owns mixed-report builder/Perf, broader native replay and review checks; implement still owns cohort settlement, inclusive billing and allocation cleanup.

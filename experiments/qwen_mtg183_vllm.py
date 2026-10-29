@@ -9,12 +9,12 @@ The existing campaign watchdog kills the whole game process group on timeout.
 """
 
 import argparse
-from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, wait
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from decimal import Decimal
 from functools import partial
 import json
-import multiprocessing
+from multiprocessing.connection import Connection
 import os
 from pathlib import Path
 import time
@@ -24,6 +24,7 @@ from pydantic import Field, TypeAdapter
 
 from experiments import qwen_mtg183 as original
 from manabot.llm.schema import InferenceConfig, RuntimeIdentity
+from manabot.sim.child import ChildProcess
 from manabot.verify.llm_game import GameSummary, _write
 
 
@@ -111,7 +112,7 @@ def _prepare_schedule(config: Campaign, out: Path) -> list[original.ScheduledGam
     return games
 
 
-def play_game(
+def _play_game(
     game: original.ScheduledGame, out: Path, deadline: float
 ) -> original.GameResult:
     """One process per game prevents Torch's process-global RNG from crossing games."""
@@ -169,6 +170,53 @@ def play_game(
     return original.GameResult(game=game, summary=summary)
 
 
+def _game_child(
+    connection: Connection, game: original.ScheduledGame, out: Path, deadline: float
+) -> None:
+    """Acknowledge the isolated game before constructing its runtime."""
+    with connection:
+        connection.send("ready")
+        # Descendants inherit the campaign watchdog's process group.
+        if connection.recv() != "play":
+            raise RuntimeError("expected game admission")
+        connection.send(_play_game(game, out, deadline))
+
+
+def play_game(
+    game: original.ScheduledGame, out: Path, deadline: float
+) -> original.GameResult:
+    """Supervise one game without importing the caller's main in its child.
+
+    The campaign retains admission before this call. IPC loss and a hard wall
+    deadline produce failures, never replacements; the game's
+    child is stopped before its evidence can be collected. The outer campaign
+    watchdog owns descendant cleanup if the game dies before closing its session.
+    """
+    process = ChildProcess(
+        "experiments.qwen_mtg183_vllm:_game_child", (game, out, deadline)
+    )
+    try:
+        connection = process.connection
+        remaining = deadline - time.time()
+        if remaining <= 0 or not connection.poll(remaining):
+            raise TimeoutError("game admission wall deadline exhausted")
+        if connection.recv() != "ready":
+            raise RuntimeError("game child did not acknowledge admission")
+        connection.send("play")
+
+        remaining = deadline - time.time()
+        if remaining <= 0 or not connection.poll(remaining):
+            raise TimeoutError("game result wall deadline exhausted")
+        result = connection.recv()
+        if not isinstance(result, original.GameResult) or result.game != game:
+            raise RuntimeError("game child returned a different scheduled game")
+        if time.time() >= deadline:
+            raise TimeoutError("game result wall deadline exhausted")
+        return result
+    finally:
+        process.close()
+
+
 def _identity_departure(summary: GameSummary, behavior: str) -> str | None:
     """Name a receipt that played a different player than the frozen cohort.
 
@@ -224,6 +272,10 @@ def worker(config: Campaign, out: Path) -> None:
                     "attempted": len(results) + len(pending),
                     "settled": len(results),
                     "completed": sum(r.summary.completed for r in results),
+                    "failed": sum(not r.summary.completed for r in results),
+                    "canceled": 0,
+                    "canceled_games": [],
+                    "unattempted": len(games) - len(results) - len(pending),
                     "pending_games": [g.index for g in pending.values()],
                     "seconds": time.monotonic() - started,
                     "stop_reason": stop_reason,
@@ -236,9 +288,7 @@ def worker(config: Campaign, out: Path) -> None:
             ),
         )
 
-    with ProcessPoolExecutor(
-        max_workers=config.concurrency, mp_context=multiprocessing.get_context("spawn")
-    ) as pool:
+    with ThreadPoolExecutor(max_workers=config.concurrency) as pool:
 
         def admit() -> None:
             nonlocal stop_reason
@@ -312,7 +362,13 @@ def run(config: Campaign) -> None:
             {
                 "planned": len(games),
                 "attempted": 0,
+                "settled": 0,
                 "completed": 0,
+                "failed": 0,
+                "canceled": 0,
+                "canceled_games": [],
+                "pending_games": [],
+                "unattempted": len(games),
                 "stop_reason": "preparing shared server",
                 "session_closed": False,
                 "concurrency": config.concurrency,
@@ -339,8 +395,17 @@ def run(config: Campaign) -> None:
             original.supervise(config, worker_module="experiments.qwen_mtg183_vllm")
     except BaseException as error:
         receipt = json.loads((out / "campaign.json").read_text())
+        # supervise() has stopped the process group and collected partial
+        # evidence. An admitted game without a returned result was interrupted;
+        # do not erase it or infer completion from an unfinished archive.
+        canceled = receipt["pending_games"]
         receipt.update(
-            stop_reason=f"{type(error).__name__}: {error}", session_closed=True
+            stop_reason=f"{type(error).__name__}: {error}",
+            session_closed=True,
+            canceled=len(canceled),
+            canceled_games=canceled,
+            pending_games=[],
+            settled=receipt["settled"] + len(canceled),
         )
         _write(out / "campaign.json", json.dumps(receipt, indent=2))
         raise

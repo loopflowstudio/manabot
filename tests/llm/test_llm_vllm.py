@@ -1,6 +1,7 @@
 """Exact token boundaries and failure accounting without GPU allocation."""
 
 from concurrent.futures import Future
+from contextlib import nullcontext
 from functools import partial
 import json
 from pathlib import Path
@@ -8,7 +9,7 @@ import subprocess
 import sys
 import tarfile
 import time
-from types import TracebackType
+from types import SimpleNamespace, TracebackType
 from typing import Callable
 from urllib.request import Request
 
@@ -25,6 +26,7 @@ from transformers import PreTrainedTokenizerFast
 from experiments import qwen_mtg183_vllm as campaign
 from manabot.llm import tokenization, vllm_runtime, vllm_server
 from manabot.llm.schema import InferenceConfig, Message, RuntimeIdentity, Sampling
+from manabot.sim.child import ChildProcess
 from manabot.verify.llm_game import GameSummary
 
 
@@ -585,8 +587,8 @@ def campaign_identity(tmp_path: Path) -> RuntimeIdentity:
     return identity
 
 
-def _use_inline_pool(monkeypatch: pytest.MonkeyPatch, concurrency: int) -> None:
-    """Settle submitted game fixtures immediately without spawning game workers."""
+def _use_inline_supervisors(monkeypatch: pytest.MonkeyPatch, concurrency: int) -> None:
+    """Settle submitted game fixtures immediately without launching game children."""
 
     class Pool:
         def __init__(self, **kwargs: object) -> None:
@@ -612,7 +614,7 @@ def _use_inline_pool(monkeypatch: pytest.MonkeyPatch, concurrency: int) -> None:
             future.set_result(fn(game, out, deadline))
             return future
 
-    monkeypatch.setattr(campaign, "ProcessPoolExecutor", Pool)
+    monkeypatch.setattr(campaign, "ThreadPoolExecutor", Pool)
 
 
 @pytest.mark.parametrize("concurrency", [4, 8, 16])
@@ -644,7 +646,7 @@ def test_failed_batch_retains_every_admitted_game_and_stops_queue(
             ),
         )
 
-    _use_inline_pool(monkeypatch, concurrency)
+    _use_inline_supervisors(monkeypatch, concurrency)
     monkeypatch.setattr(campaign, "play_game", play)
     campaign.worker(config, tmp_path)
     receipt = json.loads((tmp_path / "campaign.json").read_text())
@@ -704,7 +706,7 @@ def test_changed_player_identity_stops_cohort_and_is_retained(
         submitted.append(game.index)
         return campaign.original.GameResult(game=game, summary=summary)
 
-    _use_inline_pool(monkeypatch, config.concurrency)
+    _use_inline_supervisors(monkeypatch, config.concurrency)
     monkeypatch.setattr(campaign, "play_game", play)
     campaign.worker(config, tmp_path)
     receipt = json.loads((tmp_path / "campaign.json").read_text())
@@ -817,3 +819,119 @@ def test_offline_snapshot_matches_prepared_files(
     (snapshot / ("model.safetensors" if server else "tokenizer.json")).unlink()
     with pytest.raises(IncompleteSnapshotError):
         construct()
+
+
+@pytest.mark.parametrize(
+    "mode", ["complete", "admission", "exit", "deadline", "mismatch"]
+)
+def test_game_child_lifecycle(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, mode: str
+) -> None:
+    children: list[ChildProcess] = []
+
+    def child(target: str, arguments: tuple[object, ...]) -> ChildProcess:
+        process = ChildProcess(
+            "tests.fixtures.llm_process:game_child", (mode, *arguments)
+        )
+        children.append(process)
+        return process
+
+    monkeypatch.setattr(campaign, "ChildProcess", child)
+    game = campaign.original.schedule(campaign.Campaign())[0]
+    deadline = time.time() + (2 if mode == "deadline" else 10)
+    if mode == "complete":
+        result = campaign.play_game(game, tmp_path, deadline)
+        assert result.game == game and result.summary.completed
+    else:
+        error = (
+            TimeoutError
+            if mode == "deadline"
+            else EOFError
+            if mode == "exit"
+            else RuntimeError
+        )
+        with pytest.raises(error):
+            campaign.play_game(game, tmp_path, deadline)
+    assert len(children) == 1
+    assert children[0].exitcode is not None
+    assert children[0].connection.closed
+    assert not children[0].is_alive()
+
+
+def test_game_child_launch_failure_settles_admission(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, campaign_identity: RuntimeIdentity
+) -> None:
+    def fail(target: str, arguments: tuple[object, ...]) -> ChildProcess:
+        raise OSError("injected launch failure")
+
+    config = campaign.Campaign(concurrency=1, games=2)
+    campaign._prepare_schedule(config, tmp_path)
+    monkeypatch.setattr(campaign, "ChildProcess", fail)
+    campaign.worker(config, tmp_path)
+    receipt = json.loads((tmp_path / "campaign.json").read_text())
+    assert receipt["attempted"] == receipt["settled"] == receipt["failed"] == 1
+    assert receipt["unattempted"] == 1
+    assert receipt["pending_games"] == []
+    assert receipt["session_closed"]
+    assert "injected launch failure" in receipt["stop_reason"]
+
+
+def test_real_game_child_retains_failed_preparation(tmp_path: Path) -> None:
+    out = tmp_path / "output"
+    out.mkdir()
+    game = campaign.original.schedule(campaign.Campaign())[0]
+    game = game.model_copy(
+        update={
+            "config": game.config.model_copy(
+                update={"inference": tmp_path / "missing.json"}
+            )
+        }
+    )
+    result = campaign.play_game(game, out, time.time() + 20)
+    assert result.game == game
+    assert not result.summary.completed
+    assert "FileNotFoundError" in result.summary.failure
+    retained = json.loads(
+        (
+            tmp_path / "game-records" / f"game-{game.index:03d}" / "summary.json"
+        ).read_text()
+    )
+    assert retained == result.summary.model_dump(mode="json")
+
+
+def test_campaign_interruption_accounts_for_every_admission(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setenv("ETUDE_OUTPUT_DIR", str(tmp_path))
+    monkeypatch.setattr(
+        vllm_server, "VLLMServer", lambda *args: nullcontext(SimpleNamespace(seconds=0))
+    )
+
+    def interrupt(config: campaign.Campaign, *, worker_module: str) -> None:
+        path = tmp_path / "campaign.json"
+        receipt = json.loads(path.read_text())
+        assert receipt["unattempted"] == receipt["planned"] == 100
+        receipt.update(
+            attempted=2, settled=1, failed=1, pending_games=[11], unattempted=98
+        )
+        path.write_text(json.dumps(receipt))
+        raise RuntimeError("campaign worker interrupted; partial evidence retained")
+
+    monkeypatch.setattr(campaign.original, "supervise", interrupt)
+    with pytest.raises(RuntimeError, match="worker interrupted"):
+        campaign.run(campaign.Campaign())
+    receipt = json.loads((tmp_path / "campaign.json").read_text())
+    assert receipt["session_closed"]
+    assert receipt["pending_games"] == []
+    assert receipt["canceled_games"] == [11]
+    assert receipt["settled"] == receipt["attempted"] == 2
+    assert receipt["completed"] == 0
+    assert receipt["failed"] == receipt["canceled"] == 1
+    assert receipt["unattempted"] == 98
+    assert (
+        receipt["planned"]
+        == receipt["completed"]
+        + receipt["failed"]
+        + receipt["canceled"]
+        + receipt["unattempted"]
+    )

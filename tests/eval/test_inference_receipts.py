@@ -1286,3 +1286,35 @@ def test_same_game_matchup_keeps_exclusive_and_nested_timers_separate(
     path = write_report([], [root], tmp_path / "report")
     assert _report(path)["question"] == "Where does evaluation time go?"
     assert _report(path)["inference_performance"]["runs"][0]["matchup"] == matchup
+
+
+@pytest.mark.parametrize("invalid", [None, "extra", "successful", "wrong_step"])
+def test_failed_terminal_selection_survives_historical_close_error(
+    tmp_path: Path, invalid: str | None
+) -> None:
+    root = _fixture(tmp_path / "close-error", failure=True)
+    summary_path = root / "game/summary.json"
+    summary = json.loads(summary_path.read_text())
+    summary["model_decisions"] = 3
+    _write(summary_path, summary)
+    terminal = root / "game/decision-00003"
+    if invalid == "extra":
+        summary["model_decisions"] = 2
+        _write(summary_path, summary)
+    elif invalid == "successful":
+        selection = json.loads((terminal / "selection.json").read_text())
+        selection.update(origin="initial", selected_reference="A0", failure=None)
+        _write(terminal / "selection.json", selection)
+    elif invalid == "wrong_step":
+        terminal.rename(root / "game/decision-00004")
+    before = inventory(root)
+    if invalid is not None:
+        with pytest.raises(ValueError, match="counts exceed summary"):
+            project_llm(root)
+    else:
+        result = project_llm(root)
+        assert result["coverage"]["selection_population"] == 4
+        assert result["coverage"]["failed_selections"] == 1
+        assert result["coverage"]["replay_verified_games"] == 0
+        assert result["observed_status"] == "failed"
+    assert inventory(root) == before

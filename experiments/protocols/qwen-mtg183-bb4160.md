@@ -1,4 +1,4 @@
-# Qwen sampled reasoning versus MTG-183 in historical w13 — bb4160
+# Qwen versus MTG-183 in historical w13 — bb4160
 
 Jack Heart requested this evaluation on 2026-10-28 with a fresh **$10 GPU
 budget** (cumulative, including setup, failures, transfer and cleanup), and on
@@ -22,7 +22,8 @@ MTG-188 treatments and their budgets stay closed and are not pooled here.
 - **Model:** Qwen/Qwen3.5-9B BF16, model/tokenizer revision
   `c202236235762e1c871ad0ccb60c8ee5ba337b9a`, vLLM 0.17.1 from
   `configs/llm/vllm-0.17.1-linux.lock`; no quantization, prefix caching or
-  prompt truncation. Thinking enabled. The served name is the behavior version,
+  prompt truncation. Thinking is enabled except in the declared `nothink` floor.
+  The served name is the behavior version,
   which hashes the full inference configuration and runtime identity; every
   game summary names it and the opponent digest, and a departure stops admission.
 - **Schedule:** the MTG-188 100-game ordered-pair Elemental schedule (deals
@@ -77,14 +78,16 @@ in `experiments/qwen_mtg183_vllm.py`):
   main cohort is under way):** thinking disabled with Qwen's non-thinking
   sampling (T 0.7, top-p 0.8, top-k 20, presence 1.5), 512 output tokens.
 
-Serving for these arms: 32 concurrent games (`--max-num-seqs 32`) and the
+Initial serving declaration: 32 concurrent games (`--max-num-seqs 32`) and the
 checkpoint's own MTP head as a one-token speculative draft (vLLM 0.17.1
 `{"method":"mtp","num_speculative_tokens":1}`; its rejection sampler applies the
 declared top-k/top-p and presence penalty). The draft is part of the hashed
 server argv. Every Qwen attempt prints prompt, reasoning and answer tokens,
 forced close, seconds and tokens/s to job stdout, with vLLM's throughput and
 speculative-acceptance lines once a minute. Receipts also record single-choice
-Qwen decisions (not auto-resolved) and the native skip count per game.
+Qwen decisions (not auto-resolved) and the native skip count per game. The MTP
+failure below supersedes this serving choice for the replacement cohort;
+the current job constructor defaults to no speculative draft.
 
 ## Stages and stopping
 
@@ -143,10 +146,10 @@ cap $7.00. The MTP attempt is not pooled with it.
 
 | Run | Stage | Cap | Outcome | Charge |
 | --- | --- | --- | --- | --- |
-| `dddaf3001dfa` | sampled pilot, 1 game, c=1 | $2.00 | cancelled mid-game; 41 Qwen selections, 0 fallbacks; pod absent | $0.566 billed through 02:00 UTC |
-| `139099571cbb` | budget pilot, 32 games, c=32, MTP 1 | $1.20 | cancelled after ~10 min of decisions (86 attempts); pod absent | ~$0.16 (estimate) |
-| `8f68c0bc488b` | scored cohort, budget, 100 games, c=32, MTP 1 | $7.00 | engine crash (MTP); 32 attempted, 0 completed, 68 unattempted; pod absent | ~$0.18 (estimate) |
-| `cdb0c09f90c6` | **scored cohort**, budget, 100 games, c=32, no MTP | $7.00 | running | pending |
+| `dddaf3001dfa` | sampled pilot, 1 game, c=1 | $2.00 | 1 admitted/canceled, 0 completed; pod absent | $1.11978240 provider billed |
+| `139099571cbb` | budget pilot, 32 games, c=32, MTP 1 | $1.20 | 32 admitted/canceled, 0 completed; pod absent | $0.16946718 provider billed |
+| `8f68c0bc488b` | scored cohort, budget, 100 games, c=32, MTP 1 | $7.00 | 32 failed, 0 completed, 68 unattempted; pod absent | $0.18681270 provider billed |
+| `cdb0c09f90c6` | **scored cohort**, budget, 100 games, c=32, no MTP | $7.00 | running, admissions stopped; final receipts unavailable | $1.47195755 provider billed through whole hours at snapshot; not final |
 
 ### Retained evidence and reporting (2026-10-29)
 
@@ -165,11 +168,69 @@ targets response. Generated reasoning floor-index p50/max: priority 4,606/8,223,
 declare-blockers 5,853/5,853, targets 3,903/3,903. These distributions include
 repairs; the interrupted attempt stays in the denominator with an unknown split.
 
-At 05:50 UTC the replacement cohort remained running; a failed game had stopped
-admissions while already admitted games settled. Its final outcome, no-thinking
-floor, inclusive charge reconciliation and allocation cleanup remain outstanding.
-The launcher reported $1.12 for the sampled pilot and $0.02 for the MTP cohort;
-these differ from the earlier partial billing/estimates above and are not a
-reconciled provider invoice. No further rental was launched during this report
-repair. The declared `budget-64k` option is unlaunched and cannot alter the
-running cohort's 16,384-token context.
+At 06:20:40 UTC the replacement cohort remained running. Its incomplete retained
+log contains 49 admissions, 24 completed games, 2 failed games and 23 unsettled
+admissions, leaving 51 unattempted schedule entries. No admissions follow the
+first failure. These are log observations, not final game/replay receipts.
+Etude has recorded no output files yet, so final W/L/D, replay qualification,
+late-game failures and completed-cohort performance cannot be recovered yet.
+The existing bounded run is left to settle admitted games; this implementation
+pass started no rental, watcher or controller.
+
+Direct RunPod reads confirmed the first three pods absent and returned whole-hour
+bills totaling **$1.47606228455**. Retained launcher costs understate the second
+and third attempts; the provider totals supersede those estimates, not the frozen
+receipts. `experiments/data/bb4160/accounting-20261029T0620.json` retains the
+observation time, per-hour amounts, allocation identities, deletion times and
+launcher comparison. The current pod remains present. Its final partial hour,
+cleanup and non-pod ancillary charges are unknown; inclusive cost and useful
+games/dollar are therefore not certified.
+
+Keeping the current $7 cap and $0.50 cleanup/ancillary reserve leaves at most
+**$1.02393771545** uncommitted. The constructor's $1.05 minimum exceeds that by
+$0.02606228455 and also exceeds the accepted well-under-$1 floor intent. Thus
+there is no affordable no-thinking commitment on the current path before
+settlement. This is a budget-limited deferral, not evidence that no-thinking was
+run or that a shorter launch has been qualified. `budget-64k` remains unlaunched;
+its declaration at `8f2711df3` diagnoses late-game 16k context overflow and does
+not change the running cohort.
+
+### Receipt recovery and process integration
+
+All 32 game archives from each of the budget pilot and MTP cohort were fetched
+with digest verification and published in the data manifest, alongside their
+schedule, inference/runtime and GPU receipts. The pilot's `vllm.log` fetch failed
+Etude's range/identity validation (HTTP 206); it is not treated as verified.
+Frozen game bytes were not rewritten. Expanded local copies live under
+`.runs/bb4160/`; `receipt-accounting.json` beside each retained attempt summarizes
+selection files and generated-token splits.
+
+The pilot's final archives supersede its earlier 86-attempt log sample: 130
+selection files, 95 initially valid, 3 repaired, 0 fallback and 32 interrupted;
+133 generation attempts, 101 responses, 76 forced closes, 286,422 generated
+output tokens. Priority reasoning has 99 received splits among 124 attempts,
+p50/max 3,072/3,072; declare-attackers 2,776 (one), declare-blockers 3,072 (one).
+Learn and targets have no received split and remain unknown. There are 265
+committed Command receipts, no final game summaries and no complete-game replay
+qualification. Whole-device sampled peak was 43,141,562,368 bytes.
+
+The MTP failure archives contain 143 selections: 106 initially valid, 5 repaired,
+0 fallback and 32 failed; 149 attempts, 117 responses, 84 forced closes and
+329,862 generated output tokens. All 32 games failed; 68 were unattempted.
+Priority reasoning has 113 received splits among 134 attempts, p50/max 3,072;
+attackers 1,428 (one), blockers/learn/targets 3,072 (one each); private inspection
+has no received split. Complete-game replay coverage is 0/32 admitted games.
+The historical close exception left some summaries one selection short: the
+failed terminal selection was journaled before the counter advanced. The offline
+reader now admits exactly that uncommitted failed terminal decision, while
+rejecting excess successful or unrelated files. The resulting projection retains
+all 143 selections; no success or replay qualification is inferred.
+
+The review branch now launches game, resident-session and one-shot inference
+children through `ChildProcess`, with bounded supervisor threads for games.
+Admission, identity/deadline checks, IPC failure and reap behavior remain covered.
+Games inherit the existing outer watchdog process group, so forced shutdown also
+covers orphaned inference descendants. New campaign receipts distinguish failed,
+canceled and unattempted games; watchdog interruption retains canceled admission
+IDs. These repairs do not retroactively describe source `cfcd947042c4` running
+on the current rental. Broader mixed-report/Perf and review checks remain with gate.

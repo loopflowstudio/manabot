@@ -6,15 +6,10 @@ import time
 
 import pytest
 
-from manabot.llm.schema import (
-    EncodedPrompt,
-    GeneratedResponse,
-    InferenceConfig,
-    Message,
-    RuntimeIdentity,
-)
+from manabot.llm.schema import InferenceConfig
 from manabot.llm.session import InferenceSession
 from manabot.verify.llm_game import GameConfig, play
+from tests.fixtures.llm_process import FirstReferenceRuntime
 
 
 def test_native_random_control_completes_and_replays(tmp_path: Path) -> None:
@@ -175,30 +170,6 @@ def test_campaign_archive_retains_completed_and_partial_games(tmp_path: Path) ->
     assert (out / "game-000.tar.gz").read_bytes() == before
 
 
-class _FirstReferenceRuntime:
-    """Answers A0; the native game binds whatever that reference names."""
-
-    def __init__(self, config: InferenceConfig) -> None:
-        self.identity = RuntimeIdentity(
-            runtime="test",
-            runtime_version="1",
-            torch_version="unused",
-            python_version="test",
-            device_name="cpu",
-            chat_template="test",
-            generation_config={},
-        )
-
-    def encode(self, messages: tuple[Message, ...]) -> EncodedPrompt:
-        return EncodedPrompt(text=messages[-1].content, token_ids=(1, 2))
-
-    def generate(self, prompt: EncodedPrompt, deadline: float) -> GeneratedResponse:
-        return GeneratedResponse(text="A0", token_ids=(3,), finish_reason="eos")
-
-    def peak_gpu_bytes(self) -> int | None:
-        return None
-
-
 def test_game_receipts_bind_the_model_behavior_version(tmp_path: Path) -> None:
     config = InferenceConfig(
         model_id="test",
@@ -212,9 +183,8 @@ def test_game_receipts_bind_the_model_behavior_version(tmp_path: Path) -> None:
         deadline_seconds=5,
         fallback_seed=1,
     )
-    # The spawned worker imports this module, including the native harness.
     with InferenceSession(
-        config, factory=_FirstReferenceRuntime, load_seconds=120
+        config, factory=FirstReferenceRuntime, load_seconds=10
     ) as session:
         summary = play(GameConfig(max_decisions=8), tmp_path / "game", session)
     assert summary.model_decisions > 0

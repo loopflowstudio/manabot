@@ -6,7 +6,6 @@ No game state crosses this boundary, and an interrupted session cannot resume.
 """
 
 from dataclasses import dataclass
-import multiprocessing
 from multiprocessing.connection import Connection
 import time
 from typing import Callable
@@ -20,6 +19,7 @@ from manabot.llm.schema import (
     SelectionResult,
 )
 from manabot.llm.selection import Runtime, select
+from manabot.sim.child import ChildProcess
 
 
 @dataclass(frozen=True)
@@ -94,16 +94,16 @@ class InferenceSession:
     ) -> None:
         self.config = config
         self.closed = False
-        context = multiprocessing.get_context("spawn")
-        self.connection, child = context.Pipe()
-        self.process = context.Process(target=_serve, args=(child, config, factory))
         started = time.monotonic()
+        self.process = ChildProcess("manabot.llm.session:_serve", (config, factory))
+        self.connection = self.process.connection
         try:
-            self.process.start()
-            child.close()
-            if not self.connection.poll(load_seconds):
+            remaining = load_seconds - (time.monotonic() - started)
+            if remaining <= 0 or not self.connection.poll(remaining):
                 raise TimeoutError("model loading wall deadline exhausted")
             message = self.connection.recv()
+            if time.monotonic() - started >= load_seconds:
+                raise TimeoutError("model loading wall deadline exhausted")
             if isinstance(message, _LoadFailure):
                 raise RuntimeError(message.message)
             if not isinstance(message, RuntimeIdentity):
@@ -113,7 +113,6 @@ class InferenceSession:
             self.behavior_version = self.identity.behavior_version(config)
             self.load_seconds = time.monotonic() - started
         except BaseException:
-            child.close()
             self.close()
             raise
 
@@ -174,17 +173,7 @@ class InferenceSession:
         if self.closed:
             return
         self.closed = True
-        self.connection.close()
-        if self.process.pid is not None:
-            if self.process.is_alive():
-                self.process.terminate()
-            self.process.join(timeout=1)
-            if self.process.is_alive():
-                # SIGKILL always ends the worker; wait for it so close() cannot
-                # raise and replace the failure that retired this session.
-                self.process.kill()
-                self.process.join()
-            self.process.close()
+        self.process.close()
 
     def __enter__(self) -> "InferenceSession":
         return self
