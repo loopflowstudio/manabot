@@ -1137,3 +1137,109 @@ fn zuko_exiles_the_top_card_and_may_play_it_this_turn() {
     assert_eq!(s.game().state.zones.zone_of(ogre), Some(ZoneType::Exile));
     assert!(!can_cast(&mut s, ogre));
 }
+
+/// Badgermole Cub earthbends 1 on entering; tapping a creature for mana adds
+/// an extra {G}.
+#[test]
+fn badgermole_cub_earthbends_and_adds_green_when_a_creature_taps_for_mana() {
+    let mut s = setup(&["Badgermole Cub", "Hermitic Herbalist"]);
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    cast(&mut s, "Badgermole Cub");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(forest)));
+    settle(&mut s);
+    assert_eq!(counters(&s, forest), 1);
+    assert!(is_land_creature(&s, forest));
+
+    let herbalist = s.force_permanent_on_battlefield(0, "Hermitic Herbalist");
+    ready(&mut s, herbalist);
+    s.set_player_mana_pool(0, "0");
+    activate(&mut s, herbalist, 0);
+    mode(&mut s, 1);
+    settle(&mut s);
+    assert_eq!(*pool(&s), managym::state::mana::Mana::parse("UG"));
+}
+
+/// Herbalist's second ability offers every unordered two-color pair once
+/// (fifteen modes) and the mana pays only Lesson spells.
+#[test]
+fn hermitic_herbalist_offers_each_two_color_combination_once() {
+    let mut s = setup(&["Hermitic Herbalist"]);
+    let herbalist = s.force_permanent_on_battlefield(0, "Hermitic Herbalist");
+    ready(&mut s, herbalist);
+    s.set_player_mana_pool(0, "0");
+    activate(&mut s, herbalist, 1);
+    let modes = s
+        .action_space()
+        .actions
+        .iter()
+        .filter(|a| matches!(a, Action::ChooseMode { .. }))
+        .count();
+    assert_eq!(modes, 15);
+    mode(&mut s, 1);
+    settle(&mut s);
+    let player = &s.game().state.players[0].mana_pool;
+    assert_eq!(
+        player.restricted_of(ManaUse::spell(["Lesson"])),
+        [1, 1, 0, 0, 0, 0]
+    );
+    assert_eq!(player.total(), 2);
+}
+
+/// Haru triggers for each other Ally entering, not for itself. Two earthbends
+/// on one land stack counters and leave two independent delayed returns: the
+/// land returns once, tapped, as a new object.
+#[test]
+fn haru_earthbends_per_other_ally_and_a_doubly_bent_land_returns_once() {
+    let mut s = setup(&[
+        "Haru, Hidden Talent",
+        "Hermitic Herbalist",
+        "Lightning Strike",
+    ]);
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    cast(&mut s, "Haru, Hidden Talent");
+    settle(&mut s);
+    assert_eq!(counters(&s, forest), 0);
+    for _ in 0..2 {
+        cast(&mut s, "Hermitic Herbalist");
+        pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+        assert!(s.choose_target(Target::Permanent(forest)));
+        settle(&mut s);
+    }
+    assert_eq!(counters(&s, forest), 2);
+    assert_eq!(s.game().state.delayed_triggers.len(), 2);
+
+    let land = card_of(&s, forest);
+    cast(&mut s, "Lightning Strike");
+    assert!(s.choose_target(Target::Permanent(forest)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, land), Some(ZoneType::Battlefield));
+    let forests = s.battlefield_permanents_named(0, "Forest");
+    assert_eq!(forests.len(), 1);
+    let returned = s.game().state.permanents[forests[0]].as_ref().unwrap();
+    assert!(returned.tapped && !returned.animated);
+    assert_eq!(returned.plus1_counters, 0);
+    assert!(s.game().state.delayed_triggers.is_empty());
+}
+
+/// Iroh, Grand Lotus attacks for firebending 2. (Its graveyard flashback grants
+/// are witnessed in `tests/rules/temur_cards.rs`.)
+#[test]
+fn iroh_grand_lotus_firebends_two_when_attacking() {
+    let mut s = setup(&["Iroh, Grand Lotus"]);
+    let iroh = s.force_permanent_on_battlefield(0, "Iroh, Grand Lotus");
+    ready(&mut s, iroh);
+    s.set_player_mana_pool(0, "");
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    choose(&mut s, |a| {
+        matches!(a, Action::DeclareAttacker { attack: true, .. })
+    });
+    pass_until(&mut s, ActionSpaceKind::Priority);
+    while !s.game().state.stack_objects.is_empty() {
+        s.pass_priority();
+    }
+    assert_eq!(
+        s.game().state.players[0].combat_mana_pool,
+        managym::state::mana::Mana::parse("RR")
+    );
+}
