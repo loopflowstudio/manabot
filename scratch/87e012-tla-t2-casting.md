@@ -93,7 +93,10 @@ files into `tests/cards/` stays T1's (Jack Heart, 2026-10-29).
 
 ## Check
 
-2026-10-29 at `431a31f65`: debug `cargo test --test cards --test rules_tests
---lib` (+ search/hash/scenario/protocol-schema tests) pass; clippy and fmt
-clean. `pytest tests/semantic/` fails only T1's three frozen-schema
-assertions (expect 3/7/4, bind 8); `tests/academy/test_play_modes.py` passes.
+2026-10-29 compress (after `3b0c2df28`): battlefield moves invalidate the
+controller's mana cache in `move_card_with_entry` only; `ZoneEntry::for_zone`
+owns which entry terms a destination takes; `Observation::validate` admits a
+battlefield card its controller doesn't own. Debug `cargo test --no-fail-fast`
+passes except the pre-existing semantic-conformance pair; clippy and fmt
+clean. `pytest tests/semantic/` (T1's three frozen-schema assertions) and
+`tests/academy/test_play_modes.py` last ran at `431a31f65`.

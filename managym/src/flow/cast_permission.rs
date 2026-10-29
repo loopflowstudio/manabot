@@ -175,19 +175,14 @@ impl Game {
     /// Whether `card` is a foretold card lying face down in exile, hidden
     /// from everyone but its owner.
     pub(crate) fn is_foretold(&self, card: CardId) -> bool {
-        self.foretold_grant(card).is_some()
-    }
-
-    fn foretold_grant(&self, card: CardId) -> Option<&ExileCastGrant> {
-        if self.state.zones.zone_of(card) != Some(ZoneType::Exile) {
-            return None;
-        }
-        let object = self.current_object_ref(card)?;
-        self.state
-            .cast_permissions
-            .exile_grants
-            .iter()
-            .find(|grant| grant.foretold && grant.object == object)
+        self.state.zones.zone_of(card) == Some(ZoneType::Exile)
+            && self.current_object_ref(card).is_some_and(|object| {
+                self.state
+                    .cast_permissions
+                    .exile_grants
+                    .iter()
+                    .any(|grant| grant.foretold && grant.object == object)
+            })
     }
 
     /// Determinization: hidden card `new` becomes `player`'s foretold card

@@ -552,7 +552,6 @@ impl Game {
                 .contains(link.exiled_card, ZoneType::Exile, owner)
             {
                 self.move_card(link.exiled_card, ZoneType::Battlefield);
-                self.invalidate_mana_cache(owner);
             }
         }
     }

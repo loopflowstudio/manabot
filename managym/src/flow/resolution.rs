@@ -324,7 +324,6 @@ impl Game {
                                 ..crate::flow::proposed_event::ZoneEntry::default()
                             },
                         );
-                        self.invalidate_mana_cache(frame.controller);
                     } else {
                         self.reveal_card_to_hand(card, frame.controller);
                     }
@@ -597,9 +596,8 @@ impl Game {
                     return None;
                 };
                 let permanent = self.state.permanents[id].as_ref()?;
-                let (card, controller) = (permanent.card, permanent.controller);
+                let card = permanent.card;
                 self.move_card(card, ZoneType::Library);
-                self.invalidate_mana_cache(controller);
                 if *second_from_top {
                     let owner = self.state.cards[card].owner;
                     self.journal_zones();
@@ -1111,8 +1109,6 @@ impl Game {
                             ..crate::flow::proposed_event::ZoneEntry::default()
                         },
                     );
-                    let owner = self.state.cards[card].owner;
-                    self.invalidate_mana_cache(owner);
                 }
                 None
             }
@@ -1128,9 +1124,7 @@ impl Game {
                 self.lookup_current_permanent(source_ref).ok()?;
                 let permanent = self.state.permanents[permanent_id].as_ref()?;
                 let exiled_card = permanent.card;
-                let exiled_controller = permanent.controller;
                 self.move_card(exiled_card, ZoneType::Exile);
-                self.invalidate_mana_cache(exiled_controller);
                 self.state.exile_links.push(ExileLink {
                     source: source_ref,
                     exiled_card,
@@ -1282,9 +1276,7 @@ impl Game {
             return;
         };
         let card = permanent.card;
-        let controller = permanent.controller;
         self.move_card(card, ZoneType::Hand);
-        self.invalidate_mana_cache(controller);
     }
 
     /// Check whether a target is (still) legal for a given TargetSpec, from

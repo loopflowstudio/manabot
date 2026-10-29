@@ -596,23 +596,21 @@ impl Observation {
         }
     }
 
+    /// List a card on its owner's side; see [`Self::push_card`].
     fn add_card(
         &mut self,
         game: &Game,
         card_id: crate::state::game_object::CardId,
         zone: ZoneType,
     ) {
-        let card_data = Self::card_data(game, card_id, zone);
-        // Battlefield cards are listed with their permanent's controller, in
-        // the same order as its permanents; other zones belong to the owner.
-        let agent_side = match game.state.card_to_permanent[card_id]
-            .and_then(|id| game.state.permanents[id].as_ref())
-            .filter(|_| zone == ZoneType::Battlefield)
-        {
-            Some(permanent) => permanent.controller.0 == self.agent.player_index as usize,
-            None => card_data.owner_id == self.agent.id,
-        };
-        if agent_side {
+        let owner = game.state.cards[card_id].owner;
+        self.push_card(Self::card_data(game, card_id, zone), owner);
+    }
+
+    /// List a card on `side`: its owner's, except that battlefield cards
+    /// sit with their permanent's controller, in permanent order.
+    fn push_card(&mut self, card_data: CardData, side: PlayerId) {
+        if side.0 == self.agent.player_index as usize {
             self.agent_cards.push(card_data);
         } else {
             self.opponent_cards.push(card_data);
@@ -657,7 +655,10 @@ impl Observation {
             self.opponent_permanents.push(pdat);
         }
 
-        self.add_card(game, permanent.card, ZoneType::Battlefield);
+        self.push_card(
+            Self::card_data(game, permanent.card, ZoneType::Battlefield),
+            permanent.controller,
+        );
     }
 
     fn card_data(game: &Game, card_id: CardId, zone: ZoneType) -> CardData {
@@ -1169,13 +1170,15 @@ impl Observation {
                 return false;
             }
         }
-        for card in &self.agent_cards {
-            if card.owner_id != self.agent.id {
-                return false;
-            }
-        }
-        for card in &self.opponent_cards {
-            if card.owner_id != self.opponent.id {
+        // A battlefield card sits with its controller, who may not own it.
+        for (cards, side) in [
+            (&self.agent_cards, self.agent.id),
+            (&self.opponent_cards, self.opponent.id),
+        ] {
+            if cards
+                .iter()
+                .any(|card| card.zone != ZoneType::Battlefield && card.owner_id != side)
+            {
                 return false;
             }
         }

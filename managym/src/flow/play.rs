@@ -166,7 +166,6 @@ impl Game {
         self.journal_turn();
         self.state.turn.lands_played += 1;
         self.move_card(card, ZoneType::Battlefield);
-        self.invalidate_mana_cache(player);
 
         Ok(())
     }
@@ -1448,7 +1447,6 @@ impl Game {
             // CR 601.2h, 602.2b — Costs are paid on activation; sacrificing
             // moves the source to its owner's graveyard immediately.
             self.sacrifice_permanent(permanent_id);
-            self.invalidate_mana_cache(player);
         }
 
         let id = self.state.id_gen.next_id();

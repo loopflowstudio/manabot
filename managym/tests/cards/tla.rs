@@ -2189,6 +2189,16 @@ fn hama_casts_an_opponents_artifact_under_your_control() {
     assert_eq!(s.zone_size(1, ZoneType::Hand), hands.1);
     s.set_player_mana_pool(0, "1");
     assert!(can_activate(&mut s, artifact));
+    // Each player's view lists the Prism on its controller's side.
+    for viewer in [PlayerId(0), PlayerId(1)] {
+        let view = Observation::for_player(s.game(), viewer);
+        assert!(view.validate());
+        let mine = view
+            .agent_cards
+            .iter()
+            .any(|card| card.zone == ZoneType::Battlefield && card.name == "Prophetic Prism");
+        assert_eq!(mine, viewer == PlayerId(0));
+    }
 }
 
 /// Sozin's Comet grants firebending 5 to the creatures you control as it

@@ -29,6 +29,24 @@ pub(crate) struct ZoneEntry {
     pub face_down: bool,
 }
 
+impl ZoneEntry {
+    /// The terms `zone` takes: battlefield terms only for the battlefield,
+    /// face down only for exile.
+    fn for_zone(self, zone: ZoneType) -> Self {
+        match zone {
+            ZoneType::Battlefield => Self {
+                face_down: false,
+                ..self
+            },
+            ZoneType::Exile => Self {
+                face_down: self.face_down,
+                ..Self::default()
+            },
+            _ => Self::default(),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum ProposedDamageTarget {
     Player(PlayerId),
@@ -105,15 +123,9 @@ impl Game {
         for replacement in replacements {
             Self::apply_replacement(&mut event, &replacement.effect);
         }
-        // Only exile receives a card face down, and only the battlefield a
-        // controller: a redirected move drops either term.
+        // A redirected move keeps only the terms its new destination takes.
         if let ProposedEvent::ZoneMove { to, entry, .. } = &mut event {
-            if *to != ZoneType::Exile {
-                entry.face_down = false;
-            }
-            if *to != ZoneType::Battlefield {
-                entry.controller = None;
-            }
+            *entry = entry.for_zone(*to);
         }
 
         self.commit_proposed_event(event)
@@ -154,11 +166,7 @@ impl Game {
                 if self.state.cards.get(card.0).is_none()
                     || self.state.zones.zone_of(*card) != *from
                     || *from == Some(*to)
-                    || (*to != ZoneType::Battlefield
-                        && (entry.tapped
-                            || entry.plus_one_counters != 0
-                            || entry.controller.is_some()))
-                    || (*to != ZoneType::Exile && entry.face_down)
+                    || *entry != entry.for_zone(*to)
                 {
                     return false;
                 }

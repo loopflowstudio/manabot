@@ -391,17 +391,14 @@ impl Game {
                     // A permanent spell enters under its controller's
                     // control, even when another player owns the card
                     // (CR 110.2).
-                    let owner = self.state.cards[card].owner;
-                    let controller = (frame.controller != owner).then_some(frame.controller);
                     self.move_card_with_entry(
                         card,
                         ZoneType::Battlefield,
                         crate::flow::proposed_event::ZoneEntry {
-                            controller,
+                            controller: Some(frame.controller),
                             ..Default::default()
                         },
                     );
-                    self.invalidate_mana_cache(frame.controller);
                 } else {
                     self.move_card(card, ZoneType::Graveyard);
                 }
@@ -1213,7 +1210,6 @@ impl Game {
                         },
                     );
                 }
-                self.invalidate_mana_cache(owner);
                 self.journal_zones();
                 self.state
                     .zones
