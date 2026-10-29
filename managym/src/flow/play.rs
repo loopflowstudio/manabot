@@ -1331,18 +1331,13 @@ impl Game {
         source: PermanentId,
         ability: &ActivatedAbilityDefinition,
     ) -> bool {
+        let cost = &ability.mana_cost;
         if !ability.tap_source {
-            return self.can_pay_with_waterbend(player, &ability.mana_cost);
+            return self.waterbend_payment_possible(player, cost, cost.generic());
         }
         let mut probe = self.clone();
         probe.tap_permanent(source, false);
-        probe.can_pay_with_waterbend(player, &ability.mana_cost)
-    }
-
-    /// Can `player` cover `cost` with untapped waterbend candidates
-    /// ({1} each, generic only) plus available mana?
-    pub(crate) fn can_pay_with_waterbend(&self, player: PlayerId, cost: &ManaCost) -> bool {
-        self.waterbend_payment_possible(player, cost, cost.generic())
+        probe.waterbend_payment_possible(player, cost, cost.generic())
     }
 
     /// Tap `permanent` to pay {1} of the pending waterbend cost.

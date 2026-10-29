@@ -140,7 +140,7 @@ and UI. Guard + directed + viewer-safety tests in
 
 - Next T1 sync, after T1 publishes engine-type cards/w17: the three steers
   above, then the world gate. Last observed 2026-10-29 (after `8f562b7d0`):
-  PR #394 head still `f9732c12f`; T1 committed `167eb13d4` locally (engine-type
+  PR #394 head still `f9732c12f` (rechecked at compress, 2026-10-29); T1 committed `167eb13d4` locally (engine-type
   set files with Scryfall ids, `authoring.rs`/`compile.rs`/IR deleted, tokens in
   `semantic/tokens.rs`) and has uncommitted Python follow-up work, so the sync is
   still waiting. Conversion path: T1's `scratch/conversion/generate.py` turns
@@ -169,5 +169,6 @@ activations (card offers had skipped the life check); permanent offers build
 their `Payment` once; suspended-decision spaces share `select_cards`/`card_focus`;
 `count_battlefield_matching` serves affinity, activation reduction and
 `EffectValue::BattlefieldMatching`; `zone_cast_cost` alone applies the
-hand-only override. Last: debug `--lib`/`cards`/`rules_tests`
+hand-only override; waterbend affordability calls `waterbend_payment_possible`
+directly (pass-through `can_pay_with_waterbend` removed). Last: debug `--lib`/`cards`/`rules_tests`
 121/293/131 pass, clippy `--all-targets` clean. Authoring layer left for T1.

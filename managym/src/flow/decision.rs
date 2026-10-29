@@ -452,10 +452,9 @@ impl Game {
                         for permanent in self.waterbend_candidates(player) {
                             let mut probe = self.clone();
                             probe.tap_permanent(permanent, false);
-                            if probe.can_pay_with_waterbend(
-                                player,
-                                &crate::state::mana::ManaCost::default().with_generic(generic - 1),
-                            ) {
+                            let rest =
+                                crate::state::mana::ManaCost::default().with_generic(generic - 1);
+                            if probe.waterbend_payment_possible(player, &rest, generic - 1) {
                                 actions.push(Action::WaterbendTap { player, permanent });
                             }
                         }
