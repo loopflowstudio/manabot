@@ -11,7 +11,7 @@ import torch
 
 from manabot.semantic.compiler import Opcode, canonical_json
 from manabot.semantic.learning import (
-    DEFAULT_IR_PATH,
+    DEFAULT_PACK_KEY,
     DEFAULT_SCHEMA_PATH,
     ArtifactCompatibilityError,
     BoundSemanticPack,
@@ -21,6 +21,7 @@ from manabot.semantic.learning import (
     SemanticProjectionError,
     UnknownOpcodeError,
     UnknownSchemaError,
+    current_ir_document,
 )
 
 
@@ -29,7 +30,7 @@ def _json(path: Path) -> dict:
 
 
 def _manifest(*, reverse_ids: bool = False) -> dict:
-    ir = _json(DEFAULT_IR_PATH)
+    ir = current_ir_document(DEFAULT_PACK_KEY)
     rows = list(range(len(ir["definitions"])))
     card_ids = list(reversed(rows)) if reverse_ids else rows
     return {
@@ -387,14 +388,14 @@ def test_unknown_schema_opcode_and_content_binding_fail_closed(tmp_path: Path) -
     with pytest.raises(UnknownSchemaError, match="got 999"):
         LearningSchema.load(bad_schema)
 
-    ir = _json(DEFAULT_IR_PATH)
+    ir = current_ir_document(DEFAULT_PACK_KEY)
     ir["programs"][0]["instructions"][0].update(op_name="future_op", opcode=999)
     bad_ir = tmp_path / "ir.json"
     _write_rehashed_ir(bad_ir, ir)
     with pytest.raises(UnknownOpcodeError, match="unknown opcode name"):
         BoundSemanticPack.bind(_manifest(), ir_path=bad_ir)
 
-    ir = _json(DEFAULT_IR_PATH)
+    ir = current_ir_document(DEFAULT_PACK_KEY)
     ir["programs"][0]["instructions"][0]["opcode"] = 999
     mismatched_ir = tmp_path / "mismatched-ir.json"
     _write_rehashed_ir(mismatched_ir, ir)

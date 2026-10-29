@@ -1,5 +1,5 @@
 //! Current TLA cards and their fixed tokens.
-//! Edit these typed definitions; regenerate checked-in projections with compile_current_content.
+//! Edit these typed definitions; `semantic::compile` lowers them in process.
 use super::authoring::{
     Card, CardType, Characteristics, Color, Condition, Controller, Cost, Destination, Direction,
     Duration, Event, Keyword, Op, Payment, Predicate, PrintedPower, Program, ProgramKind, Quantity,

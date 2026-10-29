@@ -40,7 +40,7 @@ impl managym::semantic::InterpreterContext for Fixture {
 }
 
 fn pack() -> SemanticPack {
-    SemanticPack::two_deck().expect("checked-in two-deck IR parses")
+    SemanticPack::current("two_deck").expect("checked-in two-deck IR parses")
 }
 
 fn program<'a>(pack: &'a SemanticPack, semantic_key: &str) -> &'a Program {
@@ -206,7 +206,7 @@ fn basic_land_taps_for_its_color() {
     let pack = pack();
     let bound = pack.bind(&ContentPack::default()).expect("bind");
     let trace = bound
-        .run(program(&pack, "basic.island.mana"), &Fixture::default())
+        .run(program(&pack, "temur.island.mana"), &Fixture::default())
         .expect("run");
     assert_eq!(
         trace,

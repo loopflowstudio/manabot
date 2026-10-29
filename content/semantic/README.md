@@ -6,22 +6,19 @@ Current TLA cards are authored as typed Rust functions in
 costs, targets, predicates and characteristics; `authored_support.rs` supplies the
 non-TLA definitions needed by current setups. Card text is presentation only.
 
-The offline exporter writes `current/generated/cards.json`. The existing compiler
-then resolves definition references and token closure, validates the closed
-instruction schema, and emits canonical IR plus coverage reports. All generated
-files are checked in. `--check` compiles the Rust source and rejects any stale output:
+The engine compiles those definitions in process
+([`semantic/compile.rs`](../../managym/src/semantic/compile.rs)): it resolves
+definition references and token closure, checks target roles, assigns opcodes and
+program indexes, and hashes canonical IR. No card catalog or IR is generated on
+disk. Python reads the same documents through `managym.semantic_ir_json(pack_key)`.
 
-```bash
-uv run python -m scripts.compile_current_content
-uv run python -m scripts.compile_current_content --check
-```
-
-Edit a card's Rust function, add it to its set's `cards()` list, and regenerate.
-TLA membership and fixed tokens derive from that set list. Do not edit generated
-JSON or add another native registration. `current/setups.json` remains ordinary
+Edit a card's Rust function, add it to its set's `cards()` list, and rebuild.
+TLA membership and fixed tokens derive from that set list. Do not add another
+native registration. `cargo test --lib semantic::compile` compiles every current
+preset and checks qualifications. `current/setups.json` remains ordinary
 deck/sideboard data, and `qualifications.json` remains independent review evidence.
 Changes to rules or token dependencies require renewed qualification, even if the
-Rust source compiles. The exporter requires Cargo but no installed Python extension.
+Rust source compiles.
 
 The [TLA authoring and qualification contract](../../docs/rules/tla/README.md)
 describes the inventory, independent witnesses, unsupported cards and ownership
@@ -31,13 +28,13 @@ transitive definition closure; editing a clause invalidates that qualification.
 
 ## Native runtime and identity
 
-`SemanticPack::compile_content_pack` lowers checked IR into the ordinary native
+`SemanticPack::compile_content_pack` lowers compiled IR into the ordinary native
 `CardDefinition` runtime. It supplies characteristics, costs, targets, triggers,
 static abilities and effects. Presentation text comes from the same definition;
 Oracle text never supplies executable rules. Historical IR without embedded text
 uses `current/presentation.json`, a frozen text snapshot.
 
-Each generated `semantic_index` is local to its IR document, distinct from native
+Each compiled `semantic_index` is local to its IR document, distinct from native
 `CardDefId`. The compiled pack records its pack key, IR hash and source hash in
 `ContentPackManifest.compiled_semantics`. `managym.content_pool(pack_key)` exposes
 that identity, native IDs, semantic keys and eligibility without starting a game.
@@ -70,7 +67,7 @@ counters, damage, control and other match facts remain in observation tensors.
 
 Datasets and checkpoints persist `BoundSemanticPack.artifact_header()`. Loaders
 reject missing or mismatched schema, IR, content, layout and identity-mode
-provenance. Current manifest binding uses explicit entries in `CURRENT_IR_PATHS`.
+provenance. Current manifest binding uses explicit pack keys in `CURRENT_PACK_KEYS`.
 Historical artifact inspection requires its original schema and IR paths; frozen
 receipts and checkpoints are never silently upgraded.
 
@@ -85,10 +82,10 @@ uv run --extra dev pytest -q \
 ## Historical sources and coverage evidence
 
 The `v1/` and `w7/` through `w11/` artifacts retain earlier sources, schemas,
-fixtures and receipts. They are not inputs to current generation. Historical
-compiler checks remain available through `scripts/compile_semantic_content.py`;
-the explicit source/output invocations in `.github/workflows/ci.yml` validate
-those frozen artifacts independently of the current generator.
+fixtures and receipts. They are not inputs to current content. Historical
+compiler checks remain available through `scripts/compile_semantic_content.py`
+(the retained Python compiler); the explicit source/output invocations in
+`.github/workflows/ci.yml` validate those frozen artifacts.
 
 `v1/coverage.evidence.json` records rule-family ownership, executable witnesses,
 support/deviation annotations and admission history. Its coverage-gap artifact

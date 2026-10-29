@@ -1,9 +1,9 @@
 //! Versioned content eligibility shared by deck import and native admission.
 //!
-//! A compiled definition is not automatically eligible. Offline qualifications
-//! bind independent witnesses to the complete authored definition; generated
-//! descriptors bind those decisions to the exact IR hash. Setup construction
-//! policy belongs to the admission caller, not this catalog.
+//! A compiled definition is not automatically eligible. Reviewed qualifications
+//! bind independent witnesses to the complete authored closure (see
+//! [`compile::qualified`]). Setup construction policy belongs to the admission
+//! caller, not this catalog.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -12,7 +12,7 @@ use std::{
 
 use serde::{Deserialize, Serialize};
 
-use super::{IrError, SemanticPack};
+use super::{compile, IrError, SemanticPack};
 use crate::{
     cardsets::alpha::{CompiledSemanticManifest, ContentPack},
     state::card::CardDefId,
@@ -44,18 +44,6 @@ pub struct ContentPool {
     pub definitions: Vec<PoolDefinition>,
 }
 
-#[derive(Deserialize)]
-struct QualificationManifest {
-    ir_hash: String,
-    eligible: BTreeSet<String>,
-}
-
-#[derive(Deserialize)]
-struct Qualifications {
-    inventory: BTreeSet<String>,
-    packs: BTreeMap<String, QualificationManifest>,
-}
-
 struct PoolRuntime {
     content: Arc<ContentPack>,
     descriptor: ContentPool,
@@ -64,21 +52,15 @@ struct PoolRuntime {
 impl PoolRuntime {
     fn compile(
         semantic: &SemanticPack,
-        mut qualification: QualificationManifest,
+        qualified: &BTreeSet<String>,
         inventory: &BTreeSet<String>,
     ) -> Result<Self, IrError> {
-        if qualification.ir_hash != semantic.ir_hash {
-            return Err(IrError::Malformed(format!(
-                "stale eligibility for {}",
-                semantic.pack_key
-            )));
-        }
         let content = Arc::new(semantic.compile_content_pack()?);
         // IR owns identity and pack membership; qualifications only decide
         // eligibility. Inventory-only cards remain explicit.
         let mut definitions = BTreeMap::new();
         for definition in &semantic.definitions {
-            let eligible = qualification.eligible.remove(&definition.semantic_key);
+            let eligible = qualified.contains(&definition.semantic_key);
             definitions.insert(
                 definition.registry_name.clone(),
                 PoolDefinition {
@@ -97,12 +79,6 @@ impl PoolRuntime {
                     },
                 },
             );
-        }
-        if !qualification.eligible.is_empty() {
-            return Err(IrError::Malformed(format!(
-                "qualified definitions missing from {}: {:?}",
-                semantic.pack_key, qualification.eligible
-            )));
         }
         for name in inventory {
             definitions
@@ -134,26 +110,13 @@ fn pools() -> Result<&'static BTreeMap<String, PoolRuntime>, IrError> {
     static POOLS: OnceLock<Result<BTreeMap<String, PoolRuntime>, IrError>> = OnceLock::new();
     POOLS
         .get_or_init(|| {
-            let mut qualifications: Qualifications = serde_json::from_str(include_str!(
-                "../../../content/semantic/current/generated/eligibility.json"
-            ))
-            .map_err(|e| IrError::Malformed(e.to_string()))?;
-            let pool = SemanticPack::pool()?;
+            let (qualified, inventory) = (compile::qualified()?, compile::inventory()?);
+            let pool = SemanticPack::current("pool")?;
             SemanticPack::catalog()?
                 .iter()
                 .chain([&pool])
                 .map(|semantic| {
-                    let qualification = qualifications
-                        .packs
-                        .remove(&semantic.pack_key)
-                        .ok_or_else(|| {
-                            IrError::Malformed(format!(
-                                "missing eligibility for {}",
-                                semantic.pack_key
-                            ))
-                        })?;
-                    let runtime =
-                        PoolRuntime::compile(semantic, qualification, &qualifications.inventory)?;
+                    let runtime = PoolRuntime::compile(semantic, qualified, inventory)?;
                     Ok((semantic.pack_key.clone(), runtime))
                 })
                 .collect()
@@ -218,27 +181,5 @@ mod tests {
         assert_eq!(excluded.eligibility, Eligibility::Unsupported);
         assert!(excluded.card_def_id.is_none());
         assert!(excluded.semantic_key.is_none());
-    }
-
-    #[test]
-    fn qualifications_reject_stale_ir_and_missing_definitions() {
-        let semantic = SemanticPack::baseline().unwrap();
-        let inventory = BTreeSet::new();
-        let stale = QualificationManifest {
-            ir_hash: "stale".into(),
-            eligible: BTreeSet::new(),
-        };
-        assert!(matches!(
-            PoolRuntime::compile(&semantic, stale, &inventory),
-            Err(IrError::Malformed(reason)) if reason.contains("stale eligibility")
-        ));
-        let missing = QualificationManifest {
-            ir_hash: semantic.ir_hash.clone(),
-            eligible: BTreeSet::from(["missing.definition".into()]),
-        };
-        assert!(matches!(
-            PoolRuntime::compile(&semantic, missing, &inventory),
-            Err(IrError::Malformed(reason)) if reason.contains("qualified definitions missing")
-        ));
     }
 }

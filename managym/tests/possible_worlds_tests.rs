@@ -34,7 +34,7 @@ fn local_binom(n: u32, k: u32) -> u128 {
 }
 
 fn authored_match() -> Game {
-    let semantic = SemanticPack::two_deck().expect("checked-in semantic IR parses");
+    let semantic = SemanticPack::current("two_deck").expect("checked-in semantic IR parses");
     let configs = vec![
         PlayerConfig::new(
             "UR Lessons",

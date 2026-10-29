@@ -1,25 +1,34 @@
-"""Current authoring has one owner; qualifications cannot survive clause edits."""
+"""Current cards compile natively; qualifications cannot survive clause edits.
+
+Clause-edit and missing-token rejection are native tests in
+`managym/src/semantic/compile.rs`; these checks cover the Python consumers.
+"""
 
 import json
 from pathlib import Path
-import shutil
 
 from managym.decision import Command, DecisionFrame, Observation
 from managym.experience_projection import describe_actions, serialize_observation
 import pytest
 
-from manabot.semantic.compiler import SemanticCompileError
-from manabot.semantic.content import CONTENT_ROOT, ContentSource, generate
-from manabot.semantic.learning import BoundSemanticPack
+from manabot.semantic.learning import (
+    CURRENT_PACK_KEYS,
+    BoundSemanticPack,
+    current_ir_document,
+)
 from manabot.semantic.policy_catalog import bind_policy_catalog
 import managym
 
+CONTENT_ROOT = Path(__file__).resolve().parents[2] / "content/semantic"
+SETUPS = json.loads((CONTENT_ROOT / "current/setups.json").read_text())
 
-def test_current_outputs_and_all_learning_projections() -> None:
-    generate(check=True)
-    source = ContentSource.load()
-    for preset in [*source.setups, "pool"]:
-        ir, _ = source.project(preset)
+
+def test_all_current_packs_bind_learning_projections() -> None:
+    pack_keys = {setup["pack_key"] for setup in SETUPS.values()} | {"tla-pool-v1"}
+    assert CURRENT_PACK_KEYS <= pack_keys
+    for pack_key in sorted(pack_keys):
+        ir = current_ir_document(pack_key)
+        assert ir["pack_key"] == pack_key
         manifest = {
             "schema_version": 1,
             "content_digest": "projection-test",
@@ -28,42 +37,21 @@ def test_current_outputs_and_all_learning_projections() -> None:
                 for i, d in enumerate(ir["definitions"])
             ],
         }
-        bound = BoundSemanticPack.bind(
-            manifest,
-            ir_path=CONTENT_ROOT / "generated" / f"{preset}.ir.json",
-            schema_path=CONTENT_ROOT / "learning_schema.json",
-        )
-        assert len(bound.definition_row_by_card_def_id) == len(ir["definitions"])
+        if pack_key in CURRENT_PACK_KEYS:
+            bound = BoundSemanticPack.bind(
+                {**manifest, "compiled_semantics": _receipt(ir)}
+            )
+            assert bound.ir.ir_hash == ir["ir_hash"]
+            assert len(bound.definition_row_by_card_def_id) == len(ir["definitions"])
 
 
-def test_missing_token_fails_closed() -> None:
-    source = ContentSource.load()
-    ally = next(
-        k for k, d in source.definitions.items() if d["registry_name"] == "Ally"
-    )
-    del source.definitions[ally]
-    with pytest.raises(SemanticCompileError, match="missing content definition"):
-        source.project("two_deck")
+def _receipt(ir: dict) -> dict[str, str]:
+    return {key: ir[key] for key in ("pack_key", "ir_hash", "source_hash")}
 
 
-@pytest.mark.parametrize("name", ["Avatar Enthusiasts", "Ally"])
-def test_qualification_rejects_changes_to_card_or_token_clauses(
-    tmp_path: Path,
-    name: str,
-) -> None:
-    shutil.copytree(CONTENT_ROOT, tmp_path / "content")
-    root = tmp_path / "content"
-    path = root / "generated" / "cards.json"
-    catalog = json.loads(path.read_text())
-    rows = catalog["definitions"]
-    definition = next(row for row in rows if row["registry_name"] == name)
-    if name == "Ally":
-        definition["characteristics"]["power"] = 7
-    else:
-        definition["programs"] = []
-    path.write_text(json.dumps(catalog))
-    with pytest.raises(SemanticCompileError, match="stale qualification"):
-        generate(root=root)
+def test_unknown_pack_has_no_current_ir() -> None:
+    with pytest.raises(ValueError, match="unknown content pack"):
+        current_ir_document("missing-pack")
 
 
 @pytest.mark.parametrize(
@@ -96,8 +84,7 @@ def test_reviewed_cards_are_eligible_in_the_native_pool(name: str) -> None:
 
 
 def test_current_projections_preserve_every_historical_setup_count() -> None:
-    source = ContentSource.load()
-    for preset in source.setups:
+    for preset, setup in SETUPS.items():
         if preset == "baseline":
             continue
         directory, filename = (
@@ -106,11 +93,9 @@ def test_current_projections_preserve_every_historical_setup_count() -> None:
             else ("v1", preset)
         )
         historical = json.loads(
-            (
-                CONTENT_ROOT.parent / directory / "generated" / f"{filename}.ir.json"
-            ).read_text()
+            (CONTENT_ROOT / directory / "generated" / f"{filename}.ir.json").read_text()
         )
-        current, _ = source.project(preset)
+        current = current_ir_document(setup["pack_key"])
         for old, new in zip(historical["decks"], current["decks"], strict=True):
             assert old["key"] == new["key"]
             for field in ("cards", "sideboard"):

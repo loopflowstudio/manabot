@@ -21,10 +21,9 @@ and convergence status are in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
 6. **`src/python/`**: PyO3 bindings and Rust→Python conversions
 
 Current TLA authoring lives in typed functions in `src/cardsets/tla.rs`; symbolic
-authoring types live in `src/cardsets/authoring.rs`. The offline exporter and
-compiler (`uv run python -m scripts.compile_current_content`, from the repository
-root) regenerate the checked-in catalog and native/learning IR. `--check` rejects
-stale outputs. Keep decklist data and independent qualification evidence separate
+authoring types live in `src/cardsets/authoring.rs`. `src/semantic/compile.rs`
+compiles them in process into the IR the runtime lowers and the learning projection
+reads (`managym.semantic_ir_json`); nothing is generated on disk. Keep decklist data and independent qualification evidence separate
 from card behavior; see [the authoring contract](../content/semantic/README.md).
 
 Dependencies flow: python → agent → flow → state/infra.

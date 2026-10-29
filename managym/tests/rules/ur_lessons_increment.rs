@@ -446,7 +446,7 @@ fn combustion_is_an_owned_learn_candidate() {
 
 #[test]
 fn revised_forty_card_deck_completes_and_replays_every_command_exactly() {
-    let semantic = SemanticPack::two_deck().unwrap();
+    let semantic = SemanticPack::current("two_deck").unwrap();
     let mut ur = semantic
         .player_config("UR candidate", "ur_lessons")
         .unwrap();

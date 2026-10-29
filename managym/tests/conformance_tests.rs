@@ -190,7 +190,7 @@ fn engine_pt(printed: Option<i32>, cda: bool) -> Option<String> {
 #[test]
 fn every_registered_real_card_matches_scryfall() {
     let registry = CardRegistry::default();
-    let research = SemanticPack::complexity()
+    let research = SemanticPack::current("complexity")
         .and_then(|pack| pack.compile_content_pack())
         .expect("complexity catalog compiles");
     let fixture = fixture();

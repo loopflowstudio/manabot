@@ -25,6 +25,8 @@ class ContentPool(TypedDict):
     definitions: list[PoolDefinition]
 
 def content_pool(pack_key: str) -> ContentPool: ...
+def semantic_ir_json(pack_key: str) -> str:
+    """Canonical IR compiled natively from the typed set definitions."""
 
 class PreparedPossibleWorldMaterializer:
     @property

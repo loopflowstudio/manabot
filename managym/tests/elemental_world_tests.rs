@@ -5,7 +5,7 @@ use managym::{semantic::SemanticPack, Game};
 fn retained_professor_cast_prefix_can_enter_and_finish_mana_payment() {
     // Native failure retained by MTG-175: one Forest, off-color lands and
     // Prophetic Prism can pay 2GG, provided Prism preserves the Forest.
-    let pack = SemanticPack::elemental_world().unwrap();
+    let pack = SemanticPack::current("elemental_world").unwrap();
     let mut configs = vec![
         pack.player_config("arena-seat-0", "elemental_wb").unwrap(),
         pack.player_config("arena-seat-1", "elemental_ug").unwrap(),
@@ -33,7 +33,7 @@ fn retained_professor_cast_prefix_can_enter_and_finish_mana_payment() {
 
 #[test]
 fn every_pair_and_mirror_uses_the_selected_world_and_completes() {
-    let semantic = SemanticPack::optional_payments().unwrap();
+    let semantic = SemanticPack::current("optional_payments").unwrap();
     for (left, first) in semantic.decks.iter().enumerate() {
         for (right, second) in semantic.decks.iter().enumerate() {
             let mut configs = vec![

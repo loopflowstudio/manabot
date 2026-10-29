@@ -175,9 +175,10 @@ checks required by the affected package and workflow.
 ### Typed card authoring
 
 Current TLA cards are authored in `managym/src/cardsets/tla.rs`, using the
-symbolic types in `authoring.rs`. Regenerate and check the committed catalog/IR
-with `uv run python -m scripts.compile_current_content` and `--check`; never
-hand-edit generated card JSON. Keep decklists and independent qualification
+symbolic types in `authoring.rs`. The engine compiles them in process
+(`managym/src/semantic/compile.rs`); there is no generated card JSON or IR to
+regenerate. Python reads current IR through `managym.semantic_ir_json`; rebuild
+the extension after card changes. Keep decklists and independent qualification
 receipts separate from behavior. Keep long printed text in a local `text_box`
 binding so rustfmt can format the typed definition.
 

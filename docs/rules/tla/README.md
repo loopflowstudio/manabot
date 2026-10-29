@@ -4,10 +4,9 @@ Current definitions are authored once in
 [`managym/src/cardsets/tla.rs`](../../../managym/src/cardsets/tla.rs).
 The typed Rust definitions contain characteristics, programs and presentation text.
 Set membership also owns native roots and fixed tokens. Setup manifests only choose
-definition IDs and counts. Generate the catalog and every native/learning projection
-with `uv run python -m scripts.compile_current_content`; `--check` compiles the Rust
-source and rejects stale checked-in outputs. Frozen v1/w11 sources remain historical
-evidence and are not generator inputs. Current execution uses world **w16** and
+definition IDs and counts. The engine compiles every native/learning projection
+from that source in process; there are no generated card files. Frozen v1/w11
+sources remain historical evidence and are not inputs to current content. Current execution uses world **w16** and
 learning schema **8**.
 
 `SemanticPack::compile_content_pack` lowers these programs into the ordinary rules
@@ -26,13 +25,13 @@ parsing and consumer entry points. Merely appearing in an authored setup does
 not qualify a card for arbitrary submitted combinations.
 
 Qualifications bind independent witness references to a complete transitive definition-closure hash
-in `qualifications.json`. Editing/removing any clause makes generation fail until
+in `qualifications.json`. Editing/removing any clause makes compilation fail until
 its qualification is explicitly reviewed. This is a guard against stale evidence,
-not a proof that tests or generated definitions implement every rule. Tokens
+not a proof that tests or compiled definitions implement every rule. Tokens
 cannot become deck entries. Unimplemented cards and preserved but unqualified
 programs remain explicitly unsupported by the shared pool descriptor.
-Generated eligibility retains the inventory once and qualified keys per IR hash;
-the runtime derives pack membership and definition identity from that checked IR.
+The runtime derives pack membership and definition identity from compiled IR and
+eligibility from current qualifications; `inventory.json` names unimplemented cards.
 
 The current pool qualifies **86 cards**: the five basic lands, Avatar Enthusiasts
 and Glider Kids, the 55 cards documented in the [T1 clause review](t1-clause-review.json),
@@ -48,7 +47,7 @@ and these 24 cards:
 
 The [T1 clause review](t1-clause-review.json) covers all 60 remaining candidates
 against the pinned rules and card text. Named independent witnesses cover printed clauses;
-registration and generation are not the evidence. Water Tribe Rallier now reveals
+registration and compilation are not the evidence. Water Tribe Rallier now reveals
 its chosen card, and temporary haste grants now permit attacks and tap-symbol
 costs without erasing summoning sickness when the grant expires.
 

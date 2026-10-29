@@ -1,5 +1,5 @@
 //! Non-TLA definitions required by current authored setups.
-//! Edit these typed definitions; regenerate checked-in projections with compile_current_content.
+//! Edit these typed definitions; `semantic::compile` lowers them in process.
 use super::authoring::{
     Card, CardType, Characteristics, Color, Cost, Duration, Event, Keyword, Op, Predicate,
     PrintedPower, Program, ProgramKind, Quantity, Sacrifice, Selector, Subject, Target, Trigger,

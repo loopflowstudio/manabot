@@ -1,7 +1,7 @@
 //! Runtime lowering and diagnostic interpretation of reviewed typed card IR.
 //!
-//! This module parses the versioned IR projected from the current definition
-//! catalog by `scripts/compile_current_content.py`,
+//! This module parses the versioned IR that [`compile`] produces in process from
+//! the typed set definitions in `cardsets/` (or a frozen historical document),
 //! binds every semantic definition **once** to a real [`ContentPack`]
 //! [`CardDefId`], and then executes admitted card programs by dispatching purely
 //! on the stable numeric [`Opcode`]. No step in this module inspects a card
@@ -15,6 +15,7 @@
 //! on compiled semantics. Directed rules tests independently witness behavior;
 //! shared pool descriptors expose identity and qualification to deck admission.
 
+pub mod compile;
 mod content;
 mod pool;
 
@@ -29,23 +30,6 @@ use serde_json::Value;
 
 use crate::cardsets::alpha::ContentPack;
 use crate::state::{ability::PaymentCost, card::CardDefId, mana::ManaCost};
-
-/// Canonical, checked-in IR document. Kept in sync by the offline compiler's
-/// `--check` mode; this crate only ever reads it.
-const SACRIFICE_IR: &str =
-    include_str!("../../../content/semantic/current/generated/sacrifice.ir.json");
-
-const ELEMENTAL_IR: &str =
-    include_str!("../../../content/semantic/current/generated/elemental.ir.json");
-
-const TWO_DECK_IR: &str =
-    include_str!("../../../content/semantic/current/generated/two_deck.ir.json");
-
-/// Additive Jeong increment. The original two-deck IR remains a separate,
-/// immutable catalog entry so existing match and replay identities do not
-/// acquire "latest pack" semantics.
-const JEONG_INCREMENT_IR: &str =
-    include_str!("../../../content/semantic/current/generated/jeong_increment.ir.json");
 
 /// Stable numeric opcodes. These mirror `manabot.semantic.compiler.Opcode` and
 /// are the *only* dispatch key the interpreter uses.
@@ -194,7 +178,7 @@ impl Opcode {
     }
 }
 
-/// Error raised while parsing or binding the checked-in IR. Every variant is a
+/// Error raised while compiling, parsing or binding IR. Every variant is a
 /// *fail-closed* signal: a missing admission or a name-bearing branch stops the
 /// interpreter rather than silently degrading to card-specific behaviour.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -661,78 +645,26 @@ pub struct DefaultContext;
 
 impl InterpreterContext for DefaultContext {}
 
-const COMPLEXITY_IR: &str =
-    include_str!("../../../content/semantic/current/generated/complexity.ir.json");
-
 impl SemanticPack {
-    /// Every admitted immutable pack; shared by runtime and Python setup discovery.
+    /// Every authored setup pack; shared by runtime and Python setup discovery.
     pub fn catalog() -> Result<&'static [Self], IrError> {
-        // Embedded documents never change during a process. Setup discovery
-        // and runtime compilation share their parsed definitions.
         static CATALOG: OnceLock<Result<Vec<SemanticPack>, IrError>> = OnceLock::new();
         CATALOG
             .get_or_init(|| {
-                Ok(vec![
-                    Self::two_deck()?,
-                    Self::jeong_increment()?,
-                    Self::elemental()?,
-                    Self::sacrifice()?,
-                    Self::temur()?,
-                    Self::elemental_world()?,
-                    Self::optional_payments()?,
-                    Self::complexity()?,
-                    Self::baseline()?,
-                ])
+                compile::presets()?
+                    .iter()
+                    .filter(|preset| !matches!(preset.as_str(), "pool" | "tla"))
+                    .map(|preset| Self::current(preset))
+                    .collect()
             })
             .as_deref()
             .map_err(Clone::clone)
     }
 
-    pub fn optional_payments() -> Result<Self, IrError> {
-        Self::from_json(include_str!(
-            "../../../content/semantic/current/generated/optional_payments.ir.json"
-        ))
-    }
-
-    pub fn baseline() -> Result<Self, IrError> {
-        Self::from_json(include_str!(
-            "../../../content/semantic/current/generated/baseline.ir.json"
-        ))
-    }
-
-    pub fn elemental_world() -> Result<Self, IrError> {
-        Self::from_json(include_str!(
-            "../../../content/semantic/current/generated/elemental_world.ir.json"
-        ))
-    }
-
-    pub fn temur() -> Result<Self, IrError> {
-        Self::from_json(include_str!(
-            "../../../content/semantic/current/generated/temur.ir.json"
-        ))
-    }
-
-    pub fn sacrifice() -> Result<Self, IrError> {
-        Self::from_json(SACRIFICE_IR)
-    }
-
-    pub fn elemental() -> Result<Self, IrError> {
-        Self::from_json(ELEMENTAL_IR)
-    }
-
-    /// Parse the process-wide checked-in two-deck IR.
-    pub fn two_deck() -> Result<Self, IrError> {
-        Self::from_json(TWO_DECK_IR)
-    }
-
-    /// Parse the checked-in Jeong Jeong's Deserters increment.
-    pub fn jeong_increment() -> Result<Self, IrError> {
-        Self::from_json(JEONG_INCREMENT_IR)
-    }
-
-    /// Parse the isolated MTG-122 research catalog and its exact deck roster.
-    pub fn complexity() -> Result<Self, IrError> {
-        Self::from_json(COMPLEXITY_IR)
+    /// One current preset, compiled in process from the typed set definitions:
+    /// an authored setup named in `setups.json`, `pool` or `tla`.
+    pub fn current(preset: &str) -> Result<Self, IrError> {
+        Self::from_value(compile::document(preset)?)
     }
 
     /// Parse an IR document from JSON text.

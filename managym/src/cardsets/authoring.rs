@@ -1,8 +1,8 @@
-//! Typed, symbolic card authoring for the offline content compiler.
+//! Typed, symbolic card authoring.
 //!
-//! Set files own rules and presentation. These serializable types retain symbolic
-//! references and binding roles; the existing compiler validates and assigns numeric
-//! identities before the shared runtime lowers IR. No JSON is parsed here.
+//! Set files own rules and presentation. These types retain symbolic references
+//! and binding roles; `semantic::compile` validates them and assigns numeric
+//! identities in process before the shared runtime lowers IR. No JSON is parsed here.
 //! Optional fields preserve absence versus explicit null in historical source hashes.
 use serde::Serialize;
 

@@ -183,7 +183,7 @@ mod catalog_tests {
             .find(|r| r.pack_key == "mtg122-complexity-v1")
             .unwrap();
         assert_eq!(runtime.setups.len(), 6);
-        let semantic = SemanticPack::complexity().unwrap();
+        let semantic = SemanticPack::current("complexity").unwrap();
         for key in [
             "research.savannah_lions",
             "research.glory_seeker",
@@ -231,7 +231,7 @@ mod catalog_tests {
 
     #[test]
     fn duplicate_exact_catalog_entries_fail_closed() {
-        let semantic = SemanticPack::jeong_increment().expect("Jeong IR parses");
+        let semantic = SemanticPack::current("jeong_increment").expect("Jeong IR parses");
         let player_configs = configs(&semantic, "ur_lessons", "gw_allies_jeong");
         let runtime = AuthoredRuntime::compile(semantic).expect("Jeong pack compiles");
         let duplicate = runtime.clone();
@@ -244,18 +244,6 @@ mod catalog_tests {
 }
 
 impl SemanticPack {
-    /// Current TLA definitions, lowered through the same compiler as authored setups.
-    pub fn tla() -> Result<Self, IrError> {
-        Self::from_json(include_str!(
-            "../../../content/semantic/current/generated/tla.ir.json"
-        ))
-    }
-
-    pub fn pool() -> Result<Self, IrError> {
-        Self::from_json(include_str!(
-            "../../../content/semantic/current/generated/pool.ir.json"
-        ))
-    }
     /// Materialize the reviewed typed IR as the immutable pack consumed by a
     /// live [`Game`](crate::Game). No executable registry is consulted: text,
     /// characteristics and programs are carried by the authored content.
@@ -326,7 +314,7 @@ impl SemanticPack {
 
 impl ContentPack {
     pub(crate) fn register_current_tla(&mut self) {
-        let pack = SemanticPack::tla().expect("checked TLA IR");
+        let pack = SemanticPack::current("tla").expect("current TLA definitions compile");
         // Lower once, then register each pristine definition exactly once. In
         // particular, registration is the sole materializer of ward triggers.
         for definition in pack.lower_definitions().expect("checked TLA programs") {
@@ -336,7 +324,7 @@ impl ContentPack {
 }
 
 /// Frozen IR predating embedded presentation remains readable without loading
-/// another executable content pack. Current generated IR always includes text.
+/// another executable content pack. Current compiled IR always includes text.
 fn historical_presentation(name: &str) -> Result<String, IrError> {
     static TEXT: OnceLock<std::collections::BTreeMap<String, String>> = OnceLock::new();
     TEXT.get_or_init(|| {
