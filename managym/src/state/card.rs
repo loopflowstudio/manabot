@@ -309,6 +309,12 @@ pub struct ActivatedAbilityDefinition {
     /// Exhaust: each object may activate this ability only once (CR 702.177a).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub exhaust: bool,
+    /// "Activate only once each turn" (CR 602.5b); counted per object.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub once_each_turn: bool,
+    /// "Costs {1} less to activate for each [predicate] you control."
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_reduction_per: Option<CardPredicate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sacrifice: Option<SacrificeCost>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]

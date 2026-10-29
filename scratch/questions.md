@@ -26,20 +26,23 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
 
 ## T2 (87e012) — 2026-10-29 operator choices
 
-- When printed flashback and Iroh's grant both apply, the engine uses the
-  grant's cost instead of offering both. True dominance holds for every TLA
-  card; a non-dominated alternative would need a cost choice.
-- Learning schema 8 extended append-only (Plant, Rogue, `flashback`) following
-  `1e0d3c998`. The first new opcode needs learning schema 9; not yet taken.
-- Slice 1 avoided a new opcode: landcycling is `search_basic_land` with
-  `destination: hand` (searching any card of the subtype, not only basics),
-  graveyard self-return is `return_to_hand` targeting `source`. If reviewers
-  prefer a distinct `search_library` opcode, that is schema 9.
+- Printed flashback plus Iroh's grant: the grant's cost is used (dominant for
+  every TLA card; a non-dominated alternative would need a cost choice).
+- No schema 9 yet: schema 8 appended subtypes/fields/predicates per slice.
+  Landcycling reuses `search_basic_land` (any card of the subtype) and
+  restricted mana reuses opcode 56 with `spend_only`; a distinct
+  `search_library` or restricted `add_mana` opcode would be schema 9.
 - Card abilities get their own action variant (`ActivateCardAbility`) sharing
-  the `PriorityActivateAbility` type, rather than widening `ActivateAbility`
-  to an `ActivationSource`; internal payment/target state uses the shared
-  `ActivationSource`.
+  `PriorityActivateAbility`, rather than widening `ActivateAbility`.
 - A discard-cost ability refers to its card's graveyard object after costs
   (Team Avatar's damage source), standing in for the hand object's LKI.
-- World stays w16 while T2 only adds cards and flashback costs; bump when a
-  slice changes existing rules meaning (one unreleased world per Task).
+- World stays w16 while T2 only adds cards; bump when existing rules change.
+- Observation `lesson_mana`, `ManaOutput.lesson` and the continuation `lesson`
+  flag keep names and widths but carry all restricted mana. The flag is set
+  when the payment's purpose names a Lesson/Shrine/Ally spell or ability
+  source, so in w16 it now also fires for Ally spells and Ally abilities
+  (before: Lesson spells only); acceptable while w16 is unreleased. The policy sees restricted totals, not which
+  restriction; Academy reads "Restricted mana"; `manabot-text-4` still says
+  "Lesson-only mana" (relabel needs a representation version bump).
+- `PlayerVitals` bound 32 → 40 bytes (boxed restricted classes); `UndoEntry`
+  ≤ 72. Non-tap mana abilities are admitted when `once_each_turn` bounds them.

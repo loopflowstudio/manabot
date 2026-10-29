@@ -50,6 +50,7 @@ pub struct ClauseTarget {
 pub struct ManaOutput {
     pub mode: usize,
     pub mana: [u8; 6],
+    /// Spend-restricted output by color, whatever its restriction.
     pub lesson: [u8; 6],
 }
 
@@ -76,6 +77,8 @@ pub struct ContinuationFrame {
     pub sacrifice: Option<VisibleReference>,
     pub cost: Option<[u8; 7]>,
     pub hybrid: Vec<[u8; 2]>,
+    /// The payment has a purpose (a cast spell or an activation), so some
+    /// spend-restricted mana may pay it. Named for the first restriction.
     pub lesson: bool,
     pub waterbend: bool,
     pub can_decline: bool,
@@ -91,7 +94,7 @@ impl ContinuationFrame {
             .iter()
             .map(|pair| [pair[0] as u8, pair[1] as u8])
             .collect();
-        self.lesson = cost.spend_on_lesson;
+        self.lesson = !cost.purpose.is_ordinary();
     }
 }
 
@@ -469,7 +472,7 @@ impl Game {
                         .map(|(mode, output)| ManaOutput {
                             mode,
                             mana: output.mana,
-                            lesson: output.lesson,
+                            lesson: output.restricted_colors(),
                         })
                         .collect();
                     (3, resume.as_deref())

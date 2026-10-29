@@ -453,6 +453,8 @@ fn apply_program(
                     zone,
                     discard_source: cost.discard_source,
                     exhaust: cost.exhaust,
+                    once_each_turn: cost.once_each_turn,
+                    cost_reduction_per: cost.affinity,
                     sacrifice: cost.sacrifice,
                     own_turn_only: cost.own_turn_only,
                     life_cost: cost.life,
@@ -486,6 +488,7 @@ struct ProgramCost {
     zone: Option<String>,
     discard_source: bool,
     exhaust: bool,
+    once_each_turn: bool,
 }
 
 fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
@@ -537,6 +540,7 @@ fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
         zone: opt_str_field(value, "zone")?.map(str::to_owned),
         discard_source: opt_bool_field(value, "discard_source")?.unwrap_or(false),
         exhaust: opt_bool_field(value, "exhaust")?.unwrap_or(false),
+        once_each_turn: opt_bool_field(value, "once_each_turn")?.unwrap_or(false),
     })
 }
 
@@ -810,15 +814,10 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
                 "mana and flashback grants require a static program",
             )
         }
-        Step::AddLessonMana { mana } => {
-            let mut mana = Mana::parse(mana);
-            mana.lesson = mana.mana;
-            mana.mana = [0; 6];
-            Effect::AddMana {
-                mana,
-                until_end_of_combat: false,
-            }
-        }
+        Step::AddLessonMana { mana, spend_only } => Effect::AddMana {
+            mana: Mana::restricted_to(*spend_only, Mana::parse(mana).mana),
+            until_end_of_combat: false,
+        },
         Step::CreateNonlegendaryCopy => Effect::CreateNonlegendaryCopy,
         Step::ModifyControlled {
             predicate,

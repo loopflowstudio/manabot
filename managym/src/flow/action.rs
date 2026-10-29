@@ -195,7 +195,7 @@ impl Game {
                     continue;
                 }
                 if (ability.own_turn_only && self.active_player() != player)
-                    || (ability.exhaust && permanent.exhausted.contains(&ability_index))
+                    || permanent.activation_used(ability_index, ability)
                     || self.state.players[player.0].life < ability.life_cost as i32
                 {
                     continue;

@@ -1055,7 +1055,7 @@ mod tests {
             },
             keywords: KeywordData::default(),
             mana_cost: ManaCost {
-                spend_on_lesson: false,
+                purpose: Default::default(),
                 cost: [0; 7],
                 mana_value,
                 hybrid: Vec::new(),

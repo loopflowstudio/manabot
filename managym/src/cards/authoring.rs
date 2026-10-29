@@ -179,6 +179,9 @@ pub struct Cost {
     /// Exhaust (CR 702.177a): "Activate only once."
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exhaust: Option<bool>,
+    /// "Activate only once each turn" (CR 602.5b).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub once_each_turn: Option<bool>,
 }
 
 impl Cost {
@@ -450,8 +453,12 @@ pub enum Op {
     GrantMana {
         predicates: Vec<Predicate>,
     },
+    /// Mana with a spending restriction (CR 106.6); omitted `spend_only`
+    /// means "Spend this mana only to cast Lesson spells."
     AddLessonMana {
         mana: &'static str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        spend_only: Option<SpendOnly>,
     },
     GrantFlashback,
     Branch {
@@ -514,6 +521,39 @@ impl Op {
                 .collect(),
         }
     }
+
+    /// "Spend this mana only to cast Lesson spells."
+    pub fn lesson_mana(mana: &'static str) -> Self {
+        Self::AddLessonMana {
+            mana,
+            spend_only: None,
+        }
+    }
+
+    /// "Add one mana of any color. Spend this mana only to ..."
+    pub fn choose_restricted_mana(spend_only: SpendOnly) -> Self {
+        Self::Modal {
+            modes: ["W", "U", "B", "R", "G"]
+                .into_iter()
+                .map(|mana| {
+                    vec![Self::AddLessonMana {
+                        mana,
+                        spend_only: Some(spend_only.clone()),
+                    }]
+                })
+                .collect(),
+        }
+    }
+}
+
+/// What restricted mana may be spent on: spells with any of `spell_subtypes`,
+/// or abilities of sources with any of `ability_source_subtypes`.
+#[derive(Serialize, Default, Clone)]
+pub struct SpendOnly {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub spell_subtypes: Vec<&'static str>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub ability_source_subtypes: Vec<&'static str>,
 }
 
 #[derive(Serialize)]

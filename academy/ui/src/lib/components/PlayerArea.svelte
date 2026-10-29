@@ -91,7 +91,7 @@
 {#snippet playerBar()}
   {#if player.mana}
     <p class="type-caption py-1" data-testid="mana-pool">{label} mana: {manaText(player.mana)}
-      {#if player.lesson_mana?.some(Boolean)} · Lesson-only mana: {manaText(player.lesson_mana)}{/if}
+      {#if player.lesson_mana?.some(Boolean)} · Restricted mana: {manaText(player.lesson_mana)}{/if}
       {#if player.combat_mana} · {player.combat_mana} mana expires at end of combat{/if}
     </p>
   {:else}<p class="type-caption text-ink-2">Mana details not recorded.</p>{/if}

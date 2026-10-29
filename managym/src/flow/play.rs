@@ -18,7 +18,7 @@ use crate::{
         ability::TargetRequirement,
         card::{ActivatedAbilityDefinition, ActivationZone},
         game_object::{CardId, PermanentId, PlayerId, Target},
-        mana::ManaCost,
+        mana::{ManaCost, ManaUse},
         stack_object::{ActivatedAbilityOnStack, StackObject},
         zone::ZoneType,
     },
@@ -94,7 +94,7 @@ impl Game {
         } else {
             card_ref.mana_cost.clone()?
         };
-        cost.spend_on_lesson = card_ref.has_subtype("Lesson");
+        cost.purpose = ManaUse::spell(card_ref.subtypes.iter().map(String::as_str));
         if kicked {
             if let Some(kicker) = &card_ref.kicker {
                 cost = cost.plus(kicker);
@@ -631,8 +631,8 @@ impl Game {
         if ability.own_turn_only && self.active_player() != player {
             return Err(AgentError("activation requires your turn".into()));
         }
-        if ability.exhaust && permanent.exhausted.contains(&ability_index) {
-            return Err(AgentError("exhaust ability was already activated".into()));
+        if permanent.activation_used(ability_index, &ability) {
+            return Err(AgentError("ability was already activated".into()));
         }
         if ability.tap_source && !permanent.can_tap(&self.state.cards[source_card]) {
             return Err(AgentError("source cannot tap".into()));
@@ -689,19 +689,40 @@ impl Game {
     }
 
     /// The ability at `ability_index` of `card` when the card is in the
-    /// zone of `player`'s that the ability functions from.
+    /// zone of `player`'s that the ability functions from, priced as now.
     pub(crate) fn card_ability_in_zone(
         &self,
         player: PlayerId,
         card: CardId,
         ability_index: usize,
     ) -> Option<ActivatedAbilityDefinition> {
-        let ability = self.state.cards[card]
-            .activated_abilities
-            .get(ability_index)?;
-        (ability.zone != ActivationZone::Battlefield
-            && self.state.zones.contains(card, ability.zone.zone(), player))
-        .then(|| ability.clone())
+        let card_ref = &self.state.cards[card];
+        let ability = card_ref.activated_abilities.get(ability_index)?;
+        if ability.zone == ActivationZone::Battlefield
+            || !self.state.zones.contains(card, ability.zone.zone(), player)
+        {
+            return None;
+        }
+        let mut ability = ability.clone();
+        let purpose = ManaUse::ability(card_ref.subtypes.iter().map(String::as_str));
+        self.price_activation(player, purpose, &mut ability);
+        Some(ability)
+    }
+
+    /// Record an activation against its exhaust or once-each-turn limit.
+    pub(crate) fn record_activation(
+        &mut self,
+        permanent: PermanentId,
+        ability_index: usize,
+        ability: &ActivatedAbilityDefinition,
+    ) {
+        if !ability.exhaust && !ability.once_each_turn {
+            return;
+        }
+        self.journal_permanent(permanent);
+        if let Some(permanent) = self.state.permanents[permanent].as_mut() {
+            permanent.record_activation(ability_index, ability);
+        }
     }
 
     /// The definition an activation of `source` uses; `None` once the
@@ -1167,12 +1188,7 @@ impl Game {
             }
             self.tap_permanent(permanent_id, false);
         }
-        if ability.exhaust {
-            self.journal_permanent(permanent_id);
-            if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
-                permanent.exhausted.push(ability_index);
-            }
-        }
+        self.record_activation(permanent_id, ability_index, &ability);
         if ability.sacrifice_source {
             // CR 601.2h, 602.2b — Costs are paid on activation; sacrificing
             // moves the source to its owner's graveyard immediately.

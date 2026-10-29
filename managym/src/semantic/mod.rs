@@ -29,7 +29,11 @@ use std::sync::OnceLock;
 use serde_json::Value;
 
 use crate::cards::content_pack::ContentPack;
-use crate::state::{ability::PaymentCost, card::CardDefId, mana::ManaCost};
+use crate::state::{
+    ability::PaymentCost,
+    card::CardDefId,
+    mana::{ManaCost, ManaUse, SPEND_SUBTYPES},
+};
 
 /// Stable numeric opcodes. These mirror `manabot.semantic.compiler.Opcode` and
 /// are the *only* dispatch key the interpreter uses.
@@ -263,8 +267,11 @@ pub enum Step {
         target: String,
         subtype: String,
     },
+    /// Restricted mana (CR 106.6). The opcode predates other restrictions;
+    /// an omitted `spend_only` keeps its original meaning, Lesson spells.
     AddLessonMana {
         mana: String,
+        spend_only: ManaUse,
     },
     GrantFlashback,
     GrantMana {
@@ -1081,6 +1088,10 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
     let step = match opcode {
         Opcode::AddLessonMana => Step::AddLessonMana {
             mana: str_field(value, "mana")?.to_owned(),
+            spend_only: match value.get("spend_only") {
+                None => ManaUse::spell(["Lesson"]),
+                Some(_) => mana_use(object_field(value, "spend_only")?)?,
+            },
         },
         Opcode::Discard => Step::Discard,
         Opcode::ExileIfDies => Step::ExileIfDies {
@@ -1505,6 +1516,35 @@ fn str_array_field(value: &Value, name: &str) -> Result<Vec<String>, IrError> {
                 .ok_or_else(|| IrError::Malformed(format!("field {name:?} must hold strings")))
         })
         .collect()
+}
+
+/// `{"spell_subtypes": [...], "ability_source_subtypes": [...]}`, each optional.
+fn mana_use(value: &Value) -> Result<ManaUse, IrError> {
+    let subtypes = |name: &str| -> Result<Vec<String>, IrError> {
+        let subtypes = match value.get(name) {
+            None => Vec::new(),
+            Some(_) => str_array_field(value, name)?,
+        };
+        match subtypes
+            .iter()
+            .find(|s| !SPEND_SUBTYPES.contains(&s.as_str()))
+        {
+            Some(other) => Err(IrError::Malformed(format!(
+                "unsupported spending restriction subtype {other:?}"
+            ))),
+            None => Ok(subtypes),
+        }
+    };
+    let spells = subtypes("spell_subtypes")?;
+    let abilities = subtypes("ability_source_subtypes")?;
+    let use_ = ManaUse::new(
+        spells.iter().map(String::as_str),
+        abilities.iter().map(String::as_str),
+    );
+    if use_.is_ordinary() {
+        return Err(IrError::Malformed("spend_only names no purpose".into()));
+    }
+    Ok(use_)
 }
 
 fn object_field<'a>(value: &'a Value, name: &str) -> Result<&'a Value, IrError> {

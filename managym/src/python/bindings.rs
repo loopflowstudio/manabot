@@ -1269,7 +1269,7 @@ impl From<PyManaCost> for ManaCost {
         let mana_value = value.mana_value.clamp(0, u8::MAX as i32) as u8;
 
         Self {
-            spend_on_lesson: false,
+            purpose: Default::default(),
             cost,
             mana_value,
             hybrid: value

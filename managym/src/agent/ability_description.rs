@@ -256,18 +256,19 @@ fn value_description(value: &EffectValue) -> String {
 }
 
 pub(crate) fn mana_description(mana: &Mana) -> String {
+    let restricted = mana.restricted_colors();
     let mut text: String = ["W", "U", "B", "R", "G", "C"]
         .into_iter()
         .enumerate()
         .flat_map(|(i, s)| {
             std::iter::repeat_n(
                 format!("{{{s}}}"),
-                mana.mana[i] as usize + mana.lesson[i] as usize,
+                mana.mana[i] as usize + restricted[i] as usize,
             )
         })
         .collect();
-    if mana.lesson.iter().any(|n| *n > 0) {
-        text.push_str(" (Lesson spells only)");
+    for (restriction, _) in mana.restricted() {
+        text.push_str(&format!(" ({} only)", restriction.describe()));
     }
     text
 }

@@ -175,6 +175,7 @@
       "Rogue": 65,
       "Scout": 19,
       "Seal": 20,
+      "Shrine": 71,
       "Snake": 53,
       "Soldier": 21,
       "Spider": 69,
@@ -215,6 +216,7 @@
     }
   },
   "fields": {
+    "ability_source_subtypes": 90,
     "affinity": 1,
     "amount": 2,
     "another": 74,
@@ -279,6 +281,8 @@
     "sacrifice_source": 41,
     "selector": 42,
     "sources": 43,
+    "spell_subtypes": 89,
+    "spend_only": 88,
     "subject": 44,
     "subtract": 69,
     "subtype": 70,

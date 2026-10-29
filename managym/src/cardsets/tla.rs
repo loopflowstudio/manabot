@@ -3,8 +3,8 @@
 use crate::cards::authoring::{
     Card, CardType, Characteristics, Color, Condition, Controller, Cost, Count, Destination,
     Direction, Duration, Event, Incomplete, Keyword, Op, Payment, Predicate, PrintedPower, Program,
-    ProgramKind, Quantity, Remainder, RemainderOrder, Sacrifice, Selector, Subject, Target,
-    Trigger, Until, Zone,
+    ProgramKind, Quantity, Remainder, RemainderOrder, Sacrifice, Selector, SpendOnly, Subject,
+    Target, Trigger, Until, Zone,
 };
 /// Defined cards whose behavior is incomplete. The fixed setups that name them
 /// still run them; the world does not support them for deck entry until their
@@ -149,6 +149,10 @@ pub(super) fn cards() -> Vec<Card> {
         hog_monkey(),
         rough_rhino_cavalry(),
         rebellious_captives(),
+        barrels_of_blasting_jelly(),
+        jasmine_dragon_tea_shop(),
+        white_lotus_hideout(),
+        waterbending_scroll(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -1907,21 +1911,21 @@ fn hermitic_herbalist() -> Card {
                 ProgramKind::Activated,
                 vec![Op::Modal {
                     modes: vec![
-                        vec![Op::AddLessonMana { mana: "WW" }],
-                        vec![Op::AddLessonMana { mana: "WU" }],
-                        vec![Op::AddLessonMana { mana: "WB" }],
-                        vec![Op::AddLessonMana { mana: "WR" }],
-                        vec![Op::AddLessonMana { mana: "WG" }],
-                        vec![Op::AddLessonMana { mana: "UU" }],
-                        vec![Op::AddLessonMana { mana: "UB" }],
-                        vec![Op::AddLessonMana { mana: "UR" }],
-                        vec![Op::AddLessonMana { mana: "UG" }],
-                        vec![Op::AddLessonMana { mana: "BB" }],
-                        vec![Op::AddLessonMana { mana: "BR" }],
-                        vec![Op::AddLessonMana { mana: "BG" }],
-                        vec![Op::AddLessonMana { mana: "RR" }],
-                        vec![Op::AddLessonMana { mana: "RG" }],
-                        vec![Op::AddLessonMana { mana: "GG" }],
+                        vec![Op::lesson_mana("WW")],
+                        vec![Op::lesson_mana("WU")],
+                        vec![Op::lesson_mana("WB")],
+                        vec![Op::lesson_mana("WR")],
+                        vec![Op::lesson_mana("WG")],
+                        vec![Op::lesson_mana("UU")],
+                        vec![Op::lesson_mana("UB")],
+                        vec![Op::lesson_mana("UR")],
+                        vec![Op::lesson_mana("UG")],
+                        vec![Op::lesson_mana("BB")],
+                        vec![Op::lesson_mana("BR")],
+                        vec![Op::lesson_mana("BG")],
+                        vec![Op::lesson_mana("RR")],
+                        vec![Op::lesson_mana("RG")],
+                        vec![Op::lesson_mana("GG")],
                     ],
                 }],
             )
@@ -4318,6 +4322,172 @@ fn rebellious_captives() -> Card {
         })
         .targets(vec![Target::one("land", Selector::LandYouControl)])],
         registry_name: "Rebellious Captives",
+        text_box,
+    }
+}
+
+fn barrels_of_blasting_jelly() -> Card {
+    let text_box = "{1}: Add one mana of any color. Activate only once each turn.\n{5}, {T}, Sacrifice this artifact: It deals 5 damage to target creature.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}"),
+            types: vec![CardType::Artifact],
+            ..Default::default()
+        },
+        key: "tla.barrels_of_blasting_jelly",
+        programs: vec![
+            Program::new(
+                "p0",
+                ProgramKind::Activated,
+                vec![Op::choose_mana(&["W", "U", "B", "R", "G"])],
+            )
+            .cost(Cost {
+                mana: Some("{1}"),
+                once_each_turn: Some(true),
+                ..Default::default()
+            }),
+            Program::new(
+                "p1",
+                ProgramKind::Activated,
+                vec![Op::DealDamage {
+                    amount: 5,
+                    target: "target_0",
+                }],
+            )
+            .cost(Cost {
+                mana: Some("{5}"),
+                tap_source: Some(true),
+                sacrifice_source: Some(true),
+                ..Default::default()
+            })
+            .targets(vec![Target::one("target_0", Selector::Creature)]),
+        ],
+        registry_name: "Barrels of Blasting Jelly",
+        text_box,
+    }
+}
+
+fn jasmine_dragon_tea_shop() -> Card {
+    let text_box = "{T}: Add {C}.\n{T}: Add one mana of any color. Spend this mana only to cast an Ally spell or activate an ability of an Ally source.\n{5}, {T}: Create a 1/1 white Ally creature token.";
+
+    Card {
+        characteristics: Characteristics {
+            types: vec![CardType::Land],
+            ..Default::default()
+        },
+        key: "tla.jasmine_dragon_tea_shop",
+        programs: vec![
+            Program::new(
+                "colorless",
+                ProgramKind::Mana,
+                vec![Op::AddMana {
+                    mana: "C",
+                    until: None,
+                }],
+            ),
+            Program::new(
+                "p0",
+                ProgramKind::Activated,
+                vec![Op::choose_restricted_mana(SpendOnly {
+                    spell_subtypes: vec!["Ally"],
+                    ability_source_subtypes: vec!["Ally"],
+                })],
+            )
+            .cost(Cost {
+                mana: Some("0"),
+                tap_source: Some(true),
+                ..Default::default()
+            }),
+            Program::new(
+                "p1",
+                ProgramKind::Activated,
+                vec![Op::CreateToken {
+                    count: 1,
+                    definition_ref: "token.ally",
+                    tapped_and_attacking: Some(false),
+                }],
+            )
+            .cost(Cost {
+                mana: Some("{5}"),
+                tap_source: Some(true),
+                ..Default::default()
+            }),
+        ],
+        registry_name: "Jasmine Dragon Tea Shop",
+        text_box,
+    }
+}
+
+fn white_lotus_hideout() -> Card {
+    let text_box = "{T}: Add {C}.\n{T}: Add one mana of any color. Spend this mana only to cast a Lesson or Shrine spell.\n{1}, {T}: Add one mana of any color.";
+
+    Card {
+        characteristics: Characteristics {
+            types: vec![CardType::Land],
+            ..Default::default()
+        },
+        key: "tla.white_lotus_hideout",
+        programs: vec![
+            Program::new(
+                "colorless",
+                ProgramKind::Mana,
+                vec![Op::AddMana {
+                    mana: "C",
+                    until: None,
+                }],
+            ),
+            Program::new(
+                "p0",
+                ProgramKind::Activated,
+                vec![Op::choose_restricted_mana(SpendOnly {
+                    spell_subtypes: vec!["Lesson", "Shrine"],
+                    ..Default::default()
+                })],
+            )
+            .cost(Cost {
+                mana: Some("0"),
+                tap_source: Some(true),
+                ..Default::default()
+            }),
+            Program::new(
+                "p1",
+                ProgramKind::Activated,
+                vec![Op::choose_mana(&["W", "U", "B", "R", "G"])],
+            )
+            .cost(Cost {
+                mana: Some("{1}"),
+                tap_source: Some(true),
+                ..Default::default()
+            }),
+        ],
+        registry_name: "White Lotus Hideout",
+        text_box,
+    }
+}
+
+fn waterbending_scroll() -> Card {
+    let text_box = "{6}, {T}: Draw a card. This ability costs {1} less to activate for each Island you control.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{U}"),
+            types: vec![CardType::Artifact],
+            ..Default::default()
+        },
+        key: "tla.waterbending_scroll",
+        programs: vec![Program::new(
+            "p0",
+            ProgramKind::Activated,
+            vec![Op::DrawCards { count: 1 }],
+        )
+        .cost(Cost {
+            mana: Some("{6}"),
+            tap_source: Some(true),
+            affinity: Some(Predicate::Subtype { value: "Island" }),
+            ..Default::default()
+        })],
+        registry_name: "Waterbending Scroll",
         text_box,
     }
 }

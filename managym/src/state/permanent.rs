@@ -1,5 +1,5 @@
 use super::{
-    card::{Card, Keywords},
+    card::{ActivatedAbilityDefinition, Card, Keywords},
     game_object::{CardId, ObjectId, PlayerId},
     mana::Mana,
 };
@@ -38,9 +38,30 @@ pub struct Permanent {
     /// object has activated; a new object starts fresh (CR 400.7).
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub exhausted: Vec<usize>,
+    /// "Once each turn" abilities this object has activated this turn,
+    /// cleared at cleanup.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub activated_this_turn: Vec<usize>,
 }
 
 impl Permanent {
+    /// Whether this object has used up the ability: exhaust once ever
+    /// (CR 702.177a), "once each turn" already this turn (CR 602.5b).
+    pub fn activation_used(&self, index: usize, ability: &ActivatedAbilityDefinition) -> bool {
+        (ability.exhaust && self.exhausted.contains(&index))
+            || (ability.once_each_turn && self.activated_this_turn.contains(&index))
+    }
+
+    /// Record an activation against the ability's use limits.
+    pub fn record_activation(&mut self, index: usize, ability: &ActivatedAbilityDefinition) {
+        if ability.exhaust {
+            self.exhausted.push(index);
+        }
+        if ability.once_each_turn {
+            self.activated_this_turn.push(index);
+        }
+    }
+
     pub fn new(id: ObjectId, card_id: CardId, card: &Card) -> Self {
         Self {
             id,
@@ -61,6 +82,7 @@ impl Permanent {
             attacking: false,
             was_cast: false,
             exhausted: Vec::new(),
+            activated_this_turn: Vec::new(),
         }
     }
 
@@ -144,5 +166,6 @@ impl Permanent {
         self.cant_be_blocked_this_turn = false;
         self.temp_keywords = Keywords::default();
         self.temp_subtypes.clear();
+        self.activated_this_turn.clear();
     }
 }

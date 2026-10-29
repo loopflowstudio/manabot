@@ -2180,5 +2180,47 @@
     "colors": [
       "G"
     ]
+  },
+  "Waterbending Scroll": {
+    "name": "Waterbending Scroll",
+    "mana_cost": "{1}{U}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{6}, {T}: Draw a card. This ability costs {1} less to activate for each Island you control.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Barrels of Blasting Jelly": {
+    "name": "Barrels of Blasting Jelly",
+    "mana_cost": "{1}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{1}: Add one mana of any color. Activate only once each turn.\n{5}, {T}, Sacrifice this artifact: It deals 5 damage to target creature.",
+    "colors": []
+  },
+  "Jasmine Dragon Tea Shop": {
+    "name": "Jasmine Dragon Tea Shop",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{T}: Add {C}.\n{T}: Add one mana of any color. Spend this mana only to cast an Ally spell or activate an ability of an Ally source.\n{5}, {T}: Create a 1/1 white Ally creature token.",
+    "colors": []
+  },
+  "White Lotus Hideout": {
+    "name": "White Lotus Hideout",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{T}: Add {C}.\n{T}: Add one mana of any color. Spend this mana only to cast a Lesson or Shrine spell.\n{1}, {T}: Add one mana of any color.",
+    "colors": []
   }
 }

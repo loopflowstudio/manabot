@@ -108,7 +108,7 @@ enum EventQueue {
 /// The scalar mutable facts of a [`Player`]. Known-hand facts are journaled separately. `deck`, `sideboard`, and `name` are fixed at setup and
 /// never change during a match, so journaling them would copy a 60-entry vector
 /// and a string on every life, mana, and damage change. Recording only the
-/// mutable scalars keeps the entry allocation-free.
+/// mutable scalars keeps the entry allocation-free unless restricted mana is pooled.
 #[derive(Clone, Debug)]
 struct PlayerVitals {
     life: i32,
@@ -746,9 +746,10 @@ mod tests {
             "UndoEntry grew to {} bytes; box the variant that widened it",
             size_of::<UndoEntry>()
         );
-        // Two pools each retain six ordinary and six Lesson-restricted colors,
-        // alongside life and flags. These scalars remain allocation-free and
-        // fit within the unchanged UndoEntry budget above.
-        assert!(size_of::<PlayerVitals>() <= 32);
+        // Two pools each retain six ordinary colors and a boxed list of
+        // restricted classes, alongside life and flags. They allocate only
+        // while restricted mana is pooled and fit within the unchanged
+        // UndoEntry budget above.
+        assert!(size_of::<PlayerVitals>() <= 40);
     }
 }

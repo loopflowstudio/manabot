@@ -44,6 +44,8 @@ pub struct PlayerData {
     pub combat_mana: i32,
     /// Public pooled mana by W/U/B/R/G/C; restricted mana remains separate.
     pub mana: [i32; 6],
+    /// Spend-restricted mana by color, whatever its restriction (CR 106.6).
+    /// The name predates restrictions other than Herbalist's Lesson-only mana.
     pub lesson_mana: [i32; 6],
     pub known_hand: BTreeMap<u32, u32>,
     pub sideboard_counts: BTreeMap<u32, u32>,
@@ -487,9 +489,13 @@ impl Observation {
             mana: std::array::from_fn(|slot| {
                 i32::from(p.mana_pool.mana[slot]) + i32::from(p.combat_mana_pool.mana[slot])
             }),
-            lesson_mana: std::array::from_fn(|slot| {
-                i32::from(p.mana_pool.lesson[slot]) + i32::from(p.combat_mana_pool.lesson[slot])
-            }),
+            lesson_mana: {
+                let (regular, combat) = (
+                    p.mana_pool.restricted_colors(),
+                    p.combat_mana_pool.restricted_colors(),
+                );
+                std::array::from_fn(|slot| i32::from(regular[slot]) + i32::from(combat[slot]))
+            },
             known_hand: p
                 .known_hand
                 .iter()

@@ -518,6 +518,8 @@ class _TokenBuilder:
             "target_binding": "target_binding",
             "keywords": "keyword",
             "subtypes": "subtype",
+            "spell_subtypes": "subtype",
+            "ability_source_subtypes": "subtype",
             "supertypes": "supertype",
             "event": "trigger_event",
             "duration": "duration",

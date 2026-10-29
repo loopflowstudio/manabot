@@ -12,6 +12,7 @@ use managym::{
     flow::turn::StepKind,
     state::{
         game_object::{CardId, PermanentId, PlayerId, Target},
+        mana::{ManaCost, ManaUse},
         zone::ZoneType,
     },
 };
@@ -705,4 +706,199 @@ fn rebellious_captives_exhausts_to_grow_and_earthbend_two() {
     assert_eq!(counters(&s, forest), 2);
     s.set_player_mana_pool(0, "6");
     assert!(!can_activate(&mut s, captives));
+}
+
+fn pool(s: &Scenario) -> &managym::state::mana::Mana {
+    &s.game().state.players[0].mana_pool
+}
+
+/// The mana ability may be activated once each turn (CR 602.5b); the count
+/// resets on the next turn.
+#[test]
+fn barrels_of_blasting_jelly_filters_one_mana_once_each_turn() {
+    let mut s = setup(&["Barrels of Blasting Jelly"]);
+    let barrels = s.force_permanent_on_battlefield(0, "Barrels of Blasting Jelly");
+    s.set_player_mana_pool(0, "CC");
+    activate(&mut s, barrels, 0);
+    mode(&mut s, 3);
+    assert_eq!(pool(&s).mana, [0, 0, 0, 1, 0, 1]);
+    assert!(!can_activate(&mut s, barrels), "once this turn");
+
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    s.set_player_mana_pool(0, "C");
+    activate(&mut s, barrels, 0);
+    mode(&mut s, 0);
+    assert_eq!(pool(&s).mana, [1, 0, 0, 0, 0, 0]);
+}
+
+#[test]
+fn barrels_of_blasting_jelly_sacrifices_to_deal_five_to_a_creature() {
+    let mut s = setup(&["Barrels of Blasting Jelly", "Craw Wurm"]);
+    let barrels = s.force_permanent_on_battlefield(0, "Barrels of Blasting Jelly");
+    let wurm = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    let card = s.game().state.permanents[barrels].as_ref().unwrap().card;
+    s.set_player_mana_pool(0, "4");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!s.action_space().actions.iter().any(|a| matches!(
+        a,
+        Action::ActivateAbility {
+            ability_index: 1,
+            ..
+        }
+    )));
+    s.set_player_mana_pool(0, "5");
+    activate(&mut s, barrels, 1);
+    let targets = offered_targets(&s);
+    assert!(targets.contains(&Target::Permanent(wurm)));
+    assert!(!targets.contains(&Target::Player(PlayerId(1))));
+    assert!(s.choose_target(Target::Permanent(wurm)));
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    assert_eq!(
+        zone_of(&s, card),
+        Some(ZoneType::Graveyard),
+        "sacrificed as a cost"
+    );
+    settle(&mut s);
+    assert!(
+        s.game().state.permanents[wurm].is_none(),
+        "5 damage kills the 6/4"
+    );
+}
+
+/// Restricted mana (CR 106.6) pays for Ally spells and abilities of Ally
+/// sources, and nothing else.
+#[test]
+fn jasmine_dragon_tea_shop_mana_pays_only_ally_spells_and_ally_abilities() {
+    let ally = ManaUse {
+        spells: ManaUse::spell(["Ally"]).spells,
+        abilities: ManaUse::ability(["Ally"]).abilities,
+    };
+    let mut s = setup(&[
+        "Jasmine Dragon Tea Shop",
+        "Rebellious Captives",
+        "Gray Ogre",
+    ]);
+    let shop = s.force_permanent_on_battlefield(0, "Jasmine Dragon Tea Shop");
+    s.set_player_mana_pool(0, "");
+    activate(&mut s, shop, 0);
+    mode(&mut s, 4);
+    assert_eq!(pool(&s).restricted_of(ally), [0, 0, 0, 0, 1, 0]);
+    s.game_mut().state.players[0].mana_pool.mana = [0, 0, 0, 1, 0, 1];
+    let captives = library_card(&s, 0, "Rebellious Captives");
+    let ogre = library_card(&s, 0, "Gray Ogre");
+    s.game_mut().move_card(captives, ZoneType::Hand);
+    s.game_mut().move_card(ogre, ZoneType::Hand);
+    assert!(
+        !can_cast(&mut s, ogre),
+        "{{2}}{{R}} cannot use the restricted green"
+    );
+    assert!(can_cast(&mut s, captives));
+
+    let mut s = setup(&[
+        "Jasmine Dragon Tea Shop",
+        "Rebellious Captives",
+        "Waterbending Scroll",
+    ]);
+    let shop = s.force_permanent_on_battlefield(0, "Jasmine Dragon Tea Shop");
+    let captives = s.force_permanent_on_battlefield(0, "Rebellious Captives");
+    let scroll = s.force_permanent_on_battlefield(0, "Waterbending Scroll");
+    s.set_player_mana_pool(0, "");
+    activate(&mut s, shop, 0);
+    mode(&mut s, 0);
+    s.game_mut().state.players[0].mana_pool.mana = [0, 0, 0, 0, 0, 5];
+    assert!(
+        !can_activate(&mut s, scroll),
+        "a non-Ally ability cannot use it"
+    );
+    assert!(can_activate(&mut s, captives));
+    activate(&mut s, captives, 0);
+    assert!(s.choose_target(Target::Permanent(shop)));
+    settle(&mut s);
+    assert_eq!(pool(&s).total(), 0, "the Ally ability spent all six");
+    assert_eq!(counters(&s, captives), 2);
+}
+
+#[test]
+fn jasmine_dragon_tea_shop_taps_for_colorless_or_an_ally_token() {
+    let mut s = setup(&["Jasmine Dragon Tea Shop"]);
+    let shop = s.force_permanent_on_battlefield(0, "Jasmine Dragon Tea Shop");
+    assert_eq!(
+        s.game_mut().cached_producible_mana(PlayerId(0)).mana,
+        [0, 0, 0, 0, 0, 1]
+    );
+    s.set_player_mana_pool(0, "5");
+    activate(&mut s, shop, 1);
+    settle(&mut s);
+    let tokens = s.battlefield_permanents_named(0, "Ally");
+    assert_eq!(tokens.len(), 1);
+    assert_eq!(s.game().effective_pt(tokens[0]), (1, 1));
+    assert!(s.game().state.permanents[shop].as_ref().unwrap().tapped);
+}
+
+#[test]
+fn white_lotus_hideout_restricts_to_lessons_and_shrines_and_filters_for_one() {
+    let lesson_or_shrine = ManaUse::spell(["Lesson", "Shrine"]);
+    let mut s = setup(&[
+        "White Lotus Hideout",
+        "Firebending Lesson",
+        "Lightning Strike",
+        "Gray Ogre",
+    ]);
+    let hideout = s.force_permanent_on_battlefield(0, "White Lotus Hideout");
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    assert_eq!(
+        s.game_mut().cached_producible_mana(PlayerId(0)).mana,
+        [0, 0, 0, 0, 0, 1]
+    );
+    s.set_player_mana_pool(0, "");
+    activate(&mut s, hideout, 0);
+    mode(&mut s, 3);
+    assert_eq!(pool(&s).restricted_of(lesson_or_shrine), [0, 0, 0, 1, 0, 0]);
+    let shrine = ManaCost {
+        purpose: ManaUse::spell(["Shrine"]),
+        ..ManaCost::parse("R")
+    };
+    assert!(pool(&s).can_pay(&shrine));
+    let lesson = library_card(&s, 0, "Firebending Lesson");
+    let strike = library_card(&s, 0, "Lightning Strike");
+    s.game_mut().move_card(lesson, ZoneType::Hand);
+    s.game_mut().move_card(strike, ZoneType::Hand);
+    assert!(can_cast(&mut s, lesson));
+    assert!(!can_cast(&mut s, strike));
+
+    let mut s = setup(&["White Lotus Hideout"]);
+    let hideout = s.force_permanent_on_battlefield(0, "White Lotus Hideout");
+    s.set_player_mana_pool(0, "C");
+    activate(&mut s, hideout, 1);
+    mode(&mut s, 1);
+    assert_eq!(pool(&s).mana, [0, 1, 0, 0, 0, 0]);
+    assert!(pool(&s).restricted().is_empty());
+}
+
+/// "Costs {1} less for each Island you control" applies to the generic part
+/// as the ability is activated.
+#[test]
+fn waterbending_scroll_draws_for_one_less_per_island() {
+    let mut s = setup(&["Waterbending Scroll"]);
+    let scroll = s.force_permanent_on_battlefield(0, "Waterbending Scroll");
+    for _ in 0..4 {
+        s.force_permanent_on_battlefield(0, "Island");
+    }
+    s.force_permanent_on_battlefield(1, "Island");
+    for island in s.battlefield_permanents_named(0, "Island") {
+        s.game_mut().state.permanents[island]
+            .as_mut()
+            .unwrap()
+            .tapped = true;
+    }
+    s.set_player_mana_pool(0, "1");
+    assert!(!can_activate(&mut s, scroll));
+    s.set_player_mana_pool(0, "2");
+    let hand = s.zone_size(0, ZoneType::Hand);
+    activate(&mut s, scroll, 0);
+    assert_eq!(pool(&s).total(), 0);
+    settle(&mut s);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 1);
+    assert!(s.game().state.permanents[scroll].as_ref().unwrap().tapped);
 }

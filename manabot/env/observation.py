@@ -81,7 +81,7 @@ class ObservationEncoder:
 
         # Define dimensions for players, cards, permanents.
         # Player: life + is_active + zones + phase/step one-hots + gy
-        # lessons + until-end-of-combat mana + pooled and Lesson-only colors.
+        # lessons + until-end-of-combat mana + pooled and spend-restricted colors.
         self.player_dim = 2 + self.num_zones + self.num_phases + self.num_steps + 14
         # Card: zone one-hot + is_mine + P/T + mana value + 6 type flags +
         # 12 keywords + is_token/is_ally/is_lesson tags + ward flag/cost +
