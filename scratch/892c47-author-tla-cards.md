@@ -78,3 +78,7 @@ Check: debug `cargo test --no-fail-fast` — only the known w15 semantic-conform
 pair fails; clippy/fmt clean. Focused pytest (semantic, academy, eval admission,
 monitor, policy catalog, package boundaries): 42 failures, all identical at HEAD
 with the pre-change extension (none new; `test_compiler` binding test fixed).
+
+Compress (2026-10-29): `world::unsupported_cards` reads the pool once and
+`supports_card` delegates to it; unused `world::card` removed (pool rows carry
+the reason). `cargo test --lib world::` 2/2, clippy clean; gate owns full suites.
