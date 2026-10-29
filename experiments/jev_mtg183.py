@@ -70,7 +70,9 @@ class Protocol(Record):
     engine_extension_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     driver_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     pilot_games: int = Field(default=20, ge=10, le=20)
-    # A prefix of the frozen shuffled schedule; None plays all 1,000 games.
+    # A slice of the frozen shuffled schedule: `planned_games` from position
+    # `first_game`; a continuation after an outage starts past retained work.
+    first_game: int = Field(default=0, ge=0, lt=1000)
     planned_games: int | None = Field(default=None, ge=20, le=1000)
     pilot_included: Literal[True] = True
     decks: tuple[str, ...] = DECKS
@@ -195,7 +197,12 @@ def schedule(protocol: Protocol) -> tuple[ScheduledGame, ...]:
                         )
                     )
     random.Random(protocol.schedule_seed).shuffle(games)
-    return tuple(games[: protocol.planned_games])
+    end = (
+        None
+        if protocol.planned_games is None
+        else protocol.first_game + protocol.planned_games
+    )
+    return tuple(games[protocol.first_game : end])
 
 
 def _write(path: Path, text: str) -> None:

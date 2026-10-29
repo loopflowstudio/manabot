@@ -140,6 +140,11 @@ def test_heuristic_campaign_plays_a_prefix_of_the_frozen_schedule() -> None:
     assert games == schedule(protocol())[:100]
 
 
+def test_continuation_plays_the_next_slice_of_the_frozen_schedule() -> None:
+    continuation = heuristic_protocol(71).model_copy(update={"first_game": 29})
+    assert schedule(continuation) == schedule(protocol())[29:100]
+
+
 @pytest.mark.parametrize(
     "update",
     [
