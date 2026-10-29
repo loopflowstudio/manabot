@@ -5,7 +5,9 @@ import time
 
 import pytest
 
-from manabot.verify.llm_game import GameConfig, play
+from experiments.elemental_grid import PACK
+from manabot.infra.config import MatchConfig
+from manabot.verify.llm_game import GameConfig, HeuristicOpponent, play
 
 
 def test_native_random_control_completes_and_replays(tmp_path: Path) -> None:
@@ -19,6 +21,23 @@ def test_native_random_control_completes_and_replays(tmp_path: Path) -> None:
         len(list((tmp_path / "game").glob("decision-*/transition.json")))
         == summary.decisions
     )
+
+
+@pytest.mark.parametrize("model_seat", [0, 1])
+def test_heuristic_opponent_plays_its_seat_and_replays(
+    tmp_path: Path, model_seat: int
+) -> None:
+    config = GameConfig(
+        model_seat=model_seat,
+        match=MatchConfig.authored(PACK, "elemental_ur", "elemental_gw"),
+        skip_trivial=True,
+    )
+    summary = play(config, tmp_path / "game", None, opponent=HeuristicOpponent())
+    assert summary.completed and summary.failure is None
+    assert summary.replay_matches
+    assert summary.mode == "random-v-heuristic-control"
+    assert set(summary.origins) == {"heuristic", "random-control"}
+    assert len(summary.opponent_latencies) == summary.origins["heuristic"]
 
 
 def test_decision_limit_is_not_a_completed_game(tmp_path: Path) -> None:

@@ -1,7 +1,7 @@
 """A bounded full-game proof with native text, a warm model and command replay.
 
-One seat uses the ordinary LLM protocol; the other uses a frozen checkpoint or
-samples legal actions uniformly. Every capture, selection and native transition
+One seat uses the ordinary LLM protocol; the other uses a frozen checkpoint, the
+deterministic `heuristic` anchor, or samples legal actions uniformly. Every capture, selection and native transition
 is retained before the next decision. One game cannot establish playing strength.
 """
 
@@ -10,6 +10,7 @@ from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -17,12 +18,13 @@ import random
 import statistics
 import subprocess
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from managym.decision import DecisionFrame, apply_semantic_command
 from pydantic import BaseModel, Field
 import torch
 
+from manabot.env.env import Env
 from manabot.env.match import Match
 from manabot.infra.artifacts import verify_file
 from manabot.infra.config import MatchConfig
@@ -36,6 +38,7 @@ from manabot.semantic.text_observation import (
     resolve_action,
     submit_response,
 )
+from manabot.sim.heuristic import HeuristicPlayer, heuristic_source_paths
 from manabot.verify.llm_opponent import (
     CheckpointOpponent as ConfiguredCheckpointOpponent,
 )
@@ -123,6 +126,9 @@ class CheckpointOpponent:
         self.load_seconds = time.monotonic() - started
         self.sha256 = sha256
 
+    label = "checkpoint"
+    producer = "checkpoint-stochastic-cpu"
+
     def admit(self, players: list[managym.PlayerConfig], seed: int) -> None:
         validate_agent_setup(self.agent, players, allow_deck_repetition=True)
         torch.manual_seed(seed)
@@ -165,6 +171,57 @@ class CheckpointOpponent:
         return PolicyChoice(choices[0].reference, encoding_seconds, inference_seconds)
 
 
+def heuristic_sha256() -> str:
+    """Digest of the files whose bytes define the heuristic's behavior."""
+    digest = hashlib.sha256()
+    for path in heuristic_source_paths():
+        digest.update(path.name.encode())
+        digest.update(path.read_bytes())
+    return digest.hexdigest()
+
+
+@dataclass(frozen=True)
+class _NativeView:
+    """The one `Env` attribute the heuristic reads: the actor's raw observation."""
+
+    last_raw_obs: managym.Observation
+
+
+class HeuristicOpponent:
+    """The deterministic `heuristic` arena anchor on the native environment.
+
+    Its offer index addresses the actor's native offers, which are the semantic
+    frame's offers in the same order. Per-game memory restarts at admission.
+    """
+
+    label = "heuristic"
+    producer = "heuristic"
+
+    def __init__(self) -> None:
+        self.sha256 = heuristic_sha256()
+        self.player = HeuristicPlayer()
+
+    def admit(self, players: list[managym.PlayerConfig], seed: int) -> None:
+        del players, seed
+        self.player = HeuristicPlayer()
+
+    def choose(self, env: managym.Env, decision: TextDecision) -> PolicyChoice:
+        started = time.monotonic()
+        raw = env.observation_for_player(env.current_agent_index())
+        # The heuristic reads only `last_raw_obs`; it ignores tensor observations.
+        index = self.player.act(cast(Env, _NativeView(raw)), {})
+        frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
+        if len(frame.offers) != len(raw.action_space.actions):
+            raise ValueError("native offers differ from the semantic frame")
+        offer_id = int(frame.offers[index]["id"])
+        choices = [a for a in decision.actions if a.command.offer_id == offer_id]
+        if len(choices) != 1:
+            raise ValueError(
+                "heuristic action has no unique captured semantic reference"
+            )
+        return PolicyChoice(choices[0].reference, 0.0, time.monotonic() - started)
+
+
 def _write(path: Path, payload: str) -> None:
     temporary = path.with_suffix(path.suffix + ".pending")
     temporary.write_text(payload + "\n")
@@ -172,15 +229,15 @@ def _write(path: Path, payload: str) -> None:
 
 
 def _game_mode(
-    session: "InferenceSession | OpenRouterSession | None", checkpoint: bool
+    session: "InferenceSession | OpenRouterSession | None", opponent: str | None
 ) -> str:
     if session is None:
-        return "random-v-checkpoint-control" if checkpoint else "random-control"
+        return f"random-v-{opponent}-control" if opponent else "random-control"
     model = {
         "openrouter-chat-v1": "openrouter",
         "openrouter-decisions-v1": "openrouter-decisions",
     }.get(session.identity.runtime, "qwen")
-    return f"{model}-v-{'checkpoint' if checkpoint else 'random'}"
+    return f"{model}-v-{opponent or 'random'}"
 
 
 def _record_hosted_usage(summary: GameSummary, result: "OpenRouterResult") -> None:
@@ -221,7 +278,7 @@ def play(
     session: "InferenceSession | OpenRouterSession | None",
     *,
     progress_path: Path | None = None,
-    opponent: CheckpointOpponent | None = None,
+    opponent: CheckpointOpponent | HeuristicOpponent | None = None,
 ) -> GameSummary:
     """Run once; failures never reset the game or retry uncertain execution.
 
@@ -252,7 +309,12 @@ def play(
     rng = random.Random(config.opponent_seed)
     summary = GameSummary(
         mode=_game_mode(
-            session, opponent is not None or config.opponent_checkpoint is not None
+            session,
+            opponent.label
+            if opponent is not None
+            else "checkpoint"
+            if config.opponent_checkpoint is not None
+            else None,
         )
     )
     if session:
@@ -370,7 +432,7 @@ def play(
                 summary.peak_gpu_bytes = result.peak_gpu_bytes
             elif opponent is not None and actor != config.model_seat:
                 choice = opponent.choose(env, decision)
-                reference, producer = choice.reference, "checkpoint-stochastic-cpu"
+                reference, producer = choice.reference, opponent.producer
                 summary.opponent_latencies.append(choice.inference_seconds)
                 for name, seconds in (
                     ("policy_encoding", choice.encoding_seconds),

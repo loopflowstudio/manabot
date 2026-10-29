@@ -123,6 +123,37 @@ def test_schedule_is_frozen_and_balanced_with_distinct_seeded_games() -> None:
     assert len({(g.jev_deck, g.policy_deck, g.config.model_seat) for g in games}) == 200
 
 
+def heuristic_protocol(planned_games: int | None = 100) -> Protocol:
+    return protocol().model_copy(
+        update={
+            "checkpoint": None,
+            "checkpoint_artifact_id": None,
+            "checkpoint_selection": None,
+            "heuristic_sha256": "1" * 64,
+            "planned_games": planned_games,
+        }
+    )
+
+
+def test_heuristic_campaign_plays_a_prefix_of_the_frozen_schedule() -> None:
+    games = schedule(Protocol.model_validate(heuristic_protocol().model_dump()))
+    assert games == schedule(protocol())[:100]
+
+
+@pytest.mark.parametrize(
+    "update",
+    [
+        {"heuristic_sha256": "1" * 64},
+        {"checkpoint": None},
+        {"checkpoint_selection": None},
+    ],
+)
+def test_campaign_requires_exactly_one_opponent(update: dict[str, object]) -> None:
+    values = protocol().model_dump() | update
+    with pytest.raises(ValueError, match="opponent"):
+        Protocol.model_validate(values)
+
+
 def test_report_uses_actual_seat_and_excludes_failed_replay(tmp_path: Path) -> None:
     games = schedule(protocol())
     first = next(g for g in games if g.config.model_seat == 1)

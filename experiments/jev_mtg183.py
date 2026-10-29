@@ -1,6 +1,7 @@
-"""One frozen Jev/MTG-183 campaign with durable inclusive request admission.
+"""One frozen Jev campaign with durable inclusive request admission.
 
-The ordinary native game runner owns Commands and replay. This module owns the
+Jev plays a digest-bound checkpoint (MTG-212) or the `heuristic` anchor, pinned
+by its source digest. The ordinary native game runner owns Commands and replay. This module owns the
 seeded schedule, pilot boundary, checkpoint/runtime admission and retained report.
 Restart never replaces an attempted game or clears an uncertain API reservation.
 The protocol must be reviewed and populated from dated evidence before execution.
@@ -32,7 +33,14 @@ from manabot.llm.budget import BudgetConfig, BudgetLedger, Spend
 from manabot.llm.openrouter import OpenRouterConfig, OpenRouterSession
 from manabot.llm.schema import Record
 from manabot.verify.decision_profile import wilson_interval
-from manabot.verify.llm_game import CheckpointOpponent, GameConfig, GameSummary, play
+from manabot.verify.llm_game import (
+    CheckpointOpponent,
+    GameConfig,
+    GameSummary,
+    HeuristicOpponent,
+    heuristic_sha256,
+    play,
+)
 
 DEALS_PER_PAIRING = 5
 
@@ -49,10 +57,12 @@ class PinnedFile(Record):
 class Protocol(Record):
     version: Literal["jev-mtg183-v3"] = "jev-mtg183-v3"
     inference: OpenRouterConfig
-    checkpoint: PinnedFile
-    checkpoint_artifact_id: str = Field(min_length=1)
+    # Exactly one opponent: a checkpoint with its selection, or the heuristic.
+    checkpoint: PinnedFile | None = None
+    checkpoint_artifact_id: str | None = Field(default=None, min_length=1)
     # Who selected the checkpoint and by what rule; "final" is not "best".
-    checkpoint_selection: str = Field(min_length=1)
+    checkpoint_selection: str | None = Field(default=None, min_length=1)
+    heuristic_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     billing_evidence: PinnedFile
     budget: BudgetConfig
     world: str
@@ -60,6 +70,8 @@ class Protocol(Record):
     engine_extension_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     driver_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     pilot_games: int = Field(default=20, ge=10, le=20)
+    # A prefix of the frozen shuffled schedule; None plays all 1,000 games.
+    planned_games: int | None = Field(default=None, ge=20, le=1000)
     pilot_included: Literal[True] = True
     decks: tuple[str, ...] = DECKS
     pack: Literal["elemental-world-v2"] = PACK
@@ -84,13 +96,29 @@ class Protocol(Record):
             raise ValueError("campaign requires the frozen Jev winning treatment")
         if len(self.decks) != len(DECKS) or set(self.decks) != set(DECKS):
             raise ValueError("campaign requires the complete ten-deck Elemental suite")
+        checkpoint = (
+            self.checkpoint,
+            self.checkpoint_artifact_id,
+            self.checkpoint_selection,
+        )
+        if self.heuristic_sha256 is None:
+            if None in checkpoint:
+                raise ValueError("checkpoint opponent requires its pin and selection")
+        elif checkpoint != (None, None, None):
+            raise ValueError("campaign has exactly one opponent")
         if self.budget.bound_evidence != self.billing_evidence.sha256:
             raise ValueError("budget must name the pinned billing evidence digest")
         return self
 
     def admit(self) -> None:
-        for artifact in (self.checkpoint, self.billing_evidence):
-            artifact.verify()
+        self.billing_evidence.verify()
+        if self.checkpoint is not None:
+            self.checkpoint.verify()
+        if (
+            self.heuristic_sha256 is not None
+            and heuristic_sha256() != self.heuristic_sha256
+        ):
+            raise ValueError("campaign runtime mismatch: heuristic_sha256")
         actual = runtime_identities()
         for name in ("world", "source_sha256", "engine_extension_sha256"):
             if actual[name] != getattr(self, name):
@@ -167,7 +195,7 @@ def schedule(protocol: Protocol) -> tuple[ScheduledGame, ...]:
                         )
                     )
     random.Random(protocol.schedule_seed).shuffle(games)
-    return tuple(games)
+    return tuple(games[: protocol.planned_games])
 
 
 def _write(path: Path, text: str) -> None:
@@ -407,16 +435,17 @@ def execute(
 
 
 def run(protocol: Protocol, out: Path) -> Report:
-    opponent: CheckpointOpponent | None = None
+    opponent: CheckpointOpponent | HeuristicOpponent | None = None
 
     def admit() -> None:
         nonlocal opponent
         protocol.admit()
         torch.set_num_threads(1)
-        opponent = CheckpointOpponent(
-            protocol.checkpoint.path,
-            protocol.checkpoint.sha256,
-            protocol.checkpoint.bytes,
+        pin = protocol.checkpoint
+        opponent = (
+            HeuristicOpponent()
+            if pin is None
+            else CheckpointOpponent(pin.path, pin.sha256, pin.bytes)
         )
 
     def player(
