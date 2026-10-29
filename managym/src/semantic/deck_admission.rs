@@ -105,7 +105,7 @@ pub fn admit_deck(
                     "unsupported",
                     row.reason
                         .as_deref()
-                        .unwrap_or("card has no complete qualification in this pool"),
+                        .unwrap_or("card is not supported in this pool"),
                 ),
                 (Some(row), None) => {
                     let definition = row.card_def_id.and_then(|id| content.definition(id));
@@ -114,7 +114,7 @@ pub fn admit_deck(
                         Some(_) => ("format", "tokens cannot be submitted in main or sideboard"),
                         None => (
                             "unsupported",
-                            "qualified definition is missing from runtime content",
+                            "supported definition is missing from runtime content",
                         ),
                     }
                 }

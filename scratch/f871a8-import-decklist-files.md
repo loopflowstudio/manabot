@@ -134,161 +134,22 @@ its training provenance. No weight updates, paid compute or data download needed
 
 Implemented 2026-10-28 per Jack Heart's approval (1b71de345).
 
-### Concept review of the implementation (2026-10-28, headless Graph step)
+### Settled concept reviews (2026-10-28; detail at 12a2b9fc4)
 
-Deck-supplied runs now match the accepted model: one `Deck`, `TrainingDecks`
-is run data (supply plus provenance, checked upfront, re-admitted natively at
-every root), checkpoints export `pool_world` from the native pool descriptor,
-and execution admits any deck that pool admits. No `CollectionDeck`,
-`DeckCollection` or `deck_collection` remains outside frozen evidence.
-
-One remaining path contradicts the accepted decision, which settles it:
-**authored-pack checkpoints still bind their training pair.** `checkpoint_world`
-binds the complete authored roster only for the two Elemental packs; every other
-compiled authored pack binds the actual training match. `mtg122-complexity-v1`
-authors six decks over one card file, and native reset admits any pair of them
-(checked: `gw_allies` v `l2_heavy`). A checkpoint trained on `l1_swift` v
-`l1_heavy` is nevertheless rejected for Allies v Lessons by
-`validate_agent_setup` ("checkpoint setup differs from the execution match") —
-the training-roster allowlist Jack Heart rejected, and the MTG-122 L1-then-
-Allies-v-Lessons case. Two-deck packs are unaffected in practice (pair = pack).
-
-Resolution (implied by the accepted decision, not a new product choice):
-default (uncompiled) content has no native deck admission and keeps its exact
-pair binding; native admission, not a Python mirror rule, decides mirrors.
-
-Implemented 2026-10-28: `checkpoint_world` binds the complete authored roster
-for any compiled authored pack when the actual setups are authored, marked
-`setup_binding: authored-pack-v1` (Elemental stays unmarked; its digests are
-frozen). `expected_world` reads unmarked non-Elemental compiled bindings with
-the historical `_pair_world` reader. `validate_agent_setup` admits any roster
-pair; the pack must be explicit unless it is the pack's own distinct pair that
-native reset infers. Scenario replay compares via `expected_world`.
-
-Recorded deferral, not reopened here: checkpoint `bc` extra still carries
-opaque run/regime producer links (questions.md). They do not affect world
-compatibility, and moving them is a training-state change across all producers.
-
-### Concept review at 821824996 (2026-10-28), implemented at 1f52717f6
-
-The review found imported decks still refusing every checkpoint player through
-an older special case (`SimulationConfig.validate_imported_players` and
-Academy's start path), contradicting "use any decklists admitted to that same
-world for play or evaluation". Both refusals are deleted. `simulate_models`
-admits each `ModelPlayer` with `validate_agent_setup` against the actual match
-before any game; Academy's only `CheckpointVillain` construction
-(`build_villain_policy`, used by start and watch) passes `config.to_rust()`,
-which rebuilds imported configs; fork/reconnect build no villain. Proofs: an
-untrained `content_pool="tla-pool-v1"` checkpoint simulates on two imported
-files and starts an Academy imported match; authored/Elemental-bound
-checkpoints are rejected with their world diagnostic. docs/decklist-import.md
-and questions.md updated. Not the deferred 1a redesign.
-Working screen: `scratch/concept-review.html`.
-
-### Concept review at 012f1a725 (2026-10-28, headless Graph step)
-
-World binding, run-owned `TrainingDecks`, native `set_training_decks` (admits
-each submitted deck, no roster permission) and checkpoint/sim/Academy admission
-match the accepted model. One residue of the rejected deck-kind distinction
-remained, settled by "one deck concept" and "one owner for each fact": an
-`AdmittedDeck` that stored its own `main`/`sideboard` beside a derived `Deck`.
-Implemented at 7411ed5d9/91a000fd1: it is now the import record
-`DeckImport(document: DeckDocument, deck: Deck)` with no duplicate counts;
-`ImportedMatch.hero`/`villain` hold it, consumers read `.deck`, and
-`validate_setup(content_pack, hero: Deck, villain: Deck)` compares `Deck`
-values. `setup_id` keeps its payload. The type is branch-local, so no frozen
-evidence changes; branch-local Academy traces may need re-import.
-
-Not reopened: checkpoint `bc` `run_id`/`stage_id`/`regime_digest` links predate
-this branch, are read only for a catalog producer label, and never enter world
-compatibility (recorded deferral in questions.md). No open product choice.
-
-### Concept review at a74aceb88 (2026-10-28, headless Graph step)
-
-`Deck`/`DeckImport`, run-owned `TrainingDecks`, native `set_training_decks` and
-pool-world checkpoints match the accepted model. One residue contradicts "the
-run records the decks used" and "one owner for each fact": **a deck-supplied
-regime still carries a second, authorable statement of its setups.**
-`TrainingRegime.match` is required; `read_decks` fills it with the first two
-decks as a "representative root", but an authored `match` is kept as long as
-its `content_pack` equals `decks.pool`. Checked at a74aceb88: a regime with
-decks Plains/Mountain/Island and `match` Forest×40 v Swamp×40 passes
-`validate_regime`. Native roster sampling ignores that match at every reset,
-yet the run record, regime digest, `runtime_fingerprints`, learning-state
-comparison and producer admission (`validate_agent_setup(..., regime.match)`)
-all read it, so the record claims a pair the run never played.
-
-Implemented 2026-10-28 (settled direction, no product choice): `match` is
-optional and excluded when absent; a regime with `decks` rejects an authored
-`match` ("remove the authored match") and one with neither is rejected;
-both checks live in the `references` validator, `read_decks` only embeds.
-`TrainingRegime.root_match` derives the representative pair from `decks` for
-fingerprints/collector construction and is never serialized, so the digest
-and learning-state comparison rest on `decks`. Producer admission
-(`state/admission._admit_setups`) applies the shared world deck rule to every
-deck (see below); setup transfer requires an authored match.
-Elemental-uniform and authored regimes keep their `match` unchanged.
-
-### Concept review at 59648dc59 (2026-10-28), implemented at 569e595ca/1e0c293c2
-
-Found producer admission (`_admit_setups`) restating the pool branch of
-`validate_agent_setup` outside `model/world.py`. Resolved:
-`model/world.validate_agent_decks(agent, players)` is now the one rule for
-"may this checkpoint play every one of these decks" (pool → bound pool + native
-admission; setup → roster membership). `validate_agent_setup` checks seat count
-and explicit pack, then delegates; `_admit_setups` rejects unbound checkpoints,
-then calls the shared rule. No second pool rule remains in `state/admission.py`.
-
-### Concept review at 8dcfa33b9 (2026-10-28, headless Graph step)
-
-World validation, the one `Deck`, run-owned `TrainingDecks`, native
-`set_training_decks`/reset admission and the shared `validate_agent_decks` rule
-match the accepted model. One residue contradicts "the run records the decks
-used" and the earlier record that `root_match` "is never serialized": **a deck
-run's identities still name a representative pair as its matchup.**
-`_runtime_identities` calls `runtime_fingerprints(match_config=regime.root_match)`,
-so `run.identities` (run.json, every failure capture, recovery comparison)
-carries `matchup` = the first two sorted decks and `matchup_sha256` of that
-pair. Study/arena registration (`study.py` `_IDENTITY_KEYS`, player
-`matchup_sha256`) would then label a deck-trained checkpoint with a pair it was
-not specifically trained on. The run's actual setup record is the deck supply.
-
-Next implement direction (settled; no product choice): a deck run's runtime
-identities replace `matchup`/`matchup_sha256` with the supply identity
-(`training_decks_sha256` = `TrainingDecks.digest`, plus pool key); content/
-observation/action identities still come from opening the pool. Recovery
-compares that identity. Authored-matchup consumers (monitoring, study arenas,
-card evaluation) that require `matchup_sha256` reject a deck run with an
-explicit diagnostic instead of reading a surrogate; they gain no deck-run path
-here. Authored and Elemental runs and frozen evidence keep their identities
-unchanged. Proof: a bounded deck-run setup records no `matchup` and the supply
-digest; changed decks still reject resume; an authored run's identities are
-byte-identical to before.
-
-Implemented 2026-10-28: `_runtime_identities` replaces the pair with
-`content_pool` + `training_decks_sha256`; recovery compares them through the
-existing identity equality. `manabot.infra.provenance.authored_matchup_sha256`
-is the one reader for authored-matchup consumers (monitoring, study
-calibration/arenas, attack arena) and rejects deck runs by name; `run_study`
-rejects deck recipes before training instead of after it. Card
-evaluation, eval admission and `evaluate` fingerprint their own setups and
-read no run identity (realign at 991253b10 confirmed no other run-identity
-`matchup_sha256` reader).
-
-Noted, not a change: the collector and native `VectorEnv` still hold training
-decks in a field named `uniform_roster`; it no longer gates admission
-(`set_training_decks` admits and replaces at any time), so the name is internal.
-
-### Concept review at d447c2a42 (2026-10-28, headless Graph step)
-
-No change and no open product choice. Remaining `root_match` readers
-(fingerprints, collector construction, frozen-opponent/compound/selection/belief
-stages, monitoring, study) cannot act on a deck run's behalf: the `references`
-validator admits deck regimes only for current-self single-producer self-play,
-and authored-matchup consumers reject deck runs by name. The native
-`RootRoster.distinct` flag and `uniform_roster` field separate the frozen
-Elemental roster from replaceable training decks internally; users never learn
-that distinction. Deferred items (Academy 1a, `bc` producer links) unchanged.
+Successive headless reviews each removed one residue of the rejected deck-kind
+and training-roster model; all are implemented (see "Implemented path"):
+authored-pack checkpoints bind the pack's complete roster (`authored-pack-v1`;
+Elemental unmarked and frozen; default content keeps exact pairs); imported
+decks admit checkpoint players through `validate_agent_setup` in sim and
+Academy (1f52717f6); `AdmittedDeck` became `DeckImport(document, deck)`
+(7411ed5d9/91a000fd1); deck regimes have no authorable `match` and
+`root_match` is derived, never serialized; `model/world.validate_agent_decks`
+is the one "may this checkpoint play these decks" rule (569e595ca/1e0c293c2);
+deck runs' identities carry `content_pool` + `training_decks_sha256` instead of
+a surrogate matchup, and authored-matchup consumers reject deck runs by name
+through `infra.provenance.authored_matchup_sha256` (558762869/991253b10).
+Internal names `uniform_roster`/`RootRoster.distinct` no longer gate admission.
+Deferred, unchanged: Academy 1a redesign; checkpoint `bc` producer links.
 
 ## Accepted direction — Jack Heart, 2026-10-28
 
@@ -317,7 +178,7 @@ the top of this document now establishes world validation and a single deck
 concept, without requiring that lifecycle; the preparation command, manifest
 and collection type were removed in the 2026-10-28 implementation.
 
-Current implementation: the regime checks a fixed list upfront against an explicit qualified pool. Reject the entire
+Current implementation: the regime checks a fixed list upfront against an explicit content pool. Reject the entire
 list on invalid input, retaining source/line diagnostics; never silently
 filter cards or decks. Collapse identical normalized main/sideboard lists while
 retaining every source record. Use one fixed whole-pool policy vocabulary across
@@ -332,7 +193,7 @@ adaptive weights or speculative curriculum framework.
 
 ## Contract and ownership
 
-- Content Task 892c47 owns canonical card authoring, qualification, compiled
+- Content Task 892c47 owns canonical card authoring, support, compiled
   content and learning identity. Consume native `content_pool(pack_key)` and
   `pool_content(pack_key)`; registration or authored availability alone does not
   make a card eligible for novel combinations. No second rules registry or
@@ -355,12 +216,12 @@ adaptive weights or speculative curriculum framework.
   reassignment and curriculum experiments; PR389/19d240 owns shared simulation
   and evaluation APIs. MTG-177 owns target-resolution changes.
 
-Integrated content dependency: 73865361f via merge 2806d03d5, then qualified
-checkpoint 1e0d3c998 via merge 4e206ce3b. This supplies tla-pool-v1, w16/schema 8,
-31 qualified cards and corrected modal dual-land mana; Rocky Rebuke remains
-unsupported. These are dependency checkpoints, not final upstream qualification
-or PR readiness. Review importer changes against that dependency, or revalidate
-after it lands; generated content is not importer-owned work.
+Content base: PR #394 (Task 892c47) at be2b7586b, merged here at 541365b28
+(6f8b2231e) and 2f7f7c09c, replacing the 1e0d3c998 copy. #394 supplies typed Rust
+cards, one world (w16), first-printing card keys, and support defined by a set
+file's definition (no qualification gate); `content_pool` keeps its shape with
+eligibility derived from that check. Importer code relies on no hard-coded keys
+or qualification data. Generated content and world-bound evidence are #394's.
 
 Training overlap reviewed at PR383 d0f48ca96 and PR389 c85470a59; scoped coordination
 is retained in Task 1d7884 comment 2c523295-b690-4e45-a989-1dd37b91cabb. Adaptive
@@ -408,13 +269,17 @@ failure/capture records; unseen same-world deck at a later root; invalid
 generated deck rejected before play; world-only export/load/inspect. Bounded
 fixtures, actual collector path, no weight updates.
 
-Remaining: gate owns full affected suites (debug Rust, training recovery,
-learning-state, Elemental and combined CI collection) per
-docs/development/validation.md. A world/mirror/catalog/pool `-k` sweep after
-1e0c293c2 had 9 failures (academy/test_learn_setup, semantic learning
-projection, temur, elemental_world) that fail identically without the change;
-gate must attribute them before publish. Run→checkpoint linkage is existing TrainingRun
-records; not re-proved end-to-end by executing a regime here.
+Remaining: world-bound evidence for w16 belongs to #394 and is red on its own
+CI at be2b7586b — `semantic_conformance_tests` (w15 conformance root vs w16;
+`ur-vs-gw-5eed` digest drift), `test_elemental_world` (programs 8 vs 7),
+`test_compiler` content-pack bindings, `test_rules_inventory`, and the w15 Academy
+choice-navigation/Learn fixtures (local `test_choice_navigation` 7,
+`test_learn_setup` 5; #394's Academy UI e2e fails on the same fixtures). Not
+regenerated here: #394 still has uncommitted world changes (qualification
+removal), so w16 evidence generated now would duplicate its owner and go stale.
+Integrate #394's next head, then publish #395 with base = #394's branch.
+Run→checkpoint linkage is existing TrainingRun records, not re-proved by
+executing a regime here.
 
 ## Delete — do not maintain
 
@@ -470,16 +335,12 @@ The manifest references `.lf/wave/engine/GOAL.md` and `MEMORY.md`, but neither
 exists in this checkout. The supplied Task, accepted design and dated Steers
 provide the implementation scope; Wave context was not reconstructed.
 
-Check — 2026-10-28 (at 558762869: `uv run --extra dev pytest tests/training/test_training_decks.py -k supply_not_a_pair` passed; realign at 991253b10 made no code change). Earlier (realign at cfe3ffeec, reusing compress result): training_decks/self_play/elemental_uniform/learning_state/policy_import: 45 passed. Earlier (regime match removal): `uv run --extra dev pytest tests/training/test_training_decks.py -q`: 7 passed; `tests/training/{test_self_play,test_elemental_uniform,test_learning_state,test_policy_import,test_baseline_recipe,test_experiments}.py`: 65 passed. At 91a000fd1 the decklist/Academy/catalog/boundary set passed (39). Earlier at 63c9f6bf5 the training/matchup/mirror/catalog set passed (39); pre-existing failures (Elemental program count 8 vs 7 at test_elemental_world.py:151, belief runtime `KeyError: 'relations'`) reproduce at c42bf4934 without this work; gate owns them with full suites and debug Rust.
+Check — 2026-10-28 at 2f7f7c09c (+ wording): debug `cargo test --no-fail-fast`
+598 passed, 2 failed (#394 conformance above); affected Python set (decklist,
+Academy decklist/catalog/advice, training decks/self-play/Elemental uniform/
+matchups, mirror admission, world, current content, env match, boundaries, and the
+CLAUDE.md world-change set) 191 passed, 1 failed (`test_elemental_world`, #394);
+this branch fixes #394's `test_monitor_evaluation` failures.
 
-Publish blocked — 2026-10-28 (pr-publish step at be205efc6, `lf sync` clean, main 6d069d6e5 CI green):
-recovery 26 passed; clippy clean; `cargo fmt` fixed vector_env.rs. Debug `cargo test`
-fails `semantic_conformance_tests` (manifest "belongs to a different world";
-`ur-vs-gw-5eed content digest drift`). Python: 13 failed / 286 passed across
-elemental_world (programs 8 vs 7), test_learn_setup (4), test_choice_navigation (7
-state digests); PR CI also fails stale evidence anchors and
-test_compiler content-pack bindings. All follow from the integrated 892c47 content
-checkpoint 1e0d3c998; 892c47 (PR #394) has since moved to typed Rust cards and one
-world (6f8b2231e), so this branch's content base is obsolete. Next: re-integrate on
-#394's current branch (or wait for it to land) and refresh world-bound fixtures there
-with new world files, never by rewriting retained evidence; then gate and publish.
+Scratch is over its token target (15.7k/12k) because #394's tracked notes arrive
+with its branch; this plan was trimmed, and #394's notes are left to their owner.

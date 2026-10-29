@@ -1,6 +1,6 @@
 """Mandatory rules, content and input binding for ordinary policy checkpoints.
 
-Two binding forms exist. A pool binding (`pool_world`) names a qualified
+Two binding forms exist. A pool binding (`pool_world`) names a
 content pool by its native descriptor: the model may play any deck that pool
 admits, whatever decks trained it. A setup binding (`checkpoint_world`) names
 exact setups. Over a compiled authored pack it names the pack's complete
@@ -179,7 +179,7 @@ def _input_binding(observation_space: Any) -> dict:
 
 
 def pool_world(pack_key: str, observation_space: Any) -> dict:
-    """Bind a qualified content pool's descriptor, independent of any deck."""
+    """Bind a content pool's descriptor, independent of any deck."""
     return {
         **_input_binding(observation_space),
         "content_pool": managym.content_pool(pack_key),

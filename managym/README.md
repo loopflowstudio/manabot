@@ -137,7 +137,7 @@ clone/undo and diagnostic injection must preserve its documented lifecycle.
 
 `PlayerConfig.content_pack` explicitly selects a compiled content pool. Both
 seats must name the same pack. Exact authored setups retain their admission;
-novel decks use the pool's qualified definitions and shared `development-v1`
+novel decks use the pool's supported definitions and shared `development-v1`
 construction rules (see [decklist import](../docs/decklist-import.md)). Unknown
 packs or partial bindings fail reset. Omitting it preserves exact-pair selection.
 Python `MatchHypers.authored` carries this binding for same-deck matches so replay
