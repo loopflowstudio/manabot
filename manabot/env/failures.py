@@ -340,7 +340,8 @@ class CapturedVector(_Capture):
             for i in range(num_envs)
         ]
         self.next_seeds = [game.seed for game in self.games]
-        self._roster: list[PlayerSetup] = []
+        # Sampled roots pick setups natively at reset; evidence reads them back.
+        self._sampled_roots = False
 
     def __getattr__(self, name: str) -> Any:
         # PyO3 buffer/inspection APIs are untyped; mutation is explicit below.
@@ -371,14 +372,14 @@ class CapturedVector(_Capture):
 
     def set_uniform_roster(self, roster: list[managym.PlayerConfig]) -> None:
         self.native.set_uniform_roster(roster)
-        self._roster = [PlayerSetup.retain(player) for player in roster]
+        self._sampled_roots = True
 
     def set_training_decks(
         self, decks: list[managym.PlayerConfig], digest: str
     ) -> None:
         """Replace decks for later roots; evidence keeps each game's actual setup."""
         self.native.set_training_decks(decks)
-        self._roster = [PlayerSetup.retain(player) for player in decks]
+        self._sampled_roots = True
         self.identities["training_decks"] = {
             "digest": digest,
             "sampling_policy": "uniform-distinct-v1",
@@ -408,7 +409,7 @@ class CapturedVector(_Capture):
 
     def _synchronize(self, *, reset: bool = False) -> None:
         seeds = self.native.current_game_seeds()
-        if self._roster and (
+        if self._sampled_roots and (
             reset or any(game.seed != seed for game, seed in zip(self.games, seeds))
         ):
             # Sampled roots record the native setup actually created.

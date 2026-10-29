@@ -222,7 +222,9 @@ class SeatRoutedCollector:
         game_errors: GameErrorPolicy | None = None,
         record_attempt: Callable[[GameAttempt], GameErrorState] | None = None,
     ) -> None:
-        self.decks = decks
+        # The supply's identity is fixed for the collector; every snapshot and
+        # game attempt records it, so hash the source records once.
+        self._decks_digest = decks.digest if decks is not None else None
         if decks is not None:
             if matchup_curriculum != "fixed":
                 raise ValueError("training decks cannot be combined with a curriculum")
@@ -385,14 +387,12 @@ class SeatRoutedCollector:
             CurrentGames(self._env.current_game_seeds(), deepcopy(self._game_actions))
             if self._game_recovery_limit is not None
             else None,
-            self.decks.digest if self.decks is not None else None,
+            self._decks_digest,
         )
 
     def restore(self, state: CollectorSnapshot, check: Callable[[], None]) -> None:
         """Replay into a fresh collector; reject divergence before any learning."""
-        if getattr(state, "decks_digest", None) != (
-            self.decks.digest if self.decks is not None else None
-        ):
+        if getattr(state, "decks_digest", None) != self._decks_digest:
             raise ValueError("collector training decks identity mismatch")
         if self.stats.micro_steps or self._journal:
             raise ValueError("restore requires a fresh collector")
@@ -906,7 +906,7 @@ class SeatRoutedCollector:
                 seed=seed,
                 seat=seat,
                 matchup=self.stream_matches[row].config,
-                decks_digest=self.decks.digest if self.decks is not None else None,
+                decks_digest=self._decks_digest,
                 outcome=outcome,
                 actions=[] if completed else list(self._game_actions[row]),
                 error_class=error_class,
