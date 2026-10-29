@@ -64,6 +64,7 @@ and the same commit's `scratch/questions.md`. Detailed subsequent choices:
 Obsolete MTG-207 notes: `c5d406e3d2a701525c15c8500a30f7da7896cc40:scratch/questions.md`.
 Main's MTG-193 assumptions: `6d069d6e5f0755b392c796aaf6d754913e8996c2:scratch/questions.md`;
 these supply historical context, not new direction or rental authority.
+Main's f31c9c skip-forced-decisions assumptions: `2fc0af676671e328e7da5378cf8c2ff5ac2a913c:scratch/questions.md`.
 
 - **Stop decision (Jack Heart, 2026-10-29 ~14:35 UTC):** after `cdb0c09f90c6`
   (Qwen 3-42 vs MTG-183; Haiku 5.5 was 51-49 on the same w13 opponent), cancel

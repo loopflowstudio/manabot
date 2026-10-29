@@ -3430,6 +3430,214 @@
    "sha256": "af7557764779326ca1a218c273e09e5823674b1a9817ad5f09e7aec40db54f5d",
    "bytes": 1492
   },
+  "experiments/data/jev-encoding/REPORT.md": {
+   "sha256": "d35388e88140bbb577f07f0cc6f3810000f47fdf60c37391b5e8156ac297cae4",
+   "bytes": 7837
+  },
+  "experiments/data/jev-encoding/evidence/NOTES.md": {
+   "sha256": "6c20f614293c4bf4905ec0edb43775056e41ca713190fbc929dd537bddf7a09b",
+   "bytes": 5314
+  },
+  "experiments/data/jev-encoding/evidence/check.py": {
+   "sha256": "f7e9d0177af4d0291d045a1aac300564a6486d3067891926b9884747f5dded1e",
+   "bytes": 1443
+  },
+  "experiments/data/jev-encoding/evidence/haiku-labels-h0.log": {
+   "sha256": "27dd515b100ac2b95d20f43c7b3bcf18029a9278c5d0776c045f236160181685",
+   "bytes": 14180
+  },
+  "experiments/data/jev-encoding/evidence/haiku-labels-h32.log": {
+   "sha256": "14c799e406c23cae661fc1f5a597ab55219977aedc621ebe18c53866bdb12457",
+   "bytes": 12794
+  },
+  "experiments/data/jev-encoding/evidence/haiku-probe.log": {
+   "sha256": "dce7c8b28c127f8fbf3ffded90f913c1fe548bb8fecfd8a788dd9843c2944235",
+   "bytes": 968
+  },
+  "experiments/data/jev-encoding/evidence/labels.jsonl": {
+   "sha256": "9fcf4303a6c7b188b9d1eb05d15cbc8a0e204524d8d63018c477ec1119456859",
+   "bytes": 2259177
+  },
+  "experiments/data/jev-encoding/evidence/report.py": {
+   "sha256": "8e93379fed8a37905c9e49cf545ca51234f39826f835555f04ee39a7da812947",
+   "bytes": 6008
+  },
+  "experiments/data/jev-encoding/evidence/screen-1-superseded.jsonl": {
+   "sha256": "87c37fcb4e3503b04ac9d58550929e9236a9cfa2d2a0973bc80d73a5805f4b23",
+   "bytes": 291905
+  },
+  "experiments/data/jev-encoding/evidence/screen-1.log": {
+   "sha256": "74328226857e6136ca52416bbba639e7f00f95850c4b37b41671aaa8783c51ee",
+   "bytes": 447
+  },
+  "experiments/data/jev-encoding/evidence/screen-2-blocked-unsent.jsonl": {
+   "sha256": "7332100ec605b7b5e51aec02b8f670eada54c4827828ba34a5b1f788e5add49f",
+   "bytes": 943377
+  },
+  "experiments/data/jev-encoding/evidence/screen-2.jsonl": {
+   "sha256": "c1d6104b75d942939794cf0c93458a68af68ca7a2940f94dbf3f2a9f64980b58",
+   "bytes": 828803
+  },
+  "experiments/data/jev-encoding/evidence/screen-2.log": {
+   "sha256": "da67682156d2b8d06030122d3c53c20f7bd6a1270a2e9ef04361a14b46f7839a",
+   "bytes": 1157
+  },
+  "experiments/data/jev-encoding/evidence/screen-3.jsonl": {
+   "sha256": "bfb60b4da3174847d0e8ee4b8b3b326b0bf7a722b9e4649a200c3d13c4344b35",
+   "bytes": 426714
+  },
+  "experiments/data/jev-encoding/evidence/screen-3.log": {
+   "sha256": "a68d7994af0653de1e06724aed3daa86ed8c928bad9bba400a3213a09a0dc383",
+   "bytes": 602
+  },
+  "experiments/data/jev-encoding/evidence/screen-4.jsonl": {
+   "sha256": "fc00f20012fbb01a4ed43a6a43dec65bba019d1b5bfae5ef3a26ce2ac6d258f9",
+   "bytes": 425115
+  },
+  "experiments/data/jev-encoding/evidence/screen-4.log": {
+   "sha256": "8cc86b25e5e7f6ba22e938364b002c16044bf485a53501d2a589ca1f136e15d6",
+   "bytes": 602
+  },
+  "experiments/data/jev-encoding/evidence/screen-5.jsonl": {
+   "sha256": "94e514fd3b1b5c98e3bec219529c843cb284f379a1f6d6aba35af98f646dc683",
+   "bytes": 423793
+  },
+  "experiments/data/jev-encoding/evidence/screen-5.log": {
+   "sha256": "50c74670e1f241d8864702fc1f467793cf865de55fb17882f81cc28390a8e043",
+   "bytes": 602
+  },
+  "experiments/data/jev-encoding/evidence/screen-6.jsonl": {
+   "sha256": "8a97f99e6d39a195f1a2ad9cb2fad7a04a1b83fe1a65ba207eec89d89c017cab",
+   "bytes": 138906
+  },
+  "experiments/data/jev-encoding/evidence/screen-6.log": {
+   "sha256": "8a2a01492d5dac32f8eb86c4d116e75fc1b128401f1f2e37207a90fbed601f88",
+   "bytes": 236
+  },
+  "experiments/data/jev-encoding/evidence/screen-7.jsonl": {
+   "sha256": "f6208c226bcdb4e9adc25bd981c0fb656568d2757981b680cee3bb16de6ac63c",
+   "bytes": 284334
+  },
+  "experiments/data/jev-encoding/evidence/screen-7.log": {
+   "sha256": "dc592b06b61ef9e7895e0d1f8f90989892055685c9961b3777a9d0209292def9",
+   "bytes": 417
+  },
+  "experiments/data/jev-encoding/evidence/screen-analysis.txt": {
+   "sha256": "e4a836bbde21d64c1994887d7cb91c33af4c78aea6eac523cacc4b641156a0fa",
+   "bytes": 4044
+  },
+  "experiments/data/jev-encoding/evidence/spend-2.sqlite": {
+   "sha256": "60ff49137f15a77c52d2af19aa91b517dc6cc9871efa11d25a4ae0e87b070597",
+   "bytes": 1662976
+  },
+  "experiments/data/jev-encoding/evidence/spend.sqlite": {
+   "sha256": "3ff2545ac4aaaf750dc77374e1d498faa910a3c2a3bcc4d9a620c31959607ac9",
+   "bytes": 204800
+  },
+  "experiments/data/jev-encoding/haiku-board-legend-h32-retry.tar.gz": {
+   "sha256": "d851368f9d176f9ff61562a53987d08d14e62188a7e3687a5d2d21cd46fabf2d",
+   "bytes": 19079522
+  },
+  "experiments/data/jev-encoding/haiku-board-legend-h32.tar.gz": {
+   "sha256": "9fce3f49da7fed4a45962003623da702776858e64f8505fcc1de8c66b1671100",
+   "bytes": 26818852
+  },
+  "experiments/data/jev-encoding/haiku-labels-h0.tar.gz": {
+   "sha256": "507c39d588ccbe5e8bca5f90a426fc9cb9fa8d0bde5e8912a409513e02674836",
+   "bytes": 53036145
+  },
+  "experiments/data/jev-encoding/haiku-labels-h32.tar.gz": {
+   "sha256": "5e7789b9763447059c5b316acaded3769dd1b6e59fae993434dc8bde4f22b7f0",
+   "bytes": 50894193
+  },
+  "experiments/data/jev-encoding/haiku-player-legend-h32-retry.tar.gz": {
+   "sha256": "1b1a5d8e521226e2d88f2b67e1faf8f691be0aceeeaa2fb4dbe66e6d31dffb4d",
+   "bytes": 10281430
+  },
+  "experiments/data/jev-encoding/haiku-player-legend-h32.tar.gz": {
+   "sha256": "b2f7eff5fd1387abb2f6e68aba601f0a1b7ebe53fbf2c3707b5e89b833ea3b91",
+   "bytes": 40121586
+  },
+  "experiments/data/jev-encoding/haiku-probe.tar.gz": {
+   "sha256": "c05bb998105c6ec04ea879b50c22dc2e3c57ac65e9723253de3894a81a95a298",
+   "bytes": 3218241
+  },
+  "experiments/data/jev-encoding/haiku-systematic-legend-h32-retry.tar.gz": {
+   "sha256": "f99ff811b10180b9e68cc6311a492c3ab2663fd5cab9bb95847bd03a3584b172",
+   "bytes": 5115665
+  },
+  "experiments/data/jev-encoding/haiku-systematic-legend-h32.tar.gz": {
+   "sha256": "ee953c92ae1bbff4e3e0756f4d0ce968febfbc059509beefca3fa4d1bcd99ca8",
+   "bytes": 43861911
+  },
+  "experiments/data/jev-encoding/haiku-trimmed-h32-deep.tar.gz": {
+   "sha256": "a36ebd7e2614132ee0a83995138b3d72d05bd40c0b20b01df664dce0a083dc20",
+   "bytes": 299742244
+  },
+  "experiments/data/jev-encoding/haiku-trimmed-h32.tar.gz": {
+   "sha256": "191f9386a38a0a85168a34d2695c37a58defc0f300b6cdd5ef7b827d645badec",
+   "bytes": 46376537
+  },
+  "experiments/data/jev-encoding/jev-labels-h32.tar.gz": {
+   "sha256": "6682604807c10a59da71d63ec65f1f19c959aac826633f53bbf9dd8806d45d59",
+   "bytes": 162092398
+  },
+  "experiments/data/jev-encoding/jev-systematic-legend-h32.tar.gz": {
+   "sha256": "bbea0b7a73fc24e5f3aa050e67f244246074830146fd453b9d6f7f33806fddbd",
+   "bytes": 133662861
+  },
+  "experiments/data/jev-encoding/summary.json": {
+   "sha256": "a2a5e0c594ad6fc61301e6c5018b7165dc9f089adbf5b4e89c28ef024446ba23",
+   "bytes": 4911
+  },
+  "experiments/data/jev-heuristic/archives/campaign-1.tar.gz": {
+   "sha256": "d641f23cdeb8481fb51b72f1ad13f64c43f51a468b668f54cf6bb8026df02838",
+   "bytes": 61954987
+  },
+  "experiments/data/jev-heuristic/archives/campaign-2.tar.gz": {
+   "sha256": "983828c874cec8eb5a994c32d88b712d21deb8d12cbc9931c37693be23b0ab51",
+   "bytes": 154787790
+  },
+  "experiments/data/jev-heuristic/evidence/billing-bound.json": {
+   "sha256": "038d993add63341afd7f2b343272cd1f36ec771fd81b95f842311e23829fae58",
+   "bytes": 1139
+  },
+  "experiments/data/jev-heuristic/evidence/openrouter-jev-1.14-endpoints-20261029.json": {
+   "sha256": "e95ee387c4bb60e207c04553675cccf44bdacce35d75d3dfbb7de9eefa7f2705",
+   "bytes": 1241
+  },
+  "experiments/data/jev-heuristic/evidence/runtime-package-627698fc1..e1e3adb59.patch": {
+   "sha256": "a671384e50a853802d404c594af69987b566f6bb6c838bb93f75860347cfde86",
+   "bytes": 17741
+  },
+  "experiments/data/jev-heuristic/protocol-2.json": {
+   "sha256": "99791c815b5c049e94456d908784c38b1f322f6f1c38d0abaf57e92de0e4fe50",
+   "bytes": 1923
+  },
+  "experiments/data/jev-heuristic/protocol.json": {
+   "sha256": "3c7d129f9983c761800dde0d27b1c3f713d07469b646266e29162b5df2945a29",
+   "bytes": 1897
+  },
+  "experiments/data/jev-heuristic/report.md": {
+   "sha256": "fa8d73d02edd18aeb3ca4fa698220bbad51ed89637eaa6b48416a5cee48524c0",
+   "bytes": 4075
+  },
+  "experiments/data/jev-heuristic/reports/campaign-1-report.json": {
+   "sha256": "71f0e2105dd9b6e93196ce5a369454228043b38c10d86e132326270568d49ef3",
+   "bytes": 739846
+  },
+  "experiments/data/jev-heuristic/reports/campaign-2-report.json": {
+   "sha256": "99e9e84f937c3010b5578497ae10c88ee25fd1858667c9a6847e7f3b26f328af",
+   "bytes": 1739492
+  },
+  "experiments/data/jev-heuristic/summarize.py": {
+   "sha256": "d0aeba895bb9508e94ffe4ecdb448e24c37e65f8a3c3f548af9b526ac792db77",
+   "bytes": 6317
+  },
+  "experiments/data/jev-heuristic/summary.json": {
+   "sha256": "dbb1bffe1baeebd37e08c8e763a22150b9c136dced75f559fd79d89bdafea125",
+   "bytes": 5733
+  },
   "experiments/data/longer-learning-017/allocation.json": {
    "sha256": "c9ad5f1b53859e3d5389d37de9974f9fdae7abfe3c299eb5b2d0db0b0da740d6",
    "bytes": 5872
@@ -33913,6 +34121,78 @@
   "experiments/data/mtg186/training/run.json": {
    "sha256": "f7388d3acb9e877575facec3cf48548e76f54979e673298e4203efd20fe38dd6",
    "bytes": 17056
+  },
+  "experiments/data/mtg212-jev/REPORT.md": {
+   "sha256": "0d5861786b51cd4188a1e8c4ab786d69256f6d5725cb495af8c2536bf47116c5",
+   "bytes": 5668
+  },
+  "experiments/data/mtg212-jev/campaign-1.tar.gz": {
+   "sha256": "40d9073bf97579a48e6a34ae942b388b72d14765a51d051829e2e82b32b6fc21",
+   "bytes": 18348489
+  },
+  "experiments/data/mtg212-jev/campaign-2.tar.gz": {
+   "sha256": "adf4826c01350f8d07ae67ffdc3a57e2dba166741635f3ef4a3acd35f7a6c68c",
+   "bytes": 3111294
+  },
+  "experiments/data/mtg212-jev/campaign-3.tar.gz": {
+   "sha256": "0f4232f39dedf2469962dea9b991c7d27d19dd6d3afd6988d57ba6c3f29ead83",
+   "bytes": 221509243
+  },
+  "experiments/data/mtg212-jev/evidence/billing-bound.json": {
+   "sha256": "e407a78a37c3548d31635b1688e000b265ccdbdb2c6818fd05b9a365164681a5",
+   "bytes": 1143
+  },
+  "experiments/data/mtg212-jev/evidence/finalize.sh": {
+   "sha256": "5e0db73e05a88c67e11725fbb6b114e087dc02d2fb8839392fc96bfc6b5df7af",
+   "bytes": 682
+  },
+  "experiments/data/mtg212-jev/evidence/freeze.py": {
+   "sha256": "9ab6d9b15a5db24ac5e96fba2bbbaef61c57988ff3fbdda9c22c25242062d087",
+   "bytes": 1743
+  },
+  "experiments/data/mtg212-jev/evidence/openrouter-jev-1.14-endpoints-20261028.json": {
+   "sha256": "e95ee387c4bb60e207c04553675cccf44bdacce35d75d3dfbb7de9eefa7f2705",
+   "bytes": 1241
+  },
+  "experiments/data/mtg212-jev/evidence/probe.py": {
+   "sha256": "e848c04943f02c444396ef3578a9cdd7e21527d1a51574d697083aa77be0cec4",
+   "bytes": 1401
+  },
+  "experiments/data/mtg212-jev/evidence/protocol-v2.json": {
+   "sha256": "c41dc4e40f104878141ec846ba1c400e2329cc87993ea946e9d661cc660eebc6",
+   "bytes": 2090
+  },
+  "experiments/data/mtg212-jev/evidence/protocol-v3.json": {
+   "sha256": "44f997074576ab10bdd6d69943599f15e1f32d39c65bdbf63d42a0655e005ead",
+   "bytes": 2123
+  },
+  "experiments/data/mtg212-jev/evidence/protocol.json": {
+   "sha256": "eec33d3ccaa2f2760810938923d668c55f4cddc44ab82649a01ba524068fc4a6",
+   "bytes": 2064
+  },
+  "experiments/data/mtg212-jev/evidence/report.py": {
+   "sha256": "3785c8bbba830c55a191888363662c26b07f343d2101c5c7cbf795fc83038bcb",
+   "bytes": 13004
+  },
+  "experiments/data/mtg212-jev/evidence/w13-package-d7b98a487..627698fc1.patch": {
+   "sha256": "3b5632785bcaa0fc659df13275da10a3dcc14cc70c7bd1fd85ee89be15c01b22",
+   "bytes": 137352
+  },
+  "experiments/data/mtg212-jev/evidence/w13-package-d7b98a487..d5250d99e.patch": {
+   "sha256": "c7e2477e70268ff0e422ad0eb369704032828c259a7bccd445fd23abbe069add",
+   "bytes": 130988
+  },
+  "experiments/data/mtg212-jev/evidence/w13-package-d7b98a487..fa6a5de68.patch": {
+   "sha256": "df046ef2df1dd1d81eacda2ba60bc770d60bf1e3441f8a3831ed39fc69650523",
+   "bytes": 136057
+  },
+  "experiments/data/mtg212-jev/probe.tar.gz": {
+   "sha256": "02811787a50bf91dfa9dc0a2ab60e15562a33b39e49efc4f4dde70ffe9a79ab5",
+   "bytes": 242301
+  },
+  "experiments/data/mtg212-jev/summary.json": {
+   "sha256": "0c21f7a8cea227700c43503be6a1a78f1e3c361a7ff20cdb64c702d1c824a15f",
+   "bytes": 3151
   },
   "experiments/data/opcode-alignment-v1.json": {
    "sha256": "f645e2b876253be1357794bef82fd827f0089cdeb7170c7c376ffb43eeb64a5c",

@@ -189,7 +189,10 @@ def _game_mode(
 ) -> str:
     if session is None:
         return "random-v-checkpoint-control" if checkpoint else "random-control"
-    model = "openrouter" if session.identity.runtime == "openrouter-chat-v1" else "qwen"
+    model = {
+        "openrouter-chat-v1": "openrouter",
+        "openrouter-decisions-v1": "openrouter-decisions",
+    }.get(session.identity.runtime, "qwen")
     return f"{model}-v-{'checkpoint' if checkpoint else 'random'}"
 
 
@@ -238,22 +241,28 @@ def _record_hosted_usage(summary: GameSummary, result: "OpenRouterResult") -> No
     never implies that a request without usage was free.
     """
     for attempt in result.attempts:
-        usage = attempt.completion.usage if attempt.completion else None
+        if not attempt.dispatched:
+            continue
+        usage = attempt.usage
         if usage is None or usage.cost is None:
             summary.unpriced_attempts += 1
         if usage is None:
             continue
-        summary.prompt_tokens += usage.prompt_tokens
-        summary.completion_tokens += usage.completion_tokens
+        # Both transports retain these counters alongside their native usage.
+        summary.prompt_tokens += attempt.prompt_tokens or 0
+        summary.completion_tokens += attempt.output_tokens or 0
         summary.reported_cost_usd += usage.cost or 0
-        if usage.prompt_tokens_details:
-            summary.cached_tokens += usage.prompt_tokens_details.cached_tokens or 0
+        chat_usage = attempt.completion.usage if attempt.completion else None
+        if chat_usage is None:
+            continue
+        if chat_usage.prompt_tokens_details:
+            summary.cached_tokens += chat_usage.prompt_tokens_details.cached_tokens or 0
             summary.cache_write_tokens += (
-                usage.prompt_tokens_details.cache_write_tokens or 0
+                chat_usage.prompt_tokens_details.cache_write_tokens or 0
             )
-        if usage.completion_tokens_details:
+        if chat_usage.completion_tokens_details:
             summary.reasoning_tokens += (
-                usage.completion_tokens_details.reasoning_tokens or 0
+                chat_usage.completion_tokens_details.reasoning_tokens or 0
             )
 
 
@@ -355,6 +364,9 @@ def play(
                 supplied = DecisionInput(
                     text=decision.text,
                     legal_references=tuple(a.reference for a in decision.actions),
+                    action_descriptions={
+                        a.reference: a.description for a in decision.actions
+                    },
                     representation_id=decision.representation_version,
                     source_identity={"capture_digest": decision.capture_digest},
                 )

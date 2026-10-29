@@ -119,8 +119,8 @@ test('stops cut the inputs needed to finish a game, log keeps narrating', async 
 
   // The hero holds instants (INTERACTIVE_DECK), so the baseline surfaces
   // priority at every step of both turns; main-phase stops must remove the
-  // bulk of them. The deal is fixed, though forced-action automation can
-  // change the random opponent's sampling sequence.
+  // bulk of them. The deal is fixed, though priority automation can change
+  // the random opponent's sampling sequence.
   console.log(
     `inputs to finish, same seed: baseline=${baselineInputs} stops=${stopsInputs}`,
   );

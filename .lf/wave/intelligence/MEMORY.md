@@ -1,13 +1,42 @@
 # intelligence wave memory
 
+## Hosted decision comparisons (MTG-212, 2026-10-28)
+
+Jack Heart authorized up to $10 inclusive for Jev against MTG-183's best-rated
+checkpoint, with a pilot and a smaller sample if about 1,000 games will not fit.
+The known final u5950 checkpoint is not evidence of the best rating. Missing
+combined ratings leave selection unresolved; ambiguous rankings require Jack's
+judgment. w13 checkpoint identity requires historical execution, not w14 admission
+exceptions. No Jev implementation or paid game is established by this reconciliation.
+
+Hosted model identity does not establish protocol compatibility: Jev's typed
+Decisions interface differs from the existing OpenRouter chat transport and usage
+envelope. Transport, runtime labels and accounting must agree while old evidence
+stays readable. A reported-spend stop is not a billing cap; durable reservations
+need justified charge bounds and survive missing usage and interruptions. Pilot
+costs and infrastructure consume the same campaign allowance.
+
+The Haiku pilot changed both objective and reasoning before scoring, so it cannot
+isolate either effect. Declare the winning objective, full choice treatment and
+pilot inclusion before a strength comparison. Qwen's retry and reasoning decisions
+belong to its own campaign; reuse its evidence structure without inheriting that
+authority. Complete replay-verified outcomes, failed attempts and unattempted
+schedule entries remain distinct populations.
+
 ## Inference evidence and reuse (MTG-188, 2026-10-26)
 
 Jack Heart accepted the comparable inference-receipts design on 2026-10-26
 with “seems fine, pursue.” Startup, complete decisions, native/evidence work,
 memory and inclusive cost remain separate boundaries; a slower GPU is a valid
 result. Historical projection does not satisfy empirical CPU/GPU or single/
-many-game acceptance, and neither establishes playing strength. No new paid
-execution or inherited MTG-185 spending allowance was accepted.
+many-game acceptance, and neither establishes playing strength. That design did
+not authorize paid execution or inherit MTG-185's allowance. Jack Heart later
+authorized the separate $10 Qwen-versus-MTG-183 campaign and its cumulative-budget
+retries; `experiments/protocols/qwen-mtg183-188.md` owns those dated decisions.
+Its 2,048-token treatment completed 18 replay-verified games with zero Qwen wins
+and 519 fallback selections; it does not establish unrestricted Qwen strength.
+The later 16k allowance is a separate treatment, not a reinterpretation of those
+results or permission to spend on unrelated work.
 
 Related accepted direction is retained at
 `50184b6f937588c29d661f6d07f0f780282df939:docs/resin-assessment.md` and that

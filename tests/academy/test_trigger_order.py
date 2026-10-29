@@ -235,19 +235,21 @@ def test_survival_orders_cross_consumers(
         for entry in env.observation_for_player(0).stack_objects
         if entry.description is not None
     }
-    assert stack_descriptions == {
+    # Native skipping may already have resolved what no player could answer.
+    assert stack_descriptions <= {
         label.removeprefix("Put on stack next — ").split(" — event:")[0]
         for label in labels
     }
-    stack_text = capture_text_decision(env)
-    assert stack_text is not None
-    assert all(description in stack_text.text for description in stack_descriptions)
+    if not env.is_game_over():
+        stack_text = capture_text_decision(env)
+        assert stack_text is not None
+        assert all(description in stack_text.text for description in stack_descriptions)
     digest = session.env.state_digest()
     assert session.hero_command(human)["status"] == "duplicate"
     assert session.env.state_digest() == digest
     assert branch.state_digest() == pending_digest
     assert branch.semantic_decision_frame_json() == pending_frame
-    with pytest.raises(Exception, match="stale"):
+    with pytest.raises(Exception, match="stale|match is over"):
         env.execute_semantic_command_json(command)
 
     # Only pass priority until the two trigger resolutions establish the outcome.
