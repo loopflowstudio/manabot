@@ -30,6 +30,44 @@ pub struct ExileCastGrant {
     /// "this turn": the grant ends in the cleanup step.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub this_turn: bool,
+    /// The grant lasts while `player` controls this battlefield object
+    /// ("for as long as you control Hama", "cards exiled with Azula").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source: Option<ObjectRef>,
+    /// Usable only during `player`'s turn.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub own_turn_only: bool,
+    /// The cost's generic may be paid by waterbending.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub waterbend: bool,
+    /// Castable as though it had flash.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub flash: bool,
+    /// Mana of any type can be spent: colored pips may be paid by any mana.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub any_mana: bool,
+    /// Usable only on a turn after this one ("cast it on a later turn").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub after_turn: Option<u32>,
+}
+
+impl ExileCastGrant {
+    /// A grant with no further terms: cast for the card's mana cost, any time
+    /// its timing allows.
+    pub fn new(object: ObjectRef, player: PlayerId) -> Self {
+        Self {
+            object,
+            player,
+            cost: None,
+            this_turn: false,
+            source: None,
+            own_turn_only: false,
+            waterbend: false,
+            flash: false,
+            any_mana: false,
+            after_turn: None,
+        }
+    }
 }
 
 /// `player` casts spells only from hand until `until_turn_of` begins a turn.
@@ -93,14 +131,15 @@ impl Game {
         let Some(object) = self.current_object_ref(card) else {
             return;
         };
-        self.edit_cast_permissions(|permissions| {
-            permissions.exile_grants.push(ExileCastGrant {
-                object,
-                player,
-                cost,
-                this_turn,
-            })
+        self.add_exile_grant(ExileCastGrant {
+            cost,
+            this_turn,
+            ..ExileCastGrant::new(object, player)
         });
+    }
+
+    pub(crate) fn add_exile_grant(&mut self, grant: ExileCastGrant) {
+        self.edit_cast_permissions(|permissions| permissions.exile_grants.push(grant));
     }
 
     /// "This turn" grants end in the cleanup step (CR 514.2).
@@ -149,9 +188,16 @@ impl Game {
             .any(|restriction| restriction.player == player)
     }
 
-    /// The live grant letting `player` play this exact exiled card.
-    fn exile_grant(&self, player: PlayerId, card: CardId) -> Option<&ExileCastGrant> {
+    /// The live grant letting `player` play this exact exiled card now.
+    /// Another player's permanent card is never granted: a permanent spell
+    /// enters under its owner's control here, so control-changing casts
+    /// are unsupported.
+    pub(crate) fn exile_grant(&self, player: PlayerId, card: CardId) -> Option<&ExileCastGrant> {
         if self.state.zones.zone_of(card) != Some(ZoneType::Exile) {
+            return None;
+        }
+        let definition = &self.state.cards[card];
+        if definition.owner != player && definition.types.is_permanent() {
             return None;
         }
         let object = self.current_object_ref(card)?;
@@ -159,7 +205,21 @@ impl Game {
             .cast_permissions
             .exile_grants
             .iter()
-            .find(|grant| grant.object == object && grant.player == player)
+            .find(|grant| {
+                grant.object == object
+                    && grant.player == player
+                    && (!grant.own_turn_only || self.active_player() == player)
+                    && grant
+                        .after_turn
+                        .is_none_or(|turn| self.state.turn.turn_number > turn)
+                    && grant.source.is_none_or(|source| {
+                        self.lookup_current_permanent(source).is_ok_and(|id| {
+                            self.state.permanents[id]
+                                .as_ref()
+                                .is_some_and(|permanent| permanent.controller == player)
+                        })
+                    })
+            })
     }
 
     /// The cost `player` may pay to cast `card` from exile. Hand-only
@@ -169,10 +229,16 @@ impl Game {
             return None;
         }
         let grant = self.exile_grant(player, card)?;
-        grant
+        let cost = grant
             .cost
             .clone()
-            .or_else(|| self.state.cards[card].mana_cost.clone())
+            .or_else(|| self.state.cards[card].mana_cost.clone())?;
+        // Any type of mana pays every pip, as generic (CR 609.4b-style).
+        Some(if grant.any_mana {
+            ManaCost::default().with_generic(cost.mana_value)
+        } else {
+            cost
+        })
     }
 
     /// Whether `player` may play `card` from where it is now: their hand,

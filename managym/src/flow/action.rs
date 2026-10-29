@@ -396,7 +396,7 @@ impl Game {
                             self.can_pay_with_mana_abilities(player, &cost.plus(extra), None)
                         })
                 } else {
-                    self.can_pay_with_mana_abilities(player, &cost, None)
+                    self.can_pay_cast(player, card_id, cast)
                 };
                 payable
             }

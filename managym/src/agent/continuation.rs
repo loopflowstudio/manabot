@@ -494,6 +494,7 @@ impl Game {
                 Decision::OpponentSplitsRevealed { .. } => (15, None),
                 Decision::DiscardFromRevealedHand { .. } => (16, None),
                 Decision::CastWithoutPaying { .. } => (17, None),
+                Decision::ExileLinked { .. } => (18, None),
             };
             frame.decision = kind;
             frames.push(frame);

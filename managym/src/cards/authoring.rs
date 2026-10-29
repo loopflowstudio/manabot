@@ -352,6 +352,19 @@ pub enum Op {
     OpponentsCastOnlyFromHand,
     /// "Exile the top card of your library. You may play that card this turn."
     ExileTopCardPlayThisTurn,
+    /// "A player exiles a matching card; its controller may cast it as linked."
+    ExileLinked {
+        /// `you`, or `target` (the target player chooses).
+        chooser: &'static str,
+        /// `waterbend_mana_value` (Hama) or `flash_any_mana` (Azula).
+        grant: &'static str,
+        predicate: Predicate,
+        target: &'static str,
+        up_to: bool,
+        /// The target player's `battlefield` (nontoken permanents) or
+        /// `graveyard`.
+        zone: &'static str,
+    },
     /// "Exile cards from the top of your library until you exile a nonland card; you may cast it without paying its mana cost if its mana value is less than the value, otherwise put it into your hand."
     ExileUntilNonlandCastFree {
         below: Quantity,
@@ -478,8 +491,11 @@ pub enum Op {
     CounterSpell {
         target: &'static str,
     },
+    /// Mill `count`; with `target`, that player mills instead of you.
     MillCards {
         count: i32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        target: Option<&'static str>,
     },
     CombatRequiresOther {
         predicate: Predicate,

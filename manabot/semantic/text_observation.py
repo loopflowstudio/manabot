@@ -106,6 +106,7 @@ _STAGES = frozenset(
         "revealed_hand",
         "split_revealed",
         "free_cast",
+        "linked_exile",
     )
 )
 

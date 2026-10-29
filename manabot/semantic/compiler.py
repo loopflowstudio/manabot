@@ -113,6 +113,7 @@ class Opcode(IntEnum):
     NO_MAXIMUM_HAND_SIZE = 75
     CAST_FROM_HAND_FREE = 76
     EXILE_UNTIL_NONLAND_CAST_FREE = 77
+    EXILE_LINKED = 78
 
 
 PROGRAM_KINDS = {kind.name.lower(): kind for kind in ProgramKind}
@@ -254,6 +255,7 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "airbend_all": ({"except", "predicate"}, set()),
     "opponents_cast_only_from_hand": (set(), set()),
     "exile_top_card_play_this_turn": (set(), set()),
+    "exile_linked": ({"chooser", "grant", "predicate", "target", "up_to", "zone"}, set()),
     "exile_until_nonland_cast_free": ({"below"}, set()),
     "cast_from_hand_free": ({"predicate"}, set()),
     "no_maximum_hand_size": (set(), set()),
@@ -270,7 +272,7 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "create_tokens_value": ({"definition_ref", "count"}, set()),
     "exile_with_controller_token": ({"target", "definition_ref"}, set()),
     "damage_opponent_creatures": ({"amount"}, set()),
-    "mill_cards": ({"count"}, set()),
+    "mill_cards": ({"count"}, {"target"}),
     "mill_and_select": ({"count", "predicate", "if_declined"}, {"milled_any", "then"}),
     "drain_life_value": ({"amount"}, set()),
     "counter_spell": ({"target"}, set()),

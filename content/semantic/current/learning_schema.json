@@ -364,6 +364,7 @@
     "exile": 28,
     "exile_if_dies": 63,
     "exile_top_card_play_this_turn": 69,
+    "exile_linked": 78,
     "exile_until_nonland_cast_free": 77,
     "cast_from_hand_free": 76,
     "no_maximum_hand_size": 75,

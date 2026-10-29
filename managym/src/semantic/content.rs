@@ -12,8 +12,8 @@ use crate::{
     cards::content_pack::{CompiledSemanticManifest, ContentPack},
     state::{
         ability::{
-            Ability, Effect, EffectValue, MilledBonus, StaticCondition, TargetRequirement,
-            TargetSpec, TriggerCondition, TriggerSubject,
+            Ability, Effect, EffectValue, LinkedChooser, LinkedGrant, MilledBonus, StaticCondition,
+            TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
         },
         card::{
             ActivatedAbilityDefinition, ActivationZone, CardDefinition, CardType, CardTypes,
@@ -23,6 +23,7 @@ use crate::{
         mana::{Color, Colors, Mana, ManaCost},
         player::PlayerConfig,
         predicate::CardPredicate,
+        zone::ZoneType,
     },
 };
 
@@ -1134,6 +1135,33 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         }
         Step::OpponentsCastOnlyFromHand => Effect::OpponentsCastOnlyFromHand,
         Step::ExileTopCardPlayThisTurn => Effect::ExileTopCardPlayThisTurn,
+        Step::ExileLinked {
+            chooser,
+            grant,
+            predicate,
+            target,
+            up_to,
+            zone,
+        } => Effect::ExileLinked {
+            chooser: match chooser.as_str() {
+                "you" => LinkedChooser::Controller,
+                "target" => LinkedChooser::TargetPlayer,
+                other => return unsupported(program, &format!("exile chooser {other:?}")),
+            },
+            zone: match zone.as_str() {
+                "battlefield" => ZoneType::Battlefield,
+                "graveyard" => ZoneType::Graveyard,
+                other => return unsupported(program, &format!("exile zone {other:?}")),
+            },
+            predicate: predicate_card(predicate)?,
+            up_to: *up_to,
+            grant: match grant.as_str() {
+                "waterbend_mana_value" => LinkedGrant::WaterbendManaValue,
+                "flash_any_mana" => LinkedGrant::FlashAnyMana,
+                other => return unsupported(program, &format!("exile grant {other:?}")),
+            },
+            target: target_for(program, target)?,
+        },
         Step::ExileUntilNonlandCastFree { below } => Effect::ExileUntilNonlandCastFree {
             below: below.lower()?,
         },
@@ -1214,7 +1242,13 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         Step::DamageOpponentCreatures { amount } => {
             Effect::DamageOpponentCreatures { amount: *amount }
         }
-        Step::MillCards { count } => Effect::MillCards { count: *count },
+        Step::MillCards { count, target } => Effect::MillCards {
+            count: *count,
+            target: target
+                .as_deref()
+                .map(|target| target_for(program, target))
+                .transpose()?,
+        },
         Step::MillAndSelect {
             count,
             predicate,

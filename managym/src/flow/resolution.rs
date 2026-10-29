@@ -14,7 +14,9 @@ use crate::{
         trigger::{DelayedTrigger, DelayedTriggerKind, ExileLink},
     },
     state::{
-        ability::{Ability, Effect, EffectValue, PaymentCost, TargetRequirement, TargetSpec},
+        ability::{
+            Ability, Effect, EffectValue, LinkedChooser, PaymentCost, TargetRequirement, TargetSpec,
+        },
         game_object::{CardId, PermanentId, PlayerId, Target},
         permanent::Permanent,
         stack_object::{
@@ -329,8 +331,15 @@ impl Game {
                 }
                 None
             }
-            Effect::MillCards { count } => {
-                for card in self.library_top(frame.controller, *count) {
+            Effect::MillCards { count, target } => {
+                let player = match target {
+                    Some(_) => match self.present_primary_target(frame) {
+                        Some(Target::Player(player)) => player,
+                        _ => return None,
+                    },
+                    None => frame.controller,
+                };
+                for card in self.library_top(player, *count) {
                     self.move_card(card, ZoneType::Graveyard);
                 }
                 None
@@ -483,6 +492,32 @@ impl Game {
             Effect::OpponentsCastOnlyFromHand => {
                 self.restrict_opponent_to_hand(frame.controller);
                 None
+            }
+            Effect::ExileLinked {
+                chooser,
+                zone,
+                predicate,
+                up_to,
+                grant,
+                ..
+            } => {
+                let Some(Target::Player(owner)) = self.present_primary_target(frame) else {
+                    return None;
+                };
+                let decision = Decision::ExileLinked {
+                    player: match chooser {
+                        LinkedChooser::Controller => frame.controller,
+                        LinkedChooser::TargetPlayer => owner,
+                    },
+                    owner,
+                    zone: *zone,
+                    predicate: predicate.clone(),
+                    up_to: *up_to,
+                    grant: *grant,
+                    grantee: frame.controller,
+                    source: frame.source_ref,
+                };
+                (!self.linked_exile_candidates(&decision).is_empty()).then_some(decision)
             }
             Effect::CastFromHandFree { predicate } => {
                 let decision = Decision::CastWithoutPaying {

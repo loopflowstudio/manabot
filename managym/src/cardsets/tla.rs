@@ -11,9 +11,11 @@ use crate::cards::authoring::{
 /// batch completes the missing behavior.
 pub(super) const INCOMPLETE: &[Incomplete] = &[
     ("tla.accumulate_wisdom", "Controller must order the library remainder (CR 401.4); it is randomized"),
+    ("tla.azula_cunning_usurper", "An exiled opponent-owned permanent card can't be cast: permanent spells enter under their owner's control (no control change, CR 110.2)"),
     ("tla.cat_gator", "Any target must include planeswalkers and battles (CR 115.4)"),
     ("tla.dragonfly_swarm", "Unreviewed until T4: Flying; spell-and-ability ward; graveyard CDA power; conditional death draw."),
     ("tla.great_divide_guide", "Unreviewed until T3: Continuous any-color mana grant to lands and Allies; source removal and creature sickness."),
+    ("tla.hama_the_bloodbender", "An exiled opponent-owned permanent card can't be cast: permanent spells enter under their owner's control (no control change, CR 110.2)"),
     ("tla.lightning_strike", "Any target must include planeswalkers and battles (CR 115.4)"),
     ("tla.ran_and_shaw", "Unreviewed until T5: Flying/firebending; cast-only conditional ETB nonlegendary self copy; Dragon anthem activation."),
     ("tla.suki_kyoshi_warrior", "CDA power must apply outside the battlefield (CR 604.3)"),
@@ -168,6 +170,8 @@ pub(super) fn cards() -> Vec<Card> {
         spirit_water_revival(),
         yue_the_moon_spirit(),
         solstice_revelations(),
+        hama_the_bloodbender(),
+        azula_cunning_usurper(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -1230,7 +1234,10 @@ fn sokka_s_haiku() -> Card {
                     role: "target_0",
                 },
                 Op::DrawCards { count: 1 },
-                Op::MillCards { count: 3 },
+                Op::MillCards {
+                    count: 3,
+                    target: None,
+                },
                 Op::TargetClause {
                     body: vec![Op::Untap { target: "target_1" }],
                     role: "target_1",
@@ -5364,6 +5371,97 @@ fn solstice_revelations() -> Card {
             ..Default::default()
         })],
         registry_name: "Solstice Revelations",
+        text_box,
+    }
+}
+
+fn hama_the_bloodbender() -> Card {
+    let text_box = "When Hama enters, target opponent mills three cards. Exile up to one noncreature, nonland card from that player's graveyard. For as long as you control Hama, you may cast the exiled card during your turn by waterbending {X} rather than paying its mana cost, where X is its mana value. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{U/B}{U/B}{U/B}"),
+            subtypes: Some(vec!["Human", "Warlock"]),
+            supertypes: Some(vec!["Legendary"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(3)),
+            toughness: Some(3),
+            ..Default::default()
+        },
+        key: "tla.hama_the_bloodbender",
+        programs: vec![Program::new(
+            "trigger_0",
+            ProgramKind::Triggered,
+            vec![
+                Op::MillCards {
+                    count: 3,
+                    target: Some("opponent"),
+                },
+                Op::ExileLinked {
+                    chooser: "you",
+                    grant: "waterbend_mana_value",
+                    predicate: Predicate::NotCardTypes {
+                        values: vec![CardType::Creature, CardType::Land],
+                    },
+                    target: "opponent",
+                    up_to: true,
+                    zone: "graveyard",
+                },
+            ],
+        )
+        .targets(vec![Target::one("opponent", Selector::Opponent)])
+        .trigger(Trigger::new(Event::EntersBattlefield, Subject::This))],
+        registry_name: "Hama, the Bloodbender",
+        text_box,
+    }
+}
+
+fn azula_cunning_usurper() -> Card {
+    let text_box = "Firebending 2 (Whenever this creature attacks, add {R}{R}. This mana lasts until end of combat.)\nWhen Azula enters, target opponent exiles a nontoken creature they control, then they exile a nonland card from their graveyard.\nDuring your turn, you may cast cards exiled with Azula and you may cast them as though they had flash. Mana of any type can be spent to cast those spells.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{U}{B}{B}"),
+            subtypes: Some(vec!["Human", "Noble", "Rogue"]),
+            supertypes: Some(vec!["Legendary"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(4)),
+            toughness: Some(4),
+            ..Default::default()
+        },
+        key: "tla.azula_cunning_usurper",
+        programs: vec![
+            Program::firebending("p0", "RR"),
+            Program::new(
+                "trigger_1",
+                ProgramKind::Triggered,
+                vec![
+                    Op::ExileLinked {
+                        chooser: "target",
+                        grant: "flash_any_mana",
+                        predicate: Predicate::CardType {
+                            value: CardType::Creature,
+                        },
+                        target: "opponent",
+                        up_to: false,
+                        zone: "battlefield",
+                    },
+                    Op::ExileLinked {
+                        chooser: "target",
+                        grant: "flash_any_mana",
+                        predicate: Predicate::NotCardTypes {
+                            values: vec![CardType::Land],
+                        },
+                        target: "opponent",
+                        up_to: false,
+                        zone: "graveyard",
+                    },
+                ],
+            )
+            .targets(vec![Target::one("opponent", Selector::Opponent)])
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+        ],
+        registry_name: "Azula, Cunning Usurper",
         text_box,
     }
 }

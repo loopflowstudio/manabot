@@ -10,10 +10,11 @@ use rand::seq::SliceRandom;
 
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
-    flow::{event::GameEvent, game::Game},
+    flow::{cast_permission::ExileCastGrant, event::GameEvent, game::Game},
     state::{
-        ability::{Effect, PaymentCost},
+        ability::{Effect, LinkedGrant, PaymentCost},
         game_object::{CardId, ObjectRef, PlayerId, Target},
+        mana::ManaCost,
         predicate::CardPredicate,
         zone::ZoneType,
     },
@@ -246,6 +247,20 @@ pub enum Decision {
         player: PlayerId,
         offer: FreeCastOffer,
     },
+    /// `player` exiles a matching card from `owner`'s graveyard or a
+    /// nontoken permanent `owner` controls (or declines, when `up_to`);
+    /// `grantee` may then cast it as `grant` allows while controlling
+    /// `source`.
+    ExileLinked {
+        player: PlayerId,
+        owner: PlayerId,
+        zone: ZoneType,
+        predicate: CardPredicate,
+        up_to: bool,
+        grant: LinkedGrant,
+        grantee: PlayerId,
+        source: Option<ObjectRef>,
+    },
     /// "Choose one —".
     Modal {
         player: PlayerId,
@@ -290,6 +305,7 @@ impl Decision {
             | Decision::SearchDistinctLands { player, .. }
             | Decision::DiscardFromRevealedHand { player, .. }
             | Decision::CastWithoutPaying { player, .. }
+            | Decision::ExileLinked { player, .. }
             | Decision::OpponentSplitsRevealed { player, .. }
             | Decision::OptionalDiscardDraw { player, .. }
             | Decision::Scry { player, .. }
@@ -318,6 +334,7 @@ impl Decision {
             | Decision::SearchBasicLand { .. }
             | Decision::DiscardFromRevealedHand { .. }
             | Decision::CastWithoutPaying { .. }
+            | Decision::ExileLinked { .. }
             | Decision::OptionalDiscardDraw { .. }
             | Decision::Modal { .. }
             | Decision::Learn { .. }
@@ -509,6 +526,28 @@ impl Game {
                     .collect(),
                 focus: source_focus,
             },
+            Decision::ExileLinked { player, up_to, .. } => {
+                let cards = self.linked_exile_candidates(&suspended.decision);
+                let mut actions: Vec<Action> = cards
+                    .iter()
+                    .map(|card| Action::SelectCard {
+                        player: *player,
+                        card: *card,
+                    })
+                    .collect();
+                if *up_to {
+                    actions.push(Action::Decline { player: *player });
+                }
+                ActionSpace {
+                    player: Some(*player),
+                    kind: ActionSpaceKind::LookAndSelect,
+                    focus: cards
+                        .iter()
+                        .map(|card| self.state.cards[*card].id)
+                        .collect(),
+                    actions,
+                }
+            }
             Decision::CastWithoutPaying { player, .. } => {
                 let cards = self.free_cast_candidates(&suspended.decision);
                 ActionSpace {
@@ -1098,6 +1137,51 @@ impl Game {
                 );
                 self.begin_free_cast(player, card)
             }
+            (Decision::ExileLinked { .. }, Action::SelectCard { card, .. }) => {
+                let decision = suspended.decision.clone();
+                let Decision::ExileLinked {
+                    grant,
+                    grantee,
+                    source,
+                    ..
+                } = decision
+                else {
+                    unreachable!("matched ExileLinked");
+                };
+                if !self.linked_exile_candidates(&decision).contains(card) {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("not an offered card to exile".into()));
+                }
+                self.move_card(*card, ZoneType::Exile);
+                if let (Some(source), Some(object)) = (source, self.current_object_ref(*card)) {
+                    if self.state.zones.zone_of(*card) == Some(ZoneType::Exile) {
+                        let base = ExileCastGrant {
+                            source: Some(source),
+                            own_turn_only: true,
+                            ..ExileCastGrant::new(object, grantee)
+                        };
+                        let mana_value = self.card_mana_value(*card);
+                        self.add_exile_grant(match grant {
+                            LinkedGrant::WaterbendManaValue => ExileCastGrant {
+                                cost: Some(ManaCost::default().with_generic(mana_value)),
+                                waterbend: true,
+                                ..base
+                            },
+                            LinkedGrant::FlashAnyMana => ExileCastGrant {
+                                flash: true,
+                                any_mana: true,
+                                ..base
+                            },
+                        });
+                    }
+                }
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (Decision::ExileLinked { up_to: true, .. }, Action::Decline { .. }) => {
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
             (Decision::CastWithoutPaying { player, offer }, Action::Decline { .. }) => {
                 if let FreeCastOffer::Exiled { card } = offer {
                     self.reveal_card_to_hand(*card, *player);
@@ -1252,6 +1336,37 @@ impl Game {
             .take(count)
             .copied()
             .collect()
+    }
+
+    /// The cards an `ExileLinked` decision may exile: matching graveyard
+    /// cards, or the cards of matching nontoken permanents `owner` controls.
+    pub(crate) fn linked_exile_candidates(&self, decision: &Decision) -> Vec<CardId> {
+        let Decision::ExileLinked {
+            owner,
+            zone,
+            predicate,
+            ..
+        } = decision
+        else {
+            return Vec::new();
+        };
+        match zone {
+            ZoneType::Battlefield => self
+                .battlefield_permanents(*owner)
+                .into_iter()
+                .filter(|id| self.permanent_matches_predicate(*id, predicate))
+                .filter_map(|id| self.state.permanents[id].as_ref().map(|p| p.card))
+                .filter(|card| !self.state.cards[*card].is_token)
+                .collect(),
+            _ => self
+                .state
+                .zones
+                .zone_cards(ZoneType::Graveyard, *owner)
+                .iter()
+                .copied()
+                .filter(|card| predicate.matches_card(&self.state.cards[*card]))
+                .collect(),
+        }
     }
 
     /// The cards a `CastWithoutPaying` decision offers: hand spells matching

@@ -1,6 +1,7 @@
 use super::card::Keywords;
 use super::mana::{Mana, ManaCost};
 use super::predicate::CardPredicate;
+use super::zone::ZoneType;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Ability {
@@ -154,6 +155,25 @@ impl PaymentCost {
     }
 }
 
+/// Who chooses the card an `ExileLinked` effect exiles.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum LinkedChooser {
+    Controller,
+    TargetPlayer,
+}
+
+/// How the effect's controller may cast a card it exiled, during their turn
+/// and while they control its source.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum LinkedGrant {
+    /// "by waterbending {X} rather than paying its mana cost, where X is its
+    /// mana value" (Hama, the Bloodbender).
+    WaterbendManaValue,
+    /// "as though they had flash. Mana of any type can be spent" (Azula,
+    /// Cunning Usurper).
+    FlashAnyMana,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Effect {
     /// Copy the source's copiable characteristics, removing legendary.
@@ -188,6 +208,8 @@ pub enum Effect {
     },
     MillCards {
         count: usize,
+        /// The target player mills instead of the controller.
+        target: Option<TargetSpec>,
     },
     MillAndSelect {
         count: usize,
@@ -256,6 +278,15 @@ pub enum Effect {
     OpponentsCastOnlyFromHand,
     /// "Exile the top card of your library. You may play that card this turn."
     ExileTopCardPlayThisTurn,
+    /// A player exiles a matching card; its controller may cast it as linked.
+    ExileLinked {
+        chooser: LinkedChooser,
+        zone: ZoneType,
+        predicate: CardPredicate,
+        up_to: bool,
+        grant: LinkedGrant,
+        target: TargetSpec,
+    },
     /// Exile cards from the top of your library until you exile a nonland card; you may cast it without paying its mana cost if its mana value is less than the value, otherwise put it into your hand.
     ExileUntilNonlandCastFree {
         below: EffectValue,
@@ -642,8 +673,9 @@ impl Effect {
             | Effect::DealDamageToController { .. }
             | Effect::DrainLife { .. } => None,
             Effect::TargetClause { requirement, .. } => Some(&requirement.spec),
+            Effect::MillCards { target, .. } => target.as_ref(),
+            Effect::ExileLinked { target, .. } => Some(target),
             Effect::SelectTargetRequirement { .. }
-            | Effect::MillCards { .. }
             | Effect::MillAndSelect { .. }
             | Effect::DrainLifeValue { .. } => None,
             Effect::CantBeBlockedTarget { target }

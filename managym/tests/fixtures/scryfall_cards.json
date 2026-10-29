@@ -2508,5 +2508,36 @@
     "colors": [
       "R"
     ]
+  },
+  "Hama, the Bloodbender": {
+    "name": "Hama, the Bloodbender",
+    "mana_cost": "{2}{U/B}{U/B}{U/B}",
+    "type_line": "Legendary Creature — Human Warlock",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Mill",
+      "Waterbend"
+    ],
+    "oracle_text": "When Hama enters, target opponent mills three cards. Exile up to one noncreature, nonland card from that player's graveyard. For as long as you control Hama, you may cast the exiled card during your turn by waterbending {X} rather than paying its mana cost, where X is its mana value. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+    "colors": [
+      "B",
+      "U"
+    ]
+  },
+  "Azula, Cunning Usurper": {
+    "name": "Azula, Cunning Usurper",
+    "mana_cost": "{2}{U}{B}{B}",
+    "type_line": "Legendary Creature — Human Noble Rogue",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Firebending"
+    ],
+    "oracle_text": "Firebending 2 (Whenever this creature attacks, add {R}{R}. This mana lasts until end of combat.)\nWhen Azula enters, target opponent exiles a nontoken creature they control, then they exile a nonland card from their graveyard.\nDuring your turn, you may cast cards exiled with Azula and you may cast them as though they had flash. Mana of any type can be spent to cast those spells.",
+    "colors": [
+      "B",
+      "U"
+    ]
   }
 }

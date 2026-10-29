@@ -1942,10 +1942,7 @@ fn yue_casts_a_noncreature_spell_from_hand_for_free() {
 #[test]
 fn solstice_revelations_casts_cheap_spells_free_and_keeps_the_rest() {
     let mut s = setup(&["Solstice Revelations", "Lightning Strike"]);
-    let on_top = |s: &mut Scenario, card: CardId| {
-        s.game_mut().move_card(card, ZoneType::Hand);
-        s.game_mut().move_card(card, ZoneType::Library);
-    };
+    let on_top = put_on_top;
     let strike = library_card(&s, 0, "Lightning Strike");
     on_top(&mut s, strike);
     let land = library_card(&s, 0, "Plains");
@@ -1995,4 +1992,111 @@ fn solstice_revelations_casts_cheap_spells_free_and_keeps_the_rest() {
         s.game().state.zones.zone_of(solstice),
         Some(ZoneType::Exile)
     );
+}
+
+/// Pass priority, targeting the opponent when a trigger asks, until the
+/// action space is `kind`.
+fn advance_targeting_opponent(s: &mut Scenario, kind: ActionSpaceKind) {
+    for _ in 0..10 {
+        match s.action_space().kind {
+            current if current == kind => return,
+            ActionSpaceKind::ChooseTarget => {
+                assert!(s.choose_target(Target::Player(PlayerId(1))));
+            }
+            _ => s.pass_priority(),
+        }
+    }
+    assert_eq!(s.action_space().kind, kind);
+}
+
+/// Hama mills the opponent three, exiles a noncreature nonland card from
+/// their graveyard, and lets you cast it on your turn by waterbending its
+/// mana value.
+#[test]
+fn hama_exiles_a_milled_spell_and_casts_it_by_waterbending() {
+    let mut s = setup(&["Hama, the Bloodbender", "Lightning Strike", "Gray Ogre"]);
+    let strike = library_card(&s, 1, "Lightning Strike");
+    put_on_top(&mut s, strike);
+    let helpers: Vec<PermanentId> = (0..2)
+        .map(|_| s.force_permanent_on_battlefield(0, "Gray Ogre"))
+        .collect();
+    cast(&mut s, "Hama, the Bloodbender");
+    advance_targeting_opponent(&mut s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(s.zone_size(1, ZoneType::Graveyard), 3);
+    assert!(s
+        .action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::Decline { .. })));
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { card, .. } if *card == strike),
+    );
+    settle(&mut s);
+    assert_eq!(s.game().state.zones.zone_of(strike), Some(ZoneType::Exile));
+
+    // Waterbend {2}: both Ogres tap; no mana is spent.
+    s.set_player_mana_pool(0, "");
+    assert!(can_cast(&mut s, strike));
+    cast_card(&mut s, strike);
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);
+    for helper in &helpers {
+        choose(
+            &mut s,
+            |a| matches!(a, Action::WaterbendTap { permanent, .. } if permanent == helper),
+        );
+    }
+    settle(&mut s);
+    s.assert_life(1, 17);
+    assert_eq!(
+        s.game().state.zones.zone_of(strike),
+        Some(ZoneType::Graveyard)
+    );
+    assert_eq!(s.game().state.cards[strike].owner, PlayerId(1));
+}
+
+/// Azula's opponent exiles a nontoken creature and then a nonland graveyard
+/// card; on your turn you may cast the exiled spell with any type of mana.
+/// An exiled permanent card of theirs stays uncastable (control change is
+/// unsupported; see `tla::INCOMPLETE`).
+#[test]
+fn azula_has_the_opponent_exile_and_casts_with_any_mana() {
+    let mut s = setup(&["Azula, Cunning Usurper", "Lightning Strike", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let ogre_card = s.game().state.permanents[ogre].as_ref().unwrap().card;
+    let strike = library_card(&s, 1, "Lightning Strike");
+    s.game_mut().move_card(strike, ZoneType::Graveyard);
+    cast(&mut s, "Azula, Cunning Usurper");
+    advance_targeting_opponent(&mut s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(s.action_space().player, Some(PlayerId(1)));
+    assert!(!s
+        .action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::Decline { .. })));
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { card, .. } if *card == ogre_card),
+    );
+    assert_eq!(s.action_space().player, Some(PlayerId(1)));
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { card, .. } if *card == strike),
+    );
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.zones.zone_of(ogre_card),
+        Some(ZoneType::Exile)
+    );
+    assert_eq!(s.game().state.zones.zone_of(strike), Some(ZoneType::Exile));
+
+    s.set_player_mana_pool(0, "2");
+    assert!(!can_cast(&mut s, ogre_card));
+    assert!(can_cast(&mut s, strike));
+    cast_card(&mut s, strike);
+    assert!(s.choose_target(Target::Player(PlayerId(1))));
+    settle(&mut s);
+    s.assert_life(1, 17);
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
 }

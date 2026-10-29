@@ -195,7 +195,7 @@ impl Game {
         if is_land {
             return Err(AgentError("land cards cannot be cast".to_string()));
         }
-        if owner != player {
+        if owner != player && self.exile_grant(player, card).is_none() {
             return Err(AgentError("card does not belong to player".to_string()));
         }
         if self.state.priority.holder != player {
@@ -348,17 +348,27 @@ impl Game {
     }
 
     /// The generic part of `card`'s total cost that `cast` lets `player`
-    /// pay by waterbending: a waterbend additional cost, once chosen.
+    /// pay by waterbending: a waterbend additional cost once chosen, or all
+    /// of a cost granted as "waterbending {X}" (Hama).
     pub(crate) fn cast_waterbend_generic(
         &self,
-        _player: PlayerId,
+        player: PlayerId,
         card: CardId,
         cast: CastChoices,
     ) -> u8 {
         let card_ref = &self.state.cards[card];
-        match &card_ref.kicker {
+        let kicker = match &card_ref.kicker {
             Some(kicker) if cast.kicked && card_ref.kicker_waterbend => kicker.generic(),
             _ => 0,
+        };
+        let granted = !cast.free
+            && self
+                .exile_grant(player, card)
+                .is_some_and(|grant| grant.waterbend);
+        if granted {
+            u8::MAX
+        } else {
+            kicker
         }
     }
 
@@ -689,10 +699,6 @@ impl Game {
         target_req_indices: Vec<usize>,
         cast: CastChoices,
     ) -> Result<(), AgentError> {
-        let owner = self.state.cards[card].owner;
-        if owner != player {
-            return Err(AgentError("card does not belong to player".to_string()));
-        }
         self.journal_turn();
         self.state.turn.spells_cast[player.0].push(card);
         // CR 601.2i — A cast spell is put onto the stack.

@@ -4,12 +4,13 @@
 
 use crate::state::{
     ability::{
-        Ability, Effect, EffectValue, PaymentCost, StaticCondition, TargetSpec, TriggerCondition,
-        TriggerSubject,
+        Ability, Effect, EffectValue, LinkedChooser, LinkedGrant, PaymentCost, StaticCondition,
+        TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{Card, CardType, Keywords},
     mana::{Mana, ManaCost},
     predicate::CardPredicate,
+    zone::ZoneType,
 };
 
 /// Inline delayed payloads take precedence: their ability index is not a card slot.
@@ -377,7 +378,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
         CantBeBlockedTarget { target } => format!("{} can't be blocked this turn",target_description(target)),
         ReturnGraveyardTarget { target, tapped_onto_battlefield: false } => format!("Return {} to your hand",target_description(target)),
         ReturnGraveyardTarget { target, tapped_onto_battlefield: true } => format!("Put {} onto the battlefield tapped",target_description(target)),
-        MillCards { count } => format!("Mill {count} cards"),
+        MillCards { count, target: None } => format!("Mill {count} cards"),
+        MillCards { count, target: Some(target) } => format!("{} mills {count} cards", target_description(target)),
         MillAndSelect { count, predicate, if_declined, if_milled } => {
             let mut text = format!("Mill {count} cards. You may return a {} milled this way to your hand. Otherwise: {}",predicate_description(predicate,"card"),effects_description(if_declined));
             if let Some(bonus) = if_milled {
@@ -403,6 +405,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         OpponentsCastOnlyFromHand => "Until your next turn, your opponents can't cast spells from anywhere other than their hands".to_string(),
         ExileSourceSpell => "Exile this spell".to_string(),
         ExileTopCardPlayThisTurn => "Exile the top card of your library. You may play that card this turn".to_string(),
+        ExileLinked { chooser, zone, predicate, up_to, grant, target } => format!("{} {} {} {} from {}; {}", match chooser { LinkedChooser::Controller => "You exile", LinkedChooser::TargetPlayer => "That player exiles" }, if *up_to { "up to one" } else { "a" }, predicate_description(predicate, "card"), match zone { ZoneType::Battlefield => "they control", _ => "" }, target_description(target), match grant { LinkedGrant::WaterbendManaValue => "for as long as you control this, you may cast it during your turn by waterbending {X}, where X is its mana value", LinkedGrant::FlashAnyMana => "during your turn, you may cast it as though it had flash, spending mana of any type" }),
         ExileUntilNonlandCastFree { below } => format!("Exile cards from the top of your library until you exile a nonland card. You may cast that card without paying its mana cost if its mana value is less than {}. If you don't cast it this way, put it into your hand", value_description(below)),
         CastFromHandFree { predicate } => format!("You may cast a {} from your hand without paying its mana cost", predicate_description(predicate, "spell")),
         NoMaximumHandSize => "You have no maximum hand size for the rest of the game".to_string(),

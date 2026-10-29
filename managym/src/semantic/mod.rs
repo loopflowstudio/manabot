@@ -117,6 +117,7 @@ pub enum Opcode {
     NoMaximumHandSize = 75,
     CastFromHandFree = 76,
     ExileUntilNonlandCastFree = 77,
+    ExileLinked = 78,
 }
 
 impl Opcode {
@@ -199,6 +200,7 @@ impl Opcode {
             75 => Opcode::NoMaximumHandSize,
             76 => Opcode::CastFromHandFree,
             77 => Opcode::ExileUntilNonlandCastFree,
+            78 => Opcode::ExileLinked,
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -452,6 +454,14 @@ pub enum Step {
     },
     OpponentsCastOnlyFromHand,
     ExileTopCardPlayThisTurn,
+    ExileLinked {
+        chooser: String,
+        grant: String,
+        predicate: Predicate,
+        target: String,
+        up_to: bool,
+        zone: String,
+    },
     ExileUntilNonlandCastFree {
         below: ValueExpression,
     },
@@ -507,6 +517,7 @@ pub enum Step {
     },
     MillCards {
         count: usize,
+        target: Option<String>,
     },
     MillAndSelect {
         count: usize,
@@ -1043,6 +1054,7 @@ impl<'a> BoundPack<'a> {
             | Step::AirbendAll { .. }
             | Step::OpponentsCastOnlyFromHand
             | Step::ExileTopCardPlayThisTurn
+            | Step::ExileLinked { .. }
             | Step::ExileUntilNonlandCastFree { .. }
             | Step::CastFromHandFree { .. }
             | Step::NoMaximumHandSize
@@ -1383,6 +1395,15 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         },
         Opcode::OpponentsCastOnlyFromHand => Step::OpponentsCastOnlyFromHand,
         Opcode::ExileTopCardPlayThisTurn => Step::ExileTopCardPlayThisTurn,
+        Opcode::ExileLinked => Step::ExileLinked {
+            chooser: str_field(value, "chooser")?.to_owned(),
+            grant: str_field(value, "grant")?.to_owned(),
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
+            target: str_field(value, "target")?.to_owned(),
+            up_to: opt_bool_field(value, "up_to")?
+                .ok_or_else(|| IrError::Malformed("missing up_to".into()))?,
+            zone: str_field(value, "zone")?.to_owned(),
+        },
         Opcode::ExileUntilNonlandCastFree => Step::ExileUntilNonlandCastFree {
             below: ValueExpression::parse(object_field(value, "below")?)?,
         },
@@ -1440,6 +1461,7 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         },
         Opcode::MillCards => Step::MillCards {
             count: usize_field(value, "count")?,
+            target: opt_str_field(value, "target")?.map(str::to_owned),
         },
         Opcode::MillAndSelect => Step::MillAndSelect {
             count: usize_field(value, "count")?,

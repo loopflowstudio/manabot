@@ -145,8 +145,12 @@ impl Game {
     /// Instant timing for `player` casting `card`: printed instant or flash,
     /// or a conditional "as though it had flash" that currently holds.
     pub(crate) fn has_instant_timing(&self, player: PlayerId, card: CardId) -> bool {
+        let granted_flash = self
+            .exile_grant(player, card)
+            .is_some_and(|grant| grant.flash);
         let card = &self.state.cards[card];
-        card.is_instant_speed()
+        granted_flash
+            || card.is_instant_speed()
             || card
                 .flash_if
                 .as_ref()
