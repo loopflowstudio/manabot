@@ -1,8 +1,9 @@
 """One frozen Jev campaign with durable inclusive request admission.
 
 Jev plays a digest-bound checkpoint (MTG-212) or the `heuristic` anchor, pinned
-by its source digest. The ordinary native game runner owns Commands and replay. This module owns the
-seeded schedule, pilot boundary, checkpoint/runtime admission and retained report.
+by its source digest. The ordinary native game runner owns Commands and replay.
+This module owns the seeded schedule, pilot boundary, opponent/runtime admission
+and retained report.
 Restart never replaces an attempted game or clears an uncertain API reservation.
 The protocol must be reviewed and populated from dated evidence before execution.
 """

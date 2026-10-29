@@ -1,8 +1,9 @@
 """A bounded full-game proof with native text, a warm model and command replay.
 
 One seat uses the ordinary LLM protocol; the other uses a frozen checkpoint, the
-deterministic `heuristic` anchor, or samples legal actions uniformly. Every capture, selection and native transition
-is retained before the next decision. One game cannot establish playing strength.
+deterministic `heuristic` anchor, or samples legal actions uniformly. Every
+capture, selection and native transition is retained before the next decision.
+One game cannot establish playing strength.
 """
 
 import argparse
@@ -198,7 +199,6 @@ class HeuristicOpponent:
     producer = "heuristic"
 
     def __init__(self) -> None:
-        self.sha256 = heuristic_sha256()
         self.player = HeuristicPlayer()
 
     def admit(self, players: list[managym.PlayerConfig], seed: int) -> None:
@@ -307,16 +307,10 @@ def play(
     env: managym.Env | None = None
     replay: managym.Env | None = None
     rng = random.Random(config.opponent_seed)
-    summary = GameSummary(
-        mode=_game_mode(
-            session,
-            opponent.label
-            if opponent is not None
-            else "checkpoint"
-            if config.opponent_checkpoint is not None
-            else None,
-        )
-    )
+    opponent_label = opponent.label if opponent is not None else None
+    if config.opponent_checkpoint is not None:
+        opponent_label = "checkpoint"
+    summary = GameSummary(mode=_game_mode(session, opponent_label))
     if session:
         summary.model_load_seconds = session.load_seconds
         retain(out / "runtime.json", session.identity.model_dump_json(indent=2))

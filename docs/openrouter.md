@@ -81,8 +81,8 @@ Existing chat defaults and historical receipts remain readable.
 `experiments.jev_mtg183` runs one sequential campaign through the same native
 runner. Its `Protocol` names exactly one opponent — a digest-bound checkpoint
 with its attributed selection rule, or the `heuristic` anchor pinned by
-`heuristic_sha256` over its source files — plus billing-bound evidence, source/native/driver identities and
-an inclusive budget of at most $10. Historical checkpoints require their matching
+`heuristic_sha256` over its source files — plus billing-bound evidence,
+source/native/driver identities and an inclusive budget of at most $10. Historical checkpoints require their matching
 runtime; these fields never override native world admission. The supplied Jev
 inference config alone does not authorize or admit a campaign.
 
@@ -94,9 +94,10 @@ uv run --extra openrouter --extra artifacts python -m experiments.jev_mtg183 \
 The frozen treatment has 1,000 uniquely seeded games: five per ordered deck
 pair and Jev seat, shuffled with a retained seed. The first 10–20 games are the
 included pilot under the same treatment. History capacity, forced-choice
-skipping, policy RNG and game limits are retained. `planned_games` plays a
-fixed prefix of that shuffle instead of all 1,000. Only a complete, valid pilot
-produces a 1,000-game cost projection.
+skipping, policy RNG and game limits are retained. `first_game` and
+`planned_games` select a fixed slice of that shuffle instead of all 1,000; a
+continuation after an outage starts past retained positions. Only a complete,
+valid pilot produces a 1,000-game cost projection.
 The driver continues the affordable prefix, with no replacement games. A failed
 or replay-divergent game is retained unscored; three consecutive failed games
 stop the campaign. Reported
