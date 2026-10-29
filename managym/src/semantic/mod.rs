@@ -107,6 +107,7 @@ pub enum Opcode {
     CantAttackOrBlock = 69,
     DoesntUntap = 70,
     ShuffleIntoLibrary = 71,
+    BecomeArtifactCreature = 72,
 }
 
 impl Opcode {
@@ -183,6 +184,7 @@ impl Opcode {
             69 => Opcode::CantAttackOrBlock,
             70 => Opcode::DoesntUntap,
             71 => Opcode::ShuffleIntoLibrary,
+            72 => Opcode::BecomeArtifactCreature,
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -261,8 +263,19 @@ pub enum Condition {
     Always,
     CardsDrawnAtLeast(u32),
     NthResolution(u64),
-    GraveyardAtLeast { count: u64, predicate: Predicate },
-    TargetMatches { role: String, predicate: Predicate },
+    GraveyardAtLeast {
+        count: u64,
+        predicate: Predicate,
+    },
+    TargetMatches {
+        role: String,
+        predicate: Predicate,
+    },
+    /// Counter kind name (absent means +1/+1) and minimum count on the source.
+    SourceCountersAtLeast {
+        count: i64,
+        counter: Option<String>,
+    },
 }
 
 /// One typed, executable IR step. Nested arms (`Branch`, `ForEachTarget`) carry
@@ -323,6 +336,12 @@ pub enum Step {
     /// "[target]'s owner shuffles it into their library."
     ShuffleIntoLibrary {
         target: String,
+    },
+    /// "[target] becomes an artifact creature" (CR 613.1d); no duration
+    /// lasts as long as the permanent does.
+    BecomeArtifactCreature {
+        target: String,
+        duration: Option<String>,
     },
 
     SearchBasicLands {
@@ -683,6 +702,10 @@ pub trait InterpreterContext {
         false
     }
 
+    fn source_counters_at_least(&self, _counter: Option<&str>, _count: i64) -> bool {
+        false
+    }
+
     /// Number of objects bound to a `for_each_target` role in this resolution.
     fn role_target_count(&self, _role: &str) -> usize {
         1
@@ -1012,6 +1035,7 @@ impl<'a> BoundPack<'a> {
             | Step::CantAttackOrBlock { .. }
             | Step::DoesntUntap { .. }
             | Step::ShuffleIntoLibrary { .. }
+            | Step::BecomeArtifactCreature { .. }
             | Step::SearchBasicLands { .. }
             | Step::Sacrifice { .. }
             | Step::DealDamageToController { .. }
@@ -1069,6 +1093,9 @@ fn evaluate_condition(condition: &Condition, context: &dyn InterpreterContext) -
             context.graveyard_at_least(predicate, *count)
         }
         Condition::TargetMatches { role, predicate } => context.target_matches(role, predicate),
+        Condition::SourceCountersAtLeast { count, counter } => {
+            context.source_counters_at_least(counter.as_deref(), *count)
+        }
     }
 }
 
@@ -1235,6 +1262,10 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         },
         Opcode::ShuffleIntoLibrary => Step::ShuffleIntoLibrary {
             target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::BecomeArtifactCreature => Step::BecomeArtifactCreature {
+            target: str_field(value, "target")?.to_owned(),
+            duration: opt_str_field(value, "duration")?.map(str::to_owned),
         },
         Opcode::Tap => Step::Tap {
             target: str_field(value, "target")?.to_owned(),
@@ -1468,6 +1499,10 @@ fn parse_condition(value: &Value) -> Result<Condition, IrError> {
         "target_matches" => Condition::TargetMatches {
             role: str_field(value, "role")?.to_owned(),
             predicate: parse_predicate(object_field(value, "predicate")?)?,
+        },
+        "source_counters_at_least" => Condition::SourceCountersAtLeast {
+            count: i64_field(value, "count")?,
+            counter: opt_str_field(value, "counter")?.map(str::to_owned),
         },
         other => {
             return Err(IrError::Malformed(format!(

@@ -356,6 +356,11 @@ impl Game {
                 permanent,
                 ability_index,
                 ..
+            }
+            | PendingChoice::Crew {
+                permanent,
+                ability_index,
+                ..
             } => {
                 frame.source = self.target_reference(Target::Permanent(*permanent), viewer);
                 frame.ability = Some(*ability_index);

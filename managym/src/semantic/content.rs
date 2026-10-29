@@ -16,13 +16,13 @@ use crate::{
             TriggerCondition, TriggerSubject,
         },
         card::{
-            ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keywords, PowerCda,
-            ReplacementEffect, Restriction, SacrificeCost, SpellCostReduction, StaticKeywordGrant,
-            StaticPtBuff, StaticRestriction, StaticScope, TargetCostReduction,
+            ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, CounterThreshold,
+            Keywords, PowerCda, ReplacementEffect, Restriction, SacrificeCost, SpellCostReduction,
+            StaticKeywordGrant, StaticPtBuff, StaticRestriction, StaticScope, TargetCostReduction,
             TriggeredManaAbility,
         },
         mana::{Color, Colors, Mana, ManaCost},
-        permanent::CounterKind,
+        permanent::{BecomesCreature, CounterKind},
         player::PlayerConfig,
         predicate::CardPredicate,
     },
@@ -465,6 +465,7 @@ fn apply_program(
                     sacrifice_source: cost.sacrifice_source,
                     waterbend: cost.waterbend,
                     exhaust: cost.exhaust,
+                    crew: cost.crew,
                     effect,
                 });
         }
@@ -488,6 +489,7 @@ struct ProgramCost {
     tap_source: bool,
     waterbend: bool,
     exhaust: bool,
+    crew: Option<i32>,
 }
 
 fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
@@ -550,6 +552,16 @@ fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
         sacrifice_source: opt_bool_field(value, "sacrifice_source")?.unwrap_or(false),
         waterbend: opt_bool_field(value, "waterbend")?.unwrap_or(false),
         exhaust: opt_bool_field(value, "exhaust")?.unwrap_or(false),
+        crew: value
+            .get("crew")
+            .map(|power| {
+                power
+                    .as_i64()
+                    .and_then(|n| i32::try_from(n).ok())
+                    .filter(|n| *n > 0)
+                    .ok_or_else(|| malformed(program, "invalid crew power"))
+            })
+            .transpose()?,
     })
 }
 
@@ -763,6 +775,23 @@ fn apply_static(definition: &mut CardDefinition, program: &Program) -> Result<()
             definition.power_cda = Some(PowerCda::GraveyardMatching(predicate_card(predicate)?));
         }
         [Step::Branch {
+            condition: Condition::SourceCountersAtLeast { count, counter },
+            then,
+            otherwise,
+        }] if otherwise.is_empty()
+            && matches!(
+                then.as_slice(),
+                [Step::BecomeArtifactCreature { target, duration }]
+                    if target == "source" && duration.as_deref() == Some("static")
+            ) =>
+        {
+            definition.creature_with_counters = Some(CounterThreshold {
+                kind: counter_kind(program, counter)?,
+                count: i32::try_from(*count)
+                    .map_err(|_| malformed(program, "counter threshold exceeds i32"))?,
+            });
+        }
+        [Step::Branch {
             condition,
             then,
             otherwise,
@@ -894,6 +923,25 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         }
         Step::CantAttackOrBlock { .. } | Step::DoesntUntap { .. } => {
             return unsupported(program, "restrictions require a static program")
+        }
+        Step::BecomeArtifactCreature { target, duration } if target == "source" => {
+            match duration.as_deref() {
+                Some("end_of_turn") => Effect::BecomeCreatureSource {
+                    duration: BecomesCreature::EndOfTurn,
+                },
+                None => Effect::BecomeCreatureSource {
+                    duration: BecomesCreature::Incarnation,
+                },
+                Some(other) => {
+                    return unsupported(
+                        program,
+                        &format!("unsupported animation duration {other:?}"),
+                    )
+                }
+            }
+        }
+        Step::BecomeArtifactCreature { .. } => {
+            return unsupported(program, "only the source becomes an artifact creature")
         }
         Step::Exile { target } if target == ATTACHED_AURA => Effect::ExileAttached,
         Step::ShuffleIntoLibrary { target } if target == ATTACHED_AURA => {
@@ -1510,6 +1558,7 @@ fn parse_target_requirement(
     target: &Value,
 ) -> Result<TargetRequirement, IrError> {
     Ok(TargetRequirement {
+        another: opt_bool_field(target, "another")?.unwrap_or(false),
         spec: target_spec(object_field(target, "selector")?)?,
         min: usize::try_from(u64_field(target, "min")?)
             .map_err(|_| malformed(program, "target min exceeds usize"))?,

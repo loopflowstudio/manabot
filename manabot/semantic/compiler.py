@@ -107,6 +107,7 @@ class Opcode(IntEnum):
     CANT_ATTACK_OR_BLOCK = 69
     DOESNT_UNTAP = 70
     SHUFFLE_INTO_LIBRARY = 71
+    BECOME_ARTIFACT_CREATURE = 72
 
 
 PROGRAM_KINDS = {kind.name.lower(): kind for kind in ProgramKind}
@@ -190,6 +191,7 @@ CONDITION_KINDS = {
     "cards_drawn_at_least",
     "nth_resolution",
     "target_matches",
+    "source_counters_at_least",
 }
 
 OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
@@ -202,6 +204,7 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "cant_attack_or_block": ({"target"}, set()),
     "doesnt_untap": ({"target"}, set()),
     "shuffle_into_library": ({"target"}, set()),
+    "become_artifact_creature": ({"target"}, {"duration"}),
     "add_lesson_mana": ({"mana"}, set()),
     "grant_flashback": (set(), set()),
     "grant_mana": ({"predicates"}, set()),
@@ -403,6 +406,10 @@ def _validate_condition(value: Any, context: str) -> dict[str, Any]:
         _keys(condition, context, required={"kind", "count", "predicate"})
         _integer(condition["count"], f"{context}.count", minimum=1)
         _validate_predicate(condition["predicate"], f"{context}.predicate")
+    elif kind == "source_counters_at_least":
+        _keys(condition, context, required={"kind", "count", "counter"})
+        _integer(condition["count"], f"{context}.count", minimum=1)
+        _string(condition["counter"], f"{context}.counter")
     elif kind == "nth_resolution":
         _keys(condition, context, required={"kind", "n"})
         _integer(condition["n"], f"{context}.n", minimum=1)

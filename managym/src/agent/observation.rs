@@ -207,7 +207,8 @@ pub struct PermanentData {
     /// until-EOT deltas, and +1/+1 counters all applied.
     pub power: i32,
     pub toughness: i32,
-    /// Earthbend animation: a land that's also a 0/0 creature.
+    /// A creature only through an effect: earthbend (a land that's also a
+    /// 0/0 creature), crew, or another type-changing effect.
     pub is_animated: bool,
     /// This permanent holds cards in exile until it leaves (Jailer).
     pub has_exile_link: bool,
@@ -605,7 +606,7 @@ impl Observation {
             cant_be_blocked_this_turn: permanent.cant_be_blocked_this_turn,
             power,
             toughness,
-            is_animated: permanent.animated,
+            is_animated: permanent.animated_creature(&game.state.cards[permanent.card]),
             has_exile_link: game
                 .permanent_object_ref(perm_id)
                 .is_some_and(|object_ref| {
@@ -1086,7 +1087,8 @@ impl Observation {
                             permanent,
                             ..
                         })
-                        | Some(crate::flow::game::PendingChoice::Waterbend { permanent, .. }) => {
+                        | Some(crate::flow::game::PendingChoice::Waterbend { permanent, .. })
+                        | Some(crate::flow::game::PendingChoice::Crew { permanent, .. }) => {
                             game.state.permanents[*permanent]
                                 .as_ref()
                                 .map(|perm| perm.card)

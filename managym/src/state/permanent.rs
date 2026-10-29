@@ -59,6 +59,17 @@ fn is_zero(value: &i32) -> bool {
     *value == 0
 }
 
+/// How long a type-changing effect makes a noncreature permanent an artifact
+/// creature (CR 613.1d). Ordered so the longer duration wins.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BecomesCreature {
+    /// Crew (CR 702.122a); cleared during cleanup.
+    EndOfTurn,
+    /// No duration: lasts as long as this incarnation does.
+    Incarnation,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct Permanent {
     pub id: ObjectId,
@@ -106,6 +117,10 @@ pub struct Permanent {
     /// actions clear it once that object is gone or no longer a creature.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attached_to: Option<ObjectRef>,
+    /// An effect has made this permanent an artifact creature; its printed
+    /// power and toughness apply (CR 301.7b).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub becomes_creature: Option<BecomesCreature>,
 }
 
 impl Permanent {
@@ -115,7 +130,10 @@ impl Permanent {
             card: card_id,
             controller: card.owner,
             tapped: false,
-            summoning_sick: card.types.is_creature() && !card.keywords.haste,
+            // CR 302.6 applies to any permanent that is a creature; only
+            // creatures and Vehicles can attack or pay {T} as creatures here.
+            summoning_sick: (card.types.is_creature() || card.has_subtype("Vehicle"))
+                && !card.keywords.haste,
             damage: 0,
             deathtouch_damage: false,
             temp_power: 0,
@@ -133,13 +151,24 @@ impl Permanent {
             exhausted_abilities: Vec::new(),
             was_cast: false,
             attached_to: None,
+            becomes_creature: None,
         }
     }
 
-    /// Whether this permanent is a creature — printed type or earthbend
-    /// animation (a land that's also a 0/0 creature).
+    /// Whether this permanent is a creature — printed type or animation.
     pub fn is_creature(&self, card: &Card) -> bool {
-        card.types.is_creature() || self.animated
+        card.types.is_creature() || self.animated_creature(card)
+    }
+
+    /// Whether an effect makes this permanent a creature: earthbend (a land
+    /// that's also a 0/0 creature), a type-changing effect, or its own
+    /// counter-threshold static (War Balloon).
+    pub fn animated_creature(&self, card: &Card) -> bool {
+        self.animated
+            || self.becomes_creature.is_some()
+            || card
+                .creature_with_counters
+                .is_some_and(|threshold| self.counter_count(threshold.kind) >= threshold.count)
     }
 
     /// Printed keywords plus until-EOT grants plus animation (earthbent
@@ -250,5 +279,8 @@ impl Permanent {
         self.cant_be_blocked_this_turn = false;
         self.temp_keywords = Keywords::default();
         self.temp_subtypes.clear();
+        if self.becomes_creature == Some(BecomesCreature::EndOfTurn) {
+            self.becomes_creature = None;
+        }
     }
 }

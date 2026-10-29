@@ -693,6 +693,19 @@ impl Game {
             return Ok(());
         }
 
+        if let Some(power) = ability.crew {
+            if self.crew_power_available(player, permanent_id) < power {
+                return Err(AgentError("not enough power to crew".into()));
+            }
+            self.pending_choice = Some(PendingChoice::Crew {
+                player,
+                permanent: permanent_id,
+                ability_index,
+                remaining_power: power,
+            });
+            return Ok(());
+        }
+
         // Waterbend costs open a payment sub-decision instead of paying
         // directly (the generic part may be paid by tapping permanents).
         let generic = ability.mana_cost.generic();
@@ -991,6 +1004,76 @@ impl Game {
                 self.push_activated_ability(player, permanent, ability_index, targets)
             }
         }
+    }
+
+    /// Other untapped creatures `player` controls that can help crew
+    /// `vehicle`. Summoning sickness doesn't matter (crew is not a {T}
+    /// cost); creatures without positive power add nothing and are omitted.
+    pub(crate) fn crew_candidates(
+        &self,
+        player: PlayerId,
+        vehicle: PermanentId,
+    ) -> Vec<PermanentId> {
+        self.battlefield_permanents(player)
+            .into_iter()
+            .filter(|&id| {
+                id != vehicle
+                    && self.state.permanents[id]
+                        .as_ref()
+                        .is_some_and(|permanent| !permanent.tapped)
+                    && self.permanent_is_creature(id)
+                    && self.effective_power(id) > 0
+            })
+            .collect()
+    }
+
+    pub(crate) fn crew_power_available(&self, player: PlayerId, vehicle: PermanentId) -> i32 {
+        self.crew_candidates(player, vehicle)
+            .into_iter()
+            .map(|id| self.effective_power(id))
+            .sum()
+    }
+
+    /// Tap one creature toward the pending crew cost; once the total power
+    /// reaches the crew number the ability's remaining costs are paid.
+    pub(crate) fn crew_tap_action(
+        &mut self,
+        player: PlayerId,
+        card: CardId,
+    ) -> Result<(), AgentError> {
+        let Some(PendingChoice::Crew {
+            player: payer,
+            permanent,
+            ability_index,
+            remaining_power,
+        }) = self.pending_choice
+        else {
+            return Err(AgentError("no crew payment is pending".into()));
+        };
+        if payer != player {
+            return Err(AgentError("wrong player for crew payment".into()));
+        }
+        let crew = self
+            .crew_candidates(player, permanent)
+            .into_iter()
+            .find(|id| {
+                self.state.permanents[*id]
+                    .as_ref()
+                    .is_some_and(|p| p.card == card)
+            })
+            .ok_or_else(|| AgentError("creature cannot crew".into()))?;
+        let remaining_power = remaining_power - self.effective_power(crew);
+        self.tap_permanent(crew, false);
+        if remaining_power > 0 {
+            self.pending_choice = Some(PendingChoice::Crew {
+                player,
+                permanent,
+                ability_index,
+                remaining_power,
+            });
+            return Ok(());
+        }
+        self.begin_activation_payment(player, permanent, ability_index, Vec::new())
     }
 
     /// Untapped artifacts/creatures `player` controls — the permanents that

@@ -4,6 +4,7 @@ use super::{
     ability::{Ability, Effect, StaticCondition, TargetRequirement, TargetSpec},
     game_object::{ObjectId, PlayerId},
     mana::{Color, Colors, Mana, ManaCost},
+    permanent::CounterKind,
     predicate::CardPredicate,
 };
 
@@ -213,6 +214,13 @@ pub struct StaticKeywordGrant {
     pub keywords: Keywords,
 }
 
+/// "As long as this has N or more [kind] counters on it" (War Balloon).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct CounterThreshold {
+    pub kind: CounterKind,
+    pub count: i32,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct TargetCostReduction {
     pub predicate: CardPredicate,
@@ -319,6 +327,10 @@ pub struct ActivatedAbilityDefinition {
     /// (CR 702.177a); `Permanent::exhausted_abilities` records activations.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub exhaust: bool,
+    /// "Crew N": tap any number of other untapped creatures you control
+    /// with total power N or greater (CR 702.122a).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub crew: Option<i32>,
     pub effect: Effect,
 }
 
@@ -400,6 +412,10 @@ pub struct CardDefinition {
     /// on the battlefield.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub static_restrictions: Vec<StaticRestriction>,
+    /// "As long as this has N or more [kind] counters on it, it's an artifact
+    /// creature" (CR 613.1d), read by `Permanent::animated_creature`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub creature_with_counters: Option<CounterThreshold>,
     /// Replacement/prevention definitions consumed by the proposed-event
     /// pipeline. Empty vectors are omitted so existing content-pack digests
     /// remain stable until production content actually adopts the feature.

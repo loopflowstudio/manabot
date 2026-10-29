@@ -417,6 +417,10 @@ fn effect_description(effect: &Effect) -> Option<String> {
         CantBeBlockedThisTurnSource => "This can't be blocked this turn".into(),
         GrantKeywordsToSource { keywords } => format!("This gains {} until end of turn",keywords_description(keywords)),
         SetBasePtUntilEot { power, toughness } => format!("This has base {} until end of turn",base_pt_description(*power,*toughness)),
+        BecomeCreatureSource { duration } => match duration {
+            crate::state::permanent::BecomesCreature::EndOfTurn => "This becomes an artifact creature until end of turn".into(),
+            crate::state::permanent::BecomesCreature::Incarnation => "This becomes an artifact creature".into(),
+        },
         GainLife { amount } => format!("You gain {amount} life"),
         OnNthResolutionThisTurn { n, effect } => format!("If this is resolution {n} of this ability this turn: {}",effects_description(std::slice::from_ref(effect))),
         Scry { count } => format!("Scry {count}"),

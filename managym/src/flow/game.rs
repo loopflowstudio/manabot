@@ -122,6 +122,15 @@ pub enum PendingChoice {
         /// Legal, not-yet-chosen targets for the current requirement.
         legal_targets: Vec<Target>,
     },
+    /// Paying a crew cost (CR 702.122a): tap other untapped creatures one
+    /// at a time until their total power reaches the crew number.
+    Crew {
+        player: PlayerId,
+        permanent: PermanentId,
+        ability_index: usize,
+        /// Power still owed; the cost is paid once it reaches zero.
+        remaining_power: i32,
+    },
     /// Paying a waterbend activation cost: tap artifacts/creatures for {1}
     /// each, then pay the remainder with mana.
     Waterbend {

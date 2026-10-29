@@ -2,7 +2,7 @@
 use managym::{
     agent::{
         action::{Action, ActionSpaceKind},
-        observation::{KeywordData, Observation},
+        observation::{KeywordData, Observation, PermanentData},
     },
     flow::{event::GameEvent, turn::StepKind},
     state::{
@@ -184,7 +184,7 @@ fn realm_of_koh_creates_a_spirit() {
 }
 
 /// The keywords an observer sees on a battlefield permanent.
-fn observed_keywords(s: &Scenario, id: PermanentId) -> KeywordData {
+fn observed(s: &Scenario, id: PermanentId) -> PermanentData {
     let permanent = s.game().state.permanents[id].as_ref().unwrap();
     let observation = Observation::for_player(s.game(), PlayerId(0));
     observation
@@ -192,8 +192,12 @@ fn observed_keywords(s: &Scenario, id: PermanentId) -> KeywordData {
         .iter()
         .chain(&observation.opponent_permanents)
         .find(|p| p.id == permanent.id.0 as i32)
-        .map(|p| p.keywords.clone())
+        .cloned()
         .unwrap()
+}
+
+fn observed_keywords(s: &Scenario, id: PermanentId) -> KeywordData {
+    observed(s, id).keywords
 }
 
 fn ready(s: &mut Scenario, id: PermanentId) {
@@ -835,4 +839,173 @@ fn swampsnare_trap_costs_less_onto_a_flier_and_shrinks_its_creature() {
 
     enchant(&mut s, "Swampsnare Trap", "2B", wurm);
     assert_eq!(s.game().effective_pt(wurm), (1, 1));
+}
+
+fn is_creature(s: &Scenario, id: PermanentId) -> bool {
+    let permanent = s.game().state.permanents[id].as_ref().unwrap();
+    permanent.is_creature(&s.game().state.cards[permanent.card])
+}
+
+/// Tap `creature` toward the pending crew cost.
+fn crew_with(s: &mut Scenario, creature: PermanentId) {
+    let card = s.game().state.permanents[creature].as_ref().unwrap().card;
+    assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
+    choose(
+        s,
+        |a| matches!(a, Action::SelectCard { card: c, .. } if *c == card),
+    );
+}
+
+/// CR 702.122a: crew taps other creatures whose total power reaches N; the
+/// Vehicle is an artifact creature with its printed P/T until end of turn,
+/// then a noncreature artifact again. It dies as a creature and leaves a Clue.
+#[test]
+fn fire_nation_warship_crews_until_end_of_turn_and_leaves_a_clue() {
+    let mut s = setup(&["Fire Nation Warship", "Llanowar Elves"]);
+    let ship = s.force_permanent_on_battlefield(0, "Fire Nation Warship");
+    let first = s.force_permanent_on_battlefield(0, "Llanowar Elves");
+    ready(&mut s, ship);
+    assert!(!is_creature(&s, ship));
+    assert!(!can_activate(&mut s, ship, 0), "power 1 can't crew 2");
+
+    let second = s.force_permanent_on_battlefield(0, "Llanowar Elves");
+    activate(&mut s, ship, 0);
+    assert!(
+        !has_action(&s, |a| matches!(a, Action::SelectCard { card, .. }
+            if *card == s.game().state.permanents[ship].as_ref().unwrap().card)),
+        "a Vehicle doesn't crew itself"
+    );
+    crew_with(&mut s, first);
+    crew_with(&mut s, second);
+    settle(&mut s);
+    assert!(tapped(&s, first) && tapped(&s, second));
+    assert!(is_creature(&s, ship));
+    assert!(
+        observed(&s, ship).is_animated,
+        "the policy sees the crewed Vehicle"
+    );
+    assert_eq!(s.game().effective_pt(ship), (4, 4));
+    assert!(observed_keywords(&s, ship).reach);
+
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    assert!(offered_in_combat(&s, ship));
+    s.advance_to_active_step(1, StepKind::Main);
+    assert!(!is_creature(&s, ship), "crew lasts until end of turn");
+
+    s.advance_to_active_step(0, StepKind::Main);
+    activate(&mut s, ship, 0);
+    crew_with(&mut s, first);
+    crew_with(&mut s, second);
+    settle(&mut s);
+    let ship_card = s.game().state.permanents[ship].as_ref().unwrap().card;
+    mark_damage(&mut s, ship, 4);
+    s.pass_priority();
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.zones.zone_of(ship_card),
+        Some(ZoneType::Graveyard)
+    );
+    let clue = battlefield_token(&s, 0);
+    assert_eq!(
+        s.game().state.cards[s.game().state.permanents[clue].as_ref().unwrap().card].name,
+        "Clue"
+    );
+}
+
+/// CR 302.6: a Vehicle that came under your control this turn can't attack
+/// when crewed, while a summoning-sick creature can crew (crew is not {T}).
+/// The enters trigger makes a creature you control indestructible, and the
+/// crewed Tank's firebending adds {R} when it attacks.
+#[test]
+fn tundra_tank_protects_on_entry_and_firebends_once_crewed() {
+    let mut s = setup(&["Tundra Tank", "Gray Ogre", "Llanowar Elves"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let elves = s.force_permanent_on_battlefield(0, "Llanowar Elves");
+    ready(&mut s, ogre);
+    s.set_player_mana_pool(0, "2B");
+    let tank = cast(&mut s, "Tundra Tank");
+    settle(&mut s);
+    let tank = s.game().state.card_to_permanent[tank].expect("tank entered");
+    assert!(observed_keywords(&s, ogre).indestructible);
+
+    activate(&mut s, tank, 0);
+    crew_with(&mut s, elves);
+    settle(&mut s);
+    assert!(is_creature(&s, tank));
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    assert!(!offered_in_combat(&s, tank), "summoning sick");
+
+    s.advance_to_active_step(0, StepKind::Main);
+    activate(&mut s, tank, 0);
+    crew_with(&mut s, elves);
+    settle(&mut s);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    choose(
+        &mut s,
+        |a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == tank),
+    );
+    s.advance_until(
+        |s| s.game().state.players[0].mana_pool.mana[3] == 1,
+        "firebending".into(),
+    );
+}
+
+/// CR 613.1d: three fire counters make the Balloon an artifact creature for
+/// as long as they stay; two do not.
+#[test]
+fn war_balloon_flies_once_it_has_three_fire_counters() {
+    let mut s = setup(&["War Balloon"]);
+    let balloon = s.force_permanent_on_battlefield(0, "War Balloon");
+    for count in 1..=3 {
+        assert!(!is_creature(&s, balloon));
+        s.set_player_mana_pool(0, "1");
+        activate(&mut s, balloon, 1);
+        settle(&mut s);
+        assert_eq!(counters_of(&s, balloon, CounterKind::Fire), count);
+    }
+    assert!(is_creature(&s, balloon));
+    assert_eq!(s.game().effective_pt(balloon), (4, 3));
+    assert!(observed_keywords(&s, balloon).flying);
+    s.advance_to_active_step(1, StepKind::Main);
+    assert!(is_creature(&s, balloon), "not limited to this turn");
+}
+
+/// "Another target": the entering Submersible can return any other nonland
+/// permanent but not itself. Its exhaust waterbend makes it a 3/3 artifact
+/// creature for as long as it remains, only once.
+#[test]
+fn invasion_submersible_bounces_another_permanent_then_surfaces_once() {
+    let mut s = setup(&["Invasion Submersible", "Gray Ogre"]);
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let theirs_card = s.game().state.permanents[theirs].as_ref().unwrap().card;
+    let helpers = [
+        s.force_permanent_on_battlefield(0, "Gray Ogre"),
+        s.force_permanent_on_battlefield(0, "Gray Ogre"),
+    ];
+    s.set_player_mana_pool(0, "2U");
+    let sub = cast(&mut s, "Invasion Submersible");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    let sub = s.game().state.card_to_permanent[sub].expect("entered");
+    assert!(!s.choose_target(Target::Permanent(sub)), "another target");
+    assert!(s.choose_target(Target::Permanent(theirs)));
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.zones.zone_of(theirs_card),
+        Some(ZoneType::Hand)
+    );
+    assert!(!is_creature(&s, sub));
+
+    s.set_player_mana_pool(0, "1");
+    activate(&mut s, sub, 0);
+    for helper in helpers {
+        assert!(s.choose_waterbend_tap(helper));
+    }
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    settle(&mut s);
+    assert!(is_creature(&s, sub));
+    assert_eq!(s.game().effective_pt(sub), (3, 3));
+    s.advance_to_active_step(0, StepKind::Main);
+    assert!(is_creature(&s, sub), "no duration");
+    s.set_player_mana_pool(0, "3");
+    assert!(!can_activate(&mut s, sub, 0), "exhaust");
 }

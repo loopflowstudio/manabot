@@ -106,7 +106,9 @@ impl Game {
                     .suspended_decision
                     .as_ref()
                     .is_some_and(|s| matches!(s.decision, Decision::Sacrifice { .. }));
-                if sacrifice {
+                if matches!(self.pending_choice, Some(PendingChoice::Crew { .. })) {
+                    Some(format!("Tap {} to crew", self.state.cards[*card].name))
+                } else if sacrifice {
                     Some(format!("Sacrifice {}", self.state.cards[*card].name))
                 } else if let Some(suspended) = &self.state.suspended_decision {
                     match &suspended.decision {
@@ -242,6 +244,12 @@ impl Game {
                     }
                 }
                 if ability.tap_source && !permanent.can_tap(card) {
+                    continue;
+                }
+                if ability
+                    .crew
+                    .is_some_and(|power| self.crew_power_available(player, permanent_id) < power)
+                {
                     continue;
                 }
                 let affordable = if ability.waterbend {
@@ -400,6 +408,22 @@ impl Game {
                     focus: Vec::new(),
                 })
             }
+            PendingChoice::Crew {
+                player, permanent, ..
+            } => Some(ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: self
+                    .crew_candidates(*player, *permanent)
+                    .into_iter()
+                    .filter_map(|id| self.state.permanents[id].as_ref())
+                    .map(|crew| Action::SelectCard {
+                        player: *player,
+                        card: crew.card,
+                    })
+                    .collect(),
+                focus: Vec::new(),
+            }),
             PendingChoice::ActivatedTarget {
                 player,
                 permanent,
@@ -606,6 +630,11 @@ impl Game {
                 ) =>
             {
                 self.sacrifice_payment_action(*player, Some(*card))
+            }
+            Action::SelectCard { player, card }
+                if matches!(self.pending_choice, Some(PendingChoice::Crew { .. })) =>
+            {
+                self.crew_tap_action(*player, *card)
             }
             Action::ScryCard { .. }
             | Action::SelectCard { .. }

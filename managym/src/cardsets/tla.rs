@@ -152,6 +152,10 @@ pub(super) fn cards() -> Vec<Card> {
         path_to_redemption(),
         watery_grasp(),
         swampsnare_trap(),
+        fire_nation_warship(),
+        invasion_submersible(),
+        tundra_tank(),
+        war_balloon(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -763,6 +767,7 @@ fn jet_freedom_fighter() -> Card {
                 }],
             )
             .targets(vec![Target {
+                another: None,
                 max: 2,
                 min: 0,
                 role: "target_0",
@@ -1336,6 +1341,7 @@ fn true_ancestry() -> Card {
         )
         .cost(Cost::mana("{1}{G}"))
         .targets(vec![Target {
+            another: None,
             max: 1,
             min: 0,
             role: "target_0",
@@ -1582,6 +1588,7 @@ fn curious_farm_animals() -> Card {
                 ..Default::default()
             })
             .targets(vec![Target {
+                another: None,
                 max: 1,
                 min: 0,
                 role: "target_0",
@@ -2134,6 +2141,7 @@ fn allies_at_last() -> Card {
         })
         .targets(vec![
             Target {
+                another: None,
                 max: 2,
                 min: 0,
                 role: "allies",
@@ -2447,6 +2455,7 @@ fn earth_kingdom_jailer() -> Card {
             vec![Op::ExileUntilSourceLeaves { target: "prisoner" }],
         )
         .targets(vec![Target {
+            another: None,
             max: 1,
             min: 0,
             role: "prisoner",
@@ -2534,6 +2543,7 @@ fn earth_kingdom_soldier() -> Card {
             }],
         )
         .targets(vec![Target {
+            another: None,
             max: 2,
             min: 0,
             role: "creatures",
@@ -2623,6 +2633,7 @@ fn fancy_footwork() -> Card {
         )
         .cost(Cost::mana("2W"))
         .targets(vec![Target {
+            another: None,
             max: 2,
             min: 1,
             role: "creatures",
@@ -4455,6 +4466,179 @@ fn swampsnare_trap() -> Card {
             ),
         ],
         registry_name: "Swampsnare Trap",
+        text_box,
+    }
+}
+
+fn fire_nation_warship() -> Card {
+    let text_box = "Reach\nWhen this Vehicle dies, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")\nCrew 2 (Tap any number of creatures you control with total power 2 or more: This Vehicle becomes an artifact creature until end of turn.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{3}"),
+            subtypes: Some(vec!["Vehicle"]),
+            types: vec![CardType::Artifact],
+            keywords: Some(vec![Keyword::Reach]),
+            power: Some(PrintedPower::Fixed(4)),
+            toughness: Some(4),
+            ..Default::default()
+        },
+        key: "tla.fire_nation_warship",
+        programs: vec![
+            Program::new(
+                "clue",
+                ProgramKind::Triggered,
+                vec![Op::CreateToken {
+                    count: 1,
+                    definition_ref: "token.clue",
+                    tapped_and_attacking: Some(false),
+                }],
+            )
+            .trigger(Trigger::new(Event::Dies, Subject::This)),
+            Program::crew("crew", 2),
+        ],
+        registry_name: "Fire Nation Warship",
+        text_box,
+    }
+}
+
+fn invasion_submersible() -> Card {
+    let text_box = "When this Vehicle enters, return up to one other target nonland permanent to its owner's hand.\nExhaust — Waterbend {3}: This Vehicle becomes an artifact creature. Put three +1/+1 counters on it. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}. Activate each exhaust ability only once.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{U}"),
+            subtypes: Some(vec!["Vehicle"]),
+            types: vec![CardType::Artifact],
+            power: Some(PrintedPower::Fixed(0)),
+            toughness: Some(0),
+            ..Default::default()
+        },
+        key: "tla.invasion_submersible",
+        programs: vec![
+            Program::new(
+                "bounce",
+                ProgramKind::Triggered,
+                vec![Op::TargetClause {
+                    body: vec![Op::ReturnToHand { target: "target_0" }],
+                    role: "target_0",
+                }],
+            )
+            .targets(vec![Target {
+                another: Some(true),
+                max: 1,
+                min: 0,
+                role: "target_0",
+                selector: Selector::Permanent {
+                    predicate: Predicate::NotCardTypes {
+                        values: vec![CardType::Land],
+                    },
+                },
+            }])
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::new(
+                "surface",
+                ProgramKind::Activated,
+                vec![
+                    Op::BecomeArtifactCreature {
+                        duration: None,
+                        target: "source",
+                    },
+                    Op::PutCounters {
+                        count: 3,
+                        counter: None,
+                        target: "source",
+                    },
+                ],
+            )
+            .cost(Cost {
+                mana: Some("{3}"),
+                waterbend: Some(true),
+                exhaust: Some(true),
+                ..Default::default()
+            }),
+        ],
+        registry_name: "Invasion Submersible",
+        text_box,
+    }
+}
+
+fn tundra_tank() -> Card {
+    let text_box = "Firebending 1 (Whenever this creature attacks, add {R}. This mana lasts until end of combat.)\nWhen this Vehicle enters, target creature you control gains indestructible until end of turn.\nCrew 1 (Tap any number of creatures you control with total power 1 or more: This Vehicle becomes an artifact creature until end of turn.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{B}"),
+            subtypes: Some(vec!["Vehicle"]),
+            types: vec![CardType::Artifact],
+            power: Some(PrintedPower::Fixed(4)),
+            toughness: Some(4),
+            ..Default::default()
+        },
+        key: "tla.tundra_tank",
+        programs: vec![
+            Program::firebending("firebending", "R"),
+            Program::new(
+                "protect",
+                ProgramKind::Triggered,
+                vec![Op::GrantKeywords {
+                    duration: Duration::EndOfTurn,
+                    keywords: vec![Keyword::Indestructible],
+                    target: "target_0",
+                }],
+            )
+            .targets(vec![Target::one("target_0", Selector::CreatureYouControl)])
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::crew("crew", 1),
+        ],
+        registry_name: "Tundra Tank",
+        text_box,
+    }
+}
+
+fn war_balloon() -> Card {
+    let text_box = "Flying\n{1}: Put a fire counter on this Vehicle.\nAs long as this Vehicle has three or more fire counters on it, it's an artifact creature.\nCrew 3 (Tap any number of creatures you control with total power 3 or more: This Vehicle becomes an artifact creature until end of turn.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{R}"),
+            subtypes: Some(vec!["Vehicle"]),
+            types: vec![CardType::Artifact],
+            keywords: Some(vec![Keyword::Flying]),
+            power: Some(PrintedPower::Fixed(4)),
+            toughness: Some(3),
+            ..Default::default()
+        },
+        key: "tla.war_balloon",
+        programs: vec![
+            Program::new(
+                "stoke",
+                ProgramKind::Activated,
+                vec![Op::PutCounters {
+                    count: 1,
+                    counter: Some(CounterKind::Fire),
+                    target: "source",
+                }],
+            )
+            .cost(Cost::mana("{1}")),
+            Program::new(
+                "aloft",
+                ProgramKind::Static,
+                vec![Op::Branch {
+                    condition: Condition::SourceCountersAtLeast {
+                        count: 3,
+                        counter: CounterKind::Fire,
+                    },
+                    otherwise: vec![],
+                    then: vec![Op::BecomeArtifactCreature {
+                        duration: Some(Duration::Static),
+                        target: "source",
+                    }],
+                }],
+            ),
+            Program::crew("crew", 3),
+        ],
+        registry_name: "War Balloon",
         text_box,
     }
 }

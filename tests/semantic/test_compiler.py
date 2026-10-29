@@ -209,6 +209,7 @@ def test_opcode_numbers_are_an_explicit_compatibility_surface() -> None:
         "CANT_ATTACK_OR_BLOCK": 69,
         "DOESNT_UNTAP": 70,
         "SHUFFLE_INTO_LIBRARY": 71,
+        "BECOME_ARTIFACT_CREATURE": 72,
     }
 
 

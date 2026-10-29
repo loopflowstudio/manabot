@@ -32,6 +32,7 @@
       "graveyard_at_least": 1,
       "kicked": 2,
       "nth_resolution": 3,
+      "source_counters_at_least": 7,
       "target_matches": 4
     },
     "controller": {
@@ -184,6 +185,7 @@
       "Treasure": 55,
       "Treefolk": 48,
       "Turtle": 66,
+      "Vehicle": 68,
       "Wall": 65,
       "Warrior": 22
     },
@@ -231,6 +233,7 @@
     "count": 8,
     "counter": 88,
     "counters": 62,
+    "crew": 92,
     "definition_ref": 9,
     "destination": 10,
     "direction": 63,
@@ -325,6 +328,7 @@
     "add_mana": 1,
     "add_subtype": 64,
     "attach": 68,
+    "become_artifact_creature": 72,
     "blocking_restriction": 47,
     "branch": 18,
     "buff_target_value": 29,

@@ -45,6 +45,19 @@ impl Game {
         Some(crate::state::ability::effect_target_requirements(effects))
     }
 
+    /// "Another target" excludes the exact source object.
+    fn excluded_source(
+        &self,
+        trigger: &PendingTrigger,
+        requirement: &crate::state::ability::TargetRequirement,
+    ) -> Option<PermanentId> {
+        if !requirement.another {
+            return None;
+        }
+        let source = trigger.source_ref?;
+        self.lookup_current_permanent(source).ok()
+    }
+
     pub(crate) fn choose_trigger_target(
         &mut self,
         player: PlayerId,
@@ -70,6 +83,9 @@ impl Game {
         if trigger.controller != player
             || duplicate
             || !self.target_is_legal(target, &requirement.spec, player)
+            || self
+                .excluded_source(trigger, requirement)
+                .is_some_and(|id| target == Target::Permanent(id))
         {
             return Err(AgentError("illegal trigger target".into()));
         }
@@ -153,9 +169,11 @@ impl Game {
                     .iter()
                     .filter(|index| **index == trigger.requirement_index)
                     .count();
+                let source = self.excluded_source(&trigger, requirement);
                 let legal: Vec<_> = self
                     .legal_targets_for_spec(&requirement.spec, trigger.controller)
                     .into_iter()
+                    .filter(|target| source.is_none_or(|id| *target != Target::Permanent(id)))
                     .filter(|target| {
                         !trigger.targets.iter().zip(&trigger.target_req_indices).any(
                             |(chosen, index)| {
@@ -728,7 +746,7 @@ impl Game {
     ) -> bool {
         let animated = self.state.card_to_permanent[moved_card]
             .and_then(|id| self.state.permanents[id].as_ref())
-            .map(|p| p.animated)
+            .map(|p| p.animated_creature(&self.state.cards[moved_card]))
             .unwrap_or_else(|| {
                 self.state
                     .object_lki

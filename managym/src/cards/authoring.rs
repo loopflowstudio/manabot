@@ -144,6 +144,23 @@ impl Program {
         )
     }
 
+    /// "Crew N": tap other creatures with total power N or more; this
+    /// Vehicle becomes an artifact creature until end of turn (CR 702.122a).
+    pub fn crew(key: &'static str, power: i32) -> Self {
+        Self::new(
+            key,
+            ProgramKind::Activated,
+            vec![Op::BecomeArtifactCreature {
+                duration: Some(Duration::EndOfTurn),
+                target: "source",
+            }],
+        )
+        .cost(Cost {
+            crew: Some(power),
+            ..Cost::mana("0")
+        })
+    }
+
     pub fn new(key: &'static str, kind: ProgramKind, ops: Vec<Op>) -> Self {
         Self {
             key,
@@ -202,6 +219,9 @@ pub struct Cost {
     /// "This spell costs {N} less to cast if it targets a [predicate]."
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reduced_if_targets: Option<TargetReduction>,
+    /// "Crew N" (CR 702.122a).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub crew: Option<i32>,
 }
 
 #[derive(Serialize)]
@@ -236,6 +256,9 @@ pub struct Sacrifice {
 
 #[derive(Serialize)]
 pub struct Target {
+    /// "Another target": the source can't be chosen.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub another: Option<bool>,
     pub max: i32,
     pub min: i32,
     pub role: &'static str,
@@ -245,6 +268,7 @@ pub struct Target {
 impl Target {
     pub fn one(role: &'static str, selector: Selector) -> Self {
         Self {
+            another: None,
             min: 1,
             max: 1,
             role,
@@ -408,6 +432,13 @@ pub enum Op {
     },
     /// "[target] doesn't untap during its controller's untap step" (static).
     DoesntUntap {
+        target: &'static str,
+    },
+    /// "[target] becomes an artifact creature" until end of turn, with no
+    /// duration when absent, or as a static effect under a branch condition.
+    BecomeArtifactCreature {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        duration: Option<Duration>,
         target: &'static str,
     },
     /// "[target]'s owner shuffles it into their library."
@@ -621,6 +652,11 @@ pub enum Condition {
     TargetMatches {
         predicate: Predicate,
         role: &'static str,
+    },
+    /// "As long as this has `count` or more [counter] counters on it."
+    SourceCountersAtLeast {
+        count: i32,
+        counter: CounterKind,
     },
 }
 

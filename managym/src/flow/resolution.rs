@@ -567,6 +567,12 @@ impl Game {
                 }
                 None
             }
+            Effect::BecomeCreatureSource { duration } => {
+                if let Some(permanent) = self.source_permanent_mut(frame) {
+                    permanent.becomes_creature = permanent.becomes_creature.max(Some(*duration));
+                }
+                None
+            }
             Effect::GrantKeywordsToSource { keywords } => {
                 if let Some(permanent) = self.source_permanent_mut(frame) {
                     permanent.temp_keywords = permanent.temp_keywords.union(keywords);

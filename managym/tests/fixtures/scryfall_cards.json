@@ -2159,5 +2159,63 @@
     "colors": [
       "B"
     ]
+  },
+  "Fire Nation Warship": {
+    "name": "Fire Nation Warship",
+    "mana_cost": "{3}",
+    "type_line": "Artifact — Vehicle",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Reach",
+      "Crew"
+    ],
+    "oracle_text": "Reach\nWhen this Vehicle dies, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")\nCrew 2 (Tap any number of creatures you control with total power 2 or more: This Vehicle becomes an artifact creature until end of turn.)",
+    "colors": []
+  },
+  "Invasion Submersible": {
+    "name": "Invasion Submersible",
+    "mana_cost": "{2}{U}",
+    "type_line": "Artifact — Vehicle",
+    "power": "0",
+    "toughness": "0",
+    "keywords": [
+      "Exhaust",
+      "Waterbend"
+    ],
+    "oracle_text": "When this Vehicle enters, return up to one other target nonland permanent to its owner's hand.\nExhaust — Waterbend {3}: This Vehicle becomes an artifact creature. Put three +1/+1 counters on it. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}. Activate each exhaust ability only once.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Tundra Tank": {
+    "name": "Tundra Tank",
+    "mana_cost": "{2}{B}",
+    "type_line": "Artifact — Vehicle",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Crew",
+      "Firebending"
+    ],
+    "oracle_text": "Firebending 1 (Whenever this creature attacks, add {R}. This mana lasts until end of combat.)\nWhen this Vehicle enters, target creature you control gains indestructible until end of turn.\nCrew 1 (Tap any number of creatures you control with total power 1 or more: This Vehicle becomes an artifact creature until end of turn.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "War Balloon": {
+    "name": "War Balloon",
+    "mana_cost": "{2}{R}",
+    "type_line": "Artifact — Vehicle",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Crew"
+    ],
+    "oracle_text": "Flying\n{1}: Put a fire counter on this Vehicle.\nAs long as this Vehicle has three or more fire counters on it, it's an artifact creature.\nCrew 3 (Tap any number of creatures you control with total power 3 or more: This Vehicle becomes an artifact creature until end of turn.)",
+    "colors": [
+      "R"
+    ]
   }
 }

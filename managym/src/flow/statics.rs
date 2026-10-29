@@ -383,6 +383,6 @@ impl Game {
             not_subtypes: Vec::new(),
             ..predicate.clone()
         };
-        structural.matches(card, power, permanent.animated)
+        structural.matches(card, power, permanent.animated_creature(card))
     }
 }

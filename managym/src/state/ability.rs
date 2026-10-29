@@ -1,6 +1,6 @@
 use super::card::Keywords;
 use super::mana::{Mana, ManaCost};
-use super::permanent::CounterKind;
+use super::permanent::{BecomesCreature, CounterKind};
 use super::predicate::CardPredicate;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -321,6 +321,10 @@ pub enum Effect {
     GrantKeywordsToSource {
         keywords: Keywords,
     },
+    /// The source permanent becomes an artifact creature (CR 613.1d).
+    BecomeCreatureSource {
+        duration: BecomesCreature,
+    },
     /// The source permanent has base power and/or toughness `power`/`toughness`
     /// until end of turn (CR 613.4b); an absent value leaves that base alone.
     SetBasePtUntilEot {
@@ -504,6 +508,9 @@ pub enum TargetSpec {
 /// `min == 0` encodes "up to"; `max` bounds how many may be chosen.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct TargetRequirement {
+    /// "Another target": the source object can't be chosen.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub another: bool,
     pub spec: TargetSpec,
     pub min: usize,
     pub max: usize,
@@ -512,6 +519,7 @@ pub struct TargetRequirement {
 impl TargetRequirement {
     pub fn one(spec: TargetSpec) -> Self {
         Self {
+            another: false,
             spec,
             min: 1,
             max: 1,
@@ -519,7 +527,12 @@ impl TargetRequirement {
     }
 
     pub fn up_to(max: usize, spec: TargetSpec) -> Self {
-        Self { spec, min: 0, max }
+        Self {
+            another: false,
+            spec,
+            min: 0,
+            max,
+        }
     }
 }
 
@@ -625,6 +638,7 @@ impl Effect {
             | Effect::CantBeBlockedThisTurnSource
             | Effect::GrantKeywordsToSource { .. }
             | Effect::SetBasePtUntilEot { .. }
+            | Effect::BecomeCreatureSource { .. }
             | Effect::ExileAttached
             | Effect::ShuffleAttachedIntoLibrary
             | Effect::GainLife { .. }
@@ -663,6 +677,7 @@ pub fn effect_target_requirements(effects: &[Effect]) -> Vec<TargetRequirement> 
                     .iter()
                     .any(|effect| matches!(effect, Effect::ExileUntilSourceLeaves { .. }));
                 vec![TargetRequirement {
+                    another: false,
                     spec: spec.clone(),
                     min: usize::from(!optional),
                     max: 1,
