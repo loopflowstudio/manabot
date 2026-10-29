@@ -47,6 +47,9 @@ lib 119) except `semantic_conformance_tests` (world w16 vs w15 and receipt diges
 drift; fails in PR #394 CI run 40819903624); clippy, fmt clean; extension rebuilt;
 `pytest tests/semantic` 158 pass, 4 fail on `schema_version == 3/4/7` asserts,
 inherited from `be2b7586b` (test files unchanged since it).
+Compress after slice 7: authoring `Target::up_to`/`.another()` replace literal
+targets (IR unchanged); tests share `support::card_of`. Debug `cargo test` and
+clippy re-run with the same results; extension not rebuilt (refactor only).
 
 ## Remaining (25 cards), suggested next slices
 
@@ -54,7 +57,9 @@ inherited from `be2b7586b` (test files unchanged since it).
   restriction by effective power), The Boulder, Platypus-Bear, Toph (artifacts gain
   land type), The Mechanist (temporary animation — `becomes_creature` may fit).
 - Mana: Great Divide Guide, Raucous Audience, White Lotus Tile, Energybending,
-  Ozai, The Lion-Turtle, Secret Tunnel.
+  Ozai, The Lion-Turtle, Secret Tunnel. Great Divide Guide is already authored
+  (`Op::GrantMana`) but listed in `tla::INCOMPLETE` "Unreviewed until T3": review
+  it against its obligations, test it, then drop the entry.
 - Honest Work (Aura; loses all abilities, becomes Citizen "Humble Merchant" 1/1
   with "{T}: Add {C}" — characteristic replacement, layers 1-7b).
 - X costs: Fated Firepower, Crashing Wave, Katara Water Tribe's Hope (team role
