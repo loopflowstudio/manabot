@@ -16,8 +16,8 @@ from managym.decision import Command, DecisionFrame, Observation
 from pydantic import ConfigDict, Field, model_validator
 import torch
 
-from manabot.env import Match
 from manabot.env.failures import ScalarCapture
+from manabot.env.match import Match
 from manabot.env.observation import ACTION_TYPE_DIM, ObservationSpace
 from manabot.infra.identity import canonical_sha256
 from manabot.model.actor_critic import ActorCritic

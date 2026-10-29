@@ -19,3 +19,5 @@ Reversible operator choices made headless; each is noted in the PR.
 - Not rewritten (dated evidence): `docs/rules/tla/t1-clause-review.json` and the
   Academy curated pack `local_identity` values keep pre-rename keys.
 - Full TLA completion remains the eight-PR plan; no merge or new Task authorized.
+
+Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.

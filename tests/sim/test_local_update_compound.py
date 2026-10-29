@@ -14,7 +14,9 @@ from academy.advice import BeliefNormalizationReceipt
 from academy.local_advice import local_update_scenario
 from manabot.belief.likelihood import file_sha256
 from manabot.belief.state import ViewerHistory
-from manabot.env import Env, Match, ObservationSpace
+from manabot.env.env import Env
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint

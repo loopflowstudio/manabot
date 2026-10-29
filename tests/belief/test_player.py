@@ -14,7 +14,7 @@ from manabot.belief.likelihood import (
     file_sha256,
 )
 from manabot.belief.player import ExactRangePlayer, UniformRangePlayer
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.sim.search.flat_mc import play_games

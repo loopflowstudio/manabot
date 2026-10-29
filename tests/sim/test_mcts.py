@@ -6,7 +6,7 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
@@ -16,7 +16,7 @@ from manabot.sim.search.puct import (
     DeterminizedPuctPlayer,
     determinized_puct,
 )
-from manabot.verify.util import INTERACTIVE_DECK
+from manabot.verify.games import INTERACTIVE_DECK
 import managym
 
 

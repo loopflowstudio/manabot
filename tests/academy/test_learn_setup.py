@@ -11,7 +11,9 @@ from academy.curated_pack import CURATED_PACK, JEONG_INCREMENT_PACK
 from academy.play_demo import load_play_demo
 from academy.server import viewer_view
 from academy.trace import GameConfig, load_trace
-from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, RewardConfig
 import managym
 

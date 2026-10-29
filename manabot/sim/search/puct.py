@@ -23,7 +23,8 @@ from typing import TYPE_CHECKING, Any, Mapping, Protocol
 import numpy as np
 import torch
 
-from manabot.env import Env, ObservationSpace
+from manabot.env.env import Env
+from manabot.env.observation import ObservationSpace
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.world import validate_agent_setup
 from manabot.sim.search.branch import (

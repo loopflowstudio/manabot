@@ -11,8 +11,8 @@ from pathlib import Path
 
 import torch
 
-from manabot.env import Match
 from manabot.env.failures import ScalarCapture
+from manabot.env.match import Match
 from manabot.infra.config import MatchConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.sim.action.compound import CompoundDecision, sample_compound

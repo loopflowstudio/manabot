@@ -12,14 +12,17 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.env import Env, Match, ObservationSpace, Reward, VectorEnv
+from manabot.env.env import Env
 from manabot.env.failures import (
     CaptureScope,
     capture_scope,
     read_failure,
     runtime_identities,
 )
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.env.replay import require_replay_runtime
+from manabot.env.vector_env import VectorEnv
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.sim import rollout
