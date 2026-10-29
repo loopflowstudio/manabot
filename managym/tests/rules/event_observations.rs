@@ -95,12 +95,14 @@ fn spell_events_are_observable_for_creature_spells() {
         from: Some(ZoneType::Hand),
         to: ZoneType::Stack,
         controller: PlayerId(0),
+        face_down: false,
     }));
     assert!(events.contains(&GameEvent::CardMoved {
         card: elf,
         from: Some(ZoneType::Stack),
         to: ZoneType::Battlefield,
         controller: PlayerId(0),
+        face_down: false,
     }));
 
     let spell_cast_index = events

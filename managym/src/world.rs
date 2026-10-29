@@ -19,7 +19,7 @@ use std::collections::BTreeSet;
 use crate::semantic::{content_pool, Eligibility, IrError, PoolDefinition};
 
 /// Rules and observation/action meaning; see `WORLDS.md` for compatibility.
-pub const WORLD_VERSION: &str = "w16";
+pub const WORLD_VERSION: &str = "w17";
 
 /// The pool holding every card this world defines, from every set.
 pub const WORLD_POOL: &str = "tla-pool-v1";

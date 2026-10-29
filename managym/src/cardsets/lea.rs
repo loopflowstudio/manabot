@@ -288,10 +288,10 @@ fn shivan_dragon() -> CardDefinition {
             mana_cost: ManaCost::parse("R"),
             sacrifice_source: false,
             waterbend: false,
-            effect: Effect::ModifyUntilEot {
+            effects: vec![Effect::ModifyUntilEot {
                 power_delta: 1,
                 toughness_delta: 0,
-            },
+            }],
             ..Default::default()
         }],
         text_box: "Flying\n{R}: This creature gets +1/+0 until end of turn.".to_string(),

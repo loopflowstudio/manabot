@@ -208,6 +208,11 @@ Whether a permanent has lost its abilities is `Game::has_lost_abilities`
 (until-end-of-turn loss or an Aura's `SetCharacteristics`); never read
 `Permanent.abilities_lost` alone.
 
+Activated abilities that function from hand or graveyard set `Cost.zone`
+(landcycling uses `Program::landcycling`); they are offered as
+`Action::ActivateCardAbility`. Programs compile in key order, so an ability's
+index follows its program key, not its printed position.
+
 Native fixed mana abilities on a card are additive: multiple fixed productions
 produce all listed colors together. A land that produces one chosen color uses
 one activated modal mana program, not multiple fixed mana programs. Verify each

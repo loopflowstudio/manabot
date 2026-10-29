@@ -1,11 +1,14 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use super::{
-    ability::{Ability, Effect, StaticCondition, TargetRequirement, TargetSpec},
+    ability::{
+        effect_target_requirements, Ability, Effect, StaticCondition, TargetRequirement, TargetSpec,
+    },
     game_object::{ObjectId, ObjectRef, PlayerId},
     mana::{Color, Colors, Mana, ManaCost},
     permanent::CounterKind,
     predicate::CardPredicate,
+    zone::ZoneType,
 };
 
 /// Stable index of an immutable card definition in a [`ContentPack`](crate::cards::content_pack::ContentPack).
@@ -317,7 +320,10 @@ pub enum ReplacementEffect {
 
 impl ActivatedAbilityDefinition {
     pub fn mana_choices(&self) -> Option<Vec<Mana>> {
-        match &self.effect {
+        let [effect] = self.effects.as_slice() else {
+            return None;
+        };
+        match effect {
             Effect::AddMana {
                 mana,
                 until_end_of_combat: false,
@@ -333,6 +339,42 @@ impl ActivatedAbilityDefinition {
                 })
                 .collect(),
             _ => None,
+        }
+    }
+
+    /// The activation's targeting clause (CR 602.2b, 601.2c); activated
+    /// abilities have at most one.
+    pub fn target_requirement(&self) -> Option<TargetRequirement> {
+        self.target_spec()?;
+        effect_target_requirements(&self.effects).into_iter().next()
+    }
+
+    pub fn target_spec(&self) -> Option<&TargetSpec> {
+        self.effects.iter().find_map(Effect::target_spec)
+    }
+}
+
+fn is_battlefield(zone: &ActivationZone) -> bool {
+    *zone == ActivationZone::Battlefield
+}
+
+/// Where an activated ability can be activated from (CR 113.6, 602.1).
+/// Abilities of cards outside the battlefield function only from the zone
+/// their text names, or where their cost (discarding this card) requires.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+pub enum ActivationZone {
+    #[default]
+    Battlefield,
+    Hand,
+    Graveyard,
+}
+
+impl ActivationZone {
+    pub fn zone(self) -> ZoneType {
+        match self {
+            Self::Battlefield => ZoneType::Battlefield,
+            Self::Hand => ZoneType::Hand,
+            Self::Graveyard => ZoneType::Graveyard,
         }
     }
 }
@@ -354,6 +396,25 @@ pub struct AbilityGrant {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct ActivatedAbilityDefinition {
+    /// Omitted for battlefield abilities so existing definition digests hold.
+    #[serde(skip_serializing_if = "is_battlefield")]
+    pub zone: ActivationZone,
+    /// Discard this card as an activation cost (cycling, CR 702.29); only
+    /// hand abilities carry it.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub discard_source: bool,
+    /// Discard a chosen card from hand as an activation cost.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub discard_card: bool,
+    /// Exhaust: each object may activate this ability only once (CR 702.177a).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub exhaust: bool,
+    /// "Activate only once each turn" (CR 602.5b); counted per object.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub once_each_turn: bool,
+    /// "Costs {1} less to activate for each [predicate] you control."
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_reduction_per: Option<CardPredicate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sacrifice: Option<SacrificeCost>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -374,10 +435,6 @@ pub struct ActivatedAbilityDefinition {
     /// activating player controls, {1} per permanent tapped. Taps count as
     /// cost payment rather than a mana ability (CR 701.67).
     pub waterbend: bool,
-    /// "Exhaust — [Cost]: [Effect]": activate only once per incarnation
-    /// (CR 702.177a); `Permanent::exhausted_abilities` records activations.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub exhaust: bool,
     /// "Crew N": tap any number of other untapped creatures you control
     /// with total power N or greater (CR 702.122a).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -389,7 +446,8 @@ pub struct ActivatedAbilityDefinition {
     /// grantor; printed abilities have none.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub granted_by: Option<AbilityGrant>,
-    pub effect: Effect,
+    /// Resolution effects in printed order ("draw a card, then discard a card").
+    pub effects: Vec<Effect>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -411,6 +469,13 @@ pub struct CardDefinition {
     /// "You may cast [predicate] spells from the top of your library."
     #[serde(skip_serializing_if = "Option::is_none")]
     pub library_top_casting: Option<CardPredicate>,
+    /// "If [condition], you may cast this spell as though it had flash."
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flash_if: Option<StaticCondition>,
+    /// `cost_reduction_per` counts cards in your graveyard, not permanents
+    /// you control.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub cost_reduction_in_graveyard: bool,
     /// Each matching permanent you control gains a chosen-color tap ability.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub mana_grant: Vec<CardPredicate>,
@@ -452,6 +517,19 @@ pub struct CardDefinition {
     pub targeting: Vec<TargetRequirement>,
     /// Kicker (CR 702.33): optional additional cost chosen while casting.
     pub kicker: Option<ManaCost>,
+    /// The optional additional cost is "waterbend [kicker]": its generic
+    /// mana may be paid by tapping artifacts and creatures.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub kicker_waterbend: bool,
+    /// Printed flashback (CR 702.34): castable from its owner's graveyard
+    /// for this cost, then exiled instead of going anywhere else.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flashback: Option<ManaCost>,
+    /// Printed foretell (CR 702.143): during its owner's turn it may be
+    /// exiled face down from hand for {2}, then cast on a later turn for
+    /// this cost.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub foretell: Option<ManaCost>,
     /// Ward (CR 702.21): "counter [the targeting spell] unless its
     /// controller pays [cost]". Synthesized into a BecomesTargeted
     /// triggered ability at registration.
@@ -552,6 +630,8 @@ impl Card {
     }
 
     /// CR 117.1a, 702.8 — Instants and cards with flash use instant timing.
+    /// Printed instant timing; a conditional `flash_if` is checked by
+    /// [`crate::flow::game::Game::has_instant_timing`].
     pub fn is_instant_speed(&self) -> bool {
         self.types.is_instant() || self.keywords.flash
     }

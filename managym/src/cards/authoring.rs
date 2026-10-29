@@ -167,6 +167,26 @@ impl Program {
         })
     }
 
+    /// Landcycling (CR 702.29e): "[mana], Discard this card: Search your
+    /// library for a [subtype] card, reveal it, put it into your hand, then
+    /// shuffle." It functions only from its owner's hand.
+    pub fn landcycling(key: &'static str, mana: &'static str, subtype: &'static str) -> Self {
+        Self::new(
+            key,
+            ProgramKind::Activated,
+            vec![Op::SearchBasicLand {
+                destination: Some(Destination::Hand),
+                subtype: Some(subtype),
+            }],
+        )
+        .cost(Cost {
+            mana: Some(mana),
+            zone: Some(Zone::YourHand),
+            discard_source: Some(true),
+            ..Cost::default()
+        })
+    }
+
     pub fn new(key: &'static str, kind: ProgramKind, ops: Vec<Op>) -> Self {
         Self {
             key,
@@ -220,14 +240,38 @@ pub struct Cost {
     pub life: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub affinity: Option<Predicate>,
+    /// Where `affinity` counts; absent means permanents you control.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub affinity_zone: Option<Zone>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kicker: Option<&'static str>,
+    /// Printed flashback (CR 702.34) on a spell program: its graveyard cost.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flashback: Option<&'static str>,
+    /// Printed foretell (CR 702.143) on a spell program: the cost to cast it
+    /// from exile on a later turn after foretelling it from hand for {2}.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub foretell: Option<&'static str>,
+    /// An activated ability of a card outside the battlefield functions only
+    /// from this zone (CR 113.6); absent means the battlefield.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub zone: Option<Zone>,
+    /// "Discard this card" as an activation cost; requires `zone: YourHand`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub discard_source: Option<bool>,
+    /// "Discard a card" as an activation cost (CR 601.2h); chosen on
+    /// activation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub discard_card: Option<bool>,
+    /// Exhaust (CR 702.177a): "Activate only once."
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exhaust: Option<bool>,
+    /// "Activate only once each turn" (CR 602.5b).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub once_each_turn: Option<bool>,
     /// "Activate only as a sorcery" (CR 602.5d).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sorcery_timing: Option<bool>,
-    /// "Exhaust — [Cost]": activate only once (CR 702.177a).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub exhaust: Option<bool>,
     /// "This spell costs {N} less to cast if it targets a [predicate]."
     #[serde(skip_serializing_if = "Option::is_none")]
     pub reduced_if_targets: Option<TargetReduction>,
@@ -271,13 +315,13 @@ pub struct Sacrifice {
 
 #[derive(Serialize)]
 pub struct Target {
-    /// "Another target": the source can't be chosen.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub another: Option<bool>,
     pub max: i32,
     pub min: i32,
     pub role: &'static str,
     pub selector: Selector,
+    /// "other target": the ability's source object is not a legal choice.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub another: bool,
     /// "That share a creature type": the chosen targets must share one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub shares_creature_type: Option<bool>,
@@ -286,11 +330,11 @@ pub struct Target {
 impl Target {
     pub fn one(role: &'static str, selector: Selector) -> Self {
         Self {
-            another: None,
             min: 1,
             max: 1,
             role,
             selector,
+            another: false,
             shares_creature_type: None,
         }
     }
@@ -307,7 +351,7 @@ impl Target {
     /// "Another target": the source can't be chosen.
     pub fn another(self) -> Self {
         Self {
-            another: Some(true),
+            another: true,
             ..self
         }
     }
@@ -358,8 +402,12 @@ impl Trigger {
 #[derive(Serialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum Op {
+    /// "You may discard a card. If you do, draw `count` cards." With
+    /// `up_to`, discard up to that many, then draw `count` for each.
     OptionalDiscardDraw {
         count: i32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        up_to: Option<i32>,
     },
     Modal {
         modes: Vec<Vec<Op>>,
@@ -417,12 +465,7 @@ pub enum Op {
         target: &'static str,
     },
     Earthbend {
-        count: i32,
-        target: &'static str,
-    },
-    /// "Earthbend X", X read as the ability resolves.
-    EarthbendValue {
-        count: Quantity,
+        count: Count,
         target: &'static str,
     },
     DrainLifeValue {
@@ -444,16 +487,95 @@ pub enum Op {
     Exile {
         target: &'static str,
     },
+    /// Airbend (CR 701.65): exile the target; while that exact card stays
+    /// exiled, its owner may cast it for {2} rather than its mana cost.
+    Airbend {
+        target: &'static str,
+    },
+    /// Airbend every permanent matching `predicate` except the object chosen
+    /// for the `except` role, if any (Avatar's Wrath).
+    AirbendAll {
+        except: &'static str,
+        predicate: Predicate,
+    },
+    /// "Until your next turn, your opponents can't cast spells from anywhere
+    /// other than their hands."
+    OpponentsCastOnlyFromHand,
+    /// "Exile the top card of your library. You may play that card this turn."
+    ExileTopCardPlayThisTurn,
+    /// "Each creature you control gains firebending until end of turn."
+    GrantFirebendingUntilEot {
+        amount: i32,
+    },
+    /// "A player exiles a matching card; its controller may cast it as linked."
+    ExileLinked {
+        /// `you`, or `target` (the target player chooses).
+        chooser: &'static str,
+        /// `waterbend_mana_value` (Hama) or `flash_any_mana` (Azula).
+        grant: &'static str,
+        predicate: Predicate,
+        target: &'static str,
+        up_to: bool,
+        /// The target player's `battlefield` (nontoken permanents) or
+        /// `graveyard`.
+        zone: &'static str,
+    },
+    /// "Exile cards from the top of your library until you exile a nonland
+    /// card. You may cast it without paying its mana cost if its mana value
+    /// is less than `below`; otherwise put it into your hand."
+    ExileUntilNonlandCastFree {
+        below: Quantity,
+    },
+    /// "You may cast a matching spell from your hand without paying its mana cost."
+    CastFromHandFree {
+        predicate: Predicate,
+    },
+    /// "You have no maximum hand size for the rest of the game."
+    NoMaximumHandSize,
+    /// "Shuffle your graveyard into your library."
+    ShuffleGraveyardIntoLibrary,
+    /// "Sacrifice this [permanent]. If you do, [then]." Nothing happens when
+    /// the exact source already left the battlefield.
+    SacrificeSource {
+        then: Vec<Op>,
+    },
+    /// "The owner of [target] puts it into their library second from the top
+    /// or on the bottom." The owner chooses.
+    PutIntoLibrarySecondOrBottom {
+        target: &'static str,
+    },
+    /// "Search your library for up to `count` land cards with different
+    /// names and reveal them. An opponent chooses `opponent_picks` of those
+    /// cards. Put the chosen cards into your graveyard and the rest onto the
+    /// battlefield tapped, then shuffle."
+    SearchLandsOpponentSplits {
+        count: i32,
+        opponent_picks: i32,
+    },
+    /// "Target [player] reveals their hand. You choose a [predicate] card
+    /// from it. That player discards that card."
+    RevealHandDiscardChosen {
+        predicate: Predicate,
+        target: &'static str,
+    },
+    /// Without a destination, a basic land onto the battlefield tapped. With
+    /// `Hand`, any card of `subtype` is revealed and put into hand
+    /// (landcycling: "search your library for a Plains card"), or a basic
+    /// land card when `subtype` is absent.
     SearchBasicLand {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        destination: Option<Destination>,
         subtype: Option<&'static str>,
     },
     DrawCards {
         count: i32,
     },
+    /// `target` may be `triggering_permanent`: the creature whose event
+    /// fired the trigger ("it gets +X/+X").
     BuffTargetValue {
         power: Quantity,
         target: &'static str,
-        toughness: i32,
+        toughness: Count,
     },
     CreateToken {
         count: i32,
@@ -616,7 +738,7 @@ pub enum Op {
     },
     LookAndSelect {
         destination: Destination,
-        look: i32,
+        look: Count,
         max_select: i32,
         min_select: i32,
         predicate: Predicate,
@@ -638,23 +760,37 @@ pub enum Op {
     Destroy {
         target: &'static str,
     },
+    /// Mill, then you may put a milled card matching `predicate` into hand.
+    /// `then` runs if any milled card matches `milled_any` ("You gain 2 life
+    /// if a Lesson card is milled this way").
     MillAndSelect {
         count: i32,
         if_declined: Vec<Op>,
         predicate: Predicate,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        milled_any: Option<Predicate>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        then: Vec<Op>,
     },
     CounterSpell {
         target: &'static str,
     },
+    /// Mill `count`; with `target`, that player mills instead of you.
     MillCards {
         count: i32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        target: Option<&'static str>,
     },
     CombatRequiresOther {
         predicate: Predicate,
     },
     PowerFromLandCounters,
+    /// Return the target graveyard card to its owner's hand, or with
+    /// `BattlefieldTapped` put it onto the battlefield tapped.
     ReturnGraveyardTarget {
         target: &'static str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        destination: Option<Destination>,
     },
     AddMana {
         mana: &'static str,
@@ -696,8 +832,12 @@ pub enum Op {
     GrantMana {
         predicates: Vec<Predicate>,
     },
+    /// Mana with a spending restriction (CR 106.6); omitted `spend_only`
+    /// means "Spend this mana only to cast Lesson spells."
     AddLessonMana {
         mana: &'static str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        spend_only: Option<SpendOnly>,
     },
     GrantFlashback,
     Branch {
@@ -760,27 +900,92 @@ impl Op {
                 .collect(),
         }
     }
+
+    /// "Spend this mana only to cast Lesson spells."
+    pub fn lesson_mana(mana: &'static str) -> Self {
+        Self::AddLessonMana {
+            mana,
+            spend_only: None,
+        }
+    }
+
+    /// "Add one mana of any color. Spend this mana only to ..."
+    pub fn choose_restricted_mana(spend_only: SpendOnly) -> Self {
+        Self::Modal {
+            modes: ["W", "U", "B", "R", "G"]
+                .into_iter()
+                .map(|mana| {
+                    vec![Self::AddLessonMana {
+                        mana,
+                        spend_only: Some(spend_only.clone()),
+                    }]
+                })
+                .collect(),
+        }
+    }
+}
+
+/// What restricted mana may be spent on: spells with any of `spell_subtypes`,
+/// or abilities of sources with any of `ability_source_subtypes`.
+#[derive(Serialize, Default, Clone)]
+pub struct SpendOnly {
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub spell_subtypes: Vec<&'static str>,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub ability_source_subtypes: Vec<&'static str>,
 }
 
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Predicate {
-    NotCardTypes { values: Vec<CardType> },
-    Subtype { value: &'static str },
-    Supertype { value: &'static str },
-    All { predicates: Vec<Predicate> },
-    CardType { value: CardType },
-    PowerAtMost { value: i32 },
-    ManaValueAtLeast { value: i32 },
-    SubtypesAny { values: Vec<&'static str> },
+    NotCardTypes {
+        values: Vec<CardType>,
+    },
+    Subtype {
+        value: &'static str,
+    },
+    All {
+        predicates: Vec<Predicate>,
+    },
+    /// Matches when any listed predicate matches ("artifact or Lesson").
+    AnyOf {
+        predicates: Vec<Predicate>,
+    },
+    CardType {
+        value: CardType,
+    },
+    PowerAtMost {
+        value: i32,
+    },
+    ManaValueAtLeast {
+        value: i32,
+    },
+    SubtypesAny {
+        values: Vec<&'static str>,
+    },
     Flying,
+    WithCounter,
+    /// An attacking creature (CR 508.1k); only permanents in combat match.
+    Attacking,
+    NotSubtypes {
+        values: Vec<&'static str>,
+    },
+    TypesAny {
+        values: Vec<CardType>,
+    },
+    PowerAtLeast {
+        value: i32,
+    },
+    Supertype {
+        value: &'static str,
+    },
+    /// "with no counters on it" (any kind, CR 122).
     NoCounters,
-    NotSubtypes { values: Vec<&'static str> },
-    TypesAny { values: Vec<CardType> },
-    PowerAtLeast { value: i32 },
-    // A token (`true`) or a nontoken (`false`) object.
-    Token { value: bool },
-    // An attacking or blocking creature (CR 506.4).
+    /// A token (`true`) or a nontoken (`false`) object.
+    Token {
+        value: bool,
+    },
+    /// An attacking or blocking creature (CR 506.4).
     AttackingOrBlocking,
     Any,
 }
@@ -819,9 +1024,20 @@ pub enum Condition {
     },
 }
 
+/// A printed number or a resolution-time quantity ("earthbend X, where X is…").
+/// Fixed counts serialize as plain integers.
+#[derive(Serialize)]
+#[serde(untagged)]
+pub enum Count {
+    Fixed(i32),
+    Of(Quantity),
+}
+
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Quantity {
+    /// The resolving spell's announced X.
+    X,
     BattlefieldMatching {
         predicate: Predicate,
     },
@@ -835,8 +1051,6 @@ pub enum Quantity {
     },
     /// The greatest number of creatures you control that share a creature type.
     GreatestSharedCreatureType,
-    /// The value of X announced as the spell was cast (CR 107.3m).
-    X,
     /// "The excess damage dealt this way" by the previous instruction
     /// (CR 120.4a).
     ExcessDamage,
@@ -955,10 +1169,14 @@ pub enum Duration {
 #[serde(rename_all = "snake_case")]
 pub enum Event {
     Attacks,
+    /// Exactly one creature was declared as an attacker (CR 506.5).
+    AttacksAlone,
     BecomesTapped,
     BecomesTargeted,
     CastEnters,
     CastSpell,
+    /// "At the beginning of combat on your turn."
+    CombatBegins,
     Dies,
     DrawNthCard,
     EndStepBegins,
@@ -972,6 +1190,7 @@ pub enum Event {
 #[serde(rename_all = "snake_case")]
 pub enum Destination {
     Hand,
+    BattlefieldTapped,
 }
 
 #[derive(Serialize)]
@@ -1003,6 +1222,7 @@ pub enum Controller {
 pub enum Zone {
     Battlefield,
     YourGraveyard,
+    YourHand,
 }
 
 #[derive(Serialize)]

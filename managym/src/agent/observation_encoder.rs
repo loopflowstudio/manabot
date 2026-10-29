@@ -1039,6 +1039,7 @@ mod tests {
             is_lesson: false,
             ward_cost: 0,
             kicker_cost: 0,
+            face_down: false,
             card_types: CardTypeData {
                 is_castable: true,
                 is_permanent: true,
@@ -1055,7 +1056,7 @@ mod tests {
             },
             keywords: KeywordData::default(),
             mana_cost: ManaCost {
-                spend_on_lesson: false,
+                purpose: Default::default(),
                 cost: [0; 7],
                 mana_value,
                 hybrid: Vec::new(),

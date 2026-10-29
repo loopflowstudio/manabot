@@ -297,6 +297,7 @@ class LegacyCardView(ProtocolModel):
     toughness: Int32
     mana_value: Int32
     types: LegacyCardTypesView
+    face_down: bool = Field(default=False, exclude_if=lambda value: not value)
 
 
 class LegacyPermanentView(ProtocolModel):

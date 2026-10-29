@@ -12,26 +12,28 @@ use crate::{
     cards::content_pack::{CompiledSemanticManifest, ContentPack},
     state::{
         ability::{
-            Ability, Effect, EffectValue, StaticCondition, TargetRequirement, TargetSpec,
-            TriggerCondition, TriggerSubject,
+            Ability, Effect, EffectValue, LinkedChooser, LinkedGrant, MilledBonus, StaticCondition,
+            TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
         },
         card::{
-            ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, CounterThreshold,
-            Keywords, PowerCda, ReplacementEffect, Restriction, SacrificeCost, SetCharacteristics,
-            SpellCostReduction, StaticKeywordGrant, StaticPtBuff, StaticRestriction, StaticScope,
-            StaticTypeGrant, TargetCostReduction, TriggeredManaAbility,
+            ActivatedAbilityDefinition, ActivationZone, CardDefinition, CardType, CardTypes,
+            CounterThreshold, Keywords, PowerCda, ReplacementEffect, Restriction, SacrificeCost,
+            SetCharacteristics, SpellCostReduction, StaticKeywordGrant, StaticPtBuff,
+            StaticRestriction, StaticScope, StaticTypeGrant, TargetCostReduction,
+            TriggeredManaAbility,
         },
         mana::{Color, Colors, Mana, ManaCost},
         permanent::{BecomesCreature, CounterKind},
         player::PlayerConfig,
         predicate::CardPredicate,
+        zone::ZoneType,
     },
 };
 
 use super::{
     array_field, object_field, opt_bool_field, opt_str_field, parse_condition, str_array_field,
-    str_field, u64_field, Condition, Definition, IrError, Predicate, Program, SemanticPack, Step,
-    ValueExpression,
+    str_field, u64_field, Amount, Condition, Definition, IrError, Predicate, Program, SemanticPack,
+    Step, ValueExpression,
 };
 
 #[derive(Clone)]
@@ -385,8 +387,12 @@ fn apply_program(
             }
             definition.sacrifice_cost = cost.sacrifice;
             definition.kicker = cost.kicker;
+            definition.kicker_waterbend = cost.waterbend;
+            definition.flashback = cost.flashback;
+            definition.foretell = cost.foretell;
             definition.cost_reduction_per = cost.affinity;
             definition.cost_reduction_if_targets = cost.reduced_if_targets;
+            definition.cost_reduction_in_graveyard = cost.affinity_in_graveyard;
             definition.targeting = match opt_str_field(&program.metadata, "target_binding")? {
                 None | Some("explicit") => targeting,
                 Some("inferred") => Vec::new(),
@@ -441,25 +447,47 @@ fn apply_program(
         }
         "activated" => {
             let cost = program_cost(program)?;
-            let mut effects = lower_steps(pack, program, &program.steps)?;
-            // An ability's sequential instructions resolve as one unconditional group.
-            let effect = match effects.len() {
-                0 => return unsupported(program, "activated ability has no effect"),
-                1 => effects.remove(0),
-                _ => Effect::IfCondition {
-                    condition: StaticCondition::Always,
-                    effects,
-                    otherwise: Vec::new(),
-                },
+            let effects = lower_steps(pack, program, &program.steps)?;
+            if effects.is_empty() {
+                return unsupported(program, "activated ability has no effect");
+            }
+            let zone = match cost.zone.as_deref() {
+                None | Some("battlefield") => ActivationZone::Battlefield,
+                Some("your_hand") => ActivationZone::Hand,
+                Some("your_graveyard") => ActivationZone::Graveyard,
+                Some(other) => {
+                    return unsupported(program, &format!("unsupported activation zone {other:?}"))
+                }
             };
+            if cost.discard_source && zone != ActivationZone::Hand {
+                return Err(malformed(
+                    program,
+                    "discarding the source requires a hand ability",
+                ));
+            }
+            if zone != ActivationZone::Battlefield
+                && (cost.tap_source
+                    || cost.sacrifice_source
+                    || cost.waterbend
+                    || cost.sacrifice.is_some()
+                    || cost.crew.is_some())
+            {
+                return unsupported(program, "permanent costs on a card outside the battlefield");
+            }
             // X is announced, then paid through the waterbend payment; no
             // other payment or targeting path carries it.
             if cost.mana.as_ref().is_some_and(|mana| mana.x > 0)
-                && (!cost.waterbend || effect.target_spec().is_some())
+                && (!cost.waterbend || effects.iter().any(|e| e.target_spec().is_some()))
             {
                 return unsupported(program, "X activation cost needs waterbend and no targets");
             }
             let ability = ActivatedAbilityDefinition {
+                zone,
+                discard_source: cost.discard_source,
+                discard_card: cost.discard_card,
+                exhaust: cost.exhaust,
+                once_each_turn: cost.once_each_turn,
+                cost_reduction_per: cost.affinity,
                 sacrifice: cost.sacrifice,
                 own_turn_only: cost.own_turn_only,
                 sorcery_timing: cost.sorcery_timing,
@@ -470,11 +498,10 @@ fn apply_program(
                     .ok_or_else(|| malformed(program, "activated ability has no mana cost"))?,
                 sacrifice_source: cost.sacrifice_source,
                 waterbend: cost.waterbend,
-                exhaust: cost.exhaust,
                 crew: cost.crew,
                 x_min: cost.x_min,
                 granted_by: None,
-                effect,
+                effects,
             };
             // `granted_to` is validated as the attached creature at compile.
             if program.metadata.get("granted_to").is_some() {
@@ -493,8 +520,11 @@ fn apply_program(
 struct ProgramCost {
     mana: Option<ManaCost>,
     kicker: Option<ManaCost>,
+    flashback: Option<ManaCost>,
+    foretell: Option<ManaCost>,
     affinity: Option<CardPredicate>,
     reduced_if_targets: Option<TargetCostReduction>,
+    affinity_in_graveyard: bool,
     sacrifice: Option<SacrificeCost>,
     own_turn_only: bool,
     sorcery_timing: bool,
@@ -502,7 +532,11 @@ struct ProgramCost {
     sacrifice_source: bool,
     tap_source: bool,
     waterbend: bool,
+    zone: Option<String>,
+    discard_source: bool,
+    discard_card: bool,
     exhaust: bool,
+    once_each_turn: bool,
     crew: Option<i32>,
     x_min: u8,
 }
@@ -520,6 +554,8 @@ fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
     Ok(ProgramCost {
         mana: opt_str_field(value, "mana")?.map(ManaCost::parse),
         kicker: opt_str_field(value, "kicker")?.map(ManaCost::parse),
+        flashback: opt_str_field(value, "flashback")?.map(ManaCost::parse),
+        foretell: opt_str_field(value, "foretell")?.map(ManaCost::parse),
         affinity: value.get("affinity").map(predicate_value).transpose()?,
         reduced_if_targets: value
             .get("reduced_if_targets")
@@ -534,6 +570,11 @@ fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
                 })
             })
             .transpose()?,
+        affinity_in_graveyard: match opt_str_field(value, "affinity_zone")? {
+            None | Some("battlefield") => false,
+            Some("your_graveyard") => true,
+            Some(other) => return unsupported(program, &format!("affinity zone {other:?}")),
+        },
         sacrifice: value
             .get("sacrifice")
             .map(|cost| {
@@ -566,7 +607,11 @@ fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
         tap_source: opt_bool_field(value, "tap_source")?.unwrap_or(false),
         sacrifice_source: opt_bool_field(value, "sacrifice_source")?.unwrap_or(false),
         waterbend: opt_bool_field(value, "waterbend")?.unwrap_or(false),
+        zone: opt_str_field(value, "zone")?.map(str::to_owned),
+        discard_source: opt_bool_field(value, "discard_source")?.unwrap_or(false),
+        discard_card: opt_bool_field(value, "discard_card")?.unwrap_or(false),
         exhaust: opt_bool_field(value, "exhaust")?.unwrap_or(false),
+        once_each_turn: opt_bool_field(value, "once_each_turn")?.unwrap_or(false),
         x_min: value
             .get("x_min")
             .map(|v| {
@@ -675,6 +720,7 @@ fn program_trigger(program: &Program) -> Result<TriggerCondition, IrError> {
         "enters_battlefield" => TriggerCondition::EntersTheBattlefield { subject },
         "dies" => TriggerCondition::Dies { subject },
         "attacks" => TriggerCondition::Attacks { subject },
+        "attacks_alone" => TriggerCondition::AttacksAlone { subject },
         "becomes_tapped" => TriggerCondition::BecomesTapped { subject },
         "tapped_for_mana" => TriggerCondition::TappedForMana { subject },
         "becomes_targeted" => TriggerCondition::BecomesTargeted { subject },
@@ -765,6 +811,16 @@ fn apply_static(definition: &mut CardDefinition, program: &Program) -> Result<()
                 .push(ReplacementEffect::OpponentDamagePlusCounters {
                     kind: counter_kind(program, counter)?,
                 })
+        }
+        [Step::Branch {
+            condition: condition @ Condition::GraveyardAtLeast { .. },
+            then,
+            otherwise,
+        }] if otherwise.is_empty()
+            && matches!(then.as_slice(), [Step::GrantKeywords { target, keywords, duration }]
+                if target == "source" && duration == "static" && keywords == &["flash"]) =>
+        {
+            definition.flash_if = Some(lower_condition(condition)?);
         }
         [Step::CombatRequiresOther { predicate }] => {
             definition.combat_requires_other = Some(predicate_card(predicate)?)
@@ -1074,15 +1130,10 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         Step::ShuffleIntoLibrary { .. } => {
             return unsupported(program, "shuffle_into_library reads the enchanted creature")
         }
-        Step::AddLessonMana { mana } => {
-            let mut mana = Mana::parse(mana);
-            mana.lesson = mana.mana;
-            mana.mana = [0; 6];
-            Effect::AddMana {
-                mana,
-                until_end_of_combat: false,
-            }
-        }
+        Step::AddLessonMana { mana, spend_only } => Effect::AddMana {
+            mana: Mana::restricted_to(*spend_only, Mana::parse(mana).mana),
+            until_end_of_combat: false,
+        },
         Step::CreateNonlegendaryCopy => Effect::CreateNonlegendaryCopy,
         Step::ModifyControlled {
             predicate,
@@ -1351,6 +1402,7 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             target: target_for(program, target)?,
         },
         Step::ReturnToHand { target } if target == "grantor" => Effect::ReturnGrantorToHand,
+        Step::ReturnToHand { target } if target == "source" => Effect::ReturnSourceToHand,
         Step::ReturnToHand { target } => Effect::ReturnToHand {
             target: target_for(program, target)?,
         },
@@ -1367,7 +1419,7 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             predicate,
         } if destination == "hand" => Effect::LookAndSelect {
             reveal: *reveal,
-            look: usize_value(program, *look, "look count")?,
+            look: amount_value(program, look, "look count")?,
             min_select: usize_value(program, *min_select, "minimum selection")?,
             max_select: usize_value(program, *max_select, "maximum selection")?,
             predicate: predicate_card(predicate)?,
@@ -1432,17 +1484,13 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         },
         Step::Earthbend { target, count } => Effect::Earthbend {
             target: target_for(program, target)?,
-            count: i32_value(program, *count, "earthbend count")?,
+            count: amount_value(program, count, "earthbend count")?,
         },
         Step::DestroyCreaturesLosingAbilities { max_mana_value } => {
             Effect::DestroyCreaturesLosingAbilities {
                 max_mana_value: max_mana_value.lower()?,
             }
         }
-        Step::EarthbendValue { target, count } => Effect::EarthbendValue {
-            target: target_for(program, target)?,
-            count: count.lower()?,
-        },
         Step::ExileUntilSourceLeaves { target } => Effect::ExileUntilSourceLeaves {
             target: target_for(program, target)?,
         },
@@ -1470,6 +1518,7 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             tapped: *tapped,
             untap_if_lands: *untap_if_lands,
             bottom_source: *bottom_source,
+            to_hand: false,
         },
         Step::Sacrifice { predicate } => Effect::Sacrifice {
             predicate: predicate_card(predicate)?,
@@ -1480,14 +1529,18 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         Step::DrainLife { amount } => Effect::DrainLife {
             amount: i32::try_from(*amount).map_err(|_| malformed(program, "drain exceeds i32"))?,
         },
-        Step::SearchBasicLand { subtype } => Effect::SearchBasicLand {
+        Step::SearchBasicLand { subtype, to_hand } => Effect::SearchBasicLand {
             subtype: subtype.clone(),
             count: 1,
             tapped: true,
             untap_if_lands: None,
             bottom_source: false,
+            to_hand: *to_hand,
         },
-        Step::OptionalDiscardDraw { count } => Effect::OptionalDiscardDraw { count: *count },
+        Step::OptionalDiscardDraw { count, up_to } => Effect::OptionalDiscardDraw {
+            count: *count,
+            up_to: *up_to,
+        },
         Step::DiscardTargetPlayer { count, target } => Effect::DiscardTargetPlayer {
             count: *count,
             target: target_for(program, target)?,
@@ -1495,18 +1548,99 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         Step::Destroy { target } => Effect::Destroy {
             target: target_for(program, target)?,
         },
+        Step::Exile { target } if target == "source" => Effect::ExileSourceSpell,
         Step::Exile { target } => Effect::Exile {
             target: target_for(program, target)?,
+        },
+        Step::Airbend { target } => Effect::Airbend {
+            target: target_for(program, target)?,
+        },
+        Step::AirbendAll { except, predicate } => {
+            if except != "current_target" {
+                return unsupported(program, "airbend_all excepts its clause's target");
+            }
+            Effect::AirbendAll {
+                predicate: predicate_card(predicate)?,
+            }
+        }
+        Step::OpponentsCastOnlyFromHand => Effect::OpponentsCastOnlyFromHand,
+        Step::ExileTopCardPlayThisTurn => Effect::ExileTopCardPlayThisTurn,
+        Step::GrantFirebendingUntilEot { amount } => Effect::GrantFirebendingUntilEot {
+            amount: u8::try_from(*amount)
+                .map_err(|_| malformed(program, "firebending amount exceeds u8"))?,
+        },
+        Step::ExileLinked {
+            chooser,
+            grant,
+            predicate,
+            target,
+            up_to,
+            zone,
+        } => Effect::ExileLinked {
+            chooser: match chooser.as_str() {
+                "you" => LinkedChooser::Controller,
+                "target" => LinkedChooser::TargetPlayer,
+                other => return unsupported(program, &format!("exile chooser {other:?}")),
+            },
+            zone: match zone.as_str() {
+                "battlefield" => ZoneType::Battlefield,
+                "graveyard" => ZoneType::Graveyard,
+                other => return unsupported(program, &format!("exile zone {other:?}")),
+            },
+            predicate: predicate_card(predicate)?,
+            up_to: *up_to,
+            grant: match grant.as_str() {
+                "waterbend_mana_value" => LinkedGrant::WaterbendManaValue,
+                "flash_any_mana" => LinkedGrant::FlashAnyMana,
+                other => return unsupported(program, &format!("exile grant {other:?}")),
+            },
+            target: target_for(program, target)?,
+        },
+        Step::ExileUntilNonlandCastFree { below } => Effect::ExileUntilNonlandCastFree {
+            below: below.lower()?,
+        },
+        Step::CastFromHandFree { predicate } => Effect::CastFromHandFree {
+            predicate: predicate_card(predicate)?,
+        },
+        Step::NoMaximumHandSize => Effect::NoMaximumHandSize,
+        Step::ShuffleGraveyardIntoLibrary => Effect::ShuffleGraveyardIntoLibrary,
+        Step::RevealHandDiscardChosen { target, predicate } => Effect::RevealHandDiscardChosen {
+            target: target_for(program, target)?,
+            predicate: predicate_card(predicate)?,
+        },
+        Step::SearchLandsOpponentSplits {
+            count,
+            opponent_picks,
+        } => Effect::SearchLandsOpponentSplits {
+            count: *count,
+            opponent_picks: *opponent_picks,
+        },
+        Step::PutIntoLibrarySecondOrBottom { target } => Effect::OwnerPutsIntoLibrary {
+            target: target_for(program, target)?,
+        },
+        Step::SacrificeSource { then } => Effect::SacrificeSource {
+            then: lower_steps(pack, program, then)?,
         },
         Step::BuffTargetValue {
             power,
             toughness,
             target,
+        } if target == "triggering_permanent" => Effect::BuffTriggeringPermanentValue {
+            power: power.lower()?,
+            toughness: amount_value(program, toughness, "toughness")?,
+        },
+        Step::BuffTargetValue {
+            power,
+            toughness: Amount::Fixed(toughness),
+            target,
         } => Effect::BuffTargetValue {
             power: power.lower()?,
-            toughness: *toughness,
+            toughness: i32_value(program, *toughness, "toughness")?,
             target: target_for(program, target)?,
         },
+        Step::BuffTargetValue { .. } => {
+            return unsupported(program, "variable toughness needs the triggering permanent")
+        }
         Step::ReturnToHandDrawIfControlled { target } => Effect::ReturnToHandDrawIfControlled {
             target: target_for(program, target)?,
         },
@@ -1545,15 +1679,30 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         Step::DamageOpponentCreatures { amount } => {
             Effect::DamageOpponentCreatures { amount: *amount }
         }
-        Step::MillCards { count } => Effect::MillCards { count: *count },
+        Step::MillCards { count, target } => Effect::MillCards {
+            count: *count,
+            target: target
+                .as_deref()
+                .map(|target| target_for(program, target))
+                .transpose()?,
+        },
         Step::MillAndSelect {
             count,
             predicate,
             if_declined,
+            milled_any,
+            then,
         } => Effect::MillAndSelect {
             count: *count,
             predicate: predicate_card(predicate)?,
             if_declined: lower_steps(pack, program, if_declined)?,
+            if_milled: match milled_any {
+                None => None,
+                Some(predicate) => Some(MilledBonus {
+                    predicate: predicate_card(predicate)?,
+                    effects: lower_steps(pack, program, then)?,
+                }),
+            },
         },
         Step::DrainLifeValue { amount } => Effect::DrainLifeValue {
             amount: amount.lower()?,
@@ -1564,8 +1713,12 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         Step::CantBeBlockedTarget { target } => Effect::CantBeBlockedTarget {
             target: target_for(program, target)?,
         },
-        Step::ReturnGraveyardTarget { target } => Effect::ReturnGraveyardTarget {
+        Step::ReturnGraveyardTarget {
+            target,
+            tapped_onto_battlefield,
+        } => Effect::ReturnGraveyardTarget {
             target: target_for(program, target)?,
+            tapped_onto_battlefield: *tapped_onto_battlefield,
         },
         Step::Modal { modes } => Effect::Modal {
             modes: modes
@@ -1615,6 +1768,8 @@ fn merge_predicate(result: &mut CardPredicate, predicate: &Predicate) -> Result<
         Predicate::NoCounters => result.no_counters = true,
         Predicate::AttackingOrBlocking => result.in_combat = true,
         Predicate::Token(token) => set_once(&mut result.token, *token, "token")?,
+        Predicate::WithCounter => result.with_counter = true,
+        Predicate::Attacking => result.attacking = true,
         Predicate::PowerAtLeast(value) => set_once(
             &mut result.min_power,
             i32::try_from(*value).map_err(|_| IrError::Malformed("power exceeds i32".into()))?,
@@ -1632,6 +1787,12 @@ fn merge_predicate(result: &mut CardPredicate, predicate: &Predicate) -> Result<
         Predicate::SubtypesAny(names) => result.subtypes_any = names.clone(),
         Predicate::NotSubtypes(names) => result.not_subtypes = names.clone(),
         Predicate::Any => {}
+        Predicate::AnyOf(predicates) => {
+            result.any_of = predicates
+                .iter()
+                .map(predicate_card)
+                .collect::<Result<_, _>>()?
+        }
         Predicate::All(predicates) => {
             for predicate in predicates {
                 merge_predicate(result, predicate)?;
@@ -1754,6 +1915,13 @@ fn i32_value(program: &Program, value: i64, name: &str) -> Result<i32, IrError> 
     i32::try_from(value).map_err(|_| malformed(program, &format!("{name} exceeds i32")))
 }
 
+fn amount_value(program: &Program, amount: &Amount, name: &str) -> Result<EffectValue, IrError> {
+    match amount {
+        Amount::Fixed(value) => Ok(EffectValue::Fixed(i32_value(program, *value, name)?)),
+        Amount::Value(value) => value.lower(),
+    }
+}
+
 fn malformed(program: &Program, message: &str) -> IrError {
     IrError::Malformed(format!("program {}: {message}", program.semantic_key))
 }
@@ -1776,13 +1944,13 @@ fn parse_target_requirement(
     target: &Value,
 ) -> Result<TargetRequirement, IrError> {
     Ok(TargetRequirement {
-        another: opt_bool_field(target, "another")?.unwrap_or(false),
         shares_creature_type: opt_bool_field(target, "shares_creature_type")?.unwrap_or(false),
         spec: target_spec(object_field(target, "selector")?)?,
         min: usize::try_from(u64_field(target, "min")?)
             .map_err(|_| malformed(program, "target min exceeds usize"))?,
         max: usize::try_from(u64_field(target, "max")?)
             .map_err(|_| malformed(program, "target max exceeds usize"))?,
+        another: opt_bool_field(target, "another")?.unwrap_or(false),
     })
 }
 
@@ -1819,6 +1987,7 @@ fn lower_condition(condition: &Condition) -> Result<StaticCondition, IrError> {
 impl ValueExpression {
     fn lower(&self) -> Result<EffectValue, IrError> {
         Ok(match self {
+            Self::X => EffectValue::X,
             Self::CreaturesWithCounters => EffectValue::CreaturesWithCounters,
             Self::BattlefieldMatching(predicate) => EffectValue::BattlefieldMatching {
                 predicate: predicate_card(predicate)?,
@@ -1831,7 +2000,6 @@ impl ValueExpression {
                 subtract: *subtract,
             },
             Self::GreatestSharedCreatureType => EffectValue::GreatestSharedCreatureType,
-            Self::X => EffectValue::X,
             Self::ExcessDamage => EffectValue::ExcessDamage,
         })
     }

@@ -1,8 +1,8 @@
 # T3 — characteristics, counters, replacements, attachments (Task 6875f0)
 
 Brief: the Task directive (49 cards, obligations in `docs/rules/tla/allocation.jsonl`,
-`planned_pr == "T3"`). Stacked on T1 (892c47, PR #394 head `86ebe9ccf`); build beside
-T2 and reconcile shared costs before landing. Every merge needs Jack Heart's review.
+`planned_pr == "T3"`). Stacked on T1 (892c47, PR #394 head `86ebe9ccf`) and synced onto T2
+(87e012, PR #398 head `16dfd3dbb`). Every merge needs Jack Heart's review.
 Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
 
 ## Done (46 of 49)
@@ -100,21 +100,29 @@ Schema 8 (unreleased, T1 precedent) appended in place: fields 85-99, predicates
 quantities 5-7, trigger_event 13, subtypes 64-75.
 `scratch/add_fixture.py` copies pinned evidence into the conformance fixture.
 
-Check (items 15-16, debug; cards 59, rules_tests 356 re-run at `2b86ca7d8`): `cargo test`
-all targets pass (lib 120) except `semantic_conformance_tests` (w16 vs w15, digest drift, as
-PR #394 CI 40819903624); clippy, fmt clean; extension rebuilt; `pytest
-tests/semantic` 158 pass, 4 fail on `be2b7586b`'s `schema_version` asserts.
+17. T2 sync (2026-10-29): merged PR #398 head `16dfd3dbb` (T2 87e012). One X
+   announcement for spells (T2's `CastChoices`/`AnnounceX`); `ActivationX`
+   stays, its X on `Payment::Activation.x`. One exhaust gate
+   (`Permanent::activation_used`), one `state::is_zero`, one `ZoneEntry` (with
+   `x`, `counters`). `EarthbendValue` deleted for T2's `Earthbend { count: Count }`.
+   Activated targets run on `ActivationSource` with `chosen`; library-top casting
+   is a `zone_cast_cost` case. Schema 8 renumbered after T2's entries (details
+   and test-helper names: `scratch/questions.md`). World w17 with its own entry.
+
+Check (sync, debug): `cargo test --no-fail-fast` all targets pass (lib 122,
+cards 121, rules_tests 356) except `semantic_conformance_tests` (receipts are w15,
+as on PR #394/#398 CI); clippy (`--all-targets --all-features -D warnings`) and fmt
+clean; extension rebuilt; `pytest tests/semantic` 160 pass, 3 fail on T1's frozen
+`schema_version` asserts (8 vs 3/7/4). World-change Python suite (CLAUDE.md) left to gate.
 
 ## Remaining (3 cards), suggested next slices
 
-- Glider Staff (2026-10-29, deferred to the T2 sync): its entry trigger
-  airbends, which T2 owns (`Op::Airbend`, exact-object cast permission,
-  `0d124a66e`); a second airbend here would be a parallel authority. After the
-  sync it needs only that op plus `equipped_pt` 1/1, an equipped flying grant
+- Glider Staff: entry trigger with T2's `Op::Airbend` (exact-object cast
+  permission), plus `equipped_pt` 1/1, an equipped flying grant
   (`StaticKeywordGrant` on `each:equipped_creature`) and `equip {2}`.
 
-- Crashing Wave (deferred from slice 11): after the T2 sync, build on T2's
-  waterbend additional cost (`a1773e4e6`) and its X announcement; then "up to
+- Crashing Wave (deferred from slice 11): build on T2's waterbend additional
+  cost (`kicker_waterbend`) and `AnnounceX`; then "up to
   X targets" (requirement max read from X) and a resolution-time distribution
   of three stun counters among tapped opponents' creatures (repeated
   one-at-a-time choice, as Heartless Act).
@@ -140,47 +148,8 @@ and **one observation change before landing.** The acceptance criteria say obser
    frozen widths are unchanged), and the world/observation validation in
    CLAUDE.md applies.
 
-Next implement order: (3) the T2 sync per the list below; (4) Glider Staff and Crashing Wave on T2's airbend and
+Next implement order: (4) Glider Staff and Crashing Wave on T2's airbend and
 waterbend; (5) the observation change with Fire Nation Palace.
-
-## Reconcile at sync (T2 87e012, PR #398 on T1, head `16dfd3dbb`, 2026-10-29)
-
-- World number: T2 `cd215fb83` records w16 in `WORLDS.md` (166 supported cards);
-  this branch's conformance drift is also w16 vs w15 with no `WORLDS.md` entry.
-  At the sync T3's world becomes the next number after T2's, with its own entry.
-- T2 `ee9e32383` bumped the text observation to `manabot-text-5` (restricted
-  mana); this Task's observation change builds on v5 and the policy-input version.
-
-- Both branches append to schema 8 from 86ebe9ccf with colliding numbers. T2:
-  fields 85-96, predicates 13-15, subtypes 64-74, special role 6, opcodes 66-73,
-  trigger_event 13, destination 2, zone 3. This branch: fields 85-99 (97
-  `granted_to`, 98 `name`, 99 `shares_creature_type`), predicates 13-16, subtypes 64-75 (75 `Cave`), special roles 6-15 (15
-  `grantor`), opcodes 66-90, conditions 7-9,
-  quantities 5-7, trigger_event 13 (`end_step_begins`), enum `counter`. T2 since
-  added opcodes 74-79, fields 97-101 (101 `foretell`), quantity 5 `x`, enum
-  `grant`, role `each:creature_you_control` 7. The later lander renumbers its own entries
-  (append-only, contiguous).
-- X has two implementations: T2 `PendingChoice::AnnounceX` + `CastChoices.x`
-  (`69c23c358`; quantity 5 `x`, field 97 `mana_x`) and this branch's
-  `SpellX`/`ActivationX` (quantity 6, field 95). Keep one spell announcement
-  (T2's `CastChoices`), one `x` quantity and one `mana_x` field; keep
-  `ActivationX` only if T2 has no activation X, and carry `x_min` and
-  `BattlefieldEntry.x` onto the survivor.
-- Keep one exhaust field and gate (T2 field 87, here 89) and one with-counters
-  predicate reading every `CounterKind` (T2 `with_counter` 13; here `no_counters`
-  14 complements it). Merge T2's `tests/cards.rs`, `support.rs`, `tla.rs` with
-  these. `tests/rules/tla_cards.rs` (one line added here) predates T2 and T3;
-  T2's recorded operator reading (`d7ea2cd17`) leaves its move to T1, so T3
-  reconciles with wherever it lives at the sync.
-- Both branches added `state::is_zero` (T2 `2673c95cd`, here `2598ddacf`); keep
-  one. T2's foretell (`1144d0f32`) adds face-down exile to observations and
-  protocol schemas; Fire Nation Palace's observation change should build on it.
-- T2 renamed `BattlefieldEntry` → `ZoneEntry` (`face_down`, `controller`);
-  carry this branch's `x` onto it. T2 keys battlefield zones by controller
-  (`431a31f65`) and lets `move_card_with_entry` alone invalidate the mana cache
-  for moves (`35404b274`); keep this branch's invalidations for non-move
-  changes (attach, counters, `abilities_lost`, `temp_subtypes`,
-  `becomes_creature`), which alter mana output without a move.
 
 ## Delete — do not maintain
 

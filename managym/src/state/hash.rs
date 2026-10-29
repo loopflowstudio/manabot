@@ -149,10 +149,17 @@ struct CanonicalMatchState<'a> {
     trigger_placement: &'a Option<crate::flow::trigger::TriggerPlacement>,
     delayed_triggers: &'a [crate::flow::trigger::DelayedTrigger],
     exile_links: &'a [crate::flow::trigger::ExileLink],
+    /// Omitted when empty, keeping hashes of states without grants unchanged.
+    #[serde(skip_serializing_if = "no_cast_permissions")]
+    cast_permissions: &'a crate::flow::cast_permission::CastPermissions,
     suspended_decision: &'a Option<crate::flow::decision::SuspendedResolution>,
     trigger_enqueue_counter: u64,
     rng_probe: [u64; 8],
     allocation_watermark: u32,
+}
+
+fn no_cast_permissions(value: &&crate::flow::cast_permission::CastPermissions) -> bool {
+    value.is_empty()
 }
 
 impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
@@ -179,6 +186,7 @@ impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
             trigger_placement,
             delayed_triggers,
             exile_links,
+            cast_permissions,
             suspended_decision,
             trigger_enqueue_counter,
             rng,
@@ -228,6 +236,7 @@ impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
             trigger_placement,
             delayed_triggers,
             exile_links,
+            cast_permissions,
             suspended_decision,
             trigger_enqueue_counter: *trigger_enqueue_counter,
             rng_probe,

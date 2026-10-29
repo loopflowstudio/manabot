@@ -2,6 +2,7 @@ use super::card::Keywords;
 use super::mana::{Mana, ManaCost};
 use super::permanent::{BecomesCreature, CounterKind};
 use super::predicate::CardPredicate;
+use super::zone::ZoneType;
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Ability {
@@ -51,6 +52,11 @@ pub enum TriggerCondition {
     /// `AnyYouControl` fires once per combat ("whenever one or more ...
     /// attack"), not once per attacker.
     Attacks {
+        subject: TriggerSubject,
+    },
+    /// "Whenever [subject] attacks alone": exactly one creature was
+    /// declared as an attacker (CR 506.5). The attacker is the context.
+    AttacksAlone {
         subject: TriggerSubject,
     },
     /// "Whenever [subject] becomes tapped."
@@ -126,6 +132,9 @@ pub enum TriggerSubject {
 /// A resolution-time quantity relative to the effect controller.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum EffectValue {
+    Fixed(i32),
+    /// The resolving spell's announced X (CR 107.3).
+    X,
     CreaturesWithCounters,
     BattlefieldMatching {
         predicate: CardPredicate,
@@ -140,8 +149,6 @@ pub enum EffectValue {
     /// The greatest number of creatures you control that share a creature
     /// type (CR 205.3m).
     GreatestSharedCreatureType,
-    /// The resolving spell's announced X (CR 107.3m).
-    X,
     /// Excess damage (CR 120.4a) the resolution's latest damage instruction
     /// dealt to its creature; 0 outside a resolution.
     ExcessDamage,
@@ -162,6 +169,25 @@ impl PaymentCost {
             Self::Waterbend { generic } => ManaCost::default().with_generic(*generic),
         }
     }
+}
+
+/// Who chooses the card an `ExileLinked` effect exiles.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum LinkedChooser {
+    Controller,
+    TargetPlayer,
+}
+
+/// How the effect's controller may cast a card it exiled, during their turn
+/// and while they control its source.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum LinkedGrant {
+    /// "by waterbending {X} rather than paying its mana cost, where X is its
+    /// mana value" (Hama, the Bloodbender).
+    WaterbendManaValue,
+    /// "as though they had flash. Mana of any type can be spent" (Azula,
+    /// Cunning Usurper).
+    FlashAnyMana,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -206,14 +232,21 @@ pub enum Effect {
     },
     ReturnGraveyardTarget {
         target: TargetSpec,
+        /// Onto the battlefield tapped instead of into its owner's hand.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        tapped_onto_battlefield: bool,
     },
     MillCards {
         count: usize,
+        /// The target player mills instead of the controller.
+        target: Option<TargetSpec>,
     },
     MillAndSelect {
         count: usize,
         predicate: CardPredicate,
         if_declined: Vec<Effect>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        if_milled: Option<MilledBonus>,
     },
     DrainLifeValue {
         amount: EffectValue,
@@ -239,9 +272,16 @@ pub enum Effect {
         untap_if_lands: Option<usize>,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         bottom_source: bool,
+        /// Landcycling: any card of `subtype` (not only a basic land) is
+        /// revealed and put into hand instead of onto the battlefield.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        to_hand: bool,
     },
+    /// Discard up to `up_to` cards, then draw `count` for each discarded.
     OptionalDiscardDraw {
         count: usize,
+        #[serde(skip_serializing_if = "is_one")]
+        up_to: usize,
     },
     DiscardTargetPlayer {
         count: usize,
@@ -253,6 +293,78 @@ pub enum Effect {
     Exile {
         target: TargetSpec,
     },
+    /// Airbend (CR 701.65): exile the target; its owner may cast that exact
+    /// exiled card for {2} rather than its mana cost.
+    Airbend {
+        target: TargetSpec,
+    },
+    /// Airbend every battlefield permanent matching `predicate` other than
+    /// the clause's chosen target, if any.
+    AirbendAll {
+        predicate: CardPredicate,
+    },
+    /// Until the controller's next turn, opponents cast spells only from
+    /// their hands.
+    OpponentsCastOnlyFromHand,
+    /// "Exile the top card of your library. You may play that card this turn."
+    ExileTopCardPlayThisTurn,
+    /// Each creature you control gains firebending until end of turn.
+    GrantFirebendingUntilEot {
+        amount: u8,
+    },
+    /// A player exiles a matching card; its controller may cast it as linked.
+    ExileLinked {
+        chooser: LinkedChooser,
+        zone: ZoneType,
+        predicate: CardPredicate,
+        up_to: bool,
+        grant: LinkedGrant,
+        target: TargetSpec,
+    },
+    /// Exile cards from the top of your library until you exile a nonland
+    /// card; you may cast it without paying its mana cost if its mana value
+    /// is less than `below`, otherwise put it into your hand.
+    ExileUntilNonlandCastFree {
+        below: EffectValue,
+    },
+    /// You may cast a matching spell from your hand without paying its mana cost.
+    CastFromHandFree {
+        predicate: CardPredicate,
+    },
+    /// You have no maximum hand size for the rest of the game.
+    NoMaximumHandSize,
+    /// Shuffle your graveyard into your library.
+    ShuffleGraveyardIntoLibrary,
+    /// The target's owner chooses second from the top of their library or
+    /// the bottom (a resolution-time mode of [`Effect::PlaceTargetInLibrary`]).
+    OwnerPutsIntoLibrary {
+        target: TargetSpec,
+    },
+    /// The target player reveals their hand (it becomes public knowledge);
+    /// the effect's controller chooses a matching card and that player
+    /// discards it.
+    RevealHandDiscardChosen {
+        target: TargetSpec,
+        predicate: CardPredicate,
+    },
+    /// Search for up to `count` land cards with different names; an
+    /// opponent puts `opponent_picks` of them into the graveyard and the rest
+    /// enter tapped (Elemental Teachings).
+    SearchLandsOpponentSplits {
+        count: usize,
+        opponent_picks: usize,
+    },
+    /// Put the primary target into its owner's library, second from the top
+    /// or on the bottom.
+    PlaceTargetInLibrary {
+        second_from_top: bool,
+    },
+    /// Sacrifice the exact source permanent; only if that happened, run `then`.
+    SacrificeSource {
+        then: Vec<Effect>,
+    },
+    /// The resolving spell exiles itself instead of going to the graveyard.
+    ExileSourceSpell,
     BuffTargetValue {
         power: EffectValue,
         toughness: i32,
@@ -265,6 +377,12 @@ pub enum Effect {
     ModifyTriggeringPermanent {
         counters: i32,
         keywords: Keywords,
+    },
+    /// The permanent whose event fired the trigger gets +X/+Y until end of
+    /// turn, with X and Y computed on resolution.
+    BuffTriggeringPermanentValue {
+        power: EffectValue,
+        toughness: EffectValue,
     },
     Discard,
     DealDamageValue {
@@ -395,11 +513,9 @@ pub enum Effect {
         power: Option<i32>,
         toughness: Option<i32>,
     },
-    /// Earthbend with a count read as the ability resolves.
-    EarthbendValue {
-        target: TargetSpec,
-        count: EffectValue,
-    },
+    /// "Return this card from your graveyard to your hand": only the exact
+    /// graveyard object the ability came from (CR 400.7).
+    ReturnSourceToHand,
     /// Resolving player gains `amount` life.
     GainLife {
         amount: i32,
@@ -425,7 +541,7 @@ pub enum Effect {
     LookAndSelect {
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         reveal: bool,
-        look: usize,
+        look: EffectValue,
         min_select: usize,
         max_select: usize,
         predicate: CardPredicate,
@@ -473,7 +589,7 @@ pub enum Effect {
     /// delayed trigger returns it to the battlefield tapped when it dies
     /// or is exiled.
     Earthbend {
-        count: i32,
+        count: EffectValue,
         target: TargetSpec,
     },
     /// Delayed-trigger payload (earthbend): return the source card from
@@ -568,6 +684,13 @@ pub enum Effect {
     },
 }
 
+/// Effects that run when any card milled by the same instruction matches.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct MilledBonus {
+    pub predicate: CardPredicate,
+    pub effects: Vec<Effect>,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum TargetSpec {
     PermanentYouControl {
@@ -606,9 +729,6 @@ pub enum TargetSpec {
 /// `min == 0` encodes "up to"; `max` bounds how many may be chosen.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct TargetRequirement {
-    /// "Another target": the source object can't be chosen.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub another: bool,
     /// "[N] target creatures that share a creature type" (CR 115.1, 608.2b):
     /// every chosen target must share one creature type with the others.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -616,16 +736,19 @@ pub struct TargetRequirement {
     pub spec: TargetSpec,
     pub min: usize,
     pub max: usize,
+    /// "other target": the ability's own source object is not a candidate.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub another: bool,
 }
 
 impl TargetRequirement {
     pub fn one(spec: TargetSpec) -> Self {
         Self {
-            another: false,
             shares_creature_type: false,
             spec,
             min: 1,
             max: 1,
+            another: false,
         }
     }
 
@@ -677,21 +800,24 @@ impl Effect {
             | Effect::DealDamageToController { .. }
             | Effect::DrainLife { .. } => None,
             Effect::TargetClause { requirement, .. } => Some(&requirement.spec),
+            Effect::MillCards { target, .. } => target.as_ref(),
+            Effect::ExileLinked { target, .. } => Some(target),
             Effect::SelectTargetRequirement { .. }
-            | Effect::MillCards { .. }
             | Effect::MillAndSelect { .. }
             | Effect::DrainLifeValue { .. } => None,
             Effect::CantBeBlockedTarget { target }
-            | Effect::ReturnGraveyardTarget { target }
+            | Effect::ReturnGraveyardTarget { target, .. }
             | Effect::ExileWithControllerToken { target, .. }
             | Effect::DiscardTargetPlayer { target, .. }
             | Effect::Destroy { target }
             | Effect::Exile { target }
+            | Effect::Airbend { target }
             | Effect::BuffTargetValue { target, .. }
             | Effect::ReturnToHandDrawIfControlled { target } => Some(target),
             Effect::SearchBasicLand { .. }
             | Effect::OptionalDiscardDraw { .. }
-            | Effect::ModifyTriggeringPermanent { .. } => None,
+            | Effect::ModifyTriggeringPermanent { .. }
+            | Effect::BuffTriggeringPermanentValue { .. } => None,
             Effect::DealDamageValue { target, .. }
             | Effect::PutCountersValue { target, .. }
             | Effect::ExileIfDiesThisTurn { target }
@@ -708,7 +834,6 @@ impl Effect {
             Effect::CounterSpell { target } => Some(target),
             Effect::PutCounters { target, .. } => Some(target),
             Effect::Earthbend { target, .. }
-            | Effect::EarthbendValue { target, .. }
             | Effect::BecomeCreatureTarget { target, .. }
             | Effect::SetBasePtTarget { target, .. } => Some(target),
             Effect::ExileUntilSourceLeaves { target } => Some(target),
@@ -716,7 +841,9 @@ impl Effect {
             Effect::UntapTarget { target }
             | Effect::TapTarget { target }
             | Effect::AttachSourceTo { target }
-            | Effect::RemoveCounters { target, .. } => Some(target),
+            | Effect::RemoveCounters { target, .. }
+            | Effect::OwnerPutsIntoLibrary { target }
+            | Effect::RevealHandDiscardChosen { target, .. } => Some(target),
             Effect::GrantKeywordsToTarget { target, .. } => Some(target),
             Effect::OnNthResolutionThisTurn { effect, .. } => effect.target_spec(),
             Effect::OptionalPayment {
@@ -731,10 +858,21 @@ impl Effect {
                 .iter()
                 .chain(otherwise.iter())
                 .find_map(|effect| effect.target_spec()),
-            Effect::IfTargetMatches { then, .. } => {
+            Effect::IfTargetMatches { then, .. } | Effect::SacrificeSource { then } => {
                 then.iter().find_map(|effect| effect.target_spec())
             }
             Effect::CreateNonlegendaryCopy
+            | Effect::AirbendAll { .. }
+            | Effect::OpponentsCastOnlyFromHand
+            | Effect::ExileSourceSpell
+            | Effect::ExileTopCardPlayThisTurn
+            | Effect::GrantFirebendingUntilEot { .. }
+            | Effect::ExileUntilNonlandCastFree { .. }
+            | Effect::CastFromHandFree { .. }
+            | Effect::NoMaximumHandSize
+            | Effect::ShuffleGraveyardIntoLibrary
+            | Effect::PlaceTargetInLibrary { .. }
+            | Effect::SearchLandsOpponentSplits { .. }
             | Effect::ModifyControlled { .. }
             | Effect::SetBasePtControlled { .. }
             | Effect::AddSubtypesControlled { .. }
@@ -757,6 +895,7 @@ impl Effect {
             | Effect::RemoveAllCountersFromAttached
             | Effect::ReturnGrantorToHand
             | Effect::ShuffleAttachedIntoLibrary
+            | Effect::ReturnSourceToHand
             | Effect::GainLife { .. }
             | Effect::GainLifeValue { .. }
             | Effect::AddManaValue { .. }

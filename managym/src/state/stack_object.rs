@@ -19,7 +19,8 @@ pub struct SpellOnStack {
     pub target_req_indices: Vec<usize>,
     /// Whether the kicker cost was paid while casting (CR 702.33).
     pub kicked: bool,
-    /// The announced value of X (CR 601.2b); 0 for spells without {X}.
+    /// The value of X announced while casting (CR 107.3); its mana value
+    /// on the stack includes it (CR 202.3e).
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub x: u8,
     pub mode: Option<usize>,

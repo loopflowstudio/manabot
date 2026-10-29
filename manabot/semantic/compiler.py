@@ -101,33 +101,46 @@ class Opcode(IntEnum):
     EXILE_IF_DIES = 63
     ADD_SUBTYPE = 64
     OPTIONAL_PAYMENT = 65
-    REMOVE_COUNTERS = 66
-    SET_BASE_PT = 67
-    ATTACH = 68
-    CANT_ATTACK_OR_BLOCK = 69
-    DOESNT_UNTAP = 70
-    SHUFFLE_INTO_LIBRARY = 71
-    BECOME_ARTIFACT_CREATURE = 72
-    ADD_MANA_OF_ONE_COLOR = 73
-    EARTHBEND_VALUE = 74
-    CANT_BE_BLOCKED_BY_MORE_THAN = 75
-    ATTACKS_DESPITE_DEFENDER = 76
-    ADD_CARD_TYPES = 77
-    ADD_SUBTYPES_CONTROLLED = 78
-    UNSPENT_MANA_BECOMES_RED = 79
-    DESTROY_CREATURES_LOSING_ABILITIES = 80
-    ENTERS_WITH_X_COUNTERS = 81
-    OPPONENT_DAMAGE_PLUS_COUNTERS = 82
-    SET_BASE_PT_VALUE = 83
-    FIGHT = 84
-    GAIN_LIFE_VALUE = 85
-    ADD_MANA_VALUE = 86
-    KEEP_UNSPENT_RED_MANA = 87
-    SEARCH_LIBRARY_TO_HAND = 88
-    LOOK_AT_LIBRARY_TOP = 89
-    CAST_FROM_LIBRARY_TOP = 90
-    SET_CHARACTERISTICS = 91
-    REMOVE_ALL_COUNTERS = 92
+    AIRBEND = 66
+    AIRBEND_ALL = 67
+    OPPONENTS_CAST_ONLY_FROM_HAND = 68
+    EXILE_TOP_CARD_PLAY_THIS_TURN = 69
+    SACRIFICE_SOURCE = 70
+    PUT_INTO_LIBRARY_SECOND_OR_BOTTOM = 71
+    SEARCH_LANDS_OPPONENT_SPLITS = 72
+    REVEAL_HAND_DISCARD_CHOSEN = 73
+    SHUFFLE_GRAVEYARD_INTO_LIBRARY = 74
+    NO_MAXIMUM_HAND_SIZE = 75
+    CAST_FROM_HAND_FREE = 76
+    EXILE_UNTIL_NONLAND_CAST_FREE = 77
+    EXILE_LINKED = 78
+    GRANT_FIREBENDING_UNTIL_EOT = 79
+    REMOVE_COUNTERS = 80
+    SET_BASE_PT = 81
+    ATTACH = 82
+    CANT_ATTACK_OR_BLOCK = 83
+    DOESNT_UNTAP = 84
+    SHUFFLE_INTO_LIBRARY = 85
+    BECOME_ARTIFACT_CREATURE = 86
+    ADD_MANA_OF_ONE_COLOR = 87
+    CANT_BE_BLOCKED_BY_MORE_THAN = 88
+    ATTACKS_DESPITE_DEFENDER = 89
+    ADD_CARD_TYPES = 90
+    ADD_SUBTYPES_CONTROLLED = 91
+    UNSPENT_MANA_BECOMES_RED = 92
+    DESTROY_CREATURES_LOSING_ABILITIES = 93
+    ENTERS_WITH_X_COUNTERS = 94
+    OPPONENT_DAMAGE_PLUS_COUNTERS = 95
+    SET_BASE_PT_VALUE = 96
+    FIGHT = 97
+    GAIN_LIFE_VALUE = 98
+    ADD_MANA_VALUE = 99
+    KEEP_UNSPENT_RED_MANA = 100
+    SEARCH_LIBRARY_TO_HAND = 101
+    LOOK_AT_LIBRARY_TOP = 102
+    CAST_FROM_LIBRARY_TOP = 103
+    SET_CHARACTERISTICS = 104
+    REMOVE_ALL_COUNTERS = 105
 
 
 PROGRAM_KINDS = {kind.name.lower(): kind for kind in ProgramKind}
@@ -193,6 +206,7 @@ SELECTOR_KINDS = {
 }
 PREDICATE_KINDS = {
     "all",
+    "any_of",
     "any",
     "card_type",
     "not_card_types",
@@ -200,6 +214,7 @@ PREDICATE_KINDS = {
     "power_at_least",
     "mana_value_at_least",
     "flying",
+    "attacking",
     "types_any",
     "subtypes_any",
     "not_subtypes",
@@ -229,7 +244,6 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "shuffle_into_library": ({"target"}, set()),
     "become_artifact_creature": ({"target"}, {"duration"}),
     "add_mana_of_one_color": ({"amount"}, set()),
-    "earthbend_value": ({"target", "count"}, set()),
     "cant_be_blocked_by_more_than": ({"count", "predicate"}, set()),
     "attacks_despite_defender": ({"target"}, set()),
     "add_card_types": ({"predicate", "types"}, set()),
@@ -296,10 +310,24 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "deal_power_damage": ({"sources", "target"}, set()),
     "set_power_from_count": ({"predicate", "zone", "controller"}, set()),
     "search_basic_land": ({"subtype"}, set()),
-    "optional_discard_draw": ({"count"}, set()),
+    "optional_discard_draw": ({"count"}, {"up_to"}),
     "discard_target_player": ({"count", "target"}, set()),
     "destroy": ({"target"}, set()),
     "exile": ({"target"}, set()),
+    "airbend": ({"target"}, set()),
+    "airbend_all": ({"except", "predicate"}, set()),
+    "opponents_cast_only_from_hand": (set(), set()),
+    "exile_top_card_play_this_turn": (set(), set()),
+    "grant_firebending_until_eot": ({"amount"}, set()),
+    "exile_linked": ({"chooser", "grant", "predicate", "target", "up_to", "zone"}, set()),
+    "exile_until_nonland_cast_free": ({"below"}, set()),
+    "cast_from_hand_free": ({"predicate"}, set()),
+    "no_maximum_hand_size": (set(), set()),
+    "shuffle_graveyard_into_library": (set(), set()),
+    "sacrifice_source": ({"then"}, set()),
+    "put_into_library_second_or_bottom": ({"target"}, set()),
+    "search_lands_opponent_splits": ({"count", "opponent_picks"}, set()),
+    "reveal_hand_discard_chosen": ({"predicate", "target"}, set()),
     "buff_target_value": ({"power", "toughness", "target"}, set()),
     "return_to_hand_draw_if_controlled": ({"target"}, set()),
     "modify_triggering_permanent": ({"counters", "keywords"}, set()),
@@ -308,12 +336,12 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "create_tokens_value": ({"definition_ref", "count"}, set()),
     "exile_with_controller_token": ({"target", "definition_ref"}, set()),
     "damage_opponent_creatures": ({"amount"}, set()),
-    "mill_cards": ({"count"}, set()),
-    "mill_and_select": ({"count", "predicate", "if_declined"}, set()),
+    "mill_cards": ({"count"}, {"target"}),
+    "mill_and_select": ({"count", "predicate", "if_declined"}, {"milled_any", "then"}),
     "drain_life_value": ({"amount"}, set()),
     "counter_spell": ({"target"}, set()),
     "cant_be_blocked_target": ({"target"}, set()),
-    "return_graveyard_target": ({"target"}, set()),
+    "return_graveyard_target": ({"target"}, {"destination"}),
     "modal": ({"modes"}, set()),
     "target_clause": ({"role", "body"}, set()),
     "prevent_life_gain": (set(), set()),
@@ -601,12 +629,12 @@ def _validate_value_expression(value: Any, context: str) -> None:
     expression = _object(value, context)
     kind = _string(expression.get("kind"), context)
     fields = {
+        "x": set(),
         "creatures_with_counters": set(),
         "battlefield_matching": {"predicate"},
         "graveyard_matching": {"predicate", "base"},
         "cards_drawn_minus": {"subtract"},
         "greatest_shared_creature_type": set(),
-        "x": set(),
         "excess_damage": set(),
     }
     if kind not in fields:
@@ -642,7 +670,6 @@ def _validate_instruction_scalars(
                 ("create_tokens_value", "count"),
                 ("drain_life_value", "amount"),
                 ("add_mana_of_one_color", "amount"),
-                ("earthbend_value", "count"),
                 ("destroy_creatures_losing_abilities", "max_mana_value"),
                 ("set_base_pt_value", "power"),
                 ("set_base_pt_value", "toughness"),

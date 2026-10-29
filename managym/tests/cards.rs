@@ -1,14 +1,12 @@
-//! Card behavior tests, one module per printed set in `src/cardsets/`.
-//!
-//! Engine rules that are not about one card stay in `rules/`. These tests
-//! document and protect behavior; they never decide whether a card is
-//! supported (the set file defining it does).
+//! Per-card behavior tests, one module per printed set, mirroring
+//! `src/cardsets/`. Engine-rule tests that are not about one card stay in
+//! `tests/rules/`. Tests witness behavior; they never gate card support,
+//! which comes only from the set file defining the card.
+// Shared with the rules tests; this crate uses only part of it.
 #[allow(dead_code)]
 #[path = "rules/helpers.rs"]
 mod helpers;
-
 #[path = "cards/support.rs"]
 mod support;
-
 #[path = "cards/tla.rs"]
 mod tla;

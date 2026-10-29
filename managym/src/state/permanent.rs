@@ -1,5 +1,5 @@
 use super::{
-    card::{Card, Keywords},
+    card::{ActivatedAbilityDefinition, Card, Keywords},
     game_object::{CardId, ObjectId, ObjectRef, PlayerId},
 };
 
@@ -105,6 +105,10 @@ pub struct Permanent {
     pub counters: Counters,
     /// "Can't be blocked this turn" — cleared during cleanup.
     pub cant_be_blocked_this_turn: bool,
+    /// Firebending granted until end of turn ("gains firebending 5"): red
+    /// mana added when it attacks, summed over grants. Cleared at cleanup.
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub firebending_this_turn: u8,
     /// Earthbend animation: this permanent is a 0/0 creature with haste in
     /// addition to its printed types (still a land). No duration — it lasts
     /// as long as the permanent does.
@@ -121,9 +125,6 @@ pub struct Permanent {
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub abilities_lost: bool,
     pub attacking: bool,
-    /// Exhaust abilities this incarnation has activated (CR 702.177a).
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub exhausted_abilities: Vec<usize>,
     /// True only for this incarnation entering as a resolving cast spell.
     pub was_cast: bool,
     /// The exact object this Equipment is attached to (CR 301.5). State-based
@@ -134,9 +135,34 @@ pub struct Permanent {
     /// power and toughness apply (CR 301.7b).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub becomes_creature: Option<BecomesCreature>,
+    /// Exhaust abilities (indices into the card's activated abilities) this
+    /// object has activated; a new object starts fresh (CR 400.7).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub exhausted: Vec<usize>,
+    /// "Once each turn" abilities this object has activated this turn,
+    /// cleared at cleanup.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub activated_this_turn: Vec<usize>,
 }
 
 impl Permanent {
+    /// Whether this object has used up the ability: exhaust once ever
+    /// (CR 702.177a), "once each turn" already this turn (CR 602.5b).
+    pub fn activation_used(&self, index: usize, ability: &ActivatedAbilityDefinition) -> bool {
+        (ability.exhaust && self.exhausted.contains(&index))
+            || (ability.once_each_turn && self.activated_this_turn.contains(&index))
+    }
+
+    /// Record an activation against the ability's use limits.
+    pub fn record_activation(&mut self, index: usize, ability: &ActivatedAbilityDefinition) {
+        if ability.exhaust {
+            self.exhausted.push(index);
+        }
+        if ability.once_each_turn {
+            self.activated_this_turn.push(index);
+        }
+    }
+
     pub fn new(id: ObjectId, card_id: CardId, card: &Card) -> Self {
         Self {
             id,
@@ -156,16 +182,18 @@ impl Permanent {
             plus1_counters: 0,
             counters: Counters::default(),
             cant_be_blocked_this_turn: false,
+            firebending_this_turn: 0,
             animated: false,
             temp_keywords: Keywords::default(),
             temp_subtypes: Vec::new(),
             exile_if_dies_this_turn: false,
             abilities_lost: false,
             attacking: false,
-            exhausted_abilities: Vec::new(),
             was_cast: false,
             attached_to: None,
             becomes_creature: None,
+            exhausted: Vec::new(),
+            activated_this_turn: Vec::new(),
         }
     }
 
@@ -238,11 +266,6 @@ impl Permanent {
         *count != old
     }
 
-    /// Whether an exhaust ability at `ability_index` was already activated.
-    pub fn exhausted(&self, ability_index: usize) -> bool {
-        self.exhausted_abilities.contains(&ability_index)
-    }
-
     /// "With a counter on it" / "with no counters on it" read every kind.
     pub fn has_counters(&self) -> bool {
         self.plus1_counters > 0 || !self.counters.is_empty()
@@ -269,10 +292,12 @@ impl Permanent {
         self.temp_base_power = None;
         self.temp_base_toughness = None;
         self.cant_be_blocked_this_turn = false;
+        self.firebending_this_turn = 0;
         self.temp_keywords = Keywords::default();
         self.temp_subtypes.clear();
         if self.becomes_creature == Some(BecomesCreature::EndOfTurn) {
             self.becomes_creature = None;
         }
+        self.activated_this_turn.clear();
     }
 }

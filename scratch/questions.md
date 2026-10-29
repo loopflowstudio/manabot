@@ -5,8 +5,8 @@ noted in the PR. Jack Heart's 2026-10-29 direction superseded the qualification
 and pool-membership choices that were here (history: `be2b7586b:scratch/questions.md`).
 
 - Old worlds run from their recorded git revision; no in-process rules shims.
-- No w17: main is w15 and w16 is this PR's unreleased world, so renames, basics
-  moving to `lea.*`, and support-by-definition all stay in w16.
+- T1: no w17 (main is w15; renames, basics moving to `lea.*` and support by
+  definition stay in w16). T3 later takes w17.
 - IR keeps the retired compiler's JSON shape, built in Rust on `serde_json::Value`
   (made byte-identity provable); lowering straight to `Step` is a later option.
 - Learning tokens come from `learning.py` over that IR; schema 8 unchanged.
@@ -85,3 +85,26 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   reused, so both name the same object and the stack shape stays unchanged.
   With more than two targets, "share a creature type" means one type common to
   all, and the first-pick partner check is pairwise (exact for two).
+
+## T3 sync onto T2 (PR #398 head `16dfd3dbb`) — 2026-10-29
+
+T2's design and operator choices are at `16dfd3dbb:scratch/87e012-tla-t2-casting.md`
+and `16dfd3dbb:scratch/questions.md`; the ones this branch now builds on:
+`CastChoices` X, `ActivationSource`, `ActivatedAbilityDefinition.effects`,
+`Permanent::{activation_used, record_activation}`, `ManaUse`-keyed restricted
+mana, `Game::zone_cast_cost`/`may_play_from_zone`, `ZoneEntry`.
+
+- Schema 8: T2's numbers stay; this branch's entries follow T2's maxima in
+  their old order. Same-named entries are one entry (`x`, `mana_x`, `exhaust`,
+  `each:creature_you_control`). `earthbend_value` is gone (T2's `earthbend`
+  takes a `Count`), so opcodes after it moved down one.
+- `with_counter` keeps T2's +1/+1 meaning (Hog-Monkey's text); `no_counters`
+  reads every kind. Card-only matching rejects `with_counter`/`attacking`.
+- Activation X rides `Payment::Activation.x`; `ActivationX` and `Crew` keep a
+  `PermanentId` (battlefield only). `ActivatedAbilityDefinition::target_requirement`
+  replaced `requires_target`/`target_is_optional`.
+- Library-top casting is a `zone_cast_cost` case; `in_casting_zone` is gone.
+- An Aura entering attached invalidates both players' mana caches.
+- Card tests: T2's funded `setup` stays; this branch's tests use
+  `setup_unfunded`. T2's one-argument `can_activate` is `can_activate_any`.
+- World: w17 (own `WORLDS.md` entry); conformance receipts stay w15.

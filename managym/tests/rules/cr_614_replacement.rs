@@ -180,6 +180,7 @@ fn cr_614_1c_enters_tapped_and_with_counters_before_card_moved_commits() {
         from,
         to: ZoneType::Battlefield,
         controller: PlayerId(0),
+        face_down: false,
     }));
 }
 

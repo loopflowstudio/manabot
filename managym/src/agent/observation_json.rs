@@ -72,7 +72,7 @@ pub fn mana_cost<'de, D: Deserializer<'de>>(deserializer: D) -> Result<ManaCost,
         cost,
         mana_value: raw.mana_value,
         hybrid,
-        spend_on_lesson: false,
+        purpose: Default::default(),
         x: 0,
     })
 }

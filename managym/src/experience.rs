@@ -310,6 +310,9 @@ pub struct LegacyCardView {
     pub toughness: i32,
     pub mana_value: i32,
     pub types: LegacyCardTypesView,
+    /// Foretold and face down in exile; only its owner's views list it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub face_down: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]

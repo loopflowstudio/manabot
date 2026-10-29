@@ -1,21 +1,30 @@
-//! Directed drivers shared by the per-set card tests.
+//! Shared drivers for per-card tests: a five-color fixture, with or without
+//! ample floating mana, and helpers that take legal actions rather than
+//! mutating game state.
 use std::collections::BTreeMap;
 
+use crate::helpers::Scenario;
 use managym::{
     agent::action::{Action, ActionSpaceKind},
     flow::turn::StepKind,
     state::{
-        game_object::{CardId, PermanentId, PlayerId},
+        game_object::{CardId, PermanentId, PlayerId, Target},
         permanent::CounterKind,
         zone::ZoneType,
     },
 };
 
-use super::helpers::Scenario;
-
-/// Both players have 16 of each basic plus four of each named card, player 0
-/// is in their first main phase with empty hands and an empty battlefield.
+/// Both players hold sixteen of each basic plus four of each named card, start
+/// in player 0's main phase with empty hands and ample floating mana.
 pub fn setup(names: &[&str]) -> Scenario {
+    let mut s = setup_unfunded(names);
+    s.set_player_mana_pool(0, "20WWWWUUUUBBBBRRRRGGGG");
+    s.set_player_mana_pool(1, "20WWWWUUUUBBBBRRRRGGGG");
+    s
+}
+
+/// [`setup`] without floating mana: tests pay costs from lands they play.
+pub fn setup_unfunded(names: &[&str]) -> Scenario {
     let mut deck: BTreeMap<String, usize> = ["Plains", "Island", "Swamp", "Mountain", "Forest"]
         .into_iter()
         .map(|name| (name.into(), 16))
@@ -60,6 +69,14 @@ pub fn choose(s: &mut Scenario, predicate: impl Fn(&Action) -> bool) {
     s.step_action(i);
 }
 
+pub fn mode(s: &mut Scenario, wanted: usize) {
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+    choose(
+        s,
+        |a| matches!(a, Action::ChooseMode { mode, .. } if *mode == wanted),
+    );
+}
+
 /// Move a library copy of `name` to player 0's hand and refresh priority.
 pub fn to_hand(s: &mut Scenario, name: &str) -> CardId {
     let id = library_card(s, 0, name);
@@ -78,22 +95,47 @@ pub fn play_land(s: &mut Scenario, name: &str) -> PermanentId {
     s.game().state.card_to_permanent[id].expect("land entered")
 }
 
-/// Cast a library copy of `name`, leaving it on the stack.
+/// Put a library copy of `name` into player 0's hand and cast it, leaving
+/// it on the stack.
 pub fn cast(s: &mut Scenario, name: &str) -> CardId {
     let id = to_hand(s, name);
+    cast_card(s, id);
+    id
+}
+
+/// Cast `id` from whichever zone currently permits it.
+pub fn cast_card(s: &mut Scenario, id: CardId) {
+    s.game_mut().scenario_refresh_priority().unwrap();
     choose(
         s,
         |a| matches!(a, Action::CastSpell { card, .. } if *card == id),
     );
-    id
 }
 
+pub fn can_cast(s: &mut Scenario, id: CardId) -> bool {
+    s.game_mut().scenario_refresh_priority().unwrap();
+    has_action(
+        s,
+        |a| matches!(a, Action::CastSpell { card, .. } if *card == id),
+    )
+}
+
+/// Whether ability `index` of `source` is offered now.
 pub fn can_activate(s: &mut Scenario, source: PermanentId, index: usize) -> bool {
     s.game_mut().scenario_refresh_priority().unwrap();
     has_action(s, |a| {
         matches!(a, Action::ActivateAbility { permanent, ability_index, .. }
             if *permanent == source && *ability_index == index)
     })
+}
+
+/// Whether any ability of `source` is offered now.
+pub fn can_activate_any(s: &mut Scenario, source: PermanentId) -> bool {
+    s.game_mut().scenario_refresh_priority().unwrap();
+    has_action(
+        s,
+        |a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == source),
+    )
 }
 
 pub fn activate(s: &mut Scenario, source: PermanentId, index: usize) {
@@ -104,7 +146,35 @@ pub fn activate(s: &mut Scenario, source: PermanentId, index: usize) {
     });
 }
 
-/// Pass and decline until the stack is empty and player priority returns.
+/// Abilities of `card` that function from its current hand or graveyard.
+pub fn can_activate_card(s: &mut Scenario, source: CardId) -> bool {
+    s.game_mut().scenario_refresh_priority().unwrap();
+    has_action(
+        s,
+        |a| matches!(a, Action::ActivateCardAbility { card, .. } if *card == source),
+    )
+}
+
+pub fn activate_card(s: &mut Scenario, source: CardId, index: usize) {
+    s.game_mut().scenario_refresh_priority().unwrap();
+    choose(s, |a| {
+        matches!(a, Action::ActivateCardAbility { card, ability_index, .. }
+            if *card == source && *ability_index == index)
+    });
+}
+
+pub fn offered_targets(s: &Scenario) -> Vec<Target> {
+    s.action_space()
+        .actions
+        .iter()
+        .filter_map(|a| match a {
+            Action::ChooseTarget { target, .. } => Some(*target),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Pass or decline until priority returns with an empty stack.
 pub fn settle(s: &mut Scenario) {
     for _ in 0..100 {
         if s.action_space().kind == ActionSpaceKind::Priority
@@ -124,7 +194,7 @@ pub fn settle(s: &mut Scenario) {
     panic!("resolution did not settle")
 }
 
-/// Pass priority until the given decision is offered.
+/// Pass priority until the action space is `kind`.
 pub fn pass_until(s: &mut Scenario, kind: ActionSpaceKind) {
     for _ in 0..10 {
         if s.action_space().kind == kind {
@@ -153,4 +223,11 @@ pub fn counters_of(s: &Scenario, id: PermanentId, kind: CounterKind) -> i32 {
         .as_ref()
         .unwrap()
         .counter_count(kind)
+}
+
+pub fn ready(s: &mut Scenario, id: PermanentId) {
+    s.game_mut().state.permanents[id]
+        .as_mut()
+        .unwrap()
+        .summoning_sick = false;
 }

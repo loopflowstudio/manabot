@@ -29,7 +29,11 @@ use std::sync::OnceLock;
 use serde_json::Value;
 
 use crate::cards::content_pack::ContentPack;
-use crate::state::{ability::PaymentCost, card::CardDefId, mana::ManaCost};
+use crate::state::{
+    ability::PaymentCost,
+    card::CardDefId,
+    mana::{ManaCost, ManaUse, SPEND_SUBTYPES},
+};
 
 /// Stable numeric opcodes. These mirror `manabot.semantic.compiler.Opcode` and
 /// are the *only* dispatch key the interpreter uses.
@@ -101,33 +105,46 @@ pub enum Opcode {
     ExileIfDies = 63,
     AddSubtype = 64,
     OptionalPayment = 65,
-    RemoveCounters = 66,
-    SetBasePt = 67,
-    Attach = 68,
-    CantAttackOrBlock = 69,
-    DoesntUntap = 70,
-    ShuffleIntoLibrary = 71,
-    BecomeArtifactCreature = 72,
-    AddManaOfOneColor = 73,
-    EarthbendValue = 74,
-    CantBeBlockedByMoreThan = 75,
-    AttacksDespiteDefender = 76,
-    AddCardTypes = 77,
-    AddSubtypesControlled = 78,
-    UnspentManaBecomesRed = 79,
-    DestroyCreaturesLosingAbilities = 80,
-    EntersWithXCounters = 81,
-    OpponentDamagePlusCounters = 82,
-    SetBasePtValue = 83,
-    Fight = 84,
-    GainLifeValue = 85,
-    AddManaValue = 86,
-    KeepUnspentRedMana = 87,
-    SearchLibraryToHand = 88,
-    LookAtLibraryTop = 89,
-    CastFromLibraryTop = 90,
-    SetCharacteristics = 91,
-    RemoveAllCounters = 92,
+    Airbend = 66,
+    AirbendAll = 67,
+    OpponentsCastOnlyFromHand = 68,
+    ExileTopCardPlayThisTurn = 69,
+    SacrificeSource = 70,
+    PutIntoLibrarySecondOrBottom = 71,
+    SearchLandsOpponentSplits = 72,
+    RevealHandDiscardChosen = 73,
+    ShuffleGraveyardIntoLibrary = 74,
+    NoMaximumHandSize = 75,
+    CastFromHandFree = 76,
+    ExileUntilNonlandCastFree = 77,
+    ExileLinked = 78,
+    GrantFirebendingUntilEot = 79,
+    RemoveCounters = 80,
+    SetBasePt = 81,
+    Attach = 82,
+    CantAttackOrBlock = 83,
+    DoesntUntap = 84,
+    ShuffleIntoLibrary = 85,
+    BecomeArtifactCreature = 86,
+    AddManaOfOneColor = 87,
+    CantBeBlockedByMoreThan = 88,
+    AttacksDespiteDefender = 89,
+    AddCardTypes = 90,
+    AddSubtypesControlled = 91,
+    UnspentManaBecomesRed = 92,
+    DestroyCreaturesLosingAbilities = 93,
+    EntersWithXCounters = 94,
+    OpponentDamagePlusCounters = 95,
+    SetBasePtValue = 96,
+    Fight = 97,
+    GainLifeValue = 98,
+    AddManaValue = 99,
+    KeepUnspentRedMana = 100,
+    SearchLibraryToHand = 101,
+    LookAtLibraryTop = 102,
+    CastFromLibraryTop = 103,
+    SetCharacteristics = 104,
+    RemoveAllCounters = 105,
 }
 
 impl Opcode {
@@ -198,33 +215,46 @@ impl Opcode {
             63 => Opcode::ExileIfDies,
             64 => Opcode::AddSubtype,
             65 => Opcode::OptionalPayment,
-            66 => Opcode::RemoveCounters,
-            67 => Opcode::SetBasePt,
-            68 => Opcode::Attach,
-            69 => Opcode::CantAttackOrBlock,
-            70 => Opcode::DoesntUntap,
-            71 => Opcode::ShuffleIntoLibrary,
-            72 => Opcode::BecomeArtifactCreature,
-            73 => Opcode::AddManaOfOneColor,
-            74 => Opcode::EarthbendValue,
-            75 => Opcode::CantBeBlockedByMoreThan,
-            76 => Opcode::AttacksDespiteDefender,
-            77 => Opcode::AddCardTypes,
-            78 => Opcode::AddSubtypesControlled,
-            79 => Opcode::UnspentManaBecomesRed,
-            80 => Opcode::DestroyCreaturesLosingAbilities,
-            81 => Opcode::EntersWithXCounters,
-            82 => Opcode::OpponentDamagePlusCounters,
-            83 => Opcode::SetBasePtValue,
-            84 => Opcode::Fight,
-            85 => Opcode::GainLifeValue,
-            86 => Opcode::AddManaValue,
-            87 => Opcode::KeepUnspentRedMana,
-            88 => Opcode::SearchLibraryToHand,
-            89 => Opcode::LookAtLibraryTop,
-            90 => Opcode::CastFromLibraryTop,
-            91 => Opcode::SetCharacteristics,
-            92 => Opcode::RemoveAllCounters,
+            66 => Opcode::Airbend,
+            67 => Opcode::AirbendAll,
+            68 => Opcode::OpponentsCastOnlyFromHand,
+            69 => Opcode::ExileTopCardPlayThisTurn,
+            70 => Opcode::SacrificeSource,
+            71 => Opcode::PutIntoLibrarySecondOrBottom,
+            72 => Opcode::SearchLandsOpponentSplits,
+            73 => Opcode::RevealHandDiscardChosen,
+            74 => Opcode::ShuffleGraveyardIntoLibrary,
+            75 => Opcode::NoMaximumHandSize,
+            76 => Opcode::CastFromHandFree,
+            77 => Opcode::ExileUntilNonlandCastFree,
+            78 => Opcode::ExileLinked,
+            79 => Opcode::GrantFirebendingUntilEot,
+            80 => Opcode::RemoveCounters,
+            81 => Opcode::SetBasePt,
+            82 => Opcode::Attach,
+            83 => Opcode::CantAttackOrBlock,
+            84 => Opcode::DoesntUntap,
+            85 => Opcode::ShuffleIntoLibrary,
+            86 => Opcode::BecomeArtifactCreature,
+            87 => Opcode::AddManaOfOneColor,
+            88 => Opcode::CantBeBlockedByMoreThan,
+            89 => Opcode::AttacksDespiteDefender,
+            90 => Opcode::AddCardTypes,
+            91 => Opcode::AddSubtypesControlled,
+            92 => Opcode::UnspentManaBecomesRed,
+            93 => Opcode::DestroyCreaturesLosingAbilities,
+            94 => Opcode::EntersWithXCounters,
+            95 => Opcode::OpponentDamagePlusCounters,
+            96 => Opcode::SetBasePtValue,
+            97 => Opcode::Fight,
+            98 => Opcode::GainLifeValue,
+            99 => Opcode::AddManaValue,
+            100 => Opcode::KeepUnspentRedMana,
+            101 => Opcode::SearchLibraryToHand,
+            102 => Opcode::LookAtLibraryTop,
+            103 => Opcode::CastFromLibraryTop,
+            104 => Opcode::SetCharacteristics,
+            105 => Opcode::RemoveAllCounters,
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -281,6 +311,7 @@ const FORBIDDEN_FIELDS: [&str; 3] = ["card_name", "registry_name", "definition_r
 pub enum Predicate {
     Any,
     All(Vec<Predicate>),
+    AnyOf(Vec<Predicate>),
     CardType(String),
     Subtype(String),
     Supertype(String),
@@ -294,6 +325,8 @@ pub enum Predicate {
     /// A token (`true`) or a nontoken (`false`).
     Token(bool),
     AttackingOrBlocking,
+    WithCounter,
+    Attacking,
     TypesAny(Vec<String>),
     SubtypesAny(Vec<String>),
     NotSubtypes(Vec<String>),
@@ -337,8 +370,11 @@ pub enum Step {
         target: String,
         subtype: String,
     },
+    /// Restricted mana (CR 106.6). The opcode predates other restrictions;
+    /// an omitted `spend_only` keeps its original meaning, Lesson spells.
     AddLessonMana {
         mana: String,
+        spend_only: ManaUse,
     },
     GrantFlashback,
     GrantMana {
@@ -393,11 +429,6 @@ pub enum Step {
     /// "Add X mana of any one color."
     AddManaOfOneColor {
         amount: ValueExpression,
-    },
-    /// "Earthbend X", X read as the ability resolves.
-    EarthbendValue {
-        target: String,
-        count: ValueExpression,
     },
     /// "Each creature you control [predicate] can't be blocked by more than
     /// `count` creatures" (static).
@@ -567,7 +598,7 @@ pub enum Step {
     },
     LookAndSelect {
         reveal: bool,
-        look: i64,
+        look: Amount,
         min_select: i64,
         max_select: i64,
         destination: String,
@@ -584,7 +615,7 @@ pub enum Step {
     },
     Earthbend {
         target: String,
-        count: i64,
+        count: Amount,
     },
     ExileUntilSourceLeaves {
         target: String,
@@ -600,9 +631,11 @@ pub enum Step {
     },
     SearchBasicLand {
         subtype: Option<String>,
+        to_hand: bool,
     },
     OptionalDiscardDraw {
         count: usize,
+        up_to: usize,
     },
     DiscardTargetPlayer {
         count: usize,
@@ -614,9 +647,51 @@ pub enum Step {
     Exile {
         target: String,
     },
+    Airbend {
+        target: String,
+    },
+    AirbendAll {
+        except: String,
+        predicate: Predicate,
+    },
+    OpponentsCastOnlyFromHand,
+    ExileTopCardPlayThisTurn,
+    GrantFirebendingUntilEot {
+        amount: usize,
+    },
+    ExileLinked {
+        chooser: String,
+        grant: String,
+        predicate: Predicate,
+        target: String,
+        up_to: bool,
+        zone: String,
+    },
+    ExileUntilNonlandCastFree {
+        below: ValueExpression,
+    },
+    CastFromHandFree {
+        predicate: Predicate,
+    },
+    NoMaximumHandSize,
+    ShuffleGraveyardIntoLibrary,
+    SacrificeSource {
+        then: Vec<Step>,
+    },
+    PutIntoLibrarySecondOrBottom {
+        target: String,
+    },
+    SearchLandsOpponentSplits {
+        count: usize,
+        opponent_picks: usize,
+    },
+    RevealHandDiscardChosen {
+        target: String,
+        predicate: Predicate,
+    },
     BuffTargetValue {
         power: ValueExpression,
-        toughness: i32,
+        toughness: Amount,
         target: String,
     },
     ReturnToHandDrawIfControlled {
@@ -647,11 +722,14 @@ pub enum Step {
     },
     MillCards {
         count: usize,
+        target: Option<String>,
     },
     MillAndSelect {
         count: usize,
         predicate: Predicate,
         if_declined: Vec<Step>,
+        milled_any: Option<Predicate>,
+        then: Vec<Step>,
     },
     DrainLifeValue {
         amount: ValueExpression,
@@ -664,6 +742,7 @@ pub enum Step {
     },
     ReturnGraveyardTarget {
         target: String,
+        tapped_onto_battlefield: bool,
     },
     Modal {
         modes: Vec<Vec<Step>>,
@@ -1127,7 +1206,7 @@ impl<'a> BoundPack<'a> {
             }),
             Step::LookAndSelect {
                 reveal: _,
-                look,
+                look: Amount::Fixed(look),
                 min_select,
                 max_select,
                 destination,
@@ -1138,6 +1217,7 @@ impl<'a> BoundPack<'a> {
                 max_select: *max_select,
                 destination: destination.clone(),
             }),
+            Step::LookAndSelect { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
             Step::Branch {
                 condition,
                 then,
@@ -1155,10 +1235,14 @@ impl<'a> BoundPack<'a> {
                     self.run_steps(body, context, trace)?;
                 }
             }
-            Step::Earthbend { target, count } => trace.push(TraceEvent::Earthbend {
+            Step::Earthbend {
+                target,
+                count: Amount::Fixed(count),
+            } => trace.push(TraceEvent::Earthbend {
                 target: target.clone(),
                 count: *count,
             }),
+            Step::Earthbend { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
             Step::ExileUntilSourceLeaves { target } => {
                 trace.push(TraceEvent::ExileUntilSourceLeaves(target.clone()))
             }
@@ -1183,7 +1267,6 @@ impl<'a> BoundPack<'a> {
             | Step::ShuffleIntoLibrary { .. }
             | Step::BecomeArtifactCreature { .. }
             | Step::AddManaOfOneColor { .. }
-            | Step::EarthbendValue { .. }
             | Step::CantBeBlockedByMoreThan { .. }
             | Step::AttacksDespiteDefender { .. }
             | Step::AddCardTypes { .. }
@@ -1211,7 +1294,23 @@ impl<'a> BoundPack<'a> {
             Step::OptionalDiscardDraw { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
             Step::DiscardTargetPlayer { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
             Step::Destroy { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
-            Step::Exile { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
+            Step::Exile { .. }
+            | Step::Airbend { .. }
+            | Step::AirbendAll { .. }
+            | Step::OpponentsCastOnlyFromHand
+            | Step::ExileTopCardPlayThisTurn
+            | Step::GrantFirebendingUntilEot { .. }
+            | Step::ExileLinked { .. }
+            | Step::ExileUntilNonlandCastFree { .. }
+            | Step::CastFromHandFree { .. }
+            | Step::NoMaximumHandSize
+            | Step::ShuffleGraveyardIntoLibrary
+            | Step::SacrificeSource { .. }
+            | Step::PutIntoLibrarySecondOrBottom { .. }
+            | Step::SearchLandsOpponentSplits { .. }
+            | Step::RevealHandDiscardChosen { .. } => {
+                trace.push(TraceEvent::RuleStep(step.clone()))
+            }
             Step::BuffTargetValue { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
             Step::ReturnToHandDrawIfControlled { .. } => {
                 trace.push(TraceEvent::RuleStep(step.clone()))
@@ -1328,6 +1427,10 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
     let step = match opcode {
         Opcode::AddLessonMana => Step::AddLessonMana {
             mana: str_field(value, "mana")?.to_owned(),
+            spend_only: match value.get("spend_only") {
+                None => ManaUse::spell(["Lesson"]),
+                Some(_) => mana_use(object_field(value, "spend_only")?)?,
+            },
         },
         Opcode::Discard => Step::Discard,
         Opcode::ExileIfDies => Step::ExileIfDies {
@@ -1438,10 +1541,6 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         Opcode::AddManaOfOneColor => Step::AddManaOfOneColor {
             amount: ValueExpression::parse(object_field(value, "amount")?)?,
         },
-        Opcode::EarthbendValue => Step::EarthbendValue {
-            target: str_field(value, "target")?.to_owned(),
-            count: ValueExpression::parse(object_field(value, "count")?)?,
-        },
         Opcode::CantBeBlockedByMoreThan => Step::CantBeBlockedByMoreThan {
             count: i64_field(value, "count")?,
             predicate: parse_predicate(object_field(value, "predicate")?)?,
@@ -1543,7 +1642,7 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         },
         Opcode::LookAndSelect => Step::LookAndSelect {
             reveal: opt_bool_field(value, "reveal")?.unwrap_or(false),
-            look: i64_field(value, "look")?,
+            look: Amount::parse(field(value, "look")?)?,
             min_select: i64_field(value, "min_select")?,
             max_select: i64_field(value, "max_select")?,
             destination: str_field(value, "destination")?.to_owned(),
@@ -1560,7 +1659,7 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         },
         Opcode::Earthbend => Step::Earthbend {
             target: str_field(value, "target")?.to_owned(),
-            count: i64_field(value, "count")?,
+            count: Amount::parse(field(value, "count")?)?,
         },
         Opcode::ExileUntilSourceLeaves => Step::ExileUntilSourceLeaves {
             target: str_field(value, "target")?.to_owned(),
@@ -1607,9 +1706,22 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
                     ))
                 }
             },
+            to_hand: match opt_str_field(value, "destination")? {
+                None => false,
+                Some("hand") => true,
+                Some(other) => {
+                    return Err(IrError::Malformed(format!(
+                        "unsupported search destination {other:?}"
+                    )))
+                }
+            },
         },
         Opcode::OptionalDiscardDraw => Step::OptionalDiscardDraw {
             count: usize_field(value, "count")?,
+            up_to: match value.get("up_to") {
+                None => 1,
+                Some(_) => usize_field(value, "up_to")?,
+            },
         },
         Opcode::DiscardTargetPlayer => Step::DiscardTargetPlayer {
             count: usize_field(value, "count")?,
@@ -1621,10 +1733,52 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         Opcode::Exile => Step::Exile {
             target: str_field(value, "target")?.to_owned(),
         },
+        Opcode::Airbend => Step::Airbend {
+            target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::AirbendAll => Step::AirbendAll {
+            except: str_field(value, "except")?.to_owned(),
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
+        },
+        Opcode::OpponentsCastOnlyFromHand => Step::OpponentsCastOnlyFromHand,
+        Opcode::ExileTopCardPlayThisTurn => Step::ExileTopCardPlayThisTurn,
+        Opcode::GrantFirebendingUntilEot => Step::GrantFirebendingUntilEot {
+            amount: usize_field(value, "amount")?,
+        },
+        Opcode::ExileLinked => Step::ExileLinked {
+            chooser: str_field(value, "chooser")?.to_owned(),
+            grant: str_field(value, "grant")?.to_owned(),
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
+            target: str_field(value, "target")?.to_owned(),
+            up_to: opt_bool_field(value, "up_to")?
+                .ok_or_else(|| IrError::Malformed("missing up_to".into()))?,
+            zone: str_field(value, "zone")?.to_owned(),
+        },
+        Opcode::ExileUntilNonlandCastFree => Step::ExileUntilNonlandCastFree {
+            below: ValueExpression::parse(object_field(value, "below")?)?,
+        },
+        Opcode::CastFromHandFree => Step::CastFromHandFree {
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
+        },
+        Opcode::NoMaximumHandSize => Step::NoMaximumHandSize,
+        Opcode::ShuffleGraveyardIntoLibrary => Step::ShuffleGraveyardIntoLibrary,
+        Opcode::SacrificeSource => Step::SacrificeSource {
+            then: parse_steps(array_field(value, "then")?)?,
+        },
+        Opcode::PutIntoLibrarySecondOrBottom => Step::PutIntoLibrarySecondOrBottom {
+            target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::RevealHandDiscardChosen => Step::RevealHandDiscardChosen {
+            target: str_field(value, "target")?.to_owned(),
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
+        },
+        Opcode::SearchLandsOpponentSplits => Step::SearchLandsOpponentSplits {
+            count: usize_field(value, "count")?,
+            opponent_picks: usize_field(value, "opponent_picks")?,
+        },
         Opcode::BuffTargetValue => Step::BuffTargetValue {
             power: ValueExpression::parse(object_field(value, "power")?)?,
-            toughness: i32::try_from(i64_field(value, "toughness")?)
-                .map_err(|_| IrError::Malformed("integer exceeds i32".into()))?,
+            toughness: Amount::parse(field(value, "toughness")?)?,
             target: str_field(value, "target")?.to_owned(),
         },
         Opcode::ReturnToHandDrawIfControlled => Step::ReturnToHandDrawIfControlled {
@@ -1657,11 +1811,17 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         },
         Opcode::MillCards => Step::MillCards {
             count: usize_field(value, "count")?,
+            target: opt_str_field(value, "target")?.map(str::to_owned),
         },
         Opcode::MillAndSelect => Step::MillAndSelect {
             count: usize_field(value, "count")?,
             predicate: parse_predicate(object_field(value, "predicate")?)?,
             if_declined: parse_steps(array_field(value, "if_declined")?)?,
+            milled_any: value.get("milled_any").map(parse_predicate).transpose()?,
+            then: match value.get("then") {
+                None => Vec::new(),
+                Some(_) => parse_steps(array_field(value, "then")?)?,
+            },
         },
         Opcode::DrainLifeValue => Step::DrainLifeValue {
             amount: ValueExpression::parse(object_field(value, "amount")?)?,
@@ -1674,6 +1834,15 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         },
         Opcode::ReturnGraveyardTarget => Step::ReturnGraveyardTarget {
             target: str_field(value, "target")?.to_owned(),
+            tapped_onto_battlefield: match opt_str_field(value, "destination")? {
+                None | Some("hand") => false,
+                Some("battlefield_tapped") => true,
+                Some(other) => {
+                    return Err(IrError::Malformed(format!(
+                        "unknown graveyard return destination {other:?}"
+                    )))
+                }
+            },
         },
         Opcode::Modal => Step::Modal {
             modes: array_field(value, "modes")?
@@ -1769,6 +1938,12 @@ fn parse_predicate(value: &Value) -> Result<Predicate, IrError> {
                 .map(parse_predicate)
                 .collect::<Result<Vec<_>, _>>()?,
         ),
+        "any_of" => Predicate::AnyOf(
+            array_field(value, "predicates")?
+                .iter()
+                .map(parse_predicate)
+                .collect::<Result<Vec<_>, _>>()?,
+        ),
         "card_type" => Predicate::CardType(str_field(value, "value")?.to_owned()),
         "subtype" => Predicate::Subtype(str_field(value, "value")?.to_owned()),
         "supertype" => Predicate::Supertype(str_field(value, "value")?.to_owned()),
@@ -1786,6 +1961,8 @@ fn parse_predicate(value: &Value) -> Result<Predicate, IrError> {
             opt_bool_field(value, "value")?
                 .ok_or_else(|| IrError::Malformed("token predicate needs a value".into()))?,
         ),
+        "with_counter" => Predicate::WithCounter,
+        "attacking" => Predicate::Attacking,
         "types_any" => Predicate::TypesAny(str_array_field(value, "values")?),
         "subtypes_any" => Predicate::SubtypesAny(str_array_field(value, "values")?),
         "not_subtypes" => Predicate::NotSubtypes(str_array_field(value, "values")?),
@@ -1867,6 +2044,35 @@ fn str_array_field(value: &Value, name: &str) -> Result<Vec<String>, IrError> {
         .collect()
 }
 
+/// `{"spell_subtypes": [...], "ability_source_subtypes": [...]}`, each optional.
+fn mana_use(value: &Value) -> Result<ManaUse, IrError> {
+    let subtypes = |name: &str| -> Result<Vec<String>, IrError> {
+        let subtypes = match value.get(name) {
+            None => Vec::new(),
+            Some(_) => str_array_field(value, name)?,
+        };
+        match subtypes
+            .iter()
+            .find(|s| !SPEND_SUBTYPES.contains(&s.as_str()))
+        {
+            Some(other) => Err(IrError::Malformed(format!(
+                "unsupported spending restriction subtype {other:?}"
+            ))),
+            None => Ok(subtypes),
+        }
+    };
+    let spells = subtypes("spell_subtypes")?;
+    let abilities = subtypes("ability_source_subtypes")?;
+    let use_ = ManaUse::new(
+        spells.iter().map(String::as_str),
+        abilities.iter().map(String::as_str),
+    );
+    if use_.is_ordinary() {
+        return Err(IrError::Malformed("spend_only names no purpose".into()));
+    }
+    Ok(use_)
+}
+
 fn object_field<'a>(value: &'a Value, name: &str) -> Result<&'a Value, IrError> {
     let inner = field(value, name)?;
     if inner.is_object() {
@@ -1881,20 +2087,40 @@ fn object_field<'a>(value: &'a Value, name: &str) -> Result<&'a Value, IrError> 
 /// Quantities evaluated by the live engine relative to the resolving controller.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ValueExpression {
+    /// The resolving spell's or ability's announced X.
+    X,
     CreaturesWithCounters,
     BattlefieldMatching(Predicate),
-    GraveyardMatching { base: i32, predicate: Predicate },
+    GraveyardMatching {
+        base: i32,
+        predicate: Predicate,
+    },
     CardsDrawnMinus(u32),
     GreatestSharedCreatureType,
-    X,
     ExcessDamage,
 }
+/// A printed integer or a resolution-time [`ValueExpression`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Amount {
+    Fixed(i64),
+    Value(ValueExpression),
+}
+
+impl Amount {
+    fn parse(value: &Value) -> Result<Self, IrError> {
+        match value.as_i64() {
+            Some(fixed) => Ok(Self::Fixed(fixed)),
+            None => ValueExpression::parse(value).map(Self::Value),
+        }
+    }
+}
+
 impl ValueExpression {
     fn parse(value: &Value) -> Result<Self, IrError> {
         Ok(match str_field(value, "kind")? {
+            "x" => Self::X,
             "creatures_with_counters" => Self::CreaturesWithCounters,
             "greatest_shared_creature_type" => Self::GreatestSharedCreatureType,
-            "x" => Self::X,
             "excess_damage" => Self::ExcessDamage,
             "battlefield_matching" => {
                 Self::BattlefieldMatching(parse_predicate(object_field(value, "predicate")?)?)

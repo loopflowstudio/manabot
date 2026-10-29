@@ -10,9 +10,10 @@ use crate::{
         turn::StepKind,
     },
     state::{
-        ability::{Ability, TargetSpec, TriggerCondition, TriggerSubject},
+        ability::{Ability, Effect, TargetSpec, TriggerCondition, TriggerSubject},
         card::CardType,
         game_object::{CardId, ObjectLki, ObjectRef, PermanentId, PlayerId, Target},
+        mana::{Color, Mana},
         stack_object::{StackObject, TriggeredAbilityOnStack},
         zone::ZoneType,
     },
@@ -29,6 +30,12 @@ pub(crate) struct TriggerSourceSnapshot {
 }
 
 impl Game {
+    /// Whether `target` is the exact permanent whose ability triggered.
+    fn is_trigger_source(&self, trigger: &PendingTrigger, target: Target) -> bool {
+        matches!(target, Target::Permanent(id)
+            if trigger.source_ref.is_some() && self.permanent_object_ref(id) == trigger.source_ref)
+    }
+
     fn trigger_requirements(
         &self,
         trigger: &PendingTrigger,
@@ -83,6 +90,7 @@ impl Game {
             .any(|(chosen, index)| *index == trigger.requirement_index && *chosen == target);
         if trigger.controller != player
             || duplicate
+            || (requirement.another && self.is_trigger_source(trigger, target))
             || !self.target_is_legal(target, &requirement.spec, player)
             || self
                 .excluded_source(trigger, requirement)
@@ -175,6 +183,9 @@ impl Game {
                     .legal_targets_for_spec(&requirement.spec, trigger.controller)
                     .into_iter()
                     .filter(|target| source.is_none_or(|id| *target != Target::Permanent(id)))
+                    .filter(|target| {
+                        !(requirement.another && self.is_trigger_source(&trigger, *target))
+                    })
                     .filter(|target| {
                         !trigger.targets.iter().zip(&trigger.target_req_indices).any(
                             |(chosen, index)| {
@@ -390,6 +401,7 @@ impl Game {
     }
 
     fn check_triggers_for_event(&mut self, event: &GameEvent, sources: &[TriggerSourceSnapshot]) {
+        self.granted_firebending_triggers(event);
         let mut fired = Vec::new();
         for source in sources.iter().filter(|source| !source.lki.abilities_lost) {
             for (ability_index, ability) in
@@ -443,6 +455,7 @@ impl Game {
                     matches!(
                         effect,
                         crate::state::ability::Effect::ModifyTriggeringPermanent { .. }
+                            | crate::state::ability::Effect::BuffTriggeringPermanentValue { .. }
                     )
                 }) {
                 match event {
@@ -451,6 +464,9 @@ impl Game {
                         to: ZoneType::Battlefield,
                         ..
                     } => self.state.card_to_permanent[*card].map(Target::Permanent),
+                    GameEvent::AttackersDeclared { attackers, .. } if attackers.len() == 1 => {
+                        Some(Target::Permanent(attackers[0]))
+                    }
                     _ => None,
                 }
             } else {
@@ -475,6 +491,41 @@ impl Game {
                 .trigger_enqueue_counter
                 .checked_add(1)
                 .expect("trigger occurrence identity exhausted");
+        }
+    }
+
+    /// Granted firebending (CR 702.187): each attacking creature with
+    /// firebending until end of turn triggers "add that much {R} until end
+    /// of combat".
+    fn granted_firebending_triggers(&mut self, event: &GameEvent) {
+        let GameEvent::AttackersDeclared { attackers, .. } = event else {
+            return;
+        };
+        for attacker in attackers.clone() {
+            let Some(permanent) = self.state.permanents[attacker].as_ref() else {
+                continue;
+            };
+            let (amount, controller, card) = (
+                permanent.firebending_this_turn,
+                permanent.controller,
+                permanent.card,
+            );
+            if amount == 0 {
+                continue;
+            }
+            let (Some(source), Some(lki)) = (
+                self.permanent_object_ref(attacker),
+                self.snapshot_current_permanent(card),
+            ) else {
+                continue;
+            };
+            let mut mana = Mana::default();
+            mana.mana[Color::Red as usize] = amount;
+            let effect = Effect::AddMana {
+                mana,
+                until_end_of_combat: true,
+            };
+            self.enqueue_delayed_trigger(source, lki, controller, vec![effect]);
         }
     }
 
@@ -602,7 +653,7 @@ impl Game {
                         .is_some_and(|id| self.permanent_matches_predicate(id, predicate))
             }
             (TriggerCondition::YouCastSpell { predicate }, GameEvent::SpellCast { card, .. }) => {
-                self.state.cards[*card].owner == source_controller
+                self.spell_caster(*card) == source_controller
                     && predicate.matches_card(&self.state.cards[*card])
             }
             // Conditionally-granted abilities: the ability only exists (and
@@ -631,6 +682,7 @@ impl Game {
                     from,
                     to,
                     controller,
+                    ..
                 },
             ) => {
                 let entered = *to == ZoneType::Battlefield && *from != Some(ZoneType::Battlefield);
@@ -651,6 +703,7 @@ impl Game {
                     from,
                     to,
                     controller,
+                    ..
                 },
             ) => {
                 let died = *from == Some(ZoneType::Battlefield) && *to == ZoneType::Graveyard;
@@ -688,6 +741,32 @@ impl Game {
                             .any(|attacker| self.permanent_matches_predicate(*attacker, predicate))
                 }
             },
+            (
+                TriggerCondition::AttacksAlone { subject },
+                GameEvent::AttackersDeclared { player, attackers },
+            ) => {
+                let [attacker] = attackers.as_slice() else {
+                    return false;
+                };
+                match subject {
+                    TriggerSubject::This => self
+                        .state
+                        .card_to_permanent
+                        .get(source_card.0)
+                        .copied()
+                        .flatten()
+                        .is_some_and(|permanent_id| permanent_id == *attacker),
+                    TriggerSubject::AnotherYouControl(predicate) => {
+                        *player == source_controller
+                            && self.permanent_is_other(*attacker, source_card)
+                            && self.permanent_matches_predicate(*attacker, predicate)
+                    }
+                    TriggerSubject::AnyYouControl(predicate) => {
+                        *player == source_controller
+                            && self.permanent_matches_predicate(*attacker, predicate)
+                    }
+                }
+            }
             (
                 TriggerCondition::BecomesTapped { subject },
                 GameEvent::PermanentTapped { permanent, .. },

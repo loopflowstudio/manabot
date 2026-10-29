@@ -56,7 +56,7 @@ owner's decision.
 
 ## Learning projection
 
-Current execution uses world **w16** and `current/learning_schema.json` (schema **8**).
+Current execution uses world **w17** and `current/learning_schema.json` (schema **8**).
 `BoundSemanticPack` binds a native manifest to the exact IR and schema, resolving
 registry names once and discarding them from model inputs. The shared catalog
 stores typed definition/program token spans and definition-reference edges.

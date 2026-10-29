@@ -476,6 +476,21 @@ impl Game {
         counts.into_values().max().unwrap_or(0)
     }
 
+    /// Instant timing for `player` casting `card`: printed instant or flash,
+    /// or a conditional "as though it had flash" that currently holds.
+    pub(crate) fn has_instant_timing(&self, player: PlayerId, card: CardId) -> bool {
+        let granted_flash = self
+            .exile_grant(player, card)
+            .is_some_and(|grant| grant.flash);
+        let card = &self.state.cards[card];
+        granted_flash
+            || card.is_instant_speed()
+            || card
+                .flash_if
+                .as_ref()
+                .is_some_and(|condition| self.check_static_condition(condition, player))
+    }
+
     /// Evaluate a static condition for `controller` ("you").
     pub(crate) fn check_static_condition(
         &self,
@@ -595,6 +610,18 @@ impl Game {
         {
             return false;
         }
+        if predicate.with_counter && permanent.plus1_counters <= 0 {
+            return false;
+        }
+        if predicate.attacking
+            && !self
+                .state
+                .combat
+                .as_ref()
+                .is_some_and(|combat| combat.attackers.contains(&permanent_id))
+        {
+            return false;
+        }
         let has_subtype = |name: &str| self.permanent_has_subtype(permanent_id, name);
         if predicate
             .subtype
@@ -608,6 +635,8 @@ impl Game {
         }
         let structural = CardPredicate {
             flying: false,
+            with_counter: false,
+            attacking: false,
             subtype: None,
             subtypes_any: Vec::new(),
             not_subtypes: Vec::new(),

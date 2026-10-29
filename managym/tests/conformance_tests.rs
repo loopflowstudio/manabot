@@ -299,7 +299,8 @@ fn every_registered_real_card_matches_scryfall() {
             ("Menace", def.keywords.menace),
             ("Hexproof", def.keywords.hexproof),
             ("Ward", def.ward.is_some()),
-            ("Kicker", def.kicker.is_some()),
+            // A waterbend additional cost rides the kicker field unnamed.
+            ("Kicker", def.kicker.is_some() && !def.kicker_waterbend),
         ];
         for (keyword, has) in checks {
             if kw(keyword) != has {

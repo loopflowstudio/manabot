@@ -200,7 +200,7 @@ class LearningSchema:
 
         opcodes = _validate_id_map(raw.get("opcodes"), "learning_schema.opcodes")
         # Frozen schemas admit only the opcode prefix available at publication.
-        max_opcode = {2: 23, 3: 50, 4: 55, 5: 61, 6: 64, 7: 65, 8: 92}[version]
+        max_opcode = {2: 23, 3: 50, 4: 55, 5: 61, 6: 64, 7: 65, 8: 105}[version]
         expected_opcodes = {
             opcode.name.lower(): int(opcode)
             for opcode in Opcode
@@ -521,12 +521,17 @@ class _TokenBuilder:
             "target_binding": "target_binding",
             "keywords": "keyword",
             "subtypes": "subtype",
+            "spell_subtypes": "subtype",
+            "ability_source_subtypes": "subtype",
             "supertypes": "supertype",
             "event": "trigger_event",
             "duration": "duration",
             "until": "duration",
             "zone": "zone",
+            "affinity_zone": "zone",
             "controller": "controller",
+            "chooser": "controller",
+            "grant": "grant",
             "destination": "destination",
             "remainder": "remainder",
             "remainder_order": "ordering",
@@ -560,9 +565,17 @@ class _TokenBuilder:
             self.emit("integer", value)
             return
         if isinstance(value, str):
-            if field in {"mana", "mana_cost", "kicker", "cost", "or_mana"}:
+            if field in {
+                "mana",
+                "mana_cost",
+                "kicker",
+                "flashback",
+                "foretell",
+                "cost",
+                "or_mana",
+            }:
                 self.mana(value, f"{context}.{field}")
-            elif field in {"role", "sources", "target"}:
+            elif field in {"role", "sources", "target", "except"}:
                 self.role(value, roles)
             else:
                 self.enum(self._domain_for_string(field, value, context), value)
@@ -570,7 +583,9 @@ class _TokenBuilder:
         if isinstance(value, Mapping):
             nested_context = {
                 "amount": "quantity",
+                "below": "quantity",
                 "count": "quantity",
+                "look": "quantity",
                 "power": "quantity",
                 "toughness": "quantity",
                 "max_mana_value": "quantity",
@@ -580,6 +595,7 @@ class _TokenBuilder:
                 "per_color_among": "predicate",
                 "if": "condition",
                 "predicate": "predicate",
+                "milled_any": "predicate",
                 "predicates": "predicate",
                 "selector": "selector",
                 "subject": "subject",

@@ -11,7 +11,7 @@ use crate::{
         ability::Effect,
         card::{AbilityGrant, ActivatedAbilityDefinition, ReplacementEffect},
         game_object::{PermanentId, PlayerId},
-        mana::{Mana, ManaCost},
+        mana::{Mana, ManaCost, ManaUse},
     },
 };
 
@@ -263,7 +263,11 @@ impl PaymentModel {
                             .map(|mana| u32::from(mana.usable_total(cost)))
                             .max()
                             .unwrap_or(0);
-                        let upfront = if !ability.cost.spend_on_lesson || cost.spend_on_lesson {
+                        // Subtract the upfront cost only when it competes for
+                        // the same usable mana, keeping the bound optimistic.
+                        let upfront = if ability.cost.purpose.is_ordinary()
+                            || ability.cost.purpose == cost.purpose
+                        {
                             u32::from(ability.cost.mana_value)
                         } else {
                             0
@@ -277,21 +281,13 @@ impl PaymentModel {
                     let mut upper = source.fixed.clone().unwrap_or_default();
                     for ability in &source.abilities {
                         for output in &ability.outputs {
-                            for slot in 0..6 {
-                                upper.mana[slot] = upper.mana[slot].max(output.mana[slot]);
-                                upper.lesson[slot] = upper.lesson[slot].max(output.lesson[slot]);
-                            }
+                            upper.max_with(output);
                         }
                     }
                     if *waterbend && source.waterbend {
                         upper.mana[5] = upper.mana[5].max(1);
                     }
-                    for slot in 0..6 {
-                        optimistic.mana[slot] =
-                            optimistic.mana[slot].saturating_add(upper.mana[slot]);
-                        optimistic.lesson[slot] =
-                            optimistic.lesson[slot].saturating_add(upper.lesson[slot]);
-                    }
+                    optimistic.add(&upper);
                 }
                 if usable_total < u32::from(cost.mana_value) || !optimistic.can_pay(cost) {
                     return None;
@@ -454,8 +450,9 @@ impl Game {
     /// Printed abilities, then currently granted abilities in source order,
     /// then the intrinsic mana ability of basic land types gained by an effect,
     /// then abilities granted by attached Equipment and Auras in battlefield
-    /// order. A permanent that has lost all abilities keeps only the grants of
-    /// the Aura that set its characteristics (Humble Merchant's "{T}: Add {C}").
+    /// order, each with its cost as it would be paid now. A permanent that has
+    /// lost all abilities keeps only the grants of the Aura that set its
+    /// characteristics (Humble Merchant's "{T}: Add {C}").
     pub(crate) fn activated_abilities_for(
         &self,
         permanent: PermanentId,
@@ -463,10 +460,17 @@ impl Game {
         let Some(source) = self.state.permanents[permanent].as_ref() else {
             return Vec::new();
         };
+        let card = &self.state.cards[source.card];
+        let purpose = ManaUse::ability(
+            card.subtypes
+                .iter()
+                .chain(&source.temp_subtypes)
+                .map(String::as_str),
+        );
         let lost = self.has_lost_abilities(permanent);
         let mut abilities = Vec::new();
         if !lost {
-            abilities = self.state.cards[source.card].activated_abilities.clone();
+            abilities = card.activated_abilities.clone();
             self.extend_own_abilities(permanent, &mut abilities);
         }
         for (grantor, card) in self.attachments_on(permanent) {
@@ -486,6 +490,9 @@ impl Game {
                     }),
             );
         }
+        for ability in &mut abilities {
+            self.price_activation(source.controller, purpose, ability);
+        }
         abilities
     }
 
@@ -499,8 +506,10 @@ impl Game {
     ) {
         let source = self.state.permanents[permanent].as_ref().unwrap();
         for ability in abilities.iter_mut() {
-            if let Some(effect) = self.current_mana_output(&ability.effect, source.controller) {
-                ability.effect = effect;
+            if let [effect] = ability.effects.as_slice() {
+                if let Some(effect) = self.current_mana_output(effect, source.controller) {
+                    ability.effects = vec![effect];
+                }
             }
         }
         for grant in self.battlefield_permanents(source.controller) {
@@ -512,7 +521,7 @@ impl Game {
             {
                 abilities.push(ActivatedAbilityDefinition {
                     tap_source: true,
-                    effect: Effect::any_color_mana(),
+                    effects: vec![Effect::any_color_mana()],
                     ..Default::default()
                 });
             }
@@ -520,7 +529,7 @@ impl Game {
         if let Some(effect) = self.gained_land_type_mana(permanent) {
             abilities.push(ActivatedAbilityDefinition {
                 tap_source: true,
-                effect,
+                effects: vec![effect],
                 ..Default::default()
             });
         }
@@ -584,7 +593,7 @@ impl Game {
                 Some(branch[0].clone())
             }
             Effect::AddOneColorManaValue { amount } => {
-                let amount = self.effect_value(amount, controller, 0).max(0) as usize;
+                let amount = self.controller_value(amount, controller).max(0) as usize;
                 if amount == 0 {
                     return Some(Effect::AddMana {
                         mana: Mana::default(),
@@ -596,6 +605,28 @@ impl Game {
                 ))
             }
             _ => None,
+        }
+    }
+
+    /// The activation's mana cost as paid now: its purpose names the source
+    /// (for restricted mana, CR 106.6) and per-permanent reductions apply to
+    /// its generic part (CR 601.2f, 602.2b).
+    pub(crate) fn price_activation(
+        &self,
+        controller: PlayerId,
+        purpose: ManaUse,
+        ability: &mut ActivatedAbilityDefinition,
+    ) {
+        ability.mana_cost.purpose = purpose;
+        if let Some(predicate) = &ability.cost_reduction_per {
+            let count = self
+                .battlefield_permanents(controller)
+                .into_iter()
+                .filter(|permanent| self.permanent_matches_predicate(*permanent, predicate))
+                .count();
+            ability.mana_cost = ability
+                .mana_cost
+                .reduced_generic(u8::try_from(count).unwrap_or(u8::MAX));
         }
     }
 
@@ -678,9 +709,10 @@ impl Game {
                     .activated_abilities_for(permanent)
                     .iter()
                     .enumerate()
-                    .filter(|(_, ability)| {
+                    .filter(|(index, ability)| {
                         (!ability.tap_source || can_tap)
                             && (!ability.own_turn_only || self.active_player() == player)
+                            && !source.activation_used(*index, ability)
                     })
                     .filter_map(|(index, ability)| {
                         let mut outputs = ability.mana_choices()?;
@@ -715,14 +747,14 @@ impl Game {
         ) = &self.pending_choice
         {
             if let crate::flow::game::Payment::Activation {
-                permanent,
+                source,
                 ability_index,
                 ..
             } = payment.as_ref()
             {
-                life = life.saturating_sub(
-                    self.activated_abilities_for(*permanent)[*ability_index].life_cost,
-                );
+                if let Some(ability) = self.activation_ability(*source, *ability_index) {
+                    life = life.saturating_sub(ability.life_cost);
+                }
             }
         }
         let mut model = PaymentModel { sources, life };
@@ -738,7 +770,7 @@ impl Game {
     ) -> Option<SourceReservation> {
         match payment {
             crate::flow::game::Payment::Activation {
-                permanent,
+                source: crate::flow::game::ActivationSource::Permanent(permanent),
                 ability_index,
                 ..
             } => {
@@ -749,7 +781,7 @@ impl Game {
                     sacrifice: ability.tap_source || ability.sacrifice_source,
                 })
             }
-            crate::flow::game::Payment::Spell { .. } => None,
+            _ => None,
         }
     }
 
@@ -813,17 +845,14 @@ impl Game {
                 waterbend: false,
             }),
             Some(PendingChoice::Waterbend {
-                permanent,
-                ability_index,
+                payment,
                 remaining_generic,
+                tapped,
                 ..
             }) => {
-                result.push(Obligation::Pay {
-                    cost: self.activated_abilities_for(*permanent)[*ability_index]
-                        .mana_cost
-                        .with_generic(*remaining_generic),
-                    waterbend: true,
-                });
+                let (owed, waterbend) =
+                    self.waterbend_owed(player, payment, *remaining_generic, *tapped);
+                result.extend(waterbend_obligations(&owed, waterbend));
             }
             _ => {}
         }
@@ -930,13 +959,15 @@ impl Game {
             model.reserve(reservation);
         }
         if let crate::flow::game::Payment::Activation {
-            permanent,
+            source,
             ability_index,
             ..
         } = payment
         {
-            let life = self.activated_abilities_for(*permanent)[*ability_index].life_cost;
-            let Some(remaining) = model.life.checked_sub(life) else {
+            let Some(ability) = self.activation_ability(*source, *ability_index) else {
+                return false;
+            };
+            let Some(remaining) = model.life.checked_sub(ability.life_cost) else {
                 return false;
             };
             model.life = remaining;
@@ -953,14 +984,18 @@ impl Game {
             .is_some()
     }
 
-    pub(crate) fn waterbend_payment_possible(&self, player: PlayerId, cost: &ManaCost) -> bool {
+    /// Can `player` pay `cost`, `waterbend` of its generic with mana or
+    /// waterbend taps and the rest with mana?
+    pub(crate) fn waterbend_payment_possible(
+        &self,
+        player: PlayerId,
+        cost: &ManaCost,
+        waterbend: u8,
+    ) -> bool {
         self.payment_model(player, None)
             .plan(
                 self.pooled_mana(player),
-                vec![Obligation::Pay {
-                    cost: cost.clone(),
-                    waterbend: true,
-                }],
+                waterbend_obligations(cost, waterbend),
                 SourcePolicy::All,
             )
             .is_some()
@@ -983,6 +1018,10 @@ impl Game {
         if !self.can_activate_mana_ability(player, permanent, ability_index) {
             return Err(AgentError("illegal mana activation".into()));
         }
+        let ability = self
+            .activated_abilities_for(permanent)
+            .swap_remove(ability_index);
+        self.record_activation(permanent, ability_index, &ability);
         let old = self.state.suspended_decision.take();
         self.suspend_rule_decision(crate::flow::decision::Decision::ManaUpfront {
             player,
@@ -1183,13 +1222,29 @@ impl Game {
         // expiring combat pool before the regular pool within each class.
         self.journal_player(player);
         let player_state = &mut self.state.players[player.0];
+        let mut classes = player_state
+            .mana_pool
+            .restricted()
+            .iter()
+            .chain(player_state.combat_mana_pool.restricted())
+            .map(|(class, _)| *class)
+            .collect::<Vec<_>>();
+        classes.sort();
+        classes.dedup();
+        for class in classes {
+            let mut regular = player_state.mana_pool.restricted_of(class);
+            let mut combat = player_state.combat_mana_pool.restricted_of(class);
+            let left = remaining.restricted_of(class);
+            for slot in 0..left.len() {
+                let spent = regular[slot] + combat[slot] - left[slot];
+                let from_combat = spent.min(combat[slot]);
+                combat[slot] -= from_combat;
+                regular[slot] -= spent - from_combat;
+            }
+            player_state.mana_pool.set_restricted(class, regular);
+            player_state.combat_mana_pool.set_restricted(class, combat);
+        }
         for slot in 0..remaining.mana.len() {
-            let restricted_spent = player_state.mana_pool.lesson[slot]
-                + player_state.combat_mana_pool.lesson[slot]
-                - remaining.lesson[slot];
-            let combat = restricted_spent.min(player_state.combat_mana_pool.lesson[slot]);
-            player_state.combat_mana_pool.lesson[slot] -= combat;
-            player_state.mana_pool.lesson[slot] -= restricted_spent - combat;
             let spent = player_state.mana_pool.mana[slot]
                 + player_state.combat_mana_pool.mana[slot]
                 - remaining.mana[slot];
@@ -1257,6 +1312,26 @@ impl Game {
     }
 }
 
+/// `cost` as obligations: `waterbend` of its generic that taps may also
+/// pay, and the rest paid only with mana.
+fn waterbend_obligations(cost: &ManaCost, waterbend: u8) -> Vec<Obligation> {
+    let mut obligations = vec![Obligation::Pay {
+        cost: cost.reduced_generic(waterbend),
+        waterbend: false,
+    }];
+    if waterbend > 0 {
+        obligations.push(Obligation::Pay {
+            cost: ManaCost {
+                purpose: cost.purpose,
+                ..ManaCost::default()
+            }
+            .with_generic(waterbend),
+            waterbend: true,
+        });
+    }
+    obligations
+}
+
 #[cfg(test)]
 mod tests {
     use crate::cards::content_pack::ContentPack;
@@ -1266,8 +1341,10 @@ mod tests {
         for definition in ContentPack::default().definitions() {
             for ability in &definition.activated_abilities {
                 if ability.mana_choices().is_some() {
+                    // A plan uses each source once; across activations a
+                    // tap or a once-each-turn mark bounds repeated use.
                     assert!(
-                        ability.tap_source,
+                        ability.tap_source || ability.once_each_turn,
                         "{} needs separate tap/sacrifice resource transitions before admission",
                         definition.name
                     );

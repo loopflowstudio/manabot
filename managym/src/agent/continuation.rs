@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     flow::{
         decision::{Decision, SuspendedResolution},
-        game::{Game, Payment, PendingChoice},
+        game::{ActivationSource, Game, Payment, PendingChoice},
     },
     state::{
         ability::PaymentCost,
@@ -50,6 +50,7 @@ pub struct ClauseTarget {
 pub struct ManaOutput {
     pub mode: usize,
     pub mana: [u8; 6],
+    /// Spend-restricted output by color, whatever its restriction.
     pub lesson: [u8; 6],
 }
 
@@ -76,6 +77,8 @@ pub struct ContinuationFrame {
     pub sacrifice: Option<VisibleReference>,
     pub cost: Option<[u8; 7]>,
     pub hybrid: Vec<[u8; 2]>,
+    /// The payment has a purpose (a cast spell or an activation), so some
+    /// spend-restricted mana may pay it. Named for the first restriction.
     pub lesson: bool,
     pub waterbend: bool,
     pub can_decline: bool,
@@ -91,7 +94,7 @@ impl ContinuationFrame {
             .iter()
             .map(|pair| [pair[0] as u8, pair[1] as u8])
             .collect();
-        self.lesson = cost.spend_on_lesson;
+        self.lesson = !cost.purpose.is_ordinary();
     }
 }
 
@@ -139,6 +142,15 @@ impl Game {
         self.current_object_ref(card)
             .map(|object| self.visible_reference(object, viewer))
             .unwrap_or_default()
+    }
+
+    fn activation_reference(&self, source: ActivationSource, viewer: PlayerId) -> VisibleReference {
+        match source {
+            ActivationSource::Permanent(permanent) => {
+                self.target_reference(Target::Permanent(permanent), viewer)
+            }
+            ActivationSource::Card(card) => self.card_reference(card, viewer),
+        }
     }
 
     pub(crate) fn target_reference(&self, target: Target, viewer: PlayerId) -> VisibleReference {
@@ -332,7 +344,7 @@ impl Game {
             }
             PendingChoice::ChooseTargets {
                 card,
-                kicked,
+                cast,
                 mode,
                 requirement_index,
                 chosen,
@@ -340,29 +352,36 @@ impl Game {
                 ..
             } => {
                 frame.source = self.card_reference(*card, viewer);
-                frame.kicked = *kicked;
+                frame.kicked = cast.kicked;
                 frame.mode = *mode;
                 frame.active_clause = Some(*requirement_index);
                 frame.targets = self.clause_targets(chosen, chosen_req_indices, viewer);
             }
-            PendingChoice::SpellMode { card, kicked, .. }
-            | PendingChoice::SpellX { card, kicked, .. } => {
+            PendingChoice::SpellMode { card, cast, .. } => {
                 frame.source = self.card_reference(*card, viewer);
-                frame.kicked = *kicked;
+                frame.kicked = cast.kicked;
             }
-            PendingChoice::KickerChoice { card, .. } => {
+            PendingChoice::KickerChoice { card, .. } | PendingChoice::AnnounceX { card, .. } => {
                 frame.source = self.card_reference(*card, viewer)
             }
             PendingChoice::ActivatedTarget {
-                permanent,
+                source,
                 ability_index,
                 chosen,
                 ..
             } => {
-                frame.source = self.target_reference(Target::Permanent(*permanent), viewer);
+                frame.source = self.activation_reference(*source, viewer);
                 frame.ability = Some(*ability_index);
                 frame.active_clause = Some(0);
                 frame.targets = self.clause_targets(chosen, &[], viewer);
+            }
+            PendingChoice::DiscardPayment {
+                source,
+                ability_index,
+                ..
+            } => {
+                frame.source = self.activation_reference(*source, viewer);
+                frame.ability = Some(*ability_index);
             }
             PendingChoice::ActivationX {
                 permanent,
@@ -378,19 +397,17 @@ impl Game {
                 frame.ability = Some(*ability_index);
             }
             PendingChoice::Waterbend {
-                permanent,
-                ability_index,
-                remaining_generic,
+                player,
+                payment,
+                tapped,
                 ..
             } => {
-                frame.source = self.target_reference(Target::Permanent(*permanent), viewer);
-                frame.ability = Some(*ability_index);
+                self.payment_frame(payment, viewer, &mut frame);
                 frame.waterbend = true;
-                let mut cost = self.activated_abilities_for(*permanent)[*ability_index]
-                    .mana_cost
-                    .with_x(0);
-                cost.cost[6] = *remaining_generic;
-                frame.cost(&cost);
+                let owed = self
+                    .payment_mana_cost(*player, payment, None)
+                    .reduced_generic(*tapped);
+                frame.cost(&owed);
             }
         }
         frame
@@ -477,7 +494,7 @@ impl Game {
                         .map(|(mode, output)| ManaOutput {
                             mode,
                             mana: output.mana,
-                            lesson: output.lesson,
+                            lesson: output.restricted_colors(),
                         })
                         .collect();
                     (3, resume.as_deref())
@@ -494,6 +511,11 @@ impl Game {
                 Decision::Learn { .. } => (11, None),
                 Decision::Discard { .. } => (12, None),
                 Decision::LegendRule { .. } => (13, None),
+                Decision::SearchDistinctLands { .. } => (14, None),
+                Decision::OpponentSplitsRevealed { .. } => (15, None),
+                Decision::DiscardFromRevealedHand { .. } => (16, None),
+                Decision::CastWithoutPaying { .. } => (17, None),
+                Decision::ExileLinked { .. } => (18, None),
             };
             frame.decision = kind;
             frames.push(frame);
@@ -512,23 +534,24 @@ impl Game {
         match payment {
             Payment::Spell {
                 card,
-                kicked,
+                cast,
                 mode,
                 targets,
                 target_req_indices,
                 ..
             } => {
                 frame.source = self.card_reference(*card, viewer);
-                frame.kicked = *kicked;
+                frame.kicked = cast.kicked;
                 frame.mode = *mode;
                 frame.targets = self.clause_targets(targets, target_req_indices, viewer);
             }
             Payment::Activation {
-                permanent,
+                source,
                 ability_index,
                 targets,
+                ..
             } => {
-                frame.source = self.target_reference(Target::Permanent(*permanent), viewer);
+                frame.source = self.activation_reference(*source, viewer);
                 frame.ability = Some(*ability_index);
                 frame.targets = self.clause_targets(targets, &[], viewer);
             }

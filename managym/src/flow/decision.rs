@@ -10,9 +10,12 @@ use rand::seq::SliceRandom;
 
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
-    flow::{event::GameEvent, game::Game},
+    flow::{
+        event::GameEvent,
+        game::{CastChoices, Game},
+    },
     state::{
-        ability::{Effect, PaymentCost},
+        ability::{Effect, LinkedGrant, PaymentCost},
         game_object::{CardId, ObjectRef, PlayerId, Target},
         predicate::CardPredicate,
         zone::ZoneType,
@@ -63,8 +66,7 @@ pub struct EffectFrame {
     pub resolutions_this_turn: u32,
     /// Whether the resolving spell was kicked.
     pub kicked: bool,
-    /// The resolving spell's announced X (CR 107.3m); 0 otherwise.
-    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    /// The resolving spell's or ability's announced X; 0 without one.
     pub x: u8,
     /// Excess damage (CR 120.4a) the latest damage instruction dealt to its
     /// creature, read by a later "the excess damage dealt this way".
@@ -145,6 +147,17 @@ impl PaymentProgress {
     }
 }
 
+/// Where a `CastWithoutPaying` decision's candidates come from.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum FreeCastOffer {
+    /// Spells in the deciding player's hand matching `predicate`, read when
+    /// offered (Yue, the Moon Spirit).
+    Hand { predicate: CardPredicate },
+    /// One exiled card, put into its owner's hand if not cast (Solstice
+    /// Revelations).
+    Exiled { card: CardId },
+}
+
 /// A pending mid-resolution decision, including its own bookkeeping so a
 /// multi-step choice (scry card-by-card, pick-by-pick selection) re-suspends
 /// with updated state.
@@ -184,6 +197,8 @@ pub enum Decision {
         untap_if_lands: Option<usize>,
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         bottom_source: bool,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        to_hand: bool,
         #[serde(skip_serializing_if = "Vec::is_empty")]
         selected: Vec<CardId>,
     },
@@ -193,9 +208,14 @@ pub enum Decision {
         player: PlayerId,
         predicate: CardPredicate,
     },
+    /// Discard up to `remaining` more cards; then draw `count` per discard.
     OptionalDiscardDraw {
         player: PlayerId,
         count: usize,
+        #[serde(skip_serializing_if = "is_one")]
+        remaining: usize,
+        #[serde(skip_serializing_if = "crate::state::is_zero")]
+        discarded: usize,
     },
     /// Choose cards in their desired top/bottom order (CR 701.26).
     Scry {
@@ -218,6 +238,51 @@ pub enum Decision {
         selected: usize,
         min_select: usize,
         max_select: usize,
+    },
+    /// Search for up to `remaining` more land cards with different names,
+    /// revealing each (Elemental Teachings). The revealed cards stay in the
+    /// library until an opponent splits them (`OpponentSplitsRevealed`).
+    SearchDistinctLands {
+        player: PlayerId,
+        remaining: usize,
+        selected: Vec<CardId>,
+        opponent_picks: usize,
+    },
+    /// `player` chooses a card matching `predicate` from `owner`'s revealed
+    /// hand; `owner` discards it. Candidates are read from the current hand,
+    /// one per definition, so resampled physical copies stay consistent.
+    DiscardFromRevealedHand {
+        player: PlayerId,
+        owner: PlayerId,
+        predicate: CardPredicate,
+    },
+    /// An opponent chooses `remaining` more of `owner`'s `revealed` library
+    /// cards for the graveyard; the rest enter tapped, then `owner` shuffles.
+    OpponentSplitsRevealed {
+        player: PlayerId,
+        owner: PlayerId,
+        revealed: Vec<CardId>,
+        remaining: usize,
+    },
+    /// "You may cast [a spell] without paying its mana cost" while an effect
+    /// resolves (CR 608.2g): choose a candidate from `offer`, or decline.
+    CastWithoutPaying {
+        player: PlayerId,
+        offer: FreeCastOffer,
+    },
+    /// `player` exiles a matching card from `owner`'s graveyard or a
+    /// nontoken permanent `owner` controls (or declines, when `up_to`);
+    /// `grantee` may then cast it as `grant` allows while controlling
+    /// `source`.
+    ExileLinked {
+        player: PlayerId,
+        owner: PlayerId,
+        zone: ZoneType,
+        predicate: CardPredicate,
+        up_to: bool,
+        grant: LinkedGrant,
+        grantee: PlayerId,
+        source: Option<ObjectRef>,
     },
     /// "Choose one —".
     Modal {
@@ -243,6 +308,7 @@ pub enum Decision {
 fn is_one(value: &usize) -> bool {
     *value == 1
 }
+
 fn is_true(value: &bool) -> bool {
     *value
 }
@@ -257,6 +323,11 @@ impl Decision {
             Decision::SelectMilled { player, .. }
             | Decision::SearchBasicLand { player, .. }
             | Decision::SearchLibraryToHand { player, .. }
+            | Decision::SearchDistinctLands { player, .. }
+            | Decision::DiscardFromRevealedHand { player, .. }
+            | Decision::CastWithoutPaying { player, .. }
+            | Decision::ExileLinked { player, .. }
+            | Decision::OpponentSplitsRevealed { player, .. }
             | Decision::OptionalDiscardDraw { player, .. }
             | Decision::Scry { player, .. }
             | Decision::LookAndSelect { player, .. }
@@ -278,9 +349,14 @@ impl Decision {
             | Decision::Sacrifice { .. } => &[],
             Decision::Scry { looked, .. } => looked,
             Decision::LookAndSelect { looked, .. } => looked,
+            Decision::SearchDistinctLands { selected, .. } => selected,
+            Decision::OpponentSplitsRevealed { revealed, .. } => revealed,
             Decision::SelectMilled { .. }
             | Decision::SearchBasicLand { .. }
             | Decision::SearchLibraryToHand { .. }
+            | Decision::DiscardFromRevealedHand { .. }
+            | Decision::CastWithoutPaying { .. }
+            | Decision::ExileLinked { .. }
             | Decision::OptionalDiscardDraw { .. }
             | Decision::Modal { .. }
             | Decision::Learn { .. }
@@ -333,26 +409,37 @@ impl Game {
 
     fn finalize_frame(&mut self, frame: EffectFrame) {
         if let FrameFinalize::Spell { card, attach_to } = frame.finalize {
-            let is_permanent = self.state.cards[card].types.is_permanent();
-            if is_permanent {
-                self.move_card_with_entry(
-                    card,
-                    ZoneType::Battlefield,
-                    crate::flow::proposed_event::BattlefieldEntry {
-                        x: frame.x,
-                        ..Default::default()
-                    },
-                );
-                if let Some(permanent_id) = self.state.card_to_permanent[card] {
-                    self.journal_permanent(permanent_id);
-                    if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
-                        permanent.attached_to = attach_to;
+            // A spell that exiled itself ("Exile Avatar's Wrath") has
+            // already left the stack (CR 608.2n).
+            if self.state.zones.zone_of(card) == Some(ZoneType::Stack) {
+                if self.state.cards[card].types.is_permanent() {
+                    // A permanent spell enters under its controller's
+                    // control, even when another player owns the card
+                    // (CR 110.2).
+                    self.move_card_with_entry(
+                        card,
+                        ZoneType::Battlefield,
+                        crate::flow::proposed_event::ZoneEntry {
+                            controller: Some(frame.controller),
+                            x: frame.x,
+                            ..Default::default()
+                        },
+                    );
+                    if let Some(permanent_id) = self.state.card_to_permanent[card] {
+                        if attach_to.is_some() {
+                            self.journal_permanent(permanent_id);
+                            if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
+                                permanent.attached_to = attach_to;
+                            }
+                            // The Aura's grants change the enchanted
+                            // creature's mana abilities, whoever controls it.
+                            self.invalidate_mana_cache(PlayerId(0));
+                            self.invalidate_mana_cache(PlayerId(1));
+                        }
                     }
+                } else {
+                    self.move_card(card, ZoneType::Graveyard);
                 }
-                let owner = self.state.cards[card].owner;
-                self.invalidate_mana_cache(owner);
-            } else {
-                self.move_card(card, ZoneType::Graveyard);
             }
             self.emit(GameEvent::SpellResolved { card });
         }
@@ -436,10 +523,13 @@ impl Game {
                 focus: source_focus,
             },
             Decision::SearchBasicLand {
-                player, subtype, ..
+                player,
+                subtype,
+                to_hand,
+                ..
             } => {
                 let mut actions: Vec<Action> = self
-                    .basic_land_search_candidates(*player, subtype)
+                    .basic_land_search_candidates(*player, subtype, *to_hand)
                     .into_iter()
                     .map(|card| Action::SelectCard {
                         player: *player,
@@ -471,6 +561,91 @@ impl Game {
                     focus: source_focus,
                 }
             }
+            Decision::SearchDistinctLands { player, .. } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: self
+                    .distinct_land_search_candidates(&suspended.decision)
+                    .into_iter()
+                    .map(|card| Action::SelectCard {
+                        player: *player,
+                        card,
+                    })
+                    .chain(std::iter::once(Action::Decline { player: *player }))
+                    .collect(),
+                focus: source_focus,
+            },
+            Decision::DiscardFromRevealedHand { player, .. } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::Discard,
+                actions: self
+                    .revealed_hand_candidates(&suspended.decision)
+                    .into_iter()
+                    .map(|card| Action::SelectCard {
+                        player: *player,
+                        card,
+                    })
+                    .collect(),
+                focus: source_focus,
+            },
+            Decision::ExileLinked { player, up_to, .. } => {
+                let cards = self.linked_exile_candidates(&suspended.decision);
+                let mut actions: Vec<Action> = cards
+                    .iter()
+                    .map(|card| Action::SelectCard {
+                        player: *player,
+                        card: *card,
+                    })
+                    .collect();
+                if *up_to {
+                    actions.push(Action::Decline { player: *player });
+                }
+                ActionSpace {
+                    player: Some(*player),
+                    kind: ActionSpaceKind::LookAndSelect,
+                    focus: cards
+                        .iter()
+                        .map(|card| self.state.cards[*card].id)
+                        .collect(),
+                    actions,
+                }
+            }
+            Decision::CastWithoutPaying { player, .. } => {
+                let cards = self.free_cast_candidates(&suspended.decision);
+                ActionSpace {
+                    player: Some(*player),
+                    kind: ActionSpaceKind::LookAndSelect,
+                    focus: cards
+                        .iter()
+                        .map(|card| self.state.cards[*card].id)
+                        .collect(),
+                    actions: cards
+                        .into_iter()
+                        .map(|card| Action::SelectCard {
+                            player: *player,
+                            card,
+                        })
+                        .chain(std::iter::once(Action::Decline { player: *player }))
+                        .collect(),
+                }
+            }
+            Decision::OpponentSplitsRevealed {
+                player, revealed, ..
+            } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: revealed
+                    .iter()
+                    .map(|card| Action::SelectCard {
+                        player: *player,
+                        card: *card,
+                    })
+                    .collect(),
+                focus: revealed
+                    .iter()
+                    .map(|card| self.state.cards[*card].id)
+                    .collect(),
+            },
             Decision::Discard { player, .. } | Decision::OptionalDiscardDraw { player, .. } => {
                 let mut actions: Vec<Action> = self
                     .state
@@ -732,6 +907,7 @@ impl Game {
                     tapped,
                     untap_if_lands,
                     bottom_source,
+                    to_hand,
                     selected,
                 },
                 Action::SelectCard { .. } | Action::Decline { .. },
@@ -739,20 +915,24 @@ impl Game {
                 let player = *player;
                 if let Action::SelectCard { card, .. } = action {
                     if !self
-                        .basic_land_search_candidates(player, subtype)
+                        .basic_land_search_candidates(player, subtype, *to_hand)
                         .contains(card)
                     {
                         self.state.suspended_decision = Some(suspended);
-                        return Err(AgentError("not a matching basic land in library".into()));
+                        return Err(AgentError("not a matching card in library".into()));
                     }
-                    self.move_card_with_entry(
-                        *card,
-                        ZoneType::Battlefield,
-                        crate::flow::proposed_event::BattlefieldEntry {
-                            tapped: *tapped,
-                            ..Default::default()
-                        },
-                    );
+                    if *to_hand {
+                        self.reveal_card_to_hand(*card, player);
+                    } else {
+                        self.move_card_with_entry(
+                            *card,
+                            ZoneType::Battlefield,
+                            crate::flow::proposed_event::ZoneEntry {
+                                tapped: *tapped,
+                                ..Default::default()
+                            },
+                        );
+                    }
                     selected.push(*card);
                     *remaining -= 1;
                     if *remaining > 0 {
@@ -815,21 +995,40 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::OptionalDiscardDraw { player, count }, Action::SelectCard { card, .. }) => {
-                if !self.state.zones.contains(*card, ZoneType::Hand, *player) {
-                    self.state.suspended_decision = Some(suspended);
-                    return Err(AgentError("discard must be from hand".into()));
+            (
+                Decision::OptionalDiscardDraw {
+                    player,
+                    count,
+                    remaining,
+                    discarded,
+                },
+                Action::SelectCard { .. } | Action::Decline { .. },
+            ) => {
+                if let Action::SelectCard { card, .. } = action {
+                    if !self.state.zones.contains(*card, ZoneType::Hand, *player) {
+                        self.state.suspended_decision = Some(suspended);
+                        return Err(AgentError("discard must be from hand".into()));
+                    }
+                    self.move_card(*card, ZoneType::Graveyard);
+                    *remaining -= 1;
+                    *discarded += 1;
+                    let hand_empty = self
+                        .state
+                        .zones
+                        .zone_cards(ZoneType::Hand, *player)
+                        .is_empty();
+                    if *remaining > 0 && !hand_empty {
+                        self.state.suspended_decision = Some(suspended);
+                        return Ok(());
+                    }
                 }
-                let count = *count;
-                self.move_card(*card, ZoneType::Graveyard);
-                suspended
-                    .frame
-                    .queue
-                    .push_front(Effect::DrawCards { count });
-                self.run_frame(suspended.frame);
-                Ok(())
-            }
-            (Decision::OptionalDiscardDraw { .. }, Action::Decline { .. }) => {
+                if *discarded > 0 {
+                    let count = *count * *discarded;
+                    suspended
+                        .frame
+                        .queue
+                        .push_front(Effect::DrawCards { count });
+                }
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -954,6 +1153,141 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
+            (Decision::SearchDistinctLands { .. }, Action::SelectCard { card, .. }) => {
+                if !self
+                    .distinct_land_search_candidates(&suspended.decision)
+                    .contains(card)
+                {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("not a distinct land card in library".into()));
+                }
+                let Decision::SearchDistinctLands {
+                    remaining,
+                    selected,
+                    ..
+                } = &mut suspended.decision
+                else {
+                    unreachable!()
+                };
+                selected.push(*card);
+                *remaining -= 1;
+                if *remaining > 0 {
+                    self.state.suspended_decision = Some(suspended);
+                } else {
+                    self.finish_distinct_land_search(suspended);
+                }
+                Ok(())
+            }
+            (
+                Decision::DiscardFromRevealedHand {
+                    owner, predicate, ..
+                },
+                Action::SelectCard { card, .. },
+            ) => {
+                if !self.state.zones.contains(*card, ZoneType::Hand, *owner)
+                    || !predicate.matches_card(&self.state.cards[*card])
+                {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError(
+                        "not a matching card in the revealed hand".into(),
+                    ));
+                }
+                self.move_card(*card, ZoneType::Graveyard);
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (Decision::CastWithoutPaying { .. }, Action::SelectCard { card, .. }) => {
+                if !self
+                    .free_cast_candidates(&suspended.decision)
+                    .contains(card)
+                {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("not a castable offered card".into()));
+                }
+                // The cast is the effect's last instruction: finish the
+                // resolution, then cast the chosen card onto the stack.
+                let (player, card) = (suspended.decision.player(), *card);
+                self.run_frame(suspended.frame);
+                debug_assert!(
+                    self.state.suspended_decision.is_none(),
+                    "a free cast ends its resolving effect"
+                );
+                self.begin_free_cast(player, card)
+            }
+            (
+                Decision::ExileLinked {
+                    grant,
+                    grantee,
+                    source,
+                    ..
+                },
+                Action::SelectCard { card, .. },
+            ) => {
+                let (grant, grantee, source) = (*grant, *grantee, *source);
+                if !self
+                    .linked_exile_candidates(&suspended.decision)
+                    .contains(card)
+                {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("not an offered card to exile".into()));
+                }
+                self.exile_linked(*card, grantee, source, grant);
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (Decision::ExileLinked { up_to: true, .. }, Action::Decline { .. }) => {
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (Decision::CastWithoutPaying { player, offer }, Action::Decline { .. }) => {
+                if let FreeCastOffer::Exiled { card } = offer {
+                    self.reveal_card_to_hand(*card, *player);
+                }
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (Decision::SearchDistinctLands { .. }, Action::Decline { .. }) => {
+                self.finish_distinct_land_search(suspended);
+                Ok(())
+            }
+            (
+                Decision::OpponentSplitsRevealed {
+                    owner,
+                    revealed,
+                    remaining,
+                    ..
+                },
+                Action::SelectCard { card, .. },
+            ) => {
+                let Some(index) = revealed.iter().position(|c| c == card) else {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("not a revealed card".into()));
+                };
+                revealed.remove(index);
+                self.move_card(*card, ZoneType::Graveyard);
+                *remaining -= 1;
+                if *remaining > 0 && !revealed.is_empty() {
+                    self.state.suspended_decision = Some(suspended);
+                    return Ok(());
+                }
+                let owner = *owner;
+                for card in std::mem::take(revealed) {
+                    self.move_card_with_entry(
+                        card,
+                        ZoneType::Battlefield,
+                        crate::flow::proposed_event::ZoneEntry {
+                            tapped: true,
+                            ..Default::default()
+                        },
+                    );
+                }
+                self.journal_zones();
+                self.state
+                    .zones
+                    .shuffle(ZoneType::Library, owner, &mut self.state.rng);
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
             (Decision::SelectMilled { player, cards, .. }, Action::SelectCard { card, .. })
                 if cards.contains(card) =>
             {
@@ -1067,6 +1401,152 @@ impl Game {
             .zone_cards(ZoneType::Library, player)
             .last()
             .copied()
+    }
+
+    /// The cards an `ExileLinked` decision may exile: matching graveyard
+    /// cards, or the cards of matching nontoken permanents `owner` controls.
+    pub(crate) fn linked_exile_candidates(&self, decision: &Decision) -> Vec<CardId> {
+        let Decision::ExileLinked {
+            owner,
+            zone,
+            predicate,
+            ..
+        } = decision
+        else {
+            return Vec::new();
+        };
+        match zone {
+            ZoneType::Battlefield => self
+                .battlefield_permanents(*owner)
+                .into_iter()
+                .filter(|id| self.permanent_matches_predicate(*id, predicate))
+                .filter_map(|id| self.state.permanents[id].as_ref().map(|p| p.card))
+                .filter(|card| !self.state.cards[*card].is_token)
+                .collect(),
+            _ => self
+                .state
+                .zones
+                .zone_cards(ZoneType::Graveyard, *owner)
+                .iter()
+                .copied()
+                .filter(|card| predicate.matches_card(&self.state.cards[*card]))
+                .collect(),
+        }
+    }
+
+    /// The cards a `CastWithoutPaying` decision offers: hand spells matching
+    /// its predicate (one per definition, so resampled copies stay
+    /// consistent) or the exiled card, each castable for free right now.
+    pub(crate) fn free_cast_candidates(&self, decision: &Decision) -> Vec<CardId> {
+        let Decision::CastWithoutPaying { player, offer } = decision else {
+            return Vec::new();
+        };
+        let free = CastChoices {
+            free: true,
+            ..Default::default()
+        };
+        let mut candidates: Vec<CardId> = match offer {
+            FreeCastOffer::Hand { predicate } => self
+                .state
+                .zones
+                .zone_cards(ZoneType::Hand, *player)
+                .iter()
+                .copied()
+                .filter(|card| {
+                    let card = &self.state.cards[*card];
+                    card.types.is_castable() && predicate.matches_card(card)
+                })
+                .collect(),
+            FreeCastOffer::Exiled { card } => self
+                .state
+                .zones
+                .contains(*card, ZoneType::Exile, *player)
+                .then_some(*card)
+                .into_iter()
+                .collect(),
+        };
+        candidates.retain(|card| self.can_cast_with(*player, *card, free));
+        candidates.sort_unstable_by_key(|card| (self.state.cards[*card].definition_id, *card));
+        candidates.dedup_by_key(|card| self.state.cards[*card].definition_id);
+        candidates
+    }
+
+    /// One hand card per matching definition for `DiscardFromRevealedHand`.
+    pub(crate) fn revealed_hand_candidates(&self, decision: &Decision) -> Vec<CardId> {
+        let Decision::DiscardFromRevealedHand {
+            owner, predicate, ..
+        } = decision
+        else {
+            return Vec::new();
+        };
+        let mut candidates: Vec<CardId> = self
+            .state
+            .zones
+            .zone_cards(ZoneType::Hand, *owner)
+            .iter()
+            .copied()
+            .filter(|card| predicate.matches_card(&self.state.cards[*card]))
+            .collect();
+        candidates.sort_unstable_by_key(|card| (self.state.cards[*card].definition_id, *card));
+        candidates.dedup_by_key(|card| self.state.cards[*card].definition_id);
+        candidates
+    }
+
+    /// Library land cards whose names differ from every card already
+    /// selected by a `SearchDistinctLands` decision.
+    pub(crate) fn distinct_land_search_candidates(&self, decision: &Decision) -> Vec<CardId> {
+        let Decision::SearchDistinctLands {
+            player, selected, ..
+        } = decision
+        else {
+            return Vec::new();
+        };
+        let mut candidates: Vec<CardId> = self
+            .state
+            .zones
+            .zone_cards(ZoneType::Library, *player)
+            .iter()
+            .copied()
+            .filter(|card| {
+                let card_ref = &self.state.cards[*card];
+                card_ref.types.is_land()
+                    && !selected
+                        .iter()
+                        .any(|chosen| self.state.cards[*chosen].name == card_ref.name)
+            })
+            .collect();
+        candidates.sort_unstable_by_key(|card| (self.state.cards[*card].definition_id, *card));
+        candidates
+    }
+
+    /// The revealed lands pass to an opponent's split, or, when there are
+    /// none, the library is shuffled.
+    fn finish_distinct_land_search(&mut self, mut suspended: SuspendedResolution) {
+        let Decision::SearchDistinctLands {
+            player,
+            selected,
+            opponent_picks,
+            ..
+        } = &mut suspended.decision
+        else {
+            unreachable!()
+        };
+        let player = *player;
+        if selected.is_empty() {
+            self.journal_zones();
+            self.state
+                .zones
+                .shuffle(ZoneType::Library, player, &mut self.state.rng);
+            self.run_frame(suspended.frame);
+            return;
+        }
+        suspended.decision = Decision::OpponentSplitsRevealed {
+            player: PlayerId(1 - player.0),
+            owner: player,
+            revealed: std::mem::take(selected),
+            remaining: *opponent_picks,
+        };
+        self.state.suspended_decision = Some(suspended);
     }
 
     /// Move a library card to the bottom of its owner's library. Not a zone

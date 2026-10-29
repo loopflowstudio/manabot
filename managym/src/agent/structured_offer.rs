@@ -862,11 +862,10 @@ impl Game {
     ) -> Result<Option<StructuredOfferSet>, StructuredOfferError> {
         let Some(PendingChoice::Waterbend {
             player,
-            permanent,
-            ability_index,
+            payment,
             remaining_generic,
-            x,
-        }) = self.pending_choice
+            tapped,
+        }) = &self.pending_choice
         else {
             return Err(StructuredOfferError::WrongDecision);
         };
@@ -878,7 +877,8 @@ impl Game {
         {
             return Ok(None);
         }
-        let legal_taps = self.waterbend_candidates(player);
+        let player = *player;
+        let legal_taps = self.waterbend_payment_candidates(player, payment);
         if legal_taps.iter().any(|id| {
             self.state.permanents[*id]
                 .as_ref()
@@ -888,16 +888,8 @@ impl Game {
         }) {
             return Ok(None);
         }
-        self.state.permanents[permanent]
-            .as_ref()
-            .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
-        let cost = self
-            .activated_abilities_for(permanent)
-            .get(ability_index)
-            .ok_or(StructuredOfferError::WrongDecision)?
-            .mana_cost
-            .with_x(x)
-            .with_generic(remaining_generic);
+        let (cost, remaining_generic) =
+            self.waterbend_owed(player, payment, *remaining_generic, *tapped);
         let max = legal_taps.len().min(usize::from(remaining_generic));
         let min = (0..=max)
             .find(|count| self.can_pay_mana_cost(player, &cost.reduced_generic(*count as u8)))
@@ -1955,7 +1947,9 @@ fn search_offer_verb(action: &Action) -> OfferVerb {
     match action {
         Action::PlayLand { .. } => OfferVerb::PlayLand,
         Action::CastSpell { .. } => OfferVerb::Cast,
-        Action::ActivateAbility { .. } => OfferVerb::ActivateAbility,
+        Action::ActivateAbility { .. }
+        | Action::ActivateCardAbility { .. }
+        | Action::Foretell { .. } => OfferVerb::ActivateAbility,
         Action::PassPriority { .. } => OfferVerb::PassPriority,
         Action::DeclareAttacker { .. } => OfferVerb::DeclareAttacker,
         Action::DeclareBlocker { .. } => OfferVerb::DeclareBlocker,

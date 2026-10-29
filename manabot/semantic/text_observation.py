@@ -28,7 +28,7 @@ from pydantic import ValidationError
 
 import managym
 
-REPRESENTATION_VERSION = "manabot-text-4"
+REPRESENTATION_VERSION = "manabot-text-5"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
 _PHASES = ("beginning", "first main", "combat", "second main", "ending")
 _STEPS = (
@@ -103,6 +103,10 @@ _STAGES = frozenset(
         "legend_rule",
         "order_triggers",
         "trigger_targets",
+        "revealed_hand",
+        "split_revealed",
+        "free_cast",
+        "linked_exile",
     )
 )
 
@@ -212,7 +216,7 @@ def _mana(cost: ManaCost | managym.ManaCost | None) -> str:
             + "}"
         )
     return (symbols or "{0}") + (
-        " (Lesson spending context)" if getattr(cost, "spend_on_lesson", False) else ""
+        " (restricted spending)" if getattr(cost, "spend_on_lesson", False) else ""
     )
 
 
@@ -476,7 +480,7 @@ class _Renderer:
                     for symbol, count in zip("WUBRGC", player.mana, strict=True)
                 )
                 + ".",
-                "Lesson-only mana: "
+                "Restricted mana: "
                 + ", ".join(
                     f"{symbol} {count}"
                     for symbol, count in zip("WUBRGC", player.lesson_mana, strict=True)

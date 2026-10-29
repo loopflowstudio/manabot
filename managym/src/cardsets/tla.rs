@@ -1,27 +1,22 @@
 //! Current TLA cards and their fixed tokens.
 //! Edit these typed definitions; `semantic::compile` lowers them in process.
 use crate::cards::authoring::{
-    Card, CardType, Characteristics, Color, Condition, Controller, Cost, CounterKind, Destination,
-    Direction, Duration, Event, Incomplete, Keyword, Op, Payment, Predicate, PrintedPower, Program,
-    ProgramKind, Quantity, Remainder, RemainderOrder, Sacrifice, Selector, Subject, Target,
-    TargetReduction, Trigger, Until, Zone,
+    Card, CardType, Characteristics, Color, Condition, Controller, Cost, Count, CounterKind,
+    Destination, Direction, Duration, Event, Incomplete, Keyword, Op, Payment, Predicate,
+    PrintedPower, Program, ProgramKind, Quantity, Remainder, RemainderOrder, Sacrifice, Selector,
+    SpendOnly, Subject, Target, TargetReduction, Trigger, Until, Zone,
 };
+
 /// Defined cards whose behavior is incomplete. The fixed setups that name them
 /// still run them; the world does not support them for deck entry until their
 /// batch completes the missing behavior.
 pub(super) const INCOMPLETE: &[Incomplete] = &[
     ("tla.accumulate_wisdom", "Controller must order the library remainder (CR 401.4); it is randomized"),
-    ("tla.badgermole_cub", "Unreviewed until T2: ETB earthbend; creature mana taps add green; waterbend taps do not produce mana."),
     ("tla.cat_gator", "Any target must include planeswalkers and battles (CR 115.4)"),
-    ("tla.dai_li_agents", "Unreviewed until T2: Two earthbend clauses may share target; attack drain counts creatures with counters."),
     ("tla.dragonfly_swarm", "Unreviewed until T4: Flying; spell-and-ability ward; graveyard CDA power; conditional death draw."),
-    ("tla.haru_hidden_talent", "Unreviewed until T2: Another Ally entry earthbend; repeated targets and independent delayed returns."),
-    ("tla.hermitic_herbalist", "Unreviewed until T2: Any-color one mana or all unordered two-color combinations restricted to Lesson casting."),
-    ("tla.iroh_grand_lotus", "Unreviewed until T2: Firebending; own-turn graveyard flashback grants differing by Lesson type; retention after source leaves."),
     ("tla.lightning_strike", "Any target must include planeswalkers and battles (CR 115.4)"),
     ("tla.ran_and_shaw", "Unreviewed until T5: Flying/firebending; cast-only conditional ETB nonlegendary self copy; Dragon anthem activation."),
     ("tla.suki_kyoshi_warrior", "CDA power must apply outside the battlefield (CR 604.3)"),
-    ("tla.toph_the_blind_bandit", "Unreviewed until T2: ETB earthbend; CDA power counts counters on controlled lands."),
     ("tla.water_tribe_rallier", "Library power filter must evaluate CDAs, such as Suki's (CR 604.3)"),
 ];
 
@@ -131,6 +126,51 @@ pub(super) fn cards() -> Vec<Card> {
         monk(),
         soldier(),
         spirit(),
+        earthbending_lesson(),
+        sandbenders_storm(),
+        earth_village_ruffians(),
+        geyser_leaper(),
+        foggy_swamp_vinebender(),
+        fire_nation_attacks(),
+        rockalanche(),
+        canyon_crawler(),
+        mongoose_lizard(),
+        saber_tooth_moose_lion(),
+        giant_koi(),
+        rabaroo_troop(),
+        team_avatar(),
+        merchant_of_many_hats(),
+        hog_monkey(),
+        rough_rhino_cavalry(),
+        rebellious_captives(),
+        barrels_of_blasting_jelly(),
+        jasmine_dragon_tea_shop(),
+        white_lotus_hideout(),
+        waterbending_scroll(),
+        aang_the_last_airbender(),
+        airbending_lesson(),
+        airbenders_reversal(),
+        avatars_wrath(),
+        zuko_exiled_prince(),
+        aang_s_iceberg(),
+        north_pole_patrol(),
+        zuko_s_conviction(),
+        sokka_bold_boomeranger(),
+        seismic_sense(),
+        aang_s_journey(),
+        sparring_dummy(),
+        lost_days(),
+        serpent_of_the_pass(),
+        elemental_teachings(),
+        dai_li_indoctrination(),
+        professor_zei_anthropologist(),
+        united_front(),
+        spirit_water_revival(),
+        yue_the_moon_spirit(),
+        solstice_revelations(),
+        hama_the_bloodbender(),
+        azula_cunning_usurper(),
+        sozins_comet(),
         abandoned_air_temple(),
         agna_qel_a(),
         ba_sing_se(),
@@ -178,6 +218,7 @@ pub(super) fn cards() -> Vec<Card> {
         secret_tunnel(),
     ]
 }
+
 fn abandon_attachments() -> Card {
     let text_box = "You may discard a card. If you do, draw two cards.";
 
@@ -192,7 +233,10 @@ fn abandon_attachments() -> Card {
         programs: vec![Program::new(
             "spell",
             ProgramKind::Spell,
-            vec![Op::OptionalDiscardDraw { count: 2 }],
+            vec![Op::OptionalDiscardDraw {
+                count: 2,
+                up_to: None,
+            }],
         )
         .cost(Cost::mana("{1}{U/R}"))
         .inferred()],
@@ -417,14 +461,14 @@ fn dai_li_agents() -> Card {
                 vec![
                     Op::TargetClause {
                         body: vec![Op::Earthbend {
-                            count: 1,
+                            count: Count::Fixed(1),
                             target: "target_0",
                         }],
                         role: "target_0",
                     },
                     Op::TargetClause {
                         body: vec![Op::Earthbend {
-                            count: 1,
+                            count: Count::Fixed(1),
                             target: "target_1",
                         }],
                         role: "target_1",
@@ -693,7 +737,7 @@ fn haru_hidden_talent() -> Card {
             "trigger_0",
             ProgramKind::Triggered,
             vec![Op::Earthbend {
-                count: 1,
+                count: Count::Fixed(1),
                 target: "target_0",
             }],
         )
@@ -886,7 +930,7 @@ fn master_piandao() -> Card {
             ProgramKind::Triggered,
             vec![Op::LookAndSelect {
                 destination: Destination::Hand,
-                look: 4,
+                look: Count::Fixed(4),
                 max_select: 1,
                 min_select: 0,
                 predicate: Predicate::SubtypesAny {
@@ -1125,6 +1169,8 @@ fn ostrich_horse() -> Card {
                 predicate: Predicate::CardType {
                     value: CardType::Land,
                 },
+                milled_any: None,
+                then: Vec::new(),
             }],
         )
         .trigger(Trigger::new(Event::EntersBattlefield, Subject::This))],
@@ -1209,7 +1255,10 @@ fn shared_roots() -> Card {
         programs: vec![Program::new(
             "spell",
             ProgramKind::Spell,
-            vec![Op::SearchBasicLand { subtype: None }],
+            vec![Op::SearchBasicLand {
+                destination: None,
+                subtype: None,
+            }],
         )
         .cost(Cost::mana("{1}{G}"))
         .inferred()],
@@ -1238,7 +1287,10 @@ fn sokka_s_haiku() -> Card {
                     role: "target_0",
                 },
                 Op::DrawCards { count: 1 },
-                Op::MillCards { count: 3 },
+                Op::MillCards {
+                    count: 3,
+                    target: None,
+                },
                 Op::TargetClause {
                     body: vec![Op::Untap { target: "target_1" }],
                     role: "target_1",
@@ -1314,7 +1366,7 @@ fn toph_the_blind_bandit() -> Card {
                 "trigger_0",
                 ProgramKind::Triggered,
                 vec![Op::Earthbend {
-                    count: 2,
+                    count: Count::Fixed(2),
                     target: "target_0",
                 }],
             )
@@ -1347,7 +1399,10 @@ fn true_ancestry() -> Card {
             ProgramKind::Spell,
             vec![
                 Op::TargetClause {
-                    body: vec![Op::ReturnGraveyardTarget { target: "target_0" }],
+                    body: vec![Op::ReturnGraveyardTarget {
+                        target: "target_0",
+                        destination: None,
+                    }],
                     role: "target_0",
                 },
                 Op::CreateToken {
@@ -1938,21 +1993,21 @@ fn hermitic_herbalist() -> Card {
                 ProgramKind::Activated,
                 vec![Op::Modal {
                     modes: vec![
-                        vec![Op::AddLessonMana { mana: "WW" }],
-                        vec![Op::AddLessonMana { mana: "WU" }],
-                        vec![Op::AddLessonMana { mana: "WB" }],
-                        vec![Op::AddLessonMana { mana: "WR" }],
-                        vec![Op::AddLessonMana { mana: "WG" }],
-                        vec![Op::AddLessonMana { mana: "UU" }],
-                        vec![Op::AddLessonMana { mana: "UB" }],
-                        vec![Op::AddLessonMana { mana: "UR" }],
-                        vec![Op::AddLessonMana { mana: "UG" }],
-                        vec![Op::AddLessonMana { mana: "BB" }],
-                        vec![Op::AddLessonMana { mana: "BR" }],
-                        vec![Op::AddLessonMana { mana: "BG" }],
-                        vec![Op::AddLessonMana { mana: "RR" }],
-                        vec![Op::AddLessonMana { mana: "RG" }],
-                        vec![Op::AddLessonMana { mana: "GG" }],
+                        vec![Op::lesson_mana("WW")],
+                        vec![Op::lesson_mana("WU")],
+                        vec![Op::lesson_mana("WB")],
+                        vec![Op::lesson_mana("WR")],
+                        vec![Op::lesson_mana("WG")],
+                        vec![Op::lesson_mana("UU")],
+                        vec![Op::lesson_mana("UB")],
+                        vec![Op::lesson_mana("UR")],
+                        vec![Op::lesson_mana("UG")],
+                        vec![Op::lesson_mana("BB")],
+                        vec![Op::lesson_mana("BR")],
+                        vec![Op::lesson_mana("BG")],
+                        vec![Op::lesson_mana("RR")],
+                        vec![Op::lesson_mana("RG")],
+                        vec![Op::lesson_mana("GG")],
                     ],
                 }],
             )
@@ -2102,7 +2157,7 @@ fn accumulate_wisdom() -> Card {
                 },
                 otherwise: vec![Op::LookAndSelect {
                     destination: Destination::Hand,
-                    look: 3,
+                    look: Count::Fixed(3),
                     max_select: 1,
                     min_select: 1,
                     predicate: Predicate::Any,
@@ -2215,7 +2270,7 @@ fn badgermole_cub() -> Card {
                 "earthbend",
                 ProgramKind::Triggered,
                 vec![Op::Earthbend {
-                    count: 1,
+                    count: Count::Fixed(1),
                     target: "land",
                 }],
             )
@@ -3439,7 +3494,7 @@ fn water_tribe_rallier() -> Card {
             ProgramKind::Activated,
             vec![Op::LookAndSelect {
                 destination: Destination::Hand,
-                look: 4,
+                look: Count::Fixed(4),
                 max_select: 1,
                 min_select: 0,
                 predicate: Predicate::All {
@@ -3558,7 +3613,10 @@ fn yuyan_archers() -> Card {
         programs: vec![Program::new(
             "rummage",
             ProgramKind::Triggered,
-            vec![Op::OptionalDiscardDraw { count: 1 }],
+            vec![Op::OptionalDiscardDraw {
+                count: 1,
+                up_to: None,
+            }],
         )
         .trigger(Trigger::new(Event::EntersBattlefield, Subject::This))],
         registry_name: "Yuyan Archers",
@@ -3712,6 +3770,1791 @@ fn spirit() -> Card {
     }
 }
 
+/// The ten tapped dual lands share both abilities; only identity and colors vary.
+fn draw_land(
+    key: &'static str,
+    registry_name: &'static str,
+    text_box: &'static str,
+    colors: [&'static str; 2],
+) -> Card {
+    Card {
+        characteristics: Characteristics {
+            subtypes: Some(vec![]),
+            types: vec![CardType::Land],
+            keywords: Some(vec![]),
+            enters_tapped: Some(true),
+            ..Default::default()
+        },
+        key,
+        programs: vec![
+            Program::new(
+                "draw",
+                ProgramKind::Activated,
+                vec![Op::DrawCards { count: 1 }],
+            )
+            .cost(Cost {
+                mana: Some("4"),
+                sacrifice_source: Some(true),
+                tap_source: Some(true),
+                ..Default::default()
+            }),
+            Program::new(
+                "mana",
+                ProgramKind::Activated,
+                vec![Op::choose_mana(&colors)],
+            )
+            .cost(Cost {
+                mana: Some("0"),
+                tap_source: Some(true),
+                ..Default::default()
+            }),
+        ],
+        registry_name,
+        text_box,
+    }
+}
+
+fn earthbending_lesson() -> Card {
+    let text_box = "Earthbend 4. (Target land you control becomes a 0/0 creature with haste that's still a land. Put four +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{3}{G}"),
+            subtypes: Some(vec!["Lesson"]),
+            types: vec![CardType::Sorcery],
+            ..Default::default()
+        },
+        key: "tla.earthbending_lesson",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::Earthbend {
+                count: Count::Fixed(4),
+                target: "land",
+            }],
+        )
+        .cost(Cost::mana("{3}{G}"))
+        .targets(vec![Target::one("land", Selector::LandYouControl)])
+        .inferred()],
+        registry_name: "Earthbending Lesson",
+        text_box,
+    }
+}
+
+fn sandbenders_storm() -> Card {
+    let text_box = "Choose one —\n• Destroy target creature with power 4 or greater.\n• Earthbend 3. (Target land you control becomes a 0/0 creature with haste that's still a land. Put three +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{3}{W}"),
+            types: vec![CardType::Instant],
+            ..Default::default()
+        },
+        key: "tla.sandbenders_storm",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::Modal {
+                modes: vec![
+                    vec![Op::Destroy { target: "creature" }],
+                    vec![Op::Earthbend {
+                        count: Count::Fixed(3),
+                        target: "land",
+                    }],
+                ],
+            }],
+        )
+        .cost(Cost::mana("{3}{W}"))
+        .targets(vec![
+            Target::one(
+                "creature",
+                Selector::Permanent {
+                    predicate: Predicate::All {
+                        predicates: vec![
+                            Predicate::CardType {
+                                value: CardType::Creature,
+                            },
+                            Predicate::PowerAtLeast { value: 4 },
+                        ],
+                    },
+                },
+            ),
+            Target::one("land", Selector::LandYouControl),
+        ])
+        .inferred()],
+        registry_name: "Sandbenders' Storm",
+        text_box,
+    }
+}
+
+fn earth_village_ruffians() -> Card {
+    let text_box = "When this creature dies, earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{B/G}"),
+            subtypes: Some(vec!["Human", "Soldier", "Rogue"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(3)),
+            toughness: Some(1),
+            ..Default::default()
+        },
+        key: "tla.earth_village_ruffians",
+        programs: vec![Program::new(
+            "dies",
+            ProgramKind::Triggered,
+            vec![Op::Earthbend {
+                count: Count::Fixed(2),
+                target: "land",
+            }],
+        )
+        .targets(vec![Target::one("land", Selector::LandYouControl)])
+        .trigger(Trigger::new(Event::Dies, Subject::This))],
+        registry_name: "Earth Village Ruffians",
+        text_box,
+    }
+}
+
+fn geyser_leaper() -> Card {
+    let text_box = "Flying\nWaterbend {4}: Draw a card, then discard a card. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{4}{U}"),
+            subtypes: Some(vec!["Human", "Warrior", "Ally"]),
+            types: vec![CardType::Creature],
+            keywords: Some(vec![Keyword::Flying]),
+            power: Some(PrintedPower::Fixed(4)),
+            toughness: Some(3),
+            ..Default::default()
+        },
+        key: "tla.geyser_leaper",
+        programs: vec![Program::new(
+            "loot",
+            ProgramKind::Activated,
+            vec![Op::DrawCards { count: 1 }, Op::Discard],
+        )
+        .cost(Cost {
+            mana: Some("{4}"),
+            waterbend: Some(true),
+            ..Default::default()
+        })],
+        registry_name: "Geyser Leaper",
+        text_box,
+    }
+}
+
+fn foggy_swamp_vinebender() -> Card {
+    let text_box = "This creature can't be blocked by creatures with power 2 or less.\nWaterbend {5}: Put a +1/+1 counter on this creature. Activate only during your turn. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{3}{G}"),
+            subtypes: Some(vec!["Human", "Plant", "Ally"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(4)),
+            toughness: Some(3),
+            ..Default::default()
+        },
+        key: "tla.foggy_swamp_vinebender",
+        programs: vec![
+            Program::new(
+                "evasion",
+                ProgramKind::Static,
+                vec![Op::BlockingRestriction {
+                    direction: Direction::BlockedBy,
+                    predicate: Predicate::PowerAtMost { value: 2 },
+                }],
+            ),
+            Program::new(
+                "grow",
+                ProgramKind::Activated,
+                vec![Op::PutCounters {
+                    count: 1,
+                    target: "source",
+                    counter: None,
+                }],
+            )
+            .cost(Cost {
+                mana: Some("{5}"),
+                waterbend: Some(true),
+                own_turn_only: Some(true),
+                ..Default::default()
+            }),
+        ],
+        registry_name: "Foggy Swamp Vinebender",
+        text_box,
+    }
+}
+
+fn fire_nation_attacks() -> Card {
+    let text_box = "Create two 2/2 red Soldier creature tokens with firebending 1. (Whenever a creature with firebending 1 attacks, add {R}. This mana lasts until end of combat.)\nFlashback {8}{R} (You may cast this card from your graveyard for its flashback cost. Then exile it.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{4}{R}"),
+            types: vec![CardType::Instant],
+            ..Default::default()
+        },
+        key: "tla.fire_nation_attacks",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::CreateToken {
+                count: 2,
+                definition_ref: "token.soldier",
+                tapped_and_attacking: None,
+            }],
+        )
+        .cost(Cost {
+            mana: Some("{4}{R}"),
+            flashback: Some("{8}{R}"),
+            ..Default::default()
+        })],
+        registry_name: "Fire Nation Attacks",
+        text_box,
+    }
+}
+
+fn rockalanche() -> Card {
+    let text_box = "Earthbend X, where X is the number of Forests you control. (Target land you control becomes a 0/0 creature with haste that's still a land. Put X +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)\nFlashback {5}{G} (You may cast this card from your graveyard for its flashback cost. Then exile it.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{G}"),
+            subtypes: Some(vec!["Lesson"]),
+            types: vec![CardType::Sorcery],
+            ..Default::default()
+        },
+        key: "tla.rockalanche",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::Earthbend {
+                count: Count::Of(Quantity::BattlefieldMatching {
+                    predicate: Predicate::Subtype { value: "Forest" },
+                }),
+                target: "land",
+            }],
+        )
+        .cost(Cost {
+            mana: Some("{2}{G}"),
+            flashback: Some("{5}{G}"),
+            ..Default::default()
+        })
+        .targets(vec![Target::one("land", Selector::LandYouControl)])
+        .inferred()],
+        registry_name: "Rockalanche",
+        text_box,
+    }
+}
+
+fn canyon_crawler() -> Card {
+    let text_box = "Deathtouch\nWhen this creature enters, create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")\nSwampcycling {2} ({2}, Discard this card: Search your library for a Swamp card, reveal it, put it into your hand, then shuffle.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{4}{B}{B}"),
+            subtypes: Some(vec!["Spider", "Beast"]),
+            types: vec![CardType::Creature],
+            keywords: Some(vec![Keyword::Deathtouch]),
+            power: Some(PrintedPower::Fixed(6)),
+            toughness: Some(6),
+            ..Default::default()
+        },
+        key: "tla.canyon_crawler",
+        programs: vec![
+            Program::new(
+                "food",
+                ProgramKind::Triggered,
+                vec![Op::CreateToken {
+                    count: 1,
+                    definition_ref: "token.food",
+                    tapped_and_attacking: Some(false),
+                }],
+            )
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::landcycling("swampcycling", "{2}", "Swamp"),
+        ],
+        registry_name: "Canyon Crawler",
+        text_box,
+    }
+}
+
+fn mongoose_lizard() -> Card {
+    let text_box = "Menace (This creature can't be blocked except by two or more creatures.)\nWhen this creature enters, it deals 1 damage to any target.\nMountaincycling {2} ({2}, Discard this card: Search your library for a Mountain card, reveal it, put it into your hand, then shuffle.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{4}{R}{R}"),
+            subtypes: Some(vec!["Mongoose", "Lizard"]),
+            types: vec![CardType::Creature],
+            keywords: Some(vec![Keyword::Menace]),
+            power: Some(PrintedPower::Fixed(5)),
+            toughness: Some(6),
+            ..Default::default()
+        },
+        key: "tla.mongoose_lizard",
+        programs: vec![
+            Program::new(
+                "ping",
+                ProgramKind::Triggered,
+                vec![Op::DealDamage {
+                    amount: 1,
+                    target: "target_0",
+                }],
+            )
+            .targets(vec![Target::one("target_0", Selector::CreatureOrPlayer)])
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::landcycling("mountaincycling", "{2}", "Mountain"),
+        ],
+        registry_name: "Mongoose Lizard",
+        text_box,
+    }
+}
+
+fn saber_tooth_moose_lion() -> Card {
+    let text_box = "Reach\nForestcycling {2} ({2}, Discard this card: Search your library for a Forest card, reveal it, put it into your hand, then shuffle.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{4}{G}{G}"),
+            subtypes: Some(vec!["Elk", "Cat"]),
+            types: vec![CardType::Creature],
+            keywords: Some(vec![Keyword::Reach]),
+            power: Some(PrintedPower::Fixed(7)),
+            toughness: Some(7),
+            ..Default::default()
+        },
+        key: "tla.saber_tooth_moose_lion",
+        programs: vec![Program::landcycling("forestcycling", "{2}", "Forest")],
+        registry_name: "Saber-Tooth Moose-Lion",
+        text_box,
+    }
+}
+
+fn giant_koi() -> Card {
+    let text_box = "Waterbend {3}: This creature can't be blocked this turn. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)\nIslandcycling {2} ({2}, Discard this card: Search your library for an Island card, reveal it, put it into your hand, then shuffle.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{4}{U}{U}"),
+            subtypes: Some(vec!["Fish"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(5)),
+            toughness: Some(7),
+            ..Default::default()
+        },
+        key: "tla.giant_koi",
+        programs: vec![
+            Program::new(
+                "unblockable",
+                ProgramKind::Activated,
+                vec![Op::RestrictBlocking {
+                    duration: Duration::EndOfTurn,
+                    predicate: Predicate::Any,
+                    target: "source",
+                }],
+            )
+            .cost(Cost {
+                mana: Some("{3}"),
+                waterbend: Some(true),
+                ..Default::default()
+            }),
+            Program::landcycling("islandcycling", "{2}", "Island"),
+        ],
+        registry_name: "Giant Koi",
+        text_box,
+    }
+}
+
+fn rabaroo_troop() -> Card {
+    let text_box = "Landfall — Whenever a land you control enters, this creature gains flying until end of turn and you gain 1 life.\nPlainscycling {2} ({2}, Discard this card: Search your library for a Plains card, reveal it, put it into your hand, then shuffle.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{3}{W}{W}"),
+            subtypes: Some(vec!["Rabbit", "Kangaroo"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(3)),
+            toughness: Some(5),
+            ..Default::default()
+        },
+        key: "tla.rabaroo_troop",
+        programs: vec![
+            Program::new(
+                "landfall",
+                ProgramKind::Triggered,
+                vec![
+                    Op::GrantKeywords {
+                        duration: Duration::EndOfTurn,
+                        keywords: vec![Keyword::Flying],
+                        target: "source",
+                    },
+                    Op::GainLife { amount: 1 },
+                ],
+            )
+            .trigger(Trigger::new(
+                Event::EntersBattlefield,
+                Subject::AnyYouControl {
+                    predicate: Predicate::CardType {
+                        value: CardType::Land,
+                    },
+                },
+            )),
+            Program::landcycling("plainscycling", "{2}", "Plains"),
+        ],
+        registry_name: "Rabaroo Troop",
+        text_box,
+    }
+}
+
+fn team_avatar() -> Card {
+    let text_box = "Whenever a creature you control attacks alone, it gets +X/+X until end of turn, where X is the number of creatures you control.\n{2}{W}, Discard this card: It deals damage equal to the number of creatures you control to target creature.";
+    let creatures_you_control = || Quantity::BattlefieldMatching {
+        predicate: Predicate::CardType {
+            value: CardType::Creature,
+        },
+    };
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{W}"),
+            types: vec![CardType::Enchantment],
+            ..Default::default()
+        },
+        key: "tla.team_avatar",
+        programs: vec![
+            Program::new(
+                "attacks_alone",
+                ProgramKind::Triggered,
+                vec![Op::BuffTargetValue {
+                    power: creatures_you_control(),
+                    target: "triggering_permanent",
+                    toughness: Count::Of(creatures_you_control()),
+                }],
+            )
+            .trigger(Trigger::new(
+                Event::AttacksAlone,
+                Subject::AnyYouControl {
+                    predicate: Predicate::CardType {
+                        value: CardType::Creature,
+                    },
+                },
+            )),
+            Program::new(
+                "discard_damage",
+                ProgramKind::Activated,
+                vec![Op::DealDamageValue {
+                    amount: creatures_you_control(),
+                    target: "target_0",
+                }],
+            )
+            .cost(Cost {
+                mana: Some("{2}{W}"),
+                zone: Some(Zone::YourHand),
+                discard_source: Some(true),
+                ..Default::default()
+            })
+            .targets(vec![Target::one("target_0", Selector::Creature)]),
+        ],
+        registry_name: "Team Avatar",
+        text_box,
+    }
+}
+
+fn merchant_of_many_hats() -> Card {
+    let text_box = "{2}{B}: Return this card from your graveyard to your hand.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{B}"),
+            subtypes: Some(vec!["Human", "Peasant", "Ally"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(2)),
+            toughness: Some(2),
+            ..Default::default()
+        },
+        key: "tla.merchant_of_many_hats",
+        programs: vec![Program::new(
+            "return",
+            ProgramKind::Activated,
+            vec![Op::ReturnToHand { target: "source" }],
+        )
+        .cost(Cost {
+            mana: Some("{2}{B}"),
+            zone: Some(Zone::YourGraveyard),
+            ..Default::default()
+        })],
+        registry_name: "Merchant of Many Hats",
+        text_box,
+    }
+}
+
+fn hog_monkey() -> Card {
+    let text_box = "At the beginning of combat on your turn, target creature you control with a +1/+1 counter on it gains menace until end of turn. (It can't be blocked except by two or more creatures.)\nExhaust — {5}: Put two +1/+1 counters on this creature. (Activate each exhaust ability only once.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{B}"),
+            subtypes: Some(vec!["Boar", "Monkey"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(3)),
+            toughness: Some(2),
+            ..Default::default()
+        },
+        key: "tla.hog_monkey",
+        programs: vec![
+            Program::new(
+                "combat_menace",
+                ProgramKind::Triggered,
+                vec![Op::GrantKeywords {
+                    duration: Duration::EndOfTurn,
+                    keywords: vec![Keyword::Menace],
+                    target: "target_0",
+                }],
+            )
+            .targets(vec![Target::one(
+                "target_0",
+                Selector::PermanentYouControl {
+                    predicate: Predicate::All {
+                        predicates: vec![
+                            Predicate::CardType {
+                                value: CardType::Creature,
+                            },
+                            Predicate::WithCounter,
+                        ],
+                    },
+                },
+            )])
+            .trigger(Trigger::new(Event::CombatBegins, Subject::This)),
+            Program::new(
+                "exhaust",
+                ProgramKind::Activated,
+                vec![Op::PutCounters {
+                    count: 2,
+                    target: "source",
+                    counter: None,
+                }],
+            )
+            .cost(Cost {
+                mana: Some("{5}"),
+                exhaust: Some(true),
+                ..Default::default()
+            }),
+        ],
+        registry_name: "Hog-Monkey",
+        text_box,
+    }
+}
+
+fn rough_rhino_cavalry() -> Card {
+    let text_box = "Firebending 2 (Whenever this creature attacks, add {R}{R}. This mana lasts until end of combat.)\nExhaust — {8}: Put two +1/+1 counters on this creature. It gains trample until end of turn. (Activate each exhaust ability only once.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{4}{R}"),
+            subtypes: Some(vec!["Human", "Mercenary"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(5)),
+            toughness: Some(5),
+            ..Default::default()
+        },
+        key: "tla.rough_rhino_cavalry",
+        programs: vec![
+            Program::firebending("firebending", "RR"),
+            Program::new(
+                "exhaust",
+                ProgramKind::Activated,
+                vec![
+                    Op::PutCounters {
+                        count: 2,
+                        target: "source",
+                        counter: None,
+                    },
+                    Op::GrantKeywords {
+                        duration: Duration::EndOfTurn,
+                        keywords: vec![Keyword::Trample],
+                        target: "source",
+                    },
+                ],
+            )
+            .cost(Cost {
+                mana: Some("{8}"),
+                exhaust: Some(true),
+                ..Default::default()
+            }),
+        ],
+        registry_name: "Rough Rhino Cavalry",
+        text_box,
+    }
+}
+
+fn rebellious_captives() -> Card {
+    let text_box = "Exhaust — {6}: Put two +1/+1 counters on this creature, then earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped. Activate each exhaust ability only once.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{G}"),
+            subtypes: Some(vec!["Human", "Peasant", "Ally"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(2)),
+            toughness: Some(2),
+            ..Default::default()
+        },
+        key: "tla.rebellious_captives",
+        programs: vec![Program::new(
+            "exhaust",
+            ProgramKind::Activated,
+            vec![
+                Op::PutCounters {
+                    count: 2,
+                    target: "source",
+                    counter: None,
+                },
+                Op::Earthbend {
+                    count: Count::Fixed(2),
+                    target: "land",
+                },
+            ],
+        )
+        .cost(Cost {
+            mana: Some("{6}"),
+            exhaust: Some(true),
+            ..Default::default()
+        })
+        .targets(vec![Target::one("land", Selector::LandYouControl)])],
+        registry_name: "Rebellious Captives",
+        text_box,
+    }
+}
+
+fn barrels_of_blasting_jelly() -> Card {
+    let text_box = "{1}: Add one mana of any color. Activate only once each turn.\n{5}, {T}, Sacrifice this artifact: It deals 5 damage to target creature.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}"),
+            types: vec![CardType::Artifact],
+            ..Default::default()
+        },
+        key: "tla.barrels_of_blasting_jelly",
+        programs: vec![
+            Program::new(
+                "p0",
+                ProgramKind::Activated,
+                vec![Op::choose_mana(&["W", "U", "B", "R", "G"])],
+            )
+            .cost(Cost {
+                mana: Some("{1}"),
+                once_each_turn: Some(true),
+                ..Default::default()
+            }),
+            Program::new(
+                "p1",
+                ProgramKind::Activated,
+                vec![Op::DealDamage {
+                    amount: 5,
+                    target: "target_0",
+                }],
+            )
+            .cost(Cost {
+                mana: Some("{5}"),
+                tap_source: Some(true),
+                sacrifice_source: Some(true),
+                ..Default::default()
+            })
+            .targets(vec![Target::one("target_0", Selector::Creature)]),
+        ],
+        registry_name: "Barrels of Blasting Jelly",
+        text_box,
+    }
+}
+
+fn jasmine_dragon_tea_shop() -> Card {
+    let text_box = "{T}: Add {C}.\n{T}: Add one mana of any color. Spend this mana only to cast an Ally spell or activate an ability of an Ally source.\n{5}, {T}: Create a 1/1 white Ally creature token.";
+
+    Card {
+        characteristics: Characteristics {
+            types: vec![CardType::Land],
+            ..Default::default()
+        },
+        key: "tla.jasmine_dragon_tea_shop",
+        programs: vec![
+            Program::new(
+                "colorless",
+                ProgramKind::Mana,
+                vec![Op::AddMana {
+                    mana: "C",
+                    until: None,
+                }],
+            ),
+            Program::new(
+                "p0",
+                ProgramKind::Activated,
+                vec![Op::choose_restricted_mana(SpendOnly {
+                    spell_subtypes: vec!["Ally"],
+                    ability_source_subtypes: vec!["Ally"],
+                })],
+            )
+            .cost(Cost {
+                mana: Some("0"),
+                tap_source: Some(true),
+                ..Default::default()
+            }),
+            Program::new(
+                "p1",
+                ProgramKind::Activated,
+                vec![Op::CreateToken {
+                    count: 1,
+                    definition_ref: "token.ally",
+                    tapped_and_attacking: Some(false),
+                }],
+            )
+            .cost(Cost {
+                mana: Some("{5}"),
+                tap_source: Some(true),
+                ..Default::default()
+            }),
+        ],
+        registry_name: "Jasmine Dragon Tea Shop",
+        text_box,
+    }
+}
+
+fn white_lotus_hideout() -> Card {
+    let text_box = "{T}: Add {C}.\n{T}: Add one mana of any color. Spend this mana only to cast a Lesson or Shrine spell.\n{1}, {T}: Add one mana of any color.";
+
+    Card {
+        characteristics: Characteristics {
+            types: vec![CardType::Land],
+            ..Default::default()
+        },
+        key: "tla.white_lotus_hideout",
+        programs: vec![
+            Program::new(
+                "colorless",
+                ProgramKind::Mana,
+                vec![Op::AddMana {
+                    mana: "C",
+                    until: None,
+                }],
+            ),
+            Program::new(
+                "p0",
+                ProgramKind::Activated,
+                vec![Op::choose_restricted_mana(SpendOnly {
+                    spell_subtypes: vec!["Lesson", "Shrine"],
+                    ..Default::default()
+                })],
+            )
+            .cost(Cost {
+                mana: Some("0"),
+                tap_source: Some(true),
+                ..Default::default()
+            }),
+            Program::new(
+                "p1",
+                ProgramKind::Activated,
+                vec![Op::choose_mana(&["W", "U", "B", "R", "G"])],
+            )
+            .cost(Cost {
+                mana: Some("{1}"),
+                tap_source: Some(true),
+                ..Default::default()
+            }),
+        ],
+        registry_name: "White Lotus Hideout",
+        text_box,
+    }
+}
+
+fn waterbending_scroll() -> Card {
+    let text_box = "{6}, {T}: Draw a card. This ability costs {1} less to activate for each Island you control.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{U}"),
+            types: vec![CardType::Artifact],
+            ..Default::default()
+        },
+        key: "tla.waterbending_scroll",
+        programs: vec![Program::new(
+            "p0",
+            ProgramKind::Activated,
+            vec![Op::DrawCards { count: 1 }],
+        )
+        .cost(Cost {
+            mana: Some("{6}"),
+            tap_source: Some(true),
+            affinity: Some(Predicate::Subtype { value: "Island" }),
+            ..Default::default()
+        })],
+        registry_name: "Waterbending Scroll",
+        text_box,
+    }
+}
+
+fn nonland_permanent() -> Selector {
+    Selector::Permanent {
+        predicate: Predicate::NotCardTypes {
+            values: vec![CardType::Land],
+        },
+    }
+}
+
+fn aang_the_last_airbender() -> Card {
+    let text_box = "Flying\nWhen Aang enters, airbend up to one other target nonland permanent. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)\nWhenever you cast a Lesson spell, Aang gains lifelink until end of turn.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{3}{W}"),
+            subtypes: Some(vec!["Human", "Avatar", "Ally"]),
+            supertypes: Some(vec!["Legendary"]),
+            types: vec![CardType::Creature],
+            keywords: Some(vec![Keyword::Flying]),
+            power: Some(PrintedPower::Fixed(3)),
+            toughness: Some(2),
+            ..Default::default()
+        },
+        key: "tla.aang_the_last_airbender",
+        programs: vec![
+            Program::new(
+                "enters",
+                ProgramKind::Triggered,
+                vec![Op::TargetClause {
+                    role: "permanent",
+                    body: vec![Op::Airbend {
+                        target: "current_target",
+                    }],
+                }],
+            )
+            .targets(vec![Target {
+                min: 0,
+                another: true,
+                ..Target::one("permanent", nonland_permanent())
+            }])
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::new(
+                "lesson_cast",
+                ProgramKind::Triggered,
+                vec![Op::GrantKeywords {
+                    duration: Duration::EndOfTurn,
+                    keywords: vec![Keyword::Lifelink],
+                    target: "source",
+                }],
+            )
+            .trigger(Trigger {
+                predicate: Some(Predicate::Subtype { value: "Lesson" }),
+                ..Trigger::new(Event::CastSpell, Subject::This)
+            }),
+        ],
+        registry_name: "Aang, the Last Airbender",
+        text_box,
+    }
+}
+
+fn airbending_lesson() -> Card {
+    let text_box = "Airbend target nonland permanent. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)\nDraw a card.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{W}"),
+            subtypes: Some(vec!["Lesson"]),
+            types: vec![CardType::Instant],
+            ..Default::default()
+        },
+        key: "tla.airbending_lesson",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![
+                Op::Airbend {
+                    target: "permanent",
+                },
+                Op::DrawCards { count: 1 },
+            ],
+        )
+        .cost(Cost::mana("{2}{W}"))
+        .targets(vec![Target::one("permanent", nonland_permanent())])
+        .inferred()],
+        registry_name: "Airbending Lesson",
+        text_box,
+    }
+}
+
+fn airbenders_reversal() -> Card {
+    let text_box = "Choose one —\n• Destroy target attacking creature.\n• Airbend target creature you control. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{W}"),
+            subtypes: Some(vec!["Lesson"]),
+            types: vec![CardType::Instant],
+            ..Default::default()
+        },
+        key: "tla.airbender_s_reversal",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::Modal {
+                modes: vec![
+                    vec![Op::Destroy { target: "attacker" }],
+                    vec![Op::Airbend { target: "own" }],
+                ],
+            }],
+        )
+        .cost(Cost::mana("{1}{W}"))
+        .targets(vec![
+            Target::one(
+                "attacker",
+                Selector::Permanent {
+                    predicate: Predicate::All {
+                        predicates: vec![
+                            Predicate::CardType {
+                                value: CardType::Creature,
+                            },
+                            Predicate::Attacking,
+                        ],
+                    },
+                },
+            ),
+            Target::one("own", Selector::CreatureYouControl),
+        ])
+        .inferred()],
+        registry_name: "Airbender's Reversal",
+        text_box,
+    }
+}
+
+fn avatars_wrath() -> Card {
+    let text_box = "Choose up to one target creature, then airbend all other creatures. (Exile them. While each one is exiled, its owner may cast it for {2} rather than its mana cost.)\nUntil your next turn, your opponents can't cast spells from anywhere other than their hands.\nExile Avatar's Wrath.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{W}{W}"),
+            types: vec![CardType::Sorcery],
+            ..Default::default()
+        },
+        key: "tla.avatar_s_wrath",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![
+                Op::TargetClause {
+                    role: "spared",
+                    body: vec![Op::AirbendAll {
+                        except: "current_target",
+                        predicate: Predicate::CardType {
+                            value: CardType::Creature,
+                        },
+                    }],
+                },
+                Op::OpponentsCastOnlyFromHand,
+                Op::Exile { target: "source" },
+            ],
+        )
+        .cost(Cost::mana("{2}{W}{W}"))
+        .targets(vec![Target {
+            min: 0,
+            ..Target::one("spared", Selector::Creature)
+        }])],
+        registry_name: "Avatar's Wrath",
+        text_box,
+    }
+}
+
+fn zuko_exiled_prince() -> Card {
+    let text_box = "Firebending 3 (Whenever this creature attacks, add {R}{R}{R}. This mana lasts until end of combat.)\n{3}: Exile the top card of your library. You may play that card this turn.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{3}{R}"),
+            subtypes: Some(vec!["Human", "Noble"]),
+            supertypes: Some(vec!["Legendary"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(4)),
+            toughness: Some(3),
+            ..Default::default()
+        },
+        key: "tla.zuko_exiled_prince",
+        programs: vec![
+            Program::firebending("firebending", "RRR"),
+            Program::new(
+                "impulse",
+                ProgramKind::Activated,
+                vec![Op::ExileTopCardPlayThisTurn],
+            )
+            .cost(Cost::mana("{3}")),
+        ],
+        registry_name: "Zuko, Exiled Prince",
+        text_box,
+    }
+}
+
+fn aang_s_iceberg() -> Card {
+    let text_box = "Flash\nWhen this enchantment enters, exile up to one other target nonland permanent until this enchantment leaves the battlefield.\nWaterbend {3}: Sacrifice this enchantment. If you do, scry 2. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{W}"),
+            types: vec![CardType::Enchantment],
+            keywords: Some(vec![Keyword::Flash]),
+            ..Default::default()
+        },
+        key: "tla.aang_s_iceberg",
+        programs: vec![
+            Program::new(
+                "freeze",
+                ProgramKind::Triggered,
+                vec![Op::TargetClause {
+                    role: "frozen",
+                    body: vec![Op::ExileUntilSourceLeaves {
+                        target: "current_target",
+                    }],
+                }],
+            )
+            .targets(vec![Target {
+                min: 0,
+                another: true,
+                ..Target::one("frozen", nonland_permanent())
+            }])
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::new(
+                "thaw",
+                ProgramKind::Activated,
+                vec![Op::SacrificeSource {
+                    then: vec![Op::Scry { count: 2 }],
+                }],
+            )
+            .cost(Cost {
+                mana: Some("{3}"),
+                waterbend: Some(true),
+                ..Default::default()
+            }),
+        ],
+        registry_name: "Aang's Iceberg",
+        text_box,
+    }
+}
+
+fn north_pole_patrol() -> Card {
+    let text_box = "{T}: Untap another target permanent you control.\nWaterbend {3}, {T}: Tap target creature an opponent controls. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{U}"),
+            subtypes: Some(vec!["Human", "Soldier", "Ally"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(2)),
+            toughness: Some(3),
+            ..Default::default()
+        },
+        key: "tla.north_pole_patrol",
+        programs: vec![
+            Program::new(
+                "untap",
+                ProgramKind::Activated,
+                vec![Op::Untap {
+                    target: "permanent",
+                }],
+            )
+            .cost(Cost {
+                mana: Some("0"),
+                tap_source: Some(true),
+                ..Default::default()
+            })
+            .targets(vec![Target {
+                another: true,
+                ..Target::one(
+                    "permanent",
+                    Selector::PermanentYouControl {
+                        predicate: Predicate::Any,
+                    },
+                )
+            }]),
+            Program::new(
+                "tap",
+                ProgramKind::Activated,
+                vec![Op::Tap { target: "creature" }],
+            )
+            .cost(Cost {
+                mana: Some("{3}"),
+                tap_source: Some(true),
+                waterbend: Some(true),
+                ..Default::default()
+            })
+            .targets(vec![Target::one(
+                "creature",
+                Selector::CreatureOpponentControls,
+            )]),
+        ],
+        registry_name: "North Pole Patrol",
+        text_box,
+    }
+}
+
+fn zuko_s_conviction() -> Card {
+    let text_box = "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nReturn target creature card from your graveyard to your hand. If this spell was kicked, instead put that card onto the battlefield tapped.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{B}"),
+            types: vec![CardType::Instant],
+            ..Default::default()
+        },
+        key: "tla.zuko_s_conviction",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::Branch {
+                condition: Condition::Kicked,
+                otherwise: vec![Op::ReturnGraveyardTarget {
+                    target: "creature",
+                    destination: None,
+                }],
+                then: vec![Op::ReturnGraveyardTarget {
+                    target: "creature",
+                    destination: Some(Destination::BattlefieldTapped),
+                }],
+            }],
+        )
+        .cost(Cost {
+            mana: Some("{B}"),
+            kicker: Some("{4}"),
+            ..Default::default()
+        })
+        .targets(vec![Target::one(
+            "creature",
+            Selector::GraveyardCardYouOwn {
+                predicate: Predicate::CardType {
+                    value: CardType::Creature,
+                },
+            },
+        )])],
+        registry_name: "Zuko's Conviction",
+        text_box,
+    }
+}
+
+fn sokka_bold_boomeranger() -> Card {
+    let text_box = "When Sokka enters, discard up to two cards, then draw that many cards.\nWhenever you cast an artifact or Lesson spell, put a +1/+1 counter on Sokka.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{U}{R}"),
+            subtypes: Some(vec!["Human", "Warrior", "Ally"]),
+            supertypes: Some(vec!["Legendary"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(1)),
+            toughness: Some(1),
+            ..Default::default()
+        },
+        key: "tla.sokka_bold_boomeranger",
+        programs: vec![
+            Program::new(
+                "enters",
+                ProgramKind::Triggered,
+                vec![Op::OptionalDiscardDraw {
+                    count: 1,
+                    up_to: Some(2),
+                }],
+            )
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::new(
+                "grows",
+                ProgramKind::Triggered,
+                vec![Op::PutCounters {
+                    count: 1,
+                    target: "source",
+                    counter: None,
+                }],
+            )
+            .trigger(Trigger {
+                predicate: Some(Predicate::AnyOf {
+                    predicates: vec![
+                        Predicate::CardType {
+                            value: CardType::Artifact,
+                        },
+                        Predicate::Subtype { value: "Lesson" },
+                    ],
+                }),
+                ..Trigger::new(Event::CastSpell, Subject::This)
+            }),
+        ],
+        registry_name: "Sokka, Bold Boomeranger",
+        text_box,
+    }
+}
+
+fn seismic_sense() -> Card {
+    let text_box = "Look at the top X cards of your library, where X is the number of lands you control. You may reveal a creature or land card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{G}"),
+            subtypes: Some(vec!["Lesson"]),
+            types: vec![CardType::Sorcery],
+            ..Default::default()
+        },
+        key: "tla.seismic_sense",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::LookAndSelect {
+                destination: Destination::Hand,
+                look: Count::Of(Quantity::BattlefieldMatching {
+                    predicate: Predicate::CardType {
+                        value: CardType::Land,
+                    },
+                }),
+                max_select: 1,
+                min_select: 0,
+                predicate: Predicate::TypesAny {
+                    values: vec![CardType::Creature, CardType::Land],
+                },
+                reveal: Some(true),
+                remainder: Some(Remainder::LibraryBottom),
+                remainder_order: Some(RemainderOrder::Random),
+            }],
+        )
+        .cost(Cost::mana("{G}"))],
+        registry_name: "Seismic Sense",
+        text_box,
+    }
+}
+
+fn aang_s_journey() -> Card {
+    let text_box = "Kicker {2} (You may pay an additional {2} as you cast this spell.)\nSearch your library for a basic land card. If this spell was kicked, instead search your library for a basic land card and a Shrine card. Reveal those cards, put them into your hand, then shuffle.\nYou gain 2 life.";
+    let basic = || Op::SearchBasicLand {
+        destination: Some(Destination::Hand),
+        subtype: None,
+    };
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}"),
+            subtypes: Some(vec!["Lesson"]),
+            types: vec![CardType::Sorcery],
+            ..Default::default()
+        },
+        key: "tla.aang_s_journey",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![
+                Op::Branch {
+                    condition: Condition::Kicked,
+                    otherwise: vec![basic()],
+                    then: vec![
+                        basic(),
+                        Op::SearchBasicLand {
+                            destination: Some(Destination::Hand),
+                            subtype: Some("Shrine"),
+                        },
+                    ],
+                },
+                Op::GainLife { amount: 2 },
+            ],
+        )
+        .cost(Cost {
+            mana: Some("{2}"),
+            kicker: Some("{2}"),
+            ..Default::default()
+        })],
+        registry_name: "Aang's Journey",
+        text_box,
+    }
+}
+
+fn sparring_dummy() -> Card {
+    let text_box = "Defender\n{T}: Mill a card. You may put a land card milled this way into your hand. You gain 2 life if a Lesson card is milled this way. (To mill a card, put the top card of your library into your graveyard.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{G}"),
+            subtypes: Some(vec!["Scarecrow"]),
+            types: vec![CardType::Artifact, CardType::Creature],
+            keywords: Some(vec![Keyword::Defender]),
+            power: Some(PrintedPower::Fixed(1)),
+            toughness: Some(3),
+            ..Default::default()
+        },
+        key: "tla.sparring_dummy",
+        programs: vec![Program::new(
+            "train",
+            ProgramKind::Activated,
+            vec![Op::MillAndSelect {
+                count: 1,
+                if_declined: Vec::new(),
+                predicate: Predicate::CardType {
+                    value: CardType::Land,
+                },
+                milled_any: Some(Predicate::Subtype { value: "Lesson" }),
+                then: vec![Op::GainLife { amount: 2 }],
+            }],
+        )
+        .cost(Cost {
+            mana: Some("0"),
+            tap_source: Some(true),
+            ..Default::default()
+        })],
+        registry_name: "Sparring Dummy",
+        text_box,
+    }
+}
+
+fn lost_days() -> Card {
+    let text_box = "The owner of target creature or enchantment puts it into their library second from the top or on the bottom. You create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{4}{U}"),
+            subtypes: Some(vec!["Lesson"]),
+            types: vec![CardType::Instant],
+            ..Default::default()
+        },
+        key: "tla.lost_days",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![
+                Op::PutIntoLibrarySecondOrBottom { target: "lost" },
+                Op::CreateToken {
+                    count: 1,
+                    definition_ref: "token.clue",
+                    tapped_and_attacking: None,
+                },
+            ],
+        )
+        .cost(Cost::mana("{4}{U}"))
+        .targets(vec![Target::one(
+            "lost",
+            Selector::Permanent {
+                predicate: Predicate::TypesAny {
+                    values: vec![CardType::Creature, CardType::Enchantment],
+                },
+            },
+        )])],
+        registry_name: "Lost Days",
+        text_box,
+    }
+}
+
+fn serpent_of_the_pass() -> Card {
+    let text_box = "If there are three or more Lesson cards in your graveyard, you may cast this spell as though it had flash.\nThis spell costs {1} less to cast for each noncreature, nonland card in your graveyard.";
+    let noncreature_nonland = || Predicate::NotCardTypes {
+        values: vec![CardType::Creature, CardType::Land],
+    };
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{5}{U}{U}"),
+            subtypes: Some(vec!["Serpent"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(6)),
+            toughness: Some(5),
+            ..Default::default()
+        },
+        key: "tla.serpent_of_the_pass",
+        programs: vec![
+            Program::new(
+                "flash",
+                ProgramKind::Static,
+                vec![Op::Branch {
+                    condition: Condition::GraveyardAtLeast {
+                        count: 3,
+                        predicate: Predicate::Subtype { value: "Lesson" },
+                    },
+                    otherwise: Vec::new(),
+                    then: vec![Op::GrantKeywords {
+                        duration: Duration::Static,
+                        keywords: vec![Keyword::Flash],
+                        target: "source",
+                    }],
+                }],
+            ),
+            Program::new("spell", ProgramKind::Spell, Vec::new()).cost(Cost {
+                mana: Some("{5}{U}{U}"),
+                affinity: Some(noncreature_nonland()),
+                affinity_zone: Some(Zone::YourGraveyard),
+                ..Default::default()
+            }),
+        ],
+        registry_name: "Serpent of the Pass",
+        text_box,
+    }
+}
+
+fn elemental_teachings() -> Card {
+    let text_box = "Search your library for up to four land cards with different names and reveal them. An opponent chooses two of those cards. Put the chosen cards into your graveyard and the rest onto the battlefield tapped, then shuffle.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{4}{G}"),
+            subtypes: Some(vec!["Lesson"]),
+            types: vec![CardType::Instant],
+            ..Default::default()
+        },
+        key: "tla.elemental_teachings",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::SearchLandsOpponentSplits {
+                count: 4,
+                opponent_picks: 2,
+            }],
+        )
+        .cost(Cost::mana("{4}{G}"))],
+        registry_name: "Elemental Teachings",
+        text_box,
+    }
+}
+
+fn dai_li_indoctrination() -> Card {
+    let text_box = "Choose one —\n• Target opponent reveals their hand. You choose a nonland permanent card from it. That player discards that card.\n• Earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{B}"),
+            subtypes: Some(vec!["Lesson"]),
+            types: vec![CardType::Sorcery],
+            ..Default::default()
+        },
+        key: "tla.dai_li_indoctrination",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::Modal {
+                modes: vec![
+                    vec![Op::RevealHandDiscardChosen {
+                        predicate: Predicate::NotCardTypes {
+                            values: vec![CardType::Land, CardType::Instant, CardType::Sorcery],
+                        },
+                        target: "opponent",
+                    }],
+                    vec![Op::Earthbend {
+                        count: Count::Fixed(2),
+                        target: "land",
+                    }],
+                ],
+            }],
+        )
+        .cost(Cost::mana("{1}{B}"))
+        .targets(vec![
+            Target::one("opponent", Selector::Opponent),
+            Target::one("land", Selector::LandYouControl),
+        ])
+        .inferred()],
+        registry_name: "Dai Li Indoctrination",
+        text_box,
+    }
+}
+
+fn professor_zei_anthropologist() -> Card {
+    let text_box = "{T}, Discard a card: Draw a card.\n{1}, {T}, Sacrifice Professor Zei: Return target instant or sorcery card from your graveyard to your hand. Activate only during your turn.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{U/R}{U/R}"),
+            subtypes: Some(vec!["Human", "Advisor", "Ally"]),
+            supertypes: Some(vec!["Legendary"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(0)),
+            toughness: Some(3),
+            ..Default::default()
+        },
+        key: "tla.professor_zei_anthropologist",
+        programs: vec![
+            Program::new(
+                "draw",
+                ProgramKind::Activated,
+                vec![Op::DrawCards { count: 1 }],
+            )
+            .cost(Cost {
+                mana: Some("0"),
+                tap_source: Some(true),
+                discard_card: Some(true),
+                ..Default::default()
+            }),
+            Program::new(
+                "recall",
+                ProgramKind::Activated,
+                vec![Op::ReturnGraveyardTarget {
+                    target: "spell",
+                    destination: None,
+                }],
+            )
+            .cost(Cost {
+                mana: Some("{1}"),
+                tap_source: Some(true),
+                sacrifice_source: Some(true),
+                own_turn_only: Some(true),
+                ..Default::default()
+            })
+            .targets(vec![Target::one(
+                "spell",
+                Selector::GraveyardCardYouOwn {
+                    predicate: Predicate::TypesAny {
+                        values: vec![CardType::Instant, CardType::Sorcery],
+                    },
+                },
+            )]),
+        ],
+        registry_name: "Professor Zei, Anthropologist",
+        text_box,
+    }
+}
+
+fn united_front() -> Card {
+    let text_box = "Create X 1/1 white Ally creature tokens, then put a +1/+1 counter on each creature you control.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{X}{W}{W}"),
+            types: vec![CardType::Sorcery],
+            ..Default::default()
+        },
+        key: "tla.united_front",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![
+                Op::CreateTokensValue {
+                    count: Quantity::X,
+                    definition_ref: "token.ally",
+                },
+                Op::PutCounters {
+                    count: 1,
+                    target: "each:creature_you_control",
+                    counter: None,
+                },
+            ],
+        )
+        .cost(Cost::mana("{X}{W}{W}"))
+        .inferred()],
+        registry_name: "United Front",
+        text_box,
+    }
+}
+
+fn spirit_water_revival() -> Card {
+    let text_box = "As an additional cost to cast this spell, you may waterbend {6}. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)\nDraw two cards. If this spell's additional cost was paid, instead shuffle your graveyard into your library, draw seven cards, and you have no maximum hand size for the rest of the game.\nExile Spirit Water Revival.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{U}{U}"),
+            types: vec![CardType::Sorcery],
+            ..Default::default()
+        },
+        key: "tla.spirit_water_revival",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![
+                Op::Branch {
+                    condition: Condition::Kicked,
+                    otherwise: vec![Op::DrawCards { count: 2 }],
+                    then: vec![
+                        Op::ShuffleGraveyardIntoLibrary,
+                        Op::DrawCards { count: 7 },
+                        Op::NoMaximumHandSize,
+                    ],
+                },
+                Op::Exile { target: "source" },
+            ],
+        )
+        .cost(Cost {
+            mana: Some("{1}{U}{U}"),
+            kicker: Some("{6}"),
+            waterbend: Some(true),
+            ..Default::default()
+        })],
+        registry_name: "Spirit Water Revival",
+        text_box,
+    }
+}
+
+fn yue_the_moon_spirit() -> Card {
+    let text_box = "Flying, vigilance\nWaterbend {5}, {T}: You may cast a noncreature spell from your hand without paying its mana cost. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{3}{U}"),
+            subtypes: Some(vec!["Spirit", "Ally"]),
+            supertypes: Some(vec!["Legendary"]),
+            types: vec![CardType::Creature],
+            keywords: Some(vec![Keyword::Flying, Keyword::Vigilance]),
+            power: Some(PrintedPower::Fixed(3)),
+            toughness: Some(3),
+            ..Default::default()
+        },
+        key: "tla.yue_the_moon_spirit",
+        programs: vec![Program::new(
+            "free_cast",
+            ProgramKind::Activated,
+            vec![Op::CastFromHandFree {
+                predicate: Predicate::NotCardTypes {
+                    values: vec![CardType::Creature, CardType::Land],
+                },
+            }],
+        )
+        .cost(Cost {
+            mana: Some("{5}"),
+            tap_source: Some(true),
+            waterbend: Some(true),
+            ..Default::default()
+        })],
+        registry_name: "Yue, the Moon Spirit",
+        text_box,
+    }
+}
+
+fn solstice_revelations() -> Card {
+    let text_box = "Exile cards from the top of your library until you exile a nonland card. You may cast that card without paying its mana cost if the spell's mana value is less than the number of Mountains you control. If you don't cast that card this way, put it into your hand.\nFlashback {6}{R} (You may cast this card from your graveyard for its flashback cost. Then exile it.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{R}"),
+            subtypes: Some(vec!["Lesson"]),
+            types: vec![CardType::Instant],
+            ..Default::default()
+        },
+        key: "tla.solstice_revelations",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::ExileUntilNonlandCastFree {
+                below: Quantity::BattlefieldMatching {
+                    predicate: Predicate::Subtype { value: "Mountain" },
+                },
+            }],
+        )
+        .cost(Cost {
+            mana: Some("{2}{R}"),
+            flashback: Some("{6}{R}"),
+            ..Default::default()
+        })],
+        registry_name: "Solstice Revelations",
+        text_box,
+    }
+}
+
+fn hama_the_bloodbender() -> Card {
+    let text_box = "When Hama enters, target opponent mills three cards. Exile up to one noncreature, nonland card from that player's graveyard. For as long as you control Hama, you may cast the exiled card during your turn by waterbending {X} rather than paying its mana cost, where X is its mana value. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{U/B}{U/B}{U/B}"),
+            subtypes: Some(vec!["Human", "Warlock"]),
+            supertypes: Some(vec!["Legendary"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(3)),
+            toughness: Some(3),
+            ..Default::default()
+        },
+        key: "tla.hama_the_bloodbender",
+        programs: vec![Program::new(
+            "trigger_0",
+            ProgramKind::Triggered,
+            vec![
+                Op::MillCards {
+                    count: 3,
+                    target: Some("opponent"),
+                },
+                Op::ExileLinked {
+                    chooser: "you",
+                    grant: "waterbend_mana_value",
+                    predicate: Predicate::NotCardTypes {
+                        values: vec![CardType::Creature, CardType::Land],
+                    },
+                    target: "opponent",
+                    up_to: true,
+                    zone: "graveyard",
+                },
+            ],
+        )
+        .targets(vec![Target::one("opponent", Selector::Opponent)])
+        .trigger(Trigger::new(Event::EntersBattlefield, Subject::This))],
+        registry_name: "Hama, the Bloodbender",
+        text_box,
+    }
+}
+
+fn azula_cunning_usurper() -> Card {
+    let text_box = "Firebending 2 (Whenever this creature attacks, add {R}{R}. This mana lasts until end of combat.)\nWhen Azula enters, target opponent exiles a nontoken creature they control, then they exile a nonland card from their graveyard.\nDuring your turn, you may cast cards exiled with Azula and you may cast them as though they had flash. Mana of any type can be spent to cast those spells.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{U}{B}{B}"),
+            subtypes: Some(vec!["Human", "Noble", "Rogue"]),
+            supertypes: Some(vec!["Legendary"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(4)),
+            toughness: Some(4),
+            ..Default::default()
+        },
+        key: "tla.azula_cunning_usurper",
+        programs: vec![
+            Program::firebending("p0", "RR"),
+            Program::new(
+                "trigger_1",
+                ProgramKind::Triggered,
+                vec![
+                    Op::ExileLinked {
+                        chooser: "target",
+                        grant: "flash_any_mana",
+                        predicate: Predicate::CardType {
+                            value: CardType::Creature,
+                        },
+                        target: "opponent",
+                        up_to: false,
+                        zone: "battlefield",
+                    },
+                    Op::ExileLinked {
+                        chooser: "target",
+                        grant: "flash_any_mana",
+                        predicate: Predicate::NotCardTypes {
+                            values: vec![CardType::Land],
+                        },
+                        target: "opponent",
+                        up_to: false,
+                        zone: "graveyard",
+                    },
+                ],
+            )
+            .targets(vec![Target::one("opponent", Selector::Opponent)])
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+        ],
+        registry_name: "Azula, Cunning Usurper",
+        text_box,
+    }
+}
+
+fn sozins_comet() -> Card {
+    let text_box = "Each creature you control gains firebending 5 until end of turn. (Whenever it attacks, add {R}{R}{R}{R}{R}. This mana lasts until end of combat.)\nForetell {2}{R} (During your turn, you may pay {2} and exile this card from your hand face down. Cast it on a later turn for its foretell cost.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{3}{R}{R}"),
+            types: vec![CardType::Sorcery],
+            ..Default::default()
+        },
+        key: "tla.sozins_comet",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::GrantFirebendingUntilEot { amount: 5 }],
+        )
+        .cost(Cost {
+            foretell: Some("{2}{R}"),
+            ..Cost::mana("{3}{R}{R}")
+        })],
+        registry_name: "Sozin's Comet",
+        text_box,
+    }
+}
+
 fn abandoned_air_temple() -> Card {
     let text_box = "This land enters tapped unless you control a basic land.\n{T}: Add {W}.\n{3}{W}, {T}: Put a +1/+1 counter on each creature you control.";
 
@@ -3770,7 +5613,7 @@ fn ba_sing_se() -> Card {
             "earthbend",
             ProgramKind::Activated,
             vec![Op::Earthbend {
-                count: 2,
+                count: Count::Fixed(2),
                 target: "target_0",
             }],
         )
@@ -3849,50 +5692,6 @@ fn basic_check_land(
     }
 }
 
-/// The ten tapped dual lands share both abilities; only identity and colors vary.
-fn draw_land(
-    key: &'static str,
-    registry_name: &'static str,
-    text_box: &'static str,
-    colors: [&'static str; 2],
-) -> Card {
-    Card {
-        characteristics: Characteristics {
-            subtypes: Some(vec![]),
-            types: vec![CardType::Land],
-            keywords: Some(vec![]),
-            enters_tapped: Some(true),
-            ..Default::default()
-        },
-        key,
-        programs: vec![
-            Program::new(
-                "draw",
-                ProgramKind::Activated,
-                vec![Op::DrawCards { count: 1 }],
-            )
-            .cost(Cost {
-                mana: Some("4"),
-                sacrifice_source: Some(true),
-                tap_source: Some(true),
-                ..Default::default()
-            }),
-            Program::new(
-                "mana",
-                ProgramKind::Activated,
-                vec![Op::choose_mana(&colors)],
-            )
-            .cost(Cost {
-                mana: Some("0"),
-                tap_source: Some(true),
-                ..Default::default()
-            }),
-        ],
-        registry_name,
-        text_box,
-    }
-}
-
 fn air_nomad_legacy() -> Card {
     let text_box = "When this enchantment enters, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")\nCreatures you control with flying get +1/+1.";
 
@@ -3950,7 +5749,7 @@ fn badgermole() -> Card {
                 "earthbend",
                 ProgramKind::Triggered,
                 vec![Op::Earthbend {
-                    count: 2,
+                    count: Count::Fixed(2),
                     target: "target_0",
                 }],
             )
@@ -4807,7 +6606,7 @@ fn earthen_ally() -> Card {
                 "earthbend",
                 ProgramKind::Activated,
                 vec![Op::Earthbend {
-                    count: 5,
+                    count: Count::Fixed(5),
                     target: "land",
                 }],
             )
@@ -4875,8 +6674,8 @@ fn the_boulder_ready_to_rumble() -> Card {
         programs: vec![Program::new(
             "attacks",
             ProgramKind::Triggered,
-            vec![Op::EarthbendValue {
-                count: Quantity::BattlefieldMatching {
+            vec![Op::Earthbend {
+                count: Count::Of(Quantity::BattlefieldMatching {
                     predicate: Predicate::All {
                         predicates: vec![
                             Predicate::CardType {
@@ -4885,7 +6684,7 @@ fn the_boulder_ready_to_rumble() -> Card {
                             Predicate::PowerAtLeast { value: 4 },
                         ],
                     },
-                },
+                }),
                 target: "land",
             }],
         )
@@ -4914,7 +6713,10 @@ fn platypus_bear() -> Card {
             Program::new(
                 "enters",
                 ProgramKind::Triggered,
-                vec![Op::MillCards { count: 2 }],
+                vec![Op::MillCards {
+                    count: 2,
+                    target: None,
+                }],
             )
             .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
             Program::new(
@@ -4969,7 +6771,7 @@ fn toph_the_first_metalbender() -> Card {
                 "end_step",
                 ProgramKind::Triggered,
                 vec![Op::Earthbend {
-                    count: 2,
+                    count: Count::Fixed(2),
                     target: "land",
                 }],
             )

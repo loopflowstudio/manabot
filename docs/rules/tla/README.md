@@ -5,7 +5,7 @@ TLA cards are typed Rust definitions in
 fixed tokens TLA cards make. Basic lands are Alpha cards (`lea.plains` …
 `lea.forest` in `lea.rs`); TLA decks admit them as basics. Setup manifests only
 choose definition keys and counts. The engine compiles every native/learning
-projection from that source in process. Current execution uses world **w16** and
+projection from that source in process. Current execution uses world **w17** and
 learning schema **8**.
 
 `managym.content_pool("tla-pool-v1")` is the world pool: every card any set file

@@ -44,7 +44,7 @@ def test_both_payment_methods_compile_and_both_branches_reach_policy_input(
     assert optional["if_declined"][0]["op_name"] == "deal_damage_to_controller"
     pack = bind_policy_catalog("elemental-world-v2")
     assert pack.schema.opcodes["optional_payment"] == 65
-    assert pack.schema.raw["schema_version"] == 7
+    assert pack.schema.raw["schema_version"] == 8
     # Project the authored variant too: admitting the checked pack alone does
     # not prove that the encoder retains a nonempty paid continuation.
     ir_path = tmp_path / "optional-payment.ir.json"

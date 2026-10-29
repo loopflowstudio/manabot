@@ -6,7 +6,6 @@ use crate::{
         turn::{PhaseKind, StepKind},
     },
     state::{
-        card::Card,
         game_object::{CardId, ObjectId, PlayerId, Target},
         mana::ManaCost,
         permanent::Permanent,
@@ -44,6 +43,8 @@ pub struct PlayerData {
     pub combat_mana: i32,
     /// Public pooled mana by W/U/B/R/G/C; restricted mana remains separate.
     pub mana: [i32; 6],
+    /// Spend-restricted mana by color, whatever its restriction (CR 106.6).
+    /// The name predates restrictions other than Herbalist's Lesson-only mana.
     pub lesson_mana: [i32; 6],
     pub known_hand: BTreeMap<u32, u32>,
     pub sideboard_counts: BTreeMap<u32, u32>,
@@ -92,6 +93,9 @@ pub struct CardData {
     pub keywords: KeywordData,
     #[serde(deserialize_with = "super::observation_json::mana_cost")]
     pub mana_cost: ManaCost,
+    /// Foretold and face down in exile; listed only for its owner.
+    #[serde(default)]
+    pub face_down: bool,
 }
 
 /// An owned outside-game copy. The candidate is private to this viewer and
@@ -398,7 +402,8 @@ impl Observation {
                                 _ => None,
                             },
                             ability_index: match action {
-                                Action::ActivateAbility { ability_index, .. } => {
+                                Action::ActivateAbility { ability_index, .. }
+                                | Action::ActivateCardAbility { ability_index, .. } => {
                                     Some(*ability_index)
                                 }
                                 _ => None,
@@ -487,9 +492,13 @@ impl Observation {
             mana: std::array::from_fn(|slot| {
                 i32::from(p.mana_pool.mana[slot]) + i32::from(p.combat_mana_pool.mana[slot])
             }),
-            lesson_mana: std::array::from_fn(|slot| {
-                i32::from(p.mana_pool.lesson[slot]) + i32::from(p.combat_mana_pool.lesson[slot])
-            }),
+            lesson_mana: {
+                let (regular, combat) = (
+                    p.mana_pool.restricted_colors(),
+                    p.combat_mana_pool.restricted_colors(),
+                );
+                std::array::from_fn(|slot| i32::from(regular[slot]) + i32::from(combat[slot]))
+            },
             known_hand: p
                 .known_hand
                 .iter()
@@ -533,15 +542,30 @@ impl Observation {
             if suspended.decision.player() == agent_player {
                 let cards = match &suspended.decision {
                     crate::flow::decision::Decision::SearchBasicLand {
-                        player, subtype, ..
-                    } => game.basic_land_search_candidates(*player, subtype),
+                        player,
+                        subtype,
+                        to_hand,
+                        ..
+                    } => game.basic_land_search_candidates(*player, subtype, *to_hand),
                     crate::flow::decision::Decision::SearchLibraryToHand { player, predicate } => {
                         game.library_search_candidates(*player, predicate)
+                    }
+                    decision @ crate::flow::decision::Decision::DiscardFromRevealedHand {
+                        ..
+                    } => game.revealed_hand_candidates(decision),
+                    decision @ crate::flow::decision::Decision::SearchDistinctLands {
+                        selected,
+                        ..
+                    } => {
+                        let mut cards = selected.clone();
+                        cards.extend(game.distinct_land_search_candidates(decision));
+                        cards
                     }
                     decision => decision.revealed_cards().to_vec(),
                 };
                 for card in cards {
-                    self.add_card(game, card, ZoneType::Library);
+                    let zone = game.state.zones.zone_of(card).unwrap_or(ZoneType::Library);
+                    self.add_card(game, card, zone);
                 }
             }
         }
@@ -551,7 +575,10 @@ impl Observation {
                 self.add_card(game, *card, ZoneType::Graveyard);
             }
             for card in game.state.zones.zone_cards(ZoneType::Exile, player) {
-                self.add_card(game, *card, ZoneType::Exile);
+                // A foretold card is face down: only its owner sees it.
+                if player == agent_player || !game.is_foretold(*card) {
+                    self.add_card(game, *card, ZoneType::Exile);
+                }
             }
         }
 
@@ -582,16 +609,21 @@ impl Observation {
         }
     }
 
+    /// List a card on its owner's side; see [`Self::push_card`].
     fn add_card(
         &mut self,
         game: &Game,
         card_id: crate::state::game_object::CardId,
         zone: ZoneType,
     ) {
-        let card = &game.state.cards[card_id];
-        let card_data = Self::card_data(game, card, zone);
+        let owner = game.state.cards[card_id].owner;
+        self.push_card(Self::card_data(game, card_id, zone), owner);
+    }
 
-        if card_data.owner_id == self.agent.id {
+    /// List a card on `side`: its owner's, except that battlefield cards
+    /// sit with their permanent's controller, in permanent order.
+    fn push_card(&mut self, card_data: CardData, side: PlayerId) {
+        if side.0 == self.agent.player_index as usize {
             self.agent_cards.push(card_data);
         } else {
             self.opponent_cards.push(card_data);
@@ -636,10 +668,14 @@ impl Observation {
             self.opponent_permanents.push(pdat);
         }
 
-        self.add_card(game, permanent.card, ZoneType::Battlefield);
+        self.push_card(
+            Self::card_data(game, permanent.card, ZoneType::Battlefield),
+            permanent.controller,
+        );
     }
 
-    fn card_data(game: &Game, card: &Card, zone: ZoneType) -> CardData {
+    fn card_data(game: &Game, card_id: CardId, zone: ZoneType) -> CardData {
+        let card = &game.state.cards[card_id];
         CardData {
             zone,
             owner_id: game.state.players[card.owner.0].id.0 as i32,
@@ -682,6 +718,7 @@ impl Observation {
             },
             keywords: KeywordData::from_keywords(&card.keywords),
             mana_cost: card.mana_cost.clone().unwrap_or_default(),
+            face_down: zone == ZoneType::Exile && game.is_foretold(card_id),
         }
     }
 
@@ -802,11 +839,13 @@ impl Observation {
                 from,
                 to,
                 controller,
+                face_down,
             } => {
                 let mut data = Self::card_event_data(EventType::CardMoved, *card, *controller);
                 data.from_zone = from.map_or(-1, |zone| zone as i32);
                 data.to_zone = *to as i32;
-                if from.is_none() && *to == ZoneType::Hand {
+                // Outside cards and face-down arrivals name no public object.
+                if (from.is_none() && *to == ZoneType::Hand) || *face_down {
                     data.source_kind = EventEntityKind::None as i32;
                     data.source_id = -1;
                 }
@@ -1033,6 +1072,9 @@ impl Observation {
             Action::PlayLand { card, .. } | Action::CastSpell { card, .. } => {
                 vec![game.state.cards[card].id]
             }
+            Action::ActivateCardAbility { card, .. } | Action::Foretell { card, .. } => {
+                vec![game.state.cards[card].id]
+            }
             Action::ActivateAbility { permanent, .. } => game.state.permanents[*permanent]
                 .as_ref()
                 .map(|perm| vec![perm.id])
@@ -1091,16 +1133,27 @@ impl Observation {
                     .and_then(|suspended| suspended.frame.source)
                     .or(match &game.pending_choice {
                         Some(crate::flow::game::PendingChoice::SpellMode { card, .. })
-                        | Some(crate::flow::game::PendingChoice::SpellX { card, .. })
                         | Some(crate::flow::game::PendingChoice::KickerChoice { card, .. })
+                        | Some(crate::flow::game::PendingChoice::AnnounceX { card, .. })
                         | Some(crate::flow::game::PendingChoice::ChooseTargets { card, .. }) => {
                             Some(*card)
                         }
                         Some(crate::flow::game::PendingChoice::ActivatedTarget {
-                            permanent,
+                            source: crate::flow::game::ActivationSource::Card(card),
                             ..
                         })
-                        | Some(crate::flow::game::PendingChoice::Waterbend { permanent, .. })
+                        | Some(crate::flow::game::PendingChoice::DiscardPayment {
+                            source: crate::flow::game::ActivationSource::Card(card),
+                            ..
+                        }) => Some(*card),
+                        Some(crate::flow::game::PendingChoice::ActivatedTarget {
+                            source: crate::flow::game::ActivationSource::Permanent(permanent),
+                            ..
+                        })
+                        | Some(crate::flow::game::PendingChoice::DiscardPayment {
+                            source: crate::flow::game::ActivationSource::Permanent(permanent),
+                            ..
+                        })
                         | Some(crate::flow::game::PendingChoice::ActivationX {
                             permanent, ..
                         })
@@ -1108,6 +1161,9 @@ impl Observation {
                             game.state.permanents[*permanent]
                                 .as_ref()
                                 .map(|perm| perm.card)
+                        }
+                        Some(crate::flow::game::PendingChoice::Waterbend { payment, .. }) => {
+                            game.payment_source_card(payment)
                         }
                         Some(
                             crate::flow::game::PendingChoice::SacrificePayment { .. }
@@ -1133,13 +1189,15 @@ impl Observation {
                 return false;
             }
         }
-        for card in &self.agent_cards {
-            if card.owner_id != self.agent.id {
-                return false;
-            }
-        }
-        for card in &self.opponent_cards {
-            if card.owner_id != self.opponent.id {
+        // A battlefield card sits with its controller, who may not own it.
+        for (cards, side) in [
+            (&self.agent_cards, self.agent.id),
+            (&self.opponent_cards, self.opponent.id),
+        ] {
+            if cards
+                .iter()
+                .any(|card| card.zone != ZoneType::Battlefield && card.owner_id != side)
+            {
                 return false;
             }
         }
@@ -1190,6 +1248,9 @@ impl Observation {
                     .iter()
                     .map(|pip| [pip[0] as u8, pip[1] as u8])
                     .collect::<Vec<_>>());
+            }
+            if card.face_down {
+                value["face_down"] = json!(true);
             }
             value
         }
