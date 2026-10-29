@@ -31,9 +31,8 @@ use managym::semantic::SemanticPack;
 use managym::state::card::{CardDefinition, CardType};
 use managym::state::mana::{Color, ManaCost};
 
-/// Registered names that are deliberately not real Magic cards (marked
-/// `// not a real card` at the registration). Tokens are excluded via
-/// `is_token` instead.
+/// Registered rules fixtures that are not real Magic cards
+/// (`managym/src/cards/fixtures.rs`). Tokens are excluded via `is_token`.
 const NOT_REAL_CARDS: &[&str] = &["Crossroads of Destiny"];
 
 /// name -> engine mana-cost rendering accepted in place of the Scryfall

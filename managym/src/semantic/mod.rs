@@ -1,4 +1,4 @@
-//! Runtime lowering and diagnostic interpretation of reviewed typed card IR.
+//! Runtime lowering and diagnostic interpretation of typed card IR.
 //!
 //! This module parses the versioned IR that [`compile`] produces in process from
 //! the typed set definitions in `cardsets/` (or a frozen historical document),
@@ -13,7 +13,7 @@
 //! live [`ContentPack`] used by the exact authored matchup, so ordinary game
 //! commands, events, stabilization, search forks, and terminal state now run
 //! on compiled semantics. Directed rules tests independently witness behavior;
-//! shared pool descriptors expose identity and qualification to deck admission.
+//! shared pool descriptors expose identity and support to deck admission.
 
 pub mod compile;
 mod content;

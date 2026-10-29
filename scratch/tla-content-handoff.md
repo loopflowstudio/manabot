@@ -5,8 +5,12 @@ Accepted by Jack Heart on 2026-10-28 as the first of seven TLA PRs plus one sepa
 Accepted revision, Jack Heart, 2026-10-28: typed Rust set files are the authored
 authority; generated representations are checked in. See
 [tla-rust-authoring-direction.md](tla-rust-authoring-direction.md). This supersedes
-the earlier JSON authoring implementation, while preserving the compiler/runtime,
-qualification and D1 ownership boundaries.
+the earlier JSON authoring implementation, while preserving the compiler/runtime
+and D1 ownership boundaries. Jack Heart's 2026-10-29 direction replaces the
+qualification model below (support = defined in a set file; one world pool of
+every defined card; set filters for TLA decks; every card in its first-printing
+set file). Where this brief says "qualified", "eligibility" or "86 cards", read
+the current plan in [892c47-author-tla-cards.md](892c47-author-tla-cards.md).
 
 Outcome: current TLA behavior has one typed authoring source lowered to the native rules runtime and learning projection; a new card no longer needs an unrelated handwritten native registration just to compile or obtain display text. Extend this source with the missing cards whose complete behavior fits established primitives. Preserve the authored setups and existing behavior witnesses. Registration, native/compiled agreement and generated tests alone never certify a card's correctness.
 
