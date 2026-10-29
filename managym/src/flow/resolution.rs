@@ -477,6 +477,42 @@ impl Game {
                 self.restrict_opponent_to_hand(frame.controller);
                 None
             }
+            Effect::OwnerPutsIntoLibrary { .. } => {
+                let Some(Target::Permanent(id)) = self.present_primary_target(frame) else {
+                    return None;
+                };
+                let card = self.state.permanents[id].as_ref()?.card;
+                Some(Decision::Modal {
+                    player: self.state.cards[card].owner,
+                    modes: [true, false]
+                        .map(|second_from_top| {
+                            vec![Effect::PlaceTargetInLibrary { second_from_top }]
+                        })
+                        .to_vec(),
+                })
+            }
+            Effect::PlaceTargetInLibrary { second_from_top } => {
+                let Some(Target::Permanent(id)) = self.present_primary_target(frame) else {
+                    return None;
+                };
+                let permanent = self.state.permanents[id].as_ref()?;
+                let (card, controller) = (permanent.card, permanent.controller);
+                self.move_card(card, ZoneType::Library);
+                self.invalidate_mana_cache(controller);
+                if *second_from_top {
+                    let owner = self.state.cards[card].owner;
+                    self.journal_zones();
+                    let library = self.state.zones.zone_cards_mut(ZoneType::Library, owner);
+                    if let Some(index) = library.iter().position(|c| *c == card) {
+                        library.remove(index);
+                        let below_top = library.len().saturating_sub(1);
+                        library.insert(below_top, card);
+                    }
+                } else {
+                    self.put_on_bottom_of_library(card);
+                }
+                None
+            }
             Effect::SacrificeSource { then } => {
                 if let Some(permanent_id) = self.source_permanent_id(frame) {
                     self.sacrifice_permanent(permanent_id);

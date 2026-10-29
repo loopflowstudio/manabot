@@ -247,6 +247,16 @@ pub enum Effect {
     OpponentsCastOnlyFromHand,
     /// "Exile the top card of your library. You may play that card this turn."
     ExileTopCardPlayThisTurn,
+    /// The target's owner chooses second from the top of their library or
+    /// the bottom (a resolution-time mode of [`Effect::PlaceTargetInLibrary`]).
+    OwnerPutsIntoLibrary {
+        target: TargetSpec,
+    },
+    /// Put the primary target into its owner's library, second from the top
+    /// or on the bottom.
+    PlaceTargetInLibrary {
+        second_from_top: bool,
+    },
     /// Sacrifice the exact source permanent; only if that happened, run `then`.
     SacrificeSource {
         then: Vec<Effect>,
@@ -627,7 +637,9 @@ impl Effect {
             Effect::Earthbend { target, .. } => Some(target),
             Effect::ExileUntilSourceLeaves { target } => Some(target),
             Effect::BuffTarget { target, .. } => Some(target),
-            Effect::UntapTarget { target } | Effect::TapTarget { target } => Some(target),
+            Effect::UntapTarget { target }
+            | Effect::TapTarget { target }
+            | Effect::OwnerPutsIntoLibrary { target } => Some(target),
             Effect::GrantKeywordsToTarget { target, .. } => Some(target),
             Effect::OnNthResolutionThisTurn { effect, .. } => effect.target_spec(),
             Effect::OptionalPayment {
@@ -650,6 +662,7 @@ impl Effect {
             | Effect::OpponentsCastOnlyFromHand
             | Effect::ExileSourceSpell
             | Effect::ExileTopCardPlayThisTurn
+            | Effect::PlaceTargetInLibrary { .. }
             | Effect::ModifyControlled { .. }
             | Effect::ModifyUntilEot { .. }
             | Effect::DrawCards { .. }

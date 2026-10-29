@@ -2389,5 +2389,29 @@
     "colors": [
       "G"
     ]
+  },
+  "Lost Days": {
+    "name": "Lost Days",
+    "mana_cost": "{4}{U}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "The owner of target creature or enchantment puts it into their library second from the top or on the bottom. You create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")",
+    "colors": [
+      "U"
+    ]
+  },
+  "Serpent of the Pass": {
+    "name": "Serpent of the Pass",
+    "mana_cost": "{5}{U}{U}",
+    "type_line": "Creature — Serpent",
+    "power": "6",
+    "toughness": "5",
+    "keywords": [],
+    "oracle_text": "If there are three or more Lesson cards in your graveyard, you may cast this spell as though it had flash.\nThis spell costs {1} less to cast for each noncreature, nonland card in your graveyard.",
+    "colors": [
+      "U"
+    ]
   }
 }

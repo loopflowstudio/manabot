@@ -349,6 +349,13 @@ pub struct CardDefinition {
     /// During your turn, grant graveyard flashback (Lessons cost {1}).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub grants_flashback: bool,
+    /// "If [condition], you may cast this spell as though it had flash."
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub flash_if: Option<StaticCondition>,
+    /// `cost_reduction_per` counts cards in your graveyard, not permanents
+    /// you control.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub cost_reduction_in_graveyard: bool,
     /// Each matching permanent you control gains a chosen-color tap ability.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub mana_grant: Vec<CardPredicate>,
@@ -465,6 +472,8 @@ impl Card {
     }
 
     /// CR 117.1a, 702.8 — Instants and cards with flash use instant timing.
+    /// Printed instant timing; a conditional `flash_if` is checked by
+    /// [`crate::flow::game::Game::has_instant_timing`].
     pub fn is_instant_speed(&self) -> bool {
         self.types.is_instant() || self.keywords.flash
     }

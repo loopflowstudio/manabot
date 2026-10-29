@@ -159,6 +159,8 @@ pub(super) fn cards() -> Vec<Card> {
         seismic_sense(),
         aang_s_journey(),
         sparring_dummy(),
+        lost_days(),
+        serpent_of_the_pass(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -5020,6 +5022,88 @@ fn sparring_dummy() -> Card {
             ..Default::default()
         })],
         registry_name: "Sparring Dummy",
+        text_box,
+    }
+}
+
+fn lost_days() -> Card {
+    let text_box = "The owner of target creature or enchantment puts it into their library second from the top or on the bottom. You create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{4}{U}"),
+            subtypes: Some(vec!["Lesson"]),
+            types: vec![CardType::Instant],
+            ..Default::default()
+        },
+        key: "tla.lost_days",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![
+                Op::PutIntoLibrarySecondOrBottom { target: "lost" },
+                Op::CreateToken {
+                    count: 1,
+                    definition_ref: "token.clue",
+                    tapped_and_attacking: None,
+                },
+            ],
+        )
+        .cost(Cost::mana("{4}{U}"))
+        .targets(vec![Target::one(
+            "lost",
+            Selector::Permanent {
+                predicate: Predicate::TypesAny {
+                    values: vec![CardType::Creature, CardType::Enchantment],
+                },
+            },
+        )])],
+        registry_name: "Lost Days",
+        text_box,
+    }
+}
+
+fn serpent_of_the_pass() -> Card {
+    let text_box = "If there are three or more Lesson cards in your graveyard, you may cast this spell as though it had flash.\nThis spell costs {1} less to cast for each noncreature, nonland card in your graveyard.";
+    let noncreature_nonland = || Predicate::NotCardTypes {
+        values: vec![CardType::Creature, CardType::Land],
+    };
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{5}{U}{U}"),
+            subtypes: Some(vec!["Serpent"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(6)),
+            toughness: Some(5),
+            ..Default::default()
+        },
+        key: "tla.serpent_of_the_pass",
+        programs: vec![
+            Program::new(
+                "flash",
+                ProgramKind::Static,
+                vec![Op::Branch {
+                    condition: Condition::GraveyardAtLeast {
+                        count: 3,
+                        predicate: Predicate::Subtype { value: "Lesson" },
+                    },
+                    otherwise: Vec::new(),
+                    then: vec![Op::GrantKeywords {
+                        duration: Duration::Static,
+                        keywords: vec![Keyword::Flash],
+                        target: "source",
+                    }],
+                }],
+            ),
+            Program::new("spell", ProgramKind::Spell, Vec::new()).cost(Cost {
+                mana: Some("{5}{U}{U}"),
+                affinity: Some(noncreature_nonland()),
+                affinity_zone: Some(Zone::YourGraveyard),
+                ..Default::default()
+            }),
+        ],
+        registry_name: "Serpent of the Pass",
         text_box,
     }
 }

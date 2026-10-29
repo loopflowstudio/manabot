@@ -200,7 +200,7 @@ class LearningSchema:
 
         opcodes = _validate_id_map(raw.get("opcodes"), "learning_schema.opcodes")
         # Frozen schemas admit only the opcode prefix available at publication.
-        max_opcode = {2: 23, 3: 50, 4: 55, 5: 61, 6: 64, 7: 65, 8: 70}[version]
+        max_opcode = {2: 23, 3: 50, 4: 55, 5: 61, 6: 64, 7: 65, 8: 71}[version]
         expected_opcodes = {
             opcode.name.lower(): int(opcode)
             for opcode in Opcode
@@ -525,6 +525,7 @@ class _TokenBuilder:
             "duration": "duration",
             "until": "duration",
             "zone": "zone",
+            "affinity_zone": "zone",
             "controller": "controller",
             "destination": "destination",
             "remainder": "remainder",

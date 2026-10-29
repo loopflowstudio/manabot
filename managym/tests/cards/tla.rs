@@ -1560,3 +1560,68 @@ fn sparring_dummy_mills_a_land_to_hand_or_a_lesson_for_two_life() {
         s.assert_life(0, life);
     }
 }
+
+/// Lost Days: the target's owner (not the caster) chooses second from the top
+/// or the bottom of their library; the caster creates a Clue either way.
+#[test]
+fn lost_days_owner_puts_it_second_from_top_or_on_the_bottom_and_caster_gets_a_clue() {
+    for second in [true, false] {
+        let mut s = setup(&["Lost Days", "Gray Ogre", "Aang's Iceberg"]);
+        let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+        let land = s.force_permanent_on_battlefield(1, "Forest");
+        let ogre_card = card_of(&s, ogre);
+        cast(&mut s, "Lost Days");
+        assert!(!offered_targets(&s).contains(&Target::Permanent(land)));
+        assert!(s.choose_target(Target::Permanent(ogre)));
+        pass_until(&mut s, ActionSpaceKind::Modal);
+        assert_eq!(s.action_space().player, Some(PlayerId(1)));
+        mode(&mut s, if second { 0 } else { 1 });
+        settle(&mut s);
+        let library = s
+            .game()
+            .state
+            .zones
+            .zone_cards(ZoneType::Library, PlayerId(1))
+            .to_vec();
+        let expected = if second { library.len() - 2 } else { 0 };
+        assert_eq!(library[expected], ogre_card);
+        assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
+    }
+}
+
+/// Serpent of the Pass costs {1} less per noncreature, nonland card in your
+/// graveyard (creatures and lands there do not count), and with three Lessons
+/// there it may be cast at instant speed.
+#[test]
+fn serpent_of_the_pass_is_cheaper_per_graveyard_spell_and_flashes_with_three_lessons() {
+    let mut s = setup(&[
+        "Serpent of the Pass",
+        "Lightning Strike",
+        "Earthbending Lesson",
+        "Gray Ogre",
+    ]);
+    let serpent = put(&mut s, "Serpent of the Pass", ZoneType::Hand);
+    put(&mut s, "Gray Ogre", ZoneType::Graveyard);
+    put(&mut s, "Forest", ZoneType::Graveyard);
+    for _ in 0..2 {
+        put(&mut s, "Lightning Strike", ZoneType::Graveyard);
+    }
+    // {5}{U}{U} less two.
+    s.set_player_mana_pool(0, "2UU");
+    assert!(!can_cast(&mut s, serpent));
+    s.set_player_mana_pool(0, "3UU");
+    assert!(can_cast(&mut s, serpent));
+
+    // Two Lessons: sorcery timing only, so not in the beginning of combat.
+    for _ in 0..2 {
+        put(&mut s, "Earthbending Lesson", ZoneType::Graveyard);
+    }
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    s.set_player_mana_pool(0, "20UU");
+    assert!(!can_cast(&mut s, serpent));
+    put(&mut s, "Earthbending Lesson", ZoneType::Graveyard);
+    assert!(can_cast(&mut s, serpent));
+    // Seven noncreature, nonland cards reduce all {5} generic.
+    s.set_player_mana_pool(0, "UU");
+    assert!(can_cast(&mut s, serpent));
+}

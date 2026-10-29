@@ -112,13 +112,15 @@ impl Game {
             }
         }
         if let Some(predicate) = &card_ref.cost_reduction_per {
-            let mut count = 0_u8;
-            for permanent_id in self.battlefield_permanents(player) {
-                if self.permanent_matches_predicate(permanent_id, predicate) {
-                    count = count.saturating_add(1);
-                }
-            }
-            cost = cost.reduced_generic(count);
+            let count = if card_ref.cost_reduction_in_graveyard {
+                self.count_graveyard_matching(player, predicate)
+            } else {
+                self.battlefield_permanents(player)
+                    .into_iter()
+                    .filter(|id| self.permanent_matches_predicate(*id, predicate))
+                    .count()
+            };
+            cost = cost.reduced_generic(u8::try_from(count).unwrap_or(u8::MAX));
         }
         for permanent_id in self.battlefield_permanents(player) {
             let permanent = self.state.permanents[permanent_id].as_ref()?;
@@ -179,7 +181,7 @@ impl Game {
             (
                 card_ref.types.is_land(),
                 card_ref.owner,
-                card_ref.is_instant_speed(),
+                self.has_instant_timing(player, card),
             )
         };
 

@@ -65,6 +65,13 @@ impl Game {
                         [Effect::CreateToken { token_name, .. }] => {
                             Some(format!("Create a {token_name} token"))
                         }
+                        [Effect::PlaceTargetInLibrary { second_from_top }] => {
+                            Some(if *second_from_top {
+                                "Second from the top".into()
+                            } else {
+                                "On the bottom".into()
+                            })
+                        }
                         [Effect::SearchBasicLand { .. }] => {
                             Some("Search your library for a basic land".into())
                         }
@@ -325,7 +332,7 @@ impl Game {
             return None;
         }
 
-        let can_cast_now = if card.is_instant_speed() {
+        let can_cast_now = if self.has_instant_timing(player, card_id) {
             self.can_cast_instants(player)
         } else {
             self.can_cast_sorceries(player)

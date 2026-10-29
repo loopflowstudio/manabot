@@ -23,7 +23,7 @@ use crate::{
     state::{
         ability::StaticCondition,
         card::{Keywords, PowerCda, StaticScope},
-        game_object::{PermanentId, PlayerId},
+        game_object::{CardId, PermanentId, PlayerId},
         predicate::CardPredicate,
         zone::ZoneType,
     },
@@ -140,6 +140,17 @@ impl Game {
             }
         }
         (power, toughness)
+    }
+
+    /// Instant timing for `player` casting `card`: printed instant or flash,
+    /// or a conditional "as though it had flash" that currently holds.
+    pub(crate) fn has_instant_timing(&self, player: PlayerId, card: CardId) -> bool {
+        let card = &self.state.cards[card];
+        card.is_instant_speed()
+            || card
+                .flash_if
+                .as_ref()
+                .is_some_and(|condition| self.check_static_condition(condition, player))
     }
 
     /// Evaluate a static condition for `controller` ("you").

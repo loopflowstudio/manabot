@@ -379,6 +379,7 @@ fn apply_program(
             definition.kicker = cost.kicker;
             definition.flashback = cost.flashback;
             definition.cost_reduction_per = cost.affinity;
+            definition.cost_reduction_in_graveyard = cost.affinity_in_graveyard;
             definition.targeting = match opt_str_field(&program.metadata, "target_binding")? {
                 None | Some("explicit") => targeting,
                 Some("inferred") => Vec::new(),
@@ -479,6 +480,7 @@ struct ProgramCost {
     kicker: Option<ManaCost>,
     flashback: Option<ManaCost>,
     affinity: Option<CardPredicate>,
+    affinity_in_graveyard: bool,
     sacrifice: Option<SacrificeCost>,
     own_turn_only: bool,
     life: u32,
@@ -506,6 +508,11 @@ fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
         kicker: opt_str_field(value, "kicker")?.map(ManaCost::parse),
         flashback: opt_str_field(value, "flashback")?.map(ManaCost::parse),
         affinity: value.get("affinity").map(predicate_value).transpose()?,
+        affinity_in_graveyard: match opt_str_field(value, "affinity_zone")? {
+            None | Some("battlefield") => false,
+            Some("your_graveyard") => true,
+            Some(other) => return unsupported(program, &format!("affinity zone {other:?}")),
+        },
         sacrifice: value
             .get("sacrifice")
             .map(|cost| {
@@ -700,6 +707,16 @@ fn apply_static(definition: &mut CardDefinition, program: &Program) -> Result<()
             definition.unblockable_if = Some(lower_condition(condition)?);
         }
         [Step::PreventLifeGain] => definition.prevents_life_gain = true,
+        [Step::Branch {
+            condition: condition @ Condition::GraveyardAtLeast { .. },
+            then,
+            otherwise,
+        }] if otherwise.is_empty()
+            && matches!(then.as_slice(), [Step::GrantKeywords { target, keywords, duration }]
+                if target == "source" && duration == "static" && keywords == &["flash"]) =>
+        {
+            definition.flash_if = Some(lower_condition(condition)?);
+        }
         [Step::CombatRequiresOther { predicate }] => {
             definition.combat_requires_other = Some(predicate_card(predicate)?)
         }
@@ -1103,6 +1120,9 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         }
         Step::OpponentsCastOnlyFromHand => Effect::OpponentsCastOnlyFromHand,
         Step::ExileTopCardPlayThisTurn => Effect::ExileTopCardPlayThisTurn,
+        Step::PutIntoLibrarySecondOrBottom { target } => Effect::OwnerPutsIntoLibrary {
+            target: target_for(program, target)?,
+        },
         Step::SacrificeSource { then } => Effect::SacrificeSource {
             then: lower_steps(pack, program, then)?,
         },

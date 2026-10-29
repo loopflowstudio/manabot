@@ -164,6 +164,9 @@ pub struct Cost {
     pub life: Option<i32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub affinity: Option<Predicate>,
+    /// Where `affinity` counts; absent means permanents you control.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub affinity_zone: Option<Zone>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kicker: Option<&'static str>,
     /// Printed flashback (CR 702.34) on a spell program: its graveyard cost.
@@ -349,6 +352,11 @@ pub enum Op {
     /// the exact source already left the battlefield.
     SacrificeSource {
         then: Vec<Op>,
+    },
+    /// "The owner of [target] puts it into their library second from the top
+    /// or on the bottom." The owner chooses.
+    PutIntoLibrarySecondOrBottom {
+        target: &'static str,
     },
     /// Without a destination, a basic land onto the battlefield tapped. With
     /// `Hand`, any card of `subtype` is revealed and put into hand
