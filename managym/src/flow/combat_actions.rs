@@ -250,8 +250,8 @@ impl Game {
                 .is_none_or(|condition| {
                     !self.check_static_condition(condition, permanent.controller)
                 });
-        permanent.is_creature(card)
-            && permanent.can_tap(card)
+        self.permanent_is_creature(permanent_id)
+            && self.permanent_can_tap(permanent_id)
             && !defender_applies
             && self.combat_condition_met(permanent_id)
     }

@@ -754,7 +754,6 @@ impl Game {
             ));
         }
 
-        let source_card = permanent.card;
         let Some(ability) = self
             .activated_abilities_for(permanent_id)
             .get(ability_index)
@@ -775,7 +774,7 @@ impl Game {
         if ability.exhaust && permanent.exhausted(ability_index) {
             return Err(AgentError("exhaust ability already activated".into()));
         }
-        if ability.tap_source && !permanent.can_tap(&self.state.cards[source_card]) {
+        if ability.tap_source && !self.permanent_can_tap(permanent_id) {
             return Err(AgentError("source cannot tap".into()));
         }
         if self.state.players[player.0].life < ability.life_cost as i32 {
@@ -1406,7 +1405,7 @@ impl Game {
         };
 
         if ability.tap_source {
-            if !permanent.can_tap(&self.state.cards[source_card]) {
+            if !self.permanent_can_tap(permanent_id) {
                 return Err(AgentError("source cannot pay tap cost".into()));
             }
             self.tap_permanent(permanent_id, false);

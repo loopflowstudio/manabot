@@ -529,6 +529,21 @@ impl Game {
             .union(&self.static_keyword_bonus(permanent_id))
     }
 
+    /// Whether the permanent can pay a {T} cost or attack (CR 302.6): it is
+    /// untapped, and a creature under its controller's control since the
+    /// turn began or with haste, as `effective_keywords` and
+    /// `permanent_is_creature` report it. A temporary grant must not erase the
+    /// restriction that applies again when the grant expires (CR 702.10).
+    pub(crate) fn permanent_can_tap(&self, permanent_id: PermanentId) -> bool {
+        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+            return false;
+        };
+        !(permanent.tapped
+            || (permanent.summoning_sick
+                && self.permanent_is_creature(permanent_id)
+                && !self.effective_keywords(permanent_id).haste))
+    }
+
     /// Lethal-damage check (CR 704.5g), animation- and statics-aware.
     pub(crate) fn has_lethal_damage(&self, permanent_id: PermanentId) -> bool {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {

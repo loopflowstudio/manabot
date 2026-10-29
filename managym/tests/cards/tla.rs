@@ -6,6 +6,7 @@ use managym::{
     },
     flow::{event::GameEvent, turn::StepKind},
     state::{
+        card::Keywords,
         game_object::{CardId, PermanentId, PlayerId, Target},
         mana::Mana,
         permanent::CounterKind,
@@ -2065,4 +2066,49 @@ fn honest_work_replaces_a_printed_mana_ability_until_it_leaves() {
     assert_eq!(green(&mut s), Mana::parse("G"));
     assert_eq!(s.game().permanent_name(elves), "Llanowar Elves");
     assert!(s.game().permanent_has_subtype(elves, "Elf"));
+}
+
+fn set_sick(s: &mut Scenario, id: PermanentId, sick: bool) {
+    let permanent = s.game_mut().state.permanents[id].as_mut().unwrap();
+    permanent.tapped = false;
+    permanent.summoning_sick = sick;
+}
+
+/// CR 302.6, 613.1f: the merchant has lost its printed haste, so a
+/// creature that came under its controller's control this turn cannot pay
+/// "{T}: Add {C}".
+#[test]
+fn honest_work_takes_haste_from_a_summoning_sick_merchant() {
+    let mut s = setup(&["Honest Work", "Raging Goblin"]);
+    let goblin = s.force_permanent_on_battlefield(1, "Raging Goblin");
+    enchant(&mut s, "Honest Work", "U", goblin);
+    s.advance_to_active_step(1, StepKind::Main);
+
+    set_sick(&mut s, goblin, true);
+    assert!(!can_activate(&mut s, goblin, 0), "no haste remains");
+    set_sick(&mut s, goblin, false);
+    assert!(can_activate(&mut s, goblin, 0));
+}
+
+/// CR 302.6, 702.10: haste from another permanent's static ability lets a
+/// creature tap the turn it enters. No printed card grants haste statically
+/// yet, so Badgermole's grant carries haste here instead of trample.
+#[test]
+fn a_static_haste_grant_lets_a_creature_tap_the_turn_it_enters() {
+    let mut s = setup(&["Badgermole", "Llanowar Elves"]);
+    let badgermole = s.force_permanent_on_battlefield(0, "Badgermole");
+    let card = card_of(&s, badgermole);
+    s.game_mut().state.cards[card].static_keyword_grants[0].keywords = Keywords {
+        haste: true,
+        ..Default::default()
+    };
+    let elves = s.force_permanent_on_battlefield(0, "Llanowar Elves");
+    let mana = |s: &mut Scenario| {
+        s.game_mut().invalidate_mana_cache(PlayerId(0));
+        s.game_mut().cached_producible_mana(PlayerId(0))
+    };
+    assert_eq!(mana(&mut s), Mana::default(), "sick without the grant");
+
+    add_counters(&mut s, elves, CounterKind::PlusOnePlusOne, 1);
+    assert_eq!(mana(&mut s), Mana::parse("G"));
 }

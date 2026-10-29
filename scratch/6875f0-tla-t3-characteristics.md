@@ -12,7 +12,7 @@ Per-slice detail: `git log 86ebe9ccf..`.
 1. Locations: `ReplacementEffect::EntersTappedUnlessControls`, `Predicate::Supertype`,
    `Cost.sorcery_timing`; multi-instruction activations lower to `IfCondition{Always}`.
 2. Static grants: `StaticKeywordGrant` via `effective_keywords`, one
-   `static_scope_applies`. Static haste grants still miss `Permanent::can_tap`.
+   `static_scope_applies`.
 3. Counters: `CounterKind`, stun in `Permanent::untap`, `Cost.exhaust`,
    `Predicate::NoCounters`.
 4. Base P/T 7b: `set_base_pt` (end of turn only).
@@ -78,6 +78,13 @@ Per-slice detail: `git log 86ebe9ccf..`.
    Moving an attachment with grants or characteristics invalidates both
    players' mana caches.
 
+15. One tap authority: `Game::permanent_can_tap` (statics.rs) over
+   `Game::effective_keywords` and `permanent_is_creature` serves mana, activation,
+   tap costs and attack offers; `Permanent::can_tap`, `producible_mana` and the
+   `abilities_lost` check in `Permanent::effective_keywords` are gone. Tests:
+   `honest_work_takes_haste_from_a_summoning_sick_merchant`,
+   `a_static_haste_grant_lets_a_creature_tap_the_turn_it_enters`.
+
 Schema 8 (unreleased, T1 precedent) appended in place: fields 85-98, predicates
 13-16, special roles 6-15, opcodes 66-92, enums `counter` and `name`, conditions 7-9,
 quantities 5-7, trigger_event 13, subtypes 64-74.
@@ -142,7 +149,7 @@ Two consequences follow from that rule and the Task's acceptance criteria, with 
    frozen widths are unchanged), and the world/observation validation in
    CLAUDE.md applies.
 
-Next implement order: (1) the `can_tap` authority; (2) Secret Tunnel's stack
+Next implement order: (1) done (item 15); (2) Secret Tunnel's stack
 target `ObjectRef` capture and LKI creature types (not blocked by T2); (3) the T2
 sync per the list below; (4) Glider Staff and Crashing Wave on T2's airbend and
 waterbend; (5) the observation change with Fire Nation Palace.
@@ -181,5 +188,6 @@ waterbend; (5) the observation change with Fire Nation Palace.
 ## Delete — do not maintain
 
 Qualification entries, `Permanent::local_power`/`local_toughness`,
+`Permanent::can_tap`/`producible_mana`,
 `StaticScope::Equipped`, `Game::equipped_creature` and `Permanent::can_attack`
 are gone; do not restore them.

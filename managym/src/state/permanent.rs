@@ -1,7 +1,6 @@
 use super::{
     card::{Card, Keywords},
     game_object::{CardId, ObjectId, ObjectRef, PlayerId},
-    mana::Mana,
 };
 
 /// Counter kinds the engine knows (CR 122). Absence in authored IR means
@@ -187,11 +186,9 @@ impl Permanent {
     }
 
     /// Printed keywords plus until-EOT grants plus animation (earthbent
-    /// lands have haste).
+    /// lands have haste). An input to `Game::effective_keywords`, which
+    /// applies ability loss and static grants.
     pub fn effective_keywords(&self, card: &Card) -> Keywords {
-        if self.abilities_lost {
-            return Keywords::default();
-        }
         let mut keywords = card.keywords.union(&self.temp_keywords);
         if self.animated {
             keywords.haste = true;
@@ -203,28 +200,8 @@ impl Permanent {
         keywords
     }
 
-    pub fn can_tap(&self, card: &Card) -> bool {
-        // Haste bypasses sickness; a temporary grant must not erase the
-        // restriction that applies again when the grant expires (CR 702.10).
-        !(self.tapped
-            || (self.summoning_sick
-                && self.is_creature(card)
-                && !self.effective_keywords(card).haste))
-    }
-
     pub fn can_block(&self, card: &Card) -> bool {
         self.is_creature(card) && !self.tapped
-    }
-
-    pub fn producible_mana(&self, card: &Card) -> Mana {
-        let mut total = Mana::default();
-        if !self.can_tap(card) {
-            return total;
-        }
-        for ability in &card.mana_abilities {
-            total.add(&ability.mana);
-        }
-        total
     }
 
     /// CR 122.1d: a tapped permanent with a stun counter that would become

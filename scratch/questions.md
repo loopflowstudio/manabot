@@ -74,5 +74,8 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   itself. Glider Staff waits for T2's airbend rather than a second one here.
 - Slice 14 (Honest Work): no timestamps, so it also removes later grants and
   its "{T}: Add {C}" survives an until-EOT loss; until-EOT subtypes still add.
-  Observations don't show the new name or types. `Permanent::can_tap` still
-  reads the creature's own haste.
+  Observations don't show the new name or types.
+- Tap authority: a static haste grant changes mana output only through moves
+  that already invalidate the mana cache; a grant whose condition flips without
+  a move leaves the cache stale until the next invalidation, as other
+  condition-dependent statics already do.

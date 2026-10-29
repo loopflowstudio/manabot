@@ -669,7 +669,8 @@ impl Game {
                 let source = self.state.permanents[permanent].as_ref().unwrap();
                 let card = &self.state.cards[source.card];
                 // A source that lost its abilities offers no zero-mana tap.
-                let fixed = (source.can_tap(card)
+                let can_tap = self.permanent_can_tap(permanent);
+                let fixed = (can_tap
                     && !card.mana_abilities.is_empty()
                     && !self.has_lost_abilities(permanent))
                 .then(|| self.fixed_source_mana(permanent));
@@ -678,7 +679,7 @@ impl Game {
                     .iter()
                     .enumerate()
                     .filter(|(_, ability)| {
-                        (!ability.tap_source || source.can_tap(card))
+                        (!ability.tap_source || can_tap)
                             && (!ability.own_turn_only || self.active_player() == player)
                     })
                     .filter_map(|(index, ability)| {
@@ -1083,8 +1084,14 @@ impl Game {
         if self.has_lost_abilities(permanent) {
             return Mana::default();
         }
-        let mut output = source.producible_mana(card);
-        if source.can_tap(card) && !card.mana_abilities.is_empty() {
+        let mut output = Mana::default();
+        if !self.permanent_can_tap(permanent) {
+            return output;
+        }
+        for ability in &card.mana_abilities {
+            output.add(&ability.mana);
+        }
+        if !card.mana_abilities.is_empty() {
             output.add(&self.tap_mana_bonus(permanent, source.controller));
         }
         output

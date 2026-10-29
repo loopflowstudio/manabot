@@ -193,7 +193,6 @@ impl Game {
             let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
                 continue;
             };
-            let card = &self.state.cards[permanent.card];
             for (ability_index, ability) in self
                 .activated_abilities_for(permanent_id)
                 .iter()
@@ -257,7 +256,7 @@ impl Game {
                         continue;
                     }
                 }
-                if ability.tap_source && !permanent.can_tap(card) {
+                if ability.tap_source && !self.permanent_can_tap(permanent_id) {
                     continue;
                 }
                 if ability
