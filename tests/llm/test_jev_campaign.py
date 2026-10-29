@@ -12,7 +12,7 @@ from experiments.jev_mtg183 import (
     Protocol,
     ScheduledGame,
     execute,
-    report,
+    _report,
     schedule,
 )
 from manabot.llm.budget import BudgetConfig, BudgetLedger
@@ -143,7 +143,7 @@ def test_report_uses_actual_seat_and_excludes_failed_replay(tmp_path: Path) -> N
     ledger.settle(ledger.reserve(first.name, "paid"), 0.1)
     ledger.settle(ledger.reserve(second.name, "free"), 0)
     ledger.reserve(first.name, "digest")
-    result = report(games, attempts, ledger.snapshot(), 20, "fixture")
+    result = _report(games, attempts, ledger.snapshot(), 20, "fixture")
     assert result.overall.valid == result.overall.wins == 1
     assert result.overall.replay_failures == result.overall.interrupted == 1
     assert result.by_seat["1"].wins == 1 and result.by_seat["0"].wins == 0

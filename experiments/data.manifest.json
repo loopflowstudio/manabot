@@ -2498,6 +2498,54 @@
    "sha256": "af7557764779326ca1a218c273e09e5823674b1a9817ad5f09e7aec40db54f5d",
    "bytes": 1492
   },
+  "experiments/data/jev-heuristic/archives/campaign-1.tar.gz": {
+   "sha256": "d641f23cdeb8481fb51b72f1ad13f64c43f51a468b668f54cf6bb8026df02838",
+   "bytes": 61954987
+  },
+  "experiments/data/jev-heuristic/archives/campaign-2.tar.gz": {
+   "sha256": "983828c874cec8eb5a994c32d88b712d21deb8d12cbc9931c37693be23b0ab51",
+   "bytes": 154787790
+  },
+  "experiments/data/jev-heuristic/evidence/billing-bound.json": {
+   "sha256": "038d993add63341afd7f2b343272cd1f36ec771fd81b95f842311e23829fae58",
+   "bytes": 1139
+  },
+  "experiments/data/jev-heuristic/evidence/openrouter-jev-1.14-endpoints-20261029.json": {
+   "sha256": "e95ee387c4bb60e207c04553675cccf44bdacce35d75d3dfbb7de9eefa7f2705",
+   "bytes": 1241
+  },
+  "experiments/data/jev-heuristic/evidence/runtime-package-627698fc1..e1e3adb59.patch": {
+   "sha256": "a671384e50a853802d404c594af69987b566f6bb6c838bb93f75860347cfde86",
+   "bytes": 17741
+  },
+  "experiments/data/jev-heuristic/protocol-2.json": {
+   "sha256": "99791c815b5c049e94456d908784c38b1f322f6f1c38d0abaf57e92de0e4fe50",
+   "bytes": 1923
+  },
+  "experiments/data/jev-heuristic/protocol.json": {
+   "sha256": "3c7d129f9983c761800dde0d27b1c3f713d07469b646266e29162b5df2945a29",
+   "bytes": 1897
+  },
+  "experiments/data/jev-heuristic/report.md": {
+   "sha256": "fa8d73d02edd18aeb3ca4fa698220bbad51ed89637eaa6b48416a5cee48524c0",
+   "bytes": 4075
+  },
+  "experiments/data/jev-heuristic/reports/campaign-1-report.json": {
+   "sha256": "71f0e2105dd9b6e93196ce5a369454228043b38c10d86e132326270568d49ef3",
+   "bytes": 739846
+  },
+  "experiments/data/jev-heuristic/reports/campaign-2-report.json": {
+   "sha256": "99e9e84f937c3010b5578497ae10c88ee25fd1858667c9a6847e7f3b26f328af",
+   "bytes": 1739492
+  },
+  "experiments/data/jev-heuristic/summarize.py": {
+   "sha256": "d0aeba895bb9508e94ffe4ecdb448e24c37e65f8a3c3f548af9b526ac792db77",
+   "bytes": 6317
+  },
+  "experiments/data/jev-heuristic/summary.json": {
+   "sha256": "dbb1bffe1baeebd37e08c8e763a22150b9c136dced75f559fd79d89bdafea125",
+   "bytes": 5733
+  },
   "experiments/data/longer-learning-017/allocation.json": {
    "sha256": "c9ad5f1b53859e3d5389d37de9974f9fdae7abfe3c299eb5b2d0db0b0da740d6",
    "bytes": 5872

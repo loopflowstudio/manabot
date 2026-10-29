@@ -255,7 +255,7 @@ class Report(Record):
     )
 
 
-def report(
+def _report(
     games: tuple[ScheduledGame, ...],
     attempts: list[Attempt],
     spend: Spend,
@@ -348,7 +348,7 @@ def execute(
         prior = out / "report.json"
 
         def retain_report(reason: str | None) -> Report:
-            result = report(
+            result = _report(
                 games, attempts, ledger.snapshot(), protocol.pilot_games, reason
             )
             _write(prior, result.model_dump_json(indent=2))
