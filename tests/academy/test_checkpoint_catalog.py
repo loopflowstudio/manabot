@@ -146,3 +146,63 @@ def test_replaced_checkpoint_cannot_replace_playable_match(runs: Path) -> None:
     with pytest.raises(ValueError, match="no longer available"):
         game.new_game({"villain_type": "checkpoint", "opponent_sha256": sha256})
     assert game.current_recovery("explicit_resync")["frame"] == before
+
+
+def _deck_import() -> dict:
+    return {
+        "pack_key": "tla-pool-v1",
+        "hero": {"source": "10 Forest\n10 Mountain\n2 Avatar Enthusiasts"},
+        "villain": {"source": "20 Island"},
+    }
+
+
+def test_imported_decks_play_pool_checkpoints_and_refuse_setup_bindings(
+    runs: Path,
+) -> None:
+    from manabot.env.observation import ObservationSpace
+    from manabot.infra.config import ModelConfig
+    from manabot.model.actor_critic import ActorCritic
+    from manabot.model.checkpoint import save_checkpoint
+
+    space = ObservationSpace()
+    agent = ActorCritic(space, ModelConfig(semantic_pack="tla-pool-v1"))
+    pool = runs / "pool" / "step_0.pt"
+    save_checkpoint(agent, space, pool, content_pool="tla-pool-v1")
+    rng = random.Random(0)
+    with TestClient(app) as client:
+        message = _new_game_error(
+            client,
+            {
+                "villain_type": "checkpoint",
+                "opponent_sha256": _sha(runs / "self-play" / "step_0.pt"),
+                "deck_import": _deck_import(),
+            },
+        )
+        assert "was trained on" in message
+        with client.websocket_connect("/ws/play") as websocket:
+            websocket.send_json(
+                {
+                    "type": "new_game",
+                    "config": {
+                        "villain_type": "checkpoint",
+                        "opponent_sha256": _sha(pool),
+                        "deck_import": _deck_import(),
+                        "seed": 7,
+                    },
+                }
+            )
+            payload = websocket.receive_json()
+            for _ in range(40):
+                if payload["type"] == "game_over":
+                    break
+                assert payload["type"] == "observation", payload
+                actions = payload["actions"]
+                choice = actions[rng.randrange(len(actions))]
+                websocket.send_json({"type": "action", "index": choice["index"]})
+                payload = websocket.receive_json()
+    [(_, trace)] = _recorded_traces(trace_store.TRACES_DIR)
+    assert trace["config"]["opponent"]["sha256"] == _sha(pool)
+    villain_turns = [
+        event for event in trace["events"] if event.get("actor") == "villain"
+    ]
+    assert villain_turns

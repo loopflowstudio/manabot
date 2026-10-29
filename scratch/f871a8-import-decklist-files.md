@@ -279,9 +279,11 @@ reassignment, experimental distributions and shared simulation APIs are untouche
 
 The importer connects parser/resolution to native admission, sim file flags and
 Academy's editable two-file validation/start flow. Retained imports bind exact
-pool/content identity and reject source/setup tampering. Simulation supports
-random/default players; Academy supports built-in opponents. Imported setup
-checkpoint opponents remain rejected in those consumers (scratch/questions.md).
+pool/content identity and reject source/setup tampering. Checkpoint players on
+imported setups go through the shared `validate_agent_setup`: sim admits every
+model player in `simulate_models` before games; Academy's only CheckpointVillain
+construction receives `config.to_rust()` (imported configs). Pool-bound
+checkpoints play imported decks; authored/Elemental ones refuse them.
 
 Training (world-validated decks, implemented): `decklist.Deck` is the one deck
 concept (counts; identity from content). `AdmittedDeck` is an import record
@@ -320,8 +322,9 @@ records; not re-proved end-to-end by executing a regime here.
 ## Delete — do not maintain
 
 Completed earlier: explicit-pack authored-only selection; `env.match.parse_deck`
-and its tests; deck hashing moved to decklist (identity preserved). This pass
-removed `manabot/deck_collection.py` (`CollectionDeck`, `DeckCollection`,
+and its tests; deck hashing moved to decklist (identity preserved). Later passes
+removed `SimulationConfig.validate_imported_players` and Academy's imported
+checkpoint refusal, plus `manabot/deck_collection.py` (`CollectionDeck`, `DeckCollection`,
 prepare CLI and manifest), checkpoint/catalog `deck_collection` binding and
 roster allowlist, collector checkpoint-digest check, policy-admission deck
 equality, native `set_deck_collection` pre-reset restriction, and

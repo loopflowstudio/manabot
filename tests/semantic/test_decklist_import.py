@@ -2,7 +2,9 @@
 
 from pathlib import Path
 
+import numpy as np
 import pytest
+import torch
 from typer.testing import CliRunner
 
 from manabot import cli
@@ -17,7 +19,13 @@ from manabot.decklist import (
     parse_decklist,
 )
 from manabot.env.match import Match
-from manabot.infra.config import RuntimeConfig, SimulationConfig
+from manabot.env.observation import ObservationSpace
+from manabot.infra.config import ModelConfig, RuntimeConfig, SimulationConfig
+from manabot.model.actor_critic import ActorCritic
+from manabot.model.checkpoint import load_checkpoint, save_checkpoint
+from manabot.model.world import validate_agent_setup
+from manabot.sim.player import ModelPlayer
+from manabot.sim.sim import load_player, simulate_models
 import managym
 
 PACK = "tla-pool-v1"
@@ -169,10 +177,77 @@ def test_decklist_rejects_unknown_format_and_retained_source_tampering() -> None
         ImportedMatch.model_validate(retained).validate_current()
 
 
-def test_decklist_checkpoint_simulation_is_explicitly_rejected() -> None:
+def _untrained(path: Path, pack: str = PACK, **binding: object) -> None:
+    torch.set_num_threads(1)
+    space = ObservationSpace()
+    agent = ActorCritic(
+        space, ModelConfig(hidden_dim=8, num_attention_heads=2, semantic_pack=pack)
+    )
+    save_checkpoint(agent, space, path, **binding)
+
+
+class _RecordingModel(ModelPlayer):
+    """Fail the proof on a model error the simulator would replace randomly."""
+
+    def __init__(self, path: Path) -> None:
+        player = load_player(str(path))
+        assert isinstance(player, ModelPlayer)
+        super().__init__(player.name, player.agent)
+        self.actions = 0
+        self.errors: list[Exception] = []
+
+    def get_action(self, obs: dict[str, np.ndarray]) -> int:
+        try:
+            action = super().get_action(obs)
+        except Exception as error:
+            self.errors.append(error)
+            raise
+        self.actions += 1
+        return action
+
+
+def test_decklist_pool_checkpoint_simulates_imported_files(tmp_path: Path) -> None:
+    hero, villain = tmp_path / "hero.txt", tmp_path / "villain.txt"
+    hero.write_text(HERO)
+    villain.write_text(VILLAIN)
+    match = import_files(hero, villain, PACK).match_config()
+    pool = tmp_path / "pool.pt"
+    _untrained(pool, content_pool=PACK)
+    model = _RecordingModel(pool)
+    config = SimulationConfig(
+        hero=str(pool), num_games=1, num_threads=1, max_steps=40, match=match
+    )
+    stats = simulate_models(model, load_player("random"), config)
+    assert len(stats.games) == 1
+    assert model.actions > 0 and not model.errors
+
+
+@pytest.mark.parametrize(
+    ("pack", "decks"),
+    [
+        ("ur-lessons-vs-gw-allies", ("ur_lessons", "gw_allies")),
+        ("elemental-world-v2", ("elemental_bg", "elemental_gr")),
+    ],
+)
+def test_decklist_setup_bound_checkpoint_rejects_imported_files(
+    tmp_path: Path, pack: str, decks: tuple[str, str]
+) -> None:
     imported = import_match(parse_decklist(HERO), parse_decklist(VILLAIN), PACK)
-    with pytest.raises(ValueError, match="checkpoint setup admission"):
-        SimulationConfig(hero="policy.pt", match=imported.match_config())
+    path = tmp_path / "authored.pt"
+    _untrained(
+        path,
+        pack,
+        player_configs=[managym.authored_deck_setup(pack, key) for key in decks],
+    )
+    agent, _ = load_checkpoint(str(path))
+    players = Match(imported.match_config()).to_rust()
+    with pytest.raises(ValueError, match="outside checkpoint"):
+        validate_agent_setup(agent, players)
+    config = SimulationConfig(
+        hero=str(path), num_games=1, match=imported.match_config()
+    )
+    with pytest.raises(ValueError, match="outside checkpoint"):
+        simulate_models(load_player(str(path)), load_player("random"), config)
 
 
 @pytest.mark.parametrize(

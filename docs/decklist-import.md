@@ -61,10 +61,13 @@ the setup identity. A changed pool rejects a retained import instead of silently
 reinterpreting it. Existing native Commands, reconnect, replay and forks retain
 their ordinary authority checks.
 
-Imported setups currently reject checkpoint opponents. A checkpoint trained on
-a curated matchup is not admitted merely because tensor dimensions agree.
-The simulation entry point supports `random` and `default`; no training is
-required to use the importer.
+Checkpoint players on imported setups pass the same execution admission as
+every other match (`manabot.model.world.validate_agent_setup`). A checkpoint
+bound to the importing content pool plays any decks that pool admits; a
+checkpoint bound to authored setups, such as a curated matchup or the Elemental
+roster, refuses imported decks even when tensor dimensions agree. Simulation
+and Academy apply this check before the first game; `random` and `default`
+need no checkpoint, and no training is required to use the importer.
 
 ## Training on decklists
 

@@ -731,10 +731,6 @@ def _parse_game_config(config: Any) -> GameConfig:
     imported = None
     if "deck_import" in data:
         imported = DeckImportInput.model_validate(data["deck_import"]).admit()
-        if villain_type == "checkpoint":
-            raise ValueError(
-                "Imported decks currently support built-in opponents; checkpoint setup admission is not available"
-            )
         hero_deck, villain_deck = imported.hero.main, imported.villain.main
         hero_deck_name = villain_deck_name = "imported"
         selected_pack = None

@@ -236,13 +236,3 @@ class SimulationConfig(BaseConfig):
     max_steps: int = 2000
     match: MatchConfig = Field(default_factory=MatchConfig)
     reward: RewardConfig = Field(default_factory=RewardConfig)
-
-    @model_validator(mode="after")
-    def validate_imported_players(self) -> "SimulationConfig":
-        if self.match.imported_decks is not None and any(
-            player not in {"random", "default"} for player in (self.hero, self.villain)
-        ):
-            raise ValueError(
-                "Imported decks currently support random/default simulation players; checkpoint setup admission is not available"
-            )
-        return self

@@ -1,6 +1,7 @@
 """Scalar game simulation and evaluation statistics recorded through Etude.
 
-load_player admits local policies or exact Etude checkpoint records. run_simulation
+load_player admits local policies or exact Etude checkpoint records; simulate_models
+admits each model against the actual match setup before play. run_simulation
 owns the evaluation tracking lifetime; game statistics never fit a model.
 """
 
@@ -26,6 +27,7 @@ from manabot.infra.config import RuntimeConfig, SimulationConfig
 from manabot.infra.log import getLogger, setGlobalLogLevel
 from manabot.infra.runtime import seed_random
 from manabot.model.checkpoint import load_checkpoint, load_etude_checkpoint
+from manabot.model.world import validate_agent_setup
 from manabot.sim.player import (
     DefaultPlayer,
     ModelPlayer,
@@ -428,6 +430,10 @@ def simulate_models(
 
     # Set up hyperparameters
     sim_config = sim_config or SimulationConfig()
+    # Every model player is admitted against the actual setup before any game.
+    players = Match(sim_config.match).to_rust()
+    for player in (hero_player, villain_player):
+        validate_agent_setup(getattr(player, "agent", None), players)
 
     # Determine number of threads (capped by games and CPU cores)
     num_threads = min(sim_config.num_threads, sim_config.num_games)
