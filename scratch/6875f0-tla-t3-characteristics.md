@@ -155,6 +155,9 @@ and **one observation change before landing.** The acceptance criteria say obser
    frozen widths are unchanged), and the world/observation validation in
    CLAUDE.md applies.
 
+Realign after the compress (2026-10-29): PR #398 head still `16dfd3dbb`, PR #394 head
+still `86ebe9ccf`, `origin/main` fully contained; plan and code agree.
+
 Next implement order: (4) Glider Staff and Crashing Wave on T2's airbend and
 waterbend; (5) the observation change with Fire Nation Palace.
 

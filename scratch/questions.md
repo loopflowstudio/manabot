@@ -58,7 +58,7 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   Ozai is on the battlefield, outside the proposed-event pipeline.
 - Slice 11 (X): the X choice reuses the Modal space (`ChooseMode`, mode =
   X, labelled "X = n"); observations don't show the announced X (later shape
-  change). Offered X stops at the first unpayable value, capped at 20. Fated
+  change). Offered X stops at the first unpayable value (no cap since the T2-sync compress; spell and activation X share `payable_x_values`). Fated
   Firepower's increase applies after prevention and doubling (the affected
   player's best order; no ordering choice is offered). Ability loss ignores
   timestamps (all keywords go, counters' included); CDAs still apply. Crashing
