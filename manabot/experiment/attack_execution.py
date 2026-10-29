@@ -170,7 +170,7 @@ def execute_attack_plan(plan: AttackPlan, out: Path) -> AttackResult:
             out / "scenarios.json",
             [
                 asdict(item)
-                for item in validate_scenarios(selected_match=plan.template.match)
+                for item in validate_scenarios(selected_match=plan.template.root_match)
             ],
         )
         with VerifyStore(out / "training.sqlite") as store:

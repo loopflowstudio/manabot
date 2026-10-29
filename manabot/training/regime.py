@@ -551,8 +551,11 @@ class TrainingRegime(Strict):
     schema_version: Literal[1, 2] = 2
     id: str
     world: str
-    match: MatchConfig
-    # Run-owned deck supply; checkpoints bind the pool's world, never these decks.
+    # Exactly one owner of the run's setups: an authored match, or the run-owned
+    # deck supply. Checkpoints bind the pool's world, never these decks.
+    match: MatchConfig | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     decks: TrainingDecks | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -579,17 +582,17 @@ class TrainingRegime(Strict):
         """Embed decklist files at load so recovery never rereads mutable paths."""
         if not isinstance(value, dict) or value.get("decks") is None:
             return value
+        if value.get("match") is not None:
+            raise ValueError(
+                "training decks own the run's setups; remove the authored match"
+            )
         source = value["decks"]
         decks = (
             TrainingDecks.from_files(source["files"], source["pool"])
             if isinstance(source, dict) and "files" in source
             else TrainingDecks.model_validate(source)
         )
-        return {
-            **value,
-            "decks": decks,
-            "match": value["match"] if "match" in value else decks.match_config(),
-        }
+        return {**value, "decks": decks}
 
     @model_validator(mode="before")
     @classmethod
@@ -626,11 +629,26 @@ class TrainingRegime(Strict):
         return values
 
     @property
+    def root_match(self) -> MatchConfig:
+        """The authored match, or a deck run's derived representative pair.
+
+        A deck run's sampled roots come from the native draw; this pair only
+        opens a game where one is needed (fingerprints, collector construction)
+        and is never part of the regime record or its digest.
+        """
+        if self.decks is not None:
+            return self.decks.match_config()
+        assert self.match is not None
+        return self.match
+
+    @property
     def recoverable(self) -> bool:
         return self.recovery is not None or self.recovery_max_microsteps is not None
 
     @model_validator(mode="after")
     def references(self) -> "TrainingRegime":
+        if self.match is None and self.decks is None:
+            raise ValueError("regime requires a match or training decks")
         if self.decks is not None and any(
             not isinstance(stage, TrainSelfPlay)
             or stage.behavior != "current-self"

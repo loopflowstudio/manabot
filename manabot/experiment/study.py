@@ -572,7 +572,7 @@ def run_study(
     if resume or (plan is not None and plan.protocol.purpose == "scientific"):
         current = runtime_fingerprints(
             protocol.training_seeds[0],
-            match_config=recipes[0].match,
+            match_config=recipes[0].root_match,
             observation_space=ObservationSpace(recipes[0].observation),
         )
         current["training_source_sha256"] = source_bundle_sha256(

@@ -23,7 +23,8 @@ from manabot.decklist import (
 from manabot.env.failures import CaptureScope, FailureEvidence, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import ModelConfig, RewardConfig
+from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
+from manabot.infra.identity import canonical_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
@@ -33,6 +34,7 @@ from manabot.training.decks import TrainingDecks, pair_match
 from manabot.training.execution import validate_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
 from manabot.training.rollout.collection import SeatRoutedCollector
+from manabot.training.state.admission import _admit_setups
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLedger,
@@ -152,6 +154,23 @@ def test_regime_embeds_files_and_reports_bad_input_before_training(
     for path in paths:
         Path(path).unlink()
     assert validate_regime(regime).decks == regime.decks
+    # The decks are the regime's only record of its setups.
+    record = regime.model_dump(mode="json")
+    assert "match" not in record and regime.match is None
+    assert TrainingRegime.model_validate(record) == regime
+    assert canonical_sha256(
+        TrainingRegime.model_validate(record).model_dump(mode="json")
+    ) == canonical_sha256(record)
+    assert regime.root_match.content_pack == PACK
+    authored = MatchConfig(
+        hero="forest",
+        villain="swamp",
+        hero_deck={"Forest": 40},
+        villain_deck={"Swamp": 40},
+        content_pack=PACK,
+    )
+    with pytest.raises(ValueError, match="remove the authored match"):
+        TrainingRegime.model_validate({**record, "match": authored.model_dump()})
     wrong = regime.model_copy(deep=True)
     wrong.agent.semantic_pack = "elemental-world-v2"
     with pytest.raises(ValueError, match="complete pool"):
@@ -243,6 +262,18 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
         torch.save(changed, path)
         with pytest.raises(ValueError, match="binding"):
             load_checkpoint(str(path))
+
+    # Producer admission for a deck run checks the pool, not one pair.
+    regime = _regime(decks)
+    _admit_setups(policy, regime)
+    other_pool = deepcopy(policy)
+    other_pool.world_binding = {
+        **binding,
+        "content_pool": {**binding["content_pool"], "pack_key": "other-pool"},
+    }
+    for unbound in (_agent(), other_pool):
+        with pytest.raises(ValueError, match="bound to their pool"):
+            _admit_setups(unbound, regime)
 
     # The same model collects from a later supply it never trained on.
     later = TrainingDecks.from_documents(_documents("Swamp", "Forest"), PACK)

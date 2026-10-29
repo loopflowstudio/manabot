@@ -102,7 +102,7 @@ def checkpoint_manifest(
         raise ValueError("monitoring requires its exact declared authored setup")
     admission = register_checkpoint(
         path,
-        match=run.regime.match,
+        match=run.regime.root_match,
         content_suite=suite,
         player_id="monitor-checkpoint",
         display_name="Monitored checkpoint",

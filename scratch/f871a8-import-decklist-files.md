@@ -218,16 +218,15 @@ yet the run record, regime digest, `runtime_fingerprints`, learning-state
 comparison and producer admission (`validate_agent_setup(..., regime.match)`)
 all read it, so the record claims a pair the run never played.
 
-Next implement direction (settled; no product choice): in a deck-supplied
-regime `decks` is the only owner of setups. Reject an authored `match` alongside
-`decks`; derive any internal representative match from `decks` (fingerprints
-need one game to read the content manifest) and do not serialize it in the
-regime record, so the digest and learning-state comparison rest on `decks`
-alone. Admission against a pool-bound checkpoint validates the pool
-(`admit_pool_decks`/`decks.check()`), not a representative pair. Elemental-
-uniform keeps its frozen `match` semantics. Proof: authored `match` + `decks`
-rejected with a diagnostic; a files-based regime round-trips without `match`
-and with an unchanged `decks` digest; recovery/learning-state tests still pass.
+Implemented 2026-10-28 (settled direction, no product choice): `match` is
+optional and excluded when absent; a regime with `decks` rejects an authored
+`match` ("remove the authored match") and one with neither is rejected.
+`TrainingRegime.root_match` derives the representative pair from `decks` for
+fingerprints/collector construction and is never serialized, so the digest
+and learning-state comparison rest on `decks`. Producer admission
+(`state/admission._admit_setups`) requires a checkpoint bound to the decks'
+pool and re-admits every deck; setup transfer requires an authored match.
+Elemental-uniform and authored regimes keep their `match` unchanged.
 
 ## Accepted direction — Jack Heart, 2026-10-28
 
@@ -403,4 +402,4 @@ The manifest references `.lf/wave/engine/GOAL.md` and `MEMORY.md`, but neither
 exists in this checkout. The supplied Task, accepted design and dated Steers
 provide the implementation scope; Wave context was not reconstructed.
 
-Check — 2026-10-28 at 91a000fd1: `uv run --extra dev pytest tests/semantic/test_decklist_import.py tests/academy/test_decklist_setup.py tests/academy/test_checkpoint_catalog.py tests/training/test_training_decks.py tests/test_package_boundaries.py -q`: 39 passed. Earlier at 63c9f6bf5 the training/matchup/mirror/catalog set passed (39); pre-existing failures (Elemental program count 8 vs 7 at test_elemental_world.py:151, belief runtime `KeyError: 'relations'`) reproduce at c42bf4934 without this work; gate owns them with full suites and debug Rust.
+Check — 2026-10-28 (regime match removal): `uv run --extra dev pytest tests/training/test_training_decks.py -q`: 7 passed; `tests/training/{test_self_play,test_elemental_uniform,test_learning_state,test_policy_import,test_baseline_recipe,test_experiments}.py`: 65 passed. At 91a000fd1 the decklist/Academy/catalog/boundary set passed (39). Earlier at 63c9f6bf5 the training/matchup/mirror/catalog set passed (39); pre-existing failures (Elemental program count 8 vs 7 at test_elemental_world.py:151, belief runtime `KeyError: 'relations'`) reproduce at c42bf4934 without this work; gate owns them with full suites and debug Rust.

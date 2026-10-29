@@ -171,7 +171,7 @@ def validate_regime(
         and stage.matchup_curriculum == "elemental-uniform"
         for stage in regime.stages
     ):
-        elemental_roster(Match(regime.match))
+        elemental_roster(Match(regime.root_match))
         if regime.agent.semantic_pack != "elemental-world-v2":
             raise ValueError(
                 "elemental-uniform requires complete Elemental policy input"
@@ -179,8 +179,6 @@ def validate_regime(
     if regime.decks is not None:
         if require_current_world:
             regime.decks.check()
-        if regime.match.content_pack != regime.decks.pool:
-            raise ValueError("regime match differs from its training decks' pool")
         if regime.agent.semantic_pack != regime.decks.pool:
             raise ValueError(
                 "training decks require the complete pool policy vocabulary"
@@ -194,14 +192,14 @@ def _checkpoint_world(regime: TrainingRegime) -> dict[str, Any]:
     """A deck-supplied run exports its pool's world, never its training decks."""
     if regime.decks is not None:
         return {"content_pool": regime.decks.pool}
-    return {"player_configs": Match(regime.match).to_rust()}
+    return {"player_configs": Match(regime.root_match).to_rust()}
 
 
 def _runtime_identities(
     seed: int, regime: TrainingRegime, space: ObservationSpace
 ) -> dict[str, object]:
     identities = runtime_fingerprints(
-        seed, match_config=regime.match, observation_space=space
+        seed, match_config=regime.root_match, observation_space=space
     )
     identities.update(
         architecture=architecture_identity(regime.agent, space),
@@ -834,7 +832,7 @@ def _execute_regime(
                     games = []
                     for _ in range(stage.games_per_update):
                         target = out / f"{stage.id}-game-{game_index}.jsonl"
-                        match = Match(regime.match)
+                        match = Match(regime.root_match)
                         if game_index % 2:
                             match = match.swapped()
                         tick = time.perf_counter()
@@ -943,7 +941,7 @@ def _execute_regime(
                 record.artifacts["population"] = artifact(population_path)
                 persist()
                 games = []
-                match = Match(regime.match)
+                match = Match(regime.root_match)
                 for index, spec in enumerate(stage.population):
                     target = out / f"{stage.id}-{index}.receipts.jsonl"
                     tick = time.perf_counter()
@@ -1003,7 +1001,7 @@ def _execute_regime(
                 policy_artifact = source.artifacts[stage.weights]
                 dataset = collect_frozen_policy(
                     checkpoint=Path(policy_artifact["path"]),
-                    match_config=regime.match,
+                    match_config=regime.root_match,
                     games=stage.games,
                     seed=seeds["belief_collection"] + game_index,
                     max_steps=stage.max_steps,
@@ -1124,7 +1122,7 @@ def _execute_regime(
                             str(opponent_path)
                         )
                         validate_agent_setup(
-                            opponent_agent, Match(regime.match).to_rust()
+                            opponent_agent, Match(regime.root_match).to_rust()
                         )
                         if opponent_space.encoder.config != space.encoder.config:
                             raise ValueError("frozen opponent observation ABI differs")
@@ -1208,7 +1206,7 @@ def _execute_regime(
 
                     collector = SeatRoutedCollector(
                         space,
-                        Match(regime.match),
+                        Match(regime.root_match),
                         Reward(RewardConfig()),
                         num_envs=stage.streams,
                         seed=seeds["collection"],

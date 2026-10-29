@@ -73,8 +73,10 @@ need no checkpoint, and no training is required to use the importer.
 
 A training run supplies decks and samples matches from them. In an ordinary
 `TrainingRegime`, set `decks` to the content pool and the decklist files, and
-`agent.semantic_pack` to the same pool key. The representative `match` may be
-omitted; it is derived from the first two decks. Existing self-play stage
+`agent.semantic_pack` to the same pool key, and omit `match`: the decks are
+the regime's only record of its setups, and a regime that also authors a
+`match` is rejected. Producer policies are admitted against the pool, by
+checking every deck, rather than against one pair. Existing self-play stage
 settings remain in use. Deck stages require `behavior: current-self`, one
 producer, ordinary roots and the default fixed curriculum field. For example,
 adapting an existing recipe in Python (this only constructs a configuration):
