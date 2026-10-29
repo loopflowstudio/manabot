@@ -11,11 +11,9 @@ use crate::cards::authoring::{
 /// batch completes the missing behavior.
 pub(super) const INCOMPLETE: &[Incomplete] = &[
     ("tla.accumulate_wisdom", "Controller must order the library remainder (CR 401.4); it is randomized"),
-    ("tla.azula_cunning_usurper", "An exiled opponent-owned permanent card can't be cast: permanent spells enter under their owner's control (no control change, CR 110.2)"),
     ("tla.cat_gator", "Any target must include planeswalkers and battles (CR 115.4)"),
     ("tla.dragonfly_swarm", "Unreviewed until T4: Flying; spell-and-ability ward; graveyard CDA power; conditional death draw."),
     ("tla.great_divide_guide", "Unreviewed until T3: Continuous any-color mana grant to lands and Allies; source removal and creature sickness."),
-    ("tla.hama_the_bloodbender", "An exiled opponent-owned permanent card can't be cast: permanent spells enter under their owner's control (no control change, CR 110.2)"),
     ("tla.lightning_strike", "Any target must include planeswalkers and battles (CR 115.4)"),
     ("tla.ran_and_shaw", "Unreviewed until T5: Flying/firebending; cast-only conditional ETB nonlegendary self copy; Dragon anthem activation."),
     ("tla.suki_kyoshi_warrior", "CDA power must apply outside the battlefield (CR 604.3)"),

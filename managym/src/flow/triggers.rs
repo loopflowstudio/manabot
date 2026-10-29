@@ -627,7 +627,7 @@ impl Game {
                         .is_some_and(|id| self.permanent_matches_predicate(id, predicate))
             }
             (TriggerCondition::YouCastSpell { predicate }, GameEvent::SpellCast { card, .. }) => {
-                self.state.cards[*card].owner == source_controller
+                self.spell_caster(*card) == source_controller
                     && predicate.matches_card(&self.state.cards[*card])
             }
             // Conditionally-granted abilities: the ability only exists (and

@@ -388,9 +388,20 @@ impl Game {
             // already left the stack (CR 608.2n).
             if self.state.zones.zone_of(card) == Some(ZoneType::Stack) {
                 if self.state.cards[card].types.is_permanent() {
-                    self.move_card(card, ZoneType::Battlefield);
+                    // A permanent spell enters under its controller's
+                    // control, even when another player owns the card
+                    // (CR 110.2).
                     let owner = self.state.cards[card].owner;
-                    self.invalidate_mana_cache(owner);
+                    let controller = (frame.controller != owner).then_some(frame.controller);
+                    self.move_card_with_entry(
+                        card,
+                        ZoneType::Battlefield,
+                        crate::flow::proposed_event::ZoneEntry {
+                            controller,
+                            ..Default::default()
+                        },
+                    );
+                    self.invalidate_mana_cache(frame.controller);
                 } else {
                     self.move_card(card, ZoneType::Graveyard);
                 }

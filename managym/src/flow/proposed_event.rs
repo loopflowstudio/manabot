@@ -21,6 +21,9 @@ pub(crate) struct ZoneEntry {
     pub tapped: bool,
     /// Battlefield: enters with this many +1/+1 counters.
     pub plus_one_counters: i32,
+    /// Battlefield: enters under this player's control; `None` is its owner.
+    /// A resolving permanent spell enters under its controller (CR 110.2).
+    pub controller: Option<PlayerId>,
     /// Exile: enters face down (foretell, CR 702.143a), so the move is
     /// secret from everyone but its owner (CR 406.3).
     pub face_down: bool,
@@ -102,10 +105,14 @@ impl Game {
         for replacement in replacements {
             Self::apply_replacement(&mut event, &replacement.effect);
         }
-        // Only exile receives a card face down; a redirected move is face up.
+        // Only exile receives a card face down, and only the battlefield a
+        // controller: a redirected move drops either term.
         if let ProposedEvent::ZoneMove { to, entry, .. } = &mut event {
             if *to != ZoneType::Exile {
                 entry.face_down = false;
+            }
+            if *to != ZoneType::Battlefield {
+                entry.controller = None;
             }
         }
 
@@ -148,7 +155,9 @@ impl Game {
                     || self.state.zones.zone_of(*card) != *from
                     || *from == Some(*to)
                     || (*to != ZoneType::Battlefield
-                        && (entry.tapped || entry.plus_one_counters != 0))
+                        && (entry.tapped
+                            || entry.plus_one_counters != 0
+                            || entry.controller.is_some()))
                     || (*to != ZoneType::Exile && entry.face_down)
                 {
                     return false;

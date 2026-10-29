@@ -151,8 +151,7 @@ enum UndoEntry {
     /// vectors for every card that moves.
     ZoneMove {
         card: CardId,
-        owner: PlayerId,
-        from: Option<(ZoneType, usize)>,
+        from: Option<(PlayerId, ZoneType, usize)>,
         card_zones_len: usize,
     },
     Permanent(PermanentId, Box<Option<crate::state::permanent::Permanent>>),
@@ -274,13 +273,9 @@ impl UndoEntry {
             }
             Self::ZoneMove {
                 card,
-                owner,
                 from,
                 card_zones_len,
-            } => game
-                .state
-                .zones
-                .undo_move(card, owner, from, card_zones_len),
+            } => game.state.zones.undo_move(card, from, card_zones_len),
             Self::Permanent(permanent, old) => game.state.permanents[permanent] = *old,
             Self::CardToPermanent(card, old) => game.state.card_to_permanent[card] = old,
             Self::Incarnation(card, old) => game.state.object_incarnations[card] = old,
@@ -549,15 +544,14 @@ impl Game {
 
     /// Journal one card's zone change. Must be called before the move, while
     /// the card still sits at the index this records.
-    pub(crate) fn journal_zone_move(&mut self, card: CardId, owner: PlayerId) {
+    pub(crate) fn journal_zone_move(&mut self, card: CardId) {
         if !self.journal_active() {
             return;
         }
-        let from = self.state.zones.locate(card, owner);
+        let from = self.state.zones.locate(card);
         let card_zones_len = self.state.zones.card_zones_len();
         self.record_undo(UndoEntry::ZoneMove {
             card,
-            owner,
             from,
             card_zones_len,
         });

@@ -110,6 +110,18 @@ impl Game {
         }
     }
 
+    /// The controller of `card`'s spell on the stack (CR 110.2), or its
+    /// owner once it has left the stack.
+    pub(crate) fn spell_caster(&self, card: CardId) -> PlayerId {
+        self.find_spell_on_stack_index(card)
+            .and_then(|index| match &self.state.stack_objects[index] {
+                StackObject::Spell(spell) => Some(spell.controller),
+                _ => None,
+            })
+            .unwrap_or(self.state.cards[card].owner)
+    }
+
+    /// The permanents `player` controls, in battlefield order.
     pub(crate) fn battlefield_permanents(&self, player: PlayerId) -> Vec<PermanentId> {
         self.state
             .zones
@@ -428,13 +440,18 @@ impl Game {
             }
         }
 
-        self.journal_zone_move(card, owner);
-        self.state.zones.move_card(card, owner, to_zone);
+        let holder = match (to_zone, entry.controller) {
+            (ZoneType::Battlefield, Some(controller)) => controller,
+            _ => owner,
+        };
+        self.journal_zone_move(card);
+        self.state.zones.move_card(card, holder, to_zone);
 
         if to_zone == ZoneType::Battlefield {
             let permanent_id = PermanentId(self.state.permanents.len());
             let mut permanent =
                 Permanent::new(self.state.id_gen.next_id(), card, &self.state.cards[card]);
+            permanent.controller = holder;
             permanent.was_cast = was_cast;
             permanent.tapped = entry.tapped;
             permanent.plus1_counters = entry.plus_one_counters.max(0);
@@ -447,6 +464,11 @@ impl Game {
             self.state.card_to_permanent[card] = Some(permanent_id);
         }
 
+        if old_zone == Some(ZoneType::Battlefield) || to_zone == ZoneType::Battlefield {
+            // The permanent's controller gains or loses its mana abilities,
+            // whoever owns the card.
+            self.invalidate_mana_cache(event_controller);
+        }
         self.capture_card_move(card, old_zone, Some(to_zone), event_controller);
         let event = GameEvent::CardMoved {
             card,

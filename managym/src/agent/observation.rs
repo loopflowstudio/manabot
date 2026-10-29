@@ -603,8 +603,16 @@ impl Observation {
         zone: ZoneType,
     ) {
         let card_data = Self::card_data(game, card_id, zone);
-
-        if card_data.owner_id == self.agent.id {
+        // Battlefield cards are listed with their permanent's controller, in
+        // the same order as its permanents; other zones belong to the owner.
+        let agent_side = match game.state.card_to_permanent[card_id]
+            .and_then(|id| game.state.permanents[id].as_ref())
+            .filter(|_| zone == ZoneType::Battlefield)
+        {
+            Some(permanent) => permanent.controller.0 == self.agent.player_index as usize,
+            None => card_data.owner_id == self.agent.id,
+        };
+        if agent_side {
             self.agent_cards.push(card_data);
         } else {
             self.opponent_cards.push(card_data);

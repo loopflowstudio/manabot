@@ -2061,9 +2061,9 @@ fn hama_exiles_a_milled_spell_and_casts_it_by_waterbending() {
 }
 
 /// Azula's opponent exiles a nontoken creature and then a nonland graveyard
-/// card; on your turn you may cast the exiled spell with any type of mana.
-/// An exiled permanent card of theirs stays uncastable (control change is
-/// unsupported; see `tla::INCOMPLETE`).
+/// card; on your turn you may cast either with any type of mana. Their
+/// creature enters under your control (CR 110.2) and, when it dies, goes to
+/// its owner's graveyard.
 #[test]
 fn azula_has_the_opponent_exile_and_casts_with_any_mana() {
     let mut s = setup(&["Azula, Cunning Usurper", "Lightning Strike", "Gray Ogre"]);
@@ -2103,6 +2103,92 @@ fn azula_has_the_opponent_exile_and_casts_with_any_mana() {
     settle(&mut s);
     s.assert_life(1, 17);
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+
+    // Gray Ogre ({2}{R}) for three colorless: it enters under your control.
+    s.set_player_mana_pool(0, "3");
+    assert!(can_cast(&mut s, ogre_card));
+    cast_card(&mut s, ogre_card);
+    settle(&mut s);
+    let stolen = s.game().state.card_to_permanent[ogre_card].expect("Ogre on battlefield");
+    let permanent = s.game().state.permanents[stolen].as_ref().unwrap();
+    assert_eq!(permanent.controller, PlayerId(0));
+    assert_eq!(s.game().state.cards[ogre_card].owner, PlayerId(1));
+    assert!(s
+        .game()
+        .state
+        .zones
+        .zone_cards(ZoneType::Battlefield, PlayerId(0))
+        .contains(&ogre_card));
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let id = s.game().state.cards[ogre_card].id.0 as i32;
+    assert!(observation
+        .agent_permanents
+        .iter()
+        .any(|p| p.id == permanent.id.0 as i32));
+    assert!(observation
+        .agent_cards
+        .iter()
+        .any(|c| c.id == id && c.zone == ZoneType::Battlefield));
+
+    // It dies into its owner's graveyard.
+    s.set_player_mana_pool(0, "1R");
+    cast(&mut s, "Lightning Strike");
+    assert!(s.choose_target(Target::Permanent(stolen)));
+    settle(&mut s);
+    assert!(s
+        .game()
+        .state
+        .zones
+        .contains(ogre_card, ZoneType::Graveyard, PlayerId(1)));
+}
+
+/// Hama can exile an opposing noncreature permanent card: cast by
+/// waterbending, Prophetic Prism enters under your control, its enters
+/// trigger draws for you, and its mana ability is yours to activate.
+#[test]
+fn hama_casts_an_opponents_artifact_under_your_control() {
+    let mut s = setup(&["Hama, the Bloodbender", "Prophetic Prism", "Gray Ogre"]);
+    let prism = library_card(&s, 1, "Prophetic Prism");
+    put_on_top(&mut s, prism);
+    let helpers: Vec<PermanentId> = (0..2)
+        .map(|_| s.force_permanent_on_battlefield(0, "Gray Ogre"))
+        .collect();
+    cast(&mut s, "Hama, the Bloodbender");
+    advance_targeting_opponent(&mut s, ActionSpaceKind::LookAndSelect);
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { card, .. } if *card == prism),
+    );
+    settle(&mut s);
+    assert_eq!(s.game().state.zones.zone_of(prism), Some(ZoneType::Exile));
+
+    s.set_player_mana_pool(0, "");
+    let hands = (
+        s.zone_size(0, ZoneType::Hand),
+        s.zone_size(1, ZoneType::Hand),
+    );
+    assert!(can_cast(&mut s, prism));
+    cast_card(&mut s, prism);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);
+    for helper in &helpers {
+        choose(
+            &mut s,
+            |a| matches!(a, Action::WaterbendTap { permanent, .. } if permanent == helper),
+        );
+    }
+    settle(&mut s);
+    let artifact = s.game().state.card_to_permanent[prism].expect("Prism on battlefield");
+    assert_eq!(
+        s.game().state.permanents[artifact]
+            .as_ref()
+            .unwrap()
+            .controller,
+        PlayerId(0)
+    );
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hands.0 + 1);
+    assert_eq!(s.zone_size(1, ZoneType::Hand), hands.1);
+    s.set_player_mana_pool(0, "1");
+    assert!(can_activate(&mut s, artifact));
 }
 
 /// Sozin's Comet grants firebending 5 to the creatures you control as it

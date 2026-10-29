@@ -325,15 +325,10 @@ impl Game {
     }
 
     /// The live grant letting `player` play this exact exiled card now.
-    /// Another player's permanent card is never granted: a permanent spell
-    /// enters under its owner's control here, so control-changing casts
-    /// are unsupported.
+    /// Another player's card is castable too; a permanent spell enters
+    /// under its caster's control (CR 110.2).
     pub(crate) fn exile_grant(&self, player: PlayerId, card: CardId) -> Option<&ExileCastGrant> {
         if self.state.zones.zone_of(card) != Some(ZoneType::Exile) {
-            return None;
-        }
-        let definition = &self.state.cards[card];
-        if definition.owner != player && definition.types.is_permanent() {
             return None;
         }
         let object = self.current_object_ref(card)?;
