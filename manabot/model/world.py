@@ -62,14 +62,9 @@ def validate_agent_setup(
         return
     pack_key = bound_pack(binding)
     if "content_pool" in binding:
-        # Any deck the bound pool admits may execute; unsupported cards never do.
-        if len(player_configs) != 2 or any(
-            p.content_pack != pack_key for p in player_configs
-        ):
-            raise ValueError(
-                "execution requires two decks in the checkpoint's content pool"
-            )
-        admit_pool_decks(pack_key, player_configs)
+        if len(player_configs) != 2:
+            raise ValueError("execution requires two decks")
+        validate_agent_decks(agent, player_configs)
         return
     actual = _setups(player_configs)
     if not _binds_roster(binding) and not allow_deck_repetition:
@@ -77,11 +72,9 @@ def validate_agent_setup(
             raise ValueError("checkpoint setup differs from the execution match")
         return
 
-    if len(actual) != 2 or any(setup not in binding["setups"] for setup in actual):
-        raise ValueError(
-            "execution deck is outside checkpoint's exact setup roster "
-            "(setup differs from every authored setup)"
-        )
+    if len(actual) != 2:
+        raise ValueError("execution requires two decks")
+    validate_agent_decks(agent, player_configs)
     # Native reset admits any pair of a pack's authored decks, mirrors included;
     # the Python side checks roster membership and the selected pack only.
     if pack_key in _ROSTER_PACKS:
@@ -97,6 +90,32 @@ def validate_agent_setup(
         raise ValueError(
             "decks other than the bound pair require the checkpoint's explicit "
             "content pack"
+        )
+
+
+def validate_agent_decks(
+    agent: Any, player_configs: Sequence[managym.PlayerConfig]
+) -> None:
+    """Check that a checkpoint may play every one of these decks, in any pairing.
+
+    A pool binding admits each deck its pool admits natively; a setup binding
+    admits only the decks of its setups. Match shape (seat count, explicit
+    pack selection) belongs to `validate_agent_setup`.
+    """
+    binding = getattr(agent, "world_binding", None)
+    if binding is None:
+        return
+    pack_key = bound_pack(binding)
+    if "content_pool" in binding:
+        # Any deck the bound pool admits may execute; unsupported cards never do.
+        if any(p.content_pack != pack_key for p in player_configs):
+            raise ValueError("execution deck is outside the checkpoint's content pool")
+        admit_pool_decks(pack_key, player_configs)
+        return
+    if any(setup not in binding["setups"] for setup in _setups(player_configs)):
+        raise ValueError(
+            "execution deck is outside checkpoint's exact setup roster "
+            "(setup differs from every authored setup)"
         )
 
 

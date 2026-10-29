@@ -244,16 +244,14 @@ differ at the edges: a checkpoint without a binding passes
 `validate_agent_setup` but fails `_admit_setups`, and only the shared rule
 names the exact diagnostic consumers see in sim/Academy.
 
-Next implement direction (settled, no product choice): `model/world.py` owns
-one entry, e.g. `validate_agent_decks(agent, players)`, answering "may this
-checkpoint play every one of these decks": pool binding → each deck in the
-bound pool and natively admitted; setup binding → every deck in its roster.
-`validate_agent_setup` keeps the two-seat/explicit-pack match checks and
-delegates its pool branch to it; `_admit_setups` becomes
-`validate_agent_decks(agent, regime.decks.players())` (keeping its explicit
-rejection of unbound checkpoints, which admission already requires). Proof: the
-existing producer-admission and pool-checkpoint tests, plus an authored-bound
-checkpoint rejected for a deck regime with the shared diagnostic.
+Implemented: `model/world.validate_agent_decks(agent, players)` is the one
+rule for "may this checkpoint play every one of these decks" (pool → bound
+pool + native admission; setup → roster membership). `validate_agent_setup`
+keeps seat count and explicit-pack checks and delegates deck membership;
+`_admit_setups` rejects unbound checkpoints, then calls the shared rule.
+Check: focused training-decks/matchups/world/catalog/import/mirror tests, 64
+passed (incl. authored-bound checkpoint rejected for a deck regime). Full
+affected suites and debug Rust remain for gate.
 
 Noted, not a change: the collector and native `VectorEnv` still hold training
 decks in a field named `uniform_roster`; it no longer gates admission

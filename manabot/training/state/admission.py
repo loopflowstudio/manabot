@@ -17,7 +17,7 @@ import torch
 from manabot.env.match import Match
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.checkpoint import load_checkpoint
-from manabot.model.world import validate_agent_setup
+from manabot.model.world import validate_agent_decks, validate_agent_setup
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
     ArtifactReference,
@@ -55,16 +55,15 @@ def copy_verified_artifact(
 def _admit_setups(agent: object, regime: TrainingRegime) -> None:
     """Admit a policy for a regime's setups: its match, or its whole deck supply.
 
-    A deck run is bound to its pool's world, so admission checks that binding
-    and the pool's native admission of every deck, never a representative pair.
+    A deck run admits a checkpoint only if its world may play every deck in the
+    supply, never a representative pair; the shared world rule decides.
     """
     if regime.decks is None:
         validate_agent_setup(agent, Match(regime.root_match).to_rust())
         return
-    binding = getattr(agent, "world_binding", None) or {}
-    if binding.get("content_pool", {}).get("pack_key") != regime.decks.pool:
-        raise ValueError("training decks require a checkpoint bound to their pool")
-    regime.decks.check()
+    if getattr(agent, "world_binding", None) is None:
+        raise ValueError("training decks require a checkpoint bound to a world")
+    validate_agent_decks(agent, regime.decks.players())
 
 
 def admit_policy(

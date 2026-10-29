@@ -29,7 +29,7 @@ from manabot.model.actor_critic import ActorCritic
 from manabot.model.catalog import checkpoint_incompatibility, inspect_checkpoint
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.inference import PolicyInference
-from manabot.model.world import validate_agent_setup
+from manabot.model.world import checkpoint_world, validate_agent_setup
 from manabot.training.decks import TrainingDecks, pair_match
 from manabot.training.execution import validate_regime
 from manabot.training.regime import TrainingRegime, TrainSelfPlay
@@ -44,6 +44,7 @@ from manabot.training.state.game_errors import (
 import managym
 
 PACK = "tla-pool-v1"
+ROSTER_PACK = "elemental-world-v2"
 
 
 def _documents(*names: str) -> list[DeckDocument]:
@@ -266,14 +267,26 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
     # Producer admission for a deck run checks the pool, not one pair.
     regime = _regime(decks)
     _admit_setups(policy, regime)
+    with pytest.raises(ValueError, match="bound to a world"):
+        _admit_setups(_agent(), regime)
     other_pool = deepcopy(policy)
     other_pool.world_binding = {
         **binding,
         "content_pool": {**binding["content_pool"], "pack_key": "other-pool"},
     }
-    for unbound in (_agent(), other_pool):
-        with pytest.raises(ValueError, match="bound to their pool"):
-            _admit_setups(unbound, regime)
+    with pytest.raises(ValueError, match="outside the checkpoint's content pool"):
+        _admit_setups(other_pool, regime)
+    # A setup-bound checkpoint plays only its roster, under the shared rule.
+    authored = deepcopy(policy)
+    authored.world_binding = checkpoint_world(
+        [
+            managym.authored_deck_setup(ROSTER_PACK, key)
+            for key in managym.authored_deck_keys(ROSTER_PACK)[:2]
+        ],
+        ObservationSpace(),
+    )
+    with pytest.raises(ValueError, match="outside checkpoint's exact setup roster"):
+        _admit_setups(authored, regime)
 
     # The same model collects from a later supply it never trained on.
     later = TrainingDecks.from_documents(_documents("Swamp", "Forest"), PACK)
