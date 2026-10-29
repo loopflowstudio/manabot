@@ -118,7 +118,12 @@ pipeline: `544ae312c:scratch/892c47-author-tla-cards.md`.
    world-bound receipts (parity w11, learn demo/trigger-order w15, w13 increment)
    — they already mismatched at w16. PR394 update, demo.
 
-Check (2026-10-29, after rewrite): debug `cargo test --no-fail-fast` — only the
-known w15 semantic-conformance pair fails; `cards` 235 incl. observability 8.
-pytest semantic+model 341 pass; academy 28 fail, all frozen-world receipts/
-fixtures (w11 parity source hashes, w13 asserts, w15 demos).
+Check (2026-10-29, gate after syncing main 633dca159): debug `cargo test
+--no-fail-fast` — only the known w15 semantic-conformance pair fails (cards 235,
+rules 131 + 2 ignored); fmt and clippy `-D warnings` (with and without
+`python`) clean. pytest: semantic + model 341 pass; current-world arena/monitor/
+choice set passes; academy 233 pass, 26 fail — all world-bound receipts and
+demo fixtures (w11 parity, w13 increment, w15 learn/precision/trigger-order
+demos, public-commitment parity) that need regeneration for a frozen world;
+the full suite exceeds the 2 h local limit and lacks duckdb/HF extras.
+Online Scryfall check: 161 definitions, 0 problems.
