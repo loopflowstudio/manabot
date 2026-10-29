@@ -1,0 +1,76 @@
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.46
+   Compiling unicode-ident v1.0.24
+   Compiling libc v0.2.186
+   Compiling syn v2.0.119
+   Compiling version_check v0.9.5
+   Compiling generic-array v0.14.7
+   Compiling cfg-if v1.0.4
+   Compiling typenum v1.20.1
+   Compiling zerocopy v0.8.54
+   Compiling serde_core v1.0.228
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v2.0.1
+   Compiling zmij v1.0.23
+   Compiling cc v1.2.67
+   Compiling getrandom v0.2.17
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.150
+   Compiling ref-cast v1.0.25
+   Compiling ppv-lite86 v0.2.21
+   Compiling rand_core v0.6.4
+   Compiling blake3 v1.8.5
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling ref-cast-impl v1.0.25
+   Compiling serde_derive v1.0.228
+   Compiling serde_derive_internals v0.29.1
+   Compiling memchr v2.8.3
+   Compiling itoa v1.0.18
+   Compiling schemars_derive v1.2.1
+   Compiling digest v0.10.7
+   Compiling rand_chacha v0.3.1
+   Compiling cpufeatures v0.2.17
+   Compiling dyn-clone v1.0.20
+   Compiling constant_time_eq v0.4.2
+   Compiling arrayref v0.3.9
+   Compiling arrayvec v0.7.8
+   Compiling schemars v1.2.1
+   Compiling sha2 v0.10.9
+   Compiling rand v0.8.7
+   Compiling base64 v0.22.1
+   Compiling managym v0.2.0 (/Users/jack/src/manabot.0d9ba3-explore-faithful-support/managym)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 38.72s
+     Running tests/rules_tests.rs (managym/target/debug/deps/rules_tests-07e004f6799edcb6)
+
+running 27 tests
+test rules::tla_cards::attack_tap_is_not_tapped_for_mana ... ok
+test rules::tla_cards::attack_trigger_creates_tapped_and_attacking_token ... ok
+test rules::tla_cards::avatar_enthusiasts_counter_when_another_ally_enters ... ok
+test rules::tla_cards::avatar_enthusiasts_counts_token_allies ... ok
+test rules::tla_cards::avatar_enthusiasts_no_counter_for_non_ally ... ok
+test rules::tla_cards::avatar_enthusiasts_does_not_count_itself ... ok
+test rules::tla_cards::avatar_enthusiasts_no_counter_for_opponents_ally ... ok
+test rules::tla_cards::becomes_tapped_fires_when_attacker_taps ... ok
+test rules::tla_cards::block_restriction_respects_effective_power ... ok
+test rules::tla_cards::bounce_is_not_death ... ok
+test rules::tla_cards::counters_on_lands_are_inert_and_persistent ... ok
+test rules::tla_cards::cant_be_blocked_this_turn_blocks_all_blocks ... ok
+test rules::tla_cards::creature_token_ceases_to_exist_after_dying ... ok
+test rules::tla_cards::dies_trigger_fires_on_death ... ok
+test rules::tla_cards::fortune_teller_clue_sacrifices_to_draw_and_ceases_to_exist ... ok
+test rules::tla_cards::haste_attacker_fires_attack_trigger_on_entry_turn ... ok
+test rules::tla_cards::jeong_jeongs_deserters_targeted_counter_and_lethal_sba ... ok
+test rules::tla_cards::kyoshi_warriors_etb_creates_ally_token_via_stack ... ok
+test rules::tla_cards::observation_encodes_counters_tokens_and_type_tags ... ok
+test rules::tla_cards::invasion_reinforcements_flash_cast_on_opponents_turn ... ok
+test rules::tla_cards::one_or_more_attack_trigger_fires_once ... ok
+test rules::tla_cards::otter_penguin_ignores_opponent_draws ... ok
+test rules::tla_cards::otter_penguin_buffs_on_second_draw_only_and_resets ... ok
+test rules::tla_cards::tapped_for_mana_trigger ... ok
+test rules::tla_cards::south_pole_voyager_second_resolution_draws ... ok
+test rules::tla_cards::vigilance_attacker_does_not_become_tapped ... ok
+test rules::tla_cards::tiger_seal_taps_at_upkeep_and_untaps_on_second_draw ... ok
+
+test result: ok. 27 passed; 0 failed; 0 ignored; 0 measured; 289 filtered out; finished in 0.07s
+

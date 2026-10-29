@@ -3594,6 +3594,25 @@ fn authored_pack(pack_key: &str) -> PyResult<&'static crate::semantic::SemanticP
         .ok_or_else(|| PyValueError::new_err(format!("unknown authored pack {pack_key:?}")))
 }
 
+/// Distinct card names this world does not support for deck entry, sorted.
+/// Eligibility only; deck construction policy belongs to deck admission.
+#[cfg(feature = "python")]
+#[pyfunction]
+fn unsupported_cards(names: Vec<String>) -> PyResult<Vec<String>> {
+    crate::world::unsupported_cards(names.iter().map(String::as_str))
+        .map_err(|error| PyValueError::new_err(error.to_string()))
+}
+
+/// The compiled semantic IR for one current pack, as canonical JSON. The
+/// learning projection binds these exact documents; nothing is read from disk.
+#[cfg(feature = "python")]
+#[pyfunction]
+fn semantic_ir_json(pack_key: &str) -> PyResult<String> {
+    crate::semantic::compile::document_for_pack(pack_key)
+        .map(|document| document.to_string())
+        .map_err(|error| PyValueError::new_err(error.to_string()))
+}
+
 #[cfg(feature = "python")]
 #[pyfunction]
 fn content_pool(py: Python<'_>, pack_key: &str) -> PyResult<PyObject> {
@@ -3752,7 +3771,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("WORLD_VERSION", crate::WORLD_VERSION)?;
     m.add(
         "CARD_DEFINITION_COUNT",
-        crate::cardsets::alpha::CardRegistry::default().len(),
+        crate::cards::content_pack::CardRegistry::default().len(),
     )?;
     m.add("AgentError", py.get_type_bound::<PyAgentError>())?;
 
@@ -3771,6 +3790,8 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(admit_deck, m)?)?;
     m.add_function(wrap_pyfunction!(authored_deck_keys, m)?)?;
     m.add_function(wrap_pyfunction!(content_pool, m)?)?;
+    m.add_function(wrap_pyfunction!(semantic_ir_json, m)?)?;
+    m.add_function(wrap_pyfunction!(unsupported_cards, m)?)?;
     m.add_function(wrap_pyfunction!(validate_observation_json, m)?)?;
     m.add_function(wrap_pyfunction!(parse_continuation_frames_json, m)?)?;
     m.add_class::<PyObservation>()?;

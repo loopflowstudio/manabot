@@ -23,7 +23,7 @@ use crate::{
 use std::sync::Arc;
 
 #[cfg(test)]
-use crate::cardsets::alpha::ContentPack;
+use crate::cards::content_pack::ContentPack;
 
 #[derive(Debug)]
 struct RolloutSlot {

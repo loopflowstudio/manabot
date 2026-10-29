@@ -1087,7 +1087,7 @@ impl Game {
 
 #[cfg(test)]
 mod tests {
-    use crate::cardsets::alpha::ContentPack;
+    use crate::cards::content_pack::ContentPack;
 
     #[test]
     fn registered_mana_activations_have_finite_source_costs() {

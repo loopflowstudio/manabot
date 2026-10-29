@@ -25,9 +25,10 @@ was dead on arrival in exp-10.)
 | **w13** | in development, MTG-177 integration, 2026-10-22 | 40 / 41 / 28 / 16; targeting enforcement plus shared-payment repair | unchanged authored packs; fresh combined-runtime conformance receipts | no strength baseline |
 | **w14** | in development, MTG-195, 2026-10-26 | 40 / 41 / 28 / 17; controller-selected trigger placement and policy-input v3 occurrence joins | unchanged authored packs; fresh w14 conformance and play fixtures | no strength baseline |
 | **w15** | in development, MTG-177, 2026-10-27 | 40 / 41 / 28 / 17; retained resolution eligibility, policy-input v4 relations 64 × 33 | unchanged authored packs; fresh integrated conformance and play fixtures | no strength baseline |
+| **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, set-keyed definitions, one default pack | `tla-pool-v1` (86 supported cards); conformance receipts not yet regenerated | no strength baseline |
 
-**Current development world: w15.** `managym.WORLD_VERSION` identifies live runs. Earlier
-checkpoints (including w14) are **not comparable** to w15; do not reuse their
+**Current development world: w16.** `managym.WORLD_VERSION` identifies live runs. Earlier
+checkpoints (including w15) are **not comparable** to w16; do not reuse their
 win rates or load them as current-world policies. Shape alone is insufficient
 identity. Exp-11 historically ported opponent components with
 `port_legacy_state_dict` and behavioral validation; that utility is now retired.
@@ -35,6 +36,26 @@ Current loaders require current-ABI checkpoints. Cross-world *measurements*
 are regenerated, never ported (exp-10's precedent).
 
 Update this table in the same PR as any rules-meaning or shape change.
+
+## Running an older world
+
+The engine implements exactly one world. To run an older world, check out the
+revision that recorded it and build that engine; current code carries no rules
+compatibility shims. Frozen evidence (IR, receipts, checkpoints) stays readable
+in place and is never rewritten.
+
+## w16: one card authority (not yet frozen)
+
+Cards are typed Rust functions in per-set files under `managym/src/cardsets/`
+(`tla.rs`, `stx.rs`, `lea.rs`, …), each defined once. `semantic::compile`
+lowers them in process into the IR the runtime, pool descriptor and learning
+projection read; no card catalog or IR is generated on disk. Definition keys
+name their real set (`tla.forest`, `stx.pop_quiz`, `token.clue`); qualification
+hashes were refreshed only after proving each reviewed closure unchanged apart
+from the rename. The default content pack registers every typed definition and
+only the native cards that still lack one (`managym/src/cards/native.rs`), keeping
+the legacy `CardDefId` prefix. `managym::world` owns `WORLD_VERSION` and the
+card/deck support check (`managym.unsupported_cards`).
 
 ## w7: Elemental rules and compiled content (not yet frozen)
 

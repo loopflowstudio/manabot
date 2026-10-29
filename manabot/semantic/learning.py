@@ -1,8 +1,10 @@
 """Versioned, viewer-safe semantic-program projection for learning.
 
-The rules engine remains authoritative. This module binds the checked-in
-semantic IR to one immutable ContentPack manifest, builds a shared typed token
-graph, and maps only already-viewer-safe Observation objects into that graph.
+The rules engine remains authoritative. This module binds semantic IR to one
+immutable ContentPack manifest, builds a shared typed token graph, and maps only
+already-viewer-safe Observation objects into that graph. Current IR is compiled
+natively from the typed Rust set definitions and read through
+``managym.semantic_ir_json``; frozen historical IR is read from an explicit path.
 """
 
 from __future__ import annotations
@@ -20,7 +22,30 @@ from .compiler import IR_SCHEMA_VERSION, Opcode, ProgramKind, canonical_json
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SCHEMA_PATH = ROOT / "content/semantic/current/learning_schema.json"
-DEFAULT_IR_PATH = ROOT / "content/semantic/current/generated/two_deck.ir.json"
+DEFAULT_PACK_KEY = "ur-lessons-vs-gw-allies"
+
+# Explicit current packs shared by live-manifest and policy binding. Historical
+# or research IR outside this catalog requires an explicit path.
+CURRENT_PACK_KEYS = frozenset(
+    {
+        "tla-pool-v1",
+        "tla-baseline-v1",
+        "ur-lessons-vs-gw-allies",
+        "elemental-combat-v1",
+        "elemental-sacrifice-v1",
+        "elemental-temur-v1",
+        "elemental-world-v2",
+        "elemental-world-v1",
+        "mtg122-complexity-v1",
+    }
+)
+
+
+def current_ir_document(pack_key: str) -> dict[str, Any]:
+    """The natively compiled IR for one current pack."""
+    import managym  # Native only on this path; historical readers stay pure.
+
+    return dict(json.loads(managym.semantic_ir_json(pack_key)))
 
 
 class SemanticProjectionError(ValueError):
@@ -254,9 +279,12 @@ class SemanticIr:
     def load(
         cls,
         schema: LearningSchema,
-        path: str | Path = DEFAULT_IR_PATH,
+        path: str | Path | None = None,
+        *,
+        pack_key: str = DEFAULT_PACK_KEY,
     ) -> "SemanticIr":
-        raw = _load_json(Path(path))
+        """Read frozen IR from ``path``, or current IR for ``pack_key``."""
+        raw = current_ir_document(pack_key) if path is None else _load_json(Path(path))
         version = _integer(raw.get("schema_version"), "semantic_ir.schema_version")
         if version != schema.raw["ir_schema_version"]:
             raise UnknownSchemaError(
@@ -909,58 +937,17 @@ class BoundSemanticPack:
         ir_path: str | Path | None = None,
     ) -> "BoundSemanticPack":
         provenance = manifest.get("compiled_semantics")
-        default_schema, default_ir = DEFAULT_SCHEMA_PATH, DEFAULT_IR_PATH
-        if isinstance(provenance, Mapping):
-            match provenance.get("pack_key"):
-                case "tla-pool-v1":
-                    default_ir = (
-                        ROOT / "content/semantic/current/generated/pool.ir.json"
-                    )
-                case "tla-baseline-v1":
-                    default_ir = (
-                        ROOT / "content/semantic/current/generated/baseline.ir.json"
-                    )
-                case "elemental-combat-v1":
-                    default_schema = (
-                        ROOT / "content/semantic/current/learning_schema.json"
-                    )
-                    default_ir = (
-                        ROOT / "content/semantic/current/generated/elemental.ir.json"
-                    )
-                case "elemental-world-v2":
-                    default_schema = (
-                        ROOT / "content/semantic/current/learning_schema.json"
-                    )
-                    default_ir = (
-                        ROOT
-                        / "content/semantic/current/generated/optional_payments.ir.json"
-                    )
-                case "elemental-world-v1":
-                    default_schema = (
-                        ROOT / "content/semantic/current/learning_schema.json"
-                    )
-                    default_ir = (
-                        ROOT
-                        / "content/semantic/current/generated/elemental_world.ir.json"
-                    )
-                case "elemental-temur-v1":
-                    default_schema = (
-                        ROOT / "content/semantic/current/learning_schema.json"
-                    )
-                    default_ir = (
-                        ROOT / "content/semantic/current/generated/temur.ir.json"
-                    )
-                case "elemental-sacrifice-v1":
-                    default_schema = (
-                        ROOT / "content/semantic/current/learning_schema.json"
-                    )
-                    default_ir = (
-                        ROOT / "content/semantic/current/generated/sacrifice.ir.json"
-                    )
-        schema = LearningSchema.load(schema_path or default_schema)
-        ir = SemanticIr.load(schema, ir_path or default_ir)
+        pack_key = DEFAULT_PACK_KEY
+        if (
+            isinstance(provenance, Mapping)
+            and provenance.get("pack_key") in CURRENT_PACK_KEYS
+        ):
+            pack_key = provenance["pack_key"]
+        schema = LearningSchema.load(schema_path or DEFAULT_SCHEMA_PATH)
+        ir = SemanticIr.load(schema, ir_path, pack_key=pack_key)
         if isinstance(provenance, Mapping) and (
-            provenance.get("ir_hash") != ir.ir_hash
+            provenance.get("pack_key") != ir.raw["pack_key"]
+            or provenance.get("ir_hash") != ir.ir_hash
             or provenance.get("source_hash") != ir.raw["source_hash"]
         ):
             raise ContentPackBindingError("Compiled IR differs from the live pack")
@@ -1307,7 +1294,8 @@ __all__ = [
     "ArtifactCompatibilityError",
     "BoundSemanticPack",
     "ContentPackBindingError",
-    "DEFAULT_IR_PATH",
+    "CURRENT_PACK_KEYS",
+    "DEFAULT_PACK_KEY",
     "DEFAULT_SCHEMA_PATH",
     "LearningSchema",
     "SemanticArtifactHeader",
@@ -1317,6 +1305,7 @@ __all__ = [
     "SemanticObjectProjection",
     "SemanticProjectionError",
     "UnadmittedDefinitionError",
+    "current_ir_document",
     "UnknownOpcodeError",
     "UnknownSchemaError",
 ]

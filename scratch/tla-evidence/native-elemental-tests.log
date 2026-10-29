@@ -1,0 +1,50 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.11s
+     Running tests/rules_tests.rs (managym/target/debug/deps/rules_tests-07e004f6799edcb6)
+
+running 43 tests
+test rules::elemental_cards::ancestry_does_not_follow_a_graveyard_target_into_a_new_incarnation ... ok
+test rules::elemental_cards::ally_entry_context_buffs_the_entering_ally_and_haru_earthbends ... ok
+test rules::elemental_cards::announced_enter_trigger_keeps_its_controller_when_its_source_changes_control ... ok
+test rules::elemental_cards::azula_announces_both_modes_then_binds_independent_targets_including_same_object ... ok
+test rules::elemental_cards::boomerang_and_zuko_use_resolution_time_control_after_target_announcement ... ok
+test rules::elemental_cards::boomerang_draws_only_when_its_target_was_controlled_by_the_caster ... ok
+test rules::elemental_cards::cat_gator_uses_swamps_and_lifelink_on_its_enter_trigger ... ok
+test rules::elemental_cards::court_official_and_ozai_make_the_target_player_choose_discards ... ok
+test rules::elemental_cards::dai_li_targets_same_land_twice_then_drains_for_creatures_with_counters ... ok
+test rules::elemental_cards::disciple_targets_another_small_creature_pays_tap_and_survives_source_departure ... ok
+test rules::elemental_cards::avatar_state_grants_a_visible_incarnation_local_subtype_and_cleans_up ... ok
+test rules::elemental_cards::eyetwitch_and_poxbearer_deaths_keep_their_different_rewards ... ok
+test rules::elemental_cards::gather_creates_per_plains_and_scry_can_reverse_top_cards_privately ... ok
+test rules::elemental_cards::hybrid_discard_is_optional_at_resolution_and_draws_exactly_two ... ok
+test rules::elemental_cards::hybrid_draw_payoffs_use_draw_count_and_trigger_on_the_second_draw_only ... ok
+test rules::elemental_cards::iroh_modes_gate_targets_and_damage_only_opponent_creatures ... ok
+test rules::elemental_cards::jet_entry_damage_and_death_choose_up_to_two_distinct_creatures ... ok
+test rules::elemental_cards::library_search_is_private_enters_tapped_and_continues_to_learn ... ok
+test rules::elemental_cards::library_search_semantic_command_replays_and_rejects_reuse_without_mutation ... ok
+test rules::elemental_cards::master_piandao_reveals_a_selected_ally_and_bottoms_the_rest ... ok
+test rules::elemental_cards::messenger_hawk_accepts_either_hybrid_color_and_investigates_on_entry ... ok
+test rules::elemental_cards::momo_counts_earlier_matching_casts_before_it_entered_and_resets_next_turn ... ok
+test rules::elemental_cards::momo_reduces_first_matching_spell_only_and_grows_when_another_flier_enters ... ok
+test rules::elemental_cards::origin_destroys_artifacts_or_protects_with_counter_and_indestructible ... ok
+test rules::elemental_cards::ostrich_mills_then_selects_only_a_milled_land_or_grows_when_declined ... ok
+test rules::elemental_cards::professors_enter_and_offer_learn_before_priority_returns ... ok
+test rules::elemental_cards::prowess_resolves_above_the_noncreature_spell ... ok
+test rules::elemental_cards::removal_respects_mana_value_and_excluded_creature_types ... ok
+test rules::elemental_cards::resampled_private_search_choices_still_name_library_cards ... ok
+test rules::elemental_cards::savor_makes_food_with_a_real_tap_cost_and_cindermaw_prevents_its_life_gain ... ok
+test rules::elemental_cards::scry_possible_world_materialization_preserves_inspected_cards_and_order_choices ... ok
+test rules::elemental_cards::search_possible_worlds_refresh_private_candidates_without_exposing_library_cards ... ok
+test rules::elemental_cards::search_selection_or_decline_and_shuffle_restore_exactly_under_undo ... ok
+test rules::elemental_cards::sokka_binds_spell_and_land_separately_and_resolves_with_one_illegal_target ... ok
+test rules::elemental_cards::spectral_sailor_draw_ability_survives_the_sources_destruction ... ok
+test rules::elemental_cards::spirit_tokens_cannot_block_or_be_blocked_by_nonspirits ... ok
+test rules::elemental_cards::targeted_combat_tricks_apply_through_play ... ok
+test rules::elemental_cards::tiger_dillo_needs_another_four_power_creature_to_be_an_attacker ... ok
+test rules::elemental_cards::toph_enters_earthbends_and_counts_counters_on_lands ... ok
+test rules::elemental_cards::true_ancestry_returns_only_a_current_permanent_card_and_can_decline ... ok
+test rules::elemental_cards::uncle_iroh_reduces_lesson_spells_without_reducing_ordinary_spells ... ok
+test rules::elemental_cards::zuko_exiles_and_gives_clue_to_the_targets_current_controller ... ok
+test rules::elemental_cards::elemental_new_decisions_replay_reject_stale_commands_and_restore_exact_forks ... ok
+
+test result: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 273 filtered out; finished in 0.88s
+

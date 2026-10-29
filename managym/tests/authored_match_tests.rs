@@ -22,7 +22,7 @@ fn jeong_configs(pack: &SemanticPack) -> Vec<PlayerConfig> {
 
 #[test]
 fn exact_authored_match_runs_to_a_winner_on_compiled_semantics() {
-    let semantic = SemanticPack::two_deck().expect("checked-in semantic IR parses");
+    let semantic = SemanticPack::current("two_deck").expect("checked-in semantic IR parses");
     let mut game = Game::new(authored_configs(&semantic), 0, true);
     let provenance = game
         .state
@@ -63,7 +63,7 @@ fn exact_authored_match_runs_to_a_winner_on_compiled_semantics() {
 
 #[test]
 fn jeong_increment_selects_its_exact_pack_in_either_seat_order() {
-    let semantic = SemanticPack::jeong_increment().expect("checked-in Jeong IR parses");
+    let semantic = SemanticPack::current("jeong_increment").expect("checked-in Jeong IR parses");
     let configs = jeong_configs(&semantic);
 
     for player_configs in [configs.clone(), configs.into_iter().rev().collect()] {
@@ -81,7 +81,7 @@ fn jeong_increment_selects_its_exact_pack_in_either_seat_order() {
 
 #[test]
 fn tampered_jeong_deck_does_not_select_a_compiled_pack() {
-    let semantic = SemanticPack::jeong_increment().expect("checked-in Jeong IR parses");
+    let semantic = SemanticPack::current("jeong_increment").expect("checked-in Jeong IR parses");
     let mut configs = jeong_configs(&semantic);
     let deck = &mut configs[1].decklist;
     deck.remove("Jeong Jeong's Deserters");
@@ -110,7 +110,7 @@ fn non_authored_decks_keep_the_general_content_pack() {
 
 #[test]
 fn elemental_validation_rosters_select_compiled_content_and_play_to_terminal() {
-    let semantic = SemanticPack::elemental().unwrap();
+    let semantic = SemanticPack::current("elemental").unwrap();
     let configs = vec![
         semantic.player_config("left", "elemental_left").unwrap(),
         semantic.player_config("right", "elemental_right").unwrap(),

@@ -1,0 +1,329 @@
+# Faithful full-TLA play and training
+
+**Draft for review — 2026-10-28.** Jack Heart selected the full TLA card file,
+shared human/agent rules and research-only delivery. He subsequently accepted
+concept-review option **1a: any valid user-supplied TLA deck**, explicitly including
+**decklist-file input**, which may ship in its own PR. Curated-only play is not
+the end state. Architecture and sequencing
+below are proposals, not implementation approval. Scope remains [the Task brief](tla-scope.md).
+
+**Accepted direction — Jack Heart, 2026-10-28:** any valid user-supplied TLA deck through the shared human/bot engine (concept-review 1a), including decklist-file input. File import can be a separate PR in parallel with card work. At most eight TLA PRs, with two or three concurrent groups at most; automate builds and present each PR to Jack for review. Proposed below: seven TLA PRs plus one import PR, eight combined. PR boundaries are still a proposal.
+
+The intended win is that a person and a manabot can play every TLA card through
+one rules engine, understand every available decision, and replay or fork it
+without changing its meaning. Completion means correct behavior, not registration
+of all names. Current coverage is an authored-deck subset; expanding that subset
+without fixing its underlying abstractions would multiply special cases.
+
+## Inventory and evidence
+
+The [support map](tla-support-map.md) is the short reading path. The separate
+[tla-card-ledger.jsonl](tla-card-ledger.jsonl) contains **294 face rows for 286
+cards**, plus **11 token/marker rows**, with per-face obligations, native owner,
+compiled pack/deck admission, test references, gaps and prerequisite families.
+All 394 TLA printing numbers and their 414 faces match Wizards' checklist after
+only apostrophe/dash normalization. No unmatched entries remain. Nine fixed token
+templates plus the dynamic Copy marker are required; Treasure is retained as an
+explicit adjacent-product exclusion. No TLA emblem producer was found.
+
+Authority and reproducibility:
+
+- [Wizards' gallery](https://magic.wizards.com/en/products/avatar-the-last-airbender/card-image-gallery)
+  links the [November 18, 2025 checklist](https://media.wizards.com/2025/downloads/card-sets/TLA_Cardlist_11182025.pdf).
+  The main-set 1–281 plus five basic identities define the gameplay inventory.
+  Additional art/treatments through 394 do not add gameplay cards. Both faces of
+  each of eight transforming cards are included, as are two single-faced Sagas.
+- [Official release notes](https://magic.wizards.com/en/news/feature/avatar-the-last-airbender-release-notes)
+  provide general mechanics and card-specific rulings. They are not a complete
+  card list; their internally inconsistent displayed modification date is retained,
+  not repaired. Their publication date is November 7, 2025.
+- The [current rules landing page](https://magic.wizards.com/en/rules) still points
+  to [CR effective September 25, 2026](https://media.wizards.com/2026/downloads/MagicCompRules%2020260925.txt).
+  Retrieved bytes hash to `8d860e451f20f38865b725b42d82feb714c725373dd8f3b32b8652b3eeb070ca`,
+  exactly the historical audit source. Prior provenance remains unchanged.
+- Scryfall's paginated `set:tla unique:prints` and `set:ttla` are the **secondary
+  Oracle transcription/identity join**, not the official rules authority. All 76
+  overlapping retained fixture records match current retrieved fields exactly.
+  The ledger links each transcription and identifies official card-note sections
+  where found. It does not certify a fresh official Oracle-text audit of every
+  clause; that remains an admission requirement.
+- [sources.json](tla-evidence/sources.json) pins URLs, retrieval timestamps, raw
+  digests and checkout `c5d406e3d2a701525c15c8500a30f7da7896cc40` (also the observed
+  origin/main ref). Sources are retained locally; validation needs no network.
+
+TLE is the separate eternal-legal set, including Beginner Box, Jumpstart,
+source-material and Scene/Commander product additions. TLE-only cards are excluded
+from **TLA**, even when found in the same booster product. TTLA is token packaging,
+not another playable-card set. PTLA promos and art-only products do not add TLA
+rules identities. The checklist's other tokens, including Aang, Awoken Avatar and
+the tutorial Soldier, are not TLA producer closure. The
+[collecting guide](https://magic.wizards.com/en/news/feature/collecting-avatar-the-last-airbender)
+explains mixed TLA/TLE booster content. Thus a future faithful retail Draft/Sealed
+product needs a separate TLE/content decision; this plan does not claim to deliver it.
+
+## What the investigation establishes
+
+**76/286 cards have native definitions; 74 occur in an embedded compiled catalog;
+69 occur in current `elemental-world-v2`.** All 76 are classified **partial**, not
+fully supported. The remaining 210 cards (218 face rows) have no native definition.
+No unreviewed card has been promoted on the basis of its printed text or matching
+name. Per-face obligation summaries were read against the retrieved card text;
+family tags are conservative triage aids, not a proof that every family gap affects
+every tagged card. Test references include fixture mentions and must be read as
+bounded witnesses, not clause-by-clause certification.
+
+The current code is **w14/hash9**. Native `ContentPack` definitions and compiled
+semantic programs coexist. `SemanticPack::compile_content_pack` lowers typed
+programs into the same `CardDefinition`/`Effect` engine, but constructs
+`ContentPack::default()` just to copy presentation text. This makes a native
+registration an unnecessary prerequisite for a new compiled card. Exact setup
+matching selects compiled packs; arbitrary deck edits cannot use that admission.
+The existing differential definition test establishes coherence, not correctness.
+
+The most consequential findings are concrete:
+
+| Boundary | Inspected fact and resulting decision |
+| --- | --- |
+| Resolution and identity | w14 still rechecks legality inside individual effects. MTG-177 owns the entry-time eligibility repair (CR 608.2b); reuse its accepted result. Earthbend's delayed return checks a bare card's current graveyard/exile zone, not the departure's destination incarnation. Fix the exact-object link before adding more exile paths (400.7, 603.7). |
+| Airbend and casting | No Airbend effect or general exile-permission representation exists. Flashback already retains casting origin and exile replacement. Generalize the permission/cost authority; do not implement airbend as bounce or automatic recast. CR 701.65 and 601 preserve timing and additional costs. |
+| Trigger placement | MTG-195/PR386 landed controller ordering and two APNAP groups. `trigger_condition_fires` still has no trigger-on-trigger matcher. Firebender Ascension needs that matcher plus ability copying; Katara, the Fearless instead changes trigger multiplicity. Modal Appa and Bumi choose modes at placement; Earth Rumble creates a reflexive trigger after earthbend (603.3b/c, 603.12). |
+| Characteristics | `statics.rs` explicitly supports additive P/T and narrow grants without timestamps/dependencies. Honest Work replaces name, types, abilities and base P/T; Toph, the First Metalbender makes artifacts lands; earthbend can then reset an existing creature's base to zero. One effective-characteristic query must govern all consumers (613). |
+| Replacement and counters | `proposed_event.rs` sorts applicable effects by source and applies the collected list once. This is not CR 616's affected-player choice with recomputed applicability. Stun/finality/keyword/lore/quest counters need typed behavior; adding integers to `plus1_counters` is insufficient (122, 614–616). |
+| Face, attachment, copy state | No general Aura/Equipment relation, Saga lifecycle or active-face state exists. Ran and Shaw has a narrow nonlegendary self-copy. Ember Island Production, Koh, Sagas and Fire Lord Azula need copiable values and stack/face identity, not cloned presentation definitions (303.4, 707, 712, 714). |
+| Decisions and visibility | Secret of Bloodbending is in TLA. Supporting it requires a decision controller distinct from the active player and object controller, with rule-authorized visibility and the controlled player's resources. It is not optional multiplayer scope (723). |
+| Capacity | The legacy encoder defaults to 64 actions, 40 permanents/player and two focus objects; it errors before bounded writes. `structured_offer.rs` and `CompoundDecoder` already provide uncapped compound selections. Reuse/extend them and ragged objects; raising constants cannot support arbitrarily repeated tokens or target sets. |
+
+MTG-177's fresh shared status reports an idle finished Graph, incomplete Task and
+stale planning mirror. PR354 is merged, but it delivered the earlier w13 repair.
+Read-only inspection of its separate checkout found w15/hash10 at
+`b634eea390f150c58407f2691ae02e32b6d4c297` plus uncommitted consumer edits; there is
+no open PR from that branch. This draft is not a dependency already delivered.
+PR386 is merged at `e742e8bffe622ddb43009d1586ceec25d44cf342`; PR383 remains open
+and owns adaptive-curriculum changes in vector environments. Canceled
+MTG-167/168/169/170/196 are historical findings, not active implementation owners.
+
+The exact `.lf/wave/engine` memory files are absent in this checkout; the retained
+`.lf/wave/rules/GOAL.md` has the older narrow charter. Its one-authority, privacy,
+complete-choice and reproducibility principles apply. The explicit full-TLA
+research brief supersedes its selected-matchup research limit. No Wave files are
+changed and no new KR or performance target is invented.
+
+## Demo and first useful delivery
+
+**This slice: exact exile identity, casting permissions and airbend**, after the
+MTG-177 resolution contract is accepted and the content cutover below is complete.
+Admit Airbending Lesson, Airbender's Reversal and Aang, the Last Airbender with
+complete behavior in explicit development setups. These are proposed test setups,
+not changes to the ten accepted decks.
+
+A retained Academy position shows Aang airbending an opponent's creature. The owner
+sees the same legal exile-cast option as the policy, paying the alternative cost
+and any additional costs at the normal time. A second position uses Airbender's
+Reversal on the controller's earthbent land: it returns tapped through the delayed
+trigger; the airbend grant never becomes permission to play a land. Moving the
+card again before that return prevents following the new incarnation. A token
+ceases to exist. Reconnect resumes the exact payment/target decision. Replay and
+an isolated fork produce the same independent expected state witness.
+
+Proposed headless command (to be implemented, not claimed available today):
+
+```bash
+uv run --extra dev python -m scripts.verify_tla_airbend --out scratch/tla-airbend-proof.json
+```
+
+It drives named directed cases through native Commands, the ordinary Academy
+ASGI protocol and the agent offer/decoder, asserting expected zones, owner/controller,
+cost, life, pending decision, public/private frame and canonical digest. Include
+kicker under the airbend alternative, illegal sorcery timing, source departure,
+all-invalid resolution, more than 64 legal target candidates, duplicate/stale
+Commands, replay and nested rollback. Use at most 200 Commands per fixture,
+no random-game search and no policy training. A proposed Playwright
+`tla-airbend.spec.ts` uses those positions against isolated stable built services;
+zero pending-choice loss after reconnect is required. The review demo is the
+same flow visible in Academy; acceptance never requires a person or display.
+
+## Chosen architecture and deletion path
+
+Use reviewed typed content lowered into **one native rules runtime**. Card text
+is presentation/source evidence, never a runtime parser. A card admission is a
+versioned manifest assertion that every face and related object has executable
+programs and independent expected behavior witnesses. Missing programs, partial
+faces, unknown opcodes and stale manifests reject admission explicitly.
+
+1. **Content authority, first deletion cut.** Separate immutable presentation data
+   from `ContentPack::default()` in `compile_content_pack`. Make current TLA typed
+   authoring the sole rule definition; generate the native pack and learning
+   projection from its IR. Move the two native-only cards into that source with
+   their existing behavior tests. Setup manifests reference eligible definitions
+   independently of runtime semantics. Preserve historical authored setups as
+   presets; new pool/format admission must accept any valid submitted combination.
+   The research ledger is evidence, never the runtime admission database.
+2. **Exact object/stack/permission state.** Extend existing `ObjectRef`, stack
+   objects and resolution frames rather than adding an airbend side engine.
+   Casting grants identify destination incarnation, eligible actor, origin zone,
+   alternative cost, duration and timing modifiers. The shared cast planner
+   composes grants with prohibitions, additional costs and the existing
+   `PaymentModel`; execution validates the same typed plan. Keep distinct checks
+   when announcing, accepting a Command and beginning resolution. Retained
+   eligibility governs instructions within one resolution.
+3. **One effective-characteristic view.** Put layer, timestamp/dependency,
+   controller, subtype/name, ability and P/T evaluation behind native queries.
+   Use those queries for predicates, payment abilities, trigger matching,
+   combat, LKI and viewer-safe observations. Copying reads copiable values, not
+   the final layered view. Printed definitions remain immutable.
+4. **Resumable event and decision state.** Extend existing event commit,
+   trigger placement and continuation machinery. Replacement choice keeps the
+   proposed event and applied-effect set; each choice recomputes applicability.
+   Modes, reflexive targets, distributions, copied stack objects and control-player
+   decisions are authoritative pending decisions, hashed and journaled. No UI
+   selection is a substitute for a required shared choice.
+
+**Delete—do not maintain:** remove current executable TLA registrations from
+`cardsets/tla.rs` and TLA branches of `elemental.rs`, `sacrifice.rs`, `temur.rs`
+after the content cutover, retaining non-TLA rules and shared token definitions
+where still needed. Remove the presentation-only native-registry dependency in
+`compile_content_pack`; replace current TLA native-versus-compiled equality as the
+admission oracle with independent rule outcomes, preserving all behavioral tests.
+Replace fixed source-order replacement selection in `collect_replacements` when
+the ordered-choice implementation lands. Replace bare-card earthbend destination
+lookup and migrate special death/flashback replacements into the event authority
+when their equivalent independent cases are ready. MTG-177 owns deletion of
+redundant per-instruction target checks; do not modernize that obsolete path first.
+
+Frozen content/IR/worlds, checkpoint receipts and old conformance corpora remain
+unchanged and addressable by their original IDs. Historical readers may read
+immutable old schemas; they must not become an alternate current-world executor.
+A new typed source may generate several setup manifests, not several copies of
+current rules. No Legacy/New runtime split, dual writes, hand-coded browser rules,
+name-dispatched exceptions or silent fallback to the generic registry is accepted.
+
+## Proposed eight-PR delivery plan
+
+Jack's accepted constraints are a maximum of eight TLA PRs, staged dependencies,
+two or three concurrent card groups, automatic builds and his review of each PR.
+This proposal reserves seven PRs for the TLA file and one for decklist input,
+keeping the combined total at eight. No implementation Task is launched here.
+
+| PR | Complete outcome and representative cards | Dependencies |
+| --- | --- | --- |
+| T1 · One content authority and baseline cards | Remove duplicate current TLA rule definitions and presentation-registry coupling; retain existing supported behavior and admit simple creatures/spells/lands whose full obligations use established operations. Establish pool versus setup admission and immutable identity. | Accepted MTG-177 resolution contract where needed; do not duplicate its repair. |
+| T2 · Casting, payment and zone permissions | Shared alternative/additional/X costs, scoped mana and waterbend/exhaust, exact exile/earthbend links, airbend, private search and play permissions including foretell. Airbending Lesson, Airbender's Reversal, Sozin's Comet; cards needing later machinery are owned by that later PR. | T1; any layered-characteristic interactions land after T3’s queries. |
+| T3 · Characteristics, counters and replacement choices | Effective types/abilities/P/T, Aura/Equipment relations, typed counters, affected-player replacement ordering and SBA/LKI correctness. Honest Work, Toph, Fated Firepower and corresponding equipment/counter families. | T1; shared permission interactions validated with T2. |
+| T4 · Triggers and stack behavior | Event/reflexive/modal triggers, bending history, multiplicity, ability/spell copies and retargeting. Earth Rumble, Katara, Firebender Ascension, Redirect Lightning. | T2/T3 contracts; owns new trigger/stack primitives needed by T5/T6. |
+| T5 · Permanent copies and linked abilities | Copiable values, copy exceptions and dynamic ability inheritance from linked exiled objects. Ember Island Production, Koh, related copy/token cards. | T2/T3; consume T4 trigger/stack changes where required. |
+| T6 · Sagas, transforming cards and turn scheduling | All eight double-faced cards and the two other Sagas, including face-specific abilities, transformed reentry, extra turns/combat and cleanup. Avatar Aang, the Avatar Sagas, both transforming Aang cards. | T2/T3 and T4; qualify both faces together, including private search, reflexive triggers and extra-turn prerequisites. |
+| T7 · Controlled-player decisions and whole-set acceptance | Secret of Bloodbending and any cards whose complete behavior requires the joined authorities; verify complete card/token closure and cross-family combinations through arbitrary admitted decks, human/bot choices, reconnect/replay and version gates. | T2–T6 plus D1 for the file-to-game acceptance demo. No undefined “miscellaneous cards” bucket. |
+| D1 · Decklist files | Parse a documented text dialect into structured deck entries, retain submitted source for correction, report line-level syntax/unknown/ambiguous/unsupported-card errors, and invoke the same setup admission for humans and bots. Deliver a complete file-to-admitted-game path against the currently supported pool. | T1 admission contract; existing curated-only checks cannot be bypassed. Does not wait for all TLA mechanics. |
+
+**Staging:** T1 first. Then T2 and T3 concurrently, with D1 as the third workstream.
+After those shared contracts settle, build T4, T5 and T6 with at most three card
+workstreams. Their final integration is dependency ordered: T5/T6 stack on T4
+where they consume its primitives; parallel authoring is not independent landing.
+T7 follows the joined results. Each shared kernel area has one implementation owner;
+dependent PRs add cards/tests against it rather than implementing competing machinery.
+Review and land predecessors before dependent PRs; do not auto-merge or carry an
+approval over to code changed by later integration.
+
+Each card has one completion owner: the latest prerequisite PR needed for all its
+faces/clauses. Simple clauses of a later card do not count as a completed admission.
+Before launch, add the proposed PR owner and prerequisites to every ledger row,
+check that all 286 identities and required tokens are covered, and adjust these
+boundaries within the eight-PR cap. Representative names above are not an exhaustive
+partition yet. Cross-family counterexamples remain beside the owning card.
+
+The earlier 27–49 engineer-week estimate described the underlying research scope,
+not a validated schedule for these larger PRs. Fewer PRs do not reduce the rules work.
+Re-estimate after assigning all cards and checking dependencies; do not invent a
+calendar promise. Automatic building means implementation and checks proceed under
+this plan, while Jack retains review of each concrete PR. The exploration itself
+still ends with this proposal for review.
+
+High-value independent witnesses: earthbend a printed artifact creature made into
+a land by Toph; change zones again before return; Honest Work removes deathtouch or
+indestructible between SBA checks; Fated Firepower competes with prevention in both
+orders; North Pole Patrol cannot spend its tap twice; paid waterbend fires Aang
+regardless of resource mix; Appa modal targets are selected before priority;
+Earth Rumble may target its newly animated land only in the reflexive trigger;
+Ascension's copied ability retains modes but may change targets; Saga final
+chapter waits for the stack and reentry changes incarnation; Koh's chosen ability
+set updates without inheriting counters; control-player visibility never exposes a
+sideboard. Each expected outcome is independently derived from pinned CR/card notes,
+not produced by comparing two consumers of the same code.
+
+## Admission, compatibility and acceptance
+
+The full end state admits any valid user-supplied TLA deck, including decklist files,
+under a named two-player format through the shared native admission boundary.
+Development fixtures are intermediate proof inputs, not the final admission boundary.
+Specific format rules remain proposed below.
+Do not infer retail Draft/Sealed, Commander, multiplayer, new product decks or
+training strength from card completeness. Full cross-set MTG conformance is excluded;
+planeswalkers/battles are not in this TLA file. Any-target universality outside the
+admitted world remains separately documented, not silently claimed.
+
+Each behavior change gets a new development world identity and content digest.
+State/hash, Command/capture schema, observation fields and learning vocabulary are
+versioned when their contracts change. New code chooses the next available versions
+at implementation time; w15 is already reserved in MTG-177. Preserve absent-version
+v1 checkpoint semantics via `ObservationConfig.from_checkpoint`; no shape-compatible
+checkpoint is silently upgraded. Use the ordinary catalog/reload and arena-admission
+checks. Coordinate vector buffer changes with PR383's owner, without selecting its
+curriculum decisions.
+
+Uncapped choices mean every finite legal choice in a represented state remains
+reachable. Extend compound/ragged support across new ordered, variable and numeric
+choices; do not enumerate exponential subsets in a flat action list. Test controlled
+65-candidate and three-focus fixtures, ordered-choice prefixes and dynamic object
+counts. Legacy encoders retain explicit capacity rejection and cannot be advertised
+as full-TLA training. A process resource limit is an explicit failed/aborted episode,
+never an altered rule or hidden action cap. Measure actual inference/memory after
+schemas settle; no unsupported latency/throughput claim is part of this draft.
+
+Gate for each implementation chunk runs its focused independent native witnesses
+plus the shared Command/reconnect/replay proof **once**, then the required change-area
+checks in `docs/development/validation.md`: debug Rust with two Cargo jobs, format/
+Clippy, current-world admission/model/monitor checks, learning projection and focused
+Academy protocol/browser cases. Complete generation/check/build before browser servers;
+all server subprocesses are reaped. No random search, stress workload, paid compute or
+strength campaign is needed for these decisions. Missing native/browser tooling is
+reported and assigned to capable CI, never marked passed.
+
+The full file is done when valid novel decks imported from files are admitted for
+both Academy and manabot, malformed/unsupported input returns actionable issues
+without losing source, and every required face/token has clause-level independent
+expected results and positive/negative interaction witnesses; compiled admission
+rejects a missing face/token/program; both consumers can express every legal choice
+with viewer-safe information; reconnect retains actual pending decisions; recorded
+Commands and isolated forks reproduce canonical consequences; incompatible historical
+checkpoints are rejected while historical evidence remains readable. The ledger's
+inventory completeness alone satisfies none of those behavioral conditions.
+
+## Alternatives, success and failure
+
+A native-registration-only expansion is initially cheap but preserves duplicate
+semantic authoring and cannot produce complete learning programs. A second engine
+behind an adapter moves the same hard problems into observation/action/state translation
+and replay identity; no compatible drop-in has been established. Runtime Oracle-text
+interpretation adds an unbounded interpretation problem and loses deterministic,
+reviewable programs. None is selected. Expand the existing typed kernel and delete
+current duplication.
+
+Wild success: a newly authored card mostly composes existing operations; a designer
+can inspect the same strategic decision a policy sees, and the first surprising
+interaction becomes a small independent witness. Track the proportion of admissions
+requiring kernel edits, but do not mistake that ratio for rule fidelity.
+
+Wild failure: hundreds of definitions turn green against their own generated tests,
+fixed buffers exclude choices, and per-card flags fight over identity/layers. The
+architecture prevents that through independent outcomes, one effective view, explicit
+pending decisions and deletion of duplicate current rules.
+
+**Check result — 2026-10-28:** offline inventory/face/printing/closure verification
+passed; 76 fixture comparisons had zero drift; 201 focused debug rules tests and one
+100-definition compiled/native parity test passed. The rules suites include a retained
+fixed-deck replay case; this run added no random search. No full Rust suite, browser
+proof, policy training or whole-card conformance was claimed. Raw logs and the exact
+command receipt are in `tla-evidence/validation.json`.
+
+Remaining review decisions are in [questions.md](questions.md). Production behavior,
+authored decks, Task identity and historical evidence were not changed.

@@ -3,7 +3,7 @@
 //! a dropped admission or a re-introduced name-based branch, and pin the
 //! resolved effect traces for representative happy-path and interaction cases.
 
-use managym::cardsets::alpha::ContentPack;
+use managym::cards::content_pack::ContentPack;
 use managym::semantic::{Condition, IrError, Predicate, Program, SemanticPack, Step, TraceEvent};
 
 /// Test context whose runtime facts are configured per scenario. Defaults make
@@ -40,7 +40,7 @@ impl managym::semantic::InterpreterContext for Fixture {
 }
 
 fn pack() -> SemanticPack {
-    SemanticPack::two_deck().expect("checked-in two-deck IR parses")
+    SemanticPack::current("two_deck").expect("checked-in two-deck IR parses")
 }
 
 fn program<'a>(pack: &'a SemanticPack, semantic_key: &str) -> &'a Program {
@@ -206,7 +206,7 @@ fn basic_land_taps_for_its_color() {
     let pack = pack();
     let bound = pack.bind(&ContentPack::default()).expect("bind");
     let trace = bound
-        .run(program(&pack, "basic.island.mana"), &Fixture::default())
+        .run(program(&pack, "tla.island.p0"), &Fixture::default())
         .expect("run");
     assert_eq!(
         trace,

@@ -3,6 +3,7 @@ pub mod benchmark;
 #[cfg(feature = "benchmark")]
 pub mod benchmark_allocations;
 pub mod canonical_replay;
+pub mod cards;
 pub mod cardsets;
 pub mod conformance;
 pub mod decision;
@@ -17,12 +18,11 @@ pub mod search_state;
 pub mod semantic;
 pub mod state;
 pub mod study;
+pub mod world;
 
 pub use agent::env::Env;
 pub use agent::vector_env::VectorEnv;
 pub use flow::game::Game;
 pub use state::hash::{MatchStateHash, MATCH_STATE_HASH_VERSION};
 pub use state::player::PlayerConfig;
-
-/// Rules and observation/action meaning; see WORLDS.md for compatibility.
-pub const WORLD_VERSION: &str = "w16";
+pub use world::WORLD_VERSION;

@@ -12,10 +12,12 @@ from typing import Any
 
 from managym.experience import InteractionOffer
 
+from manabot.semantic.learning import current_ir_document
+
 from .server import DecisionContext, GameSession
 
 ROOT = Path(__file__).parents[1]
-SEMANTIC_IR_PATH = ROOT / "content/semantic/current/generated/two_deck.ir.json"
+SEMANTIC_PACK_KEY = "ur-lessons-vs-gw-allies"
 DEFAULT_RECEIPT_PATH = (
     ROOT / "conformance/authored-match-w11-v1/release-stack-ur-vs-gw-seed-0.json"
 )
@@ -83,7 +85,7 @@ def _json_bytes(value: object) -> bytes:
 
 
 def _load_semantic_ir() -> dict[str, Any]:
-    return json.loads(SEMANTIC_IR_PATH.read_text(encoding="utf-8"))
+    return current_ir_document(SEMANTIC_PACK_KEY)
 
 
 def _registry_name(definition: dict[str, Any]) -> str:

@@ -1,0 +1,36 @@
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running tests/rules_tests.rs (managym/target/debug/deps/rules_tests-07e004f6799edcb6)
+
+running 29 tests
+test rules::stage3_cards::animated_land_bounced_drops_the_delayed_trigger ... ok
+test rules::stage3_cards::animated_land_attacks_with_haste_and_still_taps_for_mana ... ok
+test rules::stage3_cards::animated_land_dies_and_returns_tapped_as_plain_land ... ok
+test rules::stage3_cards::animated_land_exiled_returns_tapped ... ok
+test rules::stage3_cards::anthem_buffs_other_allies_only ... ok
+test rules::stage3_cards::avatar_state_grants_keywords_and_hexproof_blocks_opponent_targeting ... ok
+test rules::stage3_cards::cadets_pump_ability_buffs_until_end_of_turn ... ok
+test rules::stage3_cards::corrected_card_characteristics_match_oracle ... ok
+test rules::stage3_cards::dragonfly_swarm_death_trigger_needs_lesson_at_fire_time ... ok
+test rules::stage3_cards::dragonfly_swarm_power_counts_noncreature_nonland_graveyard_cards ... ok
+test rules::stage3_cards::earthbend_animates_land_with_counter ... ok
+test rules::stage3_cards::earthbend_trigger_removed_without_lands ... ok
+test rules::stage3_cards::earthbend_targets_only_own_lands ... ok
+test rules::stage3_cards::fancy_footwork_untaps_and_buffs_one_or_two_targets ... ok
+test rules::stage3_cards::firebending_only_triggers_with_lesson_in_graveyard ... ok
+test rules::stage3_cards::firebending_mana_lasts_until_end_of_combat_and_casts_spells ... ok
+test rules::stage3_cards::first_time_flyer_conditional_static_recomputes_on_read ... ok
+test rules::stage3_cards::healer_tap_gains_life_and_scries ... ok
+test rules::stage3_cards::jailer_exiles_and_returns_on_leaving ... ok
+test rules::stage3_cards::jailer_old_trigger_does_not_follow_reentered_source ... ok
+test rules::stage3_cards::jailer_killed_in_response_exiles_nothing ... ok
+test rules::stage3_cards::jailer_target_is_up_to_one_and_mv_gated ... ok
+test rules::stage3_cards::jailer_trigger_still_fires_with_no_legal_targets ... ok
+test rules::stage3_cards::layers_compose_counters_anthem_and_until_eot ... ok
+test rules::stage3_cards::lieutenant_counters_each_other_ally_and_grows ... ok
+test rules::stage3_cards::suki_power_tracks_creature_count_and_attack_makes_a_token ... ok
+test rules::stage3_cards::two_anthems_buff_each_other_and_stack ... ok
+test rules::stage3_cards::zero_toughness_animated_land_dies_by_sba_and_returns ... ok
+test rules::stage3_cards::yip_yip_buffs_and_grants_flying_to_allies_only ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 287 filtered out; finished in 0.07s
+

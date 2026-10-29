@@ -9,7 +9,7 @@ use crate::{
         },
         structured_offer::{OfferSubmission, StructuredOfferSet},
     },
-    cardsets::alpha::ContentPackManifest,
+    cards::content_pack::ContentPackManifest,
     decision::{
         Command as SemanticCommand, DecisionFrame, Observation as SemanticObservation,
         SemanticTransition,
@@ -1332,7 +1332,7 @@ mod content_pack_contract_tests {
 
     use super::Env;
     use crate::{
-        cardsets::alpha::{default_content_pack, CONTENT_PACK_SCHEMA_VERSION},
+        cards::content_pack::{default_content_pack, CONTENT_PACK_SCHEMA_VERSION},
         state::player::PlayerConfig,
     };
 

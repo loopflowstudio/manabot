@@ -24,7 +24,7 @@ fn configs(sideboard: BTreeMap<String, usize>) -> Vec<PlayerConfig> {
 
 #[test]
 fn learn_authored_setup_keeps_main_decks_and_sideboards_together_in_both_seats() {
-    let pack = SemanticPack::two_deck().unwrap();
+    let pack = SemanticPack::current("two_deck").unwrap();
     assert_eq!(
         pack.decklist("ur_lessons").unwrap().values().sum::<usize>(),
         41

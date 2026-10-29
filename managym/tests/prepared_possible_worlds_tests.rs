@@ -5,7 +5,7 @@ use managym::state::{game_object::PlayerId, zone::ZoneType};
 use managym::{semantic::SemanticPack, Env, PlayerConfig};
 
 fn authored_configs() -> Vec<PlayerConfig> {
-    let semantic = SemanticPack::two_deck().expect("checked-in semantic IR parses");
+    let semantic = SemanticPack::current("two_deck").expect("checked-in semantic IR parses");
     vec![
         PlayerConfig::new(
             "UR Lessons",

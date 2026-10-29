@@ -1,0 +1,720 @@
+{
+  "schema_version": 1,
+  "inspected_repository_revision": "c5d406e3d2a701525c15c8500a30f7da7896cc40",
+  "observed_origin_main": "c5d406e3d2a701525c15c8500a30f7da7896cc40",
+  "retrieval_timestamp_method": "UTC file completion time of successful curl request; raw exact bytes retained",
+  "rules_effective_date": "2026-09-25",
+  "historical_rules_digest_unchanged": true,
+  "inventory_policy": "Official checklist names/numbers plus Scryfall Oracle identity join; all 394 printings and 414 printing faces verified; 286 identities/294 faces. TLE-only cards excluded; TTLA producer closure included. No official Oracle-text completeness certification.",
+  "sources": [
+    {
+      "path": "scratch/tla-evidence/gallery.html",
+      "bytes": 303849,
+      "sha256": "12f0e438b045fdbee265082b9bd34a1b9f074733163ecc090c35863bb5e8aee4",
+      "url": "https://magic.wizards.com/en/products/avatar-the-last-airbender/card-image-gallery",
+      "retrieved_utc": "2026-10-28T18:56:27.883021+00:00",
+      "authority": "official_Wizards"
+    },
+    {
+      "path": "scratch/tla-evidence/rules.html",
+      "bytes": 150636,
+      "sha256": "ee00fd253dc4ea01c78ed6caaef7d789ba5a46dba0a80e4993a410a3c759dc56",
+      "url": "https://magic.wizards.com/en/rules",
+      "retrieved_utc": "2026-10-28T18:56:28.148477+00:00",
+      "authority": "official_Wizards"
+    },
+    {
+      "path": "scratch/tla-evidence/release-notes.html",
+      "bytes": 671298,
+      "sha256": "f47bfb42f763c90a96044941bec1274785d8193ddcab3f65a5d289ee9d4f04a4",
+      "url": "https://magic.wizards.com/en/news/feature/avatar-the-last-airbender-release-notes",
+      "retrieved_utc": "2026-10-28T18:56:29.564502+00:00",
+      "authority": "official_Wizards"
+    },
+    {
+      "path": "scratch/tla-evidence/collecting.html",
+      "bytes": 252525,
+      "sha256": "918726b082389c49f6fdbefc89160567048b1af889c4a6dc7ed09042a9b72436",
+      "url": "https://magic.wizards.com/en/news/feature/collecting-avatar-the-last-airbender",
+      "retrieved_utc": "2026-10-28T19:09:21.967727+00:00",
+      "authority": "official_Wizards"
+    },
+    {
+      "path": "scratch/tla-evidence/official-card-list.pdf",
+      "bytes": 670702,
+      "sha256": "6f4d874899d49ea480ff1b98487a1b955f17eea8e4dfc7b04ffaffa97bee600a",
+      "url": "https://media.wizards.com/2025/downloads/card-sets/TLA_Cardlist_11182025.pdf",
+      "retrieved_utc": "2026-10-28T18:58:21.316951+00:00",
+      "authority": "official_Wizards"
+    },
+    {
+      "path": "scratch/tla-evidence/comprehensive-rules.txt",
+      "bytes": 977752,
+      "sha256": "8d860e451f20f38865b725b42d82feb714c725373dd8f3b32b8652b3eeb070ca",
+      "url": "https://media.wizards.com/2026/downloads/MagicCompRules%2020260925.txt",
+      "retrieved_utc": "2026-10-28T18:57:41.062553+00:00",
+      "authority": "official_Wizards"
+    },
+    {
+      "path": "scratch/tla-evidence/scryfall-tla-1.json",
+      "bytes": 947705,
+      "sha256": "b26f8e923629ebd2d3f6f73cab4f5859a3549b698f31563471fbd4554590eff3",
+      "url": "https://api.scryfall.com/cards/search?q=set%3Atla&unique=prints&order=set",
+      "retrieved_utc": "2026-10-28T18:56:30.014888+00:00",
+      "authority": "secondary_transcription"
+    },
+    {
+      "path": "scratch/tla-evidence/scryfall-tla-2.json",
+      "bytes": 948986,
+      "sha256": "4f517e7404e688cdc735f5c922c4add8e931251c4f6af9fffebf9a2e79e8d316",
+      "url": "https://api.scryfall.com/cards/search?q=set%3Atla&unique=prints&order=set&page=2",
+      "retrieved_utc": "2026-10-28T18:57:42.009529+00:00",
+      "authority": "secondary_transcription"
+    },
+    {
+      "path": "scratch/tla-evidence/scryfall-tla-3.json",
+      "bytes": 253693,
+      "sha256": "541b6ef06ee618e9fda301a6d2a1c75d4d19ab5c8eeb0b28631f13a6f9ff1639",
+      "url": "https://api.scryfall.com/cards/search?q=set%3Atla&unique=prints&order=set&page=3",
+      "retrieved_utc": "2026-10-28T18:57:42.469130+00:00",
+      "authority": "secondary_transcription"
+    },
+    {
+      "path": "scratch/tla-evidence/scryfall-ttla.json",
+      "bytes": 716984,
+      "sha256": "d6e8b3318e066efafa88bf2f8cbf6882f0c32c87fd03f8bc1747a806d7fbb181",
+      "url": "https://api.scryfall.com/cards/search?q=set%3Attla&unique=prints&order=set",
+      "retrieved_utc": "2026-10-28T18:57:42.880255+00:00",
+      "authority": "secondary_transcription"
+    }
+  ],
+  "repository_sources": [
+    {
+      "path": "academy/curated_pack.py",
+      "bytes": 15433,
+      "sha256": "14f9bcc2c26fddf07b30f7b4d2f4fdd8fe5607e4f6cf37af8483d6ad4c12b009"
+    },
+    {
+      "path": "academy/server.py",
+      "bytes": 138679,
+      "sha256": "dde36468248c15059ecc23c59556fc4d0216bbc1559d747b0deafca5febe1cff"
+    },
+    {
+      "path": "content/semantic/v1/complexity.source.json",
+      "bytes": 37976,
+      "sha256": "6212d7336cb09e5384cd4466abf437e271385f886e9d95506b8e81e1d0764fdf"
+    },
+    {
+      "path": "content/semantic/v1/elemental.source.json",
+      "bytes": 59590,
+      "sha256": "6948fef31fc88a6dee2f9300ee50b581e41b7b017af0f0836c8828b0cd55b126"
+    },
+    {
+      "path": "content/semantic/v1/elemental_world.source.json",
+      "bytes": 137664,
+      "sha256": "2ec5048774676e6966ea05ce90caf64bfe1ce105af5ba4dd0c5da062a0da01c3"
+    },
+    {
+      "path": "content/semantic/v1/jeong_increment.source.json",
+      "bytes": 34314,
+      "sha256": "fe1f45e36a5390c177d3c05078dbc6fea17032e9720e87704bc1c76d09a7eb3d"
+    },
+    {
+      "path": "content/semantic/v1/sacrifice.source.json",
+      "bytes": 31221,
+      "sha256": "cbe5f77abda929f57b28414f41d95ff317e275c6ea71fed782d3f45848f8285d"
+    },
+    {
+      "path": "content/semantic/v1/temur.source.json",
+      "bytes": 14222,
+      "sha256": "b71a4ce356e310f42456057a0309582ac5742bb6a6e10ea9247b43a8ef62c54d"
+    },
+    {
+      "path": "content/semantic/v1/two_deck.source.json",
+      "bytes": 21645,
+      "sha256": "9b8d8b1b18aa49d6546a3183d53adb2ba9c8d82190a28b97029147578a0b2b1a"
+    },
+    {
+      "path": "content/semantic/w11/elemental_world.source.json",
+      "bytes": 137851,
+      "sha256": "3501aaa7a80b69c08391fe970e4385148069f52bae1461e39afe4a29ab33ff1e"
+    },
+    {
+      "path": "manabot/env/match.py",
+      "bytes": 7567,
+      "sha256": "fba1f80660d072493badc2f9747313226a9c47acea2c488cf2f9f22a8c74ade2"
+    },
+    {
+      "path": "manabot/infra/config.py",
+      "bytes": 8264,
+      "sha256": "9139cadf010dd3eb2de53e883edb41675f4b7439ecfb9c0d2c17df2e9ed928a1"
+    },
+    {
+      "path": "manabot/model/compound.py",
+      "bytes": 7284,
+      "sha256": "d00cbb5debc0ce53b9b4561e4a832715b64e967b31ac1d6ca59753bd754981a7"
+    },
+    {
+      "path": "managym/src/agent/observation.rs",
+      "bytes": 47659,
+      "sha256": "37d818ba7481b6751cb11b99a1b3f41ff2fb9f49a7bf84d604d558055acd5d99"
+    },
+    {
+      "path": "managym/src/agent/observation_encoder.rs",
+      "bytes": 44095,
+      "sha256": "08801f7dc15d5d9c6d70d03aff6ad6df549d71d3db01bc8ee961b8016fd3dbc7"
+    },
+    {
+      "path": "managym/src/agent/structured_offer.rs",
+      "bytes": 77884,
+      "sha256": "99635e95410b07e64d979287ce8777b52a6542eddabd1e99a6c3439ee311bc70"
+    },
+    {
+      "path": "managym/src/cardsets/alpha.rs",
+      "bytes": 17597,
+      "sha256": "c76c9aa758d61721290173706068e3989a4c505bb6cf51dbce4dc306eec7c6a9"
+    },
+    {
+      "path": "managym/src/cardsets/elemental.rs",
+      "bytes": 45428,
+      "sha256": "e0f2b9903098cc69cb85a9e11fbb5e3088d811616ec4f9dd0001d03f91a3ade8"
+    },
+    {
+      "path": "managym/src/cardsets/sacrifice.rs",
+      "bytes": 23080,
+      "sha256": "1a28a2dcb59cd66903956a9017d351acd0b866c9a7086c34a4d9440973b338f2"
+    },
+    {
+      "path": "managym/src/cardsets/temur.rs",
+      "bytes": 8090,
+      "sha256": "8343a08d239a452273cf53b08c29c0a2f6eb7ea7d52952898cf0b746f56a9ab7"
+    },
+    {
+      "path": "managym/src/cardsets/tla.rs",
+      "bytes": 39248,
+      "sha256": "8203f0d0cdac7eee6976b106d8f556af8700043cea3a4feafd84accbd3291b2e"
+    },
+    {
+      "path": "managym/src/decision_context.rs",
+      "bytes": 17791,
+      "sha256": "4b2a9e36654c2434dc98ac23282c500e6fa9e095dcca88b6a3e488ec233cb68f"
+    },
+    {
+      "path": "managym/src/experience.rs",
+      "bytes": 20822,
+      "sha256": "dc05169972950045ffed32437b02adbc1d0857445f8127ad6991cf44aba6b2d1"
+    },
+    {
+      "path": "managym/src/flow/action.rs",
+      "bytes": 26973,
+      "sha256": "b4b1e9586bad4bc56af9591e3afd6e021f15c5ab42d5d8a5777f330a3291a475"
+    },
+    {
+      "path": "managym/src/flow/combat.rs",
+      "bytes": 359,
+      "sha256": "0e4ec6be6e336521c6750a04c87b1b0b869e4b6d29752b1adc5551148cb3e07a"
+    },
+    {
+      "path": "managym/src/flow/damage.rs",
+      "bytes": 8823,
+      "sha256": "b0d5e1f8fd63792784c5d77f7639d81721cca4eff8d3fce791c497acd58117f5"
+    },
+    {
+      "path": "managym/src/flow/event.rs",
+      "bytes": 3536,
+      "sha256": "c96a48d8360a7f08b2f1e92e682fdbaec0195d9981799e730194c70f9f3f8d2a"
+    },
+    {
+      "path": "managym/src/flow/identity.rs",
+      "bytes": 6557,
+      "sha256": "bfd9f782ae331fdee6189733a862aa6e443328aaf0fc49e1d8c15fbd3d291bb2"
+    },
+    {
+      "path": "managym/src/flow/mana.rs",
+      "bytes": 41379,
+      "sha256": "f92e3a861f433f1f3eb06193d4fcbbe290802206529366b3ecb0bd487c17a4e7"
+    },
+    {
+      "path": "managym/src/flow/play.rs",
+      "bytes": 39215,
+      "sha256": "d6c1281fc2ebc1b2e39814f2c0a524f16d69a222ef07304bd5767a960f9d5b8e"
+    },
+    {
+      "path": "managym/src/flow/proposed_event.rs",
+      "bytes": 16986,
+      "sha256": "8bec62c57f370c77781f79909a907eb4b99a7c26daceba7d46caaf84b4b81496"
+    },
+    {
+      "path": "managym/src/flow/resolution.rs",
+      "bytes": 46725,
+      "sha256": "2bd6b9b518044a6a8ad824be631c5164503f453e406121cbc136abe246f686bf"
+    },
+    {
+      "path": "managym/src/flow/sba.rs",
+      "bytes": 7404,
+      "sha256": "0847961cfdc40d9ca36f409b7352acf79da2daa37b88f9700d6c98b5fd4032d6"
+    },
+    {
+      "path": "managym/src/flow/search.rs",
+      "bytes": 7148,
+      "sha256": "43614f74639d3d86a03ed7a2a0d0f942d3e7bee7ae83817b7e0c836deb27141e"
+    },
+    {
+      "path": "managym/src/flow/statics.rs",
+      "bytes": 9402,
+      "sha256": "de206f5ce67a3e8d24c0bf82c784e36ac5ec7de69851327cf1e1ac2854255155"
+    },
+    {
+      "path": "managym/src/flow/trigger.rs",
+      "bytes": 3519,
+      "sha256": "e060480ddb63eaf7c6ca8ff43284e7e9d22c48da7bb803d4c75f8d9c5e808326"
+    },
+    {
+      "path": "managym/src/flow/triggers.rs",
+      "bytes": 31042,
+      "sha256": "52717dd054679b2cde4b80a07b4eb559b3fa379ff9aabb3a89df8ba4b248458b"
+    },
+    {
+      "path": "managym/src/flow/turn.rs",
+      "bytes": 4662,
+      "sha256": "6f7fa159ff503f183c0970e983c58351aab08b0ee486f628a42b4cea541c55a0"
+    },
+    {
+      "path": "managym/src/flow/zones.rs",
+      "bytes": 21874,
+      "sha256": "6f4c93fafdf7c9ad4d1452f08d9bc5a1422d0f3e7095c225e241eeb66bad20af"
+    },
+    {
+      "path": "managym/src/lib.rs",
+      "bytes": 693,
+      "sha256": "cbc1c428968d03296c96925bbee8773eb1cc9416ea90bd2e48b506ed92b53e4d"
+    },
+    {
+      "path": "managym/src/semantic/content.rs",
+      "bytes": 53059,
+      "sha256": "8baee0bc572c4174295e4230791c0ecf8827b3224abbfc58751c502642f47530"
+    },
+    {
+      "path": "managym/src/semantic/mod.rs",
+      "bytes": 57507,
+      "sha256": "3a5ae0afd9f76d3b725ee1757741f810008b16a1e58c265995e403ba760d2b0b"
+    },
+    {
+      "path": "managym/src/state/card.rs",
+      "bytes": 16379,
+      "sha256": "51f1fd0afd9a7aa64f15ff48db3b26a669b1411c6d47285930b834fe163e989a"
+    },
+    {
+      "path": "managym/src/state/hash.rs",
+      "bytes": 8940,
+      "sha256": "3a82a3c4428db4a22dd0de0ebaaeed4bf2a324cd3d5c20aeddb7e80f0832e176"
+    },
+    {
+      "path": "managym/src/state/mana.rs",
+      "bytes": 15589,
+      "sha256": "d5ffc52c3464c193144557bccd1d9ee51c42f2669dcab70ef7f0a5992a728089"
+    },
+    {
+      "path": "managym/src/state/permanent.rs",
+      "bytes": 4601,
+      "sha256": "eb81b1c88140e2e2249158b6292709ca90f3e6dfce40899198b2581a340c5397"
+    },
+    {
+      "path": "managym/src/state/predicate.rs",
+      "bytes": 4440,
+      "sha256": "419df1ad1976933fb51819124222d595bdb17f4a648f5227893e0a0ba8fec77a"
+    },
+    {
+      "path": "managym/tests/elemental_world_tests.rs",
+      "bytes": 3932,
+      "sha256": "5c5969bb84e13ac5089c53c007c675d314abe98c8de523c1d33ec8644d7d2ad5"
+    },
+    {
+      "path": "managym/tests/fixtures/scryfall_cards.json",
+      "bytes": 48495,
+      "sha256": "62d944f9f37180b057cc46b160ee791b5fc85491e2f8c008d50304787d932173"
+    },
+    {
+      "path": "managym/tests/rules/cr_103_game_start.rs",
+      "bytes": 1012,
+      "sha256": "33b9891f566ce6590129ac06580e892b005649b6195ed2065387faf8f51a8e12"
+    },
+    {
+      "path": "managym/tests/rules/cr_106_mana.rs",
+      "bytes": 4531,
+      "sha256": "6b0f87b0e604b9b95bb8597cf2c1f5b089e7d05342c46efb404272d8d39bccdf"
+    },
+    {
+      "path": "managym/tests/rules/cr_305_lands.rs",
+      "bytes": 2002,
+      "sha256": "f1087737fa1f6b8e2e57b7a17726e7528067a8daa119e3324586155fffbda32e"
+    },
+    {
+      "path": "managym/tests/rules/cr_400_identity.rs",
+      "bytes": 6754,
+      "sha256": "db2bd9f7e60cb398cbfdf71e8a1de49b1bb12f2417962e3a38d8b4cfd2806aea"
+    },
+    {
+      "path": "managym/tests/rules/cr_405_stack.rs",
+      "bytes": 3318,
+      "sha256": "6a0eb468e0b884da55f40135bd9ec899b4295798a04dc01090f5fcf554f9120e"
+    },
+    {
+      "path": "managym/tests/rules/cr_508_attackers.rs",
+      "bytes": 1902,
+      "sha256": "0e5e101c3b8449af71da536cf38c76f1585498e81153c68935dbe8b884683db1"
+    },
+    {
+      "path": "managym/tests/rules/cr_510_combat_damage.rs",
+      "bytes": 1597,
+      "sha256": "c08dd956af687f745c7d7a8366dbadbc25b5f767e64f83d09c929402fa814765"
+    },
+    {
+      "path": "managym/tests/rules/cr_601_casting.rs",
+      "bytes": 2928,
+      "sha256": "472809d882d3a205727667d2f2a9f696dfd8e8db638a097355e838851e61056c"
+    },
+    {
+      "path": "managym/tests/rules/cr_614_replacement.rs",
+      "bytes": 7132,
+      "sha256": "2cf692cee66450e442921b692a1cb45d75f5b23ba40b395abd07d81484ca7525"
+    },
+    {
+      "path": "managym/tests/rules/cr_702_keywords.rs",
+      "bytes": 18677,
+      "sha256": "337d6de08114c0cfaee606eead733e6949c490264ee529edf4c235d69e806ccf"
+    },
+    {
+      "path": "managym/tests/rules/cr_704_sba.rs",
+      "bytes": 14203,
+      "sha256": "9a50f3f69987dba4e52dba1deb2cc616a51c51aab316349e94a0e29e811880d9"
+    },
+    {
+      "path": "managym/tests/rules/elemental_cards.rs",
+      "bytes": 54471,
+      "sha256": "1f16687bae07676334374d67c4720e8a1aa5bd2031547a8e9a4c5eefad95e29b"
+    },
+    {
+      "path": "managym/tests/rules/event_log.rs",
+      "bytes": 3447,
+      "sha256": "45d2015cb6ff1f0e0ef5c457abb1183f14dd943aeaa32b3c5581b65e95b6d75e"
+    },
+    {
+      "path": "managym/tests/rules/interaction_spells.rs",
+      "bytes": 5421,
+      "sha256": "9218d08d0929b4f39125948dd369ffff6d95eea916c00777e9b3751931ae6f0e"
+    },
+    {
+      "path": "managym/tests/rules/presentation_events.rs",
+      "bytes": 3529,
+      "sha256": "fb84a3bfbbb1f93c99238f285fac9b74e9ae53b6b0c1db14ccaf6c5b812a952b"
+    },
+    {
+      "path": "managym/tests/rules/sacrifice_cards.rs",
+      "bytes": 22561,
+      "sha256": "95106d87351599f033d100bc7f722f4a463aa58acd1654fec01666c672303acb"
+    },
+    {
+      "path": "managym/tests/rules/stage2_cards.rs",
+      "bytes": 39133,
+      "sha256": "ddccc45da03e2d8004741d3a7a85ee67a6b08ec166962409c981be377e718412"
+    },
+    {
+      "path": "managym/tests/rules/stage3_cards.rs",
+      "bytes": 43002,
+      "sha256": "5c84b1b44a80accdcb39ead313dcdd305cc71d1fe9297b6287712be4453e0af4"
+    },
+    {
+      "path": "managym/tests/rules/structured_attacker_offers.rs",
+      "bytes": 23622,
+      "sha256": "51f4b020a396db5480f18a0d2dcf21c383d13725d5589e753bc7ec9d57571e8a"
+    },
+    {
+      "path": "managym/tests/rules/structured_offers.rs",
+      "bytes": 23433,
+      "sha256": "47f565f891c1b13f4a596772b515cdf8a1891a44e750301485b2a53102f62bd0"
+    },
+    {
+      "path": "managym/tests/rules/temur_cards.rs",
+      "bytes": 49606,
+      "sha256": "e1af4480dbf9965ae0f390fc98ddbdcc5141c4937b4747b23063a571cc773773"
+    },
+    {
+      "path": "managym/tests/rules/tla_cards.rs",
+      "bytes": 36066,
+      "sha256": "14af817c01947ae01547b5fca62600e323fefb53c5ccc37fb3749fbbcfb805c7"
+    },
+    {
+      "path": "managym/tests/rules/ur_lessons_increment.rs",
+      "bytes": 21537,
+      "sha256": "b520c8eb34d46cbbfe9de72d3fac22dd47cf615823d100cca77ff866170b2b1b"
+    }
+  ],
+  "research_artifacts": [
+    {
+      "path": ".lf/prompts/20261028-121705-13e030b4-94a5-4504-a9ca-3a407cb54356-vQ6v0c-steer.md",
+      "bytes": 1093,
+      "sha256": "aabfadc8af3230688b28da60fda33dc29c9255e4f89b0815a0e85f593f71b02c"
+    },
+    {
+      "path": ".lf/prompts/20261028-121832-c288b713-2b33-406b-b138-ec98be913706-aavLtv-steer.md",
+      "bytes": 1092,
+      "sha256": "02e36fb2035b44ffeed461487eba82568f593d6b926cc12e939d8b975ce2591a"
+    },
+    {
+      "path": ".lf/prompts/20261028-122113-54fd6d86-4683-4817-96a8-3ce30fd9413e-RqeirK-steer.md",
+      "bytes": 994,
+      "sha256": "9ccbc7d72f8be42a0cafa0b9e8959ce17bcf73aa4873c7b0cc2521f9f63433d7"
+    },
+    {
+      "path": ".lf/prompts/20261028-122113-54fd6d86-4683-4817-96a8-3ce30fd9413e-viNh43-steer.md",
+      "bytes": 1121,
+      "sha256": "5c9f1324dfc392315e9d1fca1dfccc65dd8b5b492b9d62b72a4afc2f97f0c8ce"
+    },
+    {
+      "path": ".lf/prompts/20261028-122619-d70760c1-b6c4-47b4-90f7-bc25387c24e8-RCFVad-steer.md",
+      "bytes": 802,
+      "sha256": "741138da958bdefa0279a023b39fca020cdf55ab7a8634d8e933aaeb267803f0"
+    },
+    {
+      "path": "scratch/full-tla.md",
+      "bytes": 28440,
+      "sha256": "7cdb6308f8750ec6d1e30ca485e1676c53af5456401fffa3cb88f10c496c07ef"
+    },
+    {
+      "path": "scratch/questions.md",
+      "bytes": 3058,
+      "sha256": "a16fee6287ab41e06d04b55ce7c99e622556cb5abb2274c85d435e7722d48893"
+    },
+    {
+      "path": "scratch/tla-card-ledger.jsonl",
+      "bytes": 695669,
+      "sha256": "84e38747f2dc1bb500283b221532e0b6b70bbbee987e929a58c0f56cdbef99c0"
+    },
+    {
+      "path": "scratch/tla-content-handoff.md",
+      "bytes": 1066,
+      "sha256": "996af1033aa667f442aa7de963be741d29c881e9abaf411df033a6f8ee1361ca"
+    },
+    {
+      "path": "scratch/tla-decklist-handoff.md",
+      "bytes": 968,
+      "sha256": "59b05c6c019c56440af16c3141c681f1ba47ddff7e84725162effb96e61a0183"
+    },
+    {
+      "path": "scratch/tla-delivery-batches.md",
+      "bytes": 2006,
+      "sha256": "21497244a10e30e73b7ea618e1b0fffa9c05bec4b2fdd6b032e8ddc38d6ae654"
+    },
+    {
+      "path": "scratch/tla-evidence/assign_batches.py",
+      "bytes": 2689,
+      "sha256": "de93bf292568784c659251e1be8abf8174dfdcb75ee0cc13216ea56b312b49cb"
+    },
+    {
+      "path": "scratch/tla-evidence/batch-members.txt",
+      "bytes": 6759,
+      "sha256": "9b94793a59a34f9ca32be47c9ad4c6960bb5bc738892953c81a4451c445549bb"
+    },
+    {
+      "path": "scratch/tla-evidence/build_ledger.py",
+      "bytes": 12449,
+      "sha256": "cbcfdc9540a79e3480a0af93b4d25b9e58f864441278da1a6106a4d045479fb0"
+    },
+    {
+      "path": "scratch/tla-evidence/card-batches.json",
+      "bytes": 71079,
+      "sha256": "4a3de52c90db30570963740352ea1b212ed83111a38ec8afbc8457618c163c2e"
+    },
+    {
+      "path": "scratch/tla-evidence/card-obligations.tsv",
+      "bytes": 23939,
+      "sha256": "0f04c58e04dfa6bedd5be4e24b1e57caa3d95f56129eeb0f2ec0d986233ac513"
+    },
+    {
+      "path": "scratch/tla-evidence/cards.json",
+      "bytes": 1829428,
+      "sha256": "8bb731396e3a54a218c869df18235dc82713e4380958d0d8a01f1f1b7d7db1bc"
+    },
+    {
+      "path": "scratch/tla-evidence/compiled-parity-tests.log",
+      "bytes": 466,
+      "sha256": "9d01a0324271f4d0fba436e8c0aaf8d4b66e73f7e772ba6e4a2fa56a2dd9da0b"
+    },
+    {
+      "path": "scratch/tla-evidence/delivery-plan.json",
+      "bytes": 1864,
+      "sha256": "c93731b7e66a87b8220162af712c79170cf2b544dd7a987c099a9e404d9643ab"
+    },
+    {
+      "path": "scratch/tla-evidence/fixture-comparison.json",
+      "bytes": 42,
+      "sha256": "6ffdccb7360d69f701577298bbc7d0feba8d6bc26786d72e12d5e2d01a68abe0"
+    },
+    {
+      "path": "scratch/tla-evidence/gallery-names.txt",
+      "bytes": 35318,
+      "sha256": "9e7523553de9e5dfd3fd7c7c4ec24680df2b047af96123498bf4918dadb92212"
+    },
+    {
+      "path": "scratch/tla-evidence/gallery.json",
+      "bytes": 246975,
+      "sha256": "fc9a8648722510a974d79b4086132a51bca122c6970c6b899084490d6db288e8"
+    },
+    {
+      "path": "scratch/tla-evidence/historical-notes/full-tla-before-final-reconciliation.txt",
+      "bytes": 26539,
+      "sha256": "98f450384e207f83e5660396f75a91afaabb7d6708dd603f84dc5d4c23530107"
+    },
+    {
+      "path": "scratch/tla-evidence/historical-notes/manifest.json",
+      "bytes": 2393,
+      "sha256": "65fd3ab05ccfab8b9103935a5cf67b4daed02fbc3ddb42b53582f1e4640443d1"
+    },
+    {
+      "path": "scratch/tla-evidence/historical-notes/questions-before-final-reconciliation.txt",
+      "bytes": 2893,
+      "sha256": "6ea518a0aa88ea89b64f9e5e6b9ebc7b6128689ac6f49ca2005871bdd216a5bc"
+    },
+    {
+      "path": "scratch/tla-evidence/historical-notes/tla-content-handoff-before-final-reconciliation.txt",
+      "bytes": 4689,
+      "sha256": "db80f859730b933ea1a006ef9696cf3c07b256510903717dcef056e505930658"
+    },
+    {
+      "path": "scratch/tla-evidence/historical-notes/tla-decklist-handoff-before-final-reconciliation.txt",
+      "bytes": 4334,
+      "sha256": "2be9d16794f4c135d7ad9b95e6788970c14cf4a2f4f29a3b33791ab37d7ec5a4"
+    },
+    {
+      "path": "scratch/tla-evidence/historical-notes/tla-delivery-batches-before-final-reconciliation.txt",
+      "bytes": 5973,
+      "sha256": "f82e53b59c11912555a2e79112f07d8fdd57705bd41857d38a2095981fccba1b"
+    },
+    {
+      "path": "scratch/tla-evidence/historical-notes/tla-scope-before-final-reconciliation.txt",
+      "bytes": 9939,
+      "sha256": "8c9bb188e75a8ba396345a3977485edc90aaa5b775f84d7b2f93e31e0564115b"
+    },
+    {
+      "path": "scratch/tla-evidence/inventory-check.json",
+      "bytes": 1035,
+      "sha256": "b30feaaa66f67cc69811c66607b42dee5f840d0fe970567dd1c8d1532ddb837e"
+    },
+    {
+      "path": "scratch/tla-evidence/mechanics.json",
+      "bytes": 7627,
+      "sha256": "c373e0be034c550722e3c7fbe51cc4b400ebb21ac5db6301eb1314c2713204ba"
+    },
+    {
+      "path": "scratch/tla-evidence/mtg177-status.json",
+      "bytes": 676,
+      "sha256": "054f9816184562d23eaa23e18149c48f8ff46cd22f81a4a5599268d4de27ca67"
+    },
+    {
+      "path": "scratch/tla-evidence/native-elemental-tests.log",
+      "bytes": 4673,
+      "sha256": "fa94779c4784952d0a5647c09113509e6023f65f9145107ecf794e434c82c340"
+    },
+    {
+      "path": "scratch/tla-evidence/native-sacrifice-tests.log",
+      "bytes": 2205,
+      "sha256": "3088d055e0db9eb5e6ff4f9963af49cb54dd84be30d31f42b9972264c820b790"
+    },
+    {
+      "path": "scratch/tla-evidence/native-stage2-tests.log",
+      "bytes": 2730,
+      "sha256": "213c4e3a35eec61db1721ced79e3d2f27faacd9eecc6189bc2c5f773708109ab"
+    },
+    {
+      "path": "scratch/tla-evidence/native-stage3-tests.log",
+      "bytes": 2605,
+      "sha256": "ed6d872cc2725f1d0025ae0367b7fc13f57d43a5193a3f62fe61a07402af73ab"
+    },
+    {
+      "path": "scratch/tla-evidence/native-temur-tests.log",
+      "bytes": 3433,
+      "sha256": "34ca84d5af09e28ba8bb6918a2ef904653f779b634b6f37c255607c97ec5472e"
+    },
+    {
+      "path": "scratch/tla-evidence/native-tla-tests.log",
+      "bytes": 3616,
+      "sha256": "47f0242e109f49cc7682b4b64af62205f3bf1f70cf84b5b2bc582966216653ad"
+    },
+    {
+      "path": "scratch/tla-evidence/native-ur-tests.log",
+      "bytes": 1902,
+      "sha256": "501ac5e9c7d3d91bbddd0151d5d6721b9422c6f57d214a0f9deec94b0c779ce6"
+    },
+    {
+      "path": "scratch/tla-evidence/official-card-list.json",
+      "bytes": 36138,
+      "sha256": "ff225b42a74e4dc1cb41f9af29e63126b471fc0a4c2d3988ae1260c649d52ce9"
+    },
+    {
+      "path": "scratch/tla-evidence/official-card-list.txt",
+      "bytes": 220329,
+      "sha256": "7c6d651130a5a865e7b16f7977fec930498c0167e1ee11bbe3c0fd985512debb"
+    },
+    {
+      "path": "scratch/tla-evidence/official-checklist-rows.json",
+      "bytes": 53659,
+      "sha256": "5a6cdf4ad753b56a429a9cca76c28407c5ca56ba9a5f0fea51dad2e10e4b1229"
+    },
+    {
+      "path": "scratch/tla-evidence/pr354.json",
+      "bytes": 168,
+      "sha256": "c5f1fdc9c109998bf526a8142881ce26598a8becb541766e6d9013560999fb05"
+    },
+    {
+      "path": "scratch/tla-evidence/pr383.json",
+      "bytes": 148,
+      "sha256": "4c2602546e418e24d594a2e6ac6b97cfe55b266bdb092557f23835c9497baebe"
+    },
+    {
+      "path": "scratch/tla-evidence/pr386.json",
+      "bytes": 177,
+      "sha256": "46119ae515d431f3b4d6e70ab3d1e6a19345f427f0ed20ad64623336df076f0d"
+    },
+    {
+      "path": "scratch/tla-evidence/release-notes.json",
+      "bytes": 342785,
+      "sha256": "0c56714ba20ad21375a03bbc518d7801a5d88888cb1c1480cb6729c7a23da891"
+    },
+    {
+      "path": "scratch/tla-evidence/release-notes.txt",
+      "bytes": 238594,
+      "sha256": "52d5adb74a3b98045f5459a0c348f68b21d12c2f14b2c098295a67bfba6ad624"
+    },
+    {
+      "path": "scratch/tla-evidence/rules.json",
+      "bytes": 106959,
+      "sha256": "f52f6991ac3d87190ffc457b9d5047b187d352cb3c65f5a561fb4fe0938ddc9c"
+    },
+    {
+      "path": "scratch/tla-evidence/validation.json",
+      "bytes": 2574,
+      "sha256": "de1ca3a3f35a92dcb22e222819bd101100956e6b2b7714b30e7bda7acdc9d299"
+    },
+    {
+      "path": "scratch/tla-evidence/verify_ledger.py",
+      "bytes": 3614,
+      "sha256": "3f6fe6c9bc83e54af45e976e310dc8986bc16ceac70d409d536393c4beb30120"
+    },
+    {
+      "path": "scratch/tla-evidence/wave-status.json",
+      "bytes": 692,
+      "sha256": "c1feabceabaa7b7d47d29601dbbd2054000a499952e09b29f8505bcbceb50b4e"
+    },
+    {
+      "path": "scratch/tla-scope.md",
+      "bytes": 3190,
+      "sha256": "e4d8bbe11041dc7dad84670b5e7cc116e2a4282f78d16a34c4ae098748f86745"
+    },
+    {
+      "path": "scratch/tla-support-map.md",
+      "bytes": 6690,
+      "sha256": "37272372cd8f940dd9725c8523592b03d5163694cd11174b0e662a705914ae7e"
+    }
+  ]
+}

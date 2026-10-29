@@ -98,7 +98,7 @@ impl VectorEnv {
         if !self.player_configs.is_empty() {
             return Err(AgentError("uniform roster must be set before reset".into()));
         }
-        let pack = crate::semantic::SemanticPack::optional_payments()
+        let pack = crate::semantic::SemanticPack::current("optional_payments")
             .map_err(|e| AgentError(e.to_string()))?;
         let expected: Vec<PlayerConfig> = pack
             .decks
@@ -863,7 +863,7 @@ mod tests {
     }
 
     fn elemental_roster() -> Vec<PlayerConfig> {
-        let pack = crate::semantic::SemanticPack::optional_payments().unwrap();
+        let pack = crate::semantic::SemanticPack::current("optional_payments").unwrap();
         pack.decks
             .iter()
             .map(|d| {

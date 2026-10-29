@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use managym::{
-    cardsets::alpha::{default_content_pack, ContentPack, CONTENT_PACK_SCHEMA_VERSION},
+    cards::content_pack::{default_content_pack, ContentPack, CONTENT_PACK_SCHEMA_VERSION},
     state::{
         game_object::{CardId, PlayerId},
         player::PlayerConfig,

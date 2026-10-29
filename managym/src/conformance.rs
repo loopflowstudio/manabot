@@ -20,7 +20,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    cardsets::alpha::default_content_pack,
+    cards::content_pack::default_content_pack,
     flow::{game::Game, search::mix_seed},
     state::player::PlayerConfig,
 };
@@ -110,25 +110,25 @@ impl Orientation {
     fn source_digest(self) -> String {
         blake3::hash(self.source_bytes()).to_hex().to_string()
     }
-    fn content(self) -> Result<Arc<crate::cardsets::alpha::ContentPack>, String> {
+    fn content(self) -> Result<Arc<crate::cards::content_pack::ContentPack>, String> {
         match self {
             Self::ElementalWorldGrVsUg | Self::ElementalWorldUgVsGr => Ok(Arc::new(
-                crate::semantic::SemanticPack::optional_payments()
+                crate::semantic::SemanticPack::current("optional_payments")
                     .and_then(|pack| pack.compile_content_pack())
                     .map_err(|error| error.to_string())?,
             )),
             Self::TemurLeftVsRight | Self::TemurRightVsLeft => Ok(Arc::new(
-                crate::semantic::SemanticPack::temur()
+                crate::semantic::SemanticPack::current("temur")
                     .and_then(|pack| pack.compile_content_pack())
                     .map_err(|error| error.to_string())?,
             )),
             Self::SacrificeLeftVsRight | Self::SacrificeRightVsLeft => Ok(Arc::new(
-                crate::semantic::SemanticPack::sacrifice()
+                crate::semantic::SemanticPack::current("sacrifice")
                     .and_then(|pack| pack.compile_content_pack())
                     .map_err(|error| error.to_string())?,
             )),
             Self::ElementalLeftVsRight | Self::ElementalRightVsLeft => Ok(Arc::new(
-                crate::semantic::SemanticPack::elemental()
+                crate::semantic::SemanticPack::current("elemental")
                     .and_then(|pack| pack.compile_content_pack())
                     .map_err(|error| error.to_string())?,
             )),

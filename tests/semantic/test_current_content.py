@@ -1,21 +1,34 @@
-"""Current authoring has one owner; qualifications cannot survive clause edits."""
+"""Current cards compile natively; qualifications cannot survive clause edits.
+
+Clause-edit and missing-token rejection are native tests in
+`managym/src/semantic/compile.rs`; these checks cover the Python consumers.
+"""
 
 import json
 from pathlib import Path
-import shutil
 
+from managym.decision import Command, DecisionFrame, Observation
+from managym.experience_projection import describe_actions, serialize_observation
 import pytest
 
-from manabot.semantic.compiler import SemanticCompileError, compile_source
-from manabot.semantic.content import CONTENT_ROOT, ContentSource, generate
-from manabot.semantic.learning import BoundSemanticPack
+from manabot.semantic.learning import (
+    CURRENT_PACK_KEYS,
+    BoundSemanticPack,
+    current_ir_document,
+)
+from manabot.semantic.policy_catalog import bind_policy_catalog
+import managym
+
+CONTENT_ROOT = Path(__file__).resolve().parents[2] / "content/semantic"
+SETUPS = json.loads((CONTENT_ROOT / "current/setups.json").read_text())
 
 
-def test_current_outputs_and_all_learning_projections() -> None:
-    generate(check=True)
-    source = ContentSource.load()
-    for preset in [*source.setups, "pool"]:
-        ir, _ = source.project(preset)
+def test_all_current_packs_bind_learning_projections() -> None:
+    pack_keys = {setup["pack_key"] for setup in SETUPS.values()} | {"tla-pool-v1"}
+    assert CURRENT_PACK_KEYS <= pack_keys
+    for pack_key in sorted(pack_keys):
+        ir = current_ir_document(pack_key)
+        assert ir["pack_key"] == pack_key
         manifest = {
             "schema_version": 1,
             "content_digest": "projection-test",
@@ -24,78 +37,54 @@ def test_current_outputs_and_all_learning_projections() -> None:
                 for i, d in enumerate(ir["definitions"])
             ],
         }
-        bound = BoundSemanticPack.bind(
-            manifest,
-            ir_path=CONTENT_ROOT / "generated" / f"{preset}.ir.json",
-            schema_path=CONTENT_ROOT / "learning_schema.json",
-        )
-        assert len(bound.definition_row_by_card_def_id) == len(ir["definitions"])
+        if pack_key in CURRENT_PACK_KEYS:
+            bound = BoundSemanticPack.bind(
+                {**manifest, "compiled_semantics": _receipt(ir)}
+            )
+            assert bound.ir.ir_hash == ir["ir_hash"]
+            assert len(bound.definition_row_by_card_def_id) == len(ir["definitions"])
 
 
-def test_missing_token_and_changed_qualified_clause_fail_closed(tmp_path: Path) -> None:
-    source = ContentSource.load()
-    ally = next(
-        k for k, d in source.definitions.items() if d["registry_name"] == "Ally"
-    )
-    del source.definitions[ally]
-    with pytest.raises(SemanticCompileError, match="missing content definition"):
-        source.project("two_deck")
-
-    shutil.copytree(CONTENT_ROOT, tmp_path / "content")
-    path = tmp_path / "content" / "definitions.json"
-    rows = json.loads(path.read_text())
-    enthusiast = next(d for d in rows if d["registry_name"] == "Avatar Enthusiasts")
-    enthusiast["programs"] = []
-    path.write_text(json.dumps(rows))
-    with pytest.raises(SemanticCompileError, match="stale qualification"):
-        generate(root=path.parent)
+def _receipt(ir: dict) -> dict[str, str]:
+    return {key: ir[key] for key in ("pack_key", "ir_hash", "source_hash")}
 
 
-def test_new_definition_compiles_without_a_native_registration() -> None:
-    ir, _ = compile_source(
-        {
-            "schema_version": 1,
-            "pack_key": "authoring-proof",
-            "decks": [],
-            "pool": ["proof.draw"],
-            "definitions": [
-                {
-                    "key": "proof.draw",
-                    "registry_name": "Unregistered authoring witness",
-                    "text_box": "Draw a card.",
-                    "characteristics": {"types": ["sorcery"], "mana_cost": "U"},
-                    "programs": [
-                        {
-                            "key": "draw",
-                            "kind": "spell",
-                            "cost": {"mana": "U"},
-                            "ops": [{"op": "draw_cards", "count": 1}],
-                        }
-                    ],
-                }
-            ],
-        }
-    )
-    assert ir["definitions"][0]["text_box"] == "Draw a card."
-    assert ir["programs"][0]["instructions"][0]["op_name"] == "draw_cards"
+def test_unknown_pack_has_no_current_ir() -> None:
+    with pytest.raises(ValueError, match="unknown content pack"):
+        current_ir_document("missing-pack")
 
 
-def test_qualified_producer_rejects_changed_token_characteristics(
-    tmp_path: Path,
-) -> None:
-    shutil.copytree(CONTENT_ROOT, tmp_path / "content")
-    path = tmp_path / "content" / "definitions.json"
-    rows = json.loads(path.read_text())
-    ally = next(row for row in rows if row["registry_name"] == "Ally")
-    ally["characteristics"]["power"] = 7
-    path.write_text(json.dumps(rows))
-    with pytest.raises(SemanticCompileError, match="stale qualification.*treetop"):
-        generate(root=path.parent)
+@pytest.mark.parametrize(
+    "name",
+    [
+        "Accumulate Wisdom",
+        "Cat-Gator",
+        "Lightning Strike",
+        "Suki, Kyoshi Warrior",
+        "Water Tribe Rallier",
+    ],
+)
+def test_cards_with_unresolved_clause_prerequisites_stay_out_of_pool(name: str) -> None:
+    pool = managym.content_pool("tla-pool-v1")
+    entry = next(row for row in pool["definitions"] if row["registry_name"] == name)
+    assert entry["card_def_id"] is not None  # Preserved authored availability.
+    assert entry["eligibility"] == "unsupported"
+    assert entry["reason"]
+
+
+@pytest.mark.parametrize(
+    "name", ["Wartime Protestors", "Master Piandao", "Gran-Gran", "Allies at Last"]
+)
+def test_reviewed_cards_are_eligible_in_the_native_pool(name: str) -> None:
+    pool = managym.content_pool("tla-pool-v1")
+    entry = next(row for row in pool["definitions"] if row["registry_name"] == name)
+    assert entry["card_def_id"] is not None
+    assert entry["eligibility"] == "eligible"
+    assert entry["reason"] is None
 
 
 def test_current_projections_preserve_every_historical_setup_count() -> None:
-    source = ContentSource.load()
-    for preset in source.setups:
+    for preset, setup in SETUPS.items():
         if preset == "baseline":
             continue
         directory, filename = (
@@ -104,11 +93,9 @@ def test_current_projections_preserve_every_historical_setup_count() -> None:
             else ("v1", preset)
         )
         historical = json.loads(
-            (
-                CONTENT_ROOT.parent / directory / "generated" / f"{filename}.ir.json"
-            ).read_text()
+            (CONTENT_ROOT / directory / "generated" / f"{filename}.ir.json").read_text()
         )
-        current, _ = source.project(preset)
+        current = current_ir_document(setup["pack_key"])
         for old, new in zip(historical["decks"], current["decks"], strict=True):
             assert old["key"] == new["key"]
             for field in ("cards", "sideboard"):
@@ -130,12 +117,6 @@ def test_current_projections_preserve_every_historical_setup_count() -> None:
 def test_baseline_card_executes_shared_commands_and_forks_with_learning_and_academy_views() -> (
     None
 ):
-    from managym.decision import Command, DecisionFrame, Observation
-    from managym.experience_projection import describe_actions, serialize_observation
-
-    from manabot.semantic.policy_catalog import bind_policy_catalog
-    import managym
-
     env = managym.Env(seed=28, skip_trivial=False)
     obs, _ = env.reset(
         [

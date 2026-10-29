@@ -7,7 +7,7 @@ use super::{
     predicate::CardPredicate,
 };
 
-/// Stable index of an immutable card definition in a [`ContentPack`](crate::cardsets::alpha::ContentPack).
+/// Stable index of an immutable card definition in a [`ContentPack`](crate::cards::content_pack::ContentPack).
 ///
 /// The numeric value deliberately matches the legacy `registry_key` exposed
 /// through observations so the Python and fixed-action ABIs do not change.

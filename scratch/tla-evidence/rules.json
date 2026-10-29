@@ -1,0 +1,2464 @@
+{
+  "layout": "default",
+  "data": [
+    {}
+  ],
+  "fetch": {
+    "TheSiteHeader:0": {
+      "payload": {
+        "id": "52shL43K2cOnAjEUdt2Ipc",
+        "contentTypeId": "TheSiteHeader",
+        "locale": "en",
+        "createdAt": "2020-08-27T15:21:49.828Z",
+        "updatedAt": "2024-12-09T18:57:09.861Z",
+        "publishedVersion": 77,
+        "entryTitle": "The Site Header | Global",
+        "siteLogo": {
+          "id": "1o1zNnmeR0Vyh6QmNZ7tYc",
+          "contentTypeId": "Linkables",
+          "locale": "en",
+          "createdAt": "2020-07-06T22:56:07.561Z",
+          "updatedAt": "2024-10-16T17:52:20.253Z",
+          "publishedVersion": 27,
+          "entryTitle": "Linkables | Site Logo",
+          "link": "/en",
+          "label": "← Back to the homepage",
+          "media": {
+            "url": "//images.ctfassets.net/s5n2t79q9icq/3dB5uyWzUH95O1ZPBNNUX5/6cff7c65a809285755ea24b164b6ac65/magic-logo.png",
+            "size": 14085,
+            "width": 257,
+            "height": 86,
+            "fileName": "magic-logo.png",
+            "contentType": "image/png",
+            "id": "3dB5uyWzUH95O1ZPBNNUX5",
+            "title": "arena-logo",
+            "description": "Magic The Gathering Logo"
+          }
+        },
+        "navigation": [
+          {
+            "id": "6oFfaPGCAIPwVWXAotMGZy",
+            "contentTypeId": "NavigationGroup",
+            "locale": "en",
+            "createdAt": "2020-12-02T17:50:52.981Z",
+            "updatedAt": "2024-10-29T16:08:42.755Z",
+            "publishedVersion": 94,
+            "entryTitle": "Site Nav Group | Products",
+            "groupLabel": "Products",
+            "navigationItems": [
+              {
+                "id": "3pCkCJzo0wXPF4DlNcWACL",
+                "contentTypeId": "NavigationGroup",
+                "locale": "en",
+                "createdAt": "2023-08-05T19:34:51.533Z",
+                "updatedAt": "2026-10-10T00:42:01.361Z",
+                "publishedVersion": 119,
+                "entryTitle": "Site Nav Group | Coming Soon",
+                "groupLabel": "Coming Soon",
+                "navigationItems": [
+                  {
+                    "id": "5LsTcfpmVpOoMLtIPBZylA",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2020-12-02T17:50:53.804Z",
+                    "updatedAt": "2025-09-26T19:30:21.684Z",
+                    "publishedVersion": 139,
+                    "entryTitle": "Site Nav | Tabletop |   TRK 9/26",
+                    "link": "https://magic.wizards.com/en/products/star-trek",
+                    "label": "Star Trek",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "TRK"
+                  },
+                  {
+                    "id": "5kFbYNgc4qmS2jnA40qiAK",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2026-07-17T18:36:07.693Z",
+                    "updatedAt": "2026-07-17T18:36:07.693Z",
+                    "publishedVersion": 13,
+                    "entryTitle": "Site Nav | Tabletop | NAU 7/17",
+                    "link": "https://magic.wizards.com/en/products/nauctis-the-sunken-realm",
+                    "label": "Nauctis: The Sunken Realm",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "NAU"
+                  },
+                  {
+                    "id": "5qyNJ0yX7EyXHOn5XZXc25",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2026-10-10T00:42:01.404Z",
+                    "updatedAt": "2026-10-10T00:42:01.404Z",
+                    "publishedVersion": 14,
+                    "entryTitle": "Site Nav | Tabletop | MDD 10/9",
+                    "link": "https://magic.wizards.com/en/products/marvel/marvel-darkhold-destiny",
+                    "label": " Marvel Darkhold Destiny",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "ZFR"
+                  },
+                  {
+                    "id": "2T7hKQum7FuE4kU6LV2w75",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2026-07-17T18:36:07.713Z",
+                    "updatedAt": "2026-07-17T18:36:07.713Z",
+                    "publishedVersion": 20,
+                    "entryTitle": "Site Nav | Tabletop | KTB 7/17",
+                    "link": "https://magic.wizards.com/en/products/kamigawa-titanbreach",
+                    "label": "Kamigawa: Titanbreach",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "KTB"
+                  },
+                  {
+                    "id": "7iW7PYD6V7khkkGQV0ZKCj",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2026-07-17T18:36:07.728Z",
+                    "updatedAt": "2026-07-17T18:36:07.728Z",
+                    "publishedVersion": 16,
+                    "entryTitle": "Site Nav | Tabletop | ZFR 7/17",
+                    "link": "https://magic.wizards.com/en/products/zhalfir",
+                    "label": "Zhalfir",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "ZFR"
+                  }
+                ]
+              },
+              {
+                "id": "6OLS2AcpArlmMsNCOkfXdQ",
+                "contentTypeId": "NavigationGroup",
+                "locale": "en",
+                "createdAt": "2020-12-02T17:50:53.371Z",
+                "updatedAt": "2026-10-01T23:02:37.670Z",
+                "publishedVersion": 190,
+                "entryTitle": "Site Nav Group | Tabletop // Latest Products 8/5",
+                "groupLabel": "Available Now",
+                "navigationItems": [
+                  {
+                    "id": "3C3IP3obHkseWJ7x9R4DH0",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2025-09-26T19:30:21.666Z",
+                    "updatedAt": "2026-09-03T16:12:35.964Z",
+                    "publishedVersion": 16,
+                    "entryTitle": "Site Nav | Tabletop |   FRA 9/26",
+                    "link": "https://magic.wizards.com/en/products/reality-fracture",
+                    "label": "Reality Fracture",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "FRA"
+                  },
+                  {
+                    "id": "1RYFbNdwTTnJ85Te8z1Xqi",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-02-23T21:31:15.740Z",
+                    "updatedAt": "2025-09-26T19:30:21.529Z",
+                    "publishedVersion": 36,
+                    "entryTitle": "Site Nav | Tabletop | HOB 9/26",
+                    "link": "https://magic.wizards.com/en/products/the-hobbit",
+                    "label": "The Hobbit™",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "HOB"
+                  },
+                  {
+                    "id": "5rsx2zAR4tTfRKh6AQvYle",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2020-12-02T17:50:53.721Z",
+                    "updatedAt": "2025-09-26T19:30:21.549Z",
+                    "publishedVersion": 121,
+                    "entryTitle": "Site Nav | Tabletop |  MSH 9/26",
+                    "link": "https://magic.wizards.com/en/products/marvel/marvel-super-heroes",
+                    "label": "Marvel Super Heroes",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "MSH"
+                  },
+                  {
+                    "id": "nLn3UsjLYV0qjAy2ODSuR",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2020-12-02T17:50:53.909Z",
+                    "updatedAt": "2025-09-26T19:30:21.647Z",
+                    "publishedVersion": 130,
+                    "entryTitle": "Site Nav | Tabletop |  SOS 9/26",
+                    "link": "https://magic.wizards.com/en/products/secrets-of-strixhaven",
+                    "label": "Secrets of Strixhaven",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "LTR"
+                  },
+                  {
+                    "id": "45E6QgV54fpiebxESekWYE",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2025-10-10T16:07:28.731Z",
+                    "updatedAt": "2025-10-10T16:07:28.731Z",
+                    "publishedVersion": 15,
+                    "entryTitle": "Site Nav | Tabletop |   TMT 10/10",
+                    "link": "https://magic.wizards.com/en/products/teenage-mutant-ninja-turtles",
+                    "label": "Teenage Mutant Ninja Turtles",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "TMT"
+                  },
+                  {
+                    "id": "6dX06te6YrhrJGdnPLNcYG",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-10-25T21:25:23.982Z",
+                    "updatedAt": "2025-06-20T21:14:29.061Z",
+                    "publishedVersion": 37,
+                    "entryTitle": "Site Nav | Tabletop |  INR // ECL",
+                    "link": "https://magic.wizards.com/en/products/lorwyn-eclipsed",
+                    "label": "Lorwyn Eclipsed",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "ECL"
+                  },
+                  {
+                    "id": "1ZTcR9re3iX0rlRv2G9T2X",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2020-12-02T17:50:53.953Z",
+                    "updatedAt": "2022-01-18T15:57:20.659Z",
+                    "publishedVersion": 17,
+                    "entryTitle": "Site Nav | Tabletop | Secret Lair Drop Series",
+                    "link": "https://magic.wizards.com/en/secretlair",
+                    "label": "Secret Lair Drop Series",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "SLD"
+                  },
+                  {
+                    "id": "5DkJZs5184RmANPzxFBwQv",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2020-12-02T17:50:53.992Z",
+                    "updatedAt": "2023-09-22T22:41:34.082Z",
+                    "publishedVersion": 34,
+                    "entryTitle": "Site Nav | Tabletop | All Sets",
+                    "identifier": "all",
+                    "link": "https://magic.wizards.com/en/products",
+                    "label": "Latest Products",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "All"
+                  },
+                  {
+                    "id": "Kzi8V2lKl438a1KJPNqBU",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-09-26T19:34:39.553Z",
+                    "updatedAt": "2024-09-26T19:34:39.553Z",
+                    "publishedVersion": 29,
+                    "entryTitle": "Site Nav | Tabletop | Card Set Archive",
+                    "identifier": "all",
+                    "link": "https://magic.wizards.com/en/products/card-set-archive",
+                    "label": "Card Set Archive",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "card-set-archive"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "6j8ueX9gDQpXQaLUZ9fUo5",
+            "contentTypeId": "NavigationGroup",
+            "locale": "en",
+            "createdAt": "2020-12-02T17:50:53.464Z",
+            "updatedAt": "2025-11-14T20:37:22.382Z",
+            "publishedVersion": 23,
+            "entryTitle": "Site Nav Group | MTG ARENA",
+            "groupLabel": "MTG Arena",
+            "navigationItems": [
+              {
+                "id": "6O7mSgbJC10THx3aAjhlEq",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2022-08-18T20:40:12.669Z",
+                "updatedAt": "2022-08-18T20:40:12.669Z",
+                "publishedVersion": 10,
+                "entryTitle": "Site Nav | MTG ARENA | DOWNLOAD",
+                "link": "https://magic.wizards.com/en/mtgarena",
+                "label": "Download",
+                "eventCategory": "Main Navigation",
+                "eventAction": "Click",
+                "eventLabel": "ComingSoon-All"
+              },
+              {
+                "id": "1hPaUUb6hcbYfHv5spvyb6",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2020-12-02T17:50:54.164Z",
+                "updatedAt": "2022-08-19T15:35:43.113Z",
+                "publishedVersion": 39,
+                "entryTitle": "Site Nav | MTG ARENA | GETTING STARTED",
+                "link": "https://magic.wizards.com/en/mtgarena/getting-started",
+                "label": "Getting Started",
+                "eventCategory": "Main Navigation",
+                "eventAction": "Click",
+                "eventLabel": "ComingSoon-All"
+              },
+              {
+                "id": "4c8w0ONSn4OA1jemML3p3R",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2022-08-18T20:40:12.839Z",
+                "updatedAt": "2022-08-18T20:40:12.839Z",
+                "publishedVersion": 14,
+                "entryTitle": "Site Nav | MTG ARENA | Drop Rates",
+                "link": "https://magic.wizards.com/en/mtgarena/drop-rates",
+                "label": "Drop Rates",
+                "eventCategory": "Main Navigation",
+                "eventAction": "Click",
+                "eventLabel": "ComingSoon-All"
+              },
+              {
+                "id": "DIDZnmMsk2tiOjr7youqP",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2022-08-18T20:40:12.775Z",
+                "updatedAt": "2022-08-18T20:40:12.775Z",
+                "publishedVersion": 11,
+                "entryTitle": "Site Nav | MTG ARENA | ALCHEMY",
+                "link": "https://magic.wizards.com/en/mtgarena/alchemy",
+                "label": "Alchemy",
+                "eventCategory": "Main Navigation",
+                "eventAction": "Click",
+                "eventLabel": "ComingSoon-All"
+              },
+              {
+                "id": "6V0O1OlGluQS73IdtOXr1g",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2022-08-18T20:40:12.799Z",
+                "updatedAt": "2022-08-18T20:40:12.799Z",
+                "publishedVersion": 9,
+                "entryTitle": "Site Nav | MTG ARENA | Draft",
+                "link": "https://magic.wizards.com/en/mtgarena/draft",
+                "label": "Draft",
+                "eventCategory": "Main Navigation",
+                "eventAction": "Click",
+                "eventLabel": "ComingSoon-All"
+              },
+              {
+                "id": "6sZMaXZveImJEyG9X1SYdf",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2024-10-16T17:52:20.412Z",
+                "updatedAt": "2024-10-16T17:52:20.412Z",
+                "publishedVersion": 11,
+                "entryTitle": "Site Nav | MTG Arena | News",
+                "link": "https://magic.wizards.com/en/news/mtg-arena",
+                "label": "MTG Arena News",
+                "eventCategory": "Main Navigation",
+                "eventAction": "Click",
+                "eventLabel": "news-mtg-arena"
+              }
+            ]
+          },
+          {
+            "id": "67RvinR1kCNM2iL0fZgzpt",
+            "contentTypeId": "NavigationGroup",
+            "locale": "en",
+            "createdAt": "2020-12-02T17:50:53.038Z",
+            "updatedAt": "2026-04-24T16:23:43.815Z",
+            "publishedVersion": 30,
+            "entryTitle": "Site Nav Group | Play",
+            "groupLabel": "Play",
+            "navigationItems": [
+              {
+                "id": "5d8FIZnkyOayZ2QWbaukTB",
+                "contentTypeId": "NavigationGroup",
+                "locale": "en",
+                "createdAt": "2020-12-02T17:50:53.506Z",
+                "updatedAt": "2026-02-24T23:28:31.470Z",
+                "publishedVersion": 41,
+                "entryTitle": "Site Nav Group | Casual Events // Play Events",
+                "groupLabel": "Play Events",
+                "navigationItems": [
+                  {
+                    "id": "1beIdGXPDWE3P9GkIsQxFu",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2020-12-02T17:50:54.253Z",
+                    "updatedAt": "2022-10-26T22:47:23.356Z",
+                    "publishedVersion": 29,
+                    "entryTitle": "Site Nav | Casual Events | Prerelease",
+                    "identifier": "prerelease",
+                    "link": "https://magic.wizards.com/en/play-events/prerelease",
+                    "label": "Prerelease",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Casual-Prerelease"
+                  },
+                  {
+                    "id": "475Eqo698pSz0TQLYJLwIY",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2025-02-11T23:46:34.290Z",
+                    "updatedAt": "2025-02-11T23:46:34.290Z",
+                    "publishedVersion": 29,
+                    "entryTitle": "Site Nav | Casual Events | Magic Academy",
+                    "link": "https://magic.wizards.com/en/play-events/magic-academy",
+                    "tagline": "Magic Academy",
+                    "label": "Magic Academy"
+                  },
+                  {
+                    "id": "2oDHUiqCoci2s0jKadEO2h",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-02-14T19:14:25.933Z",
+                    "updatedAt": "2024-02-14T19:14:25.933Z",
+                    "publishedVersion": 10,
+                    "entryTitle": "Site Nav | Casual Events | Standard Showdown",
+                    "link": "https://magic.wizards.com/en/play-events/standard-showdown",
+                    "label": "Standard Showdown",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Casual-FNM"
+                  },
+                  {
+                    "id": "3emgYMldFIGYjTtSrjk3f0",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2026-02-24T23:28:23.522Z",
+                    "updatedAt": "2026-02-24T23:28:23.522Z",
+                    "publishedVersion": 4,
+                    "entryTitle": "Site Nav | Casual Events | Commander Box League",
+                    "link": "https://magic.wizards.com/en/play-events/commander-box-league",
+                    "label": "Commander Box League",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Casual-FNM"
+                  },
+                  {
+                    "id": "25EUK7P89Cw3gcHR1KdPEz",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-02-14T19:14:25.970Z",
+                    "updatedAt": "2024-02-14T19:14:25.970Z",
+                    "publishedVersion": 12,
+                    "entryTitle": "Site Nav | Casual Events | Commander Party",
+                    "link": "https://magic.wizards.com/en/play-events/commander-party",
+                    "label": "Commander Party",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Casual-FNM"
+                  },
+                  {
+                    "id": "nuTsSHluRsDXIT24IAfpX",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-02-14T19:14:25.951Z",
+                    "updatedAt": "2024-02-14T19:14:25.951Z",
+                    "publishedVersion": 10,
+                    "entryTitle": "Site Nav | Casual Events | Store Championship",
+                    "link": "https://magic.wizards.com/en/play-events/store-championship",
+                    "label": "Store Championship",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Casual-FNM"
+                  },
+                  {
+                    "id": "TUCXssxBVMgrJCfolXyC8",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2020-12-02T17:50:54.300Z",
+                    "updatedAt": "2022-10-26T22:47:23.394Z",
+                    "publishedVersion": 24,
+                    "entryTitle": "Site Nav | Casual Events | Friday Night Magic",
+                    "link": "https://magic.wizards.com/en/play-events/friday-night-magic",
+                    "label": "Friday Night Magic",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Casual-FNM"
+                  },
+                  {
+                    "id": "1fQwttXyWv6pMTWEDYMVlc",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-10-16T17:52:20.493Z",
+                    "updatedAt": "2024-10-16T17:52:20.493Z",
+                    "publishedVersion": 11,
+                    "entryTitle": "Site Nav | Play | MagicCon",
+                    "identifier": "magiccon",
+                    "link": "https://www.mtgfestivals.com/",
+                    "label": "MagicCon",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "magiccon"
+                  },
+                  {
+                    "id": "222dkSNhABNENG1FmAXnF",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-10-16T17:52:20.511Z",
+                    "updatedAt": "2024-10-16T17:52:20.511Z",
+                    "publishedVersion": 11,
+                    "entryTitle": "Site Nav | Play | Pro Tour",
+                    "identifier": "pro-tour",
+                    "link": "https://magic.gg/pro-tour",
+                    "label": "Pro Tour",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "pro_tour"
+                  },
+                  {
+                    "id": "3vOxfWbtxF2mLp2u0TdG1",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2020-12-02T17:50:54.341Z",
+                    "updatedAt": "2024-10-16T17:52:20.528Z",
+                    "publishedVersion": 34,
+                    "entryTitle": "Site Nav | Casual Events | All",
+                    "identifier": "all",
+                    "link": "https://magic.wizards.com/en/play-events",
+                    "label": "All Events",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Casual-All"
+                  }
+                ]
+              },
+              {
+                "id": "3o950HhdABF4zQMiAIIK6p",
+                "contentTypeId": "NavigationGroup",
+                "locale": "en",
+                "createdAt": "2020-12-02T17:50:53.543Z",
+                "updatedAt": "2025-06-20T21:47:32.041Z",
+                "publishedVersion": 39,
+                "entryTitle": "Site Nav Group | Formats",
+                "groupLabel": "Formats",
+                "navigationItems": [
+                  {
+                    "id": "2YegyMUwTaPQX4BOpnfZ4m",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2020-12-02T17:50:54.514Z",
+                    "updatedAt": "2022-01-17T19:03:42.575Z",
+                    "publishedVersion": 20,
+                    "entryTitle": "Site Nav | Formats | Commander",
+                    "link": "https://magic.wizards.com/en/formats/commander",
+                    "label": "Commander",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Formats-Commander"
+                  },
+                  {
+                    "id": "keMEMMDV1wnLzE70VnwTS",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2020-12-02T17:50:54.494Z",
+                    "updatedAt": "2022-01-17T19:03:42.553Z",
+                    "publishedVersion": 22,
+                    "entryTitle": "Site Nav | Formats | Standard",
+                    "link": "https://magic.wizards.com/en/formats/standard",
+                    "label": "Standard",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Formats-Standard"
+                  },
+                  {
+                    "id": "3zxtvJ7eDKEf3a1D4EGgk4",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2020-12-02T17:50:54.583Z",
+                    "updatedAt": "2022-01-17T19:03:42.627Z",
+                    "publishedVersion": 20,
+                    "entryTitle": "Site Nav | Formats | Modern",
+                    "link": "https://magic.wizards.com/en/formats/modern",
+                    "label": "Modern",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Formats-Modern"
+                  },
+                  {
+                    "id": "5hWUryhTAcIdjjoAmci7mb",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2020-12-02T17:50:54.537Z",
+                    "updatedAt": "2024-09-25T20:21:21.172Z",
+                    "publishedVersion": 34,
+                    "entryTitle": "Site Nav | Formats | Pioneer",
+                    "link": "https://magic.wizards.com/en/formats/pioneer",
+                    "label": "Pioneer",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Formats-Pioneer"
+                  },
+                  {
+                    "id": "2YZnEqYRwfo3fPE2pthzHW",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2020-12-02T17:50:54.385Z",
+                    "updatedAt": "2022-01-17T19:03:42.471Z",
+                    "publishedVersion": 23,
+                    "entryTitle": "Site Nav | Formats | Booster Draft",
+                    "link": "https://magic.wizards.com/en/formats/booster-draft",
+                    "label": "Booster Draft",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Formats-BoosterDraft"
+                  },
+                  {
+                    "id": "5HTf1FRCAQarTplQK4EiPS",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2025-06-20T21:47:32.233Z",
+                    "updatedAt": "2025-06-20T21:47:32.233Z",
+                    "publishedVersion": 18,
+                    "entryTitle": "Site Nav | Formats | Pick Two Draft",
+                    "link": "https://magic.wizards.com/en/formats/pick-two-draft",
+                    "label": "Pick-Two Draft",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Formats-PickTwoDraft"
+                  },
+                  {
+                    "id": "2vT39R0AhzqV5iRMtFIjKl",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2020-12-02T17:50:54.429Z",
+                    "updatedAt": "2022-01-17T19:03:42.527Z",
+                    "publishedVersion": 26,
+                    "entryTitle": "Site Nav | Formats | Sealed Deck",
+                    "link": "https://magic.wizards.com/en/formats/sealed-deck",
+                    "label": "Sealed Deck",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Formats-SealedDecks"
+                  },
+                  {
+                    "id": "2pb9KVPNu4vyQO78hBuf7M",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2020-12-02T17:50:54.607Z",
+                    "updatedAt": "2024-10-16T17:52:20.546Z",
+                    "publishedVersion": 26,
+                    "entryTitle": "Site Nav | Formats | All Formats",
+                    "identifier": "all",
+                    "link": "https://magic.wizards.com/en/formats",
+                    "label": "All Formats",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Formats-All"
+                  }
+                ]
+              },
+              {
+                "id": "7KzjiBg3x67ILuzM4qLh2E",
+                "contentTypeId": "NavigationGroup",
+                "locale": "en",
+                "createdAt": "2020-12-02T17:50:53.420Z",
+                "updatedAt": "2024-10-16T17:52:20.604Z",
+                "publishedVersion": 54,
+                "entryTitle": "Site Nav Group | Digital // Platforms",
+                "groupLabel": "Platforms",
+                "navigationItems": [
+                  {
+                    "id": "6mSxKWQMhL5zLeEYxyz5zJ",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-10-16T17:52:20.901Z",
+                    "updatedAt": "2024-10-16T17:52:20.901Z",
+                    "publishedVersion": 10,
+                    "entryTitle": "Linkables | PLATFORM | Locator",
+                    "identifier": "locator",
+                    "link": "https://locator.wizards.com/?utm_source=magicweb&utm_medium=referral",
+                    "label": "Store Locator"
+                  },
+                  {
+                    "id": "5f9MOzarCtyNuDTSyYfVk4",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-10-16T17:52:21.003Z",
+                    "updatedAt": "2024-10-16T17:52:21.003Z",
+                    "publishedVersion": 9,
+                    "entryTitle": "Site Nav | DIGITAL | MTG ARENA",
+                    "link": "https://magic.wizards.com/en/mtgarena",
+                    "label": "MTG Arena",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "ComingSoon-All"
+                  },
+                  {
+                    "id": "4rsBhueQHZp6z94felqJYv",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2020-12-02T17:50:54.111Z",
+                    "updatedAt": "2024-10-16T17:52:21.020Z",
+                    "publishedVersion": 11,
+                    "entryTitle": "Site Nav | Digital | Magic Online",
+                    "link": "https://magic.wizards.com/mtgo",
+                    "label": "Magic Online",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Digital-MTGO"
+                  },
+                  {
+                    "id": "3xyioZ26r7C3T5Pp040rRN",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-06-24T20:48:11.935Z",
+                    "updatedAt": "2026-03-09T21:47:10.852Z",
+                    "publishedVersion": 11,
+                    "entryTitle": "Site Nav | Digital | Spelltable",
+                    "link": "https://spelltable.wizards.com",
+                    "label": "SpellTable",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Spelltable"
+                  },
+                  {
+                    "id": "56pPsXOzBmzoH91H3GwNsA",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-10-16T17:52:21.098Z",
+                    "updatedAt": "2024-10-16T17:52:21.098Z",
+                    "publishedVersion": 14,
+                    "entryTitle": "Linkables | PLATFORM | Accounts ",
+                    "identifier": "accounts",
+                    "link": "https://myaccounts.wizards.com/login",
+                    "label": "Wizards Accounts"
+                  }
+                ]
+              },
+              {
+                "id": "6HhyQvnV3CluKRZJ4KUyTt",
+                "contentTypeId": "NavigationGroup",
+                "locale": "en",
+                "createdAt": "2025-01-27T17:07:29.985Z",
+                "updatedAt": "2025-01-27T17:07:29.985Z",
+                "publishedVersion": 22,
+                "entryTitle": "Site Nav Group | Support",
+                "groupLabel": "Support",
+                "navigationItems": [
+                  {
+                    "id": "66ou59Hbvs2UJ7g2GRi8US",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2025-01-27T17:07:30.226Z",
+                    "updatedAt": "2025-01-27T17:07:30.226Z",
+                    "publishedVersion": 9,
+                    "entryTitle": "Site Header Nav Link | Player Support",
+                    "link": "https://support.wizards.com",
+                    "label": "Player Support"
+                  },
+                  {
+                    "id": "5rmyLDJNk5t2bTQhM7cQ8y",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2025-01-27T17:07:30.251Z",
+                    "updatedAt": "2025-01-27T17:07:30.251Z",
+                    "publishedVersion": 9,
+                    "entryTitle": "Site Header Nav Link | Store Support",
+                    "link": "https://wpn.wizards.com",
+                    "label": "Store Support"
+                  },
+                  {
+                    "id": "7EJCOuuoMcFZaZNUryiAOb",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2025-01-27T17:07:30.268Z",
+                    "updatedAt": "2025-01-27T17:07:30.268Z",
+                    "publishedVersion": 3,
+                    "entryTitle": "Site Header Nav Link | Club Support ",
+                    "link": "https://magic.wizards.com/en/magic-club-program",
+                    "label": "Club Support"
+                  },
+                  {
+                    "id": "J7r8QVDzPnfs7FMLAzsez",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2025-01-27T17:07:30.285Z",
+                    "updatedAt": "2025-01-27T17:07:30.285Z",
+                    "publishedVersion": 2,
+                    "entryTitle": "Site HEader Nav Link | Military Support",
+                    "link": "https://magic.wizards.com/en/magic-military-program",
+                    "label": "Military Support"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "6k9eQQPGPs7lWT9EzKOREG",
+            "contentTypeId": "NavigationGroup",
+            "locale": "en",
+            "createdAt": "2024-10-16T17:52:21.131Z",
+            "updatedAt": "2026-04-24T16:23:54.119Z",
+            "publishedVersion": 26,
+            "entryTitle": "Site Nav | Learn MTG",
+            "groupLabel": "Learn",
+            "navigationItems": [
+              {
+                "id": "65uEE8Rk63H56begE6w6GB",
+                "contentTypeId": "NavigationGroup",
+                "locale": "en",
+                "createdAt": "2020-12-02T17:50:53.569Z",
+                "updatedAt": "2024-10-16T17:52:21.148Z",
+                "publishedVersion": 27,
+                "entryTitle": "Site Nav Group | Resources",
+                "groupLabel": "Resources",
+                "navigationItems": [
+                  {
+                    "id": "7zsNGEOpCZP7eTLOUHamBC",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2021-10-12T21:42:22.643Z",
+                    "updatedAt": "2021-10-12T21:42:22.643Z",
+                    "publishedVersion": 35,
+                    "entryTitle": "Site Nav | Resources | Where to Start",
+                    "link": "https://magic.wizards.com/en/intro",
+                    "linkOut": false,
+                    "target": "_self",
+                    "label": "Where to Start",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Resources-MX-Intro"
+                  },
+                  {
+                    "id": "1kL7nVnGMEZz582sI4EvzB",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2022-01-07T17:10:33.435Z",
+                    "updatedAt": "2022-01-07T17:10:33.435Z",
+                    "publishedVersion": 16,
+                    "entryTitle": "Site Nav | Resources | How to Play",
+                    "link": "https://magic.wizards.com/en/how-to-play",
+                    "linkOut": false,
+                    "target": "_self",
+                    "label": "How to Play",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Resources-MX-Intro"
+                  },
+                  {
+                    "id": "5X0RrcuvQuLbromoySu9Fw",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2023-05-30T21:01:07.572Z",
+                    "updatedAt": "2023-05-30T21:01:07.572Z",
+                    "publishedVersion": 18,
+                    "entryTitle": "Site Nav | Resources | Product Guide",
+                    "link": "/product-guide",
+                    "linkOut": false,
+                    "target": "_self",
+                    "label": "Product Guide",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Resources-MX-ProductGuide"
+                  },
+                  {
+                    "id": "1EE2ejFwoyajcM3fHVYlKe",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2022-08-23T23:18:50.272Z",
+                    "updatedAt": "2023-10-06T21:05:28.248Z",
+                    "publishedVersion": 33,
+                    "entryTitle": "Site Nav | Resources | Keyword Glossary // Common Keywords",
+                    "link": "https://magic.wizards.com/en/keyword-glossary",
+                    "label": "Keyword Glossary",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Resources-MX-keyword-glossary"
+                  },
+                  {
+                    "id": "3RNubO2EpUMEyjLut4eov4",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2020-12-02T17:50:54.730Z",
+                    "updatedAt": "2021-02-17T17:32:54.701Z",
+                    "publishedVersion": 26,
+                    "entryTitle": "Site Nav | Resources | Banned & Restricted List",
+                    "link": "https://magic.wizards.com/en/game-info/gameplay/rules-and-formats/banned-restricted",
+                    "label": "Banned & Restricted List",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Resources-Banned"
+                  },
+                  {
+                    "id": "3NUW7iBjCKiC0TR7HquewP",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2020-07-06T22:56:06.503Z",
+                    "updatedAt": "2024-10-16T17:52:21.184Z",
+                    "publishedVersion": 33,
+                    "entryTitle": "Linkables | Card Database",
+                    "identifier": "database",
+                    "link": "https://gatherer.wizards.com/Pages/Default.aspx",
+                    "label": "Card Database"
+                  },
+                  {
+                    "id": "1G4YtxhRGawH99w75byFJa",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2020-12-02T17:50:54.064Z",
+                    "updatedAt": "2024-10-16T17:52:21.114Z",
+                    "publishedVersion": 36,
+                    "entryTitle": "Site Nav | Digital | Companion App",
+                    "link": "https://magic.wizards.com/en/products/companion-app",
+                    "label": "Companion App",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "CompanionApp"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "5B3s4yaYbwiSFVbLc2yn24",
+            "contentTypeId": "Linkables",
+            "locale": "en",
+            "createdAt": "2024-12-09T18:57:10.116Z",
+            "updatedAt": "2024-12-09T18:57:10.116Z",
+            "publishedVersion": 18,
+            "entryTitle": "Site Nav | Top Level | Shop",
+            "link": "https://magic.wizards.com/en/shop",
+            "label": "SHOP",
+            "eventCategory": "Main Navigation",
+            "eventAction": "Click",
+            "eventLabel": "shop-magic"
+          },
+          {
+            "id": "3Y7zU5CRCz3AoOoddYk795",
+            "contentTypeId": "NavigationGroup",
+            "locale": "en",
+            "createdAt": "2024-10-16T17:52:21.202Z",
+            "updatedAt": "2025-09-05T20:23:16.192Z",
+            "publishedVersion": 38,
+            "entryTitle": "Site Nav | News",
+            "groupLabel": "News",
+            "groupLink": "/en/news",
+            "navigationItems": [
+              {
+                "id": "6SsYuQ4mSlsfr9IVxpJNrO",
+                "contentTypeId": "NavigationGroup",
+                "locale": "en",
+                "createdAt": "2024-10-16T17:52:21.221Z",
+                "updatedAt": "2024-10-16T17:52:21.221Z",
+                "publishedVersion": 24,
+                "entryTitle": "Site Nav Group | News | Read",
+                "groupLabel": "Read",
+                "navigationItems": [
+                  {
+                    "id": "40Q3b4znwTam51bj9XVqSq",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2020-08-27T15:21:50.105Z",
+                    "updatedAt": "2024-10-16T17:52:20.326Z",
+                    "publishedVersion": 47,
+                    "entryTitle": "Site Nav | News // All Articles (2024 Nav update)",
+                    "link": "https://magic.wizards.com/en/news",
+                    "label": "Latest News",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "DailyMTG"
+                  },
+                  {
+                    "id": "VP9yN1Kw0iH6jqcitDqfe",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-10-16T17:52:21.241Z",
+                    "updatedAt": "2024-10-16T17:52:21.241Z",
+                    "publishedVersion": 17,
+                    "entryTitle": "Site Nav | News | Announcements",
+                    "link": "https://magic.wizards.com/en/news/announcements",
+                    "label": "Announcements",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "DailyMTG"
+                  },
+                  {
+                    "id": "HsQHY8q8P1oYtwQIj2NGf",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-10-16T17:52:21.260Z",
+                    "updatedAt": "2024-10-16T17:52:21.260Z",
+                    "publishedVersion": 19,
+                    "entryTitle": "Site Nav | News | Feature/Behind the Scenes",
+                    "link": "https://magic.wizards.com/en/news/feature",
+                    "label": "Behind The Scenes",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "DailyMTG"
+                  },
+                  {
+                    "id": "6g6oE2Z4Jm3sBnnUJDdnwj",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-10-16T17:52:21.277Z",
+                    "updatedAt": "2024-10-16T17:52:21.277Z",
+                    "publishedVersion": 16,
+                    "entryTitle": "Site Nav | News | Making Magic",
+                    "link": "https://magic.wizards.com/en/news/making-magic",
+                    "label": "Making Magic",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "news-making-magic"
+                  },
+                  {
+                    "id": "5rshgOcsLF3c3hnNyPL5Hc",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-10-16T17:52:21.308Z",
+                    "updatedAt": "2024-10-16T17:52:21.308Z",
+                    "publishedVersion": 20,
+                    "entryTitle": "Site Nav | News | MTG Arena News",
+                    "link": "https://magic.wizards.com/en/news/mtg-arena",
+                    "label": "MTG Arena News",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "news-mtg-arena"
+                  },
+                  {
+                    "id": "4m3D4cAqXz8cZnoQPrdTqc",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-10-16T17:52:21.326Z",
+                    "updatedAt": "2024-10-16T17:52:21.326Z",
+                    "publishedVersion": 19,
+                    "entryTitle": "Site Nav | News | Card Previews",
+                    "link": "https://magic.wizards.com/en/news/card-preview",
+                    "label": "Card Previews",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "news-card-previews"
+                  },
+                  {
+                    "id": "6xPtR2KUmGyeuL2V5Pgxvg",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2020-08-27T15:21:50.008Z",
+                    "updatedAt": "2024-10-16T17:52:20.290Z",
+                    "publishedVersion": 44,
+                    "entryTitle": "Site Nav | NEWS | Esports // Competitive",
+                    "link": "https://www.magic.gg/news",
+                    "target": "_blank",
+                    "label": "Competitive",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "Esports"
+                  }
+                ]
+              },
+              {
+                "id": "2ah42S8Bo0j1VC1deWI9ss",
+                "contentTypeId": "NavigationGroup",
+                "locale": "en",
+                "createdAt": "2024-10-16T17:52:21.344Z",
+                "updatedAt": "2024-10-16T17:52:21.344Z",
+                "publishedVersion": 15,
+                "entryTitle": "Site Nav Group | News | Watch",
+                "groupLabel": "Watch",
+                "navigationItems": [
+                  {
+                    "id": "5wzrTZXGfWa5svzvhsTXVP",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-10-16T17:52:21.409Z",
+                    "updatedAt": "2025-02-18T17:11:41.312Z",
+                    "publishedVersion": 22,
+                    "entryTitle": "Site Nav | News | Watch | Drive To Work Podcast",
+                    "link": "https://mtgdrivetowork.transistor.fm/?utm_source=magicweb&utm_medium=top-nav&utm_campaign=drive-to-work",
+                    "linkOut": true,
+                    "label": "Drive To Work Podcast",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "news-watch-drive-to-work-podcast"
+                  },
+                  {
+                    "id": "1i4t2SXF7QAwWitV2QLOqX",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-10-16T17:52:21.426Z",
+                    "updatedAt": "2024-10-16T17:52:21.426Z",
+                    "publishedVersion": 11,
+                    "entryTitle": "Site Nav | News | Watch | Weekly MTG",
+                    "link": "https://www.youtube.com/playlist?list=PL3rP64NRtmbjdg_j75RqbTu5Ffpc-Q_9s",
+                    "linkOut": true,
+                    "label": "WeeklyMTG",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "news-watch-weeklymtg"
+                  },
+                  {
+                    "id": "7m9VI8PEbRboAbVt5XGBJq",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-10-16T17:52:21.519Z",
+                    "updatedAt": "2025-03-25T19:24:51.540Z",
+                    "publishedVersion": 19,
+                    "entryTitle": "Site Nav | News | Watch | Magic Story Podcast ",
+                    "link": "https://magic-story.transistor.fm/?utm_source=magicweb&utm_medium=top-nav&utm_campaign=story-podcast",
+                    "linkOut": true,
+                    "label": "Magic Story Podcast",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "news-watch-magic-story-podcast"
+                  }
+                ]
+              },
+              {
+                "id": "7BdkXUDjZKv3GdJs32mlTI",
+                "contentTypeId": "NavigationGroup",
+                "locale": "en",
+                "createdAt": "2024-10-16T17:52:21.621Z",
+                "updatedAt": "2024-10-16T17:52:21.621Z",
+                "publishedVersion": 17,
+                "entryTitle": "Site Nav Group | News | Story",
+                "groupLabel": "Story",
+                "navigationItems": [
+                  {
+                    "id": "26gjWdbhkbqqSWpITQATis",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2020-08-27T15:21:50.065Z",
+                    "updatedAt": "2024-10-16T17:52:20.308Z",
+                    "publishedVersion": 40,
+                    "entryTitle": "Site Nav | Story // Latest Stories",
+                    "link": "https://magic.wizards.com/en/story",
+                    "label": "Latest Stories",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "MagicStory"
+                  },
+                  {
+                    "id": "ckboVTl2mC8NCgLAypnox",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-10-16T17:52:21.702Z",
+                    "updatedAt": "2024-10-16T17:52:21.702Z",
+                    "publishedVersion": 19,
+                    "entryTitle": "Site Nav | News | Story | Archive",
+                    "link": "https://magic.wizards.com/en/story#archive",
+                    "label": "Story Archive",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "news-story-archive"
+                  },
+                  {
+                    "id": "22dtasqLj3aIBKQalTaQ3I",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-10-16T17:52:21.721Z",
+                    "updatedAt": "2024-10-16T17:52:21.721Z",
+                    "publishedVersion": 18,
+                    "entryTitle": "Site Nav | News | Story | Planes and Planeswalkers",
+                    "link": "https://magic.wizards.com/en/story#planes_planeswalkers",
+                    "label": "Planes and Planeswalkers",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "news-story-planes-planeswalkers"
+                  }
+                ]
+              },
+              {
+                "id": "cz6fu1MkfFWJ6wJvil3NJ",
+                "contentTypeId": "NavigationGroup",
+                "locale": "en",
+                "createdAt": "2024-10-16T17:52:21.741Z",
+                "updatedAt": "2024-10-16T17:52:21.741Z",
+                "publishedVersion": 14,
+                "entryTitle": "Site Nav Group | News | More",
+                "groupLabel": "More",
+                "navigationItems": [
+                  {
+                    "id": "6HdBlSzZyblOm7OGaAUwFn",
+                    "contentTypeId": "Linkables",
+                    "locale": "en",
+                    "createdAt": "2024-10-16T17:52:21.760Z",
+                    "updatedAt": "2024-10-16T17:52:21.760Z",
+                    "publishedVersion": 37,
+                    "entryTitle": "Site Nav | News | More | Wallpapers",
+                    "link": "https://magic.wizards.com/en/news#wallpapers",
+                    "linkOut": true,
+                    "label": "Wallpapers",
+                    "eventCategory": "Main Navigation",
+                    "eventAction": "Click",
+                    "eventLabel": "news-watch-magic-story-podcast"
+                  }
+                ]
+              }
+            ]
+          }
+        ],
+        "utilityLinks": [
+          {
+            "id": "5oS4iZ9A0PhQznnyKYXQLe",
+            "contentTypeId": "Linkables",
+            "locale": "en",
+            "createdAt": "2020-07-06T22:56:05.375Z",
+            "updatedAt": "2023-01-24T19:17:27.948Z",
+            "publishedVersion": 32,
+            "entryTitle": "Linkables | Locator",
+            "identifier": "locator",
+            "link": "https://locator.wizards.com/?utm_source=magicweb&utm_medium=referral",
+            "label": "Locator"
+          },
+          {
+            "id": "3NUW7iBjCKiC0TR7HquewP",
+            "contentTypeId": "Linkables",
+            "locale": "en",
+            "createdAt": "2020-07-06T22:56:06.503Z",
+            "updatedAt": "2024-10-16T17:52:21.184Z",
+            "publishedVersion": 33,
+            "entryTitle": "Linkables | Card Database",
+            "identifier": "database",
+            "link": "https://gatherer.wizards.com/Pages/Default.aspx",
+            "label": "Card Database"
+          },
+          {
+            "id": "1nojko119EJ2OzuerrhBZN",
+            "contentTypeId": "Linkables",
+            "locale": "en",
+            "createdAt": "2020-07-06T22:56:05.379Z",
+            "updatedAt": "2020-12-02T17:50:53.200Z",
+            "publishedVersion": 20,
+            "entryTitle": "Linkables | Accounts",
+            "identifier": "accounts",
+            "link": "https://myaccounts.wizards.com/login",
+            "label": "Accounts"
+          }
+        ],
+        "dataLayerMenuType": "site header"
+      },
+      "subdrawerLayers": [],
+      "submenuActiveId": null,
+      "submenu": [],
+      "prevActiveEl": null
+    },
+    "TheSiteAnnouncement:0": {
+      "shouldDisplay": false,
+      "payload": {
+        "id": "3j3ZA0OysZ0xiC43cUUk99",
+        "contentTypeId": "TheSiteAnnouncement",
+        "locale": "en",
+        "createdAt": "2020-12-03T19:51:15.198Z",
+        "updatedAt": "2023-07-29T16:00:12.130Z",
+        "publishedVersion": 77,
+        "entryTitle": "Announcement",
+        "announcement": "### Policy Update\n<em>We have updated our <a href=\"https://company.wizards.com/legal/wizards-coasts-privacy-policy\">privacy policy</a>. Click the link to learn more.</em>",
+        "enable": false
+      }
+    },
+    "PageFinder:0": {
+      "payload": {
+        "id": "6JBS1nhJRYI7k77GpnUXyA",
+        "contentTypeId": "PageBuilder",
+        "locale": "en",
+        "createdAt": "2022-01-07T15:53:07.339Z",
+        "updatedAt": "2022-01-07T15:53:07.339Z",
+        "publishedVersion": 27,
+        "entryTitle": "Formats | Light Effort |  Rules",
+        "metaTitle": "Rules | Magic: The Gathering",
+        "metaDescription": "The Comprehensive Rules of Magic is a reference document that holds all of the rules and possible corner cases found in Magic.",
+        "slug": "/rules",
+        "blueprint": [
+          {
+            "id": "6mSdJix1fvpH5efCxdE74i",
+            "contentTypeId": "RichBannerAd",
+            "locale": "en",
+            "createdAt": "2022-01-07T15:53:07.366Z",
+            "updatedAt": "2022-01-07T15:53:07.366Z",
+            "publishedVersion": 12,
+            "entryTitle": "Formats | RULES | Hero",
+            "backgroundImage": {
+              "id": "Eo4LOlaI7glVG9eGZqZmZ",
+              "contentTypeId": "ResponsiveImage",
+              "locale": "en",
+              "createdAt": "2022-01-07T15:53:00.493Z",
+              "updatedAt": "2022-08-23T18:53:43.714Z",
+              "publishedVersion": 6,
+              "entryTitle": "Formats Landing Page | Hero Background",
+              "default": {
+                "url": "//images.ctfassets.net/s5n2t79q9icq/3KH6X7976LEXbIlJdUPrmb/e0a3a93d8c789d5a100f4f1ec80499ef/our-games-bg.jpg",
+                "size": 107979,
+                "width": 1920,
+                "height": 893,
+                "fileName": "our-games-bg.jpg",
+                "contentType": "image/jpeg",
+                "id": "3KH6X7976LEXbIlJdUPrmb",
+                "title": "our-games-bg"
+              }
+            },
+            "header": "RULES",
+            "headerWeight": "h1",
+            "headerColor": "#c35427",
+            "extraCssStyling": {
+              "borderBottom": "8px solid #c35427"
+            }
+          },
+          {
+            "id": "1Ib7S9hi35Z0nHvP04Tbfo",
+            "contentTypeId": "ContentBlock",
+            "locale": "en",
+            "createdAt": "2022-01-07T15:53:07.396Z",
+            "updatedAt": "2026-09-18T16:30:50.016Z",
+            "publishedVersion": 187,
+            "entryTitle": "Rules | Body Content | Light migration",
+            "renderAs": "EditorialContent",
+            "copy": "<h2>Basic Rules</h2>\n\n<p>If you're looking for a basic introduction to the rules of <em>Magic</em>, check the Basic Rules out by clicking the link below:</p>\n\n<p><a class=\"cta\" href=\"https://magic.wizards.com/en/how-to-play\">Learn the basics</a></p>\n\n<p>&nbsp</p>\n\n<h2>Comprehensive Rules</h2>\n\n<p>The Comprehensive Rules of <em>Magic</em> is a reference document that holds all of the rules and possible corner cases found in <em>Magic</em>. It is NOT meant to be read beginning to end; instead it's meant to be consulted when specific rules questions come into play.</p>\n\n<p><a class=\"cta\" href=\"https://media.wizards.com/2026/downloads/MagicCompRules 20260925.docx\"><span class=\"txt\">DOCX</span></a></p>\n\n<p><a class=\"cta\" href=\"https://media.wizards.com/2026/downloads/MagicCompRules 20260925.pdf\" target=\"_blank\"><span class=\"txt\">PDF</span> </a></p>\n\n<p><span class=\"txt\"><a class=\"cta\" href=\"https://media.wizards.com/2026/downloads/MagicCompRules 20260925.txt\" target=\"_blank\"><span class=\"txt\">TXT</span></a></span></p>\n"
+          }
+        ],
+        "pageStatus": "draft"
+      },
+      "shouldCloakPage": false,
+      "variantCollection": [],
+      "hasError": false
+    },
+    "TheSiteFooter:0": {
+      "isMounted": false,
+      "payload": {
+        "id": "57MX6qj8NNtViXxDmS5J08",
+        "contentTypeId": "TheSiteFooter",
+        "locale": "en",
+        "createdAt": "2020-07-06T23:05:59.449Z",
+        "updatedAt": "2025-02-14T22:48:36.844Z",
+        "publishedVersion": 109,
+        "entryTitle": "The Site Footer",
+        "h2": "Magic: The Gathering Footer",
+        "locatorLabel": "Find a store",
+        "locatorPlaceholder": "Enter your city or postal code",
+        "socialLabel": "Social",
+        "socialLinks": [
+          {
+            "id": "6GRn9lBicqwdTBa5H8H26Q",
+            "contentTypeId": "Linkables",
+            "locale": "en",
+            "createdAt": "2020-05-28T04:43:37.569Z",
+            "updatedAt": "2022-01-04T17:05:35.627Z",
+            "publishedVersion": 54,
+            "entryTitle": "Social Media Link | Facebook",
+            "identifier": "facebook",
+            "link": "https://www.facebook.com/MagicTheGathering",
+            "linkOut": true,
+            "label": "Magic: The Gathering Facebook Official Account"
+          },
+          {
+            "id": "36nWqVoYw2XVcmjntThvGw",
+            "contentTypeId": "Linkables",
+            "locale": "en",
+            "createdAt": "2020-05-28T04:44:29.988Z",
+            "updatedAt": "2022-01-04T17:05:35.598Z",
+            "publishedVersion": 27,
+            "entryTitle": "Social Media Link | Twitter",
+            "identifier": "twitter",
+            "link": "https://twitter.com/wizards_magic",
+            "linkOut": true,
+            "label": "Magic: The Gathering Twitter Official Account"
+          },
+          {
+            "id": "47jWLuB6DNRYfxVFlcHKTh",
+            "contentTypeId": "Linkables",
+            "locale": "en",
+            "createdAt": "2020-05-28T04:45:16.999Z",
+            "updatedAt": "2022-01-04T17:05:35.686Z",
+            "publishedVersion": 25,
+            "entryTitle": "Social Media Link | Twitch",
+            "identifier": "twitch",
+            "link": "https://www.twitch.tv/magic",
+            "label": "Magic: The Gathering Twitch Official Channel"
+          },
+          {
+            "id": "7IECe4Mxa3vIR77hpOxl5m",
+            "contentTypeId": "Linkables",
+            "locale": "en",
+            "createdAt": "2020-05-28T04:45:17.065Z",
+            "updatedAt": "2022-01-04T17:05:35.666Z",
+            "publishedVersion": 22,
+            "entryTitle": "Social Media Link | Youtube",
+            "identifier": "youtube",
+            "link": "https://www.youtube.com/channel/UC8ZGymAvfP97qJabgqUkz4A",
+            "linkOut": true,
+            "label": "Magic: The Gathering Youtube Official Channel"
+          },
+          {
+            "id": "4ax3Z5QZIhvBbhZmzFG0h7",
+            "contentTypeId": "Linkables",
+            "locale": "en",
+            "createdAt": "2020-05-28T04:45:17.024Z",
+            "updatedAt": "2022-01-04T17:05:35.646Z",
+            "publishedVersion": 27,
+            "entryTitle": "Social Media Link | Instagram",
+            "identifier": "instagram",
+            "link": "https://www.instagram.com/wizards_magic/",
+            "linkOut": true,
+            "label": "Magic: The Gathering Instagram Official Account"
+          }
+        ],
+        "navigationGroups": [
+          {
+            "id": "5ATBhjAEl7c0EAgB73dLp3",
+            "contentTypeId": "NavigationGroup",
+            "locale": "en",
+            "createdAt": "2020-07-06T22:56:48.544Z",
+            "updatedAt": "2024-09-27T20:49:25.621Z",
+            "publishedVersion": 105,
+            "entryTitle": "Footer Nav Group | Find",
+            "groupLabel": "Find",
+            "navigationItems": [
+              {
+                "id": "3RNj48XWl3EQDLaY94T69v",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2020-07-06T22:56:05.367Z",
+                "updatedAt": "2023-01-03T23:11:54.257Z",
+                "publishedVersion": 45,
+                "entryTitle": "Footer Nav Link | Articles",
+                "link": "https://magic.wizards.com/en/news",
+                "label": "Articles"
+              },
+              {
+                "id": "55JVfrKWwlgrpIJrhU3GyK",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2020-07-06T22:56:22.558Z",
+                "updatedAt": "2022-02-22T16:04:18.334Z",
+                "publishedVersion": 19,
+                "entryTitle": "Footer Nav Link | Club Support",
+                "link": "https://magic.wizards.com/en/magic-club-program",
+                "label": "Club Support"
+              },
+              {
+                "id": "3InJNVKpVGVQzSuOZosQGy",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2020-07-06T22:56:22.546Z",
+                "updatedAt": "2020-07-06T22:56:22.546Z",
+                "publishedVersion": 5,
+                "entryTitle": "Footer Nav Link | Digital Books",
+                "link": "https://www.amazon.com/s/ref=sr_pg_1?rh=n%3A283155%2Cp_45%3A3%2Cp_46%3ADuring%2Cp_47%3A2018%2Cp_n_feature_browse-bin%3A618073011%2Cp_30%3Awizards%20of%20the%20coast&sort=relevanceexprank&unfiltered=1&ie=UTF8&qid=1527106656",
+                "label": "Digital Books"
+              },
+              {
+                "id": "7jrbv46rUWgV59xTICDwhL",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2020-07-06T22:56:04.928Z",
+                "updatedAt": "2022-01-28T21:33:27.671Z",
+                "publishedVersion": 31,
+                "entryTitle": "Footer Nav Link | Formats",
+                "link": "https://magic.wizards.com/en/formats",
+                "label": "Formats"
+              },
+              {
+                "id": "7KiT6Y0dp3TRQwcEwHTPpn",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2020-07-06T22:56:04.874Z",
+                "updatedAt": "2022-01-28T21:34:54.919Z",
+                "publishedVersion": 28,
+                "entryTitle": "Footer Nav Link | Rules",
+                "link": "https://magic.wizards.com/en/rules",
+                "label": "Rules"
+              },
+              {
+                "id": "2ygtZBfGnZy2HVwMsRYuqa",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2020-07-06T22:56:22.532Z",
+                "updatedAt": "2022-02-22T16:04:52.904Z",
+                "publishedVersion": 6,
+                "entryTitle": "Footer Nav Link | Military Support",
+                "link": "https://magic.wizards.com/en/magic-military-program",
+                "label": "Military Support"
+              }
+            ]
+          },
+          {
+            "id": "2b4fHuqGPaOykbOGRWsUGV",
+            "contentTypeId": "NavigationGroup",
+            "locale": "en",
+            "createdAt": "2020-07-06T22:56:48.531Z",
+            "updatedAt": "2024-09-27T20:52:35.978Z",
+            "publishedVersion": 42,
+            "entryTitle": "Footer Nav Group | Company ",
+            "groupLabel": "Company",
+            "navigationItems": [
+              {
+                "id": "6YdvCD55xLUJsyVrHMTuvQ",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2020-07-06T22:56:06.294Z",
+                "updatedAt": "2023-01-03T23:14:00.614Z",
+                "publishedVersion": 19,
+                "entryTitle": "Footer Nav Link | About",
+                "link": "https://company.wizards.com/en/who-we-are",
+                "label": "About"
+              },
+              {
+                "id": "18gGJ0ubK6wpllCpfxYCe1",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2024-09-27T20:52:31.674Z",
+                "updatedAt": "2024-09-27T20:52:31.674Z",
+                "publishedVersion": 10,
+                "entryTitle": "Footer Nav Link | Accounts",
+                "link": "https://myaccounts.wizards.com/login",
+                "linkOut": false,
+                "label": "Accounts"
+              },
+              {
+                "id": "27EkkUG6YEOVZoXGgj2JkJ",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2020-07-06T22:56:04.051Z",
+                "updatedAt": "2023-01-03T22:02:10.232Z",
+                "publishedVersion": 15,
+                "entryTitle": "Footer Nav Link | Careers",
+                "link": "https://company.wizards.com/en/careers",
+                "label": "Careers"
+              },
+              {
+                "id": "5yYs5MxOTJrowQkQZcJyuy",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2020-07-06T22:56:04.078Z",
+                "updatedAt": "2022-04-06T18:43:19.576Z",
+                "publishedVersion": 12,
+                "entryTitle": "Footer Nav Link | Support",
+                "link": "https://support.wizards.com/hc/en-us",
+                "label": "Support"
+              },
+              {
+                "id": "7qhsxzRyX0qGCNLAox1EOA",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2020-07-06T22:56:04.505Z",
+                "updatedAt": "2022-04-06T18:43:19.653Z",
+                "publishedVersion": 9,
+                "entryTitle": "Footer Nav Link | Wizards Play Network",
+                "link": "https://wpn.wizards.com/en",
+                "label": "Wizards Play Network"
+              },
+              {
+                "id": "73bgkPC8OeUuYFfkgIXlVv",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2022-04-06T18:43:10.321Z",
+                "updatedAt": "2022-04-06T18:43:19.683Z",
+                "publishedVersion": 7,
+                "entryTitle": "Footer Nav Link | Affiliate Program Disclosure",
+                "link": "https://company.wizards.com/en/affiliate-program-disclosure",
+                "label": "Affiliate Program Disclosure"
+              }
+            ]
+          },
+          {
+            "id": "6sZBXLpTga9dFnLMElbNi0",
+            "contentTypeId": "NavigationGroup",
+            "locale": "en",
+            "createdAt": "2024-09-27T21:47:58.092Z",
+            "updatedAt": "2024-09-27T21:47:58.092Z",
+            "publishedVersion": 7,
+            "entryTitle": "Footer Nav Group | Magic",
+            "groupLabel": "Magic",
+            "navigationItems": [
+              {
+                "id": "6oeXEFjJEhVoVai5Q5qgDn",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2024-09-27T21:47:58.186Z",
+                "updatedAt": "2024-09-27T21:47:58.186Z",
+                "publishedVersion": 20,
+                "entryTitle": "Footer Nav Link | Magic: The Gathering",
+                "link": "https://magic.wizards.com/en",
+                "linkOut": false,
+                "label": "Magic: The Gathering"
+              },
+              {
+                "id": "1KPf7tVyD4c3wgvvj8rsB9",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2024-09-27T21:47:58.249Z",
+                "updatedAt": "2025-03-18T20:57:35.238Z",
+                "publishedVersion": 14,
+                "entryTitle": "Footer Nav Link | Magic Arena",
+                "link": "https://magic.wizards.com/en/mtgarena",
+                "linkOut": false,
+                "label": "MTG Arena"
+              },
+              {
+                "id": "C1JEljdrZMnTAvRbN7gXz",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2024-09-27T21:47:58.268Z",
+                "updatedAt": "2024-09-27T21:47:58.268Z",
+                "publishedVersion": 3,
+                "entryTitle": "Footer Nav Link | Magic.gg",
+                "link": "https://magic.gg",
+                "linkOut": false,
+                "label": "Magic.gg"
+              },
+              {
+                "id": "3JrHwBrjsdpfqiVMN5PYjd",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2024-09-27T21:47:58.335Z",
+                "updatedAt": "2024-09-27T21:47:58.335Z",
+                "publishedVersion": 11,
+                "entryTitle": "Footer Nav Link | Store Locator",
+                "link": "https://locator.wizards.com",
+                "linkOut": false,
+                "label": "Store & Events Locator"
+              },
+              {
+                "id": "4Rtb1SragQpfoCp6Mpfw5R",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2024-09-27T21:47:58.365Z",
+                "updatedAt": "2024-09-27T21:47:58.365Z",
+                "publishedVersion": 11,
+                "entryTitle": "Footer Nav Link | Card Database",
+                "link": "https://gatherer.wizards.com",
+                "linkOut": false,
+                "label": "Card Database"
+              },
+              {
+                "id": "2gmWBuIACmYbvsm7Tap6fh",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2024-09-27T21:47:58.385Z",
+                "updatedAt": "2024-09-27T21:47:58.385Z",
+                "publishedVersion": 4,
+                "entryTitle": "Footer Nav Link | Secret Lair",
+                "link": "https://secretlair.wizards.com",
+                "linkOut": false,
+                "label": "Secret Lair"
+              },
+              {
+                "id": "3kIdyUvI9aHKljUIDHG3hz",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2024-09-27T21:47:58.404Z",
+                "updatedAt": "2024-09-27T21:47:58.404Z",
+                "publishedVersion": 4,
+                "entryTitle": "Footer Nav Link | Spelltable",
+                "link": "https://spelltable.wizards.com",
+                "linkOut": false,
+                "label": "SpellTable"
+              }
+            ]
+          },
+          {
+            "id": "3QcgxjQkvDO1PM4psYWSJ3",
+            "contentTypeId": "NavigationGroup",
+            "locale": "en",
+            "createdAt": "2020-07-06T22:56:48.526Z",
+            "updatedAt": "2023-01-03T22:04:49.468Z",
+            "publishedVersion": 24,
+            "entryTitle": "Footer Nav Group | Brands",
+            "groupLabel": "Brands",
+            "navigationItems": [
+              {
+                "id": "9PeTadXvhJZXFwTlgDNNx",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2020-07-06T22:56:06.638Z",
+                "updatedAt": "2024-08-06T20:22:37.540Z",
+                "publishedVersion": 10,
+                "entryTitle": "Footer Nav Link | Dungeons & Dragons",
+                "link": "https://www.dndbeyond.com",
+                "label": "Dungeons & Dragons"
+              },
+              {
+                "id": "3VXwnR95nvR0TlZ8x0gppw",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2020-07-06T22:56:04.734Z",
+                "updatedAt": "2020-07-06T22:56:04.734Z",
+                "publishedVersion": 5,
+                "entryTitle": "Footer Nav Link | Duel Masters",
+                "link": "https://dm.takaratomy.co.jp/",
+                "label": "Duel Masters"
+              },
+              {
+                "id": "1BOaXw3cjcnVB5NWIhHYIB",
+                "contentTypeId": "Linkables",
+                "locale": "en",
+                "createdAt": "2020-07-06T22:56:07.294Z",
+                "updatedAt": "2024-09-27T20:28:54.415Z",
+                "publishedVersion": 15,
+                "entryTitle": "Footer Nav Link | Magic",
+                "link": "https://magic.wizards.com/en",
+                "label": "Magic: The Gathering"
+              }
+            ]
+          }
+        ],
+        "logos": [
+          {
+            "id": "6oAjMLwUfwM4jsVPADrUtd",
+            "contentTypeId": "Linkables",
+            "locale": "en",
+            "createdAt": "2020-05-28T04:45:27.221Z",
+            "updatedAt": "2020-05-28T04:45:27.221Z",
+            "publishedVersion": 23,
+            "entryTitle": "Footer Logo | Wizards of the Coast",
+            "link": "https://company.wizards.com/",
+            "media": {
+              "url": "//images.ctfassets.net/s5n2t79q9icq/oUuxA4RiKrcKBgQt9kPWQ/08b26297fe9426198223bd7789d328c0/wizards_logo_119x80.png",
+              "size": 12985,
+              "width": 119,
+              "height": 80,
+              "fileName": "wizards_logo_119x80.png",
+              "contentType": "image/png",
+              "id": "oUuxA4RiKrcKBgQt9kPWQ",
+              "title": "Wizards of the Coast Logo",
+              "description": "The logo of Wizards of the Coast"
+            }
+          },
+          {
+            "id": "4pss4xTb3sNCNQCIkjN9Pz",
+            "contentTypeId": "Linkables",
+            "locale": "en",
+            "createdAt": "2020-05-28T04:45:27.236Z",
+            "updatedAt": "2020-05-28T04:45:27.236Z",
+            "publishedVersion": 18,
+            "entryTitle": "Footer Logo | Hasbro",
+            "link": "https://shop.hasbro.com",
+            "media": {
+              "url": "//images.ctfassets.net/s5n2t79q9icq/5FCDLiPoqO9xVOMQOVWaGs/65b826b49da7b40da30f79ca42949527/hasbro.svg",
+              "size": 161354,
+              "width": 66,
+              "height": 72,
+              "fileName": "hasbro.svg",
+              "contentType": "image/svg+xml",
+              "id": "5FCDLiPoqO9xVOMQOVWaGs",
+              "title": "Hasbro Logo",
+              "description": "The Logo of Hasbro"
+            }
+          }
+        ],
+        "gameRatings": [
+          {
+            "id": "1hKsNakzHxP4pA0rA6erzx",
+            "contentTypeId": "Linkables",
+            "locale": "en",
+            "createdAt": "2020-06-16T18:21:46.182Z",
+            "updatedAt": "2020-06-16T18:21:46.182Z",
+            "publishedVersion": 6,
+            "entryTitle": "Game Ratings | ESRB Privacy Certified",
+            "link": "https://www.esrb.org/EPCConfirm/916/",
+            "media": {
+              "url": "//images.ctfassets.net/s5n2t79q9icq/5tmmoGQljmuDb5yZkBNbX6/121ec18a530c6b683abbcd53ad8f09a8/esrb.svg",
+              "size": 53663,
+              "width": 68,
+              "height": 92,
+              "fileName": "esrb.svg",
+              "contentType": "image/svg+xml",
+              "id": "5tmmoGQljmuDb5yZkBNbX6",
+              "title": "ESRB Privacy Certified Badge",
+              "description": "ESRB Privacy Certified Badge"
+            }
+          },
+          {
+            "id": "4t25OnpeTShSefwzkUZipd",
+            "contentTypeId": "Linkables",
+            "locale": "en",
+            "createdAt": "2020-06-16T18:06:43.073Z",
+            "updatedAt": "2020-07-06T22:56:09.790Z",
+            "publishedVersion": 13,
+            "entryTitle": "Game Ratings | ESRB Teen",
+            "link": "https://www.esrb.org/ratings/ratings_guide.aspx",
+            "media": {
+              "url": "//images.ctfassets.net/s5n2t79q9icq/5wbGLWLwUf3mr8afVRQe2e/a14e2ebc6b787b2aa22d2a1326afabc2/esrb-2020-rating.png",
+              "size": 7343,
+              "width": 248,
+              "height": 93,
+              "fileName": "esrb-2020-rating.png",
+              "contentType": "image/png",
+              "id": "5wbGLWLwUf3mr8afVRQe2e",
+              "title": "ESRB Teen",
+              "description": "ESRB Teen"
+            }
+          }
+        ],
+        "utilsLinks": [
+          {
+            "id": "4WSLL40Y4BG4xq9XYAY5bP",
+            "contentTypeId": "Linkables",
+            "locale": "en",
+            "createdAt": "2020-07-06T22:56:05.152Z",
+            "updatedAt": "2023-01-03T22:06:56.257Z",
+            "publishedVersion": 63,
+            "entryTitle": "Footer Utils Link | Terms",
+            "link": "https://company.wizards.com/legal/terms",
+            "label": "Terms"
+          },
+          {
+            "id": "5k8npZ1OcZY5F3BzuoUBQz",
+            "contentTypeId": "Linkables",
+            "locale": "en",
+            "createdAt": "2020-07-06T22:56:05.093Z",
+            "updatedAt": "2023-01-03T22:07:21.955Z",
+            "publishedVersion": 33,
+            "entryTitle": "Footer Utils Link | Code of Conduct",
+            "link": "https://company.wizards.com/legal/code-conduct",
+            "label": "Code of Conduct"
+          },
+          {
+            "id": "2XL6aM7HRBI7Ka0RzJHMex",
+            "contentTypeId": "Linkables",
+            "locale": "en",
+            "createdAt": "2020-07-06T22:56:05.074Z",
+            "updatedAt": "2023-01-03T22:07:41.375Z",
+            "publishedVersion": 28,
+            "entryTitle": "Footer Utils Link | Privacy Policy",
+            "link": "https://company.wizards.com/legal/wizards-coasts-privacy-policy",
+            "label": "Privacy Policy"
+          },
+          {
+            "id": "1RdZHIuEV0xbhJrZnZKxIa",
+            "contentTypeId": "Linkables",
+            "locale": "en",
+            "createdAt": "2020-07-06T22:56:05.073Z",
+            "updatedAt": "2020-07-06T22:56:05.073Z",
+            "publishedVersion": 25,
+            "entryTitle": "Footer Utils Link | Customer Support",
+            "link": "https://support.wizards.com/",
+            "label": "Customer Support"
+          },
+          {
+            "id": "4m2rHwy1eIoetppyYDar9g",
+            "contentTypeId": "Linkables",
+            "locale": "en",
+            "createdAt": "2020-07-06T22:56:07.056Z",
+            "updatedAt": "2020-07-06T22:56:07.056Z",
+            "publishedVersion": 29,
+            "entryTitle": "Footer Utils Link | Fan Content Policy",
+            "link": "https://company.wizards.com/fancontentpolicy",
+            "label": "Fan Content Policy"
+          },
+          {
+            "id": "79O4jI4B1Io2HsPSOAYK8w",
+            "contentTypeId": "Linkables",
+            "locale": "en",
+            "createdAt": "2020-07-06T22:56:05.264Z",
+            "updatedAt": "2025-03-21T19:37:26.436Z",
+            "publishedVersion": 71,
+            "entryTitle": "Footer Utils Link | Do not sell",
+            "identifier": "ketch-show-experience",
+            "link": "#ketch-show-experience",
+            "label": "DO NOT SELL OR SHARE MY PERSONAL INFORMATION"
+          },
+          {
+            "id": "1heu9UyyZ3jZKojTrnMDse",
+            "contentTypeId": "Cta",
+            "locale": "en",
+            "createdAt": "2025-02-14T22:48:19.422Z",
+            "updatedAt": "2025-02-14T22:53:53.157Z",
+            "publishedVersion": 23,
+            "entryTitle": "Footer Link | Your Privacy Choice",
+            "identifier": "ketch-show-preferences",
+            "link": "#ketch-show-preferences",
+            "label": "Your Privacy Choices",
+            "hideOtherPlatformClients": false
+          }
+        ],
+        "copyright": "© 1993-{{YEAR}} Wizards of the Coast LLC, a subsidiary of Hasbro, Inc. All Rights Reserved.",
+        "dataLayerMenuType": "site footer"
+      }
+    }
+  },
+  "error": null,
+  "state": {
+    "siteMeta": {
+      "metaSiteName": "MAGIC: THE GATHERING",
+      "metaUrl": "https://magic.wizards.com",
+      "metaType": "website",
+      "metaTitle": "MAGIC: THE GATHERING",
+      "metaImage": {
+        "url": "//images.ctfassets.net/s5n2t79q9icq/5p96VsqUFOFydvLm9q0d9j/db8816b162d484efb1a2d476252658f6/MTG_Meta-ShareImage.jpg",
+        "size": 90195,
+        "width": 1200,
+        "height": 630,
+        "fileName": "MTG_Meta-ShareImage.jpg",
+        "contentType": "image/jpeg",
+        "id": "5p96VsqUFOFydvLm9q0d9j",
+        "title": "Meta Image | default"
+      }
+    },
+    "isWindowLoaded": false,
+    "globalRedirect": [
+      {
+        "to": "https://magic.wizards.com/",
+        "from": "/zh-Hant/mtgarena",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/",
+        "from": "/zh-Hant/mtgarena-welcome",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/",
+        "from": "/zh-Hant/mtgarena/events",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/",
+        "from": "/zh-Hant/mtgarena/how-to-play",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/",
+        "from": "/zh-Hant/mtgarena/getting-started",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/",
+        "from": "/zh-Hans/mtgarena",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/",
+        "from": "/zh-Hans/mtgarena-welcome",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/",
+        "from": "/zh-Hans/mtgarena/events",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/",
+        "from": "/zh-Hans/mtgarena/how-to-play",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/",
+        "from": "/zh-Hans/mtgarena/getting-started",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/",
+        "from": "/zh-hant/mtgarena",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/",
+        "from": "/zh-hant/mtgarena-welcome",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/",
+        "from": "/zh-hant/mtgarena/events",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/",
+        "from": "/zh-hant/mtgarena/how-to-play",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/",
+        "from": "/zh-hant/mtgarena/getting-started",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/zh-Hant/formats",
+        "from": "/zh-hant/formats/alchemy",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/zh-Hant/formats",
+        "from": "/zh-Hant/formats/alchemy",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/zh-Hant/formats",
+        "from": "/zh-hant/formats/historic",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/zh-Hant/formats",
+        "from": "/zh-Hant/formats/historic",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/",
+        "from": "/zh-hans/mtgarena",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/",
+        "from": "/zh-hans/mtgarena-welcome",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/",
+        "from": "/zh-hans/mtgarena/events",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/",
+        "from": "/zh-hans/mtgarena/how-to-play",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/",
+        "from": "/zh-hans/mtgarena/getting-started",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/zh-Hans/formats",
+        "from": "/zh-hans/formats/alchemy",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/zh-Hans/formats",
+        "from": "/zh-Hans/formats/alchemy",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/zh-Hans/formats",
+        "from": "/zh-hans/formats/historic",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/zh-Hans/formats",
+        "from": "/zh-Hans/formats/historic",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/zh-Hans/formats",
+        "from": "/zh-Hans/mtgarena/alchemy",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/zh-Hant/formats",
+        "from": "/zh-Hant/mtgarena/alchemy",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/en/news/mtg-arena/chromatic-cube-draft-mtg-arena",
+        "from": "/en/mtga-chromatic-cube-draft",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/en/news/mtg-arena/chromatic-cube-draft-mtg-arena",
+        "from": "/en/mtga-chromatic-cube",
+        "statusCode": 301
+      },
+      {
+        "to": "/en/v1/magic-card-layer-visualizer",
+        "from": "/en/magic-card-layer-visualizer"
+      },
+      {
+        "to": "https://magic.wizards.com/en/products/commander-masters/card-image-gallery",
+        "from": "/en/news/card-image-gallery/commander-masters",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/en/products/commander-masters/card-image-gallery",
+        "from": "/en/news/card-image-gallery/commander-masters-variants",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/en/products/commander-masters/card-image-gallery",
+        "from": "/en/news/card-image-gallery/commander-masters-commander",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/es/products/commander-masters/card-image-gallery",
+        "from": "/es/news/card-image-gallery/commander-masters",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/es/products/commander-masters/card-image-gallery",
+        "from": "/es/news/card-image-gallery/commander-masters",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/es/products/commander-masters/card-image-gallery",
+        "from": "/es/news/card-image-gallery/commander-masters-variants",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/es/products/commander-masters/card-image-gallery",
+        "from": "/es/news/card-image-gallery/commander-masters-commander",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/pt-BR/products/commander-masters/card-image-gallery",
+        "from": "/pt-BR/news/card-image-gallery/commander-masters",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/pt-BR/products/commander-masters/card-image-gallery",
+        "from": "/pt-BR/news/card-image-gallery/commander-masters-variants",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/pt-BR/products/commander-masters/card-image-gallery",
+        "from": "/pt-BR/news/card-image-gallery/commander-masters-commander",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/ja/products/commander-masters/card-image-gallery",
+        "from": "/ja/news/card-image-gallery/commander-masters",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/ja/products/commander-masters/card-image-gallery",
+        "from": "/ja/news/card-image-gallery/commander-masters-variants",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/ja/products/commander-masters/card-image-gallery",
+        "from": "/ja/news/card-image-gallery/commander-masters-commander",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/it/products/commander-masters/card-image-gallery",
+        "from": "/it/news/card-image-gallery/commander-masters",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/it/products/commander-masters/card-image-gallery",
+        "from": "/it/news/card-image-gallery/commander-masters-variants",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/it/products/commander-masters/card-image-gallery",
+        "from": "/it/news/card-image-gallery/commander-masters-commander",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/de/products/commander-masters/card-image-gallery",
+        "from": "/de/news/card-image-gallery/commander-masters",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/de/products/commander-masters/card-image-gallery",
+        "from": "/de/news/card-image-gallery/commander-masters-variants",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/de/products/commander-masters/card-image-gallery",
+        "from": "/de/news/card-image-gallery/commander-masters-commander",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/fr/products/commander-masters/card-image-gallery",
+        "from": "/fr/news/card-image-gallery/commander-masters",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/fr/products/commander-masters/card-image-gallery",
+        "from": "/fr/news/card-image-gallery/commander-masters-variants",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/fr/products/commander-masters/card-image-gallery",
+        "from": "/fr/news/card-image-gallery/commander-masters-commander",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/zh-Hans/products/commander-masters/card-image-gallery",
+        "from": "/zh-Hans/news/card-image-gallery/commander-masters",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/zh-Hans/products/commander-masters/card-image-gallery",
+        "from": "/zh-Hans/news/card-image-gallery/commander-masters-variants",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/zh-Hans/products/commander-masters/card-image-gallery",
+        "from": "/zh-Hans/news/card-image-gallery/commander-masters-commander",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/en/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/en/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/en/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/en/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth-variants",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/en/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/en/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth-commander",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/fr/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/fr/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/fr/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/fr/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth-variants",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/fr/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/fr/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth-commander",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/de/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/de/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/de/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/de/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth-variants",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/de/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/de/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth-commander",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/it/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/it/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/it/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/it/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth-variants",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/it/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/it/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth-commander",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/ja/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/ja/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/ja/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/ja/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth-variants",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/ja/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/ja/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth-commander",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/es/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/es/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/es/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/es/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth-variants",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/es/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/es/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth-commander",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/pt-BR/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/pt-BR/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/pt-BR/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/pt-BR/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth-variants",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/pt-BR/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/pt-BR/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth-commander",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/zh-Hans/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/zh-Hans/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/zh-Hans/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/zh-Hans/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth-variants",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/zh-Hans/products/the-lord-of-the-rings-tales-of-middle-earth/card-image-gallery",
+        "from": "/zh-Hans/news/card-image-gallery/the-lord-of-the-rings-tales-of-middle-earth-commander",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/en/products/doctor-who/card-image-gallery",
+        "from": "/en/products/magic-the-gathering-doctor-who/card-image-gallery",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/zh_Hans/products/doctor-who/card-image-gallery",
+        "from": "/zh-Hans/products/magic-the-gathering-doctor-who/card-image-gallery",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/zh-Hant/products/doctor-who/card-image-gallery",
+        "from": "/zh-Hant/products/magic-the-gathering-doctor-who/card-image-gallery",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/fr/products/doctor-who/card-image-gallery",
+        "from": "/fr/products/magic-the-gathering-doctor-who/card-image-gallery",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/de/products/doctor-who/card-image-gallery",
+        "from": "/de/products/magic-the-gathering-doctor-who/card-image-gallery",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/it/products/doctor-who/card-image-gallery",
+        "from": "/it/products/magic-the-gathering-doctor-who/card-image-gallery",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/ja/products/doctor-who/card-image-gallery",
+        "from": "/ja/products/magic-the-gathering-doctor-who/card-image-gallery",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/ko/products/doctor-who/card-image-gallery",
+        "from": "/ko/products/magic-the-gathering-doctor-who/card-image-gallery",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/pt-BR/products/doctor-who/card-image-gallery",
+        "from": "/pr-BR/products/magic-the-gathering-doctor-who/card-image-gallery",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/ru/products/doctor-who/card-image-gallery",
+        "from": "/ru/products/magic-the-gathering-doctor-who/card-image-gallery",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/es/products/doctor-who/card-image-gallery",
+        "from": "/es/products/magic-the-gathering-doctor-who/card-image-gallery",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/en/news/mtg-arena/mtg-arena-announcements-may-28-2024?utm_medium=playerinbox&utm_source=arena",
+        "from": "/en/news/mtg-arena/mtg-arena-announcements-may-27-2024",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/en/mtgarena/events?utm_medium=carousel&utm_source=arena",
+        "from": "/en/mtgarena/events%20",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/en/mtgarena/events?utm_medium=carousel&utm_source=arena",
+        "from": "/en/mtgarena/events%20%20",
+        "statusCode": 301
+      },
+      {
+        "to": "https://magic.wizards.com/en/news/announcements/announcing-secret-lair-x-marvels-deadpool-april-pools-day",
+        "from": "/en/news/announcements/announcing-secret-lair-redacted",
+        "statusCode": 301
+      }
+    ],
+    "system": {
+      "os": null,
+      "browser": null
+    },
+    "siteHeaderOffset": null,
+    "shouldToastLang": false,
+    "currentPageId": "6JBS1nhJRYI7k77GpnUXyA",
+    "currentPageStatus": "draft",
+    "enableDecklistArenaDownload": false,
+    "organizationSchema": {
+      "url": "https://magic.wizards.com/en",
+      "logo": "https://images.ctfassets.net/s5n2t79q9icq/3dB5uyWzUH95O1ZPBNNUX5/6cff7c65a809285755ea24b164b6ac65/magic-logo.png?fm=webp",
+      "name": "Magic: The Gathering",
+      "@type": "Organization",
+      "sameAs": [
+        "https://www.facebook.com/MagicTheGathering",
+        "https://twitter.com/wizards_magic",
+        "https://www.instagram.com/wizards_magic/",
+        "https://www.youtube.com/channel/UC8ZGymAvfP97qJabgqUkz4A",
+        "https://www.twitch.tv/magic",
+        "https://en.wikipedia.org/wiki/Magic:_The_Gathering"
+      ],
+      "@context": "https://schema.org"
+    },
+    "backRequestCount": 0,
+    "shouldPushNewGa4DataLayer": true,
+    "shouldRedirectRestrictedAccess": true,
+    "use3rdPartyCookieManagement": true,
+    "admin": {},
+    "cookies": {
+      "hasConsentedCookies": false
+    },
+    "logs": {
+      "entries": [
+        "[server] req.url: /en/rules",
+        "[server] locale found in url: en",
+        "[server] locale from cookie: undefined",
+        "[server] locale from browser preferences: undefined"
+      ]
+    },
+    "navDrawer": {
+      "isNavDrawerOpen": false
+    },
+    "redirect": {},
+    "request": {},
+    "siteMeasurement": {
+      "viewport": {
+        "width": null,
+        "height": null
+      }
+    },
+    "subnav": {
+      "nav": null
+    },
+    "theme": {
+      "currentTheme": {
+        "buttonLabelColor": "#222222",
+        "primaryButtonLabelColor": "#ffffff",
+        "primaryColor100": "#FDDF8A",
+        "primaryColor200": "#FF9013",
+        "primaryColor300": "#EB2C06",
+        "accentColor": "#EA4B12",
+        "linkColor": "#EA3601",
+        "linkColorActive": "#B93B0D"
+      },
+      "forceStoreTheme": false
+    },
+    "toastDrawer": {
+      "collection": []
+    },
+    "i18n": {
+      "routeParams": {}
+    }
+  },
+  "serverRendered": true,
+  "routePath": "/en/rules",
+  "config": {
+    "_app": {
+      "basePath": "/",
+      "assetsPath": "/_nuxt/",
+      "cdnURL": null
+    }
+  }
+}

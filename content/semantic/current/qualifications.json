@@ -1,32 +1,8 @@
 {
-  "sacrifice.plains": {
-    "closure_hash": "bad2c7bf760ad76f23f5aaf606d2e13e77409770a5d3c3d00a88d3aed932b20d",
+  "tla.abandon_attachments": {
+    "closure_hash": "166fcb33deafbd9179fed7fc36f7921d2c8ad6d24560959c3ed6c3d483414d09",
     "witnesses": [
-      "managym/tests/rules/cr_305_lands.rs"
-    ]
-  },
-  "sacrifice.swamp": {
-    "closure_hash": "7e42321f3a5251ee5bac6e5a6f9abc407d95340d3a1a56ed8b6d8aab860f7539",
-    "witnesses": [
-      "managym/tests/rules/cr_305_lands.rs"
-    ]
-  },
-  "temur.forest": {
-    "closure_hash": "00a7aee872d923d40085b76dbbd733263811dc081819e5740f251b20ae7f467d",
-    "witnesses": [
-      "managym/tests/rules/cr_305_lands.rs"
-    ]
-  },
-  "temur.island": {
-    "closure_hash": "91075098de7652ad8ec47071066cdbc0a1db00a6f78b2198bc862d141d2f3df3",
-    "witnesses": [
-      "managym/tests/rules/cr_305_lands.rs"
-    ]
-  },
-  "temur.mountain": {
-    "closure_hash": "75f7d49a270ff9d81243aacd520302507c64cb2c53e2551164a4528a8828cb96",
-    "witnesses": [
-      "managym/tests/rules/cr_305_lands.rs"
+      "managym/tests/rules/elemental_cards.rs::hybrid_discard_is_optional_at_resolution_and_draws_exactly_two"
     ]
   },
   "tla.airship_engine_room": {
@@ -35,10 +11,25 @@
       "managym/tests/rules/tla_content.rs::draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card"
     ]
   },
+  "tla.allies_at_last": {
+    "closure_hash": "eb08d41547fc077c358e209a73d2a187717e22c137c8acfb79d436f4f5fddf36",
+    "witnesses": [
+      "managym/tests/rules/stage2_cards.rs::allies_at_last_affinity_and_two_attackers",
+      "managym/tests/rules/stage2_cards.rs::allies_at_last_up_to_zero_attackers_is_legal",
+      "managym/tests/rules/tla_content.rs::allies_at_last_can_choose_one_source_and_uses_its_current_power",
+      "managym/tests/rules/tla_content.rs::allies_at_last_respects_source_and_victim_legality_and_lifelink"
+    ]
+  },
   "tla.avatar_enthusiasts": {
     "closure_hash": "e07125fac706e597143d10211804d17f08565a9c45b3739a096abfd7107c846d",
     "witnesses": [
       "managym/tests/rules/tla_cards.rs::avatar_enthusiasts_counter_when_another_ally_enters"
+    ]
+  },
+  "tla.azula_always_lies": {
+    "closure_hash": "c579e5e1350003f291309172bd8acf01fc66dd9056f3b6361a1f0d28bd1e0d94",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::azula_announces_both_modes_then_binds_independent_targets_including_same_object"
     ]
   },
   "tla.boar_q_pine": {
@@ -53,16 +44,92 @@
       "managym/tests/rules/tla_content.rs::draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card"
     ]
   },
+  "tla.boomerang_basics": {
+    "closure_hash": "1998324e31a3dbc85bde3663b5c6a638827c73c44a767fbeed8d1e32cc54ccfb",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::boomerang_draws_only_when_its_target_was_controlled_by_the_caster",
+      "managym/tests/rules/elemental_cards.rs::boomerang_and_zuko_use_resolution_time_control_after_target_announcement"
+    ]
+  },
+  "tla.callous_inspector": {
+    "closure_hash": "a77ace1d85b666eea7773d5b7e208b24c695977fb061f71c962c77829ddc24ba",
+    "witnesses": [
+      "managym/tests/rules/sacrifice_cards.rs::death_rewards_and_selected_activation_costs",
+      "managym/tests/rules/tla_content.rs::printed_trample_first_strike_lifelink_and_menace_affect_combat",
+      "managym/tests/rules/tla_cards.rs::fortune_teller_clue_sacrifices_to_draw_and_ceases_to_exist"
+    ]
+  },
   "tla.cat_owl": {
     "closure_hash": "62e38b267043bf71a41c43997d0b21c00292c3d49396aa4c09574b74e70c84e3",
     "witnesses": [
       "managym/tests/rules/tla_content.rs::cat_owl_attack_untaps_artifacts_or_creatures_in_either_control"
     ]
   },
+  "tla.combustion_technique": {
+    "closure_hash": "de730ed36622c903996890d7d84ca2317c30313eb24968692da3334e1e07bd5a",
+    "witnesses": [
+      "managym/tests/rules/ur_lessons_increment.rs::combustion_damage_counts_own_lessons_excludes_resolving_spell_and_exiles_later_death",
+      "managym/tests/rules/ur_lessons_increment.rs::combustion_lethal_damage_exiles_without_a_graveyard_move",
+      "managym/tests/rules/ur_lessons_increment.rs::combustion_replacement_expires_at_cleanup_and_does_not_follow_reentry",
+      "managym/tests/rules/ur_lessons_increment.rs::combustion_invalid_target_does_not_damage_or_mark_new_incarnation"
+    ]
+  },
+  "tla.compassionate_healer": {
+    "closure_hash": "49ee60ada68a2ab804dcffb2f293582c3084d08f29cb0ca25eab47d681436fd5",
+    "witnesses": [
+      "managym/tests/rules/stage3_cards.rs::healer_tap_gains_life_and_scries",
+      "managym/tests/rules/stage2_cards.rs::glider_kids_scry_bottom_moves_top_card_to_bottom",
+      "managym/tests/rules/stage2_cards.rs::glider_kids_scry_keep_leaves_top_card"
+    ]
+  },
+  "tla.corrupt_court_official": {
+    "closure_hash": "9593a481d76baa8dc60b94940d5b9a4fb13be47f3db4608eb91dc6355f1fe405",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::court_official_and_ozai_make_the_target_player_choose_discards"
+    ]
+  },
   "tla.cunning_maneuver": {
-    "closure_hash": "3568a4f7eb1bf9ef0b7aadad8422760cae5c84977bacec71bb9716c814151b03",
+    "closure_hash": "60adc031c66c2e9ce40dce12c7181c49780071ec00edca0b965749f956c93901",
     "witnesses": [
       "managym/tests/rules/tla_content.rs::cunning_maneuver_buffs_and_investigates_but_all_invalid_targets_stop_it"
+    ]
+  },
+  "tla.curious_farm_animals": {
+    "closure_hash": "375bd88d81a19d002dd3c7421db1e0740149e3aa931320fbe8c683531c315ffd",
+    "witnesses": [
+      "managym/tests/rules/sacrifice_cards.rs::farm_animals_can_decline_target_and_still_pay_sacrifice",
+      "managym/tests/rules/sacrifice_cards.rs::farm_animals_destroy_an_artifact_without_targeting_a_creature",
+      "managym/tests/rules/tla_content.rs::artifact_enchantment_removal_covers_both_types_and_excludes_lands"
+    ]
+  },
+  "tla.cycle_of_renewal": {
+    "closure_hash": "4979d063d3e26663bcaffa18527a88307c422b136a36925f5e52f6681d0b750b",
+    "witnesses": [
+      "managym/tests/rules/sacrifice_cards.rs::cycle_sacrifices_during_resolution_and_searches_two_distinct_basics"
+    ]
+  },
+  "tla.deadly_precision": {
+    "closure_hash": "151447040cbc21f2a329ca76b8d54592f7e24278fe6c628825f564391ddeeef9",
+    "witnesses": [
+      "managym/tests/rules/sacrifice_cards.rs::precision_has_a_real_four_mana_alternative",
+      "managym/tests/rules/tla_content.rs::deadly_precision_sacrifices_artifact_before_destroying_a_different_creature"
+    ]
+  },
+  "tla.deserter_s_disciple": {
+    "closure_hash": "3946b712120ea6d23248691d232885612807bd8ea39c4b2513c2cb9a8e2a7a49",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::disciple_targets_another_small_creature_pays_tap_and_survives_source_departure",
+      "managym/tests/rules/tla_content.rs::disciple_rechecks_power_and_its_effect_expires"
+    ]
+  },
+  "tla.earth_kingdom_jailer": {
+    "closure_hash": "a0879c7ec44e95f15567cbdaee26bc74b60fc2e6042269c78a79a1ca5d32af30",
+    "witnesses": [
+      "managym/tests/rules/stage3_cards.rs::jailer_exiles_and_returns_on_leaving",
+      "managym/tests/rules/stage3_cards.rs::jailer_target_is_up_to_one_and_mv_gated",
+      "managym/tests/rules/stage3_cards.rs::jailer_trigger_still_fires_with_no_legal_targets",
+      "managym/tests/rules/stage3_cards.rs::jailer_killed_in_response_exiles_nothing",
+      "managym/tests/rules/stage3_cards.rs::jailer_old_trigger_does_not_follow_reentered_source"
     ]
   },
   "tla.earth_kingdom_protectors": {
@@ -77,16 +144,94 @@
       "managym/tests/rules/tla_content.rs::earth_kingdom_soldier_offers_zero_one_or_two_distinct_own_creatures"
     ]
   },
+  "tla.earth_kings_lieutenant": {
+    "closure_hash": "80582a506f51e98580c3be929ac8cbe9620a9aed67901b98f5f120758fc2b38e",
+    "witnesses": [
+      "managym/tests/rules/stage3_cards.rs::lieutenant_counters_each_other_ally_and_grows",
+      "managym/tests/rules/tla_content.rs::printed_trample_first_strike_lifelink_and_menace_affect_combat"
+    ]
+  },
+  "tla.enter_the_avatar_state": {
+    "closure_hash": "9e470a4406a37aa69eef07ecb45fb61fbfc3b8bcdc1da474c485b6de61fde640",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::avatar_state_grants_a_visible_incarnation_local_subtype_and_cleans_up",
+      "managym/tests/rules/stage3_cards.rs::avatar_state_grants_keywords_and_hexproof_blocks_opponent_targeting"
+    ]
+  },
+  "tla.epic_downfall": {
+    "closure_hash": "92189bdbf9ec70009e58b25f81ca9d248a615f2631a5fc268c3c4d68d282e04e",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::removal_respects_mana_value_and_excluded_creature_types"
+    ]
+  },
+  "tla.fancy_footwork": {
+    "closure_hash": "c30fce0cf30209ef42457bb9ece33488fc48131b9932164b351d1a2caf4e0a71",
+    "witnesses": [
+      "managym/tests/rules/stage3_cards.rs::fancy_footwork_untaps_and_buffs_one_or_two_targets",
+      "managym/tests/rules/tla_content.rs::fancy_footwork_one_target_or_one_remaining_target_expires"
+    ]
+  },
+  "tla.fire_nation_cadets": {
+    "closure_hash": "4095e98d3d0e50a76f08058e7e22681d824d3bb40c5e868f1563ff0a891e5311",
+    "witnesses": [
+      "managym/tests/rules/stage3_cards.rs::firebending_only_triggers_with_lesson_in_graveyard",
+      "managym/tests/rules/stage3_cards.rs::firebending_mana_lasts_until_end_of_combat_and_casts_spells",
+      "managym/tests/rules/stage3_cards.rs::cadets_pump_ability_buffs_until_end_of_turn",
+      "managym/tests/rules/tla_content.rs::cadets_keep_announced_firebending_after_last_lesson_leaves"
+    ]
+  },
   "tla.fire_sages": {
     "closure_hash": "2053f82f836762eca423e78b422539bb8e692de3bff0ee0cd17834ff1a57b9ad",
     "witnesses": [
       "managym/tests/rules/tla_content.rs::fire_sages_counter_cost_and_firebending_mana_lifetime"
     ]
   },
+  "tla.firebending_lesson": {
+    "closure_hash": "d4f8f645e5445896f021f5f0824b0a847fbae0cc82bb4cdc4f6f7a434e8667b0",
+    "witnesses": [
+      "managym/tests/rules/stage2_cards.rs::firebending_lesson_kicked_deals_five",
+      "managym/tests/rules/stage2_cards.rs::firebending_lesson_unkicked_deals_two",
+      "managym/tests/rules/stage2_cards.rs::firebending_lesson_kicker_not_offered_when_unaffordable"
+    ]
+  },
+  "tla.first_time_flyer": {
+    "closure_hash": "7f2a9a8aa2e122b8f213cc1afd0d5a5b5209066d85f943fba88997eddd005513",
+    "witnesses": [
+      "managym/tests/rules/stage3_cards.rs::first_time_flyer_conditional_static_recomputes_on_read",
+      "managym/tests/rules/tla_content.rs::qualified_fliers_evade_ground_and_vigilant_attackers_remain_untapped"
+    ]
+  },
   "tla.foggy_bottom_swamp": {
     "closure_hash": "b65f2ff02ccb41faae7eb77591f28c8a0acbd4ebb4ba4ba8f5bcf40cf88bda2d",
     "witnesses": [
       "managym/tests/rules/tla_content.rs::draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card"
+    ]
+  },
+  "tla.foggy_swamp_spirit_keeper": {
+    "closure_hash": "067468b44beb438ff66e4624b98809f29fb8b47a80c9f11255c3e993b31e062a",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::hybrid_draw_payoffs_use_draw_count_and_trigger_on_the_second_draw_only",
+      "managym/tests/rules/elemental_cards.rs::spirit_tokens_cannot_block_or_be_blocked_by_nonspirits",
+      "managym/tests/rules/tla_content.rs::printed_trample_first_strike_lifelink_and_menace_affect_combat"
+    ]
+  },
+  "tla.forecasting_fortune_teller": {
+    "closure_hash": "58a71c29d9d3d9607d0721eb8309f8d03a2b1ab30551f5fba8488ffec4bcc119",
+    "witnesses": [
+      "managym/tests/rules/tla_cards.rs::fortune_teller_clue_sacrifices_to_draw_and_ceases_to_exist"
+    ]
+  },
+  "tla.forest": {
+    "closure_hash": "9a85741789e33aa05405d0afecb53036d333b7440b7f03db333653e1f714f4ea",
+    "witnesses": [
+      "managym/tests/rules/cr_305_lands.rs"
+    ]
+  },
+  "tla.gather_the_white_lotus": {
+    "closure_hash": "ef0e7c57c2b01b1d1233d6fe49fef6627bba63b8dfb5ca13551542ee04fa9b5e",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::gather_creates_per_plains_and_scry_can_reverse_top_cards_privately",
+      "managym/tests/rules/tla_content.rs::required_fixed_token_templates_have_the_printed_sizes_and_keyword_effects"
     ]
   },
   "tla.glider_kids": {
@@ -98,10 +243,73 @@
       "managym/tests/rules/stage2_cards.rs::glider_kids_flies_over_ground_blockers"
     ]
   },
+  "tla.gran_gran": {
+    "closure_hash": "9656111eac8933b7b0fc92af48e87545d11bb22187a356ad60d39eb6fb28f28d",
+    "witnesses": [
+      "managym/tests/rules/ur_lessons_increment.rs::gran_gran_taps_to_loot_mandatorily_and_can_discard_the_drawn_card",
+      "managym/tests/rules/ur_lessons_increment.rs::gran_gran_reduction_threshold_noncreature_and_generic_floor"
+    ]
+  },
   "tla.iguana_parrot": {
     "closure_hash": "1e7607f86a167d3b99beaef839ab79c2358f478236a4bc63cb4a455316b40925",
     "witnesses": [
       "managym/tests/rules/tla_content.rs::iguana_and_boar_trigger_only_on_own_noncreature_casts"
+    ]
+  },
+  "tla.invasion_reinforcements": {
+    "closure_hash": "54ec132c2aa5033078e7a1baf175048c17432ffbdcf827fd6ff7973fba58f96b",
+    "witnesses": [
+      "managym/tests/rules/tla_cards.rs::invasion_reinforcements_flash_cast_on_opponents_turn",
+      "managym/tests/rules/tla_content.rs::required_fixed_token_templates_have_the_printed_sizes_and_keyword_effects"
+    ]
+  },
+  "tla.iroh_s_demonstration": {
+    "closure_hash": "f74fa5212b0e6400ad95a23461384fa7fe4980a44091f36919914e3c22718f04",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::iroh_modes_gate_targets_and_damage_only_opponent_creatures"
+    ]
+  },
+  "tla.island": {
+    "closure_hash": "49fb6eb62c0f457e7b3effbe977e2bf35b082f07de26d851b00b4215a4dba67d",
+    "witnesses": [
+      "managym/tests/rules/cr_305_lands.rs"
+    ]
+  },
+  "tla.itll_quench_ya": {
+    "closure_hash": "98f0f653f4bc7478996520a002856e844beea16cd15347a9ff1c253e451b76a4",
+    "witnesses": [
+      "managym/tests/rules/stage2_cards.rs::quench_controller_declines_and_spell_is_countered",
+      "managym/tests/rules/stage2_cards.rs::quench_controller_pays_and_spell_resolves",
+      "managym/tests/rules/stage2_cards.rs::quench_pay_option_absent_when_controller_cannot_pay"
+    ]
+  },
+  "tla.jeong_jeongs_deserters": {
+    "closure_hash": "90e7ee16002e383aa389024e8164d42c59d618cba8b299f4d245aff9a16d3c40",
+    "witnesses": [
+      "managym/tests/rules/tla_cards.rs::jeong_jeongs_deserters_targeted_counter_and_lethal_sba"
+    ]
+  },
+  "tla.jet_freedom_fighter": {
+    "closure_hash": "8347760da97bfc4962979832e0dac6a19d7b954a6ac04983a02eb984d2f230a7",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::jet_entry_damage_and_death_choose_up_to_two_distinct_creatures"
+    ]
+  },
+  "tla.june_bounty_hunter": {
+    "closure_hash": "ad72e897c3b14da3f12a725e1264027ad9dbfe9cedf1b8d98201d1d1ac26c1fe",
+    "witnesses": [
+      "managym/tests/rules/sacrifice_cards.rs::june_sacrifices_another_creature_only_on_its_controllers_turn",
+      "managym/tests/rules/sacrifice_cards.rs::june_is_unblockable_after_two_draws",
+      "managym/tests/rules/tla_cards.rs::fortune_teller_clue_sacrifices_to_draw_and_ceases_to_exist"
+    ]
+  },
+  "tla.knowledge_seeker": {
+    "closure_hash": "77849840df48f1005dfe4928a0dca703c285f28a74fef6e5ea46d698954df126",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::hybrid_draw_payoffs_use_draw_count_and_trigger_on_the_second_draw_only",
+      "managym/tests/rules/elemental_cards.rs::eyetwitch_and_poxbearer_deaths_keep_their_different_rewards",
+      "managym/tests/rules/tla_content.rs::qualified_fliers_evade_ground_and_vigilant_attackers_remain_untapped",
+      "managym/tests/rules/tla_cards.rs::fortune_teller_clue_sacrifices_to_draw_and_ceases_to_exist"
     ]
   },
   "tla.kyoshi_village": {
@@ -110,10 +318,34 @@
       "managym/tests/rules/tla_content.rs::draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card"
     ]
   },
+  "tla.kyoshi_warriors": {
+    "closure_hash": "c76a7224ff4bbab3b97742ba0f2e5dd6f75c4c64a5cbdd1791c6581ba1585f3c",
+    "witnesses": [
+      "managym/tests/rules/tla_cards.rs::kyoshi_warriors_etb_creates_ally_token_via_stack",
+      "managym/tests/rules/tla_content.rs::required_fixed_token_templates_have_the_printed_sizes_and_keyword_effects"
+    ]
+  },
+  "tla.master_piandao": {
+    "closure_hash": "7352238d46ceebbd2a0e68713a531a27c38579f0e00cc16d67c99ca3c9fcd0c0",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::master_piandao_reveals_a_selected_ally_and_bottoms_the_rest",
+      "managym/tests/rules/tla_content.rs::printed_trample_first_strike_lifelink_and_menace_affect_combat",
+      "managym/tests/rules/tla_content.rs::piandao_can_take_a_lesson_or_equipment_or_decline_without_revealing_remainder"
+    ]
+  },
   "tla.meditation_pools": {
     "closure_hash": "f02de7842ec7ffc2dbb559c0a8cd8c337415c60d3ab7e6bf776bb2776f4e40bb",
     "witnesses": [
       "managym/tests/rules/tla_content.rs::draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card"
+    ]
+  },
+  "tla.messenger_hawk": {
+    "closure_hash": "64b7a10a11754b8c027ef7ba9c5b7066747a44cd7ade1747830afed3a5863304",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::messenger_hawk_accepts_either_hybrid_color_and_investigates_on_entry",
+      "managym/tests/rules/elemental_cards.rs::hybrid_draw_payoffs_use_draw_count_and_trigger_on_the_second_draw_only",
+      "managym/tests/rules/tla_content.rs::qualified_fliers_evade_ground_and_vigilant_attackers_remain_untapped",
+      "managym/tests/rules/tla_cards.rs::fortune_teller_clue_sacrifices_to_draw_and_ceases_to_exist"
     ]
   },
   "tla.misty_palms_oasis": {
@@ -122,10 +354,32 @@
       "managym/tests/rules/tla_content.rs::draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card"
     ]
   },
+  "tla.momo_friendly_flier": {
+    "closure_hash": "3090fc14ce6c1accd9b94fa31635e3fdfdf62089c9b5573750e87de6d39c20a7",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::momo_reduces_first_matching_spell_only_and_grows_when_another_flier_enters",
+      "managym/tests/rules/elemental_cards.rs::momo_counts_earlier_matching_casts_before_it_entered_and_resets_next_turn",
+      "managym/tests/rules/tla_content.rs::qualified_fliers_evade_ground_and_vigilant_attackers_remain_untapped",
+      "managym/tests/rules/tla_content.rs::momo_excludes_lemurs_and_opponents_turn_and_its_pump_expires"
+    ]
+  },
+  "tla.mountain": {
+    "closure_hash": "909dd9f73c07a87505772a333f536d4519a307ae811390f8aba4b972682df7ff",
+    "witnesses": [
+      "managym/tests/rules/cr_305_lands.rs"
+    ]
+  },
   "tla.north_pole_gates": {
     "closure_hash": "affb2589c37affd8229bfe24a8b0a6e1f895d5f6979737bd10ccb821c329162b",
     "witnesses": [
       "managym/tests/rules/tla_content.rs::draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card"
+    ]
+  },
+  "tla.octopus_form": {
+    "closure_hash": "b9962e1cf5118a6830d4a55bacfb8789b25d43ea5882e5140bad374e6ee398e8",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::targeted_combat_tricks_apply_through_play",
+      "managym/tests/rules/tla_content.rs::octopus_form_untaps_only_own_target_and_expires"
     ]
   },
   "tla.omashu_city": {
@@ -134,10 +388,51 @@
       "managym/tests/rules/tla_content.rs::draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card"
     ]
   },
+  "tla.origin_of_metalbending": {
+    "closure_hash": "f2cc0b020de9146f52d2e54d98dc842a143cc051bc3ff3789ddeead1cd9afc0d",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::origin_destroys_artifacts_or_protects_with_counter_and_indestructible",
+      "managym/tests/rules/tla_content.rs::origin_indestructible_expires_but_counter_remains",
+      "managym/tests/rules/tla_content.rs::artifact_enchantment_removal_covers_both_types_and_excludes_lands"
+    ]
+  },
+  "tla.ostrich_horse": {
+    "closure_hash": "e43e81833f4a3ef59d86f483506a07f63df8367a8958b92770d76852276e0ab1",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::ostrich_mills_then_selects_only_a_milled_land_or_grows_when_declined"
+    ]
+  },
+  "tla.otter_penguin": {
+    "closure_hash": "ba34cc07fe13f28cb6102b22e370a59d6673276708baa51a1fdfd1fdec35f5d5",
+    "witnesses": [
+      "managym/tests/rules/tla_cards.rs::otter_penguin_buffs_on_second_draw_only_and_resets",
+      "managym/tests/rules/tla_cards.rs::otter_penguin_ignores_opponent_draws",
+      "managym/tests/rules/tla_cards.rs::cant_be_blocked_this_turn_blocks_all_blocks"
+    ]
+  },
+  "tla.ozai_s_cruelty": {
+    "closure_hash": "3524a0446db38cc457cadc2092f97f13285ca3a00381c51824b18ccf09f48626",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::court_official_and_ozai_make_the_target_player_choose_discards"
+    ]
+  },
   "tla.pillar_launch": {
     "closure_hash": "a41093c90ac8b727092fad77b82b3a155f7e56dd280abf81ca7c8e15dd738335",
     "witnesses": [
       "managym/tests/rules/tla_content.rs::pillar_launch_untaps_and_grants_temporary_reach_and_stats"
+    ]
+  },
+  "tla.plains": {
+    "closure_hash": "ba535f0947efbb2cc456ceba55d385eef37514277148e0100f5deea0eefdc3d1",
+    "witnesses": [
+      "managym/tests/rules/cr_305_lands.rs"
+    ]
+  },
+  "tla.pretending_poxbearers": {
+    "closure_hash": "fa53735e85d8cb35c01cdfdd268bb5d75bd7c0c3498771c224dcf19790b0f72e",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::eyetwitch_and_poxbearer_deaths_keep_their_different_rewards",
+      "managym/tests/rules/tla_content.rs::required_fixed_token_templates_have_the_printed_sizes_and_keyword_effects"
     ]
   },
   "tla.rumble_arena": {
@@ -152,16 +447,86 @@
       "managym/tests/rules/tla_content.rs::draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card"
     ]
   },
+  "tla.shared_roots": {
+    "closure_hash": "8730dcba9c0bf525cdac1237ee37d19edd9a17e018c0a8b592ddf6cf49fa5d38",
+    "witnesses": [
+      "managym/tests/rules/tla_content.rs::shared_roots_search_can_find_or_decline_without_leaking_the_library",
+      "managym/tests/rules/elemental_cards.rs::search_selection_or_decline_and_shuffle_restore_exactly_under_undo"
+    ]
+  },
+  "tla.sokka_s_haiku": {
+    "closure_hash": "500a8a65e499baa015adf7c84d1d5cfb334dac359f058221c06da882519ec4f1",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::sokka_binds_spell_and_land_separately_and_resolves_with_one_illegal_target",
+      "managym/tests/rules/tla_content.rs::sokkas_haiku_counters_draws_mills_and_untaps_and_needs_a_legal_target"
+    ]
+  },
+  "tla.south_pole_voyager": {
+    "closure_hash": "92b21ef616b8d285db2a7ef0b888a3e59f86c5c95a581a6f71396f6b5c4c4c1a",
+    "witnesses": [
+      "managym/tests/rules/tla_cards.rs::south_pole_voyager_second_resolution_draws"
+    ]
+  },
   "tla.sun_blessed_peak": {
     "closure_hash": "577830f4184a22babf20ae891d2a1279d3801a925011ef67cafcb457d310c99e",
     "witnesses": [
       "managym/tests/rules/tla_content.rs::draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card"
     ]
   },
+  "tla.swamp": {
+    "closure_hash": "6c91200b1e7e5b53b538494cc261ec75a0ede9f322810c534d3df5f81c1490e7",
+    "witnesses": [
+      "managym/tests/rules/cr_305_lands.rs"
+    ]
+  },
+  "tla.tiger_dillo": {
+    "closure_hash": "71a895bf1571f8e27e751b5186c4750a240ca7349957cc49dff3263ac08ee01c",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::tiger_dillo_needs_another_four_power_creature_to_be_an_attacker",
+      "managym/tests/rules/tla_content.rs::tiger_dillo_blocking_needs_another_four_power_creature"
+    ]
+  },
+  "tla.tiger_seal": {
+    "closure_hash": "2e023c5b3b02ae7e13a29d81a06c7aafb814736f55e8bd51a2d009668e868546",
+    "witnesses": [
+      "managym/tests/rules/tla_cards.rs::tiger_seal_taps_at_upkeep_and_untaps_on_second_draw",
+      "managym/tests/rules/tla_content.rs::qualified_fliers_evade_ground_and_vigilant_attackers_remain_untapped"
+    ]
+  },
+  "tla.tolls_of_war": {
+    "closure_hash": "a4948e32aa125f1519d5e33720e1ad94abe04c8c4a3541533d286be8773f5330",
+    "witnesses": [
+      "managym/tests/rules/sacrifice_cards.rs::tolls_limits_triggers_while_mayhem_sees_opponent_sacrifices",
+      "managym/tests/rules/sacrifice_cards.rs::tolls_fires_once_in_a_turn_and_resets_on_the_next_turn"
+    ]
+  },
   "tla.treetop_freedom_fighters": {
-    "closure_hash": "753d223d93f0f194e56df6a094bc08882ad7a110fd3d5eeae206f8e9d8377fdb",
+    "closure_hash": "ce36804bd765805d45250da29cfe5ecf42f393544559a814d411f9859fea4b23",
     "witnesses": [
       "managym/tests/rules/tla_content.rs::treetop_creates_one_white_ally_and_can_attack_immediately"
+    ]
+  },
+  "tla.true_ancestry": {
+    "closure_hash": "df873c31a8e0841edba1321a2331ad71017efa2d7d69e024783bb9771496e957",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::true_ancestry_returns_only_a_current_permanent_card_and_can_decline",
+      "managym/tests/rules/elemental_cards.rs::ancestry_does_not_follow_a_graveyard_target_into_a_new_incarnation",
+      "managym/tests/rules/tla_cards.rs::fortune_teller_clue_sacrifices_to_draw_and_ceases_to_exist"
+    ]
+  },
+  "tla.uncle_iroh": {
+    "closure_hash": "c4d2320d9c3a8ba3d27c41e51f257d90ccad334bc1f4fa249a6ad12f1d7aa3f5",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::uncle_iroh_reduces_lesson_spells_without_reducing_ordinary_spells",
+      "managym/tests/rules/tla_content.rs::uncle_iroh_firebending_survives_steps_and_expires_after_combat"
+    ]
+  },
+  "tla.unlucky_cabbage_merchant": {
+    "closure_hash": "9d933917edd46167917e0a00344d52977d9e64bd789a43aa62ef0822bcaec73c",
+    "witnesses": [
+      "managym/tests/rules/sacrifice_cards.rs::merchant_search_returns_the_exact_source_even_on_failure_to_find",
+      "managym/tests/rules/sacrifice_cards.rs::merchant_returns_to_its_owners_bottom_while_its_controller_shuffles",
+      "managym/tests/rules/tla_content.rs::merchant_successful_search_is_optional_and_returns_source_before_shuffle"
     ]
   },
   "tla.walltop_sentries": {
@@ -176,16 +541,56 @@
       "managym/tests/rules/tla_content.rs::wandering_musicians_pump_all_own_creatures_for_the_turn"
     ]
   },
+  "tla.wartime_protestors": {
+    "closure_hash": "f4a433ec3129ad0b1697338a2f0e7b1c92a0fc63fd294db080fab09accdcfc26",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::ally_entry_context_buffs_the_entering_ally_and_haru_earthbends",
+      "managym/tests/rules/tla_content.rs::wartime_protestors_haste_grant_is_temporary_and_only_for_other_own_allies",
+      "managym/tests/rules/tla_content.rs::wartime_granted_haste_enables_tap_cost_without_erasing_summoning_sickness"
+    ]
+  },
   "tla.water_tribe_captain": {
     "closure_hash": "2a1c1b26cb15215e5484ceeef9c463161f2994facc80b662904baf758ec43fc6",
     "witnesses": [
       "managym/tests/rules/tla_content.rs::water_tribe_captain_pays_five_and_buffs_only_own_creatures_until_cleanup"
     ]
   },
+  "tla.waterbending_lesson": {
+    "closure_hash": "d2ab1b8da94905d3c2b9da440b1d63147eb4c73eb762e38fc5c2fad1a3e94b3e",
+    "witnesses": [
+      "managym/tests/rules/temur_cards.rs::waterbend_lesson_draws_before_optional_payment_and_taps_without_mana",
+      "managym/tests/rules/temur_cards.rs::waterbend_cannot_partially_pay_then_discard",
+      "managym/tests/rules/temur_cards.rs::optional_lesson_all_mana_mixed_and_all_taps_keep_the_same_continuation",
+      "managym/tests/rules/temur_cards.rs::optional_lesson_without_resources_only_declines_then_discards_one_drawn_card"
+    ]
+  },
+  "tla.white_lotus_reinforcements": {
+    "closure_hash": "1867374fa6457e579b65dd81a5a4edcbd49b5254c130ec347cc090441a406e2b",
+    "witnesses": [
+      "managym/tests/rules/stage3_cards.rs::anthem_buffs_other_allies_only",
+      "managym/tests/rules/stage3_cards.rs::two_anthems_buff_each_other_and_stack",
+      "managym/tests/rules/tla_content.rs::qualified_fliers_evade_ground_and_vigilant_attackers_remain_untapped"
+    ]
+  },
+  "tla.yip_yip": {
+    "closure_hash": "2f66e20b7243613c1ef8e42531fb0561d9787e52500d4ee1712ad666e12f08e7",
+    "witnesses": [
+      "managym/tests/rules/stage3_cards.rs::yip_yip_buffs_and_grants_flying_to_allies_only"
+    ]
+  },
   "tla.yuyan_archers": {
     "closure_hash": "e191bdfd28e8707ea34bf0ae44e2e0879e393a67d179dd37b13fb8cd3eef5d9a",
     "witnesses": [
       "managym/tests/rules/tla_content.rs::yuyan_rummage_may_be_declined_or_discard_then_draw"
+    ]
+  },
+  "tla.zuko_s_exile": {
+    "closure_hash": "3dc76d6c6237f294231c78302d8735eab8f79658f0f7bec3eb8f347102909bb6",
+    "witnesses": [
+      "managym/tests/rules/elemental_cards.rs::zuko_exiles_and_gives_clue_to_the_targets_current_controller",
+      "managym/tests/rules/elemental_cards.rs::boomerang_and_zuko_use_resolution_time_control_after_target_announcement",
+      "managym/tests/rules/tla_cards.rs::fortune_teller_clue_sacrifices_to_draw_and_ceases_to_exist",
+      "managym/tests/rules/tla_content.rs::artifact_enchantment_removal_covers_both_types_and_excludes_lands"
     ]
   }
 }

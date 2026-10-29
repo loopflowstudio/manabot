@@ -9,7 +9,7 @@ use std::{
 use serde_json::Value;
 
 use crate::{
-    cardsets::alpha::{CompiledSemanticManifest, ContentPack},
+    cards::content_pack::{CompiledSemanticManifest, ContentPack},
     state::{
         ability::{
             Ability, Effect, EffectValue, StaticCondition, TargetRequirement, TargetSpec,
@@ -231,20 +231,13 @@ mod catalog_tests {
             .find(|r| r.pack_key == "mtg122-complexity-v1")
             .unwrap();
         assert_eq!(runtime.setups.len(), 6);
-        let semantic = SemanticPack::complexity().unwrap();
-        for key in [
-            "research.savannah_lions",
-            "research.glory_seeker",
-            "research.hill_giant",
-        ] {
+        let semantic = SemanticPack::current("complexity").unwrap();
+        for key in ["lea.savannah_lions", "ons.glory_seeker", "lea.hill_giant"] {
             let definition = semantic
                 .definitions
                 .iter()
                 .find(|d| d.semantic_key == key)
                 .unwrap();
-            assert!(ContentPack::default()
-                .definition_id(&definition.registry_name)
-                .is_none());
             assert!(!semantic
                 .programs
                 .iter()
@@ -281,7 +274,7 @@ mod catalog_tests {
 
     #[test]
     fn duplicate_exact_catalog_entries_fail_closed() {
-        let semantic = SemanticPack::jeong_increment().expect("Jeong IR parses");
+        let semantic = SemanticPack::current("jeong_increment").expect("Jeong IR parses");
         let player_configs = configs(&semantic, "ur_lessons", "gw_allies_jeong");
         let runtime = AuthoredRuntime::compile(semantic).expect("Jeong pack compiles");
         let duplicate = runtime.clone();
@@ -294,18 +287,6 @@ mod catalog_tests {
 }
 
 impl SemanticPack {
-    /// Current TLA definitions, lowered through the same compiler as authored setups.
-    pub fn tla() -> Result<Self, IrError> {
-        Self::from_json(include_str!(
-            "../../../content/semantic/current/generated/tla.ir.json"
-        ))
-    }
-
-    pub fn pool() -> Result<Self, IrError> {
-        Self::from_json(include_str!(
-            "../../../content/semantic/current/generated/pool.ir.json"
-        ))
-    }
     /// Materialize the reviewed typed IR as the immutable pack consumed by a
     /// live [`Game`](crate::Game). No executable registry is consulted: text,
     /// characteristics and programs are carried by the authored content.
@@ -320,7 +301,7 @@ impl SemanticPack {
         ))
     }
 
-    fn lower_definitions(&self) -> Result<Vec<CardDefinition>, IrError> {
+    pub(crate) fn lower_definitions(&self) -> Result<Vec<CardDefinition>, IrError> {
         let mut definitions = Vec::with_capacity(self.definitions.len());
         for definition in &self.definitions {
             let mut compiled = compile_characteristics(definition)?;
@@ -374,19 +355,8 @@ impl SemanticPack {
     }
 }
 
-impl ContentPack {
-    pub(crate) fn register_current_tla(&mut self) {
-        let pack = SemanticPack::tla().expect("checked TLA IR");
-        // Lower once, then register each pristine definition exactly once. In
-        // particular, registration is the sole materializer of ward triggers.
-        for definition in pack.lower_definitions().expect("checked TLA programs") {
-            self.register_card(definition);
-        }
-    }
-}
-
 /// Frozen IR predating embedded presentation remains readable without loading
-/// another executable content pack. Current generated IR always includes text.
+/// another executable content pack. Current compiled IR always includes text.
 fn historical_presentation(name: &str) -> Result<String, IrError> {
     static TEXT: OnceLock<std::collections::BTreeMap<String, String>> = OnceLock::new();
     TEXT.get_or_init(|| {

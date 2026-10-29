@@ -178,7 +178,17 @@ checks required by the affected package and workflow.
   can reload active pages and destroy in-page revision probes; use isolated
   ports and stable generated files for concurrent headless runs.
 
-### Typed card mana authoring
+### Typed card authoring
+
+Cards are authored once, in their printed set's file under
+`managym/src/cardsets/` (keys `<set>.<card>`), using the symbolic types in
+`managym/src/cards/authoring.rs`. Add a card to its set file's `cards()`; do
+not add native registrations (`cards/native.rs` only shrinks). The engine compiles them in process
+(`managym/src/semantic/compile.rs`); there is no generated card JSON or IR to
+regenerate. Python reads current IR through `managym.semantic_ir_json`; rebuild
+the extension after card changes. Keep decklists and independent qualification
+receipts separate from behavior. Keep long printed text in a local `text_box`
+binding so rustfmt can format the typed definition.
 
 Native fixed mana abilities on a card are additive: multiple fixed productions
 produce all listed colors together. A land that produces one chosen color uses

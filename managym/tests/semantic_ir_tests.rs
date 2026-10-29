@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use managym::{
-    cardsets::alpha::ContentPack,
+    cards::content_pack::ContentPack,
     state::{
         card::{CardDefinition, CardType},
         mana::{Color, ManaCost},

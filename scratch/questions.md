@@ -38,3 +38,7 @@
   links that predate this branch; producer admission depends on them. Moving
   them fully to run records is a separate change; no training-deck data remains.
 - Sampling policy is the code-named `uniform-distinct-v1`, not a stored field.
+
+- 2026-10-28: rebuilt on PR #394 (6f8b2231e, typed Rust cards, one world) per
+  Jack Heart, replacing the 1e0d3c998 content copy. Its TLA Rust authoring notes
+  remain at 6f8b2231e:scratch/questions.md.
