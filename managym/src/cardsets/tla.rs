@@ -163,6 +163,7 @@ pub(super) fn cards() -> Vec<Card> {
         serpent_of_the_pass(),
         elemental_teachings(),
         dai_li_indoctrination(),
+        professor_zei_anthropologist(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -5171,6 +5172,61 @@ fn dai_li_indoctrination() -> Card {
         ])
         .inferred()],
         registry_name: "Dai Li Indoctrination",
+        text_box,
+    }
+}
+
+fn professor_zei_anthropologist() -> Card {
+    let text_box = "{T}, Discard a card: Draw a card.\n{1}, {T}, Sacrifice Professor Zei: Return target instant or sorcery card from your graveyard to your hand. Activate only during your turn.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{U/R}{U/R}"),
+            subtypes: Some(vec!["Human", "Advisor", "Ally"]),
+            supertypes: Some(vec!["Legendary"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(0)),
+            toughness: Some(3),
+            ..Default::default()
+        },
+        key: "tla.professor_zei_anthropologist",
+        programs: vec![
+            Program::new(
+                "draw",
+                ProgramKind::Activated,
+                vec![Op::DrawCards { count: 1 }],
+            )
+            .cost(Cost {
+                mana: Some("0"),
+                tap_source: Some(true),
+                discard_card: Some(true),
+                ..Default::default()
+            }),
+            Program::new(
+                "recall",
+                ProgramKind::Activated,
+                vec![Op::ReturnGraveyardTarget {
+                    target: "spell",
+                    destination: None,
+                }],
+            )
+            .cost(Cost {
+                mana: Some("{1}"),
+                tap_source: Some(true),
+                sacrifice_source: Some(true),
+                own_turn_only: Some(true),
+                ..Default::default()
+            })
+            .targets(vec![Target::one(
+                "spell",
+                Selector::GraveyardCardYouOwn {
+                    predicate: Predicate::TypesAny {
+                        values: vec![CardType::Instant, CardType::Sorcery],
+                    },
+                },
+            )]),
+        ],
+        registry_name: "Professor Zei, Anthropologist",
         text_box,
     }
 }

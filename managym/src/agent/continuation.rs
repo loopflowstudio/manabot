@@ -368,6 +368,11 @@ impl Game {
                 source,
                 ability_index,
                 ..
+            }
+            | PendingChoice::DiscardPayment {
+                source,
+                ability_index,
+                ..
             } => {
                 frame.source = self.activation_reference(*source, viewer);
                 frame.ability = Some(*ability_index);

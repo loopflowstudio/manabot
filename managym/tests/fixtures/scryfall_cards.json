@@ -2439,5 +2439,18 @@
     "colors": [
       "B"
     ]
+  },
+  "Professor Zei, Anthropologist": {
+    "name": "Professor Zei, Anthropologist",
+    "mana_cost": "{U/R}{U/R}",
+    "type_line": "Legendary Creature — Human Advisor Ally",
+    "power": "0",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "{T}, Discard a card: Draw a card.\n{1}, {T}, Sacrifice Professor Zei: Return target instant or sorcery card from your graveyard to your hand. Activate only during your turn.",
+    "colors": [
+      "R",
+      "U"
+    ]
   }
 }

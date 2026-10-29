@@ -179,6 +179,10 @@ pub struct Cost {
     /// "Discard this card" as an activation cost; requires `zone: YourHand`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub discard_source: Option<bool>,
+    /// "Discard a card" as an activation cost (CR 601.2h); chosen on
+    /// activation.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub discard_card: Option<bool>,
     /// Exhaust (CR 702.177a): "Activate only once."
     #[serde(skip_serializing_if = "Option::is_none")]
     pub exhaust: Option<bool>,

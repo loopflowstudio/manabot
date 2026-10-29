@@ -1748,3 +1748,44 @@ fn dai_li_indoctrination_reveals_a_hand_and_discards_your_pick_or_earthbends_two
     settle(&mut s);
     assert_eq!(counters(&s, forest), 2);
 }
+
+/// Professor Zei's {T}, discard: the discarded card is chosen as a cost
+/// (no activation with an empty hand), then a card is drawn. Its sacrifice
+/// ability returns an instant or sorcery card, only during your turn.
+#[test]
+fn professor_zei_discards_as_a_cost_to_draw_and_sacrifices_to_recall_a_spell() {
+    let mut s = setup(&[
+        "Professor Zei, Anthropologist",
+        "Lightning Strike",
+        "Gray Ogre",
+    ]);
+    let zei = s.force_permanent_on_battlefield(0, "Professor Zei, Anthropologist");
+    ready(&mut s, zei);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!s.action_space().actions.iter().any(|a| matches!(
+        a, Action::ActivateAbility { permanent, ability_index: 0, .. } if *permanent == zei
+    )));
+    let pitched = put(&mut s, "Gray Ogre", ZoneType::Hand);
+    activate(&mut s, zei, 0);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Discard);
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { card, .. } if *card == pitched),
+    );
+    assert_eq!(zone_of(&s, pitched), Some(ZoneType::Graveyard));
+    assert!(s.game().state.permanents[zei].as_ref().unwrap().tapped);
+    settle(&mut s);
+    assert_eq!(hand(&s).len(), 1);
+
+    let strike = put(&mut s, "Lightning Strike", ZoneType::Graveyard);
+    s.game_mut().state.permanents[zei].as_mut().unwrap().tapped = false;
+    activate(&mut s, zei, 1);
+    let targets = offered_targets(&s);
+    assert_eq!(targets.len(), 1, "the Strike, not the Ogre");
+    choose(&mut s, |a| matches!(a, Action::ChooseTarget { .. }));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, strike), Some(ZoneType::Hand));
+    assert!(s
+        .battlefield_permanents_named(0, "Professor Zei, Anthropologist")
+        .is_empty());
+}

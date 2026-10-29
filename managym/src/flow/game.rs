@@ -114,6 +114,13 @@ pub enum PendingChoice {
         source: ActivationSource,
         ability_index: usize,
     },
+    /// Choosing the card to discard for a "Discard a card" activation cost.
+    DiscardPayment {
+        player: PlayerId,
+        source: ActivationSource,
+        ability_index: usize,
+        targets: Vec<Target>,
+    },
     /// "You may pay the kicker cost" (CR 601.2b) — asked before targeting.
     KickerChoice { player: PlayerId, card: CardId },
     SpellMode {

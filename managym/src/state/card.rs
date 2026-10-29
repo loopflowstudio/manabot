@@ -306,6 +306,9 @@ pub struct ActivatedAbilityDefinition {
     /// hand abilities carry it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub discard_source: bool,
+    /// Discard a chosen card from hand as an activation cost.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub discard_card: bool,
     /// Exhaust: each object may activate this ability only once (CR 702.177a).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub exhaust: bool,

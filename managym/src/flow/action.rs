@@ -206,6 +206,12 @@ impl Game {
                 if (ability.own_turn_only && self.active_player() != player)
                     || permanent.activation_used(ability_index, ability)
                     || self.state.players[player.0].life < ability.life_cost as i32
+                    || (ability.discard_card
+                        && self
+                            .state
+                            .zones
+                            .zone_cards(ZoneType::Hand, player)
+                            .is_empty())
                 {
                     continue;
                 }
@@ -445,6 +451,21 @@ impl Game {
                     focus: Vec::new(),
                 })
             }
+            PendingChoice::DiscardPayment { player, .. } => Some(ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::Discard,
+                actions: self
+                    .state
+                    .zones
+                    .zone_cards(ZoneType::Hand, *player)
+                    .iter()
+                    .map(|card| Action::SelectCard {
+                        player: *player,
+                        card: *card,
+                    })
+                    .collect(),
+                focus: Vec::new(),
+            }),
             PendingChoice::ActivatedTarget {
                 player,
                 source,
@@ -659,6 +680,14 @@ impl Game {
                 ) =>
             {
                 self.sacrifice_payment_action(*player, Some(*card))
+            }
+            Action::SelectCard { player, card }
+                if matches!(
+                    self.pending_choice,
+                    Some(PendingChoice::DiscardPayment { .. })
+                ) =>
+            {
+                self.discard_payment_action(*player, *card)
             }
             Action::ScryCard { .. }
             | Action::SelectCard { .. }

@@ -890,10 +890,24 @@ impl Game {
         ability_index: usize,
         targets: Vec<Target>,
     ) -> Result<(), AgentError> {
-        let cost = self
+        let ability = self
             .activation_ability(source, ability_index)
-            .ok_or_else(|| AgentError("missing source".into()))?
-            .sacrifice;
+            .ok_or_else(|| AgentError("missing source".into()))?;
+        if ability.discard_card
+            && !matches!(
+                self.pending_choice,
+                Some(PendingChoice::DiscardPayment { .. })
+            )
+        {
+            self.pending_choice = Some(PendingChoice::DiscardPayment {
+                player,
+                source,
+                ability_index,
+                targets,
+            });
+            return Ok(());
+        }
+        let cost = ability.sacrifice;
         self.begin_payment(
             player,
             Payment::Activation {
@@ -921,6 +935,36 @@ impl Game {
         } else {
             self.begin_mana_payment(player, payment, None, None)
         }
+    }
+
+    /// Discard `card` for the pending "Discard a card" cost, then pay the
+    /// rest of the activation cost.
+    pub(crate) fn discard_payment_action(
+        &mut self,
+        player: PlayerId,
+        card: CardId,
+    ) -> Result<(), AgentError> {
+        let Some(PendingChoice::DiscardPayment {
+            player: payer,
+            source,
+            ability_index,
+            targets,
+        }) = self.pending_choice.clone()
+        else {
+            return Err(AgentError("no discard payment pending".into()));
+        };
+        if payer != player || !self.state.zones.contains(card, ZoneType::Hand, player) {
+            return Err(AgentError("discard cost must be a card in hand".into()));
+        }
+        self.move_card(card, ZoneType::Graveyard);
+        let result = self.begin_activation_payment(player, source, ability_index, targets);
+        if matches!(
+            self.pending_choice,
+            Some(PendingChoice::DiscardPayment { .. })
+        ) {
+            self.pending_choice = None;
+        }
+        result
     }
 
     pub(crate) fn sacrifice_payment_action(

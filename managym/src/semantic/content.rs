@@ -453,6 +453,7 @@ fn apply_program(
                 .push(ActivatedAbilityDefinition {
                     zone,
                     discard_source: cost.discard_source,
+                    discard_card: cost.discard_card,
                     exhaust: cost.exhaust,
                     once_each_turn: cost.once_each_turn,
                     cost_reduction_per: cost.affinity,
@@ -489,6 +490,7 @@ struct ProgramCost {
     waterbend: bool,
     zone: Option<String>,
     discard_source: bool,
+    discard_card: bool,
     exhaust: bool,
     once_each_turn: bool,
 }
@@ -546,6 +548,7 @@ fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
         waterbend: opt_bool_field(value, "waterbend")?.unwrap_or(false),
         zone: opt_str_field(value, "zone")?.map(str::to_owned),
         discard_source: opt_bool_field(value, "discard_source")?.unwrap_or(false),
+        discard_card: opt_bool_field(value, "discard_card")?.unwrap_or(false),
         exhaust: opt_bool_field(value, "exhaust")?.unwrap_or(false),
         once_each_turn: opt_bool_field(value, "once_each_turn")?.unwrap_or(false),
     })
