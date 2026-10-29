@@ -171,9 +171,14 @@ pub enum Decision {
         #[serde(skip_serializing_if = "Vec::is_empty")]
         selected: Vec<CardId>,
     },
+    /// Discard up to `remaining` more cards; then draw `count` per discard.
     OptionalDiscardDraw {
         player: PlayerId,
         count: usize,
+        #[serde(skip_serializing_if = "is_one")]
+        remaining: usize,
+        #[serde(skip_serializing_if = "is_zero")]
+        discarded: usize,
     },
     /// Choose cards in their desired top/bottom order (CR 701.26).
     Scry {
@@ -221,6 +226,10 @@ pub enum Decision {
 fn is_one(value: &usize) -> bool {
     *value == 1
 }
+fn is_zero(value: &usize) -> bool {
+    *value == 0
+}
+
 fn is_true(value: &bool) -> bool {
     *value
 }
@@ -753,13 +762,34 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::OptionalDiscardDraw { player, count }, Action::SelectCard { card, .. }) => {
+            (
+                Decision::OptionalDiscardDraw {
+                    player,
+                    count,
+                    remaining,
+                    discarded,
+                },
+                Action::SelectCard { card, .. },
+            ) => {
                 if !self.state.zones.contains(*card, ZoneType::Hand, *player) {
                     self.state.suspended_decision = Some(suspended);
                     return Err(AgentError("discard must be from hand".into()));
                 }
-                let count = *count;
                 self.move_card(*card, ZoneType::Graveyard);
+                *remaining -= 1;
+                *discarded += 1;
+                let player = *player;
+                if *remaining > 0
+                    && !self
+                        .state
+                        .zones
+                        .zone_cards(ZoneType::Hand, player)
+                        .is_empty()
+                {
+                    self.state.suspended_decision = Some(suspended);
+                    return Ok(());
+                }
+                let count = *count * *discarded;
                 suspended
                     .frame
                     .queue
@@ -767,7 +797,19 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::OptionalDiscardDraw { .. }, Action::Decline { .. }) => {
+            (
+                Decision::OptionalDiscardDraw {
+                    count, discarded, ..
+                },
+                Action::Decline { .. },
+            ) => {
+                if *discarded > 0 {
+                    let count = *count * *discarded;
+                    suspended
+                        .frame
+                        .queue
+                        .push_front(Effect::DrawCards { count });
+                }
                 self.run_frame(suspended.frame);
                 Ok(())
             }

@@ -241,6 +241,7 @@ const FORBIDDEN_FIELDS: [&str; 3] = ["card_name", "registry_name", "definition_r
 pub enum Predicate {
     Any,
     All(Vec<Predicate>),
+    AnyOf(Vec<Predicate>),
     CardType(String),
     Subtype(String),
     NotCardTypes(Vec<String>),
@@ -416,6 +417,7 @@ pub enum Step {
     },
     OptionalDiscardDraw {
         count: usize,
+        up_to: usize,
     },
     DiscardTargetPlayer {
         count: usize,
@@ -489,6 +491,7 @@ pub enum Step {
     },
     ReturnGraveyardTarget {
         target: String,
+        tapped_onto_battlefield: bool,
     },
     Modal {
         modes: Vec<Vec<Step>>,
@@ -1311,6 +1314,10 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         },
         Opcode::OptionalDiscardDraw => Step::OptionalDiscardDraw {
             count: usize_field(value, "count")?,
+            up_to: match value.get("up_to") {
+                None => 1,
+                Some(_) => usize_field(value, "up_to")?,
+            },
         },
         Opcode::DiscardTargetPlayer => Step::DiscardTargetPlayer {
             count: usize_field(value, "count")?,
@@ -1386,6 +1393,15 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         },
         Opcode::ReturnGraveyardTarget => Step::ReturnGraveyardTarget {
             target: str_field(value, "target")?.to_owned(),
+            tapped_onto_battlefield: match opt_str_field(value, "destination")? {
+                None | Some("hand") => false,
+                Some("battlefield_tapped") => true,
+                Some(other) => {
+                    return Err(IrError::Malformed(format!(
+                        "unknown graveyard return destination {other:?}"
+                    )))
+                }
+            },
         },
         Opcode::Modal => Step::Modal {
             modes: array_field(value, "modes")?
@@ -1465,6 +1481,12 @@ fn parse_predicate(value: &Value) -> Result<Predicate, IrError> {
     let predicate = match kind {
         "any" => Predicate::Any,
         "all" => Predicate::All(
+            array_field(value, "predicates")?
+                .iter()
+                .map(parse_predicate)
+                .collect::<Result<Vec<_>, _>>()?,
+        ),
+        "any_of" => Predicate::AnyOf(
             array_field(value, "predicates")?
                 .iter()
                 .map(parse_predicate)

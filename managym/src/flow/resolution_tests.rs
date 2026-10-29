@@ -447,9 +447,13 @@ fn resolution_does_not_follow_departed_permanent_or_graveyard_incarnation() {
                     vec![
                         Effect::ReturnGraveyardTarget {
                             target: spec.clone(),
+                            tapped_onto_battlefield: false,
                         },
                         pause(),
-                        Effect::ReturnGraveyardTarget { target: spec },
+                        Effect::ReturnGraveyardTarget {
+                            target: spec,
+                            tapped_onto_battlefield: false,
+                        },
                     ],
                 )],
                 vec![Target::GraveyardCard(original)],

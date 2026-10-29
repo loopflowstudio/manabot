@@ -173,6 +173,9 @@ pub enum Effect {
     },
     ReturnGraveyardTarget {
         target: TargetSpec,
+        /// Onto the battlefield tapped instead of into its owner's hand.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        tapped_onto_battlefield: bool,
     },
     MillCards {
         count: usize,
@@ -211,8 +214,11 @@ pub enum Effect {
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         to_hand: bool,
     },
+    /// Discard up to `up_to` cards, then draw `count` for each discarded.
     OptionalDiscardDraw {
         count: usize,
+        #[serde(skip_serializing_if = "is_one")]
+        up_to: usize,
     },
     DiscardTargetPlayer {
         count: usize,
@@ -587,7 +593,7 @@ impl Effect {
             | Effect::MillAndSelect { .. }
             | Effect::DrainLifeValue { .. } => None,
             Effect::CantBeBlockedTarget { target }
-            | Effect::ReturnGraveyardTarget { target }
+            | Effect::ReturnGraveyardTarget { target, .. }
             | Effect::ExileWithControllerToken { target, .. }
             | Effect::DiscardTargetPlayer { target, .. }
             | Effect::Destroy { target }

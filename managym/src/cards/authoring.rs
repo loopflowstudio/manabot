@@ -268,8 +268,12 @@ impl Trigger {
 #[derive(Serialize)]
 #[serde(tag = "op", rename_all = "snake_case")]
 pub enum Op {
+    /// "You may discard a card. If you do, draw `count` cards." With
+    /// `up_to`, discard up to that many, then draw `count` for each.
     OptionalDiscardDraw {
         count: i32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        up_to: Option<i32>,
     },
     Modal {
         modes: Vec<Vec<Op>>,
@@ -435,8 +439,12 @@ pub enum Op {
         predicate: Predicate,
     },
     PowerFromLandCounters,
+    /// Return the target graveyard card to its owner's hand, or with
+    /// `BattlefieldTapped` put it onto the battlefield tapped.
     ReturnGraveyardTarget {
         target: &'static str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        destination: Option<Destination>,
     },
     AddMana {
         mana: &'static str,
@@ -591,6 +599,10 @@ pub enum Predicate {
         value: &'static str,
     },
     All {
+        predicates: Vec<Predicate>,
+    },
+    /// Matches when any listed predicate matches ("artifact or Lesson").
+    AnyOf {
         predicates: Vec<Predicate>,
     },
     CardType {
@@ -782,6 +794,7 @@ pub enum Event {
 #[serde(rename_all = "snake_case")]
 pub enum Destination {
     Hand,
+    BattlefieldTapped,
 }
 
 #[derive(Serialize)]

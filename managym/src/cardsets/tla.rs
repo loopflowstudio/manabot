@@ -154,6 +154,8 @@ pub(super) fn cards() -> Vec<Card> {
         zuko_exiled_prince(),
         aang_s_iceberg(),
         north_pole_patrol(),
+        zuko_s_conviction(),
+        sokka_bold_boomeranger(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -170,7 +172,10 @@ fn abandon_attachments() -> Card {
         programs: vec![Program::new(
             "spell",
             ProgramKind::Spell,
-            vec![Op::OptionalDiscardDraw { count: 2 }],
+            vec![Op::OptionalDiscardDraw {
+                count: 2,
+                up_to: None,
+            }],
         )
         .cost(Cost::mana("{1}{U/R}"))
         .inferred()],
@@ -1320,7 +1325,10 @@ fn true_ancestry() -> Card {
             ProgramKind::Spell,
             vec![
                 Op::TargetClause {
-                    body: vec![Op::ReturnGraveyardTarget { target: "target_0" }],
+                    body: vec![Op::ReturnGraveyardTarget {
+                        target: "target_0",
+                        destination: None,
+                    }],
                     role: "target_0",
                 },
                 Op::CreateToken {
@@ -3525,7 +3533,10 @@ fn yuyan_archers() -> Card {
         programs: vec![Program::new(
             "rummage",
             ProgramKind::Triggered,
-            vec![Op::OptionalDiscardDraw { count: 1 }],
+            vec![Op::OptionalDiscardDraw {
+                count: 1,
+                up_to: None,
+            }],
         )
         .trigger(Trigger::new(Event::EntersBattlefield, Subject::This))],
         registry_name: "Yuyan Archers",
@@ -4795,6 +4806,98 @@ fn north_pole_patrol() -> Card {
             )]),
         ],
         registry_name: "North Pole Patrol",
+        text_box,
+    }
+}
+
+fn zuko_s_conviction() -> Card {
+    let text_box = "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nReturn target creature card from your graveyard to your hand. If this spell was kicked, instead put that card onto the battlefield tapped.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{B}"),
+            types: vec![CardType::Instant],
+            ..Default::default()
+        },
+        key: "tla.zuko_s_conviction",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![Op::Branch {
+                condition: Condition::Kicked,
+                otherwise: vec![Op::ReturnGraveyardTarget {
+                    target: "creature",
+                    destination: None,
+                }],
+                then: vec![Op::ReturnGraveyardTarget {
+                    target: "creature",
+                    destination: Some(Destination::BattlefieldTapped),
+                }],
+            }],
+        )
+        .cost(Cost {
+            mana: Some("{B}"),
+            kicker: Some("{4}"),
+            ..Default::default()
+        })
+        .targets(vec![Target::one(
+            "creature",
+            Selector::GraveyardCardYouOwn {
+                predicate: Predicate::CardType {
+                    value: CardType::Creature,
+                },
+            },
+        )])],
+        registry_name: "Zuko's Conviction",
+        text_box,
+    }
+}
+
+fn sokka_bold_boomeranger() -> Card {
+    let text_box = "When Sokka enters, discard up to two cards, then draw that many cards.\nWhenever you cast an artifact or Lesson spell, put a +1/+1 counter on Sokka.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{U}{R}"),
+            subtypes: Some(vec!["Human", "Warrior", "Ally"]),
+            supertypes: Some(vec!["Legendary"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(1)),
+            toughness: Some(1),
+            ..Default::default()
+        },
+        key: "tla.sokka_bold_boomeranger",
+        programs: vec![
+            Program::new(
+                "enters",
+                ProgramKind::Triggered,
+                vec![Op::OptionalDiscardDraw {
+                    count: 1,
+                    up_to: Some(2),
+                }],
+            )
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::new(
+                "grows",
+                ProgramKind::Triggered,
+                vec![Op::PutCounters {
+                    count: 1,
+                    target: "source",
+                }],
+            )
+            .trigger(Trigger {
+                predicate: Some(Predicate::AnyOf {
+                    predicates: vec![
+                        Predicate::CardType {
+                            value: CardType::Artifact,
+                        },
+                        Predicate::Subtype { value: "Lesson" },
+                    ],
+                }),
+                ..Trigger::new(Event::CastSpell, Subject::This)
+            }),
+        ],
+        registry_name: "Sokka, Bold Boomeranger",
         text_box,
     }
 }

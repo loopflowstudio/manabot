@@ -1075,7 +1075,10 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             bottom_source: false,
             to_hand: *to_hand,
         },
-        Step::OptionalDiscardDraw { count } => Effect::OptionalDiscardDraw { count: *count },
+        Step::OptionalDiscardDraw { count, up_to } => Effect::OptionalDiscardDraw {
+            count: *count,
+            up_to: *up_to,
+        },
         Step::DiscardTargetPlayer { count, target } => Effect::DiscardTargetPlayer {
             count: *count,
             target: target_for(program, target)?,
@@ -1177,8 +1180,12 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         Step::CantBeBlockedTarget { target } => Effect::CantBeBlockedTarget {
             target: target_for(program, target)?,
         },
-        Step::ReturnGraveyardTarget { target } => Effect::ReturnGraveyardTarget {
+        Step::ReturnGraveyardTarget {
+            target,
+            tapped_onto_battlefield,
+        } => Effect::ReturnGraveyardTarget {
             target: target_for(program, target)?,
+            tapped_onto_battlefield: *tapped_onto_battlefield,
         },
         Step::Modal { modes } => Effect::Modal {
             modes: modes
@@ -1241,6 +1248,12 @@ fn merge_predicate(result: &mut CardPredicate, predicate: &Predicate) -> Result<
         Predicate::SubtypesAny(names) => result.subtypes_any = names.clone(),
         Predicate::NotSubtypes(names) => result.not_subtypes = names.clone(),
         Predicate::Any => {}
+        Predicate::AnyOf(predicates) => {
+            result.any_of = predicates
+                .iter()
+                .map(predicate_card)
+                .collect::<Result<_, _>>()?
+        }
         Predicate::All(predicates) => {
             for predicate in predicates {
                 merge_predicate(result, predicate)?;

@@ -299,10 +299,26 @@ impl Game {
                 }
                 None
             }
-            Effect::ReturnGraveyardTarget { .. } => {
+            Effect::ReturnGraveyardTarget {
+                tapped_onto_battlefield,
+                ..
+            } => {
                 let target = self.present_primary_target(frame)?;
                 if let Target::GraveyardCard(object) = target {
-                    self.reveal_card_to_hand(CardId::from(object.entity), frame.controller);
+                    let card = CardId::from(object.entity);
+                    if *tapped_onto_battlefield {
+                        self.move_card_with_entry(
+                            card,
+                            ZoneType::Battlefield,
+                            crate::flow::proposed_event::BattlefieldEntry {
+                                tapped: true,
+                                ..crate::flow::proposed_event::BattlefieldEntry::default()
+                            },
+                        );
+                        self.invalidate_mana_cache(frame.controller);
+                    } else {
+                        self.reveal_card_to_hand(card, frame.controller);
+                    }
                 }
                 None
             }
@@ -390,10 +406,14 @@ impl Game {
                 to_hand: *to_hand,
                 selected: Vec::new(),
             }),
-            Effect::OptionalDiscardDraw { count } => Some(Decision::OptionalDiscardDraw {
-                player: frame.controller,
-                count: *count,
-            }),
+            Effect::OptionalDiscardDraw { count, up_to } => {
+                (*up_to > 0).then_some(Decision::OptionalDiscardDraw {
+                    player: frame.controller,
+                    count: *count,
+                    remaining: *up_to,
+                    discarded: 0,
+                })
+            }
             Effect::DiscardTargetPlayer { count, .. } => {
                 let Some(Target::Player(player)) = self.present_primary_target(frame) else {
                     return None;

@@ -152,6 +152,7 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
         subtypes_any,
         not_subtypes,
         supertype,
+        any_of,
         min_power,
         card_type: kind,
         card_types_any,
@@ -177,6 +178,17 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     }
     if let Some(t) = kind {
         terms.push(card_type(*t).into());
+    }
+    if !any_of.is_empty() {
+        terms.push(format!(
+            "({})",
+            any_of
+                .iter()
+                .map(|alternative| predicate_description(alternative, ""))
+                .map(|text| text.trim().to_string())
+                .collect::<Vec<_>>()
+                .join(" or ")
+        ));
     }
     if !card_types_any.is_empty() {
         terms.push(format!(
@@ -362,7 +374,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
         DrainLife { amount } => format!("Each opponent loses {amount} life and you gain {amount} life"),
         DrainLifeValue { amount } => format!("Each opponent loses X life and you gain X life, where X is {}",value_description(amount)),
         CantBeBlockedTarget { target } => format!("{} can't be blocked this turn",target_description(target)),
-        ReturnGraveyardTarget { target } => format!("Return {} to your hand",target_description(target)),
+        ReturnGraveyardTarget { target, tapped_onto_battlefield: false } => format!("Return {} to your hand",target_description(target)),
+        ReturnGraveyardTarget { target, tapped_onto_battlefield: true } => format!("Put {} onto the battlefield tapped",target_description(target)),
         MillCards { count } => format!("Mill {count} cards"),
         MillAndSelect { count, predicate, if_declined } => format!("Mill {count} cards. You may return a {} milled this way to your hand. Otherwise: {}",predicate_description(predicate,"card"),effects_description(if_declined)),
         TargetClause { requirement, effects } => format!("Choose {}–{} {} for this clause: {}",requirement.min,requirement.max,target_description(&requirement.spec),effects_description(effects)),
@@ -373,7 +386,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
             if *bottom_source { text.push_str(". Put this on the bottom of its owner's library"); }
             text
         },
-        OptionalDiscardDraw { count } => format!("You may discard a card. If you do, draw {count} cards"),
+        OptionalDiscardDraw { count, up_to: 1 } => format!("You may discard a card. If you do, draw {count} cards"),
+        OptionalDiscardDraw { count, up_to } => format!("Discard up to {up_to} cards, then draw {count} for each"),
         DiscardTargetPlayer { count, target } => format!("{} discards {count} cards",target_description(target)),
         Destroy { target } => format!("Destroy {}",target_description(target)),
         Exile { target } => format!("Exile {}",target_description(target)),

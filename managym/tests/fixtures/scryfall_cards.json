@@ -2323,5 +2323,32 @@
     "colors": [
       "U"
     ]
+  },
+  "Zuko's Conviction": {
+    "name": "Zuko's Conviction",
+    "mana_cost": "{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Kicker"
+    ],
+    "oracle_text": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nReturn target creature card from your graveyard to your hand. If this spell was kicked, instead put that card onto the battlefield tapped.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Sokka, Bold Boomeranger": {
+    "name": "Sokka, Bold Boomeranger",
+    "mana_cost": "{U}{R}",
+    "type_line": "Legendary Creature — Human Warrior Ally",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "When Sokka enters, discard up to two cards, then draw that many cards.\nWhenever you cast an artifact or Lesson spell, put a +1/+1 counter on Sokka.",
+    "colors": [
+      "R",
+      "U"
+    ]
   }
 }

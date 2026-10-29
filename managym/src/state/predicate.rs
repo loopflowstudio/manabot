@@ -21,6 +21,9 @@ pub struct CardPredicate {
     pub not_subtypes: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub supertype: Option<String>,
+    /// At least one alternative must match ("artifact or Lesson").
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub any_of: Vec<CardPredicate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub min_power: Option<i32>,
     /// Card must have this card type.
@@ -74,6 +77,14 @@ impl CardPredicate {
             return false;
         }
         if !self.subtypes_any.is_empty() && !self.subtypes_any.iter().any(|s| card.has_subtype(s)) {
+            return false;
+        }
+        if !self.any_of.is_empty()
+            && !self
+                .any_of
+                .iter()
+                .any(|alternative| alternative.matches(card, power, animated_creature))
+        {
             return false;
         }
         if self.not_subtypes.iter().any(|s| card.has_subtype(s)) {

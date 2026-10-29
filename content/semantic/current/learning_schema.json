@@ -38,6 +38,7 @@
       "you": 1
     },
     "destination": {
+      "battlefield_tapped": 2,
       "hand": 1
     },
     "direction": {
@@ -71,6 +72,7 @@
     "predicate": {
       "all": 1,
       "any": 2,
+      "any_of": 15,
       "attacking": 14,
       "card_type": 3,
       "flying": 7,
@@ -303,6 +305,7 @@
     "types": 54,
     "types_any": 55,
     "untap_if_lands": 79,
+    "up_to": 92,
     "until": 56,
     "value": 57,
     "values": 58,

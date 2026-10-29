@@ -1334,3 +1334,101 @@ fn north_pole_patrol_untaps_another_and_waterbends_to_tap_an_opponent() {
     assert!(s.game().state.permanents[foe].as_ref().unwrap().tapped);
     assert_eq!(pool(&s).total(), 0);
 }
+
+/// Zuko's Conviction returns a creature card from your graveyard to hand, or,
+/// kicked, puts it onto the battlefield tapped. Noncreature cards are not
+/// targets.
+#[test]
+fn zukos_conviction_returns_a_creature_to_hand_or_kicked_onto_the_battlefield() {
+    for kicked in [false, true] {
+        let mut s = setup(&["Zuko's Conviction", "Gray Ogre", "Lightning Strike"]);
+        let ogre = put(&mut s, "Gray Ogre", ZoneType::Graveyard);
+        let strike = put(&mut s, "Lightning Strike", ZoneType::Graveyard);
+        cast(&mut s, "Zuko's Conviction");
+        assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
+        if kicked {
+            choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+        } else {
+            choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+        }
+        let targets = offered_targets(&s);
+        assert!(!targets
+            .iter()
+            .any(|t| matches!(t, Target::GraveyardCard(o) if CardId::from(o.entity) == strike)));
+        choose(&mut s, |a| {
+            matches!(a, Action::ChooseTarget { target: Target::GraveyardCard(o), .. }
+                if CardId::from(o.entity) == ogre)
+        });
+        settle(&mut s);
+        if kicked {
+            assert_eq!(zone_of(&s, ogre), Some(ZoneType::Battlefield));
+            let id = s.battlefield_permanents_named(0, "Gray Ogre")[0];
+            assert!(s.game().state.permanents[id].as_ref().unwrap().tapped);
+        } else {
+            assert_eq!(zone_of(&s, ogre), Some(ZoneType::Hand));
+        }
+    }
+}
+
+fn hand(s: &Scenario) -> Vec<CardId> {
+    s.game()
+        .state
+        .zones
+        .zone_cards(ZoneType::Hand, PlayerId(0))
+        .to_vec()
+}
+
+/// Sokka discards up to two cards and only then draws that many, so a drawn
+/// card cannot be discarded; casting an artifact or a Lesson grows him.
+#[test]
+fn sokka_discards_up_to_two_then_draws_that_many_and_grows_on_artifacts_and_lessons() {
+    let mut s = setup(&[
+        "Sokka, Bold Boomeranger",
+        "Earthbending Lesson",
+        "Barrels of Blasting Jelly",
+        "Gray Ogre",
+    ]);
+    let kept = put(&mut s, "Gray Ogre", ZoneType::Hand);
+    let first = put(&mut s, "Forest", ZoneType::Hand);
+    let second = put(&mut s, "Island", ZoneType::Hand);
+    cast(&mut s, "Sokka, Bold Boomeranger");
+    pass_until(&mut s, ActionSpaceKind::Discard);
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { card, .. } if *card == first),
+    );
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Discard);
+    assert_eq!(hand(&s).len(), 2, "no draw before the discards finish");
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { card, .. } if *card == second),
+    );
+    settle(&mut s);
+    let in_hand = hand(&s);
+    assert_eq!(in_hand.len(), 3);
+    assert!(in_hand.contains(&kept));
+    assert_eq!(zone_of(&s, first), Some(ZoneType::Graveyard));
+
+    let sokka = s.battlefield_permanents_named(0, "Sokka, Bold Boomeranger")[0];
+    s.set_player_mana_pool(0, "20WWWWUUUUBBBBRRRRGGGG");
+    cast(&mut s, "Gray Ogre");
+    settle(&mut s);
+    assert_eq!(counters(&s, sokka), 0);
+    cast(&mut s, "Barrels of Blasting Jelly");
+    settle(&mut s);
+    assert_eq!(counters(&s, sokka), 1);
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    cast(&mut s, "Earthbending Lesson");
+    assert!(s.choose_target(Target::Permanent(forest)));
+    settle(&mut s);
+    assert_eq!(counters(&s, sokka), 2);
+
+    // Declining at once discards nothing and draws nothing.
+    let mut s = setup(&["Sokka, Bold Boomeranger"]);
+    put(&mut s, "Forest", ZoneType::Hand);
+    cast(&mut s, "Sokka, Bold Boomeranger");
+    pass_until(&mut s, ActionSpaceKind::Discard);
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut s);
+    assert_eq!(hand(&s).len(), 1);
+}

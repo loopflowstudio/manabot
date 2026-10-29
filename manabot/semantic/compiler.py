@@ -170,6 +170,7 @@ SELECTOR_KINDS = {
 }
 PREDICATE_KINDS = {
     "all",
+    "any_of",
     "any",
     "card_type",
     "not_card_types",
@@ -238,7 +239,7 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "deal_power_damage": ({"sources", "target"}, set()),
     "set_power_from_count": ({"predicate", "zone", "controller"}, set()),
     "search_basic_land": ({"subtype"}, set()),
-    "optional_discard_draw": ({"count"}, set()),
+    "optional_discard_draw": ({"count"}, {"up_to"}),
     "discard_target_player": ({"count", "target"}, set()),
     "destroy": ({"target"}, set()),
     "exile": ({"target"}, set()),
@@ -260,7 +261,7 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "drain_life_value": ({"amount"}, set()),
     "counter_spell": ({"target"}, set()),
     "cant_be_blocked_target": ({"target"}, set()),
-    "return_graveyard_target": ({"target"}, set()),
+    "return_graveyard_target": ({"target"}, {"destination"}),
     "modal": ({"modes"}, set()),
     "target_clause": ({"role", "body"}, set()),
     "prevent_life_gain": (set(), set()),
