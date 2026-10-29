@@ -1080,8 +1080,7 @@ mod tests {
             is_animated: false,
             has_exile_link: false,
             exile_if_dies_this_turn: false,
-            temp_subtypes: Vec::new(),
-            keywords: KeywordData::default(),
+            ..Default::default()
         }
     }
 

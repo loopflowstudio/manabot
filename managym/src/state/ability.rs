@@ -313,6 +313,11 @@ pub enum Effect {
     GrantFirebendingUntilEot {
         amount: u8,
     },
+    /// Target creature gains firebending until end of turn.
+    GrantFirebendingToTarget {
+        amount: u8,
+        target: TargetSpec,
+    },
     /// A player exiles a matching card; its controller may cast it as linked.
     ExileLinked {
         chooser: LinkedChooser,
@@ -865,7 +870,8 @@ impl Effect {
             | Effect::RemoveCounters { target, .. }
             | Effect::OwnerPutsIntoLibrary { target }
             | Effect::RevealHandDiscardChosen { target, .. } => Some(target),
-            Effect::GrantKeywordsToTarget { target, .. } => Some(target),
+            Effect::GrantKeywordsToTarget { target, .. }
+            | Effect::GrantFirebendingToTarget { target, .. } => Some(target),
             Effect::OnNthResolutionThisTurn { effect, .. } => effect.target_spec(),
             Effect::OptionalPayment {
                 if_paid: then,

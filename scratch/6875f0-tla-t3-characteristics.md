@@ -5,7 +5,7 @@ Brief: the Task directive (49 cards, obligations in `docs/rules/tla/allocation.j
 (87e012, PR #398 head `16dfd3dbb`). Every merge needs Jack Heart's review.
 Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
 
-## Done (48 of 49)
+## Done (49 of 49)
 
 Per-slice detail: `git log 86ebe9ccf..`.
 
@@ -139,9 +139,30 @@ receipts, as on PR #394/#398 CI); clippy and fmt clean; before the compress (IR 
 `pytest tests/semantic` 160 pass, 3 fail on T1's frozen `schema_version` asserts. World-change
 Python suite (CLAUDE.md) left to gate.
 
-## Remaining (1 card)
+19. Fire Nation Palace and the observation change (2026-10-29): a fifth
+   `basic_check_land`; `grant_firebending_until_eot` takes an optional `target`
+   (Sozin's Comet's IR unchanged) → `Effect::GrantFirebendingToTarget`.
+   Observation-only fields on T2's `face_down` precedent, omitted at defaults:
+   `PermanentData.{stun,fire,double_strike}_counters`, `attached_to`, `name` and
+   `creature_types` (set by an effect), `is_granted_land`, `firebending`;
+   `StackObjectData.{x, granted_keywords}`; battlefield `CardData.is_ally` reads
+   `permanent_has_subtype`. PyO3, `.pyi`, protocol views (`counters`,
+   `attached_to`, `creature_types`, `is_granted_land`, `firebending`, effective
+   `name`; stack `x`), Academy `types.ts` and the six protocol schemas follow.
+   No tensor column or policy-input version.
 
-- Fire Nation Palace (granted firebending; observation shape change).
+Check (item 19, debug): fmt and clippy clean; `cargo test --no-fail-fast` 721 pass,
+2 fail (`semantic_conformance_tests`: w15 receipts, known). Extension rebuilt.
+Protocol schema tests and `pytest tests/semantic` pass but for 3 frozen
+`schema_version` asserts. CLAUDE.md world suite: 56 pass, 10 fail, all on
+`manabot/sim/registration.py`'s world literal (stops at w15) or that assert;
+Academy `test_ur_lessons_increment` / study bench fail on w13 pins and the stale
+study source closure — all world-release evidence, left to gate.
+
+## Remaining
+
+None of the 49 cards. World release items (registration literal, receipts,
+frozen asserts) belong to the stack's world release, not this slice.
 
 ## Concept review after slice 14 (2026-10-29, headless)
 
@@ -167,8 +188,6 @@ Realign after item 18 (2026-10-29): PR #398 head still `16dfd3dbb`, PR #394 head
 still `86ebe9ccf`, `origin/main` fully contained; schema 8 ids contiguous (fields
 to 116, opcodes to 106, special roles to 17); item 18 is uncommitted in the worktree.
 
-Next implement order: (5) the observation change with Fire Nation Palace
-((4), Glider Staff and Crashing Wave, is item 18).
 
 ## Delete — do not maintain
 

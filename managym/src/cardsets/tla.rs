@@ -175,6 +175,7 @@ pub(super) fn cards() -> Vec<Card> {
         agna_qel_a(),
         ba_sing_se(),
         realm_of_koh(),
+        fire_nation_palace(),
         air_nomad_legacy(),
         badgermole(),
         diligent_zookeeper(),
@@ -5546,7 +5547,10 @@ fn sozins_comet() -> Card {
         programs: vec![Program::new(
             "spell",
             ProgramKind::Spell,
-            vec![Op::GrantFirebendingUntilEot { amount: 5 }],
+            vec![Op::GrantFirebendingUntilEot {
+                amount: 5,
+                target: None,
+            }],
         )
         .cost(Cost {
             foretell: Some("{2}{R}"),
@@ -5626,6 +5630,31 @@ fn ba_sing_se() -> Card {
             ..Default::default()
         })
         .targets(vec![Target::one("target_0", Selector::LandYouControl)]),
+    )
+}
+
+fn fire_nation_palace() -> Card {
+    let text_box = "This land enters tapped unless you control a basic land.\n{T}: Add {R}.\n{1}{R}, {T}: Target creature you control gains firebending 4 until end of turn. (Whenever it attacks, add {R}{R}{R}{R}. This mana lasts until end of combat.)";
+
+    basic_check_land(
+        "tla.fire_nation_palace",
+        "Fire Nation Palace",
+        text_box,
+        "R",
+        Program::new(
+            "firebending",
+            ProgramKind::Activated,
+            vec![Op::GrantFirebendingUntilEot {
+                amount: 4,
+                target: Some("target_0"),
+            }],
+        )
+        .cost(Cost {
+            mana: Some("1R"),
+            tap_source: Some(true),
+            ..Default::default()
+        })
+        .targets(vec![Target::one("target_0", Selector::CreatureYouControl)]),
     )
 }
 

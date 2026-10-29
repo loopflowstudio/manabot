@@ -88,7 +88,7 @@ def _serialize_permanent(
     return {
         **details,
         "id": int(permanent.id),
-        "name": card.name if card else None,
+        "name": permanent.name or (card.name if card else None),
         "text_box": card.text_box if card else "",
         "exile_if_dies_this_turn": bool(permanent.exile_if_dies_this_turn),
         **(
@@ -108,7 +108,29 @@ def _serialize_permanent(
         "base_power": int(card.power) if card else None,
         "base_toughness": int(card.toughness) if card else None,
         "plus1_counters": int(permanent.plus1_counters),
+        **_characteristics(permanent),
     }
+
+
+def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
+    """Effect-derived state, present only when an effect applies."""
+    counters = {
+        kind: count
+        for kind, count in (
+            ("stun", int(permanent.stun_counters)),
+            ("fire", int(permanent.fire_counters)),
+            ("double_strike", int(permanent.double_strike_counters)),
+        )
+        if count
+    }
+    values: dict[str, Any] = {
+        "counters": counters,
+        "attached_to": permanent.attached_to,
+        "creature_types": permanent.creature_types,
+        "is_granted_land": bool(permanent.is_granted_land),
+        "firebending": int(permanent.firebending),
+    }
+    return {key: value for key, value in values.items() if value}
 
 
 def _serialize_player(
@@ -252,6 +274,7 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
             "source_permanent": entry.source_permanent_id,
             "ability_index": entry.ability_index,
             "chosen_mode": entry.chosen_mode,
+            "x": int(entry.x) or None,
         }
         for entry in observation.stack_objects
     ]

@@ -57,8 +57,12 @@ Counters other than +1/+1 have kinds (stun, fire, double strike). Equipment
 and Auras attach to an exact object and grant abilities or set
 characteristics; Vehicles crew by tapping creatures. Activated abilities may
 announce X and choose several targets that share a creature type. Learning
-schema 8 grows append-only after w16's entries; observation and action
-shapes are unchanged so far.
+schema 8 grows append-only after w16's entries. Observations add
+effect-derived fields, omitted at their defaults: a permanent's counters by
+kind, attachment, set name and creature types (`is_ally` reads them), granted
+land type and firebending; a stack object's announced X and a spell's granted
+keywords. Policy tensors and their frozen widths are unchanged; action shapes
+are unchanged.
 
 ## w16: one card authority (not yet frozen)
 

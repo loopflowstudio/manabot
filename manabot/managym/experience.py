@@ -323,6 +323,17 @@ class LegacyPermanentView(ProtocolModel):
     base_power: Int32 | None
     base_toughness: Int32 | None
     plus1_counters: UInt32
+    counters: dict[str, UInt32] = Field(
+        default_factory=dict, exclude_if=lambda value: not value
+    )
+    attached_to: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    creature_types: list[str] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    is_granted_land: bool = Field(default=False, exclude_if=lambda value: not value)
+    firebending: UInt32 = Field(default=0, exclude_if=lambda value: not value)
 
 
 class SideboardCardView(ProtocolModel):
@@ -398,6 +409,7 @@ class StackEntryView(ProtocolModel):
     chosen_mode: UInt32 | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    x: UInt32 | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class LegacyHeroObservation(ProtocolModel):

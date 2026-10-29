@@ -1591,10 +1591,17 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         }
         Step::OpponentsCastOnlyFromHand => Effect::OpponentsCastOnlyFromHand,
         Step::ExileTopCardPlayThisTurn => Effect::ExileTopCardPlayThisTurn,
-        Step::GrantFirebendingUntilEot { amount } => Effect::GrantFirebendingUntilEot {
-            amount: u8::try_from(*amount)
-                .map_err(|_| malformed(program, "firebending amount exceeds u8"))?,
-        },
+        Step::GrantFirebendingUntilEot { amount, target } => {
+            let amount = u8::try_from(*amount)
+                .map_err(|_| malformed(program, "firebending amount exceeds u8"))?;
+            match target {
+                None => Effect::GrantFirebendingUntilEot { amount },
+                Some(role) => Effect::GrantFirebendingToTarget {
+                    amount,
+                    target: target_for(program, role)?,
+                },
+            }
+        }
         Step::ExileLinked {
             chooser,
             grant,

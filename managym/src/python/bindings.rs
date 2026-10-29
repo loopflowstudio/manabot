@@ -1443,6 +1443,26 @@ pub struct PyPermanent {
     /// Effective keywords (printed + until-EOT grants).
     #[pyo3(get, set)]
     pub keywords: PyKeywords,
+    #[pyo3(get, set)]
+    pub stun_counters: i32,
+    #[pyo3(get, set)]
+    pub fire_counters: i32,
+    #[pyo3(get, set)]
+    pub double_strike_counters: i32,
+    /// Permanent id this Aura or Equipment is attached to.
+    #[pyo3(get, set)]
+    pub attached_to: Option<i32>,
+    /// Name set by an effect; None while the printed name applies.
+    #[pyo3(get, set)]
+    pub name: Option<String>,
+    /// Creature types set by an effect; None while the printed ones apply.
+    #[pyo3(get, set)]
+    pub creature_types: Option<Vec<String>>,
+    #[pyo3(get, set)]
+    pub is_granted_land: bool,
+    /// Firebending gained until end of turn.
+    #[pyo3(get, set)]
+    pub firebending: i32,
 }
 
 #[cfg(feature = "python")]
@@ -1464,6 +1484,14 @@ impl From<PermanentData> for PyPermanent {
             exile_if_dies_this_turn: value.exile_if_dies_this_turn,
             temp_subtypes: value.temp_subtypes,
             keywords: value.keywords.into(),
+            stun_counters: value.stun_counters,
+            fire_counters: value.fire_counters,
+            double_strike_counters: value.double_strike_counters,
+            attached_to: value.attached_to,
+            name: value.name,
+            creature_types: value.creature_types,
+            is_granted_land: value.is_granted_land,
+            firebending: value.firebending,
         }
     }
 }
@@ -1487,6 +1515,14 @@ impl From<PyPermanent> for PermanentData {
             exile_if_dies_this_turn: value.exile_if_dies_this_turn,
             temp_subtypes: value.temp_subtypes,
             keywords: value.keywords.into(),
+            stun_counters: value.stun_counters,
+            fire_counters: value.fire_counters,
+            double_strike_counters: value.double_strike_counters,
+            attached_to: value.attached_to,
+            name: value.name,
+            creature_types: value.creature_types,
+            is_granted_land: value.is_granted_land,
+            firebending: value.firebending,
         }
     }
 }
@@ -1735,6 +1771,12 @@ pub struct PyStackObject {
     pub ability_index: Option<i32>,
     #[pyo3(get, set)]
     pub targets: Vec<PyStackTarget>,
+    /// The announced value of X (0 when none).
+    #[pyo3(get, set)]
+    pub x: i32,
+    /// Keywords a static grants this spell on the stack; None when none.
+    #[pyo3(get, set)]
+    pub granted_keywords: Option<PyKeywords>,
 }
 
 #[cfg(feature = "python")]
@@ -1750,6 +1792,8 @@ impl From<StackObjectData> for PyStackObject {
             chosen_mode: value.chosen_mode,
             ability_index: value.ability_index,
             targets: value.targets.into_iter().map(PyStackTarget::from).collect(),
+            x: value.x,
+            granted_keywords: value.granted_keywords.map(PyKeywords::from),
         }
     }
 }
@@ -1771,6 +1815,8 @@ impl From<PyStackObject> for StackObjectData {
                 .into_iter()
                 .map(StackTargetData::from)
                 .collect(),
+            x: value.x,
+            granted_keywords: value.granted_keywords.map(KeywordData::from),
         }
     }
 }

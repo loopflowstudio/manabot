@@ -114,3 +114,13 @@ mana, `Game::zone_cast_cost`/`may_play_from_zone`, `ZoneEntry`.
   applied at resolution). The required waterbend {X} adds to the total cost,
   not the mana value; a free cast still pays it with X = 0. Kicker and a
   required additional cost on one spell are rejected at compile time.
+- Item 19 (observation change, with Fire Nation Palace): the new fields are
+  observation, protocol-view and Academy-type data only, like T2's `face_down`;
+  no policy tensor column and no new policy-input version, so frozen widths and
+  checkpoints are untouched. Encoding them for policies is a later choice.
+  Name/creature types appear only while an effect sets them; spell keyword
+  grants reach `Observation`, not the Academy stack view. Academy UI rendering
+  of the new view fields is not added. `.pyi` now also lists `Permanent`'s
+  existing `exile_if_dies_this_turn` and `temp_subtypes`.
+- `manabot/sim/registration.py` admits worlds only up to w15 (w16 and w17 are
+  rejected); left to the world release with the receipts.

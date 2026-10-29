@@ -193,9 +193,16 @@ pub struct StackObjectData {
     pub chosen_mode: Option<usize>,
     pub ability_index: Option<i32>,
     pub targets: Vec<StackTargetData>,
+    /// The announced value of X (CR 107.3); omitted when zero.
+    #[serde(default)]
+    pub x: i32,
+    /// Keywords a static grants this spell while on the stack (a Lesson's
+    /// lifelink); absent when none.
+    #[serde(default)]
+    pub granted_keywords: Option<KeywordData>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PermanentData {
     pub id: i32,
@@ -222,6 +229,28 @@ pub struct PermanentData {
     /// (Yip Yip! flying, Enter the Avatar State, ...). The card entry keeps
     /// printed keywords; this is what the permanent can actually do now.
     pub keywords: KeywordData,
+    /// Counters other than +1/+1 (CR 122.1); each omitted when zero.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub stun_counters: i32,
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub fire_counters: i32,
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub double_strike_counters: i32,
+    /// The permanent this Aura or Equipment is attached to (CR 301.5, 303.4).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attached_to: Option<i32>,
+    /// Name and creature types set by an effect (Honest Work); absent while
+    /// the printed ones apply.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub creature_types: Option<Vec<String>>,
+    /// A land only through an effect (a static land-type grant).
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub is_granted_land: bool,
+    /// Firebending gained until end of turn (Sozin's Comet, Fire Nation Palace).
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub firebending: i32,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -660,6 +689,25 @@ impl Observation {
                         .any(|link| link.source == object_ref)
                 }),
             keywords: KeywordData::from_keywords(&game.effective_keywords(perm_id)),
+            stun_counters: permanent.counters.stun,
+            fire_counters: permanent.counters.fire,
+            double_strike_counters: permanent.counters.double_strike,
+            attached_to: permanent
+                .attached_to
+                .and_then(|object| game.object_event_ref(object))
+                .map(|object| object.entity.0 as i32),
+            name: game
+                .set_characteristics(perm_id)
+                .map(|set| set.name.clone()),
+            creature_types: game.set_characteristics(perm_id).map(|_| {
+                game.creature_types(perm_id)
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect()
+            }),
+            is_granted_land: game.permanent_is_land(perm_id)
+                && !game.state.cards[permanent.card].types.is_land(),
+            firebending: i32::from(permanent.firebending_this_turn),
         };
 
         if permanent.controller.0 == self.agent.player_index as usize {
@@ -690,7 +738,13 @@ impl Observation {
                 .supertypes
                 .iter()
                 .any(|s| s.eq_ignore_ascii_case("legendary")),
-            is_ally: card.has_subtype("Ally"),
+            // A characteristic-setting effect replaces a permanent's types.
+            is_ally: match game.state.card_to_permanent[card_id] {
+                Some(permanent) if zone == ZoneType::Battlefield => {
+                    game.permanent_has_subtype(permanent, "Ally")
+                }
+                _ => card.has_subtype("Ally"),
+            },
             is_lesson: card.has_subtype("Lesson"),
             ward_cost: card
                 .ward
@@ -753,6 +807,19 @@ impl Observation {
                 _ => None,
             },
             ability_index: stack_object.ability_index().map(|index| index as i32),
+            x: match stack_object {
+                StackObject::Spell(spell) => i32::from(spell.x),
+                StackObject::ActivatedAbility(ability) => i32::from(ability.x),
+                StackObject::TriggeredAbility(_) => 0,
+            },
+            granted_keywords: match stack_object {
+                StackObject::Spell(spell) => {
+                    let keywords = game.spell_keywords(spell.card, spell.controller);
+                    (keywords != crate::state::card::Keywords::default())
+                        .then(|| KeywordData::from_keywords(&keywords))
+                }
+                _ => None,
+            },
             targets: stack_object
                 .targets()
                 .iter()
@@ -1266,7 +1333,7 @@ impl Observation {
         }
 
         fn stack_object_json(stack_object: &StackObjectData) -> Value {
-            json!({
+            let mut value = json!({
                 "description": stack_object.description,
                 "stack_object_id": stack_object.stack_object_id,
                 "kind": stack_object.kind as i32,
@@ -1276,7 +1343,14 @@ impl Observation {
                 "ability_index": stack_object.ability_index,
                 "chosen_mode": stack_object.chosen_mode,
                 "targets": stack_object.targets.iter().map(stack_target_json).collect::<Vec<_>>(),
-            })
+            });
+            if stack_object.x != 0 {
+                value["x"] = json!(stack_object.x);
+            }
+            if let Some(keywords) = &stack_object.granted_keywords {
+                value["granted_keywords"] = json!(keywords);
+            }
+            value
         }
 
         let action_json = self

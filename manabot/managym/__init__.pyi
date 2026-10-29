@@ -433,8 +433,21 @@ class Permanent:
     toughness: int
     is_animated: bool
     has_exile_link: bool
+    exile_if_dies_this_turn: bool
+    temp_subtypes: List[str]
     # Effective keywords (printed + until-EOT grants).
     keywords: Keywords
+    stun_counters: int
+    fire_counters: int
+    double_strike_counters: int
+    # Permanent id this Aura or Equipment is attached to.
+    attached_to: int | None
+    # Name and creature types set by an effect; None while printed ones apply.
+    name: str | None
+    creature_types: List[str] | None
+    is_granted_land: bool
+    # Firebending gained until end of turn.
+    firebending: int
 
 class Turn:
     turn_number: int
@@ -474,6 +487,10 @@ class StackObject:
     chosen_mode: int | None
     ability_index: int | None
     targets: List[StackTarget]
+    # The announced value of X (0 when none).
+    x: int
+    # Keywords a static grants this spell on the stack.
+    granted_keywords: Keywords | None
 
 class EventData:
     event_type: EventTypeEnum

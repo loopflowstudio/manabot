@@ -47,6 +47,16 @@ export interface PermanentState {
   base_power: number | null;
   base_toughness: number | null;
   plus1_counters: number;
+  /** Counters other than +1/+1, by kind (stun, fire, double_strike). */
+  counters?: Record<string, number>;
+  /** The permanent this Aura or Equipment is attached to. */
+  attached_to?: number;
+  /** Creature types set by an effect; `name` is then the set name. */
+  creature_types?: string[];
+  /** A land only through an effect. */
+  is_granted_land?: boolean;
+  /** Firebending gained until end of turn. */
+  firebending?: number;
 }
 
 export interface SideboardCard {
@@ -118,6 +128,8 @@ export interface StackEntryView {
   source_permanent?: number;
   ability_index?: number;
   chosen_mode?: number;
+  /** The announced value of X, when above zero. */
+  x?: number;
 }
 
 export interface Observation {

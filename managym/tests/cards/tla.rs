@@ -19,7 +19,7 @@ use managym::{
     state::{
         card::Keywords,
         game_object::{CardId, PermanentId, PlayerId, Target},
-        mana::{Mana, ManaCost, ManaUse},
+        mana::{Color, Mana, ManaCost, ManaUse},
         permanent::CounterKind,
         zone::ZoneType,
     },
@@ -1821,6 +1821,12 @@ fn united_front_announces_x_and_counts_it_on_resolution() {
         panic!("United Front is not on the stack");
     };
     assert_eq!(spell.x, 3);
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    assert_eq!(
+        observation.stack_objects.last().unwrap().x,
+        3,
+        "X is observed"
+    );
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
     settle(&mut s);
     let allies = s.battlefield_permanents_named(0, "Ally");
@@ -2458,10 +2464,11 @@ fn determinize_resamples_an_opponents_foretold_card() {
 
 /// The TLA locations with "enters tapped unless you control a basic land",
 /// each with a one-drop it can pay for alone.
-const LOCATIONS: [(&str, &str, usize); 4] = [
+const LOCATIONS: [(&str, &str, usize); 5] = [
     ("Abandoned Air Temple", "Healer's Hawk", 0),
     ("Agna Qel'a", "Wind Drake", 2),
     ("Ba Sing Se", "Llanowar Elves", 0),
+    ("Fire Nation Palace", "Monastery Swiftspear", 0),
     ("Realm of Koh", "Typhoid Rats", 0),
 ];
 
@@ -2605,6 +2612,56 @@ fn ba_sing_se_earthbends_only_at_sorcery_timing() {
     assert_eq!(s.action_space().player, Some(PlayerId(0)));
     s.set_player_mana_pool(0, "2G");
     assert!(!can_activate(&mut s, city, 0), "not on an opponent's turn");
+}
+
+/// Fire Nation Palace targets only a creature you control; that creature
+/// alone gains firebending 4, so its attack adds {R}{R}{R}{R} that lasts
+/// until end of combat (CR 702.187).
+#[test]
+fn fire_nation_palace_grants_firebending_four_to_one_creature() {
+    let mut s = setup_unfunded(&["Fire Nation Palace", "Gray Ogre"]);
+    let palace = s.force_permanent_on_battlefield(0, "Fire Nation Palace");
+    let chosen = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let other = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    ready(&mut s, chosen);
+    ready(&mut s, other);
+    s.set_player_mana_pool(0, "R");
+    assert!(!can_activate(&mut s, palace, 0), "{{1}}{{R}} is required");
+    s.set_player_mana_pool(0, "1R");
+    activate(&mut s, palace, 0);
+    assert!(
+        !s.choose_target(Target::Permanent(theirs)),
+        "only a creature you control"
+    );
+    assert!(s.choose_target(Target::Permanent(chosen)));
+    settle(&mut s);
+    assert!(tapped(&s, palace));
+    let firebending = |s: &Scenario, id: PermanentId| {
+        s.game().state.permanents[id]
+            .as_ref()
+            .unwrap()
+            .firebending_this_turn
+    };
+    assert_eq!(firebending(&s, chosen), 4);
+    assert_eq!(firebending(&s, other), 0);
+    assert_eq!(observed(&s, chosen).firebending, 4, "the grant is observed");
+    assert_eq!(observed(&s, other).firebending, 0);
+
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    for _ in 0..2 {
+        choose(&mut s, |a| {
+            matches!(a, Action::DeclareAttacker { attack: true, .. })
+        });
+    }
+    pass_until(&mut s, ActionSpaceKind::Priority);
+    while !s.game().state.stack_objects.is_empty() {
+        s.pass_priority();
+    }
+    assert_eq!(s.current_step(), StepKind::DeclareAttackers);
+    let pool = &s.game().state.players[0].combat_mana_pool;
+    assert_eq!(pool.mana[Color::Red as usize], 4);
+    assert_eq!(pool.total(), 4);
 }
 
 #[test]
@@ -2816,6 +2873,7 @@ fn rowdy_snowballers_stun_replaces_the_next_untap() {
     settle(&mut s);
     assert!(tapped(&s, ogre));
     assert_eq!(counters_of(&s, ogre, CounterKind::Stun), 1);
+    assert_eq!(observed(&s, ogre).stun_counters, 1);
 
     s.advance_to_active_step(1, StepKind::Upkeep);
     assert!(
@@ -2823,6 +2881,7 @@ fn rowdy_snowballers_stun_replaces_the_next_untap() {
         "the untap step removes the stun counter instead"
     );
     assert_eq!(counters_of(&s, ogre, CounterKind::Stun), 0);
+    assert_eq!(observed(&s, ogre).stun_counters, 0);
 
     s.advance_to_active_step(1, StepKind::Main);
     s.advance_to_active_step(1, StepKind::Upkeep);
@@ -3105,9 +3164,11 @@ fn glider_staff_airbends_a_creature_and_gives_its_bearer_flying() {
     assert!(!observed_keywords(&s, ours).flying);
 
     s.set_player_mana_pool(0, "2");
+    assert_eq!(observed(&s, staff).attached_to, None);
     equip(&mut s, staff, ours);
     assert_eq!(s.game().effective_pt(ours), (3, 3));
     assert!(observed_keywords(&s, ours).flying);
+    assert_eq!(observed(&s, staff).attached_to, Some(observed(&s, ours).id));
 
     s.advance_to_active_step(1, StepKind::Main);
     s.set_player_mana_pool(1, "2");
@@ -3822,6 +3883,12 @@ fn toph_makes_your_nontoken_artifacts_lands_and_earthbends_at_your_end_step() {
         .create_token("Clue", PlayerId(0), false)
         .expect("clue");
     let forest = s.force_permanent_on_battlefield(0, "Forest");
+    assert!(
+        observed(&s, tile).is_granted_land,
+        "a land only through Toph"
+    );
+    assert!(!observed(&s, theirs).is_granted_land);
+    assert!(!observed(&s, forest).is_granted_land, "a printed land");
 
     s.advance_until(
         |s| s.action_space().kind == ActionSpaceKind::ChooseTarget,
@@ -4297,6 +4364,9 @@ fn lo_and_li_tutor_a_lesson_or_noble_and_grant_lifelink() {
     cast(&mut s, "Firebending Lesson");
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert!(s.choose_target(Target::Permanent(ogre)));
+    let observation = Observation::for_player(s.game(), PlayerId(1));
+    let lesson = observation.stack_objects.last().unwrap();
+    assert!(lesson.granted_keywords.as_ref().is_some_and(|k| k.lifelink));
     settle(&mut s);
     assert_eq!(
         s.game().state.players[0].life,
@@ -4478,8 +4548,10 @@ fn honest_work_turns_the_creature_into_a_humble_merchant() {
     permanent.change_counters(CounterKind::Stun, 1);
     assert_eq!(s.game().effective_pt(drake), (4, 4));
     assert!(observed_keywords(&s, drake).flying);
+    assert_eq!(observed(&s, drake).stun_counters, 1);
+    assert_eq!(observed(&s, drake).name, None, "the printed name applies");
 
-    enchant(&mut s, "Honest Work", "U", drake);
+    let work = enchant(&mut s, "Honest Work", "U", drake);
     assert!(tapped(&s, drake), "the entry trigger taps it");
     for kind in CounterKind::ALL {
         assert_eq!(counters_of(&s, drake, kind), 0, "{kind:?} removed");
@@ -4489,6 +4561,11 @@ fn honest_work_turns_the_creature_into_a_humble_merchant() {
     assert_eq!(s.game().permanent_name(drake), "Humble Merchant");
     assert!(s.game().permanent_has_subtype(drake, "Citizen"));
     assert!(!s.game().permanent_has_subtype(drake, "Drake"));
+    let seen = observed(&s, drake);
+    assert_eq!(seen.stun_counters, 0);
+    assert_eq!(seen.name.as_deref(), Some("Humble Merchant"));
+    assert_eq!(seen.creature_types, Some(vec!["Citizen".into()]));
+    assert_eq!(observed(&s, work).attached_to, Some(seen.id));
 
     s.advance_to_active_step(1, StepKind::Main);
     ready(&mut s, drake);

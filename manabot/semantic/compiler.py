@@ -320,7 +320,7 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "airbend_all": ({"except", "predicate"}, set()),
     "opponents_cast_only_from_hand": (set(), set()),
     "exile_top_card_play_this_turn": (set(), set()),
-    "grant_firebending_until_eot": ({"amount"}, set()),
+    "grant_firebending_until_eot": ({"amount"}, {"target"}),
     "exile_linked": ({"chooser", "grant", "predicate", "target", "up_to", "zone"}, set()),
     "exile_until_nonland_cast_free": ({"below"}, set()),
     "cast_from_hand_free": ({"predicate"}, set()),

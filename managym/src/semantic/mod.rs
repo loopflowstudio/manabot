@@ -666,6 +666,7 @@ pub enum Step {
     ExileTopCardPlayThisTurn,
     GrantFirebendingUntilEot {
         amount: usize,
+        target: Option<String>,
     },
     ExileLinked {
         chooser: String,
@@ -1758,6 +1759,7 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         Opcode::ExileTopCardPlayThisTurn => Step::ExileTopCardPlayThisTurn,
         Opcode::GrantFirebendingUntilEot => Step::GrantFirebendingUntilEot {
             amount: usize_field(value, "amount")?,
+            target: opt_str_field(value, "target")?.map(str::to_owned),
         },
         Opcode::ExileLinked => Step::ExileLinked {
             chooser: str_field(value, "chooser")?.to_owned(),

@@ -745,6 +745,16 @@ impl Game {
                 }
                 None
             }
+            Effect::GrantFirebendingToTarget { amount, .. } => {
+                if let Some(Target::Permanent(id)) = self.present_primary_target(frame) {
+                    self.journal_permanent(id);
+                    if let Some(permanent) = self.state.permanents[id].as_mut() {
+                        permanent.firebending_this_turn =
+                            permanent.firebending_this_turn.saturating_add(*amount);
+                    }
+                }
+                None
+            }
             Effect::NoMaximumHandSize => {
                 self.journal_player(frame.controller);
                 self.state.players[frame.controller.0].no_maximum_hand_size = true;

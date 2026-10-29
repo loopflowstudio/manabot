@@ -1048,6 +1048,15 @@
     "LegacyPermanentView": {
       "type": "object",
       "properties": {
+        "attached_to": {
+          "description": "The permanent this Aura or Equipment is attached to.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
         "base_power": {
           "$ref": "#/$defs/RequiredNullable5"
         },
@@ -1059,6 +1068,25 @@
           "format": "uint32",
           "minimum": 0
         },
+        "counters": {
+          "description": "Counters other than +1/+1, by kind (`stun`, `fire`, `double_strike`).",
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "creature_types": {
+          "description": "Creature types set by an effect (Honest Work); `name` is then the set name.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "damage": {
           "type": "integer",
           "format": "int32"
@@ -1066,10 +1094,20 @@
         "exile_if_dies_this_turn": {
           "type": "boolean"
         },
+        "firebending": {
+          "description": "Firebending gained until end of turn.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
         "id": {
           "type": "integer",
           "format": "uint32",
           "minimum": 0
+        },
+        "is_granted_land": {
+          "description": "A land only through an effect.",
+          "type": "boolean"
         },
         "is_token": {
           "type": [
@@ -1912,6 +1950,15 @@
           "type": "string"
         },
         "source_permanent": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "x": {
+          "description": "The announced value of X, when one was announced above zero.",
           "type": [
             "integer",
             "null"

@@ -3136,5 +3136,13 @@
     "colors": [
       "U"
     ]
+  },
+  "Fire Nation Palace": {
+    "name": "Fire Nation Palace",
+    "mana_cost": "",
+    "type_line": "Land",
+    "keywords": [],
+    "oracle_text": "This land enters tapped unless you control a basic land.\n{T}: Add {R}.\n{1}{R}, {T}: Target creature you control gains firebending 4 until end of turn. (Whenever it attacks, add {R}{R}{R}{R}. This mana lasts until end of combat.)",
+    "colors": []
   }
 }

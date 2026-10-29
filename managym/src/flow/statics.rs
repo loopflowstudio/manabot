@@ -258,7 +258,10 @@ impl Game {
     /// The characteristics an Aura attached to `permanent_id` sets, if any
     /// (the latest in battlefield order). Attachments are filtered on their
     /// own `abilities_lost` flag alone, so this never recurses.
-    fn set_characteristics(&self, permanent_id: PermanentId) -> Option<&SetCharacteristics> {
+    pub(crate) fn set_characteristics(
+        &self,
+        permanent_id: PermanentId,
+    ) -> Option<&SetCharacteristics> {
         self.attachments_on(permanent_id)
             .filter_map(|(_, card)| card.attached_characteristics.as_ref())
             .last()
