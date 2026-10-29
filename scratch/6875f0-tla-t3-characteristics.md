@@ -209,6 +209,13 @@ Check (item 20 + compress): vitest 23 files/113 pass, `npm run check` 0 errors
 tests/semantic/test_text_observation.py` 18 pass, `tests/academy/test_play_modes.py`
 12 pass; ruff clean. No Playwright run.
 
+Concept review after item 22 (2026-10-29): the layout matches Jack Heart's steer.
+`tests/cards/<set>.rs` mirrors `src/cardsets/`, and `cards.rs` mounts one module per
+set. TLA card names left in `tests/rules/` are witnesses for CR rules
+(`cr_400_7_*`, `dragonfly_sba_scenario`, structured offers) or deck filler for the
+full-deck replay, not single-card tests. The steer allows a coverage README or
+script but does not require one; nothing to change. Next: gate.
+
 ## Delete — do not maintain
 
 Qualification entries, `Permanent::local_power`/`local_toughness`,

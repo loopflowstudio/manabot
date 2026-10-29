@@ -21,28 +21,25 @@
 </head>
 <body><main>
 <header>
-  <p>Task 6875f0 · TLA T3 · concept-review step (headless) · 2026-10-29</p>
-  <p>Built from <code>scratch/6875f0-tla-t3-characteristics.md</code>, Jack Heart's 2026-10-29 card-test steer, <code>CLAUDE.md</code>, <code>managym/tests/cards.rs</code>, <code>managym/tests/rules/{mod,tla_content,tla_mechanics}.rs</code>, <code>managym/tests/cards/support.rs</code>, commit <code>9cf2f4e71</code>.</p>
+  <p>Task 6875f0 · TLA T3 · concept-review step (headless) · 2026-10-29, after item 22</p>
+  <p>Built from <code>scratch/6875f0-tla-t3-characteristics.md</code>, Jack Heart's 2026-10-29 card-test steer, <code>managym/tests/cards.rs</code>, <code>managym/tests/cards/*.rs</code>, <code>managym/tests/rules/*.rs</code>, <code>managym/src/cardsets/</code>, commits <code>9cf2f4e71</code>..<code>605814d8a</code>.</p>
 </header>
 
-<h1>One card's tests live with its set. One file still breaks that rule.</h1>
-<p><strong>Decision:</strong> none needed. Jack Heart's steer already settles this. Outcome: <em>the design changed</em>, so the loop goes back to implement for item 22.</p>
+<h1>Card tests now live with their set. Nothing left to change.</h1>
+<p><strong>Decision:</strong> none needed. <strong>Outcome:</strong> nothing to change and no open choice, so the loop advances to gate.</p>
 
-<h2>Actions → concepts → APIs</h2>
+<h2>Actions → concepts → APIs (as implemented)</h2>
 <table>
 <tr><th>A contributor wants to…</th><th>Concept</th><th>Where it lives</th></tr>
-<tr><td>see how a card behaves</td><td>Card test</td><td><code>tests/cards/&lt;set&gt;.rs</code>, mirroring <code>src/cardsets/&lt;set&gt;.rs</code></td></tr>
-<tr><td>see how a rule behaves across cards</td><td>Rule test</td><td><code>tests/rules/cr_*.rs</code>, <code>tla_mechanics.rs</code></td></tr>
+<tr><td>see how a card behaves</td><td>Card test</td><td><code>tests/cards/&lt;set&gt;.rs</code>, one module per set file in <code>src/cardsets/</code>, mounted by <code>tests/cards.rs</code></td></tr>
+<tr><td>see how a rule behaves across cards</td><td>Rule test</td><td><code>tests/rules/cr_*.rs</code>, <code>tla_mechanics.rs</code>, the structured-offer files</td></tr>
 <tr><td>drive a scenario</td><td>Shared driver</td><td><code>tests/cards/support.rs</code> (both targets mount it)</td></tr>
 <tr><td>know whether a card is supported</td><td>Definition</td><td>the set file alone; tests never decide support</td></tr>
 </table>
 
-<h2>The mismatch</h2>
-<p>Before (now): <code>tests/rules/tla_content.rs</code> has 37 tests. Almost all of them test one TLA card, for example <code>allies_at_last_…</code>, <code>water_tribe_captain_…</code>, <code>momo_…</code> and <code>piandao_…</code>. It also defines its own <code>choose</code>, <code>activate</code>, <code>tapped</code>, <code>can_cast</code>, <code>enter</code> and <code>keywords</code> beside the shared drivers. To find a TLA card's tests, you have to look in two folders.</p>
-<div class="proposed">
-<p>After (item 22, move-only): each of those tests goes to <code>tests/cards/tla.rs</code>, or to <code>tokens.rs</code> for token templates. A test that really covers a rule goes to the matching <code>cr_*.rs</code> or to <code>tla_mechanics.rs</code>. <code>tla_content.rs</code> and its <code>mod</code> line are deleted. Tests use the drivers in <code>support.rs</code>, and renamed pairs that do the same thing (<code>activate_named</code>, <code>enter_settled</code>, <code>ready_named</code>, <code>cast_available</code>) are merged. The debug test total stays at 481.</p>
-</div>
-<p><code>tla_mechanics.rs</code> stays where it is. Its tests use vanilla, injected or fixture-only cards to check engine mechanics, so they are not about one printed card.</p>
+<h2>Checked counterexamples</h2>
+<p>Some TLA card names still appear under <code>tests/rules/</code>. Each one is there to witness a rule or to fill a deck, not to test that card. <code>cr_400_7_death_trigger_keeps_source_lki_across_reentry</code> and <code>dragonfly_sba_scenario</code> use Dragonfly Swarm for CR 400.7 and 704. The structured-offer tests use cards as action fixtures. <code>tla_mechanics.rs</code> uses TLA cards only to build the deck for its full-deck replay. Its other tests use vanilla cards, injected abilities or the fixture card Crossroads of Destiny.</p>
+<p>The steer allows a coverage README or script in <code>tests/cards/</code> but does not ask for one. It is not added here.</p>
 
 <h2>Questions</h2>
 <ol>
