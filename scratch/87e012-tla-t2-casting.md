@@ -42,6 +42,9 @@ status fields; T2's observation-row guard and viewer-safety tests sit beside it
 in `tests/cards/observability.rs`; Python text/encoder parity test for the new
 permanent column. JSON protocol schemas regenerated. WORLDS.md w18.
 Restricted-mana text names the class, not Lesson-only (`ee9e32383`).
+Academy's card face prints and names the three T2 permanent statuses (used
+exhaust, used once-each-turn, granted firebending) in text-5 wording
+(`Card.svelte` via `PermanentRow.svelte`, `61d7e1d89`).
 
 ## Remaining
 
@@ -54,7 +57,7 @@ Restricted-mana text names the class, not Lesson-only (`ee9e32383`).
 
 2026-10-29 implement (concept review 4): `Card.svelte` prints and names exhaust/once-each-turn/granted-firebending statuses in text-5 wording, fed from `PermanentRow.svelte`; `PermanentRow.svelte.test.ts` 2 pass; Academy `npm run check` 0 errors and `npm run build` pass (after `npm ci`, node 26 runs).
 
-2026-10-29 realign: plan matches code (51 T2 cards allocated; none in `tla::INCOMPLETE`); T1 head unchanged since `01e8f9975`; no checks rerun.
+2026-10-29 realign (after Academy statuses): plan matches code; Academy wording matches `text_observation.py`; #394 still open at `01e8f9975`; no checks rerun.
 
 2026-10-29 compress: removed orphaned `tests/support/casting.rs`; TLA any-color/two-color mana modes use `one_mana_of_any_color`/`two_mana_in_any_combination` (same mode order). Debug `cargo test --test cards` 303, rules 131 + 2 ignored, content_pack 3; clippy `-D warnings` clean.
 
