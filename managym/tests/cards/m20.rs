@@ -1,7 +1,9 @@
-//! Tests for cards filed in `src/cardsets/m20.rs`, grouped by the helper family they
-//! drive play with (`tests/support/`).
+//! Tests for cards filed in `src/cardsets/m20.rs`, in card order.
 
-use crate::support::elemental::{cast, settle, setup};
+use crate::support::{
+    game::five_color_setup,
+    play::{cast, settle},
+};
 use managym::{
     agent::action::Action,
     state::{game_object::Target, zone::ZoneType},
@@ -9,7 +11,7 @@ use managym::{
 
 #[test]
 fn spectral_sailor_draw_ability_survives_the_sources_destruction() {
-    let mut s = setup(&["Spectral Sailor", "Lightning Strike"]);
+    let mut s = five_color_setup(&["Spectral Sailor", "Lightning Strike"]);
     let sailor = s.force_permanent_on_battlefield(0, "Spectral Sailor");
     s.game_mut().scenario_refresh_priority().unwrap();
     let index = s

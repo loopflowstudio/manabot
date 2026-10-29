@@ -21,6 +21,8 @@ mod ktk;
 mod lea;
 #[path = "cards/m20.rs"]
 mod m20;
+#[path = "cards/mkm.rs"]
+mod mkm;
 #[path = "cards/observability.rs"]
 mod observability;
 #[path = "cards/roe.rs"]

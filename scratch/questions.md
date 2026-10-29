@@ -8,9 +8,6 @@ and pool-membership choices that were here (history: `be2b7586b:scratch/question
 - Superseded 2026-10-29 by Jack Heart's one-representation decision (w17, no
   JSON, tokens from `Effect`): the earlier choices to stay in w16, keep the IR's
   JSON shape and build tokens in `learning.py`.
-- 2026-10-29: card tests are grouped inside each set file by helper family
-  (`mod stage2 { … }`), since families define same-named helpers with
-  different signatures; merging the helpers is a later cleanup.
 - 2026-10-29: the 14 setup-used incomplete TLA cards keep their definitions and
   are listed in one `tla::INCOMPLETE` const (key, missing behavior) beside
   `cards()`, rather than a field on all 269 `Card` literals. Native cards sit in
@@ -44,3 +41,7 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
 - 2026-10-29: the Python offline compiler (`manabot/semantic/compiler.py`) and its
   frozen-source tests stay as the reader/reproducer of frozen v1–w11 IR; nothing
   current reads it.
+- 2026-10-29 (support reorg): tests that exercise several cards stay where
+  they were (Corrupt Court Official with Ozai's Cruelty in `cards/tla.rs`, Epic
+  Downfall with Power Word Kill in `cards/afr.rs`); Lightning Strike has no test
+  of its own, so no `ptk.rs`/`ths.rs` test files exist yet.

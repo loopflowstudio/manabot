@@ -10,10 +10,10 @@ use managym::{
     },
 };
 
-use super::helpers::*;
+use crate::support::game::*;
 
 fn resolve_player_bolt(seed: u64) -> (Scenario, CardId, Vec<GameEvent>) {
-    let mut s = Scenario::new(bolt_deck(), mountain_deck(), seed);
+    let mut s = Scenario::new(deck_of("Mountain", "Lightning Bolt"), deck(&[("Mountain", 40)]), seed);
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Mountain");
     s.force_card_in_hand(0, "Lightning Bolt");
@@ -76,7 +76,7 @@ fn event_log_records_life_change() {
 
 #[test]
 fn event_log_records_counterspell() {
-    let mut s = Scenario::new(bolt_deck(), counterspell_deck(), 7004);
+    let mut s = Scenario::new(deck_of("Mountain", "Lightning Bolt"), deck_of("Island", "Counterspell"), 7004);
 
     s.advance_to_active_step(1, StepKind::Main);
     s.force_cards_in_hand(1, "Island", 2);

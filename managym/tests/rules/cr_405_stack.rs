@@ -7,12 +7,16 @@ use managym::{
     },
 };
 
-use super::helpers::*;
+use crate::support::game::*;
 
 /// CR 405.1 — Stack objects resolve in last-in, first-out order.
 #[test]
 fn cr_405_1_lifo_resolution() {
-    let mut s = Scenario::new(bolt_deck(), mountain_deck(), 4051);
+    let mut s = Scenario::new(
+        deck_of("Mountain", "Lightning Bolt"),
+        deck(&[("Mountain", 40)]),
+        4051,
+    );
 
     s.force_cards_in_hand(0, "Mountain", 2);
     s.force_cards_in_hand(0, "Lightning Bolt", 2);
@@ -44,7 +48,11 @@ fn cr_405_1_lifo_resolution() {
 /// CR 405.5 — After a spell resolves, active player gets priority.
 #[test]
 fn cr_405_5_priority_after_resolution() {
-    let mut s = Scenario::new(bolt_deck(), mountain_deck(), 4055);
+    let mut s = Scenario::new(
+        deck_of("Mountain", "Lightning Bolt"),
+        deck(&[("Mountain", 40)]),
+        4055,
+    );
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Mountain");
@@ -63,7 +71,11 @@ fn cr_405_5_priority_after_resolution() {
 /// CR 405 — Counterspell may target a spell object on the stack.
 #[test]
 fn cr_405_counterspell_targets_stack_object() {
-    let mut s = Scenario::new(bolt_deck(), counterspell_deck(), 4059);
+    let mut s = Scenario::new(
+        deck_of("Mountain", "Lightning Bolt"),
+        deck_of("Island", "Counterspell"),
+        4059,
+    );
 
     s.advance_to_active_step(1, StepKind::Main);
     s.force_cards_in_hand(1, "Island", 2);

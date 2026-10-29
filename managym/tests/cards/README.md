@@ -10,8 +10,11 @@ binary is `tests/cards.rs`; run it with `cargo test --test cards` (or
   cards from other sets (basics, removal, filler creatures).
 - Engine rules that are not about one card — injected abilities, fixture cards
   such as Crossroads of Destiny, token mechanics — stay in `tests/rules/`.
-- Inside a set file, tests are grouped by the helper family they play with;
-  the helpers live in `tests/support/`, shared with the rules tests.
+- A set file is flat and in the card order of its set file's `cards()`. A
+  setup used by one card's tests sits just before them; tests that exercise a
+  mechanic across many cards follow at the end.
+- Scenario helpers shared with the rules tests live in `tests/support/`:
+  `game.rs` builds a game, `play.rs` drives it and `inspect.rs` reads it.
 
 Tests and coverage never qualify or gate a card. A card is supported when its
 set file defines it (see `managym/src/world.rs`); a missing test is a gap to

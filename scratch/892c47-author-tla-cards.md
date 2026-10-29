@@ -104,16 +104,17 @@ pipeline: `544ae312c:scratch/892c47-author-tla-cards.md`.
 5. Academy authored-match receipt names programs from the catalog
    (`conformance/authored-match-w17-v1`). Docs: AGENTS.md card section,
    WORLDS.md w17, content/semantic and managym READMEs, TLA notes.
-6. Earlier this Task (before 2026-10-29 rewrite): support by definition, set
+6. tests/support by purpose: `game.rs`/`play.rs`/`inspect.rs`, each primitive
+   once (renames listed in the commit); card-specific setups beside their tests;
+   flat `cards/<set>.rs` in card order (new `cards/mkm.rs`). Counts unchanged
+   (cards 235, rules 131 + 2 ignored).
+7. Earlier this Task (before 2026-10-29 rewrite): support by definition, set
    filter, basics in `lea.rs`, card tests by set (`tests/cards.rs`), fixture
    refresh reads the pool.
 
 ## Remaining
 
-1. tests/support reorganization (steer above); move tests for the moved cards
-   (Corrupt Court Official, Epic Downfall, Lightning Strike) out of
-   `tests/cards/tla.rs` into `ptk.rs`/`eld.rs`/`ths.rs` as part of it.
-2. Gate: full debug `cargo test`, clippy, focused pytest; regenerate or retire
+1. Gate: full debug `cargo test`, clippy, focused pytest; regenerate or retire
    world-bound receipts (parity w11, learn demo/trigger-order w15, w13 increment)
    — they already mismatched at w16. PR394 update, demo.
 

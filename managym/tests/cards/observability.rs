@@ -7,8 +7,7 @@
 //! that state and check the named column or token changes, and viewer-safety
 //! tests check hidden cards change neither.
 
-use std::collections::BTreeMap;
-
+use crate::support::game::deck;
 use managym::{
     agent::{
         observation::Observation,
@@ -495,13 +494,6 @@ fn ability_token(ability: &Ability) -> &'static str {
 
 // ---------------------------------------------------------------------------
 // Fixtures.
-
-fn deck(cards: &[(&str, usize)]) -> BTreeMap<String, usize> {
-    cards
-        .iter()
-        .map(|(name, count)| (name.to_string(), *count))
-        .collect()
-}
 
 /// Player 0 controls one Gray Ogre; both libraries are otherwise Mountains.
 fn ogre_game() -> (Game, PermanentId) {
