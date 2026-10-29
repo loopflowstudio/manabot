@@ -140,6 +140,14 @@ checkpoints or experiment evidence.
 - Inspect a bot in the browser: `./scripts/play` (installs locked local dependencies,
   starts backend + frontend, and stops both on Ctrl-C).
 
+## Forced decisions
+
+Every game runner, benchmark and Academy session uses native trivial-decision
+skipping (`skip_trivial`, on by default); a decision with one legal action is
+never shown to a person or sent to a model or policy (Jack Heart, 2026-10-28).
+Turning it off is for explicit debugging or named constructed-position
+diagnostics only; `tests/env/test_skip_forced_decisions.py` lists them.
+
 ## Testing
 
 **NEVER intentionally induce load for testing**, including debugging,

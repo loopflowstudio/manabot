@@ -99,14 +99,11 @@ def test_session_manabot_and_stored_root_agree(tmp_path: Path, reverse: bool) ->
     payload = load_trace(session.match_id, tmp_path)
     restored = GameConfig(**payload["config"])
     assert asdict(restored) == asdict(config)
-    # Compare each consumer at its own native decision boundary. Academy
-    # surfaces sole choices; training collapses them using the same setup.
-    rebuilt = managym.Env(seed=restored.seed, skip_trivial=False)
+    # Academy and training share one native decision boundary.
+    assert witness == training_witness
+    rebuilt = managym.Env(seed=restored.seed)
     rebuilt.reset(restored.to_rust())
     assert rebuilt.search_witness_json() == witness
-    training_root = managym.Env(seed=restored.seed, skip_trivial=True)
-    training_root.reset(restored.to_rust())
-    assert training_root.search_witness_json() == training_witness
 
 
 @pytest.mark.parametrize("reverse", [False, True])

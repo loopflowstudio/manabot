@@ -99,7 +99,7 @@ test('a pinned local model link selects the model and both Elemental decks', asy
   await expect(page.getByTestId('action-option').first()).toBeVisible();
 });
 
-test('forced steps advance into a real choice and remain visible in the game log', async ({ page }) => {
+test('priority automation advances into a real choice and remains visible in the game log', async ({ page }) => {
   await page.goto('/?hero=elemental_ur&villain=elemental_gw');
   await page.getByTestId('opponent-select').selectOption('passive');
   await page.getByRole('button', { name: 'New Game', exact: true }).click();

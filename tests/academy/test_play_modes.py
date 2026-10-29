@@ -278,19 +278,11 @@ def test_deck_names_echoed_and_recorded_in_trace(isolated_traces):
 
 
 def test_curated_combat_tape_is_identical_live_trace_and_inspector_fixture(
-    isolated_traces: Path, monkeypatch: pytest.MonkeyPatch
+    isolated_traces: Path,
 ) -> None:
     """One exact UR-vs-GW position crosses every semantic event consumer."""
 
     from manabot.env.observation import ActionEnum
-
-    # Exact retained event revisions bind the original execution preset.
-    native_env = managym.Env
-
-    def historical_env(*, seed: int, skip_trivial: bool) -> managym.Env:
-        return native_env(seed=seed, skip_trivial=True)
-
-    monkeypatch.setattr(server.managym, "Env", historical_env)
 
     def attacking_villain(_env: object, obs: managym.Observation) -> int:
         for index, action in enumerate(obs.action_space.actions):
