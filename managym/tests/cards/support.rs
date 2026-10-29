@@ -114,10 +114,7 @@ pub fn cast_card(s: &mut Scenario, id: CardId) {
 
 pub fn can_cast(s: &mut Scenario, id: CardId) -> bool {
     s.game_mut().scenario_refresh_priority().unwrap();
-    has_action(
-        s,
-        |a| matches!(a, Action::CastSpell { card, .. } if *card == id),
-    )
+    can_cast_now(s, id)
 }
 
 /// Whether ability `index` of `source` is offered now.
@@ -212,11 +209,11 @@ pub fn pass_until(s: &mut Scenario, kind: ActionSpaceKind) {
 
 /// The card a battlefield permanent represents.
 pub fn card_of(s: &Scenario, id: PermanentId) -> CardId {
-    s.game().state.permanents[id].as_ref().unwrap().card
+    permanent_state(s, id).card
 }
 
 pub fn tapped(s: &Scenario, id: PermanentId) -> bool {
-    s.game().state.permanents[id].as_ref().unwrap().tapped
+    permanent_state(s, id).tapped
 }
 
 pub fn counters(s: &Scenario, id: PermanentId) -> i32 {
@@ -224,10 +221,7 @@ pub fn counters(s: &Scenario, id: PermanentId) -> i32 {
 }
 
 pub fn counters_of(s: &Scenario, id: PermanentId, kind: CounterKind) -> i32 {
-    s.game().state.permanents[id]
-        .as_ref()
-        .unwrap()
-        .counter_count(kind)
+    permanent_state(s, id).counter_count(kind)
 }
 
 pub fn ready(s: &mut Scenario, id: PermanentId) {
@@ -312,8 +306,7 @@ pub fn cast_only(s: &mut Scenario) {
 
 pub fn cast_and_resolve(s: &mut Scenario) {
     cast_only(s);
-    s.pass_priority();
-    s.pass_priority();
+    resolve(s);
 }
 
 pub fn enter_settled(s: &mut Scenario, name: &str) -> CardId {
@@ -339,19 +332,16 @@ pub fn activate_named(s: &mut Scenario, name: &str, index: usize) {
 }
 
 pub fn ready_named(s: &mut Scenario, name: &str) {
-    let source = permanent(s, name);
-    s.game_mut().state.permanents[source]
-        .as_mut()
-        .unwrap()
-        .summoning_sick = false;
+    ready(s, permanent(s, name));
     s.game_mut().scenario_refresh_priority().unwrap();
 }
 
+/// [`can_cast`] against the current action space, without refreshing priority.
 pub fn can_cast_now(s: &Scenario, id: CardId) -> bool {
-    s.action_space()
-        .actions
-        .iter()
-        .any(|action| matches!(action, Action::CastSpell { card, .. } if *card == id))
+    has_action(
+        s,
+        |a| matches!(a, Action::CastSpell { card, .. } if *card == id),
+    )
 }
 
 pub fn permanent(s: &Scenario, name: &str) -> PermanentId {
@@ -555,14 +545,7 @@ pub fn put_permanent(s: &mut Scenario, player: usize, name: &str) -> PermanentId
 pub fn cast_available(s: &mut Scenario, name: &str) -> CardId {
     let card = available_card(s, 0, name);
     s.game_mut().move_card(card, ZoneType::Hand);
-    s.game_mut().scenario_refresh_priority().unwrap();
-    let index = s
-        .action_space()
-        .actions
-        .iter()
-        .position(|a| matches!(a, Action::CastSpell { card: c, .. } if *c == card))
-        .unwrap_or_else(|| panic!("cannot cast {name}: {:?}", s.action_space()));
-    s.step_action(index);
+    cast_card(s, card);
     card
 }
 

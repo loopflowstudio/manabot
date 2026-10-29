@@ -3,72 +3,51 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>T3 concept review after item 19</title>
+<title>T3 concept review after item 20 — card-test layout</title>
 <style>
-  :root { color-scheme: light dark; --ink:#1d1b18; --ink2:#5d5850; --bg:#faf7f1; --line:#d8d1c4; --prop:#2f6b4f; --gap:#9a3b2a; }
-  @media (prefers-color-scheme: dark) { :root { --ink:#ece6da; --ink2:#a9a196; --bg:#1a1916; --line:#3a362f; --prop:#7fc4a0; --gap:#e08a74; } }
-  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 Georgia, serif; }
-  main { max-width: 42rem; margin: 0 auto; padding: 2.5rem 1.25rem 4rem; }
-  h1 { font-size:1.6rem; margin:0 0 .25rem; } h2 { font-size:1.15rem; margin:2.5rem 0 .5rem; }
-  .meta { color:var(--ink2); font-size:.85rem; }
-  code { font: .85em ui-monospace, Menlo, monospace; }
-  table { border-collapse: collapse; width:100%; font-size:.9rem; }
-  th, td { text-align:left; vertical-align:top; padding:.45rem .5rem; border-bottom:1px solid var(--line); }
-  .gap { color:var(--gap); } .prop { color:var(--prop); }
-  .call { border-left:3px solid var(--gap); padding:.25rem 0 .25rem 1rem; margin:1.5rem 0; }
-  .card { border:1px solid var(--line); border-radius:6px; padding:.6rem .8rem; margin:.5rem 0; font: .9rem ui-monospace, Menlo, monospace; }
-  ol li { margin-bottom:.5rem; }
+  :root { color-scheme: light dark; --fg:#1d1b18; --bg:#faf8f4; --mute:#6b655c; --line:#ddd6ca; --prop:#7a4b00; --code:#efe9df; }
+  @media (prefers-color-scheme: dark) { :root { --fg:#ece7de; --bg:#1a1916; --mute:#a39b8e; --line:#3a362f; --prop:#f0b45a; --code:#26241f; } }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 Georgia, serif; }
+  main { max-width:44rem; margin:0 auto; padding:2.5rem 1.25rem 4rem; }
+  header p { color:var(--mute); font-size:.9rem; margin:.2rem 0; }
+  h1 { font-size:1.5rem; line-height:1.3; } h2 { font-size:1.15rem; margin-top:2.2rem; }
+  code { background:var(--code); padding:0 .25em; border-radius:3px; font-size:.88em; }
+  .proposed { border-left:3px solid var(--prop); padding-left:1rem; }
+  .proposed::before { content:"Proposed — next implement"; display:block; color:var(--prop); font-size:.8rem; letter-spacing:.04em; text-transform:uppercase; }
+  table { border-collapse:collapse; width:100%; font-size:.92rem; }
+  td, th { border-bottom:1px solid var(--line); padding:.4rem .5rem; text-align:left; vertical-align:top; }
+  ol li { margin:.4rem 0; }
 </style>
 </head>
-<body>
-<main>
-<h1>T3: Academy and bots should show what item 19 now observes</h1>
-<p class="meta">Task 6875f0 · step concept-review (headless) · 2026-10-29 ·
-built from <code>scratch/6875f0-tla-t3-characteristics.md</code>,
-<code>academy/ui/src/lib/components/PermanentRow.svelte</code>,
-<code>GameBoard.svelte</code>, <code>manabot/semantic/text_observation.py</code>,
-commit <code>85650933a</code></p>
+<body><main>
+<header>
+  <p>Task 6875f0 · TLA T3 · concept-review step (headless) · 2026-10-29</p>
+  <p>Built from <code>scratch/6875f0-tla-t3-characteristics.md</code>, <code>scratch/questions.md</code>, <code>AGENTS.md</code>, <code>managym/tests/cards.rs</code>, <code>managym/tests/rules/*</code>, commits <code>a1d67b416</code>, <code>12c1aae3b</code></p>
+</header>
 
-<p><strong>Outcome: the design changed, and the next step is implementation.</strong> All 49 cards are authored. Item 19 added
-counters by kind, attachment, set name and types, granted land, firebending and stack X to the
-observation. The readers that people and LLM bots actually see still drop those fields.</p>
+<h1>Card tests should sit where the docs say they do</h1>
+<p>Item 20 (Academy and text labels for effect-derived characteristics) matches the accepted model: the labels repeat shared observation fields, hide no choice and reveal nothing new. No change is needed there.</p>
+<p>One mismatch remains. Jack Heart's 2026-10-29 steer already settles it, so this review records it as implement direction and asks no new question.</p>
 
-<div class="call">
-<p><strong>The consequential mismatch.</strong> You cast Crashing Wave and place three stun counters.
-In Academy, the opponent's creatures look the same as before: no stun counters are shown, Glider Staff doesn't
-say which creature it equips, and the stack shows no X value. The engine observation has these fields; the board
-doesn't render them. Jack Heart's 2026-10-21 direction already settles this: Academy should make the
-viewer-safe observation understandable to a human.</p>
-</div>
-
-<h2>Actions, concepts and readers</h2>
+<h2>The mismatch</h2>
 <table>
-<tr><th>What the player does</th><th>Concept</th><th>Shown now</th><th>Proposed</th></tr>
-<tr><td>Places stun counters</td><td><code>PermanentData.stun_counters</code> → view <code>counters</code></td><td class="gap">not shown</td><td class="prop">counter badge by kind</td></tr>
-<tr><td>Equips or enchants a creature</td><td><code>attached_to</code></td><td class="gap">not shown</td><td class="prop">"attached to X" on the Aura or Equipment, and the reverse on the host</td></tr>
-<tr><td>Enchants with Honest Work</td><td>set <code>name</code> / <code>creature_types</code></td><td>name only</td><td class="prop">types line as well</td></tr>
-<tr><td>Casts with X</td><td>stack <code>x</code></td><td class="gap">not shown</td><td class="prop">"X = n" beside the mode</td></tr>
-<tr><td>Uses Toph or Fire Nation Palace</td><td><code>is_granted_land</code>, <code>firebending</code></td><td class="gap">not shown</td><td class="prop">a label</td></tr>
-<tr><td>An LLM bot reads the board</td><td>text observation, permanent line</td><td class="gap">+1/+1 counters only</td><td class="prop">the same fields, added only when present</td></tr>
+  <tr><th></th><th>Before (verified)</th><th>After (proposed)</th></tr>
+  <tr><td>Contributor's action</td><td>Looks for a card's tests. Finds T3's under <code>tests/cards/tla.rs</code> and T1's and earlier sets' under <code>tests/rules/*_cards.rs</code>, grouped by stage.</td><td>Opens <code>tests/cards/&lt;set&gt;.rs</code>, which mirrors <code>src/cardsets/&lt;set&gt;.rs</code>.</td></tr>
+  <tr><td>Concept</td><td>Two homes for per-card evidence. AGENTS.md on this branch already describes only one.</td><td>A single home for each card's tests. <code>tests/rules/</code> holds engine machinery that is not about one card.</td></tr>
+  <tr><td>Code</td><td><code>tests/cards.rs</code> declares only <code>tla</code></td><td>One <code>mod</code> for each set. Shared helpers live in <code>cards/support.rs</code> or <code>rules/helpers.rs</code>.</td></tr>
 </table>
 
-<h2>What it looks like (proposed)</h2>
-<div class="card">Grizzly Bears 2/2 · tapped · <span class="prop">stun 1</span></div>
-<div class="card">Glider Staff · <span class="prop">attached to Aang</span></div>
-<div class="card">Stack · Top · Crashing Wave · spell · Seat 1 · <span class="prop">X = 2</span></div>
+<div class="proposed">
+<p><strong>Item 21:</strong> a move-only commit. Each test about one card moves to the set file of that card's first printing. Tests that cover machinery across cards stay where they are (<code>tla_content.rs</code>, <code>cr_*</code>). Assertions do not change, and the debug <code>cargo test</code> counts must match before and after. Emptied files are deleted. If PR #394 moves these tests first, the sync takes its layout. Tests and coverage never gate support.</p>
+</div>
 
-<h2>What stays fixed</h2>
-<p>This change only adds labels. It has no new actions, hides no choices, and changes no engine or IR code.
-Text-observation output for cards without the new fields stays byte-identical. Frozen policy
-widths and checkpoints are untouched.</p>
+<h2>Still deferred, not blocking</h2>
+<p>Jack Heart's PR review will decide whether the policy tensor encodes item 19's fields (stun and fire counters, attachment). That is a new policy-input version or a later Task. Until then, bots play without perceiving them.</p>
 
-<h2>Still unresolved (not blocking)</h2>
+<h2>Questions</h2>
 <ol>
-<li>Should the policy tensor encode stun and fire counters and attachment through a new policy-input version
-alongside v4? This is a training-compatibility choice, so it's recorded for your PR review. Until then, bots
-train and play T3 cards without perceiving these fields.
-<br><em>a.</em> Leave it for later · <em>b.</em> Add v5 in T3 · <em>c.</em> Add it in a separate Task</li>
+  <li>Card-test split: (a) move every per-card test now, as proposed; (b) move only the TLA tests in <code>tla_cards.rs</code> and leave the other sets to PR #394.</li>
+  <li>Policy tensor for item 19's fields: (a) a policy-input version bump in T3; (b) a later Task.</li>
 </ol>
-</main>
-</body>
+</main></body>
 </html>

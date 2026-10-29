@@ -21,7 +21,7 @@ use managym::{
     state::{
         ability::{Ability, Effect, TriggerCondition, TriggerSubject},
         card::CardType,
-        game_object::{CardId, PermanentId, PlayerId},
+        game_object::{CardId, PlayerId},
         predicate::CardPredicate,
         zone::ZoneType,
     },
@@ -53,10 +53,6 @@ fn force_from_library(s: &mut Scenario, player: usize, name: &str) -> CardId {
 
 fn inject_ability(s: &mut Scenario, card_id: CardId, ability: Ability) {
     s.game_mut().state.cards[card_id].abilities.push(ability);
-}
-
-fn battlefield_card(s: &Scenario, permanent_id: PermanentId) -> CardId {
-    permanent_state(s, permanent_id).card
 }
 
 // ---------------------------------------------------------------------------
@@ -108,7 +104,7 @@ fn attack_trigger_creates_tapped_and_attacking_token() {
         .as_mut()
         .unwrap()
         .summoning_sick = false;
-    let ogre_card = battlefield_card(&s, ogre);
+    let ogre_card = card_of(&s, ogre);
     inject_ability(
         &mut s,
         ogre_card,
@@ -152,7 +148,7 @@ fn one_or_more_attack_trigger_fires_once() {
             .unwrap()
             .summoning_sick = false;
     }
-    let ogre_a_card = battlefield_card(&s, ogre_a);
+    let ogre_a_card = card_of(&s, ogre_a);
     inject_ability(
         &mut s,
         ogre_a_card,
@@ -210,7 +206,7 @@ fn becomes_tapped_fires_when_attacker_taps() {
         .as_mut()
         .unwrap()
         .summoning_sick = false;
-    let ogre_card = battlefield_card(&s, ogre);
+    let ogre_card = card_of(&s, ogre);
     inject_ability(
         &mut s,
         ogre_card,
@@ -239,7 +235,7 @@ fn vigilance_attacker_does_not_become_tapped() {
         .as_mut()
         .unwrap()
         .summoning_sick = false;
-    let angel_card = battlefield_card(&s, angel);
+    let angel_card = card_of(&s, angel);
     inject_ability(
         &mut s,
         angel_card,
@@ -272,7 +268,7 @@ fn tapped_for_mana_trigger() {
         .as_mut()
         .unwrap()
         .summoning_sick = false;
-    let elves_card = battlefield_card(&s, elves);
+    let elves_card = card_of(&s, elves);
     inject_ability(
         &mut s,
         elves_card,
@@ -304,7 +300,7 @@ fn attack_tap_is_not_tapped_for_mana() {
         .as_mut()
         .unwrap()
         .summoning_sick = false;
-    let ogre_card = battlefield_card(&s, ogre);
+    let ogre_card = card_of(&s, ogre);
     inject_ability(
         &mut s,
         ogre_card,
@@ -333,7 +329,7 @@ fn attack_tap_is_not_tapped_for_mana() {
 fn dies_trigger_fires_on_death() {
     let mut s = Scenario::new(ogre_only_deck(), deck(&[("Plains", 40)]), 73);
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    let ogre_card = battlefield_card(&s, ogre);
+    let ogre_card = card_of(&s, ogre);
     inject_ability(
         &mut s,
         ogre_card,
@@ -358,7 +354,7 @@ fn dies_trigger_fires_on_death() {
 fn bounce_is_not_death() {
     let mut s = Scenario::new(ogre_only_deck(), deck(&[("Plains", 40)]), 79);
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    let ogre_card = battlefield_card(&s, ogre);
+    let ogre_card = card_of(&s, ogre);
     inject_ability(
         &mut s,
         ogre_card,
@@ -391,7 +387,7 @@ fn block_restriction_respects_effective_power() {
         .as_mut()
         .unwrap()
         .summoning_sick = false;
-    let attacker_card = battlefield_card(&s, attacker);
+    let attacker_card = card_of(&s, attacker);
     s.game_mut().state.cards[attacker_card].block_restriction = Some(CardPredicate {
         card_type: Some(CardType::Creature),
         max_power: Some(2),

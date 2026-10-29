@@ -163,9 +163,21 @@ Compress after item 19: both firebending effects share `Game::grant_firebending`
 `add_permanent` reads `set_characteristics` once; bool omission uses `Not::not`.
 Debug: clippy/fmt clean, lib 122, cards 125, rules_tests 356 (serialization unchanged).
 
+21. Card-test layout (Jack Heart's 2026-10-29 steer; done, move-only): the
+   per-card tests of eight `tests/rules/` files now sit in `tests/cards/<set>.rs`
+   (15 set files, by the card each test names, else its first `setup` card).
+   Shared drivers live in `cards/support.rs`, which `tests/rules/` also mounts;
+   colliding helpers were renamed, not merged. Cross-card machinery is in
+   `rules/tla_mechanics.rs`. Check (debug): clippy/fmt clean; cards 312 +
+   rules_tests 169 = 481 (was 125 + 356); only the w15 receipt failures.
+   Compress: `battlefield_card` folded into `card_of`; support helpers build on
+   each other (`can_cast`→`can_cast_now`, `cast_available`→`cast_card`,
+   `ready_named`→`ready`, `cast_and_resolve`→`resolve`, readers via
+   `permanent_state`). Debug: clippy/fmt clean, cards 312, rules_tests 169.
+
 ## Remaining
 
-None of the 49 cards and no implement item. World release items (registration
+No implement item remains; all 49 cards are done. World release items (registration
 literal, receipts, frozen asserts) belong to the stack's world release, not this
 slice. Browser proof of the stunned and equipped creature is left to demo. Policy
 tensor encoding of item 19's fields is undecided: Jack Heart's PR review chooses
@@ -191,9 +203,6 @@ existing text is byte-identical. `_characteristics` in the projection omits on
 `None`, not falsiness. Compress: `tablePermanents` is required through
 PlayerArea → Battlefield → BattlefieldZone (GameBoard always supplies it); only
 `PermanentRow` defaults it.
-
-Realign after item 20 (2026-10-29): PR #398 head still `16dfd3dbb`, PR #394
-head still `86ebe9ccf`, `origin/main` contained.
 
 Check (item 20 + compress): vitest 23 files/113 pass, `npm run check` 0 errors
 (nvm node 24; Homebrew node 25.8 lacks llhttp); `pytest

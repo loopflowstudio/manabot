@@ -26,8 +26,10 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
 
 ## T3 (6875f0) assumptions — 2026-10-29
 
-- Support is by definition since the T1 sync (86ebe9ccf). Only this batch's tests
-  went to `managym/tests/cards/`; moving T1's per-card tests is left to PR #394.
+- Support is by definition since the T1 sync (86ebe9ccf). Superseded after item 20:
+  per-card tests already in `tests/rules/` move to `tests/cards/<set>.rs` here
+  (Jack Heart's steer; item 21), since PR #394 has not moved them; on sync the
+  first landed layout wins.
 - Conditional entry reads the card owner's battlefield. Schema 8 is unreleased, so
   vocabulary is appended in place. `semantic_conformance_tests` is left to T1's
   world release.
@@ -128,3 +130,8 @@ mana, `Game::zone_cast_cost`/`may_play_from_zone`, `ZoneEntry`.
   2026-10-21 Academy direction). Encoding them in the policy tensor (a new policy-input
   version beside v4) is left for Jack Heart's PR review; bots train and play
   T3 cards without perceiving stun/fire counters or attachment until then.
+- Item 21 left `rules/tla_content.rs` in place as directed, though most of its
+  tests are per-card TLA tests; moving them and merging the renamed drivers
+  (`activate_named`, `enter_settled`, `ur_lessons_setup`, ...) into one set is
+  a follow-up. Multi-set tests went to the first card named (`landfall_*` →
+  `fin.rs`).
