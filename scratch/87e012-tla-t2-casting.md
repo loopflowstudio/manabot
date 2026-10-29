@@ -139,15 +139,17 @@ and UI. Guard + directed + viewer-safety tests in
 ## Remaining
 
 - Next T1 sync, after T1 publishes engine-type cards/w17: the three steers
-  above, then the world gate. Last observed 2026-10-29 (after `8f562b7d0`):
-  PR #394 head still `f9732c12f` (rechecked at compress, 2026-10-29); T1 committed `167eb13d4` locally (engine-type
+  above, then the world gate. Last observed 2026-10-29 (realign after
+  `180c1832d`): PR #394 head still `f9732c12f`; T1's implement step still
+  running. (The launch steer's `be2b7586b` is an older #394 merge already in
+  T2's history.) T1 committed `167eb13d4` locally (engine-type
   set files with Scryfall ids, `authoring.rs`/`compile.rs`/IR deleted, tokens in
   `semantic/tokens.rs`) and has uncommitted Python follow-up work, so the sync is
   still waiting. Conversion path: T1's `scratch/conversion/generate.py` turns
   lowered `CardDefinition` Debug dumps into set files and reads field types from
   `state/*.rs`. Dump T2's lowered definitions before the merge, regenerate
   T2's set files with it on T1's helpers, and resolve set-file conflicts to that
-  output. Main's `9a62e8b39`, `2fc0af676` arrive with T1's next main sync.
+  output. Main's `9a62e8b39`, `2fc0af676`, `633dca159` arrive with T1's next main sync.
 - Gate (not run here): CLAUDE.md arena admission/monitoring suite; full debug
   `cargo test`; Academy check/build (local node can't load libllhttp; CI).
 - Known gaps (questions.md): possible-worlds ignore foretold cards; granted
