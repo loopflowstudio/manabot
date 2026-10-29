@@ -893,12 +893,7 @@ impl Game {
         let ability = self
             .activation_ability(source, ability_index)
             .ok_or_else(|| AgentError("missing source".into()))?;
-        if ability.discard_card
-            && !matches!(
-                self.pending_choice,
-                Some(PendingChoice::DiscardPayment { .. })
-            )
-        {
+        if ability.discard_card {
             self.pending_choice = Some(PendingChoice::DiscardPayment {
                 player,
                 source,
@@ -956,15 +951,17 @@ impl Game {
         if payer != player || !self.state.zones.contains(card, ZoneType::Hand, player) {
             return Err(AgentError("discard cost must be a card in hand".into()));
         }
+        let sacrifice = self
+            .activation_ability(source, ability_index)
+            .ok_or_else(|| AgentError("missing source".into()))?
+            .sacrifice;
         self.move_card(card, ZoneType::Graveyard);
-        let result = self.begin_activation_payment(player, source, ability_index, targets);
-        if matches!(
-            self.pending_choice,
-            Some(PendingChoice::DiscardPayment { .. })
-        ) {
-            self.pending_choice = None;
-        }
-        result
+        let payment = Payment::Activation {
+            source,
+            ability_index,
+            targets,
+        };
+        self.begin_payment(player, payment, sacrifice)
     }
 
     pub(crate) fn sacrifice_payment_action(

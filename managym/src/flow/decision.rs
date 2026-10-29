@@ -844,40 +844,26 @@ impl Game {
                     remaining,
                     discarded,
                 },
-                Action::SelectCard { card, .. },
+                Action::SelectCard { .. } | Action::Decline { .. },
             ) => {
-                if !self.state.zones.contains(*card, ZoneType::Hand, *player) {
-                    self.state.suspended_decision = Some(suspended);
-                    return Err(AgentError("discard must be from hand".into()));
-                }
-                self.move_card(*card, ZoneType::Graveyard);
-                *remaining -= 1;
-                *discarded += 1;
-                let player = *player;
-                if *remaining > 0
-                    && !self
+                if let Action::SelectCard { card, .. } = action {
+                    if !self.state.zones.contains(*card, ZoneType::Hand, *player) {
+                        self.state.suspended_decision = Some(suspended);
+                        return Err(AgentError("discard must be from hand".into()));
+                    }
+                    self.move_card(*card, ZoneType::Graveyard);
+                    *remaining -= 1;
+                    *discarded += 1;
+                    let hand_empty = self
                         .state
                         .zones
-                        .zone_cards(ZoneType::Hand, player)
-                        .is_empty()
-                {
-                    self.state.suspended_decision = Some(suspended);
-                    return Ok(());
+                        .zone_cards(ZoneType::Hand, *player)
+                        .is_empty();
+                    if *remaining > 0 && !hand_empty {
+                        self.state.suspended_decision = Some(suspended);
+                        return Ok(());
+                    }
                 }
-                let count = *count * *discarded;
-                suspended
-                    .frame
-                    .queue
-                    .push_front(Effect::DrawCards { count });
-                self.run_frame(suspended.frame);
-                Ok(())
-            }
-            (
-                Decision::OptionalDiscardDraw {
-                    count, discarded, ..
-                },
-                Action::Decline { .. },
-            ) => {
                 if *discarded > 0 {
                     let count = *count * *discarded;
                     suspended
@@ -1201,8 +1187,6 @@ impl Game {
             .collect()
     }
 
-    /// Move a library card to the bottom of its owner's library. Not a zone
-    /// change (CR 701.26b-style reorder), so no events fire.
     /// One hand card per matching definition for `DiscardFromRevealedHand`.
     pub(crate) fn revealed_hand_candidates(&self, decision: &Decision) -> Vec<CardId> {
         let Decision::DiscardFromRevealedHand {
@@ -1281,6 +1265,8 @@ impl Game {
         self.state.suspended_decision = Some(suspended);
     }
 
+    /// Move a library card to the bottom of its owner's library. Not a zone
+    /// change (CR 701.26b-style reorder), so no events fire.
     pub(crate) fn put_on_bottom_of_library(&mut self, card: CardId) {
         let owner = self.state.cards[card].owner;
         // A reorder within one zone, so the zone-move inverse does not apply.

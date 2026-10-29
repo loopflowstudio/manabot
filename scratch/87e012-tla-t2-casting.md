@@ -98,4 +98,4 @@ Remaining 7 T2 cards, each needing a casting-pipeline mechanism not built yet:
 
 ## Check
 
-2026-10-28 (after Professor Zei, `fb624ef92`+): debug `cargo test --tests --no-fail-fast` passes except the pre-existing semantic-conformance pair; clippy and fmt clean; rebuilt extension, `pytest tests/semantic/` 159 pass, 3 fail only on T1's unupdated frozen-schema assertions (`test_elemental`, `test_elemental_world`, `test_sacrifice` expect 3/7/4, bind 8 since `73865361f`); world-change Python suite and Academy check deferred to gate.
+2026-10-28 compress (discard-cost payment, discard-draw arms): debug `cargo test --test cards --test rules_tests --lib` passes; clippy and fmt clean. Earlier full debug run (`fb624ef92`): all pass except the pre-existing semantic-conformance pair; `pytest tests/semantic/` fails only T1's frozen-schema assertions (expect 3/7/4, bind 8). World-change Python suite and Academy check deferred to gate.
