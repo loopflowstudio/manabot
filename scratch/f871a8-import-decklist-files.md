@@ -271,8 +271,9 @@ existing identity equality. `manabot.infra.provenance.authored_matchup_sha256`
 is the one reader for authored-matchup consumers (monitoring, study
 calibration/arenas, attack arena) and rejects deck runs by name; `run_study`
 rejects deck recipes before training instead of after it. Card
-evaluation fingerprints its own authored matrix and reads no run identity.
-Check: `pytest tests/training/test_training_decks.py -k supply_not_a_pair` passes.
+evaluation, eval admission and `evaluate` fingerprint their own setups and
+read no run identity (realign at 991253b10 confirmed no other run-identity
+`matchup_sha256` reader).
 
 Noted, not a change: the collector and native `VectorEnv` still hold training
 decks in a field named `uniform_roster`; it no longer gates admission
@@ -458,4 +459,4 @@ The manifest references `.lf/wave/engine/GOAL.md` and `MEMORY.md`, but neither
 exists in this checkout. The supplied Task, accepted design and dated Steers
 provide the implementation scope; Wave context was not reconstructed.
 
-Check — 2026-10-28 (realign at cfe3ffeec: no code change; reuses compress result): training_decks/self_play/elemental_uniform/learning_state/policy_import: 45 passed. Earlier (regime match removal): `uv run --extra dev pytest tests/training/test_training_decks.py -q`: 7 passed; `tests/training/{test_self_play,test_elemental_uniform,test_learning_state,test_policy_import,test_baseline_recipe,test_experiments}.py`: 65 passed. At 91a000fd1 the decklist/Academy/catalog/boundary set passed (39). Earlier at 63c9f6bf5 the training/matchup/mirror/catalog set passed (39); pre-existing failures (Elemental program count 8 vs 7 at test_elemental_world.py:151, belief runtime `KeyError: 'relations'`) reproduce at c42bf4934 without this work; gate owns them with full suites and debug Rust.
+Check — 2026-10-28 (at 558762869: `uv run --extra dev pytest tests/training/test_training_decks.py -k supply_not_a_pair` passed; realign at 991253b10 made no code change). Earlier (realign at cfe3ffeec, reusing compress result): training_decks/self_play/elemental_uniform/learning_state/policy_import: 45 passed. Earlier (regime match removal): `uv run --extra dev pytest tests/training/test_training_decks.py -q`: 7 passed; `tests/training/{test_self_play,test_elemental_uniform,test_learning_state,test_policy_import,test_baseline_recipe,test_experiments}.py`: 65 passed. At 91a000fd1 the decklist/Academy/catalog/boundary set passed (39). Earlier at 63c9f6bf5 the training/matchup/mirror/catalog set passed (39); pre-existing failures (Elemental program count 8 vs 7 at test_elemental_world.py:151, belief runtime `KeyError: 'relations'`) reproduce at c42bf4934 without this work; gate owns them with full suites and debug Rust.
