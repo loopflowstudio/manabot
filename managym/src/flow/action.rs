@@ -175,14 +175,11 @@ impl Game {
                 .iter()
                 .enumerate()
             {
+                let source = ActivationSource::Permanent(permanent_id);
                 if ability.zone != ActivationZone::Battlefield
                     || (ability.requires_target()
                         && self
-                            .activated_ability_targets(
-                                player,
-                                ActivationSource::Permanent(permanent_id),
-                                ability_index,
-                            )
+                            .activated_ability_targets(player, source, ability_index)
                             .is_empty())
                 {
                     continue;
@@ -208,12 +205,12 @@ impl Game {
                     }
                     continue;
                 }
+                let payment = Payment::Activation {
+                    source,
+                    ability_index,
+                    targets: Vec::new(),
+                };
                 if let Some(cost) = &ability.sacrifice {
-                    let payment = Payment::Activation {
-                        source: ActivationSource::Permanent(permanent_id),
-                        ability_index,
-                        targets: Vec::new(),
-                    };
                     if !self
                         .payment_candidates(player, &payment, cost)
                         .into_iter()
@@ -243,16 +240,7 @@ impl Game {
                 let affordable = if ability.waterbend {
                     self.can_pay_waterbend_activation(player, permanent_id, ability)
                 } else {
-                    self.can_pay_announced_activation(
-                        player,
-                        &ability.mana_cost,
-                        &Payment::Activation {
-                            source: ActivationSource::Permanent(permanent_id),
-                            ability_index,
-                            targets: Vec::new(),
-                        },
-                        None,
-                    )
+                    self.can_pay_announced_activation(player, &ability.mana_cost, &payment, None)
                 };
                 if affordable {
                     actions.push(Action::ActivateAbility {

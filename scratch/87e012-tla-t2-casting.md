@@ -164,3 +164,6 @@ observations read one combined regular+combat pool. Debug `--lib`/`cards`/
 Compress 2: `Game::check_activation_terms` owns the turn/life terms for
 permanent and card activations and both offer scans (card offers had skipped
 the life check). Debug `--lib`/`cards`/`rules_tests` 121/293/131, clippy clean.
+Compress 3: permanent activation offers build their `Payment` once;
+suspended-decision spaces share `select_cards`/`card_focus`. Debug
+`--lib`/`cards`/`rules_tests` 121/293/131, clippy clean.
