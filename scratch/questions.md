@@ -34,8 +34,7 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   vocabulary is appended in place. `semantic_conformance_tests` is left to T1's
   world release.
 - Zookeeper's creature-type count excludes a fixed noncreature-subtype list.
-- Non-+1/+1 counters live in `Permanent.counters` (serialized only when present);
-  observations don't show stun or fire counters, nor attachment (later shape change).
+- Non-+1/+1 counters live in `Permanent.counters` (serialized only when present).
 - Heartless Act removes counters by a repeated resolution-time choice. Exhaust is
   per incarnation; 702.177b "haven't activated" effects are not modeled.
 - `set_base_pt` lowers only for the source until end of turn. Kyoshi Battle Fan's
@@ -59,14 +58,13 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   fixed at resolution. Ozai's replacement applies directly as pools empty while
   Ozai is on the battlefield, outside the proposed-event pipeline.
 - Slice 11 (X): the X choice reuses the Modal space (`ChooseMode`, mode =
-  X, labelled "X = n"); observations don't show the announced X (later shape
-  change). Offered X stops at the first unpayable value (no cap since the T2-sync compress; spell and activation X share `payable_x_values`). Fated
+  X, labelled "X = n"). Offered X stops at the first unpayable value (no cap since the T2-sync compress; spell and activation X share `payable_x_values`). Fated
   Firepower's increase applies after prevention and doubling (the affected
   player's best order; no ordering choice is offered). Ability loss ignores
   timestamps (all keywords go, counters' included); CDAs still apply. Crashing
   Wave is deferred (spell waterbend and stun distribution).
 - Slice 12: excess is measured from damage marked after replacements. Lesson
-  lifelink applies to stack spells; observations don't show spell grants. The
+  lifelink applies to stack spells. The
   tutor offers every match plus failing to find. Hakoda's top card is shown only
   to its controller; CR 401.2's no-peeking-mid-cast limit is not modeled.
 - Slice 13: granted abilities follow the grantee's own in its ability list,
@@ -76,7 +74,6 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   itself. Glider Staff waits for T2's airbend rather than a second one here.
 - Slice 14 (Honest Work): no timestamps, so it also removes later grants and
   its "{T}: Add {C}" survives an until-EOT loss; until-EOT subtypes still add.
-  Observations don't show the new name or types.
 - Tap authority: a static haste grant changes mana output only through moves
   that already invalidate the mana cache; a grant whose condition flips without
   a move leaves the cache stale until the next invalidation, as other
@@ -121,8 +118,6 @@ mana, `Game::zone_cast_cost`/`may_play_from_zone`, `ZoneEntry`.
   existing `exile_if_dies_this_turn` and `temp_subtypes`.
 - `manabot/sim/registration.py` admits worlds only up to w15 (w16 and w17 are
   rejected); left to the world release with the receipts.
-- Item 19's "no policy encoding" choice was superseded 2026-10-29 by Jack
-  Heart's full policy encoding (policy input v5, item 23).
 - Item 22 moved all of `rules/tla_content.rs` into `cards/tla.rs` and merged its
   drivers into `cards/support.rs`. Multi-set tests went to the first card named
   (`landfall_*` → `fin.rs`). TLA's fixed tokens are TLA cards, so their tests
