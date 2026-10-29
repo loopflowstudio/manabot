@@ -50,3 +50,8 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   only, so other noncreature permanents animated later (none in TLA so far) could
   attack the turn they enter. The observed `is_animated` now means "a creature
   only through an effect" (unchanged for existing content).
+- Slice 8 (mana): state-dependent mana outputs are read when the ability is
+  offered, not after its costs are paid; no current cost changes the reading.
+  A single fixed output is still offered as a one-option `ChooseMode`, like other
+  activated mana abilities. White Lotus Tile with X = 0 taps for nothing. Great
+  Divide Guide's earlier tests stay in `tests/rules/temur_cards.rs` (T1's move).

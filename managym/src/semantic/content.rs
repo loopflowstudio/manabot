@@ -449,6 +449,7 @@ fn apply_program(
                 _ => Effect::IfCondition {
                     condition: StaticCondition::Always,
                     effects,
+                    otherwise: Vec::new(),
                 },
             };
             definition
@@ -804,15 +805,34 @@ fn apply_static(definition: &mut CardDefinition, program: &Program) -> Result<()
         [step @ (Step::ModifyPt { .. } | Step::GrantKeywords { .. })] => {
             apply_static_effect(definition, program, step, None)?
         }
+        [Step::Branch {
+            condition,
+            then,
+            otherwise,
+        }] if then.is_empty() => {
+            let [Step::CantAttackOrBlock { target }] = otherwise.as_slice() else {
+                return unsupported(
+                    program,
+                    "an unless-static must restrict attacking and blocking",
+                );
+            };
+            definition.static_restrictions.push(StaticRestriction {
+                scope: static_scope(program, target)?,
+                kind: Restriction::CantAttackOrBlock,
+                unless: Some(lower_condition(condition)?),
+            })
+        }
         [Step::CantAttackOrBlock { target }] => {
             definition.static_restrictions.push(StaticRestriction {
                 scope: static_scope(program, target)?,
                 kind: Restriction::CantAttackOrBlock,
+                unless: None,
             })
         }
         [Step::DoesntUntap { target }] => definition.static_restrictions.push(StaticRestriction {
             scope: static_scope(program, target)?,
             kind: Restriction::DoesntUntap,
+            unless: None,
         }),
         _ => return unsupported(program, "unsupported static program shape"),
     }
@@ -1235,6 +1255,15 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             predicate: predicate_card(predicate)?,
             then: lower_steps(pack, program, then)?,
         },
+        Step::Branch {
+            condition: condition @ Condition::ControlsMatching { .. },
+            then,
+            otherwise,
+        } => Effect::IfCondition {
+            condition: lower_condition(condition)?,
+            effects: lower_steps(pack, program, then)?,
+            otherwise: lower_steps(pack, program, otherwise)?,
+        },
         Step::Branch { .. } => return unsupported(program, "unsupported branch shape"),
         Step::ForEachTarget { body, .. } => Effect::ForEachTarget {
             effects: lower_steps(pack, program, body)?,
@@ -1304,6 +1333,9 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         } => Effect::ModifyTriggeringPermanent {
             counters: *counters,
             keywords: keywords(names)?,
+        },
+        Step::AddManaOfOneColor { amount } => Effect::AddOneColorManaValue {
+            amount: amount.lower()?,
         },
         Step::DealDamageValue { amount, target } => Effect::DealDamageValue {
             amount: amount.lower()?,
@@ -1585,6 +1617,9 @@ fn lower_condition(condition: &Condition) -> Result<StaticCondition, IrError> {
                 .map_err(|_| IrError::Malformed("count exceeds usize".into()))?,
             predicate: predicate_card(predicate)?,
         },
+        Condition::ControlsMatching { predicate } => StaticCondition::ControlsMatching {
+            predicate: predicate_card(predicate)?,
+        },
         _ => return Err(IrError::Malformed("unsupported static condition".into())),
     })
 }
@@ -1603,6 +1638,7 @@ impl ValueExpression {
             Self::CardsDrawnMinus(subtract) => EffectValue::CardsDrawnMinus {
                 subtract: *subtract,
             },
+            Self::GreatestSharedCreatureType => EffectValue::GreatestSharedCreatureType,
         })
     }
 }

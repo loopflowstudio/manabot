@@ -23,7 +23,7 @@ use crate::{
 };
 
 impl Game {
-    fn effect_value(&self, value: &EffectValue, controller: PlayerId) -> i32 {
+    pub(crate) fn effect_value(&self, value: &EffectValue, controller: PlayerId) -> i32 {
         match value {
             EffectValue::CreaturesWithCounters => self
                 .battlefield_permanents(controller)
@@ -45,6 +45,9 @@ impl Game {
             }
             EffectValue::CardsDrawnMinus { subtract } => {
                 self.state.turn.cards_drawn_this_turn[controller.0].saturating_sub(*subtract) as i32
+            }
+            EffectValue::GreatestSharedCreatureType => {
+                self.greatest_shared_creature_type(controller) as i32
             }
         }
     }
@@ -588,10 +591,17 @@ impl Game {
                 player: frame.controller,
                 remaining: 1,
             }),
-            Effect::IfCondition { condition, effects } => {
-                if self.check_static_condition(condition, frame.controller) {
-                    frame.prepend_effects(effects.iter().cloned());
-                }
+            Effect::IfCondition {
+                condition,
+                effects,
+                otherwise,
+            } => {
+                let branch = if self.check_static_condition(condition, frame.controller) {
+                    effects
+                } else {
+                    otherwise
+                };
+                frame.prepend_effects(branch.iter().cloned());
                 None
             }
             Effect::DealDamageValue { amount, target } => {
@@ -915,6 +925,13 @@ impl Game {
                     source: source_ref,
                     exiled_card,
                 });
+                None
+            }
+            Effect::AddOneColorManaValue { .. } => {
+                frame.prepend_effects(
+                    self.current_mana_output(effect, frame.controller)
+                        .into_iter(),
+                );
                 None
             }
             Effect::AddMana {

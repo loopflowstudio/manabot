@@ -451,6 +451,11 @@ impl Game {
             return Vec::new();
         };
         let mut abilities = self.state.cards[source.card].activated_abilities.clone();
+        for ability in &mut abilities {
+            if let Some(effect) = self.current_mana_output(&ability.effect, source.controller) {
+                ability.effect = effect;
+            }
+        }
         for grant in self.battlefield_permanents(source.controller) {
             let grant = self.state.permanents[grant].as_ref().unwrap();
             if self.state.cards[grant.card]
@@ -466,6 +471,59 @@ impl Game {
             }
         }
         abilities
+    }
+
+    /// Mana abilities resolve at once (CR 605.3a), so an output that depends
+    /// on the game is fixed when the ability is offered: a branch between two
+    /// immediate outputs, or X mana of one chosen color. Activation costs do
+    /// not change these readings for current content.
+    pub(crate) fn current_mana_output(
+        &self,
+        effect: &Effect,
+        controller: PlayerId,
+    ) -> Option<Effect> {
+        match effect {
+            Effect::IfCondition {
+                condition,
+                effects,
+                otherwise,
+            } if [effects, otherwise].iter().all(|branch| {
+                matches!(
+                    branch.as_slice(),
+                    [Effect::AddMana {
+                        until_end_of_combat: false,
+                        ..
+                    }]
+                )
+            }) =>
+            {
+                let branch = if self.check_static_condition(condition, controller) {
+                    effects
+                } else {
+                    otherwise
+                };
+                Some(branch[0].clone())
+            }
+            Effect::AddOneColorManaValue { amount } => {
+                let amount = self.effect_value(amount, controller).max(0) as u32;
+                if amount == 0 {
+                    return Some(Effect::AddMana {
+                        mana: Mana::default(),
+                        until_end_of_combat: false,
+                    });
+                }
+                Some(Effect::mana_choice(["W", "U", "B", "R", "G"].map(
+                    |color| {
+                        let mut mana = Mana::default();
+                        for _ in 0..amount {
+                            mana.add(&Mana::parse(color));
+                        }
+                        mana
+                    },
+                )))
+            }
+            _ => None,
+        }
     }
 
     fn payment_model(&self, player: PlayerId, sacrifice: Option<PermanentId>) -> PaymentModel {

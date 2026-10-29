@@ -36,6 +36,7 @@ fn proft_s_eidetic_memory() -> CardDefinition {
                             count: EffectValue::CardsDrawnMinus { subtract: 1 },
                             target: TargetSpec::CreatureYouControl,
                         }],
+                        otherwise: vec![],
                     }],
                 },
             ],

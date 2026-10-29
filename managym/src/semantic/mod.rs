@@ -108,6 +108,7 @@ pub enum Opcode {
     DoesntUntap = 70,
     ShuffleIntoLibrary = 71,
     BecomeArtifactCreature = 72,
+    AddManaOfOneColor = 73,
 }
 
 impl Opcode {
@@ -185,6 +186,7 @@ impl Opcode {
             70 => Opcode::DoesntUntap,
             71 => Opcode::ShuffleIntoLibrary,
             72 => Opcode::BecomeArtifactCreature,
+            73 => Opcode::AddManaOfOneColor,
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -276,6 +278,9 @@ pub enum Condition {
         count: i64,
         counter: Option<String>,
     },
+    ControlsMatching {
+        predicate: Predicate,
+    },
 }
 
 /// One typed, executable IR step. Nested arms (`Branch`, `ForEachTarget`) carry
@@ -342,6 +347,10 @@ pub enum Step {
     BecomeArtifactCreature {
         target: String,
         duration: Option<String>,
+    },
+    /// "Add X mana of any one color."
+    AddManaOfOneColor {
+        amount: ValueExpression,
     },
 
     SearchBasicLands {
@@ -706,6 +715,10 @@ pub trait InterpreterContext {
         false
     }
 
+    fn controls_matching(&self, _predicate: &Predicate) -> bool {
+        false
+    }
+
     /// Number of objects bound to a `for_each_target` role in this resolution.
     fn role_target_count(&self, _role: &str) -> usize {
         1
@@ -1036,6 +1049,7 @@ impl<'a> BoundPack<'a> {
             | Step::DoesntUntap { .. }
             | Step::ShuffleIntoLibrary { .. }
             | Step::BecomeArtifactCreature { .. }
+            | Step::AddManaOfOneColor { .. }
             | Step::SearchBasicLands { .. }
             | Step::Sacrifice { .. }
             | Step::DealDamageToController { .. }
@@ -1096,6 +1110,7 @@ fn evaluate_condition(condition: &Condition, context: &dyn InterpreterContext) -
         Condition::SourceCountersAtLeast { count, counter } => {
             context.source_counters_at_least(counter.as_deref(), *count)
         }
+        Condition::ControlsMatching { predicate } => context.controls_matching(predicate),
     }
 }
 
@@ -1266,6 +1281,9 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
         Opcode::BecomeArtifactCreature => Step::BecomeArtifactCreature {
             target: str_field(value, "target")?.to_owned(),
             duration: opt_str_field(value, "duration")?.map(str::to_owned),
+        },
+        Opcode::AddManaOfOneColor => Step::AddManaOfOneColor {
+            amount: ValueExpression::parse(object_field(value, "amount")?)?,
         },
         Opcode::Tap => Step::Tap {
             target: str_field(value, "target")?.to_owned(),
@@ -1504,6 +1522,9 @@ fn parse_condition(value: &Value) -> Result<Condition, IrError> {
             count: i64_field(value, "count")?,
             counter: opt_str_field(value, "counter")?.map(str::to_owned),
         },
+        "controls_matching" => Condition::ControlsMatching {
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
+        },
         other => {
             return Err(IrError::Malformed(format!(
                 "unknown branch condition kind {other:?}"
@@ -1634,11 +1655,13 @@ pub enum ValueExpression {
     BattlefieldMatching(Predicate),
     GraveyardMatching { base: i32, predicate: Predicate },
     CardsDrawnMinus(u32),
+    GreatestSharedCreatureType,
 }
 impl ValueExpression {
     fn parse(value: &Value) -> Result<Self, IrError> {
         Ok(match str_field(value, "kind")? {
             "creatures_with_counters" => Self::CreaturesWithCounters,
+            "greatest_shared_creature_type" => Self::GreatestSharedCreatureType,
             "battlefield_matching" => {
                 Self::BattlefieldMatching(parse_predicate(object_field(value, "predicate")?)?)
             }

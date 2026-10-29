@@ -458,6 +458,10 @@ pub enum Op {
         duration: Option<Duration>,
         target: &'static str,
     },
+    /// "Add X mana of any one color", X read when the mana ability resolves.
+    AddManaOfOneColor {
+        amount: Quantity,
+    },
     /// "[target]'s owner shuffles it into their library."
     ShuffleIntoLibrary {
         target: &'static str,
@@ -675,15 +679,28 @@ pub enum Condition {
         count: i32,
         counter: CounterKind,
     },
+    /// "If you control a [predicate] permanent."
+    ControlsMatching {
+        predicate: Predicate,
+    },
 }
 
 #[derive(Serialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Quantity {
-    BattlefieldMatching { predicate: Predicate },
-    GraveyardMatching { base: i32, predicate: Predicate },
+    BattlefieldMatching {
+        predicate: Predicate,
+    },
+    GraveyardMatching {
+        base: i32,
+        predicate: Predicate,
+    },
     CreaturesWithCounters,
-    CardsDrawnMinus { subtract: i32 },
+    CardsDrawnMinus {
+        subtract: i32,
+    },
+    /// The greatest number of creatures you control that share a creature type.
+    GreatestSharedCreatureType,
 }
 
 #[derive(Serialize)]

@@ -15,7 +15,6 @@ pub(super) const INCOMPLETE: &[Incomplete] = &[
     ("tla.cat_gator", "Any target must include planeswalkers and battles (CR 115.4)"),
     ("tla.dai_li_agents", "Unreviewed until T2: Two earthbend clauses may share target; attack drain counts creatures with counters."),
     ("tla.dragonfly_swarm", "Unreviewed until T4: Flying; spell-and-ability ward; graveyard CDA power; conditional death draw."),
-    ("tla.great_divide_guide", "Unreviewed until T3: Continuous any-color mana grant to lands and Allies; source removal and creature sickness."),
     ("tla.haru_hidden_talent", "Unreviewed until T2: Another Ally entry earthbend; repeated targets and independent delayed returns."),
     ("tla.hermitic_herbalist", "Unreviewed until T2: Any-color one mana or all unordered two-color combinations restricted to Lesson casting."),
     ("tla.iroh_grand_lotus", "Unreviewed until T2: Firebending; own-turn graveyard flashback grants differing by Lesson type; retention after source leaves."),
@@ -156,6 +155,9 @@ pub(super) fn cards() -> Vec<Card> {
         invasion_submersible(),
         tundra_tank(),
         war_balloon(),
+        raucous_audience(),
+        white_lotus_tile(),
+        the_lion_turtle(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -4615,6 +4617,129 @@ fn war_balloon() -> Card {
             Program::crew("crew", 3),
         ],
         registry_name: "War Balloon",
+        text_box,
+    }
+}
+
+fn raucous_audience() -> Card {
+    let text_box =
+        "{T}: Add {G}. If you control a creature with power 4 or greater, add {G}{G} instead.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{G}"),
+            subtypes: Some(vec!["Human", "Citizen"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(2)),
+            toughness: Some(1),
+            ..Default::default()
+        },
+        key: "tla.raucous_audience",
+        programs: vec![Program::new(
+            "mana",
+            ProgramKind::Activated,
+            vec![Op::Branch {
+                condition: Condition::ControlsMatching {
+                    predicate: Predicate::All {
+                        predicates: vec![
+                            Predicate::CardType {
+                                value: CardType::Creature,
+                            },
+                            Predicate::PowerAtLeast { value: 4 },
+                        ],
+                    },
+                },
+                otherwise: vec![Op::AddMana {
+                    mana: "G",
+                    until: None,
+                }],
+                then: vec![Op::AddMana {
+                    mana: "GG",
+                    until: None,
+                }],
+            }],
+        )
+        .cost(Cost {
+            tap_source: Some(true),
+            ..Cost::mana("0")
+        })],
+        registry_name: "Raucous Audience",
+        text_box,
+    }
+}
+
+fn white_lotus_tile() -> Card {
+    let text_box = "This artifact enters tapped.\n{T}: Add X mana of any one color, where X is the greatest number of creatures you control that have a creature type in common.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{4}"),
+            types: vec![CardType::Artifact],
+            enters_tapped: Some(true),
+            ..Default::default()
+        },
+        key: "tla.white_lotus_tile",
+        programs: vec![Program::new(
+            "mana",
+            ProgramKind::Activated,
+            vec![Op::AddManaOfOneColor {
+                amount: Quantity::GreatestSharedCreatureType,
+            }],
+        )
+        .cost(Cost {
+            tap_source: Some(true),
+            ..Cost::mana("0")
+        })],
+        registry_name: "White Lotus Tile",
+        text_box,
+    }
+}
+
+fn the_lion_turtle() -> Card {
+    let text_box = "Reach, vigilance\nWhen The Lion-Turtle enters, you gain 3 life.\nThe Lion-Turtle can't attack or block unless there are three or more Lesson cards in your graveyard.\n{T}: Add one mana of any color.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{G}{U}"),
+            subtypes: Some(vec!["Elder", "Cat", "Turtle"]),
+            types: vec![CardType::Creature],
+            supertypes: Some(vec!["Legendary"]),
+            keywords: Some(vec![Keyword::Reach, Keyword::Vigilance]),
+            power: Some(PrintedPower::Fixed(3)),
+            toughness: Some(6),
+            ..Default::default()
+        },
+        key: "tla.the_lion_turtle",
+        programs: vec![
+            Program::new(
+                "enters",
+                ProgramKind::Triggered,
+                vec![Op::GainLife { amount: 3 }],
+            )
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::new(
+                "wisdom",
+                ProgramKind::Static,
+                vec![Op::Branch {
+                    condition: Condition::GraveyardAtLeast {
+                        count: 3,
+                        predicate: Predicate::Subtype { value: "Lesson" },
+                    },
+                    otherwise: vec![Op::CantAttackOrBlock { target: "source" }],
+                    then: vec![],
+                }],
+            ),
+            Program::new(
+                "mana",
+                ProgramKind::Activated,
+                vec![Op::choose_mana(&["W", "U", "B", "R", "G"])],
+            )
+            .cost(Cost {
+                tap_source: Some(true),
+                ..Cost::mana("0")
+            }),
+        ],
+        registry_name: "The Lion-Turtle",
         text_box,
     }
 }

@@ -101,6 +101,10 @@ pub enum StaticCondition {
         count: usize,
         predicate: CardPredicate,
     },
+    /// "if you control a [predicate] permanent".
+    ControlsMatching {
+        predicate: CardPredicate,
+    },
 }
 
 /// Which game objects an event-based trigger condition watches.
@@ -118,9 +122,19 @@ pub enum TriggerSubject {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum EffectValue {
     CreaturesWithCounters,
-    BattlefieldMatching { predicate: CardPredicate },
-    GraveyardMatching { base: i32, predicate: CardPredicate },
-    CardsDrawnMinus { subtract: u32 },
+    BattlefieldMatching {
+        predicate: CardPredicate,
+    },
+    GraveyardMatching {
+        base: i32,
+        predicate: CardPredicate,
+    },
+    CardsDrawnMinus {
+        subtract: u32,
+    },
+    /// The greatest number of creatures you control that share a creature
+    /// type (CR 205.3m).
+    GreatestSharedCreatureType,
 }
 
 /// A resolving obligation, distinct from the effects chosen by its outcome.
@@ -247,6 +261,8 @@ pub enum Effect {
     IfCondition {
         condition: StaticCondition,
         effects: Vec<Effect>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        otherwise: Vec<Effect>,
     },
     ReturnToHand {
         target: TargetSpec,
@@ -421,6 +437,10 @@ pub enum Effect {
         mana: Mana,
         until_end_of_combat: bool,
     },
+    /// "Add X mana of any one color", X read as the mana ability resolves.
+    AddOneColorManaValue {
+        amount: EffectValue,
+    },
     /// The target gets +power/+toughness until end of turn.
     BuffTarget {
         power: i32,
@@ -594,7 +614,12 @@ impl Effect {
             | Effect::PutCountersValue { target, .. }
             | Effect::ExileIfDiesThisTurn { target }
             | Effect::AddSubtypeToTarget { target, .. } => Some(target),
-            Effect::IfCondition { effects, .. } => effects.iter().find_map(Effect::target_spec),
+            Effect::IfCondition {
+                effects, otherwise, ..
+            } => effects
+                .iter()
+                .chain(otherwise)
+                .find_map(Effect::target_spec),
             Effect::Discard => None,
             Effect::ReturnToHand { target } => Some(target),
             Effect::DealDamage { target, .. } => Some(target),
@@ -650,6 +675,7 @@ impl Effect {
             | Effect::CounterUnlessPays { .. }
             | Effect::ReturnSourceToBattlefieldTapped
             | Effect::AddMana { .. }
+            | Effect::AddOneColorManaValue { .. }
             | Effect::ForEachTarget { .. }
             | Effect::PutCountersOnEachMatching { .. }
             | Effect::TargetCreaturesDealPowerDamageToLastTarget => None,

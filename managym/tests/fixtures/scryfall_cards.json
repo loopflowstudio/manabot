@@ -2217,5 +2217,41 @@
     "colors": [
       "R"
     ]
+  },
+  "Raucous Audience": {
+    "name": "Raucous Audience",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Human Citizen",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "{T}: Add {G}. If you control a creature with power 4 or greater, add {G}{G} instead.",
+    "colors": [
+      "G"
+    ]
+  },
+  "White Lotus Tile": {
+    "name": "White Lotus Tile",
+    "mana_cost": "{4}",
+    "type_line": "Artifact",
+    "keywords": [],
+    "oracle_text": "This artifact enters tapped.\n{T}: Add X mana of any one color, where X is the greatest number of creatures you control that have a creature type in common.",
+    "colors": []
+  },
+  "The Lion-Turtle": {
+    "name": "The Lion-Turtle",
+    "mana_cost": "{1}{G}{U}",
+    "type_line": "Legendary Creature — Elder Cat Turtle",
+    "power": "3",
+    "toughness": "6",
+    "keywords": [
+      "Reach",
+      "Vigilance"
+    ],
+    "oracle_text": "Reach, vigilance\nWhen The Lion-Turtle enters, you gain 3 life.\nThe Lion-Turtle can't attack or block unless there are three or more Lesson cards in your graveyard.\n{T}: Add one mana of any color.",
+    "colors": [
+      "G",
+      "U"
+    ]
   }
 }

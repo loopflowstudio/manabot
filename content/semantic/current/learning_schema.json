@@ -29,6 +29,7 @@
     "condition": {
       "always": 5,
       "cards_drawn_at_least": 6,
+      "controls_matching": 8,
       "graveyard_at_least": 1,
       "kicked": 2,
       "nth_resolution": 3,
@@ -94,7 +95,8 @@
       "battlefield_matching": 2,
       "cards_drawn_minus": 4,
       "creatures_with_counters": 1,
-      "graveyard_matching": 3
+      "graveyard_matching": 3,
+      "greatest_shared_creature_type": 5
     },
     "remainder": {
       "library_bottom": 1
@@ -145,6 +147,7 @@
       "Dinosaur": 31,
       "Dragon": 8,
       "Druid": 32,
+      "Elder": 69,
       "Elf": 54,
       "Elk": 50,
       "Equipment": 33,
@@ -326,6 +329,7 @@
   "opcodes": {
     "add_lesson_mana": 56,
     "add_mana": 1,
+    "add_mana_of_one_color": 73,
     "add_subtype": 64,
     "attach": 68,
     "become_artifact_creature": 72,

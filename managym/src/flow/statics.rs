@@ -240,6 +240,10 @@ impl Game {
         self.static_sources().any(|(source_id, controller, card)| {
             card.static_restrictions.iter().any(|restriction| {
                 restriction.kind == kind
+                    && restriction
+                        .unless
+                        .as_ref()
+                        .is_none_or(|condition| !self.check_static_condition(condition, controller))
                     && self.static_scope_applies(
                         &restriction.scope,
                         source_id,
@@ -251,12 +255,16 @@ impl Game {
         })
     }
 
+    fn creature_type_count(&self, permanent_id: PermanentId) -> i32 {
+        self.creature_types(permanent_id).len() as i32
+    }
+
     /// Distinct creature types of a battlefield creature (CR 205.3m): printed
     /// subtypes of a printed creature, less noncreature subtypes, plus
     /// temporarily granted subtypes. Animated lands keep only granted types.
-    fn creature_type_count(&self, permanent_id: PermanentId) -> i32 {
+    fn creature_types(&self, permanent_id: PermanentId) -> Vec<&str> {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
-            return 0;
+            return Vec::new();
         };
         let card = &self.state.cards[permanent.card];
         let mut types: Vec<&str> = Vec::new();
@@ -271,7 +279,21 @@ impl Game {
         types.extend(permanent.temp_subtypes.iter().map(String::as_str));
         types.sort_unstable();
         types.dedup();
-        types.len() as i32
+        types
+    }
+
+    /// The greatest number of creatures `controller` controls that share one
+    /// creature type (White Lotus Tile); zero when none has a creature type.
+    pub(crate) fn greatest_shared_creature_type(&self, controller: PlayerId) -> usize {
+        let mut counts: std::collections::BTreeMap<&str, usize> = Default::default();
+        for id in self.battlefield_permanents(controller) {
+            if self.permanent_is_creature(id) {
+                for creature_type in self.creature_types(id) {
+                    *counts.entry(creature_type).or_default() += 1;
+                }
+            }
+        }
+        counts.into_values().max().unwrap_or(0)
     }
 
     /// Evaluate a static condition for `controller` ("you").
@@ -289,6 +311,10 @@ impl Game {
             StaticCondition::GraveyardAtLeast { count, predicate } => {
                 self.count_graveyard_matching(controller, predicate) >= *count
             }
+            StaticCondition::ControlsMatching { predicate } => self
+                .battlefield_permanents(controller)
+                .into_iter()
+                .any(|id| self.permanent_matches_predicate(id, predicate)),
         }
     }
 

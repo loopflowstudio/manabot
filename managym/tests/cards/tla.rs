@@ -1006,3 +1006,194 @@ fn invasion_submersible_bounces_another_permanent_then_surfaces_once() {
     s.set_player_mana_pool(0, "3");
     assert!(!can_activate(&mut s, sub, 0), "exhaust");
 }
+
+fn pool(s: &Scenario) -> managym::state::mana::Mana {
+    s.game().state.players[0].mana_pool.clone()
+}
+
+fn untap(s: &mut Scenario, id: PermanentId) {
+    s.game_mut().state.permanents[id].as_mut().unwrap().tapped = false;
+}
+
+/// CR 613.1f: lands and Allies you control have the granted ability while the
+/// Guide remains; an opponent's land does not, and a summoning-sick Ally
+/// can't use it (CR 302.6). The chosen color pays a real cost.
+#[test]
+fn great_divide_guide_grants_lands_and_allies_any_color() {
+    let mut s = setup(&["Great Divide Guide", "Healer's Hawk"]);
+    let guide = s.force_permanent_on_battlefield(0, "Great Divide Guide");
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    assert!(!can_activate(&mut s, guide, 0), "summoning sick");
+
+    activate(&mut s, forest, 0);
+    choose_mode(&mut s, 0);
+    assert_eq!(pool(&s), managym::state::mana::Mana::parse("W"));
+    cast(&mut s, "Healer's Hawk");
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Healer's Hawk").len(), 1);
+    assert_eq!(pool(&s).total(), 0);
+
+    ready(&mut s, guide);
+    assert!(can_activate(&mut s, guide, 0));
+    untap(&mut s, forest);
+    let guide_card = card_of(&s, guide);
+    s.game_mut().move_card(guide_card, ZoneType::Graveyard);
+    assert!(
+        !can_activate(&mut s, forest, 0),
+        "the grant ends with its source"
+    );
+
+    let mut s = setup(&["Great Divide Guide"]);
+    s.force_permanent_on_battlefield(0, "Great Divide Guide");
+    let theirs = s.force_permanent_on_battlefield(1, "Forest");
+    s.advance_to_active_step(1, StepKind::Main);
+    assert!(!can_activate(&mut s, theirs, 0), "only lands you control");
+}
+
+/// The output reads effective power as the ability resolves (CR 605.3a), so
+/// a creature grown to four by counters doubles it; an opponent's does not.
+/// Payment for a spell counts the doubled output.
+#[test]
+fn raucous_audience_adds_more_with_a_four_power_creature() {
+    let mut s = setup(&["Raucous Audience", "Gray Ogre"]);
+    let audience = s.force_permanent_on_battlefield(0, "Raucous Audience");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    ready(&mut s, audience);
+    add_counters(&mut s, theirs, CounterKind::PlusOnePlusOne, 2);
+    activate(&mut s, audience, 0);
+    choose_mode(&mut s, 0);
+    assert_eq!(pool(&s), managym::state::mana::Mana::parse("G"));
+
+    untap(&mut s, audience);
+    s.set_player_mana_pool(0, "0");
+    to_hand(&mut s, "Raucous Audience");
+    assert!(
+        !has_action(&s, |a| matches!(a, Action::CastSpell { .. })),
+        "{{G}} alone can't pay {{1}}{{G}}"
+    );
+    add_counters(&mut s, ogre, CounterKind::PlusOnePlusOne, 2);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    choose(&mut s, |a| matches!(a, Action::CastSpell { .. }));
+    for _ in 0..4 {
+        match s.action_space().kind {
+            ActionSpaceKind::Priority => break,
+            ActionSpaceKind::Modal => choose_mode(&mut s, 0),
+            _ if has_action(&s, |a| matches!(a, Action::PayCost { .. })) => {
+                choose(&mut s, |a| matches!(a, Action::PayCost { .. }))
+            }
+            _ => choose(
+                &mut s,
+                |a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == audience),
+            ),
+        }
+    }
+    settle(&mut s);
+    assert!(tapped(&s, audience));
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Raucous Audience").len(),
+        2
+    );
+    assert_eq!(pool(&s).total(), 0);
+}
+
+/// The Tile enters tapped; X counts the largest group of your creatures
+/// sharing a creature type (CR 205.3m), including a granted type, and all of
+/// it is one chosen color. With no creatures it adds nothing.
+#[test]
+fn white_lotus_tile_adds_one_color_for_the_largest_shared_type() {
+    let mut s = setup(&["White Lotus Tile", "Gray Ogre", "Llanowar Elves"]);
+    s.set_player_mana_pool(0, "4");
+    let tile = cast(&mut s, "White Lotus Tile");
+    settle(&mut s);
+    let tile = s.game().state.card_to_permanent[tile].expect("entered");
+    assert!(tapped(&s, tile));
+
+    untap(&mut s, tile);
+    activate(&mut s, tile, 0);
+    choose_mode(&mut s, 0);
+    assert!(tapped(&s, tile));
+    assert_eq!(pool(&s).total(), 0, "no creatures");
+
+    for _ in 0..2 {
+        s.force_permanent_on_battlefield(0, "Gray Ogre");
+    }
+    let elves = s.force_permanent_on_battlefield(0, "Llanowar Elves");
+    for _ in 0..3 {
+        s.force_permanent_on_battlefield(1, "Gray Ogre");
+    }
+    untap(&mut s, tile);
+    activate(&mut s, tile, 0);
+    choose_mode(&mut s, 1);
+    assert_eq!(pool(&s), managym::state::mana::Mana::parse("UU"));
+
+    s.game_mut().state.permanents[elves]
+        .as_mut()
+        .unwrap()
+        .temp_subtypes = vec!["Ogre".into()];
+    s.set_player_mana_pool(0, "0");
+    untap(&mut s, tile);
+    activate(&mut s, tile, 0);
+    choose_mode(&mut s, 3);
+    assert_eq!(pool(&s), managym::state::mana::Mana::parse("RRR"));
+}
+
+/// CR 508.1c, 509.1b: the Lion-Turtle can neither attack nor block until
+/// three Lesson cards are in its controller's graveyard; vigilance keeps it
+/// untapped once it can attack. It gains 3 life on entry and taps for any
+/// color.
+#[test]
+fn the_lion_turtle_waits_for_three_lessons_to_fight() {
+    let mut s = setup(&["The Lion-Turtle", "Waterbending Lesson", "Gray Ogre"]);
+    let attacker = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    ready(&mut s, attacker);
+    s.set_player_mana_pool(0, "1GU");
+    let turtle = cast(&mut s, "The Lion-Turtle");
+    settle(&mut s);
+    let turtle = s.game().state.card_to_permanent[turtle].expect("entered");
+    assert_eq!(s.game().state.players[0].life, 23);
+    ready(&mut s, turtle);
+    activate(&mut s, turtle, 0);
+    choose_mode(&mut s, 2);
+    assert_eq!(pool(&s), managym::state::mana::Mana::parse("B"));
+    untap(&mut s, turtle);
+
+    s.advance_until(
+        |s| s.action_space().kind == ActionSpaceKind::DeclareAttacker,
+        "attackers".into(),
+    );
+    assert!(!offered_in_combat(&s, turtle), "can't attack");
+    s.advance_to_active_step(1, StepKind::DeclareAttackers);
+    s.declare_attack();
+    s.advance_until(
+        |s| s.action_space().kind == ActionSpaceKind::DeclareBlocker,
+        "blockers".into(),
+    );
+    assert!(!offered_in_combat(&s, turtle), "can't block");
+
+    for _ in 0..3 {
+        let lesson = super::support::library_card(&s, 0, "Waterbending Lesson");
+        s.game_mut().move_card(lesson, ZoneType::Graveyard);
+    }
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_until(
+        |s| s.action_space().kind == ActionSpaceKind::DeclareAttacker,
+        "attackers".into(),
+    );
+    s.declare_attack();
+    s.advance_until(
+        |s| s.action_space().kind == ActionSpaceKind::DeclareBlocker,
+        "blockers".into(),
+    );
+    assert!(offered_in_combat(&s, turtle), "blocks with three Lessons");
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    s.advance_until(
+        |s| s.action_space().kind == ActionSpaceKind::DeclareAttacker,
+        "attackers".into(),
+    );
+    choose(
+        &mut s,
+        |a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == turtle),
+    );
+    assert!(!tapped(&s, turtle), "vigilance");
+}

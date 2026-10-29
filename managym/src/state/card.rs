@@ -234,6 +234,9 @@ pub struct TargetCostReduction {
 pub struct StaticRestriction {
     pub scope: StaticScope,
     pub kind: Restriction,
+    /// "... unless [condition]" for the source's controller (The Lion-Turtle).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unless: Option<StaticCondition>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]

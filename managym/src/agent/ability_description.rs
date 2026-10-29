@@ -125,6 +125,10 @@ fn static_description(condition: &StaticCondition) -> String {
             "your graveyard has at least {count} {} cards",
             predicate_description(predicate, "matching")
         ),
+        StaticCondition::ControlsMatching { predicate } => format!(
+            "you control a {}",
+            predicate_description(predicate, "permanent")
+        ),
     }
 }
 
@@ -255,6 +259,9 @@ fn value_description(value: &EffectValue) -> String {
             "{base} plus the number of {} in your graveyard",
             predicate_description(predicate, "cards")
         ),
+        EffectValue::GreatestSharedCreatureType => {
+            "the greatest number of creatures you control that share a creature type".into()
+        }
         EffectValue::CardsDrawnMinus { subtract } => {
             format!("the number of cards you have drawn this turn minus {subtract} (minimum zero)")
         }
@@ -399,8 +406,9 @@ fn effect_description(effect: &Effect) -> Option<String> {
         PutCountersValue { count, target } => format!("Put X +1/+1 counters on {}, where X is {}",target_description(target),value_description(count)),
         AddSubtypeToTarget { target, subtype } => format!("{} becomes a {subtype} in addition to its other types until end of turn",target_description(target)),
         ExileIfDiesThisTurn { target } => format!("If {} would die this turn, exile it instead",target_description(target)),
-        IfCondition { condition: StaticCondition::Always, effects } => effects_description(effects),
-        IfCondition { condition, effects } => format!("If {}: {}",static_description(condition),effects_description(effects)),
+        IfCondition { condition: StaticCondition::Always, effects, .. } => effects_description(effects),
+        IfCondition { condition, effects, otherwise } if otherwise.is_empty() => format!("If {}: {}",static_description(condition),effects_description(effects)),
+        IfCondition { condition, effects, otherwise } => format!("If {}: {}. Otherwise: {}",static_description(condition),effects_description(effects),effects_description(otherwise)),
         ReturnToHand { target } => format!("Return {} to its owner's hand",target_description(target)),
         DealDamage { amount, target } => format!("Deal {amount} damage to {}",target_description(target)),
         CounterSpell { target } => format!("Counter {}",target_description(target)),
@@ -435,6 +443,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         Earthbend { count, target } => format!("Earthbend {count} {}: it becomes a 0/0 creature with haste that's still a land; put {count} +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped",target_description(target)),
         ReturnSourceToBattlefieldTapped => "Return this card to the battlefield tapped".into(),
         ExileUntilSourceLeaves { target } => format!("Exile up to one {} until this leaves the battlefield, only if this is still on the battlefield",target_description(target)),
+        AddOneColorManaValue { amount } => format!("Add X mana of any one color, where X is {}",value_description(amount)),
         AddMana { mana, until_end_of_combat } => format!("Add {}{}",mana_description(mana),if *until_end_of_combat { ". This mana lasts until end of combat" } else { "" }),
         BuffTarget { power, toughness, target } => format!("{} gets {power:+}/{toughness:+} until end of turn",target_description(target)),
         UntapTarget { target } => format!("Untap {}",target_description(target)),

@@ -210,6 +210,7 @@ def test_opcode_numbers_are_an_explicit_compatibility_surface() -> None:
         "DOESNT_UNTAP": 70,
         "SHUFFLE_INTO_LIBRARY": 71,
         "BECOME_ARTIFACT_CREATURE": 72,
+        "ADD_MANA_OF_ONE_COLOR": 73,
     }
 
 

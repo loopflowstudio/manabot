@@ -5,7 +5,7 @@ Brief: the Task directive (49 cards, obligations in `docs/rules/tla/allocation.j
 T2 and reconcile shared costs before landing. Every merge needs Jack Heart's review.
 Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
 
-## Done (24 of 49)
+## Done (28 of 49)
 
 1. Locations (Abandoned Air Temple, Agna Qel'a, Ba Sing Se, Realm of Koh):
    `ReplacementEffect::EntersTappedUnlessControls`; `Predicate::Supertype`;
@@ -38,28 +38,37 @@ Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
    - Vehicles enter summoning sick (CR 302.6); `Target.another` →
      `TargetRequirement.another` excludes the source from trigger targets.
 
+8. Mana (Great Divide Guide reviewed and its `INCOMPLETE` entry dropped; Raucous
+   Audience, White Lotus Tile, The Lion-Turtle):
+   - `Game::activated_abilities_for` fixes state-dependent mana outputs when
+     offered (`current_mana_output`, CR 605.3a): an `IfCondition` (now with
+     `otherwise`) between two immediate `AddMana`s, or `AddOneColorManaValue`.
+   - Condition 8 `controls_matching` → `StaticCondition::ControlsMatching`;
+     quantity 5 `greatest_shared_creature_type`; opcode 73 `add_mana_of_one_color`.
+   - `StaticRestriction.unless`, authored as a static `branch` with empty `then`
+     and `cant_attack_or_block` in `otherwise`.
+
 Schema 8 (unreleased, T1 precedent) appended in place: fields 85-92, predicates
-13-14, special roles 6-12, opcodes 66-72, enum `counter`, condition 7, subtypes 64-68.
+13-14, special roles 6-12, opcodes 66-73, enum `counter`, conditions 7-8,
+quantity 5, subtypes 64-69.
 `scratch/add_fixture.py` copies pinned evidence into the conformance fixture.
 
-Check (slice 7, debug): `cargo test` all targets pass (cards 29, rules_tests 356,
+Check (slice 8, debug): `cargo test` all targets pass (cards 33, rules_tests 356,
 lib 119) except `semantic_conformance_tests` (world w16 vs w15 and receipt digest
 drift; fails in PR #394 CI run 40819903624); clippy, fmt clean; extension rebuilt;
 `pytest tests/semantic` 158 pass, 4 fail on `schema_version == 3/4/7` asserts,
 inherited from `be2b7586b` (test files unchanged since it).
-Compress after slice 7: authoring `Target::up_to`/`.another()` replace literal
-targets (IR unchanged); tests share `support::card_of`. Debug `cargo test` and
-clippy re-run with the same results; extension not rebuilt (refactor only).
 
-## Remaining (25 cards), suggested next slices
+## Remaining (21 cards), suggested next slices
 
 - Effective-characteristic reads: Earthen Ally, Flopsie (team counters; blocker
   restriction by effective power), The Boulder, Platypus-Bear, Toph (artifacts gain
   land type), The Mechanist (temporary animation — `becomes_creature` may fit).
-- Mana: Great Divide Guide, Raucous Audience, White Lotus Tile, Energybending,
-  Ozai, The Lion-Turtle, Secret Tunnel. Great Divide Guide is already authored
-  (`Op::GrantMana`) but listed in `tla::INCOMPLETE` "Unreviewed until T3": review
-  it against its obligations, test it, then drop the entry.
+- Mana remainder: Energybending (lands gain all basic land types until end of
+  turn: effective subtypes plus derived mana), Ozai (unspent mana becomes red
+  instead of emptying; flying/indestructible while six or more unspent), Secret
+  Tunnel (Cave; needs two-target activated abilities — `PendingChoice::ActivatedTarget`
+  chooses one — with a shared-creature-type constraint).
 - Honest Work (Aura; loses all abilities, becomes Citizen "Humble Merchant" 1/1
   with "{T}: Add {C}" — characteristic replacement, layers 1-7b).
 - X costs: Fated Firepower, Crashing Wave, Katara Water Tribe's Hope (team role
@@ -74,7 +83,8 @@ clippy re-run with the same results; extension not rebuilt (refactor only).
 - T1 (892c47) deletions reconciled at sync 86ebe9ccf.
 - T2 (87e012) appends to schema 8 with colliding numbers: fields 85-87, predicate
   13 `with_counter`, subtypes 64-70, special role 6. This branch holds fields 85-92,
-  predicates 13-14, subtypes 64-68, special roles 6-12, opcodes 66-72, condition 7.
+  predicates 13-14, subtypes 64-69, special roles 6-12, opcodes 66-73, conditions
+  7-8, quantity 5.
   The later lander renumbers its own entries (append-only, contiguous).
 - Keep one exhaust cost field and gate, and one with-counters predicate reading
   every `CounterKind`. Merge T2's `tests/cards.rs`, `support.rs`, `tla.rs` with

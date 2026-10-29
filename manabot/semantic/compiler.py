@@ -108,6 +108,7 @@ class Opcode(IntEnum):
     DOESNT_UNTAP = 70
     SHUFFLE_INTO_LIBRARY = 71
     BECOME_ARTIFACT_CREATURE = 72
+    ADD_MANA_OF_ONE_COLOR = 73
 
 
 PROGRAM_KINDS = {kind.name.lower(): kind for kind in ProgramKind}
@@ -192,6 +193,7 @@ CONDITION_KINDS = {
     "nth_resolution",
     "target_matches",
     "source_counters_at_least",
+    "controls_matching",
 }
 
 OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
@@ -205,6 +207,7 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "doesnt_untap": ({"target"}, set()),
     "shuffle_into_library": ({"target"}, set()),
     "become_artifact_creature": ({"target"}, {"duration"}),
+    "add_mana_of_one_color": ({"amount"}, set()),
     "add_lesson_mana": ({"mana"}, set()),
     "grant_flashback": (set(), set()),
     "grant_mana": ({"predicates"}, set()),
@@ -410,6 +413,9 @@ def _validate_condition(value: Any, context: str) -> dict[str, Any]:
         _keys(condition, context, required={"kind", "count", "counter"})
         _integer(condition["count"], f"{context}.count", minimum=1)
         _string(condition["counter"], f"{context}.counter")
+    elif kind == "controls_matching":
+        _keys(condition, context, required={"kind", "predicate"})
+        _validate_predicate(condition["predicate"], f"{context}.predicate")
     elif kind == "nth_resolution":
         _keys(condition, context, required={"kind", "n"})
         _integer(condition["n"], f"{context}.n", minimum=1)
@@ -556,6 +562,7 @@ def _validate_value_expression(value: Any, context: str) -> None:
         "battlefield_matching": {"predicate"},
         "graveyard_matching": {"predicate", "base"},
         "cards_drawn_minus": {"subtract"},
+        "greatest_shared_creature_type": set(),
     }
     if kind not in fields:
         _fail(context, f"unknown quantity {kind!r}")
@@ -588,6 +595,7 @@ def _validate_instruction_scalars(
                 ("put_counters_value", "count"),
                 ("create_tokens_value", "count"),
                 ("drain_life_value", "amount"),
+                ("add_mana_of_one_color", "amount"),
             }:
                 _validate_value_expression(instruction[field], f"{context}.{field}")
             else:
