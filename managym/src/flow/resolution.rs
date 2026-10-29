@@ -291,35 +291,36 @@ impl Game {
     /// A departed target counts with its creature types as it last existed
     /// on the battlefield (CR 608.2h), and is itself illegal.
     fn require_shared_creature_type(&self, slots: &mut [ResolutionTarget], requirement: usize) {
-        // `None` marks a slot of another clause.
-        let types: Vec<Option<Vec<String>>> = slots
-            .iter()
-            .map(|slot| {
-                (slot.requirement == requirement).then(|| match slot.target {
-                    Target::Permanent(id) if self.permanent_object_ref(id).is_some() => self
-                        .creature_types(id)
-                        .into_iter()
-                        .map(String::from)
-                        .collect(),
-                    Target::Permanent(id) => self
-                        .departed_permanent_lki(id)
-                        .map(|lki| lki.creature_types.clone())
-                        .unwrap_or_default(),
-                    _ => Vec::new(),
-                })
-            })
+        let members: Vec<usize> = (0..slots.len())
+            .filter(|&index| slots[index].requirement == requirement)
             .collect();
-        for (index, slot) in slots.iter_mut().enumerate() {
-            if slot.requirement != requirement {
-                continue;
-            }
-            let own = types[index].as_deref().unwrap_or_default();
-            slot.legal &= types.iter().enumerate().all(|(other, theirs)| {
-                other == index
-                    || theirs
-                        .as_ref()
-                        .is_none_or(|theirs| theirs.iter().any(|t| own.contains(t)))
-            });
+        let types: Vec<Vec<String>> = members
+            .iter()
+            .map(|&index| self.last_known_creature_types(slots[index].target))
+            .collect();
+        for (member, &index) in members.iter().enumerate() {
+            let own = &types[member];
+            slots[index].legal &= types
+                .iter()
+                .enumerate()
+                .all(|(other, theirs)| other == member || theirs.iter().any(|t| own.contains(t)));
+        }
+    }
+
+    /// A permanent target's creature types: current ones while it remains,
+    /// else as it last existed on the battlefield (CR 608.2h).
+    fn last_known_creature_types(&self, target: Target) -> Vec<String> {
+        match target {
+            Target::Permanent(id) if self.permanent_object_ref(id).is_some() => self
+                .creature_types(id)
+                .into_iter()
+                .map(String::from)
+                .collect(),
+            Target::Permanent(id) => self
+                .departed_permanent_lki(id)
+                .map(|lki| lki.creature_types.clone())
+                .unwrap_or_default(),
+            _ => Vec::new(),
         }
     }
 

@@ -91,9 +91,9 @@ Per-slice detail: `git log 86ebe9ccf..`.
    targets, decline once `min` is met) via `Game::activation_target_requirement`
    and `activated_ability_targets(.., chosen)`, which offers a first target
    only with a partner. `resolution_targets` applies
-   `require_shared_creature_type`; a departed target counts with
-   `ObjectLki.creature_types`, found by `ObjectLki.permanent` through
-   `departed_permanent_lki` (no stack shape change; `ObjectLki` is now Clone).
+   `require_shared_creature_type` over `last_known_creature_types`; a departed
+   target counts with `ObjectLki.creature_types`, found by `ObjectLki.permanent`
+   through `departed_permanent_lki` (no stack shape change; `ObjectLki` is now Clone).
 
 Schema 8 (unreleased, T1 precedent) appended in place: fields 85-99, predicates
 13-16, special roles 6-15, opcodes 66-92, enums `counter` and `name`, conditions 7-9,
@@ -128,14 +128,7 @@ Accepted model: a permanent's characteristics are what `Game` derives from them
 fields are inputs, never answers. Slice 14 applied that rule to ability loss.
 Two consequences follow from that rule and the Task's acceptance criteria, with no new product choice:
 
-1. **One tap/attack-eligibility authority.** `Permanent::can_tap` (mana,
-   activation, crew, attack offers) reads `Permanent::effective_keywords` and
-   `Permanent::is_creature`, which ignore static haste grants, Aura ability
-   loss and layer-4 types. Move it to a `Game` reader over
-   `Game::effective_keywords` and `permanent_is_creature`, and delete the
-   `Permanent` keyword reader's `abilities_lost` check. Counterexample to test:
-   a summoning-sick creature with printed haste under Honest Work cannot tap
-   for {C}. A creature given haste by a static grant can tap the turn it enters.
+1. **One tap/attack-eligibility authority**: done as item 15.
 2. **One observation change before landing.** The acceptance criteria say observations stay
    "complete", and Jack Heart's shared-decision-surface direction says the same, so the
    "later shape change" deferrals in `scratch/questions.md` belong to this
@@ -149,9 +142,8 @@ Two consequences follow from that rule and the Task's acceptance criteria, with 
    frozen widths are unchanged), and the world/observation validation in
    CLAUDE.md applies.
 
-Next implement order: (1) and (2) done (items 15, 16: tap authority, Secret
-Tunnel); (3) the T2
-sync per the list below; (4) Glider Staff and Crashing Wave on T2's airbend and
+Next implement order: (1) and (2) done (items 15, 16); (3) the T2 sync per the
+list below; (4) Glider Staff and Crashing Wave on T2's airbend and
 waterbend; (5) the observation change with Fire Nation Palace.
 
 ## Reconcile at sync (T2 87e012 at `65544f0ff`, 2026-10-29)

@@ -540,14 +540,13 @@ impl Game {
         {
             let on_battlefield = self.state.zones.zone_of(*card) == Some(ZoneType::Battlefield);
             if !on_battlefield && !self.state.cards[*card].abilities.is_empty() {
-                let source_lki =
-                    self.state
-                        .object_lki
-                        .iter()
-                        .rev()
-                        .find_map(|(object_ref, lki)| {
-                            (object_ref.entity.0 == card.0).then(|| lki.clone())
-                        });
+                let source_lki = self
+                    .state
+                    .object_lki
+                    .iter()
+                    .rev()
+                    .find(|(object_ref, _)| object_ref.entity.0 == card.0)
+                    .map(|(_, lki)| lki.clone());
                 if let Some(lki) = source_lki {
                     sources.push(TriggerSourceSnapshot {
                         card: *card,
