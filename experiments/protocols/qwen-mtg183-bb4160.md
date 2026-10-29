@@ -152,6 +152,25 @@ frozen cohort above except no speculative draft (`--speculative-tokens 0`) and
 the session-close repair; new behavior version from the new server argv. Job
 cap $7.00. The MTP attempt is not pooled with it.
 
+### Cohort `cdb0c09f90c6` result (budget arm, 16,384-token context)
+
+Admitted 49 of 100 entries; 45 completed and replay-verified: **Qwen 3 wins,
+42 losses, 0 draws**. Game 75 (157 decisions) and three other long games stopped
+on `ContextOverflow`: a late-game prompt plus the 4,096-token allowance exceeded
+the 16,384-token context this arm declared. Selection failed closed (no
+truncation), the first such failure stopped admissions, and 51 entries were
+never attempted. 2,213 Qwen selections: 2,182 initially valid, 26 after
+repair, 1 fallback; 2,240 generations averaged 2,971 output tokens, nearly all
+reasoning (6.59M of 6.66M). Selection latency p50 210 s, p95 230 s, max 524 s.
+vLLM served 730–800 generated tokens/s with 32 running requests; peak
+whole-device memory 41,975 MiB of 49,140. Campaign wall 18,225 s.
+
+**Declared cohort `budget-64k` (2026-10-29, before launch):** the budget arm
+unchanged except a 65,536-token context, all 100 schedule entries, concurrency
+32, no MTP, job cap $4.80 (7.75-hour rental, 7-hour watchdog). New behavior
+version. Not pooled with `cdb0c09f90c6`: a game that would have overflowed
+there can finish here.
+
 ## Attempts
 
 | Run | Stage | Cap | Outcome | Charge |
