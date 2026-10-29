@@ -471,3 +471,15 @@ exists in this checkout. The supplied Task, accepted design and dated Steers
 provide the implementation scope; Wave context was not reconstructed.
 
 Check — 2026-10-28 (at 558762869: `uv run --extra dev pytest tests/training/test_training_decks.py -k supply_not_a_pair` passed; realign at 991253b10 made no code change). Earlier (realign at cfe3ffeec, reusing compress result): training_decks/self_play/elemental_uniform/learning_state/policy_import: 45 passed. Earlier (regime match removal): `uv run --extra dev pytest tests/training/test_training_decks.py -q`: 7 passed; `tests/training/{test_self_play,test_elemental_uniform,test_learning_state,test_policy_import,test_baseline_recipe,test_experiments}.py`: 65 passed. At 91a000fd1 the decklist/Academy/catalog/boundary set passed (39). Earlier at 63c9f6bf5 the training/matchup/mirror/catalog set passed (39); pre-existing failures (Elemental program count 8 vs 7 at test_elemental_world.py:151, belief runtime `KeyError: 'relations'`) reproduce at c42bf4934 without this work; gate owns them with full suites and debug Rust.
+
+Publish blocked — 2026-10-28 (pr-publish step at be205efc6, `lf sync` clean, main 6d069d6e5 CI green):
+recovery 26 passed; clippy clean; `cargo fmt` fixed vector_env.rs. Debug `cargo test`
+fails `semantic_conformance_tests` (manifest "belongs to a different world";
+`ur-vs-gw-5eed content digest drift`). Python: 13 failed / 286 passed across
+elemental_world (programs 8 vs 7), test_learn_setup (4), test_choice_navigation (7
+state digests); PR CI also fails stale evidence anchors and
+test_compiler content-pack bindings. All follow from the integrated 892c47 content
+checkpoint 1e0d3c998; 892c47 (PR #394) has since moved to typed Rust cards and one
+world (6f8b2231e), so this branch's content base is obsolete. Next: re-integrate on
+#394's current branch (or wait for it to land) and refresh world-bound fixtures there
+with new world files, never by rewriting retained evidence; then gate and publish.

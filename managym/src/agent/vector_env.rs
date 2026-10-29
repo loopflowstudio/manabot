@@ -790,7 +790,9 @@ mod tests {
         };
         let decks: Vec<_> = ["Plains", "Mountain", "Forest"].map(deck).into();
         let mut vector = VectorEnv::new(2, 17402, true, OpponentPolicy::None);
-        assert!(vector.set_training_decks(vec![decks[0].clone(); 2]).is_err());
+        assert!(vector
+            .set_training_decks(vec![decks[0].clone(); 2])
+            .is_err());
         let mut bad = decks.clone();
         bad[0].decklist = BTreeMap::from([("Black Lotus".into(), 12)]);
         assert!(vector.set_training_decks(bad).is_err());
@@ -818,7 +820,9 @@ mod tests {
         // An unadmitted replacement fails before any game and keeps prior decks.
         let mut generated = deck("Island");
         generated.decklist.insert("Rocky Rebuke".into(), 1);
-        assert!(vector.set_training_decks(vec![decks[0].clone(), generated]).is_err());
+        assert!(vector
+            .set_training_decks(vec![decks[0].clone(), generated])
+            .is_err());
         vector
             .reset_seeds_into(seeds.clone(), |_, _, _, _, _| Ok(()))
             .unwrap();
