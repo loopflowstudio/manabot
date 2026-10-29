@@ -5,7 +5,7 @@ Brief: the Task directive (49 cards, obligations in `docs/rules/tla/allocation.j
 T2 and reconcile shared costs before landing. Every merge needs Jack Heart's review.
 Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
 
-## Done (39 of 49)
+## Done (43 of 49)
 
 1. Locations (Abandoned Air Temple, Agna Qel'a, Ba Sing Se, Realm of Koh):
    `ReplacementEffect::EntersTappedUnlessControls`; `Predicate::Supertype`;
@@ -87,18 +87,35 @@ Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
      triggered abilities, with `ObjectLki.abilities_lost`), one destroy batch.
    - Opcode 83 `set_base_pt_value` (team role) → `Effect::SetBasePtControlled`.
 
+12. Razor Rings, The Last Agni Kai, Lo and Li, Hakoda:
+   - `Game::apply_creature_damage_measuring_excess` (CR 120.4a) sets
+     `EffectFrame.excess_damage`, read by quantity 7 `excess_damage`; opcodes
+     84 `fight` (CR 701.14b: any illegal/absent fighter → no damage), 85
+     `gain_life_value`, 86 `add_mana_value`, 87 `keep_unspent_red_mana`
+     (`Player.keeps_red_mana`, cleared at cleanup; red of combat mana kept);
+     predicate 16 `attacking_or_blocking` (`CardPredicate.in_combat`).
+   - 88 `search_library_to_hand` → `Decision::SearchLibraryToHand`
+     (continuation kind 6, as the basic-land search).
+     Roles 13 `each:noble_creature_you_control`, 14 `each:lesson_spell_you_control`
+     (`StaticScope::SpellsYouControl`, read by `Game::spell_keywords` in
+     `damage.rs::source_keywords`).
+   - 89 `look_at_library_top`, 90 `cast_from_library_top`: one zone check,
+     `Game::in_casting_zone`; the top card is observed by its controller and
+     pinned by `determinize`. `grant_keywords` EOT on
+     `each:creature_you_control` → `Effect::GrantKeywordsControlled`.
+
 Schema 8 (unreleased, T1 precedent) appended in place: fields 85-96, predicates
-13-15, special roles 6-12, opcodes 66-83, enum `counter`, conditions 7-9,
-quantities 5-6, trigger_event 13, subtypes 64-74.
+13-16, special roles 6-14, opcodes 66-90, enum `counter`, conditions 7-9,
+quantities 5-7, trigger_event 13, subtypes 64-74.
 `scratch/add_fixture.py` copies pinned evidence into the conformance fixture.
 
-Check (slice 11, debug): `cargo test` all targets pass (cards 44, rules_tests
+Check (slice 12, debug): `cargo test` all targets pass (cards 50, rules_tests
 356, lib 120) except `semantic_conformance_tests` (w16 vs w15 and receipt digest
 drift, as in PR #394 CI 40819903624); clippy, fmt clean; extension rebuilt;
 `pytest tests/semantic` 158 pass, 4 fail on `schema_version == 3/4/7` asserts
 from `be2b7586b`.
 
-## Remaining (10 cards), suggested next slices
+## Remaining (6 cards), suggested next slices
 
 - Secret Tunnel (Cave; "this land can't be blocked" is `unblockable_if` Always;
   {T}: Add {C}): deferred from slice 10. Its "{4}, {T}: two target creatures you
@@ -114,18 +131,16 @@ from `be2b7586b`.
   X targets" (requirement max read from X) and a resolution-time distribution
   of three stun counters among tapped opponents' creatures (repeated
   one-at-a-time choice, as Heartless Act).
-- Fire Nation Palace (granted firebending; observation shape change); Lo and Li
-  (stack-source keywords in `damage.rs::source_keywords`); Glider Staff (airbend),
-  Trusty Boomerang (granted activated ability); Razor Rings, The Last Agni Kai
-  (excess damage); Hakoda.
+- Fire Nation Palace (granted firebending; observation shape change); Glider
+  Staff (airbend), Trusty Boomerang (granted activated ability).
 
 ## Reconcile at sync (T2 87e012 at `83dd0cd46`, 2026-10-29)
 
 - Both branches append to schema 8 from 86ebe9ccf with colliding numbers. T2:
   fields 85-96, predicates 13-15, subtypes 64-74, special role 6, opcodes 66-73,
   trigger_event 13, destination 2, zone 3. This branch: fields 85-96, predicates
-  13-15, subtypes 64-74, special roles 6-12, opcodes 66-83, conditions 7-9,
-  quantities 5-6, trigger_event 13 (`end_step_begins`), enum `counter`. T2 since
+  13-16, subtypes 64-74, special roles 6-14, opcodes 66-90, conditions 7-9,
+  quantities 5-7, trigger_event 13 (`end_step_begins`), enum `counter`. T2 since
   added opcodes 74-79, fields 97-100, quantity 5 `x`, enum `grant`, role
   `each:creature_you_control` 7. The later lander renumbers its own entries
   (append-only, contiguous).

@@ -119,6 +119,13 @@ class Opcode(IntEnum):
     ENTERS_WITH_X_COUNTERS = 81
     OPPONENT_DAMAGE_PLUS_COUNTERS = 82
     SET_BASE_PT_VALUE = 83
+    FIGHT = 84
+    GAIN_LIFE_VALUE = 85
+    ADD_MANA_VALUE = 86
+    KEEP_UNSPENT_RED_MANA = 87
+    SEARCH_LIBRARY_TO_HAND = 88
+    LOOK_AT_LIBRARY_TOP = 89
+    CAST_FROM_LIBRARY_TOP = 90
 
 
 PROGRAM_KINDS = {kind.name.lower(): kind for kind in ProgramKind}
@@ -230,6 +237,13 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "enters_with_x_counters": ({"counter"}, set()),
     "opponent_damage_plus_counters": ({"counter"}, set()),
     "set_base_pt_value": ({"target", "power", "toughness", "duration"}, set()),
+    "fight": ({"sources", "target"}, set()),
+    "gain_life_value": ({"amount"}, set()),
+    "add_mana_value": ({"amount", "mana"}, set()),
+    "keep_unspent_red_mana": (set(), set()),
+    "search_library_to_hand": ({"predicate"}, set()),
+    "look_at_library_top": (set(), set()),
+    "cast_from_library_top": ({"predicate"}, set()),
     "add_lesson_mana": ({"mana"}, set()),
     "grant_flashback": (set(), set()),
     "grant_mana": ({"predicates"}, set()),
@@ -589,6 +603,7 @@ def _validate_value_expression(value: Any, context: str) -> None:
         "cards_drawn_minus": {"subtract"},
         "greatest_shared_creature_type": set(),
         "x": set(),
+        "excess_damage": set(),
     }
     if kind not in fields:
         _fail(context, f"unknown quantity {kind!r}")
@@ -627,6 +642,8 @@ def _validate_instruction_scalars(
                 ("destroy_creatures_losing_abilities", "max_mana_value"),
                 ("set_base_pt_value", "power"),
                 ("set_base_pt_value", "toughness"),
+                ("gain_life_value", "amount"),
+                ("add_mana_value", "amount"),
             }:
                 _validate_value_expression(instruction[field], f"{context}.{field}")
             else:

@@ -169,6 +169,10 @@ pub(super) fn cards() -> Vec<Card> {
         fated_firepower(),
         day_of_black_sun(),
         katara_water_tribe_s_hope(),
+        razor_rings(),
+        the_last_agni_kai(),
+        lo_and_li_twin_tutors(),
+        hakoda_selfless_commander(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -5223,6 +5227,185 @@ fn katara_water_tribe_s_hope() -> Card {
             }),
         ],
         registry_name: "Katara, Water Tribe's Hope",
+        text_box,
+    }
+}
+
+fn razor_rings() -> Card {
+    let text_box = "Razor Rings deals 4 damage to target attacking or blocking creature. You gain life equal to the excess damage dealt this way.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{W}"),
+            types: vec![CardType::Instant],
+            ..Default::default()
+        },
+        key: "tla.razor_rings",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![
+                Op::DealDamage {
+                    amount: 4,
+                    target: "target_0",
+                },
+                Op::GainLifeValue {
+                    amount: Quantity::ExcessDamage,
+                },
+            ],
+        )
+        .cost(Cost::mana("{1}{W}"))
+        .targets(vec![Target::one(
+            "target_0",
+            Selector::Permanent {
+                predicate: Predicate::All {
+                    predicates: vec![
+                        Predicate::CardType {
+                            value: CardType::Creature,
+                        },
+                        Predicate::AttackingOrBlocking,
+                    ],
+                },
+            },
+        )])],
+        registry_name: "Razor Rings",
+        text_box,
+    }
+}
+
+fn the_last_agni_kai() -> Card {
+    let text_box = "Target creature you control fights target creature an opponent controls. If the creature the opponent controls is dealt excess damage this way, add that much {R}.\nUntil end of turn, you don't lose unspent red mana as steps and phases end.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}{R}"),
+            types: vec![CardType::Instant],
+            ..Default::default()
+        },
+        key: "tla.the_last_agni_kai",
+        programs: vec![Program::new(
+            "spell",
+            ProgramKind::Spell,
+            vec![
+                Op::Fight {
+                    sources: "fighter",
+                    target: "victim",
+                },
+                Op::AddManaValue {
+                    amount: Quantity::ExcessDamage,
+                    mana: "R",
+                },
+                Op::KeepUnspentRedMana,
+            ],
+        )
+        .cost(Cost::mana("{1}{R}"))
+        .targets(vec![
+            Target::one("fighter", Selector::CreatureYouControl),
+            Target::one("victim", Selector::CreatureOpponentControls),
+        ])],
+        registry_name: "The Last Agni Kai",
+        text_box,
+    }
+}
+
+fn lo_and_li_twin_tutors() -> Card {
+    let text_box = "When Lo and Li enter, search your library for a Lesson or Noble card, reveal it, put it into your hand, then shuffle.\nNoble creatures you control and Lesson spells you control have lifelink.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{4}{B}"),
+            subtypes: Some(vec!["Human", "Advisor"]),
+            types: vec![CardType::Creature],
+            supertypes: Some(vec!["Legendary"]),
+            power: Some(PrintedPower::Fixed(2)),
+            toughness: Some(2),
+            ..Default::default()
+        },
+        key: "tla.lo_and_li_twin_tutors",
+        programs: vec![
+            Program::new(
+                "tutor",
+                ProgramKind::Triggered,
+                vec![Op::SearchLibraryToHand {
+                    predicate: Predicate::SubtypesAny {
+                        values: vec!["Lesson", "Noble"],
+                    },
+                }],
+            )
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::new(
+                "noble_lifelink",
+                ProgramKind::Static,
+                vec![Op::GrantKeywords {
+                    duration: Duration::Static,
+                    keywords: vec![Keyword::Lifelink],
+                    target: "each:noble_creature_you_control",
+                }],
+            ),
+            Program::new(
+                "lesson_lifelink",
+                ProgramKind::Static,
+                vec![Op::GrantKeywords {
+                    duration: Duration::Static,
+                    keywords: vec![Keyword::Lifelink],
+                    target: "each:lesson_spell_you_control",
+                }],
+            ),
+        ],
+        registry_name: "Lo and Li, Twin Tutors",
+        text_box,
+    }
+}
+
+fn hakoda_selfless_commander() -> Card {
+    let text_box = "Vigilance\nYou may look at the top card of your library any time.\nYou may cast Ally spells from the top of your library.\nSacrifice Hakoda: Creatures you control get +0/+5 and gain indestructible until end of turn.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{3}{W}"),
+            subtypes: Some(vec!["Human", "Warrior", "Ally"]),
+            types: vec![CardType::Creature],
+            supertypes: Some(vec!["Legendary"]),
+            keywords: Some(vec![Keyword::Vigilance]),
+            power: Some(PrintedPower::Fixed(3)),
+            toughness: Some(5),
+            ..Default::default()
+        },
+        key: "tla.hakoda_selfless_commander",
+        programs: vec![
+            Program::new("look", ProgramKind::Static, vec![Op::LookAtLibraryTop]),
+            Program::new(
+                "cast_allies",
+                ProgramKind::Static,
+                vec![Op::CastFromLibraryTop {
+                    predicate: Predicate::Subtype { value: "Ally" },
+                }],
+            ),
+            Program::new(
+                "rally",
+                ProgramKind::Activated,
+                vec![
+                    Op::ModifyControlled {
+                        power: 0,
+                        predicate: Predicate::CardType {
+                            value: CardType::Creature,
+                        },
+                        toughness: 5,
+                    },
+                    Op::GrantKeywords {
+                        duration: Duration::EndOfTurn,
+                        keywords: vec![Keyword::Indestructible],
+                        target: "each:creature_you_control",
+                    },
+                ],
+            )
+            .cost(Cost {
+                mana: Some("0"),
+                sacrifice_source: Some(true),
+                ..Default::default()
+            }),
+        ],
+        registry_name: "Hakoda, Selfless Commander",
         text_box,
     }
 }

@@ -35,7 +35,7 @@ const SOURCE_SCHEMA_VERSION: u64 = 1;
 
 /// Opcode names in numeric order: `OPCODE_NAMES[n - 1]` names opcode `n`.
 /// These numbers are learning token identities; append, never reorder.
-pub(crate) const OPCODE_NAMES: [&str; 83] = [
+pub(crate) const OPCODE_NAMES: [&str; 90] = [
     "add_mana",
     "draw_cards",
     "put_top_cards_in_hand",
@@ -119,6 +119,13 @@ pub(crate) const OPCODE_NAMES: [&str; 83] = [
     "enters_with_x_counters",
     "opponent_damage_plus_counters",
     "set_base_pt_value",
+    "fight",
+    "gain_life_value",
+    "add_mana_value",
+    "keep_unspent_red_mana",
+    "search_library_to_hand",
+    "look_at_library_top",
+    "cast_from_library_top",
 ];
 
 /// Program kinds in numeric order, as for [`OPCODE_NAMES`].

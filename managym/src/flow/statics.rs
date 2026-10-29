@@ -36,7 +36,7 @@ use crate::{
     state::{
         ability::StaticCondition,
         card::{Card, CardType, Keywords, PowerCda, Restriction, StaticScope},
-        game_object::{PermanentId, PlayerId},
+        game_object::{CardId, PermanentId, PlayerId},
         predicate::CardPredicate,
         zone::ZoneType,
     },
@@ -196,6 +196,28 @@ impl Game {
         keywords
     }
 
+    /// A stack spell's keywords: printed, plus static grants to spells its
+    /// controller controls (CR 613.1f).
+    pub(crate) fn spell_keywords(&self, card_id: CardId, controller: PlayerId) -> Keywords {
+        let card = &self.state.cards[card_id];
+        let mut keywords = card.keywords;
+        for (_, source_controller, source) in self.static_sources() {
+            for grant in &source.static_keyword_grants {
+                if let StaticScope::SpellsYouControl(predicate) = &grant.scope {
+                    if source_controller == controller
+                        && predicate.matches_card(card)
+                        && grant.condition.as_ref().is_none_or(|condition| {
+                            self.check_static_condition(condition, controller)
+                        })
+                    {
+                        keywords = keywords.union(&grant.keywords);
+                    }
+                }
+            }
+        }
+        keywords
+    }
+
     /// Battlefield permanents whose cards project static P/T, keyword or
     /// restriction effects, with their controllers.
     fn static_sources(&self) -> impl Iterator<Item = (PermanentId, PlayerId, &Card)> {
@@ -282,6 +304,7 @@ impl Game {
         let (predicate, other, with_counters) = match scope {
             StaticScope::This => return source_id == target_id,
             StaticScope::Attached => return self.attached_creature(source_id) == Some(target_id),
+            StaticScope::SpellsYouControl(_) => return false,
             StaticScope::OtherYouControl(predicate) => (predicate, true, false),
             StaticScope::YouControl(predicate) => (predicate, false, false),
             StaticScope::YouControlWithCounters(predicate) => (predicate, false, true),
@@ -293,6 +316,19 @@ impl Game {
             return false;
         }
         self.permanent_matches_with(target_id, predicate, view)
+    }
+
+    /// Whether the permanent is attacking or blocking (CR 506.4).
+    pub(crate) fn permanent_in_combat(&self, permanent_id: PermanentId) -> bool {
+        self.state.permanents[permanent_id]
+            .as_ref()
+            .is_some_and(|permanent| permanent.attacking)
+            || self.state.combat.as_ref().is_some_and(|combat| {
+                combat
+                    .attacker_to_blockers
+                    .values()
+                    .any(|blockers| blockers.contains(&permanent_id))
+            })
     }
 
     /// The permanent an Aura or Equipment is attached to, if that exact
@@ -463,7 +499,10 @@ impl Game {
                 self.effective_keywords(permanent_id).flying
             }
         };
-        if (predicate.flying && !flying()) || (predicate.no_counters && permanent.has_counters()) {
+        if (predicate.flying && !flying())
+            || (predicate.no_counters && permanent.has_counters())
+            || (predicate.in_combat && !self.permanent_in_combat(permanent_id))
+        {
             return false;
         }
         let has_subtype = |name: &str| {

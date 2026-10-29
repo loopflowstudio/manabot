@@ -1170,24 +1170,34 @@ impl Game {
     pub(crate) fn clear_mana_pools(&mut self) {
         for player in [PlayerId(0), PlayerId(1)] {
             self.journal_player(player);
-            if self.unspent_mana_becomes_red(player) {
-                self.state.players[player.0].mana_pool.become_red();
+            let becomes_red = self.unspent_mana_becomes_red(player);
+            let keeps_red = self.state.players[player.0].keeps_red_mana;
+            let pool = &mut self.state.players[player.0].mana_pool;
+            if becomes_red {
+                pool.become_red();
+            } else if keeps_red {
+                *pool = pool.red_only();
             } else {
-                self.state.players[player.0].mana_pool.clear();
+                pool.clear();
             }
         }
     }
 
     /// Until-end-of-combat mana (firebending) empties as combat ends. Under
-    /// Ozai it stays as ordinary red mana instead.
+    /// Ozai it stays as ordinary red mana instead; red mana a player keeps
+    /// this turn joins their ordinary pool.
     pub(crate) fn clear_combat_mana_pools(&mut self) {
         for player in [PlayerId(0), PlayerId(1)] {
             self.journal_player(player);
             let mut combat = std::mem::take(&mut self.state.players[player.0].combat_mana_pool);
             if self.unspent_mana_becomes_red(player) {
                 combat.become_red();
-                self.state.players[player.0].mana_pool.add(&combat);
+            } else if self.state.players[player.0].keeps_red_mana {
+                combat = combat.red_only();
+            } else {
+                continue;
             }
+            self.state.players[player.0].mana_pool.add(&combat);
         }
     }
 

@@ -478,7 +478,9 @@ impl Game {
                 }
                 Decision::Sacrifice { .. } => (4, None),
                 Decision::SelectMilled { .. } => (5, None),
-                Decision::SearchBasicLand { .. } => (6, None),
+                Decision::SearchBasicLand { .. } | Decision::SearchLibraryToHand { .. } => {
+                    (6, None)
+                }
                 Decision::OptionalDiscardDraw { .. } => (7, None),
                 Decision::Scry { .. } => (8, None),
                 Decision::LookAndSelect { .. } => (9, None),

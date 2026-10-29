@@ -125,6 +125,10 @@ impl Game {
                             self.state.cards[*card].name,
                             if *tapped { " tapped" } else { "" }
                         )),
+                        Decision::SearchLibraryToHand { .. } => Some(format!(
+                            "Put {} into your hand",
+                            self.state.cards[*card].name
+                        )),
                         _ => None,
                     }
                 } else {
@@ -147,6 +151,7 @@ impl Game {
                     .iter(),
             )
             .copied()
+            .chain(self.library_top_castable(player))
             .any(|card| self.priority_action_for_card(player, card).is_some())
             || self
                 .priority_activate_ability_actions(player)
@@ -170,6 +175,7 @@ impl Game {
                     .iter(),
             )
             .copied()
+            .chain(self.library_top_castable(player))
         {
             if let Some(action) = self.priority_action_for_card(player, card) {
                 actions.push(action);
@@ -288,9 +294,7 @@ impl Game {
 
     fn priority_action_for_card(&self, player: PlayerId, card_id: CardId) -> Option<Action> {
         let card = &self.state.cards[card_id];
-        if self.state.zones.zone_of(card_id) != Some(ZoneType::Hand)
-            && self.flashback_cost(player, card_id).is_none()
-        {
+        if !self.in_casting_zone(player, card_id) {
             return None;
         }
         if card.types.is_land() {

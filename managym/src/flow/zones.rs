@@ -52,12 +52,24 @@ impl Game {
         player: PlayerId,
         subtype: &Option<String>,
     ) -> Vec<CardId> {
-        let predicate = CardPredicate {
-            card_type: Some(crate::state::card::CardType::Land),
-            supertype: Some("basic".into()),
-            subtype: subtype.clone(),
-            ..Default::default()
-        };
+        self.library_search_candidates(
+            player,
+            &CardPredicate {
+                card_type: Some(crate::state::card::CardType::Land),
+                supertype: Some("basic".into()),
+                subtype: subtype.clone(),
+                ..Default::default()
+            },
+        )
+    }
+
+    /// Library cards matching `predicate`, in a stable order independent of
+    /// library order.
+    pub(crate) fn library_search_candidates(
+        &self,
+        player: PlayerId,
+        predicate: &CardPredicate,
+    ) -> Vec<CardId> {
         let mut candidates: Vec<CardId> = self
             .state
             .zones
@@ -68,6 +80,13 @@ impl Game {
             .collect();
         candidates.sort_unstable_by_key(|card| (self.state.cards[*card].definition_id, *card));
         candidates
+    }
+
+    pub(crate) fn shuffle_library(&mut self, player: PlayerId) {
+        self.journal_zones();
+        self.state
+            .zones
+            .shuffle(ZoneType::Library, player, &mut self.state.rng);
     }
 
     /// Reveal before moving; public hand knowledge retains definition counts,

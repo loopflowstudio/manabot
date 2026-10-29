@@ -42,6 +42,44 @@ impl Game {
         });
     }
 
+    /// Deal noncombat damage to a creature and return the excess damage
+    /// actually dealt (CR 120.4a): the damage marked beyond lethal damage,
+    /// which counts damage already marked (CR 120.6) and is 1 from a
+    /// deathtouch source (CR 702.2c). Replacements apply first, so prevented
+    /// damage is never excess.
+    pub(crate) fn apply_creature_damage_measuring_excess(
+        &mut self,
+        source: Option<ObjectRef>,
+        permanent_id: PermanentId,
+        amount: i32,
+    ) -> i32 {
+        let marked = |game: &Self| {
+            game.state.permanents[permanent_id]
+                .as_ref()
+                .map(|permanent| permanent.damage)
+        };
+        let Some(before) = marked(self) else {
+            return 0;
+        };
+        if !self.permanent_is_creature(permanent_id) {
+            self.apply_permanent_damage(source, permanent_id, amount);
+            return 0;
+        }
+        let remaining = (self.effective_toughness(permanent_id) - before).max(0);
+        let deathtouch = source.is_some_and(|object_ref| {
+            self.source_keywords(object_ref)
+                .is_some_and(|keywords| keywords.deathtouch)
+        });
+        let lethal = if deathtouch {
+            remaining.min(1)
+        } else {
+            remaining
+        };
+        self.apply_permanent_damage(source, permanent_id, amount);
+        let dealt = marked(self).unwrap_or(before) - before;
+        (dealt - lethal).max(0)
+    }
+
     pub(crate) fn apply_combat_player_damage(
         &mut self,
         source: Option<ObjectRef>,
@@ -207,7 +245,8 @@ impl Game {
     }
 
     /// Damage-source keywords include until-EOT grants while the source is
-    /// on the battlefield (Enter the Avatar State's lifelink).
+    /// on the battlefield (Enter the Avatar State's lifelink), and static
+    /// grants to a resolving spell (Lo and Li's Lesson spells).
     fn source_keywords(&self, source: ObjectRef) -> Option<crate::state::card::Keywords> {
         if let Ok(permanent_id) = self.lookup_current_permanent(source) {
             return Some(self.effective_keywords(permanent_id));
@@ -216,6 +255,14 @@ impl Game {
             return Some(lki.keywords);
         }
         let card = CardId::from(source.entity);
+        if let Some(spell) = self.find_spell_on_stack_index(card).and_then(|index| {
+            match &self.state.stack_objects[index] {
+                crate::state::stack_object::StackObject::Spell(spell) => Some(spell),
+                _ => None,
+            }
+        }) {
+            return Some(self.spell_keywords(card, spell.controller));
+        }
         self.state.cards.get(card.0).map(|card| card.keywords)
     }
 
@@ -238,7 +285,14 @@ impl Game {
         }
     }
 
+    /// CR 514.2: "until end of turn" effects end in the cleanup step.
     pub(crate) fn clear_temporary_modifiers(&mut self) {
+        for player in [PlayerId(0), PlayerId(1)] {
+            if self.state.players[player.0].keeps_red_mana {
+                self.journal_player(player);
+                self.state.players[player.0].keeps_red_mana = false;
+            }
+        }
         for index in 0..self.state.permanents.len() {
             let permanent_id = PermanentId(index);
             if self.state.permanents[permanent_id].is_some() {

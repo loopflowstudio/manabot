@@ -56,6 +56,10 @@ pub struct Player {
     /// Mana that lasts until end of combat (firebending) — persists across
     /// combat steps instead of emptying, empties as combat ends.
     pub combat_mana_pool: Mana,
+    /// "Until end of turn, you don't lose unspent red mana as steps and
+    /// phases end" (The Last Agni Kai); ends in the cleanup step.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub keeps_red_mana: bool,
 }
 
 impl Player {
@@ -72,6 +76,7 @@ impl Player {
             alive: true,
             mana_pool: Mana::default(),
             combat_mana_pool: Mana::default(),
+            keeps_red_mana: false,
         }
     }
 }

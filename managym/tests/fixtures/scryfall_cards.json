@@ -2400,5 +2400,53 @@
       "U",
       "W"
     ]
+  },
+  "Razor Rings": {
+    "name": "Razor Rings",
+    "mana_cost": "{1}{W}",
+    "type_line": "Instant",
+    "keywords": [],
+    "oracle_text": "Razor Rings deals 4 damage to target attacking or blocking creature. You gain life equal to the excess damage dealt this way.",
+    "colors": [
+      "W"
+    ]
+  },
+  "The Last Agni Kai": {
+    "name": "The Last Agni Kai",
+    "mana_cost": "{1}{R}",
+    "type_line": "Instant",
+    "keywords": [
+      "Fight"
+    ],
+    "oracle_text": "Target creature you control fights target creature an opponent controls. If the creature the opponent controls is dealt excess damage this way, add that much {R}.\nUntil end of turn, you don't lose unspent red mana as steps and phases end.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Lo and Li, Twin Tutors": {
+    "name": "Lo and Li, Twin Tutors",
+    "mana_cost": "{4}{B}",
+    "type_line": "Legendary Creature — Human Advisor",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "When Lo and Li enter, search your library for a Lesson or Noble card, reveal it, put it into your hand, then shuffle.\nNoble creatures you control and Lesson spells you control have lifelink.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Hakoda, Selfless Commander": {
+    "name": "Hakoda, Selfless Commander",
+    "mana_cost": "{3}{W}",
+    "type_line": "Legendary Creature — Human Warrior Ally",
+    "power": "3",
+    "toughness": "5",
+    "keywords": [
+      "Vigilance"
+    ],
+    "oracle_text": "Vigilance\nYou may look at the top card of your library any time.\nYou may cast Ally spells from the top of your library.\nSacrifice Hakoda: Creatures you control get +0/+5 and gain indestructible until end of turn.",
+    "colors": [
+      "W"
+    ]
   }
 }

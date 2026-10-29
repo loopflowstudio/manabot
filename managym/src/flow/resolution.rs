@@ -27,6 +27,7 @@ impl Game {
     pub(crate) fn effect_value(&self, value: &EffectValue, controller: PlayerId, x: u8) -> i32 {
         match value {
             EffectValue::X => i32::from(x),
+            EffectValue::ExcessDamage => 0,
             EffectValue::CreaturesWithCounters => self
                 .battlefield_permanents(controller)
                 .into_iter()
@@ -51,6 +52,15 @@ impl Game {
             EffectValue::GreatestSharedCreatureType => {
                 self.greatest_shared_creature_type(controller) as i32
             }
+        }
+    }
+
+    /// A quantity read by a resolving instruction, which also sees the
+    /// frame's announced X and recorded excess damage.
+    fn frame_value(&self, value: &EffectValue, frame: &EffectFrame) -> i32 {
+        match value {
+            EffectValue::ExcessDamage => frame.excess_damage,
+            _ => self.effect_value(value, frame.controller, frame.x),
         }
     }
 
@@ -100,6 +110,7 @@ impl Game {
             resolutions_this_turn: 0,
             kicked: spell.kicked,
             x: spell.x,
+            excess_damage: 0,
             targets,
             active_requirement: 0,
             context_target: None,
@@ -155,6 +166,7 @@ impl Game {
             resolutions_this_turn: 0,
             kicked: false,
             x: ability.x,
+            excess_damage: 0,
             targets,
             active_requirement: 0,
             context_target: attached,
@@ -221,6 +233,7 @@ impl Game {
             resolutions_this_turn,
             kicked: false,
             x: 0,
+            excess_damage: 0,
             targets,
             active_requirement: 0,
             context_target: triggered.context,
@@ -349,7 +362,7 @@ impl Game {
                 }
             }
             Effect::DrainLifeValue { amount } => {
-                let amount = self.effect_value(amount, frame.controller, frame.x).max(0);
+                let amount = self.frame_value(amount, frame).max(0);
                 self.change_life(PlayerId(1 - frame.controller.0), -amount);
                 self.gain_life(frame.controller, amount);
                 None
@@ -368,7 +381,7 @@ impl Game {
                 None
             }
             Effect::CreateTokensValue { token_name, count } => {
-                let count = self.effect_value(count, frame.controller, frame.x).max(0) as usize;
+                let count = self.frame_value(count, frame).max(0) as usize;
                 for _ in 0..count {
                     self.create_token(token_name, frame.controller, false);
                 }
@@ -438,7 +451,7 @@ impl Game {
                 target,
             } => self.execute_frame_effect(
                 &Effect::BuffTarget {
-                    power: self.effect_value(power, frame.controller, frame.x),
+                    power: self.frame_value(power, frame),
                     toughness: *toughness,
                     target: target.clone(),
                 },
@@ -497,11 +510,96 @@ impl Game {
                         self.apply_player_damage(frame.source_ref, player, *amount);
                     }
                     Target::Permanent(permanent_id) => {
-                        self.apply_permanent_damage(frame.source_ref, permanent_id, *amount);
+                        frame.excess_damage = self.apply_creature_damage_measuring_excess(
+                            frame.source_ref,
+                            permanent_id,
+                            *amount,
+                        );
                     }
                     Target::StackSpell(_) | Target::GraveyardCard(_) => {}
                 }
                 None
+            }
+            Effect::GainLifeValue { amount } => {
+                let amount = self.frame_value(amount, frame);
+                self.gain_life(frame.controller, amount);
+                None
+            }
+            Effect::AddManaValue { mana, amount } => {
+                let count = self.frame_value(amount, frame).max(0);
+                self.journal_player(frame.controller);
+                self.invalidate_mana_cache(frame.controller);
+                for _ in 0..count {
+                    self.state.players[frame.controller.0].mana_pool.add(mana);
+                }
+                None
+            }
+            Effect::KeepUnspentRedMana => {
+                self.journal_player(frame.controller);
+                self.state.players[frame.controller.0].keeps_red_mana = true;
+                None
+            }
+            Effect::FightLastTarget => {
+                // CR 701.14b: if either creature is an illegal target, has
+                // left the battlefield or is no longer a creature, neither
+                // deals damage.
+                let [first, .., last] = frame.targets.as_slice() else {
+                    return None;
+                };
+                let (Target::Permanent(first), Target::Permanent(last)) =
+                    (first.target, last.target)
+                else {
+                    return None;
+                };
+                if !frame.targets.iter().all(|slot| slot.legal)
+                    || !self.permanent_is_battlefield_creature(first)
+                    || !self.permanent_is_battlefield_creature(last)
+                {
+                    return None;
+                }
+                let first_ref = self.permanent_object_ref(first)?;
+                let last_ref = self.permanent_object_ref(last)?;
+                // Each deals damage equal to its power at once (CR 701.14a).
+                let first_power = self.effective_power(first);
+                let last_power = self.effective_power(last);
+                if first_power > 0 {
+                    frame.excess_damage = self.apply_creature_damage_measuring_excess(
+                        Some(first_ref),
+                        last,
+                        first_power,
+                    );
+                }
+                if last_power > 0 {
+                    self.apply_permanent_damage(Some(last_ref), first, last_power);
+                }
+                None
+            }
+            Effect::GrantKeywordsControlled {
+                predicate,
+                keywords,
+            } => {
+                for id in self.battlefield_permanents(frame.controller) {
+                    if self.permanent_matches_predicate(id, predicate) {
+                        self.journal_permanent(id);
+                        let permanent = self.state.permanents[id].as_mut()?;
+                        permanent.temp_keywords = permanent.temp_keywords.union(keywords);
+                    }
+                }
+                None
+            }
+            Effect::SearchLibraryToHand { predicate } => {
+                // With nothing to find, the search still shuffles.
+                if self
+                    .library_search_candidates(frame.controller, predicate)
+                    .is_empty()
+                {
+                    self.shuffle_library(frame.controller);
+                    return None;
+                }
+                Some(Decision::SearchLibraryToHand {
+                    player: frame.controller,
+                    predicate: predicate.clone(),
+                })
             }
             Effect::CounterSpell { .. } => {
                 let Some(Target::StackSpell(target_spell)) = self.present_primary_target(frame)
@@ -549,8 +647,8 @@ impl Game {
                 power,
                 toughness,
             } => {
-                let power = self.effect_value(power, frame.controller, frame.x);
-                let toughness = self.effect_value(toughness, frame.controller, frame.x);
+                let power = self.frame_value(power, frame);
+                let toughness = self.frame_value(toughness, frame);
                 for id in self.battlefield_permanents(frame.controller) {
                     if self.permanent_matches_predicate(id, predicate) {
                         self.journal_permanent(id);
@@ -654,7 +752,7 @@ impl Game {
                 None
             }
             Effect::DealDamageValue { amount, target } => {
-                let amount = self.effect_value(amount, frame.controller, frame.x);
+                let amount = self.frame_value(amount, frame);
                 self.execute_frame_effect(
                     &Effect::DealDamage {
                         amount,
@@ -664,7 +762,7 @@ impl Game {
                 )
             }
             Effect::EarthbendValue { count, target } => {
-                let count = self.effect_value(count, frame.controller, frame.x);
+                let count = self.frame_value(count, frame);
                 self.execute_frame_effect(
                     &Effect::Earthbend {
                         count,
@@ -674,7 +772,7 @@ impl Game {
                 )
             }
             Effect::PutCountersValue { count, target } => {
-                let count = self.effect_value(count, frame.controller, frame.x);
+                let count = self.frame_value(count, frame);
                 self.execute_frame_effect(
                     &Effect::PutCounters {
                         count,
@@ -705,7 +803,7 @@ impl Game {
                 None
             }
             Effect::DestroyCreaturesLosingAbilities { max_mana_value } => {
-                let max = self.effect_value(max_mana_value, frame.controller, frame.x);
+                let max = self.frame_value(max_mana_value, frame);
                 let creatures: Vec<PermanentId> = [PlayerId(0), PlayerId(1)]
                     .into_iter()
                     .flat_map(|player| self.battlefield_permanents(player))
@@ -1134,6 +1232,7 @@ impl Game {
                         resolutions_this_turn: frame.resolutions_this_turn,
                         kicked: frame.kicked,
                         x: frame.x,
+                        excess_damage: 0,
                         targets: vec![ResolutionTarget {
                             requirement: 0,
                             ..target

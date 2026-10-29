@@ -13,6 +13,10 @@ pub struct CardPredicate {
     /// so card-only matching ignores it.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub no_counters: bool,
+    /// An attacking or blocking creature (CR 506.4); only battlefield
+    /// permanents are in combat, so card-only matching ignores it.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub in_combat: bool,
     /// A token (`Some(true)`) or a nontoken (`Some(false)`).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub token: Option<bool>,

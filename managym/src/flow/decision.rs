@@ -66,6 +66,10 @@ pub struct EffectFrame {
     /// The resolving spell's announced X (CR 107.3m); 0 otherwise.
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub x: u8,
+    /// Excess damage (CR 120.4a) the latest damage instruction dealt to its
+    /// creature, read by a later "the excess damage dealt this way".
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub excess_damage: i32,
     /// Chosen slots, with eligibility retained across instructions and choices.
     pub targets: Vec<ResolutionTarget>,
     pub active_requirement: usize,
@@ -179,6 +183,12 @@ pub enum Decision {
         #[serde(skip_serializing_if = "Vec::is_empty")]
         selected: Vec<CardId>,
     },
+    /// "Search your library for a [predicate] card, reveal it, put it into
+    /// your hand, then shuffle." Candidates come from the current library.
+    SearchLibraryToHand {
+        player: PlayerId,
+        predicate: CardPredicate,
+    },
     OptionalDiscardDraw {
         player: PlayerId,
         count: usize,
@@ -242,6 +252,7 @@ impl Decision {
             | Decision::Sacrifice { player, .. } => *player,
             Decision::SelectMilled { player, .. }
             | Decision::SearchBasicLand { player, .. }
+            | Decision::SearchLibraryToHand { player, .. }
             | Decision::OptionalDiscardDraw { player, .. }
             | Decision::Scry { player, .. }
             | Decision::LookAndSelect { player, .. }
@@ -265,6 +276,7 @@ impl Decision {
             Decision::LookAndSelect { looked, .. } => looked,
             Decision::SelectMilled { .. }
             | Decision::SearchBasicLand { .. }
+            | Decision::SearchLibraryToHand { .. }
             | Decision::OptionalDiscardDraw { .. }
             | Decision::Modal { .. }
             | Decision::Learn { .. }
@@ -291,6 +303,7 @@ impl Game {
                 resolutions_this_turn: 0,
                 kicked: false,
                 x: 0,
+                excess_damage: 0,
                 targets: Vec::new(),
                 active_requirement: 0,
                 context_target: None,
@@ -422,6 +435,23 @@ impl Game {
             } => {
                 let mut actions: Vec<Action> = self
                     .basic_land_search_candidates(*player, subtype)
+                    .into_iter()
+                    .map(|card| Action::SelectCard {
+                        player: *player,
+                        card,
+                    })
+                    .collect();
+                actions.push(Action::Decline { player: *player });
+                ActionSpace {
+                    player: Some(*player),
+                    kind: ActionSpaceKind::LookAndSelect,
+                    actions,
+                    focus: source_focus,
+                }
+            }
+            Decision::SearchLibraryToHand { player, predicate } => {
+                let mut actions: Vec<Action> = self
+                    .library_search_candidates(*player, predicate)
                     .into_iter()
                     .map(|card| Action::SelectCard {
                         player: *player,
@@ -732,10 +762,7 @@ impl Game {
                         self.put_on_bottom_of_library(card);
                     }
                 }
-                self.journal_zones();
-                self.state
-                    .zones
-                    .shuffle(ZoneType::Library, player, &mut self.state.rng);
+                self.shuffle_library(player);
                 if untap_if_lands.is_some_and(|minimum| {
                     self.battlefield_permanents(player)
                         .into_iter()
@@ -761,6 +788,25 @@ impl Game {
                     }
                     self.invalidate_mana_cache(player);
                 }
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (
+                Decision::SearchLibraryToHand { player, predicate },
+                Action::SelectCard { .. } | Action::Decline { .. },
+            ) => {
+                let player = *player;
+                if let Action::SelectCard { card, .. } = action {
+                    if !self
+                        .library_search_candidates(player, predicate)
+                        .contains(card)
+                    {
+                        self.state.suspended_decision = Some(suspended);
+                        return Err(AgentError("not a matching card in library".into()));
+                    }
+                    self.reveal_card_to_hand(*card, player);
+                }
+                self.shuffle_library(player);
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -1087,6 +1133,7 @@ mod learn_tests {
             resolutions_this_turn: 0,
             kicked: false,
             x: 0,
+            excess_damage: 0,
             targets: vec![],
             active_requirement: 0,
             context_target: None,
@@ -1840,6 +1887,7 @@ mod payment_tests {
             resolutions_this_turn: 0,
             kicked: false,
             x: 0,
+            excess_damage: 0,
             targets: vec![],
             active_requirement: 0,
             context_target: None,

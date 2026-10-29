@@ -142,6 +142,9 @@ pub enum EffectValue {
     GreatestSharedCreatureType,
     /// The resolving spell's announced X (CR 107.3m).
     X,
+    /// Excess damage (CR 120.4a) the resolution's latest damage instruction
+    /// dealt to its creature; 0 outside a resolution.
+    ExcessDamage,
 }
 
 /// A resolving obligation, distinct from the effects chosen by its outcome.
@@ -394,6 +397,9 @@ pub enum Effect {
     GainLife {
         amount: i32,
     },
+    GainLifeValue {
+        amount: EffectValue,
+    },
     /// Execute the inner effect only if this is the `n`th time this
     /// ability has resolved this turn ("if this is the second time this
     /// ability has resolved this turn, ...").
@@ -483,6 +489,28 @@ pub enum Effect {
     /// "Add X mana of any one color", X read as the mana ability resolves.
     AddOneColorManaValue {
         amount: EffectValue,
+    },
+    /// Add `mana` `amount` times, `amount` read at resolution.
+    AddManaValue {
+        mana: Mana,
+        amount: EffectValue,
+    },
+    /// "Until end of turn, you don't lose unspent red mana as steps and
+    /// phases end" (CR 106.4).
+    KeepUnspentRedMana,
+    /// The first chosen creature fights the last (CR 701.14); records the
+    /// excess damage dealt to the last.
+    FightLastTarget,
+    /// Permanents the resolving player controls matching `predicate` gain
+    /// `keywords` until end of turn; the set is fixed at resolution.
+    GrantKeywordsControlled {
+        predicate: CardPredicate,
+        keywords: Keywords,
+    },
+    /// Search your library for a card matching `predicate`, reveal it, put
+    /// it into your hand, then shuffle (CR 701.23).
+    SearchLibraryToHand {
+        predicate: CardPredicate,
     },
     /// The target gets +power/+toughness until end of turn.
     BuffTarget {
@@ -716,6 +744,12 @@ impl Effect {
             | Effect::ExileAttached
             | Effect::ShuffleAttachedIntoLibrary
             | Effect::GainLife { .. }
+            | Effect::GainLifeValue { .. }
+            | Effect::AddManaValue { .. }
+            | Effect::KeepUnspentRedMana
+            | Effect::FightLastTarget
+            | Effect::GrantKeywordsControlled { .. }
+            | Effect::SearchLibraryToHand { .. }
             | Effect::Scry { .. }
             | Effect::LookAndSelect { .. }
             | Effect::PutTopCardsInHand { .. }

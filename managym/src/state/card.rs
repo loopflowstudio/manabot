@@ -185,6 +185,9 @@ pub enum StaticScope {
     /// "Equipped creature" / "enchanted creature": the exact creature the
     /// source Equipment or Aura is attached to.
     Attached,
+    /// "[predicate] spells you control" (Lo and Li's Lesson spells): stack
+    /// spells only, read by `Game::spell_keywords`; no permanent matches.
+    SpellsYouControl(CardPredicate),
 }
 
 /// A static continuous P/T effect (CR 613.3c layer 7c): "[scope] get(s)
@@ -376,6 +379,12 @@ pub struct CardDefinition {
     /// During your turn, grant graveyard flashback (Lessons cost {1}).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub grants_flashback: bool,
+    /// "You may look at the top card of your library any time" (CR 401.2).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub looks_at_library_top: bool,
+    /// "You may cast [predicate] spells from the top of your library."
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub library_top_casting: Option<CardPredicate>,
     /// Each matching permanent you control gains a chosen-color tap ability.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub mana_grant: Vec<CardPredicate>,

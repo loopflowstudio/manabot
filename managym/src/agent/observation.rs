@@ -516,6 +516,14 @@ impl Observation {
             self.add_card(game, *card, ZoneType::Hand);
         }
 
+        // The top of the agent's own library, when they may look at it any
+        // time (CR 401.2).
+        if game.looks_at_library_top(agent_player) {
+            for card in game.library_top(agent_player, 1) {
+                self.add_card(game, card, ZoneType::Library);
+            }
+        }
+
         // Library cards revealed to the agent by a pending mid-resolution
         // decision. Search candidates are derived from the current library;
         // scry/look choices retain their exact cards. Only the deciding player
@@ -526,6 +534,9 @@ impl Observation {
                     crate::flow::decision::Decision::SearchBasicLand {
                         player, subtype, ..
                     } => game.basic_land_search_candidates(*player, subtype),
+                    crate::flow::decision::Decision::SearchLibraryToHand { player, predicate } => {
+                        game.library_search_candidates(*player, predicate)
+                    }
                     decision => decision.revealed_cards().to_vec(),
                 };
                 for card in cards {

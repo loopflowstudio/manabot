@@ -326,7 +326,7 @@ impl Game {
                 Decision::ManaUpfront { .. } => ("mana_payment", "Pay the mana ability activation cost before choosing its output."),
                 Decision::ManaChoice { .. } => ("mana_color", "Choose the mana to add. The mana ability's activation costs have already committed; this does not open priority."),
                 Decision::Sacrifice { .. } => ("resolution_sacrifice", "Choose a permanent to sacrifice as a resolving effect, not as an announcement cost."),
-                Decision::SearchBasicLand { .. } => ("private_search", "Inspect the permitted library candidates. Choose a land or the legal failure-to-find offer; no library order is disclosed."),
+                Decision::SearchBasicLand { .. } | Decision::SearchLibraryToHand { .. } => ("private_search", "Inspect the permitted library candidates. Choose a card or the legal failure-to-find offer; no library order is disclosed."),
                 Decision::Learn { .. } => ("learn", "Take a Lesson, discard and draw, or decline Learn. Navigation does not commit a choice."),
                 Decision::LookAndSelect { .. } => ("private_inspection", "Choose from the inspected cards using the complete legal offers."),
                 Decision::Scry { .. } => ("scry", "Choose the placement of the inspected cards."),

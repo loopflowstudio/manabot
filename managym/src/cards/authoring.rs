@@ -524,6 +524,35 @@ pub enum Op {
     AddManaOfOneColor {
         amount: Quantity,
     },
+    /// "[sources] fights [target]" (CR 701.14).
+    Fight {
+        sources: &'static str,
+        target: &'static str,
+    },
+    /// "You gain life equal to [amount]."
+    GainLifeValue {
+        amount: Quantity,
+    },
+    /// "Add [mana] for each of [amount]" ("add that much {R}").
+    AddManaValue {
+        amount: Quantity,
+        mana: &'static str,
+    },
+    /// "Until end of turn, you don't lose unspent red mana as steps and
+    /// phases end."
+    KeepUnspentRedMana,
+    /// "Search your library for a [predicate] card, reveal it, put it into
+    /// your hand, then shuffle."
+    SearchLibraryToHand {
+        predicate: Predicate,
+    },
+    /// "You may look at the top card of your library any time" (static).
+    LookAtLibraryTop,
+    /// "You may cast [predicate] spells from the top of your library"
+    /// (static).
+    CastFromLibraryTop {
+        predicate: Predicate,
+    },
     /// "[target]'s owner shuffles it into their library."
     ShuffleIntoLibrary {
         target: &'static str,
@@ -716,6 +745,8 @@ pub enum Predicate {
     PowerAtLeast { value: i32 },
     // A token (`true`) or a nontoken (`false`) object.
     Token { value: bool },
+    // An attacking or blocking creature (CR 506.4).
+    AttackingOrBlocking,
     Any,
 }
 
@@ -771,6 +802,9 @@ pub enum Quantity {
     GreatestSharedCreatureType,
     /// The value of X announced as the spell was cast (CR 107.3m).
     X,
+    /// "The excess damage dealt this way" by the previous instruction
+    /// (CR 120.4a).
+    ExcessDamage,
 }
 
 #[derive(Serialize)]

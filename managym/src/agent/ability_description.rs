@@ -154,6 +154,7 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     let CardPredicate {
         flying,
         no_counters,
+        in_combat,
         token,
         subtypes_any,
         not_subtypes,
@@ -214,6 +215,9 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     }
     if *no_counters {
         terms.push("with no counters on it".into());
+    }
+    if *in_combat {
+        terms.insert(0, "attacking or blocking".into());
     }
     terms.join(" ")
 }
@@ -277,6 +281,7 @@ fn value_description(value: &EffectValue) -> String {
             format!("the number of cards you have drawn this turn minus {subtract} (minimum zero)")
         }
         EffectValue::X => "X".into(),
+        EffectValue::ExcessDamage => "the excess damage dealt this way".into(),
     }
 }
 
@@ -447,6 +452,12 @@ fn effect_description(effect: &Effect) -> Option<String> {
             BecomesCreature::Incarnation => "This becomes an artifact creature".into(),
         },
         GainLife { amount } => format!("You gain {amount} life"),
+        GainLifeValue { amount } => format!("You gain life equal to {}", value_description(amount)),
+        AddManaValue { mana, amount } => format!("Add {} for each of {}", mana_description(mana), value_description(amount)),
+        KeepUnspentRedMana => "Until end of turn, you don't lose unspent red mana as steps and phases end".into(),
+        FightLastTarget => "The first target fights the last target".into(),
+        GrantKeywordsControlled { predicate, keywords } => format!("Each {} you control gains {} until end of turn", predicate_description(predicate, "permanent"), keywords_description(keywords)),
+        SearchLibraryToHand { predicate } => format!("Search your library for {}, reveal it, put it into your hand, then shuffle", predicate_description(predicate, "card")),
         OnNthResolutionThisTurn { n, effect } => format!("If this is resolution {n} of this ability this turn: {}",effects_description(std::slice::from_ref(effect))),
         Scry { count } => format!("Scry {count}"),
         LookAndSelect { reveal, look, min_select, max_select, predicate } => format!("{} the top {look} cards of your library. Put {min_select}–{max_select} {} from among them into your hand and the rest on the bottom in a random order",if *reveal { "Reveal" } else { "Look at" },predicate_description(predicate,"cards")),

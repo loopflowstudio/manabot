@@ -6,7 +6,7 @@ use managym::{
     },
     flow::{event::GameEvent, turn::StepKind},
     state::{
-        game_object::{PermanentId, PlayerId, Target},
+        game_object::{CardId, PermanentId, PlayerId, Target},
         mana::Mana,
         permanent::CounterKind,
         zone::ZoneType,
@@ -1660,4 +1660,252 @@ fn katara_waterbends_x_to_set_your_creatures_base_pt() {
     assert_eq!(s.game().effective_pt(ally), (1, 1));
     s.set_player_mana_pool(0, "5");
     assert!(!can_activate(&mut s, katara, 0), "only during your turn");
+}
+
+fn block_with(s: &mut Scenario, blocker: PermanentId, attacker: PermanentId) {
+    s.advance_until(
+        |s| s.action_space().kind == ActionSpaceKind::DeclareBlocker,
+        "blockers".into(),
+    );
+    while s.action_space().kind == ActionSpaceKind::DeclareBlocker {
+        choose(s, |a| match a {
+            Action::DeclareBlocker {
+                blocker: b,
+                attacker: chosen,
+                ..
+            } if *b == blocker => *chosen == Some(attacker),
+            Action::DeclareBlocker { attacker: None, .. } => true,
+            _ => false,
+        });
+    }
+}
+
+/// CR 120.4a, 120.6: Razor Rings targets only a creature in combat, and the
+/// excess counts damage already marked: 4 to a 2/2 blocker with 1 damage
+/// marked is 3 excess.
+#[test]
+fn razor_rings_gains_life_equal_to_excess_damage_to_a_creature_in_combat() {
+    let mut s = setup(&["Razor Rings", "Gray Ogre", "Wind Drake"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let drake = s.force_permanent_on_battlefield(1, "Wind Drake");
+    ready(&mut s, ogre);
+    s.set_player_mana_pool(0, "1W");
+    to_hand(&mut s, "Razor Rings");
+    assert!(
+        !has_action(&s, |a| matches!(a, Action::CastSpell { .. })),
+        "no creature is attacking or blocking"
+    );
+
+    declare_attackers(&mut s, &[ogre]);
+    block_with(&mut s, drake, ogre);
+    mark_damage(&mut s, drake, 1);
+    s.set_player_mana_pool(0, "1W");
+    cast(&mut s, "Razor Rings");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(drake)));
+    settle(&mut s);
+    assert!(s.game().state.permanents[drake].is_none());
+    assert_eq!(
+        s.game().state.players[0].life,
+        23,
+        "4 - 1 lethal = 3 excess"
+    );
+}
+
+/// CR 701.14: the fighters deal damage equal to their power to each other.
+/// Excess damage to the opponent's creature adds that much {R}, and red
+/// mana (only) survives step ends until the turn ends.
+#[test]
+fn the_last_agni_kai_adds_red_for_excess_fight_damage_and_keeps_red_mana() {
+    let mut s = setup(&["The Last Agni Kai", "Gray Ogre", "Wind Drake"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let drake = s.force_permanent_on_battlefield(1, "Wind Drake");
+    add_counters(&mut s, ogre, CounterKind::PlusOnePlusOne, 3);
+    s.set_player_mana_pool(0, "1R");
+    cast(&mut s, "The Last Agni Kai");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    assert!(s.choose_target(Target::Permanent(drake)));
+    settle(&mut s);
+    assert!(s.game().state.permanents[drake].is_none());
+    assert_eq!(
+        s.game().state.permanents[ogre].as_ref().unwrap().damage,
+        2,
+        "the drake fights back"
+    );
+    assert_eq!(pool(&s), Mana::parse("RRR"), "5 power - 2 lethal");
+
+    s.set_player_mana_pool(0, "RRRG");
+    s.advance_to_active_step(0, StepKind::End);
+    assert_eq!(pool(&s), Mana::parse("RRR"), "green is lost");
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert_eq!(pool(&s).total(), 0, "the effect ends with the turn");
+}
+
+/// CR 701.14b: a fight with an illegal target deals no damage at all.
+#[test]
+fn the_last_agni_kai_without_its_victim_deals_no_damage() {
+    let mut s = setup(&["The Last Agni Kai", "Gray Ogre", "Wind Drake"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let drake = s.force_permanent_on_battlefield(1, "Wind Drake");
+    s.set_player_mana_pool(0, "1R");
+    cast(&mut s, "The Last Agni Kai");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    assert!(s.choose_target(Target::Permanent(drake)));
+    let card = card_of(&s, drake);
+    s.game_mut().move_card(card, ZoneType::Hand);
+    settle(&mut s);
+    assert_eq!(s.game().state.permanents[ogre].as_ref().unwrap().damage, 0);
+    assert_eq!(pool(&s).total(), 0);
+}
+
+/// Lo and Li's entry offers only Lesson and Noble cards from the library
+/// (or failing to find); the chosen card is revealed into hand. Noble
+/// creatures you control and Lesson spells you control have lifelink: a
+/// Lesson spell's damage gains its controller life (release notes).
+#[test]
+fn lo_and_li_tutor_a_lesson_or_noble_and_grant_lifelink() {
+    let mut s = setup(&[
+        "Lo and Li, Twin Tutors",
+        "Uncle Iroh",
+        "Firebending Lesson",
+        "Gray Ogre",
+    ]);
+    let theirs = s.force_permanent_on_battlefield(1, "Uncle Iroh");
+    s.set_player_mana_pool(0, "4B");
+    cast(&mut s, "Lo and Li, Twin Tutors");
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let offered: Vec<_> = s
+        .action_space()
+        .actions
+        .iter()
+        .filter_map(|a| match a {
+            Action::SelectCard { card, .. } => Some(s.game().state.cards[*card].name.clone()),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(offered.len(), 8, "four Lessons and four Nobles");
+    assert!(offered
+        .iter()
+        .all(|name| name == "Uncle Iroh" || name == "Firebending Lesson"));
+    assert!(has_action(&s, |a| matches!(a, Action::Decline { .. })));
+    let iroh_card = s
+        .action_space()
+        .actions
+        .iter()
+        .find_map(|a| match a {
+            Action::SelectCard { card, .. } if s.game().state.cards[*card].name == "Uncle Iroh" => {
+                Some(*card)
+            }
+            _ => None,
+        })
+        .unwrap();
+    choose(
+        &mut s,
+        |a| matches!(a, Action::SelectCard { card, .. } if *card == iroh_card),
+    );
+    settle(&mut s);
+    let hand = s.game().state.zones.zone_cards(ZoneType::Hand, PlayerId(0));
+    assert_eq!(hand.len(), 1);
+    assert_eq!(s.game().state.cards[hand[0]].name, "Uncle Iroh");
+
+    let iroh = s.force_permanent_on_battlefield(0, "Uncle Iroh");
+    assert!(observed_keywords(&s, iroh).lifelink);
+    assert!(!observed_keywords(&s, theirs).lifelink);
+
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.set_player_mana_pool(0, "R");
+    cast(&mut s, "Firebending Lesson");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.players[0].life,
+        22,
+        "the Lesson has lifelink"
+    );
+}
+
+/// Put a library copy of `name` on top of `player`'s library.
+fn put_on_top(s: &mut Scenario, player: usize, name: &str) -> CardId {
+    let id = library_card(s, player, name);
+    s.game_mut().move_card(id, ZoneType::Exile);
+    s.game_mut().move_card(id, ZoneType::Library);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    id
+}
+
+fn sees_library_card(s: &Scenario, player: usize, card: CardId) -> bool {
+    let id = s.game().state.cards[card].id.0 as i32;
+    let observation = Observation::for_player(s.game(), PlayerId(player));
+    observation
+        .agent_cards
+        .iter()
+        .chain(&observation.opponent_cards)
+        .any(|c| c.id == id && c.zone == ZoneType::Library)
+}
+
+fn can_cast(s: &Scenario, card: CardId) -> bool {
+    has_action(
+        s,
+        |a| matches!(a, Action::CastSpell { card: c, .. } if *c == card),
+    )
+}
+
+/// CR 401.2: Hakoda's controller sees their top card (the opponent does
+/// not) and may cast it if it's an Ally spell, paying its cost; other spells
+/// stay put.
+#[test]
+fn hakoda_reveals_the_top_card_to_you_and_casts_allies_from_it() {
+    let mut s = setup(&[
+        "Hakoda, Selfless Commander",
+        "Avatar Enthusiasts",
+        "Gray Ogre",
+    ]);
+    let ally = put_on_top(&mut s, 0, "Avatar Enthusiasts");
+    s.set_player_mana_pool(0, "2W");
+    assert!(!sees_library_card(&s, 0, ally), "no permission yet");
+    assert!(!can_cast(&s, ally));
+
+    s.force_permanent_on_battlefield(0, "Hakoda, Selfless Commander");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(sees_library_card(&s, 0, ally));
+    assert!(!sees_library_card(&s, 1, ally), "private to its controller");
+    assert!(can_cast(&s, ally));
+    choose(
+        &mut s,
+        |a| matches!(a, Action::CastSpell { card, .. } if *card == ally),
+    );
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.zones.zone_of(ally),
+        Some(ZoneType::Battlefield)
+    );
+
+    let ogre = put_on_top(&mut s, 0, "Gray Ogre");
+    s.set_player_mana_pool(0, "2W");
+    assert!(sees_library_card(&s, 0, ogre));
+    assert!(!can_cast(&s, ogre), "not an Ally");
+}
+
+/// Sacrificing Hakoda gives the creatures you control +0/+5 and
+/// indestructible until end of turn; the opponent's are untouched.
+#[test]
+fn hakoda_sacrifices_to_fortify_your_creatures() {
+    let mut s = setup(&["Hakoda, Selfless Commander", "Gray Ogre"]);
+    let hakoda = s.force_permanent_on_battlefield(0, "Hakoda, Selfless Commander");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    activate(&mut s, hakoda, 0);
+    settle(&mut s);
+    assert!(s.game().state.permanents[hakoda].is_none());
+    assert_eq!(s.game().effective_pt(ogre), (2, 7));
+    assert!(observed_keywords(&s, ogre).indestructible);
+    assert_eq!(s.game().effective_pt(theirs), (2, 2));
+    assert!(!observed_keywords(&s, theirs).indestructible);
+
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert_eq!(s.game().effective_pt(ogre), (2, 2));
+    assert!(!observed_keywords(&s, ogre).indestructible);
 }

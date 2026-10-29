@@ -406,6 +406,15 @@ impl Mana {
         }
     }
 
+    /// Only red mana, with its spending restrictions.
+    pub fn red_only(&self) -> Self {
+        let red = Color::Red as usize;
+        let mut kept = Self::default();
+        kept.mana[red] = self.mana[red];
+        kept.lesson[red] = self.lesson[red];
+        kept
+    }
+
     pub fn clear(&mut self) {
         // CR 106.4 — Unspent mana empties from pools as steps/phases end.
         self.mana = [0; 6];

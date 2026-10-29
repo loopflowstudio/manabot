@@ -119,6 +119,13 @@ pub enum Opcode {
     EntersWithXCounters = 81,
     OpponentDamagePlusCounters = 82,
     SetBasePtValue = 83,
+    Fight = 84,
+    GainLifeValue = 85,
+    AddManaValue = 86,
+    KeepUnspentRedMana = 87,
+    SearchLibraryToHand = 88,
+    LookAtLibraryTop = 89,
+    CastFromLibraryTop = 90,
 }
 
 impl Opcode {
@@ -207,6 +214,13 @@ impl Opcode {
             81 => Opcode::EntersWithXCounters,
             82 => Opcode::OpponentDamagePlusCounters,
             83 => Opcode::SetBasePtValue,
+            84 => Opcode::Fight,
+            85 => Opcode::GainLifeValue,
+            86 => Opcode::AddManaValue,
+            87 => Opcode::KeepUnspentRedMana,
+            88 => Opcode::SearchLibraryToHand,
+            89 => Opcode::LookAtLibraryTop,
+            90 => Opcode::CastFromLibraryTop,
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -275,6 +289,7 @@ pub enum Predicate {
     NoCounters,
     /// A token (`true`) or a nontoken (`false`).
     Token(bool),
+    AttackingOrBlocking,
     TypesAny(Vec<String>),
     SubtypesAny(Vec<String>),
     NotSubtypes(Vec<String>),
@@ -414,6 +429,30 @@ pub enum Step {
         power: ValueExpression,
         toughness: ValueExpression,
         duration: String,
+    },
+    /// `sources` fights `target`.
+    Fight {
+        sources: String,
+        target: String,
+    },
+    GainLifeValue {
+        amount: ValueExpression,
+    },
+    /// Add `mana` `amount` times.
+    AddManaValue {
+        mana: String,
+        amount: ValueExpression,
+    },
+    KeepUnspentRedMana,
+    SearchLibraryToHand {
+        predicate: Predicate,
+    },
+    /// "You may look at the top card of your library any time" (static).
+    LookAtLibraryTop,
+    /// "You may cast [predicate] spells from the top of your library"
+    /// (static).
+    CastFromLibraryTop {
+        predicate: Predicate,
     },
     /// "Enters with X [counter] counters" (static).
     EntersWithXCounters {
@@ -1138,6 +1177,13 @@ impl<'a> BoundPack<'a> {
             | Step::EntersWithXCounters { .. }
             | Step::OpponentDamagePlusCounters { .. }
             | Step::SetBasePtValue { .. }
+            | Step::Fight { .. }
+            | Step::GainLifeValue { .. }
+            | Step::AddManaValue { .. }
+            | Step::KeepUnspentRedMana
+            | Step::SearchLibraryToHand { .. }
+            | Step::LookAtLibraryTop
+            | Step::CastFromLibraryTop { .. }
             | Step::SearchBasicLands { .. }
             | Step::Sacrifice { .. }
             | Step::DealDamageToController { .. }
@@ -1402,6 +1448,25 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
             power: ValueExpression::parse(object_field(value, "power")?)?,
             toughness: ValueExpression::parse(object_field(value, "toughness")?)?,
             duration: str_field(value, "duration")?.to_owned(),
+        },
+        Opcode::Fight => Step::Fight {
+            sources: str_field(value, "sources")?.to_owned(),
+            target: str_field(value, "target")?.to_owned(),
+        },
+        Opcode::GainLifeValue => Step::GainLifeValue {
+            amount: ValueExpression::parse(object_field(value, "amount")?)?,
+        },
+        Opcode::AddManaValue => Step::AddManaValue {
+            mana: str_field(value, "mana")?.to_owned(),
+            amount: ValueExpression::parse(object_field(value, "amount")?)?,
+        },
+        Opcode::KeepUnspentRedMana => Step::KeepUnspentRedMana,
+        Opcode::SearchLibraryToHand => Step::SearchLibraryToHand {
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
+        },
+        Opcode::LookAtLibraryTop => Step::LookAtLibraryTop,
+        Opcode::CastFromLibraryTop => Step::CastFromLibraryTop {
+            predicate: parse_predicate(object_field(value, "predicate")?)?,
         },
         Opcode::EntersWithXCounters => Step::EntersWithXCounters {
             counter: opt_str_field(value, "counter")?.map(str::to_owned),
@@ -1688,6 +1753,7 @@ fn parse_predicate(value: &Value) -> Result<Predicate, IrError> {
         ),
         "flying" => Predicate::Flying,
         "no_counters" => Predicate::NoCounters,
+        "attacking_or_blocking" => Predicate::AttackingOrBlocking,
         "token" => Predicate::Token(
             opt_bool_field(value, "value")?
                 .ok_or_else(|| IrError::Malformed("token predicate needs a value".into()))?,
@@ -1793,6 +1859,7 @@ pub enum ValueExpression {
     CardsDrawnMinus(u32),
     GreatestSharedCreatureType,
     X,
+    ExcessDamage,
 }
 impl ValueExpression {
     fn parse(value: &Value) -> Result<Self, IrError> {
@@ -1800,6 +1867,7 @@ impl ValueExpression {
             "creatures_with_counters" => Self::CreaturesWithCounters,
             "greatest_shared_creature_type" => Self::GreatestSharedCreatureType,
             "x" => Self::X,
+            "excess_damage" => Self::ExcessDamage,
             "battlefield_matching" => {
                 Self::BattlefieldMatching(parse_predicate(object_field(value, "predicate")?)?)
             }

@@ -42,34 +42,20 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   put onto the battlefield uncast goes to the graveyard (303.4g not modeled).
 - Swampsnare Trap castability assumes the reduction if any legal target earns it;
   targets that would leave the cost unpayable are not offered.
-- Slice 7 (Vehicles): crew offers only other untapped creatures with positive
-  power, one at a time, and stops once covered (tapping extra or 0-power creatures
-  is legal but omitted). A completed crew then follows the ordinary {0} payment,
-  which offers mana abilities when the player has any (as for Earth Kingdom
-  Protectors). The observed `is_animated` now means "a creature
-  only through an effect" (unchanged for existing content).
-- Slice 8 (mana): state-dependent mana outputs are read when the ability is
-  offered, not after its costs are paid; no current cost changes the reading.
-  A single fixed output is still offered as a one-option `ChooseMode`, like other
-  activated mana abilities. White Lotus Tile with X = 0 taps for nothing. Great
-  Divide Guide's earlier tests stay in `tests/rules/temur_cards.rs` (T1's move).
-- Slice 9 (effective characteristics): Toph's granted land type is read by
-  predicates, "land you control" targets and land-counter CDAs, but not by the
-  observation's `is_land` (printed types; a later shape change). Granted types
-  are not retained in last known information. Summoning sickness is set at entry for
-  creatures and Vehicles only (marking every permanent would change existing
-  state hashes and observations), so a Clue The Mechanist animates the turn it
-  was created can attack. Flopsie's
-  limit refuses a second blocker during the one-at-a-time declaration rather
-  than repairing it afterwards as menace does.
-- Slice 10 (mana remainder): gained basic land types add one activated mana
-  ability choosing among their colors, not one ability per type (CR 305.6);
-  outputs are the same, ability indices differ. Energybending's affected set is
-  fixed at resolution (CR 611.2c), so a land played later that turn gains
-  nothing. Ozai's replacement is applied directly as pools empty, not through
-  the proposed-event pipeline (no other mana-loss replacements exist); it
-  applies while Ozai is on the battlefield as the step ends. Secret Tunnel is
-  deferred (two-target activation).
+- Slice 7 (Vehicles): crew offers other untapped positive-power creatures one at
+  a time until covered (extra or 0-power taps omitted), then the ordinary {0}
+  payment. Observed `is_animated` means "a creature only through an effect".
+- Slice 8 (mana): state-dependent outputs are read when offered (no current
+  cost changes them); one fixed output is still a one-option `ChooseMode`.
+  White Lotus Tile with X = 0 taps for nothing.
+- Slice 9: Toph's granted land type is read by predicates, targets and CDAs,
+  not by observed `is_land` or LKI. Only creatures and Vehicles enter summoning
+  sick (hash stability), so a Clue The Mechanist animates can attack at once.
+  Flopsie's limit refuses a second blocker during declaration.
+- Slice 10: gained basic land types add one mana ability choosing among their
+  colors (same outputs as CR 305.6, different indices). Energybending's set is
+  fixed at resolution. Ozai's replacement applies directly as pools empty while
+  Ozai is on the battlefield, outside the proposed-event pipeline.
 - Slice 11 (X): the X choice reuses the Modal space (`ChooseMode`, mode =
   X, labelled "X = n"); observations don't show the announced X (later shape
   change). Offered X stops at the first unpayable value, capped at 20. Fated
@@ -77,3 +63,7 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   player's best order; no ordering choice is offered). Ability loss ignores
   timestamps (all keywords go, counters' included); CDAs still apply. Crashing
   Wave is deferred (spell waterbend and stun distribution).
+- Slice 12: excess is measured from damage marked after replacements. Lesson
+  lifelink applies to stack spells; observations don't show spell grants. The
+  tutor offers every match plus failing to find. Hakoda's top card is shown only
+  to its controller; CR 401.2's no-peeking-mid-cast limit is not modeled.

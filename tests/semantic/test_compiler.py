@@ -221,6 +221,13 @@ def test_opcode_numbers_are_an_explicit_compatibility_surface() -> None:
         "ENTERS_WITH_X_COUNTERS": 81,
         "OPPONENT_DAMAGE_PLUS_COUNTERS": 82,
         "SET_BASE_PT_VALUE": 83,
+        "FIGHT": 84,
+        "GAIN_LIFE_VALUE": 85,
+        "ADD_MANA_VALUE": 86,
+        "KEEP_UNSPENT_RED_MANA": 87,
+        "SEARCH_LIBRARY_TO_HAND": 88,
+        "LOOK_AT_LIBRARY_TOP": 89,
+        "CAST_FROM_LIBRARY_TOP": 90,
     }
 
 

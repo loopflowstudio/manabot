@@ -14,6 +14,7 @@ use crate::{
     },
     state::{
         ability::TargetRequirement,
+        card::Card,
         game_object::{CardId, PermanentId, PlayerId, Target},
         mana::ManaCost,
         stack_object::{ActivatedAbilityOnStack, StackObject},
@@ -72,6 +73,44 @@ impl Game {
         } else {
             definition.mana_cost.clone()
         }
+    }
+
+    /// Battlefield permanents `player` controls whose abilities are active.
+    fn active_permanent_cards(&self, player: PlayerId) -> impl Iterator<Item = &Card> {
+        self.battlefield_permanents(player)
+            .into_iter()
+            .filter_map(|id| self.state.permanents[id].as_ref())
+            .filter(|permanent| !permanent.abilities_lost)
+            .map(|permanent| &self.state.cards[permanent.card])
+    }
+
+    /// Whether `player` may look at the top card of their library (CR 401.2).
+    pub(crate) fn looks_at_library_top(&self, player: PlayerId) -> bool {
+        self.active_permanent_cards(player)
+            .any(|card| card.looks_at_library_top)
+    }
+
+    /// The top card of `player`'s library, when a permanent they control
+    /// lets them cast it as a spell (Hakoda's Ally spells). Lands are never
+    /// cast, so they are never offered.
+    pub(crate) fn library_top_castable(&self, player: PlayerId) -> Option<CardId> {
+        let card = *self.library_top(player, 1).first()?;
+        let definition = &self.state.cards[card];
+        (!definition.types.is_land()
+            && self.active_permanent_cards(player).any(|source| {
+                source
+                    .library_top_casting
+                    .as_ref()
+                    .is_some_and(|predicate| predicate.matches_card(definition))
+            }))
+        .then_some(card)
+    }
+
+    /// The zones `player` may cast `card` from right now (CR 601.2a).
+    pub(crate) fn in_casting_zone(&self, player: PlayerId, card: CardId) -> bool {
+        self.state.zones.contains(card, ZoneType::Hand, player)
+            || self.flashback_cost(player, card).is_some()
+            || self.library_top_castable(player) == Some(card)
     }
 
     /// The cost to cast `card` right now: base with each {X} paid as `x`
@@ -185,9 +224,7 @@ impl Game {
             )
         };
 
-        if !self.state.zones.contains(card, ZoneType::Hand, player)
-            && self.flashback_cost(player, card).is_none()
-        {
+        if !self.in_casting_zone(player, card) {
             return Err(AgentError("card is not in a permitted casting zone".into()));
         }
         if is_land {

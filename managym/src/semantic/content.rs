@@ -730,6 +730,10 @@ fn trigger_subject(value: &Value) -> Result<TriggerSubject, IrError> {
 fn apply_static(definition: &mut CardDefinition, program: &Program) -> Result<(), IrError> {
     match program.steps.as_slice() {
         [Step::GrantFlashback] => definition.grants_flashback = true,
+        [Step::LookAtLibraryTop] => definition.looks_at_library_top = true,
+        [Step::CastFromLibraryTop { predicate }] => {
+            definition.library_top_casting = Some(predicate_card(predicate)?)
+        }
         [Step::GrantMana { predicates }] => {
             definition.mana_grant = predicates
                 .iter()
@@ -973,6 +977,13 @@ fn static_scope(program: &Program, target: &str) -> Result<StaticScope, IrError>
             not_subtypes: vec!["Human".into()],
             ..creature()
         }),
+        "each:noble_creature_you_control" => StaticScope::YouControl(CardPredicate {
+            subtype: Some("Noble".into()),
+            ..creature()
+        }),
+        "each:lesson_spell_you_control" => {
+            StaticScope::SpellsYouControl(CardPredicate::subtype("Lesson"))
+        }
         ATTACHED_EQUIPMENT | ATTACHED_AURA => StaticScope::Attached,
         _ => return unsupported(program, &format!("unsupported static scope {target:?}")),
     })
@@ -1000,10 +1011,13 @@ fn lower_steps(
 
 fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Effect, IrError> {
     let effect = match step {
-        Step::GrantFlashback | Step::GrantMana { .. } => {
+        Step::GrantFlashback
+        | Step::GrantMana { .. }
+        | Step::LookAtLibraryTop
+        | Step::CastFromLibraryTop { .. } => {
             return unsupported(
                 program,
-                "mana and flashback grants require a static program",
+                "mana, flashback and library permissions require a static program",
             )
         }
         Step::CantAttackOrBlock { .. }
@@ -1272,6 +1286,16 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             target,
             keywords: names,
             duration,
+        } if duration == "end_of_turn" && target == "each:creature_you_control" => {
+            Effect::GrantKeywordsControlled {
+                predicate: CardPredicate::creature(),
+                keywords: keywords(names)?,
+            }
+        }
+        Step::GrantKeywords {
+            target,
+            keywords: names,
+            duration,
         } if duration == "end_of_turn" => Effect::GrantKeywordsToTarget {
             keywords: keywords(names)?,
             target: target_for(program, target)?,
@@ -1395,6 +1419,18 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             target: target_for(program, target)?,
         },
         Step::DealPowerDamage { .. } => Effect::TargetCreaturesDealPowerDamageToLastTarget,
+        Step::Fight { .. } => Effect::FightLastTarget,
+        Step::GainLifeValue { amount } => Effect::GainLifeValue {
+            amount: amount.lower()?,
+        },
+        Step::AddManaValue { mana, amount } => Effect::AddManaValue {
+            mana: Mana::parse(mana),
+            amount: amount.lower()?,
+        },
+        Step::KeepUnspentRedMana => Effect::KeepUnspentRedMana,
+        Step::SearchLibraryToHand { predicate } => Effect::SearchLibraryToHand {
+            predicate: predicate_card(predicate)?,
+        },
         Step::SearchBasicLands {
             count,
             tapped,
@@ -1549,6 +1585,7 @@ fn merge_predicate(result: &mut CardPredicate, predicate: &Predicate) -> Result<
     match predicate {
         Predicate::Flying => result.flying = true,
         Predicate::NoCounters => result.no_counters = true,
+        Predicate::AttackingOrBlocking => result.in_combat = true,
         Predicate::Token(token) => set_once(&mut result.token, *token, "token")?,
         Predicate::PowerAtLeast(value) => set_once(
             &mut result.min_power,
@@ -1766,6 +1803,7 @@ impl ValueExpression {
             },
             Self::GreatestSharedCreatureType => EffectValue::GreatestSharedCreatureType,
             Self::X => EffectValue::X,
+            Self::ExcessDamage => EffectValue::ExcessDamage,
         })
     }
 }
