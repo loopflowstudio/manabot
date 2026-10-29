@@ -25,7 +25,7 @@ was dead on arrival in exp-10.)
 | **w13** | in development, MTG-177 integration, 2026-10-22 | 40 / 41 / 28 / 16; targeting enforcement plus shared-payment repair | unchanged authored packs; fresh combined-runtime conformance receipts | no strength baseline |
 | **w14** | in development, MTG-195, 2026-10-26 | 40 / 41 / 28 / 17; controller-selected trigger placement and policy-input v3 occurrence joins | unchanged authored packs; fresh w14 conformance and play fixtures | no strength baseline |
 | **w15** | in development, MTG-177, 2026-10-27 | 40 / 41 / 28 / 17; retained resolution eligibility, policy-input v4 relations 64 × 33 | unchanged authored packs; fresh integrated conformance and play fixtures | no strength baseline |
-| **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
+| **w16** | in development, Tasks 892c47 and 87e012, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack; TLA casting permissions, restricted mana, foretell and control | `tla-pool-v1`: every defined card (166 supported); conformance receipts not yet regenerated | no strength baseline |
 
 **Current development world: w16.** `managym.WORLD_VERSION` identifies live runs. Earlier
 checkpoints (including w15) are **not comparable** to w16; do not reuse their
@@ -61,6 +61,20 @@ set files; with the rules fixtures they keep the default pack's legacy
 set. A card is supported when its set file defines it with a typed program and
 does not mark it incomplete; tests never gate support. `managym.set_cards`
 narrows the pool to chosen sets, such as `["tla", "lea"]`.
+
+TLA casting, costs and zone permissions (Task 87e012) extend w16 before its
+freeze. `flow/cast_permission.rs` owns casting outside the hand: printed
+flashback, exact-card exile grants that go stale once the card leaves exile,
+and hand-only restrictions that override every other permission until the
+restricter's next untap. Kicker, X and free casts are announced together at
+cast time. Restricted mana is keyed by what it may pay for (Lesson, Shrine or
+Ally spells and ability sources); the narrowest usable mana spends first.
+Hand and graveyard abilities, including landcycling, are card activations.
+Exhaust and once-each-turn limits belong to the permanent. Foretold cards are
+exiled face down and visible only to their owner. Each player's battlefield
+lists the permanents they control, and a resolving permanent spell enters
+under its controller (CR 110.2). Learning schema 8 grows append-only;
+observation and action shapes are unchanged.
 
 ## w7: Elemental rules and compiled content (not yet frozen)
 
