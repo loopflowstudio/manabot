@@ -22,6 +22,11 @@ class DecisionInput(Record):
     representation_id: str = Field(min_length=1)
     # Opaque provenance from the renderer, or an explicitly named synthetic fixture.
     source_identity: dict[str, str]
+    # Exact renderer descriptions for typed-choice transports. Old text-only
+    # receipts omit this field and retain their original meaning.
+    action_descriptions: dict[str, str] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
     @model_validator(mode="after")
     def validate_references(self) -> "DecisionInput":
@@ -30,6 +35,11 @@ class DecisionInput(Record):
             raise ValueError("legal references must be unique")
         if any(not ref or any(c.isspace() for c in ref) for ref in refs):
             raise ValueError("legal references must be nonempty single tokens")
+        if self.action_descriptions is not None and (
+            set(self.action_descriptions) != set(refs)
+            or any(not value.strip() for value in self.action_descriptions.values())
+        ):
+            raise ValueError("descriptions must cover exactly every legal reference")
         return self
 
 
