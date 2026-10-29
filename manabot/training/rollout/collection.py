@@ -29,12 +29,10 @@ from typing import Any, Literal, TypedDict
 import numpy as np
 import torch
 
-from manabot.deck_collection import DeckCollection
 from manabot.decklist import deck_identity
 from manabot.env import Match, ObservationSpace, Reward
 from manabot.env.failures import CapturedVector
 from manabot.env.observation import ACTION_TYPE_DIM, ActionEnum
-from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.inference import PolicyInference
@@ -50,6 +48,7 @@ from manabot.sim.rollout import (
     RandomBatchController,
     _allocate_buffers,
 )
+from manabot.training.decks import TrainingDecks, pair_match
 from manabot.training.rollout.matchups import (
     Curriculum,
     elemental_roster,
@@ -187,7 +186,7 @@ class CollectorSnapshot:
     sampling_rng: torch.Tensor
     stats: CollectorStats
     current_games: CurrentGames | None = None
-    collection_digest: str | None = None
+    decks_digest: str | None = None
 
 
 _ACTION_TYPE_NAMES = {int(member): member.name.lower() for member in ActionEnum}
@@ -218,21 +217,20 @@ class SeatRoutedCollector:
         recovery_max_game_microsteps: int | None = None,
         root: str | None = None,
         matchup_curriculum: Curriculum = "fixed",
-        deck_collection: DeckCollection | None = None,
+        decks: TrainingDecks | None = None,
         workers: int = 1,
         game_errors: GameErrorPolicy | None = None,
         record_attempt: Callable[[GameAttempt], GameErrorState] | None = None,
     ) -> None:
-        self.deck_collection = deck_collection
-        if deck_collection is not None:
+        self.decks = decks
+        if decks is not None:
             if matchup_curriculum != "fixed":
-                raise ValueError("deck collection cannot be combined with a curriculum")
-            deck_collection.validate_current()
-            if match.config != deck_collection.match_config():
+                raise ValueError("training decks cannot be combined with a curriculum")
+            if match.config.content_pack != decks.pool:
                 raise ValueError(
-                    "collection representative match differs from the admitted collection"
+                    "collector match differs from its training decks' pool"
                 )
-            self._uniform_roster = deck_collection.roster()
+            self._uniform_roster = decks.players()
         elif matchup_curriculum == "elemental-uniform":
             self._uniform_roster = elemental_roster(match)
         else:
@@ -328,10 +326,8 @@ class SeatRoutedCollector:
                 if self._uniform_roster
                 else stream_matches(match, num_envs, matchup_curriculum)
             )
-            if deck_collection is not None:
-                self._env.set_deck_collection(
-                    self._uniform_roster, deck_collection.digest
-                )
+            if decks is not None:
+                self._env.set_training_decks(self._uniform_roster, decks.digest)
             elif self._uniform_roster:
                 self._env.set_uniform_roster(self._uniform_roster)
             if matchup_curriculum in ("fixed", "elemental-uniform"):
@@ -389,15 +385,15 @@ class SeatRoutedCollector:
             CurrentGames(self._env.current_game_seeds(), deepcopy(self._game_actions))
             if self._game_recovery_limit is not None
             else None,
-            self.deck_collection.digest if self.deck_collection is not None else None,
+            self.decks.digest if self.decks is not None else None,
         )
 
     def restore(self, state: CollectorSnapshot, check: Callable[[], None]) -> None:
         """Replay into a fresh collector; reject divergence before any learning."""
-        if getattr(state, "collection_digest", None) != (
-            self.deck_collection.digest if self.deck_collection is not None else None
+        if getattr(state, "decks_digest", None) != (
+            self.decks.digest if self.decks is not None else None
         ):
-            raise ValueError("collector deck collection identity mismatch")
+            raise ValueError("collector training decks identity mismatch")
         if self.stats.micro_steps or self._journal:
             raise ValueError("restore requires a fresh collector")
         if state.current_games is not None:
@@ -458,27 +454,12 @@ class SeatRoutedCollector:
     def _refresh_roots(self) -> None:
         """Read native sampling after resets, before counting the next game's rows."""
         if self._uniform_roster:
-            self.stream_matches = []
-            for a, b in self._env.current_matchup_indices():
-                if self.deck_collection is not None:
-                    self.stream_matches.append(
-                        Match(self.deck_collection.match_config(a, b))
-                    )
-                    continue
-                first, second = self._uniform_roster[a], self._uniform_roster[b]
-                self.stream_matches.append(
-                    Match(
-                        MatchConfig(
-                            hero=first.name,
-                            villain=second.name,
-                            hero_deck=first.decklist,
-                            villain_deck=second.decklist,
-                            hero_sideboard=first.sideboard,
-                            villain_sideboard=second.sideboard,
-                            content_pack=first.content_pack,
-                        )
-                    )
-                )
+            # Actual native setups, not indices: they remain exact for any deck
+            # the run submitted, even one outside the supply it began with.
+            self.stream_matches = [
+                Match(pair_match(*players))
+                for players in self._env.current_player_configs()
+            ]
         self._self_play_decks = [
             (
                 deck_identity(m.hero_deck, m.hero_sideboard),
@@ -585,18 +566,10 @@ class SeatRoutedCollector:
         No sampled action crosses the update boundary.
         """
 
-        if self.deck_collection is not None:
-            if agent.config.semantic_pack != self.deck_collection.pool.pack_key:
-                raise ValueError(
-                    "deck collection requires the complete pool policy vocabulary"
-                )
-            binding = getattr(agent, "world_binding", None)
-            if (
-                binding is not None
-                and binding.get("deck_collection", {}).get("digest")
-                != self.deck_collection.digest
-            ):
-                raise ValueError("policy checkpoint deck collection identity mismatch")
+        if self.decks is not None and agent.config.semantic_pack != self.decks.pool:
+            raise ValueError(
+                "training decks require the complete pool policy vocabulary"
+            )
         if self.opponent_mode == "learning":
             raise ValueError("use collect_pair for two learning models")
         # No cache or prepared observation survives learning, snapshot or restore.
@@ -937,9 +910,7 @@ class SeatRoutedCollector:
                 seed=seed,
                 seat=seat,
                 matchup=self.stream_matches[row].config,
-                collection_digest=self.deck_collection.digest
-                if self.deck_collection is not None
-                else None,
+                decks_digest=self.decks.digest if self.decks is not None else None,
                 outcome=outcome,
                 actions=[] if completed else list(self._game_actions[row]),
                 error_class=error_class,

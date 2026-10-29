@@ -20,7 +20,7 @@ pub struct StepResult {
     pub info: InfoDict,
 }
 
-/// One root sampler, with frozen Elemental draws and explicit distinct collection draws.
+/// One root sampler: the frozen Elemental roster, or replaceable distinct training decks.
 #[derive(Debug, Default)]
 struct RootRoster {
     players: Vec<PlayerConfig>,
@@ -129,22 +129,32 @@ impl VectorEnv {
         Ok(())
     }
 
-    /// Admit complete qualified lists before any root allocation. No pair table.
-    pub fn set_deck_collection(&mut self, roster: Vec<PlayerConfig>) -> Result<(), AgentError> {
-        if !self.player_configs.is_empty() || roster.len() < 2 {
+    /// Replace the training decks sampled at subsequent roots.
+    ///
+    /// Every deck passes the content pool's native admission before the
+    /// replacement takes effect; on any error the previous decks remain. Games
+    /// already underway keep their decks. Membership never grants permission:
+    /// game creation admits each submitted deck again.
+    pub fn set_training_decks(&mut self, decks: Vec<PlayerConfig>) -> Result<(), AgentError> {
+        if !self.uniform_roster.is_empty() && !self.uniform_roster.distinct {
             return Err(AgentError(
-                "collection requires at least two decks before reset".into(),
+                "the Elemental roster cannot be replaced by training decks".into(),
             ));
         }
-        let pack = roster[0]
+        if decks.len() < 2 {
+            return Err(AgentError(
+                "uniform-distinct-v1 requires at least two training decks".into(),
+            ));
+        }
+        let pack = decks[0]
             .content_pack
             .as_deref()
-            .ok_or_else(|| AgentError("collection requires an explicit content pool".into()))?;
+            .ok_or_else(|| AgentError("training decks require an explicit content pool".into()))?;
         let mut distinct = std::collections::BTreeSet::new();
-        for player in &roster {
+        for player in &decks {
             if player.content_pack.as_deref() != Some(pack) {
                 return Err(AgentError(
-                    "collection decks must share one content pool".into(),
+                    "training decks must share one content pool".into(),
                 ));
             }
             let issues = crate::semantic::deck_admission::admit_deck(
@@ -156,26 +166,40 @@ impl VectorEnv {
             .map_err(|error| AgentError(error.to_string()))?;
             if !issues.is_empty() {
                 return Err(AgentError(format!(
-                    "collection deck {}: {:?}",
-                    player.name, issues
+                    "training deck {}: {}",
+                    player.name,
+                    issues
+                        .iter()
+                        .map(|issue| issue.message.as_str())
+                        .collect::<Vec<_>>()
+                        .join("; ")
                 )));
             }
             if !distinct.insert((&player.decklist, &player.sideboard)) {
                 return Err(AgentError(
-                    "collection requires distinct normalized decks".into(),
+                    "training decks must be distinct normalized lists".into(),
                 ));
             }
         }
         self.uniform_roster = RootRoster {
-            players: roster,
+            players: decks,
             distinct: true,
         };
         Ok(())
     }
 
-    /// Current ordered indices into the configured uniform roster; empty for fixed setups.
+    /// The setups each game was actually reset with, in seat order.
+    pub fn current_player_configs(&self) -> Vec<Vec<PlayerConfig>> {
+        self.envs
+            .iter()
+            .map(|env| env.player_configs().to_vec())
+            .collect()
+    }
+
+    /// Current ordered indices into the fixed Elemental roster; empty otherwise.
+    /// Replaceable training decks report actual setups via `current_player_configs`.
     pub fn current_matchup_indices(&self) -> Vec<(usize, usize)> {
-        if self.uniform_roster.is_empty() {
+        if self.uniform_roster.is_empty() || self.uniform_roster.distinct {
             return Vec::new();
         }
         self.envs
@@ -758,44 +782,57 @@ mod tests {
     };
 
     #[test]
-    fn collection_roots_are_distinct_replayable_and_admitted() {
-        let roster: Vec<_> = ["Plains", "Mountain", "Forest"]
-            .into_iter()
-            .map(|name| {
-                let mut player = PlayerConfig::new(name, BTreeMap::from([(name.into(), 12)]));
-                player.content_pack = Some("tla-pool-v1".into());
-                player
-            })
-            .collect();
+    fn training_decks_are_admitted_distinct_replayable_and_replaceable() {
+        let deck = |name: &str| {
+            let mut player = PlayerConfig::new(name, BTreeMap::from([(name.into(), 12)]));
+            player.content_pack = Some("tla-pool-v1".into());
+            player
+        };
+        let decks: Vec<_> = ["Plains", "Mountain", "Forest"].map(deck).into();
         let mut vector = VectorEnv::new(2, 17402, true, OpponentPolicy::None);
-        assert!(vector
-            .set_deck_collection(vec![roster[0].clone(); 2])
-            .is_err());
-        let mut bad = roster.clone();
+        assert!(vector.set_training_decks(vec![decks[0].clone(); 2]).is_err());
+        let mut bad = decks.clone();
         bad[0].decklist = BTreeMap::from([("Black Lotus".into(), 12)]);
-        assert!(vector.set_deck_collection(bad).is_err());
-        vector.set_deck_collection(roster.clone()).unwrap();
-        vector.reset_all(roster[..2].to_vec()).unwrap();
+        assert!(vector.set_training_decks(bad).is_err());
+        vector.set_training_decks(decks.clone()).unwrap();
+        vector.reset_all(decks[..2].to_vec()).unwrap();
         let seeds = vector.current_game_seeds();
-        let pairs = vector.current_matchup_indices();
-        for (index, &(a, b)) in pairs.iter().enumerate() {
-            assert_ne!(a, b);
+        let actual = vector.current_player_configs();
+        for (index, players) in actual.iter().enumerate() {
+            assert_ne!(players[0].decklist, players[1].decklist);
             let mut scalar = Env::new(seeds[index], true, false, false);
-            scalar
-                .reset(vec![roster[a].clone(), roster[b].clone()])
-                .unwrap();
+            scalar.reset(players.clone()).unwrap();
             assert_eq!(
                 scalar.state_digest().unwrap(),
                 vector.envs[index].state_digest().unwrap()
             );
         }
-        vector.reset_all(roster[..2].to_vec()).unwrap();
+        vector.reset_all(decks[..2].to_vec()).unwrap();
         assert_ne!(seeds, vector.current_game_seeds());
+        vector
+            .reset_seeds_into(seeds.clone(), |_, _, _, _, _| Ok(()))
+            .unwrap();
+        assert_eq!(actual, vector.current_player_configs());
+
+        // A later root may use a deck nobody registered before training began.
+        // An unadmitted replacement fails before any game and keeps prior decks.
+        let mut generated = deck("Island");
+        generated.decklist.insert("Rocky Rebuke".into(), 1);
+        assert!(vector.set_training_decks(vec![decks[0].clone(), generated]).is_err());
+        vector
+            .reset_seeds_into(seeds.clone(), |_, _, _, _, _| Ok(()))
+            .unwrap();
+        assert_eq!(actual, vector.current_player_configs());
+        let replacement = vec![deck("Island"), deck("Swamp")];
+        vector.set_training_decks(replacement.clone()).unwrap();
+        assert_eq!(actual, vector.current_player_configs());
         vector
             .reset_seeds_into(seeds, |_, _, _, _, _| Ok(()))
             .unwrap();
-        assert_eq!(pairs, vector.current_matchup_indices());
-        assert!(vector.set_deck_collection(roster).is_err());
+        for players in vector.current_player_configs() {
+            assert!(players.iter().all(|player| replacement.contains(player)));
+        }
+        assert!(vector.current_matchup_indices().is_empty());
     }
 
     fn sample_player_configs() -> Vec<PlayerConfig> {

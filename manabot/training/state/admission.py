@@ -119,7 +119,6 @@ def admit_policy(
         raise ValueError("published checkpoint does not match producer weight artifact")
     if (
         source.regime.world != regime.world
-        or source.regime.deck_collection != regime.deck_collection
         or source.regime.agent != regime.agent
         or source.regime.observation != regime.observation
     ):

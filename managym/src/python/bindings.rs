@@ -984,6 +984,18 @@ impl From<PyPlayerConfig> for PlayerConfig {
 }
 
 #[cfg(feature = "python")]
+impl From<PlayerConfig> for PyPlayerConfig {
+    fn from(value: PlayerConfig) -> Self {
+        PyPlayerConfig {
+            name: value.name,
+            decklist: value.decklist.into_iter().collect(),
+            sideboard: value.sideboard.into_iter().collect(),
+            content_pack: value.content_pack,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
 #[pyclass(name = "Player")]
 #[derive(Clone)]
 pub struct PyPlayer {

@@ -1,45 +1,30 @@
-<!doctype html>
-<html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Checkpoints bind worlds · Accepted concept</title>
-<style>
-:root{color-scheme:light dark;--paper:#faf8f3;--ink:#282b26;--muted:#62665e;--line:#d5d6cc;--wash:#eeeee6;--accent:#346245}@media(prefers-color-scheme:dark){:root{--paper:#1b201d;--ink:#f0f0e6;--muted:#bdc2b7;--line:#495147;--wash:#272e28;--accent:#a7d3ab}}*{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font:17px/1.55 system-ui,sans-serif}main{max-width:790px;margin:auto;padding:36px 24px 60px}h1{font:500 clamp(31px,5vw,45px)/1.12 Georgia,serif;letter-spacing:-.025em;margin:14px 0 20px}h2{font-size:23px;margin:32px 0 12px}p{margin:10px 0 16px}.meta,.muted,small{color:var(--muted)}.meta{font-size:13px}.lead{font-size:21px}.contract{border-left:3px solid var(--accent);padding-left:18px}code{font:.85em ui-monospace,monospace;overflow-wrap:anywhere}pre{font:15px/1.65 ui-monospace,monospace;white-space:pre-wrap;background:var(--wash);padding:18px}table{width:100%;border-collapse:collapse;font-size:15px}th,td{text-align:left;vertical-align:top;padding:11px 8px;border-bottom:1px solid var(--line)}th:first-child,td:first-child{padding-left:0}footer{border-top:1px solid var(--line);margin-top:34px;padding-top:18px}@media(max-width:500px){main{padding:25px 17px}table{font-size:13px}th,td{padding:9px 5px}}
-</style></head>
-<body><main>
-<header><p class="meta">f871a8 · Concept review · October 28, 2026 · Accepted clarification from Jack Heart</p>
-<h1>Checkpoints bind worlds.</h1>
-<p class="lead">The world fixes the rules-engine behavior and card file. The training run owns how the model was trained.</p>
-<p class="contract">A model can play any deck admitted by its world. It does not need its training decklists, sampling policy or regime to load or execute.</p>
-<p class="meta">Built from your clarification, <code>model/world.py</code>, <code>model/checkpoint.py</code>, <code>model/catalog.py</code>, <code>deck_collection.py</code>, training-state admission and the working design. This is the accepted target; current implementation still needs correction.</p></header>
-<section><h2>The ownership split</h2>
-<pre>Training run ── produces / references ──▶ Checkpoint
-                                              │
-                                           binds to
-                                              ▼
-                                            World</pre>
-<table><thead><tr><th>Concept</th><th>Owns</th></tr></thead><tbody>
-<tr><td><strong>World</strong></td><td>Versioned rules-engine behavior and card file, including the semantics of observations and legal actions.</td></tr>
-<tr><td><strong>Checkpoint</strong></td><td>Weights, architecture/inference configuration and world identity. The encodings and output meanings needed to interpret the model.</td></tr>
-<tr><td><strong>Training run</strong></td><td>Regime, deck collection, source provenance, sampling/curriculum, seeds, metrics and producer history. A verified reference to the checkpoint artifact.</td></tr>
-<tr><td><strong>Recovery state</strong></td><td>Run-owned optimizer, scheduler, collector and RNG state; exact population and continuation contract.</td></tr>
-</tbody></table>
-<p class="muted">Architecture and model I/O are necessary to interpret weights. They do not require the model to understand its training regime.</p></section>
-<section><h2>One concrete interaction</h2>
-<p>Prepare collection A and use it in a training run. Export a model bound to world W. Copy the model somewhere without collection A or the training recipe.</p>
-<p><strong>Load and play:</strong> the model loads using W. A new deck D passes W’s native admission and can be played, even if D never appeared in A. The evaluation record owns D and its result.</p>
-<p><strong>Failure and recovery:</strong> an unsupported card or changed rules/card-file identity fails compatibility. Resuming the interrupted training run checks that run’s original collection, sampler and recovery state. Those checks do not become model execution restrictions.</p>
-<p>Curriculum may later change what a run samples. It belongs to the run. Uniform distinct-deck sampling is still the initial choice.</p></section>
-<section><h2>Current → accepted target</h2>
-<table><thead><tr><th>Current implementation</th><th>Required correction</th></tr></thead><tbody>
-<tr><td>Checkpoint embeds <code>DeckCollection</code> and an exact setup roster.</td><td>Portable checkpoint binds the world. The run retains the collection and training provenance.</td></tr>
-<tr><td>Checkpoint loading re-admits the training source records.</td><td>Loading validates weights/architecture, world and inference contracts without training data.</td></tr>
-<tr><td>Execution rejects a deck absent from the training roster.</td><td>Shared native admission validates the actual deck against the bound world.</td></tr>
-<tr><td>Training metadata is partly embedded in export metadata.</td><td>Audit current exporters and producer/catalog readers so run records supply training facts.</td></tr>
-</tbody></table>
-<p class="muted">The earlier review was too narrow: relaxing the roster check while retaining training-regime dependencies in the checkpoint would not satisfy this correction.</p></section>
-<section><h2>Actions → APIs</h2>
-<p><strong>Prepare and train:</strong> keep <code>DeckCollection</code> and <code>TrainingRegime</code> at the training boundary. <strong>Save, load and inspect:</strong> change <code>checkpoint_world</code>, checkpoint export/loading and catalog admission to consume the world descriptor, without a representative training match. <strong>Play:</strong> use the same native deck admission. <strong>Resume:</strong> keep exact run-state admission strict.</p>
-<p>Frozen artifacts and historical semantics stay intact. New portable contracts must be explicit where versioning is required. No new runtime, card registry or curriculum framework is needed.</p></section>
-<footer><h2>Decision resolved</h2>
-<p>Your clarification replaces the 3a/3b choice. The proof should load a model with no training inputs available, admit a new same-world deck, reject incompatible worlds/cards/model I/O, and retain exact-resume checks in the training run.</p>
-<p class="meta">Design and usage copy updated. No implementation changes or execution restart in this concept-review pass. Training remains primary; Academy secondary; 17Lands ingestion follows full TLA support.</p></footer>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>A deck is a deck · Manabot concept review</title><style>
+:root{color-scheme:light dark;--bg:#faf8f3;--ink:#282d29;--muted:#5d675f;--line:#ccd2c9;--wash:#eef0e9;--accent:#2b6847}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 system-ui,sans-serif}main{max-width:860px;margin:auto;padding:34px 25px 65px}h1{font:500 clamp(34px,5vw,48px)/1.12 Georgia,serif;margin:17px 0}h2{font-size:22px;margin:29px 0 12px}p{margin:10px 0 16px}.meta{font-size:13px;color:var(--muted);overflow-wrap:anywhere}.lead{font-size:21px}.note{border-left:3px solid var(--accent);padding-left:18px}a{color:var(--accent);text-underline-offset:3px}code{font:.9em ui-monospace,monospace;overflow-wrap:anywhere}pre{background:var(--wash);padding:18px;font:14px/1.65 ui-monospace,monospace;white-space:pre-wrap}table{width:100%;border-collapse:collapse;font-size:15px}td,th{padding:12px 10px 12px 0;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}footer{border-top:1px solid var(--line);padding-top:16px;margin-top:30px}:focus-visible{outline:2px solid var(--accent);outline-offset:3px}@media(prefers-color-scheme:dark){:root{--bg:#1c211e;--ink:#ecefe6;--muted:#b4beb5;--line:#4d5a4f;--wash:#29332b;--accent:#a2d7ae}}@media(max-width:500px){main{padding:24px 17px}table{font-size:13px}pre{font-size:12px;padding:13px}}@media print{main{padding:0}body{font-size:12px}}
+</style></head><body><main><header>
+<p class="meta">f871a8 · Concept review · October 28, 2026<br>Built from Jack Heart’s direction, scratch/f871a8-import-decklist-files.md, manabot/deck_collection.py, manabot/model/world.py, training/regime.py and native vector_env.rs.</p>
+<h1>A deck is a deck.</h1><p class="lead">Training gets a verified world. It chooses or computes decks, then submits them to that world.</p><p class="note"><strong>Accepted correction; implementation pending.</strong> A fixed list is useful input, not the universe of permitted training decks. Collection membership does not make a different kind of deck.</p></header>
+<section><h2>Three concepts</h2><table><thead><tr><th>Concept</th><th>Responsibility</th></tr></thead><tbody>
+<tr><td><strong>World</strong></td><td>Fixed rules and card definitions. Determines whether a deck can execute.</td></tr>
+<tr><td><strong>Deck</strong></td><td>Main-deck and sideboard card counts. Same representation whether read from a file, sampled from a list or computed.</td></tr>
+<tr><td><strong>Training</strong></td><td>Chooses decks. Initially uniform sampling from supplied lists; eventually it may compute or modify them. Records what actually ran and the state needed to continue.</td></tr></tbody></table>
+<p>Checkpoints bind to the world and model I/O. Import source text and diagnostics remain metadata. Neither collection membership nor provenance changes what a deck is.</p></section>
+<section><h2>One interaction, through the boundary</h2><p>Choose world W. Supply decks A, B and C and check them all before starting. Training samples matches from that list.</p><p>Later, a training procedure could produce deck D. If D is valid in W, it can be used in a subsequent game with the same world and model. There is no requirement to have registered D at the start.</p>
+<pre aria-label="Proposed conceptual flow">Initial fixed-list path:
+  supplied decks → validate against W → choose decks → start game
+
+Future computed-deck path:
+  training state → produce deck → validate against W → start game
+
+Both paths submit the same kind of deck.</pre>
+<p class="meta">Conceptual flow, not implemented API signatures. Computed decks and adaptive curriculum remain future work; the fixed-list path must not make them incompatible with the world/model boundary.</p>
+<p><strong>Invalid input:</strong> an unsupported card rejects the proposed deck before game creation. Report the problem; correct and resubmit. Do not substitute another deck silently or change a game already underway.</p>
+<p><strong>Recovery:</strong> restore training’s selection or generation state, RNG and actual game decks. An evolving deck sequence can belong to one run. Exact resume requires faithful continuation, not an eternally fixed deck list.</p></section>
+<section><h2>What must change in the implementation</h2><table><thead><tr><th>Current code</th><th>Required direction</th></tr></thead><tbody>
+<tr><td><code>CollectionDeck</code> wraps counts, identity and mandatory source documents.</td><td>Use one shared deck representation. Retain import evidence separately; computed decks need no fictional file.</td></tr>
+<tr><td><code>DeckCollection</code> bundles decks, sources, pool, sampling policy and learning schema.</td><td>A stored list can be data. Training owns selection policy; the world owns validity and inference compatibility.</td></tr>
+<tr><td><code>set_deck_collection</code> requires a complete roster before reset.</td><td>World validation is the execution boundary. Fixed-list prevalidation is an early error check, not exclusive permission.</td></tr>
+<tr><td>Checkpoint/export/catalog paths depend on the training collection.</td><td>Bind and inspect the model using its world and inference contract, without training data.</td></tr>
+<tr><td>Recovery rejects any change to a frozen collection digest.</td><td>Preserve exact continuation of the run’s declared selection process. Future recorded deck changes are not automatically a different experiment.</td></tr></tbody></table>
+<p>No new deck-source hierarchy or mutation framework is needed just to express this boundary. Reuse the existing shared native admission and consolidate the current deck types. Preserve historical artifacts and the existing Elemental sampling sequence.</p></section>
+<footer><h2>Direction settled; machinery remains to build</h2><p>The next proof should accept a new same-world deck at a later game root, reject an invalid one before execution, validate a fixed list upfront, and recover the run faithfully. No weight updates are needed for that proof.</p><p class="meta">No new product choice is needed to establish this boundary. The timing and algorithm for future deck adaptation remain deferred. This pass records the design; it does not change product code or restart execution.</p><p><a href="loopflow://manabot/task/f871a8">Import decklist files · f871a8</a> · Available: concept review · <a href="https://github.com/loopflowstudio/manabot/pull/395">Draft PR #395</a></p></footer>
 </main></body></html>

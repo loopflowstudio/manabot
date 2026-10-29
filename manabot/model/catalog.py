@@ -26,10 +26,9 @@ from typing import Any, Literal
 
 import torch
 
-from manabot.deck_collection import DeckCollection
 from manabot.env import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.world import WORLD, checkpoint_configs, checkpoint_world
+from manabot.model.world import WORLD, expected_world
 
 CheckpointSource = Literal["path", "runs", "tournament"]
 
@@ -167,15 +166,7 @@ def checkpoint_incompatibility(checkpoint: Mapping[str, Any]) -> str | None:
         observation = ObservationConfig.from_checkpoint(
             checkpoint["hypers"]["observation_hypers"]
         )
-        configs = checkpoint_configs(binding)
-        collection = (
-            DeckCollection.model_validate(binding["deck_collection"])
-            if "deck_collection" in binding
-            else None
-        )
-        expected = checkpoint_world(
-            configs, ObservationSpace(observation), deck_collection=collection
-        )
+        expected = expected_world(binding, ObservationSpace(observation))
     except BaseException as error:  # PyO3 panics on invalid native setups
         if isinstance(error, (KeyboardInterrupt, SystemExit, GeneratorExit)):
             raise
@@ -200,10 +191,6 @@ def _content_mismatch(trained: Any, engine: Any) -> str:
 
 _BINDING_FIELDS = (
     (
-        "deck_collection",
-        lambda trained, engine: "its deck collection no longer resolves the same",
-    ),
-    (
         "policy_input_version",
         lambda trained, engine: (
             f"policy input version {trained}, engine expects {engine}"
@@ -216,6 +203,7 @@ _BINDING_FIELDS = (
         ),
     ),
     ("content_manifest", _content_mismatch),
+    ("content_pool", _content_mismatch),
     (
         "input_schema",
         lambda trained, engine: "observation tensor shapes differ from this engine",

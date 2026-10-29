@@ -21,6 +21,7 @@ from pydantic import BaseModel, ConfigDict, computed_field
 
 if TYPE_CHECKING:
     from manabot.infra.config import MatchConfig
+    import managym
 
 Section = Literal["main", "sideboard"]
 MAX_SOURCE_BYTES = 65_536
@@ -107,10 +108,32 @@ def deck_identity(deck: Mapping[str, int], sideboard: Mapping[str, int]) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+class Deck(_Record):
+    """Main-deck and sideboard counts; identity derives from this content alone."""
+
+    main: dict[str, int]
+    sideboard: dict[str, int] = {}
+
+    @property
+    def identity(self) -> str:
+        return deck_identity(self.main, self.sideboard)
+
+    def player(self, pack_key: str) -> managym.PlayerConfig:
+        import managym
+
+        return managym.PlayerConfig(self.identity, self.main, self.sideboard, pack_key)
+
+
 class AdmittedDeck(_Record):
+    """One source document's admission result: the deck plus its provenance."""
+
     document: DeckDocument
     main: dict[str, int]
     sideboard: dict[str, int]
+
+    @property
+    def deck(self) -> Deck:
+        return Deck(main=self.main, sideboard=self.sideboard)
 
 
 class ImportedMatch(_Record):

@@ -247,10 +247,18 @@ impl PyVectorEnv {
             .map_err(map_agent_err)
     }
 
-    fn set_deck_collection(&mut self, roster: Vec<PyPlayerConfig>) -> PyResult<()> {
+    fn set_training_decks(&mut self, decks: Vec<PyPlayerConfig>) -> PyResult<()> {
         self.inner
-            .set_deck_collection(roster.into_iter().map(PlayerConfig::from).collect())
+            .set_training_decks(decks.into_iter().map(PlayerConfig::from).collect())
             .map_err(map_agent_err)
+    }
+
+    fn current_player_configs(&self) -> Vec<Vec<PyPlayerConfig>> {
+        self.inner
+            .current_player_configs()
+            .into_iter()
+            .map(|players| players.into_iter().map(PyPlayerConfig::from).collect())
+            .collect()
     }
 
     fn current_matchup_indices(&self) -> Vec<(usize, usize)> {

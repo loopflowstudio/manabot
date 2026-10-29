@@ -373,15 +373,16 @@ class CapturedVector(_Capture):
         self.native.set_uniform_roster(roster)
         self._roster = [PlayerSetup.retain(player) for player in roster]
 
-    def set_deck_collection(
-        self, roster: list[managym.PlayerConfig], digest: str
+    def set_training_decks(
+        self, decks: list[managym.PlayerConfig], digest: str
     ) -> None:
-        self.native.set_deck_collection(roster)
-        self._roster = [PlayerSetup.retain(player) for player in roster]
-        self.identities["deck_collection"] = {
+        """Replace decks for later roots; evidence keeps each game's actual setup."""
+        self.native.set_training_decks(decks)
+        self._roster = [PlayerSetup.retain(player) for player in decks]
+        self.identities["training_decks"] = {
             "digest": digest,
             "sampling_policy": "uniform-distinct-v1",
-            "deck_ids": [player.name for player in roster],
+            "deck_ids": [player.name for player in decks],
         }
 
     def reset_all_into_buffers(self, players: list[managym.PlayerConfig]) -> None:
@@ -395,7 +396,7 @@ class CapturedVector(_Capture):
             game.restart(seed)
         with self._guard(lambda: self._evidence_for(self.games, "reset")):
             self.native.reset_each_into_buffers(players)
-        self._synchronize()
+        self._synchronize(reset=True)
 
     def reset_seeds_into_buffers(self, seeds: list[int]) -> None:
         self.next_seeds = list(seeds)
@@ -403,17 +404,19 @@ class CapturedVector(_Capture):
             game.restart(seed)
         with self._guard(lambda: self._evidence_for(self.games, "reset")):
             self.native.reset_seeds_into_buffers(seeds)
-        self._synchronize()
+        self._synchronize(reset=True)
 
-    def _synchronize(self) -> None:
-        if self._roster:
-            for game, (a, b) in zip(
-                self.games, self.native.current_matchup_indices(), strict=True
-            ):
-                game.players = [self._roster[a], self._roster[b]]
-        for game, seed in zip(
-            self.games, self.native.current_game_seeds(), strict=True
+    def _synchronize(self, *, reset: bool = False) -> None:
+        seeds = self.native.current_game_seeds()
+        if self._roster and (
+            reset or any(game.seed != seed for game, seed in zip(self.games, seeds))
         ):
+            # Sampled roots record the native setup actually created.
+            for game, players in zip(
+                self.games, self.native.current_player_configs(), strict=True
+            ):
+                game.players = [PlayerSetup.retain(player) for player in players]
+        for game, seed in zip(self.games, seeds, strict=True):
             if game.seed != seed:
                 game.restart(seed)
         self.next_seeds = [

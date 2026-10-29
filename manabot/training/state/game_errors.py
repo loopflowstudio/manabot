@@ -65,7 +65,7 @@ class GameAttempt(BaseModel):
     seed: int
     seat: int
     matchup: MatchConfig
-    collection_digest: str | None = Field(
+    decks_digest: str | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
     outcome: GameOutcome

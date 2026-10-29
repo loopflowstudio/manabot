@@ -42,6 +42,7 @@ _ROOT_OWNERS: dict[str, ComponentName] = {
     "id": "identity",
     "world": "environment",
     "match": "environment",
+    "decks": "environment",
     "observation": "environment",
     "agent": "model",
     "stages": "pipeline",

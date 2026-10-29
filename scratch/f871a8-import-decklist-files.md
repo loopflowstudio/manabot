@@ -1,4 +1,62 @@
-# PR D: decklist import and reproducible training collections
+# PR D: decklist import and reproducible training on decklists
+
+## Accepted correction: one deck concept, validated against the world
+
+Jack Heart clarified that training receives a verified world with its card set,
+then supplies decks during training. A fixed list may be validated upfront, but
+pre-registering every possible training deck must not define compatibility.
+Decks may eventually be computed or modified as training progresses. He also
+rejected the confusing distinction between `CollectionDeck`, deck, and
+`DeckCollection`: a deck is a deck, regardless of where it came from or how it
+was selected. These statements supersede any fixed-population requirement below.
+
+### Accepted experience and ownership
+
+- **World:** fixed rules behavior and card definitions; shared native validation
+  decides whether a submitted deck can execute in that world.
+- **Deck:** main-deck and sideboard card counts. Identity is derived from that
+  content. File text, filenames and parse diagnostics describe an import/source;
+  they do not create a special kind of deck. Computed decks need no invented file.
+- **Training:** chooses or produces decks and submits them at game creation.
+  Initially this can sample uniformly from a supplied list. A fixed list is
+  checked upfront so bad input is reported before training. Future computed or
+  modified decks pass the same world validation before use. All submitted decks
+  must be valid; a cached validation result for an unchanged deck/world can avoid
+  repeating work without turning registration into permission.
+- **Checkpoint:** binds the world and inference contract, never the list of
+  training decks or the method of choosing them.
+- **Run and recovery:** retain the actual decks used, selection/generation state,
+  seeds and changes needed to explain and reproduce continuation. An evolving
+  deck sequence can be part of one run. Exact resume means restoring that
+  process faithfully, not requiring an eternally fixed population. An unrecorded
+  substitution or unrecoverable source state must not silently pass exact resume.
+
+### Usage draft and implementation direction (implemented 2026-10-28)
+
+Choose world W. Supply decks A, B and C; validate them against W and sample
+matches. Later, a deck-producing procedure could modify B into D and submit D.
+If D passes W's validation, it can start a subsequent game with the same model
+and world. An unsupported card rejects D before game creation with a diagnostic;
+it does not alter a game already underway or silently replace the deck. Correct
+the deck and submit it again. Exact failure/retry policy for a future adaptive
+producer remains future work.
+
+Consolidate around one shared deck representation; reuse or reshape existing
+domain types rather than adding a new nominal wrapper. Separate parsing/source
+records, world validation, training selection and recovery by responsibility.
+Remove `CollectionDeck` as a separate domain concept. A list of decks may be
+stored as data, but `DeckCollection` must not be a mandatory admission lifecycle
+or own the sampler/model-input schema. Review native `RootRoster`/collection
+setup and collector admission as well as checkpoint code: removing only the
+checkpoint coupling would still leave pre-registration as a training constraint.
+Preserve the existing Elemental sequence and historical evidence.
+
+The immediate path can remain fixed-list uniform sampling. Do not implement a
+curriculum or deck-mutation framework merely to reserve this future capability.
+The boundary must accept a valid deck without requiring membership in a frozen
+training roster. Proof should cover a new same-world deck at a later game root,
+an invalid generated deck rejected before execution, fixed-list upfront errors,
+and faithful recovery of the actual deck-selection process without weight updates.
 
 ## Accepted concept correction: checkpoints bind worlds, not training regimes
 
@@ -19,11 +77,11 @@ choice between a training-roster allowlist and a world-bound policy.
   to interpret the model are inference contracts, not training-regime knowledge.
   No training deck collection, source files, sampling policy or regime is needed
   to save, load, inspect or execute the portable model.
-- **Training run:** the regime, admitted deck collection and source provenance,
+- **Training run:** the regime, deck selection/production and source provenance,
   sampling policy/curriculum, seeds, metrics and producer history. It references
   the checkpoint artifact by verified identity; the checkpoint need not contain
   or load the run. This preserves provenance without making the model own it.
-- **Recovery state:** optimizer, scheduler, collector/RNG and exact-population
+- **Recovery state:** optimizer, scheduler, collector/RNG and deck-selection
   state owned by the run. Exact-resume checks happen here and in run admission,
   not in portable checkpoint compatibility.
 
@@ -34,16 +92,16 @@ I/O still reject; unseen-but-admitted combinations do not. The distinction is
 compatibility, not a claim about strength. Uniform distinct-deck sampling remains
 the initial run policy; curriculum is deferred and never becomes model metadata.
 
-### Accepted usage copy (target behavior; implementation still differs)
+### Usage sketch (implementation details are not separate user approvals)
 
-Prepare an admitted deck collection and select it in a training run. The run
-records its exact collection, sampling policy and history. Export or load the
+Supply decklists for a training run to sample from. The run
+records the decks used, selection policy/state and history. Export or load the
 model with its world; the model does not require the training files or regime.
 Use any decklists admitted to that same world for play or evaluation, recording
 actual evaluation inputs in the evaluation record. Resume a training run using
-its recovery state and original run contract. A changed training population is
-an explicitly recorded change of experiment/transfer, never a silent exact
-resume. Cross-corpus training transfer and adaptive curriculum are still deferred.
+its recovery state and run contract. Deck changes produced by that process may
+belong to the same run; unrecorded input/state substitutions must not silently
+pass exact resume. Adaptive curriculum and deck generation remain future work.
 
 ### Implementation consequence and proof
 
@@ -74,9 +132,8 @@ changed rules/card-file/input identities; preserve exact run recovery rejection
 for changed corpus/sampler/state; verify the run still links the checkpoint and
 its training provenance. No weight updates, paid compute or data download needed.
 
-The review updates the design and screen only. Implementation remains pending;
-this correction is not a claim that the existing checkpoint path already has
-this separation. Working screen: `scratch/concept-review.html`.
+Implemented 2026-10-28 per Jack Heart's approval; awaiting another review.
+Working screen: `scratch/concept-review.html`.
 
 ## Accepted direction — Jack Heart, 2026-10-28
 
@@ -91,8 +148,22 @@ download, follow-up launches, frozen-evidence rewrites or independent TLA rules
 work. Real 17Lands acquisition/schema mapping and held-out corpus policy remain
 later design work. Do not change MTG-175's reserved curriculum experiments.
 
-Prepare complete decks against an explicit qualified pool. Reject the entire
-collection on invalid input, retaining source/line diagnostics; never silently
+### Implementation choices, distinct from explicitly accepted direction
+
+In the PR review, Jack Heart asked whether “Files become one admitted training
+collection” was agreed. The explicit agreement is random training matches from
+decklists, uniform sampling over distinct lists initially, future curriculum,
+and world-bound models independent of training regime. A separate preparation
+command, immutable manifest, and collection type bundling source records, pool,
+sampling policy and learning schema are implementation choices; the heading
+must not present them as separately approved product concepts. The question does
+not itself approve or reject that lifecycle. The subsequent clarification at
+the top of this document now establishes world validation and a single deck
+concept, without requiring that lifecycle; the preparation command, manifest
+and collection type were removed in the 2026-10-28 implementation.
+
+Current implementation: the regime checks a fixed list upfront against an explicit qualified pool. Reject the entire
+list on invalid input, retaining source/line diagnostics; never silently
 filter cards or decks. Collapse identical normalized main/sideboard lists while
 retaining every source record. Use one fixed whole-pool policy vocabulary across
 all sampled pairs. Record game starts separately from learner transitions:
@@ -112,7 +183,7 @@ adaptive weights or speculative curriculum framework.
   make a card eligible for novel combinations. No second rules registry or
   generic native fallback for imported files.
 - This Task owns counted-lines-v1 parsing, named normalized records, shared
-  native construction admission, collection manifests and consumer entry points.
+  native construction admission, run-owned training decks and consumer entry points.
   Preserve source bytes including BOM/CRLF, filenames and line diagnostics.
   Resolve front/full DFC names; reject reverse-only, ambiguous, unknown and
   unsupported entries without substitution.
@@ -146,58 +217,51 @@ The importer connects parser/resolution to native admission, sim file flags and
 Academy's editable two-file validation/start flow. Retained imports bind exact
 pool/content identity and reject source/setup tampering. Simulation supports
 random/default players; Academy supports built-in opponents. Imported setup
-checkpoint opponents remain rejected until consumer compatibility admission
-exists. Current collection-trained exports bind all member decks; this is superseded by
-the accepted world-only checkpoint design above and needs correction.
+checkpoint opponents remain rejected in those consumers (scratch/questions.md).
 
-Training configuration embeds a loaded, versioned collection rather than keeping
-a mutable file pointer. Set `deck_collection: path/to/manifest.json` and
-`agent.semantic_pack: tla-pool-v1`; an omitted representative match is derived.
-Stages require current-self behavior, one producer, ordinary roots and the
-fixed curriculum field. See docs/decklist-import.md for preparation and usage.
+Training (world-validated decks, implemented): `decklist.Deck` is the one deck
+concept (counts; identity from content). `AdmittedDeck` is an import record
+exposing `.deck`. `training/decks.TrainingDecks` is run-owned data: pool key,
+distinct decks, every source record; `from_documents`/`from_files` reject the
+whole fixed list upfront; `check()` re-admits decks natively at regime
+validation. Regime field `decks: {pool, files}` embeds at load. Native
+`VectorEnv.set_training_decks` admits every deck before replacing the supply for
+later roots (no pre-reset restriction; rejection keeps prior decks; running
+games unchanged); `current_player_configs` reports actual setups, used by the
+collector and failure capture. `current_matchup_indices` is Elemental-only.
 
-Collection digest binds normalized membership, all retained source records,
-content/world, schema and sampling policy. Native roots choose actual decks;
-collector counters, snapshots, exact/current-game recovery, checkpoint/catalog
-admission and failure records currently retain those identities. Keep them in run
-and recovery records; remove the collection dependency from portable model
-checkpoint/catalog admission as directed above. Failure capture journals
-isolated steps and synchronizes replacement roots through CapturedVector.
+Checkpoints: deck runs export `save_checkpoint(content_pool=...)` →
+`model.world.pool_world`: native `content_pool` descriptor, rules, input schema
+and learning-schema hash; no setups, decks, sources or sampler. Execution admits
+any deck the pool admits (`validate_agent_setup`), rejects unsupported/other
+pools; load/catalog reject changed descriptor/rules/input. Exact setup bindings
+(authored, Elemental) unchanged. Run recovery keeps the decks digest in collector
+snapshots and `GameAttempt.decks_digest`; learning-state resume compares
+`regime.decks`; policy admission no longer compares training decks.
 
-Acceptance: three or more eligible non-preset decks; changing pairs over resets;
-identical pair/seat/seed and policy RNG after recovery; reject invalid/unsupported
-input before collection; reject changed corpus/content/schema on resume; retain
-actual sampled IDs in failure/capture records; one compatible policy vocabulary.
-Use bounded fixtures and the actual collector reset path, without weight updates.
+Acceptance (training): three or more eligible decks; changing pairs over resets;
+identical pair/seat/seed/policy RNG after recovery; invalid/unsupported fixed
+input rejected upfront; changed supply rejected on resume; actual setups in
+failure/capture records; unseen same-world deck at a later root; invalid
+generated deck rejected before play; world-only export/load/inspect. Bounded
+fixtures, actual collector path, no weight updates.
 
-Gate/demo/delivery own full affected suites, acceptance review, final upstream
-content revalidation and publication. The world-only checkpoint correction above
-is now required implementation work. Existing focused evidence: native admission/catalog tests, 50 Python
-import/startup/identity/reconnect/fork/stale/source checks, frontend check/build
-and a real browser import/reconnect proof passed. The documented fixed-seed CLI
-proof stopped after four decisions, deliberately unfinished, with setup identity
-0471df58fab1310ced94add4190c76509abb878f8df191c601c12bcafc8fe3fa.
-Training proof at d8fc9833c passed nine collection tests and one existing Elemental
-isolated-failure regression, plus the focused debug native collection-root test;
-the release extension was rebuilt and atomically installed. These are focused
-results, not full gate certification.
+Remaining: gate owns full affected suites (debug Rust, training recovery,
+learning-state, Elemental and combined CI collection) per
+docs/development/validation.md. Run→checkpoint linkage is existing TrainingRun
+records; not re-proved end-to-end by executing a regime here.
 
 ## Delete — do not maintain
 
-Completed: remove explicit-pack authored-only selection from semantic/content.rs;
-retain implicit presets alongside qualified novel admission. Remove unused
-`env.match.parse_deck` and its exclusive TestDeckParsing/deck_formats tests.
-Move deck hashing from rollout accounting to shared decklist ownership, preserving
-its existing serialized identity. Generalize the existing root sampler's admission
-without changing Elemental's exact roster, mirrors or RNG sequence.
-
-Collection preparation groups admitted records once by deck ID, so membership
-and provenance cannot drift between parallel maps. Both file consumers share the
-bounded UTF-8 reader, preserving their existing filename conventions. Setup
-hashing stays local: importing infra.identity here reenters infra.config and
-breaks Academy's fresh-process import boundary.
-No remaining deletion targets in this training pass; no card-authoring deletion
-belongs here. The Academy redesign below is explicitly deferred.
+Completed earlier: explicit-pack authored-only selection; `env.match.parse_deck`
+and its tests; deck hashing moved to decklist (identity preserved). This pass
+removed `manabot/deck_collection.py` (`CollectionDeck`, `DeckCollection`,
+prepare CLI and manifest), checkpoint/catalog `deck_collection` binding and
+roster allowlist, collector checkpoint-digest check, policy-admission deck
+equality, native `set_deck_collection` pre-reset restriction, and
+tests/training/test_deck_collection.py (coverage moved to test_training_decks.py).
+Setup hashing stays local (infra.identity import breaks Academy's boundary).
+The Academy redesign below is explicitly deferred.
 
 ## Secondary Academy direction (1a, accepted; not implemented)
 
@@ -240,4 +304,5 @@ The manifest references `.lf/wave/engine/GOAL.md` and `MEMORY.md`, but neither
 exists in this checkout. The supplied Task, accepted design and dated Steers
 provide the implementation scope; Wave context was not reconstructed.
 
-Check — `uv run --extra dev --extra artifacts pytest tests/academy/test_advice.py::test_default_play_import_does_not_require_training_dependencies tests/training/test_deck_collection.py tests/semantic/test_decklist_import.py tests/academy/test_decklist_setup.py -q`: 28 passed; existing Elemental recovery/refill checks: 5 passed; Ruff and diff checks passed. Gate owns full affected suites (debug Rust, training recovery/learning-state/Elemental and combined CI collection), per docs/development/validation.md.
+Check — 2026-10-28 corrections: `uv run --extra dev pytest tests/training/test_training_decks.py tests/model/test_world.py tests/model/test_catalog.py tests/training/test_elemental_uniform.py tests/semantic/test_decklist_import.py tests/academy/test_decklist_setup.py tests/test_package_boundaries.py tests/academy/test_advice.py::test_default_play_import_does_not_require_training_dependencies -q`: 60 passed; tests/model + self_play + checkpoint catalog + learning_state/game_errors/recovery: 236 passed after registering `decks` in experiment ownership; `cargo test --lib vector_env` (debug) 13 passed; clippy and ruff clean; release extension rebuilt and atomically installed.
+Compress — 2026-10-28: one deck-admission loop (`model.world.admit_pool_decks`) now serves both `TrainingDecks.check` and pool-bound `validate_agent_setup`; dropped unused `match_config` indices and a redundant regime branch. Focused suite above (minus advice test): 58 passed; ruff clean. Gate owns full suites.

@@ -9,7 +9,7 @@ from pathlib import Path
 import platform
 import socket
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 import uuid
 
 import numpy as np
@@ -175,21 +175,25 @@ def validate_regime(
             raise ValueError(
                 "elemental-uniform requires complete Elemental policy input"
             )
-    if regime.deck_collection is not None:
-        collection = regime.deck_collection
+    if regime.decks is not None:
         if require_current_world:
-            collection.validate_current()
-        if regime.match != collection.match_config():
+            regime.decks.check()
+        if regime.match.content_pack != regime.decks.pool:
+            raise ValueError("regime match differs from its training decks' pool")
+        if regime.agent.semantic_pack != regime.decks.pool:
             raise ValueError(
-                "collection representative match differs from regime match"
-            )
-        if regime.agent.semantic_pack != collection.pool.pack_key:
-            raise ValueError(
-                "deck collection requires the complete pool policy vocabulary"
+                "training decks require the complete pool policy vocabulary"
             )
     if regime.agent.belief_count_buckets:
         raise ValueError("regime stages do not produce belief inputs")
     return regime
+
+
+def _checkpoint_world(regime: TrainingRegime) -> dict[str, Any]:
+    """A deck-supplied run exports its pool's world, never its training decks."""
+    if regime.decks is not None:
+        return {"content_pool": regime.decks.pool}
+    return {"player_configs": Match(regime.match).to_rust()}
 
 
 def _runtime_identities(
@@ -621,8 +625,7 @@ def _execute_regime(
                 model,
                 space,
                 target.with_suffix(".tmp"),
-                player_configs=Match(regime.match).to_rust(),
-                deck_collection=regime.deck_collection,
+                **_checkpoint_world(regime),
                 extra={
                     "run_id": run.id,
                     "stage_id": record.id,
@@ -1155,8 +1158,7 @@ def _execute_regime(
                             agent,
                             space,
                             temporary,
-                            player_configs=Match(regime.match).to_rust(),
-                            deck_collection=regime.deck_collection,
+                            **_checkpoint_world(regime),
                             extra={
                                 "run_id": run.id,
                                 "stage_id": stage.id,
@@ -1227,7 +1229,7 @@ def _execute_regime(
                         else None,
                         root=stage.root,
                         matchup_curriculum=stage.matchup_curriculum,
-                        deck_collection=regime.deck_collection,
+                        decks=regime.decks,
                         device=stage.execution.device,
                         workers=stage.execution.workers,
                     )
@@ -1523,8 +1525,7 @@ def _execute_regime(
                         model,
                         space,
                         temporary,
-                        player_configs=Match(regime.match).to_rust(),
-                        deck_collection=regime.deck_collection,
+                        **_checkpoint_world(regime),
                         extra={
                             "run_id": run.id,
                             "stage_id": stage.id,

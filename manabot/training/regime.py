@@ -11,8 +11,8 @@ from pydantic import (
     model_validator,
 )
 
-from manabot.deck_collection import DeckCollection
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
+from manabot.training.decks import TrainingDecks
 from manabot.training.state.game_errors import GameErrorPolicy
 
 
@@ -552,7 +552,8 @@ class TrainingRegime(Strict):
     id: str
     world: str
     match: MatchConfig
-    deck_collection: DeckCollection | None = Field(
+    # Run-owned deck supply; checkpoints bind the pool's world, never these decks.
+    decks: TrainingDecks | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
     observation: ObservationConfig = ObservationConfig()
@@ -574,19 +575,20 @@ class TrainingRegime(Strict):
 
     @model_validator(mode="before")
     @classmethod
-    def read_collection(cls, value: object) -> object:
-        if not isinstance(value, dict) or value.get("deck_collection") is None:
+    def read_decks(cls, value: object) -> object:
+        """Embed decklist files at load so recovery never rereads mutable paths."""
+        if not isinstance(value, dict) or value.get("decks") is None:
             return value
-        source = value["deck_collection"]
-        collection = (
-            DeckCollection.load(source)
-            if isinstance(source, str)
-            else DeckCollection.model_validate(source)
+        source = value["decks"]
+        decks = (
+            TrainingDecks.from_files(source["files"], source["pool"])
+            if isinstance(source, dict) and "files" in source
+            else TrainingDecks.model_validate(source)
         )
         return {
             **value,
-            "deck_collection": collection,
-            "match": value["match"] if "match" in value else collection.match_config(),
+            "decks": decks,
+            "match": value["match"] if "match" in value else decks.match_config(),
         }
 
     @model_validator(mode="before")
@@ -629,7 +631,7 @@ class TrainingRegime(Strict):
 
     @model_validator(mode="after")
     def references(self) -> "TrainingRegime":
-        if self.deck_collection is not None and any(
+        if self.decks is not None and any(
             not isinstance(stage, TrainSelfPlay)
             or stage.behavior != "current-self"
             or stage.execution.workers != 1
@@ -638,7 +640,7 @@ class TrainingRegime(Strict):
             for stage in self.stages
         ):
             raise ValueError(
-                "deck collections require current-self, one producer, ordinary roots and no curriculum"
+                "training decks require current-self, one producer, ordinary roots and no curriculum"
             )
         tolerant = any(
             isinstance(stage, TrainSelfPlay) and stage.game_errors is not None

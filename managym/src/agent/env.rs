@@ -282,6 +282,13 @@ impl Env {
         self.seed
     }
 
+    /// Setups this game was reset with; empty before the first reset.
+    pub fn player_configs(&self) -> &[PlayerConfig] {
+        self.action_trace
+            .as_ref()
+            .map_or(&[], |trace| trace.player_configs.as_slice())
+    }
+
     /// Number of trivial decision points auto-collapsed by `skip_trivial`
     /// since the current game began. Resets to zero on `reset`.
     pub fn skip_trivial_count(&self) -> usize {

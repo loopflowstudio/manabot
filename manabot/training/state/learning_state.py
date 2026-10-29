@@ -154,7 +154,7 @@ def admit_learning_state(
         source.regime.world != regime.world
         or source.regime.agent != regime.agent
         or source.regime.observation != regime.observation
-        or source.regime.deck_collection != regime.deck_collection
+        or source.regime.decks != regime.decks
         or source.regime.match != source_match
         or source.regime.schedule_clock != regime.schedule_clock
     ):

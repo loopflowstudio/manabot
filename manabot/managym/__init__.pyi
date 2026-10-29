@@ -218,6 +218,8 @@ class VectorEnv:
         self, active: list[bool] | None = None
     ) -> list[str | None]: ...
     def current_game_seeds(self) -> list[int]: ...
+    def set_training_decks(self, decks: List[PlayerConfig]) -> None: ...
+    def current_player_configs(self) -> list[list[PlayerConfig]]: ...
     def current_agent_indices(self) -> list[int]: ...
     def reset_seeds_into_buffers(self, seeds: list[int]) -> None: ...
     def skip_trivial_counts(self) -> List[int]: ...
@@ -541,15 +543,15 @@ class ManaOutput:
     mana: list[int]
     lesson: list[int]
 
-
 class DeckAdmissionIssue(TypedDict):
     section: Literal["main", "sideboard"] | None
     card_name: str | None
     code: str
     message: str
 
-
 def admit_deck(
-    pack_key: str, main: dict[str, int], sideboard: dict[str, int],
+    pack_key: str,
+    main: dict[str, int],
+    sideboard: dict[str, int],
     ruleset: str = "development-v1",
 ) -> list[DeckAdmissionIssue]: ...

@@ -22,7 +22,6 @@ from manabot.belief.encoding import (
     BeliefEncodingSchema,
     belief_checkpoint_fields,
 )
-from manabot.deck_collection import DeckCollection
 from manabot.env import ObservationSpace
 from manabot.infra.artifacts import StoredArtifact, materialize_artifact, verify_file
 from manabot.infra.config import ModelConfig, ObservationConfig
@@ -33,6 +32,7 @@ from manabot.model.architecture import (
 )
 from manabot.model.world import (
     checkpoint_world,
+    pool_world,
     validate_checkpoint_world,
     validate_policy_input,
 )
@@ -166,18 +166,25 @@ def save_checkpoint(
     obs_space: ObservationSpace,
     path: str | Path,
     *,
-    player_configs: list[managym.PlayerConfig],
+    player_configs: list[managym.PlayerConfig] | None = None,
+    content_pool: str | None = None,
     extra: dict[str, Any] | None = None,
     belief_schema: BeliefEncodingSchema | None = None,
-    deck_collection: DeckCollection | None = None,
 ) -> None:
-    """Save a portable policy with its explicit world, input and value semantics."""
+    """Save a portable policy with its explicit world, input and value semantics.
 
+    Bind either exact setups or a whole content pool, never both.
+    """
+
+    if (player_configs is None) == (content_pool is None):
+        raise ValueError("bind exactly one of player_configs or content_pool")
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     checkpoint = {
-        "world_binding": checkpoint_world(
-            player_configs, obs_space, deck_collection=deck_collection
+        "world_binding": (
+            pool_world(content_pool, obs_space)
+            if content_pool is not None
+            else checkpoint_world(player_configs, obs_space)
         ),
         "architecture": architecture_receipt(agent).model_dump(mode="json"),
         "model_state_dict": agent.state_dict(),
