@@ -336,9 +336,10 @@ def runs(
     ceiling = Decimal(attempt_usd)
     if not ceiling.is_finite() or not Decimal("0") < ceiling <= Decimal("9.40"):
         raise ValueError("attempt_usd must be positive and at most 9.40")
-    # The cap must cover the whole rental at the on-demand's $0.60/hour ceiling.
-    # Setup, server startup and delivery take the last 45 minutes of the window.
-    hours = min(11.0, float(ceiling / Decimal("0.60")))
+    # The cap must cover the whole rental at the on-demand's $0.60/hour ceiling,
+    # including its 15-minute machine setup allowance. Environment setup, server
+    # startup and delivery take the last 45 minutes of the job window.
+    hours = min(11.0, float(ceiling / Decimal("0.60")) - 0.25)
     if hours < 1.5:
         raise ValueError("attempt_usd must cover at least 1.5 rental hours")
     config = Campaign(
