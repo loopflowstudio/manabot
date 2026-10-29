@@ -79,9 +79,10 @@ quantity 5, trigger_event 13, subtypes 64-74.
 
 Check (slice 10, debug): `cargo test` all targets pass (cards 41, rules_tests
 356, lib 119) except `semantic_conformance_tests` (w16 vs w15 and receipt digest
-drift; fails in PR #394 CI run 40819903624); clippy, fmt clean; extension
+drift, as in PR #394 CI 40819903624); clippy, fmt clean; extension
 rebuilt; `pytest tests/semantic` 158 pass, 4 fail on `schema_version == 3/4/7`
-asserts inherited from `be2b7586b`.
+asserts from `be2b7586b`. Cards 41/41 after
+`dadcc6d8e`.
 
 ## Remaining (13 cards), suggested next slices
 
@@ -101,12 +102,12 @@ asserts inherited from `be2b7586b`.
   Trusty Boomerang (granted activated ability); Razor Rings, The Last Agni Kai
   (excess damage); Hakoda.
 
-## Reconcile at sync (T2 87e012 at local `d5b9b8fa2`, read 2026-10-29)
+## Reconcile at sync (T2 87e012 at `d5b9b8fa2`, 2026-10-29)
 
 - Both branches append to schema 8 from 86ebe9ccf with colliding numbers. T2:
   fields 85-96, predicates 13-15, subtypes 64-74, special role 6, opcodes 66-73,
   trigger_event 13, destination 2, zone 3. This branch: fields 85-93, predicates
-  13-15, subtypes 64-74, special roles 6-12, opcodes 66-77, conditions 7-8,
+  13-15, subtypes 64-74, special roles 6-12, opcodes 66-79, conditions 7-9,
   quantity 5, trigger_event 13 (`end_step_begins`), enum `counter`. The later lander renumbers its own entries
   (append-only, contiguous).
 - Keep one exhaust field and gate (T2 field 87, here 89) and one with-counters
