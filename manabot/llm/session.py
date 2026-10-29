@@ -180,8 +180,10 @@ class InferenceSession:
                 self.process.terminate()
             self.process.join(timeout=1)
             if self.process.is_alive():
+                # SIGKILL always ends the worker; wait for it so close() cannot
+                # raise and replace the failure that retired this session.
                 self.process.kill()
-                self.process.join(timeout=1)
+                self.process.join()
             self.process.close()
 
     def __enter__(self) -> "InferenceSession":

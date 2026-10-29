@@ -120,10 +120,28 @@ every game must name it and the MTG-183 digest. A failed game or identity
 departure stops admissions; admitted games settle; unattempted entries remain
 unattempted. Results are reported as this arm only.
 
+### MTP crash and re-declared cohort
+
+Cohort attempt `8f68c0bc488b` admitted 32 games; after about 13 minutes vLLM's
+engine died: the 0.17.1 gated-delta-net attention backend asserts that a batch
+never mixes plain and speculative decodes (`AssertionError: num_decodes: 1,
+num_spec_decodes: 31`, `gdn_attn.py:310`). Nine games received HTTP 500; the
+other 23 then failed while closing their inference worker (`Cannot close a
+process while it is still running`), a harness defect that masked the runtime
+failure. No game completed, 68 entries were unattempted, and its receipts stay
+under its run ID. MTP is therefore unusable with this model in the pinned vLLM;
+upgrading vLLM is outside this budget. The session now waits for its killed
+worker before closing.
+
+**Re-declared scored cohort (2026-10-29, before launch):** identical to the
+frozen cohort above except no speculative draft (`--speculative-tokens 0`) and
+the session-close repair; new behavior version from the new server argv. Job
+cap $7.00. The MTP attempt is not pooled with it.
+
 ## Attempts
 
 | Run | Stage | Cap | Outcome | Charge |
 | --- | --- | --- | --- | --- |
 | `dddaf3001dfa` | sampled pilot, 1 game, c=1 | $2.00 | cancelled mid-game; 41 Qwen selections, 0 fallbacks; pod absent | $0.566 billed through 02:00 UTC |
-| `139099571cbb` | budget pilot, 32 games, c=32, MTP 1 | $1.20 | cancelled after ~10 min of decisions (86 attempts) | pending |
-| `8f68c0bc488b` | **scored cohort**, budget, 100 games, c=32, MTP 1 | $7.00 | running | pending |
+| `139099571cbb` | budget pilot, 32 games, c=32, MTP 1 | $1.20 | cancelled after ~10 min of decisions (86 attempts); pod absent | ~$0.16 (estimate) |
+| `8f68c0bc488b` | scored cohort, budget, 100 games, c=32, MTP 1 | $7.00 | engine crash (MTP); 32 attempted, 0 completed, 68 unattempted; pod absent | ~$0.18 (estimate) |
