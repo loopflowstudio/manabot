@@ -8,8 +8,9 @@ the batched sampler (valid-action guarantees), the K-stream vector driver
 import numpy as np
 import torch
 
-from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.env.observation import PERMANENT_DEFINITION_INDEX
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import PERMANENT_DEFINITION_INDEX, ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.sim.rollout import (
@@ -20,7 +21,7 @@ from manabot.sim.rollout import (
     run_vector_games,
 )
 from manabot.sim.search.flat_mc import aggregate_records
-from manabot.verify.util import INTERACTIVE_DECK
+from manabot.verify.games import INTERACTIVE_DECK
 
 
 def make_env(seed: int = 3) -> tuple[Env, dict]:

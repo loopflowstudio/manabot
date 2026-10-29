@@ -8,11 +8,24 @@ from typing import Any, Literal
 from pydantic import Field, model_validator
 
 from manabot.infra.identity import SHA256_PATTERN, StrictModel, canonical_sha256
-from manabot.sim.execution import EvalCompute
+from manabot.sim.execution import EvalCompute, EvalComputeV1
 from manabot.sim.search.branch import branch_backend
 
 type WorldVersion = Literal[
-    "w2", "w3", "w4", "w5", "w6", "w7", "w8", "w9", "w10", "w11", "w12", "w13", "w14"
+    "w2",
+    "w3",
+    "w4",
+    "w5",
+    "w6",
+    "w7",
+    "w8",
+    "w9",
+    "w10",
+    "w11",
+    "w12",
+    "w13",
+    "w14",
+    "w15",
 ]
 
 
@@ -89,13 +102,19 @@ class PlayerRegistration(StrictModel):
                     "batch_size": 1,
                 }
                 if "execution" in self.player_spec:
-                    execution = EvalCompute.model_validate(
-                        self.player_spec["execution"]
-                    )
+                    declared = self.player_spec["execution"]
+                    execution: EvalCompute | EvalComputeV1
+                    if declared.get("version") == "shared-eval-v1":
+                        # Frozen v1 players fixed the batch size in their spec.
+                        execution = EvalComputeV1.model_validate(declared)
+                        expected_checkpoint_spec["batch_size"] = (
+                            execution.max_batch_rows
+                        )
+                    else:
+                        execution = EvalCompute.model_validate(declared)
+                        del expected_checkpoint_spec["batch_size"]
                     expected_checkpoint_spec.update(
-                        device=execution.device,
-                        batch_size=execution.max_batch_rows,
-                        execution=execution.model_dump(),
+                        device=execution.device, execution=execution.model_dump()
                     )
                     if self.compute_class_id != execution.identity:
                         raise ValueError(

@@ -18,7 +18,8 @@ import time
 import numpy as np
 import torch
 
-from manabot.env import Env, ObservationSpace
+from manabot.env.env import Env
+from manabot.env.observation import ObservationSpace
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import validate_agent_setup

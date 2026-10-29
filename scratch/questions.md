@@ -51,3 +51,11 @@ Serving plan from Jack Heart's session (inference analysis of pinned Qwen3.5-9B 
 - Enable the model's native MTP speculative decoding in vLLM 0.17.1 (config has mtp_num_hidden_layers=1). Verify the exact `--speculative-config` method name accepted by the pinned vLLM (e.g. `qwen3_5_mtp`/`mtp`, num_speculative_tokens 1-2) offline before renting; it preserves the sampling distribution and joins the hashed base argv, so it is part of the declared treatment. If unsupported in 0.17.1, record that and proceed without it — do not bump vLLM inside this budget without evidence.
 - Pilot: a short concurrency-32 pilot (a few minutes of decisions is enough) measuring tok/s aggregate, accept rate, per-decision reasoning tokens and forced-close rate; then freeze the cohort. Budget estimate: ~400k tokens/game => ~$7 for 100 games without MTP, ~$4-5 with. Wall ~13-16 h on one pod; size the window/cap accordingly.
 - Native `skip_trivial` ON for every Qwen game (standing rule). The campaign already set it via `experiments/qwen_mtg183.py`; the pilot did not pay for forced decisions. `GameConfig.skip_trivial` now defaults to True (Jack Heart: "we should basically never set skip_trivial=False").
+
+## Sync resolution — 2026-10-28
+
+Preserved this branch's bb4160 decisions. Main's MTG-193 questions and
+assumptions remain at
+`6d069d6e5f0755b392c796aaf6d754913e8996c2:scratch/questions.md`;
+they are historical context for shared evaluation, not new bb4160 direction
+or an additional rental budget.

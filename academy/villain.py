@@ -124,7 +124,7 @@ class CheckpointVillain:
         # decisions wider than the training batch's storage capacity.
         space = self.obs_space
         if len(obs.action_space.actions) > space.encoder.max_actions:
-            from manabot.env import ObservationSpace
+            from manabot.env.observation import ObservationSpace
 
             space = ObservationSpace(
                 space.encoder.config.model_copy(

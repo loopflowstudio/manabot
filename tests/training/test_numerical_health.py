@@ -15,7 +15,8 @@ import torch
 from torch import Tensor
 
 from experiments.ataraxos_move import ataraxos_move_scalar
-from manabot.env import Match, ObservationSpace, Reward
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.policy_distribution import (

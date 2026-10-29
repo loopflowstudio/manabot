@@ -27,7 +27,7 @@ class NavigationFixture(BaseModel):
     positions: dict[str, NavigationPosition]
 
 
-FIXTURE = Path(__file__).parents[2] / "academy/fixtures/choice-navigation-w14.json"
+FIXTURE = Path(__file__).parents[2] / "academy/fixtures/choice-navigation-w15.json"
 POSITIONS = NavigationFixture.model_validate_json(FIXTURE.read_text()).positions
 
 
@@ -37,7 +37,7 @@ def test_retained_choice_position(
 ) -> None:
     # JSON is checked against the live producer, including full offers and projection.
     position = POSITIONS[family]
-    # Reproduce this w14 fixture with its explicitly recorded collapse mode.
+    # Reproduce this w15 fixture with its explicitly recorded collapse mode.
     # The companion fixtures cover Academy's explicit-decision mode.
     native_env = managym.Env
 
@@ -93,7 +93,7 @@ def test_retained_choice_position(
 @pytest.mark.parametrize("family", ["CHOOSE_TARGET", "DISCARD"])
 def test_current_explicit_choice_position(tmp_path: Path, family: str) -> None:
     current = NavigationFixture.model_validate_json(
-        FIXTURE.with_name("choice-navigation-explicit-w14.json").read_text()
+        FIXTURE.with_name("choice-navigation-explicit-w15.json").read_text()
     ).positions[family]
     session = GameSession(tmp_path)
     try:

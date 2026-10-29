@@ -7,7 +7,9 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.experiment.config import Case, Environment, Experiment, ModelOverride
 from manabot.infra.config import (
     MatchConfig,

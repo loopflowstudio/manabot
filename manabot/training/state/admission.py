@@ -14,7 +14,7 @@ import shutil
 
 import torch
 
-from manabot.env import Match
+from manabot.env.match import Match
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.world import validate_agent_setup

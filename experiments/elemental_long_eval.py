@@ -112,6 +112,7 @@ from manabot.infra.files import atomic_json
 from manabot.infra.identity import file_sha256
 from manabot.model.checkpoint import fetch_etude_checkpoint
 from manabot.sim.heuristic import heuristic_source_paths
+from manabot.sim.threads import child_environment
 import managym
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -479,7 +480,7 @@ def _play_group(
             text=True,
             capture_output=True,
             timeout=GROUP_SECONDS,
-            env={**os.environ, "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"},
+            env=child_environment(),
         )
         failure = None if completed.returncode == 0 else completed.stderr[-4000:]
     except subprocess.TimeoutExpired:

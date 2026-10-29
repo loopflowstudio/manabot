@@ -9,7 +9,7 @@ from manabot.config.load import (
     load_sim_config,
     parse_set_override,
 )
-from manabot.infra import RuntimeConfig, SimulationConfig
+from manabot.infra.config import RuntimeConfig, SimulationConfig
 
 
 def test_parse_set_override_basic_types():

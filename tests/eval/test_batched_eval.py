@@ -2,8 +2,13 @@
 
 from dataclasses import replace
 import json
-from multiprocessing.process import BaseProcess
+from multiprocessing import Pipe
+from multiprocessing.connection import Connection
+import os
 from pathlib import Path
+import signal
+import socket
+import threading
 import time
 from typing import Literal
 
@@ -11,46 +16,57 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.env import Match, ObservationSpace
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.eval.evaluation import EvaluationRequest
 from manabot.eval.execution import bind_execution
 from manabot.eval.match import play_cell
 from manabot.eval.models import EvaluationContract, EvaluationKey
-from manabot.infra.config import ModelConfig, ObservationConfig
+from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
-from manabot.sim import serving
-from manabot.sim.execution import EvalExecution
-from manabot.sim.matchup import SELECTED_SUITE, selected_match
+from manabot.model.inference import transfer
+from manabot.sim import child, serving
+from manabot.sim.execution import EvalComputeV1, EvalExecution
+from manabot.sim.matchup import SELECTED_SUITE, AuthoredMatchup, selected_match
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.registration import PlayerRegistration
 from manabot.sim.replay import read_trace, replay_environment, replay_prefix
 from manabot.sim.serving import (
-    DecisionRequest,
-    InferenceFailure,
-    InferenceRuntime,
-    PolicyAdmission,
-    PolicyKey,
     PolicyStore,
     _infer,
     _PendingRequest,
     _record_dispatch,
     sample_rows,
 )
+from manabot.sim.serving_protocol import (
+    DecisionRequest,
+    InferenceClient,
+    InferenceFailure,
+    InferenceRuntime,
+    PolicyAdmission,
+    PolicyKey,
+)
 from managym import WORLD_VERSION
 
 
 def fixture_policy(
-    directory: Path, seed: int = 83, *, policy_input_version: Literal[1, 2] = 2
+    directory: Path,
+    seed: int = 83,
+    *,
+    policy_input_version: Literal[1, 2, 3, 4] | None = None,
 ) -> tuple[EvaluationKey, PlayerRegistration, PlayerRegistration, Path]:
     contract = EvaluationContract.model_validate_json(
         (Path(__file__).parents[1] / "fixtures/int-6-skill-arena-v1.json").read_bytes()
     )
-    space = ObservationSpace(
+    observation = (
         ObservationConfig(policy_input_version=policy_input_version)
+        if policy_input_version is not None
+        else ObservationConfig()
     )
+    space = ObservationSpace(observation)
     torch.manual_seed(seed)
     agent = ActorCritic(
         space,
@@ -102,23 +118,22 @@ def fixture_policy(
 
 
 def request_for(
-    player: PlayerRegistration, execution: EvalExecution, seed: int = 5
+    player: PlayerRegistration,
+    execution: EvalExecution,
+    seed: int = 5,
+    setup: MatchConfig | None = None,
 ) -> DecisionRequest:
     _, obs = replay_environment(
         {
             "deal_seed": 83,
             "seat_players": ["a", "b"],
-            "match_hypers": selected_match().model_dump(),
+            "match_hypers": (setup or selected_match()).model_dump(),
         },
         observation_space=ObservationSpace(),
     )
     return DecisionRequest(
         str(seed),
-        "fixture-game",
-        0,
-        seed,
         PolicyKey.from_registration(player, execution),
-        seed,
         seed,
         obs,
         execution.deadline_unix,
@@ -141,9 +156,9 @@ def test_row_sampling_is_independent_of_neighbors_and_preserves_rng() -> None:
         sample_rows(logits, torch.zeros_like(masks), [5, 7], False)
 
 
-@pytest.mark.parametrize("version", (1, 2))
+@pytest.mark.parametrize("version", (1, 2, 3, 4))
 def test_served_checkpoint_preserves_input_version(
-    tmp_path: Path, version: Literal[1, 2]
+    tmp_path: Path, version: Literal[1, 2, 3, 4]
 ) -> None:
     key, player, anchor, path = fixture_policy(tmp_path, policy_input_version=version)
     _, trace, replay = play_cell(
@@ -160,10 +175,10 @@ def test_served_checkpoint_preserves_input_version(
     for game in read_trace(Path(trace["path"])):
         assert len(game["decisions"]) == 2, game.get("failure")
         assert game["observation_hypers"].get("policy_input_version", 1) == version
-        assert ("policy_input_version" in game["observation_hypers"]) == (version == 2)
+        assert ("policy_input_version" in game["observation_hypers"]) == (version >= 2)
         env, observation = replay_prefix(game, 1)
         try:
-            assert ("relations" in observation) == (version == 2)
+            assert ("relations" in observation) == (version >= 2)
         finally:
             env.close()
 
@@ -223,22 +238,154 @@ def test_residency_catalog_batching_parity_and_eviction(tmp_path: Path) -> None:
     store.close()
 
 
+def test_matchups_of_one_checkpoint_share_its_policy_and_batches(
+    tmp_path: Path,
+) -> None:
+    key, player, _, path = fixture_policy(tmp_path)
+    mirror = MatchConfig.authored(
+        "ur-lessons-vs-gw-allies",
+        "ur_lessons",
+        "ur_lessons",
+        hero="arena-seat-0",
+        villain="arena-seat-1",
+    )
+    other = player.model_copy(
+        update={
+            "player_spec": {**player.player_spec, "allow_deck_repetition": True},
+            "matchup_sha256": canonical_sha256(mirror.model_dump()),
+            "content_suite": AuthoredMatchup(
+                pack_key="ur-lessons-vs-gw-allies",
+                role_a="ur_lessons",
+                role_b="gw_allies",
+            ).content_suite,
+        }
+    )
+    execution = EvalExecution(deadline_unix=time.time() + 120)
+    _, (player, other) = bind_execution(key, (player, other), execution)
+    assert PolicyKey.from_registration(player, execution) == (
+        PolicyKey.from_registration(other, execution)
+    )
+    perf = EvalPerformance("test")
+    store = PolicyStore(execution, perf)
+    store.admit(PolicyAdmission(player, str(path), (selected_match(),)))
+    store.admit(PolicyAdmission(other, str(path), (mirror,)))
+    assert perf.counters["model_loads"] == 1
+    assert len(store.admissions) == 1
+    requests = [
+        request_for(player, execution, 5),
+        request_for(other, execution, 7, mirror),
+    ]
+    mixed = _infer(store, requests, "mixed")
+    assert perf.counters["batch_rows/2"] == 1
+    single = [_infer(store, [request], "single")[0] for request in requests]
+    assert [r.action for r in mixed] == [r.action for r in single]
+    assert perf.counters["model_loads"] == 1
+    store.close()
+
+
+def _client(runtime: InferenceRuntime) -> InferenceClient:
+    """A direct service connection held in this process, as a game child holds one."""
+    return InferenceClient(runtime.connect().detach())
+
+
+def test_service_batches_a_backlog_of_overdue_requests(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    key, player, _, path = fixture_policy(tmp_path)
+    execution = EvalExecution(deadline_unix=time.time() + 60, max_batch_rows=4)
+    _, (player,) = bind_execution(key, (player,), execution)
+    # Submitted long before the service reads them, as when it lags.
+    requests = [
+        replace(request_for(player, execution, seed), submitted=time.monotonic() - 1)
+        for seed in range(6)
+    ]
+    control, service_control = Pipe()
+    handoff, service_handoff = socket.socketpair()
+    control.send(
+        ("admission", "admit", PolicyAdmission(player, str(path), (selected_match(),)))
+    )
+    clients, handed_over = [], []
+    for request in requests:
+        client, service_end = socket.socketpair()
+        # Room for the whole request before the service reads any of it.
+        client.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 2**20)
+        service_end.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 2**20)
+        socket.send_fds(handoff, [b"c"], [service_end.fileno()])
+        # Kept open until the service holds it, as `InferenceRuntime.connect` does.
+        handed_over.append(service_end)
+        clients.append(Connection(client.detach()))
+        clients[-1].send(request)
+    # The pytest process keeps its own pools; the budget belongs to a child.
+    monkeypatch.setattr(torch, "set_num_threads", lambda _: None)
+    monkeypatch.setattr(torch, "set_num_interop_threads", lambda _: None)
+    monkeypatch.setattr(
+        serving, "SERVING_BUDGET", replace(serving.SERVING_BUDGET, threads=10**6)
+    )
+    service = threading.Thread(
+        target=serving.serve,
+        args=(
+            service_control,
+            execution,
+            tmp_path,
+            "backlog",
+            service_handoff.detach(),
+        ),
+    )
+    service.start()
+    try:
+        assert all(client.poll(30) for client in clients)
+        replies = [client.recv() for client in clients]
+    finally:
+        control.send(("close", "close", None))
+        service.join(30)
+        for service_end in handed_over:
+            service_end.close()
+    assert handoff.recv(len(requests)) == b"a" * len(requests)
+    assert [(reply.request_id, error) for reply, error in replies] == [
+        (r.request_id, None) for r in requests
+    ]
+    counters = json.loads((tmp_path / "serving.json").read_bytes())["counters"]
+    assert {k: v for k, v in counters.items() if k.startswith("batch_rows/")} == {
+        "batch_rows/4": 1,
+        "batch_rows/2": 1,
+    }
+    assert counters["client_connections"] == len(requests)
+
+
+def test_packed_transfer_makes_one_copy_per_dtype() -> None:
+    tensors = {
+        "a": torch.arange(6, dtype=torch.float32).reshape(2, 3),
+        "b": torch.ones(2, 4, 5),
+        "rows": torch.arange(4).reshape(2, 2),
+    }
+    moved, copies = transfer(tensors, torch.device("meta"))
+    assert copies == 2
+    assert {k: (v.shape, v.dtype, v.device.type) for k, v in moved.items()} == {
+        k: (v.shape, v.dtype, "meta") for k, v in tensors.items()
+    }
+    assert transfer(tensors, torch.device("cpu")) == (tensors, 0)
+
+
 def test_service_partial_flush_stale_replies_and_death(tmp_path: Path) -> None:
     key, player, _, path = fixture_policy(tmp_path)
     execution = EvalExecution(deadline_unix=time.time() + 60, max_delay_seconds=0.01)
     _, (player,) = bind_execution(key, (player,), execution)
     with InferenceRuntime(execution, tmp_path / "allocation") as runtime:
         runtime.admit(PolicyAdmission(player, str(path), (selected_match(),)))
+        client = _client(runtime)
         request = request_for(player, execution)
-        reply = runtime.infer(request)
+        reply = client.infer(request)
         reply.validate(request)
         with pytest.raises(InferenceFailure, match="stale"):
-            replace(reply, revision=-1).validate(request)
+            replace(reply, request_id="stale").validate(request)
         receipt = runtime.snapshot()
         runtime.process.kill()
         runtime.process.join()
+        with pytest.raises(InferenceFailure, match="exited"):
+            client.infer(request)
         with pytest.raises(InferenceFailure):
-            runtime.infer(request)
+            runtime.connect()
+        client.close()
     assert receipt["counters"]["batch_rows/1"] == 1
     assert receipt["counters"]["completed_requests"] == 1
     assert "batch_queue" not in receipt["measurements"]
@@ -247,8 +394,9 @@ def test_service_partial_flush_stale_replies_and_death(tmp_path: Path) -> None:
     assert lifecycle["measurements"]["service_start_to_ready"]["population"] == 1
     assert lifecycle["measurements"]["admission_round_trip"]["population"] == 1
     assert lifecycle["measurements"]["cleanup"]["population"] == 1
-    assert lifecycle["counters"]["completed_requests"] == 1
-    assert lifecycle["counters"]["failed_requests"] == 1
+    # Decisions bypass the supervisor; it only hands over connections.
+    assert lifecycle["counters"]["client_connections"] == 1
+    assert "requests" not in lifecycle["counters"]
     retained = json.loads((tmp_path / "allocation/serving.json").read_bytes())
     assert retained["counters"]["model_loads"] == 1
     assert retained["counters"]["rss_samples"] >= 1
@@ -280,9 +428,8 @@ def test_queue_boundary_excludes_cold_load_and_overlapping_requests(
 
     monkeypatch.setattr(serving, "load_checkpoint", delayed_load)
     monkeypatch.setattr(time, "monotonic", lambda: clock[0])
-    _record_dispatch(
-        perf, [_PendingRequest(r.request_id, r, 3) for r in requests], "batch"
-    )
+    client, _ = Pipe()
+    _record_dispatch(perf, [_PendingRequest(r, client, 3) for r in requests], "batch")
     try:
         replies = _infer(store, requests, "batch")
         assert len(replies) == 2
@@ -309,7 +456,7 @@ def test_failed_service_request_has_no_success_latency(tmp_path: Path) -> None:
         runtime.admit(PolicyAdmission(player, str(path), (selected_match(),)))
         request = replace(request_for(player, execution), observation={})
         with pytest.raises(InferenceFailure, match="observation fields"):
-            runtime.infer(request)
+            _client(runtime).infer(request)
     receipt = json.loads((tmp_path / "allocation/serving.json").read_bytes())
     assert receipt["counters"]["received_requests"] == 1
     assert receipt["counters"]["failed_requests"] == 1
@@ -323,10 +470,10 @@ def test_failed_service_request_has_no_success_latency(tmp_path: Path) -> None:
 def test_service_start_failure_retains_unready_attempt(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def fail_start(self: BaseProcess) -> None:
+    def fail_start(*args: object, **kwargs: object) -> None:
         raise OSError("injected spawn failure")
 
-    monkeypatch.setattr(BaseProcess, "start", fail_start)
+    monkeypatch.setattr(child.subprocess, "Popen", fail_start)
     execution = EvalExecution(deadline_unix=time.time() + 60)
     directory = tmp_path / "allocation"
     with pytest.raises(OSError, match="injected spawn failure"):
@@ -338,6 +485,52 @@ def test_service_start_failure_retains_unready_attempt(
     execution_receipt = json.loads((directory / "execution.json").read_bytes())
     assert execution_receipt["error"] == "OSError: injected spawn failure"
     assert execution_receipt["cost"]["measured_usd"] is None
+
+
+def test_games_reach_the_service_directly_and_its_failure_is_infrastructure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    key, player, anchor, path = fixture_policy(tmp_path)
+    execution = EvalExecution(
+        deadline_unix=time.time() + 120, max_active_games=2, request_seconds=10
+    )
+    _, (bound,) = bind_execution(key, (player,), execution)
+    with InferenceRuntime(execution, tmp_path / "allocation") as runtime:
+        connect = runtime.connect
+        connected = []
+
+        def connect_then_stop() -> socket.socket:
+            # Both games hold their connections; every decision then meets a
+            # stopped service and times out in the game child.
+            connected.append(connect())
+            if len(connected) == execution.max_active_games:
+                os.kill(runtime.process.pid, signal.SIGSTOP)
+            return connected[-1]
+
+        monkeypatch.setattr(runtime, "connect", connect_then_stop)
+        rows, trace, _ = play_cell(
+            key=key,
+            player_a=player,
+            player_b=anchor,
+            deal_seeds=(831,),
+            out_dir=tmp_path / "panel",
+            checkpoint_paths={player.player_id: str(path)},
+            execution=execution,
+            inference=runtime,
+            max_commands=4,
+        )
+        lifecycle = runtime.performance.snapshot()["counters"]
+        os.kill(runtime.process.pid, signal.SIGCONT)
+    assert len(rows) == 2 and all(
+        row["failure"] == "inference service request timed out"
+        and row["failed_player_id"] is None
+        and row["score_a"] is None
+        for row in rows
+    )
+    games = read_trace(Path(trace["path"]))
+    assert all(game["infrastructure_failure"] for game in games)
+    # No decision passes through the runtime.
+    assert "requests" not in lifecycle
 
 
 def test_concurrent_deal_blocks_retain_commands_and_one_resident_model(
@@ -376,12 +569,11 @@ def test_concurrent_deal_blocks_retain_commands_and_one_resident_model(
         == sum(d["player_id"] == player.player_id for d in g["decisions"])
         for g in games
     )
-    assert any(
-        int(k.split("/")[1]) > 1
-        for k in receipt["counters"]
-        if k.startswith("batch_rows/")
-    )
     assert all(row["score_a"] is None for row in rows)
+    # The group worker's own census, taken while its game threads are alive.
+    cell = json.loads((tmp_path / "panel/performance.json").read_text())["counters"]
+    assert cell["threads/group_worker"] >= 1
+    assert cell["threads_budget/group_worker"] == execution.max_active_games + 7
 
     from experiments.report_prototype.build import write_evaluations
     from manabot.eval.serving_benchmark import BenchmarkPlan, Panel, numerical_check
@@ -451,20 +643,58 @@ def test_execution_binding_preserves_seed_authority_and_rejects_conflicts(
         PlayerRegistration.model_validate_json(players[0].model_dump_json())
         == players[0]
     )
+    # Allocation settings are attempt facts: they leave identities unchanged.
     later = execution.model_copy(
         update={
             "deadline_unix": execution.deadline_unix + 3600,
             "instrumentation": False,
             "diagnostic_batches": 2,
+            "max_active_games": 256,
+            "max_batch_rows": 64,
+            "max_delay_seconds": 0.02,
+            "resident_model_bytes": 2**31,
+            "request_seconds": 30.0,
+            "cache_catalog": False,
+            "resident": False,
         }
     )
     assert later != execution
     assert later.identity == execution.identity
     assert bind_execution(bound, players, later) == (bound, players)
+    assert "batch_size" not in players[0].player_spec
     with pytest.raises(ValueError, match="conflicting"):
-        bind_execution(
-            bound, players, execution.model_copy(update={"max_batch_rows": 1})
-        )
+        bind_execution(bound, players, execution.model_copy(update={"device": "cuda"}))
+
+
+def test_frozen_v1_served_registration_stays_readable(tmp_path: Path) -> None:
+    _, player, _, _ = fixture_policy(tmp_path)
+    v1 = EvalComputeV1(
+        version="shared-eval-v1",
+        device="cpu",
+        dtype="float32",
+        max_active_games=64,
+        max_batch_rows=64,
+        max_delay_seconds=0.005,
+        resident_model_bytes=2**30,
+        request_seconds=60.0,
+        cache_catalog=True,
+        resident=True,
+    )
+    frozen = PlayerRegistration.model_validate(
+        {
+            **player.model_dump(),
+            "player_spec": {
+                **player.player_spec,
+                "device": "cpu",
+                "batch_size": 64,
+                "execution": v1.model_dump(),
+            },
+            "compute_class_id": v1.identity,
+        }
+    )
+    assert frozen.compute_class_id.startswith("shared-eval-")
+    # v1 and v2 never share an identity, so v1 deals are not reused.
+    assert v1.identity != EvalExecution(deadline_unix=time.time() + 30).identity
 
 
 def test_private_callback_endpoint_runs_complete_replayed_block(tmp_path: Path) -> None:
@@ -493,7 +723,7 @@ def test_private_callback_endpoint_runs_complete_replayed_block(tmp_path: Path) 
     assert replay["passed"]
 
 
-def test_expired_allocation_and_unsupported_players_start_no_games(
+def test_expired_allocation_starts_no_games_and_search_stays_unbound(
     tmp_path: Path,
 ) -> None:
     with pytest.raises(ValueError, match="deadline"):
@@ -504,12 +734,13 @@ def test_expired_allocation_and_unsupported_players_start_no_games(
     contract = EvaluationContract.model_validate_json(
         (Path(__file__).parents[1] / "fixtures/int-6-skill-arena-v1.json").read_bytes()
     )
-    with pytest.raises(ValueError, match="stateless"):
-        bind_execution(
-            contract.key,
-            (contract.anchors[2],),
-            EvalExecution(deadline_unix=time.time() + 30),
-        )
+    # Search players keep their registration and play in their game child.
+    _, (search,) = bind_execution(
+        contract.key,
+        (contract.anchors[2],),
+        EvalExecution(deadline_unix=time.time() + 30),
+    )
+    assert search == contract.anchors[2]
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="requires a CUDA runner")
@@ -558,8 +789,12 @@ def test_two_policies_never_share_a_forward_and_hung_service_is_bounded(
             request_for(player, execution, seed)
             for player, seed in ((first, 1), (second, 2), (first, 3), (second, 4))
         ]
+        # One connection per game, each with one request in flight.
+        clients = [_client(runtime) for _ in requests]
         with ThreadPoolExecutor(4) as pool:
-            replies = list(pool.map(runtime.infer, requests))
+            replies = list(
+                pool.map(lambda pair: pair[0].infer(pair[1]), zip(clients, requests))
+            )
         batches: dict[str, set[PolicyKey]] = {}
         for request, reply in zip(requests, replies, strict=True):
             batches.setdefault(reply.batch_id, set()).add(request.policy)
@@ -572,12 +807,15 @@ def test_two_policies_never_share_a_forward_and_hung_service_is_bounded(
         os.kill(runtime.process.pid, signal.SIGSTOP)
         started = time.monotonic()
         with pytest.raises(InferenceFailure, match="timed out"):
-            # Exceed pipe capacity while the reader is stopped. A synchronous
-            # send under the futures lock would prevent the deadline firing.
-            runtime.infer(
+            # Exceed socket capacity while the reader is stopped. The send
+            # itself is bounded, not only the wait for a reply.
+            clients[0].infer(
                 replace(
                     requests[0],
-                    deadline_unix=time.time() + deadline_seconds,
+                    # A game bounds each request by the allocation's request
+                    # allowance, as `execute_game` builds it.
+                    deadline_unix=time.time()
+                    + min(deadline_seconds, execution.request_seconds),
                     observation={"blocked_pipe": np.zeros(2**22, dtype=np.float32)},
                 )
             )

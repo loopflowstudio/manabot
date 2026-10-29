@@ -1,0 +1,21 @@
+{
+  "recipe": "manabot.verify.trigger_order.configure_root",
+  "setup": "Clear both hands; set life to 1/20; put Deadly Dispute in Hero hand and ready Bastion of Remembrance, Callous Inspector and two Swamps on Hero battlefield.",
+  "seed": 7,
+  "hero_deck": {
+    "Swamp": 32,
+    "Bastion of Remembrance": 2,
+    "Callous Inspector": 2,
+    "Deadly Dispute": 4
+  },
+  "villain_deck": {
+    "Swamp": 40
+  },
+  "world_version": "w15",
+  "content_digest": "d58632847ac3758a9838fdb0d2b017bf77514bda2a28082ca565e1a963f9f0d0",
+  "root_digest": "19888722a9c783099bea5d6d12f420e27f6c9a6d5e6a049e304eb632c9ba56d5",
+  "expected_life_by_first_placement": {
+    "Callous Inspector": 1,
+    "Bastion of Remembrance": 0
+  }
+}

@@ -9,7 +9,7 @@ import pytest
 
 from academy import server, trace as trace_store
 from academy.server import GameSession
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.semantic.decision_contract import SemanticDecisionContract
 from manabot.semantic.text_observation import capture_text_decision
 from manabot.verify.trigger_order import DECK, SEED, configure_root, prefix_index, root
@@ -136,7 +136,7 @@ def test_survival_orders_cross_consumers(
     assert session.env.state_digest() == initial_digest == replay.state_digest()
     evidence = json.loads(
         (
-            Path(__file__).parents[2] / "academy/fixtures/trigger-order-w14.json"
+            Path(__file__).parents[2] / "academy/fixtures/trigger-order-w15.json"
         ).read_text()
     )
     capture = json.loads(env.capture_decision(0).to_json())

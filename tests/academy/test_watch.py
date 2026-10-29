@@ -212,7 +212,7 @@ def test_checkpoint_outputs_are_from_the_chosen_inference(
     import torch
 
     from academy.villain import CheckpointVillain, choose_bot
-    from manabot.env import ObservationSpace
+    from manabot.env.observation import ObservationSpace
     from manabot.infra.config import ModelConfig
     from manabot.model.actor_critic import ActorCritic
     from manabot.model.world import checkpoint_world

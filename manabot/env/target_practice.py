@@ -10,9 +10,11 @@ from typing import Any
 
 import numpy as np
 
-from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig
-from manabot.verify.competency import _find_cast_action, _pass_index
+from manabot.verify.scenarios import find_cast_action, pass_index
 import managym
 
 
@@ -51,7 +53,7 @@ def target_root(match: Match, space: ObservationSpace, seed: int, seat: int) -> 
     env.scenario_refresh()
     for _ in range(100):
         raw = env.last_raw_obs
-        cast = _find_cast_action(raw, "Igneous Inspiration")
+        cast = find_cast_action(raw, "Igneous Inspiration")
         if int(raw.agent.player_index) == seat and cast is not None:
             env.step(cast)
             raw = env.last_raw_obs
@@ -60,7 +62,7 @@ def target_root(match: Match, space: ObservationSpace, seed: int, seat: int) -> 
             ):
                 raise ValueError("lethal-target-v1 requires exactly two player targets")
             return env
-        _, _, ended, truncated, _ = env.step(_pass_index(raw))
+        _, _, ended, truncated, _ = env.step(pass_index(raw))
         if ended or truncated:
             break
     raise RuntimeError("could not prepare lethal-target-v1 root")
@@ -72,7 +74,7 @@ def resolve_target(env: Env, action: int) -> int:
     for _ in range(20):
         if ended or truncated:
             break
-        _, _, ended, truncated, _ = env.step(_pass_index(env.last_raw_obs))
+        _, _, ended, truncated, _ = env.step(pass_index(env.last_raw_obs))
     winner = env._engine.winner_index()
     if truncated or not ended or winner is None:
         raise RuntimeError("lethal-target-v1 did not resolve to a terminal winner")

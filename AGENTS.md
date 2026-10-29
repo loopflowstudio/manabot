@@ -86,6 +86,12 @@ checkpoints or experiment evidence.
 - Put imports at the top; use explicit imports and underscore-prefixed private
   helpers. Keep one implementation and one owner for each fact; use git for
   old versions rather than `_new`, `_old`, or `_backup` variants.
+- Import names from their defining modules (`manabot.env.observation`, not
+  `manabot.env`); package `__init__` files re-export nothing, so evaluation
+  game and replay children stay Torch-free
+  (`tests/test_package_boundaries.py` enforces the child modules). Launch
+  evaluation children with `manabot.sim.child.ChildProcess`, not
+  `multiprocessing` spawn, which re-imports the parent's `__main__`.
 
 ### Python typing
 
@@ -107,6 +113,9 @@ checkpoints or experiment evidence.
 - Apply these conventions to new and changed code incrementally. Do not claim
   repository-wide type safety without a passing configured type check, or
   weaken types merely to silence one.
+- Native scalar/vector observation buffers bind continuation input semantics by
+  relation width: v2/v3 have 32 columns, v4 has 33; validity remains column 31.
+  Preserve the frozen widths and derive buffers from `ObservationSpace`.
 - Saved observation configurations use `ObservationConfig.from_checkpoint` so
   an absent policy-input version retains v1 semantics. Fresh construction uses
   the current version. Keep version-specific zero/default exclusions stable:

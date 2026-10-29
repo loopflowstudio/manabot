@@ -114,7 +114,7 @@ def test_deadline_retains_failed_attempt(tmp_path):
 
 def test_named_treatments_execute_real_optimizer_batches():
 
-    from manabot.env import ObservationSpace
+    from manabot.env.observation import ObservationSpace
     from manabot.infra.config import ModelConfig
     from manabot.model.actor_critic import ActorCritic
     from manabot.training.learning.objectives import update_iteration

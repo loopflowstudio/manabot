@@ -52,13 +52,6 @@ class CardReferences:
     permanents: torch.Tensor
     known: torch.Tensor | None
 
-    def to(self, device: torch.device) -> "CardReferences":
-        return CardReferences(
-            self.cards.to(device),
-            self.permanents.to(device),
-            None if self.known is None else self.known.to(device),
-        )
-
 
 class SemanticCardEncoder(nn.Module):
     def __init__(self, pack_key: str, hidden_dim: int) -> None:

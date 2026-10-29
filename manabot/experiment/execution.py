@@ -8,7 +8,6 @@ process attempt; VerifyStore is its persistence owner.
 from decimal import Decimal
 import hashlib
 import math
-import os
 from pathlib import Path
 import socket
 from typing import Annotated, Literal
@@ -17,6 +16,7 @@ from pydantic import ConfigDict, Field, JsonValue, model_validator
 
 from manabot.eval.monitor import MonitorProtocol
 from manabot.experiment.evaluation_queue import MonitoringBudget
+from manabot.sim.threads import effective_cpus
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
     ArtifactReference,
@@ -110,7 +110,7 @@ class Hardware(Strict):
     dollars_per_hour: float | None = Field(default=None, ge=0)
 
     def admit(self) -> None:
-        if self.cpu_threads > (os.cpu_count() or 1):
+        if self.cpu_threads > effective_cpus():
             raise ValueError("configured CPU capacity exceeds this host")
         if self.host != socket.gethostname():
             raise ValueError(

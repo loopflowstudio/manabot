@@ -29,7 +29,7 @@ from experiments.report_prototype.build import write_report
 from manabot._process import bounded_call
 from manabot.eval.evaluation import EvaluationRequest
 from manabot.reports.inference import EvidenceFile
-from manabot.sim.execution import EvalCompute, EvalExecution
+from manabot.sim.execution import EvalAllocation, EvalExecution
 
 if TYPE_CHECKING:
     from manabot.llm.schema import (
@@ -55,7 +55,7 @@ def _protocol(tmp_path: Path, *, trace: Path | None = None, roots: int = 2) -> P
     request_path.write_text(request.model_dump_json())
     compute = tmp_path / "compute.json"
     compute.write_text(
-        EvalCompute(
+        EvalAllocation(
             max_active_games=2, max_batch_rows=2, max_delay_seconds=0
         ).model_dump_json()
     )
@@ -795,7 +795,7 @@ def test_policy_baseline_bounds_batch_collection_window(
     cell = protocol.recipe.cells[0]
     assert cell.execution is not None
     cell.execution.write_text(
-        EvalCompute(max_batch_rows=4, max_delay_seconds=delay).model_dump_json()
+        EvalAllocation(max_batch_rows=4, max_delay_seconds=delay).model_dump_json()
     )
     out = tmp_path / "output"
     out.mkdir()

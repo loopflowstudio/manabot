@@ -112,9 +112,9 @@ recipes, presets (`ataraxos-mtg-v1`, `baseline-v1` receipts) and checkpoints
 keep their meaning.
 
 An observation/action-shape or rules-meaning change is a world version.
-The current development world is **w14** (`managym.WORLD_VERSION`); its rules, tensor shape,
+The current development world is **w15** (`managym.WORLD_VERSION`); its rules, tensor shape,
 and compatibility limits are in [WORLDS.md](../WORLDS.md). Earlier checkpoints,
-including w13 artifacts, are not compatible with w14. Elemental combat,
+including w14 artifacts, are not compatible with w15. Elemental combat,
 [sacrifice/landfall](../docs/rules/elemental-sacrifice.md) and [Temur](../docs/rules/elemental-temur.md) compiled admission is implemented;
 [ten-deck Elemental admission](../docs/rules/elemental/world.md) is implemented in
 `elemental-world-v2`; release certification remains unfinished. The local
@@ -233,7 +233,7 @@ import os
 from torch import Tensor
 
 # First-party imports
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 
 # Local imports
 from .sibling import Thing
@@ -414,6 +414,9 @@ capture. `submit_response(env, decision, "A0")` parses an exact reference and
 atomically checks origin, reset generation and current captured facts before
 executing the ordinary Command. A cloned Env needs its own capture. Retained
 JSON can be rendered with `render_decision` but cannot authorize submission.
+Capture/text v4 labels each ordered target’s retained “Legal when resolution
+began” fact; historical v3 captures retain unknown eligibility. Policy input v4
+uses the same native fact, separately from current object presence.
 
 Run the local response-stub proof with
 `uv run python -m manabot.verify.text_observation --out .runs/text-observation`.

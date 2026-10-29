@@ -6,8 +6,8 @@ from managym.experience_projection import describe_actions, serialize_observatio
 import numpy as np
 import pytest
 
-from manabot.env import Env, Reward
-from manabot.env.match import Match
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, RewardConfig
 import managym
