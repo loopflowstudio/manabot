@@ -8,13 +8,8 @@ and pool-membership choices that were here (history: `be2b7586b:scratch/question
 - Superseded 2026-10-29 by Jack Heart's one-representation decision (w17, no
   JSON, tokens from `Effect`): the earlier choices to stay in w16, keep the IR's
   JSON shape and build tokens in `learning.py`.
-- 2026-10-29 (sync onto T1 `01e8f9975`): T1's test layout wins
-  (`tests/support/{game,play,inspect}.rs`, flat `cards/<set>.rs`); T3's
-  `cards/support.rs`, `rules/helpers.rs` and `rules/tla_mechanics.rs` are folded
-  into it. T1 widened every policy-input version's permanent row to 29 for
-  `attacking`; this branch keeps v1–v4 byte-frozen at 28 (CLAUDE.md) and
-  carries `attacking` in v5 (column 41), which T3 already had. T1's w17 is the
-  card representation, so T2+T3's rules here are w18.
+- 2026-10-29 (sync onto T1 `01e8f9975`): T1's test layout wins; v1–v4 stay
+  28 wide here and `attacking` is a v5 column (plan, item 26).
 - 2026-10-29: the 14 setup-used incomplete TLA cards keep their definitions and
   are listed in one `tla::INCOMPLETE` const (key, missing behavior) beside
   `cards()`, rather than a field on all 269 `Card` literals. Native cards sit in
@@ -26,6 +21,8 @@ and pool-membership choices that were here (history: `be2b7586b:scratch/question
 - Not rewritten (dated evidence): the Academy curated pack `local_identity` values
   keep pre-rename keys.
 - Full TLA completion remains the eight-PR plan; no merge or new Task authorized.
+- 2026-10-29 (realign): T2's own v5/w18 (`d218e1dc2`) collides with T3's; the
+  v5-in-place versus v6/w19 choice is left to Jack Heart (plan, Remaining).
 
 Main's notes at the syncs live at `6d069d6e5:scratch/questions.md` and `origin/main@633dca159:scratch/questions.md`.
 

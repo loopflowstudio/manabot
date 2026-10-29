@@ -2,8 +2,7 @@
 
 Brief: the Task directive (49 cards, obligations in `docs/rules/tla/allocation.jsonl`,
 `planned_pr == "T3"`). Stacked on T1 (892c47, PR #394; last synced at head `01e8f9975`)
-and carrying T2 (87e012, PR #398 head `16dfd3dbb`; T2 has not yet synced onto that
-T1). Every merge needs Jack Heart's review.
+and carrying T2 at PR #398's old head `16dfd3dbb`. Every merge needs Jack Heart's review.
 Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
 
 ## Done (49 of 49)
@@ -108,6 +107,23 @@ Scryfall id.
 
 ## Remaining
 
+- **Sync onto T2's new head (PR #398 `d218e1dc2`, observed 2026-10-29).** T2
+  synced onto the same T1 head (`01e8f9975`) and independently converted its
+  cards, then shipped its own w18 and policy input v5: player 60, card 55,
+  permanent 32 (v1–v4 keep 40 / 41 / 29), new terms at the old validity column,
+  validity last, native buffers bound by player width. This branch's v5 is
+  44 / 42 / 50 with v1–v4 at 28 and validity at column 31. Both carry stack X,
+  granted firebending, used exhaust and no maximum hand size. A trial merge
+  conflicts in 31 files (v5 encoders, observation, cardsets lea/stx/tla,
+  `play.rs`, `observability.rs`, `tests/cards/tla.rs`, WORLDS.md, AGENTS.md,
+  protocol schemas, text observation, PlayerArea). Since T2 lands before T3,
+  the merge must take T2's card conversion and v5 layout and re-add only
+  T3's columns; CLAUDE.md's v5 width line, WORLDS.md and the observability guard
+  follow. **Decision needed (Jack Heart):** extend T2's unfrozen v5 and w18 in
+  place (simpler; no checkpoint exists for either), or give T3 v6 and w19 so T2's
+  v5 freezes when it lands. Not yet decided; the permanent-row width
+  disagreement (T1/T2 widened v1–v4 to 29 for `attacking`; this branch kept 28)
+  is part of it.
 - World release items (w15 conformance receipts) and browser proof.
 
 Check (item 26, debug): `cargo test --no-fail-fast` passes except the w15
