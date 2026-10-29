@@ -1,19 +1,21 @@
-# TLA Rust authoring decisions — 2026-10-28
+# TLA direct-Rust decisions — 2026-10-28
 
-- Jack Heart's Rust-first direction supersedes the JSON authority recorded at
-  `f674bcd8f:scratch/questions.md`. Typed source programs are serialized offline
-  into checked-in compiler inputs; JSON is generated output, never hand-authoring.
-- Reversible choice: retain the established semantic compiler/lowering and exact
-  serialized source identities. The Rust authoring types describe symbolic card
-  programs; lowered IR owns numeric references and native runtime execution.
-- Setup lists and independently reviewed qualification receipts remain JSON data.
-  Runtime membership and fixed-token selection move alongside Rust definitions.
-- `.lf/wave/engine/{GOAL,MEMORY}.md` are absent; no Wave writes are authorized.
-- D1/f871a8 owns parser, construction and consumer input. Preserve its agreed pool API.
-- Full TLA completion remains the accepted eight-PR plan. Existing setup availability
-  never qualifies a whole card. No additional Task or merge is authorized.
-- Integrated main includes MTG-177 repair; reassess affected qualification rather
-  than retaining the obsolete claim that integration is pending.
+Reversible operator choices made headless; each is noted in the PR.
 
-Historical audit and MTG-207 notes were read and remain at
-`f674bcd8f:scratch/questions.md`; they do not direct this implementation.
+- Old worlds run from their recorded git revision; no in-process rules shims.
+- No w17: main is w15 and w16 is this PR's unreleased world, so key renames and
+  the default-pack change stay in w16 (one unreleased world per Task).
+- IR keeps the retired compiler's JSON shape, built in Rust on `serde_json::Value`
+  from serialized typed definitions. This made byte-identity provable; lowering
+  typed definitions straight to `Step` is a possible later simplification.
+- Learning tokens still come from `learning.py` over that IR (now native-sourced);
+  schema 8 unchanged.
+- Keys renamed by real set; qualification hashes refreshed only after a proof of
+  rename-equivalence, not by review of behavior (behavior did not change).
+- Research cards (Lightning Bolt, Hill Giant, Savannah Lions, Glory Seeker) now sit
+  in `tla-pool-v1` as unsupported definitions and in the default pack.
+- World support = current qualification in `tla-pool-v1`; native legacy cards are
+  unsupported. Construction policy stays with D1/f871a8.
+- Not rewritten (dated evidence): `docs/rules/tla/t1-clause-review.json` and the
+  Academy curated pack `local_identity` values keep pre-rename keys.
+- Full TLA completion remains the eight-PR plan; no merge or new Task authorized.

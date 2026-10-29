@@ -702,7 +702,6 @@ def _validate_characteristics(value: Any, context: str) -> dict[str, Any]:
             "supertypes",
             "token",
             "toughness",
-            "enters_tapped",
         },
     )
     types = [
@@ -736,8 +735,6 @@ def _validate_characteristics(value: Any, context: str) -> dict[str, Any]:
             _integer(characteristics[field], f"{context}.{field}")
     if "token" in characteristics:
         _boolean(characteristics["token"], f"{context}.token")
-    if "enters_tapped" in characteristics:
-        _boolean(characteristics["enters_tapped"], f"{context}.enters_tapped")
     return deepcopy(characteristics)
 
 
@@ -813,7 +810,6 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
         source,
         "source",
         required={"schema_version", "pack_key", "decks", "definitions"},
-        optional={"pool", "token_templates"},
     )
     if source["schema_version"] != SOURCE_SCHEMA_VERSION:
         _fail("source.schema_version", f"expected {SOURCE_SCHEMA_VERSION}")
@@ -843,7 +839,6 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
             raw_definition,
             context,
             required={"key", "registry_name", "characteristics", "programs"},
-            optional={"text_box"},
         )
         registry_name = _string(
             raw_definition["registry_name"], f"{context}.registry_name"
@@ -934,11 +929,6 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
                 "semantic_key": definition_key,
             }
         )
-        if "text_box" in raw_definition:
-            text_box = raw_definition["text_box"]
-            if not isinstance(text_box, str):
-                _fail(context, "text_box must be a string")
-            definitions[-1]["text_box"] = text_box
     _unique(program_keys, "programs")
 
     registry_names = [
@@ -1004,27 +994,6 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
     _unique([deck["key"] for deck in decks], "source.decks")
     decks.sort(key=lambda deck: deck["key"])
 
-    pool_keys = [
-        _string(key, "source.pool[]")
-        for key in _array(source.get("pool", []), "source.pool")
-    ]
-    _unique(pool_keys, "source.pool")
-    for key in pool_keys:
-        if key not in definition_indexes:
-            _fail("source.pool", f"unknown definition {key!r}")
-        if source_by_key[key]["characteristics"].get("token", False):
-            _fail("source.pool", "token cannot be a deck pool entry")
-    token_keys = [
-        _string(key, "source.token_templates[]")
-        for key in _array(source.get("token_templates", []), "source.token_templates")
-    ]
-    _unique(token_keys, "source.token_templates")
-    for key in token_keys:
-        if key not in definition_indexes or not source_by_key[key][
-            "characteristics"
-        ].get("token", False):
-            _fail("source.token_templates", f"not a token definition: {key!r}")
-
     source_hash = _sha256(source)
     ir: dict[str, Any] = {
         "definitions": definitions,
@@ -1043,11 +1012,9 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
         for instruction in _walk_instructions(program["instructions"])
         if "definition_index" in instruction
     }
-    closure_indexes = (
-        {definition_indexes[key] for key in deck_definition_keys}
-        | referenced_indexes
-        | {definition_indexes[key] for key in [*pool_keys, *token_keys]}
-    )
+    closure_indexes = {
+        definition_indexes[key] for key in deck_definition_keys
+    } | referenced_indexes
     opcode_counts = Counter(
         instruction["op_name"]
         for program in programs
@@ -1166,19 +1133,13 @@ def compile_paths(
     return ir, coverage
 
 
-def write_or_check(
-    path: Path,
-    value: Mapping[str, Any],
-    *,
-    check: bool,
-    regenerate_command: str = "uv run scripts/compile_semantic_content.py",
-) -> None:
+def write_or_check(path: Path, value: Mapping[str, Any], *, check: bool) -> None:
     expected = pretty_json(value)
     if check:
         actual = path.read_text(encoding="utf-8") if path.exists() else None
         if actual != expected:
             raise SemanticCompileError(
-                f"{path} is stale; run `{regenerate_command}`"
+                f"{path} is stale; run `uv run scripts/compile_semantic_content.py`"
             )
         return
     path.parent.mkdir(parents=True, exist_ok=True)

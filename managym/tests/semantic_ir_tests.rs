@@ -232,10 +232,9 @@ fn authored_optional_payment_lowers_both_methods_and_continuations() {
         semantic::SemanticPack,
         state::ability::{Effect, PaymentCost},
     };
-    let original: Value = serde_json::from_str(include_str!(
-        "../../content/semantic/w11/generated/elemental_world.ir.json"
-    ))
-    .unwrap();
+    let original = managym::semantic::compile::document("optional_payments")
+        .unwrap()
+        .clone();
     for (cost, expected) in [
         (
             serde_json::json!({"mana": "{2}{U}"}),
@@ -251,7 +250,7 @@ fn authored_optional_payment_lowers_both_methods_and_continuations() {
             .as_array_mut()
             .unwrap()
             .iter_mut()
-            .find(|p| p["semantic_key"] == "temur.waterbending_lesson.p0")
+            .find(|p| p["semantic_key"] == "tla.waterbending_lesson.p0")
             .unwrap();
         let payment = &mut program["instructions"][1];
         payment["cost"] = cost;
