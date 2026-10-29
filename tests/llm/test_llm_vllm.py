@@ -12,6 +12,7 @@ from types import TracebackType
 from typing import Callable
 from urllib.request import Request
 
+from etude.launch.records import Job
 from huggingface_hub import _snapshot_download, snapshot_download
 from huggingface_hub._tree_cache import TreeCacheEntry
 from huggingface_hub.errors import IncompleteSnapshotError
@@ -54,9 +55,7 @@ def test_server_uses_its_own_virtual_environment(
 
 
 def test_speculative_draft_is_part_of_the_declared_server() -> None:
-    config = InferenceConfig.model_validate_json(
-        campaign.TREATMENTS["budget"][0].read_text()
-    )
+    config = campaign.TREATMENTS["budget"].load()
     plain = vllm_server.server_command(config, "fixture", 32)
     drafted = vllm_server.server_command(config, "fixture", 32, 1)
     assert "--speculative-config" not in plain
@@ -327,14 +326,46 @@ def test_thinking_budget_requires_thinking_and_answer_room() -> None:
         InferenceConfig.model_validate(
             {**fields, "enable_thinking": None, "thinking_budget": 16}
         )
-    # Each arm's effective configuration, as the campaign writes it, is valid
-    # and keeps the file's own output allowance.
-    for path, max_new_tokens, context_tokens in campaign.TREATMENTS.values():
-        config = InferenceConfig.model_validate_json(path.read_text())
-        assert config.max_new_tokens == max_new_tokens
-        InferenceConfig.model_validate(
-            {**config.model_dump(), "context_tokens": context_tokens}
-        )
+
+
+@pytest.mark.parametrize(
+    ("arm", "output_tokens", "context_tokens"),
+    [
+        ("sampled", 16_384, 65_536),
+        ("budget", 4096, 16_384),
+        ("budget-64k", 4096, 65_536),
+        ("nothink", 512, 16_384),
+    ],
+)
+def test_declared_arm_reaches_the_frozen_schedule(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    arm: str,
+    output_tokens: int,
+    context_tokens: int,
+) -> None:
+    # Replace only native artifact preparation; no job is submitted or rented.
+    def native_job(native_artifact: str, native_source: str) -> Job:
+        return Job(command="fixture", max_hours=11)
+
+    monkeypatch.setattr(campaign.original, "runs", native_job)
+    job = campaign.runs("unused", "unused", arm=arm, games=1)
+    assert job.config is not None
+    config = campaign.Campaign.model_validate_json(job.config)
+    games = campaign._prepare_schedule(config, tmp_path)
+    assert len(games) == 1
+    effective = InferenceConfig.model_validate_json(
+        games[0].config.inference.read_text()
+    )
+    assert (effective.max_new_tokens, effective.context_tokens) == (
+        output_tokens,
+        context_tokens,
+    )
+    source = InferenceConfig.model_validate_json(config.inference.read_text())
+    # The larger context changes no other part of the treatment.
+    assert effective.model_dump(exclude={"context_tokens"}) == source.model_dump(
+        exclude={"context_tokens"}
+    )
 
 
 def test_sampled_decoding_requires_its_settings() -> None:

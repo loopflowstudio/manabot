@@ -119,59 +119,23 @@ both runtimes; Transformers rejects a presence penalty rather than substituting.
 
 ## Delete — do not maintain
 
-Removed the report reader's greedy-only inference projection. The existing
-historical reader now preserves sampling, thinking budgets and behavior versions;
-there is no second campaign report implementation. Historical raw token counts
-remain unchanged; generated totals exclude retained forced-close spans. Missing
-split/version evidence stays unknown, with attempt denominators retained.
+The campaign treatment table no longer repeats the inference files' output and
+context limits. `Treatment` names the file and any explicit context override;
+`runs()` resolves those into the existing Campaign fields before schedule
+preparation. The saved schedule/configuration remain the worker's authority.
+The four declared arms retain their existing effective values. No obsolete code,
+exclusive fixtures or pending deletion targets remain.
 
-Removed the unversioned `config.model_id` HTTP/served-name route, completion
-parsing that ignored model identity, and startup's use of the model snapshot
-as the tokenizer authority. Existing consumers use the sole behavior-version
-route; historical receipt reading remains unchanged.
+Preserve the surviving ownership boundaries: `RuntimeIdentity.behavior_version`
+owns hashing; `tokenization` owns pinned tokenizer resolution, EOS and budget
+forcing; `SelectionResult.invalidate` revokes failed actions while retaining
+evidence. The acknowledged service identity freezes the cohort before admission.
+The historical report reader remains independent of executable admission and
+preserves unknown splits/versions and failed-attempt denominators. One-shot
+loading deadlines and resident per-decision deadlines remain distinct.
 
-`tokenization.load_tokenizer` owns pinned tokenizer resolution for both backends
-and server startup. Its required offline flag preserves Transformers' acquisition
-and vLLM's cache-only contract. `tokenization.eos_token_ids` replaces both copies
-of decoder/chat terminator handling; the template stays a startup local instead
-of duplicate runtime state. Preserve exact tokens and both Qwen EOS authorities.
-`SelectionResult.invalidate` owns failure updates for selection and both
-supervisors: retain evidence and revoke selection, origin and fallback together.
-Selection cannot retain an action when publishing its evidence fails. Token
-decoding counts closing thinking delimiters once, preserving unknown splits for
-ambiguous output and all-reasoning counts for unfinished output.
-Selection now publishes all terminal actions through the same guarded path;
-failed fallback publication revokes the action just like an initial or repaired
-answer. `_prepare_schedule` replaces `_schedule` and the duplicated schedule/index
-writes, keeping retained inference, deal and game-index files together. Startup
-alone prepares the cohort; the worker reads the saved schedule and configuration.
-The worker's second generation/write path is removed so current source defaults
-cannot redefine the prepared cohort. `_Choice.text` and `_Choice.stop_reason` are
-removed: local decoding of retained token IDs owns answer text and EOS, while
-the server's `finish_reason` must still agree with that EOS evidence.
-No exclusive tests or fixtures remain to delete. Keep the one-shot runner's
-loading-inclusive deadline separate from resident sessions' per-decision deadline.
-The vLLM startup probe takes the interpreter prefix at `-m`, avoiding an argv
-length dependency. `vllm_runtime.SERVICE_PORT`/`SERVICE_URL` own the loopback
-address for server argv, health, admission and completions; the unused client
-`port` parameter was removed.
-Removed the session's admission and request version echoes: both sides derive
-the version from the same identity and configuration, so those checks were
-tautological. Reply version/config/runtime/decision checks remain authoritative.
-Removed first-result initialization of the campaign's expected behavior version;
-the acknowledged server identity is its sole source. Preserve raw game outcomes
-and failure accounting when identity rejection stops further admissions.
-Removed `_Ready`: the startup message is the `RuntimeIdentity` itself, which
-already distinguishes successful admission from `_LoadFailure`. Canonical hashing
-lives directly in `RuntimeIdentity.behavior_version`; the single-use hash helper
-is gone and serialized hash inputs are unchanged. Campaign tests share one inline
-executor stub and supply game outcomes through `play_game`, retaining their
-admission and accounting assertions without separate pool implementations.
-
-The full research audit lives at
-`02fccd93e1983319d355a1866c101d7d0e01565b:scratch/prime-rl-assessment.md`;
-its scratch summary retains applicable findings, contrary evidence and the
-later accepted disposition.
+Earlier removals and their rationale are retained at
+`5016ad1337c47f0854e0c0376b920c5d1bc5e1df:scratch/bb4160-evaluate-qwen-versus.md`.
 
 ## Remaining implementation and execution
 
@@ -264,4 +228,4 @@ receipts. Gate still owns the actual mixed-report builder/Perf proof and broader
 native replay checks. Current cohort settlement, budget reconciliation and final
 allocation cleanup remain pending.
 
-Check: `uv run --extra dev --extra reports pytest tests/eval/test_inference_receipts.py -q -k 'sampled_report or sampled_sequence or cli_never_imports'` — 7 passed (2026-10-29); retained sampled-pilot projection succeeds. Earlier runtime qualification: w13 `tests/llm` 129 passed, this branch vLLM 42 / Transformers 2 passed. Gate owns broader acceptance.
+Check: `uv run --extra dev --extra artifacts pytest tests/llm/test_llm_vllm.py -q` — 51 passed (2026-10-29); all four arms retain their declared inference settings through job construction and schedule freezing. Ruff and diff checks pass. Gate owns broader acceptance, including the mixed-report builder/Perf proof; earlier reader/runtime qualification remains in git.

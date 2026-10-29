@@ -10,6 +10,7 @@ The existing campaign watchdog kills the whole game process group on timeout.
 
 import argparse
 from concurrent.futures import FIRST_COMPLETED, Future, ProcessPoolExecutor, wait
+from dataclasses import dataclass
 from decimal import Decimal
 from functools import partial
 import json
@@ -25,18 +26,36 @@ from experiments import qwen_mtg183 as original
 from manabot.llm.schema import InferenceConfig, RuntimeIdentity
 from manabot.verify.llm_game import GameSummary, _write
 
-# Declared bb4160 treatments: base inference file and the campaign's effective
-# per-attempt output and context limits. Arms are never pooled.
-TREATMENTS: dict[str, tuple[Path, int, int]] = {
+
+@dataclass(frozen=True)
+class Treatment:
+    """An inference file with an optional, separately declared context override."""
+
+    inference: Path
+    context_tokens: int | None = None
+
+    def load(self) -> InferenceConfig:
+        config = InferenceConfig.model_validate_json(self.inference.read_text())
+        if self.context_tokens is None:
+            return config
+        return InferenceConfig.model_validate(
+            {**config.model_dump(), "context_tokens": self.context_tokens}
+        )
+
+
+# Files own sampling and token limits; arms are never pooled.
+TREATMENTS: dict[str, Treatment] = {
     # Development pilot dddaf3001dfa: unbounded sampled reasoning.
-    "sampled": (Path("configs/llm/qwen3.5-9b-reasoning-sampled.json"), 16_384, 65_536),
+    "sampled": Treatment(Path("configs/llm/qwen3.5-9b-reasoning-sampled.json")),
     # Main arm: 3,072 reasoning tokens, then a forced close and the answer.
-    "budget": (Path("configs/llm/qwen3.5-9b-reasoning-budget.json"), 4096, 16_384),
+    "budget": Treatment(Path("configs/llm/qwen3.5-9b-reasoning-budget.json")),
     # The same arm with room for late-game prompts: cohort cdb0c09f90c6 stopped
     # when a 157-decision game's prompt outgrew the 16,384-token context.
-    "budget-64k": (Path("configs/llm/qwen3.5-9b-reasoning-budget.json"), 4096, 65_536),
+    "budget-64k": Treatment(
+        Path("configs/llm/qwen3.5-9b-reasoning-budget.json"), context_tokens=65_536
+    ),
     # Small labeled floor: Qwen's non-thinking sampling.
-    "nothink": (Path("configs/llm/qwen3.5-9b-instruct-sampled.json"), 512, 16_384),
+    "nothink": Treatment(Path("configs/llm/qwen3.5-9b-instruct-sampled.json")),
 }
 
 
@@ -355,7 +374,8 @@ def runs(
     ceiling = Decimal(attempt_usd)
     if not ceiling.is_finite() or not Decimal("0") < ceiling <= Decimal("9.40"):
         raise ValueError("attempt_usd must be positive and at most 9.40")
-    inference, max_new_tokens, context_tokens = TREATMENTS[arm]
+    treatment = TREATMENTS[arm]
+    inference = treatment.load()
     # The cap must cover the whole rental at the on-demand's $0.60/hour ceiling,
     # including its 15-minute machine setup allowance. Environment setup, server
     # startup and delivery take the last 45 minutes of the job window.
@@ -363,12 +383,12 @@ def runs(
     if hours < 1.5:
         raise ValueError("attempt_usd must cover at least 1.5 rental hours")
     config = Campaign(
-        inference=inference,
+        inference=treatment.inference,
         games=games,
         concurrency=concurrency,
         speculative_tokens=speculative_tokens or None,
-        max_new_tokens=max_new_tokens,
-        context_tokens=context_tokens,
+        max_new_tokens=inference.max_new_tokens,
+        context_tokens=inference.context_tokens,
         seconds=min(10 * 3600, hours * 3600 - 2700),
     )
     job = original.runs(native_artifact, native_source)
