@@ -85,5 +85,5 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   `activate_card`, `move_from_library`, `can_activate[_card]`,
   `offered_targets`, `offered_cards`, `zone_of`), each defined once.
 - Gaps: possible-worlds ignore foretold cards; granted land plays of another
-  player's card would enter under its owner; Academy's card face does not yet
-  badge exhausted / once-each-turn / granted firebending (types carry them).
+  player's card would enter under its owner. (Academy's card face now prints
+  and names exhausted / once-each-turn / granted firebending, text-5 wording.)

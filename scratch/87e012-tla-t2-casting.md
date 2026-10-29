@@ -45,12 +45,12 @@ Restricted-mana text names the class, not Lesson-only (`ee9e32383`).
 
 ## Remaining
 
-- Gate: CLAUDE.md arena admission/monitoring suite; Academy check/build (local
-  node can't load libllhttp; CI pending on the latest push at 2026-10-29
-  realign); world-bound receipts T1 already flagged.
+- Gate: CLAUDE.md arena admission/monitoring suite; Academy vitest suite; world-bound receipts T1 already flagged.
 - Land only after #394 lands; re-sync then.
 
 ## Check
+
+2026-10-29 implement (concept review 4): `Card.svelte` prints and names exhaust/once-each-turn/granted-firebending statuses in text-5 wording, fed from `PermanentRow.svelte`; `PermanentRow.svelte.test.ts` 2 pass; Academy `npm run check` 0 errors and `npm run build` pass (after `npm ci`, node 26 runs).
 
 2026-10-29 realign: plan matches code (51 T2 cards allocated; none in `tla::INCOMPLETE`); T1 head unchanged since `01e8f9975`; no checks rerun.
 
