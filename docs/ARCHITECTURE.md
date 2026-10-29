@@ -676,8 +676,8 @@ The immediate provider work is prioritized in the [Engine
 goal](../.lf/wave/engine/GOAL.md) and the [results-first
 roadmap](plans/results-first-roadmap.md). Engine owns changes to managym
 authority; Training owns manabot beliefs, planning, learning and opponents;
-Eval owns evaluation. Cross-wave work is integrated through runnable consumer slices,
-not by duplicating provider APIs.
+Eval owns evaluation. Cross-wave work is integrated through runnable consumer
+slices, not by duplicating provider APIs.
 
 Detailed existing contracts remain authoritative within their narrower scope:
 
