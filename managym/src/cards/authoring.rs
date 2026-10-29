@@ -36,6 +36,10 @@ pub struct Characteristics {
     pub colors: Option<Vec<Color>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub enters_tapped: Option<bool>,
+    /// "This land enters tapped unless you control a [predicate] permanent."
+    /// The entering player's battlefield is read as the land moves (CR 614.1c).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enters_tapped_unless: Option<Predicate>,
 }
 
 /// A printed `*` has no fixed numeric power; its program supplies the CDA.
@@ -73,6 +77,7 @@ impl Program {
                 power: 1,
                 target: "source",
                 toughness: 1,
+                per_creature_type_max: None,
             }],
         )
         .trigger(Trigger {
@@ -146,6 +151,9 @@ pub struct Cost {
     pub affinity: Option<Predicate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub kicker: Option<&'static str>,
+    /// "Activate only as a sorcery" (CR 602.5d).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sorcery_timing: Option<bool>,
 }
 
 impl Cost {
@@ -243,6 +251,9 @@ pub enum Op {
         power: i32,
         target: &'static str,
         toughness: i32,
+        /// "for each of its creature types, to a maximum of N" (static only).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        per_creature_type_max: Option<i32>,
     },
     PutCounters {
         count: i32,
@@ -481,6 +492,7 @@ impl Op {
 pub enum Predicate {
     NotCardTypes { values: Vec<CardType> },
     Subtype { value: &'static str },
+    Supertype { value: &'static str },
     All { predicates: Vec<Predicate> },
     CardType { value: CardType },
     PowerAtMost { value: i32 },
@@ -577,6 +589,7 @@ pub enum CardType {
 #[serde(rename_all = "snake_case")]
 pub enum Keyword {
     Deathtouch,
+    Defender,
     FirstStrike,
     Flash,
     Flying,

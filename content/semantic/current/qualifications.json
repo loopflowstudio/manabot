@@ -5,6 +5,28 @@
       "managym/tests/rules/elemental_cards.rs::hybrid_discard_is_optional_at_resolution_and_draws_exactly_two"
     ]
   },
+  "tla.abandoned_air_temple": {
+    "closure_hash": "a0ee07736a5ac415f1808a60039f45a1b21e7896e6a467e1ebb3b670e94f6a3b",
+    "witnesses": [
+      "managym/tests/cards/tla.rs::locations_enter_tapped_unless_you_control_a_basic_land",
+      "managym/tests/cards/tla.rs::locations_tap_for_their_color",
+      "managym/tests/cards/tla.rs::abandoned_air_temple_counters_each_creature_you_control_only"
+    ]
+  },
+  "tla.agna_qel_a": {
+    "closure_hash": "e2086cb6ef32de00f063447a472fe4b12045dd0e96b98a8ca4555072710264a3",
+    "witnesses": [
+      "managym/tests/cards/tla.rs::locations_enter_tapped_unless_you_control_a_basic_land",
+      "managym/tests/cards/tla.rs::locations_tap_for_their_color",
+      "managym/tests/cards/tla.rs::agna_qel_a_draws_then_discards"
+    ]
+  },
+  "tla.air_nomad_legacy": {
+    "closure_hash": "f172ea17576728a99460ceccabc09f9cb1f3fb4f87bc759f2716f0b46df33a61",
+    "witnesses": [
+      "managym/tests/cards/tla.rs::air_nomad_legacy_makes_a_clue_and_pumps_your_fliers"
+    ]
+  },
   "tla.airship_engine_room": {
     "closure_hash": "fa959bed5d27c4c2eafd6038b24d1a36406e366930d19cef00db7469b2e24b33",
     "witnesses": [
@@ -30,6 +52,20 @@
     "closure_hash": "c579e5e1350003f291309172bd8acf01fc66dd9056f3b6361a1f0d28bd1e0d94",
     "witnesses": [
       "managym/tests/rules/elemental_cards.rs::azula_announces_both_modes_then_binds_independent_targets_including_same_object"
+    ]
+  },
+  "tla.ba_sing_se": {
+    "closure_hash": "08616f6b4678b35cd00370632739a7b793607ea4db5b86db6e583e1b0317fa23",
+    "witnesses": [
+      "managym/tests/cards/tla.rs::locations_enter_tapped_unless_you_control_a_basic_land",
+      "managym/tests/cards/tla.rs::locations_tap_for_their_color",
+      "managym/tests/cards/tla.rs::ba_sing_se_earthbends_only_at_sorcery_timing"
+    ]
+  },
+  "tla.badgermole": {
+    "closure_hash": "a14fca72af005a185a2972fef6b4604d80b2494c908c75dad44923d77c02af0b",
+    "witnesses": [
+      "managym/tests/cards/tla.rs::badgermole_earthbends_and_grants_trample_to_countered_creatures"
     ]
   },
   "tla.boar_q_pine": {
@@ -122,6 +158,12 @@
       "managym/tests/rules/tla_content.rs::disciple_rechecks_power_and_its_effect_expires"
     ]
   },
+  "tla.diligent_zookeeper": {
+    "closure_hash": "aca7e53fae73ed313e0951fe631da198055570857f4d61d31eefed30064b2858",
+    "witnesses": [
+      "managym/tests/cards/tla.rs::diligent_zookeeper_counts_creature_types_of_non_humans"
+    ]
+  },
   "tla.earth_kingdom_jailer": {
     "closure_hash": "a0879c7ec44e95f15567cbdaee26bc74b60fc2e6042269c78a79a1ca5d32af30",
     "witnesses": [
@@ -205,6 +247,12 @@
     "closure_hash": "b65f2ff02ccb41faae7eb77591f28c8a0acbd4ebb4ba4ba8f5bcf40cf88bda2d",
     "witnesses": [
       "managym/tests/rules/tla_content.rs::draw_lands_enter_tapped_supply_either_color_and_sacrifice_for_one_card"
+    ]
+  },
+  "tla.foggy_swamp_hunters": {
+    "closure_hash": "34ef49dcce121c6cfac64f99377772ade3ceb71e83e352f5578dc97b13d663ae",
+    "witnesses": [
+      "managym/tests/cards/tla.rs::foggy_swamp_hunters_gain_lifelink_and_menace_after_two_draws"
     ]
   },
   "tla.foggy_swamp_spirit_keeper": {
@@ -435,6 +483,14 @@
       "managym/tests/rules/tla_content.rs::required_fixed_token_templates_have_the_printed_sizes_and_keyword_effects"
     ]
   },
+  "tla.realm_of_koh": {
+    "closure_hash": "0a624c048a6002dad2a712f8bb3395e002a2babc43393a2f1053916589befcc9",
+    "witnesses": [
+      "managym/tests/cards/tla.rs::locations_enter_tapped_unless_you_control_a_basic_land",
+      "managym/tests/cards/tla.rs::locations_tap_for_their_color",
+      "managym/tests/cards/tla.rs::realm_of_koh_creates_a_spirit"
+    ]
+  },
   "tla.rumble_arena": {
     "closure_hash": "ff998a05542aca6ffb5a1895e3a0900bd2dd8de09cd4f0bdbf1971760305664a",
     "witnesses": [
@@ -477,6 +533,12 @@
     "closure_hash": "6c91200b1e7e5b53b538494cc261ec75a0ede9f322810c534d3df5f81c1490e7",
     "witnesses": [
       "managym/tests/rules/cr_305_lands.rs"
+    ]
+  },
+  "tla.the_walls_of_ba_sing_se": {
+    "closure_hash": "8f10ce028102371a11a3e4714752805e5e56ba4c008ab63ddb4ad0f41c879566",
+    "witnesses": [
+      "managym/tests/cards/tla.rs::the_walls_of_ba_sing_se_protect_other_permanents_you_control"
     ]
   },
   "tla.tiger_dillo": {

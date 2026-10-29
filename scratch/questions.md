@@ -21,3 +21,18 @@ Reversible operator choices made headless; each is noted in the PR.
 - Full TLA completion remains the eight-PR plan; no merge or new Task authorized.
 
 Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
+
+## T3 (6875f0) assumptions — 2026-10-29
+
+- Support at this base still reads `qualifications.json`; the four new lands get
+  entries there so the world supports them. Jack Heart's steer says tests never
+  gate support; those entries go away when T1's gate removal is synced.
+- Per the same steer, only this batch's new tests went to `managym/tests/cards/`;
+  moving T1's existing per-card tests is left to T1/PR #394 to avoid conflicts.
+- Conditional entry reads the card owner's battlefield (cards enter under owner
+  control in every current path).
+- Learning schema 8 is unreleased (new in T1), so new vocabulary is appended in place.
+- `semantic_conformance_tests` fails at this base (WORLD_VERSION w16, evidence w15);
+  left to T1's world release rather than regenerated here.
+- Zookeeper's creature-type count excludes a fixed noncreature-subtype list rather
+  than a creature-type registry (none exists); revisit if a pool card breaks it.

@@ -511,6 +511,8 @@ class _TokenBuilder:
                 return "card_type"
             if value in self.schema.enums["subtype"]:
                 return "subtype"
+            if value in self.schema.enums["supertype"]:
+                return "supertype"
         fixed = {
             "colors": "color",
             "subtype": "subtype",
@@ -569,6 +571,7 @@ class _TokenBuilder:
                 "power": "quantity",
                 "affinity": "predicate",
                 "condition": "condition",
+                "enters_tapped_unless": "predicate",
                 "if": "condition",
                 "predicate": "predicate",
                 "predicates": "predicate",

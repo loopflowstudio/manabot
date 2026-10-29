@@ -189,6 +189,11 @@ regenerate. Python reads current IR through `managym.semantic_ir_json`; rebuild
 the extension after card changes. Keep decklists and independent qualification
 receipts separate from behavior. Keep long printed text in a local `text_box`
 binding so rustfmt can format the typed definition.
+Card tests mirror the set files: `managym/tests/cards/<set>.rs`, one module per
+set under the single `tests/cards.rs` target. `tests/rules/` keeps engine rules
+not about one card. Tests never decide support (Jack Heart, 2026-10-29). A new
+authored field, predicate kind or `each:` role also needs its entry appended to
+`content/semantic/current/learning_schema.json`.
 
 Native fixed mana abilities on a card are additive: multiple fixed productions
 produce all listed colors together. A land that produces one chosen color uses

@@ -176,6 +176,11 @@ pub enum StaticScope {
     /// Reinforcements). Matched against printed characteristics (no
     /// power predicates, to keep P/T computation non-recursive).
     OtherYouControl(CardPredicate),
+    /// "[predicate] you control", including the source (Air Nomad Legacy's
+    /// "creatures you control with flying").
+    YouControl(CardPredicate),
+    /// "[predicate] you control with +1/+1 counters on them" (Badgermole).
+    YouControlWithCounters(CardPredicate),
 }
 
 /// A static continuous P/T effect (CR 613.3c layer 7c): "[scope] get(s)
@@ -187,6 +192,22 @@ pub struct StaticPtBuff {
     pub condition: Option<StaticCondition>,
     pub power: i32,
     pub toughness: i32,
+    /// "+P/+T for each of its creature types, to a maximum of N" (Diligent
+    /// Zookeeper): the bonus is multiplied by the affected creature's
+    /// creature-type count, capped at this value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub per_creature_type_max: Option<i32>,
+}
+
+/// A static keyword grant (CR 613.1f layer 6): "[scope] have [keywords]
+/// [as long as condition]". Applies only while the source is on the
+/// battlefield. Scopes read printed characteristics, counters and
+/// non-static keywords, so keyword computation never recurses.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct StaticKeywordGrant {
+    pub scope: StaticScope,
+    pub condition: Option<StaticCondition>,
+    pub keywords: Keywords,
 }
 
 /// Declarative replacement/prevention effects supported by the curated
@@ -206,6 +227,9 @@ pub enum ReplacementEffect {
     DoubleDamageToController,
     /// This object enters the battlefield tapped (CR 614.1c).
     EntersTapped,
+    /// This object enters tapped unless its entering controller already
+    /// controls a permanent matching `predicate` (CR 614.1c, 614.12).
+    EntersTappedUnlessControls { predicate: CardPredicate },
     /// This object enters with +1/+1 counters already present (CR 614.1c).
     EntersWithPlusOneCounters { count: i32 },
 }
@@ -249,6 +273,9 @@ pub struct ActivatedAbilityDefinition {
     pub sacrifice: Option<SacrificeCost>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub own_turn_only: bool,
+    /// "Activate only as a sorcery" (CR 602.5d).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub sorcery_timing: bool,
     #[serde(skip_serializing_if = "is_zero")]
     pub life_cost: u32,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -332,6 +359,9 @@ pub struct CardDefinition {
     /// Static continuous P/T effects this card projects while on the
     /// battlefield (anthems, conditional self-buffs).
     pub static_pt_buffs: Vec<StaticPtBuff>,
+    /// Static keyword grants this card projects while on the battlefield.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub static_keyword_grants: Vec<StaticKeywordGrant>,
     /// Replacement/prevention definitions consumed by the proposed-event
     /// pipeline. Empty vectors are omitted so existing content-pack digests
     /// remain stable until production content actually adopts the feature.

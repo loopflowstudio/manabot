@@ -214,7 +214,7 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "scry": ({"count"}, set()),
     "tap": ({"target"}, set()),
     "untap": ({"target"}, set()),
-    "modify_pt": ({"target", "power", "toughness", "duration"}, set()),
+    "modify_pt": ({"target", "power", "toughness", "duration"}, {"per_creature_type_max"}),
     "grant_keywords": ({"target", "keywords", "duration"}, set()),
     "restrict_blocking": ({"target", "duration", "predicate"}, set()),
     "deal_damage": ({"amount", "target"}, set()),

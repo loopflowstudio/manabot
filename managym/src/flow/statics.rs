@@ -15,19 +15,37 @@
 //   4. +1/+1 counters (also layer 7c, CR 613.4c).
 // These additive layer-7c terms commute. Layer 7d switches P/T, and is not
 // represented here; neither are general timestamp/dependency interactions.
-// Anthem scopes match printed characteristics plus animation (never
-// power), so the computation cannot recurse.
+// Static keyword grants (layer 6) add to printed and until-EOT keywords.
+// Scopes match printed characteristics, animation, counters and temporary
+// subtypes (never power). A P/T scope's flying test reads effective
+// keywords; a keyword-grant scope's reads only non-static keywords. Neither
+// computation can recurse.
 
 use crate::{
     flow::game::Game,
     state::{
         ability::StaticCondition,
-        card::{Keywords, PowerCda, StaticScope},
+        card::{Card, Keywords, PowerCda, StaticScope},
         game_object::{PermanentId, PlayerId},
         predicate::CardPredicate,
         zone::ZoneType,
     },
 };
+
+/// Subtypes that permanents in the current pools can carry which are not
+/// creature types (land and artifact types; CR 205.3).
+const NONCREATURE_SUBTYPES: [&str; 10] = [
+    "Plains",
+    "Island",
+    "Swamp",
+    "Mountain",
+    "Forest",
+    "Clue",
+    "Food",
+    "Treasure",
+    "Equipment",
+    "Vehicle",
+];
 
 impl Game {
     /// The permanent's effective power: CDA-aware base, plus static buffs,
@@ -91,55 +109,127 @@ impl Game {
     /// Sum of static P/T buffs applying to `target_id` from every
     /// battlefield permanent (including itself for `StaticScope::This`).
     fn static_pt_bonus(&self, target_id: PermanentId) -> (i32, i32) {
-        let Some(target) = self.state.permanents[target_id].as_ref() else {
-            return (0, 0);
-        };
-        let target_card = &self.state.cards[target.card];
         let mut power = 0;
         let mut toughness = 0;
-
-        for player in [PlayerId(0), PlayerId(1)] {
-            for source_card_id in self.state.zones.zone_cards(ZoneType::Battlefield, player) {
-                let card = &self.state.cards[source_card_id];
-                if card.static_pt_buffs.is_empty() {
+        for (source_id, controller, card) in self.static_sources() {
+            for buff in &card.static_pt_buffs {
+                if !self.static_scope_applies(&buff.scope, source_id, controller, target_id, true)
+                    || buff.condition.as_ref().is_some_and(|condition| {
+                        !self.check_static_condition(condition, controller)
+                    })
+                {
                     continue;
                 }
-                let Some(source_perm_id) = self.state.card_to_permanent[source_card_id] else {
-                    continue;
-                };
-                let Some(source_perm) = self.state.permanents[source_perm_id].as_ref() else {
-                    continue;
-                };
-                for buff in &card.static_pt_buffs {
-                    let applies = match &buff.scope {
-                        StaticScope::This => source_perm_id == target_id,
-                        StaticScope::OtherYouControl(predicate) => {
-                            source_perm_id != target_id
-                                && source_perm.controller == target.controller
-                                // Printed characteristics + animation only
-                                // (no power predicates — keeps this
-                                // non-recursive).
-                                && predicate.matches(
-                                    target_card,
-                                    target_card.power.unwrap_or(0),
-                                    target.animated,
-                                )
-                        }
-                    };
-                    if !applies {
-                        continue;
-                    }
-                    if let Some(condition) = &buff.condition {
-                        if !self.check_static_condition(condition, source_perm.controller) {
-                            continue;
-                        }
-                    }
-                    power += buff.power;
-                    toughness += buff.toughness;
-                }
+                let times = buff
+                    .per_creature_type_max
+                    .map_or(1, |max| self.creature_type_count(target_id).min(max));
+                power += buff.power * times;
+                toughness += buff.toughness * times;
             }
         }
         (power, toughness)
+    }
+
+    /// Keywords granted to `target_id` by static abilities of battlefield
+    /// permanents (layer 6).
+    fn static_keyword_bonus(&self, target_id: PermanentId) -> Keywords {
+        let mut keywords = Keywords::default();
+        for (source_id, controller, card) in self.static_sources() {
+            for grant in &card.static_keyword_grants {
+                if self.static_scope_applies(&grant.scope, source_id, controller, target_id, false)
+                    && grant
+                        .condition
+                        .as_ref()
+                        .is_none_or(|condition| self.check_static_condition(condition, controller))
+                {
+                    keywords = keywords.union(&grant.keywords);
+                }
+            }
+        }
+        keywords
+    }
+
+    /// Battlefield permanents whose cards project static P/T or keyword
+    /// effects, with their controllers.
+    fn static_sources(&self) -> impl Iterator<Item = (PermanentId, PlayerId, &Card)> {
+        [PlayerId(0), PlayerId(1)]
+            .into_iter()
+            .flat_map(move |player| {
+                self.state
+                    .zones
+                    .zone_cards(ZoneType::Battlefield, player)
+                    .iter()
+                    .filter_map(move |&card_id| {
+                        let card = &self.state.cards[card_id];
+                        if card.static_pt_buffs.is_empty() && card.static_keyword_grants.is_empty()
+                        {
+                            return None;
+                        }
+                        let permanent_id = self.state.card_to_permanent[card_id]?;
+                        let permanent = self.state.permanents[permanent_id].as_ref()?;
+                        Some((permanent_id, permanent.controller, card))
+                    })
+            })
+    }
+
+    /// Whether a static scope from `source_id` (controlled by `controller`)
+    /// covers `target_id`. `effective_flying` selects the P/T layer's view of
+    /// flying; keyword grants read only non-static keywords.
+    fn static_scope_applies(
+        &self,
+        scope: &StaticScope,
+        source_id: PermanentId,
+        controller: PlayerId,
+        target_id: PermanentId,
+        effective_flying: bool,
+    ) -> bool {
+        let Some(target) = self.state.permanents[target_id].as_ref() else {
+            return false;
+        };
+        let (predicate, other, with_counters) = match scope {
+            StaticScope::This => return source_id == target_id,
+            StaticScope::OtherYouControl(predicate) => (predicate, true, false),
+            StaticScope::YouControl(predicate) => (predicate, false, false),
+            StaticScope::YouControlWithCounters(predicate) => (predicate, false, true),
+        };
+        if target.controller != controller
+            || (other && source_id == target_id)
+            || (with_counters && target.plus1_counters <= 0)
+        {
+            return false;
+        }
+        // Printed power only (no power predicates), keeping P/T non-recursive.
+        let card = &self.state.cards[target.card];
+        self.permanent_matches_with(target_id, predicate, card.power.unwrap_or(0), || {
+            if effective_flying {
+                self.effective_keywords(target_id).flying
+            } else {
+                target.effective_keywords(card).flying
+            }
+        })
+    }
+
+    /// Distinct creature types of a battlefield creature (CR 205.3m): printed
+    /// subtypes of a printed creature, less noncreature subtypes, plus
+    /// temporarily granted subtypes. Animated lands keep only granted types.
+    fn creature_type_count(&self, permanent_id: PermanentId) -> i32 {
+        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+            return 0;
+        };
+        let card = &self.state.cards[permanent.card];
+        let mut types: Vec<&str> = Vec::new();
+        if card.types.is_creature() {
+            types.extend(
+                card.subtypes
+                    .iter()
+                    .map(String::as_str)
+                    .filter(|s| !NONCREATURE_SUBTYPES.contains(s)),
+            );
+        }
+        types.extend(permanent.temp_subtypes.iter().map(String::as_str));
+        types.sort_unstable();
+        types.dedup();
+        types.len() as i32
     }
 
     /// Evaluate a static condition for `controller` ("you").
@@ -169,14 +259,20 @@ impl Game {
             .is_some_and(|permanent| permanent.is_creature(&self.state.cards[permanent.card]))
     }
 
-    /// Printed keywords plus until-EOT grants plus animation haste.
+    /// Printed keywords plus until-EOT grants plus animation haste plus
+    /// static grants from battlefield permanents.
     pub(crate) fn effective_keywords(&self, permanent_id: PermanentId) -> Keywords {
-        self.state
+        let Some(permanent) = self
+            .state
             .permanents
             .get(permanent_id.0)
             .and_then(|p| p.as_ref())
-            .map(|permanent| permanent.effective_keywords(&self.state.cards[permanent.card]))
-            .unwrap_or_default()
+        else {
+            return Keywords::default();
+        };
+        permanent
+            .effective_keywords(&self.state.cards[permanent.card])
+            .union(&self.static_keyword_bonus(permanent_id))
     }
 
     /// Lethal-damage check (CR 704.5g), animation- and statics-aware.
@@ -194,21 +290,37 @@ impl Game {
     }
 
     /// Match a battlefield permanent against a predicate using its
-    /// effective power and animation-aware types.
+    /// effective power, keywords and animation-aware types.
     pub(crate) fn permanent_matches_predicate(
         &self,
         permanent_id: PermanentId,
         predicate: &CardPredicate,
     ) -> bool {
+        self.permanent_matches_with(
+            permanent_id,
+            predicate,
+            self.effective_power(permanent_id),
+            || self.effective_keywords(permanent_id).flying,
+        )
+    }
+
+    /// Match a battlefield permanent against a predicate, counting its
+    /// temporary subtypes and animation. The caller supplies the power and
+    /// flying views it can read without recursing.
+    fn permanent_matches_with(
+        &self,
+        permanent_id: PermanentId,
+        predicate: &CardPredicate,
+        power: i32,
+        flying: impl FnOnce() -> bool,
+    ) -> bool {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return false;
         };
-        let card = &self.state.cards[permanent.card];
-        if predicate.flying && !self.effective_keywords(permanent_id).flying {
+        if predicate.flying && !flying() {
             return false;
         }
-        let mut predicate = predicate.clone();
-        predicate.flying = false;
+        let card = &self.state.cards[permanent.card];
         let has_subtype = |name: &str| {
             card.has_subtype(name) || permanent.temp_subtypes.iter().any(|s| s == name)
         };
@@ -222,9 +334,13 @@ impl Game {
         {
             return false;
         }
-        predicate.subtype = None;
-        predicate.subtypes_any.clear();
-        predicate.not_subtypes.clear();
-        predicate.matches(card, self.effective_power(permanent_id), permanent.animated)
+        let structural = CardPredicate {
+            flying: false,
+            subtype: None,
+            subtypes_any: Vec::new(),
+            not_subtypes: Vec::new(),
+            ..predicate.clone()
+        };
+        structural.matches(card, power, permanent.animated)
     }
 }

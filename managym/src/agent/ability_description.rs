@@ -376,6 +376,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         PutCountersValue { count, target } => format!("Put X +1/+1 counters on {}, where X is {}",target_description(target),value_description(count)),
         AddSubtypeToTarget { target, subtype } => format!("{} becomes a {subtype} in addition to its other types until end of turn",target_description(target)),
         ExileIfDiesThisTurn { target } => format!("If {} would die this turn, exile it instead",target_description(target)),
+        IfCondition { condition: StaticCondition::Always, effects } => effects_description(effects),
         IfCondition { condition, effects } => format!("If {}: {}",static_description(condition),effects_description(effects)),
         ReturnToHand { target } => format!("Return {} to its owner's hand",target_description(target)),
         DealDamage { amount, target } => format!("Deal {amount} damage to {}",target_description(target)),

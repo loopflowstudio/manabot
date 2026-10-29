@@ -12,6 +12,16 @@
       "U"
     ]
   },
+  "Abandoned Air Temple": {
+    "name": "Abandoned Air Temple",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped unless you control a basic land.\n{T}: Add {W}.\n{3}{W}, {T}: Put a +1/+1 counter on each creature you control.",
+    "colors": []
+  },
   "Accumulate Wisdom": {
     "name": "Accumulate Wisdom",
     "mana_cost": "{1}{U}",
@@ -22,6 +32,29 @@
     "oracle_text": "Look at the top three cards of your library. Put one of those cards into your hand and the rest on the bottom of your library in any order. Put each of those cards into your hand instead if there are three or more Lesson cards in your graveyard.",
     "colors": [
       "U"
+    ]
+  },
+  "Agna Qel'a": {
+    "name": "Agna Qel'a",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped unless you control a basic land.\n{T}: Add {U}.\n{2}{U}, {T}: Draw a card, then discard a card.",
+    "colors": []
+  },
+  "Air Nomad Legacy": {
+    "name": "Air Nomad Legacy",
+    "mana_cost": "{W}{U}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "When this enchantment enters, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")\nCreatures you control with flying get +1/+1.",
+    "colors": [
+      "U",
+      "W"
     ]
   },
   "Allies at Last": {
@@ -60,6 +93,32 @@
     "oracle_text": "Whenever another Ally you control enters, put a +1/+1 counter on this creature.",
     "colors": [
       "W"
+    ]
+  },
+  "Ba Sing Se": {
+    "name": "Ba Sing Se",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "This land enters tapped unless you control a basic land.\n{T}: Add {G}.\n{2}{G}, {T}: Earthbend 2. Activate only as a sorcery. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)",
+    "colors": []
+  },
+  "Badgermole": {
+    "name": "Badgermole",
+    "mana_cost": "{4}{G}",
+    "type_line": "Creature — Badger Mole",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "When this creature enters, earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)\nCreatures you control with +1/+1 counters on them have trample.",
+    "colors": [
+      "G"
     ]
   },
   "Badgermole Cub": {
@@ -174,6 +233,18 @@
     "toughness": "4",
     "keywords": [],
     "oracle_text": "",
+    "colors": [
+      "G"
+    ]
+  },
+  "Diligent Zookeeper": {
+    "name": "Diligent Zookeeper",
+    "mana_cost": "{3}{G}",
+    "type_line": "Creature — Human Citizen Ally",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "Each non-Human creature you control gets +1/+1 for each of its creature types, to a maximum of 10.",
     "colors": [
       "G"
     ]
@@ -378,6 +449,18 @@
     "oracle_text": "Draw a card. Until end of turn, target creature gains trample and gets +1/+0 for each card you've drawn this turn. (A creature with trample can deal excess combat damage to the player or planeswalker it's attacking.)",
     "colors": [
       "R"
+    ]
+  },
+  "Foggy Swamp Hunters": {
+    "name": "Foggy Swamp Hunters",
+    "mana_cost": "{3}{B}",
+    "type_line": "Creature — Human Ranger Ally",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "As long as you've drawn two or more cards this turn, this creature has lifelink and menace. (It can't be blocked except by two or more creatures.)",
+    "colors": [
+      "B"
     ]
   },
   "Foggy Swamp Spirit Keeper": {
@@ -855,6 +938,16 @@
       "R"
     ]
   },
+  "Realm of Koh": {
+    "name": "Realm of Koh",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped unless you control a basic land.\n{T}: Add {B}.\n{3}{B}, {T}: Create a 1/1 colorless Spirit creature token with \"This token can't block or be blocked by non-Spirit creatures.\"",
+    "colors": []
+  },
   "Savor": {
     "name": "Savor",
     "mana_cost": "{1}{B}",
@@ -958,6 +1051,18 @@
     "toughness": null,
     "keywords": [],
     "oracle_text": "({T}: Add {B}.)",
+    "colors": []
+  },
+  "The Walls of Ba Sing Se": {
+    "name": "The Walls of Ba Sing Se",
+    "mana_cost": "{8}",
+    "type_line": "Legendary Artifact Creature — Wall",
+    "power": "0",
+    "toughness": "30",
+    "keywords": [
+      "Defender"
+    ],
+    "oracle_text": "Defender\nOther permanents you control have indestructible.",
     "colors": []
   },
   "Tiger-Dillo": {

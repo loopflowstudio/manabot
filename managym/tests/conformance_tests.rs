@@ -115,24 +115,22 @@ fn render_type_line(def: &CardDefinition) -> String {
             }
         })
         .collect();
-    // BTreeSet order is the enum order; every registered card is
-    // single-typed today, so ordering nuances don't arise.
-    for card_type in &def.types.types {
-        words.push(
-            match card_type {
-                CardType::Creature => "Creature",
-                CardType::Instant => "Instant",
-                CardType::Sorcery => "Sorcery",
-                CardType::Planeswalker => "Planeswalker",
-                CardType::Land => "Land",
-                CardType::Enchantment => "Enchantment",
-                CardType::Artifact => "Artifact",
-                CardType::Kindred => "Kindred",
-                CardType::Battle => "Battle",
-            }
-            .to_string(),
-        );
-    }
+    // Printed type order (Kindred, Enchantment, Artifact, Land, then the
+    // permanent and spell types), as in "Legendary Artifact Creature".
+    let printed = |card_type: &CardType| match card_type {
+        CardType::Kindred => (0, "Kindred"),
+        CardType::Enchantment => (1, "Enchantment"),
+        CardType::Artifact => (2, "Artifact"),
+        CardType::Land => (3, "Land"),
+        CardType::Creature => (4, "Creature"),
+        CardType::Planeswalker => (5, "Planeswalker"),
+        CardType::Battle => (6, "Battle"),
+        CardType::Instant => (7, "Instant"),
+        CardType::Sorcery => (8, "Sorcery"),
+    };
+    let mut types: Vec<_> = def.types.types.iter().map(printed).collect();
+    types.sort_unstable();
+    words.extend(types.into_iter().map(|(_, word)| word.to_string()));
     let mut line = words.join(" ");
     if !def.subtypes.is_empty() {
         line.push_str(" \u{2014} ");

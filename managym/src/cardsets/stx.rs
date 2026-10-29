@@ -36,6 +36,7 @@ fn enthusiastic_study() -> Card {
                     power: 3,
                     target: "target_0",
                     toughness: 1,
+                    per_creature_type_max: None,
                 },
                 Op::GrantKeywords {
                     duration: Duration::EndOfTurn,

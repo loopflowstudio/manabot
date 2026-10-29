@@ -42,7 +42,7 @@ impl Game {
             if !permanent.can_attack(card) || !self.combat_condition_met(permanent_id) {
                 return Err(AgentError("permanent cannot attack".to_string()));
             }
-            permanent.effective_keywords(card).vigilance
+            self.effective_keywords(permanent_id).vigilance
         };
         self.journal_permanent(permanent_id);
         if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
@@ -281,8 +281,8 @@ impl Game {
             return false;
         }
 
-        let attacker_keywords = attacker.effective_keywords(attacker_card);
-        let blocker_keywords = blocker.effective_keywords(blocker_card);
+        let attacker_keywords = self.effective_keywords(attacker_id);
+        let blocker_keywords = self.effective_keywords(blocker_id);
         if attacker_keywords.flying && !(blocker_keywords.flying || blocker_keywords.reach) {
             return false;
         }

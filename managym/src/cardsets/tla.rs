@@ -116,6 +116,15 @@ pub(super) fn cards() -> Vec<Card> {
         monk(),
         soldier(),
         spirit(),
+        abandoned_air_temple(),
+        agna_qel_a(),
+        ba_sing_se(),
+        realm_of_koh(),
+        air_nomad_legacy(),
+        badgermole(),
+        diligent_zookeeper(),
+        foggy_swamp_hunters(),
+        the_walls_of_ba_sing_se(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -163,6 +172,7 @@ fn azula_always_lies() -> Card {
                             power: -1,
                             target: "target_0",
                             toughness: -1,
+                            per_creature_type_max: None,
                         }],
                         role: "target_0",
                     }],
@@ -180,6 +190,7 @@ fn azula_always_lies() -> Card {
                                 power: -1,
                                 target: "target_2",
                                 toughness: -1,
+                                per_creature_type_max: None,
                             }],
                             role: "target_2",
                         },
@@ -904,6 +915,7 @@ fn momo_friendly_flier() -> Card {
                     power: 1,
                     target: "source",
                     toughness: 1,
+                    per_creature_type_max: None,
                 }],
             )
             .trigger(Trigger::new(
@@ -965,6 +977,7 @@ fn octopus_form() -> Card {
                     power: 1,
                     target: "target_0",
                     toughness: 1,
+                    per_creature_type_max: None,
                 },
                 Op::GrantKeywords {
                     duration: Duration::EndOfTurn,
@@ -2304,6 +2317,7 @@ fn cunning_maneuver() -> Card {
                     power: 3,
                     target: "creature",
                     toughness: 1,
+                    per_creature_type_max: None,
                 },
                 Op::CreateToken {
                     count: 1,
@@ -2563,6 +2577,7 @@ fn fancy_footwork() -> Card {
                         power: 2,
                         target: "current_target",
                         toughness: 2,
+                        per_creature_type_max: None,
                     },
                 ],
                 role: "creatures",
@@ -2617,6 +2632,7 @@ fn fire_nation_cadets() -> Card {
                     power: 1,
                     target: "source",
                     toughness: 0,
+                    per_creature_type_max: None,
                 }],
             )
             .cost(Cost::mana("2")),
@@ -2723,6 +2739,7 @@ fn first_time_flyer() -> Card {
                     power: 1,
                     target: "source",
                     toughness: 1,
+                    per_creature_type_max: None,
                 }],
             }],
         )],
@@ -2991,6 +3008,7 @@ fn otter_penguin() -> Card {
                     power: 1,
                     target: "source",
                     toughness: 2,
+                    per_creature_type_max: None,
                 },
                 Op::RestrictBlocking {
                     duration: Duration::EndOfTurn,
@@ -3029,6 +3047,7 @@ fn pillar_launch() -> Card {
                     power: 2,
                     target: "creature",
                     toughness: 2,
+                    per_creature_type_max: None,
                 },
                 Op::GrantKeywords {
                     duration: Duration::EndOfTurn,
@@ -3410,6 +3429,7 @@ fn white_lotus_reinforcements() -> Card {
                 power: 1,
                 target: "each:other_allies_you_control",
                 toughness: 1,
+                per_creature_type_max: None,
             }],
         )],
         registry_name: "White Lotus Reinforcements",
@@ -3437,6 +3457,7 @@ fn yip_yip() -> Card {
                     power: 2,
                     target: "ally",
                     toughness: 2,
+                    per_creature_type_max: None,
                 },
                 Op::Branch {
                     condition: Condition::TargetMatches {
@@ -3631,6 +3652,142 @@ fn spirit() -> Card {
     }
 }
 
+fn abandoned_air_temple() -> Card {
+    let text_box = "This land enters tapped unless you control a basic land.\n{T}: Add {W}.\n{3}{W}, {T}: Put a +1/+1 counter on each creature you control.";
+
+    basic_check_land(
+        "tla.abandoned_air_temple",
+        "Abandoned Air Temple",
+        text_box,
+        "W",
+        Program::new(
+            "team_counters",
+            ProgramKind::Activated,
+            vec![Op::PutCounters {
+                count: 1,
+                target: "each:creature_you_control",
+            }],
+        )
+        .cost(Cost {
+            mana: Some("3W"),
+            tap_source: Some(true),
+            ..Default::default()
+        }),
+    )
+}
+
+fn agna_qel_a() -> Card {
+    let text_box = "This land enters tapped unless you control a basic land.\n{T}: Add {U}.\n{2}{U}, {T}: Draw a card, then discard a card.";
+
+    basic_check_land(
+        "tla.agna_qel_a",
+        "Agna Qel'a",
+        text_box,
+        "U",
+        Program::new(
+            "loot",
+            ProgramKind::Activated,
+            vec![Op::DrawCards { count: 1 }, Op::Discard],
+        )
+        .cost(Cost {
+            mana: Some("2U"),
+            tap_source: Some(true),
+            ..Default::default()
+        }),
+    )
+}
+
+fn ba_sing_se() -> Card {
+    let text_box = "This land enters tapped unless you control a basic land.\n{T}: Add {G}.\n{2}{G}, {T}: Earthbend 2. Activate only as a sorcery. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)";
+
+    basic_check_land(
+        "tla.ba_sing_se",
+        "Ba Sing Se",
+        text_box,
+        "G",
+        Program::new(
+            "earthbend",
+            ProgramKind::Activated,
+            vec![Op::Earthbend {
+                count: 2,
+                target: "target_0",
+            }],
+        )
+        .cost(Cost {
+            mana: Some("2G"),
+            tap_source: Some(true),
+            sorcery_timing: Some(true),
+            ..Default::default()
+        })
+        .targets(vec![Target::one("target_0", Selector::LandYouControl)]),
+    )
+}
+
+fn realm_of_koh() -> Card {
+    let text_box = "This land enters tapped unless you control a basic land.\n{T}: Add {B}.\n{3}{B}, {T}: Create a 1/1 colorless Spirit creature token with \"This token can't block or be blocked by non-Spirit creatures.\"";
+
+    basic_check_land(
+        "tla.realm_of_koh",
+        "Realm of Koh",
+        text_box,
+        "B",
+        Program::new(
+            "spirit",
+            ProgramKind::Activated,
+            vec![Op::CreateToken {
+                count: 1,
+                definition_ref: "token.spirit",
+                tapped_and_attacking: Some(false),
+            }],
+        )
+        .cost(Cost {
+            mana: Some("3B"),
+            tap_source: Some(true),
+            ..Default::default()
+        }),
+    )
+}
+
+/// The five TLA locations enter tapped without a basic land, tap for one
+/// color, and carry one activated ability.
+fn basic_check_land(
+    key: &'static str,
+    registry_name: &'static str,
+    text_box: &'static str,
+    mana: &'static str,
+    ability: Program,
+) -> Card {
+    Card {
+        characteristics: Characteristics {
+            subtypes: Some(vec![]),
+            types: vec![CardType::Land],
+            keywords: Some(vec![]),
+            token: Some(false),
+            supertypes: Some(vec![]),
+            enters_tapped_unless: Some(Predicate::All {
+                predicates: vec![
+                    Predicate::Supertype { value: "basic" },
+                    Predicate::CardType {
+                        value: CardType::Land,
+                    },
+                ],
+            }),
+            ..Default::default()
+        },
+        key,
+        programs: vec![
+            Program::new(
+                "mana",
+                ProgramKind::Mana,
+                vec![Op::AddMana { mana, until: None }],
+            ),
+            ability,
+        ],
+        registry_name,
+        text_box,
+    }
+}
+
 /// The ten tapped dual lands share both abilities; only identity and colors vary.
 fn draw_land(
     key: &'static str,
@@ -3727,6 +3884,172 @@ fn basic_land(
             vec![Op::AddMana { mana, until: None }],
         )],
         registry_name,
+        text_box,
+    }
+}
+
+fn air_nomad_legacy() -> Card {
+    let text_box = "When this enchantment enters, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")\nCreatures you control with flying get +1/+1.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{W}{U}"),
+            types: vec![CardType::Enchantment],
+            ..Default::default()
+        },
+        key: "tla.air_nomad_legacy",
+        programs: vec![
+            Program::new(
+                "clue",
+                ProgramKind::Triggered,
+                vec![Op::CreateToken {
+                    count: 1,
+                    definition_ref: "token.clue",
+                    tapped_and_attacking: None,
+                }],
+            )
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::new(
+                "flying_anthem",
+                ProgramKind::Static,
+                vec![Op::ModifyPt {
+                    duration: Duration::Static,
+                    power: 1,
+                    target: "each:creature_you_control_with_flying",
+                    toughness: 1,
+                    per_creature_type_max: None,
+                }],
+            ),
+        ],
+        registry_name: "Air Nomad Legacy",
+        text_box,
+    }
+}
+
+fn badgermole() -> Card {
+    let text_box = "When this creature enters, earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)\nCreatures you control with +1/+1 counters on them have trample.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{4}{G}"),
+            subtypes: Some(vec!["Badger", "Mole"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(4)),
+            toughness: Some(4),
+            ..Default::default()
+        },
+        key: "tla.badgermole",
+        programs: vec![
+            Program::new(
+                "earthbend",
+                ProgramKind::Triggered,
+                vec![Op::Earthbend {
+                    count: 2,
+                    target: "target_0",
+                }],
+            )
+            .targets(vec![Target::one("target_0", Selector::LandYouControl)])
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::new(
+                "trample_grant",
+                ProgramKind::Static,
+                vec![Op::GrantKeywords {
+                    duration: Duration::Static,
+                    keywords: vec![Keyword::Trample],
+                    target: "each:creature_you_control_with_counters",
+                }],
+            ),
+        ],
+        registry_name: "Badgermole",
+        text_box,
+    }
+}
+
+fn diligent_zookeeper() -> Card {
+    let text_box = "Each non-Human creature you control gets +1/+1 for each of its creature types, to a maximum of 10.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{3}{G}"),
+            subtypes: Some(vec!["Human", "Citizen", "Ally"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(4)),
+            toughness: Some(4),
+            ..Default::default()
+        },
+        key: "tla.diligent_zookeeper",
+        programs: vec![Program::new(
+            "type_anthem",
+            ProgramKind::Static,
+            vec![Op::ModifyPt {
+                duration: Duration::Static,
+                power: 1,
+                target: "each:non_human_creature_you_control",
+                toughness: 1,
+                per_creature_type_max: Some(10),
+            }],
+        )],
+        registry_name: "Diligent Zookeeper",
+        text_box,
+    }
+}
+
+fn foggy_swamp_hunters() -> Card {
+    let text_box = "As long as you've drawn two or more cards this turn, this creature has lifelink and menace. (It can't be blocked except by two or more creatures.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{3}{B}"),
+            subtypes: Some(vec!["Human", "Ranger", "Ally"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(3)),
+            toughness: Some(4),
+            ..Default::default()
+        },
+        key: "tla.foggy_swamp_hunters",
+        programs: vec![Program::new(
+            "drawn_keywords",
+            ProgramKind::Static,
+            vec![Op::Branch {
+                condition: Condition::CardsDrawnAtLeast { count: 2 },
+                otherwise: vec![],
+                then: vec![Op::GrantKeywords {
+                    duration: Duration::Static,
+                    keywords: vec![Keyword::Lifelink, Keyword::Menace],
+                    target: "source",
+                }],
+            }],
+        )],
+        registry_name: "Foggy Swamp Hunters",
+        text_box,
+    }
+}
+
+fn the_walls_of_ba_sing_se() -> Card {
+    let text_box = "Defender\nOther permanents you control have indestructible.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{8}"),
+            subtypes: Some(vec!["Wall"]),
+            types: vec![CardType::Artifact, CardType::Creature],
+            keywords: Some(vec![Keyword::Defender]),
+            power: Some(PrintedPower::Fixed(0)),
+            toughness: Some(30),
+            supertypes: Some(vec!["legendary"]),
+            ..Default::default()
+        },
+        key: "tla.the_walls_of_ba_sing_se",
+        programs: vec![Program::new(
+            "indestructible_grant",
+            ProgramKind::Static,
+            vec![Op::GrantKeywords {
+                duration: Duration::Static,
+                keywords: vec![Keyword::Indestructible],
+                target: "each:other_permanent_you_control",
+            }],
+        )],
+        registry_name: "The Walls of Ba Sing Se",
         text_box,
     }
 }

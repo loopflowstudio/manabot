@@ -191,6 +191,7 @@ impl Game {
                     continue;
                 }
                 if (ability.own_turn_only && self.active_player() != player)
+                    || (ability.sorcery_timing && !self.can_cast_sorceries(player))
                     || self.state.players[player.0].life < ability.life_cost as i32
                 {
                     continue;

@@ -80,6 +80,7 @@
       "power_at_most": 5,
       "subtype": 6,
       "subtypes_any": 11,
+      "supertype": 13,
       "types_any": 12
     },
     "quantity": {
@@ -223,6 +224,7 @@
     "direction": 63,
     "duration": 11,
     "enters_tapped": 84,
+    "enters_tapped_unless": 85,
     "event": 12,
     "first_on_own_turn": 64,
     "generic": 65,
@@ -255,6 +257,7 @@
     "or_mana": 75,
     "otherwise": 34,
     "own_turn_only": 76,
+    "per_creature_type_max": 87,
     "power": 35,
     "predicate": 36,
     "predicates": 37,
@@ -265,6 +268,7 @@
     "sacrifice": 73,
     "sacrifice_source": 41,
     "selector": 42,
+    "sorcery_timing": 86,
     "sources": 43,
     "subject": 44,
     "subtract": 69,
@@ -380,6 +384,11 @@
   "schema_version": 8,
   "special_roles": {
     "current_target": 2,
+    "each:creature_you_control": 6,
+    "each:creature_you_control_with_counters": 8,
+    "each:creature_you_control_with_flying": 7,
+    "each:non_human_creature_you_control": 9,
+    "each:other_permanent_you_control": 10,
     "each:other_allies_you_control": 4,
     "each:other_ally_creature_you_control": 5,
     "source": 1,

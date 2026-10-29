@@ -210,21 +210,32 @@ impl Game {
                     entity: EntityId::from(*card),
                     incarnation: self.state.object_incarnations[*card],
                 });
+                // Entering objects come under their owner's control; the
+                // condition reads that player's battlefield before the move.
+                let entering_controller = self.state.cards[*card].owner;
                 self.state.cards[*card]
                     .replacement_effects
                     .iter()
                     .enumerate()
-                    .filter(|(_, effect)| {
-                        matches!(
-                            effect,
+                    .filter_map(|(definition_index, effect)| {
+                        let effect = match effect {
                             ReplacementEffect::EntersTapped
-                                | ReplacementEffect::EntersWithPlusOneCounters { .. }
-                        )
-                    })
-                    .map(|(definition_index, effect)| ReplacementCandidate {
-                        source,
-                        definition_index,
-                        effect: effect.clone(),
+                            | ReplacementEffect::EntersWithPlusOneCounters { .. } => effect.clone(),
+                            ReplacementEffect::EntersTappedUnlessControls { predicate }
+                                if !self
+                                    .battlefield_permanents(entering_controller)
+                                    .into_iter()
+                                    .any(|id| self.permanent_matches_predicate(id, predicate)) =>
+                            {
+                                ReplacementEffect::EntersTapped
+                            }
+                            _ => return None,
+                        };
+                        Some(ReplacementCandidate {
+                            source,
+                            definition_index,
+                            effect,
+                        })
                     })
                     .collect()
             }

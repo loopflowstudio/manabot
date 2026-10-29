@@ -229,6 +229,7 @@ pub enum Predicate {
     All(Vec<Predicate>),
     CardType(String),
     Subtype(String),
+    Supertype(String),
     NotCardTypes(Vec<String>),
     PowerAtMost(i64),
     PowerAtLeast(i64),
@@ -335,6 +336,8 @@ pub enum Step {
         power: i64,
         toughness: i64,
         duration: String,
+        /// Multiply by the affected creature's creature-type count, capped.
+        per_creature_type_max: Option<i64>,
     },
     GrantKeywords {
         target: String,
@@ -873,6 +876,7 @@ impl<'a> BoundPack<'a> {
                 power,
                 toughness,
                 duration,
+                ..
             } => trace.push(TraceEvent::ModifyPt {
                 target: target.clone(),
                 power: *power,
@@ -1165,6 +1169,10 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
             power: i64_field(value, "power")?,
             toughness: i64_field(value, "toughness")?,
             duration: str_field(value, "duration")?.to_owned(),
+            per_creature_type_max: value
+                .get("per_creature_type_max")
+                .map(|_| i64_field(value, "per_creature_type_max"))
+                .transpose()?,
         },
         Opcode::GrantKeywords => Step::GrantKeywords {
             target: str_field(value, "target")?.to_owned(),
@@ -1407,6 +1415,7 @@ fn parse_predicate(value: &Value) -> Result<Predicate, IrError> {
         ),
         "card_type" => Predicate::CardType(str_field(value, "value")?.to_owned()),
         "subtype" => Predicate::Subtype(str_field(value, "value")?.to_owned()),
+        "supertype" => Predicate::Supertype(str_field(value, "value")?.to_owned()),
         "not_card_types" => Predicate::NotCardTypes(str_array_field(value, "values")?),
         "power_at_most" => Predicate::PowerAtMost(i64_field(value, "value")?),
         "power_at_least" => Predicate::PowerAtLeast(i64_field(value, "value")?),

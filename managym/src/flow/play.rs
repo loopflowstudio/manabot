@@ -617,6 +617,9 @@ impl Game {
         if ability.own_turn_only && self.active_player() != player {
             return Err(AgentError("activation requires your turn".into()));
         }
+        if ability.sorcery_timing && !self.can_cast_sorceries(player) {
+            return Err(AgentError("activation requires sorcery timing".into()));
+        }
         if ability.tap_source && !permanent.can_tap(&self.state.cards[source_card]) {
             return Err(AgentError("source cannot tap".into()));
         }

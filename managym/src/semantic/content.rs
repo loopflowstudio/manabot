@@ -17,8 +17,8 @@ use crate::{
         },
         card::{
             ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keywords, PowerCda,
-            ReplacementEffect, SacrificeCost, SpellCostReduction, StaticPtBuff, StaticScope,
-            TriggeredManaAbility,
+            ReplacementEffect, SacrificeCost, SpellCostReduction, StaticKeywordGrant, StaticPtBuff,
+            StaticScope, TriggeredManaAbility,
         },
         mana::{Color, Colors, Mana, ManaCost},
         player::PlayerConfig,
@@ -327,6 +327,16 @@ fn compile_characteristics(definition: &Definition) -> Result<CardDefinition, Ir
         )
     };
 
+    let mut replacement_effects = Vec::new();
+    if opt_bool_field(value, "enters_tapped")?.unwrap_or(false) {
+        replacement_effects.push(ReplacementEffect::EntersTapped);
+    }
+    if let Some(predicate) = value.get("enters_tapped_unless") {
+        replacement_effects.push(ReplacementEffect::EntersTappedUnlessControls {
+            predicate: predicate_value(predicate)?,
+        });
+    }
+
     Ok(CardDefinition {
         name: definition.registry_name.clone(),
         mana_cost,
@@ -338,11 +348,7 @@ fn compile_characteristics(definition: &Definition) -> Result<CardDefinition, Ir
         is_token: opt_bool_field(value, "token")?.unwrap_or(false),
         power: optional_i32(value, "power")?,
         toughness: optional_i32(value, "toughness")?,
-        replacement_effects: if opt_bool_field(value, "enters_tapped")?.unwrap_or(false) {
-            vec![ReplacementEffect::EntersTapped]
-        } else {
-            Vec::new()
-        },
+        replacement_effects,
         ..CardDefinition::default()
     })
 }
@@ -423,15 +429,22 @@ fn apply_program(
         }
         "activated" => {
             let cost = program_cost(program)?;
-            let effects = lower_steps(pack, program, &program.steps)?;
-            let [effect] = effects.as_slice() else {
-                return unsupported(program, "activated ability must lower to one effect");
+            let mut effects = lower_steps(pack, program, &program.steps)?;
+            // An ability's sequential instructions resolve as one unconditional group.
+            let effect = match effects.len() {
+                0 => return unsupported(program, "activated ability has no effect"),
+                1 => effects.remove(0),
+                _ => Effect::IfCondition {
+                    condition: StaticCondition::Always,
+                    effects,
+                },
             };
             definition
                 .activated_abilities
                 .push(ActivatedAbilityDefinition {
                     sacrifice: cost.sacrifice,
                     own_turn_only: cost.own_turn_only,
+                    sorcery_timing: cost.sorcery_timing,
                     life_cost: cost.life,
                     tap_source: cost.tap_source,
                     mana_cost: cost
@@ -439,7 +452,7 @@ fn apply_program(
                         .ok_or_else(|| malformed(program, "activated ability has no mana cost"))?,
                     sacrifice_source: cost.sacrifice_source,
                     waterbend: cost.waterbend,
-                    effect: effect.clone(),
+                    effect,
                 });
         }
         "static" => apply_static(definition, program)?,
@@ -455,6 +468,7 @@ struct ProgramCost {
     affinity: Option<CardPredicate>,
     sacrifice: Option<SacrificeCost>,
     own_turn_only: bool,
+    sorcery_timing: bool,
     life: u32,
     sacrifice_source: bool,
     tap_source: bool,
@@ -494,6 +508,7 @@ fn program_cost(program: &Program) -> Result<ProgramCost, IrError> {
             })
             .transpose()?,
         own_turn_only: opt_bool_field(value, "own_turn_only")?.unwrap_or(false),
+        sorcery_timing: opt_bool_field(value, "sorcery_timing")?.unwrap_or(false),
         life: value
             .get("life")
             .map(|v| {
@@ -699,6 +714,7 @@ fn apply_static(definition: &mut CardDefinition, program: &Program) -> Result<()
             condition: Some(lower_condition(condition)?),
             power: *power,
             toughness: *toughness,
+            per_creature_type_max: None,
         }),
         [Step::SetPowerFromCount {
             zone,
@@ -718,45 +734,89 @@ fn apply_static(definition: &mut CardDefinition, program: &Program) -> Result<()
             definition.power_cda = Some(PowerCda::GraveyardMatching(predicate_card(predicate)?));
         }
         [Step::Branch {
-            condition: condition @ Condition::GraveyardAtLeast { .. },
+            condition,
             then,
             otherwise,
         }] if otherwise.is_empty() => {
-            let [Step::ModifyPt {
-                target,
-                power,
-                toughness,
-                duration,
-            }] = then.as_slice()
-            else {
-                return unsupported(program, "conditional static must modify P/T once");
+            let [step] = then.as_slice() else {
+                return unsupported(program, "conditional static must have one effect");
             };
-            if target != "source" || duration != "static" {
-                return unsupported(program, "conditional static must modify its source");
-            }
-            definition.static_pt_buffs.push(StaticPtBuff {
-                scope: StaticScope::This,
-                condition: Some(lower_condition(condition)?),
-                power: i32_value(program, *power, "power")?,
-                toughness: i32_value(program, *toughness, "toughness")?,
-            });
+            apply_static_effect(definition, program, step, Some(lower_condition(condition)?))?;
         }
-        [Step::ModifyPt {
-            target,
-            power,
-            toughness,
-            duration,
-        }] if target == "each:other_allies_you_control" && duration == "static" => {
-            definition.static_pt_buffs.push(StaticPtBuff {
-                scope: StaticScope::OtherYouControl(CardPredicate::subtype("Ally")),
-                condition: None,
-                power: i32_value(program, *power, "power")?,
-                toughness: i32_value(program, *toughness, "toughness")?,
-            });
+        [step @ (Step::ModifyPt { .. } | Step::GrantKeywords { .. })] => {
+            apply_static_effect(definition, program, step, None)?
         }
         _ => return unsupported(program, "unsupported static program shape"),
     }
     Ok(())
+}
+
+/// A static P/T modification or keyword grant over an affected set.
+fn apply_static_effect(
+    definition: &mut CardDefinition,
+    program: &Program,
+    step: &Step,
+    condition: Option<StaticCondition>,
+) -> Result<(), IrError> {
+    match step {
+        Step::ModifyPt {
+            target,
+            power,
+            toughness,
+            duration,
+            per_creature_type_max,
+        } if duration == "static" => definition.static_pt_buffs.push(StaticPtBuff {
+            scope: static_scope(program, target)?,
+            condition,
+            power: i32_value(program, *power, "power")?,
+            toughness: i32_value(program, *toughness, "toughness")?,
+            per_creature_type_max: per_creature_type_max
+                .map(|max| i32_value(program, max, "creature-type maximum"))
+                .transpose()?,
+        }),
+        Step::GrantKeywords {
+            target,
+            keywords: names,
+            duration,
+        } if duration == "static" => definition.static_keyword_grants.push(StaticKeywordGrant {
+            scope: static_scope(program, target)?,
+            condition,
+            keywords: keywords(names)?,
+        }),
+        _ => {
+            return unsupported(
+                program,
+                "static effect must be a static P/T or keyword grant",
+            )
+        }
+    }
+    Ok(())
+}
+
+/// The permanents a static effect's target reference covers.
+fn static_scope(program: &Program, target: &str) -> Result<StaticScope, IrError> {
+    let creature = CardPredicate::creature;
+    Ok(match target {
+        "source" => StaticScope::This,
+        "each:other_allies_you_control" => {
+            StaticScope::OtherYouControl(CardPredicate::subtype("Ally"))
+        }
+        "each:other_permanent_you_control" => {
+            StaticScope::OtherYouControl(CardPredicate::default())
+        }
+        "each:creature_you_control_with_flying" => StaticScope::YouControl(CardPredicate {
+            flying: true,
+            ..creature()
+        }),
+        "each:creature_you_control_with_counters" => {
+            StaticScope::YouControlWithCounters(creature())
+        }
+        "each:non_human_creature_you_control" => StaticScope::YouControl(CardPredicate {
+            not_subtypes: vec!["Human".into()],
+            ..creature()
+        }),
+        _ => return unsupported(program, &format!("unsupported static scope {target:?}")),
+    })
 }
 
 fn lower_steps(
@@ -857,6 +917,13 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
                 other: true,
             }
         }
+        Step::PutCounters { target, count } if target == "each:creature_you_control" => {
+            Effect::PutCountersOnEachMatching {
+                count: i32_value(program, *count, "counter count")?,
+                predicate: CardPredicate::creature(),
+                other: false,
+            }
+        }
         Step::PutCounters { target, count } => Effect::PutCounters {
             count: i32_value(program, *count, "counter count")?,
             target: target_for(program, target)?,
@@ -880,6 +947,7 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             power,
             toughness,
             duration,
+            per_creature_type_max: None,
         } if duration == "end_of_turn" && target == "source" => Effect::ModifyUntilEot {
             power_delta: i32_value(program, *power, "power")?,
             toughness_delta: i32_value(program, *toughness, "toughness")?,
@@ -889,6 +957,7 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             power,
             toughness,
             duration,
+            per_creature_type_max: None,
         } if duration == "end_of_turn" => Effect::BuffTarget {
             power: i32_value(program, *power, "power")?,
             toughness: i32_value(program, *toughness, "toughness")?,
@@ -1179,6 +1248,7 @@ fn merge_predicate(result: &mut CardPredicate, predicate: &Predicate) -> Result<
             set_once(&mut result.card_type, card_type(name)?, "card_type")?
         }
         Predicate::Subtype(name) => set_once(&mut result.subtype, name.clone(), "subtype")?,
+        Predicate::Supertype(name) => set_once(&mut result.supertype, name.clone(), "supertype")?,
         Predicate::NotCardTypes(names) => {
             for name in names {
                 let value = card_type(name)?;
