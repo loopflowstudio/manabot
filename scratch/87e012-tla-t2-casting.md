@@ -42,6 +42,10 @@ worktree, so new T2 cards read "unsupported" in this base until T1 lands.
   `opponents_cast_only_from_hand`. `Exile {target: "source"}` exiles the resolving
   spell; finalize leaves a spell that already left the stack. Targets take
   `another` ("other target", trigger source excluded); predicate `attacking`.
+- Exile grants carry `cost: Option` (None = the card's mana cost) and `this_turn`
+  (dropped at cleanup); lands with a grant are played from exile
+  (`may_play_from_zone` gates actions and `play_land`). Opcode 69
+  `exile_top_card_play_this_turn` (Zuko).
 
 ## Done (slices 1–2 at `648edee6b`, merged onto T1 at `f7b59aa99`; slice 3 `afff1e1ed`)
 
@@ -54,7 +58,8 @@ Mongoose Lizard, Saber-Tooth Moose-Lion, Giant Koi, Rabaroo Troop, Team Avatar,
 Merchant of Many Hats; slice 2: Hog-Monkey, Rough Rhino Cavalry, Rebellious
 Captives; slice 3: Barrels of Blasting Jelly, Jasmine Dragon Tea Shop, White
 Lotus Hideout, Waterbending Scroll; slice 4a: Aang, the Last Airbender,
-Airbending Lesson, Airbender's Reversal, Avatar's Wrath. 32 of 51 defined; 19 remain.
+Airbending Lesson, Airbender's Reversal, Avatar's Wrath; slice 4b: Zuko, Exiled
+Prince. 33 of 51 defined; 18 remain.
 
 ## Base: T1
 
@@ -69,9 +74,17 @@ stage*/sacrifice/interaction) into `tests/cards/` stays T1's (Jack Heart's
 
 Slices 1–3 and 4a (airbend) are done; see Decisions.
 
-4b. Next — exact-zone grants extending `CastPermissions` (duration, own-turn,
-   flash, any-mana, land play, free cast during resolution): Zuko, Azula, Hama,
-   Yue, Solstice Revelations, Sozin's Comet foretell.
+4b. Remaining exact-zone grants, each needing a mechanism not built yet:
+   - Yue, Solstice Revelations: cast a spell *during resolution* without paying
+     its mana cost — the cast pipeline must run while a resolution is suspended
+     (decide: nested cast decision vs. a granted one-shot free cast).
+   - Sozin's Comet: foretell special action (pay {2}, exile face down from hand;
+     exile observation must hide the face from the opponent) + later-turn grant;
+     also "gains firebending 5 until end of turn" for each creature.
+   - Hama: mill + chosen graveyard exile + grant whose cost is waterbend {X}
+     while Hama stays controlled (source-linked, own turn).
+   - Azula: opponent-chosen exiles + source-linked own-turn grant with flash
+     and any-type mana.
 5. Private search/choice (Aang's Journey, Elemental Teachings, Seismic Sense,
    Lost Days, Dai Li Indoctrination, Sparring Dummy), additional costs
    (Spirit Water Revival, Professor Zei, Sokka, United Front X).
@@ -82,5 +95,6 @@ Slices 1–3 and 4a (airbend) are done; see Decisions.
 
 ## Check
 
+2026-10-28 (slice 4b Zuko): debug `cargo test --tests --no-fail-fast` passes except the pre-existing semantic-conformance pair; `tests/cards` 35 pass; clippy/fmt clean; extension rebuilt; 54 learning/content/boundary/policy-catalog pytest pass. Earlier
 2026-10-28 (slice 4a): debug `cargo test --tests --no-fail-fast` passes except the pre-existing semantic-conformance pair; `tests/cards` 34 pass; clippy/fmt clean; extension rebuilt; learning/current-content/package-boundary/optional-payments/policy-catalog pytest pass (stale `schema_version == 7` assertion fixed to 8). Earlier
 2026-10-28 (slice 3 + compress, realign): debug `cargo test --tests --no-fail-fast` passes except the pre-existing semantic-conformance pair (world/content-digest drift); `tests/cards` 29 pass; clippy/fmt clean; cp312 extension rebuilt on the final Rust and learning/current-content/package-boundary pytest 60 pass; world-change Python suite and Academy check deferred to gate.

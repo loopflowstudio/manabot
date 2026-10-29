@@ -2279,5 +2279,19 @@
     "keywords": [],
     "oracle_text": "{T}: Add {C}.\n{T}: Add one mana of any color. Spend this mana only to cast a Lesson or Shrine spell.\n{1}, {T}: Add one mana of any color.",
     "colors": []
+  },
+  "Zuko, Exiled Prince": {
+    "name": "Zuko, Exiled Prince",
+    "mana_cost": "{3}{R}",
+    "type_line": "Legendary Creature — Human Noble",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [
+      "Firebending"
+    ],
+    "oracle_text": "Firebending 3 (Whenever this creature attacks, add {R}{R}{R}. This mana lasts until end of combat.)\n{3}: Exile the top card of your library. You may play that card this turn.",
+    "colors": [
+      "R"
+    ]
   }
 }

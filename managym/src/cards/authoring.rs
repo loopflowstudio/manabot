@@ -339,6 +339,8 @@ pub enum Op {
     /// "Until your next turn, your opponents can't cast spells from anywhere
     /// other than their hands."
     OpponentsCastOnlyFromHand,
+    /// "Exile the top card of your library. You may play that card this turn."
+    ExileTopCardPlayThisTurn,
     /// Without a destination, a basic land onto the battlefield tapped. With
     /// `Hand`, any card of `subtype` is revealed and put into hand
     /// (landcycling: "search your library for a Plains card").

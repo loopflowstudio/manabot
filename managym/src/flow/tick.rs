@@ -227,6 +227,7 @@ impl Game {
         if matches!(step, StepKind::Cleanup) {
             // Safety net: no combat mana survives the turn.
             self.clear_combat_mana_pools();
+            self.expire_turn_cast_grants();
         }
     }
 

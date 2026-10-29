@@ -149,6 +149,9 @@ impl Game {
         if card_ref.owner != player {
             return Err(AgentError("card does not belong to player".to_string()));
         }
+        if !self.may_play_from_zone(player, card) {
+            return Err(AgentError("land is not in a permitted zone".into()));
+        }
         if !self.can_play_land(player) {
             return Err(AgentError("cannot play land now".to_string()));
         }

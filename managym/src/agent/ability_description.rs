@@ -381,6 +381,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         AirbendAll { predicate } => format!("Airbend all other {}. Their owners may cast them from exile for {{2}}", predicate_description(predicate,"permanents")),
         OpponentsCastOnlyFromHand => "Until your next turn, your opponents can't cast spells from anywhere other than their hands".to_string(),
         ExileSourceSpell => "Exile this spell".to_string(),
+        ExileTopCardPlayThisTurn => "Exile the top card of your library. You may play that card this turn".to_string(),
         BuffTargetValue { power, toughness, target } => format!("{} gets +X/{toughness:+} until end of turn, where X is {}",target_description(target),value_description(power)),
         ReturnToHandDrawIfControlled { target } => format!("Return {} to its owner's hand. If you controlled it, draw a card",target_description(target)),
         BuffTriggeringPermanentValue { power, toughness } => format!("It gets +X/+Y until end of turn, where X is {} and Y is {}",value_description(power),value_description(toughness)),

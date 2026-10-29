@@ -157,6 +157,7 @@ pub(super) fn cards() -> Vec<Card> {
         airbending_lesson(),
         airbenders_reversal(),
         avatars_wrath(),
+        zuko_exiled_prince(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -4668,6 +4669,34 @@ fn avatars_wrath() -> Card {
             ..Target::one("spared", Selector::Creature)
         }])],
         registry_name: "Avatar's Wrath",
+        text_box,
+    }
+}
+
+fn zuko_exiled_prince() -> Card {
+    let text_box = "Firebending 3 (Whenever this creature attacks, add {R}{R}{R}. This mana lasts until end of combat.)\n{3}: Exile the top card of your library. You may play that card this turn.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{3}{R}"),
+            subtypes: Some(vec!["Human", "Noble"]),
+            supertypes: Some(vec!["Legendary"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(4)),
+            toughness: Some(3),
+            ..Default::default()
+        },
+        key: "tla.zuko_exiled_prince",
+        programs: vec![
+            Program::firebending("firebending", "RRR"),
+            Program::new(
+                "impulse",
+                ProgramKind::Activated,
+                vec![Op::ExileTopCardPlayThisTurn],
+            )
+            .cost(Cost::mana("{3}")),
+        ],
+        registry_name: "Zuko, Exiled Prince",
         text_box,
     }
 }

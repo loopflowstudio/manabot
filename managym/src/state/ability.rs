@@ -237,6 +237,8 @@ pub enum Effect {
     /// Until the controller's next turn, opponents cast spells only from
     /// their hands.
     OpponentsCastOnlyFromHand,
+    /// "Exile the top card of your library. You may play that card this turn."
+    ExileTopCardPlayThisTurn,
     /// The resolving spell exiles itself instead of going to the graveyard.
     ExileSourceSpell,
     BuffTargetValue {
@@ -624,6 +626,7 @@ impl Effect {
             | Effect::AirbendAll { .. }
             | Effect::OpponentsCastOnlyFromHand
             | Effect::ExileSourceSpell
+            | Effect::ExileTopCardPlayThisTurn
             | Effect::ModifyControlled { .. }
             | Effect::ModifyUntilEot { .. }
             | Effect::DrawCards { .. }

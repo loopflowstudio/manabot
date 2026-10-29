@@ -449,6 +449,10 @@ impl Game {
                 self.restrict_opponent_to_hand(frame.controller);
                 None
             }
+            Effect::ExileTopCardPlayThisTurn => {
+                self.exile_top_card_play_this_turn(frame.controller);
+                None
+            }
             Effect::ExileSourceSpell => {
                 if let Some(card) = frame
                     .source

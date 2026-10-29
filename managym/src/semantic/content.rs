@@ -1099,6 +1099,7 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             }
         }
         Step::OpponentsCastOnlyFromHand => Effect::OpponentsCastOnlyFromHand,
+        Step::ExileTopCardPlayThisTurn => Effect::ExileTopCardPlayThisTurn,
         Step::BuffTargetValue {
             power,
             toughness,

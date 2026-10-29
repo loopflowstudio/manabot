@@ -108,6 +108,7 @@ pub enum Opcode {
     Airbend = 66,
     AirbendAll = 67,
     OpponentsCastOnlyFromHand = 68,
+    ExileTopCardPlayThisTurn = 69,
 }
 
 impl Opcode {
@@ -181,6 +182,7 @@ impl Opcode {
             66 => Opcode::Airbend,
             67 => Opcode::AirbendAll,
             68 => Opcode::OpponentsCastOnlyFromHand,
+            69 => Opcode::ExileTopCardPlayThisTurn,
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -431,6 +433,7 @@ pub enum Step {
         predicate: Predicate,
     },
     OpponentsCastOnlyFromHand,
+    ExileTopCardPlayThisTurn,
     BuffTargetValue {
         power: ValueExpression,
         toughness: Amount,
@@ -994,7 +997,8 @@ impl<'a> BoundPack<'a> {
             Step::Exile { .. }
             | Step::Airbend { .. }
             | Step::AirbendAll { .. }
-            | Step::OpponentsCastOnlyFromHand => trace.push(TraceEvent::RuleStep(step.clone())),
+            | Step::OpponentsCastOnlyFromHand
+            | Step::ExileTopCardPlayThisTurn => trace.push(TraceEvent::RuleStep(step.clone())),
             Step::BuffTargetValue { .. } => trace.push(TraceEvent::RuleStep(step.clone())),
             Step::ReturnToHandDrawIfControlled { .. } => {
                 trace.push(TraceEvent::RuleStep(step.clone()))
@@ -1320,6 +1324,7 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
             predicate: parse_predicate(object_field(value, "predicate")?)?,
         },
         Opcode::OpponentsCastOnlyFromHand => Step::OpponentsCastOnlyFromHand,
+        Opcode::ExileTopCardPlayThisTurn => Step::ExileTopCardPlayThisTurn,
         Opcode::BuffTargetValue => Step::BuffTargetValue {
             power: ValueExpression::parse(object_field(value, "power")?)?,
             toughness: Amount::parse(field(value, "toughness")?)?,

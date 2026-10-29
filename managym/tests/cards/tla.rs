@@ -1089,3 +1089,51 @@ fn avatars_wrath_spares_one_and_restricts_opponents_until_your_next_turn() {
     s.set_player_mana_pool(1, "2");
     assert!(can_cast(&mut s, wurm_card));
 }
+
+/// Put the library copy `card` on top of its owner's library.
+fn put_on_top(s: &mut Scenario, card: CardId) {
+    s.game_mut().move_card(card, ZoneType::Hand);
+    s.game_mut().move_card(card, ZoneType::Library);
+}
+
+/// Zuko's {3} exiles the top card; that exact card may be played this turn —
+/// a land as the turn's land play, a spell for its own mana cost — and the
+/// permission ends with the turn.
+#[test]
+fn zuko_exiles_the_top_card_and_may_play_it_this_turn() {
+    let mut s = setup(&["Zuko, Exiled Prince", "Gray Ogre"]);
+    let zuko = s.force_permanent_on_battlefield(0, "Zuko, Exiled Prince");
+    let mountain = library_card(&s, 0, "Mountain");
+    put_on_top(&mut s, mountain);
+    activate(&mut s, zuko, 0);
+    settle(&mut s);
+    assert_eq!(
+        s.game().state.zones.zone_of(mountain),
+        Some(ZoneType::Exile)
+    );
+    choose(
+        &mut s,
+        |a| matches!(a, Action::PlayLand { card, .. } if *card == mountain),
+    );
+    assert_eq!(
+        s.game().state.zones.zone_of(mountain),
+        Some(ZoneType::Battlefield)
+    );
+
+    let ogre = library_card(&s, 0, "Gray Ogre");
+    put_on_top(&mut s, ogre);
+    activate(&mut s, zuko, 0);
+    settle(&mut s);
+    // The played Mountain supplies {R}: {1} more is short of {2}{R}.
+    s.set_player_mana_pool(0, "1");
+    assert!(!can_cast(&mut s, ogre));
+    s.set_player_mana_pool(0, "2");
+    assert!(can_cast(&mut s, ogre));
+
+    // Unplayed, the card stays exiled without permission after the turn.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    s.set_player_mana_pool(0, "20RRRR");
+    assert_eq!(s.game().state.zones.zone_of(ogre), Some(ZoneType::Exile));
+    assert!(!can_cast(&mut s, ogre));
+}
