@@ -54,6 +54,10 @@ pub enum PrintedPower {
 pub struct Program {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cost: Option<Cost>,
+    /// An activated ability this source grants to the object a special role
+    /// names ("Equipped creature has \"...\""), not one of its own.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub granted_to: Option<&'static str>,
     pub key: &'static str,
     pub kind: ProgramKind,
     pub ops: Vec<Op>,
@@ -169,6 +173,7 @@ impl Program {
             kind,
             ops,
             cost: None,
+            granted_to: None,
             targets: None,
             trigger: None,
             target_binding: None,
@@ -184,6 +189,11 @@ impl Program {
     }
     pub fn trigger(mut self, trigger: Trigger) -> Self {
         self.trigger = Some(trigger);
+        self
+    }
+    /// Grant this activated ability to `role` instead of having it.
+    pub fn granted_to(mut self, role: &'static str) -> Self {
+        self.granted_to = Some(role);
         self
     }
     pub fn inferred(mut self) -> Self {

@@ -258,6 +258,7 @@
     "exhaust": 89,
     "first_on_own_turn": 64,
     "generic": 65,
+    "granted_to": 97,
     "if": 13,
     "if_declined": 66,
     "if_paid": 83,
@@ -455,6 +456,7 @@
     "each:other_permanent_you_control": 10,
     "each:other_allies_you_control": 4,
     "each:other_ally_creature_you_control": 5,
+    "grantor": 15,
     "source": 1,
     "triggering_spell": 3
   },

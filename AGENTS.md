@@ -201,6 +201,10 @@ set under the single `tests/cards.rs` target. `tests/rules/` keeps engine rules
 not about one card. A new authored field, predicate kind or `each:` role also
 needs its entry appended to `content/semantic/current/learning_schema.json`.
 
+A permanent's activated abilities are `Game::activated_abilities_for` (printed,
+then granted, e.g. `Program::granted_to` from Equipment); activation, payment
+and offer code indexes only that list, never `card.activated_abilities`.
+
 Native fixed mana abilities on a card are additive: multiple fixed productions
 produce all listed colors together. A land that produces one chosen color uses
 one activated modal mana program, not multiple fixed mana programs. Verify each

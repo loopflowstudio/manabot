@@ -5,7 +5,7 @@ Brief: the Task directive (49 cards, obligations in `docs/rules/tla/allocation.j
 T2 and reconcile shared costs before landing. Every merge needs Jack Heart's review.
 Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
 
-## Done (43 of 49)
+## Done (44 of 49)
 
 Detail per slice is in each commit message (`git log 86ebe9ccf..`).
 
@@ -58,18 +58,32 @@ Detail per slice is in each commit message (`git log 86ebe9ccf..`).
      controller and pinned by `determinize`. `grant_keywords` EOT on
      `each:creature_you_control` → `Effect::GrantKeywordsControlled`.
 
-Schema 8 (unreleased, T1 precedent) appended in place: fields 85-96, predicates
-13-16, special roles 6-14, opcodes 66-90, enum `counter`, conditions 7-9,
+13. Trusty Boomerang: `Program::granted_to("each:equipped_creature")` (field 97)
+   lowers an activated program into `CardDefinition.equipped_grants`;
+   `activated_abilities_for` lists them on the attached creature after its own
+   (`AbilityGrant`), and every activation path reads abilities only through it.
+   `ActivatedAbilityOnStack.granted_by` (`StackGrant`) fixes the grantor object
+   and grant at activation; `EffectFrame.grantor` feeds `return_to_hand` on
+   special role 15 `grantor` (`Effect::ReturnGrantorToHand`, CR 400.7).
+
+Schema 8 (unreleased, T1 precedent) appended in place: fields 85-97, predicates
+13-16, special roles 6-15, opcodes 66-90, enum `counter`, conditions 7-9,
 quantities 5-7, trigger_event 13, subtypes 64-74.
 `scratch/add_fixture.py` copies pinned evidence into the conformance fixture.
 
-Check (slice 12, debug): `cargo test` all targets pass (cards 50, rules_tests
+Check (slice 13, debug): `cargo test` all targets pass (cards 52, rules_tests
 356, lib 120) except `semantic_conformance_tests` (w16 vs w15 and receipt digest
 drift, as in PR #394 CI 40819903624); clippy, fmt clean; extension rebuilt;
 `pytest tests/semantic` 158 pass, 4 fail on `schema_version == 3/4/7` asserts
 from `be2b7586b`.
 
-## Remaining (6 cards), suggested next slices
+## Remaining (5 cards), suggested next slices
+
+- Glider Staff (2026-10-29, deferred to the T2 sync): its entry trigger
+  airbends, which T2 owns (`Op::Airbend`, exact-object cast permission,
+  `0d124a66e`); a second airbend here would be a parallel authority. After the
+  sync it needs only that op plus `equipped_pt` 1/1, an equipped flying grant
+  (`StaticKeywordGrant` on `each:equipped_creature`) and `equip {2}`.
 
 - Secret Tunnel (Cave; "this land can't be blocked" is `unblockable_if` Always;
   {T}: Add {C}): deferred from slice 10. Its "{4}, {T}: two target creatures you
@@ -85,15 +99,15 @@ from `be2b7586b`.
   X targets" (requirement max read from X) and a resolution-time distribution
   of three stun counters among tapped opponents' creatures (repeated
   one-at-a-time choice, as Heartless Act).
-- Fire Nation Palace (granted firebending; observation shape change); Glider
-  Staff (airbend), Trusty Boomerang (granted activated ability).
+- Fire Nation Palace (granted firebending; observation shape change).
 
 ## Reconcile at sync (T2 87e012 at `1144d0f32`, 2026-10-29)
 
 - Both branches append to schema 8 from 86ebe9ccf with colliding numbers. T2:
   fields 85-96, predicates 13-15, subtypes 64-74, special role 6, opcodes 66-73,
-  trigger_event 13, destination 2, zone 3. This branch: fields 85-96, predicates
-  13-16, subtypes 64-74, special roles 6-14, opcodes 66-90, conditions 7-9,
+  trigger_event 13, destination 2, zone 3. This branch: fields 85-97 (97
+  `granted_to`), predicates 13-16, subtypes 64-74, special roles 6-15 (15
+  `grantor`), opcodes 66-90, conditions 7-9,
   quantities 5-7, trigger_event 13 (`end_step_begins`), enum `counter`. T2 since
   added opcodes 74-79, fields 97-101 (101 `foretell`), quantity 5 `x`, enum
   `grant`, role `each:creature_you_control` 7. The later lander renumbers its own entries

@@ -99,6 +99,7 @@ fn stack(
                 targets,
                 attached: None,
                 x: 0,
+                granted_by: None,
             })
         }
         Entry::Triggered => StackObject::TriggeredAbility(TriggeredAbilityOnStack {

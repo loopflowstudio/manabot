@@ -67,3 +67,8 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   lifelink applies to stack spells; observations don't show spell grants. The
   tutor offers every match plus failing to find. Hakoda's top card is shown only
   to its controller; CR 401.2's no-peeking-mid-cast limit is not modeled.
+- Slice 13: granted abilities follow the grantee's own in its ability list,
+  so their `ability_index` depends on what is attached; stale offers are
+  rejected by the existing index checks. Activated-ability targets still
+  exclude their source (pre-existing), so a Boomerang creature cannot target
+  itself. Glider Staff waits for T2's airbend rather than a second one here.

@@ -941,7 +941,7 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
                 raw_program,
                 program_context,
                 required={"key", "kind", "ops"},
-                optional={"cost", "targets", "trigger", "target_binding"},
+                optional={"cost", "granted_to", "targets", "trigger", "target_binding"},
             )
             if raw_program.get("target_binding", "explicit") not in {
                 "explicit",
@@ -967,12 +967,21 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
             ]
             target_roles = [target["role"] for target in targets]
             _unique(target_roles, f"{program_context}.targets")
+            # A granted ability names its grantor ("Return Trusty Boomerang").
+            granted_to = raw_program.get("granted_to")
+            if granted_to is not None and (
+                kind_name != "activated" or granted_to != "each:equipped_creature"
+            ):
+                _fail(
+                    program_context,
+                    "only activated abilities grant to an equipped creature",
+                )
             instructions = _compile_instructions(
                 raw_program["ops"], f"{program_context}.ops", definition_indexes
             )
             _validate_instruction_references(
                 instructions,
-                set(target_roles),
+                set(target_roles) | ({"grantor"} if granted_to is not None else set()),
                 f"{program_context}.instructions",
             )
             program = {
@@ -986,6 +995,8 @@ def compile_source(source: Mapping[str, Any]) -> tuple[dict[str, Any], dict[str,
             }
             if "target_binding" in raw_program:
                 program["target_binding"] = raw_program["target_binding"]
+            if granted_to is not None:
+                program["granted_to"] = granted_to
             if "cost" in raw_program:
                 program["cost"] = _validate_cost(
                     raw_program["cost"], f"{program_context}.cost"

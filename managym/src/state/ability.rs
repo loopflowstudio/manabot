@@ -343,6 +343,9 @@ pub enum Effect {
     },
     /// Exile the object the source Aura or Equipment is attached to.
     ExileAttached,
+    /// Return the permanent that granted this ability to its owner's hand
+    /// ("Return Trusty Boomerang"); nothing if it has left the battlefield.
+    ReturnGrantorToHand,
     /// The owner of the object the source is attached to shuffles it into
     /// their library.
     ShuffleAttachedIntoLibrary,
@@ -742,6 +745,7 @@ impl Effect {
             | Effect::SetBasePtUntilEot { .. }
             | Effect::BecomeCreatureSource { .. }
             | Effect::ExileAttached
+            | Effect::ReturnGrantorToHand
             | Effect::ShuffleAttachedIntoLibrary
             | Effect::GainLife { .. }
             | Effect::GainLifeValue { .. }

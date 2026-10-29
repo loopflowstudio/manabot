@@ -173,6 +173,7 @@ pub(super) fn cards() -> Vec<Card> {
         the_last_agni_kai(),
         lo_and_li_twin_tutors(),
         hakoda_selfless_commander(),
+        trusty_boomerang(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -5406,6 +5407,40 @@ fn hakoda_selfless_commander() -> Card {
             }),
         ],
         registry_name: "Hakoda, Selfless Commander",
+        text_box,
+    }
+}
+
+fn trusty_boomerang() -> Card {
+    let text_box = "Equipped creature has \"{1}, {T}: Tap target creature. Return Trusty Boomerang to its owner's hand.\"\nEquip {1} ({1}: Attach to target creature you control. Equip only as a sorcery.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{1}"),
+            subtypes: Some(vec!["Equipment"]),
+            types: vec![CardType::Artifact],
+            ..Default::default()
+        },
+        key: "tla.trusty_boomerang",
+        programs: vec![
+            Program::new(
+                "boomerang",
+                ProgramKind::Activated,
+                vec![
+                    Op::Tap { target: "creature" },
+                    Op::ReturnToHand { target: "grantor" },
+                ],
+            )
+            .cost(Cost {
+                mana: Some("1"),
+                tap_source: Some(true),
+                ..Default::default()
+            })
+            .targets(vec![Target::one("creature", Selector::Creature)])
+            .granted_to("each:equipped_creature"),
+            Program::equip("equip", "{1}"),
+        ],
+        registry_name: "Trusty Boomerang",
         text_box,
     }
 }

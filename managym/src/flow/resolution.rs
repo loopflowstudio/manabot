@@ -114,6 +114,7 @@ impl Game {
             targets,
             active_requirement: 0,
             context_target: None,
+            grantor: None,
             queue: VecDeque::from(effects),
             finalize: FrameFinalize::Spell {
                 card,
@@ -132,11 +133,16 @@ impl Game {
     }
 
     fn resolve_activated_ability(&mut self, ability: ActivatedAbilityOnStack) {
-        let Some(definition) = self.state.cards[ability.source_card]
-            .activated_abilities
-            .get(ability.ability_index)
-            .cloned()
-        else {
+        // A granted ability keeps its grantor's text after the grantor leaves.
+        let definition = match ability.granted_by {
+            Some(grant) => self.state.cards[CardId::from(grant.grantor.entity)]
+                .equipped_grants
+                .get(grant.index),
+            None => self.state.cards[ability.source_card]
+                .activated_abilities
+                .get(ability.ability_index),
+        };
+        let Some(definition) = definition.cloned() else {
             return;
         };
 
@@ -170,6 +176,7 @@ impl Game {
             targets,
             active_requirement: 0,
             context_target: attached,
+            grantor: ability.granted_by.map(|grant| grant.grantor),
             queue: VecDeque::from(crate::state::ability::bind_effect_clauses(effects)),
             finalize: FrameFinalize::None,
         };
@@ -237,6 +244,7 @@ impl Game {
             targets,
             active_requirement: 0,
             context_target: triggered.context,
+            grantor: None,
             queue: VecDeque::from(crate::state::ability::bind_effect_clauses(effects)),
             finalize: FrameFinalize::None,
         };
@@ -873,6 +881,15 @@ impl Game {
                 }
                 None
             }
+            Effect::ReturnGrantorToHand => {
+                if let Some(grantor) = frame
+                    .grantor
+                    .and_then(|object| self.lookup_current_permanent(object).ok())
+                {
+                    self.return_permanent_to_owner_hand(grantor);
+                }
+                None
+            }
             Effect::ExileAttached | Effect::ShuffleAttachedIntoLibrary => {
                 let Some(Target::Permanent(id)) = frame.context_target else {
                     return None;
@@ -1239,6 +1256,7 @@ impl Game {
                         }],
                         active_requirement: 0,
                         context_target: None,
+                        grantor: frame.grantor,
                         queue: VecDeque::from(effects.clone()),
                         finalize: FrameFinalize::None,
                     };

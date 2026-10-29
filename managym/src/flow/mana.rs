@@ -9,7 +9,7 @@ use crate::{
     flow::game::Game,
     state::{
         ability::Effect,
-        card::{ActivatedAbilityDefinition, ReplacementEffect},
+        card::{AbilityGrant, ActivatedAbilityDefinition, ReplacementEffect},
         game_object::{PermanentId, PlayerId},
         mana::{Mana, ManaCost},
     },
@@ -452,7 +452,8 @@ impl PaymentModel {
 
 impl Game {
     /// Printed abilities, then currently granted abilities in source order,
-    /// then the intrinsic mana ability of basic land types gained by an effect.
+    /// then the intrinsic mana ability of basic land types gained by an effect,
+    /// then abilities granted by attached Equipment in battlefield order.
     pub(crate) fn activated_abilities_for(
         &self,
         permanent: PermanentId,
@@ -489,6 +490,25 @@ impl Game {
                 effect,
                 ..Default::default()
             });
+        }
+        for grantor in [PlayerId(0), PlayerId(1)]
+            .into_iter()
+            .flat_map(|player| self.battlefield_permanents(player))
+        {
+            let equipment = self.state.permanents[grantor].as_ref().unwrap();
+            let grants = &self.state.cards[equipment.card].equipped_grants;
+            if grants.is_empty()
+                || equipment.abilities_lost
+                || self.attached_creature(grantor) != Some(permanent)
+            {
+                continue;
+            }
+            abilities.extend(grants.iter().enumerate().map(|(index, ability)| {
+                ActivatedAbilityDefinition {
+                    granted_by: Some(AbilityGrant { grantor, index }),
+                    ..ability.clone()
+                }
+            }));
         }
         abilities
     }
@@ -683,9 +703,8 @@ impl Game {
                 ..
             } = payment.as_ref()
             {
-                let source = self.state.permanents[*permanent].as_ref().unwrap();
                 life = life.saturating_sub(
-                    self.state.cards[source.card].activated_abilities[*ability_index].life_cost,
+                    self.activated_abilities_for(*permanent)[*ability_index].life_cost,
                 );
             }
         }
@@ -782,9 +801,8 @@ impl Game {
                 remaining_generic,
                 ..
             }) => {
-                let source = self.state.permanents[*permanent].as_ref().unwrap();
                 result.push(Obligation::Pay {
-                    cost: self.state.cards[source.card].activated_abilities[*ability_index]
+                    cost: self.activated_abilities_for(*permanent)[*ability_index]
                         .mana_cost
                         .with_generic(*remaining_generic),
                     waterbend: true,
@@ -900,8 +918,7 @@ impl Game {
             ..
         } = payment
         {
-            let source = self.state.permanents[*permanent].as_ref().unwrap();
-            let life = self.state.cards[source.card].activated_abilities[*ability_index].life_cost;
+            let life = self.activated_abilities_for(*permanent)[*ability_index].life_cost;
             let Some(remaining) = model.life.checked_sub(life) else {
                 return false;
             };

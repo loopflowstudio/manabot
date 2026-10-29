@@ -77,6 +77,10 @@ pub struct EffectFrame {
     /// permanent) — used as the primary target when none was chosen. For an
     /// activated ability of an Aura or Equipment, the object it was attached to.
     pub context_target: Option<Target>,
+    /// The exact object that granted the resolving ability (CR 400.7: once
+    /// it leaves the battlefield, references to it find nothing).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grantor: Option<ObjectRef>,
     /// Effects still to execute.
     pub queue: VecDeque<Effect>,
     pub finalize: FrameFinalize,
@@ -307,6 +311,7 @@ impl Game {
                 targets: Vec::new(),
                 active_requirement: 0,
                 context_target: None,
+                grantor: None,
                 queue: VecDeque::new(),
                 finalize: FrameFinalize::None,
             },
@@ -1146,6 +1151,7 @@ mod learn_tests {
             targets: vec![],
             active_requirement: 0,
             context_target: None,
+            grantor: None,
             queue: VecDeque::from([Effect::Learn]),
             finalize: FrameFinalize::None,
         });
@@ -1900,6 +1906,7 @@ mod payment_tests {
             targets: vec![],
             active_requirement: 0,
             context_target: None,
+            grantor: None,
             queue: VecDeque::from([
                 Effect::OptionalPayment {
                     cost,

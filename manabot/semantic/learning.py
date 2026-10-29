@@ -731,6 +731,11 @@ class _TokenBuilder:
                 self.value(field, cost[field], context="cost", roles=roles)
             self.structure("cost_end")
 
+        # Optional, so programs without it keep their token streams.
+        if "granted_to" in program:
+            self.field("granted_to")
+            self.role(_string(program["granted_to"], "program.granted_to"), roles)
+
         self.field("targets")
         self.structure("targets_begin")
         for index, raw_target in enumerate(raw_targets):

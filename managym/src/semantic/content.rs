@@ -459,24 +459,29 @@ fn apply_program(
             {
                 return unsupported(program, "X activation cost needs waterbend and no targets");
             }
-            definition
-                .activated_abilities
-                .push(ActivatedAbilityDefinition {
-                    sacrifice: cost.sacrifice,
-                    own_turn_only: cost.own_turn_only,
-                    sorcery_timing: cost.sorcery_timing,
-                    life_cost: cost.life,
-                    tap_source: cost.tap_source,
-                    mana_cost: cost
-                        .mana
-                        .ok_or_else(|| malformed(program, "activated ability has no mana cost"))?,
-                    sacrifice_source: cost.sacrifice_source,
-                    waterbend: cost.waterbend,
-                    exhaust: cost.exhaust,
-                    crew: cost.crew,
-                    x_min: cost.x_min,
-                    effect,
-                });
+            let ability = ActivatedAbilityDefinition {
+                sacrifice: cost.sacrifice,
+                own_turn_only: cost.own_turn_only,
+                sorcery_timing: cost.sorcery_timing,
+                life_cost: cost.life,
+                tap_source: cost.tap_source,
+                mana_cost: cost
+                    .mana
+                    .ok_or_else(|| malformed(program, "activated ability has no mana cost"))?,
+                sacrifice_source: cost.sacrifice_source,
+                waterbend: cost.waterbend,
+                exhaust: cost.exhaust,
+                crew: cost.crew,
+                x_min: cost.x_min,
+                granted_by: None,
+                effect,
+            };
+            // `granted_to` is validated as the equipped creature at compile.
+            if program.metadata.get("granted_to").is_some() {
+                definition.equipped_grants.push(ability);
+            } else {
+                definition.activated_abilities.push(ability);
+            }
         }
         "static" => apply_static(definition, program)?,
         other => return unsupported(program, &format!("unsupported program kind {other:?}")),
@@ -1323,6 +1328,7 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             amount: i32_value(program, *amount, "damage")?,
             target: target_for(program, target)?,
         },
+        Step::ReturnToHand { target } if target == "grantor" => Effect::ReturnGrantorToHand,
         Step::ReturnToHand { target } => Effect::ReturnToHand {
             target: target_for(program, target)?,
         },

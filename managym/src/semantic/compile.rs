@@ -501,6 +501,17 @@ fn compile_program(
             return malformed(&context, format!("duplicate target role {role}"));
         }
     }
+    // A granted ability names its grantor ("Return Trusty Boomerang"); the
+    // grantee is the object the grantor is attached to.
+    if let Some(grantee) = raw.get("granted_to") {
+        if kind != "activated" || string(grantee, &context)? != "each:equipped_creature" {
+            return malformed(
+                &context,
+                "only activated abilities grant to an equipped creature",
+            );
+        }
+        roles.insert("grantor".to_owned());
+    }
     let instructions = compile_instructions(&raw["ops"], &format!("{context}.ops"), indexes)?;
     check_references(&instructions, &roles, &context, false)?;
 
@@ -511,7 +522,7 @@ fn compile_program(
         "semantic_key": program_key,
         "targets": targets,
     });
-    for field in ["target_binding", "cost", "trigger"] {
+    for field in ["target_binding", "cost", "granted_to", "trigger"] {
         if let Some(value) = raw.get(field) {
             program[field] = value.clone();
         }

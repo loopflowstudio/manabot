@@ -2,7 +2,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use super::{
     ability::{Ability, Effect, StaticCondition, TargetRequirement, TargetSpec},
-    game_object::{ObjectId, PlayerId},
+    game_object::{ObjectId, PermanentId, PlayerId},
     mana::{Color, Colors, Mana, ManaCost},
     permanent::CounterKind,
     predicate::CardPredicate,
@@ -330,6 +330,14 @@ pub struct SacrificeCost {
     pub or_mana: Option<ManaCost>,
 }
 
+/// The battlefield permanent whose `equipped_grants[index]` an ability
+/// granted to another permanent came from.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct AbilityGrant {
+    pub grantor: PermanentId,
+    pub index: usize,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct ActivatedAbilityDefinition {
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -363,6 +371,10 @@ pub struct ActivatedAbilityDefinition {
     /// The least X the activation may announce ("X can't be 0", CR 107.3).
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub x_min: u8,
+    /// Set only on abilities `Game::activated_abilities_for` lists from a
+    /// grantor; printed abilities have none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub granted_by: Option<AbilityGrant>,
     pub effect: Effect,
 }
 
@@ -388,6 +400,10 @@ pub struct CardDefinition {
     /// Each matching permanent you control gains a chosen-color tap ability.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub mana_grant: Vec<CardPredicate>,
+    /// Activated abilities the creature this is attached to has
+    /// ("Equipped creature has \"...\""), listed after its own.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub equipped_grants: Vec<ActivatedAbilityDefinition>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub unblockable_if: Option<StaticCondition>,
     #[serde(skip_serializing_if = "Option::is_none")]

@@ -450,8 +450,10 @@ impl Game {
                         target,
                     })
                     .collect();
-                let source = self.state.permanents[*permanent].as_ref()?;
-                let ability = &self.state.cards[source.card].activated_abilities[*ability_index];
+                let ability = self
+                    .activated_abilities_for(*permanent)
+                    .get(*ability_index)?
+                    .clone();
                 if crate::state::ability::effect_target_requirements(std::slice::from_ref(
                     &ability.effect,
                 ))
@@ -552,13 +554,9 @@ impl Game {
                 remaining_generic,
                 x,
             } => {
-                let cost = self.state.permanents[*permanent]
-                    .as_ref()
-                    .and_then(|perm| {
-                        self.state.cards[perm.card]
-                            .activated_abilities
-                            .get(*ability_index)
-                    })
+                let cost = self
+                    .activated_abilities_for(*permanent)
+                    .get(*ability_index)
                     .map(|ability| ability.mana_cost.with_x(*x))?;
                 let remainder = cost.with_generic(*remaining_generic);
                 let candidates = self.waterbend_candidates(*player);

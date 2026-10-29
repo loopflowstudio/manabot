@@ -888,11 +888,11 @@ impl Game {
         }) {
             return Ok(None);
         }
-        let source = self.state.permanents[permanent]
+        self.state.permanents[permanent]
             .as_ref()
             .ok_or(StructuredOfferError::InvalidCurrentTarget)?;
-        let cost = self.state.cards[source.card]
-            .activated_abilities
+        let cost = self
+            .activated_abilities_for(permanent)
             .get(ability_index)
             .ok_or(StructuredOfferError::WrongDecision)?
             .mana_cost

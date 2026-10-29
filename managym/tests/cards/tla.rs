@@ -1909,3 +1909,80 @@ fn hakoda_sacrifices_to_fortify_your_creatures() {
     assert_eq!(s.game().effective_pt(ogre), (2, 2));
     assert!(!observed_keywords(&s, ogre).indestructible);
 }
+
+/// Whether player 0's observed action space offers ability `index` of `id`.
+fn observed_ability(s: &mut Scenario, id: PermanentId, index: usize) -> bool {
+    s.game_mut().scenario_refresh_priority().unwrap();
+    let object = s.game().state.permanents[id].as_ref().unwrap().id.0 as i32;
+    Observation::for_player(s.game(), PlayerId(0))
+        .action_space
+        .actions
+        .iter()
+        .any(|action| action.ability_index == Some(index) && action.focus == [object])
+}
+
+/// The equipped creature has the ability (CR 702.6a, 613.1f): it taps the
+/// creature as its cost, taps the target and returns the exact Equipment to
+/// its owner's hand. Moving the Equipment moves the ability with it.
+#[test]
+fn trusty_boomerang_grants_its_creature_a_tap_ability_that_returns_it() {
+    let mut s = setup(&["Trusty Boomerang", "Gray Ogre"]);
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let first = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let second = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    ready(&mut s, first);
+    let boomerang = s.force_permanent_on_battlefield(0, "Trusty Boomerang");
+    let card = card_of(&s, boomerang);
+    s.set_player_mana_pool(0, "1");
+    assert!(!observed_ability(&mut s, first, 0), "unequipped");
+
+    equip(&mut s, boomerang, first);
+    s.set_player_mana_pool(0, "1");
+    equip(&mut s, boomerang, second);
+    s.set_player_mana_pool(0, "1");
+    assert!(
+        !observed_ability(&mut s, first, 0),
+        "left with the Equipment"
+    );
+    assert!(
+        !observed_ability(&mut s, second, 0),
+        "{{T}} needs a creature without summoning sickness"
+    );
+
+    s.set_player_mana_pool(0, "1");
+    equip(&mut s, boomerang, first);
+    s.set_player_mana_pool(0, "1");
+    assert!(observed_ability(&mut s, first, 0));
+    activate(&mut s, first, 0);
+    assert!(s.choose_target(Target::Permanent(theirs)));
+    settle(&mut s);
+    assert!(tapped(&s, first) && tapped(&s, theirs));
+    assert_eq!(s.game().state.zones.zone_of(card), Some(ZoneType::Hand));
+    assert!(!can_activate(&mut s, first, 0));
+}
+
+/// CR 113.7a, 400.7: the ability resolves without its Equipment, but
+/// "Return Trusty Boomerang" cannot find a card that has left the
+/// battlefield.
+#[test]
+fn trusty_boomerang_that_left_the_battlefield_does_not_return() {
+    let mut s = setup(&["Trusty Boomerang", "Gray Ogre"]);
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    ready(&mut s, ogre);
+    let boomerang = s.force_permanent_on_battlefield(0, "Trusty Boomerang");
+    let card = card_of(&s, boomerang);
+    s.set_player_mana_pool(0, "1");
+    equip(&mut s, boomerang, ogre);
+
+    s.set_player_mana_pool(0, "1");
+    activate(&mut s, ogre, 0);
+    assert!(s.choose_target(Target::Permanent(theirs)));
+    s.game_mut().move_card(card, ZoneType::Graveyard);
+    settle(&mut s);
+    assert!(tapped(&s, theirs));
+    assert_eq!(
+        s.game().state.zones.zone_of(card),
+        Some(ZoneType::Graveyard)
+    );
+}

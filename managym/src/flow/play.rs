@@ -17,7 +17,7 @@ use crate::{
         card::Card,
         game_object::{CardId, PermanentId, PlayerId, Target},
         mana::ManaCost,
-        stack_object::{ActivatedAbilityOnStack, StackObject},
+        stack_object::{ActivatedAbilityOnStack, StackGrant, StackObject},
         zone::ZoneType,
     },
 };
@@ -914,12 +914,10 @@ impl Game {
         permanent: PermanentId,
         ability_index: usize,
     ) -> Vec<Target> {
-        let Some(source) = self.state.permanents[permanent].as_ref() else {
-            return Vec::new();
-        };
-        let Some(ability) = self.state.cards[source.card]
-            .activated_abilities
+        let Some(ability) = self
+            .activated_abilities_for(permanent)
             .get(ability_index)
+            .cloned()
         else {
             return Vec::new();
         };
@@ -940,10 +938,11 @@ impl Game {
         else {
             return Err(AgentError("no activated target pending".into()));
         };
-        let source = self.state.permanents[permanent]
-            .as_ref()
+        let ability = self
+            .activated_abilities_for(permanent)
+            .get(ability_index)
+            .cloned()
             .ok_or_else(|| AgentError("missing activation source".into()))?;
-        let ability = &self.state.cards[source.card].activated_abilities[ability_index];
         if chooser != player
             || !crate::state::ability::effect_target_requirements(std::slice::from_ref(
                 &ability.effect,
@@ -1001,10 +1000,10 @@ impl Game {
         ability_index: usize,
         targets: Vec<Target>,
     ) -> Result<(), AgentError> {
-        let source = self.state.permanents[permanent]
-            .as_ref()
-            .ok_or_else(|| AgentError("missing source".into()))?;
-        let cost = self.state.cards[source.card].activated_abilities[ability_index]
+        let cost = self
+            .activated_abilities_for(permanent)
+            .get(ability_index)
+            .ok_or_else(|| AgentError("missing source".into()))?
             .sacrifice
             .clone();
         self.begin_payment(
@@ -1096,14 +1095,12 @@ impl Game {
                 permanent,
                 ability_index,
                 ..
-            } => {
-                let source = self.state.permanents[*permanent]
-                    .as_ref()
-                    .expect("pending activation source");
-                self.state.cards[source.card].activated_abilities[*ability_index]
-                    .mana_cost
-                    .clone()
-            }
+            } => self
+                .activated_abilities_for(*permanent)
+                .get(*ability_index)
+                .expect("pending activation source")
+                .mana_cost
+                .clone(),
         };
         match alternative {
             Some(extra) => base.plus(extra),
@@ -1183,11 +1180,13 @@ impl Game {
                 ability_index,
                 targets,
             } => {
-                let source = self.state.permanents[permanent].as_ref().ok_or_else(|| {
-                    AgentError("activation source sacrificed as another cost".into())
-                })?;
-                let life =
-                    self.state.cards[source.card].activated_abilities[ability_index].life_cost;
+                let life = self
+                    .activated_abilities_for(permanent)
+                    .get(ability_index)
+                    .ok_or_else(|| {
+                        AgentError("activation source sacrificed as another cost".into())
+                    })?
+                    .life_cost;
                 self.change_life(player, -(life as i32));
                 self.push_activated_ability(player, permanent, ability_index, targets, 0)
             }
@@ -1425,6 +1424,15 @@ impl Game {
             }
         }
 
+        let granted_by = match ability.granted_by {
+            Some(grant) => Some(StackGrant {
+                grantor: self
+                    .permanent_object_ref(grant.grantor)
+                    .ok_or_else(|| AgentError("missing ability grantor identity".into()))?,
+                index: grant.index,
+            }),
+            None => None,
+        };
         let id = self.state.id_gen.next_id();
         self.push_to_stack(StackObject::ActivatedAbility(ActivatedAbilityOnStack {
             id,
@@ -1436,6 +1444,7 @@ impl Game {
             targets,
             attached,
             x,
+            granted_by,
         }));
         self.state.priority.on_non_pass_action(self.active_player());
         Ok(())

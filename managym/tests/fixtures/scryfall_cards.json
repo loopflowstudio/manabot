@@ -2448,5 +2448,15 @@
     "colors": [
       "W"
     ]
+  },
+  "Trusty Boomerang": {
+    "name": "Trusty Boomerang",
+    "mana_cost": "{1}",
+    "type_line": "Artifact — Equipment",
+    "keywords": [
+      "Equip"
+    ],
+    "oracle_text": "Equipped creature has \"{1}, {T}: Tap target creature. Return Trusty Boomerang to its owner's hand.\"\nEquip {1} ({1}: Attach to target creature you control. Equip only as a sorcery.)",
+    "colors": []
   }
 }

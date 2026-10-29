@@ -42,6 +42,18 @@ pub struct ActivatedAbilityOnStack {
     /// The announced value of X (CR 602.2b, 601.2b).
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub x: u8,
+    /// For an ability granted by an attached permanent: that exact object and
+    /// its grant, fixed at activation (`ability_index` names the grantee's list).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub granted_by: Option<StackGrant>,
+}
+
+/// The exact grantor of an activated ability on the stack and the index of
+/// the ability in its `equipped_grants`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct StackGrant {
+    pub grantor: ObjectRef,
+    pub index: usize,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
