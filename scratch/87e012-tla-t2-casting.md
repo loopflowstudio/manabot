@@ -31,7 +31,8 @@ worktree, so new T2 cards read "unsupported" in this base until T1 lands.
   cast spell's subtypes or, in `price_activation`, the source's; narrowest
   usable class spends first. Opcode 56 `add_lesson_mana` takes optional
   `spend_only` (omitted = Lesson spells). `cost_reduction_per` (Cost
-  `affinity`) reduces generic activation cost.
+  `affinity`) reduces generic activation cost. Concept review: viewers see
+  "Restricted mana" totals (`manabot-text-5`, Academy); wire names stay.
 - Casting outside hand: `flow/cast_permission.rs` owns `GameState.cast_permissions`
   — exact-`ObjectRef` exile grants (stale once the card leaves exile) and
   `HandOnly` restrictions that override every non-hand permission until the
@@ -83,15 +84,6 @@ Dai Li Agents, whose witnesses sit in `tests/rules/elemental_cards.rs` (T1 moves
 Merged onto PR #394's head `86ebe9ccf`. Moving the per-card `tests/rules/`
 files into `tests/cards/` stays T1's (Jack Heart, 2026-10-29).
 
-## Concept review (2026-10-29, headless)
-
-Restricted mana (`ManaUse` Lesson/Shrine/Ally) read as "Lesson-only" in
-`manabot-text-4`, false for Jasmine Dragon Tea Shop and White Lotus Hideout.
-`manabot-text-5` renders "Restricted mana" and "(restricted spending)",
-truthful for the totals the capture carries. Wire names (`lesson_mana`, opcode
-`add_lesson_mana`, vector columns 34+) stay as compatibility surfaces. A
-per-class breakdown needs capture/policy v5: left for Jack Heart's review.
-
 ## Remaining
 
 - Gate: world-change Python suite, Academy check (UI shows own foretold cards
@@ -106,3 +98,4 @@ per-class breakdown needs capture/policy v5: left for Jack Heart's review.
 2026-10-29 at `35404b274`: debug `cargo test --no-fail-fast` passes except the
 pre-existing semantic-conformance pair; clippy and fmt clean. Text v5:
 `pytest tests/semantic/test_text_observation.py` 16 passed.
+Academy README says "spending restrictions" (was "Lesson restrictions").

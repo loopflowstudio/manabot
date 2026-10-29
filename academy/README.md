@@ -78,7 +78,7 @@ types group creatures, lands, other
 permanents and artifact tokens into bounded battlefield lanes; dense lanes
 compact their cards, then offer explicit paging. Focusing a legal offer reveals
 its objects' pages without submitting a choice. Public mana
-pools, Lesson restrictions and chooser-only inspected cards come from native
+pools, spending restrictions and chooser-only inspected cards come from native
 observations. Historical frames without those fields say details were not recorded.
 
 Academy constructs the native environment with `skip_trivial=False`. With
