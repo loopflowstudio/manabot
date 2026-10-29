@@ -88,9 +88,13 @@ files into `tests/cards/` is left to T1 (operator reading; see Decisions).
 
 ## Remaining
 
-- Gate: world-change Python suite, Academy check (UI shows own foretold cards
-  as "foretold, face down" and an opponent's as a count), `--features python`
-  clippy.
+- Academy check: not run locally (Homebrew node can't load libllhttp); CI
+  covers it. UI should show your own foretold cards as "foretold, face down" and
+  an opponent's as a count.
+- 2026-10-29 gate: WORLDS.md w16 extended for T2 (166 supported; shapes
+  unchanged). `--features python` clippy clean (PYO3_PYTHON=.venv). The world
+  Python suite fails 4 tests that T1 left behind: WorldVersion has no w16, and
+  three tests assert old learning schema versions. Reported on 892c47.
 - Known gaps (questions.md): possible-worlds hidden-hand constraints ignore
   foretold cards; granted land plays of another player's card would enter
   under its owner (no TLA producer).
