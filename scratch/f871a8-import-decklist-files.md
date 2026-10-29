@@ -203,6 +203,32 @@ Not reopened: checkpoint `bc` `run_id`/`stage_id`/`regime_digest` links predate
 this branch, are read only for a catalog producer label, and never enter world
 compatibility (recorded deferral in questions.md). No open product choice.
 
+### Concept review at a74aceb88 (2026-10-28, headless Graph step)
+
+`Deck`/`DeckImport`, run-owned `TrainingDecks`, native `set_training_decks` and
+pool-world checkpoints match the accepted model. One residue contradicts "the
+run records the decks used" and "one owner for each fact": **a deck-supplied
+regime still carries a second, authorable statement of its setups.**
+`TrainingRegime.match` is required; `read_decks` fills it with the first two
+decks as a "representative root", but an authored `match` is kept as long as
+its `content_pack` equals `decks.pool`. Checked at a74aceb88: a regime with
+decks Plains/Mountain/Island and `match` Forest×40 v Swamp×40 passes
+`validate_regime`. Native roster sampling ignores that match at every reset,
+yet the run record, regime digest, `runtime_fingerprints`, learning-state
+comparison and producer admission (`validate_agent_setup(..., regime.match)`)
+all read it, so the record claims a pair the run never played.
+
+Next implement direction (settled; no product choice): in a deck-supplied
+regime `decks` is the only owner of setups. Reject an authored `match` alongside
+`decks`; derive any internal representative match from `decks` (fingerprints
+need one game to read the content manifest) and do not serialize it in the
+regime record, so the digest and learning-state comparison rest on `decks`
+alone. Admission against a pool-bound checkpoint validates the pool
+(`admit_pool_decks`/`decks.check()`), not a representative pair. Elemental-
+uniform keeps its frozen `match` semantics. Proof: authored `match` + `decks`
+rejected with a diagnostic; a files-based regime round-trips without `match`
+and with an unchanged `decks` digest; recovery/learning-state tests still pass.
+
 ## Accepted direction — Jack Heart, 2026-10-28
 
 Implement, test, refine and publish one cohesive PR for review; stop before merge.
