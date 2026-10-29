@@ -1,10 +1,9 @@
 # T2 — TLA casting, costs, zone permissions and private zones (Task 87e012)
 
-Stacked on T1 (892c47, PR #394 at `be2b7586b`). Task directive lists the 51 cards
-and obligations; allocation in `docs/rules/tla/allocation.jsonl` (`planned_pr: T2`).
-Every merge needs Jack Heart's review. Card support = defined in the set file
-(Jack Heart, 2026-10-29); T1 is removing the qualification gate in its own
-worktree, so new T2 cards read "unsupported" in this base until T1 lands.
+Stacked on T1 (892c47, PR #394 at `f9732c12f`); T2 is PR #398. Task directive
+lists the 51 cards and obligations; allocation in `docs/rules/tla/allocation.jsonl`
+(`planned_pr: T2`). Every merge needs Jack Heart's review. Card support = defined
+in the set file (Jack Heart, 2026-10-29), present here since T1's `86ebe9ccf`.
 
 ## Decisions (reversible operator choices: questions.md)
 
@@ -140,10 +139,10 @@ and UI. Guard + directed + viewer-safety tests in
 ## Remaining
 
 - Next T1 sync, after T1 publishes engine-type cards/w17: the three steers
-  above, then the world gate. Last observed 2026-10-29 (after `684a286f6`):
-  PR #394 head pushed to `f9732c12f` (16:33Z), T1 implement session live,
-  worktree clean with `authoring.rs`/`compile.rs` present; main's `9a62e8b39`,
-  `2fc0af676` arrive with T1's next main sync.
+  above, then the world gate. Last observed 2026-10-29 (after `f7b857d90`):
+  PR #394 head still `f9732c12f`; T1 worktree has an uncommitted
+  `cardsets/mod.rs` edit (+47) with `authoring.rs`/`compile.rs` present; main's
+  `9a62e8b39`, `2fc0af676` arrive with T1's next main sync.
 - Gate (not run here): CLAUDE.md arena admission/monitoring suite; full debug
   `cargo test`; Academy check/build (local node can't load libllhttp; CI).
 - Known gaps (questions.md): possible-worlds ignore foretold cards; granted
