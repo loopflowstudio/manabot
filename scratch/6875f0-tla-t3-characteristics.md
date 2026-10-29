@@ -129,16 +129,20 @@ Scryfall id.
 - After T1 (PR #394) publishes its authoring-layer removal: sync, convert
   this batch's cards to engine-type definitions (no new authoring `Op`s), add
   the learning-token half of the guard over `Effect`/`Ability`, and Scryfall
-  ids. Still unpublished at `e403b8a1f`; T1's plan does not list the removal
-  or Scryfall ids, so the wait has no visible owner on T1's side.
+  ids. T1's plan now lists all three as its Remaining 1–3 (owner: T1). Still
+  unpublished (2026-10-29): origin at `e403b8a1f`; T1's local `f9732c12f` also
+  files card tests by set, so the sync reconciles it with items 21–22.
 - World release items (registration literal stops at w15, w15 conformance
   receipts, frozen `schema_version`/digest asserts, w13 pins) and browser proof.
 
 Check (items 23–24, debug, before the e403b8a1f merge): `cargo test --no-fail-fast`
-passes except `semantic_conformance_tests` (w15 receipts); pytest world/observation,
-model, sim, env, belief, verify, text, play modes 690 pass, 19 fail + 5 error, all
+passes except `semantic_conformance_tests` (w15 receipts); pytest 690 pass, 19 fail + 5 error, all
 world-release evidence or failing at `752c75ef7~1` too. The merge touched only
-`world.rs` (T1's one-pool-read support check): debug `cargo test --lib world::` 2 pass.
+`world.rs`: debug `cargo test --lib world::` 2 pass.
+Compress (after item 25): encoder card/permanent rows via `chunks_exact_mut`;
+the model's numeric permanent columns computed once. Debug `cargo test --lib
+agent::` 31 and `observability` 18 pass; pytest tests/model 176 pass. Native
+parity against a rebuilt `.so` is left to gate.
 Check (item 25): vitest 115 pass, `npm run check` 0 errors (nvm node 24); pytest
 play modes, experience/study/advice/replay/server protocol 89 pass; text
 observation 29 pass; debug `experience_protocol_tests` 5 pass.

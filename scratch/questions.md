@@ -158,7 +158,5 @@ mana, `Game::zone_cast_cost`/`may_play_from_zone`, `ZoneEntry`.
   indices (no current card has more). `deathtouch_damage` and `was_cast` stay
   unobserved: SBAs consume the first before any decision, and the second is
   read only while its own entry resolves.
-- Academy protocol views and schemas for item 24's fields are left as a
-  follow-up: Academy is not one of the three encodings Jack Heart named.
 - Scryfall ids (Jack Heart's steer) attach to card definitions, so they wait
   for the same T1 sync as the card conversion.

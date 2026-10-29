@@ -710,21 +710,14 @@ fn encode_cards(
     object_to_index: &mut HashMap<i32, i32>,
     current_object_index: &mut i32,
 ) {
-    let max_cards = config.max_cards_per_player;
-    let ordered_cards = cards.iter().take(max_cards);
-    let mut encoded_count = 0;
-
-    for (i, card) in ordered_cards.enumerate() {
-        let start = i * config.card_dim();
-        let end = start + config.card_dim();
-        encode_card_features(card, is_mine, config, &mut out[start..end]);
+    // Every slot owns an object index, so the next block starts after all of them.
+    let rows = out.chunks_exact_mut(config.card_dim());
+    for (i, (card, row)) in cards.iter().zip(rows).enumerate() {
+        encode_card_features(card, is_mine, config, row);
         out_valid[i] = 1.0;
-        object_to_index.insert(card.id, *current_object_index);
-        *current_object_index += 1;
-        encoded_count += 1;
+        object_to_index.insert(card.id, *current_object_index + i as i32);
     }
-
-    *current_object_index += (max_cards.saturating_sub(encoded_count)) as i32;
+    *current_object_index += config.max_cards_per_player as i32;
 }
 
 fn encode_card_features(
@@ -772,7 +765,7 @@ fn encode_card_features(
     if config.shows_everything() {
         out[CARD_FACE_DOWN_INDEX] = bool_to_f32(card.face_down);
     }
-    out[config.card_dim() - 1] = 1.0; // validity flag
+    out[out.len() - 1] = 1.0; // validity flag
 }
 
 fn encode_permanents(
@@ -784,21 +777,14 @@ fn encode_permanents(
     object_to_index: &mut HashMap<i32, i32>,
     current_object_index: &mut i32,
 ) {
-    let max_permanents = config.max_permanents_per_player;
-    let ordered_permanents = permanents.iter().take(max_permanents);
-    let mut encoded_count = 0;
-
-    for (i, permanent) in ordered_permanents.enumerate() {
-        let start = i * config.permanent_dim();
-        let end = start + config.permanent_dim();
-        encode_permanent_features(permanent, is_mine, config, &mut out[start..end]);
+    // Every slot owns an object index, so the next block starts after all of them.
+    let rows = out.chunks_exact_mut(config.permanent_dim());
+    for (i, (permanent, row)) in permanents.iter().zip(rows).enumerate() {
+        encode_permanent_features(permanent, is_mine, config, row);
         out_valid[i] = 1.0;
-        object_to_index.insert(permanent.id, *current_object_index);
-        *current_object_index += 1;
-        encoded_count += 1;
+        object_to_index.insert(permanent.id, *current_object_index + i as i32);
     }
-
-    *current_object_index += (max_permanents.saturating_sub(encoded_count)) as i32;
+    *current_object_index += config.max_permanents_per_player as i32;
 }
 
 fn encode_permanent_features(
@@ -866,7 +852,7 @@ fn encode_permanent_features(
             }
         }
     }
-    out[config.permanent_dim() - 1] = 1.0;
+    out[out.len() - 1] = 1.0;
 }
 
 fn encode_actions(

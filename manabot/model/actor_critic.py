@@ -72,8 +72,11 @@ class ActorCritic(nn.Module):
         # Definition IDs and v5 permanent links are categorical joins, never
         # numeric permanent features.
         self._link_columns = PERMANENT_LINK_INDEXES if enc.shows_everything else ()
-        self._join_columns = (PERMANENT_DEFINITION_INDEX, *self._link_columns)
-        perm_dim = enc.permanent_dim - len(self._join_columns)
+        join_columns = (PERMANENT_DEFINITION_INDEX, *self._link_columns)
+        self._numeric_permanent_columns = [
+            column for column in range(enc.permanent_dim) if column not in join_columns
+        ]
+        perm_dim = len(self._numeric_permanent_columns)
         action_dim = enc.action_dim
         self.max_focus_objects = enc.max_focus_objects
         embed_dim = config.hidden_dim
@@ -529,13 +532,8 @@ class ActorCritic(nn.Module):
             permanent_definitions = self._generic_definitions(
                 permanent_ids, None if references is None else references.permanents
             )
-        numeric = [
-            column
-            for column in range(obs["agent_permanents"].shape[-1])
-            if column not in self._join_columns
-        ]
         permanent_features = [
-            obs[key][..., numeric]
+            obs[key][..., self._numeric_permanent_columns]
             for key in ("agent_permanents", "opponent_permanents")
         ]
         enc_agent_perms = (
