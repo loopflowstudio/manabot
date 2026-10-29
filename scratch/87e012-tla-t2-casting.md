@@ -9,7 +9,9 @@ worktree, so new T2 cards read "unsupported" in this base until T1 lands.
 ## Decisions (reversible operator choices: questions.md)
 
 - 2026-10-29, Jack Heart: card tests live in `managym/tests/cards/<set>.rs`
-  (one `tests/cards.rs` entry); moving existing per-card rules tests is T1's.
+  (one `tests/cards.rs` entry); existing per-card `tests/rules/` tests move
+  there. Operator reading: those files predate T2 (T1's base), so T1 moves
+  them and T2 reconciles on sync; T2 created the folder because T1 had not.
 - Activated abilities carry an effect sequence (`ActivatedAbilityDefinition.effects`).
 - Printed flashback is `Cost.flashback` → `CardDefinition.flashback`.
 - Earthbend takes a `Count`; printed counts stay `EffectValue::Fixed` (IR unchanged).
@@ -81,8 +83,8 @@ Dai Li Agents, whose witnesses sit in `tests/rules/elemental_cards.rs` (T1 moves
 
 ## Base: T1
 
-Merged onto PR #394's head `86ebe9ccf`. Moving the per-card `tests/rules/`
-files into `tests/cards/` stays T1's (Jack Heart, 2026-10-29).
+Merged onto PR #394's head `86ebe9ccf`. Moving the pre-existing per-card `tests/rules/`
+files into `tests/cards/` is left to T1 (operator reading; see Decisions).
 
 ## Remaining
 
@@ -100,3 +102,11 @@ pre-existing semantic-conformance pair; clippy and fmt clean. Text v5:
 `pytest tests/semantic/test_text_observation.py` 16 passed.
 Academy README and the policy column table in `docs/recent-events.md` name
 spending restrictions, not Lesson.
+
+## Concept review 2 (2026-10-29, at `463f6c432`)
+
+Against the accepted design: nothing to change and no open product choice.
+Restricted mana is one concept on every viewer surface (text-5, Academy,
+policy-column docs). The remaining "Lesson-only" text is dated audit evidence,
+Uncle Iroh's own restriction, and a field-history comment. `tests/cards/` follows
+Jack Heart's folder direction and gates nothing.

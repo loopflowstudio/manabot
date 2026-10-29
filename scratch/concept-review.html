@@ -1,9 +1,5 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>T2 concept review: restricted mana</title>
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>T2 concept review 2: nothing to change</title>
 <style>
 :root{--bg:#fbf8f2;--fg:#2b2620;--muted:#6f6556;--rule:#e2d9c8;--code:#f2ece0;--accent:#9a4b1c;--prop:#2f6b4f}
 @media (prefers-color-scheme: dark){:root{--bg:#1b1916;--fg:#ece5d8;--muted:#a89d8b;--rule:#3a352d;--code:#26231f;--accent:#e08a52;--prop:#7cc4a0}}
@@ -14,62 +10,37 @@ h1{font-size:1.6rem;margin:0 0 .3rem}h2{font-size:1.15rem;margin:2.4rem 0 .6rem;
 pre,code{font:13px/1.5 ui-monospace,Menlo,monospace}
 pre{background:var(--code);padding:.8rem 1rem;overflow-x:auto;border-radius:4px;white-space:pre-wrap}
 code{background:var(--code);padding:0 .25em;border-radius:3px}
-.tag{font:600 11px ui-sans-serif,system-ui;letter-spacing:.06em;text-transform:uppercase}
-.now{color:var(--muted)}.proposed{color:var(--prop)}
 .mismatch{border-left:3px solid var(--accent);padding:.2rem 0 .2rem 1rem;margin:1.2rem 0}
 ol.q li{margin:.6rem 0}
-</style>
-</head>
-<body><main>
-<h1>Restricted mana is still called "Lesson" where the model reads it</h1>
-<p class="meta">Task 87e012 (TLA T2) · concept-review · 2026-10-29 · built from <code>managym/src/state/mana.rs</code>, <code>managym/src/agent/observation.rs</code>, <code>manabot/semantic/text_observation.py</code>, <code>academy/ui/src/lib/components/PlayerArea.svelte</code>, <code>managym/src/flow/cast_permission.rs</code>, <code>scratch/87e012-tla-t2-casting.md</code></p>
+</style></head><body><main>
+<h1>No product decision needed: restricted mana is one concept everywhere</h1>
+<p class="meta">Task 87e012 (TLA T2) · concept-review (second pass) · 2026-10-29 · at <code>463f6c432</code> · built from scratch/87e012-tla-t2-casting.md, scratch/questions.md, managym/tests/cards.rs, git grep over manabot, managym/src, academy, docs</p>
 
-<p><strong>Decision recorded:</strong> T2 changed the concept from "Lesson mana" to "restricted mana" (Lesson, Shrine or Ally), but the text observation still names the old one. The acceptance criteria already settle the fix ("observations stay viewer-safe and complete"). Bump the text observation to <code>manabot-text-5</code> with truthful generic labels. Nothing here waits on you; the questions at the end are for your PR review.</p>
+<p>Nothing here waits on you. The first pass found one mismatch: restricted mana was mislabelled "Lesson-only" in the text observation. <code>ee9e32383</code>, <code>8066cce97</code> and <code>463f6c432</code> fixed it. This pass checks the result.</p>
 
-<h2>One interaction: tap Jasmine Dragon Tea Shop for Ally mana</h2>
-<p><span class="tag now">Existing at 65544f0ff</span></p>
-<ol>
-<li>The player activates the Tea Shop's colored ability. The engine adds one green mana restricted to <code>ManaUse</code> Ally spells and Ally abilities (<code>state/mana.rs</code>).</li>
-<li>The observation puts it in <code>PlayerData.lesson_mana</code>. The field's comment says it holds any restriction.</li>
-<li>Academy renders <code>· Restricted mana: G</code>. That is correct.</li>
-<li>An LLM agent reads the text observation:</li>
-</ol>
-<pre>Mana pool: W 0, U 0, B 0, R 0, G 0, C 0.
-Lesson-only mana: W 0, U 0, B 0, R 0, G 1, C 0. ...
-... output mode 2: {G} (Lesson spending context)</pre>
-<div class="mismatch"><strong>Mismatch.</strong> The engine has one concept, restricted mana. The browser names it correctly, but the model is told something false: this mana pays only for Allies, never for Lessons. White Lotus Hideout's Lesson/Shrine mana gets the same wrong label. The legal action list is still correct, so the model can still act. The observation, though, contradicts the rules it is acting under.</div>
-
-<h2>Actions → concepts → APIs</h2>
-<p><span class="tag now">Before</span></p>
-<pre>add restricted mana  →  Mana.restricted (ManaUse classes)  →  PlayerData.lesson_mana
-                                                            ├ Academy: "Restricted mana"
-                                                            └ manabot-text-4: "Lesson-only mana",
-                                                              "(Lesson spending context)"</pre>
-<p><span class="tag proposed">Proposed (next implement)</span></p>
+<h2>Restricted mana, after the fix</h2>
 <pre>add restricted mana  →  Mana.restricted (ManaUse classes)  →  PlayerData.lesson_mana (wire name kept)
                                                             ├ Academy: "Restricted mana"
-                                                            └ manabot-text-5: "Restricted mana",
-                                                              "(restricted spending)"</pre>
-<p>Kept unchanged: the <code>lesson_mana</code> name in the experience protocol, Python stubs and Academy types; opcode <code>add_lesson_mana</code>; vector columns 34 and up. These are compatibility surfaces, and their doc comments already say what they hold. <code>manabot-text-4</code> output is not rewritten.</p>
-
-<h2>Challenge</h2>
+                                                            ├ manabot-text-5: "Restricted mana"
+                                                            └ docs/recent-events.md: restricted mana</pre>
+<p>Three places still say "Lesson-only". None of them is wrong:</p>
 <ul>
-<li><strong>Normal path:</strong> Herbalist's Lesson mana reads "Restricted mana" under text-5. That is less specific than before, but still true. The legal actions show it can pay for the Lesson.</li>
-<li><strong>Failure:</strong> without the bump, any LLM evaluation of TLA decks with the Tea Shop or Hideout reads false text. Changing the wording without a bump would silently change what <code>manabot-text-4</code> means.</li>
-<li><strong>Counterexample that would overturn this:</strong> a decision where the model must know <em>which</em> restriction applies before the legal actions reveal it. Mana empties between steps, so I found none. If one turns up, per-class detail is needed (question 1).</li>
+<li>the rules-audit records <code>docs/rules/audit-2026-10/*</code>, which are dated evidence and stay unchanged;</li>
+<li>Uncle Iroh, whose cost reduction really does apply only to Lessons;</li>
+<li>a comment on <code>PlayerData.lesson_mana</code> explaining why the field has that name.</li>
 </ul>
 
-<h2>Checked and kept</h2>
-<p><code>ExileCastGrant</code> terms with <code>HandOnly</code> overrides; the foretold grant as the only authority for a face-down card (<code>Game::is_foretold</code>), with <code>ZoneEntry.face_down</code> as the move event and <code>CardData.face_down</code> derived from it; <code>CastChoices</code>; <code>ActivationSource</code>; <code>Decision::CastWithoutPaying</code>.</p>
+<h2>Card tests folder</h2>
+<p><code>managym/tests/cards.rs</code> → <code>cards/tla.rs</code> follows Jack Heart's 2026-10-29 direction, and its header says tests never gate support.</p>
+<div class="mismatch">Corrected in the working design: the record said "moving the existing <code>tests/rules/</code> files is T1's (Jack Heart)". Jack Heart's steer only says the files move. Giving that move to T1 is my reading, because the files (including the Toph and Dai Li Agents witnesses) come from T1's base. The record now says so.</div>
 
 <h2>Questions for your PR review</h2>
 <ol class="q">
-<li>Restricted-mana detail for agents:
-  <br>a) generic "Restricted mana" in text-5 (recorded direction)
-  <br>b) per-class breakdown, which needs capture/policy v5</li>
-<li>Rename the Rust-internal names (<code>Op::lesson_mana</code>, <code>PlayerData.lesson_mana</code>) to "restricted":
-  <br>a) no, the names are documented (recorded)
-  <br>b) yes, Rust-internal only, keeping the wire names</li>
+<li>Who moves the old per-card files from <code>tests/rules/</code>:
+  a) T1, with T2 reconciling when it syncs (current reading)
+  b) T2 moves them now and T1 rebases</li>
+<li>Restricted-mana detail for agents, still open from the first pass:
+  a) only the total, labelled "Restricted mana", in text-5 (current)
+  b) a breakdown by restriction (needs capture/policy v5)</li>
 </ol>
-</main></body>
-</html>
+</main></body></html>
