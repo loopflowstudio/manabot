@@ -7,6 +7,7 @@ use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::game::{ActivationSource, CastChoices, Game, Payment, PendingChoice},
     state::{
+        card::ActivationZone,
         game_object::{CardId, PlayerId},
         mana::Mana,
         zone::ZoneType,
@@ -174,7 +175,7 @@ impl Game {
                 .iter()
                 .enumerate()
             {
-                if ability.zone != crate::state::card::ActivationZone::Battlefield
+                if ability.zone != ActivationZone::Battlefield
                     || (ability.requires_target()
                         && self
                             .activated_ability_targets(
@@ -186,9 +187,8 @@ impl Game {
                 {
                     continue;
                 }
-                if (ability.own_turn_only && self.active_player() != player)
+                if self.check_activation_terms(player, ability).is_err()
                     || permanent.activation_used(ability_index, ability)
-                    || self.state.players[player.0].life < ability.life_cost as i32
                     || (ability.discard_card
                         && self
                             .state
@@ -287,7 +287,7 @@ impl Game {
                         continue;
                     };
                     let source = ActivationSource::Card(card);
-                    if (ability.own_turn_only && self.active_player() != player)
+                    if self.check_activation_terms(player, &ability).is_err()
                         || (ability.requires_target()
                             && self
                                 .activated_ability_targets(player, source, ability_index)

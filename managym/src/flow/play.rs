@@ -764,17 +764,12 @@ impl Game {
         if ability.mana_choices().is_some() {
             return self.activate_mana_ability(player, permanent_id, ability_index);
         }
-        if ability.own_turn_only && self.active_player() != player {
-            return Err(AgentError("activation requires your turn".into()));
-        }
+        self.check_activation_terms(player, &ability)?;
         if permanent.activation_used(ability_index, &ability) {
             return Err(AgentError("ability was already activated".into()));
         }
         if ability.tap_source && !permanent.can_tap(&self.state.cards[source_card]) {
             return Err(AgentError("source cannot tap".into()));
-        }
-        if self.state.players[player.0].life < ability.life_cost as i32 {
-            return Err(AgentError("cannot pay life cost".into()));
         }
         let source = ActivationSource::Permanent(permanent_id);
         if ability.target_spec().is_some() {
@@ -798,17 +793,27 @@ impl Game {
         let ability = self
             .card_ability_in_zone(player, card, ability_index)
             .ok_or_else(|| AgentError("no ability of this card functions here".into()))?;
+        self.check_activation_terms(player, &ability)?;
+        let source = ActivationSource::Card(card);
+        if ability.target_spec().is_some() {
+            return self.begin_activated_targets(player, source, ability_index, &ability);
+        }
+        self.begin_activation_payment(player, source, ability_index, Vec::new())
+    }
+
+    /// The turn and life terms every activation shares, whatever its source.
+    pub(crate) fn check_activation_terms(
+        &self,
+        player: PlayerId,
+        ability: &ActivatedAbilityDefinition,
+    ) -> Result<(), AgentError> {
         if ability.own_turn_only && self.active_player() != player {
             return Err(AgentError("activation requires your turn".into()));
         }
         if self.state.players[player.0].life < ability.life_cost as i32 {
             return Err(AgentError("cannot pay life cost".into()));
         }
-        let source = ActivationSource::Card(card);
-        if ability.target_spec().is_some() {
-            return self.begin_activated_targets(player, source, ability_index, &ability);
-        }
-        self.begin_activation_payment(player, source, ability_index, Vec::new())
+        Ok(())
     }
 
     /// The ability at `ability_index` of `card` when the card is in the
@@ -901,11 +906,8 @@ impl Game {
         ability.target_spec().map_or_else(Vec::new, |spec| {
             self.legal_targets_for_spec(spec, player)
                 .into_iter()
-                .filter(|target| match source {
-                    ActivationSource::Permanent(permanent) => {
-                        *target != Target::Permanent(permanent)
-                    }
-                    ActivationSource::Card(_) => true,
+                .filter(|target| {
+                    !matches!((source, target), (ActivationSource::Permanent(own), Target::Permanent(id)) if own == *id)
                 })
                 .collect()
         })

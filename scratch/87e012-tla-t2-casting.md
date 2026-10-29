@@ -161,3 +161,6 @@ experience protocol, play modes, env observation and `tests/model` pytest pass;
 Compress: one `priority_candidate_cards` feeds both priority scans; player
 observations read one combined regular+combat pool. Debug `--lib`/`cards`/
 `rules_tests` 121/293/131 pass, clippy clean. Authoring layer left for T1.
+Compress 2: `Game::check_activation_terms` owns the turn/life terms for
+permanent and card activations and both offer scans (card offers had skipped
+the life check). Debug `--lib`/`cards`/`rules_tests` 121/293/131, clippy clean.
