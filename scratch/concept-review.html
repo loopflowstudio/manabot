@@ -1,30 +1,42 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>A deck is a deck · Manabot concept review</title><style>
-:root{color-scheme:light dark;--bg:#faf8f3;--ink:#282d29;--muted:#5d675f;--line:#ccd2c9;--wash:#eef0e9;--accent:#2b6847}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 system-ui,sans-serif}main{max-width:860px;margin:auto;padding:34px 25px 65px}h1{font:500 clamp(34px,5vw,48px)/1.12 Georgia,serif;margin:17px 0}h2{font-size:22px;margin:29px 0 12px}p{margin:10px 0 16px}.meta{font-size:13px;color:var(--muted);overflow-wrap:anywhere}.lead{font-size:21px}.note{border-left:3px solid var(--accent);padding-left:18px}a{color:var(--accent);text-underline-offset:3px}code{font:.9em ui-monospace,monospace;overflow-wrap:anywhere}pre{background:var(--wash);padding:18px;font:14px/1.65 ui-monospace,monospace;white-space:pre-wrap}table{width:100%;border-collapse:collapse;font-size:15px}td,th{padding:12px 10px 12px 0;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}footer{border-top:1px solid var(--line);padding-top:16px;margin-top:30px}:focus-visible{outline:2px solid var(--accent);outline-offset:3px}@media(prefers-color-scheme:dark){:root{--bg:#1c211e;--ink:#ecefe6;--muted:#b4beb5;--line:#4d5a4f;--wash:#29332b;--accent:#a2d7ae}}@media(max-width:500px){main{padding:24px 17px}table{font-size:13px}pre{font-size:12px;padding:13px}}@media print{main{padding:0}body{font-size:12px}}
-</style></head><body><main><header>
-<p class="meta">f871a8 · Concept review · October 28, 2026<br>Built from Jack Heart’s direction, scratch/f871a8-import-decklist-files.md, manabot/deck_collection.py, manabot/model/world.py, training/regime.py and native vector_env.rs.</p>
-<h1>A deck is a deck.</h1><p class="lead">Training gets a verified world. It chooses or computes decks, then submits them to that world.</p><p class="note"><strong>Accepted correction; implementation pending.</strong> A fixed list is useful input, not the universe of permitted training decks. Collection membership does not make a different kind of deck.</p></header>
-<section><h2>Three concepts</h2><table><thead><tr><th>Concept</th><th>Responsibility</th></tr></thead><tbody>
-<tr><td><strong>World</strong></td><td>Fixed rules and card definitions. Determines whether a deck can execute.</td></tr>
-<tr><td><strong>Deck</strong></td><td>Main-deck and sideboard card counts. Same representation whether read from a file, sampled from a list or computed.</td></tr>
-<tr><td><strong>Training</strong></td><td>Chooses decks. Initially uniform sampling from supplied lists; eventually it may compute or modify them. Records what actually ran and the state needed to continue.</td></tr></tbody></table>
-<p>Checkpoints bind to the world and model I/O. Import source text and diagnostics remain metadata. Neither collection membership nor provenance changes what a deck is.</p></section>
-<section><h2>One interaction, through the boundary</h2><p>Choose world W. Supply decks A, B and C and check them all before starting. Training samples matches from that list.</p><p>Later, a training procedure could produce deck D. If D is valid in W, it can be used in a subsequent game with the same world and model. There is no requirement to have registered D at the start.</p>
-<pre aria-label="Proposed conceptual flow">Initial fixed-list path:
-  supplied decks → validate against W → choose decks → start game
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Checkpoints bind worlds · Manabot concept review</title><style>
+:root{color-scheme:light dark;--bg:#faf8f3;--ink:#282d29;--muted:#5d675f;--line:#ccd2c9;--wash:#eef0e9;--accent:#2b6847;--warn:#8a4b14}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 system-ui,sans-serif}main{max-width:860px;margin:auto;padding:34px 25px 65px}h1{font:500 clamp(30px,5vw,44px)/1.15 Georgia,serif;margin:17px 0}h2{font-size:22px;margin:32px 0 12px}p{margin:10px 0 16px}.meta{font-size:13px;color:var(--muted);overflow-wrap:anywhere}.lead{font-size:20px}.note{border-left:3px solid var(--warn);padding-left:18px}.prop{border-left:3px dashed var(--accent);padding-left:18px}code{font:.9em ui-monospace,monospace;overflow-wrap:anywhere}pre{background:var(--wash);padding:18px;font:14px/1.6 ui-monospace,monospace;white-space:pre-wrap;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse;font-size:15px}td,th{padding:11px 10px 11px 0;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}th{font-weight:600}em.tag{font-style:normal;font-size:13px;color:var(--muted)}footer{border-top:1px solid var(--line);padding-top:16px;margin-top:30px}@media(prefers-color-scheme:dark){:root{--bg:#1c211e;--ink:#ecefe6;--muted:#b4beb5;--line:#4d5a4f;--wash:#29332b;--accent:#a2d7ae;--warn:#e7b07a}}@media(max-width:520px){main{padding:24px 16px}table{font-size:13px}pre{font-size:12px;padding:12px}}
+</style></head><body><main>
+<p class="meta">Task f871a8 · concept-review (headless Graph step) · 2026-10-28 · built from <code>scratch/f871a8-import-decklist-files.md</code>, <code>manabot/model/world.py</code>, <code>manabot/training/decks.py</code>, <code>manabot/training/execution.py</code>, <code>content/semantic/current/setups.json</code></p>
+<h1>Checkpoints bind worlds — except authored packs</h1>
+<p class="lead">Outcome: <strong>the design changed</strong>. Jack Heart's accepted decision already settles it, so no approval is needed; it goes back to implement.</p>
 
-Future computed-deck path:
-  training state → produce deck → validate against W → start game
+<h2>Actions → concepts → APIs</h2>
+<table>
+<tr><th>Action</th><th>Concept</th><th>API (existing, after 1b71de345)</th></tr>
+<tr><td>Supply decklists to a run</td><td>Deck; run-owned supply</td><td><code>TrainingDecks.from_files(paths, pool)</code> → <code>check()</code> before any root</td></tr>
+<tr><td>Play a game root</td><td>World admits each deck</td><td>native <code>admit_deck</code> at reset; <code>set_training_decks</code></td></tr>
+<tr><td>Export a model</td><td>Checkpoint binds world</td><td><code>pool_world(pack_key)</code> from <code>managym.content_pool</code></td></tr>
+<tr><td>Run a model on any deck</td><td>World compatibility</td><td><code>validate_agent_setup</code> → <code>admit_pool_decks</code></td></tr>
+<tr><td>Resume a run</td><td>Run recovery state</td><td><code>regime.decks</code> digest, collector snapshot</td></tr>
+</table>
+<p>For deck-supplied runs this matches the accepted model. <code>CollectionDeck</code>, <code>DeckCollection</code> and <code>deck_collection</code> are gone outside frozen evidence.</p>
 
-Both paths submit the same kind of deck.</pre>
-<p class="meta">Conceptual flow, not implemented API signatures. Computed decks and adaptive curriculum remain future work; the fixed-list path must not make them incompatible with the world/model boundary.</p>
-<p><strong>Invalid input:</strong> an unsupported card rejects the proposed deck before game creation. Report the problem; correct and resubmit. Do not substitute another deck silently or change a game already underway.</p>
-<p><strong>Recovery:</strong> restore training’s selection or generation state, RNG and actual game decks. An evolving deck sequence can belong to one run. Exact resume requires faithful continuation, not an eternally fixed deck list.</p></section>
-<section><h2>What must change in the implementation</h2><table><thead><tr><th>Current code</th><th>Required direction</th></tr></thead><tbody>
-<tr><td><code>CollectionDeck</code> wraps counts, identity and mandatory source documents.</td><td>Use one shared deck representation. Retain import evidence separately; computed decks need no fictional file.</td></tr>
-<tr><td><code>DeckCollection</code> bundles decks, sources, pool, sampling policy and learning schema.</td><td>A stored list can be data. Training owns selection policy; the world owns validity and inference compatibility.</td></tr>
-<tr><td><code>set_deck_collection</code> requires a complete roster before reset.</td><td>World validation is the execution boundary. Fixed-list prevalidation is an early error check, not exclusive permission.</td></tr>
-<tr><td>Checkpoint/export/catalog paths depend on the training collection.</td><td>Bind and inspect the model using its world and inference contract, without training data.</td></tr>
-<tr><td>Recovery rejects any change to a frozen collection digest.</td><td>Preserve exact continuation of the run’s declared selection process. Future recorded deck changes are not automatically a different experiment.</td></tr></tbody></table>
-<p>No new deck-source hierarchy or mutation framework is needed just to express this boundary. Reuse the existing shared native admission and consolidate the current deck types. Preserve historical artifacts and the existing Elemental sampling sequence.</p></section>
-<footer><h2>Direction settled; machinery remains to build</h2><p>The next proof should accept a new same-world deck at a later game root, reject an invalid one before execution, validate a fixed list upfront, and recover the run faithfully. No weight updates are needed for that proof.</p><p class="meta">No new product choice is needed to establish this boundary. The timing and algorithm for future deck adaptation remain deferred. This pass records the design; it does not change product code or restart execution.</p><p><a href="loopflow://manabot/task/f871a8">Import decklist files · f871a8</a> · Available: concept review · <a href="https://github.com/loopflowstudio/manabot/pull/395">Draft PR #395</a></p></footer>
+<h2>The consequential mismatch</h2>
+<div class="note">
+<p>A checkpoint trained on an authored pack other than Elemental still binds its <em>training pair</em>, not the pack.</p>
+<pre>checkpoint_world(configs):
+    if pack_key in _ROSTER_PACKS:   # only elemental-world-v1/v2
+        setups = complete authored roster
+    else:
+        setups = _setups(configs)   # the pair it trained on</pre>
+<p><code>mtg122-complexity-v1</code> authors six decks over one card file, and native reset accepts any pair of them (checked: <code>gw_allies</code> v <code>l2_heavy</code>). A checkpoint trained on <code>l1_swift</code> v <code>l1_heavy</code> is still rejected for Allies v Lessons with “checkpoint setup differs from the execution match”. That is the training-roster allowlist Jack Heart rejected, and it is the MTG-122 warm-up case. Two-deck packs are unaffected in practice, because there the pair is the whole pack.</p>
+</div>
+
+<h2>Next implement direction <em class="tag">proposed, implied by accepted decision</em></h2>
+<div class="prop">
+<p>A new setup-bound checkpoint over a compiled authored pack binds that pack's complete authored setups, as Elemental already does. Execution admits any pair that native setup admits; native admission, not a Python rule, decides whether mirrors are allowed.</p>
+<p>Version the new binding form explicitly. Historical pair bindings, including MTG-122 checkpoints, keep verifying with their original semantics through a separate reader. Default (uncompiled) content has no native deck admission, so it keeps its exact pair.</p>
+<p>Proof: a pair-trained complexity checkpoint runs a different authored pair from the same pack. A historical pair binding still loads and still rejects other pairs. A setup from another pack is still rejected.</p>
+</div>
+
+<h2>Recorded deferrals, not reopened</h2>
+<p>The checkpoint <code>bc</code> extra still carries run/regime producer links, and the sim/Academy imported-setup consumers still refuse checkpoint opponents (<code>scratch/questions.md</code>). Neither affects whether a deck-supplied checkpoint is compatible with its world.</p>
+
+<footer><p>No open product questions. If this reading is wrong:</p>
+<ol><li>Should authored packs count as fixed matchups rather than worlds? (a) No, bind the pack, as above. (b) Yes, keep pair binding and record the exception in the design.</li></ol></footer>
 </main></body></html>

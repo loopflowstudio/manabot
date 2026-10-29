@@ -132,8 +132,42 @@ changed rules/card-file/input identities; preserve exact run recovery rejection
 for changed corpus/sampler/state; verify the run still links the checkpoint and
 its training provenance. No weight updates, paid compute or data download needed.
 
-Implemented 2026-10-28 per Jack Heart's approval; awaiting another review.
-Working screen: `scratch/concept-review.html`.
+Implemented 2026-10-28 per Jack Heart's approval (1b71de345).
+
+### Concept review of the implementation (2026-10-28, headless Graph step)
+
+Deck-supplied runs now match the accepted model: one `Deck`, `TrainingDecks`
+is run data (supply plus provenance, checked upfront, re-admitted natively at
+every root), checkpoints export `pool_world` from the native pool descriptor,
+and execution admits any deck that pool admits. No `CollectionDeck`,
+`DeckCollection` or `deck_collection` remains outside frozen evidence.
+
+One remaining path contradicts the accepted decision, which settles it:
+**authored-pack checkpoints still bind their training pair.** `checkpoint_world`
+binds the complete authored roster only for the two Elemental packs; every other
+compiled authored pack binds the actual training match. `mtg122-complexity-v1`
+authors six decks over one card file, and native reset admits any pair of them
+(checked: `gw_allies` v `l2_heavy`). A checkpoint trained on `l1_swift` v
+`l1_heavy` is nevertheless rejected for Allies v Lessons by
+`validate_agent_setup` ("checkpoint setup differs from the execution match") —
+the training-roster allowlist Jack Heart rejected, and the MTG-122 L1-then-
+Allies-v-Lessons case. Two-deck packs are unaffected in practice (pair = pack).
+
+Next implement direction (implied, not a new product choice): a new setup-bound
+checkpoint over a compiled authored pack binds that pack's complete authored
+setup set, as Elemental already does; execution admits any pair native setup
+admits (native admission, not a Python mirror rule, decides mirrors). Version
+the new binding form explicitly so historical pair bindings, including MTG-122
+checkpoints, keep verifying under their original semantics through a separate
+historical reader. Default (uncompiled) content has no native deck admission and
+keeps its exact pair binding. Proof: a pair-trained complexity-pack checkpoint
+executes a different authored pair from the same pack; a historical pair binding
+still loads and still rejects other pairs; another pack's setup still rejects.
+
+Recorded deferrals, not reopened here: checkpoint `bc` extra still carries
+run/regime producer links (questions.md); sim/Academy imported-setup consumers
+still refuse checkpoint opponents. Neither constrains world compatibility of a
+deck-supplied checkpoint. Working screen: `scratch/concept-review.html`.
 
 ## Accepted direction — Jack Heart, 2026-10-28
 
