@@ -139,9 +139,11 @@ and UI. Guard + directed + viewer-safety tests in
 ## Remaining
 
 - Next T1 sync, after T1 publishes engine-type cards/w17: the three steers
-  above, then the world gate. Last observed 2026-10-29 (realign after
-  `180c1832d`): PR #394 head still `f9732c12f`; T1's implement step still
-  running. (The launch steer's `be2b7586b` is an older #394 merge already in
+  above, then the world gate. Last observed 2026-10-29 10:51: PR #394 head
+  still `f9732c12f`; T1's implement step still running, local head
+  `4fa385183` (adds `a80d9c349` tokens, `485c5146b` guard + Scryfall ids,
+  `fc3dd9b12` w17 docs) with uncommitted test edits across `tests/cards`
+  and `tests/rules`. (The launch steer's `be2b7586b` is an older #394 merge already in
   T2's history.) T1 committed `167eb13d4` locally (engine-type
   set files with Scryfall ids, `authoring.rs`/`compile.rs`/IR deleted, tokens in
   `semantic/tokens.rs`) and has uncommitted Python follow-up work, so the sync is
