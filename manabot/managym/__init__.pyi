@@ -168,7 +168,7 @@ class Env:
         max_steps: int = 2000,
     ) -> Tuple[List[float], int, int]: ...
     def encode_observation(
-        self, obs: Observation, policy_input_version: int = 4
+        self, obs: Observation, policy_input_version: int = 5
     ) -> Dict[str, np.ndarray]: ...
     def encode_observation_into(
         self, obs: Observation, out: Dict[str, np.ndarray]
@@ -394,6 +394,25 @@ class Player:
     combat_mana: int
     mana: tuple[int, int, int, int, int, int]
     lesson_mana: tuple[int, int, int, int, int, int]
+    restricted_mana: List[RestrictedMana]
+    hand_only_until: Optional[int]
+
+class RestrictedMana:
+    spells: List[str]
+    abilities: List[str]
+    mana: tuple[int, int, int, int, int, int]
+
+class CastPermission:
+    player_id: int
+    cost: Optional[ManaCost]
+    this_turn: bool
+    own_turn_only: bool
+    after_turn: Optional[int]
+    source_permanent_id: Optional[int]
+    flash: bool
+    any_mana: bool
+    waterbend: bool
+    foretold: bool
 
 class Card:
     zone: ZoneEnum
@@ -413,6 +432,8 @@ class Card:
     keywords: Keywords
     mana_cost: ManaCost
     face_down: bool
+    cast_permission: Optional[CastPermission]
+    x: Optional[int]
 
 class SideboardCard:
     candidate_id: int

@@ -174,7 +174,8 @@
               <span
                 class="type-annotation inline-block rounded border border-mountain/50 bg-mountain/10 px-3 py-2 text-ink"
               >
-                <b class="not-italic font-semibold text-mountain-ink">{card.name}</b>
+                <b class="not-italic font-semibold text-mountain-ink">{card.name}</b>{#if card.x !== undefined}
+                  <span> · X = {card.x}</span>{/if}
               </span>
             </button>
           {/each}

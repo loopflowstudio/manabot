@@ -312,40 +312,40 @@ impl Game {
     }
 
     pub(crate) fn casts_only_from_hand(&self, player: PlayerId) -> bool {
+        self.hand_only_until(player).is_some()
+    }
+
+    /// The grants naming this exact card while it is in exile. Producers
+    /// exile a new object for every grant, so a card holds at most one.
+    fn grants_naming(&self, card: CardId) -> impl Iterator<Item = &ExileCastGrant> {
+        let object = (self.state.zones.zone_of(card) == Some(ZoneType::Exile))
+            .then(|| self.current_object_ref(card))
+            .flatten();
         self.state
             .cast_permissions
-            .hand_only
+            .exile_grants
             .iter()
-            .any(|restriction| restriction.player == player)
+            .filter(move |grant| Some(grant.object) == object)
     }
 
     /// The live grant letting `player` play this exact exiled card now.
     /// Another player's card is castable too; a permanent spell enters
     /// under its caster's control (CR 110.2).
     pub(crate) fn exile_grant(&self, player: PlayerId, card: CardId) -> Option<&ExileCastGrant> {
-        if self.state.zones.zone_of(card) != Some(ZoneType::Exile) {
-            return None;
-        }
-        let object = self.current_object_ref(card)?;
-        self.state
-            .cast_permissions
-            .exile_grants
-            .iter()
-            .find(|grant| {
-                grant.object == object
-                    && grant.player == player
-                    && (!grant.own_turn_only || self.active_player() == player)
-                    && grant
-                        .after_turn
-                        .is_none_or(|turn| self.state.turn.turn_number > turn)
-                    && grant.source.is_none_or(|source| {
-                        self.lookup_current_permanent(source).is_ok_and(|id| {
-                            self.state.permanents[id]
-                                .as_ref()
-                                .is_some_and(|permanent| permanent.controller == player)
-                        })
+        self.grants_naming(card).find(|grant| {
+            grant.player == player
+                && (!grant.own_turn_only || self.active_player() == player)
+                && grant
+                    .after_turn
+                    .is_none_or(|turn| self.state.turn.turn_number > turn)
+                && grant.source.is_none_or(|source| {
+                    self.lookup_current_permanent(source).is_ok_and(|id| {
+                        self.state.permanents[id]
+                            .as_ref()
+                            .is_some_and(|permanent| permanent.controller == player)
                     })
-            })
+                })
+        })
     }
 
     /// The cost `player` may pay to cast `card` from exile. Hand-only
@@ -354,8 +354,17 @@ impl Game {
         if self.casts_only_from_hand(player) {
             return None;
         }
-        let grant = self.exile_grant(player, card)?;
+        self.grant_cast_cost(self.exile_grant(player, card)?, card)
+    }
+
+    /// What casting `card` under `grant` costs: its foretell cost, the
+    /// grant's alternative, or its mana cost. `None` when it has no cost to
+    /// pay (a land is played, not cast).
+    pub(crate) fn grant_cast_cost(&self, grant: &ExileCastGrant, card: CardId) -> Option<ManaCost> {
         let definition = &self.state.cards[card];
+        if definition.types.is_land() {
+            return None;
+        }
         let cost = if grant.foretold {
             definition.foretell.clone()?
         } else {
@@ -370,6 +379,28 @@ impl Game {
         } else {
             cost
         })
+    }
+
+    /// The permission naming this exact exiled card, whatever its timing,
+    /// for viewers to inspect. A grant tied to a source that has left the
+    /// battlefield can never be used again and is not shown.
+    pub(crate) fn exile_grant_on(&self, card: CardId) -> Option<&ExileCastGrant> {
+        self.grants_naming(card).find(|grant| {
+            grant
+                .source
+                .is_none_or(|source| self.lookup_current_permanent(source).is_ok())
+        })
+    }
+
+    /// The player whose next turn ends `player`'s hand-only casting
+    /// restriction, while one applies.
+    pub(crate) fn hand_only_until(&self, player: PlayerId) -> Option<PlayerId> {
+        self.state
+            .cast_permissions
+            .hand_only
+            .iter()
+            .find(|restriction| restriction.player == player)
+            .map(|restriction| restriction.until_turn_of)
     }
 
     /// Whether `player` may play `card` from where it is now: their hand,

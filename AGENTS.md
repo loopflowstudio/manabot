@@ -114,7 +114,8 @@ checkpoints or experiment evidence.
   repository-wide type safety without a passing configured type check, or
   weaken types merely to silence one.
 - Native scalar/vector observation buffers bind continuation input semantics by
-  relation width: v2/v3 have 32 columns, v4 has 33; validity remains column 31.
+  relation width: v2/v3 have 32 columns, v4 and v5 have 33; validity remains
+  column 31. At 33, the player row width tells v4 (40) from v5 (59).
   Preserve the frozen widths and derive buffers from `ObservationSpace`.
 - Saved observation configurations use `ObservationConfig.from_checkpoint` so
   an absent policy-input version retains v1 semantics. Fresh construction uses

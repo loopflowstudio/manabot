@@ -6,6 +6,8 @@
 #[allow(dead_code)]
 #[path = "rules/helpers.rs"]
 mod helpers;
+#[path = "cards/observability.rs"]
+mod observability;
 #[path = "cards/support.rs"]
 mod support;
 #[path = "cards/tla.rs"]

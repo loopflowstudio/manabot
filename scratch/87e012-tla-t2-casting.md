@@ -33,8 +33,8 @@ worktree, so new T2 cards read "unsupported" in this base until T1 lands.
   cast spell's subtypes or, in `price_activation`, the source's; narrowest
   usable class spends first. Opcode 56 `add_lesson_mana` takes optional
   `spend_only` (omitted = Lesson spells). `cost_reduction_per` (Cost
-  `affinity`) reduces generic activation cost. Concept review: viewers see
-  "Restricted mana" totals (`manabot-text-5`, Academy); wire names stay.
+  `affinity`) reduces generic activation cost. Viewers see restricted mana
+  per class (concept review 3); `lesson_mana` keeps the total.
 - Casting outside hand: `flow/cast_permission.rs` owns `GameState.cast_permissions`
   — exact-`ObjectRef` exile grants (stale once the card leaves exile) and
   `HandOnly` restrictions that override every non-hand permission until the
@@ -76,41 +76,74 @@ worktree, so new T2 cards read "unsupported" in this base until T1 lands.
 
 ## Done (`648edee6b`…`2673c95cd`; foretell `1144d0f32`; control `431a31f65`)
 
-All 51 T2 cards are defined and none is in `tla::INCOMPLETE` for T2
-behavior (2026-10-29, against `allocation.jsonl`). Each has a Scryfall fixture
-entry and a witness in `tests/cards/tla.rs`, except Toph, the Blind Bandit and
-Dai Li Agents, whose witnesses sit in `tests/rules/elemental_cards.rs` (T1 moves).
+All 51 T2 cards are defined, none in `tla::INCOMPLETE` for T2 behavior, each
+with a Scryfall fixture entry and a witness in `tests/cards/tla.rs` (Toph and
+Dai Li Agents in `tests/rules/elemental_cards.rs`, pending the move). Merged
+onto PR #394's head `86ebe9ccf`. WORLDS.md w16 records T2 (166 supported).
+Earlier check (`35404b274`): debug `cargo test` passes except the
+pre-existing semantic-conformance pair.
 
-## Base: T1
+## Concept review 3 (Jack Heart, accepted 2026-10-29; page `scratch/concept-review.html`)
 
-Merged onto PR #394's head `86ebe9ccf`. Moving the pre-existing per-card `tests/rules/`
-files into `tests/cards/` is left to T1 (operator reading; see Decisions).
+- 1b: exile cast permissions and the hand-only lock reach every viewer
+  surface, the policy tensor included (new policy input v5; v1–v4 widths and
+  checkpoints unchanged). Foretold grants reach only the owner.
+- 3c: restricted mana split by class on every surface, in the same v5.
+  `lesson_mana` stays for v1–v4.
+- 2: T2 lands only after T1/PR #394; before landing, the pre-existing per-card
+  tests (Toph, Dai Li Agents in `tests/rules/elemental_cards.rs`) must be in
+  `tests/cards/<set>.rs` (T2 moves them on sync if T1 did not). Don't arm
+  T2's merge while #394 is open.
+- Validation: the CLAUDE.md arena admission/monitoring suite plus a redaction
+  test (opponent's foretold grant absent from JSON, text and tensor).
+
+### Implemented (2026-10-29)
+
+`CardData.cast_permission` (`CastPermissionData`, from
+`Game::exile_grant_on` + `grant_cast_cost`; any timing, dead-source grants
+hidden) and `CardData.x` (a stack spell's announced X);
+`PlayerData.restricted_mana` (`RestrictedManaData` per `ManaUse` class) and
+`hand_only_until` (player id). Policy input v5 (default): player 40→59
+(`PLAYER_RESTRICTED_INDEX` 18 subtype×color, `PLAYER_HAND_ONLY_INDEX`), card
+41→55 (`CARD_PERMISSION_INDEX` 12 terms, `CARD_X_INDEX` 2, validity last);
+native buffers tell v5 from v4 by player width. Python reference encoder,
+PyO3 `CastPermission`/`RestrictedMana`, text-5 lines, Academy protocol
+(`LegacyCastPermissionView`, `LegacyRestrictedManaView`; schemas regenerated)
+and UI. Guard + directed + viewer-safety tests in
+`managym/tests/cards/observability.rs`; Python text/tensor redaction test.
+
+## Later steers (Jack Heart, 2026-10-29) — wait for the T1 sync
+
+- Observability: every mechanic in both the tensor and the learning program
+  tokens, enforced by an exhaustive guard (Effect/Ability, keywords, counters,
+  status fields) plus per-mechanic and viewer-safety tests. Done here for
+  observation status fields → tensor. Tokens and the Effect/Ability guard
+  depend on T1's representation change.
+- One card representation: cards in engine types (`CardDefinition`/`Ability`/
+  `Effect`/`TargetSpec`) with constructor helpers; remove `cards/authoring.rs`
+  and `semantic/compile.rs`; tokens derived in Rust; world w17. T1 is doing
+  the removal (uncommitted in its worktree at 2026-10-29 07:55); T2 then
+  converts its 51 cards and stops adding authoring `Op` variants.
+- Scryfall object id on every definition (first printing, required field),
+  offline uniqueness test and an online maintenance script beside the card
+  tests. Lands with the engine-type definitions after the sync.
 
 ## Remaining
 
-- Academy check: not run locally (Homebrew node can't load libllhttp); CI
-  covers it. UI should show your own foretold cards as "foretold, face down" and
-  an opponent's as a count.
-- 2026-10-29 gate: WORLDS.md w16 extended for T2 (166 supported; shapes
-  unchanged). `--features python` clippy clean (PYO3_PYTHON=.venv). The world
-  Python suite fails 4 tests that T1 left behind: WorldVersion has no w16, and
-  three tests assert old learning schema versions. Reported on 892c47.
-- Known gaps (questions.md): possible-worlds hidden-hand constraints ignore
-  foretold cards; granted land plays of another player's card would enter
-  under its owner (no TLA producer).
+- Sync onto T1 when PR #394 publishes the engine-type cards/w17; then the
+  three steers above, the test move (decision 2), and re-run the world gate.
+- Gate (not run here): CLAUDE.md arena admission/monitoring suite; full debug
+  `cargo test`; Academy check/build (local node can't load libllhttp; CI).
+- Known gaps (questions.md): possible-worlds ignore foretold cards; granted
+  land plays of another player's card would enter under its owner.
 
 ## Check
 
-2026-10-29 at `35404b274`: debug `cargo test --no-fail-fast` passes except the
-pre-existing semantic-conformance pair; clippy and fmt clean. Text v5:
-`pytest tests/semantic/test_text_observation.py` 16 passed.
-Academy README and the policy column table in `docs/recent-events.md` name
-spending restrictions, not Lesson.
-
-## Concept review 2 (2026-10-29, at `463f6c432`)
-
-Against the accepted design: nothing to change and no open product choice.
-Restricted mana is one concept on every viewer surface (text-5, Academy,
-policy-column docs). The remaining "Lesson-only" text is dated audit evidence,
-Uncle Iroh's own restriction, and a field-history comment. `tests/cards/` follows
-Jack Heart's folder direction and gates nothing.
+2026-10-29, v5 work: `cargo test --test cards observability` 6 passed (debug);
+`--lib observation` 11 passed; clippy `--features python --tests --examples`
+and fmt clean. Pytest: continuation-input parity v1–v5, text observation,
+experience protocol, play modes, env observation, `tests/model` all pass.
+`tests/eval/test_batched_eval.py` fails on T1's missing w16 `WorldVersion`.
+Compress (2026-10-29): exile-grant lookups share `Game::grants_naming`;
+`casts_only_from_hand` reads `hand_only_until`. `cargo test --test cards` 68
+passed (debug), clippy clean, experience protocol + text observation pytest pass.

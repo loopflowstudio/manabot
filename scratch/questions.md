@@ -35,10 +35,9 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   World stays w16 while T2 only adds cards.
 - Card abilities use `ActivateCardAbility` (sharing `PriorityActivateAbility`);
   a discard-cost ability refers to its card's graveyard object after costs.
-- Restricted mana rides the `lesson_mana`/`lesson` observation fields (now any
-  Lesson/Shrine/Ally restriction, totals only); Academy reads "Restricted
-  mana", `manabot-text-5` "Restricted mana"; per-class detail is deferred.
-  `PlayerVitals` ≤ 40 bytes, `UndoEntry` ≤ 72.
+- `lesson_mana`/`lesson` stay the total of any restriction; per-class detail
+  is `restricted_mana` (concept review 3). `PlayerVitals` ≤ 40 bytes,
+  `UndoEntry` ≤ 72.
 - Avatar's Wrath's hand-only restriction ends at its caster's next untap and
   blocks flashback too; mass airbend exiles one at a time. `another` is
   enforced for triggers (activations never offer their source).
@@ -66,3 +65,13 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   constraints still ignore foretold cards (not a leak; prior slightly off).
 - Text observation admits stages `revealed_hand`, `split_revealed`,
   `free_cast`, `linked_exile`.
+- v5 tensor (2026-10-29): restricted mana is encoded per spending subtype
+  (Lesson/Shrine/Ally × color) as "may pay for that subtype", so a
+  multi-subtype class counts under each and spell vs ability use is merged.
+  Announced X joins the card row of a stack spell (`CardData.x`), not the
+  relations, so v5 keeps v4's relation width. A grant whose source has left
+  the battlefield is not shown (it can never be used); a card holds at most
+  one live grant (every producer exiles a new object).
+- The learning-token half of the observability steer, the Effect/Ability
+  guard and Scryfall ids wait for T1's engine-type cards (w17) rather than
+  being built on the authoring layer T1 is removing.

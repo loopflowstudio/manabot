@@ -1,46 +1,82 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>T2 concept review 2: nothing to change</title>
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>T2 concept review 3</title>
 <style>
 :root{--bg:#fbf8f2;--fg:#2b2620;--muted:#6f6556;--rule:#e2d9c8;--code:#f2ece0;--accent:#9a4b1c;--prop:#2f6b4f}
-@media (prefers-color-scheme: dark){:root{--bg:#1b1916;--fg:#ece5d8;--muted:#a89d8b;--rule:#3a352d;--code:#26231f;--accent:#e08a52;--prop:#7cc4a0}}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#1b1916;--fg:#ece5d8;--muted:#a89d8b;--rule:#3a352d;--code:#26231f;--accent:#e08a52;--prop:#7cc4a0}}
 body{background:var(--bg);color:var(--fg);font:16px/1.6 ui-serif,Georgia,serif;margin:0}
 main{max-width:46rem;margin:0 auto;padding:2.5rem 16px 4rem}
-h1{font-size:1.6rem;margin:0 0 .3rem}h2{font-size:1.15rem;margin:2.4rem 0 .6rem;border-top:1px solid var(--rule);padding-top:1.4rem}
+h1{font-size:1.6rem;margin:0 0 .3rem;line-height:1.25}
+h2{font-size:1.15rem;margin:2.4rem 0 .6rem;border-top:1px solid var(--rule);padding-top:1.4rem}
 .meta{color:var(--muted);font-size:.85rem}
 pre,code{font:13px/1.5 ui-monospace,Menlo,monospace}
-pre{background:var(--code);padding:.8rem 1rem;overflow-x:auto;border-radius:4px;white-space:pre-wrap}
-code{background:var(--code);padding:0 .25em;border-radius:3px}
+pre{background:var(--code);padding:.8rem 1rem;overflow-x:auto;border-radius:4px;white-space:pre}
+code{background:var(--code);padding:0 .25em;border-radius:3px;overflow-wrap:anywhere}
+html,body{overflow-x:hidden}
 .mismatch{border-left:3px solid var(--accent);padding:.2rem 0 .2rem 1rem;margin:1.2rem 0}
-ol.q li{margin:.6rem 0}
+.proposed{border-left:3px solid var(--prop);padding:.2rem 0 .2rem 1rem;margin:1.2rem 0}
+.tag{font:600 .75rem/1 ui-sans-serif,system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase}
+.tag.now{color:var(--accent)}.tag.prop{color:var(--prop)}
+ol.q>li{margin:1rem 0}ol.q ol{list-style:lower-alpha;margin:.3rem 0}
 </style></head><body><main>
-<h1>No product decision needed: restricted mana is one concept everywhere</h1>
-<p class="meta">Task 87e012 (TLA T2) · concept-review (second pass) · 2026-10-29 · at <code>463f6c432</code> · built from scratch/87e012-tla-t2-casting.md, scratch/questions.md, managym/tests/cards.rs, git grep over manabot, managym/src, academy, docs</p>
+<h1>Should a player be able to see what they may cast from exile?</h1>
+<p class="meta">Task 87e012 (TLA T2) · concept-review, with Jack Heart · 2026-10-29 · PR #398 at <code>16dfd3dbb</code> · built from <code>scratch/87e012-tla-t2-casting.md</code>, <code>scratch/questions.md</code>, <code>managym/src/flow/cast_permission.rs</code>, <code>managym/src/agent/observation.rs</code>, <code>manabot/semantic/text_observation.py</code></p>
 
-<p>Nothing here waits on you. The first pass found one mismatch: restricted mana was mislabelled "Lesson-only" in the text observation. <code>ee9e32383</code>, <code>8066cce97</code> and <code>463f6c432</code> fixed it. This pass checks the result.</p>
+<p><strong>What I need from you:</strong> T2 adds a new kind of rules state: permission to cast an exiled card, and a lock that forbids it. Today the only place that state reaches a viewer is the list of legal offers. I want to know whether a player should be able to see it, and how far down the stack that view should go (question 1).</p>
 
-<h2>Restricted mana, after the fix</h2>
-<pre>add restricted mana  →  Mana.restricted (ManaUse classes)  →  PlayerData.lesson_mana (wire name kept)
-                                                            ├ Academy: "Restricted mana"
-                                                            ├ manabot-text-5: "Restricted mana"
-                                                            └ docs/recent-events.md: restricted mana</pre>
-<p>Three places still say "Lesson-only". None of them is wrong:</p>
+<h2>One interaction</h2>
+<p>You are playing in Academy. The opponent airbends your Rough Rhino Cavalry. Airbend means the card's owner may cast it from exile for {2}. Later the opponent casts Avatar's Wrath: "opponents can cast spells only from their hands until your next turn."</p>
+<pre>your exile:   Rough Rhino Cavalry
+your mana:    {2} untapped, your main phase
+offers:       Pass, play land …          ← no "cast Rough Rhino Cavalry", and nothing says why</pre>
+<p>The engine is right: the grant exists and the lock suppresses it. But the screen shows neither, so it looks like a bug. Even without the lock, deciding whether to keep {2} open for the Cavalry means remembering a rule the screen never shows. The agent has the same problem: it sees the card in exile only.</p>
+
+<h2>Actions → concepts → APIs</h2>
+<p><span class="tag now">Existing</span></p>
+<pre>exile with permission ─▶ ExileCastGrant {player, cost, this_turn, source,
+                          own_turn_only, waterbend, flash, any_mana,
+                          after_turn, foretold}       (GameState.cast_permissions)
+lock casting to hand  ─▶ HandOnly {player, until restricter's untap}
+                               │
+                               ├─▶ action enumerator: offer "cast from exile"
+                               ├─▶ hash, undo
+                               └─▶ observation: face_down only (foretell)</pre>
+
+<div class="mismatch"><p><strong>The mismatch.</strong> A permission is public game state (foretell is the exception), but only the offer list shows it, and only at moments when it can be used right now. That runs against the direction for the shared decision surface: a viewer should not have to work out a public rules fact for themselves. There is a precedent on the source's side: permanents already report <code>holds exile link</code>. The exiled card itself says nothing.</p></div>
+
+<p><span class="tag prop">Proposed</span></p>
+<pre>ExileCastGrant ──(viewer-safe projection)──▶ CardData.cast_permission
+    player       "Jack may cast this"
+    cost         "for {2}" | "by waterbending {X}" | own mana cost
+    window       "this turn" | "on your turn" | "on a later turn" | "while you control Hama"
+    flash, any_mana
+    foretold     → shown only to the owner; everyone else sees a face-down card
+
+HandOnly ──▶ PlayerData.cast_only_from_hand_until  "until Opponent's next turn"
+
+text-5:   "Rough Rhino Cavalry [exile]: you may cast it for {2}; blocked: hand-only until Opponent's next turn."
+Academy:  the same line on the exiled card, plus the lock on the player panel</pre>
+<div class="proposed"><p>Both views are derived state with no new record. They come from <code>Game::exile_grant</code> and the lock, so the enumerator and the viewer read the same facts. No action, offer or payment changes.</p></div>
+
+<h2>Normal path, failure, recovery</h2>
 <ul>
-<li>the rules-audit records <code>docs/rules/audit-2026-10/*</code>, which are dated evidence and stay unchanged;</li>
-<li>Uncle Iroh, whose cost reduction really does apply only to Lessons;</li>
-<li>a comment on <code>PlayerData.lesson_mana</code> explaining why the field has that name.</li>
+<li><strong>Normal:</strong> Iroh's "this turn" grant expires at cleanup and the line disappears. Hama's grant ends when Hama leaves, and the line goes with it.</li>
+<li><strong>Hidden-information failure:</strong> leaking a foretold card's grant would reveal that a face-down card can be cast for its foretell cost (and so hint at what it is). The projection hides it from anyone but the owner, just as <code>face_down</code> does today. A test can check it with the existing redaction fixture.</li>
+<li><strong>Stale object:</strong> after a card leaves exile its grant is stale. The projection follows <code>exile_grant</code>, which already compares incarnations, so nothing stale is shown.</li>
+<li><strong>What would break this:</strong> a grant that is meant to be hidden from the opponent. I could not find one among the TLA producers (airbend, Iroh, Zuko, Hama, Azula, foretell).</li>
 </ul>
 
-<h2>Card tests folder</h2>
-<p><code>managym/tests/cards.rs</code> → <code>cards/tla.rs</code> follows Jack Heart's 2026-10-29 direction, and its header says tests never gate support.</p>
-<div class="mismatch">Corrected in the working design: the record said "moving the existing <code>tests/rules/</code> files is T1's (Jack Heart)". Jack Heart's steer only says the files move. Giving that move to T1 is my reading, because the files (including the Toph and Dai Li Agents witnesses) come from T1's base. The record now says so.</div>
-
-<h2>Questions for your PR review</h2>
+<h2>Questions</h2>
 <ol class="q">
-<li>Who moves the old per-card files from <code>tests/rules/</code>:
-  a) T1, with T2 reconciling when it syncs (current reading)
-  b) T2 moves them now and T1 rebases</li>
-<li>Restricted-mana detail for agents, still open from the first pass:
-  a) only the total, labelled "Restricted mana", in text-5 (current)
-  b) a breakdown by restriction (needs capture/policy v5)</li>
+<li>How far should cast permissions and the hand-only lock go?
+  <ol>
+  <li>Observation JSON, text-5 and Academy, in T2. The policy tensor stays as it is. <em>(My recommendation: it fixes the human and LLM surfaces without touching the frozen v4 widths.)</em></li>
+  <li>The same, and the policy tensor too. That needs a new policy-input version, so it might be a separate Task.</li>
+  <li>Leave it: the offers are enough.</li>
+  </ol></li>
+<li>Who moves the existing per-card files out of <code>tests/rules/</code> (Toph, Dai Li Agents, TLA, Temur …)?
+  <ol><li>T1, with T2 reconciling when it syncs (the current reading)</li><li>T2 moves them now and T1 rebases</li></ol></li>
+<li>Restricted mana, still open from pass 1: the total is labelled "Restricted mana".
+  <ol><li>Keep the total only</li><li>Split by restriction (Lesson / Shrine / Ally) in text-5 and Academy only, the same projection shape as 1a</li><li>Also in the policy tensor</li></ol></li>
 </ol>
 </main></body></html>

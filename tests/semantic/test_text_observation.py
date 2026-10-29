@@ -8,8 +8,11 @@ from managym.decision import SemanticContractError
 from managym.decision_capture import DecisionInput
 import pytest
 
+from manabot.env.observation import CARD_PERMISSION_INDEX, ObservationSpace
+from manabot.infra.config import ObservationConfig
 from manabot.semantic.text_observation import (
     RepresentationOverflow,
+    TextDecision,
     TextEncodingError,
     capture_text_decision,
     render_decision,
@@ -208,3 +211,43 @@ def test_ally_restricted_mana_is_not_described_as_lesson_mana() -> None:
     text = capture_text_decision(env).text
     assert "Restricted mana: W 0, U 0, B 0, R 0, G 1, C 0." in text
     assert "Lesson-only" not in text and "Lesson spending" not in text
+    assert "Restricted mana for Ally spells or abilities of Ally sources: G 1." in text
+
+
+def _viewer_observation(decision: TextDecision) -> managym.Observation:
+    source = DecisionInput.model_validate_json(decision.capture_json)
+    return managym.Observation.from_json(json.dumps(source.observation.viewer_state))
+
+
+def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
+    """Text and both encoders show the owner its foretold card and terms; the
+    opponent's text, JSON and tensor hold no trace beyond the exile count."""
+    env = priority_root(("Sozin's Comet",), ("Mountain", "Mountain"))
+    decision = capture_text_decision(env)
+    foretell = next(a for a in decision.actions if "Foretell" in a.description)
+    submit_response(env, decision, foretell.reference)
+
+    owner = capture_text_decision(env)
+    assert "foretold, face down" in owner.text
+    assert "may be played from exile by You: cast for {2}{R}, only after turn" in (
+        owner.text
+    )
+    space = ObservationSpace(ObservationConfig())
+    owner_rows = space.encode(_viewer_observation(owner))["agent_cards"]
+    assert owner_rows[:, CARD_PERMISSION_INDEX + 11].sum() == 1
+
+    pass_priority = next(a for a in owner.actions if "Pass" in a.description)
+    submit_response(env, owner, pass_priority.reference)
+    opponent = capture_text_decision(env)
+    # The opponent's deck holds Comets too; none of the owner's may show.
+    assert not any(
+        "(Sozin's Comet)" in line and "owner Opponent" in line
+        for line in opponent.text.splitlines()
+    )
+    assert "foretold" not in opponent.text
+    observation = _viewer_observation(opponent)
+    assert all(card.name != "Sozin's Comet" for card in observation.opponent_cards)
+    assert observation.opponent.zone_counts[5] == 1
+    encoded = space.encode(observation)
+    for key in ("agent_cards", "opponent_cards"):
+        assert not encoded[key][:, CARD_PERMISSION_INDEX].any()
