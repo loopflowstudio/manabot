@@ -305,10 +305,6 @@ impl Game {
         }
     }
 
-    pub(crate) fn casts_only_from_hand(&self, player: PlayerId) -> bool {
-        self.hand_only_until(player).is_some()
-    }
-
     /// The grants naming this exact card while it is in exile. Producers
     /// exile a new object for every grant, so a card holds at most one.
     fn grants_naming(&self, card: CardId) -> impl Iterator<Item = &ExileCastGrant> {
@@ -340,15 +336,6 @@ impl Game {
                     })
                 })
         })
-    }
-
-    /// The cost `player` may pay to cast `card` from exile. Hand-only
-    /// restrictions stop casting, not land plays.
-    pub(crate) fn exile_cast_cost(&self, player: PlayerId, card: CardId) -> Option<ManaCost> {
-        if self.casts_only_from_hand(player) {
-            return None;
-        }
-        self.grant_cast_cost(self.exile_grant(player, card)?, card)
     }
 
     /// What casting `card` under `grant` costs: its foretell cost, the
@@ -398,7 +385,8 @@ impl Game {
     }
 
     /// Whether `player` may play `card` from where it is now: their hand,
-    /// a graveyard casting cost, or an exile grant (lands included).
+    /// a graveyard casting cost, or an exile grant. A granted land play is
+    /// not a cast, so a hand-only restriction does not stop it.
     pub(crate) fn may_play_from_zone(&self, player: PlayerId, card: CardId) -> bool {
         if self.state.zones.contains(card, ZoneType::Hand, player) {
             return true;

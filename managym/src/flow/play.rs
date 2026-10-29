@@ -63,7 +63,6 @@ impl Game {
         let definition = &self.state.cards[card];
         if !definition.types.is_spell()
             || !self.state.zones.contains(card, ZoneType::Graveyard, player)
-            || self.casts_only_from_hand(player)
         {
             return None;
         }
@@ -82,11 +81,15 @@ impl Game {
     }
 
     /// The cost `player` may pay to cast `card` from outside their hand:
-    /// graveyard flashback or an exact-object exile grant.
+    /// graveyard flashback or an exact-object exile grant. A hand-only
+    /// restriction overrides both.
     pub(crate) fn zone_cast_cost(&self, player: PlayerId, card: CardId) -> Option<ManaCost> {
+        if self.hand_only_until(player).is_some() {
+            return None;
+        }
         match self.state.zones.zone_of(card)? {
             ZoneType::Graveyard => self.flashback_cost(player, card),
-            ZoneType::Exile => self.exile_cast_cost(player, card),
+            ZoneType::Exile => self.grant_cast_cost(self.exile_grant(player, card)?, card),
             _ => None,
         }
     }

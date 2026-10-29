@@ -39,7 +39,7 @@ worktree, so new T2 cards read "unsupported" in this base until T1 lands.
   — exact-`ObjectRef` exile grants (stale once the card leaves exile) and
   `HandOnly` restrictions that override every non-hand permission until the
   restricter's next untap. `Game::zone_cast_cost` is the one non-hand cost
-  authority (graveyard flashback, exile grants). Hash omits the field when empty.
+  authority (graveyard flashback, exile grants) and applies `HandOnly`. Hash omits the field when empty.
 - Airbend = opcodes 66 `airbend {target}`, 67 `airbend_all {except, predicate}`
   (inside a target clause; spares the chosen target), 68
   `opponents_cast_only_from_hand`. `Exile {target: "source"}` exiles the resolving
@@ -164,5 +164,6 @@ priority scans; one combined regular+combat restricted pool for observations;
 activations (card offers had skipped the life check); permanent offers build
 their `Payment` once; suspended-decision spaces share `select_cards`/`card_focus`;
 `count_battlefield_matching` serves affinity, activation reduction and
-`EffectValue::BattlefieldMatching`. Last: debug `--lib`/`cards`/`rules_tests`
+`EffectValue::BattlefieldMatching`; `zone_cast_cost` alone applies the
+hand-only override. Last: debug `--lib`/`cards`/`rules_tests`
 121/293/131 pass, clippy `--all-targets` clean. Authoring layer left for T1.
