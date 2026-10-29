@@ -1,5 +1,4 @@
-//! Current TLA cards and their fixed tokens.
-//! Edit these typed definitions; `semantic::compile` lowers them in process.
+//! Avatar: The Last Airbender cards and the tokens they make.
 use crate::state::{
     ability::{
         Ability, Effect, EffectValue, LinkedChooser, LinkedGrant, MilledBonus, PaymentCost,
@@ -798,30 +797,7 @@ fn barrels_of_blasting_jelly() -> CardDefinition {
             ActivatedAbilityDefinition {
                 once_each_turn: true,
                 mana_cost: ManaCost::parse("{1}"),
-                effects: vec![Effect::Modal {
-                    modes: vec![
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("W"),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("U"),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("B"),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("R"),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("G"),
-                            until_end_of_combat: false,
-                        }],
-                    ],
-                }],
+                effects: vec![one_mana_of_any_color(None)],
                 ..Default::default()
             },
             ActivatedAbilityDefinition {
@@ -2376,143 +2352,12 @@ fn hermitic_herbalist() -> CardDefinition {
         activated_abilities: vec![
             ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![Effect::Modal {
-                    modes: vec![
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("W"),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("U"),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("B"),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("R"),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("G"),
-                            until_end_of_combat: false,
-                        }],
-                    ],
-                }],
+                effects: vec![one_mana_of_any_color(None)],
                 ..Default::default()
             },
             ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![Effect::Modal {
-                    modes: vec![
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::spell(["Lesson"]),
-                                [2, 0, 0, 0, 0, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::spell(["Lesson"]),
-                                [1, 1, 0, 0, 0, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::spell(["Lesson"]),
-                                [1, 0, 1, 0, 0, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::spell(["Lesson"]),
-                                [1, 0, 0, 1, 0, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::spell(["Lesson"]),
-                                [1, 0, 0, 0, 1, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::spell(["Lesson"]),
-                                [0, 2, 0, 0, 0, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::spell(["Lesson"]),
-                                [0, 1, 1, 0, 0, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::spell(["Lesson"]),
-                                [0, 1, 0, 1, 0, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::spell(["Lesson"]),
-                                [0, 1, 0, 0, 1, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::spell(["Lesson"]),
-                                [0, 0, 2, 0, 0, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::spell(["Lesson"]),
-                                [0, 0, 1, 1, 0, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::spell(["Lesson"]),
-                                [0, 0, 1, 0, 1, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::spell(["Lesson"]),
-                                [0, 0, 0, 2, 0, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::spell(["Lesson"]),
-                                [0, 0, 0, 1, 1, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::spell(["Lesson"]),
-                                [0, 0, 0, 0, 2, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                    ],
-                }],
+                effects: vec![two_mana_in_any_combination(ManaUse::spell(["Lesson"]))],
                 ..Default::default()
             },
         ],
@@ -2715,45 +2560,10 @@ fn jasmine_dragon_tea_shop() -> CardDefinition {
         activated_abilities: vec![
             ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![Effect::Modal {
-                    modes: vec![
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::new(["Ally"], ["Ally"]),
-                                [1, 0, 0, 0, 0, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::new(["Ally"], ["Ally"]),
-                                [0, 1, 0, 0, 0, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::new(["Ally"], ["Ally"]),
-                                [0, 0, 1, 0, 0, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::new(["Ally"], ["Ally"]),
-                                [0, 0, 0, 1, 0, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::new(["Ally"], ["Ally"]),
-                                [0, 0, 0, 0, 1, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                    ],
-                }],
+                effects: vec![one_mana_of_any_color(Some(ManaUse::new(
+                    ["Ally"],
+                    ["Ally"],
+                )))],
                 ..Default::default()
             },
             ActivatedAbilityDefinition {
@@ -3940,30 +3750,7 @@ fn rumble_arena() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,
             mana_cost: ManaCost::parse("{1}"),
-            effects: vec![Effect::Modal {
-                modes: vec![
-                    vec![Effect::AddMana {
-                        mana: Mana::parse("W"),
-                        until_end_of_combat: false,
-                    }],
-                    vec![Effect::AddMana {
-                        mana: Mana::parse("U"),
-                        until_end_of_combat: false,
-                    }],
-                    vec![Effect::AddMana {
-                        mana: Mana::parse("B"),
-                        until_end_of_combat: false,
-                    }],
-                    vec![Effect::AddMana {
-                        mana: Mana::parse("R"),
-                        until_end_of_combat: false,
-                    }],
-                    vec![Effect::AddMana {
-                        mana: Mana::parse("G"),
-                        until_end_of_combat: false,
-                    }],
-                ],
-            }],
+            effects: vec![one_mana_of_any_color(None)],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -5128,74 +4915,15 @@ fn white_lotus_hideout() -> CardDefinition {
         activated_abilities: vec![
             ActivatedAbilityDefinition {
                 tap_source: true,
-                effects: vec![Effect::Modal {
-                    modes: vec![
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::spell(["Lesson", "Shrine"]),
-                                [1, 0, 0, 0, 0, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::spell(["Lesson", "Shrine"]),
-                                [0, 1, 0, 0, 0, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::spell(["Lesson", "Shrine"]),
-                                [0, 0, 1, 0, 0, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::spell(["Lesson", "Shrine"]),
-                                [0, 0, 0, 1, 0, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::restricted_to(
-                                ManaUse::spell(["Lesson", "Shrine"]),
-                                [0, 0, 0, 0, 1, 0],
-                            ),
-                            until_end_of_combat: false,
-                        }],
-                    ],
-                }],
+                effects: vec![one_mana_of_any_color(Some(ManaUse::spell([
+                    "Lesson", "Shrine",
+                ])))],
                 ..Default::default()
             },
             ActivatedAbilityDefinition {
                 tap_source: true,
                 mana_cost: ManaCost::parse("{1}"),
-                effects: vec![Effect::Modal {
-                    modes: vec![
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("W"),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("U"),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("B"),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("R"),
-                            until_end_of_combat: false,
-                        }],
-                        vec![Effect::AddMana {
-                            mana: Mana::parse("G"),
-                            until_end_of_combat: false,
-                        }],
-                    ],
-                }],
+                effects: vec![one_mana_of_any_color(None)],
                 ..Default::default()
             },
         ],
@@ -5442,4 +5170,56 @@ fn zuko_s_exile() -> CardDefinition {
         text_box: text_box.into(),
         ..Default::default()
     }
+}
+
+// ---- Mana constructors ----
+
+/// The colored slots of `Mana::mana`, in WUBRG order; slot 5 is colorless.
+const COLOR_SLOTS: std::ops::Range<usize> = 0..5;
+
+/// Mana of `amounts` by slot, restricted to `spend` when set (CR 106.6).
+fn mana_of(amounts: [u8; 6], spend: Option<ManaUse>) -> Mana {
+    match spend {
+        Some(spend) => Mana::restricted_to(spend, amounts),
+        None => Mana {
+            mana: amounts,
+            ..Mana::default()
+        },
+    }
+}
+
+/// A modal mana effect with one mode per amount it may add.
+fn add_one_of(options: impl Iterator<Item = Mana>) -> Effect {
+    Effect::Modal {
+        modes: options
+            .map(|mana| {
+                vec![Effect::AddMana {
+                    mana,
+                    until_end_of_combat: false,
+                }]
+            })
+            .collect(),
+    }
+}
+
+/// "Add one mana of any color": one mode per color, W through G.
+fn one_mana_of_any_color(spend: Option<ManaUse>) -> Effect {
+    add_one_of(COLOR_SLOTS.map(|slot| {
+        let mut amounts = [0; 6];
+        amounts[slot] = 1;
+        mana_of(amounts, spend)
+    }))
+}
+
+/// "Add two mana in any combination of colors": one mode per unordered pair
+/// (WW, WU, ..., GG), each restricted to `spend`.
+fn two_mana_in_any_combination(spend: ManaUse) -> Effect {
+    add_one_of(COLOR_SLOTS.flat_map(|first| {
+        (first..COLOR_SLOTS.end).map(move |second| {
+            let mut amounts = [0; 6];
+            amounts[first] += 1;
+            amounts[second] += 1;
+            mana_of(amounts, Some(spend))
+        })
+    }))
 }

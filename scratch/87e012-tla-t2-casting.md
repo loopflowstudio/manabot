@@ -51,4 +51,6 @@ Restricted-mana text names the class, not Lesson-only (`ee9e32383`).
 
 ## Check
 
+2026-10-29 compress: removed orphaned `tests/support/casting.rs`; TLA any-color/two-color mana modes use `one_mana_of_any_color`/`two_mana_in_any_combination` (same mode order). Debug `cargo test --test cards` 303, rules 131 + 2 ignored, content_pack 3; clippy `-D warnings` clean.
+
 2026-10-29 after syncing T1 `8790821da`: debug `cargo test --no-fail-fast` passes except the known semantic-conformance pair (cards 303, rules 131 + 2 ignored, lib 121); clippy `-D warnings` with and without `python` and fmt clean; pytest env/observation, continuation input, experience protocol, play modes, optional payments, text observation 123 pass. Arena admission suite left for gate.
