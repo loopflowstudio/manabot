@@ -98,4 +98,5 @@ files into `tests/cards/` stays T1's (Jack Heart, 2026-10-29).
 2026-10-29 at `35404b274`: debug `cargo test --no-fail-fast` passes except the
 pre-existing semantic-conformance pair; clippy and fmt clean. Text v5:
 `pytest tests/semantic/test_text_observation.py` 16 passed.
-Academy README says "spending restrictions" (was "Lesson restrictions").
+Academy README and the policy column table in `docs/recent-events.md` name
+spending restrictions, not Lesson.

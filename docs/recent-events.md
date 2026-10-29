@@ -167,13 +167,13 @@ and frozen-world design.
 
 Each frame contributes a header, followed by ordered target, trigger-context,
 reserved-sacrifice, hybrid-cost and mana-output rows. Mana-output rows reuse
-the mode, mana amounts and Lesson flag columns for each possible output. Columns are:
+the mode, mana amounts and spending-restriction flag columns for each possible output. Columns are:
 
 | Columns | Meaning |
 | --- | --- |
 | 0–4 | Row kind; frame and parent ordinals (one-based); frame kind; controller role |
 | 5–10 | Source definition and object link (one-based); mode, ability, kicker, active clause |
-| 11–21 | Cost present; W/U/B/R/G/C/generic amounts; Lesson restriction; waterbend; decline allowed |
+| 11–21 | Cost present; W/U/B/R/G/C/generic amounts; restricted mana may pay (column name `lesson`); waterbend; decline allowed |
 | 22–29 | Target clause; target definition, object link and player role; hybrid colors; suspended decision kind; target ordinal |
 | 30–31 | Ability resolutions this turn; row validity |
 | 32 (v4 only) | Target legality at resolution start: 0 unknown/not evaluated, 1 legal, 2 illegal |
