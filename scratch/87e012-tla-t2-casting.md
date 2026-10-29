@@ -74,8 +74,9 @@ worktree, so new T2 cards read "unsupported" in this base until T1 lands.
 ## Done (`648edee6b`…`2673c95cd`; foretell `1144d0f32`; control `431a31f65`)
 
 All 51 T2 cards are defined and none is in `tla::INCOMPLETE` for T2
-behavior (2026-10-29, against `allocation.jsonl`). Each has a witness in
-`tests/cards/tla.rs` and a Scryfall fixture entry (`scratch/add_fixture.py`).
+behavior (2026-10-29, against `allocation.jsonl`). Each has a Scryfall fixture
+entry and a witness in `tests/cards/tla.rs`, except Toph, the Blind Bandit and
+Dai Li Agents, whose witnesses sit in `tests/rules/elemental_cards.rs` (T1 moves).
 
 ## Base: T1
 
