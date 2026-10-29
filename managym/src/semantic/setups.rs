@@ -375,8 +375,7 @@ mod tests {
         let pack = authored_pack("jeong_increment").unwrap();
         let player_configs = configs(pack, "ur_lessons", "gw_allies_jeong");
         let error = select(&player_configs, &[pack.clone(), pack.clone()])
-            .err()
-            .expect("ambiguous catalog must fail closed");
+            .expect_err("ambiguous catalog must fail closed");
         assert!(error.to_string().contains("catalog is ambiguous"));
     }
 

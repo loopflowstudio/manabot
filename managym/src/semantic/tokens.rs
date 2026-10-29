@@ -565,3 +565,63 @@ impl ser::SerializeStructVariant for Compound<'_, '_> {
         self.end_struct()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cards::content_pack::default_content_pack;
+
+    #[test]
+    fn learning_schema_numbers_the_engine_kinds() {
+        let schema: serde_json::Value = serde_json::from_str(include_str!(
+            "../../../content/semantic/current/learning_schema.json"
+        ))
+        .unwrap();
+        let kinds = [
+            ("structure", TokenKind::Structure),
+            ("field", TokenKind::Field),
+            ("variant", TokenKind::Variant),
+            ("integer", TokenKind::Integer),
+            ("boolean", TokenKind::Boolean),
+            ("text", TokenKind::Text),
+            ("definition_ref", TokenKind::DefinitionRef),
+            ("null", TokenKind::Null),
+            ("program_kind", TokenKind::ProgramKind),
+        ];
+        for (name, kind) in kinds {
+            assert_eq!(schema["token_kinds"][name], kind as u16, "{name}");
+        }
+        let programs = [
+            ("triggered", ProgramKind::Triggered),
+            ("mana", ProgramKind::Mana),
+            ("triggered_mana", ProgramKind::TriggeredMana),
+            ("activated", ProgramKind::Activated),
+            ("spell", ProgramKind::Spell),
+        ];
+        for (name, kind) in programs {
+            assert_eq!(schema["program_kinds"][name], kind as i32, "{name}");
+        }
+    }
+
+    #[test]
+    fn default_catalog_spans_every_definition_and_resolves_token_references() {
+        let pack = default_content_pack();
+        let catalog = learning_catalog(&pack).unwrap();
+        assert_eq!(catalog.definition_offsets.len(), pack.len() + 1);
+        assert_eq!(
+            catalog.definition_ref_source_tokens.len(),
+            catalog.definition_ref_target_rows.len()
+        );
+        for (&source, &row) in catalog
+            .definition_ref_source_tokens
+            .iter()
+            .zip(&catalog.definition_ref_target_rows)
+        {
+            assert_eq!(
+                catalog.token_kind[source as usize],
+                TokenKind::DefinitionRef as u16
+            );
+            assert!(pack.definition(CardDefId(row as u32)).unwrap().is_token);
+        }
+    }
+}
