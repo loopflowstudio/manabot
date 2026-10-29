@@ -245,7 +245,7 @@ impl Game {
                     continue;
                 }
                 let affordable = if ability.waterbend {
-                    self.can_pay_with_waterbend(player, &ability.mana_cost)
+                    self.can_pay_waterbend_activation(player, permanent_id, &ability)
                 } else {
                     self.can_pay_announced_activation(
                         player,
@@ -524,6 +524,7 @@ impl Game {
                 permanent,
                 ability_index,
                 remaining_generic,
+                ..
             } => {
                 let cost = self.state.permanents[*permanent]
                     .as_ref()
@@ -534,7 +535,12 @@ impl Game {
                     })
                     .map(|ability| ability.mana_cost.clone())?;
                 let remainder = cost.with_generic(*remaining_generic);
-                let candidates = self.waterbend_candidates(*player);
+                let candidates =
+                    self.waterbend_activation_candidates(*player, *permanent, *ability_index);
+                let taps_source = self
+                    .activated_abilities_for(*permanent)
+                    .get(*ability_index)
+                    .is_some_and(|ability| ability.tap_source);
 
                 let mut actions = self.mana_ability_actions(*player, None);
                 for candidate in &candidates {
@@ -542,6 +548,9 @@ impl Game {
                     let after_tap = remainder.reduced_generic(1);
                     let mut probe = self.clone();
                     probe.tap_permanent(*candidate, false);
+                    if taps_source {
+                        probe.tap_permanent(*permanent, false);
+                    }
                     if probe.can_pay_with_waterbend(*player, &after_tap) {
                         actions.push(Action::WaterbendTap {
                             player: *player,

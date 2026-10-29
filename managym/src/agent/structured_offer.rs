@@ -864,6 +864,7 @@ impl Game {
             permanent,
             ability_index,
             remaining_generic,
+            ..
         }) = self.pending_choice
         else {
             return Err(StructuredOfferError::WrongDecision);
@@ -876,7 +877,7 @@ impl Game {
         {
             return Ok(None);
         }
-        let legal_taps = self.waterbend_candidates(player);
+        let legal_taps = self.waterbend_activation_candidates(player, permanent, ability_index);
         if legal_taps.iter().any(|id| {
             self.state.permanents[*id]
                 .as_ref()

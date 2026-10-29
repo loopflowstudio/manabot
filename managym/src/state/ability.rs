@@ -239,6 +239,10 @@ pub enum Effect {
     OpponentsCastOnlyFromHand,
     /// "Exile the top card of your library. You may play that card this turn."
     ExileTopCardPlayThisTurn,
+    /// Sacrifice the exact source permanent; only if that happened, run `then`.
+    SacrificeSource {
+        then: Vec<Effect>,
+    },
     /// The resolving spell exiles itself instead of going to the graveyard.
     ExileSourceSpell,
     BuffTargetValue {
@@ -442,6 +446,10 @@ pub enum Effect {
     UntapTarget {
         target: TargetSpec,
     },
+    /// Tap the target (not for mana).
+    TapTarget {
+        target: TargetSpec,
+    },
     /// The target gains the set keywords until end of turn.
     GrantKeywordsToTarget {
         keywords: Keywords,
@@ -604,7 +612,7 @@ impl Effect {
             Effect::Earthbend { target, .. } => Some(target),
             Effect::ExileUntilSourceLeaves { target } => Some(target),
             Effect::BuffTarget { target, .. } => Some(target),
-            Effect::UntapTarget { target } => Some(target),
+            Effect::UntapTarget { target } | Effect::TapTarget { target } => Some(target),
             Effect::GrantKeywordsToTarget { target, .. } => Some(target),
             Effect::OnNthResolutionThisTurn { effect, .. } => effect.target_spec(),
             Effect::OptionalPayment {
@@ -619,7 +627,7 @@ impl Effect {
                 .iter()
                 .chain(otherwise.iter())
                 .find_map(|effect| effect.target_spec()),
-            Effect::IfTargetMatches { then, .. } => {
+            Effect::IfTargetMatches { then, .. } | Effect::SacrificeSource { then } => {
                 then.iter().find_map(|effect| effect.target_spec())
             }
             Effect::CreateNonlegendaryCopy

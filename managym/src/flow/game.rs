@@ -143,6 +143,8 @@ pub enum PendingChoice {
         /// Generic mana still owed (colored components are paid with mana
         /// at the end).
         remaining_generic: u8,
+        /// The ability's chosen target, if it has one.
+        target: Option<Target>,
     },
 }
 

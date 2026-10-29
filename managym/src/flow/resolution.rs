@@ -449,6 +449,13 @@ impl Game {
                 self.restrict_opponent_to_hand(frame.controller);
                 None
             }
+            Effect::SacrificeSource { then } => {
+                if let Some(permanent_id) = self.source_permanent_id(frame) {
+                    self.sacrifice_permanent(permanent_id);
+                    frame.prepend_effects(then.iter().cloned());
+                }
+                None
+            }
             Effect::ExileTopCardPlayThisTurn => {
                 self.exile_top_card_play_this_turn(frame.controller);
                 None
@@ -965,6 +972,12 @@ impl Game {
                         let controller = permanent.controller;
                         self.invalidate_mana_cache(controller);
                     }
+                }
+                None
+            }
+            Effect::TapTarget { .. } => {
+                if let Some(Target::Permanent(permanent_id)) = self.present_primary_target(frame) {
+                    self.tap_permanent(permanent_id, false);
                 }
                 None
             }

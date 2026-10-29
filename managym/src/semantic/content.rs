@@ -899,9 +899,9 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             count: usize_value(program, *count, "scry count")?,
         },
         Step::Tap { target } if target == "source" => Effect::TapSource,
-        Step::Tap { target } => {
-            return unsupported(program, &format!("cannot tap target {target:?}"))
-        }
+        Step::Tap { target } => Effect::TapTarget {
+            target: target_for(program, target)?,
+        },
         Step::Untap { target } if target == "source" => Effect::UntapSource,
         Step::Untap { target } => Effect::UntapTarget {
             target: target_for(program, target)?,
@@ -1100,6 +1100,9 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
         }
         Step::OpponentsCastOnlyFromHand => Effect::OpponentsCastOnlyFromHand,
         Step::ExileTopCardPlayThisTurn => Effect::ExileTopCardPlayThisTurn,
+        Step::SacrificeSource { then } => Effect::SacrificeSource {
+            then: lower_steps(pack, program, then)?,
+        },
         Step::BuffTargetValue {
             power,
             toughness,

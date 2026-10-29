@@ -341,6 +341,11 @@ pub enum Op {
     OpponentsCastOnlyFromHand,
     /// "Exile the top card of your library. You may play that card this turn."
     ExileTopCardPlayThisTurn,
+    /// "Sacrifice this [permanent]. If you do, [then]." Nothing happens when
+    /// the exact source already left the battlefield.
+    SacrificeSource {
+        then: Vec<Op>,
+    },
     /// Without a destination, a basic land onto the battlefield tapped. With
     /// `Hand`, any card of `subtype` is revealed and put into hand
     /// (landcycling: "search your library for a Plains card").

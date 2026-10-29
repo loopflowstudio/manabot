@@ -152,6 +152,8 @@ pub(super) fn cards() -> Vec<Card> {
         airbenders_reversal(),
         avatars_wrath(),
         zuko_exiled_prince(),
+        aang_s_iceberg(),
+        north_pole_patrol(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -4691,6 +4693,108 @@ fn zuko_exiled_prince() -> Card {
             .cost(Cost::mana("{3}")),
         ],
         registry_name: "Zuko, Exiled Prince",
+        text_box,
+    }
+}
+
+fn aang_s_iceberg() -> Card {
+    let text_box = "Flash\nWhen this enchantment enters, exile up to one other target nonland permanent until this enchantment leaves the battlefield.\nWaterbend {3}: Sacrifice this enchantment. If you do, scry 2. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{W}"),
+            types: vec![CardType::Enchantment],
+            keywords: Some(vec![Keyword::Flash]),
+            ..Default::default()
+        },
+        key: "tla.aang_s_iceberg",
+        programs: vec![
+            Program::new(
+                "freeze",
+                ProgramKind::Triggered,
+                vec![Op::TargetClause {
+                    role: "frozen",
+                    body: vec![Op::ExileUntilSourceLeaves {
+                        target: "current_target",
+                    }],
+                }],
+            )
+            .targets(vec![Target {
+                min: 0,
+                another: true,
+                ..Target::one("frozen", nonland_permanent())
+            }])
+            .trigger(Trigger::new(Event::EntersBattlefield, Subject::This)),
+            Program::new(
+                "thaw",
+                ProgramKind::Activated,
+                vec![Op::SacrificeSource {
+                    then: vec![Op::Scry { count: 2 }],
+                }],
+            )
+            .cost(Cost {
+                mana: Some("{3}"),
+                waterbend: Some(true),
+                ..Default::default()
+            }),
+        ],
+        registry_name: "Aang's Iceberg",
+        text_box,
+    }
+}
+
+fn north_pole_patrol() -> Card {
+    let text_box = "{T}: Untap another target permanent you control.\nWaterbend {3}, {T}: Tap target creature an opponent controls. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{2}{U}"),
+            subtypes: Some(vec!["Human", "Soldier", "Ally"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(2)),
+            toughness: Some(3),
+            ..Default::default()
+        },
+        key: "tla.north_pole_patrol",
+        programs: vec![
+            Program::new(
+                "untap",
+                ProgramKind::Activated,
+                vec![Op::Untap {
+                    target: "permanent",
+                }],
+            )
+            .cost(Cost {
+                mana: Some("0"),
+                tap_source: Some(true),
+                ..Default::default()
+            })
+            .targets(vec![Target {
+                another: true,
+                ..Target::one(
+                    "permanent",
+                    Selector::PermanentYouControl {
+                        predicate: Predicate::Any,
+                    },
+                )
+            }]),
+            Program::new(
+                "tap",
+                ProgramKind::Activated,
+                vec![Op::Tap { target: "creature" }],
+            )
+            .cost(Cost {
+                mana: Some("{3}"),
+                tap_source: Some(true),
+                waterbend: Some(true),
+                ..Default::default()
+            })
+            .targets(vec![Target::one(
+                "creature",
+                Selector::CreatureOpponentControls,
+            )]),
+        ],
+        registry_name: "North Pole Patrol",
         text_box,
     }
 }

@@ -380,6 +380,7 @@
     "return_to_hand": 14,
     "return_to_hand_draw_if_controlled": 30,
     "sacrifice": 52,
+    "sacrifice_source": 70,
     "scry": 7,
     "search_basic_land": 24,
     "search_basic_lands": 51,

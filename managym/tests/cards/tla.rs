@@ -1243,3 +1243,94 @@ fn iroh_grand_lotus_firebends_two_when_attacking() {
         managym::state::mana::Mana::parse("RR")
     );
 }
+
+/// Aang's Iceberg exiles another nonland permanent until it leaves. Its
+/// waterbend ability sacrifices it on resolution — the exiled card returns —
+/// and scries 2 only if that sacrifice happened.
+#[test]
+fn aangs_iceberg_exiles_until_it_leaves_and_scries_only_if_sacrificed() {
+    let mut s = setup(&["Aang's Iceberg", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let ogre_card = card_of(&s, ogre);
+    cast(&mut s, "Aang's Iceberg");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    let iceberg = s.battlefield_permanents_named(0, "Aang's Iceberg")[0];
+    assert!(!offered_targets(&s).contains(&Target::Permanent(iceberg)));
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, ogre_card), Some(ZoneType::Exile));
+
+    // Two activations on the stack: the first sacrifices and scries, the
+    // second finds no Iceberg and does nothing.
+    activate(&mut s, iceberg, 0);
+    if s.action_space().kind != ActionSpaceKind::Priority {
+        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    }
+    activate(&mut s, iceberg, 0);
+    if s.action_space().kind != ActionSpaceKind::Priority {
+        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    }
+    assert_eq!(s.game().state.stack_objects.len(), 2);
+    let mut scries = 0;
+    for _ in 0..40 {
+        if s.action_space().kind == ActionSpaceKind::Priority
+            && s.game().state.stack_objects.is_empty()
+        {
+            break;
+        }
+        if s.action_space().kind == ActionSpaceKind::Scry {
+            scries += 1;
+            while s.action_space().kind == ActionSpaceKind::Scry {
+                s.step_action(0);
+            }
+            continue;
+        }
+        s.pass_priority();
+    }
+    assert_eq!(scries, 1);
+    assert_eq!(zone_of(&s, ogre_card), Some(ZoneType::Battlefield));
+    assert!(s
+        .battlefield_permanents_named(0, "Aang's Iceberg")
+        .is_empty());
+}
+
+/// North Pole Patrol untaps another permanent you control, and its waterbend
+/// ability taps an opposing creature; the Patrol's own {T} cannot also help
+/// pay the waterbend cost.
+#[test]
+fn north_pole_patrol_untaps_another_and_waterbends_to_tap_an_opponent() {
+    let mut s = setup(&["North Pole Patrol", "Gray Ogre"]);
+    let patrol = s.force_permanent_on_battlefield(0, "North Pole Patrol");
+    let own = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let foe = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    ready(&mut s, patrol);
+    s.game_mut().state.permanents[own].as_mut().unwrap().tapped = true;
+    // Abilities index in program key order: "tap" (0) before "untap" (1).
+    activate(&mut s, patrol, 1);
+    let targets = offered_targets(&s);
+    assert!(!targets.contains(&Target::Permanent(patrol)));
+    assert!(!targets.contains(&Target::Permanent(foe)));
+    assert!(s.choose_target(Target::Permanent(own)));
+    settle(&mut s);
+    assert!(!s.game().state.permanents[own].as_ref().unwrap().tapped);
+
+    s.game_mut().state.permanents[patrol]
+        .as_mut()
+        .unwrap()
+        .tapped = false;
+    s.set_player_mana_pool(0, "2");
+    activate(&mut s, patrol, 0);
+    assert_eq!(offered_targets(&s), vec![Target::Permanent(foe)]);
+    assert!(s.choose_target(Target::Permanent(foe)));
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);
+    assert!(!s
+        .action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == patrol)));
+    assert!(s.choose_waterbend_tap(own));
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    settle(&mut s);
+    assert!(s.game().state.permanents[foe].as_ref().unwrap().tapped);
+    assert_eq!(pool(&s).total(), 0);
+}

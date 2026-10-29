@@ -659,18 +659,38 @@ impl Game {
 
         // Waterbend costs open a payment sub-decision instead of paying
         // directly (the generic part may be paid by tapping permanents).
-        let generic = ability.mana_cost.generic();
-        if ability.waterbend && generic > 0 {
-            self.pending_choice = Some(PendingChoice::Waterbend {
-                player,
-                permanent: permanent_id,
-                ability_index,
-                remaining_generic: generic,
-            });
+        if self.begin_waterbend(player, source, ability_index, &ability, None) {
             return Ok(());
         }
-
         self.begin_activation_payment(player, source, ability_index, Vec::new())
+    }
+
+    /// Waterbend costs open a payment sub-decision instead of paying directly
+    /// (the generic part may be paid by tapping permanents). Returns whether
+    /// it opened.
+    fn begin_waterbend(
+        &mut self,
+        player: PlayerId,
+        source: ActivationSource,
+        ability_index: usize,
+        ability: &ActivatedAbilityDefinition,
+        target: Option<Target>,
+    ) -> bool {
+        let generic = ability.mana_cost.generic();
+        let ActivationSource::Permanent(permanent) = source else {
+            return false;
+        };
+        if !ability.waterbend || generic == 0 {
+            return false;
+        }
+        self.pending_choice = Some(PendingChoice::Waterbend {
+            player,
+            permanent,
+            ability_index,
+            remaining_generic: generic,
+            target,
+        });
+        true
     }
 
     /// Activate an ability of a card in `player`'s hand or graveyard. Only
@@ -837,6 +857,11 @@ impl Game {
                 .contains(&target)
         {
             return Err(AgentError("illegal activated target".into()));
+        }
+        if let Some(ability) = self.activation_ability(source, ability_index) {
+            if self.begin_waterbend(player, source, ability_index, &ability, Some(target)) {
+                return Ok(());
+            }
         }
         self.begin_activation_payment(player, source, ability_index, vec![target])
     }
@@ -1070,6 +1095,40 @@ impl Game {
             .collect()
     }
 
+    /// Waterbend candidates for `source`'s ability: a source whose ability
+    /// also costs {T} cannot tap for both.
+    pub(crate) fn waterbend_activation_candidates(
+        &self,
+        player: PlayerId,
+        source: PermanentId,
+        ability_index: usize,
+    ) -> Vec<PermanentId> {
+        let taps_source = self
+            .activated_abilities_for(source)
+            .get(ability_index)
+            .is_some_and(|ability| ability.tap_source);
+        let mut candidates = self.waterbend_candidates(player);
+        if taps_source {
+            candidates.retain(|candidate| *candidate != source);
+        }
+        candidates
+    }
+
+    /// Can `source`'s waterbend ability be paid, its own {T} included?
+    pub(crate) fn can_pay_waterbend_activation(
+        &self,
+        player: PlayerId,
+        source: PermanentId,
+        ability: &ActivatedAbilityDefinition,
+    ) -> bool {
+        if !ability.tap_source {
+            return self.can_pay_with_waterbend(player, &ability.mana_cost);
+        }
+        let mut probe = self.clone();
+        probe.tap_permanent(source, false);
+        probe.can_pay_with_waterbend(player, &ability.mana_cost)
+    }
+
     /// Can `player` cover `cost` with untapped waterbend candidates
     /// ({1} each, generic only) plus available mana?
     pub(crate) fn can_pay_with_waterbend(&self, player: PlayerId, cost: &ManaCost) -> bool {
@@ -1087,6 +1146,7 @@ impl Game {
             permanent,
             ability_index,
             remaining_generic,
+            target,
         }) = self.pending_choice
         else {
             return Err(AgentError("no waterbend payment is pending".to_string()));
@@ -1097,7 +1157,10 @@ impl Game {
         if remaining_generic == 0 {
             return Err(AgentError("waterbend cost is already paid".to_string()));
         }
-        if !self.waterbend_candidates(player).contains(&tap_permanent) {
+        if !self
+            .waterbend_activation_candidates(player, permanent, ability_index)
+            .contains(&tap_permanent)
+        {
             return Err(AgentError(
                 "permanent cannot be tapped for waterbend".to_string(),
             ));
@@ -1108,13 +1171,20 @@ impl Game {
         let remaining_generic = remaining_generic - 1;
 
         if remaining_generic == 0 {
-            return self.finish_waterbend(player, permanent, ability_index, remaining_generic);
+            return self.finish_waterbend(
+                player,
+                permanent,
+                ability_index,
+                remaining_generic,
+                target,
+            );
         }
         self.pending_choice = Some(PendingChoice::Waterbend {
             player,
             permanent,
             ability_index,
             remaining_generic,
+            target,
         });
         Ok(())
     }
@@ -1129,6 +1199,7 @@ impl Game {
             permanent,
             ability_index,
             remaining_generic,
+            target,
         }) = self.pending_choice
         else {
             return Err(AgentError("no waterbend payment is pending".to_string()));
@@ -1136,7 +1207,7 @@ impl Game {
         if payer != player {
             return Err(AgentError("wrong player for waterbend payment".to_string()));
         }
-        self.finish_waterbend(player, permanent, ability_index, remaining_generic)
+        self.finish_waterbend(player, permanent, ability_index, remaining_generic, target)
     }
 
     fn finish_waterbend(
@@ -1145,6 +1216,7 @@ impl Game {
         permanent_id: PermanentId,
         ability_index: usize,
         remaining_generic: u8,
+        target: Option<Target>,
     ) -> Result<(), AgentError> {
         let Some(_) = self.state.permanents[permanent_id].as_ref() else {
             self.pending_choice = None;
@@ -1166,7 +1238,12 @@ impl Game {
             self.spend_mana(player, &remainder)?;
         }
         self.pending_choice = None;
-        self.push_activated_ability(player, permanent_id, ability_index, Vec::new())
+        self.push_activated_ability(
+            player,
+            permanent_id,
+            ability_index,
+            target.into_iter().collect(),
+        )
     }
 
     /// Costs are paid: put the activated ability on the stack (handling
