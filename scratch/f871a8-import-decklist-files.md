@@ -148,6 +148,13 @@ Check at 917037b6e: decklist/training-deck/Academy decklist suites 27 passed; re
 fixture with one row renamed to two faces. Run→checkpoint linkage is the existing
 TrainingRun records, not re-proved by executing a regime here.
 
+Concept review (2026-10-28, at 29f8823c8): aligned; nothing to change. One
+`Deck`; `TrainingDecks` is run data checked upfront and re-admitted natively;
+pool checkpoints carry only the content-pool descriptor, rules and input; producer
+admission checks every deck. `root_match` on a deck run only opens the collector
+and fingerprints (native reset samples from the submitted supply; frozen
+opponents are excluded for deck runs). The `bc` producer links stay deferred.
+
 ## Delete — do not maintain
 
 Completed earlier: explicit-pack authored-only selection; `env.match.parse_deck`
