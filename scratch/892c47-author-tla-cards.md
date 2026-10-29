@@ -127,3 +127,7 @@ demo fixtures (w11 parity, w13 increment, w15 learn/precision/trigger-order
 demos, public-commitment parity) that need regeneration for a frozen world;
 the full suite exceeds the 2 h local limit and lacks duckdb/HF extras.
 Online Scryfall check: 161 definitions, 0 problems.
+
+Compress (2026-10-29): default pack built through `from_definitions(default_order())`;
+authored deck matching is one `AuthoredDeck::matches`. `cargo test` semantic/world
+lib + conformance/content-pack/hash tests pass; clippy `-D warnings` clean.
