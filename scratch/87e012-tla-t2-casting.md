@@ -140,7 +140,7 @@ and UI. Guard + directed + viewer-safety tests in
 ## Remaining
 
 - Next T1 sync, after T1 publishes engine-type cards/w17: the three steers
-  above, then the world gate. Last observed 2026-10-29 (after `0370112e8`):
+  above, then the world gate. Last observed 2026-10-29 09:00 (after `35286899d`):
   PR #394 head `e403b8a1f`, T1 session live, worktree clean at `f9732c12f`
   (committed 08:11) with `authoring.rs`/`compile.rs` present; main's `9a62e8b39`, `2fc0af676` arrive
   with T1's next main sync.
