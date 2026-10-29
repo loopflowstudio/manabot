@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from manabot.decklist import ImportedMatch
+from manabot.decklist import Deck, ImportedMatch
 
 
 def _default_deck() -> dict[str, int]:
@@ -75,11 +75,9 @@ class MatchConfig(BaseConfig):
         imported = self.imported_decks
         if imported is not None:
             imported.validate_setup(
-                content_pack=self.content_pack,
-                hero_deck=self.hero_deck,
-                villain_deck=self.villain_deck,
-                hero_sideboard=self.hero_sideboard,
-                villain_sideboard=self.villain_sideboard,
+                self.content_pack,
+                Deck(main=self.hero_deck, sideboard=self.hero_sideboard),
+                Deck(main=self.villain_deck, sideboard=self.villain_sideboard),
             )
         return self
 

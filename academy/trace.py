@@ -16,7 +16,7 @@ from typing import Any
 
 from managym.experience_projection import redact_observation
 
-from manabot.decklist import ImportedMatch
+from manabot.decklist import Deck, ImportedMatch
 import managym
 
 from .bot_decision import BotDecision
@@ -76,11 +76,9 @@ class GameConfig:
         if self.imported_decks is not None:
             imported = ImportedMatch.model_validate(self.imported_decks)
             imported.validate_setup(
-                content_pack=imported.pool.pack_key,
-                hero_deck=self.hero_deck,
-                villain_deck=self.villain_deck,
-                hero_sideboard=self.hero_sideboard,
-                villain_sideboard=self.villain_sideboard,
+                imported.pool.pack_key,
+                Deck(main=self.hero_deck, sideboard=self.hero_sideboard),
+                Deck(main=self.villain_deck, sideboard=self.villain_sideboard),
             )
             return [
                 managym.PlayerConfig(name, deck, sideboard, imported.pool.pack_key)

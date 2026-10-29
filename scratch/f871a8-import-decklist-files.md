@@ -203,6 +203,9 @@ The type is new in this branch, so no frozen evidence or released record
 changes; branch-local Academy traces may need re-import. Proof: existing
 decklist, Academy setup, checkpoint catalog and training-deck tests.
 Implemented 2026-10-28: `DeckImport(document, deck)`; the four suites pass (32).
+Compress: `ImportedMatch.validate_setup(content_pack, hero: Deck, villain: Deck)`
+compares `Deck` values; `setup_id` hashes `Deck.model_dump()` (same payload).
+Four suites + package boundaries: 39 passed.
 
 Not reopened: checkpoint `bc` `run_id`/`stage_id`/`regime_digest` links predate
 this branch, are read only for a catalog producer label, and never enter world

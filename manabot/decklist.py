@@ -147,8 +147,7 @@ class ImportedMatch(_Record):
             "pool": self.pool.model_dump(),
             "ruleset": self.ruleset,
             "decks": [
-                {"main": imported.deck.main, "sideboard": imported.deck.sideboard}
-                for imported in (self.hero, self.villain)
+                imported.deck.model_dump() for imported in (self.hero, self.villain)
             ],
         }
         return hashlib.sha256(
@@ -185,22 +184,14 @@ class ImportedMatch(_Record):
                 )
 
     def validate_setup(
-        self,
-        *,
-        content_pack: str | None,
-        hero_deck: dict[str, int],
-        villain_deck: dict[str, int],
-        hero_sideboard: dict[str, int],
-        villain_sideboard: dict[str, int],
+        self, content_pack: str | None, hero: Deck, villain: Deck
     ) -> None:
         """Bind consumer setup fields to the re-admitted source without simulation imports."""
         self.validate_current()
-        if (
-            content_pack != self.pool.pack_key
-            or hero_deck != self.hero.deck.main
-            or villain_deck != self.villain.deck.main
-            or hero_sideboard != self.hero.deck.sideboard
-            or villain_sideboard != self.villain.deck.sideboard
+        if (content_pack, hero, villain) != (
+            self.pool.pack_key,
+            self.hero.deck,
+            self.villain.deck,
         ):
             raise ValueError("Match differs from its admitted decklist files")
 
