@@ -1,4 +1,4 @@
-"""Every game runner skips forced decisions unless a named diagnostic opts out.
+"""Every game runner skips forced decisions; only debugging fixtures opt out.
 
 A forced decision has exactly one legal action; sending it to a model or
 policy costs inference and carries no decision value. Native skipping
@@ -16,9 +16,10 @@ import managym
 
 ROOT = Path(__file__).parents[2]
 
-# Constructed positions that must stop at sole-offer continuations. Neither
-# plays a game for a model or policy; anything else that turns skipping off
-# is a regression.
+# Debugging fixtures: scripted walkers that drive both seats through
+# constructed positions one native window at a time. Neither plays a game for
+# a person, model or policy; anything else that turns skipping off is a
+# regression.
 DIAGNOSTIC_EXCEPTIONS = {
     "manabot/verify/action_cases.py",
     "manabot/verify/text_observation.py",

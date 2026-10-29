@@ -145,8 +145,10 @@ checkpoints or experiment evidence.
 Every game runner, benchmark and Academy session uses native trivial-decision
 skipping (`skip_trivial`, on by default); a decision with one legal action is
 never shown to a person or sent to a model or policy (Jack Heart, 2026-10-28).
-Turning it off is for explicit debugging or named constructed-position
-diagnostics only; `tests/env/test_skip_forced_decisions.py` lists them.
+Turning it off is for explicit debugging only. Outside tests, the only code
+that does is the constructed-position fixtures listed in
+`tests/env/test_skip_forced_decisions.py`; they play no game for a person,
+model or policy.
 
 ## Testing
 
