@@ -113,6 +113,40 @@ tests/semantic` 158 pass, 4 fail on `be2b7586b`'s `schema_version` asserts.
   one-at-a-time choice, as Heartless Act).
 - Fire Nation Palace (granted firebending; observation shape change).
 
+## Concept review after slice 14 (2026-10-29, headless)
+
+Accepted model: a permanent's characteristics are what `Game` derives from them
+(`ScopeView` layers, `has_lost_abilities`, `permanent_name`,
+`permanent_has_subtype`, `activated_abilities_for`); `Permanent` and `Card`
+fields are inputs, never answers. Slice 14 applied that rule to ability loss.
+Two consequences follow from that rule and the Task's acceptance criteria, with no new product choice:
+
+1. **One tap/attack-eligibility authority.** `Permanent::can_tap` (mana,
+   activation, crew, attack offers) reads `Permanent::effective_keywords` and
+   `Permanent::is_creature`, which ignore static haste grants, Aura ability
+   loss and layer-4 types. Move it to a `Game` reader over
+   `Game::effective_keywords` and `permanent_is_creature`, and delete the
+   `Permanent` keyword reader's `abilities_lost` check. Counterexample to test:
+   a summoning-sick creature with printed haste under Honest Work cannot tap
+   for {C}. A creature given haste by a static grant can tap the turn it enters.
+2. **One observation change before landing.** The acceptance criteria say observations stay
+   "complete", and Jack Heart's shared-decision-surface direction says the same, so the
+   "later shape change" deferrals in `scratch/questions.md` belong to this
+   Task, not another one. After the T2 sync, add them in one change built on T2's
+   `CardData.face_down` precedent (`1144d0f32`): counters by kind (stun, fire,
+   double strike), `attached_to`, effective name and creature types
+   (Honest Work; this also fixes `is_ally` for the enchanted creature), Toph's granted land
+   type, the announced X on stack objects, spell keyword grants, and Fire
+   Nation Palace's granted firebending. Policy encoding of the new fields follows the
+   existing policy-input versioning (`ObservationConfig.from_checkpoint`;
+   frozen widths are unchanged), and the world/observation validation in
+   CLAUDE.md applies.
+
+Next implement order: (1) the `can_tap` authority; (2) Secret Tunnel's stack
+target `ObjectRef` capture and LKI creature types (not blocked by T2); (3) the T2
+sync per the list below; (4) Glider Staff and Crashing Wave on T2's airbend and
+waterbend; (5) the observation change with Fire Nation Palace.
+
 ## Reconcile at sync (T2 87e012 at `65544f0ff`, 2026-10-29)
 
 - Both branches append to schema 8 from 86ebe9ccf with colliding numbers. T2:
