@@ -6,6 +6,7 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 
 use super::{content_pool, pool_content, Eligibility, IrError};
+use crate::state::player::PlayerConfig;
 
 pub const DEVELOPMENT_RULESET: &str = "development-v1";
 /// Operational allocation bound, not a tournament construction rule.
@@ -132,6 +133,27 @@ pub fn admit_deck(
         }
     }
     Ok(issues)
+}
+
+/// Why a player's submitted deck fails development admission, or `None` when it
+/// passes. Game creation and training-deck replacement share this rejection.
+pub fn development_rejection(
+    pack_key: &str,
+    player: &PlayerConfig,
+) -> Result<Option<String>, IrError> {
+    let issues = admit_deck(
+        pack_key,
+        &player.decklist,
+        &player.sideboard,
+        DEVELOPMENT_RULESET,
+    )?;
+    Ok((!issues.is_empty()).then(|| {
+        issues
+            .iter()
+            .map(|issue| issue.message.as_str())
+            .collect::<Vec<_>>()
+            .join("; ")
+    }))
 }
 
 #[cfg(test)]

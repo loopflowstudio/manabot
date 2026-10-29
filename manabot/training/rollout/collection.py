@@ -566,10 +566,6 @@ class SeatRoutedCollector:
         No sampled action crosses the update boundary.
         """
 
-        if self.decks is not None and agent.config.semantic_pack != self.decks.pool:
-            raise ValueError(
-                "training decks require the complete pool policy vocabulary"
-            )
         if self.opponent_mode == "learning":
             raise ValueError("use collect_pair for two learning models")
         # No cache or prepared observation survives learning, snapshot or restore.

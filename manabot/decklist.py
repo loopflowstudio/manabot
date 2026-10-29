@@ -58,12 +58,7 @@ class ContentPool(PoolIdentity):
     definitions: tuple[PoolDefinition, ...]
 
     def identity(self) -> PoolIdentity:
-        return PoolIdentity(
-            pack_key=self.pack_key,
-            world_version=self.world_version,
-            content_digest=self.content_digest,
-            compiled_semantics=self.compiled_semantics,
-        )
+        return PoolIdentity.model_validate(self.model_dump(exclude={"definitions"}))
 
     @classmethod
     def load(cls, pack_key: str) -> ContentPool:

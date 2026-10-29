@@ -135,20 +135,8 @@ pub(crate) fn content_pack_for_match(
             }
         }
         for player in player_configs {
-            let issues = super::deck_admission::admit_deck(
-                key,
-                &player.decklist,
-                &player.sideboard,
-                super::deck_admission::DEVELOPMENT_RULESET,
-            )?;
-            if !issues.is_empty() {
-                return Err(IrError::Malformed(
-                    issues
-                        .iter()
-                        .map(|issue| issue.message.as_str())
-                        .collect::<Vec<_>>()
-                        .join("; "),
-                ));
+            if let Some(message) = super::deck_admission::development_rejection(key, player)? {
+                return Err(IrError::Malformed(message));
             }
         }
         return super::pool_content(key).map(Some);

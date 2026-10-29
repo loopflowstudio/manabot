@@ -166,17 +166,11 @@ later design work. Do not change MTG-175's reserved curriculum experiments.
 
 ### Implementation choices, distinct from explicitly accepted direction
 
-In the PR review, Jack Heart asked whether “Files become one admitted training
-collection” was agreed. The explicit agreement is random training matches from
-decklists, uniform sampling over distinct lists initially, future curriculum,
-and world-bound models independent of training regime. A separate preparation
-command, immutable manifest, and collection type bundling source records, pool,
-sampling policy and learning schema are implementation choices; the heading
-must not present them as separately approved product concepts. The question does
-not itself approve or reject that lifecycle. The subsequent clarification at
-the top of this document now establishes world validation and a single deck
-concept, without requiring that lifecycle; the preparation command, manifest
-and collection type were removed in the 2026-10-28 implementation.
+Jack Heart's explicit agreement is random training matches from decklists,
+uniform sampling over distinct lists initially, future curriculum, and
+world-bound models independent of training regime. The earlier preparation
+command, manifest and collection type were implementation choices, never
+approved concepts, and were removed in the 2026-10-28 implementation.
 
 Current implementation: the regime checks a fixed list upfront against an explicit content pool. Reject the entire
 list on invalid input, retaining source/line diagnostics; never silently
@@ -342,5 +336,13 @@ matchups, mirror admission, world, current content, env match, boundaries, and t
 CLAUDE.md world-change set) 191 passed, 1 failed (`test_elemental_world`, #394);
 this branch fixes #394's `test_monitor_evaluation` failures.
 
-Scratch is over its token target (15.7k/12k) because #394's tracked notes arrive
-with its branch; this plan was trimmed, and #394's notes are left to their owner.
+Compress (2026-10-28): native `deck_admission::development_rejection` is the one
+"player deck under development-v1" rejection, shared by game creation and
+`set_training_decks`; the collector's duplicate pool-vocabulary check was removed
+(`validate_regime` owns it). Debug cargo deck_admission/catalog/training-decks 8
+passed, clippy clean; training decks/decklist import/Academy setup/world/Elemental
+uniform 53 passed. Gate owns the full suites.
+
+Scratch remains over its token target because #394's tracked notes and
+`scratch/reference` arrive with its branch (this Task's notes are ~6k of ~15k
+tokens); they are left to their owner and clear when #394 lands.

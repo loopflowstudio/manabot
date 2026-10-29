@@ -157,22 +157,13 @@ impl VectorEnv {
                     "training decks must share one content pool".into(),
                 ));
             }
-            let issues = crate::semantic::deck_admission::admit_deck(
-                pack,
-                &player.decklist,
-                &player.sideboard,
-                crate::semantic::deck_admission::DEVELOPMENT_RULESET,
-            )
-            .map_err(|error| AgentError(error.to_string()))?;
-            if !issues.is_empty() {
+            if let Some(message) =
+                crate::semantic::deck_admission::development_rejection(pack, player)
+                    .map_err(|error| AgentError(error.to_string()))?
+            {
                 return Err(AgentError(format!(
-                    "training deck {}: {}",
-                    player.name,
-                    issues
-                        .iter()
-                        .map(|issue| issue.message.as_str())
-                        .collect::<Vec<_>>()
-                        .join("; ")
+                    "training deck {}: {message}",
+                    player.name
                 )));
             }
             if !distinct.insert((&player.decklist, &player.sideboard)) {
