@@ -77,8 +77,8 @@ runtime failure. Base argv participates in the hash; the derived name is exclude
 to avoid circularity, and `vllm-command.json` retains the full launch command.
 Startup reads the separately pinned tokenizer snapshot. This binds the supervised
 service declaration, not independently measured GPU weight bytes.
-`InferenceConfig` still permits only greedy
-sampling. `CheckpointOpponent` retains a digest and validates admission.
+`InferenceConfig` supports explicit seeded sampling as well as greedy decoding.
+`CheckpointOpponent` retains a digest and validates admission.
 `GameSummary` now binds both players: `model_behavior_version` (resident
 sessions only; hosted/random/historical receipts leave it absent) and
 `opponent_sha256`, recorded before opponent admission so failed admissions keep
@@ -96,44 +96,34 @@ newly completed behavior-version features. `PolicyKey` remains the structured
 policy identity owner; no parallel trainer or mutable alias has been introduced.
 No new producer/consumer framework is justified for this frozen-player evaluation.
 
-## Accepted world decision (Jack Heart, 2026-10-28)
+## Accepted world decision and execution path (Jack Heart, 2026-10-28)
 
 Retain the exact MTG-183 checkpoint and evaluate Qwen against it in a separately
-pinned **historical w13** experiment: w13 source/native build, w13 decks,
-policy-input v1, results labeled as w13 evidence. Current w14 admission stays
-unchanged; no relabeling, forced admission or engine rollback on main. Next:
-pin the w13 build for the campaign, repair the Etude SDK 0.2.10 launcher-database
-incompatibility, then the offline contract checks, one real game, and bounded
-scaling within the $10 budget as originally directed.
+pinned **historical w13** experiment; results are w13 evidence. Main keeps w14
+admission (the preflight's `checkpoint requires an explicit compatible w14 world
+binding` rejection still reproduces on this branch).
 
-## Failed assumption and unresolved decision
+Implemented 2026-10-28: campaign branch `jack-heart/bb4160-w13-campaign` = this
+branch plus `git revert e742e8bff` (the w14 commit; the only conflict was
+scratch). Its engine/content source equals `f5e7289b1a6d`, which built the
+reused Linux native input `1d1b674f…` (6,555,520 bytes). Locally on that tree:
+checkpoint bytes verified from R2, all 100 scheduled games admitted (w13,
+policy-input v1, 196,482 parameters), `tests/llm` 129 passed. Launch commits
+are cherry-picked from this branch onto the campaign branch; it is never merged.
+The Etude launcher database is schema 11 again, so SDK 0.2.10 launches.
 
-The implementation preflight fetched and verified the requested checkpoint from
-`r2://manabot/jobs/f3748bcabac8/checkpoints/learner_transitions-331180341.pt`.
-It binds **w13**, policy-input v1. Current source/native builds **w14** and ordinary
-`CheckpointOpponent` loading rejects it with
-`checkpoint requires an explicit compatible w14 world binding`.
-`validate_checkpoint_world` confirms that rejection is the admission contract.
-There is no evidence of compatibility that would justify weakening it.
-
-The accepted pair of requirements—this exact opponent and current-world
-admission—cannot currently be met. **Unresolved for review:** retain the exact
-MTG-183 checkpoint in a separately pinned historical w13 experiment, or select
-an explicitly identified current-world opponent and revise the matchup. Neither
-is accepted. Keeping the original requirements leaves paid execution pending;
-no engine rollback, relabeling or substitute is assumed.
-
-A separate launch prerequisite failed: pinned Etude SDK 0.2.10 refused the
-existing launcher database as written by another SDK version. The database and
-dependency pin were left unchanged. A compatible launch environment remains
-necessary even after the scientific decision; fixing it cannot repair world
-admission. This is retained implementation evidence, not a newly repeated probe.
-
-Recorded Task GPU commitments/spend are $0. No allocation or game was started;
-no scored cohort was frozen. There is consequently no 100-game denominator,
-strength estimate, measured speedup or games/dollar result for this Task.
+Treatment and attempts live in `experiments/protocols/qwen-mtg183-bb4160.md`.
+Seeded sampling (`InferenceConfig.decoding="sampled"` + `Sampling`) reaches
+both runtimes; Transformers rejects a presence penalty rather than substituting.
+`runs()` sizes the job's hours and watchdog from its dollar cap.
 
 ## Delete — do not maintain
+
+Removed the report reader's greedy-only inference projection. The existing
+historical reader now preserves sampling, thinking budgets and behavior versions;
+there is no second campaign report implementation. Historical raw token counts
+remain unchanged; generated totals exclude retained forced-close spans. Missing
+split/version evidence stays unknown, with attempt denominators retained.
 
 Removed the unversioned `config.model_id` HTTP/served-name route, completion
 parsing that ignored model identity, and startup's use of the model snapshot
@@ -185,35 +175,35 @@ later accepted disposition.
 
 ## Remaining implementation and execution
 
-1. **World and launch prerequisites:** an accepted matchup/world revision and
-   compatible Etude launch path, preserving frozen evidence and other Tasks.
-   Exact byte/native/world/deck admission must cover the declared schedule before
-   rental. The current rejection happens before deck-pair qualification.
-2. **Opponent and campaign identity:** service routing, acknowledgement and
-   returned-model checking are implemented through the existing runtime identity.
-   Game summaries bind both frozen candidates and the vLLM campaign stops on a
-   departure from either, including its first game. The expected opponent digest
-   remains the MTG-183 constant; only an accepted opponent revision may replace
-   it. Historical-world selection would instead preserve that digest.
-3. **A declared quality-focused pilot:** recover/verify the retained reasoning
-   evidence and distinguish repetition, incomplete thinking and output limits.
-   Explicit sampling, if selected, must reach both existing runtime implementations
-   and receipts without changing historical defaults. Exact tokens, complete
-   choices, repairs/fallbacks and replay remain acceptance requirements. Reusing
-   the existing campaign avoids a second launcher or generic distributed rewrite.
-4. **Controlled qualification, then real execution:** fixtures now cover version
-   mismatch, stale/late replies, attempt-ceiling refusal, campaign expiry/stop and
-   a complete native game/replay. Live Etude charge reconciliation and allocation
-   termination remain unproven. Then one real development game after prerequisites;
-   inspection of answer quality, replay, memory, elapsed time and inclusive cost
-   before bounded concurrency increases. At most 100 scored games within the
-   fresh $10 cap; unlike treatments are not pooled.
-5. **Evidence and delivery:** reproducible commands, frozen protocols, artifact
-   references, all outcomes and inclusive charges, verified allocation termination
-   and a published reviewable change. Experiment bytes belong in the artifact
-   store via `uv run --extra artifacts python -m manabot.data publish <path>`;
-   manifests are committed and results remain untracked. Publication, landing
-   and Task completion are not claimed here.
+Implemented and qualified: w13 campaign tree and admission; seeded sampling;
+budget forcing (`thinking_budget`, `generate_response`, per-response
+`forced_close_at`/`inserted_token_ids`, game `forced_closes`); per-attempt
+`QWEN` and relayed `VLLM` stdout lines; `single_choice_decisions` and
+`skipped_trivial` receipts; MTP draft as a hashed server option; treatment arms
+in `runs()`. Attempts, charges and the frozen cohort are in
+`experiments/protocols/qwen-mtg183-bb4160.md`.
+
+1. **Scored budget cohort `cdb0c09f90c6`** (100 games, c=32, no MTP, $7.00 cap):
+   still running at 2026-10-29 05:50 UTC, with admissions stopped after a failed
+   game and admitted games settling. `8f68c0bc488b` finished with 32 failed games,
+   68 unattempted and no completion; its cleanup receipt confirms deletion.
+   The existing `budget-64k` declaration is a possible separate treatment, not
+   a launched replacement. Final reconciliation precedes further commitments.
+2. **No-thinking floor:** about 10 games, after the cohort, labeled, well under
+   $1 (minimum job cap $1.05 for the 1.5-hour window).
+3. **Evidence and delivery:** publish run outputs with
+   `uv run --extra artifacts python -m manabot.data publish <path>`, commit the
+   manifest, report W/L/D, replay, initial/repair/fallback/forced-close counts,
+   reasoning by decision kind, latency, tokens/s, memory and inclusive cost.
+   Note in the PR that skip_trivial was already enabled by the schedule.
+
+Historical reporting is implemented for sampled and budget-forced receipts,
+including generated reasoning length by retained continuation stage, inserted
+token exclusion, mixed-treatment rejection and unknown split/version coverage.
+Verified fetched pilot evidence and MTP failure summaries are published under
+`experiments/data/bb4160/` through the manifest. The canceled sampled pilot has
+41 selection files: 38 initial, 2 repaired and 1 interrupted, not 41 completed
+selections. Its 43 attempts contain 42 responses and no fallback.
 
 ## Adopted and deferred ideas; related work
 
@@ -269,9 +259,9 @@ are proposals retained here, not accepted Wave-memory edits.
 
 Service admission and completion checks are implemented with controlled fixtures;
 the earlier mismatch fixture preserves all five IPC reply checks and wrong-admission
-coverage. Gate still owns the fresh-process
-LLM-only reader import boundary, actual mixed-report builder/Perf proof and native
-replay checks. Real service/sampling, budget and campaign cleanup qualification
-remain part of the unimplemented path above.
+coverage. The fresh-process LLM-only reader import boundary passes for sampled
+receipts. Gate still owns the actual mixed-report builder/Perf proof and broader
+native replay checks. Current cohort settlement, budget reconciliation and final
+allocation cleanup remain pending.
 
-Check: `uv run --extra dev pytest tests/llm/test_llm_vllm.py -q` — 40 passed; focused ruff and `git diff --check` passed (2026-10-28). Prior unaffected session/selection checks remain applicable; gate owns broader acceptance. No live GPU/service proof; paid execution stays blocked on the unresolved world/opponent decision above.
+Check: `uv run --extra dev --extra reports pytest tests/eval/test_inference_receipts.py -q -k 'sampled_report or sampled_sequence or cli_never_imports'` — 7 passed (2026-10-29); retained sampled-pilot projection succeeds. Earlier runtime qualification: w13 `tests/llm` 129 passed, this branch vLLM 42 / Transformers 2 passed. Gate owns broader acceptance.

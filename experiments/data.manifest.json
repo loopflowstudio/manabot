@@ -810,6 +810,50 @@
    "sha256": "c7afb920522e7d5926982b4dd2d53cdfbf8fc862ad96f2a91cc16c9149d33e8a",
    "bytes": 4532
   },
+  "experiments/data/bb4160/8f68c0bc488b/campaign.json": {
+   "sha256": "0c13abf18223ab2e3ae1717f5a6a22d69714e3fc01b948a5284b37005e7e0e9c",
+   "bytes": 491
+  },
+  "experiments/data/bb4160/8f68c0bc488b/results.json": {
+   "sha256": "30793f89abaaf12b9043b24d8ef20c2ddf8fff96814b5891910a6268c293c79b",
+   "bytes": 155471
+  },
+  "experiments/data/bb4160/8f68c0bc488b/vllm.log": {
+   "sha256": "fc48e13a7cdfb1c20a989834b555ec2c69d955e8ee3096b3d60b48aa6a7c3b14",
+   "bytes": 110170
+  },
+  "experiments/data/bb4160/dddaf3001dfa/campaign.json": {
+   "sha256": "ad163d01965177f0e9c4001ac546feaa2c4c46fc0a7f8c8c826defb38488974f",
+   "bytes": 397
+  },
+  "experiments/data/bb4160/dddaf3001dfa/game-096.tar.gz": {
+   "sha256": "afdd59dc3991fd46e44de9e2abad9d1ba865b00fa5e496188efc717b8721fc2e",
+   "bytes": 2168541
+  },
+  "experiments/data/bb4160/dddaf3001dfa/gpu-memory.csv": {
+   "sha256": "0b4517d39c9ef53025c35b6c3929721fd2830ed5f03bc2d888cb2ac494451467",
+   "bytes": 747435
+  },
+  "experiments/data/bb4160/dddaf3001dfa/inference.json": {
+   "sha256": "ce7ba988354651d235d6b76f8e379612e213b4abd723c853876c900a9563e09e",
+   "bytes": 556
+  },
+  "experiments/data/bb4160/dddaf3001dfa/readiness.json": {
+   "sha256": "899cc299477866d523a704bf7fece8b3dd09476966db0a156e715b208e19939b",
+   "bytes": 123
+  },
+  "experiments/data/bb4160/dddaf3001dfa/results.json": {
+   "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570",
+   "bytes": 3
+  },
+  "experiments/data/bb4160/dddaf3001dfa/schedule.json": {
+   "sha256": "0964cd66014e6cb49a9840bc132432ca77823a9258bb300cc926c023483ae2d4",
+   "bytes": 2320
+  },
+  "experiments/data/bb4160/dddaf3001dfa/vllm-identity.json": {
+   "sha256": "7471dd3676eabc33a9ea5ea7efadac8f970a6fe83f5371495291a37473b0e640",
+   "bytes": 9321
+  },
   "experiments/data/cuda-capacity/calibration-amendment.json": {
    "sha256": "4f855afa28d4c7381acc8a62b37e1853283c9c3e6eb7d551f674880bc8f4d87a",
    "bytes": 587

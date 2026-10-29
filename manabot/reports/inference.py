@@ -35,9 +35,44 @@ class _Tokens(_HistoricalRecord):
     token_ids: list[Count]
 
 
+class _Response(_Tokens):
+    reasoning_tokens: Count | None = None
+    answer_tokens: Count | None = None
+    forced_close_at: Count | None = None
+    inserted_token_ids: list[Count] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def inserted_span_matches(self) -> _Response:
+        start = self.forced_close_at
+        if start is None:
+            if self.inserted_token_ids:
+                raise ValueError("inserted tokens without a forced-close offset")
+        elif not self.inserted_token_ids or (
+            self.token_ids[start : start + len(self.inserted_token_ids)]
+            != self.inserted_token_ids
+        ):
+            raise ValueError("forced-close span differs from retained tokens")
+        return self
+
+    @property
+    def generated_reasoning_tokens(self) -> int | None:
+        if self.reasoning_tokens is None:
+            return None
+        # The decoded split counts the inserted newline before </think>.
+        inserted = (
+            min(
+                len(self.inserted_token_ids),
+                max(0, self.reasoning_tokens - self.forced_close_at),
+            )
+            if self.forced_close_at is not None
+            else 0
+        )
+        return self.reasoning_tokens - inserted
+
+
 class _Generation(_HistoricalRecord):
     prompt: _Tokens | None = None
-    response: _Tokens | None = None
+    response: _Response | None = None
     prompt_tokens: Count | None = None
     output_tokens: Count | None = None
     validation_error: str | None = None
@@ -79,8 +114,12 @@ class _InferenceIdentity(_HistoricalRecord):
     max_new_tokens: Count
     deadline_seconds: Seconds
     fallback_seed: int
-    decoding: Literal["greedy"]
+    decoding: Literal["greedy", "sampled"]
+    # Preserve the full historical treatment, without executable admission or
+    # today's sampling defaults. Equality must include every retained setting.
+    sampling: dict[str, JsonValue] | None = None
     enable_thinking: bool | None = None
+    thinking_budget: Count | None = None
 
 
 class _Selection(_HistoricalRecord):
@@ -88,6 +127,7 @@ class _Selection(_HistoricalRecord):
     decision: _Decision
     config: _InferenceIdentity
     runtime: dict[str, JsonValue] | None = None
+    behavior_version: Digest | None = None
     attempts: list[_Generation]
     selected_reference: str | None
     origin: Literal["initial", "retry", "fallback"] | None
@@ -391,7 +431,9 @@ class Distribution:
     )
 
 
-def _distribution(values: list[float], population: int) -> Distribution:
+def _distribution(
+    values: list[float], population: int, *, unit: str = "seconds"
+) -> Distribution:
     values = sorted(values)
     return Distribution(
         len(values),
@@ -399,7 +441,62 @@ def _distribution(values: list[float], population: int) -> Distribution:
         values[math.floor((len(values) - 1) * 0.5)] if values else None,
         values[math.floor((len(values) - 1) * 0.95)] if values else None,
         values[-1] if values else None,
+        method=f"sorted[floor((n-1)*q)]; {unit}; retained observations, not random sampling",
     )
+
+
+def _generation_tokens(
+    selections: list[tuple[Path, _Selection]],
+) -> dict[str, JsonValue]:
+    """Count received tokens, including repairs, without treating absence as zero.
+
+    Decision kinds are the retained native continuation stages, not labels
+    reconstructed by the current renderer. Missing captures stay unknown.
+    """
+    by_kind: dict[str, list[_Generation]] = {}
+    for path, selection in selections:
+        capture = path.with_name("capture.json")
+        kind = "unknown"
+        if capture.exists():
+            continuation = _object(capture).get("continuation")
+            if isinstance(continuation, dict):
+                stage = continuation.get("stage")
+                if isinstance(stage, str):
+                    kind = stage
+        by_kind.setdefault(kind, []).extend(selection.attempts)
+    attempts = [a for group in by_kind.values() for a in group]
+    responses = [a.response for a in attempts if a.response is not None]
+    return {
+        "attempts": len(attempts),
+        "responses": len(responses),
+        "observed_generated_output_tokens": sum(
+            len(r.token_ids) - len(r.inserted_token_ids) for r in responses
+        ),
+        "inserted_tokens": sum(len(r.inserted_token_ids) for r in responses),
+        "forced_closes": sum(r.forced_close_at is not None for r in responses),
+        "reasoning_by_decision_kind": {
+            kind: asdict(
+                _distribution(
+                    [
+                        float(a.response.generated_reasoning_tokens)
+                        for a in group
+                        if a.response is not None
+                        and a.response.generated_reasoning_tokens is not None
+                    ],
+                    len(group),
+                    unit="generated reasoning tokens (inserted tokens excluded)",
+                )
+            )
+            for kind, group in sorted(by_kind.items())
+        },
+    }
+
+
+def _behavior_version(selections: list[_Selection]) -> str | None:
+    versions = {s.behavior_version for s in selections if s.behavior_version}
+    if len(versions) > 1:
+        raise ValueError("LLM receipts changed behavior version")
+    return next(iter(versions)) if versions else None
 
 
 def _selection_latencies(
@@ -901,6 +998,11 @@ def project_llm(root: Path) -> dict[str, Any]:
         "device_memory": device,
         "config": config,
         "inference_config": identity.model_dump() if identity else None,
+        "behavior_version": _behavior_version([s for _, s in selections]),
+        "unversioned_selections": sum(
+            s.behavior_version is None for _, s in selections
+        ),
+        "generation_tokens": _generation_tokens(selections),
         "runtime": runtime,
         "corpus": [str(p.relative_to(root)) for p, _ in selections],
         "evidence": [f.model_dump() for f in files],
@@ -1146,6 +1248,11 @@ def _project_llm_sequence(root: Path) -> dict[str, Any]:
         "device_memory": _device_memory(root / "gpu-memory.csv"),
         "config": {"games": [p["config"] for p in parts]},
         "inference_config": identities[0].model_dump() if identities else None,
+        "behavior_version": _behavior_version([s for _, s in selections]),
+        "unversioned_selections": sum(
+            s.behavior_version is None for _, s in selections
+        ),
+        "generation_tokens": _generation_tokens(selections),
         "runtime": parts[0]["runtime"] if parts else None,
         "corpus": [str(p.relative_to(root)) for p, _ in selections],
         "evidence": [f.model_dump() for f in files],

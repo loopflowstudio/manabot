@@ -53,9 +53,10 @@ are not comparable with, or pooled into, either greedy result.
 
 Pilot `dddaf3001dfa` (sampled, one game, concurrency 1) was cancelled at Jack
 Heart's direction after about 93 minutes, mid-game, before its $2 cap could be
-spent without a result. Its 41 retained Qwen selections: 38 valid initially,
-2 after repair, none by fallback, and no generation-limit cutoff (every attempt
-ended with EOS). Reasoning per attempt: median 4,616 tokens, p90 7,154, max
+spent without a result. Its 41 retained Qwen selection files contain 38 valid
+initial selections, 2 after repair, and 1 interrupted selection, with no fallback.
+There are 43 attempts, 42 with responses; received responses ended with EOS.
+Reasoning per received attempt: median 4,616 tokens, p90 7,154, max
 8,223; prompts median 5,706 tokens. Generation ran at about 33 tokens/s
 single-stream, the A6000's bandwidth ceiling for 18 GB BF16 weights, so the
 slowness was output length at concurrency 1, not a serving fault. 36 of the
@@ -146,3 +147,29 @@ cap $7.00. The MTP attempt is not pooled with it.
 | `139099571cbb` | budget pilot, 32 games, c=32, MTP 1 | $1.20 | cancelled after ~10 min of decisions (86 attempts); pod absent | ~$0.16 (estimate) |
 | `8f68c0bc488b` | scored cohort, budget, 100 games, c=32, MTP 1 | $7.00 | engine crash (MTP); 32 attempted, 0 completed, 68 unattempted; pod absent | ~$0.18 (estimate) |
 | `cdb0c09f90c6` | **scored cohort**, budget, 100 games, c=32, no MTP | $7.00 | running | pending |
+
+### Retained evidence and reporting (2026-10-29)
+
+Digest-verified Etude fetches are published in `experiments/data.manifest.json`
+under `experiments/data/bb4160/`: the sampled pilot's game archive, schedule,
+configuration, runtime identity, GPU samples and campaign receipts; and the MTP
+cohort's campaign/results receipts and engine log. Restore them with
+`uv run --extra artifacts python -m manabot.data fetch experiments/data/bb4160`.
+These are separate attempts; the manifest does not declare a successful cohort.
+
+The offline reader now accepts sampled/budget-forced receipts, preserves their
+sampling settings and behavior identities, and excludes inserted delimiters from
+generated-token counts. In the pilot, retained native continuation stages account
+for 40 priority responses (41 attempts), one declare-blockers response and one
+targets response. Generated reasoning floor-index p50/max: priority 4,606/8,223,
+declare-blockers 5,853/5,853, targets 3,903/3,903. These distributions include
+repairs; the interrupted attempt stays in the denominator with an unknown split.
+
+At 05:50 UTC the replacement cohort remained running; a failed game had stopped
+admissions while already admitted games settled. Its final outcome, no-thinking
+floor, inclusive charge reconciliation and allocation cleanup remain outstanding.
+The launcher reported $1.12 for the sampled pilot and $0.02 for the MTP cohort;
+these differ from the earlier partial billing/estimates above and are not a
+reconciled provider invoice. No further rental was launched during this report
+repair. The declared `budget-64k` option is unlaunched and cannot alter the
+running cohort's 16,384-token context.

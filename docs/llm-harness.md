@@ -192,12 +192,23 @@ startup; it does not regenerate the cohort from source defaults.
 Game receipts cannot redefine the cohort's model; changed player identities or
 played games missing either identity stop new admissions and remain in results.
 
+The offline inference report preserves sampled decoding settings, thinking
+budgets and behavior versions. It rejects mixed treatments within one game or
+sequence. `generation_tokens` reports received outputs separately from missing
+responses, excludes harness-inserted closing tokens from generated-token totals,
+and groups reasoning-length distributions by retained native continuation stage.
+Repairs and failed attempts remain in each distribution's population; missing
+splits or captures remain unknown. Historical `output_tokens` still counts every
+retained response token, including inserted delimiters. Reading these receipts
+does not import the executable model or native runtime.
+
 `manabot.verify.llm_game` connects the native text renderer and revision-bound
 Commands to that session. Its functional fixture is a 60-card mirror of 24
 Mountains, 24 Gray Ogres and 12 Lightning Bolts, Qwen in seat zero against a
 seeded uniform random opponent. This is a small engine test deck, not a
-constructed-format deck or a playing-strength benchmark. Native trivial-decision
-skipping is disabled; public history v1/32 is declared, and there is no writable
+constructed-format deck or a playing-strength benchmark. New games enable native
+trivial-decision skipping by default; the historical L4 fixture disabled it.
+Public history v1/32 is declared, and there is no writable
 model memory. Every executed Command is checked against a second native replay.
 
 The separate game configuration admits 8,192 tokens because a local 426-decision
