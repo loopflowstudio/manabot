@@ -27,30 +27,29 @@ pub const WORLD_POOL: &str = "tla-pool-v1";
 /// Whether this world supports `name` for deck entry. Unknown names are
 /// unsupported rather than errors.
 pub fn supports_card(name: &str) -> Result<bool, IrError> {
-    Ok(card(name)?.is_some_and(|row| row.eligibility == Eligibility::Eligible))
+    Ok(unsupported_cards([name])?.is_empty())
 }
 
 /// The distinct card names in `names` this world does not support, sorted.
-/// A deck is supported exactly when this is empty.
+/// A deck is supported exactly when this is empty; the pool row of an
+/// unsupported definition gives the reason.
 pub fn unsupported_cards<'a>(
     names: impl IntoIterator<Item = &'a str>,
 ) -> Result<Vec<String>, IrError> {
-    let mut unsupported = BTreeSet::new();
-    for name in names {
-        if !supports_card(name)? {
-            unsupported.insert(name.to_owned());
-        }
-    }
-    Ok(unsupported.into_iter().collect())
-}
-
-/// This world's descriptor row for `name`, including the reason for an
-/// unsupported card.
-pub fn card(name: &str) -> Result<Option<PoolDefinition>, IrError> {
-    Ok(content_pool(WORLD_POOL)?
+    let pool = content_pool(WORLD_POOL)?;
+    let supported = pool
         .definitions
+        .iter()
+        .filter(|row| row.eligibility == Eligibility::Eligible)
+        .map(|row| row.registry_name.as_str())
+        .collect::<BTreeSet<_>>();
+    Ok(names
         .into_iter()
-        .find(|row| row.registry_name == name))
+        .filter(|name| !supported.contains(name))
+        .map(str::to_owned)
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect())
 }
 
 /// This world's descriptor rows for typed cards from `sets` (key prefixes such
@@ -91,11 +90,6 @@ mod tests {
             "Forest",
         ];
         assert_eq!(unsupported_cards(deck).unwrap(), ["Water Tribe Rallier"]);
-        assert!(card("Water Tribe Rallier")
-            .unwrap()
-            .unwrap()
-            .reason
-            .is_some());
     }
 
     #[test]
