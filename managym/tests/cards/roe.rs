@@ -1,4 +1,4 @@
-//! Tests for cards filed in `src/cardsets/arb.rs`, grouped by the helper family they
+//! Tests for cards filed in `src/cardsets/roe.rs`, grouped by the helper family they
 //! drive play with (`tests/support/`).
 
 use crate::support::temur::{activate, can_cast, choose, enter};

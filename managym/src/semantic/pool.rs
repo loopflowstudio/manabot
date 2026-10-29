@@ -29,6 +29,9 @@ pub struct PoolDefinition {
     #[serde(skip_deserializing)]
     pub card_def_id: Option<CardDefId>,
     pub semantic_key: Option<String>,
+    /// Scryfall card-object id of the definition's printing.
+    #[serde(default)]
+    pub scryfall_id: Option<String>,
     pub registry_name: String,
     pub eligibility: Eligibility,
     pub reason: Option<String>,
@@ -66,6 +69,7 @@ impl PoolRuntime {
                 PoolDefinition {
                     card_def_id: Some(card_def_id),
                     semantic_key: Some(definition.key.to_owned()),
+                    scryfall_id: Some(definition.scryfall_id.to_owned()),
                     registry_name: definition.name.clone(),
                     eligibility: if reason.is_none() {
                         Eligibility::Eligible

@@ -8,7 +8,7 @@ use crate::{
 pub const PLAYER_DIM: usize = 40;
 pub const CARD_DIM: usize = 41;
 pub const PERMANENT_DEFINITION_INDEX: usize = 24;
-pub const PERMANENT_DIM: usize = 28;
+pub const PERMANENT_DIM: usize = 29;
 pub const ACTION_TYPE_DIM: usize = 17;
 /// Declaration choice is separate from its family: attack and decline must
 /// have distinct policy inputs even when they focus the same permanent.
@@ -706,6 +706,7 @@ fn encode_permanent_features(permanent: &PermanentData, is_mine: f32, out: &mut 
     out[23] = bool_to_f32(permanent.exile_if_dies_this_turn);
     out[25] = bool_to_f32(permanent.keywords.indestructible);
     out[26] = bool_to_f32(permanent.temp_subtypes.iter().any(|s| s == "Avatar"));
+    out[27] = bool_to_f32(permanent.attacking);
     out[PERMANENT_DEFINITION_INDEX] = (permanent.registry_key + 1) as f32;
     out[PERMANENT_DIM - 1] = 1.0;
 }
@@ -1078,6 +1079,7 @@ mod tests {
             is_animated: false,
             has_exile_link: false,
             exile_if_dies_this_turn: false,
+            attacking: false,
             temp_subtypes: Vec::new(),
             keywords: KeywordData::default(),
         }

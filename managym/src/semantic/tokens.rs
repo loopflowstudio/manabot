@@ -94,6 +94,25 @@ pub fn name_value(name: &str) -> i32 {
     (u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]) & 0x7fff_ffff) as i32
 }
 
+/// One definition's tokens, characteristics then programs, as `(kind, value)`.
+/// Token names in its effects must name definitions in `pack`.
+pub fn definition_tokens(
+    definition: &CardDefinition,
+    pack: &ContentPack,
+) -> Result<Vec<(TokenKind, i32)>, ContentError> {
+    let mut writer = TokenWriter::new(pack);
+    definition.serialize(&mut writer)?;
+    let mut out = writer.tokens;
+    for (kind, tokens) in definition_programs_of(definition, pack)? {
+        out.push((TokenKind::ProgramKind, kind as i32, None));
+        out.extend(tokens);
+    }
+    Ok(out
+        .into_iter()
+        .map(|(kind, value, _)| (kind, value))
+        .collect())
+}
+
 /// The token catalog of every definition in `pack`, rows in `CardDefId` order.
 pub fn learning_catalog(pack: &ContentPack) -> Result<LearningCatalog, ContentError> {
     let mut out = LearningCatalog::default();

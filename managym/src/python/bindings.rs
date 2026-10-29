@@ -1433,6 +1433,8 @@ pub struct PyPermanent {
     #[pyo3(get, set)]
     pub exile_if_dies_this_turn: bool,
     #[pyo3(get, set)]
+    pub attacking: bool,
+    #[pyo3(get, set)]
     pub temp_subtypes: Vec<String>,
     /// Effective keywords (printed + until-EOT grants).
     #[pyo3(get, set)]
@@ -1456,6 +1458,7 @@ impl From<PermanentData> for PyPermanent {
             is_animated: value.is_animated,
             has_exile_link: value.has_exile_link,
             exile_if_dies_this_turn: value.exile_if_dies_this_turn,
+            attacking: value.attacking,
             temp_subtypes: value.temp_subtypes,
             keywords: value.keywords.into(),
         }
@@ -1479,6 +1482,7 @@ impl From<PyPermanent> for PermanentData {
             is_animated: value.is_animated,
             has_exile_link: value.has_exile_link,
             exile_if_dies_this_turn: value.exile_if_dies_this_turn,
+            attacking: value.attacking,
             temp_subtypes: value.temp_subtypes,
             keywords: value.keywords.into(),
         }
@@ -3666,6 +3670,7 @@ fn pool_rows<'py>(
         let item = PyDict::new_bound(py);
         item.set_item("card_def_id", row.card_def_id.map(|id| id.0))?;
         item.set_item("semantic_key", row.semantic_key)?;
+        item.set_item("scryfall_id", row.scryfall_id)?;
         item.set_item("registry_name", row.registry_name)?;
         item.set_item(
             "eligibility",

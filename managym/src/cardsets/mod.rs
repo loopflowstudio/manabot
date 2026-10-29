@@ -98,4 +98,3 @@ const SETS: [fn() -> Vec<CardDefinition>; 30] = [
     war::cards,
     zen::cards,
 ];
-

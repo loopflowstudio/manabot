@@ -7,8 +7,6 @@ mod support;
 
 #[path = "cards/afr.rs"]
 mod afr;
-#[path = "cards/arb.rs"]
-mod arb;
 #[path = "cards/blb.rs"]
 mod blb;
 #[path = "cards/eld.rs"]
@@ -23,6 +21,12 @@ mod ktk;
 mod lea;
 #[path = "cards/m20.rs"]
 mod m20;
+#[path = "cards/observability.rs"]
+mod observability;
+#[path = "cards/roe.rs"]
+mod roe;
+#[path = "cards/scryfall.rs"]
+mod scryfall;
 #[path = "cards/soi.rs"]
 mod soi;
 #[path = "cards/stx.rs"]
