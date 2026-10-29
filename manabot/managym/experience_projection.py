@@ -130,6 +130,15 @@ def _serialize_permanent(
         "name": card.name if card else None,
         "text_box": card.text_box if card else "",
         "exile_if_dies_this_turn": bool(permanent.exile_if_dies_this_turn),
+        **{
+            field: int(getattr(permanent, field))
+            for field in (
+                "exhausted_abilities",
+                "once_each_turn_used",
+                "granted_firebending",
+            )
+            if getattr(permanent, field)
+        },
         **(
             {"temp_subtypes": list(permanent.temp_subtypes)}
             if permanent.temp_subtypes
@@ -216,6 +225,7 @@ def _serialize_player(
             if player.hand_only_until is not None
             else {}
         ),
+        **({"no_maximum_hand_size": True} if player.no_maximum_hand_size else {}),
         "zone_counts": zone_counts,
         "library_count": zone_counts.get("LIBRARY", 0),
         "known_hand": {

@@ -370,6 +370,15 @@ pub struct LegacyPermanentView {
     pub is_token: Option<bool>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub exile_if_dies_this_turn: bool,
+    /// Exhaust abilities this object has used (CR 702.177a).
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub exhausted_abilities: u32,
+    /// "Once each turn" abilities this object has used this turn.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub once_each_turn_used: u32,
+    /// Firebending granted until end of turn.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub granted_firebending: u32,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub temp_subtypes: Vec<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -416,6 +425,8 @@ pub struct LegacyPlayerView {
     /// Player id whose next turn ends this player's hand-only casting.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hand_only_until: Option<u32>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub no_maximum_hand_size: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub combat_mana: Option<i32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

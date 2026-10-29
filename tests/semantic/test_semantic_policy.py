@@ -106,8 +106,7 @@ def test_semantic_decision_binds_and_applies_real_35_target_command() -> None:
     assert source_row.zone == "hand"
     assert source_row.program_rows
     assert (
-        adapter.pack.ir.definitions[source_row.definition_row]["semantic_key"]
-        == "stx.igneous_inspiration"
+        adapter.pack.registry_names[source_row.definition_row] == "Igneous Inspiration"
     )
 
     player_targets = [
@@ -125,9 +124,8 @@ def test_semantic_decision_binds_and_applies_real_35_target_command() -> None:
     assert all(row.object_kind == "permanent" for row in object_targets)
     assert all(row.zone == "battlefield" for row in object_targets)
     assert {
-        adapter.pack.ir.definitions[row.definition_row]["semantic_key"]
-        for row in object_targets
-    } == {"tla.fire_nation_cadets"}
+        adapter.pack.registry_names[row.definition_row] for row in object_targets
+    } == {"Fire Nation Cadets"}
 
     submission = _cast_submission(decision)
     command = decision.command(submission)
@@ -244,18 +242,7 @@ def test_semantic_decision_fails_before_scoring_an_unadmitted_definition() -> No
             managym.PlayerConfig("target", {"Fire Nation Cadets": 36, "Mountain": 4}),
         ]
     )
-    env.scenario_clear_hand(0)
-    env.scenario_force_card_in_hand(0, "Lightning Bolt")
-    env.scenario_force_battlefield(0, "Mountain")
-    observation = env.scenario_refresh()
     adapter = SemanticDecisionAdapter.from_env(env)
-
-    with pytest.raises(UnadmittedDefinitionError, match="absent from semantic IR"):
-        adapter.bind(
-            env,
-            observation,
-            match_id="semantic-policy-unadmitted",
-            revision=0,
-            content_hash=adapter.pack.content_pack_hash,
-            asset_manifest_hash="semantic-policy-test-assets",
-        )
+    outside = max(adapter.pack.definition_row_by_card_def_id) + 1
+    with pytest.raises(UnadmittedDefinitionError, match="absent from the learning"):
+        adapter.pack.definition_row(outside)

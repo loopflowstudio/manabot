@@ -7,23 +7,11 @@ use managym::{
     },
 };
 
-use super::helpers::*;
-
-fn find_owned_card(s: &Scenario, player: usize, name: &str) -> CardId {
-    let Some(index) = s
-        .game()
-        .state
-        .cards
-        .iter()
-        .position(|card| card.owner == PlayerId(player) && card.name == name)
-    else {
-        panic!("card {name} not found for player {player}");
-    };
-    CardId(index)
-}
+use crate::support::game::*;
+use crate::support::inspect::owned_card;
 
 fn put_owned_card_on_battlefield(s: &mut Scenario, player: usize, name: &str) -> PermanentId {
-    let card_id = find_owned_card(s, player, name);
+    let card_id = owned_card(s, player, name);
     let game = s.game_mut();
     game.move_card(card_id, ZoneType::Battlefield);
     // Drain events and triggers so the engine doesn't process ETB triggers from setup
@@ -61,7 +49,7 @@ fn cast_manowar_and_reach_target_choice(s: &mut Scenario) {
             .zones
             .move_card(island, PlayerId(0), ZoneType::Hand);
     }
-    let manowar = find_owned_card(s, 0, "Man-o'-War");
+    let manowar = owned_card(s, 0, "Man-o'-War");
     s.game_mut()
         .state
         .zones
@@ -86,7 +74,7 @@ fn cast_manowar_and_reach_target_choice(s: &mut Scenario) {
 /// CR 603.6a — Man-o'-War's ETB trigger returns a targeted creature to hand.
 #[test]
 fn cr_603_6a_manowar_etb_returns_target_creature() {
-    let mut s = Scenario::new(manowar_deck(), island_deck(), 81);
+    let mut s = Scenario::new(deck_of("Island", "Man-o'-War"), deck(&[("Island", 40)]), 81);
     cast_manowar_and_reach_target_choice(&mut s);
 
     let hand_before = count_cards_named(&s, 0, ZoneType::Hand, "Man-o'-War");
@@ -104,7 +92,7 @@ fn cr_603_6a_manowar_etb_returns_target_creature() {
 /// CR 603.3, 117.3d — Trigger goes on the stack and players receive priority before it resolves.
 #[test]
 fn cr_603_3_trigger_uses_stack_and_response_window() {
-    let mut s = Scenario::new(manowar_deck(), island_deck(), 82);
+    let mut s = Scenario::new(deck_of("Island", "Man-o'-War"), deck(&[("Island", 40)]), 82);
     cast_manowar_and_reach_target_choice(&mut s);
 
     s.choose_target_named("Man-o'-War");
@@ -121,11 +109,15 @@ fn cr_603_3_trigger_uses_stack_and_response_window() {
 /// CR 603.3b — Pending triggers are ordered APNAP when put on the stack.
 #[test]
 fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
-    let mut s = Scenario::new(manowar_deck(), manowar_deck(), 83);
+    let mut s = Scenario::new(
+        deck_of("Island", "Man-o'-War"),
+        deck_of("Island", "Man-o'-War"),
+        83,
+    );
     let _target = put_owned_card_on_battlefield(&mut s, 0, "Man-o'-War");
 
-    let p0_source = find_owned_card(&s, 0, "Man-o'-War");
-    let p1_source = find_owned_card(&s, 1, "Man-o'-War");
+    let p0_source = owned_card(&s, 0, "Man-o'-War");
+    let p1_source = owned_card(&s, 1, "Man-o'-War");
     s.game_mut().state.pending_triggers = vec![
         PendingTrigger {
             targets: Vec::new(),
@@ -169,7 +161,7 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
 /// CR 608.2b — If a triggered ability's target becomes illegal, it does nothing.
 #[test]
 fn cr_608_2b_trigger_with_illegal_target_does_nothing() {
-    let mut s = Scenario::new(manowar_deck(), island_deck(), 84);
+    let mut s = Scenario::new(deck_of("Island", "Man-o'-War"), deck(&[("Island", 40)]), 84);
     cast_manowar_and_reach_target_choice(&mut s);
 
     let hand_before = count_cards_named(&s, 0, ZoneType::Hand, "Man-o'-War");
@@ -203,7 +195,11 @@ fn cr_608_2b_trigger_with_illegal_target_does_nothing() {
 /// target of an ability that selected the old object.
 #[test]
 fn cr_400_7_manowar_target_does_not_follow_reentered_card() {
-    let mut s = Scenario::new(manowar_deck(), island_deck(), 400_704);
+    let mut s = Scenario::new(
+        deck_of("Island", "Man-o'-War"),
+        deck(&[("Island", 40)]),
+        400_704,
+    );
     cast_manowar_and_reach_target_choice(&mut s);
     s.choose_target_named("Man-o'-War");
 
@@ -246,7 +242,7 @@ fn cr_400_7_manowar_target_does_not_follow_reentered_card() {
 /// CR 117.5, 704.3, 603.3 — SBAs are checked before pending triggers are flushed.
 #[test]
 fn cr_603_trigger_flush_happens_after_sba_check() {
-    let mut s = Scenario::new(manowar_deck(), island_deck(), 85);
+    let mut s = Scenario::new(deck_of("Island", "Man-o'-War"), deck(&[("Island", 40)]), 85);
 
     let dying_permanent = put_owned_card_on_battlefield(&mut s, 0, "Man-o'-War");
     s.game_mut().state.permanents[dying_permanent]
@@ -254,7 +250,7 @@ fn cr_603_trigger_flush_happens_after_sba_check() {
         .expect("dying permanent should exist")
         .damage = 2;
 
-    let source = find_owned_card(&s, 0, "Man-o'-War");
+    let source = owned_card(&s, 0, "Man-o'-War");
     s.game_mut().state.pending_triggers.push(PendingTrigger {
         targets: Vec::new(),
         target_req_indices: Vec::new(),

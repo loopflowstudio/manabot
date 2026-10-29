@@ -25,10 +25,12 @@ was dead on arrival in exp-10.)
 | **w13** | in development, MTG-177 integration, 2026-10-22 | 40 / 41 / 28 / 16; targeting enforcement plus shared-payment repair | unchanged authored packs; fresh combined-runtime conformance receipts | no strength baseline |
 | **w14** | in development, MTG-195, 2026-10-26 | 40 / 41 / 28 / 17; controller-selected trigger placement and policy-input v3 occurrence joins | unchanged authored packs; fresh w14 conformance and play fixtures | no strength baseline |
 | **w15** | in development, MTG-177, 2026-10-27 | 40 / 41 / 28 / 17; retained resolution eligibility, policy-input v4 relations 64 × 33 | unchanged authored packs; fresh integrated conformance and play fixtures | no strength baseline |
-| **w16** | in development, Tasks 892c47 and 87e012, 2026-10-28 | 59 / 55 / 28 / 17 (policy input v5); typed Rust cards compiled in process, first-printing set keys, one default pack; TLA casting permissions, restricted mana, foretell and control | `tla-pool-v1`: every defined card (166 supported); conformance receipts not yet regenerated | no strength baseline |
+| **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
+| **w17** | in development, Task 892c47, 2026-10-29 | 40 / 41 / 29 / 17; cards in engine rules types, learning schema 9 tokens derived from them, attacking permanent column | `tla-pool-v1`; `authored-match-w17-v1` receipt; other conformance receipts not yet regenerated | no strength baseline |
+| **w18** | in development, Task 87e012, 2026-10-29 | 60 / 55 / 32 / 17 (policy input v5; v1–v4 keep 40 / 41 / 29); TLA casting, costs, zone permissions and private zones; exile cast permissions, hand-only lock, restricted mana by class, foretell, control | `tla-pool-v1`: every defined card (166 supported); conformance receipts not yet regenerated | no strength baseline |
 
-**Current development world: w16.** `managym.WORLD_VERSION` identifies live runs. Earlier
-checkpoints (including w15) are **not comparable** to w16; do not reuse their
+**Current development world: w18.** `managym.WORLD_VERSION` identifies live runs. Earlier
+checkpoints (including w17) are **not comparable** to w18; do not reuse their
 win rates or load them as current-world policies. Shape alone is insufficient
 identity. Exp-11 historically ported opponent components with
 `port_legacy_state_dict` and behavioral validation; that utility is now retired.
@@ -44,7 +46,57 @@ revision that recorded it and build that engine; current code carries no rules
 compatibility shims. Frozen evidence (IR, receipts, checkpoints) stays readable
 in place and is never rewritten.
 
-## w16: one card authority (not yet frozen)
+## w18: TLA casting, costs, zone permissions and private zones (not yet frozen)
+
+The 51 cards of TLA batch T2 are defined in `cardsets/tla.rs` and supported
+(166 supported in `tla-pool-v1`). Rules meaning grows with them: casting from
+exile under exact-object grants (airbend, impulse exile, linked exile, foretell
+face down), a hand-only lock that overrides those grants until its controller's
+next untap, printed and granted flashback, announced X and kicker as one cast
+announcement, free casts during resolution, restricted mana keyed by spending
+class (Lesson, Shrine, Ally spells and ability sources), affinity and
+activation cost reduction, exhaust and once-each-turn activation limits,
+hand- and graveyard-zone activated abilities (landcycling), private library
+searches and choices, and control (a permanent spell enters under its
+controller).
+
+Policy input **v5** is the default; v1–v4 keep their widths. Player rows add
+restricted mana by spending subtype × color (18), the hand-only lock and no
+maximum hand size (40 → 60). Card rows add 12 cast-permission terms and a stack
+spell's announced X (41 → 55). Permanent rows add used exhaust abilities, used
+once-each-turn abilities and granted firebending (29 → 32). In every widened
+row the new terms start at the old validity column and validity stays last.
+Native buffers bind v5 by player width. Learning schema 9 is unchanged: tokens
+derive from the definitions, so new `Effect` variants and card fields appear in
+them without a schema change. Viewers see an opponent's foretold card only as an
+exile count, in JSON, text and tensor alike.
+
+## w17: one card representation (superseded by w18)
+
+Each card is a function returning the engine's own `CardDefinition`, written in
+its rules types, in the set file of its first printing; the authoring language
+(`cards/authoring.rs`), the in-process compiler (`semantic/compile.rs`) and IR
+parsing and interpretation for current content are deleted. All 161 definitions
+were generated once from w16's lowering and proven JSON-identical to it. Each
+definition carries its key and the Scryfall id of that printing; neither enters
+content digests, so default and authored pack digests equal w16's. Five cards
+moved to their actual first printing (`roe.prophetic_prism`,
+`mh2.tireless_provisioner`, `ptk.corrupt_court_official`, `eld.epic_downfall`,
+`ths.lightning_strike`); every set-file card is supported unless marked
+incomplete.
+
+Learning tokens are derived in Rust (`managym.learning_catalog`) by walking each
+definition with a `serde` serializer: learning schema **9**, token values are
+stable hashes of Rust and printed names, and IR opcodes, roles and enums are
+gone. `BoundSemanticPack` binds by content digest and registry name. Manifests
+carry `pack_key` (replacing `compiled_semantics` with its IR and source hashes);
+`content_pool` rows add `scryfall_id`. Permanent observations add an
+`attacking` column (width 28 → 29) and LLM text, so the state is no longer
+visible only through the event window. `tests/cards/observability.rs` guards
+that every keyword, permanent and player status and `Effect`/`TriggerCondition`
+/`Ability` variant names its tensor column or token.
+
+## w16: one card authority (superseded by w17)
 
 Cards are typed Rust functions in the file of the set that first printed them
 under `managym/src/cardsets/` (`tla.rs`, `stx.rs`, `lea.rs`, …), each defined
@@ -61,31 +113,6 @@ set files; with the rules fixtures they keep the default pack's legacy
 set. A card is supported when its set file defines it with a typed program and
 does not mark it incomplete; tests never gate support. `managym.set_cards`
 narrows the pool to chosen sets, such as `["tla", "lea"]`.
-
-TLA casting, costs and zone permissions (Task 87e012) extend w16 before its
-freeze. `flow/cast_permission.rs` owns casting outside the hand: printed
-flashback, exact-card exile grants that go stale once the card leaves exile,
-and hand-only restrictions that override every other permission until the
-restricter's next untap. Kicker, X and free casts are announced together at
-cast time. Restricted mana is keyed by what it may pay for (Lesson, Shrine or
-Ally spells and ability sources); the narrowest usable mana spends first.
-Hand and graveyard abilities, including landcycling, are card activations.
-Exhaust and once-each-turn limits belong to the permanent. Foretold cards are
-exiled face down and visible only to their owner. Each player's battlefield
-lists the permanents they control, and a resolving permanent spell enters
-under its controller (CR 110.2). Learning schema 8 grows append-only.
-
-Policy input v5 makes these facts policy-visible (Jack Heart, concept review 3,
-2026-10-29). Player rows grow from 40 to 59 columns: restricted mana each
-spending subtype (Lesson, Shrine, Ally) may use, by color, then the hand-only
-casting lock. Card rows grow from 41 to 55: twelve cast-permission terms (who
-may play it, its cost, this turn, own turn, later turn, source control, flash,
-any mana, waterbend, foretold) and a stack spell's announced X, with validity
-still last. Viewer JSON, text and Academy carry the same facts: a card's
-`cast_permission`, `x`, and a player's per-class `restricted_mana` and
-`hand_only_until`. A foretold card and its permission reach only its owner.
-V1–v4 keep their widths; native buffers bind v5 by the 59-column player row
-beside v4's 33-column relations.
 
 ## w7: Elemental rules and compiled content (not yet frozen)
 

@@ -1,3 +1,5 @@
+"""The learning projection binds the engine's own card tokens to live packs."""
+
 from __future__ import annotations
 
 from copy import deepcopy
@@ -9,52 +11,77 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.semantic.compiler import Opcode, canonical_json
 from manabot.semantic.learning import (
-    DEFAULT_PACK_KEY,
     DEFAULT_SCHEMA_PATH,
+    PROGRAM_KINDS,
+    TOKEN_KINDS,
     ArtifactCompatibilityError,
     BoundSemanticPack,
     ContentPackBindingError,
     LearningSchema,
     SemanticArtifactHeader,
     SemanticProjectionError,
-    UnknownOpcodeError,
     UnknownSchemaError,
-    current_ir_document,
+    token_value,
 )
+import managym
+
+PACK_KEY = "ur-lessons-vs-gw-allies"
 
 
 def _json(path: Path) -> dict:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _manifest(*, reverse_ids: bool = False) -> dict:
-    ir = current_ir_document(DEFAULT_PACK_KEY)
-    rows = list(range(len(ir["definitions"])))
-    card_ids = list(reversed(rows)) if reverse_ids else rows
+def _manifest(*, reverse_ids: bool = False, pack_key: str = PACK_KEY) -> dict:
+    pool = managym.content_pool(pack_key)
+    rows = sorted(pool["definitions"], key=lambda row: row["card_def_id"])
+    ids = [row["card_def_id"] for row in rows]
+    if reverse_ids:
+        ids.reverse()
     return {
         "schema_version": 1,
-        "content_digest": "content-pack-test-digest",
+        "content_digest": pool["content_digest"],
+        "pack_key": pack_key,
         "definitions": [
-            {
-                "card_def_id": card_ids[row],
-                "registry_name": definition["content_pack_binding"]["value"],
-            }
-            for row, definition in enumerate(ir["definitions"])
+            {"card_def_id": card_def_id, "registry_name": row["registry_name"]}
+            for card_def_id, row in zip(ids, rows, strict=True)
         ],
     }
 
 
-def _write_rehashed_ir(path: Path, ir: dict) -> None:
-    unhashed = deepcopy(ir)
-    unhashed.pop("ir_hash", None)
-    ir["ir_hash"] = (
-        __import__("hashlib")
-        .sha256(canonical_json(unhashed).encode("utf-8"))
-        .hexdigest()
+def _row(pack: BoundSemanticPack, name: str, pack_key: str = PACK_KEY) -> int:
+    pool = managym.content_pool(pack_key)
+    card_def_id = next(
+        row["card_def_id"]
+        for row in pool["definitions"]
+        if row["registry_name"] == name
     )
-    path.write_text(json.dumps(ir, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return pack.definition_row(card_def_id)
+
+
+def _tokens(
+    pack: BoundSemanticPack, offsets: np.ndarray, row: int
+) -> list[tuple[int, int]]:
+    start, end = int(offsets[row]), int(offsets[row + 1])
+    return list(
+        zip(
+            pack.catalog.token_kind[start:end].tolist(),
+            pack.catalog.token_value[start:end].tolist(),
+            strict=True,
+        )
+    )
+
+
+def _card_tokens(pack: BoundSemanticPack, row: int) -> list[tuple[int, int]]:
+    tokens = _tokens(pack, pack.catalog.definition_offsets, row)
+    for program in pack.program_rows(row):
+        tokens += _tokens(pack, pack.catalog.program_offsets, program)
+    return tokens
+
+
+def _variant(name: str) -> tuple[int, int]:
+    return (TOKEN_KINDS["variant"], token_value(name))
 
 
 def _fake_observation(card_ids: list[int], *, hidden_marker: str = "a"):
@@ -71,179 +98,80 @@ def _fake_observation(card_ids: list[int], *, hidden_marker: str = "a"):
     )
 
 
-def _span(catalog, offsets: np.ndarray, row: int) -> tuple[bytes, bytes]:
-    start, end = (int(offsets[row]), int(offsets[row + 1]))
-    return (
-        catalog.token_kind[start:end].tobytes(),
-        catalog.token_value[start:end].tobytes(),
-    )
-
-
-def _first_instruction_span(
-    pack: BoundSemanticPack, program_row: int
-) -> tuple[bytes, bytes]:
-    catalog = pack.catalog
-    start = int(catalog.program_offsets[program_row])
-    end = int(catalog.program_offsets[program_row + 1])
-    kinds = catalog.token_kind[start:end]
-    values = catalog.token_value[start:end]
-    structure_kind = pack.schema.token_kinds["structure"]
-    begin_value = pack.schema.structures["instruction_begin"]
-    end_value = pack.schema.structures["instruction_end"]
-    begin = next(
-        index
-        for index, (kind, value) in enumerate(zip(kinds, values))
-        if int(kind) == structure_kind and int(value) == begin_value
-    )
-    finish = next(
-        index
-        for index, (kind, value) in enumerate(zip(kinds[begin:], values[begin:]), begin)
-        if int(kind) == structure_kind and int(value) == end_value
-    )
-    return kinds[begin : finish + 1].tobytes(), values[begin : finish + 1].tobytes()
-
-
-def test_schema_and_catalog_are_deterministic_and_cover_compiler_opcodes() -> None:
+def test_catalog_is_deterministic_and_spans_every_definition() -> None:
     first = BoundSemanticPack.bind(_manifest())
-    second = BoundSemanticPack.bind(deepcopy(_manifest()))
-
-    assert first.schema.schema_hash == second.schema.schema_hash
-    assert first.semantic_pack_hash == second.semantic_pack_hash
-    used_opcodes = {
-        instruction["op_name"]: instruction["opcode"]
-        for program in first.ir.programs
-        for instruction in _walk(program["instructions"])
-    }
-    # The shared schema covers the compiler; an individual deck pack need not
-    # exercise every opcode in that vocabulary.
-    assert first.schema.opcodes == {
-        opcode.name.lower(): int(opcode) for opcode in Opcode
-    }
-    assert used_opcodes.items() <= first.schema.opcodes.items()
+    second = BoundSemanticPack.bind(_manifest())
+    assert first.schema.raw == _json(DEFAULT_SCHEMA_PATH)
     for field in first.catalog.__dict__:
-        left = getattr(first.catalog, field)
-        right = getattr(second.catalog, field)
-        assert left.dtype == right.dtype
-        assert left.tobytes() == right.tobytes()
-        assert not left.flags.writeable
-
-    assert len(first.catalog.definition_offsets) == len(first.ir.definitions) + 1
-    assert len(first.catalog.program_offsets) == len(first.ir.programs) + 1
+        assert (
+            getattr(first.catalog, field).tobytes()
+            == getattr(second.catalog, field).tobytes()
+        )
+    assert first.catalog.definitions == len(_manifest()["definitions"])
     assert first.catalog.definition_ref_source_tokens.size > 0
     assert first.catalog.definition_ref_source_tokens.size == (
         first.catalog.definition_ref_target_rows.size
     )
-
-
-def _walk(instructions):
-    for instruction in instructions:
-        yield instruction
-        for field in ("then", "otherwise", "body"):
-            yield from _walk(instruction.get(field, []))
-
-
-def test_same_instruction_recombines_identically_across_card_programs():
-    pack = BoundSemanticPack.bind(_manifest())
-    rows = {
-        program["semantic_key"]: index for index, program in enumerate(pack.ir.programs)
+    present = set(first.catalog.token_kind.tolist())
+    assert present == set(TOKEN_KINDS.values()) - {TOKEN_KINDS["padding"]}
+    kinds = {
+        int(first.catalog.token_value[int(offset)])
+        for offset in first.catalog.program_offsets[:-1]
     }
+    assert kinds <= set(PROGRAM_KINDS.values())
+    for offset in first.catalog.program_offsets[:-1]:
+        assert int(first.catalog.token_kind[int(offset)]) == TOKEN_KINDS["program_kind"]
 
-    invasion = _first_instruction_span(
-        pack, rows["tla.invasion_reinforcements.create_ally"]
-    )
-    warriors = _first_instruction_span(pack, rows["tla.kyoshi_warriors.create_ally"])
-    assert invasion == warriors
 
-    kinds, values = _span(
-        pack.catalog, pack.catalog.program_offsets, rows["tla.accumulate_wisdom.spell"]
-    )
-    structure_kind = np.frombuffer(kinds, dtype=np.uint16)
-    structure_value = np.frombuffer(values, dtype=np.int32)
-    controls = [
-        int(value)
-        for kind, value in zip(structure_kind, structure_value)
-        if int(kind) == pack.schema.token_kinds["structure"]
-        and int(value)
-        in {
-            pack.schema.structures["then_begin"],
-            pack.schema.structures["then_end"],
-            pack.schema.structures["otherwise_begin"],
-            pack.schema.structures["otherwise_end"],
-        }
-    ]
-    assert controls == [
-        pack.schema.structures["otherwise_begin"],
-        pack.schema.structures["otherwise_end"],
-        pack.schema.structures["then_begin"],
-        pack.schema.structures["then_end"],
+def test_tokens_are_the_engine_definition_without_identity_or_printed_text() -> None:
+    pack = BoundSemanticPack.bind(_manifest())
+    values = set(pack.catalog.token_value.tolist())
+    for row in managym.content_pool(PACK_KEY)["definitions"]:
+        # Single-word names such as "Ally" are also printed subtypes.
+        if " " in row["registry_name"]:
+            assert token_value(row["registry_name"]) not in values
+    for field in ("key", "scryfall_id", "name", "text_box"):
+        assert (TOKEN_KINDS["field"], token_value(field)) not in set(
+            zip(pack.catalog.token_kind.tolist(), values, strict=False)
+        )
+    bolt = _card_tokens(pack, _row(pack, "Igneous Inspiration"))
+    assert _variant("Effect::DealDamage") in bolt
+    assert _variant("TargetSpec::CreatureOrPlayer") in bolt
+    assert (TOKEN_KINDS["integer"], 3) in bolt
+
+
+def test_same_effect_encodes_identically_across_cards() -> None:
+    pack = BoundSemanticPack.bind(_manifest())
+    draw = [
+        _variant("Effect::DrawCards"),
+        (TOKEN_KINDS["field"], token_value("count")),
     ]
 
+    def has_draw(tokens: list[tuple[int, int]]) -> bool:
+        return any(tokens[i : i + 2] == draw for i in range(len(tokens) - 1))
 
-def test_catalog_exposes_every_required_semantic_token_family() -> None:
+    drawing = [
+        row for row in range(pack.definition_count) if has_draw(_card_tokens(pack, row))
+    ]
+    assert len(drawing) >= 2
+
+
+def test_definition_tokens_do_not_depend_on_the_pack() -> None:
+    small = BoundSemanticPack.bind(_manifest())
+    world = BoundSemanticPack.bind(_manifest(pack_key="tla-pool-v1"))
+    for name in ("Forest", "Igneous Inspiration", "Invasion Reinforcements"):
+        assert _card_tokens(small, _row(small, name)) == _card_tokens(
+            world, _row(world, name, "tla-pool-v1")
+        )
+
+
+def test_created_tokens_are_definition_references() -> None:
     pack = BoundSemanticPack.bind(_manifest())
-    kinds = pack.catalog.token_kind
-    values = pack.catalog.token_value
-
-    present_kinds = set(int(value) for value in kinds)
-    assert present_kinds == set(pack.schema.token_kinds.values()) - {
-        pack.schema.token_kinds["padding"]
-    }
-
-    structure_values = {
-        int(value)
-        for kind, value in zip(kinds, values)
-        if int(kind) == pack.schema.token_kinds["structure"]
-    }
-    for boundary in (
-        "definition_begin",
-        "program_begin",
-        "cost_begin",
-        "target_begin",
-        "selector_begin",
-        "predicate_begin",
-        "condition_begin",
-        "then_begin",
-        "otherwise_begin",
-        "body_begin",
-        "instruction_begin",
-    ):
-        assert pack.schema.structures[boundary] in structure_values
-
-    field_values = {
-        int(value)
-        for kind, value in zip(kinds, values)
-        if int(kind) == pack.schema.token_kinds["field"]
-    }
-    for field in (
-        "cost",
-        "definition_ref",
-        "max",
-        "min",
-        "role",
-        "selector",
-        "target",
-        "then",
-        "otherwise",
-        "body",
-    ):
-        assert pack.schema.fields[field] in field_values
-
-    program_kinds = {
-        int(value)
-        for kind, value in zip(kinds, values)
-        if int(kind) == pack.schema.token_kinds["program_kind"]
-    }
-    opcodes = {
-        int(value)
-        for kind, value in zip(kinds, values)
-        if int(kind) == pack.schema.token_kinds["opcode"]
-    }
-    assert program_kinds == set(pack.schema.program_kinds.values())
-    assert opcodes == {
-        instruction["opcode"]
-        for program in pack.ir.programs
-        for instruction in _walk(program["instructions"])
-    }
+    (program,) = pack.program_rows(_row(pack, "Invasion Reinforcements"))
+    padded = pack.pad_catalog()
+    targets = padded["definition_ref_target_rows"][program]
+    mask = padded["definition_ref_mask"][program]
+    assert targets[mask].tolist() == [_row(pack, "Ally")]
 
 
 def test_semantic_only_ablation_is_independent_of_card_def_id_allocation():
@@ -380,7 +308,7 @@ def test_artifact_headers_round_trip_in_dataset_and_checkpoint(tmp_path):
         SemanticArtifactHeader.from_json("not-json")
 
 
-def test_unknown_schema_opcode_and_content_binding_fail_closed(tmp_path: Path) -> None:
+def test_unknown_schema_and_content_binding_fail_closed(tmp_path: Path) -> None:
     schema = _json(DEFAULT_SCHEMA_PATH)
     schema["schema_version"] = 999
     bad_schema = tmp_path / "schema.json"
@@ -388,24 +316,26 @@ def test_unknown_schema_opcode_and_content_binding_fail_closed(tmp_path: Path) -
     with pytest.raises(UnknownSchemaError, match="got 999"):
         LearningSchema.load(bad_schema)
 
-    ir = current_ir_document(DEFAULT_PACK_KEY)
-    ir["programs"][0]["instructions"][0].update(op_name="future_op", opcode=999)
-    bad_ir = tmp_path / "ir.json"
-    _write_rehashed_ir(bad_ir, ir)
-    with pytest.raises(UnknownOpcodeError, match="unknown opcode name"):
-        BoundSemanticPack.bind(_manifest(), ir_path=bad_ir)
+    schema = _json(DEFAULT_SCHEMA_PATH)
+    schema["token_kinds"]["opcode"] = 10
+    bad_kinds = tmp_path / "kinds.json"
+    bad_kinds.write_text(json.dumps(schema), encoding="utf-8")
+    with pytest.raises(SemanticProjectionError, match="TokenKind"):
+        LearningSchema.load(bad_kinds)
 
-    ir = current_ir_document(DEFAULT_PACK_KEY)
-    ir["programs"][0]["instructions"][0]["opcode"] = 999
-    mismatched_ir = tmp_path / "mismatched-ir.json"
-    _write_rehashed_ir(mismatched_ir, ir)
-    with pytest.raises(UnknownOpcodeError, match="disagrees"):
-        BoundSemanticPack.bind(_manifest(), ir_path=mismatched_ir)
+    stale = {**_manifest(), "content_digest": "0" * 64}
+    with pytest.raises(ContentPackBindingError, match="differs from the live pack"):
+        BoundSemanticPack.bind(stale)
 
     missing = _manifest()
     missing["definitions"].pop()
-    with pytest.raises(ContentPackBindingError, match="does not bind"):
+    with pytest.raises(ContentPackBindingError, match="do not all bind"):
         BoundSemanticPack.bind(missing)
+
+    unknown = _manifest()
+    unknown["definitions"][0]["registry_name"] = "Not A Card"
+    with pytest.raises(ContentPackBindingError, match="does not bind"):
+        BoundSemanticPack.bind(unknown)
 
     duplicate = _manifest()
     duplicate["definitions"][1]["card_def_id"] = duplicate["definitions"][0][

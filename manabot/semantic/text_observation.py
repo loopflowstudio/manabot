@@ -514,6 +514,8 @@ class _Renderer:
                     f"from elsewhere, until {self.name(player.hand_only_until)} "
                     "begins a turn."
                 )
+            if player.no_maximum_hand_size:
+                lines.append("Has no maximum hand size for the rest of the game.")
             for label, quantities in (
                 ("Publicly known hand minima", player.known_hand),
                 ("Initial sideboard", player.sideboard_counts),
@@ -605,8 +607,23 @@ class _Renderer:
         lines: list[str] = []
         for permanent in state.agent_permanents + state.opponent_permanents:
             optional = ""
+            if permanent.attacking:
+                optional += "; attacking"
             if permanent.temp_subtypes:
                 optional += f"; temporary subtypes {', '.join(permanent.temp_subtypes)}"
+            if permanent.exhausted_abilities:
+                optional += (
+                    f"; exhaust abilities used {permanent.exhausted_abilities}"
+                )
+            if permanent.once_each_turn_used:
+                optional += (
+                    "; once-each-turn abilities used this turn "
+                    f"{permanent.once_each_turn_used}"
+                )
+            if permanent.granted_firebending:
+                optional += (
+                    f"; firebending {permanent.granted_firebending} until end of turn"
+                )
             if keywords := _keywords(permanent.keywords):
                 optional += f"; effective keywords {keywords}"
             lines.append(

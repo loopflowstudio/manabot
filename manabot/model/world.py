@@ -47,8 +47,7 @@ def validate_agent_setup(
     if binding is None:
         return
     actual = _setups(player_configs)
-    compiled = binding["content_manifest"].get("compiled_semantics")
-    pack_key = compiled["pack_key"] if compiled is not None else None
+    pack_key = binding["content_manifest"].get("pack_key")
     roster_world = pack_key in _ROSTER_PACKS
     if not roster_world and not allow_deck_repetition:
         if actual != binding["setups"]:
@@ -72,10 +71,10 @@ def validate_agent_setup(
 
 
 def validate_policy_input(agent: Any, binding: dict) -> None:
-    compiled = binding["content_manifest"].get("compiled_semantics")
-    if compiled is not None and agent.config.semantic_pack != compiled["pack_key"]:
+    pack_key = binding["content_manifest"].get("pack_key")
+    if pack_key is not None and agent.config.semantic_pack != pack_key:
         raise ValueError(
-            "compiled matchup checkpoint requires its complete semantic program input"
+            "authored matchup checkpoint requires its complete semantic program input"
         )
 
 
@@ -91,14 +90,14 @@ def checkpoint_world(player_configs: Sequence[Any], observation_space: Any) -> d
     engine = managym.Env(seed=0)
     engine.reset(configs)
     manifest = engine.content_pack_manifest()
-    compiled = manifest.get("compiled_semantics")
-    if compiled is not None and compiled["pack_key"] in _ROSTER_PACKS:
+    pack_key = manifest.get("pack_key")
+    if pack_key in _ROSTER_PACKS:
         # The authored world admits every pair, including mirrors. Bind the
         # complete native roster, while collection still uses its actual pair.
         setups = _setups(
             [
-                managym.authored_deck_setup(compiled["pack_key"], key)
-                for key in managym.authored_deck_keys(compiled["pack_key"])
+                managym.authored_deck_setup(pack_key, key)
+                for key in managym.authored_deck_keys(pack_key)
             ]
         )
     else:
@@ -107,7 +106,7 @@ def checkpoint_world(player_configs: Sequence[Any], observation_space: Any) -> d
         key: {"shape": list(shape), "dtype": str(observation_space.encoder.dtypes[key])}
         for key, shape in observation_space.shapes.items()
     }
-    schema_path = learning_schema_path(compiled["pack_key"] if compiled else None)
+    schema_path = learning_schema_path(pack_key)
     return {
         "world": WORLD,
         "policy_input_version": observation_space.encoder.config.policy_input_version,
@@ -120,7 +119,7 @@ def checkpoint_world(player_configs: Sequence[Any], observation_space: Any) -> d
         "input_schema": schema,
         "learning_schema_sha256": (
             _digest(BoundSemanticPack.bind(manifest).schema.raw)
-            if compiled is not None and compiled["pack_key"] in _ROSTER_PACKS
+            if pack_key in _ROSTER_PACKS
             else hashlib.sha256(schema_path.read_bytes()).hexdigest()
         ),
     }
@@ -128,14 +127,9 @@ def checkpoint_world(player_configs: Sequence[Any], observation_space: Any) -> d
 
 def checkpoint_configs(binding: Mapping[str, Any]) -> list[managym.PlayerConfig]:
     """Reconstruct a representative root without dropping authored pack identity."""
-    compiled = binding["content_manifest"].get("compiled_semantics")
-    pack_key = None
-    if compiled is not None:
-        if not isinstance(compiled, dict) or not isinstance(
-            compiled.get("pack_key"), str
-        ):
-            raise ValueError("invalid compiled content pack selection")
-        pack_key = compiled["pack_key"]
+    pack_key = binding["content_manifest"].get("pack_key")
+    if pack_key is not None and not isinstance(pack_key, str):
+        raise ValueError("invalid authored content pack selection")
     return [
         managym.PlayerConfig(str(index), setup["deck"], setup["sideboard"], pack_key)
         for index, setup in enumerate(binding["setups"][:2])

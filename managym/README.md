@@ -16,17 +16,18 @@ and convergence status are in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
 1. **`src/agent/`**: RL-facing API (`Env`, action spaces, observations)
 2. **`src/flow/`**: Game progression (turns, priority, combat)
 3. **`src/state/`**: Core game state (cards, players, zones, mana)
-4. **`src/cardsets/`**: Card set files (one per printed set); **`src/cards/`**: the card language, `ContentPack`, rules fixtures
+4. **`src/cardsets/`**: Card set files (one per printed set); **`src/cards/`**: `ContentPack` and rules fixtures; **`src/semantic/`**: authored setups, pool support and learning tokens
 5. **`src/infra/`**: Logging and profiler infrastructure
 6. **`src/python/`**: PyO3 bindings and Rust→Python conversions
 
-Cards are typed functions in the file of their first printing's set under
-`src/cardsets/`; symbolic authoring types live in `src/cards/authoring.rs`.
-`src/world.rs` owns `WORLD_VERSION`, the card/deck support check (defined and
-not marked incomplete) and the set filter. `src/semantic/compile.rs` compiles
-them in process into the IR the runtime lowers and the learning projection reads
-(`managym.semantic_ir_json`); nothing is generated on disk. Keep decklist data
-separate from card behavior; see [the authoring contract](../content/semantic/README.md).
+Each card is a function in the file of its first printing's set under
+`src/cardsets/`, returning the engine's own `CardDefinition` in its rules types
+(`Effect`, `Ability`, `TargetSpec`, …). The engine runs that value directly, and
+the learning catalog (`src/semantic/tokens.rs`, `managym.learning_catalog`)
+derives policy tokens from it. `src/world.rs` owns `WORLD_VERSION`, the card/deck
+support check (defined and not marked incomplete) and the set filter. Keep
+decklist data separate from card behavior; see
+[the content contract](../content/semantic/README.md).
 
 Dependencies flow: python → agent → flow → state/infra.
 
@@ -35,7 +36,7 @@ structured offers, proposed events, fork/rollback — is documented in
 [docs/research/semantic-kernel.md](../docs/research/semantic-kernel.md), with
 conformance fixtures under [conformance/](../conformance/).
 
-Authored setups come from `SemanticPack::player_config` (Python:
+Authored setups come from `AuthoredPack::player_config` (Python:
 `managym.authored_deck_setup(pack_key, deck_key)`). Carry that complete config
 when swapping seats or rebuilding roots: deck and sideboard together identify
 an authored setup. `PlayerConfig::new` intentionally gives custom setups an

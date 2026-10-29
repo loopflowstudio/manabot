@@ -54,12 +54,19 @@ SPEND_SUBTYPES = ("Lesson", "Shrine", "Ally")
 LEGACY_PLAYER_DIM = 40
 PLAYER_RESTRICTED_INDEX = LEGACY_PLAYER_DIM
 PLAYER_HAND_ONLY_INDEX = PLAYER_RESTRICTED_INDEX + len(SPEND_SUBTYPES) * 6
-PLAYER_DIM = PLAYER_HAND_ONLY_INDEX + 1
+PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX = PLAYER_HAND_ONLY_INDEX + 1
+PLAYER_DIM = PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX + 1
 LEGACY_CARD_DIM = 41
 # V5 card terms start where v4's validity flag was; validity stays last.
 CARD_PERMISSION_INDEX = LEGACY_CARD_DIM - 1
 CARD_X_INDEX = CARD_PERMISSION_INDEX + 12
 CARD_DIM = CARD_X_INDEX + 2 + 1
+LEGACY_PERMANENT_DIM = 29
+# V5 permanent terms start where v4's validity flag was; validity stays last.
+PERMANENT_EXHAUSTED_INDEX = LEGACY_PERMANENT_DIM - 1
+PERMANENT_ONCE_EACH_TURN_INDEX = PERMANENT_EXHAUSTED_INDEX + 1
+PERMANENT_FIREBENDING_INDEX = PERMANENT_ONCE_EACH_TURN_INDEX + 1
+PERMANENT_DIM = PERMANENT_FIREBENDING_INDEX + 2
 
 
 # -----------------------------------------------------------------------------
@@ -93,7 +100,8 @@ class ObservationEncoder:
         # Define dimensions for players, cards, permanents.
         # Player: life + is_active + zones + phase/step one-hots + gy
         # lessons + until-end-of-combat mana + pooled and spend-restricted colors;
-        # v5 adds restricted mana by spending subtype and the hand-only lock.
+        # v5 adds restricted mana by spending subtype, the hand-only lock and
+        # no maximum hand size.
         # Card: zone one-hot + is_mine + P/T + mana value + 6 type flags +
         # 12 keywords + is_token/is_ally/is_lesson tags + ward flag/cost +
         # kicker flag/cost + hexproof + outside + indestructible + legendary;
@@ -105,8 +113,9 @@ class ObservationEncoder:
         # can't-be-blocked-this-turn, effective power/toughness, animated
         # (earthbent land), exile-linkage (Jailer), 13 effective-keyword flags
         # (printed + until-EOT grants), death-to-exile replacement, definition,
-        # temporary Avatar subtype, validity.
-        self.permanent_dim = 28
+        # temporary Avatar subtype, attacking; v5 adds used exhaust and
+        # once-each-turn abilities and granted firebending; validity is last.
+        self.permanent_dim = PERMANENT_DIM if current else LEGACY_PERMANENT_DIM
         self.event_dim = 12 if config.policy_history_version == 1 else 7
 
         # Preserve attack/decline independently of action family and focus.
@@ -410,6 +419,7 @@ class ObservationEncoder:
                             np.asarray(restricted.mana, dtype=np.float32) / 10.0
                         )
             arr[PLAYER_HAND_ONLY_INDEX] = float(player.hand_only_until is not None)
+            arr[PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX] = float(player.no_maximum_hand_size)
 
         self.object_to_index[player.id] = self.current_object_index
         self.current_object_index += 1
@@ -574,7 +584,12 @@ class ObservationEncoder:
         arr[23] = float(perm.exile_if_dies_this_turn)
         arr[25] = float(perm.keywords.indestructible)
         arr[26] = float("Avatar" in perm.temp_subtypes)
+        arr[27] = float(perm.attacking)
         arr[PERMANENT_DEFINITION_INDEX] = perm.registry_key + 1
+        if self.permanent_dim == PERMANENT_DIM:
+            arr[PERMANENT_EXHAUSTED_INDEX] = float(perm.exhausted_abilities)
+            arr[PERMANENT_ONCE_EACH_TURN_INDEX] = float(perm.once_each_turn_used)
+            arr[PERMANENT_FIREBENDING_INDEX] = float(perm.granted_firebending) / 10.0
         # Set validity flag (permanent exists)
         arr[-1] = 1.0
         return arr

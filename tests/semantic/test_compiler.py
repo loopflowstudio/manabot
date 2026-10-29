@@ -203,20 +203,6 @@ def test_opcode_numbers_are_an_explicit_compatibility_surface() -> None:
         "EXILE_IF_DIES": 63,
         "ADD_SUBTYPE": 64,
         "OPTIONAL_PAYMENT": 65,
-        "AIRBEND": 66,
-        "AIRBEND_ALL": 67,
-        "OPPONENTS_CAST_ONLY_FROM_HAND": 68,
-        "EXILE_TOP_CARD_PLAY_THIS_TURN": 69,
-        "SACRIFICE_SOURCE": 70,
-        "PUT_INTO_LIBRARY_SECOND_OR_BOTTOM": 71,
-        "SEARCH_LANDS_OPPONENT_SPLITS": 72,
-        "REVEAL_HAND_DISCARD_CHOSEN": 73,
-        "SHUFFLE_GRAVEYARD_INTO_LIBRARY": 74,
-        "NO_MAXIMUM_HAND_SIZE": 75,
-        "CAST_FROM_HAND_FREE": 76,
-        "EXILE_UNTIL_NONLAND_CAST_FREE": 77,
-        "EXILE_LINKED": 78,
-        "GRANT_FIREBENDING_UNTIL_EOT": 79,
     }
 
 

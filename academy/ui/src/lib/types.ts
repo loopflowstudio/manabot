@@ -63,6 +63,12 @@ export interface PermanentState {
   is_token?: boolean;
   temp_subtypes?: string[];
   exile_if_dies_this_turn?: boolean;
+  /** Exhaust abilities this object has used. */
+  exhausted_abilities?: number;
+  /** "Once each turn" abilities this object has used this turn. */
+  once_each_turn_used?: number;
+  /** Firebending granted until end of turn. */
+  granted_firebending?: number;
   text_box?: string;
   id: number;
   name: string | null;
@@ -92,6 +98,7 @@ export interface PlayerState {
   restricted_mana?: RestrictedMana[];
   /** Player id whose next turn ends this player's hand-only casting. */
   hand_only_until?: number;
+  no_maximum_hand_size?: boolean;
   combat_mana?: number;
   inspected?: CardState[];
   sideboard?: SideboardCard[];

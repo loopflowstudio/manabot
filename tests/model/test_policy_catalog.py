@@ -1,7 +1,6 @@
 """Explicit native catalog binding and shared encoder dimensions, not strength."""
 
 from pathlib import Path
-from typing import Literal
 
 import pytest
 import torch
@@ -24,7 +23,7 @@ def test_catalog_uses_actual_native_ids_and_shared_encoder() -> None:
     pack = bind_policy_catalog(key)
     encoder = SemanticCardEncoder(key, 8)
     shape = encoder.catalog_shape
-    assert shape.definitions == len(pack.ir.definitions)
+    assert shape.definitions == pack.definition_count
     assert shape.unique_tokens == len(encoder.token_vocabulary)
     assert shape.expanded_tokens == int(encoder.lengths.sum())
     assert shape.padded_tokens == encoder.tokens.numel()
@@ -44,26 +43,23 @@ def test_unknown_catalog_is_not_a_name_alias() -> None:
         SemanticCardEncoder("simple-subset", 8)
 
 
-@pytest.mark.parametrize("field", ["pack_key", "ir_hash", "source_hash"])
-def test_native_ir_receipt_must_match(
+def test_native_pool_digest_must_match_the_catalog(
     monkeypatch: pytest.MonkeyPatch,
-    field: Literal["pack_key", "ir_hash", "source_hash"],
 ) -> None:
     pool = managym.content_pool("ur-lessons-vs-gw-allies")
-    pool["compiled_semantics"][field] = "not-native-ir"
+    pool["content_digest"] = "0" * 64
     monkeypatch.setattr(managym, "content_pool", lambda key: pool)
-    with pytest.raises(ContentPackBindingError, match="Compiled IR differs"):
+    with pytest.raises(ContentPackBindingError, match="differs from the live pack"):
         SemanticCardEncoder("ur-lessons-vs-gw-allies", 8)
 
 
-@pytest.mark.parametrize("receipt", [None, "unverified", []])
-def test_policy_catalog_requires_a_compiled_receipt(
-    monkeypatch: pytest.MonkeyPatch, receipt: object
+def test_policy_catalog_requires_its_registered_pack(
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     pool = managym.content_pool("ur-lessons-vs-gw-allies")
-    pool["compiled_semantics"] = receipt
+    pool["pack_key"] = "tla-pool-v1"
     monkeypatch.setattr(managym, "content_pool", lambda key: pool)
-    with pytest.raises(ContentPackBindingError, match="compiled receipt"):
+    with pytest.raises(ContentPackBindingError, match="registered pack"):
         bind_policy_catalog("ur-lessons-vs-gw-allies")
 
 
@@ -95,4 +91,5 @@ def test_research_checkpoint_binds_common_catalog(
     assert loaded.world_binding == payload["world_binding"]
     for name, tensor in agent.state_dict().items():
         assert torch.equal(tensor, loaded.state_dict()[name])
-    assert bind_policy_catalog(key).schema.raw["enums"]["subtype"]["Giant"] > 0
+    catalog = bind_policy_catalog(key).catalog
+    assert managym.learning_token_value("Giant") in set(catalog.token_value.tolist())

@@ -18,7 +18,7 @@ use crate::{
         action::AgentError,
         observation::Observation,
         observation_encoder::{
-            encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM, PERMANENT_DIM,
+            encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM,
         },
         opponent::OpponentPolicy,
         rollout_pool::RolloutPool,
@@ -431,14 +431,14 @@ fn read_observation_buffers(
         agent_permanents: require_numpy_array(
             buffers,
             "agent_permanents",
-            &[n, c.max_permanents_per_player, PERMANENT_DIM],
+            &[n, c.max_permanents_per_player, c.permanent_dim()],
             "float32",
         )?
         .unbind(),
         opponent_permanents: require_numpy_array(
             buffers,
             "opponent_permanents",
-            &[n, c.max_permanents_per_player, PERMANENT_DIM],
+            &[n, c.max_permanents_per_player, c.permanent_dim()],
             "float32",
         )?
         .unbind(),

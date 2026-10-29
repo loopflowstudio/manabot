@@ -340,6 +340,9 @@ class LegacyPermanentView(ProtocolModel):
     exile_if_dies_this_turn: bool = Field(
         default=False, exclude_if=lambda value: not value
     )
+    exhausted_abilities: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    once_each_turn_used: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    granted_firebending: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     text_box: str = Field(default="", exclude_if=lambda value: not value)
     id: UInt32
     name: str | None
@@ -374,6 +377,9 @@ class LegacyPlayerView(ProtocolModel):
     )
     hand_only_until: UInt32 | None = Field(
         default=None, exclude_if=lambda value: value is None
+    )
+    no_maximum_hand_size: bool = Field(
+        default=False, exclude_if=lambda value: not value
     )
     combat_mana: Int32 | None = Field(
         default=None, exclude_if=lambda value: value is None

@@ -1,23 +1,31 @@
 //! Return to Ravnica.
-use super::native_creature;
-use crate::state::card::{CardDefinition, Keywords};
+use crate::state::{
+    card::{CardDefinition, CardType, CardTypes, Keywords},
+    mana::ManaCost,
+};
 
-/// Native definitions, until the typed card language has the operations they need.
-pub(super) fn native_cards() -> Vec<CardDefinition> {
+pub(super) fn cards() -> Vec<CardDefinition> {
     vec![fencing_ace()]
 }
 
 fn fencing_ace() -> CardDefinition {
-    native_creature(
-        "Fencing Ace",
-        "1W",
-        &["Human", "Soldier"],
-        1,
-        1,
-        Keywords {
+    let text_box =
+        "Double strike (This creature deals both first-strike and regular combat damage.)";
+
+    CardDefinition {
+        key: "rtr.fencing_ace",
+        scryfall_id: "a42d3066-f4ec-4d28-83ab-e48141206c72",
+        name: "Fencing Ace".into(),
+        mana_cost: Some(ManaCost::parse("{1}{W}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Human".into(), "Soldier".into()],
+        power: Some(1),
+        toughness: Some(1),
+        keywords: Keywords {
             double_strike: true,
             ..Default::default()
         },
-        "Double strike (This creature deals both first-strike and regular combat damage.)",
-    )
+        text_box: text_box.into(),
+        ..Default::default()
+    }
 }

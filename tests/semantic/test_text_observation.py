@@ -6,9 +6,14 @@ from pathlib import Path
 
 from managym.decision import SemanticContractError
 from managym.decision_capture import DecisionInput
+import numpy as np
 import pytest
 
-from manabot.env.observation import CARD_PERMISSION_INDEX, ObservationSpace
+from manabot.env.observation import (
+    CARD_PERMISSION_INDEX,
+    PERMANENT_ONCE_EACH_TURN_INDEX,
+    ObservationSpace,
+)
 from manabot.infra.config import ObservationConfig
 from manabot.semantic.text_observation import (
     RepresentationOverflow,
@@ -251,3 +256,33 @@ def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
     encoded = space.encode(observation)
     for key in ("agent_cards", "opponent_cards"):
         assert not encoded[key][:, CARD_PERMISSION_INDEX].any()
+
+
+def test_once_each_turn_use_reaches_text_and_both_encoders() -> None:
+    """Barrels' once-each-turn mana ability, once used, is in the text and in
+    the same v5 permanent column of the reference and native encoders."""
+    env = priority_root((), ("Barrels of Blasting Jelly", "Mountain"))
+    decision = capture_text_decision(env)
+    barrels = next(
+        a
+        for a in decision.actions
+        if "Barrels of Blasting Jelly" in a.description and "Activate" in a.description
+    )
+    submit_response(env, decision, barrels.reference)
+    while "once-each-turn abilities used this turn 1" not in (
+        decision := capture_text_decision(env)
+    ).text:
+        submit_response(env, decision, decision.actions[0].reference)
+
+    observation = _viewer_observation(decision)
+    space = ObservationSpace(ObservationConfig())
+    encoded = space.encode(observation)
+    row = next(
+        index
+        for index, permanent in enumerate(observation.agent_permanents)
+        if permanent.once_each_turn_used
+    )
+    assert encoded["agent_permanents"][row, PERMANENT_ONCE_EACH_TURN_INDEX] == 1
+    native = env.encode_observation(observation, policy_input_version=5)
+    for key, value in encoded.items():
+        np.testing.assert_array_equal(native[key], value, err_msg=key)

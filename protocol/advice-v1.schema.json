@@ -2419,10 +2419,24 @@
           "title": "Damage",
           "type": "integer"
         },
+        "exhausted_abilities": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Exhausted Abilities",
+          "type": "integer"
+        },
         "exile_if_dies_this_turn": {
           "default": false,
           "title": "Exile If Dies This Turn",
           "type": "boolean"
+        },
+        "granted_firebending": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Granted Firebending",
+          "type": "integer"
         },
         "id": {
           "maximum": 4294967295,
@@ -2452,6 +2466,13 @@
             }
           ],
           "title": "Name"
+        },
+        "once_each_turn_used": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Once Each Turn Used",
+          "type": "integer"
         },
         "plus1_counters": {
           "maximum": 4294967295,
@@ -2739,6 +2760,11 @@
           ],
           "default": null,
           "title": "Mana"
+        },
+        "no_maximum_hand_size": {
+          "default": false,
+          "title": "No Maximum Hand Size",
+          "type": "boolean"
         },
         "player_index": {
           "maximum": 255,

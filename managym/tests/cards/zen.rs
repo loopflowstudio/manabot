@@ -1,8 +1,10 @@
-//! Tests for cards filed in `src/cardsets/zen.rs`, grouped by the helper family they
-//! drive play with (`tests/support/`).
+//! Tests for cards filed in `src/cardsets/zen.rs`, in card order.
 
-use crate::support::elemental::{card, counters, permanent, settle, setup};
-use crate::support::sacrifice::{activate, choose, enter};
+use crate::support::{
+    game::five_color_setup,
+    inspect::{counters, library_card, permanent_named},
+    play::{activate_first, choose, play_and_settle, settle},
+};
 use managym::{
     agent::action::{Action, ActionSpaceKind},
     state::zone::ZoneType,
@@ -10,7 +12,7 @@ use managym::{
 
 #[test]
 fn landfall_creates_resources_and_counters() {
-    let mut s = setup(&[
+    let mut s = five_color_setup(&[
         "Sazh's Chocobo",
         "Tireless Tracker",
         "Lotus Cobra",
@@ -22,10 +24,10 @@ fn landfall_creates_resources_and_counters() {
         "Lotus Cobra",
         "Tireless Provisioner",
     ] {
-        enter(&mut s, name);
+        play_and_settle(&mut s, name);
     }
     // The Cobra's color and Provisioner's token are separate resolution choices.
-    let land = card(&s, 0, "Forest");
+    let land = library_card(&s, 0, "Forest");
     s.game_mut().move_card(land, ZoneType::Battlefield);
     s.game_mut().scenario_refresh_priority().unwrap();
     s.pass_priority();
@@ -42,11 +44,11 @@ fn landfall_creates_resources_and_counters() {
             s.pass_priority();
         }
     }
-    assert_eq!(counters(&s, permanent(&s, "Sazh's Chocobo")), 1);
+    assert_eq!(counters(&s, permanent_named(&s, "Sazh's Chocobo")), 1);
     assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
     assert_eq!(s.battlefield_permanents_named(0, "Food").len(), 1);
-    let clue = permanent(&s, "Clue");
-    activate(&mut s, clue);
+    let clue = permanent_named(&s, "Clue");
+    activate_first(&mut s, clue);
     settle(&mut s);
-    assert_eq!(counters(&s, permanent(&s, "Tireless Tracker")), 1);
+    assert_eq!(counters(&s, permanent_named(&s, "Tireless Tracker")), 1);
 }

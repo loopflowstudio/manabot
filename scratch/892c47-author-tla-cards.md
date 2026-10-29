@@ -66,64 +66,64 @@ pipeline: `544ae312c:scratch/892c47-author-tla-cards.md`.
   script beside the card tests checks name and set (never in CI or play).
   `text_box` stays for offline play.
 
+- 2026-10-29, Jack Heart — **tests/support by purpose**: one small scenario API
+  (`support/game.rs` build, `support/play.rs` act, `support/inspect.rs` read),
+  each primitive defined once; helpers.rs's one-card decks become one
+  deck-of-card helper; card-specific setups move next to their tests; flat
+  `cards/<set>.rs` in card order, no helper-family modules; behavior identical.
+
 ## Implemented
 
-1. In-process compile of typed set definitions to IR (`semantic/compile.rs`);
-   keys `<set>.<card>` in first-printing set files; one default pack.
-2. Support by definition (2026-10-29 direction): `qualifications.json`,
-   `inventory.json`, `t1-clause-review.json`, `Qualification`/`qualified()`/
-   `check_qualifications`/`inventory()` and their tests are gone.
-   `world::supports_card` = typed definition not in `tla::INCOMPLETE` (14 cards,
-   each with its missing behavior). Pool rows: tokens and incomplete cards
-   unsupported; the world pool also lists native set-file cards as unsupported
-   (no IR, not in `pool_content`). `world::set_cards(&["tla","lea"])` /
-   `managym.set_cards` filter by key prefix. `tla-pool-v1` key kept for D1.
-3. Basics are `lea.plains`…`lea.forest`. Proof (`scratch/prove_basic_rename.py`
-   over dumps of all 10 packs before/after): every IR equivalent apart from the
-   rename; default-pack digest and `CardDefId` manifest unchanged.
-4. `cards/native.rs` deleted. Native cards live in first-printing set files'
-   `native_cards()` (lea, por, isd, ori, sth, rtr, grn, ice, vis, stx, mkm; sets
-   checked on Scryfall); Crossroads of Destiny in `cards/fixtures.rs` (still in
-   the default pack, which tests and `manabot/verify` build games from);
-   `LEGACY_ORDER`/`TRAILING_ORDER` in `content_pack.rs`.
-5. Docs rewritten: `content/semantic/README.md`, `docs/rules/tla/README.md`,
-   `managym/README.md`, AGENTS.md typed-card section, WORLDS.md.
-
-6. Card tests: `tests/cards.rs` includes one module per set
-   (`tests/cards/<set>.rs`, 14 sets, 225 tests); 17 engine-rule tests (injected
-   abilities, tokens, Crossroads modal) moved to `tests/rules/engine_events.rs`.
-   Each test was filed by the card it is about (mapping:
-   `scratch/cardtests/assign.json`, overrides for ties). Shared helpers live in
-   `tests/support/` (used by both binaries; one module per helper family, which
-   also names the inline test groups). `tests/cards/README.md` and
-   `tests/cards/coverage.py` (120/150 cards have a test in their set file) never
-   gate support. The semantic coverage evidence validator
-   (`manabot/semantic/coverage.py`) accepts card-set test files; evidence and
-   `coverage-gaps.json` regenerated; docs and the public-commitment source
-   manifest point at the new paths.
-7. `scripts/refresh_card_fixture.py` reads names from `managym.content_pool`
-   (150 real cards = fixture; tokens skipped by `token.*` key).
+1. **One card representation (w17).** Set files return engine `CardDefinition`s
+   (generated once by `scratch/conversion/generate.py` from w16's lowering; all
+   161 proven JSON-identical). `cards/authoring.rs`, `semantic/compile.rs`,
+   `semantic/content.rs`, the IR parser/interpreter and their exclusive tests
+   (`semantic_ir_tests.rs`, `semantic_interpreter_tests.rs`) are deleted.
+   `semantic/` now holds `setups.rs` (authored decklists → packs with token
+   closure), `pool.rs` and `tokens.rs`; `IrError` became `ContentError`.
+2. **Keys and Scryfall ids.** Every definition has `key` and `scryfall_id`
+   (`#[serde(skip)]`, so content digests equal w16's). A first-printing audit
+   moved 5 cards: `roe.prophetic_prism`, `mh2.tireless_provisioner`,
+   `ptk.corrupt_court_official`, `eld.epic_downfall`, `ths.lightning_strike`.
+   `tests/cards/scryfall.rs` (offline) and `tests/cards/check_scryfall.py`
+   (network, maintenance only). Pool rows add `scryfall_id`.
+3. **Learning tokens in Rust.** `semantic::tokens` serializes definitions with a
+   serde `Serializer` (schema 9: kinds structure/field/variant/integer/boolean/
+   text/definition_ref/null/program_kind; values are blake3 name hashes via
+   `managym.learning_token_value`). `managym.learning_catalog(pack_key)`;
+   `BoundSemanticPack` binds by digest + registry name; Python IR token builder,
+   `current_ir_document` and frozen-schema loading are gone (the offline Python
+   compiler stays only for frozen-evidence reproduction). Manifests carry
+   `pack_key` instead of `compiled_semantics`; `ContentPool` drops it.
+4. **Observability.** `tests/cards/observability.rs`: exhaustive guards over
+   `Keywords`, `Permanent`, `Player`, `Effect` (63 witnesses), `TriggerCondition`,
+   `Ability`; directed column/token tests; viewer-safety (hidden opponent cards,
+   no names/text in tokens). New `attacking` permanent column (width 29), Python
+   encoder and LLM text; serialized only when true so retained captures stay
+   canonical.
+5. Academy authored-match receipt names programs from the catalog
+   (`conformance/authored-match-w17-v1`). Docs: AGENTS.md card section,
+   WORLDS.md w17, content/semantic and managym READMEs, TLA notes.
+6. tests/support by purpose: `game.rs`/`play.rs`/`inspect.rs`, each primitive
+   once (renames listed in the commit); card-specific setups beside their tests;
+   flat `cards/<set>.rs` in card order (new `cards/mkm.rs`). Counts unchanged
+   (cards 235, rules 131 + 2 ignored).
+7. Earlier this Task (before 2026-10-29 rewrite): support by definition, set
+   filter, basics in `lea.rs`, card tests by set (`tests/cards.rs`), fixture
+   refresh reads the pool.
 
 ## Remaining
 
-1. One card representation (above): convert typed cards to engine types, derive
-   learning tokens in Rust, delete the authoring layer and `compile.rs`, w17.
-2. Observability guard, per-mechanic and viewer-safety tests (above).
-3. `scryfall_id` on every definition, offline test, network check script.
-4. Gate, PR394 update, demo.
+1. Gate: full debug `cargo test`, clippy, focused pytest; regenerate or retire
+   world-bound receipts (parity w11, learn demo/trigger-order w15, w13 increment)
+   — they already mismatched at w16. PR394 update, demo.
 
-Check (2026-10-29, after card tests): debug `cargo test --no-fail-fast` — only
-the known w15 semantic-conformance pair fails (`cards` 225 pass, `rules_tests` 131);
-clippy `--all-targets -D warnings` and fmt clean. Focused pytest (semantic,
-academy, eval admission/models, monitor, choice separability, policy catalog,
-package boundaries): 42 failures, the same count as before; coverage gate 13/13.
-
-Compress (2026-10-29): `world::unsupported_cards` reads the pool once and
-`supports_card` delegates to it; unused `world::card` removed (pool rows carry
-the reason). `cargo test --lib world::` 2/2, clippy clean; gate owns full suites.
-
-Realign (2026-10-29): plan and code agree; no upstream main changes since the
-sync. Stale qualification wording removed from `delivery-plan.json` and the
-historical scratch notes. Native set-file cards being unsupported for deck entry
-is an operator choice (questions.md) against Jack Heart's "all supported"
-wording; review at demo. Check: `delivery-plan.json` parses; no test reads it.
+Check (2026-10-29, gate after syncing main 633dca159): debug `cargo test
+--no-fail-fast` — only the known w15 semantic-conformance pair fails (cards 235,
+rules 131 + 2 ignored); fmt and clippy `-D warnings` (with and without
+`python`) clean. pytest: semantic + model 341 pass; current-world arena/monitor/
+choice set passes; academy 233 pass, 26 fail — all world-bound receipts and
+demo fixtures (w11 parity, w13 increment, w15 learn/precision/trigger-order
+demos, public-commitment parity) that need regeneration for a frozen world;
+the full suite exceeds the 2 h local limit and lacks duckdb/HF extras.
+Online Scryfall check: 161 definitions, 0 problems.

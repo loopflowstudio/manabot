@@ -2,7 +2,7 @@
 // Sideboards are admitted setup and owned outside-game copies, not game zones.
 
 use managym::{
-    semantic::SemanticPack,
+    semantic::setups::authored_pack,
     state::{game_object::PlayerId, zone::ZoneType},
     Game, PlayerConfig,
 };
@@ -24,7 +24,7 @@ fn configs(sideboard: BTreeMap<String, usize>) -> Vec<PlayerConfig> {
 
 #[test]
 fn learn_authored_setup_keeps_main_decks_and_sideboards_together_in_both_seats() {
-    let pack = SemanticPack::current("two_deck").unwrap();
+    let pack = authored_pack("two_deck").unwrap();
     assert_eq!(
         pack.decklist("ur_lessons").unwrap().values().sum::<usize>(),
         41
@@ -51,10 +51,7 @@ fn learn_authored_setup_keeps_main_decks_and_sideboards_together_in_both_seats()
             .map(|key| pack.player_config(key, key).unwrap())
             .collect();
         let game = Game::new(configs.clone(), 9, false);
-        assert_eq!(
-            game.state.content.compiled_semantics().unwrap().ir_hash,
-            pack.ir_hash
-        );
+        assert_eq!(game.state.content.pack_key(), Some(pack.pack_key.as_str()));
         for (player, config) in configs.iter().enumerate() {
             let roster = &game.state.players[player].sideboard;
             assert_eq!(roster.len(), config.sideboard.values().sum::<usize>());

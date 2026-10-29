@@ -138,6 +138,11 @@
       {label} can cast spells only from hand until the other player's next turn.
     </p>
   {/if}
+  {#if player.no_maximum_hand_size}
+    <p class="type-caption py-1" data-testid="no-maximum-hand-size">
+      {label} has no maximum hand size.
+    </p>
+  {/if}
   <!-- The player bar, in the manner of a chess clock plate: identity at
        one end, life at the other. The opponent's sits above their side of
        the table; yours below yours — the players bracket the battlefield. -->

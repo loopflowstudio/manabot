@@ -47,7 +47,7 @@
           },
           {
             "count": 2,
-            "definition": "tla.lightning_strike"
+            "definition": "ths.lightning_strike"
           },
           {
             "count": 2,
@@ -259,7 +259,7 @@
           },
           {
             "count": 1,
-            "definition": "tla.lightning_strike"
+            "definition": "ths.lightning_strike"
           },
           {
             "count": 1,
@@ -355,7 +355,7 @@
           },
           {
             "count": 1,
-            "definition": "tla.epic_downfall"
+            "definition": "eld.epic_downfall"
           },
           {
             "count": 1,
@@ -555,7 +555,7 @@
           },
           {
             "count": 1,
-            "definition": "arb.prophetic_prism"
+            "definition": "roe.prophetic_prism"
           },
           {
             "count": 1,
@@ -643,7 +643,7 @@
           },
           {
             "count": 3,
-            "definition": "tla.lightning_strike"
+            "definition": "ths.lightning_strike"
           },
           {
             "count": 1,
@@ -731,7 +731,7 @@
           },
           {
             "count": 2,
-            "definition": "tla.corrupt_court_official"
+            "definition": "ptk.corrupt_court_official"
           },
           {
             "count": 1,
@@ -803,7 +803,7 @@
           },
           {
             "count": 4,
-            "definition": "tla.corrupt_court_official"
+            "definition": "ptk.corrupt_court_official"
           },
           {
             "count": 2,
@@ -835,7 +835,7 @@
           },
           {
             "count": 2,
-            "definition": "tla.lightning_strike"
+            "definition": "ths.lightning_strike"
           },
           {
             "count": 1,
@@ -903,7 +903,7 @@
           },
           {
             "count": 1,
-            "definition": "lci.tireless_provisioner"
+            "definition": "mh2.tireless_provisioner"
           },
           {
             "count": 1,
@@ -927,7 +927,7 @@
           },
           {
             "count": 2,
-            "definition": "tla.corrupt_court_official"
+            "definition": "ptk.corrupt_court_official"
           },
           {
             "count": 1,
@@ -1313,7 +1313,7 @@
           },
           {
             "count": 1,
-            "definition": "tla.corrupt_court_official"
+            "definition": "ptk.corrupt_court_official"
           },
           {
             "count": 1,
@@ -1329,7 +1329,7 @@
           },
           {
             "count": 1,
-            "definition": "tla.epic_downfall"
+            "definition": "eld.epic_downfall"
           },
           {
             "count": 1,
@@ -1377,7 +1377,7 @@
           },
           {
             "count": 1,
-            "definition": "tla.lightning_strike"
+            "definition": "ths.lightning_strike"
           },
           {
             "count": 5,
@@ -1562,7 +1562,7 @@
           },
           {
             "count": 2,
-            "definition": "tla.lightning_strike"
+            "definition": "ths.lightning_strike"
           },
           {
             "count": 2,
@@ -1774,7 +1774,7 @@
           },
           {
             "count": 1,
-            "definition": "tla.lightning_strike"
+            "definition": "ths.lightning_strike"
           },
           {
             "count": 1,
@@ -1870,7 +1870,7 @@
           },
           {
             "count": 1,
-            "definition": "tla.epic_downfall"
+            "definition": "eld.epic_downfall"
           },
           {
             "count": 1,
@@ -2070,7 +2070,7 @@
           },
           {
             "count": 1,
-            "definition": "arb.prophetic_prism"
+            "definition": "roe.prophetic_prism"
           },
           {
             "count": 1,
@@ -2158,7 +2158,7 @@
           },
           {
             "count": 3,
-            "definition": "tla.lightning_strike"
+            "definition": "ths.lightning_strike"
           },
           {
             "count": 1,
@@ -2246,7 +2246,7 @@
           },
           {
             "count": 2,
-            "definition": "tla.corrupt_court_official"
+            "definition": "ptk.corrupt_court_official"
           },
           {
             "count": 1,
@@ -2318,7 +2318,7 @@
           },
           {
             "count": 4,
-            "definition": "tla.corrupt_court_official"
+            "definition": "ptk.corrupt_court_official"
           },
           {
             "count": 2,
@@ -2350,7 +2350,7 @@
           },
           {
             "count": 2,
-            "definition": "tla.lightning_strike"
+            "definition": "ths.lightning_strike"
           },
           {
             "count": 1,
@@ -2418,7 +2418,7 @@
           },
           {
             "count": 1,
-            "definition": "lci.tireless_provisioner"
+            "definition": "mh2.tireless_provisioner"
           },
           {
             "count": 1,
@@ -2442,7 +2442,7 @@
           },
           {
             "count": 2,
-            "definition": "tla.corrupt_court_official"
+            "definition": "ptk.corrupt_court_official"
           },
           {
             "count": 1,
@@ -2716,7 +2716,7 @@
           },
           {
             "count": 1,
-            "definition": "lci.tireless_provisioner"
+            "definition": "mh2.tireless_provisioner"
           },
           {
             "count": 1,
@@ -2810,7 +2810,7 @@
           },
           {
             "count": 1,
-            "definition": "lci.tireless_provisioner"
+            "definition": "mh2.tireless_provisioner"
           },
           {
             "count": 1,
@@ -2873,7 +2873,7 @@
           },
           {
             "count": 3,
-            "definition": "arb.prophetic_prism"
+            "definition": "roe.prophetic_prism"
           },
           {
             "count": 3,
@@ -2916,7 +2916,7 @@
           },
           {
             "count": 3,
-            "definition": "arb.prophetic_prism"
+            "definition": "roe.prophetic_prism"
           },
           {
             "count": 3,

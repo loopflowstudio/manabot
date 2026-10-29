@@ -13,7 +13,8 @@ pub const LEGACY_PLAYER_DIM: usize = 40;
 /// (`SPEND_SUBTYPES` × W/U/B/R/G/C), then the hand-only casting lock.
 pub const PLAYER_RESTRICTED_INDEX: usize = LEGACY_PLAYER_DIM;
 pub const PLAYER_HAND_ONLY_INDEX: usize = PLAYER_RESTRICTED_INDEX + 3 * 6;
-pub const PLAYER_DIM: usize = PLAYER_HAND_ONLY_INDEX + 1;
+pub const PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX: usize = PLAYER_HAND_ONLY_INDEX + 1;
+pub const PLAYER_DIM: usize = PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX + 1;
 pub const LEGACY_CARD_DIM: usize = 41;
 /// v5 card columns replace v4's trailing validity flag, which moves to the
 /// new last column: 12 cast-permission terms, then announced X.
@@ -21,7 +22,12 @@ pub const CARD_PERMISSION_INDEX: usize = LEGACY_CARD_DIM - 1;
 pub const CARD_X_INDEX: usize = CARD_PERMISSION_INDEX + 12;
 pub const CARD_DIM: usize = CARD_X_INDEX + 2 + 1;
 pub const PERMANENT_DEFINITION_INDEX: usize = 24;
-pub const PERMANENT_DIM: usize = 28;
+pub const LEGACY_PERMANENT_DIM: usize = 29;
+// V5 permanent terms start where v4's validity flag was; validity stays last.
+pub const PERMANENT_EXHAUSTED_INDEX: usize = LEGACY_PERMANENT_DIM - 1;
+pub const PERMANENT_ONCE_EACH_TURN_INDEX: usize = PERMANENT_EXHAUSTED_INDEX + 1;
+pub const PERMANENT_FIREBENDING_INDEX: usize = PERMANENT_ONCE_EACH_TURN_INDEX + 1;
+pub const PERMANENT_DIM: usize = PERMANENT_FIREBENDING_INDEX + 2;
 pub const ACTION_TYPE_DIM: usize = 17;
 /// Declaration choice is separate from its family: attack and decline must
 /// have distinct policy inputs even when they focus the same permanent.
@@ -87,6 +93,14 @@ impl ObservationEncoderConfig {
         }
     }
 
+    pub fn permanent_dim(&self) -> usize {
+        if self.policy_input_version >= 5 {
+            PERMANENT_DIM
+        } else {
+            LEGACY_PERMANENT_DIM
+        }
+    }
+
     pub fn relations_len(&self) -> usize {
         if self.policy_input_version >= 2 {
             super::continuation::RELATION_ROWS * self.relation_dim()
@@ -100,7 +114,7 @@ impl ObservationEncoderConfig {
     }
 
     pub fn permanents_len(&self) -> usize {
-        self.max_permanents_per_player * PERMANENT_DIM
+        self.max_permanents_per_player * self.permanent_dim()
     }
 
     pub fn actions_len(&self) -> usize {
@@ -521,7 +535,7 @@ pub fn encode_into(
     encode_permanents(
         &obs.agent_permanents,
         1.0,
-        config.max_permanents_per_player,
+        config,
         out.agent_permanents,
         out.agent_permanents_valid,
         &mut object_to_index,
@@ -530,7 +544,7 @@ pub fn encode_into(
     encode_permanents(
         &obs.opponent_permanents,
         0.0,
-        config.max_permanents_per_player,
+        config,
         out.opponent_permanents,
         out.opponent_permanents_valid,
         &mut object_to_index,
@@ -639,6 +653,7 @@ fn encode_player_features(
             }
         }
         out[PLAYER_HAND_ONLY_INDEX] = bool_to_f32(player.hand_only_until.is_some());
+        out[PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX] = bool_to_f32(player.no_maximum_hand_size);
     }
 
     object_to_index.insert(player.id, *current_object_index);
@@ -750,18 +765,20 @@ fn encode_card_features(card: &CardData, is_mine: f32, context: &CardContext, ou
 fn encode_permanents(
     permanents: &[PermanentData],
     is_mine: f32,
-    max_permanents: usize,
+    config: &ObservationEncoderConfig,
     out: &mut [f32],
     out_valid: &mut [f32],
     object_to_index: &mut HashMap<i32, i32>,
     current_object_index: &mut i32,
 ) {
+    let max_permanents = config.max_permanents_per_player;
+    let width = config.permanent_dim();
     let ordered_permanents = permanents.iter().take(max_permanents);
     let mut encoded_count = 0;
 
     for (i, permanent) in ordered_permanents.enumerate() {
-        let start = i * PERMANENT_DIM;
-        let end = start + PERMANENT_DIM;
+        let start = i * width;
+        let end = start + width;
         encode_permanent_features(permanent, is_mine, &mut out[start..end]);
         out_valid[i] = 1.0;
         object_to_index.insert(permanent.id, *current_object_index);
@@ -801,8 +818,15 @@ fn encode_permanent_features(permanent: &PermanentData, is_mine: f32, out: &mut 
     out[23] = bool_to_f32(permanent.exile_if_dies_this_turn);
     out[25] = bool_to_f32(permanent.keywords.indestructible);
     out[26] = bool_to_f32(permanent.temp_subtypes.iter().any(|s| s == "Avatar"));
+    out[27] = bool_to_f32(permanent.attacking);
     out[PERMANENT_DEFINITION_INDEX] = (permanent.registry_key + 1) as f32;
-    out[PERMANENT_DIM - 1] = 1.0;
+    if out.len() == PERMANENT_DIM {
+        // Ability-use limits and granted firebending (v5).
+        out[PERMANENT_EXHAUSTED_INDEX] = permanent.exhausted_abilities as f32;
+        out[PERMANENT_ONCE_EACH_TURN_INDEX] = permanent.once_each_turn_used as f32;
+        out[PERMANENT_FIREBENDING_INDEX] = permanent.granted_firebending as f32 / 10.0;
+    }
+    out[out.len() - 1] = 1.0;
 }
 
 fn encode_actions(
@@ -920,7 +944,7 @@ mod tests {
     use super::{
         encode, encode_into, EncodedObservationMut, ObservationEncodeError,
         ObservationEncoderConfig, ACTION_DIM, CARD_DIM, EVENT_DIM, LEGACY_CARD_DIM,
-        LEGACY_PLAYER_DIM, PERMANENT_DIM, ZONE_DIM,
+        LEGACY_PERMANENT_DIM, LEGACY_PLAYER_DIM, ZONE_DIM,
     };
 
     #[test]
@@ -1013,6 +1037,7 @@ mod tests {
                 lesson_mana: [0; 6],
                 restricted_mana: Vec::new(),
                 hand_only_until: None,
+                no_maximum_hand_size: false,
             },
             agent_sideboard: Vec::new(),
             agent_cards: vec![
@@ -1037,6 +1062,7 @@ mod tests {
                 lesson_mana: [0; 6],
                 restricted_mana: Vec::new(),
                 hand_only_until: None,
+                no_maximum_hand_size: false,
             },
             opponent_cards: vec![make_card(221, ZoneType::Hand, false, 1, 1, 1)],
             opponent_permanents: vec![make_permanent(444, false)],
@@ -1181,6 +1207,10 @@ mod tests {
             is_animated: false,
             has_exile_link: false,
             exile_if_dies_this_turn: false,
+            attacking: false,
+            exhausted_abilities: 0,
+            once_each_turn_used: 0,
+            granted_firebending: 0,
             temp_subtypes: Vec::new(),
             keywords: KeywordData::default(),
         }
@@ -1210,9 +1240,9 @@ mod tests {
         assert_eq!(encoded.agent_cards[LEGACY_CARD_DIM - 1], 1.0);
         assert_eq!(encoded.agent_cards[LEGACY_CARD_DIM * 2 - 1], 1.0);
         assert_eq!(encoded.agent_cards[LEGACY_CARD_DIM * 3 - 1], 0.0);
-        assert_eq!(encoded.agent_permanents[PERMANENT_DIM - 1], 1.0);
+        assert_eq!(encoded.agent_permanents[LEGACY_PERMANENT_DIM - 1], 1.0);
         assert_eq!(
-            encoded.agent_permanents[PERMANENT_DIM - 1 + PERMANENT_DIM],
+            encoded.agent_permanents[LEGACY_PERMANENT_DIM - 1 + LEGACY_PERMANENT_DIM],
             0.0
         );
 
@@ -1320,8 +1350,8 @@ mod tests {
         let mut opponent_player = vec![0.0; LEGACY_PLAYER_DIM];
         let mut agent_cards = vec![0.0; 2 * LEGACY_CARD_DIM];
         let mut opponent_cards = vec![0.0; 2 * LEGACY_CARD_DIM];
-        let mut agent_permanents = vec![0.0; PERMANENT_DIM];
-        let mut opponent_permanents = vec![0.0; PERMANENT_DIM];
+        let mut agent_permanents = vec![0.0; LEGACY_PERMANENT_DIM];
+        let mut opponent_permanents = vec![0.0; LEGACY_PERMANENT_DIM];
         let mut actions = vec![0.0; 2 * ACTION_DIM];
         let mut events = vec![0.0; EVENT_DIM];
         let mut action_focus = vec![-1; 2 * 2];

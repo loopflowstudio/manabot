@@ -12,14 +12,15 @@ from typing import Any
 
 from managym.experience import InteractionOffer
 
-from manabot.semantic.learning import current_ir_document
+from manabot.semantic.learning import PROGRAM_KINDS
+import managym
 
 from .server import DecisionContext, GameSession
 
 ROOT = Path(__file__).parents[1]
 SEMANTIC_PACK_KEY = "ur-lessons-vs-gw-allies"
 DEFAULT_RECEIPT_PATH = (
-    ROOT / "conformance/authored-match-w11-v1/release-stack-ur-vs-gw-seed-0.json"
+    ROOT / "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json"
 )
 HISTORICAL_RECEIPT_PATH = (
     ROOT / "conformance/authored-match-v1/release-stack-ur-vs-gw-seed-0.json"
@@ -84,68 +85,57 @@ def _json_bytes(value: object) -> bytes:
     ).encode("utf-8")
 
 
-def _load_semantic_ir() -> dict[str, Any]:
-    return current_ir_document(SEMANTIC_PACK_KEY)
+def _program_index() -> tuple[
+    dict[int, list[dict[str, Any]]], dict[str, dict[str, Any]]
+]:
+    """Name every program of the authored pack from the engine's own catalog.
 
-
-def _registry_name(definition: dict[str, Any]) -> str:
-    binding = definition["content_pack_binding"]
-    if binding["kind"] != "legacy_registry_name":
-        raise RuntimeError(
-            f"definition {definition['semantic_key']} has unsupported content binding"
-        )
-    return str(binding["value"])
-
-
-def _validate_manifest(
-    manifest: dict[str, Any],
-    semantic_ir: dict[str, Any],
-) -> None:
-    compiled = manifest.get("compiled_semantics")
-    if compiled is None:
-        raise RuntimeError(
-            "authored release-stack match did not select compiled semantics"
-        )
-    for key in ("pack_key", "ir_hash", "source_hash"):
-        if compiled[key] != semantic_ir[key]:
-            raise RuntimeError(f"compiled semantic manifest drifted at {key}")
-
-    definitions = manifest["definitions"]
-    ir_definitions = semantic_ir["definitions"]
-    if len(definitions) != len(ir_definitions):
-        raise RuntimeError("compiled definition count differs from admitted IR")
-    for index, (manifest_definition, ir_definition) in enumerate(
-        zip(definitions, ir_definitions, strict=True)
-    ):
-        if int(manifest_definition["card_def_id"]) != index:
-            raise RuntimeError(f"compiled CardDefId drifted at definition {index}")
-        if manifest_definition["registry_name"] != _registry_name(ir_definition):
-            raise RuntimeError(
-                f"compiled registry binding drifted at definition {index}"
-            )
-
-
-def _program_index(
-    semantic_ir: dict[str, Any],
-) -> tuple[dict[int, list[dict[str, Any]]], dict[str, dict[str, Any]]]:
+    A program is one span of ``managym.learning_catalog``: each triggered,
+    mana, triggered-mana and activated ability, plus the spell. Its key is
+    ``<definition key>.<kind>.<ordinal within the definition>``.
+    """
+    pool = managym.content_pool(SEMANTIC_PACK_KEY)
+    catalog = managym.learning_catalog(SEMANTIC_PACK_KEY)
+    kind_names = {value: name for name, value in PROGRAM_KINDS.items()}
+    definitions = {int(row["card_def_id"]): row for row in pool["definitions"]}
+    offsets = catalog["definition_program_offsets"]
     by_definition: dict[int, list[dict[str, Any]]] = defaultdict(list)
     by_key: dict[str, dict[str, Any]] = {}
-    for program in semantic_ir["programs"]:
-        definition_index = int(program["definition_index"])
-        definition = semantic_ir["definitions"][definition_index]
-        row = {
-            "program_index": int(program["program_index"]),
-            "semantic_key": str(program["semantic_key"]),
-            "kind": str(program["kind_name"]),
-            "definition_index": definition_index,
-            "definition_key": str(definition["semantic_key"]),
-            "registry_name": _registry_name(definition),
-        }
-        by_definition[definition_index].append(row)
-        if row["semantic_key"] in by_key:
-            raise RuntimeError(f"duplicate semantic program {row['semantic_key']}")
-        by_key[row["semantic_key"]] = row
+    for definition_index in sorted(definitions):
+        definition = definitions[definition_index]
+        start, stop = offsets[definition_index], offsets[definition_index + 1]
+        for ordinal, program_index in enumerate(
+            catalog["definition_program_rows"][start:stop]
+        ):
+            first = catalog["program_offsets"][program_index]
+            kind = kind_names[catalog["token_value"][first]]
+            row = {
+                "program_index": int(program_index),
+                "semantic_key": f"{definition['semantic_key']}.{kind}.{ordinal}",
+                "kind": kind,
+                "definition_index": definition_index,
+                "definition_key": str(definition["semantic_key"]),
+                "registry_name": str(definition["registry_name"]),
+            }
+            by_definition[definition_index].append(row)
+            by_key[row["semantic_key"]] = row
     return dict(by_definition), by_key
+
+
+def _validate_manifest(manifest: dict[str, Any]) -> None:
+    if manifest.get("pack_key") != SEMANTIC_PACK_KEY:
+        raise RuntimeError("authored release-stack match did not select its pack")
+    pool = managym.content_pool(SEMANTIC_PACK_KEY)
+    if manifest["content_digest"] != pool["content_digest"]:
+        raise RuntimeError("authored content digest drifted from the native pool")
+    names = {
+        int(row["card_def_id"]): row["registry_name"] for row in pool["definitions"]
+    }
+    actual = {
+        int(row["card_def_id"]): row["registry_name"] for row in manifest["definitions"]
+    }
+    if actual != names:
+        raise RuntimeError("authored registry binding drifted from the native pool")
 
 
 def _player_witness(player: dict[str, Any]) -> dict[str, Any]:
@@ -354,13 +344,12 @@ def _ledger(
 
 
 def generate_authored_match_receipt() -> dict[str, Any]:
-    semantic_ir = _load_semantic_ir()
-    programs_by_definition, programs_by_key = _program_index(semantic_ir)
+    programs_by_definition, programs_by_key = _program_index()
     session, terminal_frame = play_fixed_authored_match()
     if session.env is None:
         raise RuntimeError("authored authority environment is unavailable")
     manifest = session.env.content_pack_manifest()
-    _validate_manifest(manifest, semantic_ir)
+    _validate_manifest(manifest)
     ledger, program_revisions = _ledger(session, programs_by_definition)
 
     encountered_programs = []

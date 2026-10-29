@@ -55,6 +55,9 @@ pub struct PlayerData {
     /// card's `cast_permission`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hand_only_until: Option<i32>,
+    /// No maximum hand size for the rest of the game (Spirit Water Revival).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub no_maximum_hand_size: bool,
     pub known_hand: BTreeMap<u32, u32>,
     pub sideboard_counts: BTreeMap<u32, u32>,
     pub remaining_sideboard_counts: BTreeMap<u32, u32>,
@@ -311,6 +314,20 @@ pub struct PermanentData {
     /// This permanent holds cards in exile until it leaves (Jailer).
     pub has_exile_link: bool,
     pub exile_if_dies_this_turn: bool,
+    /// Declared as an attacker in the current combat. Omitted when false, so
+    /// observations retained before this field stay canonical.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub attacking: bool,
+    /// Exhaust abilities this object has activated; each can never be
+    /// activated again by this object (CR 702.177a).
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub exhausted_abilities: i32,
+    /// "Once each turn" abilities this object has activated this turn.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub once_each_turn_used: i32,
+    /// Firebending granted until end of turn, summed over grants.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub granted_firebending: i32,
     pub temp_subtypes: Vec<String>,
     /// Effective keywords — printed keywords unioned with until-EOT grants
     /// (Yip Yip! flying, Enter the Avatar State, ...). The card entry keeps
@@ -596,6 +613,7 @@ impl Observation {
             hand_only_until: game
                 .hand_only_until(player)
                 .map(|until| game.state.players[until.0].id.0 as i32),
+            no_maximum_hand_size: p.no_maximum_hand_size,
             known_hand: p
                 .known_hand
                 .iter()
@@ -739,6 +757,10 @@ impl Observation {
             is_summoning_sick: permanent.summoning_sick,
             plus1_counters: permanent.plus1_counters,
             exile_if_dies_this_turn: permanent.exile_if_dies_this_turn,
+            attacking: permanent.attacking,
+            exhausted_abilities: permanent.exhausted.len() as i32,
+            once_each_turn_used: permanent.activated_this_turn.len() as i32,
+            granted_firebending: i32::from(permanent.firebending_this_turn),
             temp_subtypes: permanent.temp_subtypes.clone(),
             cant_be_blocked_this_turn: permanent.cant_be_blocked_this_turn,
             power,

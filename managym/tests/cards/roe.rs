@@ -1,10 +1,9 @@
-//! Tests for cards filed in `src/cardsets/arb.rs`, grouped by the helper family they
-//! drive play with (`tests/support/`).
+//! Tests for cards filed in `src/cardsets/roe.rs`, in card order.
 
-use crate::support::temur::{activate, can_cast, choose, enter};
 use crate::support::{
-    elemental::{card, cast, permanent, settle, setup},
-    helpers::Scenario,
+    game::{five_color_setup, Scenario},
+    inspect::{can_cast, library_card, permanent_named},
+    play::{activate_named, cast, choose, enter_and_settle, settle},
 };
 use managym::{
     agent::action::Action,
@@ -18,10 +17,10 @@ use std::collections::BTreeMap;
 
 #[test]
 fn prism_consumes_generic_before_adding_chosen_color() {
-    let mut s = setup(&["Prophetic Prism"]);
-    enter(&mut s, "Prophetic Prism");
+    let mut s = five_color_setup(&["Prophetic Prism"]);
+    enter_and_settle(&mut s, "Prophetic Prism");
     s.set_player_mana_pool(0, "1");
-    activate(&mut s, "Prophetic Prism", 0);
+    activate_named(&mut s, "Prophetic Prism", 0);
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("U"));
@@ -34,16 +33,16 @@ fn prism_payment_preserves_the_spells_required_green_mana() {
         ["Forest", "Island", "Island", "Mountain"],
         ["Island", "Island", "Mountain", "Forest"],
     ] {
-        let mut s = setup(&["Prophetic Prism", "Gnarled Professor"]);
+        let mut s = five_color_setup(&["Prophetic Prism", "Gnarled Professor"]);
         for land in lands {
-            enter(&mut s, land);
+            enter_and_settle(&mut s, land);
         }
-        enter(&mut s, "Prophetic Prism");
+        enter_and_settle(&mut s, "Prophetic Prism");
         s.set_player_mana_pool(0, "0");
         cast(&mut s, "Gnarled Professor");
-        activate(&mut s, "Prophetic Prism", 0);
+        activate_named(&mut s, "Prophetic Prism", 0);
         assert!(
-            !s.game().state.permanents[permanent(&s, "Forest")]
+            !s.game().state.permanents[permanent_named(&s, "Forest")]
                 .as_ref()
                 .unwrap()
                 .tapped
@@ -64,9 +63,9 @@ fn prism_payment_preserves_the_spells_required_green_mana() {
 
 #[test]
 fn prism_payment_preserves_required_blue_already_in_the_pool() {
-    let mut s = setup(&["Prophetic Prism", "Gnarled Professor", "Counterspell"]);
-    enter(&mut s, "Forest");
-    enter(&mut s, "Prophetic Prism");
+    let mut s = five_color_setup(&["Prophetic Prism", "Gnarled Professor", "Counterspell"]);
+    enter_and_settle(&mut s, "Forest");
+    enter_and_settle(&mut s, "Prophetic Prism");
     let professor = cast(&mut s, "Gnarled Professor");
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     s.set_player_mana_pool(0, "U");
@@ -76,7 +75,7 @@ fn prism_payment_preserves_required_blue_already_in_the_pool() {
         target: managym::state::game_object::Target::StackSpell(id), ..
     } if *id == professor)
     });
-    activate(&mut s, "Prophetic Prism", 0);
+    activate_named(&mut s, "Prophetic Prism", 0);
     // Spend the Forest's G on Prism, retaining the pooled U for Counterspell.
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("U"));
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
@@ -99,9 +98,9 @@ fn audit_prism_treasure_empty_pool_activation() {
     s.force_permanent_on_battlefield(0, "Prophetic Prism");
     s.game_mut().create_token("Treasure", PlayerId(0), false);
     s.set_player_mana_pool(0, "0");
-    activate(&mut s, "Prophetic Prism", 0);
+    activate_named(&mut s, "Prophetic Prism", 0);
     // Paying the upfront cost exposes the nested Treasure/color decisions.
-    activate(&mut s, "Treasure", 0);
+    activate_named(&mut s, "Treasure", 0);
     choose(&mut s, |action| {
         matches!(action, Action::ChooseMode { mode: 4, .. })
     });
@@ -112,7 +111,7 @@ fn audit_prism_treasure_empty_pool_activation() {
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("U"));
     assert!(s.battlefield_permanents_named(0, "Treasure").is_empty());
     assert!(
-        s.game().state.permanents[permanent(&s, "Prophetic Prism")]
+        s.game().state.permanents[permanent_named(&s, "Prophetic Prism")]
             .as_ref()
             .unwrap()
             .tapped
@@ -122,12 +121,12 @@ fn audit_prism_treasure_empty_pool_activation() {
 
 #[test]
 fn priority_prism_activation_can_use_a_treasure_for_its_upfront_cost() {
-    let mut s = setup(&["Prophetic Prism", "Tireless Provisioner"]);
-    enter(&mut s, "Prophetic Prism");
+    let mut s = five_color_setup(&["Prophetic Prism", "Tireless Provisioner"]);
+    enter_and_settle(&mut s, "Prophetic Prism");
     s.game_mut().create_token("Treasure", PlayerId(0), false);
     s.set_player_mana_pool(0, "0");
     s.game_mut().scenario_refresh_priority().unwrap();
-    let prism = permanent(&s, "Prophetic Prism");
+    let prism = permanent_named(&s, "Prophetic Prism");
     let index = s
         .action_space()
         .actions
@@ -143,9 +142,9 @@ fn prism_upfront_payment_preserves_professors_second_green() {
         ["Forest", "Island", "Prophetic Prism", "Island", "Mountain"],
         ["Mountain", "Island", "Prophetic Prism", "Island", "Forest"],
     ] {
-        let mut s = setup(&["Prophetic Prism", "Gnarled Professor"]);
+        let mut s = five_color_setup(&["Prophetic Prism", "Gnarled Professor"]);
         for name in sources {
-            enter(&mut s, name);
+            enter_and_settle(&mut s, name);
         }
         s.set_player_mana_pool(0, "0");
         let professor = cast(&mut s, "Gnarled Professor");
@@ -154,9 +153,9 @@ fn prism_upfront_payment_preserves_professors_second_green() {
             .actions
             .iter()
             .any(|a| matches!(a, Action::ActivateAbility { .. })));
-        activate(&mut s, "Prophetic Prism", 0);
+        activate_named(&mut s, "Prophetic Prism", 0);
         assert!(
-            !s.game().state.permanents[permanent(&s, "Forest")]
+            !s.game().state.permanents[permanent_named(&s, "Forest")]
                 .as_ref()
                 .unwrap()
                 .tapped
@@ -214,15 +213,15 @@ fn prism_payment_offers_execute_and_undo_without_mutating_sibling_forks() {
     }
 
     for forests in 0..=2 {
-        let mut s = setup(&["Prophetic Prism", "Gnarled Professor"]);
+        let mut s = five_color_setup(&["Prophetic Prism", "Gnarled Professor"]);
         for _ in 0..forests {
-            enter(&mut s, "Forest");
+            enter_and_settle(&mut s, "Forest");
         }
         for name in ["Island", "Prophetic Prism", "Island", "Mountain"] {
-            enter(&mut s, name);
+            enter_and_settle(&mut s, name);
         }
         s.set_player_mana_pool(0, "0");
-        let professor = card(&s, 0, "Gnarled Professor");
+        let professor = library_card(&s, 0, "Gnarled Professor");
         s.game_mut().move_card(professor, ZoneType::Hand);
         s.game_mut().scenario_refresh_priority().unwrap();
         assert_eq!(can_cast(&s, professor), forests > 0);
@@ -244,13 +243,13 @@ fn prism_payment_offers_execute_and_undo_without_mutating_sibling_forks() {
 
 #[test]
 fn prism_upfront_payment_can_preserve_mana_already_in_the_pool() {
-    let mut s = setup(&["Prophetic Prism", "Gnarled Professor"]);
+    let mut s = five_color_setup(&["Prophetic Prism", "Gnarled Professor"]);
     for name in ["Prophetic Prism", "Island", "Island", "Mountain"] {
-        enter(&mut s, name);
+        enter_and_settle(&mut s, name);
     }
     s.set_player_mana_pool(0, "G");
     let professor = cast(&mut s, "Gnarled Professor");
-    activate(&mut s, "Prophetic Prism", 0);
+    activate_named(&mut s, "Prophetic Prism", 0);
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("G"));
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
@@ -262,11 +261,11 @@ fn prism_upfront_payment_can_preserve_mana_already_in_the_pool() {
 
 #[test]
 fn prism_upfront_payment_search_preserves_a_required_pooled_white() {
-    let mut s = setup(&["Prophetic Prism", "Serra Angel"]);
-    enter(&mut s, "Prophetic Prism");
+    let mut s = five_color_setup(&["Prophetic Prism", "Serra Angel"]);
+    enter_and_settle(&mut s, "Prophetic Prism");
     s.set_player_mana_pool(0, "WUUUU");
     let angel = cast(&mut s, "Serra Angel");
-    activate(&mut s, "Prophetic Prism", 0);
+    activate_named(&mut s, "Prophetic Prism", 0);
     assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("WUUU"));
     assert_eq!(s.action_space().actions.len(), 1);
     choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
@@ -376,17 +375,17 @@ fn nested_mana_every_offer_completes_replays_and_rolls_back() {
     }
 
     for spell in [false, true] {
-        let mut s = setup(&["Prophetic Prism", "Tireless Provisioner", "Raging Goblin"]);
-        enter(&mut s, "Prophetic Prism");
+        let mut s = five_color_setup(&["Prophetic Prism", "Tireless Provisioner", "Raging Goblin"]);
+        enter_and_settle(&mut s, "Prophetic Prism");
         s.game_mut().create_token("Treasure", PlayerId(0), false);
-        let prism = permanent(&s, "Prophetic Prism");
-        let treasure = permanent(&s, "Treasure");
+        let prism = permanent_named(&s, "Prophetic Prism");
+        let treasure = permanent_named(&s, "Treasure");
         s.set_player_mana_pool(0, "0");
         s.game_mut().scenario_refresh_priority().unwrap();
         let spell = if spell {
             Some(cast(&mut s, "Raging Goblin"))
         } else {
-            activate(&mut s, "Prophetic Prism", 0);
+            activate_named(&mut s, "Prophetic Prism", 0);
             // The upfront cost precedes both tap and output.
             assert!(!s.game().state.permanents[prism].as_ref().unwrap().tapped);
             assert!(s.game().state.permanents[treasure].is_some());
@@ -416,11 +415,11 @@ fn nested_mana_every_offer_completes_replays_and_rolls_back() {
 #[test]
 fn filters_require_a_real_seed_and_do_not_reuse_a_reserved_source() {
     for seed in [false, true] {
-        let mut s = setup(&["Prophetic Prism", "Tireless Provisioner"]);
+        let mut s = five_color_setup(&["Prophetic Prism", "Tireless Provisioner"]);
         // Use two distinct printed copies; identical output does not make
         // their tap and sacrifice identities interchangeable.
-        enter(&mut s, "Prophetic Prism");
-        enter(&mut s, "Prophetic Prism");
+        enter_and_settle(&mut s, "Prophetic Prism");
+        enter_and_settle(&mut s, "Prophetic Prism");
         if seed {
             s.game_mut().create_token("Treasure", PlayerId(0), false);
         }
@@ -452,7 +451,7 @@ fn filters_require_a_real_seed_and_do_not_reuse_a_reserved_source() {
             // cannot spend Treasure and leave the original payment unpaid.
             let actions = &s.action_space().actions;
             assert!(!actions.iter().any(|a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == filters[0])));
-            activate(&mut s, "Treasure", 0);
+            activate_named(&mut s, "Treasure", 0);
             choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
             assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
             choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
@@ -465,11 +464,11 @@ fn filters_require_a_real_seed_and_do_not_reuse_a_reserved_source() {
 #[test]
 fn prism_pool_alternatives_keep_restrictions_and_expiring_mana_classes() {
     for blue in [2, 3] {
-        let mut s = setup(&["Prophetic Prism", "Serra Angel"]);
-        enter(&mut s, "Prophetic Prism");
+        let mut s = five_color_setup(&["Prophetic Prism", "Serra Angel"]);
+        enter_and_settle(&mut s, "Prophetic Prism");
         s.set_player_mana_pool(0, &format!("W{}", "U".repeat(blue)));
         s.game_mut().state.players[0].combat_mana_pool = Mana::parse("U");
-        let angel = card(&s, 0, "Serra Angel");
+        let angel = library_card(&s, 0, "Serra Angel");
         s.game_mut().move_card(angel, ZoneType::Hand);
         s.game_mut().scenario_refresh_priority().unwrap();
         // Five total mana is necessary: the filter conserves total mana.
@@ -479,7 +478,7 @@ fn prism_pool_alternatives_keep_restrictions_and_expiring_mana_classes() {
                 &mut s,
                 |a| matches!(a, Action::CastSpell { card, .. } if *card == angel),
             );
-            activate(&mut s, "Prophetic Prism", 0);
+            activate_named(&mut s, "Prophetic Prism", 0);
             assert_eq!(s.game().state.players[0].combat_mana_pool.total(), 0);
             assert_eq!(s.game().state.players[0].mana_pool, Mana::parse("WUUU"));
             choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 0, .. }));
@@ -492,19 +491,19 @@ fn prism_pool_alternatives_keep_restrictions_and_expiring_mana_classes() {
 #[test]
 fn filtering_cannot_launder_restricted_mana_from_a_mixed_pool() {
     for unrestricted in [false, true] {
-        let mut s = setup(&["Prophetic Prism"]);
-        enter(&mut s, "Prophetic Prism");
+        let mut s = five_color_setup(&["Prophetic Prism"]);
+        enter_and_settle(&mut s, "Prophetic Prism");
         s.set_player_mana_pool(0, if unrestricted { "U" } else { "0" });
         let lesson = ManaUse::spell(["Lesson"]);
         let restricted = Mana::restricted_to(lesson, [0, 1, 0, 0, 0, 0]);
         s.game_mut().state.players[0].mana_pool.add(&restricted);
         s.game_mut().scenario_refresh_priority().unwrap();
-        let prism = permanent(&s, "Prophetic Prism");
+        let prism = permanent_named(&s, "Prophetic Prism");
         assert_eq!(s.action_space().actions.iter().any(|action|
             matches!(action, Action::ActivateAbility { permanent, .. } if *permanent == prism)
         ), unrestricted);
         if unrestricted {
-            activate(&mut s, "Prophetic Prism", 0);
+            activate_named(&mut s, "Prophetic Prism", 0);
             assert_eq!(s.game().state.players[0].mana_pool.mana[1], 0);
             assert_eq!(
                 s.game().state.players[0].mana_pool.restricted(),
@@ -523,16 +522,16 @@ fn filtering_cannot_launder_restricted_mana_from_a_mixed_pool() {
 #[test]
 fn nested_mana_nonmana_life_cost_is_reserved_and_paid_once() {
     for life in [1, 3] {
-        let mut s = setup(&["Prophetic Prism", "Tireless Provisioner"]);
-        enter(&mut s, "Prophetic Prism");
+        let mut s = five_color_setup(&["Prophetic Prism", "Tireless Provisioner"]);
+        enter_and_settle(&mut s, "Prophetic Prism");
         s.game_mut().create_token("Treasure", PlayerId(0), false);
-        let treasure = permanent(&s, "Treasure");
+        let treasure = permanent_named(&s, "Treasure");
         let source_card = s.game().state.permanents[treasure].as_ref().unwrap().card;
         s.game_mut().state.cards[source_card].activated_abilities[0].life_cost = 2;
         s.game_mut().state.players[0].life = life;
         s.set_player_mana_pool(0, "0");
         s.game_mut().scenario_refresh_priority().unwrap();
-        let prism = permanent(&s, "Prophetic Prism");
+        let prism = permanent_named(&s, "Prophetic Prism");
         assert_eq!(
             s.action_space().actions.iter().any(
                 |a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == prism)
@@ -540,8 +539,8 @@ fn nested_mana_nonmana_life_cost_is_reserved_and_paid_once() {
             life >= 2
         );
         if life >= 2 {
-            activate(&mut s, "Prophetic Prism", 0);
-            activate(&mut s, "Treasure", 0);
+            activate_named(&mut s, "Prophetic Prism", 0);
+            activate_named(&mut s, "Treasure", 0);
             assert_eq!(s.game().state.players[0].life, 1);
             choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 1, .. }));
             choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));

@@ -7,39 +7,43 @@ use crate::state::{
     mana::ManaCost,
 };
 
-/// Native definitions, until the typed card language has the operations they need.
-pub(super) fn native_cards() -> Vec<CardDefinition> {
+pub(super) fn cards() -> Vec<CardDefinition> {
     vec![proft_s_eidetic_memory()]
 }
 
 fn proft_s_eidetic_memory() -> CardDefinition {
-    let drawn_twice = StaticCondition::CardsDrawnAtLeast { count: 2 };
+    let text_box = "When Proft's Eidetic Memory enters, draw a card.\nYou have no maximum hand size.\nAt the beginning of combat on your turn, if you've drawn more than one card this turn, put X +1/+1 counters on target creature you control, where X is the number of cards you've drawn this turn minus one.";
+
     CardDefinition {
-            name: "Proft's Eidetic Memory".into(),
-            mana_cost: Some(ManaCost::parse("1U")),
-            types: CardTypes::new([CardType::Enchantment]),
-            supertypes: vec!["Legendary".into()],
-            no_maximum_hand_size: true,
-            abilities: vec![
-                Ability::Triggered {
-                    condition: TriggerCondition::EntersTheBattlefield { subject: TriggerSubject::This },
-                    effects: vec![Effect::DrawCards { count: 1 }],
+        key: "mkm.proft_s_eidetic_memory",
+        scryfall_id: "af5b29b3-974c-4200-8df8-b072c11e1600",
+        name: "Proft's Eidetic Memory".into(),
+        mana_cost: Some(ManaCost::parse("{1}{U}")),
+        types: CardTypes::new([CardType::Enchantment]),
+        supertypes: vec!["Legendary".into()],
+        no_maximum_hand_size: true,
+        abilities: vec![
+            Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
                 },
-                Ability::Triggered {
-                    condition: TriggerCondition::ActiveIf {
-                        active_if: drawn_twice.clone(),
-                        condition: Box::new(TriggerCondition::BeginningOfYourCombat),
-                    },
-                    effects: vec![Effect::IfCondition {
-                        condition: drawn_twice,
-                        effects: vec![Effect::PutCountersValue {
-                            count: EffectValue::CardsDrawnMinus { subtract: 1 },
-                            target: TargetSpec::CreatureYouControl,
-                        }],
+                effects: vec![Effect::DrawCards { count: 1 }],
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::ActiveIf {
+                    active_if: StaticCondition::CardsDrawnAtLeast { count: 2 },
+                    condition: Box::new(TriggerCondition::BeginningOfYourCombat),
+                },
+                effects: vec![Effect::IfCondition {
+                    condition: StaticCondition::CardsDrawnAtLeast { count: 2 },
+                    effects: vec![Effect::PutCountersValue {
+                        count: EffectValue::CardsDrawnMinus { subtract: 1 },
+                        target: TargetSpec::CreatureYouControl,
                     }],
-                },
-            ],
-            text_box: "When Proft's Eidetic Memory enters, draw a card.\nYou have no maximum hand size.\nAt the beginning of combat on your turn, if you've drawn more than one card this turn, put X +1/+1 counters on target creature you control, where X is the number of cards you've drawn this turn minus one.".into(),
-            ..Default::default()
-        }
+                }],
+            },
+        ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
 }

@@ -3,10 +3,10 @@
 //! A world names rules meaning plus observation/action shape (see `WORLDS.md`).
 //! Any running engine knows its world: [`WORLD_VERSION`]. The world's cards are
 //! every definition in `cardsets/`, whatever its set; a card is *supported*
-//! when its set file defines it with a typed program and does not mark it
-//! incomplete. Incomplete and native definitions still run in the fixed setups
-//! that name them but are not supported for arbitrary decks. [`set_cards`]
-//! narrows the pool to chosen sets for deck generation or validation.
+//! when its set file defines it and does not mark it incomplete. Incomplete
+//! definitions still run in the fixed setups that name them but are not
+//! supported for arbitrary decks. [`set_cards`] narrows the pool to chosen
+//! sets for deck generation or validation.
 //!
 //! This is an eligibility check only. Deck construction policy (counts,
 //! formats, sideboards) belongs to the deck-admission caller.
@@ -16,17 +16,17 @@
 
 use std::collections::BTreeSet;
 
-use crate::semantic::{content_pool, Eligibility, IrError, PoolDefinition};
+use crate::semantic::{content_pool, ContentError, Eligibility, PoolDefinition};
 
 /// Rules and observation/action meaning; see `WORLDS.md` for compatibility.
-pub const WORLD_VERSION: &str = "w16";
+pub const WORLD_VERSION: &str = "w18";
 
 /// The pool holding every card this world defines, from every set.
 pub const WORLD_POOL: &str = "tla-pool-v1";
 
 /// Whether this world supports `name` for deck entry. Unknown names are
 /// unsupported rather than errors.
-pub fn supports_card(name: &str) -> Result<bool, IrError> {
+pub fn supports_card(name: &str) -> Result<bool, ContentError> {
     Ok(unsupported_cards([name])?.is_empty())
 }
 
@@ -35,7 +35,7 @@ pub fn supports_card(name: &str) -> Result<bool, IrError> {
 /// unsupported definition gives the reason.
 pub fn unsupported_cards<'a>(
     names: impl IntoIterator<Item = &'a str>,
-) -> Result<Vec<String>, IrError> {
+) -> Result<Vec<String>, ContentError> {
     let pool = content_pool(WORLD_POOL)?;
     let supported = pool
         .definitions
@@ -52,10 +52,10 @@ pub fn unsupported_cards<'a>(
         .collect())
 }
 
-/// This world's descriptor rows for typed cards from `sets` (key prefixes such
+/// This world's descriptor rows for cards from `sets` (key prefixes such
 /// as `"tla"`), sorted by name. Deck generators and validators apply this
 /// filter; the pool itself spans every set.
-pub fn set_cards(sets: &[&str]) -> Result<Vec<PoolDefinition>, IrError> {
+pub fn set_cards(sets: &[&str]) -> Result<Vec<PoolDefinition>, ContentError> {
     Ok(content_pool(WORLD_POOL)?
         .definitions
         .into_iter()
@@ -79,8 +79,7 @@ mod tests {
         assert!(supports_card("Lightning Bolt").unwrap());
         // Defined, but marked incomplete beside its definition.
         assert!(!supports_card("Water Tribe Rallier").unwrap());
-        // Native definition with no semantic program.
-        assert!(!supports_card("Counterspell").unwrap());
+        assert!(supports_card("Counterspell").unwrap());
         assert!(!supports_card("Crossroads of Destiny").unwrap());
         assert!(!supports_card("Not A Card").unwrap());
         let deck = [

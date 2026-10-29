@@ -1,43 +1,60 @@
 //! Zendikar.
-use crate::cards::authoring::{
-    Card, CardType, Characteristics, Event, Op, Predicate, PrintedPower, Program, ProgramKind,
-    Subject, Trigger,
+use crate::state::{
+    ability::{Ability, Effect, TriggerCondition, TriggerSubject},
+    card::{CardDefinition, CardType, CardTypes},
+    mana::{Mana, ManaCost},
+    predicate::CardPredicate,
 };
 
-pub(super) fn cards() -> Vec<Card> {
+pub(super) fn cards() -> Vec<CardDefinition> {
     vec![lotus_cobra()]
 }
 
-fn lotus_cobra() -> Card {
+fn lotus_cobra() -> CardDefinition {
     let text_box = "Landfall — Whenever a land you control enters, add one mana of any color.";
 
-    Card {
-        characteristics: Characteristics {
-            mana_cost: Some("1G"),
-            subtypes: Some(vec!["Snake"]),
-            types: vec![CardType::Creature],
-            keywords: Some(vec![]),
-            power: Some(PrintedPower::Fixed(2)),
-            toughness: Some(1),
-            token: Some(false),
-            supertypes: Some(vec![]),
-            ..Default::default()
-        },
+    CardDefinition {
         key: "zen.lotus_cobra",
-        programs: vec![Program::new(
-            "p0",
-            ProgramKind::Triggered,
-            vec![Op::choose_mana(&["W", "U", "B", "R", "G"])],
-        )
-        .trigger(Trigger::new(
-            Event::EntersBattlefield,
-            Subject::AnyYouControl {
-                predicate: Predicate::CardType {
-                    value: CardType::Land,
-                },
+        scryfall_id: "19adde22-e5eb-4815-beb6-c520b3274cc9",
+        name: "Lotus Cobra".into(),
+        mana_cost: Some(ManaCost::parse("{1}{G}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Snake".into()],
+        power: Some(2),
+        toughness: Some(1),
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::EntersTheBattlefield {
+                subject: TriggerSubject::AnyYouControl(CardPredicate {
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                }),
             },
-        ))],
-        registry_name: "Lotus Cobra",
-        text_box,
+            effects: vec![Effect::Modal {
+                modes: vec![
+                    vec![Effect::AddMana {
+                        mana: Mana::parse("W"),
+                        until_end_of_combat: false,
+                    }],
+                    vec![Effect::AddMana {
+                        mana: Mana::parse("U"),
+                        until_end_of_combat: false,
+                    }],
+                    vec![Effect::AddMana {
+                        mana: Mana::parse("B"),
+                        until_end_of_combat: false,
+                    }],
+                    vec![Effect::AddMana {
+                        mana: Mana::parse("R"),
+                        until_end_of_combat: false,
+                    }],
+                    vec![Effect::AddMana {
+                        mana: Mana::parse("G"),
+                        until_end_of_combat: false,
+                    }],
+                ],
+            }],
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
     }
 }

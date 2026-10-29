@@ -1,59 +1,72 @@
 //! Tokens created by cards outside TLA. TLA defines its own fixed tokens.
-use crate::cards::authoring::{
-    Card, CardType, Characteristics, Color, Cost, Op, PrintedPower, Program, ProgramKind,
+use crate::state::{
+    ability::Effect,
+    card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes},
+    mana::{Color, Colors, Mana},
 };
 
-pub(super) fn cards() -> Vec<Card> {
+pub(super) fn cards() -> Vec<CardDefinition> {
     vec![human_soldier(), treasure()]
 }
 
-fn human_soldier() -> Card {
+fn human_soldier() -> CardDefinition {
     let text_box = "";
 
-    Card {
-        characteristics: Characteristics {
-            subtypes: Some(vec!["Human", "Soldier"]),
-            types: vec![CardType::Creature],
-            keywords: Some(vec![]),
-            power: Some(PrintedPower::Fixed(1)),
-            toughness: Some(1),
-            token: Some(true),
-            supertypes: Some(vec![]),
-            colors: Some(vec![Color::W]),
-            ..Default::default()
-        },
+    CardDefinition {
         key: "token.human_soldier",
-        programs: vec![],
-        registry_name: "Human Soldier",
-        text_box,
+        scryfall_id: "90de6d1e-e654-4f4a-8014-061ce69e540f",
+        name: "Human Soldier".into(),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Human".into(), "Soldier".into()],
+        power: Some(1),
+        toughness: Some(1),
+        is_token: true,
+        color_override: Some(Colors::from([Color::White])),
+        text_box: text_box.into(),
+        ..Default::default()
     }
 }
 
-fn treasure() -> Card {
+fn treasure() -> CardDefinition {
     let text_box = "{T}, Sacrifice this token: Add one mana of any color.";
 
-    Card {
-        characteristics: Characteristics {
-            subtypes: Some(vec!["Treasure"]),
-            types: vec![CardType::Artifact],
-            keywords: Some(vec![]),
-            token: Some(true),
-            supertypes: Some(vec![]),
-            ..Default::default()
-        },
+    CardDefinition {
         key: "token.treasure",
-        programs: vec![Program::new(
-            "p0",
-            ProgramKind::Activated,
-            vec![Op::choose_mana(&["W", "U", "B", "R", "G"])],
-        )
-        .cost(Cost {
-            mana: Some("0"),
-            sacrifice_source: Some(true),
-            tap_source: Some(true),
+        scryfall_id: "a3a684b7-27e0-4d9e-a064-9e03c6e50c89",
+        name: "Treasure".into(),
+        types: CardTypes::new([CardType::Artifact]),
+        subtypes: vec!["Treasure".into()],
+        is_token: true,
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            tap_source: true,
+            sacrifice_source: true,
+            effects: vec![Effect::Modal {
+                modes: vec![
+                    vec![Effect::AddMana {
+                        mana: Mana::parse("W"),
+                        until_end_of_combat: false,
+                    }],
+                    vec![Effect::AddMana {
+                        mana: Mana::parse("U"),
+                        until_end_of_combat: false,
+                    }],
+                    vec![Effect::AddMana {
+                        mana: Mana::parse("B"),
+                        until_end_of_combat: false,
+                    }],
+                    vec![Effect::AddMana {
+                        mana: Mana::parse("R"),
+                        until_end_of_combat: false,
+                    }],
+                    vec![Effect::AddMana {
+                        mana: Mana::parse("G"),
+                        until_end_of_combat: false,
+                    }],
+                ],
+            }],
             ..Default::default()
-        })],
-        registry_name: "Treasure",
-        text_box,
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
     }
 }

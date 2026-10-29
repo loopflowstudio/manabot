@@ -1,4 +1,8 @@
-"""Optional payment authoring checks both continuations through the shared compiler."""
+"""Optional payments keep both continuations in policy input.
+
+The compiler checks below exercise the retired offline compiler on frozen w11
+source; current cards are engine definitions.
+"""
 
 import json
 from pathlib import Path
@@ -6,9 +10,10 @@ from typing import Any
 
 import pytest
 
-from manabot.semantic.compiler import SemanticCompileError, compile_source, pretty_json
-from manabot.semantic.learning import BoundSemanticPack
+from manabot.semantic.compiler import SemanticCompileError, compile_source
+from manabot.semantic.learning import TOKEN_KINDS, token_value
 from manabot.semantic.policy_catalog import bind_policy_catalog
+import managym
 
 SOURCE = Path("content/semantic/w11/elemental_world.source.json")
 
@@ -23,75 +28,34 @@ def _lesson(source: dict[str, Any]) -> dict[str, Any]:
     return definition["programs"][0]["ops"][1]
 
 
-def test_both_payment_methods_compile_and_both_branches_reach_policy_input(
-    tmp_path: Path,
-) -> None:
-    source = json.loads(SOURCE.read_text())
-    payment = _lesson(source)
-    payment["cost"] = {"mana": "{2}{U}"}
-    payment["if_paid"] = [{"op": "draw_cards", "count": 1}]
-    payment["if_declined"] = [{"op": "deal_damage_to_controller", "amount": 2}]
-    ir, coverage = compile_source(source)
-    assert coverage["opcode_counts"]["optional_payment"] == 1
-    program = next(
-        row
-        for row in ir["programs"]
-        if row["semantic_key"] == "temur.waterbending_lesson.p0"
-    )
-    optional = program["instructions"][1]
-    assert optional["cost"] == {"mana": "{2}{U}"}
-    assert optional["if_paid"][0]["op_name"] == "draw_cards"
-    assert optional["if_declined"][0]["op_name"] == "deal_damage_to_controller"
+def test_both_payment_branches_reach_policy_input() -> None:
+    """The current card's paid and declined continuations are both tokens."""
     pack = bind_policy_catalog("elemental-world-v2")
-    assert pack.schema.opcodes["optional_payment"] == 65
-    assert pack.schema.raw["schema_version"] == 8
-    # Project the authored variant too: admitting the checked pack alone does
-    # not prove that the encoder retains a nonempty paid continuation.
-    ir_path = tmp_path / "optional-payment.ir.json"
-    ir_path.write_text(pretty_json(ir))
-    projected = BoundSemanticPack.bind(
-        {
-            "schema_version": 1,
-            "content_digest": ir["ir_hash"],
-            "definitions": [
-                {
-                    "card_def_id": index,
-                    "registry_name": definition["content_pack_binding"]["value"],
-                }
-                for index, definition in enumerate(ir["definitions"])
-            ],
-        },
-        schema_path=SOURCE.parent / "learning_schema.json",
-        ir_path=ir_path,
+    pool = managym.content_pool("elemental-world-v2")
+    card_def_id = next(
+        row["card_def_id"]
+        for row in pool["definitions"]
+        if row["registry_name"] == "Waterbending Lesson"
     )
-    row = ir["programs"].index(program)
-    start, end = projected.catalog.program_offsets[row : row + 2]
+    (program,) = pack.program_rows(pack.definition_row(card_def_id))
+    start, end = pack.catalog.program_offsets[program : program + 2]
     tokens = list(
         zip(
-            projected.catalog.token_kind[start:end],
-            projected.catalog.token_value[start:end],
+            pack.catalog.token_kind[start:end].tolist(),
+            pack.catalog.token_value[start:end].tolist(),
+            strict=True,
         )
     )
-    for branch, opcode in (
-        ("if_paid", "draw_cards"),
-        ("if_declined", "deal_damage_to_controller"),
-    ):
-        begin = tokens.index(
-            (
-                pack.schema.token_kinds["structure"],
-                pack.schema.structures[f"{branch}_begin"],
-            )
-        )
-        end = tokens.index(
-            (
-                pack.schema.token_kinds["structure"],
-                pack.schema.structures[f"{branch}_end"],
-            )
-        )
-        assert (
-            pack.schema.token_kinds["opcode"],
-            pack.schema.opcodes[opcode],
-        ) in tokens[begin:end]
+    assert (TOKEN_KINDS["variant"], token_value("Effect::OptionalPayment")) in tokens
+    for branch in ("if_paid", "if_declined"):
+        at = tokens.index((TOKEN_KINDS["field"], token_value(branch)))
+        assert tokens[at + 1] == (TOKEN_KINDS["structure"], token_value("["))
+    # Declining the waterbend discards; paying it continues with nothing more.
+    declined = tokens.index((TOKEN_KINDS["field"], token_value("if_declined")))
+    assert tokens[declined + 2] == (
+        TOKEN_KINDS["variant"],
+        token_value("Effect::Discard"),
+    )
 
 
 @pytest.mark.parametrize("branch", ["if_paid", "if_declined"])

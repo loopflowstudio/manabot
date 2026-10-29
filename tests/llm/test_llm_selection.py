@@ -91,6 +91,7 @@ def test_initial_selection_retains_exact_input_output_and_identity() -> None:
     assert result.failure is None and result.fallback is None
     assert result.decision == decision()
     assert result.runtime.runtime == "scripted-test"
+    assert result.behavior_version == result.runtime.behavior_version(config())
     assert len(result.attempts) == 1
     attempt = result.attempts[0]
     assert attempt.response.text == "  A1\n"
@@ -99,6 +100,8 @@ def test_initial_selection_retains_exact_input_output_and_identity() -> None:
     assert attempt.seconds >= 0 and result.seconds >= attempt.seconds
     assert result.peak_gpu_bytes is None
     assert SelectionResult.model_validate_json(result.model_dump_json()) == result
+    historical = result.model_dump_json(exclude={"behavior_version"})
+    assert SelectionResult.model_validate_json(historical).behavior_version is None
 
 
 @pytest.mark.parametrize("invalid", ["", "A9", "A0 A1", "I choose A1", "A1."])
@@ -147,6 +150,30 @@ def test_two_protocol_failures_produce_reproducible_legal_fallback() -> None:
     assert first.fallback.state_before == repr(random.Random(37).getstate())
     assert len(first.attempts) == 2 and all(a.validation_error for a in first.attempts)
     assert first.failure is None
+
+
+@pytest.mark.parametrize(
+    "answers", [("A1",), ("invalid", "A1"), ("invalid", "invalid")]
+)
+def test_failed_progress_revokes_selection_and_retains_evidence(
+    answers: tuple[str, ...],
+) -> None:
+    snapshots: list[SelectionResult] = []
+
+    def publish(result: SelectionResult) -> None:
+        if result.origin is not None:
+            raise OSError("cannot retain selection")
+        snapshots.append(result)
+
+    replies = [response(answer) for answer in answers]
+    result = select(decision(), config(), ScriptedRuntime(replies), progress=publish)
+    assert result.failure is not None and result.failure.kind == "runtime"
+    assert result.failure.message == "OSError: cannot retain selection"
+    assert result.selected_reference is result.origin is result.fallback is None
+    assert len(result.attempts) == len(answers)
+    assert result.attempts[-1].response == response(answers[-1])
+    assert result.behavior_version is not None
+    assert snapshots[-1] == result
 
 
 def test_length_limited_legal_looking_answer_is_incomplete() -> None:
