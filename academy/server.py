@@ -1458,13 +1458,9 @@ class GameSession:
             )
         event_subjects.update(json.loads(self.env.presentation_subjects_json()))
         self.presentation.observe(next_obs, event_subjects=event_subjects)
-        if auto and len(actions) == 1:
-            label = (
-                f"Opponent: {action_description}"
-                if actor == "villain"
-                else action_description
-            )
-            self._pending_action_log.append(f"Auto: {label}")
+        if auto:
+            # Priority-stop automation stays identifiable in the hero's log.
+            self._pending_action_log.append(f"Auto: {action_description}")
         elif actor == "villain":
             self._pending_action_log.append(f"Villain: {action_description}")
         self.trace.events.append(

@@ -107,10 +107,11 @@ for (const width of [390, 1500]) {
     expect(await page.getByTestId('battlefield').evaluateAll(nodes => nodes.map(node => node.getBoundingClientRect().height))).toEqual(battlefieldHeights);
     await page.screenshot({ path: testInfo.outputPath('precision-payment.png'), fullPage: true });
     const paidHash = await page.evaluate(() => window.__surface.frame!.frame_hash);
+    const committed = await page.evaluate(() => window.__surface.commands.at(-1)!);
     await page.reload();
     await expect.poll(() => page.evaluate(() => window.__surface.frame?.frame_hash)).toBe(paidHash);
-    // A lost receipt can be retried with its exact original Command ID.
-    await page.evaluate(() => window.__surface.socket!.send(JSON.stringify({ type: 'command', command: window.__surface.commands.at(-1) })));
+    // A receipt lost across the reconnect can be retried with its exact original Command ID.
+    await page.evaluate(command => window.__surface.socket!.send(JSON.stringify({ type: 'command', command })), committed);
     await expect.poll(() => page.evaluate(() => window.__surface.outcomes.at(-1))).toBe('duplicate');
     expect(await page.evaluate(() => window.__surface.frame?.frame_hash)).toBe(paidHash);
     const overflow = await page.locator('body *').evaluateAll(elements => elements.filter(element => element.getBoundingClientRect().right > window.innerWidth + 1).map(element => ({ tag: element.tagName, class: element.className, width: element.getBoundingClientRect().width })).slice(0, 12));

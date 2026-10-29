@@ -40,6 +40,7 @@ def test_forced_decisions_never_surface(
     frame = ExperienceFrame.model_validate(
         session.current_recovery("reconnect")["frame"]
     )
+    log: list[str] = []
     for index in range(30):
         if frame.prompt is None:
             break
@@ -62,15 +63,57 @@ def test_forced_decisions_never_surface(
         )
         result = session.hero_command(command.model_dump(mode="json"))
         assert result["status"] == "accepted"
+        log.extend(result["update"].get("log", []))
         frame = ExperienceFrame.model_validate(result["update"]["frame"])
 
     assert session.env is not None
     assert session.env.skip_trivial_count() > 0
     assert session.trace is not None
     assert all(len(event.actions) > 1 for event in session.trace.events)
-    assert all(
-        row.action_type == "PRIORITY_PASS_PRIORITY"
-        for row in session.authority_transitions
-        if row.automatic
-    )
+    automatic = [row for row in session.authority_transitions if row.automatic]
+    assert all(row.action_type == "PRIORITY_PASS_PRIORITY" for row in automatic)
+    assert log.count("Auto: Pass priority") == len(automatic)
     assert policy_calls
+
+
+def test_priority_automation_is_logged(tmp_path: Path) -> None:
+    """Passes outside configured stops are real choices, logged as automation."""
+    session = GameSession(tmp_path, capture_authority_evidence=True)
+    session.new_game(
+        {
+            "hero_deck": "elemental_ur",
+            "villain_deck": "elemental_gw",
+            "villain_type": "passive",
+            "seed": 0,
+        }
+    )
+    frame = ExperienceFrame.model_validate(
+        session.current_recovery("reconnect")["frame"]
+    )
+    log: list[str] = []
+    for index in range(6):
+        assert frame.prompt is not None
+        offer = next(
+            (row for row in frame.offers if row.action_type == "PRIORITY_PLAY_LAND"),
+            next(
+                row
+                for row in frame.offers
+                if row.action_type == "PRIORITY_PASS_PRIORITY"
+            ),
+        )
+        command = Command(
+            command_id=f"automation-log.{index}",
+            match_id=frame.match_id,
+            expected_revision=frame.revision,
+            prompt_id=frame.prompt.id,
+            offer_id=offer.id,
+            answers=[],
+        )
+        result = session.hero_command(command.model_dump(mode="json"))
+        assert result["status"] == "accepted"
+        log.extend(result["update"].get("log", []))
+        frame = ExperienceFrame.model_validate(result["update"]["frame"])
+
+    automatic = [row for row in session.authority_transitions if row.automatic]
+    assert automatic
+    assert log.count("Auto: Pass priority") == len(automatic)

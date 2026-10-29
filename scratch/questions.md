@@ -35,9 +35,15 @@ it off. MTG-193's landed notes are at `6d069d6e5:scratch/questions.md`.
 - **Academy forced-step automation removed:** `_advance` and villain play no
   longer step single-action spaces (native skipping already did); the toggle
   reads **Use priority stops**. Old traces keep their recorded forced Auto steps.
-- **Not run here:** Playwright specs (no `node_modules` in this checkout) —
-  `decision-surface`, `learn`, `choice-navigation`, `deck-browser`, `stops`
-  changed or depend on the new fixtures; leave to gate/CI.
+- **Priority automation is logged as automation:** with forced steps gone,
+  `Auto:` log lines come from every automated priority pass (previously only
+  single-action steps), per the rule that configured automation stays
+  identifiable. `test_priority_automation_is_logged` pins it on the Elemental
+  seed-0 deal the `deck-browser` spec uses.
+- **Academy UI CI repaired (2026-10-28):** `trigger-order` no longer clicks the
+  now-forced Deadly Dispute sacrifice; `decision-surface` captures the Command
+  before reloading. Local release suite 24 passed, unit 107 passed, check clean
+  (Node 24 via nvm; Homebrew node is broken on this machine).
 - **Pre-existing local failures (also on base 6d069d6e5):** 8 Academy receipt /
   world-pin tests (`authored_match_*`, `public_commitment_parity`,
   `ur_lessons_increment`); `tests/llm/*` need `huggingface_hub`.
