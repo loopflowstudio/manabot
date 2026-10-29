@@ -102,6 +102,7 @@ pub enum Opcode {
     AddSubtype = 64,
     OptionalPayment = 65,
     RemoveCounters = 66,
+    SetBasePt = 67,
 }
 
 impl Opcode {
@@ -173,6 +174,7 @@ impl Opcode {
             64 => Opcode::AddSubtype,
             65 => Opcode::OptionalPayment,
             66 => Opcode::RemoveCounters,
+            67 => Opcode::SetBasePt,
 
             other => return Err(IrError::UnknownOpcode(other)),
         };
@@ -289,6 +291,14 @@ pub enum Step {
     RemoveCounters {
         target: String,
         count: i64,
+    },
+    /// "[target] has base power and toughness P/T" for `duration`; an
+    /// absent value leaves that base unchanged (CR 613.4b).
+    SetBasePt {
+        target: String,
+        power: Option<i64>,
+        toughness: Option<i64>,
+        duration: String,
     },
 
     SearchBasicLands {
@@ -970,6 +980,7 @@ impl<'a> BoundPack<'a> {
             | Step::ModifyControlled { .. }
             | Step::OptionalPayment { .. }
             | Step::RemoveCounters { .. }
+            | Step::SetBasePt { .. }
             | Step::SearchBasicLands { .. }
             | Step::Sacrifice { .. }
             | Step::DealDamageToController { .. }
@@ -1105,6 +1116,12 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
             target: str_field(value, "target")?.to_owned(),
             count: i64_field(value, "count")?,
         },
+        Opcode::SetBasePt => Step::SetBasePt {
+            target: str_field(value, "target")?.to_owned(),
+            power: opt_i64_field(value, "power")?,
+            toughness: opt_i64_field(value, "toughness")?,
+            duration: str_field(value, "duration")?.to_owned(),
+        },
         Opcode::GrantMana => Step::GrantMana {
             predicates: array_field(value, "predicates")?
                 .iter()
@@ -1186,10 +1203,7 @@ fn parse_step(value: &Value) -> Result<Step, IrError> {
             power: i64_field(value, "power")?,
             toughness: i64_field(value, "toughness")?,
             duration: str_field(value, "duration")?.to_owned(),
-            per_creature_type_max: value
-                .get("per_creature_type_max")
-                .map(|_| i64_field(value, "per_creature_type_max"))
-                .transpose()?,
+            per_creature_type_max: opt_i64_field(value, "per_creature_type_max")?,
         },
         Opcode::GrantKeywords => Step::GrantKeywords {
             target: str_field(value, "target")?.to_owned(),
@@ -1480,6 +1494,10 @@ fn i64_field(value: &Value, name: &str) -> Result<i64, IrError> {
     field(value, name)?
         .as_i64()
         .ok_or_else(|| IrError::Malformed(format!("field {name:?} must be an integer")))
+}
+
+fn opt_i64_field(value: &Value, name: &str) -> Result<Option<i64>, IrError> {
+    value.get(name).map(|_| i64_field(value, name)).transpose()
 }
 
 fn u64_field(value: &Value, name: &str) -> Result<u64, IrError> {

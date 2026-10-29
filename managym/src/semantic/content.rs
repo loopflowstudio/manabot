@@ -1000,9 +1000,35 @@ fn lower_step(pack: &SemanticPack, program: &Program, step: &Step) -> Result<Eff
             toughness: i32_value(program, *toughness, "toughness")?,
             target: target_for(program, target)?,
         },
+        Step::SetBasePt {
+            target,
+            power,
+            toughness,
+            duration,
+        } if duration == "end_of_turn" && target == "source" => Effect::SetBasePtUntilEot {
+            power: power
+                .map(|p| i32_value(program, p, "base power"))
+                .transpose()?,
+            toughness: toughness
+                .map(|t| i32_value(program, t, "base toughness"))
+                .transpose()?,
+        },
+        Step::SetBasePt { .. } => {
+            return unsupported(
+                program,
+                "base P/T is set only on the source until end of turn",
+            )
+        }
         Step::ModifyPt { duration, .. } => {
             return unsupported(program, &format!("unsupported P/T duration {duration:?}"))
         }
+        Step::GrantKeywords {
+            target,
+            keywords: names,
+            duration,
+        } if duration == "end_of_turn" && target == "source" => Effect::GrantKeywordsToSource {
+            keywords: keywords(names)?,
+        },
         Step::GrantKeywords {
             target,
             keywords: names,

@@ -46,3 +46,6 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   modal choice (one counter of a present kind, or stop); the caster chooses.
 - Exhaust is recorded per incarnation (`exhausted_abilities`); CR 702.177b
   "haven't activated an exhaust ability this turn" effects are not modeled.
+- Slice 4 took the base P/T layer over X costs (X choice is a new agent decision).
+  `set_base_pt` lowers only for the source until end of turn; Katara, Water
+  Tribe's Hope needs X and a team role, Honest Work needs Auras.

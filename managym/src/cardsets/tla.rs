@@ -144,6 +144,8 @@ pub(super) fn cards() -> Vec<Card> {
         rowdy_snowballers(),
         mai_jaded_edge(),
         heartless_act(),
+        flexible_waterbender(),
+        turtle_duck(),
     ]
 }
 fn abandon_attachments() -> Card {
@@ -4150,6 +4152,76 @@ fn heartless_act() -> Card {
         ])
         .inferred()],
         registry_name: "Heartless Act",
+        text_box,
+    }
+}
+
+fn flexible_waterbender() -> Card {
+    let text_box = "Vigilance\nWaterbend {3}: This creature has base power and toughness 5/2 until end of turn. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{3}{U}"),
+            subtypes: Some(vec!["Human", "Warrior", "Ally"]),
+            types: vec![CardType::Creature],
+            keywords: Some(vec![Keyword::Vigilance]),
+            power: Some(PrintedPower::Fixed(2)),
+            toughness: Some(5),
+            ..Default::default()
+        },
+        key: "tla.flexible_waterbender",
+        programs: vec![Program::new(
+            "waterbend",
+            ProgramKind::Activated,
+            vec![Op::SetBasePt {
+                duration: Duration::EndOfTurn,
+                power: Some(5),
+                target: "source",
+                toughness: Some(2),
+            }],
+        )
+        .cost(Cost {
+            mana: Some("{3}"),
+            waterbend: Some(true),
+            ..Default::default()
+        })],
+        registry_name: "Flexible Waterbender",
+        text_box,
+    }
+}
+
+fn turtle_duck() -> Card {
+    let text_box = "{3}: Until end of turn, this creature has base power 4 and gains trample.";
+
+    Card {
+        characteristics: Characteristics {
+            mana_cost: Some("{G}"),
+            subtypes: Some(vec!["Turtle", "Bird"]),
+            types: vec![CardType::Creature],
+            power: Some(PrintedPower::Fixed(0)),
+            toughness: Some(4),
+            ..Default::default()
+        },
+        key: "tla.turtle_duck",
+        programs: vec![Program::new(
+            "base_power",
+            ProgramKind::Activated,
+            vec![
+                Op::SetBasePt {
+                    duration: Duration::EndOfTurn,
+                    power: Some(4),
+                    target: "source",
+                    toughness: None,
+                },
+                Op::GrantKeywords {
+                    duration: Duration::EndOfTurn,
+                    keywords: vec![Keyword::Trample],
+                    target: "source",
+                },
+            ],
+        )
+        .cost(Cost::mana("{3}"))],
+        registry_name: "Turtle-Duck",
         text_box,
     }
 }

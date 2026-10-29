@@ -2062,5 +2062,32 @@
     "colors": [
       "B"
     ]
+  },
+  "Flexible Waterbender": {
+    "name": "Flexible Waterbender",
+    "mana_cost": "{3}{U}",
+    "type_line": "Creature — Human Warrior Ally",
+    "power": "2",
+    "toughness": "5",
+    "keywords": [
+      "Vigilance",
+      "Waterbend"
+    ],
+    "oracle_text": "Vigilance\nWaterbend {3}: This creature has base power and toughness 5/2 until end of turn. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Turtle-Duck": {
+    "name": "Turtle-Duck",
+    "mana_cost": "{G}",
+    "type_line": "Creature — Turtle Bird",
+    "power": "0",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "{3}: Until end of turn, this creature has base power 4 and gains trample.",
+    "colors": [
+      "G"
+    ]
   }
 }

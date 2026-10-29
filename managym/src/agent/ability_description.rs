@@ -298,6 +298,15 @@ fn cost_description(cost: &ManaCost) -> String {
     text
 }
 
+fn base_pt_description(power: Option<i32>, toughness: Option<i32>) -> String {
+    match (power, toughness) {
+        (Some(power), Some(toughness)) => format!("power and toughness {power}/{toughness}"),
+        (Some(power), None) => format!("power {power}"),
+        (None, Some(toughness)) => format!("toughness {toughness}"),
+        (None, None) => "power and toughness unchanged".into(),
+    }
+}
+
 fn keywords_description(k: &Keywords) -> String {
     let Keywords {
         flying,
@@ -406,6 +415,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
         PutCounters { count, kind, target } => format!("Put {count} {} counters on {}",counter_description(*kind),target_description(target)),
         TapSource => "Tap this".into(), UntapSource => "Untap this".into(),
         CantBeBlockedThisTurnSource => "This can't be blocked this turn".into(),
+        GrantKeywordsToSource { keywords } => format!("This gains {} until end of turn",keywords_description(keywords)),
+        SetBasePtUntilEot { power, toughness } => format!("This has base {} until end of turn",base_pt_description(*power,*toughness)),
         GainLife { amount } => format!("You gain {amount} life"),
         OnNthResolutionThisTurn { n, effect } => format!("If this is resolution {n} of this ability this turn: {}",effects_description(std::slice::from_ref(effect))),
         Scry { count } => format!("Scry {count}"),

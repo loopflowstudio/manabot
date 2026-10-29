@@ -7,12 +7,15 @@
 //      Suki "power = creatures you control", Dragonfly Swarm "power =
 //      noncreature nonland cards in your graveyard"); earthbend animation
 //      sets base 0/0 by construction (lands print no P/T).
-//   2. static continuous P/T effects (layer 7c: anthems and conditional
+//   2. until-end-of-turn effects that set base power or toughness (layer
+//      7b: Flexible Waterbender, Turtle-Duck). Each replaces the 7a value;
+//      a later setter overwrites an earlier one, which is timestamp order.
+//   3. static continuous P/T effects (layer 7c: anthems and conditional
 //      self-buffs), applied while their source is on the battlefield.
-//   3. until-end-of-turn P/T modifications (also layer 7c; all Milestone-1
+//   4. until-end-of-turn P/T modifications (also layer 7c; all Milestone-1
 //      effects are additive, so ordering within the layer is immaterial and
 //      no timestamp system is kept).
-//   4. +1/+1 counters (also layer 7c, CR 613.4c).
+//   5. +1/+1 counters (also layer 7c, CR 613.4c).
 // These additive layer-7c terms commute. Layer 7d switches P/T, and is not
 // represented here; neither are general timestamp/dependency interactions.
 // Static keyword grants (layer 6) add to printed and until-EOT keywords.
@@ -48,7 +51,7 @@ const NONCREATURE_SUBTYPES: [&str; 10] = [
 ];
 
 impl Game {
-    /// The permanent's effective power: CDA-aware base, plus static buffs,
+    /// The permanent's effective power: CDA-aware or set base, plus static buffs,
     /// until-EOT deltas, and +1/+1 counters.
     pub fn effective_power(&self, permanent_id: PermanentId) -> i32 {
         self.effective_pt(permanent_id).0
@@ -76,6 +79,9 @@ impl Game {
             None => card.power.unwrap_or(0),
         };
         let base_toughness = card.toughness.unwrap_or(0);
+        // Layer 7b: until-EOT base setters replace the 7a value.
+        let base_power = permanent.temp_base_power.unwrap_or(base_power);
+        let base_toughness = permanent.temp_base_toughness.unwrap_or(base_toughness);
 
         // Layer 7c: static continuous effects from battlefield permanents.
         let (static_power, static_toughness) = self.static_pt_bonus(permanent_id);

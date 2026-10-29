@@ -204,6 +204,7 @@ def test_opcode_numbers_are_an_explicit_compatibility_surface() -> None:
         "ADD_SUBTYPE": 64,
         "OPTIONAL_PAYMENT": 65,
         "REMOVE_COUNTERS": 66,
+        "SET_BASE_PT": 67,
     }
 
 

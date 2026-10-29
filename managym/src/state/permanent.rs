@@ -70,6 +70,12 @@ pub struct Permanent {
     pub deathtouch_damage: bool,
     pub temp_power: i32,
     pub temp_toughness: i32,
+    /// Until-EOT effects that set base power or toughness (CR 613.4b), cleared
+    /// during cleanup. The latest effect wins, so a setter overwrites.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temp_base_power: Option<i32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temp_base_toughness: Option<i32>,
     /// +1/+1 counters (CR 122). Any permanent can carry them, including
     /// lands — they contribute to P/T only via effective_power/toughness.
     /// Other kinds live in `counters`; `counter_count` reads either.
@@ -110,6 +116,8 @@ impl Permanent {
             deathtouch_damage: false,
             temp_power: 0,
             temp_toughness: 0,
+            temp_base_power: None,
+            temp_base_toughness: None,
             plus1_counters: 0,
             counters: Counters::default(),
             cant_be_blocked_this_turn: false,
@@ -158,18 +166,6 @@ impl Permanent {
 
     pub fn can_block(&self, card: &Card) -> bool {
         self.is_creature(card) && !self.tapped
-    }
-
-    /// Base + counters + until-EOT deltas. Static continuous effects and
-    /// characteristic-defining P/T need whole-game state — use
-    /// `Game::effective_power` / `Game::effective_toughness` (this is their
-    /// local component).
-    pub fn local_power(&self, card: &Card) -> i32 {
-        card.power.unwrap_or(0) + self.plus1_counters + self.temp_power
-    }
-
-    pub fn local_toughness(&self, card: &Card) -> i32 {
-        card.toughness.unwrap_or(0) + self.plus1_counters + self.temp_toughness
     }
 
     pub fn producible_mana(&self, card: &Card) -> Mana {
@@ -244,6 +240,8 @@ impl Permanent {
         self.exile_if_dies_this_turn = false;
         self.temp_power = 0;
         self.temp_toughness = 0;
+        self.temp_base_power = None;
+        self.temp_base_toughness = None;
         self.cant_be_blocked_this_turn = false;
         self.temp_keywords = Keywords::default();
         self.temp_subtypes.clear();

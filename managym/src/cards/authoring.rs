@@ -258,6 +258,16 @@ pub enum Op {
         #[serde(skip_serializing_if = "Option::is_none")]
         per_creature_type_max: Option<i32>,
     },
+    /// "[target] has base power and toughness P/T"; an absent value leaves
+    /// that base unchanged.
+    SetBasePt {
+        duration: Duration,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        power: Option<i32>,
+        target: &'static str,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        toughness: Option<i32>,
+    },
     /// Remove up to `count` counters of any kinds, chosen one at a time.
     RemoveCounters {
         count: i32,

@@ -551,6 +551,23 @@ impl Game {
                 }
                 None
             }
+            Effect::SetBasePtUntilEot { power, toughness } => {
+                if let Some(permanent) = self.source_permanent_mut(frame) {
+                    if power.is_some() {
+                        permanent.temp_base_power = *power;
+                    }
+                    if toughness.is_some() {
+                        permanent.temp_base_toughness = *toughness;
+                    }
+                }
+                None
+            }
+            Effect::GrantKeywordsToSource { keywords } => {
+                if let Some(permanent) = self.source_permanent_mut(frame) {
+                    permanent.temp_keywords = permanent.temp_keywords.union(keywords);
+                }
+                None
+            }
             Effect::Discard => (!self
                 .state
                 .zones

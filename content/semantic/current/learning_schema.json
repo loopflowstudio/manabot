@@ -182,6 +182,7 @@
       "Swamp": 47,
       "Treasure": 55,
       "Treefolk": 48,
+      "Turtle": 66,
       "Wall": 65,
       "Warrior": 22
     },
@@ -375,6 +376,7 @@
     "scry": 7,
     "search_basic_land": 24,
     "search_basic_lands": 51,
+    "set_base_pt": 67,
     "set_power_from_count": 23,
     "spell_cost_reduction": 49,
     "static_pt": 50,

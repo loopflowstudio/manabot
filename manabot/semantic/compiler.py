@@ -102,6 +102,7 @@ class Opcode(IntEnum):
     ADD_SUBTYPE = 64
     OPTIONAL_PAYMENT = 65
     REMOVE_COUNTERS = 66
+    SET_BASE_PT = 67
 
 
 PROGRAM_KINDS = {kind.name.lower(): kind for kind in ProgramKind}
@@ -192,6 +193,7 @@ OP_FIELDS: dict[str, tuple[set[str], set[str]]] = {
     "exile_if_dies": ({"target"}, set()),
     "add_subtype": ({"target", "subtype"}, set()),
     "remove_counters": ({"target", "count"}, set()),
+    "set_base_pt": ({"target", "duration"}, {"power", "toughness"}),
     "add_lesson_mana": ({"mana"}, set()),
     "grant_flashback": (set(), set()),
     "grant_mana": ({"predicates"}, set()),

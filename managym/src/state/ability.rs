@@ -305,6 +305,16 @@ pub enum Effect {
     UntapSource,
     /// The source permanent can't be blocked this turn.
     CantBeBlockedThisTurnSource,
+    /// The source permanent gains `keywords` until end of turn.
+    GrantKeywordsToSource {
+        keywords: Keywords,
+    },
+    /// The source permanent has base power and/or toughness `power`/`toughness`
+    /// until end of turn (CR 613.4b); an absent value leaves that base alone.
+    SetBasePtUntilEot {
+        power: Option<i32>,
+        toughness: Option<i32>,
+    },
     /// Resolving player gains `amount` life.
     GainLife {
         amount: i32,
@@ -600,6 +610,8 @@ impl Effect {
             | Effect::TapSource
             | Effect::UntapSource
             | Effect::CantBeBlockedThisTurnSource
+            | Effect::GrantKeywordsToSource { .. }
+            | Effect::SetBasePtUntilEot { .. }
             | Effect::GainLife { .. }
             | Effect::Scry { .. }
             | Effect::LookAndSelect { .. }
