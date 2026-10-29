@@ -28,7 +28,7 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
 
 - Support is by definition since the T1 sync (86ebe9ccf). Superseded after item 20:
   per-card tests already in `tests/rules/` move to `tests/cards/<set>.rs` here
-  (Jack Heart's steer; item 21), since PR #394 has not moved them; on sync the
+  (Jack Heart's steer; items 21–22), since PR #394 has not moved them; on sync the
   first landed layout wins.
 - Conditional entry reads the card owner's battlefield. Schema 8 is unreleased, so
   vocabulary is appended in place. `semantic_conformance_tests` is left to T1's

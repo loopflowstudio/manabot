@@ -162,30 +162,18 @@ study source closure — all world-release evidence, left to gate.
 Compress after item 19 (`57742379c`): shared `Game::grant_firebending`; one
 `set_characteristics` read in `add_permanent`.
 
-21. Card-test layout (Jack Heart's 2026-10-29 steer; done, move-only): the
-   per-card tests of eight `tests/rules/` files now sit in `tests/cards/<set>.rs`
-   (15 set files, by the card each test names, else its first `setup` card).
-   Shared drivers live in `cards/support.rs`, which `tests/rules/` also mounts;
-   colliding helpers were renamed, not merged. Cross-card machinery is in
-   `rules/tla_mechanics.rs`. Check (debug): clippy/fmt clean; cards 312 +
-   rules_tests 169 = 481 (was 125 + 356); only the w15 receipt failures.
-   Compress (`d261acf7a`): support helpers build on one another.
-   PR #394 (head `86ebe9ccf`, an ancestor) keeps the old layout; this move stands.
-
-## Done after item 21
-
-22. Card-test move finished (move-only, concept review after item 21 applying
-   Jack Heart's steer): all 37 `rules/tla_content.rs` tests are in
-   `cards/tla.rs` (TLA's own tokens are TLA cards; `tokens.rs` is the other
-   sets' tokens; keyword sweeps across TLA cards are per-card evidence). The
-   file and its `mod` line are gone. Local drivers became support's: `choose`,
-   `activate`, `tapped`, `can_cast_now`, and a shared `enter` that
-   `enter_settled` now builds on. `activate` refreshes only a priority space, so
-   `activate_named` is `permanent` + `activate`. `tla.rs`'s `keywords` reads
-   `Permanent::effective_keywords`. `tla_mechanics.rs` stays (vanilla, injected
-   or fixture-only cards). Check (debug): fmt/clippy clean; cards 349 +
-   rules_tests 132 = 481; one intermittent, untouched `structured_offers`
-   failure (`scratch/questions.md`).
+21–22. Card-test layout (Jack Heart's 2026-10-29 steer; move-only): every
+   single-card test from `tests/rules/` (including all 37 of the deleted
+   `tla_content.rs`) is in `tests/cards/<set>.rs`, by the card it names, else its
+   first `setup` card; TLA's own tokens stay in `tla.rs`. Shared drivers are in
+   `cards/support.rs`, which `tests/rules/` also mounts; `rules/tla_mechanics.rs`
+   keeps cross-card machinery. PR #394 (head `86ebe9ccf`) keeps the old layout.
+   Compress (`d261acf7a`, then this pass): support helpers build on one another;
+   `tla.rs` uses support's `resolve`, `mode`, `ready`, `hand_of`,
+   `available_card`, `library_card` instead of local copies, and one
+   `put(s, player, name, zone)`. Check (debug): fmt/clippy clean; cards 349 +
+   rules_tests 132 = 481; one intermittent `structured_offers` failure
+   (`scratch/questions.md`).
 
 ## Remaining
 
