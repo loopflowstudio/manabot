@@ -183,9 +183,7 @@ impl Game {
             )
         };
 
-        if !self.state.zones.contains(card, ZoneType::Hand, player)
-            && self.zone_cast_cost(player, card).is_none()
-        {
+        if !self.may_play_from_zone(player, card) {
             return Err(AgentError("card is not in a permitted casting zone".into()));
         }
         if is_land {

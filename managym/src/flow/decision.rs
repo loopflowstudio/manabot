@@ -308,18 +308,14 @@ impl Game {
         if let FrameFinalize::Spell { card } = frame.finalize {
             // A spell that exiled itself ("Exile Avatar's Wrath") has
             // already left the stack (CR 608.2n).
-            if self.state.zones.zone_of(card) != Some(ZoneType::Stack) {
-                self.emit(GameEvent::SpellResolved { card });
-                self.state.priority.on_non_pass_action(self.active_player());
-                return;
-            }
-            let is_permanent = self.state.cards[card].types.is_permanent();
-            if is_permanent {
-                self.move_card(card, ZoneType::Battlefield);
-                let owner = self.state.cards[card].owner;
-                self.invalidate_mana_cache(owner);
-            } else {
-                self.move_card(card, ZoneType::Graveyard);
+            if self.state.zones.zone_of(card) == Some(ZoneType::Stack) {
+                if self.state.cards[card].types.is_permanent() {
+                    self.move_card(card, ZoneType::Battlefield);
+                    let owner = self.state.cards[card].owner;
+                    self.invalidate_mana_cache(owner);
+                } else {
+                    self.move_card(card, ZoneType::Graveyard);
+                }
             }
             self.emit(GameEvent::SpellResolved { card });
         }

@@ -47,10 +47,12 @@ worktree, so new T2 cards read "unsupported" in this base until T1 lands.
   (`may_play_from_zone` gates actions and `play_land`). Opcode 69
   `exile_top_card_play_this_turn` (Zuko).
 
-## Done (slices 1–2 at `648edee6b`, merged onto T1 at `f7b59aa99`; slice 3 `afff1e1ed`)
+## Done (slices 1–2 `648edee6b` → T1 merge `f7b59aa99`; 3 `afff1e1ed`; 4a `0d124a66e`; 4b `dea25eda8`; post-4b compress staged, uncommitted)
 
-T1 defined 7 (Badgermole Cub, Dai Li Agents, Haru, Toph, Hermitic Herbalist,
-Iroh, Grand Lotus; witnesses in `tests/rules/`). T2 defined 17, each witnessed
+32 of 51 T2 cards are defined (checked 2026-10-28 against `allocation.jsonl`);
+19 remain undefined. T1 defined 6 (Badgermole Cub, Dai Li Agents, Haru, Toph,
+Hermitic Herbalist, Iroh, Grand Lotus), but they still sit in `tla::INCOMPLETE`
+as "Unreviewed until T2", so they remain unsupported. T2 defined 26, each witnessed
 in `tests/cards/tla.rs` with a Scryfall fixture entry: Earthbending Lesson,
 Sandbenders' Storm, Earth Village Ruffians, Geyser Leaper, Foggy Swamp
 Vinebender, Fire Nation Attacks, Rockalanche; slice 1: Canyon Crawler,
@@ -59,7 +61,7 @@ Merchant of Many Hats; slice 2: Hog-Monkey, Rough Rhino Cavalry, Rebellious
 Captives; slice 3: Barrels of Blasting Jelly, Jasmine Dragon Tea Shop, White
 Lotus Hideout, Waterbending Scroll; slice 4a: Aang, the Last Airbender,
 Airbending Lesson, Airbender's Reversal, Avatar's Wrath; slice 4b: Zuko, Exiled
-Prince. 33 of 51 defined; 18 remain.
+Prince.
 
 ## Base: T1
 
@@ -72,12 +74,20 @@ stage*/sacrifice/interaction) into `tests/cards/` stays T1's (Jack Heart's
 
 ## Next slices (one PR)
 
-Slices 1–3 and 4a (airbend) are done; see Decisions.
+Slices 1–3, 4a (airbend) and Zuko are done; see Decisions.
 
+0. Review the six T1 cards against their `INCOMPLETE` obligations (open
+   examples: Herbalist's unordered two-color combinations, Haru's independent
+   delayed returns, Badgermole's green on creature mana taps). Witnesses exist
+   in `tests/rules/{elemental,temur,stage2,tla_content}_cards.rs`. Close any
+   gaps, then drop each entry from `INCOMPLETE`. Until then they do not count
+   toward acceptance.
 4b. Remaining exact-zone grants, each needing a mechanism not built yet:
-   - Yue, Solstice Revelations: cast a spell *during resolution* without paying
-     its mana cost — the cast pipeline must run while a resolution is suspended
-     (decide: nested cast decision vs. a granted one-shot free cast).
+   - Yue, the Moon Spirit and Solstice Revelations: cast a spell *during
+     resolution* without paying its mana cost. The cast pipeline must run
+     while a resolution is suspended (decide: nested cast decision vs. a
+     granted one-shot free cast). Solstice also exiles cards until it reaches
+     a nonland, falls back to returning the card to hand, and has flashback.
    - Sozin's Comet: foretell special action (pay {2}, exile face down from hand;
      exile observation must hide the face from the opponent) + later-turn grant;
      also "gains firebending 5 until end of turn" for each creature.
@@ -95,6 +105,4 @@ Slices 1–3 and 4a (airbend) are done; see Decisions.
 
 ## Check
 
-2026-10-28 (slice 4b Zuko): debug `cargo test --tests --no-fail-fast` passes except the pre-existing semantic-conformance pair; `tests/cards` 35 pass; clippy/fmt clean; extension rebuilt; 54 learning/content/boundary/policy-catalog pytest pass. Earlier
-2026-10-28 (slice 4a): debug `cargo test --tests --no-fail-fast` passes except the pre-existing semantic-conformance pair; `tests/cards` 34 pass; clippy/fmt clean; extension rebuilt; learning/current-content/package-boundary/optional-payments/policy-catalog pytest pass (stale `schema_version == 7` assertion fixed to 8). Earlier
-2026-10-28 (slice 3 + compress, realign): debug `cargo test --tests --no-fail-fast` passes except the pre-existing semantic-conformance pair (world/content-digest drift); `tests/cards` 29 pass; clippy/fmt clean; cp312 extension rebuilt on the final Rust and learning/current-content/package-boundary pytest 60 pass; world-change Python suite and Academy check deferred to gate.
+2026-10-28 (compress after 4b, staged): debug `cargo test --tests --no-fail-fast` passes except the pre-existing semantic-conformance pair (world/content-digest drift); `tests/cards` passes all 35; clippy and fmt are clean; the compress left IR unchanged, so the 4b extension and its 54-test pytest result still stand; the world-change Python suite and the Academy check are deferred to gate.

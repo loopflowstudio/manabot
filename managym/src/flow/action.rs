@@ -136,7 +136,7 @@ impl Game {
                     .iter(),
             )
             .copied()
-            .chain(self.playable_exiled_cards(player))
+            .chain(self.exile_granted_cards(player))
             .any(|card| self.priority_action_for_card(player, card).is_some())
             || self
                 .priority_activate_ability_actions(player)
@@ -160,7 +160,7 @@ impl Game {
                     .iter(),
             )
             .copied()
-            .chain(self.playable_exiled_cards(player))
+            .chain(self.exile_granted_cards(player))
         {
             if let Some(action) = self.priority_action_for_card(player, card) {
                 actions.push(action);

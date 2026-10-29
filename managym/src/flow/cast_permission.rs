@@ -64,90 +64,80 @@ impl Game {
             return;
         };
         let card = permanent.card;
-        self.move_card(card, ZoneType::Exile);
-        if self.state.zones.zone_of(card) != Some(ZoneType::Exile)
-            || self.state.cards[card].is_token
-        {
-            return;
-        }
         let owner = self.state.cards[card].owner;
-        self.grant_exile_play(card, owner, Some(ManaCost::parse(AIRBEND_COST)), false);
+        self.exile_with_play_grant(card, owner, Some(ManaCost::parse(AIRBEND_COST)), false);
     }
 
     /// "Exile the top card of your library. You may play that card this turn."
     pub(crate) fn exile_top_card_play_this_turn(&mut self, player: PlayerId) {
-        let Some(card) = self.state.zones.top(ZoneType::Library, player) else {
-            return;
-        };
-        self.move_card(card, ZoneType::Exile);
-        if self.state.zones.zone_of(card) == Some(ZoneType::Exile) {
-            self.grant_exile_play(card, player, None, true);
+        if let Some(card) = self.state.zones.top(ZoneType::Library, player) {
+            self.exile_with_play_grant(card, player, None, true);
         }
     }
 
-    fn grant_exile_play(
+    /// Exile `card` and grant `player` play of the exiled object. A token, or
+    /// a card a replacement kept out of exile, receives no grant.
+    fn exile_with_play_grant(
         &mut self,
         card: CardId,
         player: PlayerId,
         cost: Option<ManaCost>,
         this_turn: bool,
     ) {
+        self.move_card(card, ZoneType::Exile);
+        if self.state.zones.zone_of(card) != Some(ZoneType::Exile)
+            || self.state.cards[card].is_token
+        {
+            return;
+        }
         let Some(object) = self.current_object_ref(card) else {
             return;
         };
-        self.journal_cast_permissions();
-        self.state
-            .cast_permissions
-            .exile_grants
-            .push(ExileCastGrant {
+        self.edit_cast_permissions(|permissions| {
+            permissions.exile_grants.push(ExileCastGrant {
                 object,
                 player,
                 cost,
                 this_turn,
-            });
+            })
+        });
     }
 
     /// "This turn" grants end in the cleanup step (CR 514.2).
     pub(crate) fn expire_turn_cast_grants(&mut self) {
-        if self
-            .state
-            .cast_permissions
-            .exile_grants
-            .iter()
-            .any(|grant| grant.this_turn)
-        {
-            self.journal_cast_permissions();
-            self.state
-                .cast_permissions
-                .exile_grants
-                .retain(|grant| !grant.this_turn);
-        }
+        self.edit_cast_permissions(|permissions| {
+            permissions.exile_grants.retain(|grant| !grant.this_turn)
+        });
     }
 
     /// "Until your next turn, your opponents can't cast spells from anywhere
     /// other than their hands."
     pub(crate) fn restrict_opponent_to_hand(&mut self, controller: PlayerId) {
-        self.journal_cast_permissions();
-        self.state.cast_permissions.hand_only.push(HandOnly {
-            player: PlayerId(1 - controller.0),
-            until_turn_of: controller,
+        self.edit_cast_permissions(|permissions| {
+            permissions.hand_only.push(HandOnly {
+                player: PlayerId(1 - controller.0),
+                until_turn_of: controller,
+            })
         });
     }
 
     /// Restrictions lasting "until your next turn" end as that turn begins.
     pub(crate) fn expire_cast_restrictions(&mut self, active: PlayerId) {
-        if self
-            .state
-            .cast_permissions
-            .hand_only
-            .iter()
-            .any(|restriction| restriction.until_turn_of == active)
-        {
-            self.journal_cast_permissions();
-            self.state
-                .cast_permissions
+        self.edit_cast_permissions(|permissions| {
+            permissions
                 .hand_only
-                .retain(|restriction| restriction.until_turn_of != active);
+                .retain(|restriction| restriction.until_turn_of != active)
+        });
+    }
+
+    /// Apply `edit`, journaling the previous permissions only when it
+    /// changed them (expiry runs every turn and is usually a no-op).
+    fn edit_cast_permissions(&mut self, edit: impl FnOnce(&mut CastPermissions)) {
+        let mut next = self.state.cast_permissions.clone();
+        edit(&mut next);
+        if next != self.state.cast_permissions {
+            self.journal_cast_permissions();
+            self.state.cast_permissions = next;
         }
     }
 
@@ -197,15 +187,15 @@ impl Game {
         self.zone_cast_cost(player, card).is_some()
     }
 
-    /// Exiled cards `player` may currently play.
-    pub(crate) fn playable_exiled_cards(&self, player: PlayerId) -> Vec<CardId> {
+    /// Cards named by `player`'s exile grants, stale ones included; callers
+    /// check [`Game::may_play_from_zone`].
+    pub(crate) fn exile_granted_cards(&self, player: PlayerId) -> Vec<CardId> {
         self.state
             .cast_permissions
             .exile_grants
             .iter()
             .filter(|grant| grant.player == player)
             .map(|grant| CardId::from(grant.object.entity))
-            .filter(|card| self.may_play_from_zone(player, *card))
             .collect()
     }
 }
