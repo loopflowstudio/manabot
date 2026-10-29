@@ -11,7 +11,6 @@ use crate::{
         card::ReplacementEffect,
         game_object::{CardId, EntityId, ObjectRef, PermanentId, PlayerId},
         permanent::{CounterKind, Counters},
-        stack_object::StackObject,
         zone::ZoneType,
     },
 };
@@ -274,11 +273,8 @@ impl Game {
         }
         let card = CardId::from(source.entity);
         if self.current_object_ref(card) == Some(source) {
-            if let Some(StackObject::Spell(spell)) = self
-                .find_spell_on_stack_index(card)
-                .map(|index| &self.state.stack_objects[index])
-            {
-                return Some(spell.controller);
+            if let Some(controller) = self.stack_spell_controller(card) {
+                return Some(controller);
             }
         }
         self.object_lki(source).map(|lki| lki.controller)

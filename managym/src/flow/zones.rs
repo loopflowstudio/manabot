@@ -602,4 +602,15 @@ impl Game {
             .iter()
             .position(|object| matches!(object, StackObject::Spell(spell) if spell.card == card))
     }
+
+    /// The controller of `card` while it is a spell on the stack.
+    pub(crate) fn stack_spell_controller(&self, card: CardId) -> Option<PlayerId> {
+        self.state
+            .stack_objects
+            .iter()
+            .find_map(|object| match object {
+                StackObject::Spell(spell) if spell.card == card => Some(spell.controller),
+                _ => None,
+            })
+    }
 }

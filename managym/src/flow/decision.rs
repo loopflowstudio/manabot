@@ -1055,6 +1055,15 @@ impl Game {
             .collect()
     }
 
+    /// The top card of `player`'s library.
+    pub(crate) fn library_top_card(&self, player: PlayerId) -> Option<CardId> {
+        self.state
+            .zones
+            .zone_cards(ZoneType::Library, player)
+            .last()
+            .copied()
+    }
+
     /// Move a library card to the bottom of its owner's library. Not a zone
     /// change (CR 701.26b-style reorder), so no events fire.
     pub(crate) fn put_on_bottom_of_library(&mut self, card: CardId) {

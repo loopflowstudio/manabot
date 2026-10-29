@@ -58,9 +58,8 @@ impl Game {
         self.state.zones.reassign_hidden(opponent, known, library);
         // A top card the perspective may look at stays where it is.
         let known_top = self
-            .looks_at_library_top(perspective)
-            .then(|| self.library_top(perspective, 1).first().copied())
-            .flatten();
+            .library_top_card(perspective)
+            .filter(|_| self.looks_at_library_top(perspective));
         self.state
             .zones
             .shuffle_canonical(ZoneType::Library, perspective, &mut rng);

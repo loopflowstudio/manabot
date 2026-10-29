@@ -7,85 +7,39 @@ Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
 
 ## Done (43 of 49)
 
-1. Locations (Abandoned Air Temple, Agna Qel'a, Ba Sing Se, Realm of Koh):
-   `ReplacementEffect::EntersTappedUnlessControls`; `Predicate::Supertype`;
-   `Cost.sorcery_timing`; multi-instruction activations lower to one `IfCondition{Always}`.
-2. Static grants (Air Nomad Legacy, Badgermole, Diligent Zookeeper, Foggy Swamp
-   Hunters, The Walls of Ba Sing Se): `StaticKeywordGrant` read by
-   `Game::effective_keywords`; one `static_scope_applies`; `per_creature_type_max`.
-   Static haste grants still miss `Permanent::can_tap`.
-3. Typed counters (Rowdy Snowballers, Mai, Heartless Act): `CounterKind`, stun in
-   `Permanent::untap`, `Cost.exhaust`, `Predicate::NoCounters`, opcode 66.
-4. Base P/T, layer 7b (Flexible Waterbender, Turtle-Duck): opcode 67 `set_base_pt`
-   (end of turn only).
-5. Equipment (Kyoshi Battle Fan, Meteor Sword, Twin Blades): `Permanent.attached_to`,
-   opcode 68 `attach`, `create_token.attach_source`, SBA 704.5n.
-6. Auras (Path to Redemption, Watery Grasp, Swampsnare Trap): `Program::enchant`
-   is the cast targeting (303.4a) and 704.5m legality via `permanent_matches_spec`;
-   `StaticScope::Attached`; `static_restrictions` (opcodes 69-70); activated
-   abilities capture the attached object before costs (opcode 71);
-   `cost_reduction_if_targets`.
-7. Vehicles (Fire Nation Warship, Invasion Submersible, Tundra Tank, War Balloon):
-   - `Permanent.becomes_creature` (EndOfTurn < Incarnation) and
-     `CardDefinition.creature_with_counters` feed `Permanent::animated_creature`,
-     read by `is_creature`, predicates, trigger subjects, LKI and `is_animated`.
-   - Opcode 72 `become_artifact_creature` (`end_of_turn`, absent = incarnation,
-     or `static` under `source_counters_at_least`).
-   - `Cost.crew` → `PendingChoice::Crew` taps other positive-power creatures
-     (LookAndSelect) until power is covered. Vehicles enter summoning sick;
-     `Target.another` excludes the source from trigger targets.
+Detail per slice is in each commit message (`git log 86ebe9ccf..`).
 
-8. Mana (Great Divide Guide reviewed and its `INCOMPLETE` entry dropped; Raucous
-   Audience, White Lotus Tile, The Lion-Turtle):
-   - `Game::activated_abilities_for` fixes state-dependent mana outputs when
-     offered (`current_mana_output`, CR 605.3a): an `IfCondition` (now with
-     `otherwise`) between two immediate `AddMana`s, or `AddOneColorManaValue`.
-   - Condition 8 `controls_matching` → `StaticCondition::ControlsMatching`;
-     quantity 5 `greatest_shared_creature_type`; opcode 73 `add_mana_of_one_color`.
-   - `StaticRestriction.unless`, authored as a static `branch` with empty `then`
-     and `cant_attack_or_block` in `otherwise`.
-
-9. Effective characteristics (Earthen Ally, Flopsie, The Boulder, Platypus-Bear,
-   Toph the First Metalbender, The Mechanist):
-   - `ScopeView` (Types → Keywords → PowerToughness → Rules) says what a static
-     scope reads; `permanent_matches_predicate` is the Rules view. Restriction
-     scopes now read effective power (Flopsie).
-   - Layer 4 `StaticTypeGrant` (opcode 77 `add_card_types`) read through
-     `Game::permanent_is_land` and predicate matching; predicate 15 `token`.
-   - Field 93 `per_color_among`; opcodes 74 `earthbend_value`, 75
-     `cant_be_blocked_by_more_than` (structured blocker offer goes sequential,
-     as for menace), 76 `attacks_despite_defender` (read by
-     `Game::permanent_can_attack`, which reads static defender too);
-     trigger_event 13 `end_step_begins`.
-   - `become_artifact_creature` and `set_base_pt` lower for targets too
-     (`BecomeCreatureTarget`, `SetBasePtTarget`); earthbent permanents have
-     base 0/0 even if they print P/T.
-
-10. Mana remainder (Energybending, Ozai, the Phoenix King):
-   - Opcode 78 `add_subtypes_controlled` (until-EOT `temp_subtypes` on matching
-     permanents at resolution); `Game::activated_abilities_for` appends one
-     derived "{T}: Add" choosing among gained basic land types' colors (CR 305.6).
-     Basic land types never count as creature types.
-   - Opcode 79 `unspent_mana_becomes_red` → `ReplacementEffect::UnspentManaBecomesRed`,
-     read by `clear_mana_pools`/`clear_combat_mana_pools` (combat mana joins the
-     regular pool as red); `Mana::become_red` keeps Lesson restrictions.
-   - Condition 9 `unspent_mana_at_least` → `StaticCondition::UnspentManaAtLeast`
-     (both pools).
-
-11. X costs (Fated Firepower, Day of Black Sun, Katara, Water Tribe's Hope):
-   - `ManaCost.x` counts {X} (0 off the stack, CR 202.3e); `with_x` pays it.
-     `PendingChoice::SpellX` (after kicker, before modes) and `ActivationX`
-     (before waterbend) offer payable values as Modal `ChooseMode { mode: X }`;
-     X rides `Payment::Spell`, `SpellOnStack`, `ActivatedAbilityOnStack`,
-     `PendingChoice::Waterbend` and `EffectFrame` (serialized only if nonzero).
-     Quantity 6 `x`; field 95 `mana_x`; cost field 96 `x_min`. X activations
-     must waterbend without targets (lowering rejects others).
-   - Opcodes 81 `enters_with_x_counters` (`BattlefieldEntry.x`/`counters`) and
-     82 `opponent_damage_plus_counters` (source-controller side, applied last).
-   - Opcode 80 `destroy_creatures_losing_abilities` (field 94 `max_mana_value`):
-     `Permanent.abilities_lost` (keywords, activated, static, replacement and
-     triggered abilities, with `ObjectLki.abilities_lost`), one destroy batch.
-   - Opcode 83 `set_base_pt_value` (team role) → `Effect::SetBasePtControlled`.
+1. Locations: `ReplacementEffect::EntersTappedUnlessControls`, `Predicate::Supertype`,
+   `Cost.sorcery_timing`; multi-instruction activations lower to `IfCondition{Always}`.
+2. Static grants: `StaticKeywordGrant` via `effective_keywords`, one
+   `static_scope_applies`. Static haste grants still miss `Permanent::can_tap`.
+3. Counters: `CounterKind`, stun in `Permanent::untap`, `Cost.exhaust`,
+   `Predicate::NoCounters`.
+4. Base P/T 7b: `set_base_pt` (end of turn only).
+5. Equipment: `Permanent.attached_to`, `attach`, `create_token.attach_source`, SBA 704.5n.
+6. Auras: `Program::enchant` targets (303.4a), 704.5m via `permanent_matches_spec`,
+   `StaticScope::Attached`, `static_restrictions`, attached object captured
+   before costs, `cost_reduction_if_targets`.
+7. Vehicles: `Permanent.becomes_creature` + `CardDefinition.creature_with_counters`
+   → `Permanent::animated_creature`; `become_artifact_creature`; `Cost.crew` →
+   `PendingChoice::Crew`; `Target.another`.
+8. Mana: `current_mana_output` (CR 605.3a) in `activated_abilities_for`;
+   `StaticCondition::ControlsMatching`; `add_mana_of_one_color`;
+   `StaticRestriction.unless`.
+9. Effective characteristics: `ScopeView` (Types → Keywords → PowerToughness →
+   Rules); layer 4 `StaticTypeGrant` via `permanent_is_land`; `earthbend_value`,
+   `cant_be_blocked_by_more_than`, `attacks_despite_defender`
+   (`permanent_can_attack`), `end_step_begins`; `BecomeCreatureTarget`,
+   `SetBasePtTarget`.
+10. Mana remainder: `add_subtypes_controlled` (`temp_subtypes`, derived CR 305.6
+   mana ability); `ReplacementEffect::UnspentManaBecomesRed` in
+   `clear_mana_pools`/`clear_combat_mana_pools`; `StaticCondition::UnspentManaAtLeast`.
+11. X costs: `ManaCost.x`/`with_x`; `PendingChoice::SpellX`/`ActivationX` as Modal
+   `ChooseMode`; X on `Payment::Spell`, `SpellOnStack`, `ActivatedAbilityOnStack`,
+   `PendingChoice::Waterbend`, `EffectFrame`; `x_min`; `enters_with_x_counters`
+   (`BattlefieldEntry.x`), `opponent_damage_plus_counters`,
+   `destroy_creatures_losing_abilities` (`Permanent.abilities_lost`),
+   `SetBasePtControlled`.
 
 12. Razor Rings, The Last Agni Kai, Lo and Li, Hakoda:
    - `Game::apply_creature_damage_measuring_excess` (CR 120.4a) sets
@@ -100,8 +54,8 @@ Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
      (`StaticScope::SpellsYouControl`, read by `Game::spell_keywords` in
      `damage.rs::source_keywords`).
    - 89 `look_at_library_top`, 90 `cast_from_library_top`: one zone check,
-     `Game::in_casting_zone`; the top card is observed by its controller and
-     pinned by `determinize`. `grant_keywords` EOT on
+     `Game::in_casting_zone`; `Game::library_top_card` is observed by its
+     controller and pinned by `determinize`. `grant_keywords` EOT on
      `each:creature_you_control` → `Effect::GrantKeywordsControlled`.
 
 Schema 8 (unreleased, T1 precedent) appended in place: fields 85-96, predicates

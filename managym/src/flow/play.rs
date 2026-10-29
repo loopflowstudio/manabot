@@ -94,7 +94,7 @@ impl Game {
     /// lets them cast it as a spell (Hakoda's Ally spells). Lands are never
     /// cast, so they are never offered.
     pub(crate) fn library_top_castable(&self, player: PlayerId) -> Option<CardId> {
-        let card = *self.library_top(player, 1).first()?;
+        let card = self.library_top_card(player)?;
         let definition = &self.state.cards[card];
         (!definition.types.is_land()
             && self.active_permanent_cards(player).any(|source| {

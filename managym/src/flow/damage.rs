@@ -255,13 +255,8 @@ impl Game {
             return Some(lki.keywords);
         }
         let card = CardId::from(source.entity);
-        if let Some(spell) = self.find_spell_on_stack_index(card).and_then(|index| {
-            match &self.state.stack_objects[index] {
-                crate::state::stack_object::StackObject::Spell(spell) => Some(spell),
-                _ => None,
-            }
-        }) {
-            return Some(self.spell_keywords(card, spell.controller));
+        if let Some(controller) = self.stack_spell_controller(card) {
+            return Some(self.spell_keywords(card, controller));
         }
         self.state.cards.get(card.0).map(|card| card.keywords)
     }

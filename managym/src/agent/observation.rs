@@ -518,10 +518,11 @@ impl Observation {
 
         // The top of the agent's own library, when they may look at it any
         // time (CR 401.2).
-        if game.looks_at_library_top(agent_player) {
-            for card in game.library_top(agent_player, 1) {
-                self.add_card(game, card, ZoneType::Library);
-            }
+        if let Some(card) = game
+            .library_top_card(agent_player)
+            .filter(|_| game.looks_at_library_top(agent_player))
+        {
+            self.add_card(game, card, ZoneType::Library);
         }
 
         // Library cards revealed to the agent by a pending mid-resolution
