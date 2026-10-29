@@ -4,14 +4,26 @@ Direction (Jack Heart, 2026-10-28): native skipping on in every runner,
 including Academy and the action benchmarks; only explicit debugging may turn
 it off. MTG-193's landed notes are at `6d069d6e5:scratch/questions.md`.
 
-- **Assumption — named diagnostic exceptions:** `manabot/verify/action_cases.py`
-  and `manabot/verify/text_observation.py` keep `skip_trivial=False`. They
-  build constructed positions that must stop at sole-offer continuations
-  (CASE_SET-pinned action cases; equal-state/distinct-history collision proof)
-  and play no game for a model or policy. Flipping them changes CASE_SET and
-  removes the collision. `tests/env/test_skip_forced_decisions.py` allowlists
-  exactly these two. If Jack Heart wants them on too, rebuild those fixtures
-  and bump `CASE_SET`.
+- **Settled (concept review, 2026-10-28) — the two verification fixtures are
+  debugging use:** `manabot/verify/action_cases.py` and
+  `manabot/verify/text_observation.py` keep `skip_trivial=False` as scripted
+  native-window walkers: they drive both seats through constructed positions
+  one native window at a time. Nothing they hand on is a forced decision: every
+  `curriculum()` case offers a policy 2–3 candidates (attack/target/mode/
+  ability/land 2, learn 3; 48 cases), and the text fixtures answer with a
+  response stub, no model loaded. Neither is a default nor a user path, so Jack
+  Heart's rule ("never ... any user use skip_trivial=false except debugging";
+  "no code paths where its off by default") already covers them; this is
+  applying his rule, not a product choice left open. Evidence: flipping both to
+  `True` broke their walkers (`reach`/`_choose` no longer stop where the
+  scripts expect; `action_cases.py:210`, `text_observation.py:292`, 9+
+  identity/text tests), so flipping would mean rebuilding the fixtures and
+  bumping `CASE_SET` with no effect on any person, model or policy. `AGENTS.md`
+  states the debugging-only rule and points at the allowlist. Optional polish:
+  `DIAGNOSTIC_EXCEPTIONS` and the test docstring in
+  `tests/env/test_skip_forced_decisions.py` could say "debugging fixtures" to
+  match `AGENTS.md`. Test-only constructed positions under `tests/` are outside
+  the scan.
 - **Academy demos regenerated, not migrated:** current-world fixtures
   `precision-demo-w15.json`, `precision-mana-demo-w15.json` and the new
   `learn-demo-w15.json` were rebuilt by replaying the explicit prefixes and
@@ -29,3 +41,4 @@ it off. MTG-193's landed notes are at `6d069d6e5:scratch/questions.md`.
 - **Pre-existing local failures (also on base 6d069d6e5):** 8 Academy receipt /
   world-pin tests (`authored_match_*`, `public_commitment_parity`,
   `ur_lessons_increment`); `tests/llm/*` need `huggingface_hub`.
+- Check (2026-10-28 realign): `uv run --extra dev pytest tests/env/test_skip_forced_decisions.py -q` — 4 passed in 0.88s.
