@@ -7,7 +7,8 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.env import Match, ObservationSpace, Reward
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.verify.util import (
     _choice_set_name,
     _policy_action_type_probabilities,

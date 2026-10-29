@@ -10,10 +10,12 @@ import json
 from bench_observation_support import identity, matched_breakdown
 import torch
 
-from manabot.env import Match, ObservationSpace, Reward, VectorEnv
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
+from manabot.env.vector_env import VectorEnv
 from manabot.infra.config import ModelConfig, ObservationConfig, RewardConfig
 from manabot.infra.profiler import Profiler
-from manabot.model import ActorCritic
+from manabot.model.actor_critic import ActorCritic
 
 
 def build_env(num_envs: int, seed: int, policy_input_version: int = 2) -> VectorEnv:

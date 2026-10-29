@@ -1,61 +1,92 @@
-# Rules audit assumptions — 2026-10-26
+# MTG-193 open questions and assumptions — 2026-10-26
 
-- The five-area audit is complete at its recorded evidence depth; the accepted
-  2026-10-26 resolution repair is integrated with MTG-195 for review. Unsupported mechanics
-  can be marked missing only after inspecting the relevant representation and
-  authority; an untested or unresolved obligation stays unknown or partial.
-- Directed synthetic fixtures expose precise obligations, not proof that the
-  selected authored decks can reach them. No new Task or identity migration is
-  inferred from a synthetic probe alone.
-- MTG-195 owns trigger ordering; MTG-196 owns replacement ordering. Their
-  mechanisms remain outside this repair; no external messages are selected.
-- Inherited MTG-184 questions are preserved at
-  `324db65f2:scratch/questions.md`; they do not direct this audit.
-- Resolution repair (2026-10-26): use clause-specific eligibility slots in the
-  existing EffectFrame; preserve invalid positions rather than compacting targets.
-  Untargeted trigger context is used only when no targets were chosen. Existing
-  stack CardId identity remains unchanged; no broader stack ABI is inferred.
-- Integration (2026-10-27): Jack Heart requested stacking on MTG-195 and retried
-  after its delivery. PR386 has merged, so sync main incorporates it directly.
-  Preserve trigger-ordering context/action joins and resolution eligibility together.
-- Combined contracts: world w15, hash 10, policy-input and capture/text v4,
-  embedded decision schema 7. V2/v3 keep 32 relation columns; v4 adds eligibility
-  at column 32. Validity remains column 31. Parent w14/v3 evidence stays frozen.
-  Fresh receipts are recorded; broader world admission remains gate-owned.
+Design: `scratch/19d240-batch-shared-evaluation.md`. MTG-184's landed notes
+live at `ce43a5cf7:scratch/questions.md`.
 
-- Final identity (2026-10-27 implementation): use w15/hash 10 and policy/capture
-  v4 for the combined source. Re-record the existing bounded w14 inputs at new
-  paths; keep all historical files. Broader acceptance stays with gate.
-- Line accounting measures integration-authored differences against both merge
-  parents and w14 fixture inputs separately from inherited bytes. Report full
-  new runtime-fixture line counts as well; do not hide any ceiling conflict.
-  Current churn and overage are recorded in `line-accounting.json`; retain the
-  coherent world/fixture cut and disclose the overage rather than omit consumers.
+- **Assumption — compute identity unchanged:** grouping across matchups stays
+  under `shared-eval-v1` because v1 never fixed batch composition (it already
+  varies with arrival order). If a reviewer reads the contract as fixing
+  per-matchup grouping, bump `EvalCompute.version`; that is the only change.
+- **Settled on rentals:** served-child RSS, thread budgets and the
+  oversubscription culprit; evidence in the design's Calibration section.
+- **Rentals (Jack Heart, 2026-10-27):** MTG-193 may launch its own machines,
+  under $5 total, with a spend ledger. MTG-183's runner is on its branch.
+- **Decided (Jack Heart, 2026-10-27/28):** code anchors are Torch-free in
+  #389. Checkpoint players are served under a declared allocation and keep
+  scalar in-child play without one; retiring scalar waits for a CPU
+  measurement (CPU work descoped 2026-10-28).
+- **Assumption — supervisor census recorded, not enforced:** the group-worker
+  parent hosts Etude callbacks and checkpoint preparation whose threads this
+  change does not own; failing an allocation at close would discard results.
+- **Stacked on MTG-188 (Jack Heart, 2026-10-26):** this branch merges
+  `jack/mtg-188-measure-inference-startup-decision-latency-and-game` (PR #381).
+  Its design notes are the parent Task's context, not direction for MTG-193;
+  they live at `f5e7289b1:scratch/mtg188-context.md` (removed here 2026-10-26). MTG-188's serving/worker
+  timing was ported into the split modules (`serving.py`, `serving_protocol.py`,
+  `native_game.py`); its service-start failure test now injects a `ChildProcess`
+  launch failure instead of a `multiprocessing` start failure.
 
-## Preserved main-branch notes (historical context)
+## Sync resolution — 2026-10-27
 
-# MTG-207 assumptions — 2026-10-27
+Kept the incoming MTG-188 Qwen runtime and game-runner fixes at
+`b8820b0d9e9160086d8acc13075638003c61b3e5` (historical notes in that
+revision's `scratch/questions.md`); they do not touch shared evaluation.
 
-Inherited MTG-206 notes are at `4ab16a140:scratch/questions.md`.
+## Served-only and Torch-free anchors — implement 2026-10-27
 
-- **Design chosen without review.** The Task left design open; headless, the
-  simplest exact path was taken: batch `estimate` by deal count and keep the
-  page one self-contained file computing every combination. Per-pair payloads
-  were not adopted: without a server, every combination must still be
-  computed when the page is written, so splitting saves browser memory, not
-  render time.
-- **254 MB page.** The whole-experiment JSON is 254.2 MB at base and after
-  (unchanged bytes of values). Whether a browser should load that is a page
-  design question left for review; values were not rounded, since the
-  acceptance compares them exactly.
-- **etude-sdk 0.2.11** (etude #72) merged 2026-10-28 02:09Z but was not on
-  PyPI or GitHub releases at 03:24Z (still 0.2.10 at 03:40Z), so the pin stays 0.2.10 (confirmed by Jack Heart's operator steer 2026-10-28). Projection with
-  Etude main's `estimate` swapped in is recorded in `scratch/mtg207.md`.
-- **Machine load.** Load average 90–240 on 16 cores throughout; wall times
-  are inflated several-fold, CPU less so.
+- **Assumption — in-child checkpoint search players keep `torch.manual_seed`:**
+  agent PUCT, policy-prior PUCT and local update still play in-child; only the
+  plain `checkpoint` kind leaves the child when served, and only then is its
+  seeding replaced by per-request service seeds.
+- **Superseded 2026-10-28 (option b):** `resolve_execution` no longer adds a
+  local CPU envelope; without an allocation checkpoints play scalar and the
+  monitor keeps one block per deal.
+- **Changed — `bind_execution` admits code and search players** unchanged into
+  served cells (they play in their child); before, any non-anchor was rejected.
+- **Changed — `serving_benchmark`'s `cold_scalar` arm is served** (one row,
+  not resident, no catalog cache). Frozen experiment runners that declare no
+  allocation keep scalar play and their identities.
 
-- Shipping gate (2026-10-28): use CI's debug optimization level 1 with two
-  jobs/test threads. The first unoptimized full run was interrupted after its
-  search-state contract binary exceeded five minutes; no assertion was relaxed.
-  Both the incomplete run and the complete acceptance result belong in durable
-  evidence. No additional randomized exploration is selected.
+## Engine boundary — implement 2026-10-27
+
+- **Decision — no CPU-specific engine code yet:** `cpu32` runs one shared CPU
+  allocation per machine (exp-07: batched CPU inference ≈ 12× scalar obs/s).
+  The fallback if it is slower than scalar is slice 7's; intra-op threads could
+  change numerics, so they would need a compute-contract decision.
+- **Search players stay in-child (Jack Heart, 2026-10-27):** serving search
+  players' model calls is out of scope for MTG-193; follow-up MTG-205.
+
+## Code-anchor source identity moves to `sim/anchors.py` (compress, 2026-10-27)
+
+Scripted-greedy and random registrations now pin `manabot/sim/anchors.py`
+bytes (random formerly pinned `search/flat_mc.py`; scripted pinned
+`sim/players.py`, whose bytes this slice changes anyway). New anchor
+registrations therefore get new `source_sha256` values and do not reuse
+earlier deal evidence; frozen evidence is untouched. Assumed acceptable
+under decision 2b (Torch-free anchors); revisit if a frozen v1 anchor must
+keep matching for resumption.
+
+## Calibration baselines (realign, 2026-10-27)
+
+- **Assumption — "before" arms are the retained MTG-183 runs** (`d0955f2a44b6`
+  A4500 about 2,600 games/h; `00119d1c9211` `cpu32` scalar about 1,700) on the
+  same 1,000-game pair, so the $5 ledger buys only the two "after" arms. A
+  fresh `main` before-arm is optional if the ledger allows and the hosts differ.
+
+## Parent hop (decided by Jack Heart, 2026-10-27: option b; implemented)
+
+- **Assumption — failure text:** a game whose handoff fails reads
+  "inference connection handoff failed: …"; a decision timeout in the child
+  keeps "inference service request timed out". Both remain infrastructure
+  failures with no failed player and fail the allocation.
+- **Assumption — `allocation.json` has no request latency:** decisions no
+  longer pass the supervisor; latency lives in `worker_performance` (game) and
+  `serving.json` (service). No reader used the allocation's request counters.
+- **Assumption — the w13 calibration branch** (revert of `e742e8bff`) is
+  measurement-only and never lands; MTG-183's checkpoints cannot play w14.
+
+## Calibration after the parent hop (implement, 2026-10-27)
+
+- **Blocked `cpu32` arm and unmet batch target:** state, cause (Etude EXP-13)
+  and the 88-of-256 active-slot explanation live in the design's Calibration
+  section; not repaired here (shared controller, runner setting).

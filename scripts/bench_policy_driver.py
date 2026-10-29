@@ -18,12 +18,13 @@ import time
 import numpy as np
 import torch
 
-from manabot.env import Match, ObservationSpace
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.infra.profiler import Profiler
-from manabot.model import ActorCritic
+from manabot.model.actor_critic import ActorCritic
 from manabot.sim.rollout import BatchedSampler, _allocate_buffers
-from manabot.verify.util import INTERACTIVE_DECK
+from manabot.verify.games import INTERACTIVE_DECK
 import managym
 
 

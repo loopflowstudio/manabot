@@ -11,7 +11,8 @@ from typing import Literal
 import numpy as np
 import torch
 
-from manabot.env import ObservationSpace, observation as observation_schema
+from manabot.env import observation as observation_schema
+from manabot.env.observation import ObservationSpace
 import managym
 
 

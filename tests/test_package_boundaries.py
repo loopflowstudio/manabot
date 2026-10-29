@@ -161,9 +161,11 @@ def test_simulation_imports_and_plays_without_training() -> None:
         import manabot.sim
         for module in pkgutil.walk_packages(manabot.sim.__path__, 'manabot.sim.'):
             importlib.import_module(module.name)
-        from manabot.env import Env, Match, ObservationSpace, Reward
+        from manabot.env.env import Env
+        from manabot.env.match import Match, Reward
+        from manabot.env.observation import ObservationSpace
         from manabot.infra.config import ModelConfig, RewardConfig
-        from manabot.model import ActorCritic
+        from manabot.model.actor_critic import ActorCritic
         from manabot.model.checkpoint import save_checkpoint
         from manabot.sim.search.flat_mc import make_player
         match, space = Match(), ObservationSpace()
@@ -177,6 +179,36 @@ def test_simulation_imports_and_plays_without_training() -> None:
             action = player.act(env, observation)
             assert observation['actions_valid'][action] > 0
         assert not any(name.startswith('manabot.training') for name in sys.modules)
+        """
+    )
+    subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)
+
+
+# Game, replay and supervisor processes under shared inference. They must not
+# load Torch: a served game child would otherwise hold ~200 MB for nothing.
+_TORCH_FREE_MODULES = (
+    "manabot.sim.child",
+    "manabot.sim.frames",
+    "manabot.sim.match",
+    "manabot.sim.native_game",
+    "manabot.sim.replay",
+    "manabot.sim.serving_protocol",
+    "manabot.sim.supervision",
+    "manabot.sim.threads",
+    "manabot.verify.games",
+    "manabot.verify.scenarios",
+)
+
+
+def test_evaluation_child_modules_import_without_torch() -> None:
+    probe = textwrap.dedent(
+        f"""
+        import importlib
+        import sys
+        for name in {_TORCH_FREE_MODULES!r}:
+            importlib.import_module(name)
+        heavy = sorted(m for m in ("torch", "etude.train") if m in sys.modules)
+        assert not heavy, heavy
         """
     )
     subprocess.run([sys.executable, "-c", probe], cwd=REPO_ROOT, check=True)

@@ -4,8 +4,8 @@ from pathlib import Path
 
 import numpy as np
 
-from manabot.env import Env, Reward
-from manabot.env.match import Match
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.semantic.compiler import compile_paths, pretty_json

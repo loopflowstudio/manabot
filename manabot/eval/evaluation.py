@@ -19,18 +19,18 @@ from uuid import uuid4
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from manabot.eval.execution import bind_execution
+from manabot.eval.execution import bind_execution, resolve_execution
 from manabot.eval.match import MatchupMode, play_cell
 from manabot.eval.models import EvaluationKey
 from manabot.eval.results import EvaluationRow, RateInterval
 from manabot.infra.artifacts import verify_file
 from manabot.infra.files import atomic_json, exclusive_file_lock
 from manabot.infra.identity import StrictModel, canonical_sha256, file_sha256
-from manabot.sim.execution import EvalExecution
+from manabot.sim.execution import EvalExecution, EvalExecutionV1
 from manabot.sim.matchup import AuthoredMatchup, selected_decks
 from manabot.sim.performance import EvalPerformance
 from manabot.sim.registration import PlayerRegistration
-from manabot.sim.serving import InferenceRuntime
+from manabot.sim.serving_protocol import InferenceRuntime
 
 if TYPE_CHECKING:
     from manabot.eval.endpoint import InferenceEndpoint
@@ -90,7 +90,8 @@ class EvaluationResult(BaseModel):
     request: EvaluationRequest
     evaluation_id: str | None = None
     card_evidence_dir: str | None = None
-    execution: EvalExecution | None = None
+    # Retained v1 allocations stay readable; they are never continued under v2.
+    execution: EvalExecution | EvalExecutionV1 | None = None
     status: Literal["running", "completed", "incomplete"] = "running"
     rows: list[EvaluationRow] = Field(default_factory=list)
     win: RateInterval | None = None
@@ -262,17 +263,6 @@ def _execute_attempt(
     return result
 
 
-def _execution(
-    execution: EvalExecution | None,
-    inference: InferenceRuntime | InferenceEndpoint | None,
-) -> EvalExecution | None:
-    if inference is not None:
-        if execution is not None and execution != inference.execution:
-            raise ValueError("conflicting execution declaration")
-        return inference.execution
-    return execution
-
-
 def evaluate(
     request: EvaluationRequest,
     *,
@@ -286,7 +276,7 @@ def evaluate(
     Explicit continuation uses continue_evaluation. The first attempt stays at
     this root; subsequent attempts retain their own subdirectories and receipts.
     """
-    execution = _execution(execution, inference)
+    execution = resolve_execution(execution, inference)
     if execution is not None:
         request = request.bind(execution)
     out_dir.mkdir(parents=True, exist_ok=False)
@@ -415,7 +405,6 @@ def continue_evaluation(
     relocation changes no checkpoint identity. This is filesystem continuation,
     not an object-store lease or an automatic retry after machine loss.
     """
-    execution = _execution(execution, inference)
     with exclusive_file_lock(directory / ".evaluation.lock"), ExitStack() as claims:
         prior = [directory, *sorted((directory / "attempts").glob("*/"))]
         for attempt in prior:
@@ -424,6 +413,7 @@ def continue_evaluation(
         if result.evaluation_id is None:
             raise ValueError("historical evaluation has no continuation identity")
         original = result.request
+        execution = resolve_execution(execution, inference)
         if (execution.compute if execution else None) != (
             result.execution.compute if result.execution else None
         ):

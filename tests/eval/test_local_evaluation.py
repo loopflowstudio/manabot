@@ -30,7 +30,7 @@ from manabot.infra.identity import canonical_sha256
 from manabot.sim.execution import EvalExecution
 from manabot.sim.match import play_game
 from manabot.sim.replay import read_trace, write_trace
-from manabot.sim.serving import InferenceRuntime
+from manabot.sim.serving_protocol import InferenceRuntime
 from tests.eval.test_batched_eval import fixture_policy
 
 
@@ -209,7 +209,6 @@ def test_calibration_rejects_partial_replayed_cohort(
             sender,
             Panel(name="partial", request=request),
             EvalExecution(deadline_unix=time.time() + 30),
-            "cold_scalar",
             out,
         )
         receipt = receiver.recv()

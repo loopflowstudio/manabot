@@ -13,7 +13,8 @@ import pytest
 import torch
 from torch import Tensor
 
-from manabot.env import Match, ObservationSpace, Reward
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.training.learning.damped_policy import _targets

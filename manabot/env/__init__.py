@@ -1,23 +1,5 @@
-# Local directory imports
-from .env import Env
-from .match import Match, Reward
-from .observation import ObservationSpace
-from .single_agent_env import (
-    PassivePolicy,
-    RandomPolicy,
-    SingleAgentEnv,
-    build_opponent_policy,
-)
-from .vector_env import VectorEnv
+"""Native game environments, observation encoding and replay.
 
-__all__ = [
-    "Env",
-    "Match",
-    "VectorEnv",
-    "Reward",
-    "ObservationSpace",
-    "SingleAgentEnv",
-    "PassivePolicy",
-    "RandomPolicy",
-    "build_opponent_policy",
-]
+Import names from their modules; this package re-exports nothing so game
+children can encode observations without importing Torch.
+"""

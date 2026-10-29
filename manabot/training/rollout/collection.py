@@ -29,9 +29,9 @@ from typing import Any, Literal, TypedDict
 import numpy as np
 import torch
 
-from manabot.env import Match, ObservationSpace, Reward
 from manabot.env.failures import CapturedVector
-from manabot.env.observation import ACTION_TYPE_DIM, ActionEnum
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ACTION_TYPE_DIM, ActionEnum, ObservationSpace
 from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
 from manabot.model.actor_critic import ActorCritic

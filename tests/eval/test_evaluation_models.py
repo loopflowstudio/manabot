@@ -6,7 +6,7 @@ import pytest
 
 from manabot.eval.models import EvaluationContract, EvaluationKey
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.sim.players import build_player
+from manabot.sim.guidance import build_registered_player
 from manabot.sim.registration import PlayerRegistration
 from managym import WORLD_VERSION
 
@@ -72,7 +72,7 @@ def test_dpuct_registration_and_factory_echo_frozen_semantics() -> None:
     candidate = PlayerRegistration.model_validate(
         json.loads((ROOT / "tests/fixtures/int-6-dpuct-32-w4-v1.json").read_text())
     )
-    player, observation_space = build_player(candidate, seed=7)
+    player, observation_space = build_registered_player(candidate, seed=7)
     assert observation_space is None
     assert player.simulations == 32
     assert player.worlds == 4
@@ -128,4 +128,4 @@ def test_checkpoint_candidate_missing_bytes_fails_closed() -> None:
         player_seed_derivation_id="arena-pair-deal-player-v1",
     )
     with pytest.raises(FileNotFoundError, match="unavailable"):
-        build_player(registration, seed=1)
+        build_registered_player(registration, seed=1)
