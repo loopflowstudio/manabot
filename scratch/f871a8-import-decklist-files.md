@@ -320,7 +320,8 @@ concept (counts; identity from content). `DeckImport` is an import record:
 source `document` plus its admitted `deck`. `training/decks.TrainingDecks` is run-owned data: pool key,
 distinct decks, every source record; `from_documents`/`from_files` reject the
 whole fixed list upfront; `check()` re-admits decks natively at regime
-validation. Regime field `decks: {pool, files}` embeds at load. Native
+validation. Regime field `decks: {pool, files}` embeds at load and is the
+regime's only setup record (an authored `match` beside it is rejected). Native
 `VectorEnv.set_training_decks` admits every deck before replacing the supply for
 later roots (no pre-reset restriction; rejection keeps prior decks; running
 games unchanged); `current_player_configs` reports actual setups, used by the
@@ -335,7 +336,8 @@ bind a compiled authored pack's complete roster (versioned
 `authored-pack-v1`; Elemental unmarked and frozen); historical unmarked pairs and
 default content keep exact pairs. Run recovery keeps the decks digest in collector
 snapshots and `GameAttempt.decks_digest`; learning-state resume compares
-`regime.decks`; policy admission no longer compares training decks.
+`regime.decks`; producer admission requires a checkpoint bound to the decks'
+pool and re-admits every deck, never a representative pair.
 
 Acceptance (training): three or more eligible decks; changing pairs over resets;
 identical pair/seat/seed/policy RNG after recovery; invalid/unsupported fixed
@@ -403,4 +405,4 @@ The manifest references `.lf/wave/engine/GOAL.md` and `MEMORY.md`, but neither
 exists in this checkout. The supplied Task, accepted design and dated Steers
 provide the implementation scope; Wave context was not reconstructed.
 
-Check — 2026-10-28 (compress after regime match removal): training_decks/self_play/elemental_uniform/learning_state/policy_import: 45 passed. Earlier (regime match removal): `uv run --extra dev pytest tests/training/test_training_decks.py -q`: 7 passed; `tests/training/{test_self_play,test_elemental_uniform,test_learning_state,test_policy_import,test_baseline_recipe,test_experiments}.py`: 65 passed. At 91a000fd1 the decklist/Academy/catalog/boundary set passed (39). Earlier at 63c9f6bf5 the training/matchup/mirror/catalog set passed (39); pre-existing failures (Elemental program count 8 vs 7 at test_elemental_world.py:151, belief runtime `KeyError: 'relations'`) reproduce at c42bf4934 without this work; gate owns them with full suites and debug Rust.
+Check — 2026-10-28 (realign at cfe3ffeec: no code change; reuses compress result): training_decks/self_play/elemental_uniform/learning_state/policy_import: 45 passed. Earlier (regime match removal): `uv run --extra dev pytest tests/training/test_training_decks.py -q`: 7 passed; `tests/training/{test_self_play,test_elemental_uniform,test_learning_state,test_policy_import,test_baseline_recipe,test_experiments}.py`: 65 passed. At 91a000fd1 the decklist/Academy/catalog/boundary set passed (39). Earlier at 63c9f6bf5 the training/matchup/mirror/catalog set passed (39); pre-existing failures (Elemental program count 8 vs 7 at test_elemental_world.py:151, belief runtime `KeyError: 'relations'`) reproduce at c42bf4934 without this work; gate owns them with full suites and debug Rust.
