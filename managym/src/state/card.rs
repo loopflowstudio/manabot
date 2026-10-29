@@ -181,10 +181,9 @@ pub enum StaticScope {
     /// power predicates, to keep P/T computation non-recursive).
     OtherYouControl(CardPredicate),
     /// "[predicate] you control", including the source (Air Nomad Legacy's
-    /// "creatures you control with flying").
+    /// "creatures you control with flying", Badgermole's "with +1/+1
+    /// counters on them").
     YouControl(CardPredicate),
-    /// "[predicate] you control with +1/+1 counters on them" (Badgermole).
-    YouControlWithCounters(CardPredicate),
     /// "Equipped creature" / "enchanted creature": the exact creature the
     /// source Equipment or Aura is attached to.
     Attached,

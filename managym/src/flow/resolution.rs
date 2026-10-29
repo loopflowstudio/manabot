@@ -50,7 +50,7 @@ impl Game {
                     self.permanent_is_battlefield_creature(*id)
                         && self.state.permanents[*id]
                             .as_ref()
-                            .is_some_and(|p| p.has_counters())
+                            .is_some_and(|p| p.plus1_counters > 0)
                 })
                 .count() as i32,
             EffectValue::BattlefieldMatching { predicate } => self

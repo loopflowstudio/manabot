@@ -26,8 +26,11 @@ use crate::{
     },
 };
 
-/// Largest X offered when announcing an activation's X (CR 602.2b).
-const MAX_X: u8 = 20;
+/// X values from `least` through the largest one `can_pay` accepts. Payability
+/// is monotone in X, so the scan stops at the first unpayable value.
+fn payable_x_values(least: u8, can_pay: impl Fn(u8) -> bool) -> Vec<u8> {
+    (least..=u8::MAX).take_while(|&x| can_pay(x)).collect()
+}
 
 #[derive(Default)]
 struct TargetSelection {
@@ -342,12 +345,9 @@ impl Game {
         cast: CastChoices,
     ) -> Vec<u8> {
         let mut values = vec![0];
-        for x in 1..=u8::MAX {
-            if !self.can_pay_cast(player, card, CastChoices { x, ..cast }) {
-                break;
-            }
-            values.push(x);
-        }
+        values.extend(payable_x_values(1, |x| {
+            self.can_pay_cast(player, card, CastChoices { x, ..cast })
+        }));
         values
     }
 
@@ -921,12 +921,9 @@ impl Game {
         else {
             return Vec::new();
         };
-        (ability.x_min..=MAX_X)
-            .map_while(|x| {
-                self.can_pay_with_waterbend(player, &ability.mana_cost.with_x(x))
-                    .then_some(x)
-            })
-            .collect()
+        payable_x_values(ability.x_min, |x| {
+            self.can_pay_with_waterbend(player, &ability.mana_cost.with_x(x))
+        })
     }
 
     /// Announce X for the pending activation, then pay its costs.

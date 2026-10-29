@@ -1045,9 +1045,10 @@ fn static_scope(program: &Program, target: &str) -> Result<StaticScope, IrError>
             flying: true,
             ..creature()
         }),
-        "each:creature_you_control_with_counters" => {
-            StaticScope::YouControlWithCounters(creature())
-        }
+        "each:creature_you_control_with_counters" => StaticScope::YouControl(CardPredicate {
+            with_counter: true,
+            ..creature()
+        }),
         "each:non_human_creature_you_control" => StaticScope::YouControl(CardPredicate {
             not_subtypes: vec!["Human".into()],
             ..creature()

@@ -108,6 +108,13 @@ quantities 5-7, trigger_event 13, subtypes 64-75.
    Activated targets run on `ActivationSource` with `chosen`; library-top casting
    is a `zone_cast_cost` case. Schema 8 renumbered after T2's entries (details
    and test-helper names: `scratch/questions.md`). World w17 with its own entry.
+   Compress after sync: spell and activation X share `payable_x_values` (no cap);
+   Badgermole's scope is `YouControl` with `CardPredicate.with_counter` and Dai
+   Li Agents' quantity counts +1/+1 counters only (a stun counter no longer
+   qualifies).
+
+Check (compress, debug): `cards` 121, `rules_tests` 356, lib 122 pass; clippy and
+fmt clean; extension rebuilt; `pytest tests/semantic` same 3 known failures.
 
 Check (sync, debug): `cargo test --no-fail-fast` all targets pass (lib 122,
 cards 121, rules_tests 356) except `semantic_conformance_tests` (receipts are w15,
@@ -155,5 +162,6 @@ waterbend; (5) the observation change with Fire Nation Palace.
 
 Qualification entries, `Permanent::local_power`/`local_toughness`,
 `Permanent::can_tap`/`producible_mana`,
-`StaticScope::Equipped`, `Game::equipped_creature` and `Permanent::can_attack`
+`StaticScope::Equipped`/`YouControlWithCounters`, play.rs `MAX_X`,
+`Game::equipped_creature` and `Permanent::can_attack`
 are gone; do not restore them.

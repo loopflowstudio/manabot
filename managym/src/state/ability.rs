@@ -135,6 +135,7 @@ pub enum EffectValue {
     Fixed(i32),
     /// The resolving spell's announced X (CR 107.3).
     X,
+    /// Creatures `controller` controls with +1/+1 counters on them (Dai Li Agents).
     CreaturesWithCounters,
     BattlefieldMatching {
         predicate: CardPredicate,

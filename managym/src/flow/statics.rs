@@ -355,18 +355,14 @@ impl Game {
         let Some(target) = self.state.permanents[target_id].as_ref() else {
             return false;
         };
-        let (predicate, other, with_counters) = match scope {
+        let (predicate, other) = match scope {
             StaticScope::This => return source_id == target_id,
             StaticScope::Attached => return self.attached_creature(source_id) == Some(target_id),
             StaticScope::SpellsYouControl(_) => return false,
-            StaticScope::OtherYouControl(predicate) => (predicate, true, false),
-            StaticScope::YouControl(predicate) => (predicate, false, false),
-            StaticScope::YouControlWithCounters(predicate) => (predicate, false, true),
+            StaticScope::OtherYouControl(predicate) => (predicate, true),
+            StaticScope::YouControl(predicate) => (predicate, false),
         };
-        if target.controller != controller
-            || (other && source_id == target_id)
-            || (with_counters && !target.has_counters())
-        {
+        if target.controller != controller || (other && source_id == target_id) {
             return false;
         }
         self.permanent_matches_with(target_id, predicate, view)

@@ -2597,13 +2597,15 @@ fn air_nomad_legacy_makes_a_clue_and_pumps_your_fliers() {
 }
 
 /// Earthbend's counters bring the land under the trample grant; a creature
-/// without counters, including Badgermole, or an opponent's does not have it.
+/// without +1/+1 counters (Badgermole, a stunned Ogre) or an opponent's does
+/// not have it.
 #[test]
 fn badgermole_earthbends_and_grants_trample_to_countered_creatures() {
     let mut s = setup_unfunded(&["Badgermole", "Gray Ogre"]);
     let forest = s.force_permanent_on_battlefield(0, "Forest");
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let countered = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let stunned = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
     for id in [countered, theirs] {
         s.game_mut().state.permanents[id]
@@ -2611,6 +2613,7 @@ fn badgermole_earthbends_and_grants_trample_to_countered_creatures() {
             .unwrap()
             .plus1_counters = 1;
     }
+    add_counters(&mut s, stunned, CounterKind::Stun, 1);
     s.set_player_mana_pool(0, "4G");
     let card = cast(&mut s, "Badgermole");
     for _ in 0..4 {
@@ -2626,6 +2629,7 @@ fn badgermole_earthbends_and_grants_trample_to_countered_creatures() {
     assert!(observed_keywords(&s, forest).trample);
     assert!(observed_keywords(&s, countered).trample);
     assert!(!observed_keywords(&s, ogre).trample);
+    assert!(!observed_keywords(&s, stunned).trample);
     assert!(!observed_keywords(&s, badgermole).trample);
     assert!(!observed_keywords(&s, theirs).trample);
 }
