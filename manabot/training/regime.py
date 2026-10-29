@@ -582,10 +582,6 @@ class TrainingRegime(Strict):
         """Embed decklist files at load so recovery never rereads mutable paths."""
         if not isinstance(value, dict) or value.get("decks") is None:
             return value
-        if value.get("match") is not None:
-            raise ValueError(
-                "training decks own the run's setups; remove the authored match"
-            )
         source = value["decks"]
         decks = (
             TrainingDecks.from_files(source["files"], source["pool"])
@@ -649,6 +645,10 @@ class TrainingRegime(Strict):
     def references(self) -> "TrainingRegime":
         if self.match is None and self.decks is None:
             raise ValueError("regime requires a match or training decks")
+        if self.match is not None and self.decks is not None:
+            raise ValueError(
+                "training decks own the run's setups; remove the authored match"
+            )
         if self.decks is not None and any(
             not isinstance(stage, TrainSelfPlay)
             or stage.behavior != "current-self"

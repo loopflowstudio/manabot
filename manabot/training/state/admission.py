@@ -17,7 +17,7 @@ import torch
 from manabot.env.match import Match
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.checkpoint import load_checkpoint
-from manabot.model.world import bound_pack, validate_agent_setup
+from manabot.model.world import validate_agent_setup
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
     ArtifactReference,
@@ -61,12 +61,8 @@ def _admit_setups(agent: object, regime: TrainingRegime) -> None:
     if regime.decks is None:
         validate_agent_setup(agent, Match(regime.root_match).to_rust())
         return
-    binding = getattr(agent, "world_binding", None)
-    if (
-        binding is None
-        or "content_pool" not in binding
-        or bound_pack(binding) != regime.decks.pool
-    ):
+    binding = getattr(agent, "world_binding", None) or {}
+    if binding.get("content_pool", {}).get("pack_key") != regime.decks.pool:
         raise ValueError("training decks require a checkpoint bound to their pool")
     regime.decks.check()
 
