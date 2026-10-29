@@ -178,6 +178,36 @@ def _rust_tests(path: Path) -> set[str]:
     return tests
 
 
+def _rust_test_module(path: Path, context: str) -> str:
+    """The integration-test module path of a rules or card-set test file.
+
+    Rules tests are `rules::<file>` in `rules_tests.rs`; card tests are
+    `<set>` in `cards.rs`, which includes `cards/<set>.rs` by path.
+    """
+
+    def included(harness: Path, pattern: str) -> bool:
+        return harness.is_file() and bool(
+            re.search(pattern, harness.read_text(encoding="utf-8"), re.MULTILINE)
+        )
+
+    stem = re.escape(path.stem)
+    if path.suffix == ".rs" and path.parent.name == "rules":
+        if not included(path.parent / "mod.rs", rf"^\s*pub\s+mod\s+{stem}\s*;"):
+            _fail(
+                f"{context}.path",
+                f"{path.stem!r} is not included by the rules test module",
+            )
+        if not included(path.parents[1] / "rules_tests.rs", r"^\s*mod\s+rules\s*;"):
+            _fail(f"{context}.path", "rules module is not included by rules_tests")
+        return f"rules::{path.stem}"
+    if path.suffix == ".rs" and path.parent.name == "cards":
+        pattern = rf'^#\[path\s*=\s*"cards/{stem}\.rs"\]\s*mod\s+{stem}\s*;'
+        if not included(path.parents[1] / "cards.rs", pattern):
+            _fail(f"{context}.path", f"{path.stem!r} is not included by cards.rs")
+        return path.stem
+    _fail(f"{context}.path", "Rust evidence must be a managym rules or card test file")
+
+
 def _validate_test_catalog(
     raw_tests: Any, root: Path
 ) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
@@ -201,31 +231,20 @@ def _validate_test_catalog(
         if identifier in identifiers:
             _fail(context, f"duplicate test identifier: {identifier}")
         identifiers.add(identifier)
-        if path.parent.name != "rules" or path.suffix != ".rs":
-            _fail(f"{context}.path", "Rust evidence must be a managym rules test file")
-        module_index = path.parent / "mod.rs"
-        if not module_index.is_file() or not re.search(
-            rf"^\s*pub\s+mod\s+{re.escape(path.stem)}\s*;",
-            module_index.read_text(encoding="utf-8"),
-            re.MULTILINE,
-        ):
-            _fail(
-                f"{context}.path",
-                f"{path.stem!r} is not included by the rules test module",
-            )
-        harness = path.parents[1] / "rules_tests.rs"
-        if not harness.is_file() or not re.search(
-            r"^\s*mod\s+rules\s*;",
-            harness.read_text(encoding="utf-8"),
-            re.MULTILINE,
-        ):
-            _fail(f"{context}.path", "rules module is not included by rules_tests")
+        prefix = _rust_test_module(path, context)
         name = identifier.rsplit("::", 1)[-1]
-        expected = f"rules::{path.stem}::{name}"
-        if identifier != expected:
+        group = identifier.removeprefix(f"{prefix}::").rsplit("::", 1)[0]
+        if not identifier.startswith(f"{prefix}::") or (
+            group != name
+            and not re.search(
+                rf"^mod\s+{re.escape(group)}\s*\{{",
+                path.read_text(encoding="utf-8"),
+                re.MULTILINE,
+            )
+        ):
             _fail(
                 f"{context}.identifier",
-                f"expected exact integration test identifier {expected!r}",
+                f"expected exact integration test identifier under {prefix!r}",
             )
         if name not in _rust_tests(path):
             _fail(f"{context}.identifier", f"test is not declared in {relative}")

@@ -7,9 +7,9 @@
 //! (an opponent's foretold card) reach neither the tensor nor the JSON.
 use std::ops::Range;
 
-use crate::{
+use crate::support::{
+    casting::{cast, choose, library_card, mode, settle, setup},
     helpers::Scenario,
-    support::{cast, choose, library_card, mode, settle, setup},
 };
 use managym::{
     agent::{
@@ -436,7 +436,7 @@ fn restricted_mana_is_encoded_by_spending_subtype() {
     let mut s = setup(&["Jasmine Dragon Tea Shop"]);
     let shop = s.force_permanent_on_battlefield(0, "Jasmine Dragon Tea Shop");
     s.set_player_mana_pool(0, "");
-    crate::support::activate(&mut s, shop, 0);
+    crate::support::casting::activate(&mut s, shop, 0);
     mode(&mut s, 4);
 
     let observation = Observation::for_player(s.game(), PlayerId(0));

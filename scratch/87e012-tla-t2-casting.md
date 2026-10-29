@@ -77,9 +77,10 @@ worktree, so new T2 cards read "unsupported" in this base until T1 lands.
 ## Done (`648edee6b`…`2673c95cd`; foretell `1144d0f32`; control `431a31f65`)
 
 All 51 T2 cards are defined, none in `tla::INCOMPLETE` for T2 behavior, each
-with a Scryfall fixture entry and a witness in `tests/cards/tla.rs` (Toph and
-Dai Li Agents in `tests/rules/elemental_cards.rs`, pending the move). Synced
-onto PR #394's head `e403b8a1f` (merge `e7933c6fd`). WORLDS.md w16 records T2 (166 supported).
+with a Scryfall fixture entry and a witness in `tests/cards/tla.rs` (T2's in
+`mod casting`, on `tests/support/casting.rs`; Toph and Dai Li Agents in T1's
+`mod elemental`). Synced onto PR #394's head `e403b8a1f` (merge `e7933c6fd`)
+and onto T1's local card-test move `f9732c12f`. WORLDS.md w16 records T2 (166 supported).
 Earlier check (`35404b274`): debug `cargo test` passes except the
 pre-existing semantic-conformance pair.
 
@@ -130,20 +131,16 @@ and UI. Guard + directed + viewer-safety tests in
   guard, `scryfall_id`, then gate and PR394 update. T1's implement step is live.
   T1 moved the per-card tests (225 tests in 14 set files, `tests/support/`,
   `tests/cards/README.md`, `coverage.py`; `f9732c12f`), so question 2 is
-  settled on T1's side; T2 reconciles its `tests/cards/` on sync.
+  settled on T1's side; T2's `tests/cards/` follows it since the
+  `f9732c12f` merge.
 - Scryfall object id on every definition (first printing, required field),
   offline uniqueness test and an online maintenance script beside the card
   tests. Lands with the engine-type definitions after the sync.
 
 ## Remaining
 
-- Next T1 sync: T1 committed the card-test move locally (`f9732c12f`, not yet
-  on PR #394, whose head is still `e403b8a1f`): `tests/cards.rs` with one
-  module per set, `tests/support/`, `tests/cards/tla.rs`. Merge T2's
-  `tests/cards/{tla,support,observability}.rs` into that layout; Toph/Dai Li
-  move with T1's `elemental_cards.rs` split.
-- Then the three steers above once engine-type cards/w17 exist, and the
-  world gate.
+- Next T1 sync, after T1 publishes engine-type cards/w17 (PR #394 still at
+  `e403b8a1f`): the three steers above, then the world gate.
 - Gate (not run here): CLAUDE.md arena admission/monitoring suite; full debug
   `cargo test`; Academy check/build (local node can't load libllhttp; CI).
 - Known gaps (questions.md): possible-worlds ignore foretold cards; granted
@@ -151,12 +148,10 @@ and UI. Guard + directed + viewer-safety tests in
 
 ## Check
 
-2026-10-29 realign: state read only, no tests rerun. PR #394 open at
-`e403b8a1f` (merged here); T1's local head `f9732c12f` still has
-`cards/authoring.rs` and `semantic/compile.rs`. Compress 2 (uncommitted
-`flow/cast_permission.rs`: foretell and play grants share `grant_if_exiled`,
-`is_foretold` reads `grants_naming`) reported debug `cargo test --test cards`
-68, `--test rules_tests` 356, `--lib` 121 and clippy clean. Earlier v5 check:
-continuation-input parity v1–v5, text observation, experience protocol, play
-modes, env observation and `tests/model` pytest pass; `tests/eval/test_batched_eval.py`
-fails on T1's missing w16 `WorldVersion`.
+2026-10-29, after merging T1's `f9732c12f` (temur restricted-mana edits ported
+to `cards/{arb,tla,lea}.rs`): debug `cargo test --test cards` 293,
+`--test rules_tests` 131 (424 = the earlier 68 + 356), `--lib` 121, clippy
+`--all-targets` clean; `semantic_conformance_tests` fails only the known pair.
+Earlier v5 check: continuation-input parity v1–v5, text observation,
+experience protocol, play modes, env observation and `tests/model` pytest pass;
+`tests/eval/test_batched_eval.py` fails on T1's missing w16 `WorldVersion`.

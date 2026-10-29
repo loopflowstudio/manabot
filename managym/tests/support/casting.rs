@@ -2,7 +2,7 @@
 //! helpers that take legal actions rather than mutating game state.
 use std::collections::BTreeMap;
 
-use crate::helpers::Scenario;
+use crate::support::helpers::Scenario;
 use managym::{
     agent::action::{Action, ActionSpaceKind},
     flow::turn::StepKind,
