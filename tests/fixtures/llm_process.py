@@ -64,6 +64,21 @@ class FirstReferenceRuntime(CountingRuntime):
 ReplyMismatch = Literal["request", "version", "decision", "configuration", "runtime"]
 
 
+class RecoveryRuntime(CountingRuntime):
+    """A finite scripted response sequence; no model loading or synthetic load."""
+
+    def __init__(self, config: InferenceConfig) -> None:
+        super().__init__(config)
+        self.responses = iter(("A0", "invalid", "A0", "invalid", "invalid"))
+
+    def generate(self, prompt: EncodedPrompt, deadline: float) -> GeneratedResponse:
+        try:
+            text = next(self.responses)
+        except StopIteration:
+            raise RuntimeError("injected generation failure") from None
+        return GeneratedResponse(text=text, token_ids=(3,), finish_reason="eos")
+
+
 def wrong_reply(
     connection: Connection,
     mismatch: ReplyMismatch,
