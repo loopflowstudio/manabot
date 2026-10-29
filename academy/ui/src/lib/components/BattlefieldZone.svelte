@@ -9,14 +9,14 @@
     lane: string;
     permanents: PermanentState[];
     allPermanents: PermanentState[];
-    tablePermanents?: PermanentState[];
+    tablePermanents: PermanentState[];
     focusedIds?: Set<number>;
     clickableTargets?: Map<number, number[]>;
     onSelectTarget?: (id: number) => void;
     onHoverTarget?: (id: number | null) => void;
     onPreviewCard?: (card: CardPreview | null) => void;
   }
-  let { label, lane, permanents, allPermanents, tablePermanents = allPermanents, focusedIds = new Set<number>(),
+  let { label, lane, permanents, allPermanents, tablePermanents, focusedIds = new Set<number>(),
     clickableTargets, onSelectTarget, onHoverTarget, onPreviewCard }: Props = $props();
   let box: HTMLDivElement;
   let width = $state(120);

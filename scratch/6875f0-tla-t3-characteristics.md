@@ -165,51 +165,40 @@ Debug: clippy/fmt clean, lib 122, cards 125, rules_tests 356 (serialization unch
 
 ## Remaining
 
-None of the 49 cards. World release items (registration literal, receipts,
-frozen asserts) belong to the stack's world release, not this slice.
+None of the 49 cards and no implement item. World release items (registration
+literal, receipts, frozen asserts) belong to the stack's world release, not this
+slice. Browser proof of the stunned and equipped creature is left to demo. Policy
+tensor encoding of item 19's fields is undecided: Jack Heart's PR review chooses
+between a policy-input version bump here and a later Task (`scratch/questions.md`).
 
-## Concept review after slice 14 (2026-10-29, headless)
+## Accepted model (concept reviews, 2026-10-29)
 
-Accepted model: a permanent's characteristics are what `Game` derives from them
-(`ScopeView` layers, `has_lost_abilities`, `permanent_name`,
-`permanent_has_subtype`, `activated_abilities_for`); `Permanent` and `Card`
-fields are inputs, never answers. Slice 14 applied that rule to ability loss.
-Two consequences follow, with no new product choice: one tap authority (item 15),
-and **one observation change before landing.** The acceptance criteria say observations stay
-   "complete", and Jack Heart's shared-decision-surface direction says the same, so the
-   "later shape change" deferrals in `scratch/questions.md` belong to this
-   Task, not another one. After the T2 sync, add them in one change built on T2's
-   `CardData.face_down` precedent (`1144d0f32`): counters by kind (stun, fire,
-   double strike), `attached_to`, effective name and creature types
-   (Honest Work; this also fixes `is_ally` for the enchanted creature), Toph's granted land
-   type, the announced X on stack objects, spell keyword grants, and Fire
-   Nation Palace's granted firebending. Policy encoding of the new fields follows the
-   existing policy-input versioning (`ObservationConfig.from_checkpoint`;
-   frozen widths are unchanged), and the world/observation validation in
-   CLAUDE.md applies.
+A permanent's characteristics are what `Game` derives from them (`ScopeView`
+layers, `has_lost_abilities`, `permanent_name`, `permanent_has_subtype`,
+`activated_abilities_for`). `Permanent` and `Card` fields are inputs, never
+answers. Observations stay complete (acceptance; Jack Heart's 2026-10-21
+shared-decision-surface direction), so item 19 added counters by kind,
+`attached_to`, effective name and creature types, granted land, stack X, spell
+keyword grants and granted firebending, following T2's `CardData.face_down`
+precedent. Frozen widths are unchanged.
 
-Realign after item 19 (2026-10-29): PR #398 head still `16dfd3dbb`, PR #394 head
-still `86ebe9ccf`, `origin/main` fully contained; schema 8 ids contiguous (fields
-to 116, opcodes to 106, special roles to 17). Items 18 (`c9cd80190`) and 19
-(`85650933a`) are committed; the item-19 compress is checkpointed with this realign.
+Item 20 (`a1d67b416`) gives people and LLM bots the same fields as labels only:
+`permanent-notes.ts` (counters by kind, "attached to X" / "X attached" across
+seats via `tablePermanents`, set creature types, granted land, firebending) feeds
+`Card`'s accessible name and margin chips, and the ordered stack shows "X = n".
+`text_observation.py` appends the same fields only when they are present, so
+existing text is byte-identical. `_characteristics` in the projection omits on
+`None`, not falsiness. Compress: `tablePermanents` is required through
+PlayerArea → Battlefield → BattlefieldZone (GameBoard always supplies it); only
+`PermanentRow` defaults it.
 
+Realign after item 20 (2026-10-29): PR #398 head still `16dfd3dbb`, PR #394
+head still `86ebe9ccf`, `origin/main` contained.
 
-## Concept review after item 19 (2026-10-29) — item 20 done
-
-The review found Academy and the text observation dropped item 19's fields
-(Jack Heart's 2026-10-21 Academy direction; "playable through Academy").
-Item 20 renders them as labels only: `permanent-notes.ts` (counters by kind,
-"attached to X" / "X attached" across seats via `tablePermanents`, set creature
-types, granted land, firebending) feeds `Card`'s accessible name and margin
-chips; the ordered stack shows "X = n". `text_observation.py` appends the same
-fields, and stack `X = n`, only when present (existing text byte-identical).
-`_characteristics` in the projection now omits on `None`, not falsiness.
-Policy tensor encoding stays deferred to Jack Heart's PR review.
-
-Check (item 20): vitest 23 files/113 pass, `npm run check` 0 errors;
-`pytest tests/semantic/test_text_observation.py` 18 pass, `tests/academy/test_play_modes.py`
-12 pass; ruff clean. No Playwright run (component render covers the stunned and
-equipped creature); browser proof left to demo.
+Check (item 20 + compress): vitest 23 files/113 pass, `npm run check` 0 errors
+(nvm node 24; Homebrew node 25.8 lacks llhttp); `pytest
+tests/semantic/test_text_observation.py` 18 pass, `tests/academy/test_play_modes.py`
+12 pass; ruff clean. No Playwright run.
 
 ## Delete — do not maintain
 

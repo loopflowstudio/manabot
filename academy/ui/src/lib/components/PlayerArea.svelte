@@ -13,7 +13,7 @@
     label: string;
     player: PlayerState;
     /** Every visible permanent at the table, for attachments across seats. */
-    tablePermanents?: PermanentState[];
+    tablePermanents: PermanentState[];
     deckName?: string | null;
     definitionNames?: Record<string, string>;
     opponent?: boolean;
@@ -27,7 +27,7 @@
   let {
     label,
     player,
-    tablePermanents = undefined,
+    tablePermanents,
     deckName = null,
     definitionNames = {},
     opponent = false,
@@ -173,7 +173,7 @@
         {@render rubric('Battlefield')}
         <Battlefield
           permanents={player.battlefield}
-          tablePermanents={tablePermanents ?? player.battlefield}
+          {tablePermanents}
           {focusedIds}
           {clickableTargets}
           {onSelectTarget}
@@ -186,7 +186,7 @@
         {@render rubric('Battlefield')}
         <Battlefield
           permanents={player.battlefield}
-          tablePermanents={tablePermanents ?? player.battlefield}
+          {tablePermanents}
           {focusedIds}
           {clickableTargets}
           {onSelectTarget}

@@ -5,14 +5,15 @@
 
   interface Props {
     permanents: PermanentState[];
-    tablePermanents?: PermanentState[];
+    /** Every visible permanent at the table, for attachments across seats. */
+    tablePermanents: PermanentState[];
     focusedIds?: Set<number>;
     clickableTargets?: Map<number, number[]>;
     onSelectTarget?: (id: number) => void;
     onHoverTarget?: (id: number | null) => void;
     onPreviewCard?: (card: CardPreview | null) => void;
   }
-  let { permanents, tablePermanents = permanents, focusedIds = new Set<number>(), clickableTargets,
+  let { permanents, tablePermanents, focusedIds = new Set<number>(), clickableTargets,
     onSelectTarget, onHoverTarget, onPreviewCard }: Props = $props();
   const groups = $derived(groupBattlefield(permanents));
   const lanes: { lane: BattlefieldLane; label: string }[] = [
