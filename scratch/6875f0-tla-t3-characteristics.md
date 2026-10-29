@@ -109,24 +109,32 @@ from `be2b7586b`.
   the survivor needs a type the departed creature had as it left).
 - Honest Work (Aura; loses all abilities, becomes Citizen "Humble Merchant" 1/1
   with "{T}: Add {C}" — characteristic replacement, layers 1-7b).
-- Crashing Wave (deferred from slice 11): waterbend {X} as a spell's
-  additional cost (spell-side waterbend payment does not exist; carry X from
-  `SpellX` into it), "up to X targets" (requirement max read from X), then a
-  resolution-time distribution of three stun counters among tapped creatures
-  opponents control (repeated one-at-a-time choice, as Heartless Act).
+- Crashing Wave (deferred from slice 11): after the T2 sync, build on T2's
+  waterbend additional cost (`a1773e4e6`) and its X announcement; then "up to
+  X targets" (requirement max read from X) and a resolution-time distribution
+  of three stun counters among tapped opponents' creatures (repeated
+  one-at-a-time choice, as Heartless Act).
 - Fire Nation Palace (granted firebending; observation shape change); Lo and Li
   (stack-source keywords in `damage.rs::source_keywords`); Glider Staff (airbend),
   Trusty Boomerang (granted activated ability); Razor Rings, The Last Agni Kai
   (excess damage); Hakoda.
 
-## Reconcile at sync (T2 87e012 at `d5b9b8fa2`, 2026-10-29)
+## Reconcile at sync (T2 87e012 at `83dd0cd46`, 2026-10-29)
 
 - Both branches append to schema 8 from 86ebe9ccf with colliding numbers. T2:
   fields 85-96, predicates 13-15, subtypes 64-74, special role 6, opcodes 66-73,
   trigger_event 13, destination 2, zone 3. This branch: fields 85-96, predicates
   13-15, subtypes 64-74, special roles 6-12, opcodes 66-83, conditions 7-9,
-  quantities 5-6, trigger_event 13 (`end_step_begins`), enum `counter`. The later lander renumbers its own entries
+  quantities 5-6, trigger_event 13 (`end_step_begins`), enum `counter`. T2 since
+  added opcodes 74-79, fields 97-100, quantity 5 `x`, enum `grant`, role
+  `each:creature_you_control` 7. The later lander renumbers its own entries
   (append-only, contiguous).
+- X has two implementations: T2 `PendingChoice::AnnounceX` + `CastChoices.x`
+  (`69c23c358`; quantity 5 `x`, field 97 `mana_x`) and this branch's
+  `SpellX`/`ActivationX` (quantity 6, field 95). Keep one spell announcement
+  (T2's `CastChoices`), one `x` quantity and one `mana_x` field; keep
+  `ActivationX` only if T2 has no activation X, and carry `x_min` and
+  `BattlefieldEntry.x` onto the survivor.
 - Keep one exhaust field and gate (T2 field 87, here 89) and one with-counters
   predicate reading every `CounterKind` (T2 `with_counter` 13; here `no_counters`
   14 complements it). Merge T2's `tests/cards.rs`, `support.rs`, `tla.rs` with
