@@ -580,6 +580,9 @@ pub enum BlockRestriction {
 }
 
 /// An additional cost of casting a spell (CR 601.2b, 601.2f).
+// Definitions are built once per content pack, so the sacrifice predicate's
+// size costs nothing; boxing it would only add noise to card authoring.
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum AdditionalCost {
     /// "As an additional cost, sacrifice [predicate]", or pay `or_mana`

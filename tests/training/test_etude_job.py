@@ -349,3 +349,74 @@ def test_continuation_milestones_follow_the_parent(tmp_path: Path) -> None:
     stage.learning.ema = None
     with pytest.raises(ValueError, match="EMA"):
         TrainingJob(regime=without_ema, experiment="fixture", continuation=continuation)
+
+
+def test_segment_out_of_wall_budget_succeeds_paused_with_learner_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    regime = ema_regime(5)
+    watchdog = min(regime.wall_seconds, regime.stages[0].execution.wall_seconds)
+    # A reserve just inside the watchdog: the stage stops after one update.
+    spec = TrainingJob(regime=regime, experiment="fixture", stop_reserve_seconds=watchdog - 1e-3)
+    worker_environment(tmp_path, monkeypatch, spec)
+    run = run_worker()
+    assert run.status == "paused" and run.updates_through() == 1
+    assert {"raw", "ema", "optimizer"} <= set(run.stages[0].artifacts)
+    result = json.loads((tmp_path / "output/etude-result.json").read_text())
+    assert result["clocks"] == {"updates": 1}
+    with pytest.raises(ValueError, match="inside the regime watchdog"):
+        TrainingJob(regime=regime, experiment="fixture", stop_reserve_seconds=watchdog)
+
+
+def test_monitoring_continuation_stages_raw_alone_and_resets_learner_state(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    with VerifyStore(tmp_path / "parent.sqlite") as store:
+        parent = execute_regime(
+            ema_regime(3), 12250, tmp_path / "parent", store, checkpoint_updates=1
+        )
+    # Retained as a watchdog kill would leave it: interrupted after update 3.
+    record = json.loads((tmp_path / "parent/run.json").read_text())
+    record["status"] = record["stages"][0]["status"] = "interrupted"
+    (tmp_path / "parent/run.json").write_text(json.dumps(record))
+    receipt = parent.monitoring_checkpoints[1]
+    assert receipt.updates == 2 and receipt.artifact is not None
+    inputs = tmp_path / "inputs"
+    inputs.mkdir()
+    staged = {}
+    for role, source, name in (
+        ("source_run", tmp_path / "parent/run.json", "parent-run.json"),
+        ("raw", Path(receipt.artifact["path"]), "parent-raw.pt"),
+    ):
+        (inputs / name).write_bytes(source.read_bytes())
+        staged[role] = StagedExport(
+            key=f"mtg-fixture/{name}",
+            sha256=file_sha256(source),
+            bytes=source.stat().st_size,
+        )
+    with pytest.raises(ValueError, match="raw alone"):
+        LearnerContinuation(
+            from_update=2,
+            source_stage="fit",
+            from_monitoring=True,
+            optimizer=staged["raw"],
+            **staged,
+        )
+    continuation = LearnerContinuation(
+        from_update=2, source_stage="fit", from_monitoring=True, **staged
+    )
+    spec = TrainingJob(
+        regime=ema_regime(4),
+        experiment="fixture",
+        milestones=(3,),
+        continuation=continuation,
+    )
+    job = spec.job(repo=ROOT, revision="HEAD", max_hours=1)
+    assert {i.name for i in job.inputs} == {"parent-run.json", "parent-raw.pt"}
+    worker_environment(tmp_path, monkeypatch, spec)
+    monkeypatch.setenv("ETUDE_INPUTS_DIR", str(inputs))
+    run = run_worker()
+    origin = run.stages[0].learning_state_origin
+    assert origin is not None and origin.iteration == 2
+    assert origin.reset == ("ema", "optimizer")
+    assert run.status == "completed" and run.updates_through() == 4

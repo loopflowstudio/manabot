@@ -231,13 +231,13 @@ def test_native_projection_preserves_canonical_receipt_bytes() -> None:
         "95c66ac66e1f977466c8e4df1d4f06acdbda29499de1be2bde73490897940fe4",
     )
     # Possible-world space v3 (foretold slots) changes the schema identity hash;
-    # the schema also binds the w17 content digest (re-recorded when continuous
-    # effects became records).
+    # the schema also binds the open w17 content digest, so these receipts move
+    # whenever w17 content does.
     current_v3_receipts = (
-        "eb033677d7a7057288299543f853d42553ad6d8c1c044c3ec5a415c99127a8c4",
-        "2c0aa33f475452f5c4ae0c1e6d1c808365b5320975f9d135b04fac18ba86a65f",
-        "bcca825e32854034a26a099a3d742b1da0c13e5b9b02b8088a58ca65e9940b52",
-        "4273762cba9c83af6b26d4ab964540a796e0eea4f2d5fd6d648162fe5aac4bc7",
+        "2605f3aa460d9baa003bde48eebcf726a5b46b51977cda77a7d2ad565d88d0e5",
+        "9897609815e5279c956dc880ca2aa17ecfc1726a5ce472adc00cff0d1aa02af2",
+        "016ad2e1d4072f71255bac34a65c29e4fee6b861ce206c0fcfbeed4dad6f5069",
+        "f6a62730a1781373a200b0de00678eba957b5d98526ac201aa695b5a5953d81b",
     )
     for (
         (belief, prior_catalog_receipt, historical_receipt),

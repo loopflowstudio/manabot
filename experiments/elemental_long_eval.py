@@ -6,10 +6,15 @@ and unchanged; only where it is played and stored moved.
 
 Checkpoints come from two places, merged by absolute update:
 
-- windows w1/w2: the retired cohort follower's ledger (read-only here), which
-  admitted their digest-checked exports into a local cache;
-- segment w3: the Etude run's tracked checkpoints (`etude.train.read`), and its
-  status, whose terminal state settles the seed's endpoint.
+- windows w1/w2: `experiments/protocols/elemental-183-windows.json`, the
+  retired cohort follower's digest-checked exports, copied to R2 at the keys
+  the old S3 layout used (`jobs/<job>/runtime/artifacts/sha256/<sha256>`);
+- segments w3, w4, …: each one-rental Etude run's tracked checkpoints and its
+  `state.json` in the tracking bucket (`etude.train.read`). Reading the bucket,
+  not the launcher, lets this run on a machine other than the controller. The
+  last named run's end settles the seed's endpoint unless the seed is declared
+  to continue (`--continues`), in which case the next segment's run is named on
+  restart.
 
 Each admitted checkpoint is an Etude model `uNNNNNN`, keyed by its
 window or segment run and update; the heuristic is the code player `heuristic`,
@@ -26,27 +31,32 @@ or pair schedule (player 0's deck), ten per unit. Player 0 is the rated (or
 newer) checkpoint and player 1 the heuristic (or older checkpoint); conditions
 carry the row's (opposing deck, player 0's native seat, deals) groups. `play`
 runs each group in the grid's subprocess worker under its wall bound and
-returns table `games`: one row per game and player. A group that fails or reaches its bound is stored
+returns table `games`: one row per game and player, plus the card tables
+(`card_plays`, `card_counts`, `cards`) from each game's replay-checked card
+evidence, retained in the eval run's folder. A group that fails or reaches its bound is stored
 with invalid rows (score null) and never replayed, as the protocol requires;
 Etude fails a match only for an integrity error (wrong bytes, wrong legs).
 
-`follow` holds the eval run `mtg183-eval`, one unit (a checkpoint's grid or one
+`follow` holds the eval run `mtg183-eval-cards`, one unit (a checkpoint's grid or one
 pair, oldest newer checkpoint first) at a time, delivering every match's tables
 to the given storage, and writes `<directory>/state.json` (`EvalState`): the
-admitted checkpoints, the segment's outcome and the endpoint. The report reads
-that state and the tables (`etude.eval.query.statsdb`). It never rents, cancels
-or changes training, and yields while any MTG-181 experiment runs on this machine.
+admitted checkpoints, the final segment's outcome and the endpoint. The report
+reads that state and the tables (`etude.eval.query.statsdb`). It never rents,
+cancels or changes training, and yields while any MTG-181 experiment runs on this
+machine. It runs as an Etude job on the Mac mini (`experiments/protocols/elemental-183-eval-job.json`).
 
     uv run --extra artifacts --extra evaluation python -m experiments.elemental_long_eval \
-        --directory ~/.manabot/mtg183-eval --until <unix-seconds> \
-        --windows ~/.manabot/mtg183-follow/follow/ledger.json \
-        --storage r2://manabot/evaluations --etude-source <tracking storage> --run <w3 run>
+        --directory ~/.manabot/mtg183-eval-cards --until <unix-seconds> \
+        --windows experiments/protocols/elemental-183-windows.json \
+        --storage r2://manabot/evaluations --etude-source <tracking storage> \
+        --run <w3 run> --run <w4 run> [--continues]
 """
 
 from __future__ import annotations
 
 import argparse
 from collections.abc import Callable, Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from functools import cache
 import json
@@ -69,8 +79,6 @@ from etude.eval.records import (
     Model,
     Player,
 )
-from etude.launch.client import status
-from etude.launch.records import Status
 from etude.run.records import ArtifactRef
 from etude.run.storage import (
     DirectoryStorage,
@@ -93,6 +101,7 @@ from experiments.elemental_grid import (
     Group,
     Request,
     _legs,
+    group_cell,
     groups,
     schedule_sha256,
 )
@@ -101,6 +110,8 @@ from experiments.elemental_long import (
     SEED,
     STAGE,
     H2HGame,
+    Pair,
+    Role,
     h2h_schedule,
     h2h_schedule_sha256,
     heuristic_games,
@@ -108,17 +119,24 @@ from experiments.elemental_long import (
     rated_updates,
 )
 from manabot.data import cache_directory
+from manabot.eval.card_evaluation import trace_card_tables
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import file_sha256
 from manabot.model.checkpoint import fetch_etude_checkpoint
+from manabot.sim.execution import EvalAllocation
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.threads import child_environment
 import managym
 
 ROOT = Path(__file__).resolve().parents[1]
 EXPERIMENT = "mtg183-elemental-eval"
-RUN = "mtg183-eval"
+# The run that plays the design with card data (amendment 2026-10-25, card data).
+# `mtg183-eval` played its first units without it on etude-sdk 0.2.2, whose
+# match keys this code does not reproduce, so this run replays them.
+RUN = "mtg183-eval-cards"
 HEURISTIC = "heuristic"
+# The learner every MTG-183 checkpoint belongs to: its one seed.
+LINE = f"mtg183-seed-{SEED}"
 # Inference provenance is versioned independently of player identity.
 INFERENCE_CODE = (
     ROOT / "manabot/model",
@@ -133,6 +151,13 @@ INFERENCE_CODE = (
 YIELD_TO = r"manabot\.mtg-181-trial-two-seat/.* -m experiments\."
 # Where `play` writes arena evidence; `follow` sets it for its worker processes.
 EVIDENCE = "MTG183_EVAL_EVIDENCE"
+# The eval run's folder, where workers retain card evidence; `follow` sets it.
+CARDS = "MTG183_EVAL_CARDS"
+# An `EvalAllocation` as JSON: when set, groups play through shared batched inference.
+COMPUTE = "MTG183_EVAL_COMPUTE"
+# How many of a match's groups play at once (default one, in turn); rows keep
+# the groups' order either way.
+GROUP_WORKERS = "MTG183_EVAL_GROUP_WORKERS"
 
 
 def player(updates: int) -> str:
@@ -145,7 +170,7 @@ def player(updates: int) -> str:
 
 class Checkpoint(BaseModel):
     updates: int
-    # The window's job (w1/w2) or the segment's Etude run (w3).
+    # The window's job (w1/w2) or the segment's Etude run (w3, w4, …).
     run: str
     artifact: ArtifactRef
     coordinates: dict[str, JsonValue]
@@ -155,8 +180,8 @@ class EvalState(BaseModel):
     heuristic_schedule_sha256: str = SCHEDULE_SHA256
     h2h_schedule_sha256: str = H2H_SCHEDULE_SHA256
     checkpoints: dict[int, Checkpoint] = {}
-    # The segment's terminal Etude outcome, e.g. "failed (deadline)"; None while
-    # it is live. Any outcome settles the segment.
+    # The final segment's tracked end, "finished" or "failed"; None while it is
+    # live or the seed continues. Either settles the seed.
     segment_outcome: str | None = None
     endpoint: int | None = None
     error: str | None = None
@@ -164,77 +189,90 @@ class EvalState(BaseModel):
     done: bool = False
 
 
-def window_checkpoints(ledger: Path) -> list[Checkpoint]:
+def window_checkpoints(path: Path) -> list[Checkpoint]:
     """w1/w2 exports as the retired cohort follower admitted them."""
-    data = json.loads(ledger.read_bytes())
-    found = []
-    for entry in data["checkpoints"].values():
-        path = Path(entry["path"])
-        found.append(
-            Checkpoint(
-                updates=entry["updates"],
-                run=entry["job"],
-                artifact=ArtifactRef(
-                    uri=path.as_uri(),
-                    sha256=entry["sha256"],
-                    size_bytes=path.stat().st_size,
-                ),
-                coordinates=entry["coordinates"],
-            )
-        )
-    return found
+    return [Checkpoint.model_validate(entry) for entry in json.loads(path.read_bytes())]
+
+
+@dataclass(frozen=True)
+class Observed:
+    """What a segment's tracking folder shows: its exports and how it ended."""
+
+    checkpoints: list[CheckpointRecord]
+    # The latest attempt's `state.json` ("finished" or "failed"); None while it
+    # runs, or when it never finished tracking (killed, or its machine lost).
+    ended: str | None
 
 
 @dataclass(frozen=True)
 class SegmentSource:
-    """The segment's Etude run: its tracked checkpoints and its status."""
+    """One segment's Etude run, observed through its tracking bucket."""
 
     run: str
-    checkpoints: Callable[[], list[CheckpointRecord]]
-    status: Callable[[], Status]
+    observe: Callable[[], Observed]
 
 
 def segment_source(source: str, run: str) -> SegmentSource:
-    return SegmentSource(
-        run=run,
-        checkpoints=lambda: list(read(source, STAGE, run).checkpoints),
-        status=lambda: status(run),
-    )
+    # `read` takes a bare string for a local directory, so name the bucket's storage.
+    tracking = storage_from_uri(source)
+
+    def observe() -> Observed:
+        found = read(tracking, STAGE, run)
+        return Observed(
+            checkpoints=list(found.checkpoints),
+            ended=found.state.state if found.state is not None else None,
+        )
+
+    return SegmentSource(run=run, observe=observe)
 
 
 def admit(
-    state: EvalState, windows: Sequence[Checkpoint], segment: SegmentSource | None
+    state: EvalState,
+    windows: Sequence[Checkpoint],
+    segments: Sequence[SegmentSource],
+    *,
+    continues: bool = False,
 ) -> None:
-    """Record every known export and whether the segment's run has ended.
+    """Record every known export and whether the seed's last segment has ended.
 
-    Windows come first: the segment's initial export repeats w2's endpoint and
-    is skipped. Any terminal Etude state settles the segment; a run that stops
-    short of its target still ends the seed at its last tracked export, and its
-    state stays in `segment_outcome` for the report.
+    Windows come first, then segments in launch order: each segment's initial
+    export repeats its parent's endpoint and is skipped. A segment trained if
+    it exported past everything before it; one that ended without training is
+    an error and settles nothing, since its relaunch is a new run, named on
+    restart. A run whose machine is lost never records an end, so it also
+    waits for that restart. Earlier segments ending is the chain's normal
+    course. The last segment's end settles the seed at its last tracked export
+    (even short of its target, with its end kept in `segment_outcome` for the
+    report) unless `continues` declares a successor.
     """
     for checkpoint in windows:
         state.checkpoints.setdefault(checkpoint.updates, checkpoint)
-    if segment is None:
-        return
-    try:
-        found: Status | None = segment.status()
-        records = segment.checkpoints()
-        state.error = None
-    except Exception as error:
-        found, records = None, []
-        state.error = f"{segment.run}: {type(error).__name__}: {error}"
-    for record in records:
-        updates = int(record.at["updates"])
-        if updates not in state.checkpoints:
-            state.checkpoints[updates] = Checkpoint(
-                updates=updates,
-                run=segment.run,
-                artifact=record.artifact,
-                coordinates=dict(record.at),
-            )
-    if found is not None and found.done:
-        cause = f" ({found.cause})" if found.cause else ""
-        state.segment_outcome = f"{found.outcome}{cause}"
+    state.error = None
+    parent = max((checkpoint.updates for checkpoint in windows), default=-1)
+    ended: str | None = None
+    for segment in segments:
+        try:
+            observed = segment.observe()
+        except Exception as error:
+            state.error = f"{segment.run}: {type(error).__name__}: {error}"
+            return
+        ended, reached = observed.ended, -1
+        for record in observed.checkpoints:
+            updates = int(record.at["updates"])
+            reached = max(reached, updates)
+            if updates not in state.checkpoints:
+                state.checkpoints[updates] = Checkpoint(
+                    updates=updates,
+                    run=segment.run,
+                    artifact=record.artifact,
+                    coordinates=dict(record.at),
+                )
+        if ended is not None and reached <= parent:
+            state.error = f"{segment.run}: ended {ended} without training"
+            return
+        parent = max(parent, reached)
+    if ended is not None and not continues:
+        state.segment_outcome = ended
     if state.segment_outcome and state.checkpoints and state.endpoint is None:
         state.endpoint = max(state.checkpoints)
 
@@ -269,12 +307,17 @@ def checkpoint_model(checkpoint: Checkpoint) -> Model:
     """Seat a checkpoint with the inference code's version computed once.
 
     Keyed by its window or segment run and update (`RUN/checkpoints/uNNNNNN`),
-    so where its bytes lie is not part of what it is.
+    so where its bytes lie is not part of what it is. It declares where it
+    stood (`at`) and its learner (`LINE`), which Etude's report needs to draw
+    it on a curve: no Etude training run of this experiment recorded it. Like
+    `at`, `line` is part of no key.
     """
     return _inference().model(
         CheckpointRef(
             key=CheckpointKey(run=checkpoint.run, name=player(checkpoint.updates)),
             artifact=checkpoint.artifact,
+            at={"updates": checkpoint.updates},
+            line=LINE,
         ),
     )
 
@@ -310,6 +353,8 @@ class Unit:
     # The pair's older checkpoint; None for a heuristic grid.
     older: int | None
     matches: tuple[Match, ...]
+    # The pair's role in the design; None for a heuristic grid.
+    role: Role | None = None
 
 
 def h2h_groups(games: Sequence[H2HGame]) -> list[Group]:
@@ -370,7 +415,8 @@ def units(state: EvalState) -> list[Unit]:
             )
         )
     pairs = h2h_groups(h2h_schedule())
-    for pair in pair_design(rated, state.endpoint):
+    design = pair_design(rated, state.endpoint)
+    for pair in [*design, *halving_pairs(rated, design)]:
         found.append(
             Unit(
                 key=f"pair-{pair.newer:06d}-v-{pair.older:06d}",
@@ -379,6 +425,7 @@ def units(state: EvalState) -> list[Unit]:
                 matches=_matches(
                     "pair", (players[pair.newer], players[pair.older]), pairs
                 ),
+                role=pair.role,
             )
         )
     # Stable: a checkpoint's grid before its pairs, nearer older checkpoints first.
@@ -386,6 +433,25 @@ def units(state: EvalState) -> list[Unit]:
         found,
         key=lambda u: (u.newer, u.older is not None, -(u.older or 0)),
     )
+
+
+def halving_pairs(rated: tuple[int, ...], design: Sequence[Pair]) -> list[Pair]:
+    """Each rated checkpoint against the one at exactly half its updates.
+
+    Jack Heart's direction (2026-10-27): the score of `u` against `u/2` traces
+    what the second half of training gains at every scale. These pairs extend
+    MTG-183's played design only; pairs it already holds keep their role, and
+    the shared `pair_design` (MTG-181's too) is unchanged.
+    """
+    held = {(p.newer, p.older) for p in design}
+    return [
+        Pair(newer, newer // 2, "halving")
+        for newer in rated
+        if newer > 0
+        and newer % 2 == 0
+        and newer // 2 in rated
+        and (newer, newer // 2) not in held
+    ]
 
 
 # ---------------------------------------------------------------------------
@@ -408,6 +474,8 @@ class H2HRequest(BaseModel):
     older: LocalCheckpoint
     group: Group
     output: Path
+    card_evidence: Path | None = None
+    compute: EvalAllocation | None = None
 
 
 def _local(seated: Player) -> LocalCheckpoint:
@@ -440,17 +508,35 @@ def evidence_directory() -> Path:
 
 
 def play(match: Match) -> Tables:
-    """Play one grid row, a bounded worker process per group; see the module docstring."""
+    """Play one grid row, a bounded worker process per group; see the module docstring.
+
+    Each played group's card evidence lands in the eval run's folder (`CARDS`),
+    and its card tables are delivered beside `games`. A failed group has none.
+    """
     conditions = Conditions.model_validate(match.conditions)
     newer = _local(match.players[0])
     older = None if conditions.kind != "pair" else _local(match.players[1])
+    # The registered player IDs the workers seat, in Etude row order.
+    participants = ("model", "heuristic") if older is None else ("newer", "older")
+    cards = Path(os.environ[CARDS])
     rows: list[GameRow] = []
-    for group in conditions.groups:
-        if group.model_deck != conditions.deck:
-            raise ValueError("a group plays another deck than its match")
+    tables: dict[str, list[Row]] = {}
+    if any(group.model_deck != conditions.deck for group in conditions.groups):
+        raise ValueError("a group plays another deck than its match")
+
+    def run(group: Group) -> tuple[list[GameRow], dict[str, object] | None]:
         output = evidence_directory() / match.key / f"attempt-{time.time_ns()}"
-        rows += _play_group(group, newer, older, output)
-    return {"games": game_rows(rows, conditions.kind)}
+        return _play_group(group, newer, older, output, cards)
+
+    concurrent = int(os.environ.get(GROUP_WORKERS, "1"))
+    with ThreadPoolExecutor(max_workers=concurrent) as pool:
+        played_groups = list(pool.map(run, conditions.groups))
+    for played, trace in played_groups:
+        rows += played
+        if trace is not None:
+            for name, found in trace_card_tables(cards, trace, participants).items():
+                tables.setdefault(name, []).extend(found)
+    return {"games": game_rows(rows, conditions.kind), **tables}
 
 
 def _play_group(
@@ -458,8 +544,12 @@ def _play_group(
     newer: LocalCheckpoint,
     older: LocalCheckpoint | None,
     output: Path,
-) -> list[GameRow]:
-    """A group's rows from its worker, or invalid rows when it fails or times out."""
+    cards: Path,
+) -> tuple[list[GameRow], dict[str, object] | None]:
+    """A group's rows and arena trace from its worker; invalid rows and no trace
+    when it fails or times out."""
+    found = os.environ.get(COMPUTE)
+    compute = None if not found else EvalAllocation.model_validate_json(found)
     if older is None:
         command = ["experiments.elemental_grid"]
         request: BaseModel = Request(
@@ -468,10 +558,19 @@ def _play_group(
             training_seed=SEED,
             group=group,
             output=output,
+            card_evidence=cards,
+            compute=compute,
         )
     else:
         command = ["experiments.elemental_long_eval", "worker"]
-        request = H2HRequest(newer=newer, older=older, group=group, output=output)
+        request = H2HRequest(
+            newer=newer,
+            older=older,
+            group=group,
+            output=output,
+            card_evidence=cards,
+            compute=compute,
+        )
     try:
         completed = subprocess.run(
             [sys.executable, "-m", *command],
@@ -488,12 +587,12 @@ def _play_group(
     if failure is not None:
         output.mkdir(parents=True, exist_ok=True)
         (output / "failed.txt").write_text(failure)
-        return [_invalid(group, deal, failure) for deal in group.deals]
+        return [_invalid(group, deal, failure) for deal in group.deals], None
     assert completed is not None
     rows = [GameRow.model_validate(r) for r in json.loads(completed.stdout)]
     if sorted(r.deal for r in rows) != sorted(group.deals):
         raise ValueError("worker rows differ from the scheduled deals")
-    return rows
+    return rows, json.loads((output / "trace.json").read_text())
 
 
 def _invalid(group: Group, deal: int, failure: str) -> GameRow:
@@ -563,7 +662,6 @@ def play_h2h_group(request: H2HRequest) -> list[GameRow]:
     """
     import torch
 
-    from manabot.eval.match import play_cell
     from manabot.eval.models import EvaluationKey
     from manabot.infra.identity import canonical_sha256
     from manabot.infra.provenance import runtime_fingerprints
@@ -626,7 +724,7 @@ def play_h2h_group(request: H2HRequest) -> list[GameRow]:
         evaluation_compute_envelope_id="policy-cpu-one-thread-one-pass",
     )
     request.output.mkdir(parents=True, exist_ok=False)
-    rows, trace, replay = play_cell(
+    rows, trace, replay = group_cell(request.compute)(
         key=key,
         player_a=newer,
         player_b=older,
@@ -641,6 +739,7 @@ def play_h2h_group(request: H2HRequest) -> list[GameRow]:
         authored_matchup=matchup,
         matchup_mode="cross" if leg < 4 else "mirrors",
         legs=(leg,),
+        card_evidence_dir=request.card_evidence,
     )
     for name, value in (("rows", rows), ("trace", trace), ("replay", replay)):
         (request.output / f"{name}.json").write_text(json.dumps(value, indent=2))
@@ -705,8 +804,9 @@ def follow(
     directory: Path,
     until: float,
     *,
-    windows: Callable[[], list[Checkpoint]],
-    segment: SegmentSource | None,
+    windows: Sequence[Checkpoint],
+    segments: Sequence[SegmentSource],
+    continues: bool = False,
     storages: Sequence[Storage],
     play_match: Callable[[Match], Tables] = play,
     workers: int = WORKERS,
@@ -720,20 +820,21 @@ def follow(
         raise ValueError("a game schedule differs from its frozen digest")
     directory.mkdir(parents=True, exist_ok=True)
     os.environ[EVIDENCE] = str(directory / "arena")
+    track = directory / "track"
+    os.environ[CARDS] = str(run_directory(track, EXPERIMENT, RUN)[1].resolve())
     path = directory / "state.json"
     state = (
         EvalState.model_validate_json(path.read_bytes())
         if path.exists()
         else EvalState()
     )
-    track = directory / "track"
     known = eval_environment()
     polled = 0.0
     while time.time() < until and not state.done:
         if time.time() - polled > poll_seconds:
             polled = time.time()
             try:
-                admit(state, windows(), segment)
+                admit(state, windows, segments, continues=continues)
             except Exception as error:
                 state.error = f"admission: {type(error).__name__}: {error}"
             state.observed_at = time.time()
@@ -773,9 +874,15 @@ def main() -> None:
     parser.add_argument("--windows", type=Path, required=True)
     parser.add_argument("--storage", required=True)
     parser.add_argument("--etude-source")
-    parser.add_argument("--run")
+    # Segment runs in launch order; repeat for each segment.
+    parser.add_argument("--run", action="append", default=[])
+    parser.add_argument(
+        "--continues",
+        action="store_true",
+        help="another segment follows the last --run; its end does not settle the seed",
+    )
     args = parser.parse_args()
-    if (args.etude_source is None) != (args.run is None):
+    if (args.etude_source is None) != (not args.run):
         parser.error("--etude-source and --run go together")
     # Imported by name so spawned workers unpickle `play` from this module, not __main__.
     from experiments import elemental_long_eval as this
@@ -783,10 +890,9 @@ def main() -> None:
     this.follow(
         args.directory.expanduser().resolve(),
         args.until,
-        windows=lambda: this.window_checkpoints(args.windows.expanduser()),
-        segment=None
-        if args.run is None
-        else this.segment_source(args.etude_source, args.run),
+        windows=this.window_checkpoints(args.windows.expanduser()),
+        segments=[this.segment_source(args.etude_source, run) for run in args.run],
+        continues=args.continues,
         storages=[storage_from_uri(args.storage)],
         play_match=this.play,
     )
