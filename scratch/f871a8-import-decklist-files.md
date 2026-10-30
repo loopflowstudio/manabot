@@ -191,6 +191,9 @@ concepts: Study/advice `content_pack` identity, `semantic_pack_hash`,
 `semantic_pack_key`, Rust `ContentPack`. `study.py` reads `deck_source`.
 Check: debug cargo lib setups/vector_env/deck 27 + elemental/authored 7 passed,
 clippy/fmt clean; 166 focused Python passed; parity receipt rewritten.
+Compress: setup-transfer and recent-events messages/docs say world (main's
+`explicit content pack` messages kept: their tests are main's). learning-state/
+regimes 33 passed; parity receipt verifies.
 
 ## Remaining
 

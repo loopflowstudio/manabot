@@ -292,7 +292,7 @@ class LearningStateImport(Strict):
 
     `source_match` declares a deck switch: the parent trained on exactly this
     match and this segment continues on the regime's. Both must name the
-    agent's own semantic pack, so card identities and the learned programs
+    agent's own world, so card identities and the learned programs
     keep their meaning; only deck/sideboard composition changes. Omitted, the
     parent's match must equal the regime's.
 
@@ -704,9 +704,7 @@ class TrainingRegime(Strict):
                 "learning-state continuation requires one step-target stage without process recovery"
             )
         if self.agent.recent_events and self.agent.world is None:
-            raise ValueError(
-                "recent events require a semantic pack for public identities"
-            )
+            raise ValueError("recent events require a world for public identities")
         if self.agent.recent_events and not 1 <= self.observation.max_events <= 32:
             raise ValueError("public history v1 requires 1..32 event rows")
         # The model treatment owns this input contract; callers cannot silently
