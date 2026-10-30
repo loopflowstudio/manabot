@@ -11485,3 +11485,64 @@ fn appa_loyal_sky_bison_grants_flying_or_airbends_another_permanent() {
     settle(&mut s);
     assert_eq!(zone_of(&s, ogre_card), Some(ZoneType::Exile));
 }
+
+/// A dying nonland creature earthbends X, its power as it last existed; a
+/// land creature dying earthbends nothing.
+#[test]
+fn beifongs_bounty_hunters_earthbend_by_the_dead_creatures_last_power() {
+    let mut s = five_color_setup(&["Beifong's Bounty Hunters", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(0, "Beifong's Bounty Hunters");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    until_end_of_turn(
+        &mut s,
+        ogre,
+        Modification::ModifyPt {
+            power: 1,
+            toughness: 0,
+        },
+    );
+    let ogre = card_of(&s, ogre);
+    s.game_mut().move_card(ogre, ZoneType::Graveyard);
+    resolve_until_target(&mut s);
+    assert!(s.choose_target(Target::Permanent(forest)));
+    settle(&mut s);
+    assert_eq!(counters(&s, forest), 3, "pumped power 3");
+
+    let forest_card = card_of(&s, forest);
+    s.game_mut().move_card(forest_card, ZoneType::Graveyard);
+    resolve_until_priority(&mut s);
+    let lands = s.battlefield_permanents_named(0, "Forest");
+    assert!(
+        lands.iter().all(|land| counters(&s, *land) == 0),
+        "a land creature earthbends nothing"
+    );
+}
+
+/// Hei Bai grows by sacrificing another permanent and hands its counters to
+/// a creature you control as it leaves.
+#[test]
+fn hei_bai_feeds_on_a_sacrifice_and_passes_its_counters_on_when_it_leaves() {
+    let mut s = five_color_setup(&["Hei Bai, Spirit of Balance", "Gray Ogre"]);
+    let fodder = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let heir = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    enter_battlefield(&mut s, "Hei Bai, Spirit of Balance");
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let hei_bai = s.battlefield_permanents_named(0, "Hei Bai, Spirit of Balance")[0];
+    assert!(
+        !offered_cards(&s).contains(&card_of(&s, hei_bai)),
+        "another"
+    );
+    let fodder = card_of(&s, fodder);
+    select_card(&mut s, fodder);
+    settle(&mut s);
+    assert_eq!(counters(&s, hei_bai), 2);
+
+    let hei_bai_card = card_of(&s, hei_bai);
+    s.game_mut().move_card(hei_bai_card, ZoneType::Hand);
+    resolve_until_target(&mut s);
+    assert_eq!(offered_targets(&s), vec![Target::Permanent(heir)]);
+    assert!(s.choose_target(Target::Permanent(heir)));
+    settle(&mut s);
+    assert_eq!(counters(&s, heir), 2);
+}

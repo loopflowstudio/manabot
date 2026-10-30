@@ -486,6 +486,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::CastLibraryTopFree => "Effect::CastLibraryTopFree",
         Effect::WhenYouDo { .. } => "Effect::WhenYouDo",
         Effect::TriggerModes { .. } => "Effect::TriggerModes",
+        Effect::PutSourceCountersOnTarget { .. } => "Effect::PutSourceCountersOnTarget",
         Effect::ExileSourceSpell => "Effect::ExileSourceSpell",
         Effect::DestroyCreaturesLosingAbilities { .. } => "Effect::DestroyCreaturesLosingAbilities",
         Effect::AttachSourceTo { .. } => "Effect::AttachSourceTo",
@@ -509,7 +510,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 87;
+const EFFECT_VARIANTS: usize = 88;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -747,6 +748,9 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::WhenYouDo { effects: draw() },
         Effect::TriggerModes {
             modes: vec![draw(), vec![Effect::Scry { count: 1 }]],
+        },
+        Effect::PutSourceCountersOnTarget {
+            target: TargetSpec::CreatureYouControl,
         },
         Effect::ExileSourceSpell,
         Effect::DestroyCreaturesLosingAbilities {

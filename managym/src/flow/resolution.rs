@@ -36,6 +36,15 @@ impl Game {
     fn effect_value(&self, value: &EffectValue, frame: &EffectFrame) -> i32 {
         match value {
             EffectValue::X => i32::from(frame.x),
+            EffectValue::TriggeringPower => match frame.context_target {
+                Some(Target::Permanent(id)) if self.state.permanents[id].is_some() => {
+                    self.effective_power(id)
+                }
+                Some(Target::Permanent(id)) => {
+                    self.departed_permanent_lki(id).map_or(0, |lki| lki.power)
+                }
+                _ => 0,
+            },
             EffectValue::ExcessDamage => frame.excess_damage,
             EffectValue::SourcePower => self
                 .source_permanent_id(frame)
@@ -63,6 +72,7 @@ impl Game {
             EffectValue::X
             | EffectValue::ExcessDamage
             | EffectValue::SourcePower
+            | EffectValue::TriggeringPower
             | EffectValue::AttackingMatching { .. } => 0,
             EffectValue::CreaturesWithCounters => self
                 .battlefield_permanents(controller)
@@ -1275,6 +1285,17 @@ impl Game {
                 let count = self.effect_value(count, frame);
                 if let Some(permanent_id) = self.source_permanent_id(frame) {
                     self.put_counters(permanent_id, *kind, count, frame.controller);
+                }
+                None
+            }
+            Effect::PutSourceCountersOnTarget { .. } => {
+                let Some(Target::Permanent(permanent_id)) = self.present_primary_target(frame)
+                else {
+                    return None;
+                };
+                let counters = self.object_lki(frame.source_ref?)?.counters;
+                for (kind, count) in counters.iter() {
+                    self.put_counters(permanent_id, kind, count, frame.controller);
                 }
                 None
             }

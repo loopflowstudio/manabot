@@ -394,6 +394,7 @@ fn value_description(value: &EffectValue) -> String {
         }
         EffectValue::ExcessDamage => "the excess damage dealt this way".into(),
         EffectValue::SourcePower => "this permanent's power".into(),
+        EffectValue::TriggeringPower => "that creature's power".into(),
         EffectValue::AttackingMatching { predicate } => format!(
             "the number of attacking {} you control",
             predicate_description(predicate, "creatures")
@@ -547,6 +548,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
             "Choose one — {}",
             modes.iter().map(|mode| effects_description(mode)).collect::<Vec<_>>().join("; or ")
         ),
+        PutSourceCountersOnTarget { .. } => "Put its counters on target creature you control".into(),
         WhenYouDo { effects } => format!("When you do: {}", effects_description(effects)),
         CastLibraryTopFree => "Look at the top card of your library. You may cast it without paying its mana cost".into(),
         CastFromHandFree { predicate } => format!("You may cast a {} from your hand without paying its mana cost", predicate_description(predicate, "spell")),

@@ -84,6 +84,8 @@ impl Game {
             animated_creature: self.permanent_is_animated(permanent_id),
             abilities_lost: self.has_lost_abilities(permanent_id),
             dealt_damage_this_turn: permanent.dealt_damage_this_turn,
+            power: self.effective_power(permanent_id),
+            counters: permanent.counters,
             object_ref,
             card,
             from_zone: ZoneType::Battlefield,

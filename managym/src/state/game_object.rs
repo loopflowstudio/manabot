@@ -79,6 +79,12 @@ pub struct ObjectLki {
     /// It had been dealt damage this turn.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub dealt_damage_this_turn: bool,
+    /// Its power as it last existed ("that creature's power").
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub power: i32,
+    /// Its counters as it last existed ("put its counters on ...").
+    #[serde(skip_serializing_if = "crate::state::permanent::Counters::is_empty")]
+    pub counters: crate::state::permanent::Counters,
     pub object_ref: ObjectRef,
     pub card: CardId,
     pub from_zone: ZoneType,

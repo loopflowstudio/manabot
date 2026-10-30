@@ -564,22 +564,27 @@ impl Game {
             let context = if self.state.cards[source_card].abilities[ability_index]
                 .effects()
                 .iter()
-                .any(|effect| {
-                    matches!(
-                        effect,
-                        crate::state::ability::Effect::PutCountersOnTriggeringPermanent { .. }
-                            | crate::state::ability::Effect::ApplyContinuous {
-                                affected: crate::state::ability::AffectedSpec::TriggeringPermanent,
-                                ..
-                            }
-                    )
-                }) {
+                .any(Effect::reads_triggering_permanent)
+            {
                 match event {
                     GameEvent::CardMoved {
                         card,
                         to: ZoneType::Battlefield,
                         ..
                     } => self.state.card_to_permanent[*card].map(Target::Permanent),
+                    // A departed permanent is read from its last known
+                    // information, found by the slot it occupied.
+                    GameEvent::CardMoved {
+                        card,
+                        from: Some(ZoneType::Battlefield),
+                        ..
+                    } => self
+                        .state
+                        .object_lki
+                        .values()
+                        .filter(|lki| lki.card == *card)
+                        .max_by_key(|lki| lki.object_ref)
+                        .map(|lki| Target::Permanent(lki.permanent)),
                     GameEvent::AttackersDeclared { attackers, .. } if attackers.len() == 1 => {
                         Some(Target::Permanent(attackers[0]))
                     }

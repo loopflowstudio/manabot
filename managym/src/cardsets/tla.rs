@@ -59,6 +59,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         badgermole_cub(),
         barrels_of_blasting_jelly(),
         beetle_headed_merchants(),
+        beifong_s_bounty_hunters(),
         benevolent_river_spirit(),
         bitter_work(),
         boar_q_pine(),
@@ -128,6 +129,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         hama_the_bloodbender(),
         haru_hidden_talent(),
         heartless_act(),
+        hei_bai_spirit_of_balance(),
         hermitic_herbalist(),
         hog_monkey(),
         honest_work(),
@@ -1296,6 +1298,37 @@ fn beetle_headed_merchants() -> CardDefinition {
                         kind: CounterKind::PlusOnePlusOne,
                     },
                 ],
+            }],
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn beifong_s_bounty_hunters() -> CardDefinition {
+    let text_box = "Whenever a nonland creature you control dies, earthbend X, where X is that creature's power. (Target land you control becomes a 0/0 creature with haste that's still a land. Put X +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)";
+
+    CardDefinition {
+        key: "tla.beifong_s_bounty_hunters",
+        scryfall_id: "4f88ec3a-44a7-4ae5-a68c-24294dabaeed",
+        name: "Beifong's Bounty Hunters".into(),
+        mana_cost: Some(ManaCost::parse("{2}{B}{G}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Human".into(), "Mercenary".into()],
+        power: Some(4),
+        toughness: Some(4),
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::Dies {
+                subject: TriggerSubject::AnyYouControl(CardPredicate {
+                    card_type: Some(CardType::Creature),
+                    not_card_types: vec![CardType::Land],
+                    ..Default::default()
+                }),
+            },
+            intervening_if: None,
+            effects: vec![Effect::Earthbend {
+                count: EffectValue::TriggeringPower,
+                target: TargetSpec::LandYouControl,
             }],
         }],
         text_box: text_box.into(),
@@ -3844,6 +3877,62 @@ fn heartless_act() -> CardDefinition {
                 }],
             ],
         }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn hei_bai_spirit_of_balance() -> CardDefinition {
+    let text_box = "Whenever Hei Bai enters or attacks, you may sacrifice another creature or artifact. If you do, put two +1/+1 counters on Hei Bai.\nWhen Hei Bai leaves the battlefield, put its counters on target creature you control.";
+    let feed = || {
+        vec![Effect::MaySacrifice {
+            predicate: CardPredicate {
+                card_types_any: vec![CardType::Creature, CardType::Artifact],
+                ..Default::default()
+            },
+            another: true,
+            then: vec![Effect::PutCountersOnSource {
+                count: EffectValue::Fixed(2),
+                kind: CounterKind::PlusOnePlusOne,
+            }],
+        }]
+    };
+
+    CardDefinition {
+        key: "tla.hei_bai_spirit_of_balance",
+        scryfall_id: "060d24e0-1567-41f1-ae8c-2d3b1834df3c",
+        name: "Hei Bai, Spirit of Balance".into(),
+        mana_cost: Some(ManaCost::parse("{2}{W/B}{W/B}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Bear".into(), "Spirit".into()],
+        power: Some(3),
+        toughness: Some(3),
+        abilities: vec![
+            Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: feed(),
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::Attacks {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: feed(),
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::LeavesTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::PutSourceCountersOnTarget {
+                    target: TargetSpec::CreatureYouControl,
+                }],
+            },
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }

@@ -310,6 +310,10 @@ pub enum EffectValue {
     },
     /// Permanents `controller` has sacrificed this turn.
     PermanentsSacrificedThisTurn,
+    /// The power of the permanent whose event fired the trigger, from its
+    /// last known information once it has left ("where X is that
+    /// creature's power").
+    TriggeringPower,
     /// Half the inner value, rounded down ("half X cards, rounded down").
     Half(Box<EffectValue>),
 }
@@ -636,6 +640,12 @@ pub enum Effect {
         count: EffectValue,
         kind: CounterKind,
     },
+    /// "Put its counters on [target]": every counter the source had as it
+    /// last existed, kind by kind, on the target (a leaves-the-battlefield
+    /// ability, CR 603.10a).
+    PutSourceCountersOnTarget {
+        target: TargetSpec,
+    },
     /// Put `count` counters of `kind` on the target.
     PutCounters {
         count: i32,
@@ -942,6 +952,26 @@ impl Default for Effect {
 }
 
 impl Effect {
+    /// Whether the effect reads the permanent whose event fired its
+    /// trigger, which the trigger then keeps as its context.
+    pub fn reads_triggering_permanent(&self) -> bool {
+        match self {
+            Effect::PutCountersOnTriggeringPermanent { .. }
+            | Effect::ApplyContinuous {
+                affected: AffectedSpec::TriggeringPermanent,
+                ..
+            } => true,
+            Effect::Earthbend { count: value, .. }
+            | Effect::DrawCards { count: value }
+            | Effect::GainLifeValue { amount: value }
+            | Effect::DealDamageValue { amount: value, .. }
+            | Effect::PutCountersValue { count: value, .. } => {
+                *value == EffectValue::TriggeringPower
+            }
+            _ => false,
+        }
+    }
+
     /// One immediate mana output per mode, preserving the authored color order.
     pub(crate) fn mana_choice(outputs: impl IntoIterator<Item = Mana>) -> Self {
         Self::Modal {
@@ -1018,7 +1048,9 @@ impl Effect {
             Effect::ReturnToHand { target } => Some(target),
             Effect::DealDamage { target, .. } => Some(target),
             Effect::CounterSpell { target } => Some(target),
-            Effect::PutCounters { target, .. } => Some(target),
+            Effect::PutCounters { target, .. } | Effect::PutSourceCountersOnTarget { target } => {
+                Some(target)
+            }
             Effect::Earthbend { target, .. } => Some(target),
             Effect::ExileUntilSourceLeaves { target } => Some(target),
             Effect::UntapTarget { target }
