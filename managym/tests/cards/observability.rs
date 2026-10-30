@@ -61,8 +61,8 @@ use managym::{
     cards::tokens::{definition_tokens, learning_catalog, name_value, TokenKind},
     state::{
         ability::{
-            Ability, AffectedSpec, Condition, DelayedEvent, Effect, EffectValue, LinkedChooser,
-            LinkedGrant, PaymentCost, PlayerSelector, TargetRequirement, TargetSpec,
+            Ability, AffectedSpec, Condition, DelayedEvent, Effect, EffectValue, GraveyardReturn,
+            LinkedChooser, LinkedGrant, PaymentCost, PlayerSelector, TargetRequirement, TargetSpec,
             TriggerCondition, TriggerSubject,
         },
         card::{
@@ -257,6 +257,14 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
             "Modification::CantBlock",
             Seen::Via("the action tensor omits its blocks"),
         ),
+        Modification::DoesntUntap => (
+            "Modification::DoesntUntap",
+            Seen::Via("its effect fact row and the tapped column after the untap step"),
+        ),
+        Modification::LoseKeywords(_) => (
+            "Modification::LoseKeywords",
+            Seen::Via("keyword_columns: effective keywords"),
+        ),
         Modification::ExileIfWouldDie => ("Modification::ExileIfWouldDie", Seen::Permanent(23)),
         Modification::KeepUnspentMana(_) => (
             "Modification::KeepUnspentMana",
@@ -297,19 +305,25 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
         permanent(Modification::pump(2, 1)),
         permanent(Modification::CantBeBlocked),
         permanent(Modification::CantBlock),
+        permanent(Modification::DoesntUntap),
+        permanent(Modification::LoseKeywords(Keywords {
+            hexproof: true,
+            ..Default::default()
+        })),
         permanent(Modification::ExileIfWouldDie),
         (true, Modification::KeepUnspentMana(Color::Red)),
         (true, Modification::NoMaximumHandSize),
     ]
 }
 
-const MODIFICATION_VARIANTS: usize = 12;
+const MODIFICATION_VARIANTS: usize = 14;
 
 /// The fact-row duration code of each `EffectDuration`; no wildcard.
 fn duration_code(duration: EffectDuration) -> f32 {
     match duration {
         EffectDuration::EndOfTurn => 1.0,
         EffectDuration::Indefinite => 2.0,
+        EffectDuration::WhileYouControlSource => 3.0,
     }
 }
 
@@ -322,11 +336,12 @@ fn affected_token(affected: &AffectedSpec) -> &'static str {
         AffectedSpec::TriggeringPermanent => "AffectedSpec::TriggeringPermanent",
         AffectedSpec::EachYouControl(_) => "AffectedSpec::EachYouControl",
         AffectedSpec::EachMatching(_) => "AffectedSpec::EachMatching",
+        AffectedSpec::EachOpponentControls(_) => "AffectedSpec::EachOpponentControls",
         AffectedSpec::EachTargetPlayerControls(_) => "AffectedSpec::EachTargetPlayerControls",
     }
 }
 
-fn affected_witnesses() -> [AffectedSpec; 7] {
+fn affected_witnesses() -> [AffectedSpec; 8] {
     [
         AffectedSpec::You,
         AffectedSpec::Source,
@@ -334,6 +349,7 @@ fn affected_witnesses() -> [AffectedSpec; 7] {
         AffectedSpec::TriggeringPermanent,
         AffectedSpec::EachYouControl(CardPredicate::creature()),
         AffectedSpec::EachMatching(CardPredicate::creature()),
+        AffectedSpec::EachOpponentControls(CardPredicate::creature()),
         AffectedSpec::EachTargetPlayerControls(CardPredicate::creature()),
     ]
 }
@@ -509,6 +525,8 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ForPlayer { .. } => "Effect::ForPlayer",
         Effect::RestoreController(_) => "Effect::RestoreController",
         Effect::EachPlayerKeepsCreatures { .. } => "Effect::EachPlayerKeepsCreatures",
+        Effect::ExileSourceFromGraveyard { .. } => "Effect::ExileSourceFromGraveyard",
+        Effect::MayDiscard { .. } => "Effect::MayDiscard",
         Effect::GainLifeValue { .. } => "Effect::GainLifeValue",
         Effect::AddOneColorManaValue { .. } => "Effect::AddOneColorManaValue",
         Effect::AddManaValue { .. } => "Effect::AddManaValue",
@@ -520,7 +538,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 96;
+const EFFECT_VARIANTS: usize = 98;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -552,7 +570,7 @@ fn effect_witnesses() -> Vec<Effect> {
             target: TargetSpec::GraveyardCardYouOwn {
                 predicate: creature(),
             },
-            tapped_onto_battlefield: false,
+            to: GraveyardReturn::Hand,
         },
         Effect::MillCards {
             count: EffectValue::Fixed(2),
@@ -797,6 +815,12 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::RestoreController(PlayerId(0)),
         Effect::EachPlayerKeepsCreatures { max_total_power: 4 },
+        Effect::ExileSourceFromGraveyard {
+            then: vec![Effect::Discard],
+        },
+        Effect::MayDiscard {
+            then: vec![Effect::Discard],
+        },
         Effect::GainLifeValue {
             amount: EffectValue::ExcessDamage,
         },
@@ -962,6 +986,8 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::SourceTapped => "Condition::SourceTapped",
         Condition::TargetCardExiled(_) => "Condition::TargetCardExiled",
         Condition::TriggeringHadCounters => "Condition::TriggeringHadCounters",
+        Condition::DiscardedThisWay(_) => "Condition::DiscardedThisWay",
+        Condition::TriggeringSpellMatches(_) => "Condition::TriggeringSpellMatches",
     }
 }
 
@@ -993,6 +1019,8 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::SourceTapped,
         Condition::TargetCardExiled(CardPredicate::creature()),
         Condition::TriggeringHadCounters,
+        Condition::DiscardedThisWay(CardPredicate::creature()),
+        Condition::TriggeringSpellMatches(CardPredicate::subtype("Lesson")),
     ]
 }
 

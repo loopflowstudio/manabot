@@ -258,6 +258,8 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         return f"base power/toughness {power}/{toughness}"
     if modification == "AddKeywords":
         return ", ".join(keyword.replace("_", " ") for keyword in effect.keywords)
+    if modification == "LoseKeywords":
+        return "loses " + ", ".join(keyword.replace("_", " ") for keyword in effect.keywords)
     if modification == "AddSubtypes":
         return "is also " + ", ".join(effect.subtypes)
     phrases = {
@@ -266,6 +268,7 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         "Firebending": f"firebending {effect.amount}",
         "CantBeBlocked": "can't be blocked",
         "CantBlock": "can't block",
+        "DoesntUntap": "doesn't untap during its controller's untap step",
         "ExileIfWouldDie": "exiled instead if it would die",
         "KeepUnspentMana": f"keeps unspent {(effect.color or '').lower()} mana",
         "NoMaximumHandSize": "no maximum hand size",
@@ -714,7 +717,10 @@ class _Renderer:
 
     def _effect(self, effect: managym.ContinuousEffect) -> str:
         """One continuous-effect record: how long, what, and its source."""
-        until = "until end of turn: " if effect.duration == "EndOfTurn" else ""
+        until = {
+            "EndOfTurn": "until end of turn: ",
+            "WhileYouControlSource": "while its source's controller controls it: ",
+        }.get(effect.duration, "")
         source = (
             f" (from {self.definition(effect.source_registry_key)})"
             if effect.source_registry_key is not None

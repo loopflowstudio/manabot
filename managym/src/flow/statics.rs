@@ -684,6 +684,16 @@ impl Game {
                 },
                 _ => false,
             },
+            Condition::DiscardedThisWay(predicate) => frame.is_some_and(|frame| {
+                frame
+                    .this_way
+                    .iter()
+                    .any(|card| predicate.matches_card(&self.state.cards[*card]))
+            }),
+            Condition::TriggeringSpellMatches(predicate) => matches!(
+                frame.and_then(|frame| frame.context_target),
+                Some(Target::StackSpell(card)) if predicate.matches_card(&self.state.cards[card])
+            ),
             Condition::TargetCardExiled(predicate) => {
                 let Some(Target::GraveyardCard(object)) =
                     frame.and_then(EffectFrame::primary_target)
@@ -740,6 +750,7 @@ impl Game {
         let lost = self.ability_loss_timestamp(permanent_id);
         self.recorded_keywords(permanent_id)
             .union(&self.static_keyword_bonus(permanent_id, lost))
+            .without(&self.lost_keywords(permanent_id))
     }
 
     /// Whether the permanent can pay a {T} cost or attack (CR 302.6): it is

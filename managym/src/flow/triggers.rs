@@ -104,6 +104,12 @@ impl Game {
             || duplicate
             || (requirement.another && self.is_trigger_source(trigger, target))
             || !self.target_is_legal(target, &requirement.spec, player)
+            || !self.within_source_bound(
+                target,
+                &requirement.spec,
+                trigger.source_card,
+                trigger.source_ref,
+            )
             || self
                 .excluded_source(trigger, requirement)
                 .is_some_and(|id| target == Target::Permanent(id))
@@ -217,6 +223,14 @@ impl Game {
                     .legal_targets_for_spec(&requirement.spec, trigger.controller)
                     .into_iter()
                     .filter(|target| source.is_none_or(|id| *target != Target::Permanent(id)))
+                    .filter(|target| {
+                        self.within_source_bound(
+                            *target,
+                            &requirement.spec,
+                            trigger.source_card,
+                            trigger.source_ref,
+                        )
+                    })
                     .filter(|target| {
                         !(requirement.another && self.is_trigger_source(&trigger, *target))
                     })
@@ -427,7 +441,8 @@ impl Game {
         controller: PlayerId,
     ) -> Vec<Target> {
         let mut candidates: Vec<Target> = match target_spec {
-            TargetSpec::GraveyardCardYouOwn { .. } => self
+            TargetSpec::GraveyardCardYouOwn { .. }
+            | TargetSpec::GraveyardCardYouOwnWithinSourcePower { .. } => self
                 .state
                 .zones
                 .zone_cards(ZoneType::Graveyard, controller)
@@ -611,15 +626,17 @@ impl Game {
             {
                 self.spend_once_each_turn((source_lki.object_ref, ability_index));
             }
-            let reads_triggering_permanent = match &granted {
-                Some(effects) => effects.iter().any(Effect::reads_triggering_permanent),
-                None => self.state.cards[source_card].abilities[ability_index]
-                    .effects()
-                    .iter()
-                    .any(Effect::reads_triggering_permanent),
+            let effects = match &granted {
+                Some(effects) => effects.as_slice(),
+                None => self.state.cards[source_card].abilities[ability_index].effects(),
             };
+            let reads_triggering_permanent = effects.iter().any(Effect::reads_triggering_permanent);
+            let asks_triggering_spell = effects.iter().any(Effect::asks_triggering_spell);
             let context = if reads_triggering_permanent {
                 self.triggering_permanent(event)
+            } else if let (true, GameEvent::SpellCast { card, .. }) = (asks_triggering_spell, event)
+            {
+                Some(Target::StackSpell(*card))
             } else {
                 self.trigger_context_for_event(event)
             };
@@ -752,10 +769,7 @@ impl Game {
             if amount == 0 {
                 continue;
             }
-            let (Some(source), Some(lki)) = (
-                self.permanent_object_ref(attacker),
-                self.snapshot_current_permanent(card),
-            ) else {
+            let Some(source) = self.permanent_object_ref(attacker) else {
                 continue;
             };
             let mut mana = Mana::default();
@@ -764,7 +778,7 @@ impl Game {
                 mana,
                 until_end_of_combat: true,
             };
-            self.enqueue_delayed_trigger(source, lki, controller, vec![effect]);
+            self.enqueue_inline_trigger(card, Some(source), controller, vec![effect], None);
         }
     }
 
@@ -834,17 +848,37 @@ impl Game {
         }
     }
 
-    /// Put a delayed trigger's occurrence in the waiting list, with its
-    /// source's last known information when that was a battlefield object.
+    /// Put a delayed trigger's occurrence in the waiting list.
     pub(crate) fn fire_delayed_trigger(
         &mut self,
         trigger: &DelayedTrigger,
         context: Option<Target>,
     ) {
-        let source_lki = trigger.source_ref.and_then(|source| {
+        self.enqueue_inline_trigger(
+            trigger.source_card,
+            trigger.source_ref,
+            trigger.controller,
+            trigger.effects.clone(),
+            context,
+        );
+    }
+
+    /// Put an occurrence with inline effects (no `Card::abilities` entry to
+    /// reference: a delayed, reflexive or granted-firebending ability) in the
+    /// waiting list, with its source's last known information when that was
+    /// a battlefield object.
+    pub(crate) fn enqueue_inline_trigger(
+        &mut self,
+        source_card: CardId,
+        source_ref: Option<ObjectRef>,
+        controller: PlayerId,
+        effects: Vec<Effect>,
+        context: Option<Target>,
+    ) {
+        let source_lki = source_ref.and_then(|source| {
             self.object_lki(source).cloned().or_else(|| {
-                (self.current_object_ref(trigger.source_card) == Some(source))
-                    .then(|| self.snapshot_current_permanent(trigger.source_card))
+                (self.current_object_ref(source_card) == Some(source))
+                    .then(|| self.snapshot_current_permanent(source_card))
                     .flatten()
             })
         });
@@ -852,17 +886,17 @@ impl Game {
             targets: Vec::new(),
             target_req_indices: Vec::new(),
             requirement_index: 0,
-            source_card: trigger.source_card,
-            source_ref: trigger.source_ref,
+            source_card,
+            source_ref,
             source_lki,
             ability_index: 0,
-            controller: trigger.controller,
+            controller,
             id: TriggerId(self.state.trigger_enqueue_counter),
             ordering_class: TriggerOrderingClass::Ordinary,
             context,
             player: None,
             x: 0,
-            inline_effects: Some(trigger.effects.clone()),
+            inline_effects: Some(effects),
         });
         self.state.trigger_enqueue_counter = self
             .state
@@ -915,38 +949,6 @@ impl Game {
                 .checked_add(1)
                 .expect("trigger occurrence identity exhausted");
         }
-    }
-
-    /// Enqueue a fired delayed trigger with inline effects (no
-    /// `Card::abilities` entry to reference).
-    pub(crate) fn enqueue_delayed_trigger(
-        &mut self,
-        source: ObjectRef,
-        source_lki: ObjectLki,
-        controller: PlayerId,
-        effects: Vec<crate::state::ability::Effect>,
-    ) {
-        self.state.pending_triggers.push(PendingTrigger {
-            targets: Vec::new(),
-            target_req_indices: Vec::new(),
-            requirement_index: 0,
-            source_card: source_lki.card,
-            source_ref: Some(source),
-            source_lki: Some(source_lki),
-            ability_index: 0,
-            controller,
-            id: TriggerId(self.state.trigger_enqueue_counter),
-            ordering_class: TriggerOrderingClass::Ordinary,
-            context: None,
-            player: None,
-            x: 0,
-            inline_effects: Some(effects),
-        });
-        self.state.trigger_enqueue_counter = self
-            .state
-            .trigger_enqueue_counter
-            .checked_add(1)
-            .expect("trigger occurrence identity exhausted");
     }
 
     /// Cards whose triggered abilities can see this event: every permanent on

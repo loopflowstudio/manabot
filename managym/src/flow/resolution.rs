@@ -17,11 +17,11 @@ use crate::{
     },
     state::{
         ability::{
-            Ability, AffectedSpec, DelayedEvent, Effect, EffectValue, LinkedChooser, PaymentCost,
-            PlayerSelector, TargetRequirement, TargetSpec,
+            Ability, AffectedSpec, DelayedEvent, Effect, EffectValue, GraveyardReturn,
+            LinkedChooser, PaymentCost, PlayerSelector, TargetRequirement, TargetSpec,
         },
         effect::{Affected, EffectDuration, Modification},
-        game_object::{CardId, ObjectId, PermanentId, PlayerId, Target},
+        game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
         permanent::{CounterKind, Permanent},
         predicate::CardPredicate,
         stack_object::{
@@ -153,6 +153,7 @@ impl Game {
             x: spell.x,
             excess_damage: 0,
             created: None,
+            this_way: Vec::new(),
             targets,
             active_requirement: 0,
             context_target: None,
@@ -239,6 +240,7 @@ impl Game {
             x: ability.x,
             excess_damage: 0,
             created: None,
+            this_way: Vec::new(),
             targets,
             active_requirement: 0,
             context_target: attached,
@@ -329,6 +331,7 @@ impl Game {
             x: triggered.x,
             excess_damage: 0,
             created: None,
+            this_way: Vec::new(),
             targets,
             active_requirement: 0,
             context_target: triggered.context,
@@ -495,6 +498,9 @@ impl Game {
             AffectedSpec::EachYouControl(predicate) => {
                 self.each_controlled_matching(frame.controller, predicate)
             }
+            AffectedSpec::EachOpponentControls(predicate) => {
+                self.each_controlled_matching(PlayerId(1 - frame.controller.0), predicate)
+            }
             AffectedSpec::EachMatching(predicate) => [PlayerId(0), PlayerId(1)]
                 .into_iter()
                 .flat_map(|player| self.each_controlled_matching(player, predicate))
@@ -538,8 +544,20 @@ impl Game {
             } => {
                 let affected = self.resolve_affected(affected, frame);
                 let modification = modification.resolve(|value| self.effect_value(value, frame));
-                self.apply_continuous(
+                // "For as long as you control [this]" with this gone or
+                // already someone else's lasts no time at all.
+                let source_object = frame.source_ref.filter(|source| {
+                    self.lookup_current_permanent(*source)
+                        .ok()
+                        .and_then(|id| self.state.permanents[id].as_ref())
+                        .is_some_and(|permanent| permanent.controller == frame.controller)
+                });
+                if *duration == EffectDuration::WhileYouControlSource && source_object.is_none() {
+                    return None;
+                }
+                self.record_continuous(
                     frame.source,
+                    source_object,
                     frame.controller,
                     affected,
                     modification,
@@ -600,25 +618,38 @@ impl Game {
                 self.gain_life(frame.controller, amount);
                 None
             }
-            Effect::ReturnGraveyardTarget {
-                tapped_onto_battlefield,
-                ..
-            } => {
+            Effect::ReturnGraveyardTarget { to, .. } => {
                 let target = self.present_primary_target(frame)?;
                 if let Target::GraveyardCard(object) = target {
                     let card = CardId::from(object.entity);
-                    if *tapped_onto_battlefield {
-                        self.move_card_with_entry(
-                            card,
-                            ZoneType::Battlefield,
-                            crate::flow::proposed_event::ZoneEntry {
-                                tapped: true,
-                                ..crate::flow::proposed_event::ZoneEntry::default()
-                            },
-                        );
-                    } else {
-                        self.reveal_card_to_hand(card, frame.controller);
+                    match to {
+                        GraveyardReturn::Hand => self.reveal_card_to_hand(card, frame.controller),
+                        GraveyardReturn::Battlefield | GraveyardReturn::BattlefieldTapped => {
+                            self.move_card_with_entry(
+                                card,
+                                ZoneType::Battlefield,
+                                crate::flow::proposed_event::ZoneEntry {
+                                    tapped: *to == GraveyardReturn::BattlefieldTapped,
+                                    controller: Some(frame.controller),
+                                    ..crate::flow::proposed_event::ZoneEntry::default()
+                                },
+                            );
+                        }
                     }
+                }
+                None
+            }
+            Effect::ExileSourceFromGraveyard { then } => {
+                let card = frame.source?;
+                let source = frame.source_ref?;
+                // The card the dying object became (CR 400.7): its next
+                // incarnation, still in the graveyard.
+                let current = self.current_object_ref(card)?;
+                if current.incarnation.0 == source.incarnation.0 + 1
+                    && self.state.zones.zone_of(card) == Some(ZoneType::Graveyard)
+                {
+                    self.move_card(card, ZoneType::Exile);
+                    frame.prepend_effects(then.iter().cloned());
                 }
                 None
             }
@@ -742,6 +773,7 @@ impl Game {
                     .then_some(Decision::Discard {
                         player,
                         remaining: *count,
+                        then: None,
                     })
             }
             Effect::Destroy { .. } | Effect::Exile { .. } => {
@@ -1144,23 +1176,32 @@ impl Game {
                 if_paid.clone(),
                 if_declined.clone(),
             ))),
-            Effect::Discard => (!self
-                .state
-                .zones
-                .zone_cards(ZoneType::Hand, frame.controller)
-                .is_empty())
-            .then_some(Decision::Discard {
-                player: frame.controller,
-                remaining: 1,
-            }),
+            Effect::Discard | Effect::MayDiscard { .. } => {
+                frame.this_way.clear();
+                (!self
+                    .state
+                    .zones
+                    .zone_cards(ZoneType::Hand, frame.controller)
+                    .is_empty())
+                .then(|| Decision::Discard {
+                    player: frame.controller,
+                    remaining: 1,
+                    then: match effect {
+                        Effect::MayDiscard { then } => Some(then.clone()),
+                        _ => None,
+                    },
+                })
+            }
             Effect::CastLibraryTopFree => self.library_top_free_cast(frame.controller, None),
             Effect::WhenYouDo { effects } => {
-                let source = frame.source_ref?;
-                let lki = match self.object_lki(source) {
-                    Some(lki) => lki.clone(),
-                    None => self.snapshot_current_permanent(frame.source?)?,
-                };
-                self.enqueue_delayed_trigger(source, lki, frame.controller, effects.clone());
+                // A spell's reflexive trigger has its card as its source.
+                self.enqueue_inline_trigger(
+                    frame.source?,
+                    frame.source_ref,
+                    frame.controller,
+                    effects.clone(),
+                    None,
+                );
                 None
             }
             Effect::MayOnceEachTurn { effects } => {
@@ -1770,6 +1811,7 @@ impl Game {
                         x: frame.x,
                         excess_damage: 0,
                         created: None,
+                        this_way: Vec::new(),
                         targets: vec![ResolutionTarget {
                             requirement: 0,
                             ..target
@@ -1930,6 +1972,14 @@ impl Game {
                         && self.state.cards[card].owner == controller
                         && predicate.matches_card(&self.state.cards[card])
                 }
+                TargetSpec::GraveyardCardYouOwnWithinSourcePower { predicate } => self
+                    .target_is_legal(
+                        target,
+                        &TargetSpec::GraveyardCardYouOwn {
+                            predicate: predicate.clone(),
+                        },
+                        controller,
+                    ),
                 TargetSpec::GraveyardCard { predicate } => {
                     let card = CardId::from(object.entity);
                     self.current_object_ref(card) == Some(object)
@@ -1939,6 +1989,34 @@ impl Game {
                 _ => false,
             },
         }
+    }
+
+    /// The bound a spec places with the ability's exact source (CR 608.2h:
+    /// its last known information once it has left), beyond
+    /// `target_is_legal`.
+    pub(crate) fn within_source_bound(
+        &self,
+        target: Target,
+        spec: &TargetSpec,
+        source_card: CardId,
+        source: Option<ObjectRef>,
+    ) -> bool {
+        let TargetSpec::GraveyardCardYouOwnWithinSourcePower { .. } = spec else {
+            return true;
+        };
+        let Target::GraveyardCard(object) = target else {
+            return false;
+        };
+        let power = source
+            .and_then(|source| {
+                self.object_lki(source).map(|lki| lki.power).or_else(|| {
+                    self.lookup_current_permanent(source)
+                        .ok()
+                        .map(|id| self.effective_power(id))
+                })
+            })
+            .unwrap_or_else(|| self.state.cards[source_card].power.unwrap_or(0));
+        i32::from(self.card_mana_value(CardId::from(object.entity))) <= power
     }
 
     /// Whether a battlefield permanent matches a spec's characteristics and

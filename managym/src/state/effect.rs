@@ -48,6 +48,11 @@ pub enum Modification<N = i32> {
     CantBeBlocked,
     /// Rules effect: can't block (CR 509.1b).
     CantBlock,
+    /// Rules effect: doesn't untap during its controller's untap step
+    /// (CR 502.3).
+    DoesntUntap,
+    /// Layer 6: loses these keywords, whatever grants them.
+    LoseKeywords(Keywords),
     /// Replacement: if it would die, exile it instead.
     ExileIfWouldDie,
     /// Rules effect on a player: unspent mana of this color stays as steps
@@ -76,6 +81,8 @@ impl<N> Modification<N> {
             },
             Self::CantBeBlocked => Modification::CantBeBlocked,
             Self::CantBlock => Modification::CantBlock,
+            Self::DoesntUntap => Modification::DoesntUntap,
+            Self::LoseKeywords(keywords) => Modification::LoseKeywords(*keywords),
             Self::ExileIfWouldDie => Modification::ExileIfWouldDie,
             Self::KeepUnspentMana(color) => Modification::KeepUnspentMana(*color),
             Self::NoMaximumHandSize => Modification::NoMaximumHandSize,
@@ -91,6 +98,9 @@ pub enum EffectDuration {
     /// No stated duration: for the rest of the game, or for as long as an
     /// affected object remains the same object (CR 400.7).
     Indefinite,
+    /// "For as long as you control [this]": ends once the effect's
+    /// controller no longer controls its exact source object (CR 611.2b).
+    WhileYouControlSource,
 }
 
 /// Whom a continuous effect record affects.
@@ -116,6 +126,9 @@ pub struct ContinuousEffect {
     pub affected: Affected,
     pub modification: Modification,
     pub duration: EffectDuration,
+    /// The exact source object a `WhileYouControlSource` duration follows.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_object: Option<ObjectRef>,
 }
 
 impl ContinuousEffect {

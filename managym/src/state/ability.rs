@@ -217,6 +217,12 @@ pub enum Condition {
     /// (or, once it has left, had) counters on it ("if it had counters on
     /// it").
     TriggeringHadCounters,
+    /// Resolution only: a card the resolution's latest discard moved matches
+    /// [predicate] ("When you discard a nonland card this way").
+    DiscardedThisWay(CardPredicate),
+    /// Resolution only: the spell whose casting triggered the ability
+    /// matches [predicate] ("If that spell is a Lesson").
+    TriggeringSpellMatches(CardPredicate),
     /// Resolution only: the frame's primary target was a card in a
     /// graveyard that this resolution exiled, and it matches [predicate]
     /// ("If a creature card is exiled this way").
@@ -244,7 +250,9 @@ impl Condition {
             Condition::Kicked
             | Condition::TargetMatches(_)
             | Condition::TargetDealtDamageThisTurn
-            | Condition::TargetCardExiled(_) => true,
+            | Condition::TargetCardExiled(_)
+            | Condition::DiscardedThisWay(_)
+            | Condition::TriggeringSpellMatches(_) => true,
             Condition::AnyOf(conditions) => conditions.iter().any(Condition::is_resolution_only),
             Condition::SourceCountersAtLeast { .. }
             | Condition::SourceTapped
@@ -359,6 +367,23 @@ impl PaymentCost {
     }
 }
 
+/// Where `Effect::ReturnGraveyardTarget` returns its card.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum GraveyardReturn {
+    /// Its owner's hand.
+    Hand,
+    /// The battlefield, under the resolving player's control.
+    Battlefield,
+    /// The battlefield tapped, under the resolving player's control.
+    BattlefieldTapped,
+}
+
+impl GraveyardReturn {
+    fn is_hand(&self) -> bool {
+        *self == GraveyardReturn::Hand
+    }
+}
+
 /// Who chooses the card an `ExileLinked` effect exiles.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum LinkedChooser {
@@ -419,9 +444,13 @@ pub enum Effect {
     },
     ReturnGraveyardTarget {
         target: TargetSpec,
-        /// Onto the battlefield tapped instead of into its owner's hand.
-        #[serde(skip_serializing_if = "std::ops::Not::not")]
-        tapped_onto_battlefield: bool,
+        #[serde(skip_serializing_if = "GraveyardReturn::is_hand")]
+        to: GraveyardReturn,
+    },
+    /// "You may exile it": the dying source's card, from the graveyard it
+    /// just went to; only if that happened, run `then`.
+    ExileSourceFromGraveyard {
+        then: Vec<Effect>,
     },
     MillCards {
         count: EffectValue,
@@ -758,6 +787,10 @@ pub enum Effect {
     PutTopCardsInHand {
         count: usize,
     },
+    /// "You may discard a card. If you do, [then]."
+    MayDiscard {
+        then: Vec<Effect>,
+    },
     /// Learn, without a sideboard (1v1 constructed): "You may discard a
     /// card. If you do, draw a card."
     Learn,
@@ -918,6 +951,9 @@ pub enum AffectedSpec {
     TriggeringPermanent,
     /// Each permanent the resolving player controls matching the predicate.
     EachYouControl(CardPredicate),
+    /// Each permanent an opponent of the resolving player controls matching
+    /// the predicate.
+    EachOpponentControls(CardPredicate),
     /// Each battlefield permanent matching the predicate ("all creatures").
     EachMatching(CardPredicate),
     /// Each permanent the frame's primary target player controls matching
@@ -934,6 +970,12 @@ pub enum TargetSpec {
         predicate: CardPredicate,
     },
     GraveyardCardYouOwn {
+        predicate: CardPredicate,
+    },
+    /// "target [predicate] card from your graveyard with mana value less
+    /// than or equal to this creature's power": the power of the ability's
+    /// source as it is or last existed bounds the choice.
+    GraveyardCardYouOwnWithinSourcePower {
         predicate: CardPredicate,
     },
     /// "target [predicate] card from a graveyard": any player's.
@@ -1059,6 +1101,28 @@ impl Effect {
         }
     }
 
+    /// Whether the effect asks about the spell whose casting triggered it,
+    /// which the trigger then keeps as its context.
+    pub fn asks_triggering_spell(&self) -> bool {
+        match self {
+            Effect::If {
+                condition,
+                then,
+                otherwise,
+            } => {
+                matches!(condition, Condition::TriggeringSpellMatches(_))
+                    || then
+                        .iter()
+                        .chain(otherwise)
+                        .any(Effect::asks_triggering_spell)
+            }
+            Effect::TargetClause { effects, .. } => {
+                effects.iter().any(Effect::asks_triggering_spell)
+            }
+            _ => false,
+        }
+    }
+
     /// One immediate mana output per mode, preserving the authored color order.
     pub(crate) fn mana_choice(outputs: impl IntoIterator<Item = Mana>) -> Self {
         Self::Modal {
@@ -1160,6 +1224,8 @@ impl Effect {
                 .chain(otherwise.iter())
                 .find_map(|effect| effect.target_spec()),
             Effect::SacrificeSource { then }
+            | Effect::ExileSourceFromGraveyard { then }
+            | Effect::MayDiscard { then }
             | Effect::ForPlayer { effects: then, .. }
             | Effect::MaySacrifice { then, .. }
             | Effect::MayOnceEachTurn { effects: then } => {

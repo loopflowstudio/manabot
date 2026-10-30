@@ -379,6 +379,7 @@ impl Game {
                     self.suspend_rule_decision(crate::flow::decision::Decision::Discard {
                         player,
                         remaining: 1,
+                        then: None,
                     });
                     return self.suspended_decision_action_space();
                 }

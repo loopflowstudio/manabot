@@ -162,6 +162,26 @@ impl Keywords {
         .collect()
     }
 
+    /// These keywords less those in `removed`.
+    pub fn without(&self, removed: &Keywords) -> Keywords {
+        Keywords {
+            flying: self.flying && !removed.flying,
+            reach: self.reach && !removed.reach,
+            haste: self.haste && !removed.haste,
+            flash: self.flash && !removed.flash,
+            vigilance: self.vigilance && !removed.vigilance,
+            trample: self.trample && !removed.trample,
+            first_strike: self.first_strike && !removed.first_strike,
+            double_strike: self.double_strike && !removed.double_strike,
+            deathtouch: self.deathtouch && !removed.deathtouch,
+            lifelink: self.lifelink && !removed.lifelink,
+            defender: self.defender && !removed.defender,
+            menace: self.menace && !removed.menace,
+            hexproof: self.hexproof && !removed.hexproof,
+            indestructible: self.indestructible && !removed.indestructible,
+        }
+    }
+
     /// Keyword-set union (printed keywords plus until-EOT grants).
     pub fn union(&self, other: &Keywords) -> Keywords {
         Keywords {

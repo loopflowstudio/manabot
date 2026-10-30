@@ -74,6 +74,9 @@ pub struct EffectFrame {
     /// creature, read by a later "the excess damage dealt this way".
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub excess_damage: i32,
+    /// The cards the resolution's latest discard moved ("this way").
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub this_way: Vec<CardId>,
     /// The token this resolution created last ("that token").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub created: Option<crate::state::game_object::PermanentId>,
@@ -346,6 +349,10 @@ pub enum Decision {
     Discard {
         player: PlayerId,
         remaining: usize,
+        /// Set for "you may discard a card. If you do, [then]": declining
+        /// is allowed, and `then` runs only after the discard.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        then: Option<Vec<Effect>>,
     },
     /// `player` chooses another creature they control to keep, within
     /// `max_total_power` with those already `kept` (by both players), or
@@ -575,6 +582,7 @@ impl Game {
                 x: 0,
                 excess_damage: 0,
                 created: None,
+                this_way: Vec::new(),
                 targets: Vec::new(),
                 active_requirement: 0,
                 context_target: None,
@@ -822,7 +830,11 @@ impl Game {
                             .zone_cards(ZoneType::Hand, *player)
                             .iter()
                             .copied(),
-                        matches!(suspended.decision, Decision::OptionalDiscardDraw { .. }),
+                        matches!(
+                            suspended.decision,
+                            Decision::OptionalDiscardDraw { .. }
+                                | Decision::Discard { then: Some(_), .. }
+                        ),
                     ),
                     focus: source_focus,
                 }
@@ -1282,12 +1294,27 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::Discard { player, remaining }, Action::SelectCard { card, .. }) => {
+            (Decision::Discard { then: Some(_), .. }, Action::Decline { .. }) => {
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (
+                Decision::Discard {
+                    player,
+                    remaining,
+                    then,
+                },
+                Action::SelectCard { card, .. },
+            ) => {
                 if !self.state.zones.contains(*card, ZoneType::Hand, *player) {
                     self.state.suspended_decision = Some(suspended);
                     return Err(AgentError("discard must be from hand".into()));
                 }
                 self.move_card(*card, ZoneType::Graveyard);
+                suspended.frame.this_way.push(*card);
+                if let Some(then) = then.take() {
+                    suspended.frame.prepend_effects(then.into_iter());
+                }
                 *remaining -= 1;
                 if *remaining == 0
                     || self
@@ -1895,6 +1922,7 @@ mod learn_tests {
             x: 0,
             excess_damage: 0,
             created: None,
+            this_way: Vec::new(),
             targets: vec![],
             active_requirement: 0,
             context_target: None,
@@ -2653,6 +2681,7 @@ mod payment_tests {
             x: 0,
             excess_damage: 0,
             created: None,
+            this_way: Vec::new(),
             targets: vec![],
             active_requirement: 0,
             context_target: None,

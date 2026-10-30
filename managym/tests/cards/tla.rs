@@ -12019,3 +12019,194 @@ fn destined_confrontation_each_player_keeps_total_power_four() {
     assert_eq!(s.battlefield_permanents_named(1, "Gray Ogre"), vec![theirs]);
     assert!(s.battlefield_permanents_named(1, "Craw Wurm").is_empty());
 }
+
+/// Entering taps up to one creature, which stays tapped through its
+/// controller's untap steps only while you control Ty Lee.
+#[test]
+fn ty_lee_chi_blocker_locks_a_creature_down_while_you_control_her() {
+    let mut s = five_color_setup(&["Ty Lee, Chi Blocker", "Gray Ogre", "Lightning Strike"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    enter_battlefield(&mut s, "Ty Lee, Chi Blocker");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert!(tapped(&s, ogre));
+    s.advance_to_active_step(1, StepKind::Main);
+    assert!(tapped(&s, ogre), "its untap step skips it");
+
+    s.advance_to_active_step(0, StepKind::Main);
+    let ty_lee = permanent_named(&s, "Ty Lee, Chi Blocker");
+    s.set_player_mana_pool(0, "1R");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    cast(&mut s, "Lightning Strike");
+    assert!(s.choose_target(Target::Permanent(ty_lee)));
+    settle(&mut s);
+    s.advance_to_active_step(1, StepKind::Main);
+    assert!(!tapped(&s, ogre), "Ty Lee is gone");
+}
+
+/// Tapping it on entry destroys a creature with power 4 or less; {1} strips
+/// hexproof and indestructible from your opponents' permanents.
+#[test]
+fn the_fire_nation_drill_taps_to_destroy_and_strips_protection() {
+    let mut s = five_color_setup(&["The Fire Nation Drill", "Gray Ogre", "Craw Wurm"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.force_permanent_on_battlefield(1, "Craw Wurm");
+    enter_battlefield(&mut s, "The Fire Nation Drill");
+    pass_until(&mut s, ActionSpaceKind::PayOrNot);
+    assert!(s.take_action_by_type(ActionType::PayCost));
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    let wurm = s.battlefield_permanents_named(1, "Craw Wurm")[0];
+    assert!(
+        !offered_targets(&s).contains(&Target::Permanent(wurm)),
+        "power 6"
+    );
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert!(s.battlefield_permanents_named(1, "Gray Ogre").is_empty());
+    let drill = permanent_named(&s, "The Fire Nation Drill");
+    assert!(tapped(&s, drill));
+
+    until_end_of_turn(
+        &mut s,
+        wurm,
+        Modification::AddKeywords(Keywords {
+            hexproof: true,
+            indestructible: true,
+            ..Default::default()
+        }),
+    );
+    activate(&mut s, drill, 0);
+    settle(&mut s);
+    let wurm_keywords = s.game().effective_keywords(wurm);
+    assert!(!wurm_keywords.hexproof && !wurm_keywords.indestructible);
+}
+
+/// One or more fliers attacking loot; a nonland discard counters a creature
+/// you control, a land discard does not.
+#[test]
+fn teo_spirited_glider_loots_and_counters_on_a_nonland_discard() {
+    for (discard, rewarded) in [("Gray Ogre", true), ("Forest", false)] {
+        let mut s = five_color_setup(&["Teo, Spirited Glider", "Gray Ogre"]);
+        let teo = s.force_permanent_on_battlefield(0, "Teo, Spirited Glider");
+        clear_hand(&mut s, 0);
+        let card = force_new_card_in_hand(&mut s, 0, discard);
+        clear_summoning_sickness(&mut s, teo);
+        s.advance_to_active_step(0, StepKind::DeclareAttackers);
+        choose(
+            &mut s,
+            |a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == teo),
+        );
+        while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+            s.decline_attack();
+        }
+        pass_until(&mut s, ActionSpaceKind::Discard);
+        select_card(&mut s, card);
+        if rewarded {
+            pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+            assert!(s.choose_target(Target::Permanent(teo)));
+        }
+        resolve_until_priority(&mut s);
+        assert_eq!(counters(&s, teo), i32::from(rewarded), "{discard}");
+    }
+}
+
+/// Entering may discard to return an instant or sorcery; each spell you cast
+/// earthbends 1, with another counter for a Lesson.
+#[test]
+fn toph_hardheaded_teacher_rebuys_a_spell_and_earthbends_on_each_cast() {
+    let mut s = five_color_setup(&[
+        "Toph, Hardheaded Teacher",
+        "Lightning Strike",
+        "Gray Ogre",
+        "Yip Yip!",
+    ]);
+    let strike = plant_in_graveyard(&mut s, 0, "Lightning Strike");
+    let fodder = move_to_hand(&mut s, "Gray Ogre");
+    enter_battlefield(&mut s, "Toph, Hardheaded Teacher");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    let object = s.game().current_object_ref(strike).unwrap();
+    assert!(s.choose_target(Target::GraveyardCard(object)));
+    pass_until(&mut s, ActionSpaceKind::Discard);
+    select_card(&mut s, fodder);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, strike), Some(ZoneType::Hand));
+
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    let toph = permanent_named(&s, "Toph, Hardheaded Teacher");
+    cast(&mut s, "Gray Ogre");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(forest)));
+    settle(&mut s);
+    assert_eq!(counters(&s, forest), 1, "not a Lesson");
+    cast(&mut s, "Yip Yip!");
+    assert!(s.choose_target(Target::Permanent(toph)));
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(forest)));
+    settle(&mut s);
+    assert_eq!(counters(&s, forest), 3, "a Lesson adds one more");
+}
+
+/// Sacrificing another permanent grows it; when it dies, exiling it returns
+/// a creature card with mana value up to its last power.
+#[test]
+fn sandbender_scavengers_grows_on_sacrifice_and_reanimates_within_its_power() {
+    let mut s = five_color_setup(&[
+        "Sandbender Scavengers",
+        "Gray Ogre",
+        "Craw Wurm",
+        "Lightning Strike",
+    ]);
+    let scavengers = s.force_permanent_on_battlefield(0, "Sandbender Scavengers");
+    let clue = s
+        .game_mut()
+        .create_token("Clue", PlayerId(0), false)
+        .unwrap();
+    activate(&mut s, clue, 0);
+    settle(&mut s);
+    assert_eq!(counters(&s, scavengers), 1, "the Clue was sacrificed");
+    let ogre_card = plant_in_graveyard(&mut s, 0, "Gray Ogre");
+    let wurm = plant_in_graveyard(&mut s, 0, "Craw Wurm");
+    set_counters(&mut s, scavengers, CounterKind::PlusOnePlusOne, 2);
+    let scavengers_card = card_of(&s, scavengers);
+
+    cast(&mut s, "Lightning Strike");
+    assert!(s.choose_target(Target::Permanent(scavengers)));
+    pass_until(&mut s, ActionSpaceKind::PayOrNot);
+    assert!(s.take_action_by_type(ActionType::PayCost));
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    let ogre_object = s.game().current_object_ref(ogre_card).unwrap();
+    let wurm_object = s.game().current_object_ref(wurm).unwrap();
+    let offered = offered_targets(&s);
+    assert!(
+        offered.contains(&Target::GraveyardCard(ogre_object)),
+        "3 ≤ 3"
+    );
+    assert!(
+        !offered.contains(&Target::GraveyardCard(wurm_object)),
+        "mana value 6"
+    );
+    assert!(s.choose_target(Target::GraveyardCard(ogre_object)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, scavengers_card), Some(ZoneType::Exile));
+    assert_eq!(zone_of(&s, ogre_card), Some(ZoneType::Battlefield));
+}
+
+/// Earthbend 2; then up to one creature you control fights a creature an
+/// opponent controls.
+#[test]
+fn earth_rumble_earthbends_then_your_creature_fights_theirs() {
+    let mut s = five_color_setup(&["Earth Rumble", "Craw Wurm", "Gray Ogre"]);
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    let wurm = s.force_permanent_on_battlefield(0, "Craw Wurm");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    cast(&mut s, "Earth Rumble");
+    assert!(s.choose_target(Target::Permanent(forest)));
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(wurm)));
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(counters(&s, forest), 2);
+    assert!(s.battlefield_permanents_named(1, "Gray Ogre").is_empty());
+    assert_eq!(permanent(&s, wurm).damage, 2);
+}

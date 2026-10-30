@@ -1,12 +1,12 @@
 //! Current TLA cards.
 //! Each card is one function returning its engine `CardDefinition`.
 use crate::state::ability::AffectedSpec;
-use crate::state::effect::Modification;
+use crate::state::effect::{EffectDuration, Modification};
 use crate::state::{
     ability::{
-        Ability, Condition, DelayedEvent, Effect, EffectValue, LinkedChooser, LinkedGrant,
-        MilledBonus, PaymentCost, PlayerSelector, TargetRequirement, TargetSpec, TriggerCondition,
-        TriggerSubject,
+        Ability, Condition, DelayedEvent, Effect, EffectValue, GraveyardReturn, LinkedChooser,
+        LinkedGrant, MilledBonus, PaymentCost, PlayerSelector, TargetRequirement, TargetSpec,
+        TriggerCondition, TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, ActivationZone, AdditionalCost, BlockRestriction,
@@ -94,6 +94,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         earth_kingdom_protectors(),
         earth_kingdom_soldier(),
         earth_kings_lieutenant(),
+        earth_rumble(),
         earth_rumble_wrestlers(),
         earth_village_ruffians(),
         earthbender_ascension(),
@@ -208,6 +209,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         ruinous_waterbending(),
         rumble_arena(),
         saber_tooth_moose_lion(),
+        sandbender_scavengers(),
         sandbenders_storm(),
         secret_tunnel(),
         seismic_sense(),
@@ -231,8 +233,10 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         sun_warriors(),
         swampsnare_trap(),
         team_avatar(),
+        teo_spirited_glider(),
         the_boulder_ready_to_rumble(),
         the_earth_king(),
+        the_fire_nation_drill(),
         the_last_agni_kai(),
         the_lion_turtle(),
         the_mechanist_aerial_artisan(),
@@ -242,6 +246,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         tiger_dillo(),
         tiger_seal(),
         tolls_of_war(),
+        toph_hardheaded_teacher(),
         toph_the_blind_bandit(),
         toph_the_first_metalbender(),
         treetop_freedom_fighters(),
@@ -251,6 +256,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         turtle_duck(),
         twin_blades(),
         ty_lee_artful_acrobat(),
+        ty_lee_chi_blocker(),
         uncle_iroh(),
         united_front(),
         unlucky_cabbage_merchant(),
@@ -2604,6 +2610,38 @@ fn earth_kings_lieutenant() -> CardDefinition {
                     },
                     other: true,
                 }],
+            },
+        ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn earth_rumble() -> CardDefinition {
+    let text_box = "Earthbend 2. When you do, up to one target creature you control fights target creature an opponent controls. (To earthbend 2, target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped. Creatures that fight each deal damage equal to their power to the other.)";
+
+    CardDefinition {
+        key: "tla.earth_rumble",
+        scryfall_id: "62730505-56f1-4043-a8b9-4fb7bc508b47",
+        name: "Earth Rumble".into(),
+        mana_cost: Some(ManaCost::parse("{3}{G}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        spell_effects: vec![
+            Effect::Earthbend {
+                count: EffectValue::Fixed(2),
+                target: TargetSpec::LandYouControl,
+            },
+            Effect::WhenYouDo {
+                effects: vec![
+                    Effect::TargetClause {
+                        requirement: TargetRequirement::up_to(1, TargetSpec::CreatureYouControl),
+                        effects: vec![],
+                    },
+                    Effect::TargetClause {
+                        requirement: TargetRequirement::one(TargetSpec::CreatureOpponentControls),
+                        effects: vec![Effect::FightLastTarget],
+                    },
+                ],
             },
         ],
         text_box: text_box.into(),
@@ -6472,7 +6510,7 @@ fn professor_zei_anthropologist() -> CardDefinition {
                             ..Default::default()
                         },
                     },
-                    tapped_onto_battlefield: false,
+                    to: GraveyardReturn::Hand,
                 }],
                 ..Default::default()
             },
@@ -7022,6 +7060,58 @@ fn saber_tooth_moose_lion() -> CardDefinition {
             }],
             ..Default::default()
         }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn sandbender_scavengers() -> CardDefinition {
+    let text_box = "Whenever you sacrifice another permanent, put a +1/+1 counter on this creature.\nWhen this creature dies, you may exile it. When you do, return target creature card with mana value less than or equal to this creature's power from your graveyard to the battlefield.";
+    let within_power = || TargetSpec::GraveyardCardYouOwnWithinSourcePower {
+        predicate: CardPredicate::creature(),
+    };
+
+    CardDefinition {
+        key: "tla.sandbender_scavengers",
+        scryfall_id: "9bfe0f7c-6dac-41d4-a013-109445158a5e",
+        name: "Sandbender Scavengers".into(),
+        mana_cost: Some(ManaCost::parse("{W}{B}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Human".into(), "Rogue".into()],
+        power: Some(1),
+        toughness: Some(1),
+        abilities: vec![
+            Ability::Triggered {
+                condition: TriggerCondition::Sacrificed {
+                    predicate: CardPredicate::default(),
+                    controller_only: true,
+                    another: true,
+                },
+                intervening_if: None,
+                effects: vec![Effect::PutCountersOnSource {
+                    count: EffectValue::Fixed(1),
+                    kind: CounterKind::PlusOnePlusOne,
+                }],
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::OptionalPayment {
+                    cost: PaymentCost::Mana(ManaCost::default()),
+                    if_paid: vec![Effect::ExileSourceFromGraveyard {
+                        then: vec![Effect::WhenYouDo {
+                            effects: vec![Effect::ReturnGraveyardTarget {
+                                target: within_power(),
+                                to: GraveyardReturn::Battlefield,
+                            }],
+                        }],
+                    }],
+                    if_declined: vec![],
+                }],
+            },
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -7906,6 +7996,58 @@ fn team_avatar() -> CardDefinition {
     }
 }
 
+fn teo_spirited_glider() -> CardDefinition {
+    let text_box = "Flying\nWhenever one or more creatures you control with flying attack, draw a card, then discard a card. When you discard a nonland card this way, put a +1/+1 counter on target creature you control.";
+
+    CardDefinition {
+        key: "tla.teo_spirited_glider",
+        scryfall_id: "66906ed4-baac-4be0-9359-34f453d1a04a",
+        name: "Teo, Spirited Glider".into(),
+        mana_cost: Some(ManaCost::parse("{3}{U}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Pilot".into(), "Ally".into()],
+        power: Some(1),
+        toughness: Some(4),
+        keywords: Keywords {
+            flying: true,
+            ..Default::default()
+        },
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::Attacks {
+                subject: TriggerSubject::AnyYouControl(CardPredicate {
+                    card_type: Some(CardType::Creature),
+                    flying: true,
+                    ..Default::default()
+                }),
+            },
+            intervening_if: None,
+            effects: vec![
+                Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                },
+                Effect::Discard,
+                Effect::If {
+                    condition: Condition::DiscardedThisWay(CardPredicate {
+                        not_card_types: vec![CardType::Land],
+                        ..Default::default()
+                    }),
+                    then: vec![Effect::WhenYouDo {
+                        effects: vec![Effect::PutCounters {
+                            count: 1,
+                            kind: CounterKind::PlusOnePlusOne,
+                            target: TargetSpec::CreatureYouControl,
+                        }],
+                    }],
+                    otherwise: vec![],
+                },
+            ],
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
 fn the_boulder_ready_to_rumble() -> CardDefinition {
     let text_box = "Whenever The Boulder attacks, earthbend X, where X is the number of creatures you control with power 4 or greater. (Target land you control becomes a 0/0 creature with haste that's still a land. Put X +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)";
 
@@ -7989,6 +8131,74 @@ fn the_earth_king() -> CardDefinition {
                     bottom_source: false,
                     to_hand: false,
                 }],
+            },
+        ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn the_fire_nation_drill() -> CardDefinition {
+    let text_box = "Trample\nWhen The Fire Nation Drill enters, you may tap it. When you do, destroy target creature with power 4 or less.\n{1}: Permanents your opponents control lose hexproof and indestructible until end of turn.\nCrew 2";
+
+    CardDefinition {
+        key: "tla.the_fire_nation_drill",
+        scryfall_id: "54d762f6-e131-480f-b294-10f5a63d9c98",
+        name: "The Fire Nation Drill".into(),
+        mana_cost: Some(ManaCost::parse("{2}{B}{B}")),
+        types: CardTypes::new([CardType::Artifact]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Vehicle".into()],
+        power: Some(6),
+        toughness: Some(3),
+        keywords: Keywords {
+            trample: true,
+            ..Default::default()
+        },
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::EntersTheBattlefield {
+                subject: TriggerSubject::This,
+            },
+            intervening_if: None,
+            effects: vec![Effect::OptionalPayment {
+                cost: PaymentCost::Mana(ManaCost::default()),
+                if_paid: vec![
+                    Effect::TapSource,
+                    Effect::WhenYouDo {
+                        effects: vec![Effect::Destroy {
+                            target: TargetSpec::Permanent {
+                                predicate: CardPredicate {
+                                    card_type: Some(CardType::Creature),
+                                    max_power: Some(4),
+                                    ..Default::default()
+                                },
+                            },
+                        }],
+                    },
+                ],
+                if_declined: vec![],
+            }],
+        }],
+        activated_abilities: vec![
+            ActivatedAbilityDefinition {
+                mana_cost: ManaCost::parse("{1}"),
+                effects: vec![Effect::until_end_of_turn(
+                    AffectedSpec::EachOpponentControls(CardPredicate::default()),
+                    Modification::LoseKeywords(Keywords {
+                        hexproof: true,
+                        indestructible: true,
+                        ..Default::default()
+                    }),
+                )],
+                ..Default::default()
+            },
+            ActivatedAbilityDefinition {
+                crew: Some(2),
+                effects: vec![Effect::until_end_of_turn(
+                    AffectedSpec::Source,
+                    Modification::BecomeArtifactCreature,
+                )],
+                ..Default::default()
             },
         ],
         text_box: text_box.into(),
@@ -8399,6 +8609,70 @@ fn tolls_of_war() -> CardDefinition {
     }
 }
 
+fn toph_hardheaded_teacher() -> CardDefinition {
+    let text_box = "When Toph enters, you may discard a card. If you do, return target instant or sorcery card from your graveyard to your hand.\nWhenever you cast a spell, earthbend 1. If that spell is a Lesson, put an additional +1/+1 counter on that land. (Target land you control becomes a 0/0 creature with haste that's still a land. Put a +1/+1 counter on it. When it dies or is exiled, return it to the battlefield tapped.)";
+    let instant_or_sorcery = || TargetSpec::GraveyardCardYouOwn {
+        predicate: CardPredicate {
+            card_types_any: vec![CardType::Instant, CardType::Sorcery],
+            ..Default::default()
+        },
+    };
+
+    CardDefinition {
+        key: "tla.toph_hardheaded_teacher",
+        scryfall_id: "e3ba3395-39db-4330-9801-53def924f253",
+        name: "Toph, Hardheaded Teacher".into(),
+        mana_cost: Some(ManaCost::parse("{2}{R}{G}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+        power: Some(3),
+        toughness: Some(4),
+        abilities: vec![
+            Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement::one(instant_or_sorcery()),
+                    effects: vec![Effect::MayDiscard {
+                        then: vec![Effect::ReturnGraveyardTarget {
+                            target: instant_or_sorcery(),
+                            to: GraveyardReturn::Hand,
+                        }],
+                    }],
+                }],
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::YouCastSpell {
+                    predicate: CardPredicate::default(),
+                },
+                intervening_if: None,
+                effects: vec![
+                    Effect::Earthbend {
+                        count: EffectValue::Fixed(1),
+                        target: TargetSpec::LandYouControl,
+                    },
+                    Effect::If {
+                        condition: Condition::TriggeringSpellMatches(CardPredicate::subtype(
+                            "Lesson",
+                        )),
+                        then: vec![Effect::PutCounters {
+                            count: 1,
+                            kind: CounterKind::PlusOnePlusOne,
+                            target: TargetSpec::LandYouControl,
+                        }],
+                        otherwise: vec![],
+                    },
+                ],
+            },
+        ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
 fn toph_the_blind_bandit() -> CardDefinition {
     let text_box = "When Toph enters, earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)\nToph's power is equal to the number of +1/+1 counters on lands you control.";
 
@@ -8543,7 +8817,7 @@ fn true_ancestry() -> CardDefinition {
                             ..Default::default()
                         },
                     },
-                    tapped_onto_battlefield: false,
+                    to: GraveyardReturn::Hand,
                 }],
             },
             Effect::CreateToken {
@@ -8773,6 +9047,62 @@ fn ty_lee_artful_acrobat() -> CardDefinition {
                         )],
                     }],
                     if_declined: vec![],
+                }],
+            },
+        ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn ty_lee_chi_blocker() -> CardDefinition {
+    let text_box = "Flash\nProwess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)\nWhen Ty Lee enters, tap up to one target creature. It doesn't untap during its controller's untap step for as long as you control Ty Lee.";
+
+    CardDefinition {
+        key: "tla.ty_lee_chi_blocker",
+        scryfall_id: "308cc687-9cb2-4e3a-98db-c5ba2a7da115",
+        name: "Ty Lee, Chi Blocker".into(),
+        mana_cost: Some(ManaCost::parse("{2}{U}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Performer".into(), "Ally".into()],
+        power: Some(2),
+        toughness: Some(1),
+        keywords: Keywords {
+            flash: true,
+            ..Default::default()
+        },
+        abilities: vec![
+            Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::YouCastSpell {
+                    predicate: CardPredicate {
+                        not_card_types: vec![CardType::Creature],
+                        ..Default::default()
+                    },
+                },
+                effects: vec![Effect::until_end_of_turn(
+                    AffectedSpec::Source,
+                    Modification::pump(1, 1),
+                )],
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement::up_to(1, TargetSpec::Creature),
+                    effects: vec![
+                        Effect::TapTarget {
+                            target: TargetSpec::Creature,
+                        },
+                        Effect::ApplyContinuous {
+                            affected: AffectedSpec::Target(TargetSpec::Creature),
+                            modification: Modification::DoesntUntap,
+                            duration: EffectDuration::WhileYouControlSource,
+                        },
+                    ],
                 }],
             },
         ],
@@ -9696,7 +10026,7 @@ fn zuko_s_conviction() -> CardDefinition {
                         ..Default::default()
                     },
                 },
-                tapped_onto_battlefield: true,
+                to: GraveyardReturn::BattlefieldTapped,
             }],
             otherwise: vec![Effect::ReturnGraveyardTarget {
                 target: TargetSpec::GraveyardCardYouOwn {
@@ -9705,7 +10035,7 @@ fn zuko_s_conviction() -> CardDefinition {
                         ..Default::default()
                     },
                 },
-                tapped_onto_battlefield: false,
+                to: GraveyardReturn::Hand,
             }],
         }],
         targeting: vec![TargetRequirement {

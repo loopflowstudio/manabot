@@ -26,6 +26,10 @@ export function effectNote(effect: ContinuousEffect): string {
         return "can't be blocked";
       case 'CantBlock':
         return "can't block";
+      case 'DoesntUntap':
+        return "doesn't untap during its controller's untap step";
+      case 'LoseKeywords':
+        return `loses ${(effect.keywords ?? []).map(keyword => keyword.replaceAll('_', ' ')).join(', ')}`;
       case 'ExileIfWouldDie':
         return 'exiled instead if it would die';
       case 'KeepUnspentMana':
@@ -36,7 +40,8 @@ export function effectNote(effect: ContinuousEffect): string {
         return effect.modification;
     }
   })();
-  const until = effect.duration === 'EndOfTurn' ? 'until end of turn: ' : '';
+  const until = effect.duration === 'EndOfTurn' ? 'until end of turn: '
+    : effect.duration === 'WhileYouControlSource' ? "while its source's controller controls it: " : '';
   return `${until}${phrase}${effect.source ? ` (${effect.source})` : ''}`;
 }
 

@@ -1046,6 +1046,7 @@ fn effect_facts(object: i32, effect: &ContinuousEffectData, out: &mut Vec<Fact>)
     let id = name_value(&format!("Modification::{}", effect.modification));
     let duration = match effect.duration.as_str() {
         "EndOfTurn" => 1.0,
+        "WhileYouControlSource" => 3.0,
         _ => 2.0,
     };
     let values = [

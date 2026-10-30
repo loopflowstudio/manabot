@@ -187,7 +187,9 @@ impl Game {
     /// from untapping during it.
     pub(crate) fn untap_all_permanents(&mut self, player: PlayerId) {
         for permanent_id in self.battlefield_permanents(player) {
-            if self.has_restriction(permanent_id, Restriction::DoesntUntap) {
+            if self.has_restriction(permanent_id, Restriction::DoesntUntap)
+                || self.doesnt_untap(permanent_id)
+            {
                 continue;
             }
             self.journal_permanent(permanent_id);

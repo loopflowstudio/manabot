@@ -68,7 +68,7 @@ export interface ContinuousEffect {
   keywords?: string[];
   subtypes?: string[];
   color?: string;
-  /** `EndOfTurn` or `Indefinite`. */
+  /** `EndOfTurn`, `Indefinite` or `WhileYouControlSource`. */
   duration: string;
   /** The source's printed name. */
   source?: string;

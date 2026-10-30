@@ -4,8 +4,9 @@
 
 use crate::state::{
     ability::{
-        Ability, AffectedSpec, Condition, DelayedEvent, Effect, EffectValue, LinkedChooser,
-        LinkedGrant, PaymentCost, PlayerSelector, TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, AffectedSpec, Condition, DelayedEvent, Effect, EffectValue, GraveyardReturn,
+        LinkedChooser, LinkedGrant, PaymentCost, PlayerSelector, TargetSpec, TriggerCondition,
+        TriggerSubject,
     },
     card::{Card, CardType, Keywords},
     effect::{EffectDuration, Modification},
@@ -211,6 +212,14 @@ fn condition_text(condition: &Condition) -> String {
         Condition::TargetDealtDamageThisTurn => "that target was dealt damage this turn".into(),
         Condition::SourceTapped => "this is tapped".into(),
         Condition::TriggeringHadCounters => "it had counters on it".into(),
+        Condition::DiscardedThisWay(predicate) => format!(
+            "a {} was discarded this way",
+            predicate_description(predicate, "card")
+        ),
+        Condition::TriggeringSpellMatches(predicate) => format!(
+            "that spell is a {}",
+            predicate_description(predicate, "spell")
+        ),
         Condition::TargetCardExiled(predicate) => format!(
             "a {} was exiled this way",
             predicate_description(predicate, "card")
@@ -356,6 +365,10 @@ fn target_description(t: &TargetSpec) -> String {
         ),
         TargetSpec::GraveyardCardYouOwn { predicate } => format!(
             "{} in your graveyard",
+            predicate_description(predicate, "card")
+        ),
+        TargetSpec::GraveyardCardYouOwnWithinSourcePower { predicate } => format!(
+            "{} in your graveyard with mana value at most this creature's power",
             predicate_description(predicate, "card")
         ),
         TargetSpec::GraveyardCard { predicate } => format!(
@@ -531,8 +544,10 @@ fn effect_description(effect: &Effect) -> Option<String> {
         Sacrifice { predicate } => format!("Sacrifice a {}", predicate_description(predicate,"permanent")),
         DealDamageToPlayer { player, amount } => format!("Deal {} damage to {}",value_description(amount),player_description(player)),
         DrainLife { amount } => format!("Each opponent loses {0} life and you gain {0} life",value_description(amount)),
-        ReturnGraveyardTarget { target, tapped_onto_battlefield: false } => format!("Return {} to your hand",target_description(target)),
-        ReturnGraveyardTarget { target, tapped_onto_battlefield: true } => format!("Put {} onto the battlefield tapped",target_description(target)),
+        ReturnGraveyardTarget { target, to: GraveyardReturn::Hand } => format!("Return {} to your hand",target_description(target)),
+        ReturnGraveyardTarget { target, to: GraveyardReturn::Battlefield } => format!("Return {} to the battlefield",target_description(target)),
+        ReturnGraveyardTarget { target, to: GraveyardReturn::BattlefieldTapped } => format!("Put {} onto the battlefield tapped",target_description(target)),
+        ExileSourceFromGraveyard { then } => format!("You may exile this card from your graveyard. If you do, {}", effects_description(then)),
         MillCards { count, target: None } => format!("Mill {} cards", value_description(count)),
         MillCards { count, target: Some(target) } => format!("{} mills {} cards", target_description(target), value_description(count)),
         MillAndSelect { count, predicate, if_declined, if_milled } => {
@@ -585,6 +600,10 @@ fn effect_description(effect: &Effect) -> Option<String> {
         ),
         SacrificeTriggeringPermanent => "Sacrifice that token".into(),
         PutTriggeringCountersOnSource => "Put its counters on this creature".into(),
+        MayDiscard { then } => format!(
+            "You may discard a card. If you do, {}",
+            effects_description(then)
+        ),
         ForPlayer { player, effects } => format!(
             "{} does this: {}",
             player_description(player),
@@ -688,6 +707,10 @@ fn continuous_description(
                 predicate_description(predicate, "permanent")
             )
         }
+        AffectedSpec::EachOpponentControls(predicate) => format!(
+            "Each {} your opponents control",
+            predicate_description(predicate, "permanent")
+        ),
         AffectedSpec::EachMatching(predicate) => {
             format!("Each {}", predicate_description(predicate, "permanent"))
         }
@@ -699,6 +722,7 @@ fn continuous_description(
     let until = match duration {
         EffectDuration::EndOfTurn => " until end of turn",
         EffectDuration::Indefinite => "",
+        EffectDuration::WhileYouControlSource => " for as long as you control this",
     };
     let amount = |value: &EffectValue| match value {
         EffectValue::Fixed(n) => format!("{n:+}"),
@@ -736,6 +760,12 @@ fn continuous_description(
         }
         Modification::CantBeBlocked => format!("{subject} can't be blocked{until}"),
         Modification::CantBlock => format!("{subject} can't block{until}"),
+        Modification::DoesntUntap => {
+            format!("{subject} doesn't untap during its controller's untap step{until}")
+        }
+        Modification::LoseKeywords(keywords) => {
+            format!("{subject} loses {}{until}", keywords_description(keywords))
+        }
         Modification::ExileIfWouldDie => {
             format!(
                 "If {} would die{until}, exile it instead",

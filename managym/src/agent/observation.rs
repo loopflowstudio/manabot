@@ -375,7 +375,8 @@ pub struct ContinuousEffectData {
     /// The mana color kept (`Red`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
-    /// The `EffectDuration` variant (`EndOfTurn`, `Indefinite`).
+    /// The `EffectDuration` variant (`EndOfTurn`, `Indefinite`,
+    /// `WhileYouControlSource`).
     pub duration: String,
     /// Definition of the spell or ability's source.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -433,6 +434,11 @@ impl ContinuousEffectData {
             }
             Modification::CantBeBlocked => "CantBeBlocked",
             Modification::CantBlock => "CantBlock",
+            Modification::DoesntUntap => "DoesntUntap",
+            Modification::LoseKeywords(keywords) => {
+                data.keywords = keywords.names().into_iter().map(str::to_owned).collect();
+                "LoseKeywords"
+            }
             Modification::ExileIfWouldDie => "ExileIfWouldDie",
             Modification::KeepUnspentMana(color) => {
                 data.color = Some(format!("{color:?}"));
