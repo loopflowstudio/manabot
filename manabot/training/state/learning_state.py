@@ -5,8 +5,16 @@ the unchanged learning recipe, and derives absolute counters from the producer.
 This is a new segment with fresh game/RNG streams, never process recovery. A
 declared setup transfer lets the segment continue on different decks from the
 same semantic pack (a curriculum); nothing else about the recipe may change.
+
+A parent that was interrupted before exporting its final state can still be
+continued from one of its monitoring exports (`monitoring_update`): the raw
+bytes must be the ones its record's receipt at that update names, the origin
+takes that receipt's absolute coordinates, and the EMA and Adam restart (EMA :=
+raw, fresh moments). The reset is recorded in the origin as a declared
+discontinuity, never inferred.
 """
 
+from copy import deepcopy
 from dataclasses import dataclass
 import json
 from pathlib import Path
@@ -37,7 +45,8 @@ class AdmittedLearningState:
     raw: ActorCritic
     ema: ActorCritic
     # Adam's nested torch serialization boundary; validated before application.
-    optimizer: dict[str, Any]
+    # None when a raw-only import starts Adam afresh.
+    optimizer: dict[str, Any] | None
     seed: int
 
 
@@ -75,6 +84,48 @@ def _origin(source: TrainingRun, record: StageRecord) -> LearningStateOrigin:
         + (previous.active_training_seconds if previous is not None else 0),
         cumulative_seconds=record.cumulative_seconds
         + (previous.cumulative_seconds if previous is not None else 0),
+    )
+
+
+def _monitoring_origin(
+    source: TrainingRun, record: StageRecord, update: int, raw: ArtifactReference
+) -> LearningStateOrigin:
+    """Absolute coordinates of the one admitted monitoring export at `update`
+    whose bytes are `raw`; its counters already include any origin the parent
+    inherited."""
+    found = [
+        c
+        for c in source.monitoring_checkpoints
+        if c.stage_id == record.id and c.updates == update
+    ]
+    if len(found) != 1:
+        raise ValueError(f"parent has no single monitoring export at update {update}")
+    receipt = found[0]
+    if (
+        receipt.error is not None
+        or receipt.artifact is None
+        or any(receipt.artifact.get(key) != raw[key] for key in ("sha256", "bytes"))
+    ):
+        raise ValueError(
+            "learning-state raw differs from the parent's monitoring export"
+        )
+    previous = record.learning_state_origin
+    if receipt.updates <= (previous.iteration if previous is not None else 0):
+        raise ValueError("monitoring export precedes the parent's own updates")
+    if receipt.active_training_seconds is None:
+        raise ValueError("monitoring export lacks active training seconds")
+    return LearningStateOrigin(
+        run_id=source.id,
+        stage_id=record.id,
+        iteration=receipt.updates,
+        optimizer_updates=receipt.optimizer_updates,
+        games=receipt.games,
+        environment_decisions=receipt.environment_decisions,
+        learner_transitions=receipt.learner_transitions,
+        optimizer_exposures=receipt.optimizer_exposures,
+        active_training_seconds=receipt.active_training_seconds,
+        cumulative_seconds=receipt.training_seconds,
+        reset=("ema", "optimizer"),
     )
 
 
@@ -139,12 +190,17 @@ def admit_learning_state(
     if len(source.regime.stages) != 1 or len(source.stages) != 1:
         raise ValueError("learning-state parent requires a single self-play stage")
     definition, record = source.regime.stages[0], source.stages[0]
+    # A monitoring export was published while training ran, so its parent may
+    # have been interrupted afterwards; final exports need a finished parent.
+    ended = {"completed", "paused"}
+    if spec.monitoring_update is not None:
+        ended |= {"interrupted"}
     if (
         not isinstance(definition, TrainSelfPlay)
         or definition.id != spec.source_stage
         or record.id != spec.source_stage
-        or record.status not in {"completed", "paused"}
-        or source.status not in {"completed", "paused"}
+        or record.status not in ended
+        or source.status not in ended
         or source.parent_run_id is not None
     ):
         raise ValueError("learning-state parent must have a completed or paused export")
@@ -172,18 +228,23 @@ def admit_learning_state(
     ):
         if getattr(definition, name) != getattr(stage, name):
             raise ValueError(f"learning-state recipe mismatch: {name}")
-    origin = _origin(source, record)
+    origin = (
+        _origin(source, record)
+        if spec.monitoring_update is None
+        else _monitoring_origin(source, record, spec.monitoring_update, spec.raw)
+    )
     if origin.iteration >= stage.updates:
         raise ValueError("learning-state target must exceed parent absolute iteration")
     artifacts = {"parent_run": receipt}
     policies: dict[str, ActorCritic] = {}
-    for role in ("raw", "ema", "optimizer"):
+    for role in spec.roles:
         reference = getattr(spec, role)
-        published = record.artifacts.get(role)
-        if published is None or any(
-            published.get(key) != reference[key] for key in ("sha256", "bytes")
-        ):
-            raise ValueError(f"learning-state {role} differs from parent artifact")
+        if spec.monitoring_update is None:
+            published = record.artifacts.get(role)
+            if published is None or any(
+                published.get(key) != reference[key] for key in ("sha256", "bytes")
+            ):
+                raise ValueError(f"learning-state {role} differs from parent artifact")
         copied = copy_verified_artifact(reference, out / f"{stage.id}-parent-{role}.pt")
         artifacts[f"parent_{role}"] = copied
         if role == "optimizer":
@@ -227,6 +288,17 @@ def admit_learning_state(
         ):
             raise ValueError("learning-state policy contains nonfinite tensors")
         policies[role] = agent
+    if spec.monitoring_update is not None:
+        # Declared reset: the EMA restarts as the raw weights at the origin
+        # iteration and Adam starts with no moments.
+        return AdmittedLearningState(
+            artifacts,
+            origin,
+            policies["raw"],
+            deepcopy(policies["raw"]),
+            None,
+            source.seed,
+        )
     state = torch.load(
         artifacts["parent_optimizer"]["path"], map_location="cpu", weights_only=True
     )
