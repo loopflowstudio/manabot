@@ -366,18 +366,14 @@ impl Game {
         cast: CastChoices,
     ) -> u8 {
         let card_ref = &self.state.cards[card];
-        let waterbend = if cast.kicked {
-            card_ref
-                .additional_costs
-                .iter()
-                .find_map(|cost| match cost {
-                    AdditionalCost::Waterbend(waterbend) => Some(waterbend.generic()),
-                    _ => None,
-                })
-                .unwrap_or(0)
-        } else {
-            0
-        };
+        let waterbend = card_ref
+            .additional_costs
+            .iter()
+            .find_map(|cost| match cost {
+                AdditionalCost::Waterbend(waterbend) if cast.kicked => Some(waterbend.generic()),
+                _ => None,
+            })
+            .unwrap_or(0);
         let granted = !cast.free
             && self
                 .exile_grant(player, card)
