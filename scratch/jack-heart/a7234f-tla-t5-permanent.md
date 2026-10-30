@@ -164,8 +164,8 @@ a third condition.
     fact and definition checks reject. CI does not select this file.
   - Fixes: "sacrificed 1 permanent" singular in LLM text and Academy; the
     leftover closure in `modificationPhrase` removed.
-  - Deferred to CI: browser suites and clean-machine Play; the local tree has
-    not been pushed.
+  - Browser suites and clean-machine Play ran only in CI, and passed on
+    `552636009`. The gate commits are unpushed, so CI has not run them.
 
 ## Demo (headless, 2026-10-30) — text-path gap fixed at `2963f8f87`
 
