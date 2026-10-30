@@ -261,7 +261,9 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
     if modification == "AddKeywords":
         return ", ".join(keyword.replace("_", " ") for keyword in effect.keywords)
     if modification == "LoseKeywords":
-        return "loses " + ", ".join(keyword.replace("_", " ") for keyword in effect.keywords)
+        return "loses " + ", ".join(
+            keyword.replace("_", " ") for keyword in effect.keywords
+        )
     if modification == "AddSubtypes":
         return "is also " + ", ".join(effect.subtypes)
     phrases = {
@@ -441,7 +443,7 @@ class _Renderer:
     def relation(self, index: int, relation: managym.ContinuationFrame) -> str:
         source = self.fact_reference(relation.source)
         details = [
-            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision', 'waiting trigger', 'trigger being placed', 'trigger placement round'), relation.kind)}",
+            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision', 'waiting trigger', 'trigger being placed', 'trigger placement round', 'waiting delayed trigger'), relation.kind)}",
             f"controller {self.seats[relation.controller]}",
             f"source {source}",
         ]
@@ -452,7 +454,24 @@ class _Renderer:
             details.append("kicker included")
         if relation.active_clause is not None:
             details.append(f"active target clause {relation.active_clause + 1}")
-        if relation.decision:
+        if relation.kind == 10:
+            details.append(
+                "waits for "
+                + _enum(
+                    (
+                        "none",
+                        "the watched object to die",
+                        "the watched object to die or be exiled",
+                        "a creature to die",
+                        "the next end step",
+                        "its controller's next matching spell",
+                    ),
+                    relation.decision,
+                )
+            )
+            if relation.this_turn:
+                details.append("ends at this turn's cleanup if it has not triggered")
+        elif relation.decision:
             details.append(
                 _enum(
                     (
@@ -498,7 +517,8 @@ class _Renderer:
                 f"Legal when resolution began: {eligibility}"
             )
         if relation.context is not None:
-            details.append("trigger context " + self.fact_reference(relation.context))
+            label = "watching" if relation.kind == 10 else "trigger context"
+            details.append(f"{label} {self.fact_reference(relation.context)}")
         if relation.sacrifice is not None:
             details.append(
                 "reserved sacrifice " + self.fact_reference(relation.sacrifice)

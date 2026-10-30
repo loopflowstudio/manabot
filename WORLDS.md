@@ -26,7 +26,7 @@ number. A run on an open world makes no comparability claim.
 | **w14** | in development, MTG-195, 2026-10-26 | 40 / 41 / 28 / 17; controller-selected trigger placement and policy-input v3 occurrence joins | unchanged authored packs; fresh w14 conformance and play fixtures | no strength baseline |
 | **w15** | in development, MTG-177, 2026-10-27 | 40 / 41 / 28 / 17; retained resolution eligibility, policy-input v4 relations 64 × 33 | unchanged authored packs; fresh integrated conformance and play fixtures | no strength baseline |
 | **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
-| **w17** | open (Tasks 892c47, 87e012, 6875f0, 488a40), 2026-10-29 | 67 / 55 / 38 / 17 plus 128 × 12 fact rows (policy input v5; v1–v4 keep 40 / 41 / 29); cards in engine rules types, learning schema 9 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history | `world` (the default pack): every defined card (263 supported); `semantic-kernel-w17-v1`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
+| **w17** | open (Tasks 892c47, 87e012, 6875f0, 488a40), 2026-10-29 | 67 / 55 / 38 / 17 plus 128 × 12 fact rows (policy input v5; v1–v4 keep 40 / 41 / 29); cards in engine rules types, learning schema 10 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history | `world` (the default pack): every defined card (263 supported); `semantic-kernel-w17-v1`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
 
 **Open world: w17.** `managym.WORLD_VERSION` identifies live runs. Checkpoints
 from earlier worlds are **not comparable** to w17; do not reuse their
@@ -155,10 +155,14 @@ a timestamp rank and dealt damage this turn (29 → 38). Open-ended vocabularies
 learning-token values in 16-bit halves, two amounts, duration, timestamp rank,
 source definition, validity): counter kinds, effect-added subtypes, a set name
 and creature types, spent abilities and continuous-effect records. Relation
-rows add a frame's X and a spell's granted keywords (33 → 48), so the relation
-width alone tells v5. Native buffers bind v5 by player width. Learning schema 9
-is unchanged: tokens derive from the definitions, so new `Effect` variants and
-card fields appear in them without a schema change. Viewers see an opponent's
+rows add a frame's X, a spell's granted keywords and a waiting delayed
+trigger's "this turn" (33 → 49), so the relation width alone tells v5. Waiting
+delayed triggers (CR 603.7) are public v5 relation frames of kind 10 after
+every other frame: source, controller, event (`decision`), watched object or
+remembered context, and "this turn"; v2–v4 encode none. Native buffers bind v5
+by player width. Learning schema 10 adds the `delayed_trigger` object role (the
+trigger's source definition programs); tokens derive from the definitions, so
+new `Effect` variants and card fields appear in them without a schema change. Viewers see an opponent's
 foretold card only as an exile count, in JSON, text and tensor alike.
 `managym/tests/cards/observability.rs` names each field's columns and tokens.
 Action shapes are unchanged.

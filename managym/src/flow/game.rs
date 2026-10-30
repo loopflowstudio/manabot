@@ -52,8 +52,8 @@ pub struct GameState {
     pub observation_events: EventLog,
     pub pending_triggers: Vec<PendingTrigger>,
     pub trigger_placement: Option<TriggerPlacement>,
-    /// One-shot delayed triggers (earthbend returns) watching specific
-    /// cards' next departure from the battlefield.
+    /// Delayed triggered abilities (CR 603.7) waiting for their events, in
+    /// creation order; public, and observed as continuation frames.
     pub delayed_triggers: Vec<DelayedTrigger>,
     /// "Exiled until [source] leaves the battlefield" linkages (Jailer).
     pub exile_links: Vec<ExileLink>,

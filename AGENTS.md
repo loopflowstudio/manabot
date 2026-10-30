@@ -114,8 +114,9 @@ checkpoints or experiment evidence.
   repository-wide type safety without a passing configured type check, or
   weaken types merely to silence one.
 - Native scalar/vector observation buffers bind continuation input semantics by
-  relation width: v2/v3 have 32 columns, v4 has 33, v5 has 48; validity
-  remains column 31. V5 widens player rows to 67, card rows to 55 and
+  relation width: v2/v3 have 32 columns, v4 has 33, v5 has 49; validity
+  remains column 31. Waiting delayed triggers are v5 relation frames (kind
+  10, after every other frame); v2–v4 encode none. V5 widens player rows to 67, card rows to 55 and
   permanent rows to 38 (v1–v4: 40 / 41 / 29), validity last, and adds a
   `facts` block (128 × 12, one row per `FactKind` fact about a player or
   permanent). Open-ended vocabularies (counter kinds, added subtypes, set

@@ -52,9 +52,10 @@ RELATION_VALID_INDEX = 31
 # Policy input v5 encodes every Observation fact; managym's
 # observation_encoder.rs owns the layout and these mirror it exactly. V5 widens
 # the player, card and permanent rows; v1-v4 keep the legacy widths.
-RELATION_DIM_V5 = 48
+RELATION_DIM_V5 = 49
 RELATION_X_INDEX = 33
 RELATION_KEYWORDS_INDEX = 34  # 14 granted spell keywords, KeywordData order
+RELATION_THIS_TURN_INDEX = 48  # a waiting delayed trigger ends this turn
 SPEND_SUBTYPES = ("Lesson", "Shrine", "Ally")
 LEGACY_PLAYER_DIM = 40
 PLAYER_RESTRICTED_INDEX = LEGACY_PLAYER_DIM
@@ -492,6 +493,9 @@ class ObservationEncoder:
     ) -> np.ndarray:
         """Reference implementation of native current-continuation relation rows."""
         rows: list[np.ndarray] = []
+        if not self.shows_everything:
+            # Waiting delayed triggers (kind 10, always last) are v5 facts.
+            frames = [frame for frame in frames if frame.kind != 10]
 
         def _reference(row: np.ndarray, value: managym.VisibleReference) -> None:
             row[23] = 0 if value.definition is None else value.definition + 1
@@ -527,8 +531,10 @@ class ObservationEncoder:
             row[RELATION_VALID_INDEX] = 1
             if self.shows_everything:
                 row[RELATION_X_INDEX] = frame.x
-                # Granted keywords fill the row's remaining columns.
-                row[RELATION_KEYWORDS_INDEX:] = frame.granted_keywords
+                row[RELATION_KEYWORDS_INDEX:RELATION_THIS_TURN_INDEX] = (
+                    frame.granted_keywords
+                )
+                row[RELATION_THIS_TURN_INDEX] = frame.this_turn
             rows.append(row)
             for ordinal, target in enumerate(frame.targets, 1):
                 target_row = row.copy()

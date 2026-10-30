@@ -24,8 +24,8 @@ use managym::{
     agent::{
         action::{Action, ActionSpaceKind},
         continuation::{
-            ClauseTarget, ContinuationFrame, ManaOutput, VisibleReference, RELATION_DIM_V5,
-            RELATION_KEYWORDS_INDEX, RELATION_X_INDEX,
+            delayed_event_code, ClauseTarget, ContinuationFrame, ManaOutput, VisibleReference,
+            RELATION_DIM_V5, RELATION_KEYWORDS_INDEX, RELATION_THIS_TURN_INDEX, RELATION_X_INDEX,
         },
         observation::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
@@ -47,7 +47,10 @@ use managym::{
             PLAYER_SEAT_INDEX, PLAYER_TURN_INDEX,
         },
     },
-    flow::turn::{PlayerTurnHistory, StepKind, TurnState},
+    flow::{
+        trigger::DelayedTriggerEvent,
+        turn::{PlayerTurnHistory, StepKind, TurnState},
+    },
     state::{
         effect::{Affected, EffectDuration, Modification},
         game_object::{CardId, PermanentId, PlayerId, Target},
@@ -2523,6 +2526,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         resolutions_this_turn => [column(Relation, 30)],
         x => [column(Relation, RELATION_X_INDEX)],
         granted_keywords => [Columns(Relation, RELATION_KEYWORDS_INDEX, KEYWORD_COUNT)],
+        this_turn => [column(Relation, RELATION_THIS_TURN_INDEX)],
     }));
     fields.extend(encoding!(ClauseTarget {
         reference => [Rows("VisibleReference below")],
@@ -3079,6 +3083,111 @@ fn lo_and_li_grant_lifelink_to_a_lesson_on_the_stack_in_v5() {
     let (granted, plain) = (lesson(true), lesson(false));
     assert_eq!(granted[3], 1.0, "the top frame is the spell");
     assert_eq!((granted[lifelink], plain[lifelink]), (1.0, 0.0));
+}
+
+/// Every waiting delayed trigger's event → its frame's `decision` code and
+/// whether its watched object or remembered context is a reference row.
+fn delayed_event_seen(event: &DelayedTriggerEvent) -> (u8, bool) {
+    match event {
+        DelayedTriggerEvent::Leaves {
+            or_exiled: false, ..
+        } => (1, true),
+        DelayedTriggerEvent::Leaves {
+            or_exiled: true, ..
+        } => (2, true),
+        DelayedTriggerEvent::CreatureDies => (3, false),
+        DelayedTriggerEvent::NextEndStep { context } => (4, context.is_some()),
+        DelayedTriggerEvent::YouCastSpell(_) => (5, false),
+    }
+}
+
+#[test]
+fn every_delayed_trigger_event_has_its_own_relation_code() {
+    let watched = managym::state::game_object::ObjectRef {
+        entity: managym::state::game_object::EntityId(1),
+        incarnation: managym::state::game_object::Incarnation(0),
+    };
+    let events = [
+        DelayedTriggerEvent::Leaves {
+            watched,
+            or_exiled: false,
+        },
+        DelayedTriggerEvent::Leaves {
+            watched,
+            or_exiled: true,
+        },
+        DelayedTriggerEvent::CreatureDies,
+        DelayedTriggerEvent::NextEndStep { context: None },
+        DelayedTriggerEvent::YouCastSpell(CardPredicate::subtype("Lesson")),
+    ];
+    let codes: BTreeSet<u8> = events.iter().map(delayed_event_code).collect();
+    assert_eq!(codes.len(), events.len());
+    for event in &events {
+        assert_eq!(delayed_event_seen(event).0, delayed_event_code(event));
+    }
+}
+
+/// Fatal Fissure's waiting trigger is a public relation row for both
+/// viewers — its source, controller, event, watched creature and "this turn"
+/// — until it fires or ends at cleanup.
+#[test]
+fn a_waiting_delayed_trigger_is_observed_until_it_fires_or_expires() {
+    let waiting = |s: &Scenario, viewer: usize| -> Option<(f32, f32, f32, f32)> {
+        let encoded = encoded(s, viewer, 5);
+        let rows = encoded.relations.as_chunks::<RELATION_DIM_V5>().0;
+        let header = rows
+            .iter()
+            .position(|row| row[0] == 1.0 && row[3] == 10.0)?;
+        let context = rows
+            .iter()
+            .find(|row| row[0] == 3.0 && row[3] == 10.0)
+            .map_or(0.0, |row| row[24]);
+        let row = rows[header];
+        Some((row[4], row[28], row[RELATION_THIS_TURN_INDEX], context))
+    };
+    let setup = || {
+        let mut s = five_color_setup(&["Fatal Fissure", "Lightning Strike", "Gray Ogre"]);
+        s.force_permanent_on_battlefield(0, "Forest");
+        let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+        assert_eq!(waiting(&s, 0), None);
+        cast(&mut s, "Fatal Fissure");
+        assert!(s.choose_target(Target::Permanent(ogre)));
+        settle(&mut s);
+        (s, ogre)
+    };
+    let (mut s, ogre) = setup();
+    let fissure = s.game().state.delayed_triggers[0].source_card;
+    for viewer in [0, 1] {
+        let (controller, event, this_turn, watched) = waiting(&s, viewer).expect("visible");
+        assert_eq!(
+            (controller, event, this_turn),
+            (if viewer == 0 { 1.0 } else { 2.0 }, 1.0, 1.0)
+        );
+        assert!(watched > 0.0, "the watched creature is joined");
+        assert!(
+            definitions_seen(&s, viewer).contains(&s.game().state.cards[fissure].definition_id.0)
+        );
+    }
+    let frame = Observation::for_player(s.game(), PlayerId(1))
+        .continuation
+        .into_iter()
+        .find(|frame| frame.kind == 10)
+        .unwrap();
+    assert_eq!(
+        frame.context.and_then(|c| c.object),
+        s.game().state.permanents[ogre]
+            .as_ref()
+            .map(|permanent| permanent.id.0 as i32),
+        "the watched permanent"
+    );
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(waiting(&s, 0), None, "ended at cleanup");
+
+    let (mut s, ogre) = setup();
+    cast(&mut s, "Lightning Strike");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert_eq!(waiting(&s, 0), None, "fired");
 }
 
 #[test]

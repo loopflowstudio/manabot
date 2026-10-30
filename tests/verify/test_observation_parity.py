@@ -23,10 +23,13 @@ from manabot.env.observation import (
     PERMANENT_GRANTED_LAND_INDEX,
     PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX,
     RELATION_KEYWORDS_INDEX,
+    RELATION_THIS_TURN_INDEX,
     RELATION_X_INDEX,
     ObservationConfig,
     ObservationEncoder,
 )
+from manabot.managym.enums import ActionEnum
+from manabot.verify.text_observation import priority_root
 import managym
 
 
@@ -492,3 +495,44 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     v4 = env.encode_observation(obs, 4)
     assert v4["agent_permanents"].shape[-1] == 29
     assert v4["agent_cards"].shape[-1] == 41
+
+
+def test_waiting_delayed_trigger_rows_agree_and_stay_out_of_v4() -> None:
+    env = priority_root(("Fatal Fissure",), ("Swamp", "Swamp"), opponent=("Gray Ogre",))
+    obs = env.scenario_refresh()
+    ogre = obs.opponent_permanents[0].id
+    for _ in range(12):
+        if any(frame.kind == 10 for frame in obs.continuation):
+            break
+        actions = obs.action_space.actions
+        ranked = sorted(
+            range(len(actions)),
+            key=lambda index: (
+                actions[index].action_type
+                not in (ActionEnum.PRIORITY_CAST_SPELL, ActionEnum.CHOOSE_TARGET)
+                or (
+                    actions[index].action_type == ActionEnum.CHOOSE_TARGET
+                    and ogre not in actions[index].focus
+                ),
+                actions[index].action_type != ActionEnum.PRIORITY_PASS_PRIORITY,
+            ),
+        )
+        obs, *_ = env.step(ranked[0])
+    else:
+        raise AssertionError("Fatal Fissure's trigger is not waiting")
+    for version in (4, 5):
+        expected = ObservationEncoder(
+            ObservationConfig(policy_input_version=version)
+        ).encode(obs)
+        actual = env.encode_observation(obs, version)
+        for key, value in expected.items():
+            np.testing.assert_array_equal(actual[key], value, err_msg=key)
+        relations = actual["relations"]
+        waiting = relations[:, 3] == 10
+        if version == 4:
+            assert not waiting.any(), "a v5 fact"
+            continue
+        header = relations[waiting & (relations[:, 0] == 1)][0]
+        watched = relations[waiting & (relations[:, 0] == 3)][0]
+        assert header[28] == 1 and header[RELATION_THIS_TURN_INDEX] == 1
+        assert watched[24] > 0

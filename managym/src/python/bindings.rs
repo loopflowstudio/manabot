@@ -4071,7 +4071,9 @@ fn parse_continuation_frames_json(
     let frames: Vec<crate::agent::continuation::ContinuationFrame> =
         serde_json::from_value(value.clone()).map_err(|e| PyValueError::new_err(e.to_string()))?;
     if frames.iter().enumerate().any(|(index, frame)| {
-        !(1..=9).contains(&frame.kind)
+        !(1..=10).contains(&frame.kind)
+            || (frame.kind == 10 && (!(1..=5).contains(&frame.decision) || frame.parent.is_some()))
+            || (frame.kind != 10 && frame.this_turn)
             || (frame.kind != 5
                 && frame
                     .targets
