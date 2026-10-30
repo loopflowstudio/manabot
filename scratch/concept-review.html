@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Concept review — one world, one card catalog</title>
+<title>Concept review — second pass: one world, set files, set filters</title>
 <style>
 :root{--fg:#222;--bg:#fbfaf7;--mute:#666;--rule:#ddd;--new:#2a6b3a;--old:#8a3b2a;--code:#f0eee8}
 @media (prefers-color-scheme:dark){:root{--fg:#e6e3dc;--bg:#1b1a18;--mute:#9a968e;--rule:#333;--new:#7fc78f;--old:#e39a86;--code:#26251f}}
@@ -16,48 +16,37 @@ code{padding:0 .2em}pre{padding:.8rem;overflow-x:auto}
 .proposed .tag{color:var(--new)}.existing .tag{color:var(--old)}
 table{border-collapse:collapse;width:100%;font-size:.9rem}td,th{border-bottom:1px solid var(--rule);padding:.35rem .4rem;text-align:left;vertical-align:top}
 </style></head><body><main>
-<p class="meta">Task 892c47 · step: concept-review (headless) · 2026-10-29<br>
-Built from <code>managym/src/world.rs</code>, <code>managym/src/semantic/pool.rs</code>, <code>managym/src/cards/content_pack.rs</code>, <code>managym/src/semantic/setups.rs</code>, <code>scratch/892c47-author-tla-cards.md</code></p>
+<p class="meta">Task 892c47 · step: concept-review (headless, second pass) · 2026-10-29 · at 276ac5b77<br>
+Built from managym/src/world.rs, managym/src/cards/{mod,pool,setups}.rs, content/semantic/current/setups.json, manabot/semantic/coverage.py, scratch/892c47-author-tla-cards.md</p>
 
-<h1>One world should have one every-card catalog</h1>
-<p><strong>Decision:</strong> none is needed from you. Your accepted direction (one world; its pool is every card a set file defines) already settles this. The next implement pass does it, and the PR still stops at demo.</p>
+<h1>Nothing to change; one counterexample for the demo</h1>
+<p><strong>Decision needed:</strong> none for PR394. The implemented concepts match your accepted direction. One consequence of your “first printing” and “key prefix” decisions is worth seeing at the demo.</p>
 
-<h2>Actions → concepts → APIs</h2>
+<h2>Actions → concepts → APIs (as implemented)</h2>
+<div class="existing"><p class="tag">Existing, verified in code</p>
 <table>
 <tr><th>Someone…</th><th>Concept</th><th>API</th></tr>
-<tr><td>writes a card</td><td>a function in its first-printing set file</td><td><code>cardsets::catalog()</code></td></tr>
+<tr><td>writes a card</td><td>a <code>CardDefinition</code> function in its first-printing set file</td><td><code>cardsets/&lt;set&gt;.rs</code></td></tr>
 <tr><td>asks “is this card or deck supported?”</td><td>the world</td><td><code>world::supports_card</code>, <code>unsupported_cards</code></td></tr>
-<tr><td>limits deck generation to TLA</td><td>a set filter</td><td><code>world::set_cards(&amp;["tla","lea"])</code></td></tr>
-<tr><td>imports a deck (f871a8)</td><td>the pool, with a row for each card</td><td><code>content_pool(key)</code>, <code>pool_content(key)</code></td></tr>
-<tr><td>plays a match</td><td>a content pack</td><td><code>ContentPack::default()</code> or an authored setup pack</td></tr>
-</table>
+<tr><td>limits deck generation to TLA</td><td>a set filter by key prefix</td><td><code>world::set_cards(&amp;["tla","lea"])</code></td></tr>
+<tr><td>imports a deck (f871a8)</td><td>the world pool = the default pack</td><td><code>content_pool("world")</code>, <code>pool_content("world")</code></td></tr>
+<tr><td>replays a fixed setup</td><td>an authored setup pack (decklists only)</td><td><code>content_pack_for_authored_match</code></td></tr>
+</table></div>
 
-<h2>The mismatch</h2>
-<div class="existing"><p class="tag">Existing</p>
-<p>Two packs each claim to hold every card, and they assign different ids:</p>
-<pre>ContentPack::default()     LEGACY_ORDER, then catalog, then fixtures   id 0 = Plains
-content_pool("tla-pool-v1") cardsets::catalog() order                   id 0 = Deadly Dispute</pre>
-<p>So a deck admitted through the pool gets a different content identity from the same deck played through the default path. The key also says “tla”, but the pool holds every set.</p></div>
+<h2>The counterexample</h2>
+<p>Three cards printed in TLA live under earlier sets:</p>
+<pre>ptk.corrupt_court_official   eld.epic_downfall   ths.lightning_strike
+set_cards(["tla"])  →  none of these three</pre>
+<p>That follows your wording (filter “selected by set, the key prefix such as <code>tla.*</code>”). No authored TLA deck uses them today. A “TLA-legal” filter would need a new concept, the printings of each card, so it is not something PR394 settles.</p>
 
-<div class="proposed"><p class="tag">Proposed</p>
-<pre>content_pool("world")  →  rows over ContentPack::default()
-   set-file card     eligible, or unsupported with its INCOMPLETE reason
-   token             unsupported: "created by its card"
-   rules fixture     unsupported: "rules fixture, not a printed card"
-row field: semantic_key → key</pre>
-<p>The default pack’s ids and digest stay as they are, since checkpoints and receipts depend on them. Nothing in the repository pins the pool’s current digest. The Rust <code>semantic/</code> module, named after the deleted IR, moves under <code>cards/</code>.</p></div>
+<h2>Checked and kept</h2>
+<ul>
+<li>Authored setup packs: decklists only. Frozen setups and f871a8’s exact-preset selection depend on their identities.</li>
+<li>v1 Python coverage gate: checks only the frozen v1 corpus, off the current path. It is not the review-record gate you removed.</li>
+</ul>
 
-<h2>Normal path, failure, recovery</h2>
-<p><em>Normal path:</em> f871a8 imports a TLA deck. It checks rows from <code>content_pool("world")</code>, then plays on <code>pool_content("world")</code>, which is now the same pack as the default path.<br>
-<em>Failure:</em> the deck names Water Tribe Rallier. Its row is unsupported with the INCOMPLETE reason, and admission rejects the deck with that reason.<br>
-<em>Recovery:</em> once its batch completes the card, removing the INCOMPLETE entry makes the row eligible. No other record needs to change.</p>
-
-<h2>Kept on purpose</h2>
-<p>Authored setup packs stay, because frozen checkpoints bind their ids. The v1 Python coverage gate only checks frozen v1 content, so it is left for a separate cleanup.</p>
-
-<h2>Questions (none blocking)</h2>
+<h2>Questions</h2>
 <ol>
-<li>New pool key: (a) <code>"world"</code> (the default), (b) <code>"w17"</code>, which would change with each world, (c) keep <code>"tla-pool-v1"</code>.</li>
-<li>Retire the v1 coverage gate and its CI job: (a) in a later Task (the default), (b) in PR394.</li>
+<li>After PR394, should a TLA deck filter include reprints? (a) no, the key prefix stays the filter (current); (b) yes, add printings per card in a later Task.</li>
 </ol>
 </main></body></html>

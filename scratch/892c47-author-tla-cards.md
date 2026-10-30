@@ -143,6 +143,23 @@ pipeline: `544ae312c:scratch/892c47-author-tla-cards.md`.
    f871a8 was told `card_def_id` is required (comment 2026-10-29 22:47, plus a
    correction naming `eligibility`/`reason` as the support fields).
 
+## Concept review, second pass (2026-10-29, headless)
+
+No design change. The implemented concepts match the accepted direction: set
+files are the only card representation; `world` pool = default pack;
+`supports_card`/`unsupported_cards` answer from definitions plus
+`tla::INCOMPLETE`; `set_cards` is the set filter; authored setup packs remain
+decklists only (frozen setups and f871a8's exact-preset selection need their
+identities). The v1 Python coverage gate checks only the frozen v1 corpus, off
+the current path, so it is not the review-record gate Jack Heart removed.
+
+Counterexample to show at demo (settled by Jack Heart's "key prefix" wording,
+not an open choice for this PR): Corrupt Court Official, Epic Downfall and
+Lightning Strike are TLA reprints filed under their first printings (`ptk`,
+`eld`, `ths`), so `set_cards(["tla"])` omits them. No authored TLA deck uses
+them today. A printing-aware "TLA-legal" filter would be a new product concept
+(printings per card), for f871a8 or a later Task if Jack wants it.
+
 ## Remaining
 
 1. PR394 CI at head 07fcdb6aa (b1579b887's run was cancelled, so the
