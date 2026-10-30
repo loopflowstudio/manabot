@@ -9,6 +9,7 @@ use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::game::{ActivationSource, CastChoices, Game, Payment, PendingChoice},
     state::{
+        card::ActivationZone,
         game_object::{CardId, ObjectId, PlayerId},
         mana::Mana,
         zone::ZoneType,
@@ -158,51 +159,31 @@ impl Game {
         }
     }
 
-    pub(crate) fn can_player_act(&self, player: PlayerId) -> bool {
-        self.state
-            .zones
+    /// Cards `player` might play at priority: their hand and graveyard, and
+    /// exiled cards they hold grants for, and a library top a permanent lets
+    /// them cast. `priority_action_for_card` decides.
+    fn priority_candidate_cards(&self, player: PlayerId) -> impl Iterator<Item = CardId> + '_ {
+        let zones = &self.state.zones;
+        zones
             .zone_cards(ZoneType::Hand, player)
             .iter()
-            .chain(
-                self.state
-                    .zones
-                    .zone_cards(ZoneType::Graveyard, player)
-                    .iter(),
-            )
+            .chain(zones.zone_cards(ZoneType::Graveyard, player))
             .copied()
             .chain(self.exile_granted_cards(player))
             .chain(self.library_top_castable(player))
+    }
+
+    pub(crate) fn can_player_act(&self, player: PlayerId) -> bool {
+        self.priority_candidate_cards(player)
             .any(|card| self.priority_action_for_card(player, card).is_some())
-            || self
-                .priority_activate_ability_actions(player)
-                .into_iter()
-                .next()
-                .is_some()
+            || !self.priority_activate_ability_actions(player).is_empty()
     }
 
     pub(crate) fn compute_player_actions(&self, player: PlayerId) -> Vec<Action> {
-        let mut actions = Vec::new();
-
-        for card in self
-            .state
-            .zones
-            .zone_cards(ZoneType::Hand, player)
-            .iter()
-            .chain(
-                self.state
-                    .zones
-                    .zone_cards(ZoneType::Graveyard, player)
-                    .iter(),
-            )
-            .copied()
-            .chain(self.exile_granted_cards(player))
-            .chain(self.library_top_castable(player))
-        {
-            if let Some(action) = self.priority_action_for_card(player, card) {
-                actions.push(action);
-            }
-        }
-
+        let mut actions: Vec<Action> = self
+            .priority_candidate_cards(player)
+            .filter_map(|card| self.priority_action_for_card(player, card))
+            .collect();
         actions.extend(self.priority_activate_ability_actions(player));
         actions.push(Action::PassPriority { player });
         actions
@@ -219,25 +200,17 @@ impl Game {
                 .iter()
                 .enumerate()
             {
-                if ability.zone != crate::state::card::ActivationZone::Battlefield
-                    || (ability
-                        .target_requirement()
-                        .is_some_and(|requirement| requirement.min > 0)
+                let source = ActivationSource::Permanent(permanent_id);
+                if ability.zone != ActivationZone::Battlefield
+                    || (ability.requires_target()
                         && self
-                            .activated_ability_targets(
-                                player,
-                                ActivationSource::Permanent(permanent_id),
-                                ability_index,
-                                &[],
-                            )
+                            .activated_ability_targets(player, source, ability_index, &[])
                             .is_empty())
                 {
                     continue;
                 }
-                if (ability.own_turn_only && self.active_player() != player)
-                    || (ability.sorcery_timing && !self.can_cast_sorceries(player))
+                if self.check_activation_terms(player, ability).is_err()
                     || permanent.activation_used(ability_index, ability)
-                    || self.state.players[player.0].life < ability.life_cost as i32
                     || (ability.discard_card
                         && self
                             .state
@@ -257,13 +230,13 @@ impl Game {
                     }
                     continue;
                 }
+                let payment = Payment::Activation {
+                    source,
+                    ability_index,
+                    targets: Vec::new(),
+                    x: 0,
+                };
                 if let Some(cost) = &ability.sacrifice {
-                    let payment = Payment::Activation {
-                        source: ActivationSource::Permanent(permanent_id),
-                        ability_index,
-                        targets: Vec::new(),
-                        x: 0,
-                    };
                     if !self
                         .payment_candidates(player, &payment, cost)
                         .into_iter()
@@ -299,17 +272,7 @@ impl Game {
                 let affordable = if ability.waterbend {
                     self.can_pay_waterbend_activation(player, permanent_id, ability)
                 } else {
-                    self.can_pay_announced_activation(
-                        player,
-                        &ability.mana_cost,
-                        &Payment::Activation {
-                            source: ActivationSource::Permanent(permanent_id),
-                            ability_index,
-                            targets: Vec::new(),
-                            x: 0,
-                        },
-                        None,
-                    )
+                    self.can_pay_announced_activation(player, &ability.mana_cost, &payment, None)
                 };
                 if affordable {
                     actions.push(Action::ActivateAbility {
@@ -344,10 +307,8 @@ impl Game {
                         continue;
                     };
                     let source = ActivationSource::Card(card);
-                    if (ability.own_turn_only && self.active_player() != player)
-                        || (ability
-                            .target_requirement()
-                            .is_some_and(|requirement| requirement.min > 0)
+                    if self.check_activation_terms(player, &ability).is_err()
+                        || (ability.requires_target()
                             && self
                                 .activated_ability_targets(player, source, ability_index, &[])
                                 .is_empty())

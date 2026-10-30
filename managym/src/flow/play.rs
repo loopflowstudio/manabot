@@ -71,7 +71,6 @@ impl Game {
         let definition = &self.state.cards[card];
         if !definition.types.is_spell()
             || !self.state.zones.contains(card, ZoneType::Graveyard, player)
-            || self.casts_only_from_hand(player)
         {
             return None;
         }
@@ -122,11 +121,15 @@ impl Game {
 
     /// The cost `player` may pay to cast `card` from outside their hand:
     /// graveyard flashback, an exact-object exile grant, or the top of their
-    /// library while a permanent permits it.
+    /// library while a permanent permits it. A hand-only restriction overrides
+    /// all three.
     pub(crate) fn zone_cast_cost(&self, player: PlayerId, card: CardId) -> Option<ManaCost> {
+        if self.hand_only_until(player).is_some() {
+            return None;
+        }
         match self.state.zones.zone_of(card)? {
             ZoneType::Graveyard => self.flashback_cost(player, card),
-            ZoneType::Exile => self.exile_cast_cost(player, card),
+            ZoneType::Exile => self.grant_cast_cost(self.exile_grant(player, card)?, card),
             ZoneType::Library if self.library_top_castable(player) == Some(card) => {
                 self.state.cards[card].mana_cost.clone()
             }
@@ -168,10 +171,7 @@ impl Game {
             let count = if card_ref.cost_reduction_in_graveyard {
                 self.count_graveyard_matching(player, predicate)
             } else {
-                self.battlefield_permanents(player)
-                    .into_iter()
-                    .filter(|id| self.permanent_matches_predicate(*id, predicate))
-                    .count()
+                self.count_battlefield_matching(player, predicate)
             };
             cost = cost.reduced_generic(u8::try_from(count).unwrap_or(u8::MAX));
         }
@@ -866,20 +866,12 @@ impl Game {
         if ability.mana_choices().is_some() {
             return self.activate_mana_ability(player, permanent_id, ability_index);
         }
-        if ability.own_turn_only && self.active_player() != player {
-            return Err(AgentError("activation requires your turn".into()));
-        }
-        if ability.sorcery_timing && !self.can_cast_sorceries(player) {
-            return Err(AgentError("activation requires sorcery timing".into()));
-        }
+        self.check_activation_terms(player, &ability)?;
         if permanent.activation_used(ability_index, &ability) {
             return Err(AgentError("ability was already activated".into()));
         }
         if ability.tap_source && !self.permanent_can_tap(permanent_id) {
             return Err(AgentError("source cannot tap".into()));
-        }
-        if self.state.players[player.0].life < ability.life_cost as i32 {
-            return Err(AgentError("cannot pay life cost".into()));
         }
         if ability.mana_cost.x > 0 {
             if self
@@ -981,17 +973,30 @@ impl Game {
         let ability = self
             .card_ability_in_zone(player, card, ability_index)
             .ok_or_else(|| AgentError("no ability of this card functions here".into()))?;
+        self.check_activation_terms(player, &ability)?;
+        let source = ActivationSource::Card(card);
+        if ability.target_spec().is_some() {
+            return self.begin_activated_targets(player, source, ability_index, &ability);
+        }
+        self.begin_activation_payment(player, source, ability_index, Vec::new(), 0)
+    }
+
+    /// The turn and life terms every activation shares, whatever its source.
+    pub(crate) fn check_activation_terms(
+        &self,
+        player: PlayerId,
+        ability: &ActivatedAbilityDefinition,
+    ) -> Result<(), AgentError> {
         if ability.own_turn_only && self.active_player() != player {
             return Err(AgentError("activation requires your turn".into()));
         }
         if self.state.players[player.0].life < ability.life_cost as i32 {
             return Err(AgentError("cannot pay life cost".into()));
         }
-        let source = ActivationSource::Card(card);
-        if ability.target_spec().is_some() {
-            return self.begin_activated_targets(player, source, ability_index, &ability);
+        if ability.sorcery_timing && !self.can_cast_sorceries(player) {
+            return Err(AgentError("activation requires sorcery timing".into()));
         }
-        self.begin_activation_payment(player, source, ability_index, Vec::new(), 0)
+        Ok(())
     }
 
     /// The ability at `ability_index` of `card` when the card is in the

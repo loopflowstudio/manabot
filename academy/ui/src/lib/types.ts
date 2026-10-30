@@ -28,6 +28,34 @@ export interface CardState {
   types: CardTypes;
   /** Foretold and face down in exile; only its owner's views list it. */
   face_down?: boolean;
+  /** The permission to play this card from exile, when it has one. */
+  cast_permission?: CastPermission;
+  /** The value of X announced for this spell on the stack. */
+  x?: number;
+}
+
+/** A public permission to play an exiled card; only set terms are present. */
+export interface CastPermission {
+  player_id: number;
+  /** Mana symbols paid to cast it; absent for a land play. */
+  cost?: string;
+  this_turn?: boolean;
+  own_turn_only?: boolean;
+  /** Usable only on a turn numbered after this one. */
+  after_turn?: number;
+  /** Lasts while the permitted player controls this permanent. */
+  source_permanent_id?: number;
+  flash?: boolean;
+  any_mana?: boolean;
+  waterbend?: boolean;
+  foretold?: boolean;
+}
+
+/** Mana spendable only on the named spell or ability-source subtypes. */
+export interface RestrictedMana {
+  spells?: string[];
+  abilities?: string[];
+  mana: number[];
 }
 
 export interface PermanentState {
@@ -35,6 +63,12 @@ export interface PermanentState {
   is_token?: boolean;
   temp_subtypes?: string[];
   exile_if_dies_this_turn?: boolean;
+  /** Exhaust abilities this object has used. */
+  exhausted_abilities?: number;
+  /** "Once each turn" abilities this object has used this turn. */
+  once_each_turn_used?: number;
+  /** Firebending granted until end of turn. */
+  granted_firebending?: number;
   text_box?: string;
   id: number;
   name: string | null;
@@ -55,8 +89,6 @@ export interface PermanentState {
   creature_types?: string[];
   /** A land only through an effect. */
   is_granted_land?: boolean;
-  /** Firebending gained until end of turn. */
-  firebending?: number;
   /** Attacking in the current combat. */
   attacking?: boolean;
   /** The attacking permanent this one blocks. */
@@ -78,6 +110,11 @@ export interface SideboardCard {
 export interface PlayerState {
   mana?: number[];
   lesson_mana?: number[];
+  /** `lesson_mana` split by restriction class. */
+  restricted_mana?: RestrictedMana[];
+  /** Player id whose next turn ends this player's hand-only casting. */
+  hand_only_until?: number;
+  no_maximum_hand_size?: boolean;
   combat_mana?: number;
   inspected?: CardState[];
   sideboard?: SideboardCard[];
@@ -94,8 +131,6 @@ export interface PlayerState {
   hand_hidden_count?: number;
   /** Unspent red mana stays until end of turn. */
   keeps_red_mana?: boolean;
-  /** No maximum hand size for the rest of the game. */
-  no_maximum_hand_size?: boolean;
   hand: CardState[];
   graveyard: CardState[];
   exile: CardState[];

@@ -6,10 +6,18 @@ from pathlib import Path
 
 from managym.decision import SemanticContractError
 from managym.decision_capture import DecisionInput
+import numpy as np
 import pytest
 
+from manabot.env.observation import (
+    CARD_PERMISSION_INDEX,
+    PERMANENT_ONCE_EACH_TURN_INDEX,
+    ObservationSpace,
+)
+from manabot.infra.config import ObservationConfig
 from manabot.semantic.text_observation import (
     RepresentationOverflow,
+    TextDecision,
     TextEncodingError,
     capture_text_decision,
     render_decision,
@@ -208,6 +216,76 @@ def test_ally_restricted_mana_is_not_described_as_lesson_mana() -> None:
     text = capture_text_decision(env).text
     assert "Restricted mana: W 0, U 0, B 0, R 0, G 1, C 0." in text
     assert "Lesson-only" not in text and "Lesson spending" not in text
+    assert "Restricted mana for Ally spells or abilities of Ally sources: G 1." in text
+
+
+def _viewer_observation(decision: TextDecision) -> managym.Observation:
+    source = DecisionInput.model_validate_json(decision.capture_json)
+    return managym.Observation.from_json(json.dumps(source.observation.viewer_state))
+
+
+def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
+    """Text and both encoders show the owner its foretold card and terms; the
+    opponent's text, JSON and tensor hold no trace beyond the exile count."""
+    env = priority_root(("Sozin's Comet",), ("Mountain", "Mountain"))
+    decision = capture_text_decision(env)
+    foretell = next(a for a in decision.actions if "Foretell" in a.description)
+    submit_response(env, decision, foretell.reference)
+
+    owner = capture_text_decision(env)
+    assert "foretold, face down" in owner.text
+    assert "may be played from exile by You: cast for {2}{R}, only after turn" in (
+        owner.text
+    )
+    space = ObservationSpace(ObservationConfig())
+    owner_rows = space.encode(_viewer_observation(owner))["agent_cards"]
+    assert owner_rows[:, CARD_PERMISSION_INDEX + 11].sum() == 1
+
+    pass_priority = next(a for a in owner.actions if "Pass" in a.description)
+    submit_response(env, owner, pass_priority.reference)
+    opponent = capture_text_decision(env)
+    # The opponent's deck holds Comets too; none of the owner's may show.
+    assert not any(
+        "(Sozin's Comet)" in line and "owner Opponent" in line
+        for line in opponent.text.splitlines()
+    )
+    assert "foretold" not in opponent.text
+    observation = _viewer_observation(opponent)
+    assert all(card.name != "Sozin's Comet" for card in observation.opponent_cards)
+    assert observation.opponent.zone_counts[5] == 1
+    encoded = space.encode(observation)
+    for key in ("agent_cards", "opponent_cards"):
+        assert not encoded[key][:, CARD_PERMISSION_INDEX].any()
+
+
+def test_once_each_turn_use_reaches_text_and_both_encoders() -> None:
+    """Barrels' once-each-turn mana ability, once used, is in the text and in
+    the same v5 permanent column of the reference and native encoders."""
+    env = priority_root((), ("Barrels of Blasting Jelly", "Mountain"))
+    decision = capture_text_decision(env)
+    barrels = next(
+        a
+        for a in decision.actions
+        if "Barrels of Blasting Jelly" in a.description and "Activate" in a.description
+    )
+    submit_response(env, decision, barrels.reference)
+    while "once-each-turn abilities used this turn 1" not in (
+        decision := capture_text_decision(env)
+    ).text:
+        submit_response(env, decision, decision.actions[0].reference)
+
+    observation = _viewer_observation(decision)
+    space = ObservationSpace(ObservationConfig())
+    encoded = space.encode(observation)
+    row = next(
+        index
+        for index, permanent in enumerate(observation.agent_permanents)
+        if permanent.once_each_turn_used
+    )
+    assert encoded["agent_permanents"][row, PERMANENT_ONCE_EACH_TURN_INDEX] == 1
+    native = env.encode_observation(observation, policy_input_version=5)
+    for key, value in encoded.items():
+        np.testing.assert_array_equal(native[key], value, err_msg=key)
 
 
 def _redigest(payload: dict[str, object]) -> str:
@@ -228,7 +306,7 @@ def test_effect_derived_characteristics_appear_only_when_present() -> None:
     assert render_decision(_redigest(json.loads(decision.capture_json))).text == (
         decision.text
     )
-    ogre |= {"stun_counters": 2, "firebending": 1}
+    ogre |= {"stun_counters": 2}
     mountain |= {
         "attached_to": ogre["id"],
         "name": "Citizen",
@@ -248,7 +326,7 @@ def test_effect_derived_characteristics_appear_only_when_present() -> None:
     )
     assert ogre_after == ogre_before.replace(
         "; unlisted effective keywords false.",
-        "; stun counters 2; firebending 1; unlisted effective keywords false.",
+        "; stun counters 2; unlisted effective keywords false.",
     )
 
 
@@ -293,7 +371,7 @@ def test_face_down_card_text_appears_only_when_present() -> None:
         for old, new in zip(decision.text.splitlines(), text.splitlines())
         if old != new
     ]
-    assert len(changed) == 1 and "; face down;" in changed[0][1]
+    assert len(changed) == 1 and "face down" in changed[0][1]
 
 
 def _card_line(text: str, alias: str) -> str:
@@ -318,7 +396,7 @@ def test_foretell_is_an_ability_offer_naming_the_card() -> None:
     _foretell(env)
     decision = capture_text_decision(env)
     assert "; zone exile; " in _card_line(decision.text, "C1")
-    assert "; face down; " in _card_line(decision.text, "C1")
+    assert "; foretold, face down" in _card_line(decision.text, "C1")
     assert [a.description for a in decision.actions] == ["Pass priority"]
 
 
@@ -343,7 +421,7 @@ def test_a_foretold_card_is_cast_from_exile_on_a_later_turn() -> None:
     alias = cast.description.removeprefix("Cast ").split(" ", 1)[0]
     assert cast.description == f"Cast {alias} (Sozin's Comet)"
     line = _card_line(decision.text, alias)
-    assert "; zone exile; " in line and "; face down; " in line
+    assert "; zone exile; " in line and "; foretold, face down" in line
 
 
 def test_an_ally_is_cast_from_the_visible_top_of_the_library() -> None:
@@ -401,8 +479,10 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "name": "name set to",
         "creature_types": "creature types set to",
         "is_granted_land": "land through an effect",
-        "firebending": "firebending",
         "attacking": "attacking",
+        "exhausted_abilities": "exhaust abilities used",
+        "once_each_turn_used": "once-each-turn abilities used this turn",
+        "granted_firebending": "firebending",
         "blocking": "blocking",
         "abilities_lost": "has lost all abilities",
         "used_abilities": "used-up abilities",
@@ -426,6 +506,8 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "ward_cost": "ward mana value",
         "kicker_cost": "kicker mana value",
         "face_down": "face down",
+        "cast_permission": "may be played from exile by",
+        "x": "announced X",
     },
     managym.StackObject: {
         "stack_object_id": "S<n>",
@@ -455,7 +537,9 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "sideboard_counts": "Initial sideboard",
         "remaining_sideboard_counts": "Owned outside-game candidates",
         "keeps_red_mana": "Keeps unspent red mana",
-        "no_maximum_hand_size": "No maximum hand size",
+        "no_maximum_hand_size": "Has no maximum hand size",
+        "restricted_mana": "Restricted mana for",
+        "hand_only_until": "Can cast spells only from hand",
     },
     managym.Turn: {
         "turn_number": "Turn",
@@ -484,8 +568,10 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     state["agent"] |= {"keeps_red_mana": True, "no_maximum_hand_size": True}
     text = render_decision(_redigest(payload)).text
     assert "; blocking C2 (Gray Ogre);" in text
-    assert "; attacking; has lost all abilities; used-up abilities 1;" in text
-    assert "Keeps unspent red mana until end of turn.\nNo maximum hand size." in text
+    assert "; attacking;" in text
+    assert "; has lost all abilities; used-up abilities 1;" in text
+    assert "Keeps unspent red mana until end of turn." in text
+    assert "Has no maximum hand size for the rest of the game." in text
     for absent in (
         "attacking",
         "blocking",

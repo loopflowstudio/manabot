@@ -16,7 +16,7 @@ use crate::{
     },
     state::{
         ability::{Effect, LinkedGrant, PaymentCost},
-        game_object::{CardId, ObjectRef, PlayerId, Target},
+        game_object::{CardId, ObjectId, ObjectRef, PlayerId, Target},
         permanent::CounterKind,
         predicate::CardPredicate,
         zone::ZoneType,
@@ -376,6 +376,19 @@ impl Decision {
     }
 }
 
+/// `player` selects one of `cards`; `decline` adds the option to choose none.
+fn select_cards(
+    player: PlayerId,
+    cards: impl IntoIterator<Item = CardId>,
+    decline: bool,
+) -> Vec<Action> {
+    cards
+        .into_iter()
+        .map(|card| Action::SelectCard { player, card })
+        .chain(decline.then_some(Action::Decline { player }))
+        .collect()
+}
+
 /// A resolution paused on a decision.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct SuspendedResolution {
@@ -384,6 +397,13 @@ pub struct SuspendedResolution {
 }
 
 impl Game {
+    fn card_focus(&self, cards: &[CardId]) -> Vec<ObjectId> {
+        cards
+            .iter()
+            .map(|card| self.state.cards[*card].id)
+            .collect()
+    }
+
     pub(crate) fn suspend_rule_decision(&mut self, decision: Decision) {
         self.state.suspended_decision = Some(SuspendedResolution {
             frame: EffectFrame {
@@ -480,10 +500,9 @@ impl Game {
                         for permanent in self.waterbend_candidates(player) {
                             let mut probe = self.clone();
                             probe.tap_permanent(permanent, false);
-                            if probe.can_pay_with_waterbend(
-                                player,
-                                &crate::state::mana::ManaCost::default().with_generic(generic - 1),
-                            ) {
+                            let rest =
+                                crate::state::mana::ManaCost::default().with_generic(generic - 1);
+                            if probe.waterbend_payment_possible(player, &rest, generic - 1) {
                                 actions.push(Action::WaterbendTap { player, permanent });
                             }
                         }
@@ -522,14 +541,13 @@ impl Game {
             Decision::Sacrifice { player, predicate } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
-                actions: self
-                    .sacrifice_candidates(*player, predicate)
-                    .into_iter()
-                    .map(|id| Action::SelectCard {
-                        player: *player,
-                        card: self.state.permanents[id].as_ref().unwrap().card,
-                    })
-                    .collect(),
+                actions: select_cards(
+                    *player,
+                    self.sacrifice_candidates(*player, predicate)
+                        .into_iter()
+                        .map(|id| self.state.permanents[id].as_ref().unwrap().card),
+                    false,
+                ),
                 focus: source_focus,
             },
             Decision::DistributeCounters { player, .. } => ActionSpace {
@@ -550,87 +568,53 @@ impl Game {
                 subtype,
                 to_hand,
                 ..
-            } => {
-                let mut actions: Vec<Action> = self
-                    .basic_land_search_candidates(*player, subtype, *to_hand)
-                    .into_iter()
-                    .map(|card| Action::SelectCard {
-                        player: *player,
-                        card,
-                    })
-                    .collect();
-                actions.push(Action::Decline { player: *player });
-                ActionSpace {
-                    player: Some(*player),
-                    kind: ActionSpaceKind::LookAndSelect,
-                    actions,
-                    focus: source_focus,
-                }
-            }
-            Decision::SearchLibraryToHand { player, predicate } => {
-                let mut actions: Vec<Action> = self
-                    .library_search_candidates(*player, predicate)
-                    .into_iter()
-                    .map(|card| Action::SelectCard {
-                        player: *player,
-                        card,
-                    })
-                    .collect();
-                actions.push(Action::Decline { player: *player });
-                ActionSpace {
-                    player: Some(*player),
-                    kind: ActionSpaceKind::LookAndSelect,
-                    actions,
-                    focus: source_focus,
-                }
-            }
+            } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: select_cards(
+                    *player,
+                    self.basic_land_search_candidates(*player, subtype, *to_hand),
+                    true,
+                ),
+                focus: source_focus,
+            },
+            Decision::SearchLibraryToHand { player, predicate } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: select_cards(
+                    *player,
+                    self.library_search_candidates(*player, predicate),
+                    true,
+                ),
+                focus: source_focus,
+            },
             Decision::SearchDistinctLands { player, .. } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
-                actions: self
-                    .distinct_land_search_candidates(&suspended.decision)
-                    .into_iter()
-                    .map(|card| Action::SelectCard {
-                        player: *player,
-                        card,
-                    })
-                    .chain(std::iter::once(Action::Decline { player: *player }))
-                    .collect(),
+                actions: select_cards(
+                    *player,
+                    self.distinct_land_search_candidates(&suspended.decision),
+                    true,
+                ),
                 focus: source_focus,
             },
             Decision::DiscardFromRevealedHand { player, .. } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::Discard,
-                actions: self
-                    .revealed_hand_candidates(&suspended.decision)
-                    .into_iter()
-                    .map(|card| Action::SelectCard {
-                        player: *player,
-                        card,
-                    })
-                    .collect(),
+                actions: select_cards(
+                    *player,
+                    self.revealed_hand_candidates(&suspended.decision),
+                    false,
+                ),
                 focus: source_focus,
             },
             Decision::ExileLinked { player, up_to, .. } => {
                 let cards = self.linked_exile_candidates(&suspended.decision);
-                let mut actions: Vec<Action> = cards
-                    .iter()
-                    .map(|card| Action::SelectCard {
-                        player: *player,
-                        card: *card,
-                    })
-                    .collect();
-                if *up_to {
-                    actions.push(Action::Decline { player: *player });
-                }
                 ActionSpace {
                     player: Some(*player),
                     kind: ActionSpaceKind::LookAndSelect,
-                    focus: cards
-                        .iter()
-                        .map(|card| self.state.cards[*card].id)
-                        .collect(),
-                    actions,
+                    focus: self.card_focus(&cards),
+                    actions: select_cards(*player, cards, *up_to),
                 }
             }
             Decision::CastWithoutPaying { player, .. } => {
@@ -638,18 +622,8 @@ impl Game {
                 ActionSpace {
                     player: Some(*player),
                     kind: ActionSpaceKind::LookAndSelect,
-                    focus: cards
-                        .iter()
-                        .map(|card| self.state.cards[*card].id)
-                        .collect(),
-                    actions: cards
-                        .into_iter()
-                        .map(|card| Action::SelectCard {
-                            player: *player,
-                            card,
-                        })
-                        .chain(std::iter::once(Action::Decline { player: *player }))
-                        .collect(),
+                    focus: self.card_focus(&cards),
+                    actions: select_cards(*player, cards, true),
                 }
             }
             Decision::OpponentSplitsRevealed {
@@ -657,36 +631,22 @@ impl Game {
             } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
-                actions: revealed
-                    .iter()
-                    .map(|card| Action::SelectCard {
-                        player: *player,
-                        card: *card,
-                    })
-                    .collect(),
-                focus: revealed
-                    .iter()
-                    .map(|card| self.state.cards[*card].id)
-                    .collect(),
+                actions: select_cards(*player, revealed.iter().copied(), false),
+                focus: self.card_focus(revealed),
             },
             Decision::Discard { player, .. } | Decision::OptionalDiscardDraw { player, .. } => {
-                let mut actions: Vec<Action> = self
-                    .state
-                    .zones
-                    .zone_cards(ZoneType::Hand, *player)
-                    .iter()
-                    .map(|card| Action::SelectCard {
-                        player: *player,
-                        card: *card,
-                    })
-                    .collect();
-                if matches!(suspended.decision, Decision::OptionalDiscardDraw { .. }) {
-                    actions.push(Action::Decline { player: *player });
-                }
                 ActionSpace {
                     player: Some(*player),
                     kind: ActionSpaceKind::Discard,
-                    actions,
+                    actions: select_cards(
+                        *player,
+                        self.state
+                            .zones
+                            .zone_cards(ZoneType::Hand, *player)
+                            .iter()
+                            .copied(),
+                        matches!(suspended.decision, Decision::OptionalDiscardDraw { .. }),
+                    ),
                     focus: source_focus,
                 }
             }
@@ -694,18 +654,8 @@ impl Game {
             Decision::SelectMilled { player, cards, .. } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
-                actions: cards
-                    .iter()
-                    .map(|card| Action::SelectCard {
-                        player: *player,
-                        card: *card,
-                    })
-                    .chain(std::iter::once(Action::Decline { player: *player }))
-                    .collect(),
-                focus: cards
-                    .iter()
-                    .map(|card| self.state.cards[*card].id)
-                    .collect(),
+                actions: select_cards(*player, cards.iter().copied(), true),
+                focus: self.card_focus(cards),
             },
             Decision::Scry {
                 player, remaining, ..
@@ -770,17 +720,8 @@ impl Game {
             Decision::LegendRule { player, groups, .. } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LegendRule,
-                actions: groups[0]
-                    .iter()
-                    .map(|card| Action::SelectCard {
-                        player: *player,
-                        card: *card,
-                    })
-                    .collect(),
-                focus: groups[0]
-                    .iter()
-                    .map(|card| self.state.cards[*card].id)
-                    .collect(),
+                actions: select_cards(*player, groups[0].iter().copied(), false),
+                focus: self.card_focus(&groups[0]),
             },
             Decision::Learn { player } => {
                 let mut actions: Vec<Action> = self

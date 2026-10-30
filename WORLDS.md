@@ -27,7 +27,7 @@ was dead on arrival in exp-10.)
 | **w15** | in development, MTG-177, 2026-10-27 | 40 / 41 / 28 / 17; retained resolution eligibility, policy-input v4 relations 64 × 33 | unchanged authored packs; fresh integrated conformance and play fixtures | no strength baseline |
 | **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
 | **w17** | in development, Task 892c47, 2026-10-29 | 40 / 41 / 29 / 17; cards in engine rules types, learning schema 9 tokens derived from them, attacking permanent column | `tla-pool-v1`; `authored-match-w17-v1` receipt; other conformance receipts not yet regenerated | no strength baseline |
-| **w18** | in development, Tasks 87e012 and 6875f0, 2026-10-29 | 44 / 42 / 50 / 17 (policy input v5; v1–v4 keep 40 / 41 / 28); TLA casting permissions, restricted mana, foretell and control; counters by kind, Equipment and Auras, Vehicles, layered type/keyword/P/T grants, ability loss, activation X and crew | `tla-pool-v1`: every defined card; conformance receipts not yet regenerated | no strength baseline |
+| **w18** | in development, Tasks 87e012 and 6875f0, 2026-10-29 | 63 / 55 / 52 / 17 (policy input v5; v1–v4 keep 40 / 41 / 29); TLA casting, costs, zone permissions and private zones; exile cast permissions, hand-only lock, restricted mana by class, foretell, control; counters by kind, Equipment and Auras, Vehicles, layered type/keyword/P/T grants, ability loss, activation X and crew | `tla-pool-v1`: every defined card; conformance receipts not yet regenerated | no strength baseline |
 
 **Current development world: w18.** `managym.WORLD_VERSION` identifies live runs. Earlier
 checkpoints (including w17) are **not comparable** to w18; do not reuse their
@@ -48,49 +48,54 @@ in place and is never rewritten.
 
 ## w18: TLA casting and characteristics (not yet frozen)
 
-TLA casting, costs and zone permissions (Task 87e012) are carried here before
-they land on w17. `flow/cast_permission.rs` owns casting outside the hand: printed
-flashback, exact-card exile grants that go stale once the card leaves exile,
-and hand-only restrictions that override every other permission until the
-restricter's next untap. Kicker, X and free casts are announced together at
-cast time. Restricted mana is keyed by what it may pay for (Lesson, Shrine or
-Ally spells and ability sources); the narrowest usable mana spends first.
-Hand and graveyard abilities, including landcycling, are card activations.
-Exhaust and once-each-turn limits belong to the permanent. Foretold cards are
-exiled face down and visible only to their owner. Each player's battlefield
-lists the permanents they control, and a resolving permanent spell enters
-under its controller (CR 110.2).
+The cards of TLA batches T2 (Task 87e012) and T3 (Task 6875f0) are defined in
+`cardsets/tla.rs`. T2's rules meaning: casting from exile under exact-object
+grants (airbend, impulse exile, linked exile, foretell face down), a hand-only
+lock that overrides those grants until its controller's next untap, printed
+and granted flashback, announced X and kicker as one cast announcement, free
+casts during resolution, restricted mana keyed by spending class (Lesson,
+Shrine, Ally spells and ability sources), affinity and activation cost
+reduction, exhaust and once-each-turn activation limits, hand- and
+graveyard-zone activated abilities (landcycling), private library searches and
+choices, and control (a permanent spell enters under its controller).
 
-TLA characteristics, counters, replacements and attachments (Task 6875f0)
-follow. Their cards and new rules are `CardDefinition`, `Ability` and named
-`Effect` variants like every other card, and learning tokens follow from them.
-A permanent's characteristics are what `Game` derives from its card and
-permanent state, never those inputs read alone: static type, keyword and P/T
-grants apply in layer order (`ScopeView`); `Game::has_lost_abilities`,
-`permanent_name`, `permanent_has_subtype`, `activated_abilities_for` and
-`permanent_can_tap` are the single readers. Counters other than +1/+1 have
-kinds (stun, fire, double strike). Equipment and Auras attach to an exact
-object and grant abilities or set characteristics; Vehicles crew by tapping
-creatures. Activated abilities may announce X and choose several targets that
-share a creature type.
+T3 adds characteristics, counters, replacements and attachments. Its cards and
+rules are `CardDefinition`, `Ability` and named `Effect` variants like every
+other card, and learning tokens follow from them. A permanent's
+characteristics are what `Game` derives from its card and permanent state,
+never those inputs read alone: static type, keyword and P/T grants apply in
+layer order (`ScopeView`); `Game::has_lost_abilities`, `permanent_name`,
+`permanent_has_subtype`, `activated_abilities_for` and `permanent_can_tap` are
+the single readers. Counters other than +1/+1 have kinds (stun, fire, double
+strike). Equipment and Auras attach to an exact object and grant abilities or
+set characteristics; Vehicles crew by tapping creatures. Activated abilities
+may announce X and choose several targets that share a creature type; a
+permanent may let its controller cast the top card of their library.
 
-Observations add effect-derived fields, omitted at their defaults: a
-permanent's counters by kind, attachment, set name and creature types
-(`is_ally` reads them), granted land type, firebending, `attacking`,
-`blocking`, `abilities_lost` and `used_abilities`; a player's
-`keeps_red_mana` and `no_maximum_hand_size`; a stack object's announced X and
-a spell's granted keywords. Policy input v5 (the new default) encodes every
-observed fact: player rows gain turn number, seat, kept red mana and no
-maximum hand size (44 columns), card rows face down (42), permanent rows
-counters by kind, an attachment join, effect-set characteristics, granted
-land, firebending, temporary subtypes, attacking, a blocking join, lost
-abilities and spent activation limits (50), and relation rows a frame's X and
-a spell's granted keywords (48). v1–v4 stay byte-frozen for their
-checkpoints, so w17's `attacking` column moves to v5 (column 41) and v1–v4
-permanent rows return to 28. `managym/tests/cards/observability.rs` names
-each field's columns and tokens. Action shapes are unchanged.
+Observations add, omitted at their defaults: cast permissions, a stack spell's
+announced X, a player's restricted mana, hand-only lock, no maximum hand size
+and kept red mana; a permanent's used exhaust and once-each-turn counts,
+granted firebending, counters by kind, attachment, set name and creature types
+(`is_ally` reads them), granted land type, `blocking`, `abilities_lost` and
+`used_abilities`; a stack object's X and a spell's granted keywords.
 
-## w17: one card representation (not yet frozen)
+Policy input **v5** is the default; v1–v4 keep their widths. In every widened
+row the new terms start at the old validity column and validity stays last.
+Player rows add restricted mana by spending subtype × color (18), the
+hand-only lock, no maximum hand size, turn number, seat and kept red mana
+(40 → 63). Card rows add 12 cast-permission terms and a stack spell's
+announced X (41 → 55); a face-down card is foretold, so the foretold term marks
+it. Permanent rows add used exhaust abilities, used once-each-turn abilities,
+granted firebending, counters by kind, an attachment join, effect-set
+characteristics, granted land, temporary subtypes, a blocking join, lost
+abilities and spent activation limits by ability (29 → 52). Relation rows add a
+frame's X and a spell's granted keywords (33 → 48), so the relation width alone
+tells v5. Learning schema 9 is unchanged: tokens derive from the definitions.
+Viewers see an opponent's foretold card only as an exile count, in JSON, text
+and tensor alike. `managym/tests/cards/observability.rs` names each field's
+columns and tokens. Action shapes are unchanged.
+
+## w17: one card representation (superseded by w18)
 
 Each card is a function returning the engine's own `CardDefinition`, written in
 its rules types, in the set file of its first printing; the authoring language
@@ -132,7 +137,6 @@ set files; with the rules fixtures they keep the default pack's legacy
 set. A card is supported when its set file defines it with a typed program and
 does not mark it incomplete; tests never gate support. `managym.set_cards`
 narrows the pool to chosen sets, such as `["tla", "lea"]`.
-
 
 ## w7: Elemental rules and compiled content (not yet frozen)
 

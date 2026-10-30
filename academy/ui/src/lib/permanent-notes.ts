@@ -23,7 +23,7 @@ export function permanentNotes(permanent: PermanentState, table: PermanentState[
       ? `creature types set to ${permanent.creature_types.join(' ') || 'none'}`
       : null,
     permanent.is_granted_land ? 'land through an effect' : null,
-    permanent.firebending ? `firebending ${permanent.firebending}` : null,
+    permanent.granted_firebending ? `firebending ${permanent.granted_firebending}` : null,
     permanent.attacking ? 'attacking' : null,
     permanent.blocking !== undefined ? `blocking ${named(permanent.blocking)}` : null,
     permanent.abilities_lost ? 'has lost all abilities' : null,

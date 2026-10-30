@@ -76,6 +76,11 @@ pub fn mana_cost<'de, D: Deserializer<'de>>(deserializer: D) -> Result<ManaCost,
         x: 0,
     })
 }
+pub fn optional_mana_cost<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Option<ManaCost>, D::Error> {
+    mana_cost(deserializer).map(Some)
+}
 pub fn parse(text: &str) -> Result<Observation, String> {
     let value: serde_json::Value = serde_json::from_str(text).map_err(|e| e.to_string())?;
     let observation: Observation =

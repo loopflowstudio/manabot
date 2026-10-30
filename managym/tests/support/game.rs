@@ -305,6 +305,14 @@ pub fn pin_top(s: &mut Scenario, names: &[&str]) -> Vec<CardId> {
     cards
 }
 
+/// Move player `player`'s library copy of `name` to `zone` through the
+/// zone-change authority (firing any enter or leave triggers).
+pub fn move_from_library(s: &mut Scenario, player: usize, name: &str, zone: ZoneType) -> CardId {
+    let card = library_card(s, player, name);
+    s.game_mut().move_card(card, zone);
+    card
+}
+
 /// Silently move an owned hand or library card into the graveyard (e.g.
 /// planting a Lesson).
 pub fn plant_in_graveyard(s: &mut Scenario, player: usize, card_name: &str) -> CardId {

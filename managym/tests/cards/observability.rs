@@ -13,37 +13,38 @@
 
 use crate::support::{
     game::{deck, five_color_setup, five_color_unfunded_setup, move_to_hand, Scenario},
-    inspect::library_card,
-    play::{cast, choose, choose_mode, pass_until, settle},
+    inspect::{card_of, library_card},
+    play::{activate, cast, choose, choose_mode, pass_until, settle},
 };
 use managym::{
     agent::{
-        action::ActionSpaceKind,
+        action::{Action, ActionSpaceKind},
         continuation::{
             ClauseTarget, ContinuationFrame, ManaOutput, VisibleReference, RELATION_DIM_V5,
             RELATION_KEYWORDS_INDEX, RELATION_X_INDEX,
         },
         observation::{
-            ActionOption, ActionSpaceData, CardData, CardTypeData, EventData, Observation,
-            PermanentData, PlayerData, SideboardCardData, StackObjectData, StackTargetData,
-            TurnData, KEYWORD_COUNT,
+            ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData, EventData,
+            Observation, PermanentData, PlayerData, RestrictedManaData, SideboardCardData,
+            StackObjectData, StackTargetData, TurnData, KEYWORD_COUNT,
         },
         observation_encoder::{
-            encode, EncodedObservation, ObservationEncoderConfig, CARD_DIM_V5,
-            CARD_FACE_DOWN_INDEX, PERMANENT_ABILITIES_LOST_INDEX, PERMANENT_ATTACHED_INDEX,
-            PERMANENT_ATTACKING_INDEX, PERMANENT_BLOCKING_INDEX,
-            PERMANENT_CHARACTERISTICS_SET_INDEX, PERMANENT_DIM_V5,
-            PERMANENT_DOUBLE_STRIKE_COUNTERS_INDEX, PERMANENT_FIREBENDING_INDEX,
-            PERMANENT_FIRE_INDEX, PERMANENT_GRANTED_LAND_INDEX,
-            PERMANENT_OTHER_TEMP_SUBTYPES_INDEX, PERMANENT_OTHER_USED_ABILITIES_INDEX,
-            PERMANENT_STUN_INDEX, PERMANENT_TEMP_SUBTYPES_INDEX, PERMANENT_USED_ABILITIES_INDEX,
-            PLAYER_DIM_V5, PLAYER_KEEPS_RED_MANA_INDEX, PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX,
-            PLAYER_SEAT_INDEX, PLAYER_TURN_INDEX, TEMP_SUBTYPES, USED_ABILITY_FLAGS,
+            encode, EncodedObservation, ObservationEncoderConfig, CARD_DIM, CARD_PERMISSION_INDEX,
+            CARD_X_INDEX, PERMANENT_ABILITIES_LOST_INDEX, PERMANENT_ATTACHED_INDEX,
+            PERMANENT_BLOCKING_INDEX, PERMANENT_CHARACTERISTICS_SET_INDEX, PERMANENT_DIM,
+            PERMANENT_DOUBLE_STRIKE_COUNTERS_INDEX, PERMANENT_EXHAUSTED_INDEX,
+            PERMANENT_FIREBENDING_INDEX, PERMANENT_FIRE_INDEX, PERMANENT_GRANTED_LAND_INDEX,
+            PERMANENT_ONCE_EACH_TURN_INDEX, PERMANENT_OTHER_TEMP_SUBTYPES_INDEX,
+            PERMANENT_OTHER_USED_ABILITIES_INDEX, PERMANENT_STUN_INDEX,
+            PERMANENT_TEMP_SUBTYPES_INDEX, PERMANENT_USED_ABILITIES_INDEX, PLAYER_DIM,
+            PLAYER_HAND_ONLY_INDEX, PLAYER_KEEPS_RED_MANA_INDEX, PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX,
+            PLAYER_RESTRICTED_INDEX, PLAYER_SEAT_INDEX, PLAYER_TURN_INDEX, TEMP_SUBTYPES,
+            USED_ABILITY_FLAGS,
         },
     },
     flow::turn::StepKind,
     state::{
-        game_object::{PermanentId, PlayerId},
+        game_object::{CardId, PermanentId, PlayerId, Target},
         permanent::CounterKind,
         zone::ZoneType,
     },
@@ -186,17 +187,17 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 26] {
             "abilities_lost",
             Seen::Permanent(PERMANENT_ABILITIES_LOST_INDEX),
         ),
-        ("attacking", Seen::Permanent(PERMANENT_ATTACKING_INDEX)),
+        ("attacking", Seen::Permanent(27)),
         (
             "was_cast",
             Seen::Transient("read only by entering-the-battlefield triggers as it enters"),
         ),
         ("attached_to", Seen::Permanent(PERMANENT_ATTACHED_INDEX)),
         ("becomes_creature", Seen::Permanent(8)),
-        ("exhausted", Seen::Permanent(PERMANENT_USED_ABILITIES_INDEX)),
+        ("exhausted", Seen::Permanent(PERMANENT_EXHAUSTED_INDEX)),
         (
             "activated_this_turn",
-            Seen::Permanent(PERMANENT_USED_ABILITIES_INDEX),
+            Seen::Permanent(PERMANENT_ONCE_EACH_TURN_INDEX),
         ),
     ]
 }
@@ -856,7 +857,7 @@ fn observe(game: &Game, viewer: usize) -> (Observation, EncodedObservation) {
 }
 
 fn permanent_row(encoded: &EncodedObservation) -> &[f32] {
-    &encoded.agent_permanents[..PERMANENT_DIM_V5]
+    &encoded.agent_permanents[..PERMANENT_DIM]
 }
 
 fn card_row<'a>(
@@ -872,7 +873,7 @@ fn card_row<'a>(
         .iter()
         .position(|card| card.id == id)
         .unwrap();
-    &encoded.agent_cards[row * CARD_DIM_V5..(row + 1) * CARD_DIM_V5]
+    &encoded.agent_cards[row * CARD_DIM..(row + 1) * CARD_DIM]
 }
 
 fn changed(before: &[f32], after: &[f32]) -> Vec<usize> {
@@ -940,11 +941,11 @@ fn every_permanent_and_player_field_names_where_it_is_seen() {
     let player = &game.state.players[0];
     let fields = permanent_fields(permanent)
         .into_iter()
-        .map(|(field, seen)| (field, seen, PERMANENT_DIM_V5 - 1))
+        .map(|(field, seen)| (field, seen, PERMANENT_DIM - 1))
         .chain(
             player_fields(player)
                 .into_iter()
-                .map(|(field, seen)| (field, seen, PLAYER_DIM_V5)),
+                .map(|(field, seen)| (field, seen, PLAYER_DIM)),
         );
     for (field, seen, width) in fields {
         match seen {
@@ -1183,9 +1184,9 @@ impl Buffer {
     /// V5 row width.
     fn width(self) -> usize {
         match self {
-            Buffer::Player => PLAYER_DIM_V5,
-            Buffer::Card => CARD_DIM_V5,
-            Buffer::Permanent => PERMANENT_DIM_V5,
+            Buffer::Player => PLAYER_DIM,
+            Buffer::Card => CARD_DIM,
+            Buffer::Permanent => PERMANENT_DIM,
             Buffer::Relation => RELATION_DIM_V5,
             Buffer::Action => managym::agent::observation_encoder::ACTION_DIM,
         }
@@ -1236,6 +1237,8 @@ macro_rules! encoding {
     }};
 }
 
+const PERMISSION: usize = CARD_PERMISSION_INDEX;
+
 const HIDDEN_SIDEBOARD: &str = "the agent's remaining copies are outside rows of \
     agent_cards and the ones in play are visible cards; the opponent's sideboard is \
     hidden information (scratch/questions.md)";
@@ -1280,6 +1283,8 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         combat_mana => [column(Player, 27)],
         mana => [Columns(Player, 28, 6)],
         lesson_mana => [Columns(Player, 34, 6)],
+        restricted_mana => [Rows("restricted mana below")],
+        hand_only_until => [column(Player, PLAYER_HAND_ONLY_INDEX)],
         known_hand => [Rows("known_hand")],
         sideboard_counts => [Excluded(HIDDEN_SIDEBOARD)],
         remaining_sideboard_counts => [Excluded(HIDDEN_SIDEBOARD)],
@@ -1304,7 +1309,27 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         card_types => [Rows("card types below")],
         keywords => [Rows("keywords below")],
         mana_cost => [column(Card, 10), Definition],
-        face_down => [column(Card, CARD_FACE_DOWN_INDEX)],
+        // Face-down cards are foretold, and only their owner sees them.
+        face_down => [column(Card, PERMISSION + 11)],
+        cast_permission => [Rows("cast permission below")],
+        x => [Columns(Card, CARD_X_INDEX, 2)],
+    }));
+    fields.extend(encoding!(CastPermissionData {
+        player_id => [Columns(Card, PERMISSION, 2)],
+        cost => [Columns(Card, PERMISSION + 2, 2)],
+        this_turn => [column(Card, PERMISSION + 4)],
+        own_turn_only => [column(Card, PERMISSION + 5)],
+        after_turn => [column(Card, PERMISSION + 6)],
+        source_permanent_id => [column(Card, PERMISSION + 7)],
+        flash => [column(Card, PERMISSION + 8)],
+        any_mana => [column(Card, PERMISSION + 9)],
+        waterbend => [column(Card, PERMISSION + 10)],
+        foretold => [column(Card, PERMISSION + 11)],
+    }));
+    fields.extend(encoding!(RestrictedManaData {
+        spells => [Columns(Player, PLAYER_RESTRICTED_INDEX, 18)],
+        abilities => [Columns(Player, PLAYER_RESTRICTED_INDEX, 18)],
+        mana => [Columns(Player, PLAYER_RESTRICTED_INDEX, 18), Columns(Player, 34, 6)],
     }));
     fields.extend(encoding!(CardTypeData {
         is_castable => [Definition],
@@ -1341,6 +1366,10 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         is_animated => [column(Permanent, 8)],
         has_exile_link => [column(Permanent, 9)],
         exile_if_dies_this_turn => [column(Permanent, 23)],
+        attacking => [column(Permanent, 27)],
+        exhausted_abilities => [column(Permanent, PERMANENT_EXHAUSTED_INDEX)],
+        once_each_turn_used => [column(Permanent, PERMANENT_ONCE_EACH_TURN_INDEX)],
+        granted_firebending => [column(Permanent, PERMANENT_FIREBENDING_INDEX)],
         temp_subtypes => [
             column(Permanent, 26),
             Columns(Permanent, PERMANENT_TEMP_SUBTYPES_INDEX, TEMP_SUBTYPES.len()),
@@ -1354,8 +1383,6 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         name => [column(Permanent, PERMANENT_CHARACTERISTICS_SET_INDEX)],
         creature_types => [column(Permanent, PERMANENT_CHARACTERISTICS_SET_INDEX)],
         is_granted_land => [column(Permanent, PERMANENT_GRANTED_LAND_INDEX)],
-        firebending => [column(Permanent, PERMANENT_FIREBENDING_INDEX)],
-        attacking => [column(Permanent, PERMANENT_ATTACKING_INDEX)],
         blocking => [Join(Permanent, PERMANENT_BLOCKING_INDEX)],
         abilities_lost => [column(Permanent, PERMANENT_ABILITIES_LOST_INDEX)],
         used_abilities => [
@@ -1587,7 +1614,7 @@ fn permanent_value(s: &Scenario, viewer: usize, id: PermanentId, column: usize) 
     } else {
         &encoded.opponent_permanents
     };
-    rows[row * PERMANENT_DIM_V5 + column]
+    rows[row * PERMANENT_DIM + column]
 }
 
 /// Object index of a permanent row, as action focus and joins use it.
@@ -1910,7 +1937,7 @@ fn definitions_seen(s: &Scenario, viewer: usize) -> BTreeSet<u32> {
         .copied()
         .for_each(&mut add);
     for rows in [&encoded.agent_permanents, &encoded.opponent_permanents] {
-        rows.as_chunks::<PERMANENT_DIM_V5>()
+        rows.as_chunks::<PERMANENT_DIM>()
             .0
             .iter()
             .for_each(|row| add(row[24]));
@@ -1937,7 +1964,7 @@ fn foretold_and_hand_cards_never_reach_the_opponents_encoding() {
     s.game_mut().scenario_refresh_priority().unwrap();
     choose(
         &mut s,
-        |a| matches!(a, managym::agent::action::Action::Foretell { card, .. } if *card == comet),
+        |a| matches!(a, Action::Foretell { card, .. } if *card == comet),
     );
     assert_eq!(s.game().state.zones.zone_of(comet), Some(ZoneType::Exile));
     let hidden = [comet, front].map(|card| s.game().state.cards[card].definition_id.0);
@@ -1945,12 +1972,12 @@ fn foretold_and_hand_cards_never_reach_the_opponents_encoding() {
     let owner = encoded(&s, 0, 5);
     let face_down = owner
         .agent_cards
-        .as_chunks::<CARD_DIM_V5>()
+        .as_chunks::<CARD_DIM>()
         .0
         .iter()
-        .filter(|row| row[CARD_FACE_DOWN_INDEX] == 1.0)
+        .filter(|row| row[PERMISSION + 11] == 1.0)
         .count();
-    assert_eq!(face_down, 1, "its owner sees the foretold card, face down");
+    assert_eq!(face_down, 1, "its owner sees the foretold card");
     for definition in hidden {
         assert!(definitions_seen(&s, 0).contains(&definition));
         assert!(
@@ -1961,10 +1988,10 @@ fn foretold_and_hand_cards_never_reach_the_opponents_encoding() {
     let opponent = encoded(&s, 1, 5);
     assert!(opponent
         .opponent_cards
-        .as_chunks::<CARD_DIM_V5>()
+        .as_chunks::<CARD_DIM>()
         .0
         .iter()
-        .all(|row| row[CARD_FACE_DOWN_INDEX] == 0.0));
+        .all(|row| row[PERMISSION + 11] == 0.0));
 }
 
 // ---------------------------------------------------------------------------
@@ -2001,12 +2028,14 @@ fn declare(
     });
 }
 
+/// Attacking has been a permanent column since v4 (column 27).
 #[test]
-fn attacking_creatures_differ_from_idle_ones_only_in_v5() {
+fn attacking_creatures_differ_from_idle_ones_at_column_27() {
     let (idle, _, [first, _]) = combat_state();
     let (mut attacking, ..) = combat_state();
     declare(&mut attacking, &[first], None);
-    assert_v5_alone_sees(&idle, &attacking, 0, first, PERMANENT_ATTACKING_INDEX);
+    assert_eq!(permanent_value(&idle, 0, first, 27), 0.0);
+    assert_eq!(permanent_value(&attacking, 0, first, 27), 1.0);
 }
 
 #[test]
@@ -2059,7 +2088,19 @@ fn a_spent_exhaust_ability_differs_from_an_unused_one_only_in_v5() {
         permanent_value(&spent, 0, mai_id, PERMANENT_OTHER_USED_ABILITIES_INDEX),
         0.0
     );
-    assert_v5_alone_sees(&unused, &spent, 0, mai_id, PERMANENT_USED_ABILITIES_INDEX);
+    assert_eq!(
+        permanent_value(&spent, 0, mai_id, PERMANENT_EXHAUSTED_INDEX),
+        1.0,
+        "the exhausted count moves with it"
+    );
+    assert_v5_sees(
+        &unused,
+        &spent,
+        0,
+        mai_id,
+        PERMANENT_USED_ABILITIES_INDEX,
+        2,
+    );
 }
 
 #[test]
@@ -2090,4 +2131,180 @@ fn kept_red_mana_and_no_hand_size_reach_the_player_rows_only_in_v5() {
             (0.0, 1.0)
         );
     }
+}
+
+// ---------------------------------------------------------------------------
+// Cast permissions, restricted mana and announced X
+// ---------------------------------------------------------------------------
+
+fn encoded_default(observation: &Observation) -> EncodedObservation {
+    encode(observation, &ObservationEncoderConfig::default()).expect("v5 encodes")
+}
+
+fn object_id(s: &Scenario, card: CardId) -> i32 {
+    s.game().state.cards[card].id.0 as i32
+}
+
+/// The encoded row of `card` on either side of `observation`, if listed.
+fn listed_card_row(observation: &Observation, card: i32) -> Option<Vec<f32>> {
+    let encoded = encoded_default(observation);
+    for (cards, rows) in [
+        (&observation.agent_cards, &encoded.agent_cards),
+        (&observation.opponent_cards, &encoded.opponent_cards),
+    ] {
+        if let Some(slot) = cards.iter().position(|c| c.id == card) {
+            return Some(rows[slot * CARD_DIM..(slot + 1) * CARD_DIM].to_vec());
+        }
+    }
+    None
+}
+
+fn permission_columns(row: &[f32]) -> &[f32] {
+    &row[PERMISSION..PERMISSION + 12]
+}
+
+/// Airbend's permission is public: both players see who may cast the exiled
+/// card and for how much, with "viewer may cast" set only for its owner.
+#[test]
+fn airbend_permission_reaches_both_viewers_tensors() {
+    let mut s = five_color_setup(&["Airbending Lesson", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let ogre_card = card_of(&s, ogre);
+    let id = object_id(&s, ogre_card);
+    cast(&mut s, "Airbending Lesson");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+
+    let airbender = Observation::for_player(s.game(), PlayerId(0));
+    let listed = airbender
+        .opponent_cards
+        .iter()
+        .find(|c| c.id == id)
+        .expect("the exiled Ogre is public");
+    let permission = listed.cast_permission.as_ref().expect("a permission");
+    assert_eq!(permission.player_id, airbender.opponent.id);
+    assert_eq!(permission.cost.as_ref().map(|c| c.mana_value), Some(2));
+    assert!(airbender.to_json().contains("\"cast_permission\""));
+
+    let row = listed_card_row(&airbender, id).unwrap();
+    assert_eq!(
+        permission_columns(&row),
+        &[1.0, 0.0, 1.0, 0.2, 0., 0., 0., 0., 0., 0., 0., 0.]
+    );
+    let owner = listed_card_row(&Observation::for_player(s.game(), PlayerId(1)), id).unwrap();
+    assert_eq!(owner[PERMISSION + 1], 1.0, "the owner may cast it");
+}
+
+/// Avatar's Wrath's lock is on the restricted player's row for both viewers,
+/// and the permissions it overrides stay visible.
+#[test]
+fn hand_only_lock_reaches_both_viewers_tensors() {
+    let mut s = five_color_setup(&["Avatar's Wrath", "Gray Ogre", "Craw Wurm"]);
+    let spared = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let wurm = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    let wurm_id = object_id(&s, card_of(&s, wurm));
+    let baseline = encoded_default(&Observation::for_player(s.game(), PlayerId(0)));
+    assert_eq!(baseline.opponent_player[PLAYER_HAND_ONLY_INDEX], 0.0);
+    cast(&mut s, "Avatar's Wrath");
+    assert!(s.choose_target(Target::Permanent(spared)));
+    settle(&mut s);
+
+    let caster = Observation::for_player(s.game(), PlayerId(0));
+    assert_eq!(caster.opponent.hand_only_until, Some(caster.agent.id));
+    assert_eq!(
+        encoded_default(&caster).opponent_player[PLAYER_HAND_ONLY_INDEX],
+        1.0
+    );
+    assert_eq!(
+        encoded_default(&caster).agent_player[PLAYER_HAND_ONLY_INDEX],
+        0.0
+    );
+    let locked = Observation::for_player(s.game(), PlayerId(1));
+    assert_eq!(
+        encoded_default(&locked).agent_player[PLAYER_HAND_ONLY_INDEX],
+        1.0
+    );
+    assert_eq!(listed_card_row(&locked, wurm_id).unwrap()[PERMISSION], 1.0);
+}
+
+/// Restricted mana is split by what it may pay for: Jasmine Dragon Tea
+/// Shop's green counts under Ally only.
+#[test]
+fn restricted_mana_is_encoded_by_spending_subtype() {
+    let mut s = five_color_setup(&["Jasmine Dragon Tea Shop"]);
+    let shop = s.force_permanent_on_battlefield(0, "Jasmine Dragon Tea Shop");
+    s.set_player_mana_pool(0, "");
+    activate(&mut s, shop, 0);
+    choose_mode(&mut s, 4);
+
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let classes = &observation.agent.restricted_mana;
+    assert_eq!(classes.len(), 1);
+    assert_eq!(classes[0].spells, ["Ally"]);
+    assert_eq!(classes[0].abilities, ["Ally"]);
+    assert_eq!(classes[0].mana, [0, 0, 0, 0, 1, 0]);
+    let player = encoded_default(&observation).agent_player;
+    let by_subtype = &player[PLAYER_RESTRICTED_INDEX..PLAYER_HAND_ONLY_INDEX];
+    let mut expected = [0.0; 18];
+    expected[12 + 4] = 0.1; // Ally, green
+    assert_eq!(by_subtype, expected);
+}
+
+/// A spell on the stack shows its announced X.
+#[test]
+fn announced_x_reaches_the_stack_card_row() {
+    let mut s = five_color_setup(&["United Front"]);
+    s.set_player_mana_pool(0, "3WW");
+    let front = cast(&mut s, "United Front");
+    choose_mode(&mut s, 3);
+    let id = object_id(&s, front);
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let card = observation.agent_cards.iter().find(|c| c.id == id).unwrap();
+    assert_eq!(card.x, Some(3));
+    let row = listed_card_row(&observation, id).unwrap();
+    assert_eq!(&row[CARD_X_INDEX..CARD_X_INDEX + 2], &[1.0, 0.3]);
+}
+
+// --- Viewer safety -------------------------------------------------------
+
+/// A foretold card and its permission reach only its owner: the owner's
+/// tensor marks it foretold and not yet castable; the opponent's tensor and
+/// JSON hold no trace of it beyond the exile count.
+#[test]
+fn foretold_card_and_permission_reach_only_the_owner() {
+    let mut s = five_color_setup(&["Sozin's Comet"]);
+    let comet = library_card(&s, 0, "Sozin's Comet");
+    s.game_mut().move_card(comet, ZoneType::Hand);
+    s.set_player_mana_pool(0, "2");
+    let opponent_before = encoded_default(&Observation::for_player(s.game(), PlayerId(1)));
+    s.game_mut().scenario_refresh_priority().unwrap();
+    choose(
+        &mut s,
+        |a| matches!(a, Action::Foretell { card, .. } if *card == comet),
+    );
+    let id = object_id(&s, comet);
+
+    let owner = Observation::for_player(s.game(), PlayerId(0));
+    let row = listed_card_row(&owner, id).expect("the owner sees it");
+    assert_eq!(row[PERMISSION], 1.0);
+    assert_eq!(row[PERMISSION + 6], 1.0, "castable only on a later turn");
+    assert_eq!(row[PERMISSION + 11], 1.0, "foretold");
+
+    let opponent = Observation::for_player(s.game(), PlayerId(1));
+    assert!(listed_card_row(&opponent, id).is_none());
+    let json = opponent.to_json();
+    assert!(!json.contains("Sozin") && !json.contains("foretold") && !json.contains("face_down"));
+    let after = encoded_default(&opponent);
+    for rows in [&after.agent_cards, &after.opponent_cards] {
+        assert!(rows
+            .chunks(CARD_DIM)
+            .all(|row| row[PERMISSION + 11] == 0.0 && row[PERMISSION] == 0.0));
+    }
+    assert_eq!(after.opponent_cards, opponent_before.opponent_cards);
+
+    // On its owner's next turn the later-turn term clears.
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    let row = listed_card_row(&Observation::for_player(s.game(), PlayerId(0)), id).unwrap();
+    assert_eq!(row[PERMISSION + 6], 0.0);
 }

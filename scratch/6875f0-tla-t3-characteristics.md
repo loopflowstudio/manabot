@@ -2,7 +2,7 @@
 
 Brief: the Task directive (49 cards, obligations in `docs/rules/tla/allocation.jsonl`,
 `planned_pr == "T3"`). Stacked on T1 (892c47, PR #394; last synced at head `01e8f9975`)
-and carrying T2 at PR #398's old head `16dfd3dbb`. Every merge needs Jack Heart's review.
+and merged with T2 at PR #398 head `d218e1dc2`. Every merge needs Jack Heart's review.
 Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
 
 ## Done (49 of 49)
@@ -105,31 +105,27 @@ Scryfall id.
    guards (106 `Effect`, 16 `TriggerCondition` witnesses, `Permanent`/`Player`
    fields at v5 columns) with T3's v5 tensor guard.
 
+27. Merge of T2's PR #398 head `d218e1dc2` (2026-10-29). T2's card conversion,
+   tests and v5 rows are the base; T3's columns extend T2's unfrozen v5 and w18
+   in place (assumption recorded in `scratch/questions.md` for Jack Heart to
+   overrule; the alternative is v6/w19). Widths: player 63 (T2's 60 plus turn,
+   seat, kept red mana), card 55 (T2's; the foretold term marks face-down),
+   permanent 52 (T2's 32 plus counters by kind, attachment join, set
+   characteristics, granted land, six temporary subtypes and a count, blocking
+   join, lost abilities, four used-ability flags and a count), relation 48 (T3's
+   frame X and granted spell keywords); v1–v4 keep 40 / 41 / 29 with
+   `attacking` at permanent column 27. `granted_firebending` replaces T3's
+   `firebending`. T2's shared `check_activation_terms` now also checks sorcery
+   timing; `ActivatedAbilityDefinition::requires_target` reads
+   `target_requirement`. T3's refreshing index helper is `offers_ability`.
+
 ## Remaining
 
-- **Sync onto T2's new head (PR #398 `d218e1dc2`, observed 2026-10-29).** T2
-  synced onto the same T1 head (`01e8f9975`) and independently converted its
-  cards, then shipped its own w18 and policy input v5: player 60, card 55,
-  permanent 32 (v1–v4 keep 40 / 41 / 29), new terms at the old validity column,
-  validity last, native buffers bound by player width. This branch's v5 is
-  44 / 42 / 50 with v1–v4 at 28 and validity at column 31. Both carry stack X,
-  granted firebending, used exhaust and no maximum hand size. A trial merge
-  conflicts in 31 files (v5 encoders, observation, cardsets lea/stx/tla,
-  `play.rs`, `observability.rs`, `tests/cards/tla.rs`, WORLDS.md, AGENTS.md,
-  protocol schemas, text observation, PlayerArea). Since T2 lands before T3,
-  the merge must take T2's card conversion and v5 layout and re-add only
-  T3's columns; CLAUDE.md's v5 width line, WORLDS.md and the observability guard
-  follow. **Decision needed (Jack Heart):** extend T2's unfrozen v5 and w18 in
-  place (simpler; no checkpoint exists for either), or give T3 v6 and w19 so T2's
-  v5 freezes when it lands. Not yet decided; the permanent-row width
-  disagreement (T1/T2 widened v1–v4 to 29 for `attacking`; this branch kept 28)
-  is part of it.
 - World release items (w15 conformance receipts) and browser proof.
 
-Check (item 26, debug): `cargo test --no-fail-fast` passes except the w15
-`semantic_conformance_tests` pair; clippy `--all-targets -D warnings` clean.
-pytest: model+semantic+verify parity 374, CLAUDE.md world suite 66, Academy
-play/protocol 66, env+verify 182 pass.
-Compress (after 26): one keyword-column table (`keyword_columns`) in
-`observability.rs`; `tla.rs` uses the shared support helpers. `cargo test --test
-cards` 378 pass, clippy clean.
+Check (item 27, debug, 2026-10-29): every `cargo test` target passes except the
+w15 `semantic_conformance_tests` pair (cards 383, rules 131, lib 122, schema
+tests after regeneration); clippy `--all-targets -D warnings` and fmt clean.
+pytest: CLAUDE.md world suite 66; model+semantic+env+verify+Academy protocol
+567 pass after the Temur width fix (parity 8). Academy: svelte-check clean,
+permanent-notes and GameBoard vitest pass.

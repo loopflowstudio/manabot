@@ -350,6 +350,12 @@ impl ActivatedAbilityDefinition {
         effect_target_requirements(&self.effects).into_iter().next()
     }
 
+    /// The activation cannot proceed without choosing a target.
+    pub fn requires_target(&self) -> bool {
+        self.target_requirement()
+            .is_some_and(|requirement| requirement.min > 0)
+    }
+
     pub fn target_spec(&self) -> Option<&TargetSpec> {
         self.effects.iter().find_map(Effect::target_spec)
     }

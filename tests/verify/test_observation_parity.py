@@ -6,7 +6,19 @@ import numpy as np
 import pytest
 
 # Local imports
-from manabot.env.observation import ObservationConfig, ObservationEncoder
+from manabot.env.observation import (
+    CARD_DIM,
+    CARD_PERMISSION_INDEX,
+    PERMANENT_ATTACHED_INDEX,
+    PERMANENT_GRANTED_LAND_INDEX,
+    PERMANENT_DIM,
+    PERMANENT_STUN_INDEX,
+    PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX,
+    RELATION_KEYWORDS_INDEX,
+    RELATION_X_INDEX,
+    ObservationConfig,
+    ObservationEncoder,
+)
 import managym
 
 
@@ -312,8 +324,8 @@ def test_elemental_indestructible_encoding_preserves_outside_and_definition_colu
     actual = env.encode_observation(obs)
     for key, value in expected.items():
         np.testing.assert_array_equal(actual[key], value, err_msg=key)
-    assert actual["agent_cards"].shape[-1] == 42
-    assert actual["agent_permanents"].shape[-1] == 50
+    assert actual["agent_cards"].shape[-1] == CARD_DIM
+    assert actual["agent_permanents"].shape[-1] == PERMANENT_DIM
     assert actual["agent_cards"][0, 38] == 1
     assert actual["agent_cards"][0, 37] == 0
     assert actual["agent_permanents"][0, 25] == 1
@@ -358,12 +370,17 @@ def test_v5_native_and_python_encoders_agree_on_t3_games() -> None:
                 (actual["agent_permanents"], actual["opponent_permanents"])
             )
             for name, seen in (
-                ("stun", permanents[:, 27]),
-                ("attached", permanents[:, 30]),
-                ("granted land", permanents[:, 32]),
-                ("stack X", actual["relations"][:, 33]),
-                ("spell grant", actual["relations"][:, 34:48]),
-                ("face down", actual["agent_cards"][:, 40]),
+                ("stun", permanents[:, PERMANENT_STUN_INDEX]),
+                ("attached", permanents[:, PERMANENT_ATTACHED_INDEX]),
+                ("granted land", permanents[:, PERMANENT_GRANTED_LAND_INDEX]),
+                ("stack X", actual["relations"][:, RELATION_X_INDEX]),
+                (
+                    "spell grant",
+                    actual["relations"][
+                        :, RELATION_KEYWORDS_INDEX : RELATION_KEYWORDS_INDEX + 14
+                    ],
+                ),
+                ("face down", actual["agent_cards"][:, CARD_PERMISSION_INDEX + 11]),
             ):
                 if seen.any():
                     reached.add(name)
@@ -391,7 +408,7 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     mine.stun_counters, mine.fire_counters, mine.double_strike_counters = 1, 2, 3
     mine.attached_to = theirs.id
     mine.name, mine.creature_types = "Humble Merchant", ["Citizen"]
-    mine.is_granted_land, mine.firebending = True, 4
+    mine.is_granted_land, mine.granted_firebending = True, 4
     mine.temp_subtypes = ["Island", "Construct", "Citizen"]
     mine.attacking, mine.blocking, mine.abilities_lost = True, theirs.id, True
     mine.used_abilities = [1, 5]
@@ -399,9 +416,6 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     agent = obs.agent
     agent.keeps_red_mana = agent.no_maximum_hand_size = True
     obs.agent = agent
-    cards = obs.agent_cards
-    cards[0].face_down = True
-    obs.agent_cards = cards
 
     encoder = ObservationEncoder(ObservationConfig(policy_input_version=5))
     expected = encoder.encode(obs)
@@ -410,15 +424,20 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
         np.testing.assert_array_equal(actual[key], value, err_msg=key)
     row = actual["agent_permanents"][0]
     host = 2 + 2 * encoder.cards_per_player + encoder.perms_per_player
+    # Attacking (v4 column 27), then v5: exhausted, once each turn, granted
+    # firebending, counters, attachment join, set characteristics, granted
+    # land, temporary subtypes and a count, blocking join, lost abilities,
+    # used-ability flags and a count, validity.
     np.testing.assert_allclose(
-        row[27:50],
-        [0.1, 0.2, 0.3, host + 1, 1, 1, 0.4, 0, 1, 0, 0, 0, 1, 1]
-        + [1, host + 1, 1, 0, 1, 0, 0, 1, 1],
+        row[27:PERMANENT_DIM],
+        [1, 0, 0, 0.4, 0.1, 0.2, 0.3, host + 1, 1, 1, 0, 1, 0, 0, 0, 1, 1]
+        + [host + 1, 1, 0, 1, 0, 0, 1, 1],
     )
     np.testing.assert_allclose(
-        actual["agent_player"][0, 40:], [obs.turn.turn_number / 20, 0, 1, 1]
+        actual["agent_player"][0, PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX:],
+        [1, obs.turn.turn_number / 20, 0, 1],
     )
-    assert actual["agent_cards"][0, 40] == 1 and actual["agent_cards"][0, 41] == 1
+    assert actual["agent_cards"][0, CARD_DIM - 1] == 1
     v4 = env.encode_observation(obs, 4)
-    assert v4["agent_permanents"].shape[-1] == 28
+    assert v4["agent_permanents"].shape[-1] == 29
     assert v4["agent_cards"].shape[-1] == 41

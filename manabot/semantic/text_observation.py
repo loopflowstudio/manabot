@@ -179,6 +179,16 @@ def _selectors(mode: int | None, ability: int | None) -> list[str]:
     ]
 
 
+def _spending(restricted: managym.RestrictedMana) -> str:
+    """ "Lesson or Shrine spells", "Ally spells or abilities of Ally sources"."""
+    parts = []
+    if restricted.spells:
+        parts.append(" or ".join(restricted.spells) + " spells")
+    if restricted.abilities:
+        parts.append("abilities of " + " or ".join(restricted.abilities) + " sources")
+    return " or ".join(parts)
+
+
 def _mana(cost: ManaCost | managym.ManaCost | None) -> str:
     if cost is None:
         return "no mana cost"
@@ -489,11 +499,26 @@ class _Renderer:
                 + f". Until-end-of-combat mana total: {player.combat_mana}.",
                 f"Lessons in graveyard: {player.graveyard_lessons}.",
             ]
-            # Effect-derived player state, present only when it applies.
+            for restricted in player.restricted_mana:
+                lines.append(
+                    f"Restricted mana for {_spending(restricted)}: "
+                    + ", ".join(
+                        f"{symbol} {count}"
+                        for symbol, count in zip("WUBRGC", restricted.mana, strict=True)
+                        if count
+                    )
+                    + "."
+                )
+            if player.hand_only_until is not None:
+                lines.append(
+                    "Can cast spells only from hand, overriding permissions to cast "
+                    f"from elsewhere, until {self.name(player.hand_only_until)} "
+                    "begins a turn."
+                )
+            if player.no_maximum_hand_size:
+                lines.append("Has no maximum hand size for the rest of the game.")
             if player.keeps_red_mana:
                 lines.append("Keeps unspent red mana until end of turn.")
-            if player.no_maximum_hand_size:
-                lines.append("No maximum hand size.")
             for label, quantities in (
                 ("Publicly known hand minima", player.known_hand),
                 ("Initial sideboard", player.sideboard_counts),
@@ -541,13 +566,44 @@ class _Renderer:
             if keywords := _keywords(card.keywords):
                 optional += f"; printed keywords {keywords}"
             if card.face_down:
-                optional += "; face down"
+                optional += "; foretold, face down (hidden from other players)"
+            if card.x is not None:
+                optional += f"; announced X {card.x}"
+            if card.cast_permission is not None:
+                optional += "; " + self._cast_permission(card.cast_permission)
             lines.append(
                 f"{self.name(card.id)} [{self.definition(card.registry_key)}]: owner {self.name(card.owner_id)}; zone {_enum(_ZONES, int(card.zone))}; card power/toughness {card.power}/{card.toughness}; cost {_mana(card.mana_cost)}; mana value {card.mana_cost.mana_value}{optional}; unlisted type and keyword flags false; token {_yes(card.is_token)}; legendary {_yes(card.is_legendary)}; Ally {_yes(card.is_ally)}; Lesson {_yes(card.is_lesson)}; ward mana value {card.ward_cost}; kicker mana value {card.kicker_cost}. Rules: {card.text_box or '(empty)'}"
             )
         if not state.agent_cards and not state.opponent_cards:
             lines.append("Empty.")
         return lines
+
+    def _cast_permission(self, permission: managym.CastPermission) -> str:
+        terms = [
+            "as a land play"
+            if permission.cost is None
+            else f"cast for {_mana(permission.cost)}"
+        ]
+        if permission.this_turn:
+            terms.append("this turn only")
+        if permission.own_turn_only:
+            terms.append("during their own turn only")
+        if permission.after_turn is not None:
+            terms.append(f"only after turn {permission.after_turn}")
+        if permission.source_permanent_id is not None:
+            terms.append(
+                f"while they control {self.name(permission.source_permanent_id)}"
+            )
+        if permission.flash:
+            terms.append("as though it had flash")
+        if permission.any_mana:
+            terms.append("spending mana of any type")
+        if permission.waterbend:
+            terms.append("generic may be paid by waterbending")
+        return (
+            f"may be played from exile by {self.name(permission.player_id)}: "
+            + ", ".join(terms)
+        )
 
     def _permanents_lines(self) -> list[str]:
         state = self.state
@@ -558,6 +614,19 @@ class _Renderer:
                 optional += "; attacking"
             if permanent.temp_subtypes:
                 optional += f"; temporary subtypes {', '.join(permanent.temp_subtypes)}"
+            if permanent.exhausted_abilities:
+                optional += (
+                    f"; exhaust abilities used {permanent.exhausted_abilities}"
+                )
+            if permanent.once_each_turn_used:
+                optional += (
+                    "; once-each-turn abilities used this turn "
+                    f"{permanent.once_each_turn_used}"
+                )
+            if permanent.granted_firebending:
+                optional += (
+                    f"; firebending {permanent.granted_firebending} until end of turn"
+                )
             if keywords := _keywords(permanent.keywords):
                 optional += f"; effective keywords {keywords}"
             optional += self._characteristics(permanent)
@@ -588,10 +657,6 @@ class _Renderer:
             parts.append(f"creature types set to {types}")
         if permanent.is_granted_land:
             parts.append("land through an effect")
-        if permanent.firebending:
-            parts.append(f"firebending {permanent.firebending}")
-        if permanent.attacking:
-            parts.append("attacking")
         if permanent.blocking is not None:
             parts.append(f"blocking {self.name(permanent.blocking)}")
         if permanent.abilities_lost:

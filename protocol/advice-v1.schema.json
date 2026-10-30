@@ -2131,6 +2131,17 @@
     "LegacyCardView": {
       "additionalProperties": false,
       "properties": {
+        "cast_permission": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LegacyCastPermissionView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "face_down": {
           "default": false,
           "title": "Face Down",
@@ -2184,6 +2195,20 @@
         "types": {
           "$ref": "#/$defs/LegacyCardTypesView"
         },
+        "x": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "X"
+        },
         "zone": {
           "title": "Zone",
           "type": "string"
@@ -2201,6 +2226,92 @@
         "types"
       ],
       "title": "LegacyCardView",
+      "type": "object"
+    },
+    "LegacyCastPermissionView": {
+      "additionalProperties": false,
+      "properties": {
+        "after_turn": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "After Turn"
+        },
+        "any_mana": {
+          "default": false,
+          "title": "Any Mana",
+          "type": "boolean"
+        },
+        "cost": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cost"
+        },
+        "flash": {
+          "default": false,
+          "title": "Flash",
+          "type": "boolean"
+        },
+        "foretold": {
+          "default": false,
+          "title": "Foretold",
+          "type": "boolean"
+        },
+        "own_turn_only": {
+          "default": false,
+          "title": "Own Turn Only",
+          "type": "boolean"
+        },
+        "player_id": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Player Id",
+          "type": "integer"
+        },
+        "source_permanent_id": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Permanent Id"
+        },
+        "this_turn": {
+          "default": false,
+          "title": "This Turn",
+          "type": "boolean"
+        },
+        "waterbend": {
+          "default": false,
+          "title": "Waterbend",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "player_id"
+      ],
+      "title": "LegacyCastPermissionView",
       "type": "object"
     },
     "LegacyHeroObservation": {
@@ -2370,16 +2481,23 @@
           "title": "Damage",
           "type": "integer"
         },
+        "exhausted_abilities": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Exhausted Abilities",
+          "type": "integer"
+        },
         "exile_if_dies_this_turn": {
           "default": false,
           "title": "Exile If Dies This Turn",
           "type": "boolean"
         },
-        "firebending": {
+        "granted_firebending": {
           "default": 0,
           "maximum": 4294967295,
           "minimum": 0,
-          "title": "Firebending",
+          "title": "Granted Firebending",
           "type": "integer"
         },
         "id": {
@@ -2415,6 +2533,13 @@
             }
           ],
           "title": "Name"
+        },
+        "once_each_turn_used": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Once Each Turn Used",
+          "type": "integer"
         },
         "plus1_counters": {
           "maximum": 4294967295,
@@ -2563,6 +2688,20 @@
           ],
           "default": null,
           "title": "Hand Hidden Count"
+        },
+        "hand_only_until": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hand Only Until"
         },
         "id": {
           "maximum": 4294967295,
@@ -2723,6 +2862,13 @@
           "title": "Remaining Sideboard Counts",
           "type": "object"
         },
+        "restricted_mana": {
+          "items": {
+            "$ref": "#/$defs/LegacyRestrictedManaView"
+          },
+          "title": "Restricted Mana",
+          "type": "array"
+        },
         "sideboard": {
           "items": {
             "$ref": "#/$defs/SideboardCardView"
@@ -2771,6 +2917,68 @@
         "battlefield"
       ],
       "title": "LegacyPlayerView",
+      "type": "object"
+    },
+    "LegacyRestrictedManaView": {
+      "additionalProperties": false,
+      "properties": {
+        "abilities": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Abilities",
+          "type": "array"
+        },
+        "mana": {
+          "maxItems": 6,
+          "minItems": 6,
+          "prefixItems": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            }
+          ],
+          "title": "Mana",
+          "type": "array"
+        },
+        "spells": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Spells",
+          "type": "array"
+        }
+      },
+      "required": [
+        "mana"
+      ],
+      "title": "LegacyRestrictedManaView",
       "type": "object"
     },
     "LegacyTurnView": {

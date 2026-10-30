@@ -286,6 +286,31 @@ class LegacyCardTypesView(ProtocolModel):
     is_battle: bool
 
 
+class LegacyCastPermissionView(ProtocolModel):
+    player_id: UInt32
+    cost: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    this_turn: bool = Field(default=False, exclude_if=lambda value: not value)
+    own_turn_only: bool = Field(default=False, exclude_if=lambda value: not value)
+    after_turn: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    source_permanent_id: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    flash: bool = Field(default=False, exclude_if=lambda value: not value)
+    any_mana: bool = Field(default=False, exclude_if=lambda value: not value)
+    waterbend: bool = Field(default=False, exclude_if=lambda value: not value)
+    foretold: bool = Field(default=False, exclude_if=lambda value: not value)
+
+
+class LegacyRestrictedManaView(ProtocolModel):
+    spells: list[str] = Field(default_factory=list, exclude_if=lambda value: not value)
+    abilities: list[str] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    mana: tuple[Int32, Int32, Int32, Int32, Int32, Int32]
+
+
 class LegacyCardView(ProtocolModel):
     text_box: str = Field(default="", exclude_if=lambda value: not value)
     id: UInt32
@@ -298,6 +323,10 @@ class LegacyCardView(ProtocolModel):
     mana_value: Int32
     types: LegacyCardTypesView
     face_down: bool = Field(default=False, exclude_if=lambda value: not value)
+    cast_permission: LegacyCastPermissionView | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    x: Int32 | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class LegacyPermanentView(ProtocolModel):
@@ -311,6 +340,9 @@ class LegacyPermanentView(ProtocolModel):
     exile_if_dies_this_turn: bool = Field(
         default=False, exclude_if=lambda value: not value
     )
+    exhausted_abilities: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    once_each_turn_used: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+    granted_firebending: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     text_box: str = Field(default="", exclude_if=lambda value: not value)
     id: UInt32
     name: str | None
@@ -333,7 +365,6 @@ class LegacyPermanentView(ProtocolModel):
         default=None, exclude_if=lambda value: value is None
     )
     is_granted_land: bool = Field(default=False, exclude_if=lambda value: not value)
-    firebending: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     attacking: bool = Field(default=False, exclude_if=lambda value: not value)
     blocking: UInt32 | None = Field(
         default=None, exclude_if=lambda value: value is None
@@ -358,6 +389,15 @@ class LegacyPlayerView(ProtocolModel):
     )
     lesson_mana: tuple[Int32, Int32, Int32, Int32, Int32, Int32] | None = Field(
         default=None, exclude_if=lambda value: value is None
+    )
+    restricted_mana: list[LegacyRestrictedManaView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    hand_only_until: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    no_maximum_hand_size: bool = Field(
+        default=False, exclude_if=lambda value: not value
     )
     combat_mana: Int32 | None = Field(
         default=None, exclude_if=lambda value: value is None

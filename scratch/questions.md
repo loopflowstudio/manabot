@@ -21,8 +21,23 @@ and pool-membership choices that were here (history: `be2b7586b:scratch/question
 - Not rewritten (dated evidence): the Academy curated pack `local_identity` values
   keep pre-rename keys.
 - Full TLA completion remains the eight-PR plan; no merge or new Task authorized.
-- 2026-10-29 (realign): T2's own v5/w18 (`d218e1dc2`) collides with T3's; the
-  v5-in-place versus v6/w19 choice is left to Jack Heart (plan, Remaining).
+- 2026-10-29 (merge of T2 `d218e1dc2`): **assumption for Jack Heart to
+  overrule at review.** T3 extends T2's unfrozen v5 and w18 in place rather
+  than taking v6/w19; no checkpoint exists for either, so this is reversible.
+  T2's rows are the base (v1–v4 keep 40 / 41 / 29, `attacking` stays v4
+  column 27) and T3's columns follow T2's before validity: player 63, card 55,
+  permanent 52. T3 keeps its relation columns (frame X, granted spell
+  keywords; width 48), so the relation width alone tells v5 again.
+- Same merge: T2's `granted_firebending` replaces T3's `firebending`
+  observation field; T2's foretold column stands for `face_down` (T3's card
+  column is gone). T2's exhausted / once-each-turn counts and T3's
+  `used_abilities` indices both stay: the counts are T2's, the indices say
+  which ability is spent. Dropping one is a review question.
+- Same merge: T2's card conversion and tests win where both converted a T2
+  card; T3-only cards and tests are added. T3's refreshing `can_activate`
+  helper is `offers_ability`; T2's `can_activate[_card]` stand. T2's own notes
+  are at `d218e1dc2:scratch/87e012-tla-t2-casting.md` and
+  `d218e1dc2:scratch/questions.md`.
 
 Main's notes at the syncs live at `6d069d6e5:scratch/questions.md` and `origin/main@633dca159:scratch/questions.md`.
 

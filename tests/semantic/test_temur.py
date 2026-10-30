@@ -6,7 +6,12 @@ import numpy as np
 
 from manabot.env.env import Env
 from manabot.env.match import Match, Reward
-from manabot.env.observation import ObservationEncoder, ObservationSpace
+from manabot.env.observation import (
+    CARD_DIM,
+    PLAYER_DIM,
+    ObservationEncoder,
+    ObservationSpace,
+)
 from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
 from manabot.semantic.compiler import compile_paths, pretty_json
 from manabot.semantic.learning import BoundSemanticPack, LearningSchema
@@ -41,8 +46,8 @@ def test_temur_finishes_through_the_production_training_observation_path() -> No
     env = Env(Match(match), ObservationSpace(), Reward(RewardConfig()), seed=163)
     observation, _ = env.reset(seed=163)
     # Policy input v5, the default: every observed fact has a column.
-    assert observation["agent_player"].shape[-1] == 44
-    assert observation["agent_cards"].shape[-1] == 42
+    assert observation["agent_player"].shape[-1] == PLAYER_DIM
+    assert observation["agent_cards"].shape[-1] == CARD_DIM
     rng = np.random.default_rng(163)
     for _ in range(5000):
         actions = np.flatnonzero(observation["actions_valid"])

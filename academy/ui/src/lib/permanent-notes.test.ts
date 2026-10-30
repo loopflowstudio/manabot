@@ -31,7 +31,7 @@ describe('permanent notes', () => {
   it('states set creature types, a granted land and firebending', () => {
     const citizen = permanent(3, 'Citizen', { creature_types: ['Citizen'] });
     const land = permanent(4, 'Badgermole', { is_granted_land: true });
-    const zuko = permanent(5, 'Zuko', { firebending: 2 });
+    const zuko = permanent(5, 'Zuko', { granted_firebending: 2 });
     expect(permanentNotes(citizen, [citizen])).toEqual(['creature types set to Citizen']);
     expect(permanentNotes(land, [land])).toEqual(['land through an effect']);
     expect(permanentNotes(zuko, [zuko])).toEqual(['firebending 2']);

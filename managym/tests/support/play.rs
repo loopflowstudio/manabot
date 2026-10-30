@@ -377,31 +377,12 @@ pub fn cast_and_resolve(s: &mut Scenario) {
 }
 
 /// Refresh priority, then whether ability `index` of `source` is offered.
-pub fn can_activate(s: &mut Scenario, source: PermanentId, index: usize) -> bool {
+pub fn offers_ability(s: &mut Scenario, source: PermanentId, index: usize) -> bool {
     s.game_mut().scenario_refresh_priority().unwrap();
     has_action(s, |a| {
         matches!(a, Action::ActivateAbility { permanent, ability_index, .. }
             if *permanent == source && *ability_index == index)
     })
-}
-
-/// Refresh priority, then whether any ability of `source` is offered.
-pub fn can_activate_any(s: &mut Scenario, source: PermanentId) -> bool {
-    s.game_mut().scenario_refresh_priority().unwrap();
-    has_action(
-        s,
-        |a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == source),
-    )
-}
-
-/// Refresh priority, then whether an ability of `source` functions from its
-/// current hand or graveyard zone.
-pub fn can_activate_card(s: &mut Scenario, source: CardId) -> bool {
-    s.game_mut().scenario_refresh_priority().unwrap();
-    has_action(
-        s,
-        |a| matches!(a, Action::ActivateCardAbility { card, .. } if *card == source),
-    )
 }
 
 /// Activate ability `index` of a permanent, refreshing priority only at a
@@ -416,12 +397,13 @@ pub fn activate(s: &mut Scenario, source: PermanentId, index: usize) {
     });
 }
 
-/// Activate ability `index` of a hand or graveyard card, refreshing priority.
+/// Activate ability `index` of a card in its hand or graveyard, refreshing
+/// priority first.
 pub fn activate_card(s: &mut Scenario, source: CardId, index: usize) {
     s.game_mut().scenario_refresh_priority().unwrap();
     choose(s, |a| {
         matches!(a, Action::ActivateCardAbility { card, ability_index, .. }
-            if *card == source && *ability_index == index)
+        if *card == source && *ability_index == index)
     });
 }
 

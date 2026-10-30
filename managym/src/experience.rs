@@ -313,6 +313,52 @@ pub struct LegacyCardView {
     /// Foretold and face down in exile; only its owner's views list it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub face_down: bool,
+    /// The permission to play this card from exile, when it has one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cast_permission: Option<LegacyCastPermissionView>,
+    /// The value of X announced for this spell on the stack.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub x: Option<i32>,
+}
+
+/// A public permission to play an exiled card. Only set terms are present.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LegacyCastPermissionView {
+    pub player_id: u32,
+    /// Mana symbols paid to cast it, such as `{2}`; absent for a land play.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub this_turn: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub own_turn_only: bool,
+    /// Usable only on a turn numbered after this one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub after_turn: Option<u32>,
+    /// Lasts while the permitted player controls this permanent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_permanent_id: Option<u32>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub flash: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub any_mana: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub waterbend: bool,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub foretold: bool,
+}
+
+/// Mana spendable only on spells with one of `spells`' subtypes or abilities
+/// of sources with one of `abilities`' subtypes; W/U/B/R/G/C amounts.
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct LegacyRestrictedManaView {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub spells: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub abilities: Vec<String>,
+    pub mana: [i32; 6],
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
@@ -324,6 +370,15 @@ pub struct LegacyPermanentView {
     pub is_token: Option<bool>,
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub exile_if_dies_this_turn: bool,
+    /// Exhaust abilities this object has used (CR 702.177a).
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub exhausted_abilities: u32,
+    /// "Once each turn" abilities this object has used this turn.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub once_each_turn_used: u32,
+    /// Firebending granted until end of turn.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub granted_firebending: u32,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub temp_subtypes: Vec<String>,
     #[serde(default, skip_serializing_if = "String::is_empty")]
@@ -356,9 +411,6 @@ pub struct LegacyPermanentView {
     /// A land only through an effect.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub is_granted_land: bool,
-    /// Firebending gained until end of turn.
-    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
-    pub firebending: u32,
     /// Attacking in the current combat.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub attacking: bool,
@@ -391,6 +443,14 @@ pub struct LegacyPlayerView {
     pub mana: Option<[i32; 6]>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lesson_mana: Option<[i32; 6]>,
+    /// `lesson_mana` split by restriction class.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub restricted_mana: Vec<LegacyRestrictedManaView>,
+    /// Player id whose next turn ends this player's hand-only casting.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hand_only_until: Option<u32>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub no_maximum_hand_size: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub combat_mana: Option<i32>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -415,9 +475,6 @@ pub struct LegacyPlayerView {
     /// Unspent red mana stays until end of turn.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub keeps_red_mana: bool,
-    /// No maximum hand size for the rest of the game.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub no_maximum_hand_size: bool,
     pub hand: Vec<LegacyCardView>,
     pub graveyard: Vec<LegacyCardView>,
     pub exile: Vec<LegacyCardView>,
