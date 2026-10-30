@@ -1,8 +1,6 @@
-"""Elemental admission through the compiler, live rules and learning readers."""
+"""Elemental combat setup through live rules, belief and learning readers."""
 
 from copy import deepcopy
-import json
-from pathlib import Path
 
 from managym.decision import Command, DecisionFrame, SemanticTransition
 from managym.experience_projection import describe_actions
@@ -14,58 +12,10 @@ from manabot.belief.tracker import BeliefTracker
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
 from manabot.model.actor_critic import ActorCritic
-from manabot.semantic.compiler import (
-    SemanticCompileError,
-    compile_paths,
-    compile_source,
-    pretty_json,
-)
 from manabot.semantic.learning import BoundSemanticPack, ContentPackBindingError
 import managym
 
-BASE = Path("content/semantic/v1")
 PACK = "elemental-combat-v1"
-
-
-def test_elemental_artifacts_are_canonical_and_close_all_42_cards() -> None:
-    ir, coverage = compile_paths(
-        BASE / "elemental.source.json", BASE / "elemental.fixtures.json"
-    )
-    assert (BASE / "generated/elemental.ir.json").read_text() == pretty_json(ir)
-    assert (BASE / "generated/elemental.coverage.json").read_text() == pretty_json(
-        coverage
-    )
-    assert coverage["definition_count"] == 51
-    assert coverage["admission_closure_complete"]
-    assert coverage["no_card_name_dispatch"]
-    assert (
-        len(
-            [d for d in ir["definitions"] if d["semantic_key"].startswith("elemental.")]
-        )
-        == 42
-    )
-
-
-@pytest.mark.parametrize("bad", ["quantity", "mode", "role", "tap", "binding"])
-def test_elemental_compiler_rejects_invalid_typed_programs(bad: str) -> None:
-    source = json.loads((BASE / "elemental.source.json").read_text())
-    programs = [p for d in source["definitions"] for p in d["programs"]]
-    if bad == "quantity":
-        program = next(p for p in programs if p["ops"][0]["op"] == "drain_life_value")
-        program["ops"][0]["amount"] = {"kind": "oracle_text"}
-    elif bad == "mode":
-        program = next(p for p in programs if p["ops"][0]["op"] == "modal")
-        program["ops"][0]["modes"][0] = [{"op": "destroy", "target": "missing"}]
-    elif bad == "role":
-        program = next(p for p in programs if p["ops"][0]["op"] == "target_clause")
-        program["ops"][0]["role"] = "missing"
-    elif bad == "tap":
-        program = next(p for p in programs if p["kind"] == "activated")
-        program["cost"]["tap_source"] = 1
-    else:
-        programs[0]["target_binding"] = "latest"
-    with pytest.raises(SemanticCompileError):
-        compile_source(source)
 
 
 def _engine() -> tuple[managym.Env, managym.Observation]:
@@ -94,7 +44,7 @@ def _engine() -> tuple[managym.Env, managym.Observation]:
     return engine, engine.scenario_refresh()
 
 
-def test_compiled_search_reaches_belief_and_public_history_consumers() -> None:
+def test_search_reaches_belief_and_public_history_consumers() -> None:
     engine, obs = _engine()
     pack = BoundSemanticPack.from_env(engine)
     assert pack.schema.raw["schema_version"] == 9

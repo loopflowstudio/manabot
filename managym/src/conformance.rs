@@ -20,7 +20,10 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    cards::content_pack::default_content_pack,
+    cards::{
+        content_pack::{default_content_pack, ContentPack},
+        setups::{authored_pack, AuthoredPack},
+    },
     flow::{game::Game, search::mix_seed},
     state::player::PlayerConfig,
 };
@@ -32,48 +35,6 @@ pub const OPTIMIZED_ID: &str = "optimized/skip-trivial-v1";
 pub const PHASE_REVISION: &str = "553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d";
 
 const MAX_FORCED_ACTIONS: usize = 100_000;
-const MATCHUP_SOURCE_BYTES: &[u8] =
-    include_bytes!("../../content/semantic/v1/two_deck.source.json");
-const COVERAGE_EVIDENCE_BYTES: &[u8] =
-    include_bytes!("../../content/semantic/v1/coverage.evidence.json");
-
-#[derive(Clone, Debug, Deserialize)]
-struct MatchupSource {
-    schema_version: u32,
-    pack_key: String,
-    decks: Vec<SourceDeck>,
-    definitions: Vec<SourceDefinition>,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-struct SourceDeck {
-    key: String,
-    card_count: usize,
-    cards: Vec<SourceDeckEntry>,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-struct SourceDeckEntry {
-    definition: String,
-    count: usize,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-struct SourceDefinition {
-    key: String,
-    registry_name: String,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-struct CoverageEvidence {
-    rule_families: Vec<CoverageFamily>,
-}
-
-#[derive(Clone, Debug, Deserialize)]
-struct CoverageFamily {
-    key: String,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Orientation {
@@ -90,49 +51,21 @@ pub enum Orientation {
 }
 
 impl Orientation {
-    fn source_bytes(self) -> &'static [u8] {
-        match self {
-            Self::ElementalWorldGrVsUg | Self::ElementalWorldUgVsGr => {
-                include_bytes!("../../content/semantic/w11/elemental_world.source.json")
-            }
-            Self::TemurLeftVsRight | Self::TemurRightVsLeft => {
-                include_bytes!("../../content/semantic/v1/temur.source.json")
-            }
-            Self::SacrificeLeftVsRight | Self::SacrificeRightVsLeft => {
-                include_bytes!("../../content/semantic/v1/sacrifice.source.json")
-            }
-            Self::ElementalLeftVsRight | Self::ElementalRightVsLeft => {
-                include_bytes!("../../content/semantic/v1/elemental.source.json")
-            }
-            _ => MATCHUP_SOURCE_BYTES,
-        }
+    /// The authored setup in `setups.json` that holds both seats' decks.
+    fn setup(self) -> Result<&'static AuthoredPack, String> {
+        let preset = match self {
+            Self::ElementalWorldGrVsUg | Self::ElementalWorldUgVsGr => "optional_payments",
+            Self::TemurLeftVsRight | Self::TemurRightVsLeft => "temur",
+            Self::SacrificeLeftVsRight | Self::SacrificeRightVsLeft => "sacrifice",
+            Self::ElementalLeftVsRight | Self::ElementalRightVsLeft => "elemental",
+            Self::UrLessonsVsGwAllies | Self::GwAlliesVsUrLessons => "two_deck",
+        };
+        authored_pack(preset).map_err(|error| error.to_string())
     }
-    fn source_digest(self) -> String {
-        blake3::hash(self.source_bytes()).to_hex().to_string()
-    }
-    fn content(self) -> Result<Arc<crate::cards::content_pack::ContentPack>, String> {
+    fn content(self) -> Result<Arc<ContentPack>, String> {
         match self {
-            Self::ElementalWorldGrVsUg | Self::ElementalWorldUgVsGr => Ok(Arc::clone(
-                &crate::cards::setups::authored_pack("optional_payments")
-                    .map_err(|error| error.to_string())?
-                    .content,
-            )),
-            Self::TemurLeftVsRight | Self::TemurRightVsLeft => Ok(Arc::clone(
-                &crate::cards::setups::authored_pack("temur")
-                    .map_err(|error| error.to_string())?
-                    .content,
-            )),
-            Self::SacrificeLeftVsRight | Self::SacrificeRightVsLeft => Ok(Arc::clone(
-                &crate::cards::setups::authored_pack("sacrifice")
-                    .map_err(|error| error.to_string())?
-                    .content,
-            )),
-            Self::ElementalLeftVsRight | Self::ElementalRightVsLeft => Ok(Arc::clone(
-                &crate::cards::setups::authored_pack("elemental")
-                    .map_err(|error| error.to_string())?
-                    .content,
-            )),
-            _ => Ok(default_content_pack()),
+            Self::UrLessonsVsGwAllies | Self::GwAlliesVsUrLessons => Ok(default_content_pack()),
+            _ => Ok(Arc::clone(&self.setup()?.content)),
         }
     }
     fn seat_keys(self) -> (&'static str, &'static str) {
@@ -209,7 +142,6 @@ pub struct ReplayCase {
     pub contract_id: String,
     pub case_id: String,
     pub matchup_pack_key: String,
-    pub matchup_source_digest: String,
     pub content_digest: String,
     pub reference: String,
     pub optimized: String,
@@ -281,7 +213,6 @@ pub struct ReplaySummary {
 pub struct Evidence {
     pub schema_version: u32,
     pub contract_id: String,
-    pub matchup_source_digest: String,
     pub content_digest: String,
     pub reference: String,
     pub optimized: String,
@@ -301,7 +232,6 @@ pub struct Evidence {
 pub struct FailureReceipt {
     pub schema_version: u32,
     pub contract_id: String,
-    pub matchup_source_digest: String,
     pub content_digest: String,
     pub reference: String,
     pub optimized: String,
@@ -476,63 +406,13 @@ fn selected_action(game: &Game, index: usize) -> Result<(String, String, Value),
     ))
 }
 
-fn matchup_source_for(orientation: Orientation) -> Result<MatchupSource, String> {
-    let source: MatchupSource =
-        serde_json::from_slice(orientation.source_bytes()).map_err(|error| error.to_string())?;
-    if source.schema_version != 1 {
-        return Err(format!(
-            "unsupported matchup source schema {}",
-            source.schema_version
-        ));
-    }
-    Ok(source)
-}
-
-fn matchup_source_digest() -> String {
-    blake3::hash(MATCHUP_SOURCE_BYTES).to_hex().to_string()
-}
-
 fn player_configs(orientation: Orientation) -> Result<Vec<PlayerConfig>, String> {
-    let source = matchup_source_for(orientation)?;
-    let definitions: BTreeMap<_, _> = source
-        .definitions
-        .into_iter()
-        .map(|definition| (definition.key, definition.registry_name))
-        .collect();
-    let decks: BTreeMap<_, _> = source
-        .decks
-        .into_iter()
-        .map(|deck| (deck.key.clone(), deck))
-        .collect();
+    let setup = orientation.setup()?;
     let (first, second) = orientation.seat_keys();
     [first, second]
         .into_iter()
         .map(|key| {
-            let deck = decks
-                .get(key)
-                .ok_or_else(|| format!("matchup source is missing deck {key}"))?;
-            let mut decklist = BTreeMap::new();
-            for entry in &deck.cards {
-                let registry_name = definitions.get(&entry.definition).ok_or_else(|| {
-                    format!(
-                        "deck {key} references unknown definition {}",
-                        entry.definition
-                    )
-                })?;
-                if decklist
-                    .insert(registry_name.clone(), entry.count)
-                    .is_some()
-                {
-                    return Err(format!("deck {key} repeats {registry_name}"));
-                }
-            }
-            let actual_count: usize = decklist.values().sum();
-            if actual_count != deck.card_count {
-                return Err(format!(
-                    "deck {key} declares {} cards but resolves to {actual_count}",
-                    deck.card_count
-                ));
-            }
+            let decklist = setup.decklist(key).map_err(|error| error.to_string())?;
             Ok(PlayerConfig::new(key, decklist))
         })
         .collect()
@@ -557,7 +437,7 @@ fn generate_case_internal(
     last_matching_checkpoint: &mut Option<Checkpoint>,
 ) -> Result<ReplayCase, String> {
     validate_spec(spec)?;
-    let source = matchup_source_for(spec.orientation)?;
+    let setup = spec.orientation.setup()?;
     let mut pair = ConformancePair::new(spec.orientation, spec.game_seed)?;
     let initial_checkpoint = pair.checkpoint()?;
     *last_matching_checkpoint = Some(initial_checkpoint.clone());
@@ -599,8 +479,7 @@ fn generate_case_internal(
         schema_version: SCHEMA_VERSION,
         contract_id: CONTRACT_ID.to_string(),
         case_id: spec.id.clone(),
-        matchup_pack_key: source.pack_key,
-        matchup_source_digest: spec.orientation.source_digest(),
+        matchup_pack_key: setup.pack_key.clone(),
         content_digest: spec.orientation.content()?.content_digest(),
         reference: REFERENCE_ID.to_string(),
         optimized: OPTIMIZED_ID.to_string(),
@@ -626,13 +505,10 @@ pub fn replay_case(case: &ReplayCase) -> Result<(), String> {
             case.case_id
         ));
     }
-    if case.matchup_source_digest != case.orientation.source_digest() {
-        return Err(format!("{} matchup source digest drift", case.case_id));
-    }
     if case.content_digest != case.orientation.content()?.content_digest() {
         return Err(format!("{} content digest drift", case.case_id));
     }
-    if case.matchup_pack_key != matchup_source_for(case.orientation)?.pack_key {
+    if case.matchup_pack_key != case.orientation.setup()?.pack_key {
         return Err("replay content pack key drift".into());
     }
     let mut pair = ConformancePair::new(case.orientation, case.game_seed)?;
@@ -754,23 +630,6 @@ pub fn validate_phase_matrix(matrix: &PhaseMatrix) -> Result<(), String> {
     if matrix.limitations.is_empty() {
         return Err("Phase matrix must state its practical limitations".to_string());
     }
-    let coverage: CoverageEvidence =
-        serde_json::from_slice(COVERAGE_EVIDENCE_BYTES).map_err(|error| error.to_string())?;
-    let expected_families: BTreeSet<_> = coverage
-        .rule_families
-        .into_iter()
-        .map(|family| family.key)
-        .collect();
-    let actual_families: BTreeSet<_> = matrix
-        .rows
-        .iter()
-        .map(|row| row.rule_family.clone())
-        .collect();
-    if actual_families != expected_families || matrix.rows.len() != expected_families.len() {
-        return Err(format!(
-            "Phase matrix rule-family closure mismatch; expected={expected_families:?}, actual={actual_families:?}"
-        ));
-    }
     let mut row_ids = BTreeSet::new();
     let pinned_source_prefix = format!(
         "{}/blob/{}/",
@@ -839,7 +698,6 @@ fn build_evidence(manifest: &Manifest, cases: &[ReplayCase], matrix: &PhaseMatri
     Evidence {
         schema_version: SCHEMA_VERSION,
         contract_id: CONTRACT_ID.to_string(),
-        matchup_source_digest: matchup_source_digest(),
         content_digest: default_content_pack().content_digest(),
         reference: REFERENCE_ID.to_string(),
         optimized: OPTIMIZED_ID.to_string(),
@@ -1014,7 +872,6 @@ fn persist_fuzz_failure(
     let receipt = FailureReceipt {
         schema_version: SCHEMA_VERSION,
         contract_id: CONTRACT_ID.to_string(),
-        matchup_source_digest: spec.orientation.source_digest(),
         content_digest: spec.orientation.content()?.content_digest(),
         reference: REFERENCE_ID.to_string(),
         optimized: OPTIMIZED_ID.to_string(),
@@ -1107,12 +964,11 @@ fn replay_failure_receipt(path: &Path, receipt: &FailureReceipt) -> Result<Strin
     if receipt.schema_version != SCHEMA_VERSION || receipt.contract_id != CONTRACT_ID {
         return Err("unsupported failure receipt contract".to_string());
     }
-    if receipt.matchup_source_digest != receipt.orientation.source_digest()
-        || receipt.content_digest != receipt.orientation.content()?.content_digest()
+    if receipt.content_digest != receipt.orientation.content()?.content_digest()
         || receipt.reference != REFERENCE_ID
         || receipt.optimized != OPTIMIZED_ID
     {
-        return Err("failure receipt source, content, or executor identity drift".to_string());
+        return Err("failure receipt content or executor identity drift".to_string());
     }
     let spec = CaseSpec {
         id: "failure-replay".to_string(),

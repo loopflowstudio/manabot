@@ -33,22 +33,21 @@ Main's notes at the syncs live at `6d069d6e5:scratch/questions.md` and `origin/m
   (IR/source hashes) is gone; manifests carry `pack_key`; rows add
   `scryfall_id`; `IrError` is `ContentError`. `content_pool`/`pool_content`/
   `Eligibility` otherwise unchanged.
-- 2026-10-29: the Python offline compiler (`manabot/semantic/compiler.py`) and its
-  frozen-source tests stay as the reader/reproducer of frozen v1–w11 IR; nothing
-  current reads it.
 - 2026-10-29 (support reorg): tests that exercise several cards stay where
   they were (Corrupt Court Official with Ozai's Cruelty in `cards/tla.rs`, Epic
   Downfall with Power Word Kill in `cards/afr.rs`); Lightning Strike has no test
   of its own, so no `ptk.rs`/`ths.rs` test files exist yet.
 - 2026-10-29 (concept review): world pool key becomes `"world"` (not per-world
   `"w17"`), describing the default pack; row `semantic_key` becomes `key`.
-  Coordinate with f871a8 in one comment. The v1 coverage gate is left for a later
-  Task rather than PR394.
+  Coordinate with f871a8 in one comment. (The v1 coverage gate was deleted by
+  Task afbd6a.)
 
 - 2026-10-29 (assumption): superseded corpora now without consumers
   (`semantic-kernel-w15-v1`, `authored-match-w11-v1`, `authored-match-parity-w11-v1`,
   `public-commitment-parity-v1`) stay in the tree like w12–w14; archiving them
   to S3 is a separate publish step, not done here.
+  Superseded 2026-10-30 by Jack Heart's steer: afbd6a archived them (and w12–w14,
+  v1, learn-lesson-w4-v3) to `experiments/data/archive/conformance/`.
 - 2026-10-29 (public-commitment parity, decision): bound to w17 by prefix. Only
   viewer 0's tracker fails (Command 68, South Pole Voyager revealed from library
   into hand); viewer 1 consumes the hero's Island discard (30) and
@@ -113,3 +112,41 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   failed 2 of 9 full `rules_tests` runs (Debug output of the root changed
   after a rejected stale submission); passes alone and in 7 later runs. It
   touches no possible-world code; likely order/timing-dependent shared state.
+
+## afbd6a (delete old world), 2026-10-30 — headless choices
+
+- Current-world checks in `test_temur/test_sacrifice/test_elemental/test_optional_payments`
+  stay in those files (they already run on `setups.json`); only compiler assertions
+  were deleted.
+- Phase-matrix rule-family closure against `v1/coverage.evidence.json` dropped; the
+  matrix keeps its other structural checks. `matchup_source_digest` left receipts;
+  conformance decks come from `cards::setups`.
+- `TRAILING_ORDER` removed with `LEGACY_ORDER`: default pack is name order.
+- Statics live in `CardDefinition.statics: Vec<StaticAbility>` (not `Ability::Static`)
+  so trigger indices into `abilities` are unchanged. Ward is listed as a static per
+  Jack Heart's direction though CR 702.21 makes it a triggered keyword; registration
+  still expands it to its trigger. `blocking_restriction`/`block_restriction` merged
+  as `StaticAbility::BlockRestriction(CantBlock | CantBeBlockedBy)`.
+- Academy curated pack manifests keep `source_uri` provenance strings naming
+  `content/semantic/v1/...` and `cardsets/tla.rs` (frozen pack assets; not rewritten).
+- Token first printings (Scryfall oracle-id earliest print, 2026-10-30): Ballistic
+  Boulder tltr, Bear tktk, Clue tsoi, Food teld, Monk tdmu, Human Soldier tsoi,
+  Treasure txln; Ally, Dragon, Soldier, Spirit first printed in ttla.
+
+## afbd6a sync onto T2 (c7979d310), 2026-10-30
+
+- T2's new `CardDefinition` fields became variants: `StaticAbility::{Flashback,
+  Foretell, FlashIf, CostsLessPerGraveyardCard}` (the old
+  `cost_reduction_in_graveyard` flag on `cost_reduction_per` is its own
+  variant) and `AdditionalCost::Waterbend` (was `kicker` + `kicker_waterbend`).
+  `kicker()` returns either optional cost, so the kicker card column and the
+  kicked cast stay as T2 built them. Each new variant has a guard row, witness,
+  token test and real-card test in `observability.rs`.
+- Fire Nation Attacks now produces Soldier, so it left `TOKENS_AWAITING_PRODUCER`.
+- AGENTS.md T2 note on `Cost.zone`/`Program::landcycling` named the removed IR;
+  rewritten as `ActivatedAbilityDefinition.zone` (`ActivationZone`).
+- `manabot/sim/heuristic.py` reads T2's activated-ability `effects` list and
+  skips hand/graveyard abilities (landcycling, foretell) when picking prompt,
+  spare-mana and pump abilities. T2's nine new targeted spells are pinned in
+  `test_heuristic.py`; the seven it cannot rate (airbend, linked exile, …) get
+  polarity `None`, the documented neutral fallback.

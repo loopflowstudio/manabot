@@ -343,6 +343,78 @@ pub struct SpellCostReduction {
     pub generic: u8,
 }
 
+/// A static ability (CR 604). The engine applies each by matching its
+/// variant; unless noted, it functions while its card is on the battlefield.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum StaticAbility {
+    /// "During your turn, spells in your graveyard have flashback": a Lesson's
+    /// flashback cost is {1}, any other spell's is its mana cost (Iroh, Grand
+    /// Lotus).
+    GraveyardSpellsHaveFlashback,
+    /// Each matching permanent you control has "{T}: Add one mana of any
+    /// color."
+    GrantsAnyColorManaAbility(CardPredicate),
+    /// "This creature can't be blocked as long as [condition]."
+    CantBeBlockedIf(StaticCondition),
+    /// "Players can't gain life."
+    PlayersCantGainLife,
+    /// "This creature can't attack or block unless you control another
+    /// [predicate]."
+    CantAttackOrBlockUnlessYouControlAnother(CardPredicate),
+    /// A blocking restriction on this creature (CR 509.1b).
+    BlockRestriction(BlockRestriction),
+    /// "[predicate] spells you cast cost {generic} less" while its condition
+    /// holds.
+    SpellsCostLess(SpellCostReduction),
+    /// "This spell costs {1} less to cast for each [predicate] you control"
+    /// (CR 601.2f); functions while casting, generic floor 0.
+    CostsLessPerPermanent(CardPredicate),
+    /// "This spell costs {1} less to cast for each [predicate] card in your
+    /// graveyard"; functions while casting, generic floor 0.
+    CostsLessPerGraveyardCard(CardPredicate),
+    /// "If [condition], you may cast this spell as though it had flash";
+    /// functions from hand (see `Game::has_instant_timing`).
+    FlashIf(StaticCondition),
+    /// Printed flashback (CR 702.34): castable from its owner's graveyard for
+    /// this cost, then exiled instead of going anywhere else.
+    Flashback(ManaCost),
+    /// Printed foretell (CR 702.143): during its owner's turn it may be exiled
+    /// face down from hand for {2}, then cast on a later turn for this cost.
+    Foretell(ManaCost),
+    /// "You have no maximum hand size."
+    NoMaximumHandSize,
+    /// A continuous P/T effect (layer 7c).
+    PtBuff(StaticPtBuff),
+    /// Characteristic-defining power (CR 604.3, layer 7a); printed `power` is
+    /// ignored.
+    CharacteristicPower(PowerCda),
+    /// Ward (CR 702.21): registration expands it into its "becomes the
+    /// target" trigger, "counter it unless that player pays [cost]".
+    Ward(ManaCost),
+}
+
+/// Which blocks a creature's blocking restriction forbids (CR 509.1b).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum BlockRestriction {
+    /// "This creature can't block [predicate] creatures."
+    CantBlock(CardPredicate),
+    /// "This creature can't be blocked by [predicate] creatures."
+    CantBeBlockedBy(CardPredicate),
+}
+
+/// An additional cost of casting a spell (CR 601.2b, 601.2f).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum AdditionalCost {
+    /// "As an additional cost, sacrifice [predicate]", or pay `or_mana`.
+    Sacrifice(SacrificeCost),
+    /// Kicker (CR 702.33): an optional cost chosen while casting.
+    Kicker(ManaCost),
+    /// "As an additional cost, you may waterbend [cost]": an optional cost
+    /// chosen like kicker whose generic mana may be paid by tapping artifacts
+    /// and creatures.
+    Waterbend(ManaCost),
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CardDefinition {
     /// `<set>.<card>`: the set file of the card's first printing and its slug.
@@ -353,40 +425,15 @@ pub struct CardDefinition {
     /// rulings and images are reachable from it. Play never reads it.
     #[serde(skip)]
     pub scryfall_id: &'static str,
-    /// During your turn, grant graveyard flashback (Lessons cost {1}).
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub grants_flashback: bool,
-    /// "If [condition], you may cast this spell as though it had flash."
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub flash_if: Option<StaticCondition>,
-    /// `cost_reduction_per` counts cards in your graveyard, not permanents
-    /// you control.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub cost_reduction_in_graveyard: bool,
-    /// Each matching permanent you control gains a chosen-color tap ability.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub mana_grant: Vec<CardPredicate>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub unblockable_if: Option<StaticCondition>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub sacrifice_cost: Option<SacrificeCost>,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub prevents_life_gain: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub combat_requires_other: Option<CardPredicate>,
-    /// This creature cannot block attackers matching this predicate.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub blocking_restriction: Option<CardPredicate>,
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub spell_cost_reductions: Vec<SpellCostReduction>,
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub no_maximum_hand_size: bool,
     pub name: String,
     pub mana_cost: Option<ManaCost>,
     pub types: CardTypes,
     pub supertypes: Vec<String>,
     pub subtypes: Vec<String>,
     pub abilities: Vec<Ability>,
+    /// Static abilities (CR 604), in printed order.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub statics: Vec<StaticAbility>,
     pub mana_abilities: Vec<ManaAbility>,
     pub triggered_mana_abilities: Vec<TriggeredManaAbility>,
     pub activated_abilities: Vec<ActivatedAbilityDefinition>,
@@ -395,41 +442,14 @@ pub struct CardDefinition {
     /// spells. When empty, a single requirement is derived from the first
     /// targeted spell effect.
     pub targeting: Vec<TargetRequirement>,
-    /// Kicker (CR 702.33): optional additional cost chosen while casting.
-    pub kicker: Option<ManaCost>,
-    /// The optional additional cost is "waterbend [kicker]": its generic
-    /// mana may be paid by tapping artifacts and creatures.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub kicker_waterbend: bool,
-    /// Printed flashback (CR 702.34): castable from its owner's graveyard
-    /// for this cost, then exiled instead of going anywhere else.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub flashback: Option<ManaCost>,
-    /// Printed foretell (CR 702.143): during its owner's turn it may be
-    /// exiled face down from hand for {2}, then cast on a later turn for
-    /// this cost.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub foretell: Option<ManaCost>,
-    /// Ward (CR 702.21): "counter [the targeting spell] unless its
-    /// controller pays [cost]". Synthesized into a BecomesTargeted
-    /// triggered ability at registration.
-    pub ward: Option<ManaCost>,
-    /// Affinity-style cost reduction: "This spell costs {1} less to cast
-    /// for each [predicate] you control", computed while casting (generic
-    /// floor 0).
-    pub cost_reduction_per: Option<CardPredicate>,
+    /// Additional costs of casting this spell (CR 601.2b, 601.2f).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub additional_costs: Vec<AdditionalCost>,
     pub keywords: Keywords,
-    /// "This creature can't be blocked by creatures matching [predicate]."
-    pub block_restriction: Option<CardPredicate>,
     /// Explicit color identity for cards without a mana cost (tokens).
     pub color_override: Option<Colors>,
     /// Tokens cease to exist outside the battlefield (CR 111.7, 704.5d).
     pub is_token: bool,
-    /// Characteristic-defining power (`power` is ignored when set).
-    pub power_cda: Option<PowerCda>,
-    /// Static continuous P/T effects this card projects while on the
-    /// battlefield (anthems, conditional self-buffs).
-    pub static_pt_buffs: Vec<StaticPtBuff>,
     /// Replacement/prevention definitions consumed by the proposed-event
     /// pipeline. Empty vectors are omitted so existing content-pack digests
     /// remain stable until production content actually adopts the feature.
@@ -441,6 +461,61 @@ pub struct CardDefinition {
 }
 
 impl CardDefinition {
+    /// The optional additional cost a cast may choose to pay: kicker or an
+    /// optional waterbend, which both mark the spell kicked.
+    pub fn optional_cost(&self) -> Option<&ManaCost> {
+        self.additional_costs.iter().find_map(|cost| match cost {
+            AdditionalCost::Kicker(kicker) | AdditionalCost::Waterbend(kicker) => Some(kicker),
+            AdditionalCost::Sacrifice(_) => None,
+        })
+    }
+
+    pub fn sacrifice_cost(&self) -> Option<&SacrificeCost> {
+        self.additional_costs.iter().find_map(|cost| match cost {
+            AdditionalCost::Sacrifice(sacrifice) => Some(sacrifice),
+            AdditionalCost::Kicker(_) | AdditionalCost::Waterbend(_) => None,
+        })
+    }
+
+    pub fn flashback(&self) -> Option<&ManaCost> {
+        self.statics.iter().find_map(|ability| match ability {
+            StaticAbility::Flashback(cost) => Some(cost),
+            _ => None,
+        })
+    }
+
+    pub fn foretell(&self) -> Option<&ManaCost> {
+        self.statics.iter().find_map(|ability| match ability {
+            StaticAbility::Foretell(cost) => Some(cost),
+            _ => None,
+        })
+    }
+
+    pub fn flash_if(&self) -> Option<&StaticCondition> {
+        self.statics.iter().find_map(|ability| match ability {
+            StaticAbility::FlashIf(condition) => Some(condition),
+            _ => None,
+        })
+    }
+
+    pub fn ward(&self) -> Option<&ManaCost> {
+        self.statics.iter().find_map(|ability| match ability {
+            StaticAbility::Ward(cost) => Some(cost),
+            _ => None,
+        })
+    }
+
+    pub fn power_cda(&self) -> Option<&PowerCda> {
+        self.statics.iter().find_map(|ability| match ability {
+            StaticAbility::CharacteristicPower(cda) => Some(cda),
+            _ => None,
+        })
+    }
+
+    pub fn has_static(&self, ability: &StaticAbility) -> bool {
+        self.statics.contains(ability)
+    }
+
     pub fn colors(&self) -> Colors {
         if let Some(colors) = &self.color_override {
             return colors.clone();
@@ -488,7 +563,7 @@ impl Card {
     }
 
     /// CR 117.1a, 702.8 — Instants and cards with flash use instant timing.
-    /// Printed instant timing; a conditional `flash_if` is checked by
+    /// Printed instant timing; a conditional `StaticAbility::FlashIf` is checked by
     /// [`crate::flow::game::Game::has_instant_timing`].
     pub fn is_instant_speed(&self) -> bool {
         self.types.is_instant() || self.keywords.flash

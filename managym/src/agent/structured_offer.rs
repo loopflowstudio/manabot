@@ -1050,7 +1050,7 @@ impl Game {
                 }
                 Action::CastSpell { player, card } => {
                     let card_ref = &self.state.cards[*card];
-                    if card_ref.kicker.is_some() {
+                    if card_ref.optional_cost().is_some() {
                         continue;
                     }
                     let requirements = card_ref.target_requirements();

@@ -808,13 +808,11 @@ impl Observation {
             is_ally: card.has_subtype("Ally"),
             is_lesson: card.has_subtype("Lesson"),
             ward_cost: card
-                .ward
-                .as_ref()
+                .ward()
                 .map(|cost| i32::from(cost.mana_value))
                 .unwrap_or(0),
             kicker_cost: card
-                .kicker
-                .as_ref()
+                .optional_cost()
                 .map(|cost| i32::from(cost.mana_value))
                 .unwrap_or(0),
             card_types: CardTypeData {

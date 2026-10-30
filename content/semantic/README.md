@@ -26,8 +26,8 @@ support. See the [TLA notes](../../docs/rules/tla/README.md) for the open TLA wo
 ## Packs and identity
 
 The default content pack registers every set-file definition plus the rules
-fixtures in `managym/src/cards/fixtures.rs` (Crossroads of Destiny), keeping the
-legacy `CardDefId` prefix. Each authored setup is a pack of exactly its decks'
+fixtures in `managym/src/cards/fixtures.rs` (Crossroads of Destiny), in name
+order. Each authored setup is a pack of exactly its decks'
 cards and the tokens they create, in key order
 ([`cards/setups.rs`](../../managym/src/cards/setups.rs)); exact authored
 decklists, or an explicit `content_pack`, select it. A pack's identity is its
@@ -66,32 +66,11 @@ uv run --extra dev pytest -q \
   tests/model/test_policy_catalog.py
 ```
 
-## Historical sources and coverage evidence
+## Earlier worlds
 
-The `v1/` and `w7/` through `w11/` artifacts retain earlier sources, schemas,
-fixtures, IR and receipts. They are not inputs to current content and are never
-rewritten. The retired Python compiler (`manabot/semantic/compiler.py`,
-`scripts/compile_semantic_content.py`) only reproduces those frozen artifacts;
-the explicit source/output invocations in `.github/workflows/ci.yml` validate
-them.
-
-`v1/coverage.evidence.json` records rule-family ownership, executable witnesses,
-support/deviation annotations and admission history. Its coverage-gap artifact
-retains the original rolling policy: more than 20% kernel-changing cards among
-the latest 20 distinct nonbasic, nontoken admissions requires an acknowledged
-response through the newest history sequence. It records the initial two-deck
-expansion as a `0 content-only / 20 total` breach with the semantic-kernel redesign
-as its response; it has no bearing on current support.
-
-```bash
-uv run scripts/generate_coverage_gaps.py --check
-```
-
-Historical Elemental operations and fixtures remain useful references for modal
-choices, target clauses, private selection and dynamic quantities. A spell's
-`target_binding: "inferred"` leaves target selection to shared effect traversal;
-omitting it retains the explicit binding contract. The
-[sacrifice and landfall rule contracts](../../docs/rules/elemental-sacrifice.md)
-retain their behavioral coverage and release boundaries. Earlier documentation
-of each pack's original rollout is available at
+Earlier worlds' sources, IR, learning schemas, coverage evidence and the Python
+compiler that produced them (`v1/`, `w7/`–`w11/`) are not in the tree; they run
+and read from the git revision that recorded them (see
+[WORLDS.md](../../WORLDS.md#running-an-older-world)). Earlier documentation of
+each pack's rollout is at
 `c5d406e3d2a701525c15c8500a30f7da7896cc40:content/semantic/README.md`.

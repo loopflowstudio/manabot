@@ -30,7 +30,7 @@
       "normalized_assertion": "An identical curated activated-ability scenario reaches the same state.",
       "manabot_evidence": [
         "managym/tests/rules/cr_602_activated_abilities.rs",
-        "managym/tests/rules/tla_cards.rs"
+        "managym/tests/cards/tla.rs"
       ],
       "phase_evidence": [],
       "status": "excluded",
@@ -125,8 +125,7 @@
       "rule_family": "tokens",
       "normalized_assertion": "The same Ally and Clue token scenario creates identical objects and abilities.",
       "manabot_evidence": [
-        "managym/tests/rules/tla_cards.rs",
-        "content/semantic/v1/coverage.evidence.json"
+        "managym/tests/cards/tla.rs"
       ],
       "phase_evidence": [],
       "status": "excluded",
@@ -137,7 +136,7 @@
       "rule_family": "counters",
       "normalized_assertion": "The same multi-object +1/+1 counter scenario reaches identical values.",
       "manabot_evidence": [
-        "managym/tests/rules/tla_cards.rs",
+        "managym/tests/cards/tla.rs",
         "managym/tests/rules/cr_614_replacement.rs"
       ],
       "phase_evidence": [],
@@ -178,8 +177,7 @@
       "rule_family": "tap_and_untap",
       "normalized_assertion": "The same Tiger-Seal and Fancy Footwork sequence reaches identical tap state.",
       "manabot_evidence": [
-        "managym/tests/rules/tla_cards.rs",
-        "content/semantic/v1/coverage.evidence.json"
+        "managym/tests/cards/tla.rs"
       ],
       "phase_evidence": [],
       "status": "excluded",
