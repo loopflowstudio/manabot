@@ -27,9 +27,6 @@ Per-item detail for items 1–22 is at
    grants (PyO3, protocol schemas, Academy types), then Academy and LLM text.
 21–22. Card tests in `tests/cards/<set>.rs` with shared `cards/support.rs`.
 
-`semantic_conformance_tests` fails on w15 receipts (world-release evidence,
-as on T1).
-One intermittent `structured_offers` failure is recorded in `scratch/questions.md`.
 
 ## Accepted model (concept reviews, 2026-10-29)
 
@@ -57,8 +54,8 @@ single-card tests (concept review after item 22).
 Qualification entries, `Permanent::local_power`/`local_toughness`,
 `Permanent::can_tap`/`producible_mana`,
 `StaticScope::Equipped`/`YouControlWithCounters`, play.rs `MAX_X`,
-`Game::equipped_creature` and `Permanent::can_attack`
-are gone; do not restore them.
+`Game::equipped_creature`, `Permanent::can_attack` and
+`CounterKind::parse` (authoring-era) are gone; do not restore them.
 
 ## Accepted: the policy input shows everything (Jack Heart, 2026-10-29)
 
@@ -129,14 +126,19 @@ Scryfall id.
 
 ## Remaining
 
-- World release for w18 (shared with T2): `semantic-kernel-w17-v1` and
-  `authored-match-w17-v1` receipts, the Academy w17 demo, navigation,
-  trigger-order, learn and public-commitment fixtures all fail identity checks
-  under w18 (22 `tests/academy` failures plus the authority receipt); browser proof.
+- Sync T2's PR #398 head `a5587df5a` (31 commits past `89e320c48`, unmerged
+  here): it adds T2's w18 world-bound evidence (`d130bbc90`:
+  `semantic-kernel-w18-v1`, authored-match / parity / public-commitment w18
+  receipts, Academy `*-w18.json` demo, navigation and trigger-order fixtures,
+  belief receipts on possible-world v3) and foretold-slot determinization.
+- World release under T3's w18: T3 extends w18 in place, so after the sync
+  re-record that evidence with T2's `scratch/tools/regen_*_w18.py` and
+  confirm the 22 `tests/academy` failures and the semantic-conformance pair
+  clear; browser proof (Playwright) is CI's. If T2 lands on main first, its
+  w18 evidence is frozen and T3 takes w19 (and v6) instead; the open
+  in-place assumption is in `scratch/questions.md`.
 
-Check (item 28, debug, 2026-10-29): every `cargo test` target passes except the
-`semantic_conformance_tests` pair (w17 manifest under w18); cards 384, rules
-131, lib 122; clippy `--all-targets -D warnings` and fmt clean. pytest: CLAUDE.md
-world suite 66; model+semantic+env+verify 556 before the first Academy fixture
-failure; `test_ur_lessons_increment` 8. Academy: svelte-check clean; permanent-notes,
-PermanentRow and GameBoard vitest pass.
+Check (2026-10-29, debug, uncommitted compress edits: `modify_controlled`,
+`unspent_mana_retained`, `requires_target` use, `CounterKind::parse` removed):
+`cargo test` cards 384, rules 131 (+2 ignored), lib 122 pass; clippy
+`--all-targets -D warnings` and fmt clean. Python/Academy last run at item 28.

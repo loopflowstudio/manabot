@@ -1264,34 +1264,33 @@ impl Game {
     pub(crate) fn clear_mana_pools(&mut self) {
         for player in [PlayerId(0), PlayerId(1)] {
             self.journal_player(player);
-            let becomes_red = self.unspent_mana_becomes_red(player);
-            let keeps_red = self.state.players[player.0].keeps_red_mana;
-            let pool = &mut self.state.players[player.0].mana_pool;
-            if becomes_red {
-                pool.become_red();
-            } else if keeps_red {
-                *pool = pool.red_only();
-            } else {
-                pool.clear();
-            }
+            let pool = std::mem::take(&mut self.state.players[player.0].mana_pool);
+            self.state.players[player.0].mana_pool = self.unspent_mana_retained(player, pool);
         }
     }
 
-    /// Until-end-of-combat mana (firebending) empties as combat ends. Under
-    /// Ozai it stays as ordinary red mana instead; red mana a player keeps
-    /// this turn joins their ordinary pool.
+    /// Until-end-of-combat mana (firebending) empties as combat ends. What
+    /// `unspent_mana_retained` keeps joins the ordinary pool.
     pub(crate) fn clear_combat_mana_pools(&mut self) {
         for player in [PlayerId(0), PlayerId(1)] {
             self.journal_player(player);
-            let mut combat = std::mem::take(&mut self.state.players[player.0].combat_mana_pool);
-            if self.unspent_mana_becomes_red(player) {
-                combat.become_red();
-            } else if self.state.players[player.0].keeps_red_mana {
-                combat = combat.red_only();
-            } else {
-                continue;
-            }
-            self.state.players[player.0].mana_pool.add(&combat);
+            let combat = std::mem::take(&mut self.state.players[player.0].combat_mana_pool);
+            let kept = self.unspent_mana_retained(player, combat);
+            self.state.players[player.0].mana_pool.add(&kept);
+        }
+    }
+
+    /// What survives of `player`'s unspent `pool` as it would empty: all of
+    /// it as red under Ozai (CR 614.1a), its red mana while they keep red
+    /// mana this turn, otherwise nothing.
+    fn unspent_mana_retained(&self, player: PlayerId, mut pool: Mana) -> Mana {
+        if self.unspent_mana_becomes_red(player) {
+            pool.become_red();
+            pool
+        } else if self.state.players[player.0].keeps_red_mana {
+            pool.red_only()
+        } else {
+            Mana::default()
         }
     }
 

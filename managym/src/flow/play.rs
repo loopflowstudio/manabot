@@ -1062,9 +1062,7 @@ impl Game {
         ability_index: usize,
         ability: &ActivatedAbilityDefinition,
     ) -> Result<(), AgentError> {
-        if ability
-            .target_requirement()
-            .is_some_and(|requirement| requirement.min > 0)
+        if ability.requires_target()
             && self
                 .activated_ability_targets(player, source, ability_index, &[])
                 .is_empty()

@@ -19,6 +19,7 @@ use crate::{
         },
         game_object::{CardId, PermanentId, PlayerId, Target},
         permanent::{CounterKind, Permanent},
+        predicate::CardPredicate,
         stack_object::{
             ActivatedAbilityOnStack, SpellOnStack, StackObject, TriggeredAbilityOnStack,
         },
@@ -914,13 +915,9 @@ impl Game {
                 predicate,
                 keywords,
             } => {
-                for id in self.battlefield_permanents(frame.controller) {
-                    if self.permanent_matches_predicate(id, predicate) {
-                        self.journal_permanent(id);
-                        let permanent = self.state.permanents[id].as_mut()?;
-                        permanent.temp_keywords = permanent.temp_keywords.union(keywords);
-                    }
-                }
+                self.modify_controlled(frame.controller, predicate, |permanent| {
+                    permanent.temp_keywords = permanent.temp_keywords.union(keywords);
+                });
                 None
             }
             Effect::SearchLibraryToHand { predicate } => {
@@ -968,14 +965,10 @@ impl Game {
                 power,
                 toughness,
             } => {
-                for id in self.battlefield_permanents(frame.controller) {
-                    if self.permanent_matches_predicate(id, predicate) {
-                        self.journal_permanent(id);
-                        let permanent = self.state.permanents[id].as_mut()?;
-                        permanent.temp_power += power;
-                        permanent.temp_toughness += toughness;
-                    }
-                }
+                self.modify_controlled(frame.controller, predicate, |permanent| {
+                    permanent.temp_power += power;
+                    permanent.temp_toughness += toughness;
+                });
                 None
             }
             Effect::SetBasePtControlled {
@@ -985,31 +978,23 @@ impl Game {
             } => {
                 let power = self.effect_value(power, frame);
                 let toughness = self.effect_value(toughness, frame);
-                for id in self.battlefield_permanents(frame.controller) {
-                    if self.permanent_matches_predicate(id, predicate) {
-                        self.journal_permanent(id);
-                        let permanent = self.state.permanents[id].as_mut()?;
-                        permanent.temp_base_power = Some(power);
-                        permanent.temp_base_toughness = Some(toughness);
-                    }
-                }
+                self.modify_controlled(frame.controller, predicate, |permanent| {
+                    permanent.temp_base_power = Some(power);
+                    permanent.temp_base_toughness = Some(toughness);
+                });
                 None
             }
             Effect::AddSubtypesControlled {
                 predicate,
                 subtypes,
             } => {
-                for id in self.battlefield_permanents(frame.controller) {
-                    if self.permanent_matches_predicate(id, predicate) {
-                        self.journal_permanent(id);
-                        let permanent = self.state.permanents[id].as_mut()?;
-                        for subtype in subtypes {
-                            if !permanent.temp_subtypes.contains(subtype) {
-                                permanent.temp_subtypes.push(subtype.clone());
-                            }
+                self.modify_controlled(frame.controller, predicate, |permanent| {
+                    for subtype in subtypes {
+                        if !permanent.temp_subtypes.contains(subtype) {
+                            permanent.temp_subtypes.push(subtype.clone());
                         }
                     }
-                }
+                });
                 None
             }
             Effect::OptionalPayment {
@@ -1664,6 +1649,25 @@ impl Game {
         let permanent_id = self.source_permanent_id(frame)?;
         self.journal_permanent(permanent_id);
         self.state.permanents[permanent_id].as_mut()
+    }
+
+    /// Apply `modify` to each permanent `controller` controls that matches
+    /// `predicate`, checked as each is reached ("[predicate] you control
+    /// get/gain ... until end of turn").
+    fn modify_controlled(
+        &mut self,
+        controller: PlayerId,
+        predicate: &CardPredicate,
+        mut modify: impl FnMut(&mut Permanent),
+    ) {
+        for id in self.battlefield_permanents(controller) {
+            if self.permanent_matches_predicate(id, predicate) {
+                self.journal_permanent(id);
+                if let Some(permanent) = self.state.permanents[id].as_mut() {
+                    modify(permanent);
+                }
+            }
+        }
     }
 
     /// The frame's still-present primary target, when it is a permanent.

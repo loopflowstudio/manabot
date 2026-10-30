@@ -3,8 +3,7 @@ use super::{
     game_object::{CardId, ObjectId, ObjectRef, PlayerId},
 };
 
-/// Counter kinds the engine knows (CR 122). Absence in authored IR means
-/// +1/+1, the kind every earlier card uses.
+/// Counter kinds the engine knows (CR 122).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CounterKind {
@@ -24,16 +23,6 @@ impl CounterKind {
         CounterKind::Fire,
         CounterKind::DoubleStrike,
     ];
-
-    pub fn parse(name: &str) -> Option<Self> {
-        match name {
-            "plus_one_plus_one" => Some(Self::PlusOnePlusOne),
-            "stun" => Some(Self::Stun),
-            "fire" => Some(Self::Fire),
-            "double_strike" => Some(Self::DoubleStrike),
-            _ => None,
-        }
-    }
 }
 
 /// Non-+1/+1 counters on one permanent. Serialized only when present so
