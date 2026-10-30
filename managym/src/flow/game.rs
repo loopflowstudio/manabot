@@ -14,7 +14,6 @@ use crate::{
         combat::CombatState,
         decision::SuspendedResolution,
         event::GameEvent,
-        event_log::EventLog,
         priority::PriorityState,
         trigger::{DelayedTrigger, ExileLink, PendingTrigger, TriggerPlacement},
         turn::TurnState,
@@ -46,9 +45,9 @@ pub struct GameState {
     pub stack_objects: Vec<StackObject>,
     pub combat: Option<CombatState>,
     pub mana_cache: [Option<Mana>; 2],
-    pub events: EventLog,
-    pub pending_events: EventLog,
-    pub observation_events: EventLog,
+    pub events: Vec<GameEvent>,
+    pub pending_events: Vec<GameEvent>,
+    pub observation_events: Vec<GameEvent>,
     pub pending_triggers: Vec<PendingTrigger>,
     pub trigger_placement: Option<TriggerPlacement>,
     /// One-shot delayed triggers (earthbend returns) watching specific
@@ -237,6 +236,6 @@ impl Clone for Game {
 
 impl Game {
     pub fn take_observation_events(&mut self) -> Vec<GameEvent> {
-        self.state.observation_events.take_vec()
+        std::mem::take(&mut self.state.observation_events)
     }
 }

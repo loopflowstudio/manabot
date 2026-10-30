@@ -1797,7 +1797,8 @@ mod learn_tests {
         assert_eq!(witness(&source), before);
     }
 
-    fn rollback_retrieval() {
+    #[test]
+    fn learn_retrieval_forks_and_rolls_back_outside_inventory() {
         let mut source = game(&[("Firebending Lesson", 2)]);
         learn(&mut source);
         let source_witness = witness(&source);
@@ -1823,10 +1824,6 @@ mod learn_tests {
         assert_eq!(witness(&sibling), source_witness);
     }
 
-    #[test]
-    fn learn_retrieval_forks_and_rolls_back_outside_inventory() {
-        rollback_retrieval();
-    }
     #[test]
     fn learn_reveal_is_ordered_public_definition_and_known_hand_is_not_a_hand_leak() {
         use crate::agent::observation::{EventEntityKind, EventType, Observation};
@@ -2105,7 +2102,8 @@ mod learn_tests {
         assert!(game.state.players[0].known_hand.is_empty());
     }
 
-    fn rollback_knowledge() {
+    #[test]
+    fn learn_nested_knowledge_and_search_rollback_preserve_retained_roots() {
         let mut source = small_known_hand_game();
         learn(&mut source);
         source
@@ -2143,11 +2141,6 @@ mod learn_tests {
         assert!(witness(&branch) == before, "outer rollback");
         assert!(witness(&source) == before);
         assert!(witness(&sibling) == before);
-    }
-
-    #[test]
-    fn learn_nested_knowledge_and_search_rollback_preserve_retained_roots() {
-        rollback_knowledge();
     }
 }
 
@@ -2288,7 +2281,8 @@ mod payment_tests {
         game.step(action_index).unwrap();
     }
 
-    fn rollback_suspended_waterbend() {
+    #[test]
+    fn partial_waterbend_and_paid_mana_choice_restore_through_nested_command_rollback() {
         let player = PlayerId(0);
         let mut game = payment_game_with_deck(
             PaymentCost::Waterbend { generic: 2 },
@@ -2411,10 +2405,5 @@ mod payment_tests {
         assert_eq!(witness(&branch), root);
         assert_eq!(witness(&game), root);
         assert_eq!(witness(&sibling), sibling_witness);
-    }
-
-    #[test]
-    fn partial_waterbend_and_paid_mana_choice_restore_through_nested_command_rollback() {
-        rollback_suspended_waterbend();
     }
 }

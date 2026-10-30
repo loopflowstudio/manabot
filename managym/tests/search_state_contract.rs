@@ -14,9 +14,8 @@ use managym::{
 
 #[test]
 fn independently_allocated_roots_have_equal_witnesses_along_a_shared_trace() {
-    let (mut first, _) = build_fixture("interactive-heavy-80-w4-v1").expect("first heavy fixture");
-    let (mut second, _) =
-        build_fixture("interactive-heavy-80-w4-v1").expect("second heavy fixture");
+    let mut first = build_fixture("interactive-heavy-80-w4-v1").expect("first heavy fixture");
+    let mut second = build_fixture("interactive-heavy-80-w4-v1").expect("second heavy fixture");
     second.state.content = Arc::new((*second.state.content).clone());
     assert!(
         !Arc::ptr_eq(&first.state.content, &second.state.content),
@@ -39,8 +38,7 @@ fn independently_allocated_roots_have_equal_witnesses_along_a_shared_trace() {
 
 #[test]
 fn fixed_viewer_projections_hide_opposing_hands_and_private_choices() {
-    let (root, _) =
-        build_fixture("interactive-midgame-48-w4-v1").expect("midgame visibility fixture");
+    let root = build_fixture("interactive-midgame-48-w4-v1").expect("midgame visibility fixture");
     let actor = root.agent_player();
     let other = PlayerId((actor.0 + 1) % 2);
 
@@ -71,8 +69,7 @@ fn fixed_viewer_projections_hide_opposing_hands_and_private_choices() {
 
 #[test]
 fn hidden_worlds_change_authority_without_changing_the_viewers_known_state() {
-    let (root, _) =
-        build_fixture("interactive-midgame-48-w4-v1").expect("midgame hidden-world fixture");
+    let root = build_fixture("interactive-midgame-48-w4-v1").expect("midgame hidden-world fixture");
     let viewer = PlayerId(0);
     let opponent = PlayerId(1);
     let mut first = root.clone();
@@ -109,7 +106,7 @@ fn hidden_worlds_change_authority_without_changing_the_viewers_known_state() {
 
 #[test]
 fn stale_object_refs_are_rejected_in_a_fork_and_the_root_keeps_its_identity() {
-    let (root, _) = build_fixture("interactive-heavy-80-w4-v1").expect("heavy identity fixture");
+    let root = build_fixture("interactive-heavy-80-w4-v1").expect("heavy identity fixture");
     let root_witness = witness(&root);
     let permanent = PermanentId(
         root.state

@@ -74,7 +74,7 @@ impl Game {
     }
 
     pub fn drain_events(&mut self) -> Vec<GameEvent> {
-        self.state.events.take_vec()
+        std::mem::take(&mut self.state.events)
     }
 
     pub(crate) fn tick(&mut self) -> bool {

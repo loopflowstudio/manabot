@@ -167,7 +167,7 @@ mod tests {
 
     #[test]
     fn authority_fingerprint_covers_identity_rng_events_allocation_zones_and_decisions() {
-        let (game, _) = crate::match_fixtures::build_fixture("interactive-midgame-48-w4-v1")
+        let game = crate::match_fixtures::build_fixture("interactive-midgame-48-w4-v1")
             .expect("contract fixture");
         let baseline = witness(&game);
 
