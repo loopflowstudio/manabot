@@ -60,10 +60,6 @@ struct CanonicalCard {
     owner: PlayerId,
 }
 
-fn no_history(history: &[crate::flow::turn::PlayerTurnHistory; 2]) -> bool {
-    *history == <[crate::flow::turn::PlayerTurnHistory; 2]>::default()
-}
-
 #[derive(Serialize)]
 struct CanonicalTurn {
     active_player: PlayerId,
@@ -72,7 +68,7 @@ struct CanonicalTurn {
     spells_cast: [Vec<crate::state::game_object::CardId>; 2],
     cards_drawn_this_turn: [u32; 2],
     /// Omitted while empty, keeping hashes of states without history unchanged.
-    #[serde(skip_serializing_if = "no_history")]
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
     history: [crate::flow::turn::PlayerTurnHistory; 2],
     #[serde(skip_serializing_if = "Vec::is_empty")]
     ability_triggers_this_turn: Vec<(crate::state::game_object::ObjectRef, usize, u32)>,

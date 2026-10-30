@@ -234,14 +234,8 @@ def _mana(cost: ManaCost | managym.ManaCost | None) -> str:
 
 def _turn_history(history: managym.PlayerTurnHistory) -> str:
     """What a player has done this turn, or empty when nothing yet."""
-    parts = [
-        *(
-            [f"sacrificed {history.permanents_sacrificed} permanents"]
-            if history.permanents_sacrificed
-            else []
-        ),
-    ]
-    return "; ".join(parts)
+    count = history.permanents_sacrificed
+    return f"sacrificed {count} permanents" if count else ""
 
 
 def effect_phrase(effect: managym.ContinuousEffect) -> str:

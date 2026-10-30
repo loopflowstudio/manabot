@@ -117,3 +117,7 @@ vocabularies as v5 fact rows (`FactKind`).
     pre-existing failures.
   - Academy: vitest notes and protocol pass (13); svelte-check is clean.
   - ruff is clean on the changed files.
+- 2026-10-30 compress: Python fact `push` takes native `Fact.effect`'s
+  provenance tuple (the copy row uses it); hash uses `state::is_zero`;
+  restored `continuous_description`'s doc. Parity + text observation (44),
+  debug `cargo test --test cards tla` (307) and clippy pass.

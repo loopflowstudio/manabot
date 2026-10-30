@@ -514,7 +514,6 @@ fn effect_description(effect: &Effect) -> Option<String> {
     })
 }
 
-/// One sentence for a continuous effect: whom, what, how long.
 /// "Create a token that's a copy of this[, except …]" (CR 707.9).
 fn copy_description(exceptions: &[Modification<EffectValue>]) -> String {
     let mut text = "Create a token that's a copy of this".to_string();
@@ -532,6 +531,7 @@ fn copy_description(exceptions: &[Modification<EffectValue>]) -> String {
     text
 }
 
+/// One sentence for a continuous effect: whom, what, how long.
 fn continuous_description(
     affected: &AffectedSpec,
     modification: &Modification<EffectValue>,
