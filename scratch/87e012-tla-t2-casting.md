@@ -1,6 +1,6 @@
 # T2 — TLA casting, costs, zone permissions and private zones (Task 87e012)
 
-Stacked on T1 (892c47, PR #394, open; synced at its head `38c883f08` via `89e320c48`); T2 is PR #398.
+Stacked on T1 (892c47, PR #394, open; synced at its head `2c50c8793` via `1d650064e`); T2 is PR #398.
 Task directive lists the 51 cards and obligations; allocation in
 `docs/rules/tla/allocation.jsonl` (`planned_pr: T2`). Every merge needs Jack
 Heart's review; don't arm T2's merge while #394 is open. Status: implementation
@@ -64,6 +64,8 @@ exhaust, used once-each-turn, granted firebending) in text-5 wording
 
 ## Check
 
+2026-10-29 realign (after syncing T1 `2c50c8793`, scratch and one conformance replay only): plan matches code; `912a5d0e9` dropped the single-slot test, so cards is 304; debug `cargo test --test cards determinize` 2 pass.
+
 2026-10-29 implement (concept review 6): `determinize` and materialization share `fill_foretold_slots`; `determinize_fills_two_foretold_slots_with_distinct_cards` (F = 2, 256 seeds) fails on the old code and passes; debug lib 121, cards 305, rules 131 + 2 ignored, possible_worlds 8, prepared 3, search 11; clippy `--all-targets -D warnings` and fmt clean; extension rebuilt.
 
 2026-10-29 realign (after syncing T1 `38c883f08`): plan matches code (foretold possible worlds v3 in `53bc5c993`); debug `cargo test --lib --test cards --test rules_tests --test possible_worlds_tests --test prepared_possible_worlds_tests` 121/304/131+2 ignored/8/3 pass; clippy `--all-targets -D warnings` clean.
@@ -73,9 +75,3 @@ exhaust, used once-each-turn, granted firebending) in text-5 wording
 2026-10-29 compress (possible worlds v3): one `name_counts` helper replaces `unseen_pool` and the known-hand, realized-hand and stale-pool counting loops; unseen cards gathered once per `for_viewer`. Debug lib possible_worlds 8 pass; debug cards possible_worlds 2 pass; clippy `-D warnings` and fmt clean; extension not rebuilt (no behavior change).
 
 2026-10-29 implement (concept review 4): `Card.svelte` prints and names exhaust/once-each-turn/granted-firebending statuses in text-5 wording, fed from `PermanentRow.svelte`; `PermanentRow.svelte.test.ts` 2 pass; Academy `npm run check` 0 errors and `npm run build` pass (after `npm ci`, node 26 runs).
-
-2026-10-29 realign (after Academy statuses): plan matches code; Academy wording matches `text_observation.py`; #394 still open at `01e8f9975`; no checks rerun.
-
-2026-10-29 compress: removed orphaned `tests/support/casting.rs`; TLA any-color/two-color mana modes use `one_mana_of_any_color`/`two_mana_in_any_combination` (same mode order). Debug `cargo test --test cards` 303, rules 131 + 2 ignored, content_pack 3; clippy `-D warnings` clean.
-
-2026-10-29 after syncing T1 `8790821da`: debug `cargo test --no-fail-fast` passes except the known semantic-conformance pair (cards 303, rules 131 + 2 ignored, lib 121); clippy `-D warnings` with and without `python` and fmt clean; pytest env/observation, continuation input, experience protocol, play modes, optional payments, text observation 123 pass. Arena admission suite left for gate.
