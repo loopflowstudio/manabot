@@ -28,10 +28,10 @@ use managym::{
         observation::{EventEntityKind, Observation},
         policy_history::HistoryReference,
     },
+    cards::setups::authored_pack,
     decision::Command,
     flow::{event::GameEvent, turn::StepKind},
     possible_worlds::{viewer_observation, PossibleWorldSpace},
-    semantic::setups::authored_pack,
     state::{
         game_object::{CardId, PermanentId, PlayerId, Target},
         mana::{Mana, ManaCost, ManaUse},

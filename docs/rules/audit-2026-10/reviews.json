@@ -6,7 +6,7 @@
       "inspected_owners": [
         "managym/src/flow/game.rs",
         "managym/src/state/card.rs",
-        "managym/src/semantic/"
+        "managym/src/cardsets/"
       ],
       "evidence": [],
       "gap": "No independent complete-rules oracle. Unknown means unresolved, never assumed conformant.",
@@ -67,7 +67,7 @@
       ],
       "evidence": [
         "managym/tests/rules/cr_106_mana.rs",
-        "managym/tests/rules/temur_cards.rs"
+        "managym/tests/cards/roe.rs"
       ],
       "gap": "The separately landed shared-payment repair is integrated in w13. The Prism/Treasure regression passes through explicit nested choices; no GPU root-cause identity inferred. Phyrexian, snow, variable and two-brid coverage unresolved.",
       "ownership": "dispersed",
@@ -101,8 +101,8 @@
         "managym/src/flow/resolution.rs"
       ],
       "evidence": [
-        "managym/tests/rules/interaction_spells.rs",
-        "managym/tests/rules/stage2_cards.rs"
+        "managym/tests/cards/lea.rs",
+        "managym/tests/cards/tla.rs"
       ],
       "gap": "Target clauses and exact graveyard refs exist; per-subrule legality/recheck, hexproof/controller and partial target invalidation need review.",
       "ownership": "dispersed",
@@ -132,7 +132,7 @@
         "managym/src/flow/resolution.rs"
       ],
       "evidence": [
-        "managym/tests/rules/elemental_cards.rs"
+        "managym/tests/cards/tla.rs"
       ],
       "gap": "No generic typed counter store; negative counter cancellation and stickers cannot be certified.",
       "ownership": "dispersed",
@@ -143,7 +143,7 @@
       "scope": "Definition data rather than physical printed cards; some parts are display-only.",
       "inspected_owners": [
         "managym/src/state/card.rs:CardDefinition",
-        "managym/src/semantic/",
+        "managym/src/cardsets/",
         "managym/tests/fixtures/scryfall_cards.json"
       ],
       "evidence": [
@@ -247,7 +247,7 @@
       "evidence": [
         "managym/tests/rules/cr_601_casting.rs",
         "managym/tests/rules/cr_602_activated_abilities.rs",
-        "managym/tests/rules/temur_cards.rs"
+        "managym/tests/cards/tla.rs"
       ],
       "gap": "Payment execution defect retained for MTG-174; Task 4ba5dd owns optional-payment continuation model, shipped #344 in audited base. No competing rewrite.",
       "ownership": "dispersed",
@@ -280,8 +280,7 @@
         "managym/src/state/permanent.rs:Permanent::effective_keywords"
       ],
       "evidence": [
-        "managym/tests/rules/elemental_cards.rs",
-        "managym/tests/rules/temur_cards.rs"
+        "managym/tests/cards/tla.rs"
       ],
       "gap": "No general timestamp/dependency layer engine or text changing. Incorrect counters-as-7d documentation corrected; counters and additive boosts commute in 7c.",
       "ownership": "dispersed",
@@ -298,7 +297,7 @@
         "managym/src/flow/play.rs"
       ],
       "evidence": [
-        "managym/tests/rules/temur_cards.rs",
+        "managym/tests/cards/roe.rs",
         "managym/tests/rules/cr_106_mana.rs"
       ],
       "gap": "Prism/Treasure execution passes through explicit nested payment choices in w13; arbitrary mana ability classification (especially library-moving costs) remains unresolved.",
@@ -314,8 +313,8 @@
         "managym/src/state/ability.rs:Effect"
       ],
       "evidence": [
-        "managym/tests/rules/interaction_spells.rs",
-        "managym/tests/rules/temur_cards.rs"
+        "managym/tests/cards/lea.rs",
+        "managym/tests/cards/tla.rs"
       ],
       "gap": "Per-subrule resolution audit needed; linked abilities and loyalty procedures unverified. Shared optional-payment contract in docs/rules/optional-payments.md.",
       "ownership": "dispersed",
@@ -346,7 +345,7 @@
       ],
       "evidence": [
         "managym/tests/rules/cr_702_keywords.rs",
-        "managym/tests/rules/elemental_cards.rs"
+        "managym/tests/cards/tla.rs"
       ],
       "gap": "Keywords struct has 14 booleans plus dedicated mechanics; most keywords need explicit admission decisions. Identifier hits are not implementation proof. 701 numbering has shifted (sacrifice now 701.21).",
       "ownership": "dispersed",
@@ -379,7 +378,7 @@
         "managym/src/flow/undo.rs"
       ],
       "evidence": [
-        "managym/tests/rules/temur_cards.rs"
+        "managym/tests/cards/tla.rs"
       ],
       "gap": "Copy token immutability is not general copy/layer support; replay rollback is not CR illegal-action reversal. Do not infer missing mechanics solely from names.",
       "ownership": "dispersed",
@@ -589,14 +588,14 @@
       "authority": "managym/src/state/mana.rs:Mana::payment_remainder, Mana::pay",
       "tests": [
         "managym/tests/rules/cr_106_mana.rs:audit_restricted_mana_never_pays_unrelated_costs",
-        "managym/tests/rules/temur_cards.rs:herbalist_restriction_survives_color_selection_and_cannot_pay_abilities"
+        "managym/tests/cards/tla.rs:herbalist_restriction_survives_color_selection_and_cannot_pay_abilities"
       ],
       "gap": "Other mana restrictions/additional-effect annotations unverified.",
       "comments": "Relevant intent comments exist at the cited authority; not a proof.",
       "dispersion": "dispersed",
       "anchors": [
         "managym/tests/rules/cr_106_mana.rs::audit_restricted_mana_never_pays_unrelated_costs",
-        "managym/tests/rules/temur_cards.rs::herbalist_restriction_survives_color_selection_and_cannot_pay_abilities"
+        "managym/tests/cards/tla.rs::herbalist_restriction_survives_color_selection_and_cannot_pay_abilities"
       ]
     },
     "107.4b": {
@@ -719,7 +718,7 @@
       "scope": "Effective costs include selected kicker and generic reductions.",
       "authority": "managym/src/flow/play.rs:Game::effective_spell_cost; managym/src/flow/mana.rs",
       "tests": [
-        "managym/tests/rules/temur_cards.rs"
+        "managym/tests/cards/roe.rs"
       ],
       "gap": "The bounded Prism/Treasure case passes after shared-payment integration; full locked-cost ordering, taxes and alternate costs remain unresolved.",
       "comments": "Relevant intent comments exist at the cited authority; not a proof.",
@@ -751,15 +750,15 @@
       "scope": "Immediate authored mana abilities; Prism cost may use Treasure.",
       "authority": "managym/src/flow/mana.rs; managym/src/flow/play.rs; managym/src/flow/zones.rs",
       "tests": [
-        "managym/tests/rules/temur_cards.rs:prism_consumes_generic_before_adding_chosen_color",
-        "managym/tests/rules/temur_cards.rs:audit_prism_treasure_empty_pool_activation"
+        "managym/tests/cards/roe.rs:prism_consumes_generic_before_adding_chosen_color",
+        "managym/tests/cards/roe.rs:audit_prism_treasure_empty_pool_activation"
       ],
       "gap": "Historical offered-activation failure is closed in integrated w13: explicit Treasure/color choices produce the independently asserted final U pool, consumed Treasure and no stack object. General mana-ability classification and timing remain outside this bounded proof.",
       "comments": "Relevant intent comments exist at the cited authority; not a proof.",
       "dispersion": "dispersed",
       "anchors": [
-        "managym/tests/rules/temur_cards.rs::prism_consumes_generic_before_adding_chosen_color",
-        "managym/tests/rules/temur_cards.rs::audit_prism_treasure_empty_pool_activation"
+        "managym/tests/cards/roe.rs::prism_consumes_generic_before_adding_chosen_color",
+        "managym/tests/cards/roe.rs::audit_prism_treasure_empty_pool_activation"
       ]
     },
     "605.3b": {
@@ -767,15 +766,15 @@
       "scope": "Immediate authored mana abilities; Prism cost may use Treasure.",
       "authority": "managym/src/flow/mana.rs; managym/src/flow/play.rs; managym/src/flow/zones.rs",
       "tests": [
-        "managym/tests/rules/temur_cards.rs:prism_consumes_generic_before_adding_chosen_color",
-        "managym/tests/rules/temur_cards.rs:audit_prism_treasure_empty_pool_activation"
+        "managym/tests/cards/roe.rs:prism_consumes_generic_before_adding_chosen_color",
+        "managym/tests/cards/roe.rs:audit_prism_treasure_empty_pool_activation"
       ],
       "gap": "Historical offered-activation failure is closed in integrated w13: explicit Treasure/color choices produce the independently asserted final U pool, consumed Treasure and no stack object. General mana-ability classification and timing remain outside this bounded proof.",
       "comments": "Relevant intent comments exist at the cited authority; not a proof.",
       "dispersion": "dispersed",
       "anchors": [
-        "managym/tests/rules/temur_cards.rs::prism_consumes_generic_before_adding_chosen_color",
-        "managym/tests/rules/temur_cards.rs::audit_prism_treasure_empty_pool_activation"
+        "managym/tests/cards/roe.rs::prism_consumes_generic_before_adding_chosen_color",
+        "managym/tests/cards/roe.rs::audit_prism_treasure_empty_pool_activation"
       ]
     },
     "613.4": {
@@ -783,7 +782,7 @@
       "scope": "Only additive modifiers and +1/+1 counters; no general dependencies.",
       "authority": "managym/src/flow/statics.rs:Game::effective_pt",
       "tests": [
-        "managym/tests/rules/elemental_cards.rs"
+        "managym/tests/cards/tla.rs"
       ],
       "gap": "Comments previously assigned counters to 7d; corrected to 7c. Timestamp/dependency and switch effects unimplemented. Matrix coverage remains a future investment.",
       "comments": "Relevant intent comments exist at the cited authority; not a proof.",
@@ -795,7 +794,7 @@
       "scope": "Only additive modifiers and +1/+1 counters; no general dependencies.",
       "authority": "managym/src/flow/statics.rs:Game::effective_pt",
       "tests": [
-        "managym/tests/rules/elemental_cards.rs"
+        "managym/tests/cards/tla.rs"
       ],
       "gap": "Comments previously assigned counters to 7d; corrected to 7c. Timestamp/dependency and switch effects unimplemented. Matrix coverage remains a future investment.",
       "comments": "Relevant intent comments exist at the cited authority; not a proof.",
@@ -961,7 +960,7 @@
       "tests": [
         "managym/src/flow/target_authority_tests.rs",
         "managym/tests/rules/cr_603_triggers.rs",
-        "managym/tests/rules/elemental_cards.rs",
+        "managym/tests/cards/tla.rs",
         "managym/tests/rules/cr_608_resolution.rs:audit_target_gaining_hexproof_during_resolution_is_still_affected",
         "managym/src/flow/resolution_tests.rs"
       ],
@@ -981,10 +980,10 @@
       "dispersion": "shared selection and effect metadata",
       "comments": "Effect::target_spec defines the authored subset. The blanket activation-source exclusion is not documented as a general MTG rule and must not be generalized beyond current cards.",
       "tests": [
-        "managym/tests/rules/elemental_cards.rs"
+        "managym/tests/cards/tla.rs"
       ],
       "anchors": [
-        "managym/tests/rules/elemental_cards.rs::disciple_targets_another_small_creature_pays_tap_and_survives_source_departure"
+        "managym/tests/cards/tla.rs::disciple_targets_another_small_creature_pays_tap_and_survives_source_departure"
       ],
       "gap": "Only one activated target is supported by PendingChoice::ActivatedTarget. Source exclusion fits Disciple's 'another' wording but is broader than CR 115.5, which forbids the ability targeting itself on the stack, not its source permanent. General targeted activations need review."
     },
@@ -1012,11 +1011,11 @@
       "comments": "Target legality documents current-state rechecks; graveyard lookup checks exact incarnation. Stack-spell identity limits are separately adjudicated in unification.md.",
       "tests": [
         "managym/src/flow/target_authority_tests.rs",
-        "managym/tests/rules/elemental_cards.rs"
+        "managym/tests/cards/tla.rs"
       ],
       "anchors": [
         "managym/src/flow/target_authority_tests.rs::stack_target_mana_value_boundaries_have_explicit_expected_choices",
-        "managym/tests/rules/elemental_cards.rs::ancestry_does_not_follow_a_graveyard_target_into_a_new_incarnation"
+        "managym/tests/cards/tla.rs::ancestry_does_not_follow_a_graveyard_target_into_a_new_incarnation"
       ],
       "gap": "No targets for stack abilities, exile or arbitrary graveyards. Missing target forms are unsupported mechanics, not evidence that ordinary permanent targeting bypasses zones."
     },
@@ -1028,13 +1027,13 @@
       "comments": "remaining_legal_targets explicitly documents clause-local distinctness; effect_target_requirements documents independent clauses versus shared 'that target' effects.",
       "tests": [
         "managym/src/flow/target_authority_tests.rs",
-        "managym/tests/rules/elemental_cards.rs"
+        "managym/tests/cards/tla.rs"
       ],
       "anchors": [
         "managym/src/flow/target_authority_tests.rs::trigger_target_distinctness_is_enforced_per_clause_at_submission",
-        "managym/tests/rules/elemental_cards.rs::azula_announces_both_modes_then_binds_independent_targets_including_same_object",
-        "managym/tests/rules/elemental_cards.rs::dai_li_targets_same_land_twice_then_drains_for_creatures_with_counters",
-        "managym/tests/rules/elemental_cards.rs::jet_entry_damage_and_death_choose_up_to_two_distinct_creatures"
+        "managym/tests/cards/tla.rs::azula_announces_both_modes_then_binds_independent_targets_including_same_object",
+        "managym/tests/cards/tla.rs::dai_li_targets_same_land_twice_then_drains_for_creatures_with_counters",
+        "managym/tests/cards/tla.rs::jet_entry_damage_and_death_choose_up_to_two_distinct_creatures"
       ],
       "gap": "General retargeting/new-target effects are not implemented by these paths; multi-target activated abilities are not covered. Distinct stages are not duplicate definitions to collapse."
     },
@@ -1045,12 +1044,11 @@
       "dispersion": "typed requirement with stage-specific continuations",
       "comments": "TargetRequirement explicitly documents min=0 as 'up to'; continuation code preserves costs after declining.",
       "tests": [
-        "managym/tests/rules/sacrifice_cards.rs",
-        "managym/tests/rules/stage2_cards.rs"
+        "managym/tests/cards/tla.rs"
       ],
       "anchors": [
-        "managym/tests/rules/sacrifice_cards.rs::farm_animals_can_decline_target_and_still_pay_sacrifice",
-        "managym/tests/rules/stage2_cards.rs::allies_at_last_up_to_zero_attackers_is_legal"
+        "managym/tests/cards/tla.rs::farm_animals_can_decline_target_and_still_pay_sacrifice",
+        "managym/tests/cards/tla.rs::allies_at_last_up_to_zero_attackers_is_legal"
       ],
       "gap": "These witnesses establish zero-target execution, not every downstream query distinguishing 'requires targets' from 'is targeted', nor general target-changing effects."
     },
@@ -1093,13 +1091,13 @@
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [
-        "managym/tests/rules/elemental_cards.rs:sokka_binds_spell_and_land_separately_and_resolves_with_one_illegal_target"
+        "managym/tests/cards/tla.rs:sokka_binds_spell_and_land_separately_and_resolves_with_one_illegal_target"
       ],
       "gap": "Authoring correctness is per card, not an Oracle-text parser; no proof for every instant/sorcery.",
       "anchors": [
         "managym/src/state/card.rs::target_requirements_for_mode",
         "managym/src/state/ability.rs::effect_target_requirements",
-        "managym/tests/rules/elemental_cards.rs::sokka_binds_spell_and_land_separately_and_resolves_with_one_illegal_target"
+        "managym/tests/cards/tla.rs::sokka_binds_spell_and_land_separately_and_resolves_with_one_illegal_target"
       ]
     },
     "115.1b": {
@@ -1122,12 +1120,12 @@
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [
-        "managym/tests/rules/stage3_cards.rs:earthbend_targets_only_own_lands"
+        "managym/tests/cards/tla.rs:earthbend_targets_only_own_lands"
       ],
       "gap": "Equip, modular and mutate targeting are absent; keyword targeting is authored case by case.",
       "anchors": [
         "managym/src/state/ability.rs::Earthbend",
-        "managym/tests/rules/stage3_cards.rs::earthbend_targets_only_own_lands"
+        "managym/tests/cards/tla.rs::earthbend_targets_only_own_lands"
       ]
     },
     "115.4": {
@@ -1257,13 +1255,13 @@
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [
-        "managym/tests/rules/elemental_cards.rs:azula_announces_both_modes_then_binds_independent_targets_including_same_object"
+        "managym/tests/cards/tla.rs:azula_announces_both_modes_then_binds_independent_targets_including_same_object"
       ],
       "gap": "Retargeting while preserving modes is not implemented; mode-selection evidence proves only the announcement half.",
       "anchors": [
         "managym/src/state/stack_object.rs::SpellOnStack",
         "managym/src/state/card.rs::spell_effects_for_mode",
-        "managym/tests/rules/elemental_cards.rs::azula_announces_both_modes_then_binds_independent_targets_including_same_object"
+        "managym/tests/cards/tla.rs::azula_announces_both_modes_then_binds_independent_targets_including_same_object"
       ]
     },
     "115.9": {
@@ -1412,13 +1410,13 @@
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [
-        "managym/tests/rules/temur_cards.rs:ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution"
+        "managym/tests/cards/tla.rs:ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution"
       ],
       "gap": "Paid kicker and spent-mana details are not retained on Permanent; do not generalize was_cast to arbitrary cast provenance.",
       "anchors": [
         "managym/src/flow/zones.rs::commit_zone_move",
         "managym/src/flow/triggers.rs::trigger_condition_fires",
-        "managym/tests/rules/temur_cards.rs::ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution"
+        "managym/tests/cards/tla.rs::ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution"
       ]
     },
     "400.7e": {
@@ -1428,14 +1426,14 @@
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [
-        "managym/tests/rules/stage3_cards.rs:animated_land_dies_and_returns_tapped_as_plain_land",
+        "managym/tests/cards/tla.rs:animated_land_dies_and_returns_tapped_as_plain_land",
         "managym/tests/rules/cr_608_resolution.rs:audit_earthbend_return_does_not_follow_a_second_zone_change"
       ],
       "gap": "Confirmed synthetic failure: the return follows CardId from graveyard into exile and returns the wrong incarnation. Bind the first destination ObjectRef; no supported-deck response sequence is asserted.",
       "anchors": [
         "managym/src/flow/zones.rs::handle_leaves_battlefield",
         "managym/src/flow/resolution.rs::ReturnSourceToBattlefieldTapped",
-        "managym/tests/rules/stage3_cards.rs::animated_land_dies_and_returns_tapped_as_plain_land",
+        "managym/tests/cards/tla.rs::animated_land_dies_and_returns_tapped_as_plain_land",
         "managym/tests/rules/cr_608_resolution.rs::audit_earthbend_return_does_not_follow_a_second_zone_change"
       ]
     },
@@ -1459,14 +1457,14 @@
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [
-        "managym/tests/rules/temur_cards.rs:flashback_is_exiled_when_countered_after_iroh_leaves"
+        "managym/tests/cards/tla.rs:flashback_is_exiled_when_countered_after_iroh_leaves"
       ],
       "gap": "Only flashback provenance is represented, not arbitrary granted cast abilities.",
       "anchors": [
         "managym/src/flow/play.rs::flashback_cost",
         "managym/src/state/stack_object.rs::SpellOnStack",
         "managym/src/flow/zones.rs::move_card_with_entry",
-        "managym/tests/rules/temur_cards.rs::flashback_is_exiled_when_countered_after_iroh_leaves"
+        "managym/tests/cards/tla.rs::flashback_is_exiled_when_countered_after_iroh_leaves"
       ]
     },
     "400.7h": {
@@ -1558,13 +1556,13 @@
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [
-        "managym/tests/rules/stage3_cards.rs:earthbend_trigger_removed_without_lands"
+        "managym/tests/cards/tla.rs:earthbend_trigger_removed_without_lands"
       ],
       "gap": "Uncounterable triggered abilities are not represented; requirements do not cover all post-effect instructions.",
       "anchors": [
         "managym/src/flow/triggers.rs::trigger_requirements",
         "managym/src/flow/triggers.rs::choose_trigger_target",
-        "managym/tests/rules/stage3_cards.rs::earthbend_trigger_removed_without_lands"
+        "managym/tests/cards/tla.rs::earthbend_trigger_removed_without_lands"
       ]
     },
     "603.1b": {
@@ -1762,32 +1760,32 @@
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [
-        "managym/tests/rules/stage3_cards.rs:earthbend_trigger_removed_without_lands",
+        "managym/tests/cards/tla.rs:earthbend_trigger_removed_without_lands",
         "managym/tests/rules/cr_603_triggers.rs:cr_603_trigger_flush_happens_after_sba_check"
       ],
       "gap": "Division announcements and continuous-effect prohibitions are not general; target choice coverage is bounded.",
       "anchors": [
         "managym/src/flow/triggers.rs::flush_triggers",
         "managym/src/flow/triggers.rs::choose_trigger_target",
-        "managym/tests/rules/stage3_cards.rs::earthbend_trigger_removed_without_lands",
+        "managym/tests/cards/tla.rs::earthbend_trigger_removed_without_lands",
         "managym/tests/rules/cr_603_triggers.rs::cr_603_trigger_flush_happens_after_sba_check"
       ]
     },
     "603.4": {
       "status": "partial",
       "scope": "Ran and Shaw checks graveyard threshold at entry and resolution using authored condition/effect branches.",
-      "authority": "managym/src/flow/triggers.rs:trigger_condition_fires; managym/src/flow/resolution.rs:execute_frame_effect; managym/src/cardsets/temur.rs:Ran and Shaw",
+      "authority": "managym/src/flow/triggers.rs:trigger_condition_fires; managym/src/flow/resolution.rs:execute_frame_effect; managym/src/cardsets/tla.rs:Ran and Shaw",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "ActiveIf documents fire-time only plus explicit effect branch for intervening-if; trigger_condition_fires comment is narrower than that dual use.",
       "tests": [
-        "managym/tests/rules/temur_cards.rs:ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution"
+        "managym/tests/cards/tla.rs:ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution"
       ],
       "gap": "ActiveIf also models conditional ability existence, which must not always be rechecked. No generic intervening-if field; per-card pairing must remain deliberate.",
       "anchors": [
         "managym/src/flow/triggers.rs::trigger_condition_fires",
         "managym/src/flow/resolution.rs::execute_frame_effect",
-        "managym/src/cardsets/temur.rs::Ran and Shaw",
-        "managym/tests/rules/temur_cards.rs::ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution"
+        "managym/src/cardsets/tla.rs::Ran and Shaw",
+        "managym/tests/cards/tla.rs::ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution"
       ]
     },
     "603.5": {
@@ -1813,7 +1811,7 @@
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [
-        "managym/tests/rules/stage3_cards.rs:animated_land_dies_and_returns_tapped_as_plain_land",
+        "managym/tests/cards/tla.rs:animated_land_dies_and_returns_tapped_as_plain_land",
         "managym/tests/rules/cr_608_resolution.rs:audit_earthbend_return_does_not_follow_a_second_zone_change"
       ],
       "gap": "Confirmed synthetic failure: the return follows CardId from graveyard into exile and returns the wrong incarnation. Bind the first destination ObjectRef; no supported-deck response sequence is asserted.",
@@ -1821,7 +1819,7 @@
         "managym/src/flow/triggers.rs::trigger_condition_fires",
         "managym/src/flow/zones.rs::handle_leaves_battlefield",
         "managym/src/flow/resolution.rs::ReturnSourceToBattlefieldTapped",
-        "managym/tests/rules/stage3_cards.rs::animated_land_dies_and_returns_tapped_as_plain_land",
+        "managym/tests/cards/tla.rs::animated_land_dies_and_returns_tapped_as_plain_land",
         "managym/tests/rules/cr_608_resolution.rs::audit_earthbend_return_does_not_follow_a_second_zone_change"
       ]
     },
@@ -1906,13 +1904,13 @@
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [
-        "managym/tests/rules/stage3_cards.rs:animated_land_dies_and_returns_tapped_as_plain_land"
+        "managym/tests/cards/tla.rs:animated_land_dies_and_returns_tapped_as_plain_land"
       ],
       "gap": "Only the dies/exiled return kind is implemented; general delayed timings and duration are absent.",
       "anchors": [
         "managym/src/flow/trigger.rs::DelayedTrigger",
         "managym/src/flow/zones.rs::handle_leaves_battlefield",
-        "managym/tests/rules/stage3_cards.rs::animated_land_dies_and_returns_tapped_as_plain_land"
+        "managym/tests/cards/tla.rs::animated_land_dies_and_returns_tapped_as_plain_land"
       ]
     },
     "603.7a": {
@@ -1922,13 +1920,13 @@
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [
-        "managym/tests/rules/stage3_cards.rs:animated_land_dies_and_returns_tapped_as_plain_land"
+        "managym/tests/cards/tla.rs:animated_land_dies_and_returns_tapped_as_plain_land"
       ],
       "gap": "No replacement/static-origin creation path; prior-event non-triggering has no independent new fixture.",
       "anchors": [
         "managym/src/flow/resolution.rs::Earthbend",
         "managym/src/flow/zones.rs::handle_leaves_battlefield",
-        "managym/tests/rules/stage3_cards.rs::animated_land_dies_and_returns_tapped_as_plain_land"
+        "managym/tests/cards/tla.rs::animated_land_dies_and_returns_tapped_as_plain_land"
       ]
     },
     "603.7b": {
@@ -1938,12 +1936,12 @@
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [
-        "managym/tests/rules/stage3_cards.rs:animated_land_dies_and_returns_tapped_as_plain_land"
+        "managym/tests/cards/tla.rs:animated_land_dies_and_returns_tapped_as_plain_land"
       ],
       "gap": "No stated-duration repeated delayed trigger or simultaneous-event choice; only one-shot departure supported.",
       "anchors": [
         "managym/src/flow/zones.rs::handle_leaves_battlefield",
-        "managym/tests/rules/stage3_cards.rs::animated_land_dies_and_returns_tapped_as_plain_land"
+        "managym/tests/cards/tla.rs::animated_land_dies_and_returns_tapped_as_plain_land"
       ]
     },
     "603.7c": {
@@ -2079,14 +2077,14 @@
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [
         "managym/tests/rules/cr_704_sba.rs:cr_704_3_simultaneous_departures_share_trigger_source_snapshot",
-        "managym/tests/rules/sacrifice_cards.rs:mayhem_keeps_granted_lifelink_after_it_is_sacrificed"
+        "managym/tests/cards/war.rs:mayhem_keeps_granted_lifelink_after_it_is_sacrificed"
       ],
       "gap": "No leave-graveyard or visible-to-hand/library trigger conditions; typed departure predicates do not retain all effective characteristics.",
       "anchors": [
         "managym/src/flow/triggers.rs::process_game_events_with_sources",
         "managym/src/flow/zones.rs::sacrifice_permanent",
         "managym/tests/rules/cr_704_sba.rs::cr_704_3_simultaneous_departures_share_trigger_source_snapshot",
-        "managym/tests/rules/sacrifice_cards.rs::mayhem_keeps_granted_lifelink_after_it_is_sacrificed"
+        "managym/tests/cards/war.rs::mayhem_keeps_granted_lifelink_after_it_is_sacrificed"
       ]
     },
     "603.10b": {
@@ -2239,13 +2237,13 @@
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [
-        "managym/tests/rules/temur_cards.rs:ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution"
+        "managym/tests/cards/tla.rs:ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution"
       ],
       "gap": "No generic intervening-if wrapper; conditionally existing abilities must not acquire blanket rechecks.",
       "anchors": [
         "managym/src/flow/resolution.rs::resolve_triggered_ability",
         "managym/src/flow/resolution.rs::IfCondition",
-        "managym/tests/rules/temur_cards.rs::ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution"
+        "managym/tests/cards/tla.rs::ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution"
       ]
     },
     "608.2c": {
@@ -2328,13 +2326,13 @@
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [
-        "managym/tests/rules/sacrifice_cards.rs:mayhem_keeps_granted_lifelink_after_it_is_sacrificed"
+        "managym/tests/cards/war.rs:mayhem_keeps_granted_lifelink_after_it_is_sacrificed"
       ],
       "gap": "ObjectLki omits effective P/T and temporary subtypes; not complete current/LKI information for arbitrary effects.",
       "anchors": [
         "managym/src/flow/resolution.rs::effect_value",
         "managym/src/flow/damage.rs::source_keywords",
-        "managym/tests/rules/sacrifice_cards.rs::mayhem_keeps_granted_lifelink_after_it_is_sacrificed"
+        "managym/tests/cards/war.rs::mayhem_keeps_granted_lifelink_after_it_is_sacrificed"
       ]
     },
     "608.2i": {
@@ -2397,14 +2395,14 @@
       "comments": "resolve_top_of_stack cites 608.2m for final departure, but the applicable final-step rule is 608.2n in the pinned source.",
       "tests": [
         "managym/tests/rules/cr_608_resolution.rs:cr_704_4_sba_waits_for_suspended_resolution_to_finish",
-        "managym/tests/rules/temur_cards.rs:flashback_is_exiled_when_countered_after_iroh_leaves"
+        "managym/tests/cards/tla.rs:flashback_is_exiled_when_countered_after_iroh_leaves"
       ],
       "gap": "Activated/triggered abilities are popped before running effects, not as the final step; bounded timing tests do not prove full stack lifetime.",
       "anchors": [
         "managym/src/flow/decision.rs::finalize_frame",
         "managym/src/flow/resolution.rs::resolve_top_of_stack",
         "managym/tests/rules/cr_608_resolution.rs::cr_704_4_sba_waits_for_suspended_resolution_to_finish",
-        "managym/tests/rules/temur_cards.rs::flashback_is_exiled_when_countered_after_iroh_leaves"
+        "managym/tests/cards/tla.rs::flashback_is_exiled_when_countered_after_iroh_leaves"
       ]
     },
     "608.2p": {
@@ -2611,12 +2609,12 @@
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [
-        "managym/tests/rules/tla_cards.rs:creature_token_ceases_to_exist_after_dying"
+        "managym/tests/rules/engine_events.rs:creature_token_ceases_to_exist_after_dying"
       ],
       "gap": "Directed creature-token death proof; token copies of cards/spells and attempted further moves before the check are not established.",
       "anchors": [
         "managym/src/flow/sba.rs::tokens_to_remove",
-        "managym/tests/rules/tla_cards.rs::creature_token_ceases_to_exist_after_dying"
+        "managym/tests/rules/engine_events.rs::creature_token_ceases_to_exist_after_dying"
       ]
     },
     "704.5e": {
@@ -2653,15 +2651,15 @@
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [
-        "managym/tests/rules/ur_lessons_increment.rs:legend_choice_and_lethal_damage_share_one_sba_batch",
-        "managym/tests/rules/ur_lessons_increment.rs:legend_rule_recognizes_existing_lowercase_supertypes"
+        "managym/tests/cards/tla.rs:legend_choice_and_lethal_damage_share_one_sba_batch",
+        "managym/tests/cards/tla.rs:legend_rule_recognizes_existing_lowercase_supertypes"
       ],
       "gap": "Copied nonlegendary cards and current lower-case supertypes are supported; all control/name-change and replacement combinations unproved.",
       "anchors": [
         "managym/src/flow/sba.rs::legend_groups",
         "managym/src/flow/decision.rs::LegendRule",
-        "managym/tests/rules/ur_lessons_increment.rs::legend_choice_and_lethal_damage_share_one_sba_batch",
-        "managym/tests/rules/ur_lessons_increment.rs::legend_rule_recognizes_existing_lowercase_supertypes"
+        "managym/tests/cards/tla.rs::legend_choice_and_lethal_damage_share_one_sba_batch",
+        "managym/tests/cards/tla.rs::legend_rule_recognizes_existing_lowercase_supertypes"
       ]
     },
     "704.5k": {
@@ -2965,13 +2963,13 @@
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [
-        "managym/tests/rules/ur_lessons_increment.rs:legend_choice_and_lethal_damage_share_one_sba_batch"
+        "managym/tests/cards/tla.rs:legend_choice_and_lethal_damage_share_one_sba_batch"
       ],
       "gap": "Regeneration and general shared-result replacement cases absent; replacement ordering belongs to MTG-196.",
       "anchors": [
         "managym/src/flow/sba.rs::perform_state_based_actions_with_legends",
         "managym/src/flow/proposed_event.rs::apply_proposed_event",
-        "managym/tests/rules/ur_lessons_increment.rs::legend_choice_and_lethal_damage_share_one_sba_batch"
+        "managym/tests/cards/tla.rs::legend_choice_and_lethal_damage_share_one_sba_batch"
       ]
     },
     "704.8": {

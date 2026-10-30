@@ -2,7 +2,7 @@
 // Sideboards are admitted setup and owned outside-game copies, not game zones.
 
 use managym::{
-    semantic::setups::authored_pack,
+    cards::setups::authored_pack,
     state::{game_object::PlayerId, zone::ZoneType},
     Game, PlayerConfig,
 };

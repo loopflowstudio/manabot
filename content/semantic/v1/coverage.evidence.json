@@ -12,181 +12,181 @@
       "key": "tiger_seal",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::triggers::tiger_seal_taps_at_upkeep_and_untaps_on_second_draw"
+      "identifier": "tla::tiger_seal_taps_at_upkeep_and_untaps_on_second_draw"
     },
     {
       "key": "otter_penguin",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::triggers::otter_penguin_buffs_on_second_draw_only_and_resets"
+      "identifier": "tla::otter_penguin_buffs_on_second_draw_only_and_resets"
     },
     {
       "key": "cadets_firebending",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::stage3::firebending_only_triggers_with_lesson_in_graveyard"
+      "identifier": "tla::firebending_only_triggers_with_lesson_in_graveyard"
     },
     {
       "key": "cadets_pump",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::stage3::cadets_pump_ability_buffs_until_end_of_turn"
+      "identifier": "tla::cadets_pump_ability_buffs_until_end_of_turn"
     },
     {
       "key": "first_time_flyer_static",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::stage3::first_time_flyer_conditional_static_recomputes_on_read"
+      "identifier": "tla::first_time_flyer_conditional_static_recomputes_on_read"
     },
     {
       "key": "fortune_teller_clue",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::triggers::fortune_teller_clue_sacrifices_to_draw_and_ceases_to_exist"
+      "identifier": "tla::fortune_teller_clue_sacrifices_to_draw_and_ceases_to_exist"
     },
     {
       "key": "dragonfly_power",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::stage3::dragonfly_swarm_power_counts_noncreature_nonland_graveyard_cards"
+      "identifier": "tla::dragonfly_swarm_power_counts_noncreature_nonland_graveyard_cards"
     },
     {
       "key": "dragonfly_death",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::stage3::dragonfly_swarm_death_trigger_needs_lesson_at_fire_time"
+      "identifier": "tla::dragonfly_swarm_death_trigger_needs_lesson_at_fire_time"
     },
     {
       "key": "ward_payment",
       "runner": "rust",
       "path": "managym/tests/cards/stx.rs",
-      "identifier": "stx::stage2::ward_asks_spell_controller_and_counters_on_decline"
+      "identifier": "stx::ward_asks_spell_controller_and_counters_on_decline"
     },
     {
       "key": "firebending_lesson_kicker",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::stage2::firebending_lesson_kicked_deals_five"
+      "identifier": "tla::firebending_lesson_kicked_deals_five"
     },
     {
       "key": "pop_quiz_learn",
       "runner": "rust",
       "path": "managym/tests/cards/stx.rs",
-      "identifier": "stx::stage2::pop_quiz_draws_then_learn_discard_draws"
+      "identifier": "stx::pop_quiz_draws_then_learn_discard_draws"
     },
     {
       "key": "igneous_inspiration",
       "runner": "rust",
       "path": "managym/tests/cards/stx.rs",
-      "identifier": "stx::stage2::igneous_inspiration_deals_three_then_learns"
+      "identifier": "stx::igneous_inspiration_deals_three_then_learns"
     },
     {
       "key": "divide_by_zero",
       "runner": "rust",
       "path": "managym/tests/cards/stx.rs",
-      "identifier": "stx::stage2::divide_by_zero_bounces_spell_from_stack"
+      "identifier": "stx::divide_by_zero_bounces_spell_from_stack"
     },
     {
       "key": "quench_payment",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::stage2::quench_controller_declines_and_spell_is_countered"
+      "identifier": "tla::quench_controller_declines_and_spell_is_countered"
     },
     {
       "key": "accumulate_wisdom",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::stage2::accumulate_wisdom_look_three_pick_one_rest_to_bottom"
+      "identifier": "tla::accumulate_wisdom_look_three_pick_one_rest_to_bottom"
     },
     {
       "key": "waterbend_payment",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::stage2::waterbend_pays_entirely_with_creature_taps"
+      "identifier": "tla::waterbend_pays_entirely_with_creature_taps"
     },
     {
       "key": "badgermole_waterbend",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::stage2::waterbend_taps_do_not_trigger_badgermole_cub"
+      "identifier": "tla::waterbend_taps_do_not_trigger_badgermole_cub"
     },
     {
       "key": "earthbend_animates",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::stage3::earthbend_animates_land_with_counter"
+      "identifier": "tla::earthbend_animates_land_with_counter"
     },
     {
       "key": "earthbend_returns",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::stage3::animated_land_dies_and_returns_tapped_as_plain_land"
+      "identifier": "tla::animated_land_dies_and_returns_tapped_as_plain_land"
     },
     {
       "key": "invasion_flash",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::triggers::invasion_reinforcements_flash_cast_on_opponents_turn"
+      "identifier": "tla::invasion_reinforcements_flash_cast_on_opponents_turn"
     },
     {
       "key": "compassionate_healer",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::stage3::healer_tap_gains_life_and_scries"
+      "identifier": "tla::healer_tap_gains_life_and_scries"
     },
     {
       "key": "earth_kingdom_jailer",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::stage3::jailer_exiles_and_returns_on_leaving"
+      "identifier": "tla::jailer_exiles_and_returns_on_leaving"
     },
     {
       "key": "white_lotus_anthem",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::stage3::anthem_buffs_other_allies_only"
+      "identifier": "tla::anthem_buffs_other_allies_only"
     },
     {
       "key": "earth_kings_lieutenant",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::stage3::lieutenant_counters_each_other_ally_and_grows"
+      "identifier": "tla::lieutenant_counters_each_other_ally_and_grows"
     },
     {
       "key": "kyoshi_token",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::triggers::kyoshi_warriors_etb_creates_ally_token_via_stack"
+      "identifier": "tla::kyoshi_warriors_etb_creates_ally_token_via_stack"
     },
     {
       "key": "suki_attack",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::stage3::suki_power_tracks_creature_count_and_attack_makes_a_token"
+      "identifier": "tla::suki_power_tracks_creature_count_and_attack_makes_a_token"
     },
     {
       "key": "south_pole_voyager",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::triggers::south_pole_voyager_second_resolution_draws"
+      "identifier": "tla::south_pole_voyager_second_resolution_draws"
     },
     {
       "key": "allies_at_last",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::stage2::allies_at_last_affinity_and_two_attackers"
+      "identifier": "tla::allies_at_last_affinity_and_two_attackers"
     },
     {
       "key": "yip_yip",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::stage3::yip_yip_buffs_and_grants_flying_to_allies_only"
+      "identifier": "tla::yip_yip_buffs_and_grants_flying_to_allies_only"
     },
     {
       "key": "fancy_footwork",
       "runner": "rust",
       "path": "managym/tests/cards/tla.rs",
-      "identifier": "tla::stage3::fancy_footwork_untaps_and_buffs_one_or_two_targets"
+      "identifier": "tla::fancy_footwork_untaps_and_buffs_one_or_two_targets"
     }
   ],
   "rule_families": [

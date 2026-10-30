@@ -1,4 +1,5 @@
 //! Avatar: The Last Airbender cards and the tokens they make.
+//! Each card is one function returning its engine `CardDefinition`.
 use crate::state::{
     ability::{
         Ability, Effect, EffectValue, LinkedChooser, LinkedGrant, MilledBonus, PaymentCost,
