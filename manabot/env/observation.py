@@ -473,11 +473,11 @@ class ObservationEncoder:
                             np.asarray(restricted.mana, dtype=np.float32) / 10.0
                         )
             arr[PLAYER_HAND_ONLY_INDEX] = float(player.hand_only_until is not None)
+            arr[PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX] = float(player.no_maximum_hand_size)
             arr[PLAYER_TURN_INDEX] = float(turn.turn_number) / 20.0
             # Seat 0 is on the play.
             arr[PLAYER_SEAT_INDEX] = float(player.player_index)
             arr[PLAYER_KEEPS_RED_MANA_INDEX] = float(player.keeps_red_mana)
-            arr[PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX] = float(player.no_maximum_hand_size)
 
         self.object_to_index[player.id] = self.current_object_index
         self.current_object_index += 1

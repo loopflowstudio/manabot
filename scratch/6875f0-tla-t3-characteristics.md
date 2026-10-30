@@ -118,6 +118,8 @@ Scryfall id.
    `firebending`. T2's shared `check_activation_terms` now also checks sorcery
    timing; `ActivatedAbilityDefinition::requires_target` reads
    `target_requirement`. T3's refreshing index helper is `offers_ability`.
+   Compress after the merge: both encoders write player columns in column
+   order; the native one-use `shows_everything` gate is inlined.
 
 ## Remaining
 

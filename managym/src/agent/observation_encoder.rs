@@ -108,10 +108,6 @@ impl Default for ObservationEncoderConfig {
 }
 
 impl ObservationEncoderConfig {
-    fn shows_everything(&self) -> bool {
-        self.policy_input_version >= 5
-    }
-
     pub fn relation_dim(&self) -> usize {
         match self.policy_input_version {
             5.. => super::continuation::RELATION_DIM_V5,
@@ -593,7 +589,7 @@ pub fn encode_into(
         &mut object_to_index,
         &mut current_object_index,
     );
-    if config.shows_everything() {
+    if config.policy_input_version >= 5 {
         // Hosts may be listed after their attachments, so links follow indexing.
         let link = |object: Option<i32>| {
             object
@@ -718,11 +714,11 @@ fn encode_player_features(
             }
         }
         out[PLAYER_HAND_ONLY_INDEX] = bool_to_f32(player.hand_only_until.is_some());
+        out[PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX] = bool_to_f32(player.no_maximum_hand_size);
         out[PLAYER_TURN_INDEX] = turn.turn_number as f32 / 20.0;
         // Seat 0 is on the play.
         out[PLAYER_SEAT_INDEX] = player.player_index as f32;
         out[PLAYER_KEEPS_RED_MANA_INDEX] = bool_to_f32(player.keeps_red_mana);
-        out[PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX] = bool_to_f32(player.no_maximum_hand_size);
     }
 
     object_to_index.insert(player.id, *current_object_index);
