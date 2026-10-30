@@ -43,3 +43,4 @@ experiments/data/
 .lf/metrics/
 .lf/scratch-stash/
 *.dSYM/
+academy/ui/e2e/dense-board-captures/

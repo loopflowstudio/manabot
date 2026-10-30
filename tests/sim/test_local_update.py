@@ -10,8 +10,6 @@ import numpy as np
 import pytest
 import torch
 
-from academy.advice import BeliefNormalizationReceipt
-from academy.local_advice import local_update_scenario
 from manabot.belief.likelihood import file_sha256
 from manabot.belief.sampling_data import collect_frozen_policy
 from manabot.belief.sampling_fit import fit_belief_sampler, save_belief_sampler
@@ -146,42 +144,6 @@ def test_real_root_replay_and_hidden_swap(tmp_path: Path) -> None:
             seed=7,
             query=WorldQuery.has("Lightning Bolt"),
         )
-
-
-def test_advice_projection_is_schema_compatible_and_private(tmp_path: Path) -> None:
-
-    teacher, env = make_teacher(tmp_path)
-    tracker = BeliefTracker.from_engine(
-        env._engine,
-        viewer=env._engine.current_agent_index(),
-        likelihood=teacher.likelihood,
-        epsilon=0,
-    )
-    receipt = teacher.search(env._engine, tracker.posterior, seed=21)
-    belief = BeliefNormalizationReceipt(
-        scenario_id="baseline",
-        space_identity=receipt.world_identity,
-        belief_model_id=receipt.belief_model,
-        distribution_sha256=receipt.belief_digest,
-        normalized_belief_sha256=receipt.belief_digest,
-        positive_support=tracker.posterior.positive_support_size,
-        normalization_error=0,
-        provenance_kind="model_inferred",
-        provenance_identity=receipt.policy_sha256,
-    )
-    scenario = local_update_scenario(
-        receipt, belief, labels=["offer"] * len(receipt.offer_ids)
-    )
-    assert sum(action.probability for action in scenario.actions) == pytest.approx(1)
-    public = scenario.model_dump_json()
-    for private_field in (
-        "rollouts",
-        "sampling_probabilities",
-        "branch_audit_json",
-        "world_seed",
-    ):
-        assert private_field not in public
-    assert scenario.root_uncertainty.status == "unavailable"
 
 
 @pytest.mark.parametrize("learned", [False, True])

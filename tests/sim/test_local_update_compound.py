@@ -10,8 +10,6 @@ import numpy as np
 import pytest
 import torch
 
-from academy.advice import BeliefNormalizationReceipt
-from academy.local_advice import local_update_scenario
 from manabot.belief.likelihood import file_sha256
 from manabot.belief.state import ViewerHistory
 from manabot.env.env import Env
@@ -221,26 +219,6 @@ def test_supported_root_rollout_reaching_payment_replays(
             replace(receipt, target=tuple(bad_target)).to_json()
         )
 
-    evidence = local_update_scenario(
-        receipt,
-        BeliefNormalizationReceipt(
-            scenario_id="baseline",
-            space_identity=receipt.world_identity,
-            belief_model_id=receipt.belief_model,
-            distribution_sha256=receipt.belief_digest,
-            normalized_belief_sha256=receipt.belief_digest,
-            positive_support=1,
-            normalization_error=0,
-            provenance_kind="model_inferred",
-            provenance_identity=receipt.policy_sha256,
-        ),
-        labels=["payment"] * len(receipt.target),
-    )
-    assert evidence.sampled_worlds == 1
-    for action, zero in zip(evidence.actions, inactive):
-        assert (action.q.status == "unavailable") == zero
-    assert evidence.root_value.status == "available"
-    assert np.isfinite(evidence.root_value.value)
     # Direct count materialization changes hidden truth, never the viewer policy.
     constraints = branch.hidden_hand_constraints_json(viewer)
     hand = receipt.rollouts[0].sampled_hand

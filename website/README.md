@@ -12,7 +12,7 @@ issued by Fly (see `deploy/academy-fly.sh` at the repo root for operations).
 Design tokens are hand-copied from `academy/ui/src/app.css` (the source of
 truth — see `VISUAL_DESIGN.md`); if the two drift, this site is the bug.
 Fonts and mana symbols are copied from `academy/ui/static/`; the board
-screenshot is `academy/ui/e2e/visual-references/v3/board-developed.png`.
+screenshot is `website/static/board-developed.png`.
 
 ## Develop
 

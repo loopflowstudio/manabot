@@ -148,12 +148,9 @@ history updates retain the command that preceded the failure. The ordinary
 selected arena still owns its existing suites; tiny-pool tests do not register a
 new production arena or establish selected-matchup admission.
 
-`academy.local_advice.local_update_scenario` projects into `AdvisorScenarioEvidence`;
-`regularized-local-update/v1` identifies the policy semantic. Q quantities name
-signed-value methods, and unmeasured uncertainty/robustness remain unavailable.
-No sampled worlds, sampling weights, rollout seeds or branch tapes enter that
-projection. The live `/api/advice` provider is not registered to this teacher;
-its historical-root, artifact and compute admission remain required.
+No Academy advice projection exists for this teacher; the live `/api/advice`
+provider is not registered to it, and its historical-root, artifact and compute
+admission remain required.
 
 The exact arm stops at opponent choices without a public likelihood identity
 (including combat/target choices), and at ordinary discard prompts that the

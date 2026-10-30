@@ -128,7 +128,7 @@ the local authority can run without networking or a local process,
 respectively.
 
 The pack authority remains
-`academy/ui/src/lib/packs/tla-ur-lessons-vs-gw-allies/v1/manifest.json`. Both the
+`academy/ui/src/lib/packs/tla-ur-lessons-vs-gw-allies/v2/manifest.json`. Both the
 launcher and browser receipt derive `{id, version, manifest_sha256}` from its
 installed bytes. There is no duplicated deck list or expected hash in the
 proof.
