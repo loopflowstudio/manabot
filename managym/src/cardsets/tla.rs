@@ -209,6 +209,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         sozins_comet(),
         sparring_dummy(),
         spirit_water_revival(),
+        suki_courageous_rescuer(),
         suki_kyoshi_warrior(),
         sun_blessed_peak(),
         sun_warriors(),
@@ -6908,6 +6909,49 @@ fn spirit_water_revival() -> CardDefinition {
             Effect::ExileSourceSpell,
         ],
         additional_costs: vec![AdditionalCost::Waterbend(ManaCost::parse("{6}"))],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn suki_courageous_rescuer() -> CardDefinition {
+    let text_box = "Other creatures you control get +1/+0.\nWhenever another permanent you control leaves the battlefield during your turn, create a 1/1 white Ally creature token. This ability triggers only once each turn.";
+
+    CardDefinition {
+        key: "tla.suki_courageous_rescuer",
+        scryfall_id: "33b97433-e16c-422e-a0ca-f6b1e98d8681",
+        name: "Suki, Courageous Rescuer".into(),
+        mana_cost: Some(ManaCost::parse("{1}{W}{W}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+        power: Some(2),
+        toughness: Some(4),
+        statics: vec![StaticAbility::PtBuff(StaticPtBuff {
+            scope: StaticScope::OtherYouControl(CardPredicate::creature()),
+            condition: None,
+            power: 1,
+            toughness: 0,
+            per_creature_type_max: None,
+            per_color_among: None,
+        })],
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::OnceEachTurn {
+                condition: Box::new(TriggerCondition::ActiveIf {
+                    active_if: Condition::YourTurn,
+                    condition: Box::new(TriggerCondition::LeavesTheBattlefield {
+                        subject: TriggerSubject::AnotherYouControl(CardPredicate::default()),
+                    }),
+                }),
+            },
+            intervening_if: None,
+            effects: vec![Effect::CreateToken {
+                token_name: "Ally".into(),
+                count: 1,
+                tapped_and_attacking: false,
+                attach_source: false,
+            }],
+        }],
         text_box: text_box.into(),
         ..Default::default()
     }

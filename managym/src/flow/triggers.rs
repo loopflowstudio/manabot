@@ -790,6 +790,23 @@ impl Game {
                 )
             }
             (
+                TriggerCondition::LeavesTheBattlefield { subject },
+                GameEvent::CardMoved {
+                    card,
+                    from: Some(ZoneType::Battlefield),
+                    to,
+                    controller,
+                    ..
+                },
+            ) if *to != ZoneType::Battlefield => self.subject_matches_moved_card(
+                subject,
+                source_card,
+                source_controller,
+                source_was_on_battlefield,
+                *card,
+                *controller,
+            ),
+            (
                 TriggerCondition::Attacks { subject },
                 GameEvent::AttackersDeclared { player, attackers },
             ) => match subject {

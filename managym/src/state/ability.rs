@@ -61,6 +61,11 @@ pub enum TriggerCondition {
     Dies {
         subject: TriggerSubject,
     },
+    /// "When [subject] leaves the battlefield": to any other zone, looking
+    /// back in time (CR 603.10a).
+    LeavesTheBattlefield {
+        subject: TriggerSubject,
+    },
     /// "Whenever [subject] attacks." Fires after the declare-attackers
     /// turn-based action (CR 508.1); a subject of `AnotherYouControl` /
     /// `AnyYouControl` fires once per combat ("whenever one or more ...

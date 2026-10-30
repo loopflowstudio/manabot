@@ -138,6 +138,12 @@ fn condition_description(condition: &TriggerCondition) -> String {
             format!("When you draw card {n} this turn")
         }
         TriggerCondition::YouScry => "When you scry".into(),
+        TriggerCondition::LeavesTheBattlefield { subject } => {
+            format!(
+                "When {} leaves the battlefield",
+                subject_description(subject)
+            )
+        }
         TriggerCondition::YouPutCountersOnCreature { kind } => format!(
             "When you put one or more {} counters on a creature",
             counter_description(*kind)

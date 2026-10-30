@@ -11379,3 +11379,36 @@ fn ty_lee_artful_acrobat_pays_one_so_a_creature_cant_block() {
             Action::DeclareBlocker { blocker: b, attacker: Some(_), .. } if *b == blocker)));
     }
 }
+
+/// Other creatures get +1/+0. Another permanent leaving during your turn
+/// makes one Ally, once each turn; not during the opponent's turn.
+#[test]
+fn suki_courageous_rescuer_makes_an_ally_once_when_another_permanent_leaves_on_your_turn() {
+    let mut s = five_color_setup(&["Suki, Courageous Rescuer", "Gray Ogre"]);
+    let suki = s.force_permanent_on_battlefield(0, "Suki, Courageous Rescuer");
+    let ogres: Vec<_> = (0..3)
+        .map(|_| s.force_permanent_on_battlefield(0, "Gray Ogre"))
+        .collect();
+    assert_eq!(s.game().effective_pt(ogres[0]), (3, 2));
+    assert_eq!(s.game().effective_pt(suki), (2, 4), "other creatures");
+    s.advance_to_active_step(1, StepKind::Main);
+    let ogre = card_of(&s, ogres[0]);
+    s.game_mut().move_card(ogre, ZoneType::Graveyard);
+    resolve_until_priority(&mut s);
+    assert!(
+        s.battlefield_permanents_named(0, "Ally").is_empty(),
+        "their turn"
+    );
+
+    s.advance_to_active_step(0, StepKind::Main);
+    for ogre in &ogres[1..] {
+        let card = card_of(&s, *ogre);
+        s.game_mut().move_card(card, ZoneType::Hand);
+        resolve_until_priority(&mut s);
+    }
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Ally").len(),
+        1,
+        "once each turn"
+    );
+}

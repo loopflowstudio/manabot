@@ -825,6 +825,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
             "TriggerCondition::YouPutCountersOnCreature"
         }
         TriggerCondition::YouScry => "TriggerCondition::YouScry",
+        TriggerCondition::LeavesTheBattlefield { .. } => "TriggerCondition::LeavesTheBattlefield",
         TriggerCondition::ActiveIf { .. } => "TriggerCondition::ActiveIf",
         TriggerCondition::AttacksAlone { .. } => "TriggerCondition::AttacksAlone",
         TriggerCondition::BeginningOfYourEndStep => "TriggerCondition::BeginningOfYourEndStep",
@@ -863,6 +864,9 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             kind: CounterKind::PlusOnePlusOne,
         },
         TriggerCondition::YouScry,
+        TriggerCondition::LeavesTheBattlefield {
+            subject: TriggerSubject::This,
+        },
         TriggerCondition::ActiveIf {
             active_if: Condition::YourTurn,
             condition: enters(),
