@@ -116,6 +116,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         fire_nation_warship(),
         fire_navy_trebuchet(),
         fire_sages(),
+        firebender_ascension(),
         firebending_lesson(),
         firebending_student(),
         first_time_flyer(),
@@ -152,6 +153,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         iroh_tea_master(),
         itll_quench_ya(),
         jasmine_dragon_tea_shop(),
+        jeong_jeong_the_deserter(),
         jeong_jeongs_deserters(),
         jet_freedom_fighter(),
         jet_s_brainwashing(),
@@ -205,6 +207,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         razor_rings(),
         realm_of_koh(),
         rebellious_captives(),
+        redirect_lightning(),
         rockalanche(),
         rocky_rebuke(),
         rough_rhino_cavalry(),
@@ -3438,6 +3441,56 @@ fn fire_sages() -> CardDefinition {
     }
 }
 
+fn firebender_ascension() -> CardDefinition {
+    let text_box = "When this enchantment enters, create a 2/2 red Soldier creature token with firebending 1.\nWhenever a creature you control attacking causes a triggered ability of that creature to trigger, put a quest counter on this enchantment. Then if it has four or more quest counters on it, you may copy that ability. You may choose new targets for the copy.";
+
+    CardDefinition {
+        key: "tla.firebender_ascension",
+        scryfall_id: "2929b702-03c6-4cf0-a3f7-61b27f4803be",
+        name: "Firebender Ascension".into(),
+        mana_cost: Some(ManaCost::parse("{1}{R}")),
+        types: CardTypes::new([CardType::Enchantment]),
+        abilities: vec![
+            Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::CreateToken {
+                    token_name: "Soldier".into(),
+                    count: 1,
+                    tapped_and_attacking: false,
+                    attach_source: false,
+                }],
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::YourAttackingCreatureTriggers,
+                intervening_if: None,
+                effects: vec![
+                    Effect::PutCountersOnSource {
+                        count: EffectValue::Fixed(1),
+                        kind: CounterKind::Quest,
+                    },
+                    Effect::If {
+                        condition: Condition::SourceCountersAtLeast {
+                            kind: CounterKind::Quest,
+                            count: 4,
+                        },
+                        then: vec![Effect::OptionalPayment {
+                            cost: PaymentCost::Mana(ManaCost::default()),
+                            if_paid: vec![Effect::CopyTriggeringObject],
+                            if_declined: vec![],
+                        }],
+                        otherwise: vec![],
+                    },
+                ],
+            },
+        ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
 fn firebending_lesson() -> CardDefinition {
     let text_box = "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nFirebending Lesson deals 2 damage to target creature. If this spell was kicked, it deals 5 damage to that creature instead.";
 
@@ -4842,6 +4895,49 @@ fn jasmine_dragon_tea_shop() -> CardDefinition {
                 ..Default::default()
             },
         ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn jeong_jeong_the_deserter() -> CardDefinition {
+    let text_box = "Firebending 1 (Whenever this creature attacks, add {R}. This mana lasts until end of combat.)\nExhaust — {3}: Put a +1/+1 counter on Jeong Jeong. When you next cast a Lesson spell this turn, copy it and you may choose new targets for the copy. (Activate each exhaust ability only once.)";
+
+    CardDefinition {
+        key: "tla.jeong_jeong_the_deserter",
+        scryfall_id: "a9f63d3b-bee5-48bc-8b04-d8b24b0bda6e",
+        name: "Jeong Jeong, the Deserter".into(),
+        mana_cost: Some(ManaCost::parse("{2}{R}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Rebel".into(), "Ally".into()],
+        power: Some(2),
+        toughness: Some(3),
+        abilities: vec![Ability::Triggered {
+            intervening_if: None,
+            condition: TriggerCondition::Attacks {
+                subject: TriggerSubject::This,
+            },
+            effects: vec![Effect::AddMana {
+                mana: Mana::parse("R"),
+                until_end_of_combat: true,
+            }],
+        }],
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            exhaust: true,
+            mana_cost: ManaCost::parse("{3}"),
+            effects: vec![
+                Effect::PutCountersOnSource {
+                    count: EffectValue::Fixed(1),
+                    kind: CounterKind::PlusOnePlusOne,
+                },
+                Effect::CreateDelayedTrigger {
+                    event: DelayedEvent::YouNextCastThisTurn(CardPredicate::subtype("Lesson")),
+                    effects: vec![Effect::CopyTriggeringObject],
+                },
+            ],
+            ..Default::default()
+        }],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -7019,6 +7115,28 @@ fn rebellious_captives() -> CardDefinition {
                 },
             ],
             ..Default::default()
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn redirect_lightning() -> CardDefinition {
+    let text_box = "As an additional cost to cast this spell, pay 5 life or pay {2}.\nChange the target of target spell or ability with a single target.";
+
+    CardDefinition {
+        key: "tla.redirect_lightning",
+        scryfall_id: "2b5b14a7-1fdd-4efc-b197-cadfa7f7c860",
+        name: "Redirect Lightning".into(),
+        mana_cost: Some(ManaCost::parse("{R}")),
+        types: CardTypes::new([CardType::Instant]),
+        subtypes: vec!["Lesson".into()],
+        spell_effects: vec![Effect::ChangeTarget {
+            target: TargetSpec::SpellOrAbilityWithSingleTarget,
+        }],
+        additional_costs: vec![AdditionalCost::PayLifeOrMana {
+            life: 5,
+            mana: ManaCost::parse("{2}"),
         }],
         text_box: text_box.into(),
         ..Default::default()

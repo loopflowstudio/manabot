@@ -542,6 +542,8 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ExileSourceAndReturn { .. } => "Effect::ExileSourceAndReturn",
         Effect::GainControl { .. } => "Effect::GainControl",
         Effect::PutCountersOnCreatedToken { .. } => "Effect::PutCountersOnCreatedToken",
+        Effect::CopyTriggeringObject => "Effect::CopyTriggeringObject",
+        Effect::ChangeTarget { .. } => "Effect::ChangeTarget",
         Effect::GainLifeValue { .. } => "Effect::GainLifeValue",
         Effect::AddOneColorManaValue { .. } => "Effect::AddOneColorManaValue",
         Effect::AddManaValue { .. } => "Effect::AddManaValue",
@@ -553,7 +555,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 101;
+const EFFECT_VARIANTS: usize = 103;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -849,6 +851,10 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::PutCountersOnCreatedToken {
             count: EffectValue::OwnedPermanentsOpponentsControl,
         },
+        Effect::CopyTriggeringObject,
+        Effect::ChangeTarget {
+            target: TargetSpec::SpellOrAbilityWithSingleTarget,
+        },
         Effect::GainLifeValue {
             amount: EffectValue::ExcessDamage,
         },
@@ -921,6 +927,9 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::BeginningOfYourFirstMainPhase => {
             "TriggerCondition::BeginningOfYourFirstMainPhase"
         }
+        TriggerCondition::YourAttackingCreatureTriggers => {
+            "TriggerCondition::YourAttackingCreatureTriggers"
+        }
     }
 }
 
@@ -989,6 +998,7 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             condition: Box::new(TriggerCondition::YouDrawNthCardThisTurn { n: 2 }),
         },
         TriggerCondition::BeginningOfYourFirstMainPhase,
+        TriggerCondition::YourAttackingCreatureTriggers,
     ]
 }
 
@@ -1318,6 +1328,13 @@ fn cost_seen(cost: &AdditionalCost) -> Witnessed {
             "tla",
             "spirit_water_revival_waterbends_its_additional_cost",
         ),
+        AdditionalCost::PayLifeOrMana { .. } => witnessed(
+            "AdditionalCost::PayLifeOrMana",
+            Seen::Card(35),
+            "Redirect Lightning",
+            "tla",
+            "redirect_lightning_moves_a_spell_to_another_target",
+        ),
         AdditionalCost::RequiredWaterbend(_) => witnessed(
             "AdditionalCost::RequiredWaterbend",
             Seen::Actions("the cast is offered only while the waterbend total is payable"),
@@ -1418,6 +1435,10 @@ fn cost_witnesses() -> Vec<AdditionalCost> {
         AdditionalCost::Kicker(ManaCost::parse("{4}")),
         AdditionalCost::Waterbend(ManaCost::parse("{6}")),
         AdditionalCost::RequiredWaterbend(ManaCost::parse("{X}")),
+        AdditionalCost::PayLifeOrMana {
+            life: 5,
+            mana: ManaCost::parse("{2}"),
+        },
     ]
 }
 
@@ -1999,7 +2020,8 @@ fn every_static_and_cost_variant_reaches_the_learning_tokens() {
 }
 
 /// Every variant whose row names a tensor column moves that column when the
-/// ogre gains it: ward, kicker and optional waterbend set card columns; a P/T buff and
+/// ogre gains it: ward, kicker, optional waterbend and pay-life-or-mana set card
+/// columns; a P/T buff and
 /// characteristic power move the permanent's power column.
 #[test]
 fn tensor_visible_statics_and_costs_move_their_named_columns() {
@@ -2039,7 +2061,7 @@ fn tensor_visible_statics_and_costs_move_their_named_columns() {
         assert!(moved, "{} did not move its column", row.token);
         checked += 1;
     }
-    assert_eq!(checked, 5);
+    assert_eq!(checked, 6);
 }
 
 /// With no maximum hand size, the hand-count column keeps its size through

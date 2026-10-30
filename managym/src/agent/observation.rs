@@ -1350,6 +1350,7 @@ impl Observation {
             GameEvent::AbilityTriggered {
                 source_card,
                 controller,
+                ..
             } => vec![Self::card_event_data(
                 EventType::AbilityTriggered,
                 *source_card,

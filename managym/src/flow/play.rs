@@ -338,6 +338,13 @@ impl Game {
         let Some(cost) = self.effective_spell_cost(player, card, cast, targets) else {
             return false;
         };
+        if !cast.kicked
+            && self.state.cards[card]
+                .life_alternative()
+                .is_some_and(|life| self.state.players[player.0].life < life as i32)
+        {
+            return false;
+        }
         let waterbend = self
             .cast_waterbend_generic(player, card, cast)
             .min(cost.generic());
@@ -400,6 +407,10 @@ impl Game {
         if self.state.cards[card].optional_cost().is_some()
             && self.can_pay_cast(player, card, kicked)
         {
+            // Only the mana is payable: "pay 5 life or pay {2}" at low life.
+            if !self.can_pay_cast(player, card, cast) {
+                return self.begin_mode_selection(player, card, kicked);
+            }
             self.pending_choice = Some(PendingChoice::KickerChoice { player, card, cast });
             return Ok(());
         }
@@ -812,6 +823,9 @@ impl Game {
         target_req_indices: Vec<usize>,
         cast: CastChoices,
     ) -> Result<(), AgentError> {
+        if let (false, Some(life)) = (cast.kicked, self.state.cards[card].life_alternative()) {
+            self.change_life(player, -(life as i32));
+        }
         self.journal_turn();
         self.state.turn.spells_cast[player.0].push(card);
         // CR 601.2i — A cast spell is put onto the stack.

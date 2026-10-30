@@ -807,6 +807,14 @@ impl Game {
                 }
                 None
             }
+            Effect::CopyTriggeringObject => {
+                let copy = self.copy_stack_object(frame.context_target?, frame.controller)?;
+                self.next_retarget(frame.controller, copy, 0, true)
+            }
+            Effect::ChangeTarget { .. } => {
+                let object = self.present_primary_target(frame)?;
+                self.next_retarget(frame.controller, object, 0, false)
+            }
             Effect::ExileSourceAndReturn { player } => {
                 let [player] = self.selected_players(player, frame)[..] else {
                     return None;
@@ -2023,12 +2031,20 @@ impl Game {
                         TargetSpec::SpellOrPermanent { min_mana_value } => {
                             self.card_mana_value(card) >= *min_mana_value
                         }
+                        TargetSpec::SpellOrAbilityWithSingleTarget => {
+                            self.find_spell_on_stack_index(card).is_some_and(|index| {
+                                self.state.stack_objects[index].targets().len() == 1
+                            })
+                        }
                         _ => false,
                     }
             }
-            // No printed spec targets an ability yet; ward sees one only as
-            // its trigger context.
-            Target::StackAbility(_) => false,
+            Target::StackAbility(id) => {
+                *spec == TargetSpec::SpellOrAbilityWithSingleTarget
+                    && self
+                        .find_ability_on_stack_index(id)
+                        .is_some_and(|index| self.state.stack_objects[index].targets().len() == 1)
+            }
             Target::GraveyardCard(object) => match spec {
                 TargetSpec::GraveyardCardYouOwn { predicate } => {
                     let card = CardId::from(object.entity);

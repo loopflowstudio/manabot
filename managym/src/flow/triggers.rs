@@ -551,6 +551,8 @@ impl Game {
         self.emit(GameEvent::AbilityTriggered {
             source_card: trigger.source_card,
             controller: trigger.controller,
+            ability: id,
+            attacker: trigger.attacker,
         });
         self.state.priority.start_round(self.active_player());
     }
@@ -589,6 +591,16 @@ impl Game {
                 .filter_map(|object| match object {
                     StackObject::Spell(spell) => Some(Target::StackSpell(spell.card)),
                     _ => None,
+                })
+                .collect(),
+            TargetSpec::SpellOrAbilityWithSingleTarget => self
+                .state
+                .stack_objects
+                .iter()
+                .rev()
+                .map(|object| match object {
+                    StackObject::Spell(spell) => Target::StackSpell(spell.card),
+                    object => Target::StackAbility(object.id()),
                 })
                 .collect(),
             _ => Vec::new(),
@@ -648,6 +660,11 @@ impl Game {
     fn trigger_context_for_event(&self, event: &GameEvent) -> Option<Target> {
         match event {
             GameEvent::PermanentTargeted { by, .. } => Some(*by),
+            GameEvent::AbilityTriggered {
+                ability,
+                attacker: Some(_),
+                ..
+            } => Some(Target::StackAbility(*ability)),
             _ => None,
         }
     }
@@ -780,6 +797,13 @@ impl Game {
                     .map_or(0, |permanent| permanent.cast_x),
                 _ => 0,
             };
+            let attacker = match event {
+                GameEvent::AttackersDeclared { attackers, .. } => attackers
+                    .iter()
+                    .copied()
+                    .find(|id| self.permanent_object_ref(*id) == Some(source_lki.object_ref)),
+                _ => None,
+            };
             self.state.pending_triggers.push(PendingTrigger {
                 targets: Vec::new(),
                 target_req_indices: Vec::new(),
@@ -795,6 +819,7 @@ impl Game {
                 player,
                 x,
                 chosen_modes: Vec::new(),
+                attacker,
                 inline_effects: granted,
             });
             self.state.trigger_enqueue_counter = self
@@ -902,6 +927,9 @@ impl Game {
                 until_end_of_combat: true,
             };
             self.enqueue_inline_trigger(card, Some(source), controller, vec![effect], None);
+            if let Some(trigger) = self.state.pending_triggers.last_mut() {
+                trigger.attacker = Some(attacker);
+            }
         }
     }
 
@@ -1020,6 +1048,7 @@ impl Game {
             player: None,
             x: 0,
             chosen_modes: Vec::new(),
+            attacker: None,
             inline_effects: Some(effects),
         });
         self.state.trigger_enqueue_counter = self
@@ -1066,6 +1095,7 @@ impl Game {
                 player: None,
                 x: 0,
                 chosen_modes: Vec::new(),
+                attacker: None,
                 inline_effects: None,
             });
             self.state.trigger_enqueue_counter = self
@@ -1413,6 +1443,19 @@ impl Game {
                     nth_this_turn,
                 },
             ) => *player == source_controller && nth_this_turn == n,
+            (
+                TriggerCondition::YourAttackingCreatureTriggers,
+                GameEvent::AbilityTriggered {
+                    controller,
+                    attacker: Some(attacker),
+                    ..
+                },
+            ) => {
+                *controller == source_controller
+                    && self.state.permanents[*attacker]
+                        .as_ref()
+                        .is_some_and(|permanent| permanent.controller == source_controller)
+            }
             (TriggerCondition::YouScry, GameEvent::Scried { player }) => {
                 *player == source_controller
             }

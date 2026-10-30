@@ -81,9 +81,14 @@ pub enum GameEvent {
         controller: PlayerId,
         by: Option<CardId>,
     },
+    /// A triggered ability was put on the stack as `ability`; `attacker` is
+    /// the attacking creature whose attack triggered its own ability.
     AbilityTriggered {
         source_card: CardId,
         controller: PlayerId,
+        ability: ObjectId,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        attacker: Option<PermanentId>,
     },
     /// A player drew a card; `nth_this_turn` counts that player's draws
     /// this turn (resets each turn).

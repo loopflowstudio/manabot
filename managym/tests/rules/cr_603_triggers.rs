@@ -133,6 +133,7 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
             context: None,
             player: None,
             chosen_modes: Vec::new(),
+            attacker: None,
             inline_effects: None,
             x: 0,
         },
@@ -150,6 +151,7 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
             context: None,
             player: None,
             chosen_modes: Vec::new(),
+            attacker: None,
             inline_effects: None,
             x: 0,
         },
@@ -271,6 +273,7 @@ fn cr_603_trigger_flush_happens_after_sba_check() {
         context: None,
         player: None,
         chosen_modes: Vec::new(),
+        attacker: None,
         inline_effects: None,
         x: 0,
     });

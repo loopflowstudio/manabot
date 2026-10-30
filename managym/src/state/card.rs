@@ -631,6 +631,11 @@ pub enum AdditionalCost {
     /// chosen like kicker whose generic mana may be paid by tapping artifacts
     /// and creatures.
     Waterbend(ManaCost),
+    /// "As an additional cost to cast this spell, pay [life] life or pay
+    /// [mana]": chosen like kicker, the mana marks the spell kicked;
+    /// otherwise the life is paid as it is cast (CR 119.4: only from a life
+    /// total of at least that much).
+    PayLifeOrMana { life: u32, mana: ManaCost },
     /// "As an additional cost to cast this spell, waterbend [cost]": required,
     /// and its {X} is announced with the spell's. It adds to the total cost,
     /// not the mana value (CR 202.3).
@@ -687,8 +692,18 @@ impl CardDefinition {
     /// optional waterbend, which both mark the spell kicked.
     pub fn optional_cost(&self) -> Option<&ManaCost> {
         self.additional_costs.iter().find_map(|cost| match cost {
-            AdditionalCost::Kicker(kicker) | AdditionalCost::Waterbend(kicker) => Some(kicker),
+            AdditionalCost::Kicker(kicker)
+            | AdditionalCost::Waterbend(kicker)
+            | AdditionalCost::PayLifeOrMana { mana: kicker, .. } => Some(kicker),
             AdditionalCost::Sacrifice(_) | AdditionalCost::RequiredWaterbend(_) => None,
+        })
+    }
+
+    /// The life an unkicked cast pays ("pay 5 life or pay {2}").
+    pub fn life_alternative(&self) -> Option<u32> {
+        self.additional_costs.iter().find_map(|cost| match cost {
+            AdditionalCost::PayLifeOrMana { life, .. } => Some(*life),
+            _ => None,
         })
     }
 

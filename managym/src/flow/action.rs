@@ -715,6 +715,8 @@ impl Game {
                     .is_some_and(|p| p.placing.is_some())
                 {
                     self.choose_trigger_target(*player, target)
+                } else if self.state.suspended_decision.is_some() {
+                    self.execute_decision_action(action)
                 } else {
                     Err(AgentError("no pending target choice".to_string()))
                 }

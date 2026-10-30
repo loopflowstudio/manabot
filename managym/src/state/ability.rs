@@ -120,6 +120,10 @@ pub enum TriggerCondition {
     BeginningOfYourUpkeep,
     BeginningOfYourCombat,
     BeginningOfYourEndStep,
+    /// "Whenever a creature you control attacking causes a triggered ability
+    /// of that creature to trigger": that ability, once on the stack, is the
+    /// trigger's context.
+    YourAttackingCreatureTriggers,
     /// "At the beginning of your first main phase" (the precombat main).
     BeginningOfYourFirstMainPhase,
     /// "Whenever you draw your Nth card each turn." The per-player draw
@@ -811,6 +815,14 @@ pub enum Effect {
     MayDiscard {
         then: Vec<Effect>,
     },
+    /// Copy the spell or ability the trigger names (its context): "copy it",
+    /// "copy that ability" (CR 707.10). The copy may get new targets.
+    CopyTriggeringObject,
+    /// "Change the target of target spell or ability with a single target"
+    /// (CR 115.7): to another legal target, if there is one.
+    ChangeTarget {
+        target: TargetSpec,
+    },
     /// Learn, without a sideboard (1v1 constructed): "You may discard a
     /// card. If you do, draw a card."
     Learn,
@@ -1019,6 +1031,8 @@ pub enum TargetSpec {
     Creature,
     CreatureOrPlayer,
     Spell,
+    /// "target spell or ability with a single target".
+    SpellOrAbilityWithSingleTarget,
     /// "target spell or permanent with mana value `min_mana_value` or
     /// greater" (Divide by Zero).
     SpellOrPermanent {
@@ -1218,6 +1232,7 @@ impl Effect {
             | Effect::Airbend { target }
             | Effect::ExileAndReturn { target }
             | Effect::GainControl { target, .. }
+            | Effect::ChangeTarget { target }
             | Effect::ReturnToHandDrawIfControlled { target } => Some(target),
             Effect::SearchBasicLand { .. }
             | Effect::OptionalDiscardDraw { .. }
@@ -1285,6 +1300,7 @@ impl Effect {
             | Effect::CreateDelayedTrigger { .. }
             | Effect::ExileSourceAndReturn { .. }
             | Effect::PutCountersOnCreatedToken { .. }
+            | Effect::CopyTriggeringObject
             | Effect::PutTriggeringCountersOnSource
             | Effect::RestoreController(_)
             | Effect::EachPlayerKeepsCreatures { .. }

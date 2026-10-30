@@ -135,6 +135,7 @@ fn condition_description(condition: &TriggerCondition) -> String {
         TriggerCondition::BeginningOfYourUpkeep => "At the beginning of your upkeep".into(),
         TriggerCondition::BeginningOfYourCombat => "At the beginning of your combat".into(),
         TriggerCondition::BeginningOfYourEndStep => "At the beginning of your end step".into(),
+        TriggerCondition::YourAttackingCreatureTriggers => "Whenever a creature you control attacking causes a triggered ability of that creature to trigger".into(),
         TriggerCondition::BeginningOfYourFirstMainPhase => {
             "At the beginning of your first main phase".into()
         }
@@ -384,6 +385,9 @@ fn target_description(t: &TargetSpec) -> String {
         TargetSpec::Creature => "creature".into(),
         TargetSpec::CreatureOrPlayer => "creature or player".into(),
         TargetSpec::Spell => "spell".into(),
+        TargetSpec::SpellOrAbilityWithSingleTarget => {
+            "spell or ability with a single target".into()
+        }
         TargetSpec::SpellOrPermanent { min_mana_value } => {
             format!("spell or permanent with mana value at least {min_mana_value}")
         }
@@ -595,6 +599,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
         PutSourceCountersOnTarget { .. } => "Put its counters on target creature you control".into(),
         ExileSourceAndReturn { player } => format!("Exile this, then return it to the battlefield under the control of {}", player_description(player)),
         GainControl { player, target, duration } => format!("{} gains control of {}{}", player_description(player), target_description(target), match duration { EffectDuration::EndOfTurn => " until end of turn", _ => "" }),
+        CopyTriggeringObject => "Copy it. You may choose new targets for the copy".into(),
+        ChangeTarget { target } => format!("Change the target of {}", target_description(target)),
         PutCountersOnCreatedToken { count } => format!("Put {} +1/+1 counters on that token", value_description(count)),
         ExileAndReturn { .. } => "Exile target creature you control, then return it to the battlefield under its owner's control".into(),
         WhenYouDo { effects } => format!("When you do: {}", effects_description(effects)),

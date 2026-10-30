@@ -548,6 +548,7 @@ impl Game {
                 Decision::ExileLinked { .. } => (18, None),
                 Decision::DistributeCounters { .. } => (19, None),
                 Decision::KeepCreatures { .. } => (20, None),
+                Decision::Retarget { .. } => (21, None),
             };
             frame.decision = kind;
             frames.push(frame);

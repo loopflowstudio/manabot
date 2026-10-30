@@ -110,6 +110,7 @@ _STAGES = frozenset(
         "linked_exile",
         "distribute_counters",
         "keep_creatures",
+        "retarget",
     )
 )
 

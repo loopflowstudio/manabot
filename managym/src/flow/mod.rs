@@ -15,6 +15,7 @@ pub mod play;
 pub mod priority;
 pub mod proposed_event;
 pub mod resolution;
+pub mod retarget;
 pub mod sba;
 pub mod scenario;
 pub mod search;

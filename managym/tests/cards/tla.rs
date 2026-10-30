@@ -12343,3 +12343,93 @@ fn bumi_chooses_up_to_one_mode_per_lesson_in_your_graveyard() {
     assert_eq!(counters(&s, bumi), 3);
     assert_eq!(counters(&s, forest), 3);
 }
+
+/// Paying 5 life (or {2}) moves a single-target spell to another legal
+/// target.
+#[test]
+fn redirect_lightning_moves_a_spell_to_another_target() {
+    for pay_mana in [false, true] {
+        let mut s = five_color_setup(&["Redirect Lightning", "Lightning Strike", "Gray Ogre"]);
+        let first = s.force_permanent_on_battlefield(1, "Gray Ogre");
+        let second = s.force_permanent_on_battlefield(1, "Gray Ogre");
+        let strike = cast(&mut s, "Lightning Strike");
+        assert!(s.choose_target(Target::Permanent(first)));
+        let life = s.life(0);
+        cast(&mut s, "Redirect Lightning");
+        assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
+        if pay_mana {
+            assert!(s.take_action_by_type(ActionType::PayCost));
+        } else {
+            choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+        }
+        assert!(s.choose_target(Target::StackSpell(strike)));
+        assert_eq!(s.life(0), if pay_mana { life } else { life - 5 });
+        resolve_top(&mut s);
+        assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
+        assert!(
+            !offered_targets(&s).contains(&Target::Permanent(first)),
+            "a new target"
+        );
+        assert!(s.choose_target(Target::Permanent(second)));
+        settle(&mut s);
+        assert_eq!(s.battlefield_permanents_named(1, "Gray Ogre"), vec![first]);
+    }
+}
+
+/// Exhaust counters Jeong Jeong; the next Lesson cast this turn is copied,
+/// and the copy may take a new target.
+#[test]
+fn jeong_jeong_copies_your_next_lesson_this_turn() {
+    let mut s = five_color_setup(&["Jeong Jeong, the Deserter", "Yip Yip!", "Gray Ogre"]);
+    let jeong = s.force_permanent_on_battlefield(0, "Jeong Jeong, the Deserter");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    activate(&mut s, jeong, 0);
+    settle(&mut s);
+    assert_eq!(counters(&s, jeong), 1);
+    let graveyard = s.zone_size(0, ZoneType::Graveyard);
+    cast(&mut s, "Yip Yip!");
+    assert!(s.choose_target(Target::Permanent(jeong)));
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(
+        s.choose_target(Target::Permanent(ogre)),
+        "the copy's new target"
+    );
+    settle(&mut s);
+    assert_eq!(s.game().effective_pt(jeong), (5, 6));
+    assert_eq!(s.game().effective_pt(ogre), (4, 4));
+    assert_eq!(
+        s.zone_size(0, ZoneType::Graveyard),
+        graveyard + 1,
+        "the copy ceased to exist"
+    );
+    assert!(s.game().state.delayed_triggers.is_empty(), "next cast only");
+}
+
+/// Entering makes a firebending Soldier. Each attack trigger of a creature
+/// you control adds a quest counter; from four you may copy the ability.
+#[test]
+fn firebender_ascension_counts_attack_triggers_and_copies_them_at_four() {
+    let mut s = five_color_setup(&["Firebender Ascension"]);
+    enter_and_settle(&mut s, "Firebender Ascension");
+    let ascension = permanent_named(&s, "Firebender Ascension");
+    let soldier = s.battlefield_permanents_named(0, "Soldier")[0];
+    set_counters(&mut s, ascension, CounterKind::Quest, 3);
+    clear_summoning_sickness(&mut s, soldier);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    choose(
+        &mut s,
+        |a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == soldier),
+    );
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        s.decline_attack();
+    }
+    pass_until(&mut s, ActionSpaceKind::PayOrNot);
+    assert_eq!(counters_of(&s, ascension, CounterKind::Quest), 4);
+    assert!(s.take_action_by_type(ActionType::PayCost));
+    resolve_until_priority(&mut s);
+    assert_eq!(
+        s.game().state.players[0].combat_mana_pool.mana[Color::Red as usize],
+        2,
+        "firebending and its copy"
+    );
+}

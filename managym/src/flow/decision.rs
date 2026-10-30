@@ -363,6 +363,15 @@ pub enum Decision {
         max_total_power: i32,
         kept: Vec<crate::state::game_object::PermanentId>,
     },
+    /// `player` chooses a new target for slot `slot` of the stack object
+    /// (CR 115.7), or keeps the current one when `may_keep` ("you may
+    /// choose new targets for the copy"); later slots follow.
+    Retarget {
+        player: PlayerId,
+        object: Target,
+        slot: usize,
+        may_keep: bool,
+    },
     /// All legend selections precede the simultaneous SBA batch (CR 704.5j).
     LegendRule {
         player: PlayerId,
@@ -387,6 +396,7 @@ impl Decision {
             | Decision::ManaChoice { player, .. }
             | Decision::Sacrifice { player, .. }
             | Decision::KeepCreatures { player, .. }
+            | Decision::Retarget { player, .. }
             | Decision::DistributeCounters { player, .. } => *player,
             Decision::SelectMilled { player, .. }
             | Decision::SearchBasicLand { player, .. }
@@ -416,6 +426,7 @@ impl Decision {
             | Decision::ManaChoice { .. }
             | Decision::Sacrifice { .. }
             | Decision::KeepCreatures { .. }
+            | Decision::Retarget { .. }
             | Decision::DistributeCounters { .. } => &[],
             Decision::Scry { looked, .. } => looked,
             Decision::LookAndSelect { looked, .. } => looked,
@@ -721,6 +732,22 @@ impl Game {
                         .map(|id| self.state.permanents[id].as_ref().unwrap().card),
                     optional.is_some(),
                 ),
+                focus: source_focus,
+            },
+            Decision::Retarget {
+                player, may_keep, ..
+            } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::ChooseTarget,
+                actions: self
+                    .retarget_candidates(&suspended.decision)
+                    .into_iter()
+                    .map(|target| Action::ChooseTarget {
+                        player: *player,
+                        target,
+                    })
+                    .chain(may_keep.then_some(Action::Decline { player: *player }))
+                    .collect(),
                 focus: source_focus,
             },
             Decision::KeepCreatures { player, .. } => ActionSpace {
@@ -1107,6 +1134,54 @@ impl Game {
                 };
                 kept.push(selected);
                 match self.keep_creatures(player, max_total_power, kept) {
+                    Some(next) => {
+                        suspended.decision = next;
+                        self.state.suspended_decision = Some(suspended);
+                    }
+                    None => self.run_frame(suspended.frame),
+                }
+                Ok(())
+            }
+            (
+                Decision::Retarget {
+                    player,
+                    object,
+                    slot,
+                    may_keep,
+                },
+                Action::ChooseTarget { target, .. },
+            ) => {
+                let (player, object, slot, may_keep) = (*player, *object, *slot, *may_keep);
+                if !self
+                    .retarget_candidates(&suspended.decision)
+                    .contains(target)
+                {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("illegal new target".into()));
+                }
+                self.change_stack_target(object, slot, *target);
+                match self
+                    .next_retarget(player, object, slot + 1, may_keep)
+                    .filter(|_| may_keep)
+                {
+                    Some(next) => {
+                        suspended.decision = next;
+                        self.state.suspended_decision = Some(suspended);
+                    }
+                    None => self.run_frame(suspended.frame),
+                }
+                Ok(())
+            }
+            (
+                Decision::Retarget {
+                    player,
+                    object,
+                    slot,
+                    may_keep: true,
+                },
+                Action::Decline { .. },
+            ) => {
+                match self.next_retarget(*player, *object, *slot + 1, true) {
                     Some(next) => {
                         suspended.decision = next;
                         self.state.suspended_decision = Some(suspended);
