@@ -12,7 +12,10 @@ A deck is a world concept, so it lives in managym, not Python. Add a native
 checkpoint bindings still read). `admit_deck` takes `&Deck`. Move decklist text
 parsing and card-name resolution against the content pool into managym, with
 line-specific diagnostics; Python keeps only a thin record of source text and
-filename for provenance. `TrainingDecks.decks` holds `managym.Deck`; remove
+filename for provenance. Refined the same day: the decklist itself (source
+document, entries, issues, parsing and the import result) is also managym, in
+Rust with its `managym` Python surface; `manabot.decklist` goes away rather
+than remaining as a wrapper, and manabot/Academy import from managym. `TrainingDecks.decks` holds `managym.Deck`; remove
 `manabot.model.catalog.DeckSetup` and the Python `Deck`. Leave `MatchConfig`
 hero/villain fields (recipe format) for now. Training, checkpoint files and
 Academy server stay Python. Validate with debug `cargo test`.
