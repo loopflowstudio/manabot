@@ -322,3 +322,9 @@ T2's operator choices are at `a5587df5a:scratch/questions.md`. New since
   fails on the stale audit anchor `managym/src/state/ability.rs::ModifyTriggeringPermanent`
   (T3 replaced that variant with continuous-effect records); the
   `docs/rules/audit-2026-10` rows for 400.7j and 608.2k need new anchors.
+- 2026-10-30 (slice 5): Fire Lord Zuko's one printed ability with two
+  trigger events is two `Ability::Triggered` entries (no event is both a cast
+  and an entry from exile). Appa airbends its targets one at a time.
+  `CreatureDealsCombatDamageToPlayer` triggers read the creatures from the
+  damage step's batch; with first strike, the first-strike step's triggers
+  are matched after that step's state-based actions.

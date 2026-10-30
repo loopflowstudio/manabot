@@ -67,6 +67,21 @@ evidence is re-recorded at gate with `scratch/tools/regen_*.py` and
    the pending trigger into the frame; `CounterKind::Quest`;
    `Condition::SourceCountersAtLeast` (resolution only); "do this only once
    each turn" after a "may" spends the turn's use only when taken.
+   Done (2026-10-30): Waterbender Ascension, Invasion Tactics, Appa,
+   Fire Lord Zuko, Wan Shi Tong (`CombatDamageToPlayers`,
+   `CreatureDealsCombatDamageToPlayer` ×creatures, `OneOrMoreDeal…`,
+   `FromZone`, `OpponentSearchesLibrary`/`LibrarySearched`, `cast_x` →
+   trigger `x`, `EffectValue::Half`, `TargetRequirement::ANY_NUMBER`).
+   Left: Earth Kingdom General and Planetarium share one missing mechanic,
+   "you may [act]. Do this only once each turn": the trigger fires every
+   time, the choice is offered only while unused this turn, and only taking
+   it spends the use (declining keeps it). Proposed shape: an optional
+   choice keyed by the exact source object and ability index in
+   `TurnState` (the frame learns its ability index), with EKG's
+   `CountersPlaced { permanent, kind, count }` event ("that much" via the
+   trigger's number) and Planetarium's `Scried` event plus a
+   `FreeCastOffer::LibraryTop`. `OnceEachTurn` (fires once) is the wrong
+   shape for both.
 6. Reflexive and delayed triggers, placement-time modes, copies/retargeting,
    trigger multiplicity (Katara the Fearless), LKI counter transfer, control
    change, Destined Confrontation's simultaneous choice.
@@ -102,7 +117,7 @@ and Monk (Crescent Island Temple) off `TOKENS_AWAITING_PRODUCER`; extend the new
 
 ## Remaining
 
-- Slices 5–6 (48 more cards): see the slice list above; Firebender
+- Slice 5's last two cards (above) and slice 6 (43 cards): see the slice list; Firebender
   Ascension's ETB, Earth Kingdom General's ETB, Invasion Tactics' ETB and
   Raven Eagle's draw clause are expressible today but wait for their other
   clauses (no half-defined cards). New turn facts go in `PlayerTurnHistory`.
@@ -116,7 +131,7 @@ and Monk (Crescent Island Temple) off `TOKENS_AWAITING_PRODUCER`; extend the new
 Compress (2026-10-30): turn-history writes go through `Game::update_turn_history`
 (journals only on change); one `attack_and_settle` card-test helper.
 
-Check (2026-10-30, after compress `3bbf7dce2`): debug `cargo test` all targets, fmt, clippy `-D warnings`, observation parity, text observation, experience protocol, current content and attachment join pass; schemas regenerated, extension rebuilt.
+Check (2026-10-30, after slice 5's first five cards): debug `cargo test` all targets, clippy `-D warnings`, fmt, observation parity, static-ability tokens, rules inventory pass; extension rebuilt, Scryfall fixture refreshed (274 cards), `semantic-kernel-w17-v1` re-recorded. Other w17 digest-bound Python evidence stays for gate.
 
 ## Concept review (Jack Heart, 2026-10-30, accepted 1a 2a 3a — done)
 
