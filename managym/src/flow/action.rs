@@ -66,6 +66,13 @@ impl Game {
             {
                 Some(format!("X = {mode}"))
             }
+            Action::ChooseMode { mode, .. } if self.state.suspended_decision.is_none() => {
+                let trigger = self.state.trigger_placement.as_ref()?.placing.as_ref()?;
+                let modes = self.unchosen_trigger_modes(trigger)?;
+                Some(crate::agent::ability_description::effects_description(
+                    modes.get(*mode)?,
+                ))
+            }
             Action::ChooseMode { mode, .. } => {
                 match &self.state.suspended_decision.as_ref()?.decision {
                     Decision::ManaChoice { choices, .. } => {
@@ -726,6 +733,17 @@ impl Game {
             Action::DeclareBlocker {
                 blocker, attacker, ..
             } => self.declare_blocker(*blocker, *attacker),
+            Action::ChooseMode { player, mode }
+                if self.state.suspended_decision.is_none()
+                    && self.pending_choice.is_none()
+                    && self
+                        .state
+                        .trigger_placement
+                        .as_ref()
+                        .is_some_and(|p| p.placing.is_some()) =>
+            {
+                self.choose_trigger_mode(*player, *mode)
+            }
             Action::ChooseMode { player, mode }
                 if matches!(self.pending_choice, Some(PendingChoice::SpellMode { .. })) =>
             {

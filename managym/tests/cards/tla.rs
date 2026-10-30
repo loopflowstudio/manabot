@@ -11412,3 +11412,76 @@ fn suki_courageous_rescuer_makes_an_ally_once_when_another_permanent_leaves_on_y
         "once each turn"
     );
 }
+
+/// Momo's mode is chosen as its leave trigger is put on the stack; the
+/// counter mode is offered only with a creature to target, and its target
+/// is chosen right after.
+#[test]
+fn momo_chooses_its_mode_when_the_leave_trigger_is_put_on_the_stack() {
+    let mut s = five_color_setup(&["Momo, Playful Pet", "Gray Ogre"]);
+    let momo = s.force_permanent_on_battlefield(0, "Momo, Playful Pet");
+    let momo = card_of(&s, momo);
+    s.game_mut().move_card(momo, ZoneType::Graveyard);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    let modes = |s: &Scenario| -> Vec<usize> {
+        s.action_space()
+            .actions
+            .iter()
+            .filter_map(|a| match a {
+                Action::ChooseMode { mode, .. } => Some(*mode),
+                _ => None,
+            })
+            .collect()
+    };
+    assert_eq!(modes(&s), vec![0, 2], "no creature for the counter");
+    assert!(
+        s.game().state.stack_objects.is_empty(),
+        "not yet on the stack"
+    );
+    choose_mode(&mut s, 0);
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Food").len(), 1);
+
+    let mut s = five_color_setup(&["Momo, Playful Pet", "Gray Ogre"]);
+    let momo = s.force_permanent_on_battlefield(0, "Momo, Playful Pet");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let momo = card_of(&s, momo);
+    s.game_mut().move_card(momo, ZoneType::Hand);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    assert_eq!(modes(&s), vec![0, 1, 2]);
+    choose_mode(&mut s, 1);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(counters(&s, ogre), 1);
+}
+
+/// Entering or attacking, Appa grants flying or airbends another nonland
+/// permanent you control, chosen with its target as the trigger is placed.
+#[test]
+fn appa_loyal_sky_bison_grants_flying_or_airbends_another_permanent() {
+    let mut s = five_color_setup(&["Appa, Loyal Sky Bison", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    enter_battlefield(&mut s, "Appa, Loyal Sky Bison");
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    choose_mode(&mut s, 0);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert!(s.game().effective_keywords(ogre).flying);
+
+    let appa = s.battlefield_permanents_named(0, "Appa, Loyal Sky Bison")[0];
+    let ogre_card = card_of(&s, ogre);
+    attack_until_decision(&mut s, &[appa]);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Modal);
+    choose_mode(&mut s, 1);
+    assert_eq!(
+        offered_targets(&s),
+        vec![Target::Permanent(ogre)],
+        "another"
+    );
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, ogre_card), Some(ZoneType::Exile));
+}

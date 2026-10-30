@@ -1370,6 +1370,11 @@ impl Game {
             Effect::Learn => Some(Decision::Learn {
                 player: frame.controller,
             }),
+            // A trigger's mode is chosen as it is put on the stack, which
+            // replaces this effect with the chosen mode's effects.
+            Effect::TriggerModes { .. } => {
+                unreachable!("trigger modes are chosen at placement")
+            }
             Effect::Modal { modes } => {
                 if modes.is_empty() {
                     return None;

@@ -485,6 +485,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::MayOnceEachTurn { .. } => "Effect::MayOnceEachTurn",
         Effect::CastLibraryTopFree => "Effect::CastLibraryTopFree",
         Effect::WhenYouDo { .. } => "Effect::WhenYouDo",
+        Effect::TriggerModes { .. } => "Effect::TriggerModes",
         Effect::ExileSourceSpell => "Effect::ExileSourceSpell",
         Effect::DestroyCreaturesLosingAbilities { .. } => "Effect::DestroyCreaturesLosingAbilities",
         Effect::AttachSourceTo { .. } => "Effect::AttachSourceTo",
@@ -508,7 +509,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 86;
+const EFFECT_VARIANTS: usize = 87;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -744,6 +745,9 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::MayOnceEachTurn { effects: draw() },
         Effect::CastLibraryTopFree,
         Effect::WhenYouDo { effects: draw() },
+        Effect::TriggerModes {
+            modes: vec![draw(), vec![Effect::Scry { count: 1 }]],
+        },
         Effect::ExileSourceSpell,
         Effect::DestroyCreaturesLosingAbilities {
             max_mana_value: EffectValue::X,

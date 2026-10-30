@@ -32,6 +32,7 @@ export function subjectLabel(observation: Observation, object: DecisionObjectVie
 export function stageLabel(stage: string): string {
   return ({
     order_triggers: 'Choose the next ability to stack', trigger_targets: 'Choose trigger targets',
+    trigger_mode: 'Choose a trigger mode',
     priority: 'Choose an action', targets: 'Choose a target', mode: 'Choose a spell mode',
     additional_cost: 'Choose an additional cost', payment: 'Pay the announced cost',
     mana_color: 'Choose mana to add', declare_attackers: 'Declare attackers',

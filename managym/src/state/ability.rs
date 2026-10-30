@@ -687,6 +687,13 @@ pub enum Effect {
     /// Learn, without a sideboard (1v1 constructed): "You may discard a
     /// card. If you do, draw a card."
     Learn,
+    /// "Choose one —" of a triggered ability (CR 700.2b): the controller
+    /// chooses a mode with a legal choice of targets as the ability is put
+    /// on the stack, then that mode's targets. It must be the ability's only
+    /// effect.
+    TriggerModes {
+        modes: Vec<Vec<Effect>>,
+    },
     /// Spell-level modes are selected during casting. Within a resolving
     /// ability this remains a resolution-time choice.
     Modal {
@@ -1046,6 +1053,7 @@ impl Effect {
             | Effect::CastFromHandFree { .. }
             | Effect::CastLibraryTopFree
             | Effect::WhenYouDo { .. }
+            | Effect::TriggerModes { .. }
             | Effect::ShuffleGraveyardIntoLibrary
             | Effect::PlaceTargetInLibrary { .. }
             | Effect::SearchLandsOpponentSplits { .. }

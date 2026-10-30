@@ -47,6 +47,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         airbending_lesson(),
         airship_engine_room(),
         allies_at_last(),
+        appa_loyal_sky_bison(),
         appa_steadfast_guardian(),
         avatar_enthusiasts(),
         avatar_s_wrath(),
@@ -162,6 +163,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         meteor_sword(),
         misty_palms_oasis(),
         momo_friendly_flier(),
+        momo_playful_pet(),
         mongoose_lizard(),
         north_pole_gates(),
         north_pole_patrol(),
@@ -724,6 +726,74 @@ fn allies_at_last() -> CardDefinition {
             subtype: Some("Ally".into()),
             ..Default::default()
         })],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn appa_loyal_sky_bison() -> CardDefinition {
+    let text_box = "Flying\nWhenever Appa enters or attacks, choose one —\n• Target creature you control gains flying until end of turn.\n• Airbend another target nonland permanent you control. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)";
+    let modes = || Effect::TriggerModes {
+        modes: vec![
+            vec![Effect::until_end_of_turn(
+                AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                Modification::AddKeywords(Keywords {
+                    flying: true,
+                    ..Default::default()
+                }),
+            )],
+            vec![Effect::TargetClause {
+                requirement: TargetRequirement {
+                    another: true,
+                    ..TargetRequirement::one(TargetSpec::PermanentYouControl {
+                        predicate: CardPredicate {
+                            not_card_types: vec![CardType::Land],
+                            ..Default::default()
+                        },
+                    })
+                },
+                effects: vec![Effect::Airbend {
+                    target: TargetSpec::PermanentYouControl {
+                        predicate: CardPredicate {
+                            not_card_types: vec![CardType::Land],
+                            ..Default::default()
+                        },
+                    },
+                }],
+            }],
+        ],
+    };
+
+    CardDefinition {
+        key: "tla.appa_loyal_sky_bison",
+        scryfall_id: "a9b2a843-c6fe-4d19-801e-1538e4381ab0",
+        name: "Appa, Loyal Sky Bison".into(),
+        mana_cost: Some(ManaCost::parse("{4}{W}{W}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Bison".into(), "Ally".into()],
+        power: Some(4),
+        toughness: Some(4),
+        keywords: Keywords {
+            flying: true,
+            ..Default::default()
+        },
+        abilities: vec![
+            Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![modes()],
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::Attacks {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![modes()],
+            },
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -5160,6 +5230,51 @@ fn momo_friendly_flier() -> CardDefinition {
                 AffectedSpec::Source,
                 Modification::pump(1, 1),
             )],
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn momo_playful_pet() -> CardDefinition {
+    let text_box = "Flying, vigilance\nWhen Momo leaves the battlefield, choose one —\n• Create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")\n• Put a +1/+1 counter on target creature you control.\n• Scry 2.";
+
+    CardDefinition {
+        key: "tla.momo_playful_pet",
+        scryfall_id: "9350bf4a-fa12-4867-b31f-1f1394d99571",
+        name: "Momo, Playful Pet".into(),
+        mana_cost: Some(ManaCost::parse("{W}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Lemur".into(), "Bat".into(), "Ally".into()],
+        power: Some(1),
+        toughness: Some(1),
+        keywords: Keywords {
+            flying: true,
+            vigilance: true,
+            ..Default::default()
+        },
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::LeavesTheBattlefield {
+                subject: TriggerSubject::This,
+            },
+            intervening_if: None,
+            effects: vec![Effect::TriggerModes {
+                modes: vec![
+                    vec![Effect::CreateToken {
+                        token_name: "Food".into(),
+                        count: 1,
+                        tapped_and_attacking: false,
+                        attach_source: false,
+                    }],
+                    vec![Effect::PutCounters {
+                        count: 1,
+                        kind: CounterKind::PlusOnePlusOne,
+                        target: TargetSpec::CreatureYouControl,
+                    }],
+                    vec![Effect::Scry { count: 2 }],
+                ],
+            }],
         }],
         text_box: text_box.into(),
         ..Default::default()

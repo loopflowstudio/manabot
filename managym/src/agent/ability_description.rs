@@ -487,7 +487,7 @@ fn keywords_description(k: &Keywords) -> String {
     .join(", ")
 }
 
-fn effects_description(effects: &[Effect]) -> String {
+pub(crate) fn effects_description(effects: &[Effect]) -> String {
     let parts: Vec<_> = effects.iter().filter_map(effect_description).collect();
     if parts.is_empty() {
         "Do nothing".into()
@@ -543,6 +543,10 @@ fn effect_description(effect: &Effect) -> Option<String> {
         ExileTopCardPlayThisTurn => "Exile the top card of your library. You may play that card this turn".to_string(),
         ExileLinked { chooser, zone, predicate, up_to, grant, target } => format!("{} {} {} {} from {}; {}", match chooser { LinkedChooser::Controller => "You exile", LinkedChooser::TargetPlayer => "That player exiles" }, if *up_to { "up to one" } else { "a" }, predicate_description(predicate, "card"), match zone { ZoneType::Battlefield => "they control", _ => "" }, target_description(target), match grant { LinkedGrant::WaterbendManaValue => "for as long as you control this, you may cast it during your turn by waterbending {X}, where X is its mana value", LinkedGrant::FlashAnyMana => "during your turn, you may cast it as though it had flash, spending mana of any type" }),
         ExileUntilNonlandCastFree { below } => format!("Exile cards from the top of your library until you exile a nonland card. You may cast that card without paying its mana cost if its mana value is less than {}. If you don't cast it this way, put it into your hand", value_description(below)),
+        TriggerModes { modes } => format!(
+            "Choose one — {}",
+            modes.iter().map(|mode| effects_description(mode)).collect::<Vec<_>>().join("; or ")
+        ),
         WhenYouDo { effects } => format!("When you do: {}", effects_description(effects)),
         CastLibraryTopFree => "Look at the top card of your library. You may cast it without paying its mana cost".into(),
         CastFromHandFree { predicate } => format!("You may cast a {} from your hand without paying its mana cost", predicate_description(predicate, "spell")),

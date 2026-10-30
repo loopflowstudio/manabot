@@ -352,7 +352,13 @@ impl Game {
             view.instruction = instruction.into();
         }
         if let Some(placement) = &self.state.trigger_placement {
-            view.stage = if placement.placing.is_some() {
+            let choosing_mode = placement
+                .placing
+                .as_ref()
+                .is_some_and(|trigger| self.unchosen_trigger_modes(trigger).is_some());
+            view.stage = if choosing_mode {
+                "trigger_mode"
+            } else if placement.placing.is_some() {
                 "trigger_targets"
             } else {
                 "order_triggers"
@@ -364,7 +370,11 @@ impl Game {
                     trigger.ability_index,
                     trigger.inline_effects.as_deref(),
                 );
-                format!("{description}. Choose targets for this ability before placing the next one. Earlier placements and paid costs remain committed.")
+                if choosing_mode {
+                    format!("{description}. Choose this ability's mode, then its targets, before placing the next one.")
+                } else {
+                    format!("{description}. Choose targets for this ability before placing the next one. Earlier placements and paid costs remain committed.")
+                }
             } else {
                 "Choose the next ability to put on the stack. Later placements resolve first. Each selection commits immediately.".into()
             };

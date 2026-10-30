@@ -168,6 +168,28 @@ impl Game {
                 self.state.trigger_placement = None;
                 return None;
             };
+            // CR 700.2b: a modal trigger's mode is chosen first; with no
+            // mode that has legal targets it is removed (CR 700.2a).
+            if let Some(modes) = self.unchosen_trigger_modes(&trigger) {
+                let legal = self.legal_trigger_modes(&trigger, &modes);
+                if legal.is_empty() {
+                    continue;
+                }
+                let controller = trigger.controller;
+                self.state.trigger_placement.as_mut().unwrap().placing = Some(trigger);
+                return Some(ActionSpace {
+                    player: Some(controller),
+                    kind: ActionSpaceKind::Modal,
+                    actions: legal
+                        .into_iter()
+                        .map(|mode| Action::ChooseMode {
+                            player: controller,
+                            mode,
+                        })
+                        .collect(),
+                    focus: Vec::new(),
+                });
+            }
             let Some(requirements) = self.trigger_requirements(&trigger) else {
                 continue;
             };
@@ -225,6 +247,78 @@ impl Game {
                 self.place_triggered_ability_on_stack(trigger);
             }
         }
+    }
+
+    /// The modes of a placing trigger whose mode is not yet chosen.
+    pub(crate) fn unchosen_trigger_modes(
+        &self,
+        trigger: &PendingTrigger,
+    ) -> Option<Vec<Vec<Effect>>> {
+        if trigger.inline_effects.is_some() {
+            return None;
+        }
+        match self
+            .state
+            .cards
+            .get(trigger.source_card.0)?
+            .abilities
+            .get(trigger.ability_index)?
+            .effects()
+        {
+            [Effect::TriggerModes { modes }] => Some(modes.clone()),
+            _ => None,
+        }
+    }
+
+    /// Modes whose every required target has a legal candidate.
+    fn legal_trigger_modes(&self, trigger: &PendingTrigger, modes: &[Vec<Effect>]) -> Vec<usize> {
+        let source = trigger
+            .source_ref
+            .and_then(|source| self.lookup_current_permanent(source).ok());
+        (0..modes.len())
+            .filter(|mode| {
+                crate::state::ability::effect_target_requirements(&modes[*mode])
+                    .iter()
+                    .filter(|requirement| requirement.min > 0)
+                    .all(|requirement| {
+                        self.legal_targets_for_spec(&requirement.spec, trigger.controller)
+                            .into_iter()
+                            .any(|target| {
+                                !(requirement.another
+                                    && source.is_some_and(|id| target == Target::Permanent(id)))
+                            })
+                    })
+            })
+            .collect()
+    }
+
+    /// Choose the placing modal trigger's mode; its targets follow.
+    pub(crate) fn choose_trigger_mode(
+        &mut self,
+        player: PlayerId,
+        mode: usize,
+    ) -> Result<(), AgentError> {
+        let trigger = self
+            .state
+            .trigger_placement
+            .as_ref()
+            .and_then(|p| p.placing.as_ref())
+            .ok_or_else(|| AgentError("no pending trigger mode".into()))?;
+        let modes = self
+            .unchosen_trigger_modes(trigger)
+            .ok_or_else(|| AgentError("no pending trigger mode".into()))?;
+        if trigger.controller != player
+            || !self.legal_trigger_modes(trigger, &modes).contains(&mode)
+        {
+            return Err(AgentError("illegal trigger mode".into()));
+        }
+        self.state
+            .trigger_placement
+            .as_mut()
+            .and_then(|p| p.placing.as_mut())
+            .expect("validated trigger")
+            .inline_effects = Some(modes[mode].clone());
+        Ok(())
     }
 
     pub(crate) fn decline_trigger_target(&mut self, player: PlayerId) -> Result<(), AgentError> {
