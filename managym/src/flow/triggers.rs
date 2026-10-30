@@ -654,6 +654,16 @@ impl Game {
                         event,
                     )
             }
+            (TriggerCondition::FromZone { zone, condition }, _) => {
+                self.event_origin(event) == Some(*zone)
+                    && self.trigger_condition_fires(
+                        condition,
+                        source_card,
+                        source_controller,
+                        source_was_on_battlefield,
+                        event,
+                    )
+            }
             (TriggerCondition::OnceEachTurn { condition }, _) => self.trigger_condition_fires(
                 condition,
                 source_card,
@@ -880,6 +890,23 @@ impl Game {
                 },
             ) => *player == source_controller && nth_this_turn == n,
             _ => false,
+        }
+    }
+
+    /// The zone a cast spell was cast from, or a moved card came from.
+    fn event_origin(&self, event: &GameEvent) -> Option<ZoneType> {
+        match event {
+            GameEvent::SpellCast { card, .. } => {
+                self.state
+                    .stack_objects
+                    .iter()
+                    .find_map(|object| match object {
+                        StackObject::Spell(spell) if spell.card == *card => Some(spell.cast_from),
+                        _ => None,
+                    })
+            }
+            GameEvent::CardMoved { from, .. } => *from,
+            _ => None,
         }
     }
 

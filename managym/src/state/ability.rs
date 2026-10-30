@@ -76,6 +76,13 @@ pub enum TriggerCondition {
     AttacksAlone {
         subject: TriggerSubject,
     },
+    /// The inner cast or entry trigger only for an object that came from
+    /// `zone` ("whenever you cast a spell from exile", "whenever a permanent
+    /// you control enters from exile").
+    FromZone {
+        zone: ZoneType,
+        condition: Box<TriggerCondition>,
+    },
     /// "Whenever [subject] deals combat damage to a player": once for each
     /// creature that does (`AnyYouControl`: "a creature you control").
     CreatureDealsCombatDamageToPlayer {
@@ -812,6 +819,10 @@ pub struct TargetRequirement {
 }
 
 impl TargetRequirement {
+    /// `max` for "any number of targets" (CR 601.2c): the legal candidates
+    /// bound the choice; the value stays within the learning tokens' i32.
+    pub const ANY_NUMBER: usize = i32::MAX as usize;
+
     pub fn one(spec: TargetSpec) -> Self {
         Self {
             shares_creature_type: false,

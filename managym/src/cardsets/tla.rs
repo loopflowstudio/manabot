@@ -47,6 +47,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         airbending_lesson(),
         airship_engine_room(),
         allies_at_last(),
+        appa_steadfast_guardian(),
         avatar_enthusiasts(),
         avatar_s_wrath(),
         azula_always_lies(),
@@ -94,6 +95,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         enter_the_avatar_state(),
         fancy_footwork(),
         fated_firepower(),
+        fire_lord_zuko(),
         fire_nation_attacks(),
         fire_nation_cadets(),
         fire_nation_engineer(),
@@ -711,6 +713,73 @@ fn allies_at_last() -> CardDefinition {
             subtype: Some("Ally".into()),
             ..Default::default()
         })],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn appa_steadfast_guardian() -> CardDefinition {
+    let text_box = "Flash\nFlying\nWhen Appa enters, airbend any number of other target nonland permanents you control. (Exile them. While each one is exiled, its owner may cast it for {2} rather than its mana cost.)\nWhenever you cast a spell from exile, create a 1/1 white Ally creature token.";
+    let nonland_you_control = TargetSpec::PermanentYouControl {
+        predicate: CardPredicate {
+            not_card_types: vec![CardType::Land],
+            ..Default::default()
+        },
+    };
+
+    CardDefinition {
+        key: "tla.appa_steadfast_guardian",
+        scryfall_id: "829d91e9-4878-4e55-a262-ac0d55b65d4e",
+        name: "Appa, Steadfast Guardian".into(),
+        mana_cost: Some(ManaCost::parse("{2}{W}{W}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Bison".into(), "Ally".into()],
+        power: Some(3),
+        toughness: Some(4),
+        keywords: Keywords {
+            flash: true,
+            flying: true,
+            ..Default::default()
+        },
+        abilities: vec![
+            Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement {
+                        shares_creature_type: false,
+                        spec: nonland_you_control.clone(),
+                        min: 0,
+                        max: TargetRequirement::ANY_NUMBER,
+                        another: true,
+                        max_x: false,
+                    },
+                    effects: vec![Effect::ForEachTarget {
+                        effects: vec![Effect::Airbend {
+                            target: nonland_you_control,
+                        }],
+                    }],
+                }],
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::FromZone {
+                    zone: ZoneType::Exile,
+                    condition: Box::new(TriggerCondition::YouCastSpell {
+                        predicate: CardPredicate::default(),
+                    }),
+                },
+                intervening_if: None,
+                effects: vec![Effect::CreateToken {
+                    token_name: "Ally".into(),
+                    count: 1,
+                    tapped_and_attacking: false,
+                    attach_source: false,
+                }],
+            },
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -2456,6 +2525,67 @@ fn fated_firepower() -> CardDefinition {
             },
             ReplacementEffect::OpponentDamagePlusCounters {
                 kind: CounterKind::Fire,
+            },
+        ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn fire_lord_zuko() -> CardDefinition {
+    let text_box = "Firebending X, where X is Fire Lord Zuko's power. (Whenever this creature attacks, add X {R}. This mana lasts until end of combat.)\nWhenever you cast a spell from exile and whenever a permanent you control enters from exile, put a +1/+1 counter on each creature you control.";
+    let counter_each_creature = || {
+        vec![Effect::PutCountersOnEachMatching {
+            count: EffectValue::Fixed(1),
+            predicate: CardPredicate::creature(),
+            other: false,
+        }]
+    };
+
+    CardDefinition {
+        key: "tla.fire_lord_zuko",
+        scryfall_id: "e62d3bcc-7bb4-42be-90a9-caf3c1caa29d",
+        name: "Fire Lord Zuko".into(),
+        mana_cost: Some(ManaCost::parse("{R}{W}{B}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Noble".into(), "Ally".into()],
+        power: Some(2),
+        toughness: Some(4),
+        abilities: vec![
+            Ability::Triggered {
+                condition: TriggerCondition::Attacks {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::AddManaValue {
+                    mana: Mana::parse("R"),
+                    amount: EffectValue::SourcePower,
+                    until_end_of_combat: true,
+                }],
+            },
+            // One printed ability with two trigger events (CR 603.2): no
+            // single event is both a cast and an entry from exile, so two
+            // triggered abilities fire exactly when it does.
+            Ability::Triggered {
+                condition: TriggerCondition::FromZone {
+                    zone: ZoneType::Exile,
+                    condition: Box::new(TriggerCondition::YouCastSpell {
+                        predicate: CardPredicate::default(),
+                    }),
+                },
+                intervening_if: None,
+                effects: counter_each_creature(),
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::FromZone {
+                    zone: ZoneType::Exile,
+                    condition: Box::new(TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::AnyYouControl(CardPredicate::default()),
+                    }),
+                },
+                intervening_if: None,
+                effects: counter_each_creature(),
             },
         ],
         text_box: text_box.into(),

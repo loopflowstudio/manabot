@@ -105,6 +105,11 @@ fn condition_description(condition: &TriggerCondition) -> String {
         TriggerCondition::AttacksAlone { subject } => {
             format!("When {} attacks alone", subject_description(subject))
         }
+        TriggerCondition::FromZone { zone, condition } => format!(
+            "{} (from {})",
+            condition_description(condition),
+            format!("{zone:?}").to_lowercase()
+        ),
         TriggerCondition::CreatureDealsCombatDamageToPlayer { subject } => format!(
             "When {} deals combat damage to a player",
             subject_description(subject)

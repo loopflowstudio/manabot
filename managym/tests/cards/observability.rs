@@ -777,6 +777,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::YouCastSpell { .. } => "TriggerCondition::YouCastSpell",
         TriggerCondition::PlayerCastsSpell { .. } => "TriggerCondition::PlayerCastsSpell",
         TriggerCondition::AttacksWithAnother => "TriggerCondition::AttacksWithAnother",
+        TriggerCondition::FromZone { .. } => "TriggerCondition::FromZone",
         TriggerCondition::CreatureDealsCombatDamageToPlayer { .. } => {
             "TriggerCondition::CreatureDealsCombatDamageToPlayer"
         }
@@ -842,6 +843,10 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             predicate: CardPredicate::creature(),
         },
         TriggerCondition::AttacksWithAnother,
+        TriggerCondition::FromZone {
+            zone: ZoneType::Exile,
+            condition: enters(),
+        },
         TriggerCondition::CreatureDealsCombatDamageToPlayer {
             subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
         },

@@ -13,9 +13,9 @@ use crate::support::{
     },
     inspect::{
         assert_choice_contract, can_activate, can_activate_card, can_cast, card_of, counters,
-        counters_of, find_owned_card, hand, has_action, keywords, library, library_card,
-        library_top, offered_cards, offered_targets, permanent, permanent_named, pt_modifications,
-        stack_spell_card, tapped, zone_of,
+        counters_of, find_owned_card, find_owned_card_off_battlefield, hand, has_action, keywords,
+        library, library_card, library_top, offered_cards, offered_targets, permanent,
+        permanent_named, pt_modifications, stack_spell_card, tapped, zone_of,
     },
     play::{
         activate, activate_card, activate_first, activate_named, attack_with, cast,
@@ -10824,4 +10824,83 @@ fn invasion_tactics_pumps_on_entry_and_draws_once_for_connecting_allies() {
     let hand = s.zone_size(0, ZoneType::Hand);
     hit_and_settle(&mut s, &[ogre]);
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand);
+}
+
+/// Pass priority until a trigger asks for a target.
+fn until_target_choice(s: &mut Scenario) {
+    for _ in 0..10 {
+        if s.action_space().kind == ActionSpaceKind::ChooseTarget {
+            return;
+        }
+        s.pass_priority();
+    }
+    panic!("no target choice: {:?}", s.action_space());
+}
+
+/// Appa airbends any number of other nonland permanents you control (lands
+/// and Appa are not offered); casting one from exile makes an Ally, casting
+/// from hand does not.
+#[test]
+fn appa_airbends_any_number_and_makes_an_ally_for_casts_from_exile() {
+    let mut s = five_color_setup(&["Appa, Steadfast Guardian", "Gray Ogre"]);
+    let ogres = [
+        s.force_permanent_on_battlefield(0, "Gray Ogre"),
+        s.force_permanent_on_battlefield(0, "Gray Ogre"),
+    ];
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    let ogre_cards = ogres.map(|ogre| card_of(&s, ogre));
+    cast(&mut s, "Appa, Steadfast Guardian");
+    until_target_choice(&mut s);
+    let offered = offered_targets(&s);
+    assert!(!offered.contains(&Target::Permanent(forest)));
+    assert_eq!(offered.len(), 2, "only the two Ogres: {offered:?}");
+    for ogre in ogres {
+        assert!(s.choose_target(Target::Permanent(ogre)));
+    }
+    settle(&mut s);
+    for card in ogre_cards {
+        assert_eq!(zone_of(&s, card), Some(ZoneType::Exile));
+    }
+
+    s.set_player_mana_pool(0, "2");
+    cast_card(&mut s, ogre_cards[0]);
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 1);
+    s.set_player_mana_pool(0, "2R");
+    cast(&mut s, "Gray Ogre");
+    settle(&mut s);
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Ally").len(),
+        1,
+        "from hand"
+    );
+}
+
+/// A cast from exile and an entry from exile each counter every creature
+/// you control; Zuko's firebending adds his current power in red.
+#[test]
+fn fire_lord_zuko_counters_the_team_for_exile_casts_and_entries() {
+    let mut s = five_color_setup(&["Fire Lord Zuko", "Gray Ogre"]);
+    let zuko = s.force_permanent_on_battlefield(0, "Fire Lord Zuko");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let exiled = find_owned_card_off_battlefield(&s, 0, "Gray Ogre");
+    s.game_mut().move_card(exiled, ZoneType::Exile);
+    s.game_mut().move_card(exiled, ZoneType::Battlefield);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    s.pass_priority();
+    settle(&mut s);
+    let entered = s.game().state.card_to_permanent[exiled].unwrap();
+    for creature in [zuko, ogre, entered] {
+        assert_eq!(counters(&s, creature), 1, "entry from exile");
+    }
+
+    let in_hand = find_owned_card_off_battlefield(&s, 0, "Gray Ogre");
+    s.game_mut().move_card(in_hand, ZoneType::Hand);
+    s.set_player_mana_pool(0, "2R");
+    cast_card(&mut s, in_hand);
+    settle(&mut s);
+    assert_eq!(counters(&s, zuko), 1, "a cast from hand adds nothing");
+
+    attack_and_settle(&mut s, &[zuko], None);
+    assert_eq!(combat_red(&s), 3, "firebending X = power 3");
 }
