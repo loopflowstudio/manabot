@@ -3,6 +3,20 @@
 Full wording of the accepted corrections and usage sketches below:
 e3b4f0583:scratch/f871a8-import-decklist-files.md.
 
+## Accepted direction (Jack Heart, 2026-10-30): Deck and parsing are managym concepts
+
+A deck is a world concept, so it lives in managym, not Python. Add a native
+`Deck { main, sideboard }` with content-derived identity, exposed as
+`managym.Deck`. `PlayerConfig` holds a `deck` (keep its serialized
+`decklist`/`sideboard` keys via `#[serde(flatten)]` so receipts, replays and
+checkpoint bindings still read). `admit_deck` takes `&Deck`. Move decklist text
+parsing and card-name resolution against the content pool into managym, with
+line-specific diagnostics; Python keeps only a thin record of source text and
+filename for provenance. `TrainingDecks.decks` holds `managym.Deck`; remove
+`manabot.model.catalog.DeckSetup` and the Python `Deck`. Leave `MatchConfig`
+hero/villain fields (recipe format) for now. Training, checkpoint files and
+Academy server stay Python. Validate with debug `cargo test`.
+
 ## Accepted corrections (Jack Heart, 2026-10-28; implemented 1b71de345 ff.)
 
 **One deck concept.** A deck is main/sideboard counts with identity from content,
