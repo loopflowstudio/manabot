@@ -1,6 +1,6 @@
 # T2 — TLA casting, costs, zone permissions and private zones (Task 87e012)
 
-Stacked on T1 (892c47, PR #394, synced at its head `01e8f9975` via `4d3b9b066`); T2 is PR #398.
+Stacked on T1 (892c47, PR #394, open; synced at its head `38c883f08` via `89e320c48`); T2 is PR #398.
 Task directive lists the 51 cards and obligations; allocation in
 `docs/rules/tla/allocation.jsonl` (`planned_pr: T2`). Every merge needs Jack
 Heart's review; don't arm T2's merge while #394 is open. Status: implementation
@@ -48,8 +48,9 @@ opponent's face-down foretold cards; the public `foretold` count rides on
 `Π C(n_i, k_i) · P(m, F)` (ordered fills of the F distinguishable slots from
 the m foretell-bearing cards the hand leaves); zero-weight hands are dropped
 and `Has`/`Lacks`/`Q` bounds come from the support. Materialization refills
-the slots from the seeded remainder with `resample_foretold` (a chosen card
-already foretold keeps its slot). `POSSIBLE_WORLD_SPACE_VERSION` 3 in Rust and
+the slots from the seeded remainder through `Game::fill_foretold_slots` (a
+chosen card already foretold keeps its slot), which `Game::determinize`
+shares. `POSSIBLE_WORLD_SPACE_VERSION` 3 in Rust and
 Python (`managym.possible-world-space/v3`); Python `library_size` excludes
 foretold cards.
 Academy's card face prints and names the three T2 permanent statuses (used
@@ -62,6 +63,10 @@ exhaust, used once-each-turn, granted firebending) in text-5 wording
 - Land only after #394 lands; re-sync then.
 
 ## Check
+
+2026-10-29 implement (concept review 6): `determinize` and materialization share `fill_foretold_slots`; `determinize_fills_two_foretold_slots_with_distinct_cards` (F = 2, 256 seeds) fails on the old code and passes; debug lib 121, cards 305, rules 131 + 2 ignored, possible_worlds 8, prepared 3, search 11; clippy `--all-targets -D warnings` and fmt clean; extension rebuilt.
+
+2026-10-29 realign (after syncing T1 `38c883f08`): plan matches code (foretold possible worlds v3 in `53bc5c993`); debug `cargo test --lib --test cards --test rules_tests --test possible_worlds_tests --test prepared_possible_worlds_tests` 121/304/131+2 ignored/8/3 pass; clippy `--all-targets -D warnings` clean.
 
 2026-10-29 implement (possible worlds v3): `possible_worlds_resample_an_opponents_foretold_card` passes; debug cards 304, lib 121, rules 131 + 2 ignored (one intermittent `structured_offer_rejects_fabricated_and_stale_ids_without_mutation` failure in 2 of 9 runs, see questions), possible_worlds 8, prepared 3; clippy `-D warnings` and fmt clean; extension rebuilt. Pytest belief state/range/tracker/runtime + learn contract 59 pass, 2 fail: `test_native_projection_preserves_canonical_receipt_bytes` (w7 receipt moves with the v3 schema identity; gate's world-bound receipts) and `test_manabot_player_generates_belief_before_ordinary_action` (`KeyError: 'relations'` in `actor_critic.py`, also hit by `test_belief_agent`; outside possible worlds, not checked against HEAD).
 

@@ -174,22 +174,49 @@ impl Game {
         self.grants_naming(card).any(|grant| grant.foretold)
     }
 
-    /// Determinization: hidden card `new` becomes `player`'s foretold card
-    /// in place of `old`, which rejoins the hidden pool. The caller assigns
-    /// `old` to the hand or library.
-    pub(crate) fn resample_foretold(&mut self, player: PlayerId, old: CardId, new: CardId) {
-        let (Some(from), Some(to)) = (self.current_object_ref(old), self.current_object_ref(new))
-        else {
-            return;
-        };
-        self.state.zones.replace_face_down_exile(player, old, new);
-        self.edit_cast_permissions(|permissions| {
-            for grant in &mut permissions.exile_grants {
-                if grant.object == from {
-                    grant.object = to;
-                }
+    /// Determinization: refill `player`'s face-down foretold slots from the
+    /// ordered unseen `pool`, taking its first foretell-bearing cards out of
+    /// it. A chosen card already foretold keeps its own slot, so no card
+    /// fills two slots; each vacated slot takes one incoming card, keeping
+    /// its cast grant, and its old card is left in `pool` for the caller to
+    /// assign to the hand or library. Returns false, changing nothing, when
+    /// the pool holds too few foretell-bearing cards.
+    pub(crate) fn fill_foretold_slots(&mut self, player: PlayerId, pool: &mut Vec<CardId>) -> bool {
+        let slots = self.foretold_cards(player);
+        let bearers = pool
+            .iter()
+            .filter(|card| self.state.cards[**card].foretell.is_some())
+            .count();
+        if bearers < slots.len() {
+            return false;
+        }
+        let mut chosen = Vec::with_capacity(slots.len());
+        pool.retain(|card| {
+            let take = chosen.len() < slots.len() && self.state.cards[*card].foretell.is_some();
+            if take {
+                chosen.push(*card);
             }
+            !take
         });
+        let mut incoming = chosen.iter().filter(|card| !slots.contains(card));
+        for &old in slots.iter().filter(|old| !chosen.contains(old)) {
+            let new = *incoming.next().expect("one incoming card per vacated slot");
+            let from = self
+                .current_object_ref(old)
+                .expect("a foretold card is exiled");
+            let to = self
+                .current_object_ref(new)
+                .expect("an unseen card is hidden");
+            self.state.zones.replace_face_down_exile(player, old, new);
+            self.edit_cast_permissions(|permissions| {
+                for grant in &mut permissions.exile_grants {
+                    if grant.object == from {
+                        grant.object = to;
+                    }
+                }
+            });
+        }
+        true
     }
 
     /// `player`'s face-down foretold cards in exile.

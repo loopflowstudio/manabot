@@ -109,10 +109,9 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   for belief owners): `PhysicalHandSampler`'s hypergeometric prior and
   `BeliefState.draw_unknown`/hidden-draw convolution in `belief/range.py`
   still treat every pool card as hand-or-library, as does the library
-  count row in `belief/encoding.py` (pool − hand). `Game::determinize` passes
-  an already-foretold card as `new` to `resample_foretold` when F ≥ 2, which
-  `replace_face_down_exile` cannot swap correctly; unreachable in T2 decks
-  with one foretold card at a time, but worth a fix.
+  count row in `belief/encoding.py` (pool − hand). Concept review 6's F ≥ 2
+  `Game::determinize` slot collision is fixed: it now shares
+  `fill_foretold_slots` with materialization.
 - `rules_tests::structured_offer_rejects_fabricated_and_stale_ids_without_mutation`
   failed 2 of 9 full `rules_tests` runs (Debug output of the root changed
   after a rejected stale submission); passes alone and in 7 later runs. It

@@ -544,26 +544,8 @@ impl HiddenHandConstraints {
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         new_library.shuffle(&mut rng);
 
-        // Fill the foretold slots with the first foretell-bearing cards of the
-        // seeded remainder. A chosen card already foretold keeps its slot, so
-        // no exile slot is ever read while another one holds the same card;
-        // the rest replace the slots whose card was not chosen.
-        let slots = branch.foretold_cards(opponent);
-        let mut chosen = Vec::with_capacity(slots.len());
-        new_library.retain(|card| {
-            let take = chosen.len() < slots.len() && branch.state.cards[*card].foretell.is_some();
-            if take {
-                chosen.push(*card);
-            }
-            !take
-        });
-        if chosen.len() != slots.len() {
+        if !branch.fill_foretold_slots(opponent, &mut new_library) {
             return Err(MaterializeError::InconsistentWorld);
-        }
-        let mut incoming = chosen.iter().filter(|card| !slots.contains(card));
-        for &old in slots.iter().filter(|old| !chosen.contains(old)) {
-            let new = *incoming.next().expect("one incoming card per vacated slot");
-            branch.resample_foretold(opponent, old, new);
         }
 
         branch
