@@ -212,8 +212,9 @@ def test_decklist_setup_bound_checkpoint_rejects_imported_files(
     )
     agent, _ = load_checkpoint(str(path))
     players = Match(match).to_rust()
-    with pytest.raises(ValueError, match="outside checkpoint"):
+    rejected = "outside checkpoint|setup differs"
+    with pytest.raises(ValueError, match=rejected):
         validate_agent_setup(agent, players)
     config = SimulationConfig(hero=str(path), num_games=1, match=match)
-    with pytest.raises(ValueError, match="outside checkpoint"):
+    with pytest.raises(ValueError, match=rejected):
         simulate_models(load_player(str(path)), load_player("random"), config)

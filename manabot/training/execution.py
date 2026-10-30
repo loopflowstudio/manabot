@@ -9,7 +9,7 @@ from pathlib import Path
 import platform
 import socket
 import time
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 import uuid
 
 import numpy as np
@@ -188,11 +188,11 @@ def validate_regime(
     return regime
 
 
-def _checkpoint_world(regime: TrainingRegime) -> dict[str, Any]:
-    """A deck-source run exports the world, never its deck source."""
+def _checkpoint_setups(regime: TrainingRegime) -> list[managym.PlayerConfig] | None:
+    """Setups a checkpoint binds; a deck-source run binds the world (`None`)."""
     if regime.deck_source is not None:
-        return {"player_configs": None}
-    return {"player_configs": Match(regime.root_match).to_rust()}
+        return None
+    return Match(regime.root_match).to_rust()
 
 
 def _runtime_identities(
@@ -629,7 +629,7 @@ def _execute_regime(
                 model,
                 space,
                 target.with_suffix(".tmp"),
-                **_checkpoint_world(regime),
+                player_configs=_checkpoint_setups(regime),
                 extra={
                     "run_id": run.id,
                     "stage_id": record.id,
@@ -1162,7 +1162,7 @@ def _execute_regime(
                             agent,
                             space,
                             temporary,
-                            **_checkpoint_world(regime),
+                            player_configs=_checkpoint_setups(regime),
                             extra={
                                 "run_id": run.id,
                                 "stage_id": stage.id,
@@ -1529,7 +1529,7 @@ def _execute_regime(
                         model,
                         space,
                         temporary,
-                        **_checkpoint_world(regime),
+                        player_configs=_checkpoint_setups(regime),
                         extra={
                             "run_id": run.id,
                             "stage_id": stage.id,

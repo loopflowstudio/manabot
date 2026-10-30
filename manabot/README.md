@@ -88,14 +88,11 @@ linked capture audit for boundaries and supervision limits.
 
 Ordinary checkpoints require `world_binding` from
 `manabot.model.world.checkpoint_world(actual_player_configs, observation_space)`.
-This binds native `WORLD_VERSION`, rules schemas, full deck/sideboard setups,
-content manifest and input schema. Authored decks from one compiled pack bind
-that pack's complete authored roster (`setup_binding: authored-pack-v1`; the
-Elemental packs unmarked), so the model executes any pair native reset admits,
-whichever pair trained it. Other setups, and historical unmarked bindings over
-other packs, bind their exact pair. Deck-source runs bind the world itself
+This binds native `WORLD_VERSION`, rules schemas, full deck/sideboard pairs,
+content manifest and input schema. Deck-source runs bind the world itself
 (`deck_world`: version, card digest, rules and input contract), so the model
-plays any deck the world admits. Missing or mismatched bindings fail before weights load. Seat reversal preserves each deck's sideboard. Policy checkpoint
+plays any deck the world admits. Missing or mismatched bindings fail before
+weights load. Seat reversal preserves each deck's sideboard. Policy checkpoint
 writers require explicit `player_configs`; never infer training setup from
 tensor dimensions or the default deck.
 

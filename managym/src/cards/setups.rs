@@ -266,7 +266,7 @@ pub(crate) fn content_pack_for_match(
                 .any(|p| p.content_pack.as_ref() != Some(key))
         {
             return Err(ContentError(
-                "explicit content pack requires two players with the same pack key".into(),
+                "explicit pack requires two players with the same pack key".into(),
             ));
         }
         if key == crate::world::WORLD_POOL {

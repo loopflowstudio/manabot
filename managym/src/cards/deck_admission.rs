@@ -110,13 +110,13 @@ pub fn check_decks(decks: &[Deck]) -> Result<Vec<Vec<DeckIssue>>, ContentError> 
     let content = pool_content(WORLD_POOL)?;
     Ok(decks
         .iter()
-        .map(|deck| admit_in_pool(&descriptor, &content, deck))
+        .map(|deck| admit_in_world(&descriptor, &content, deck))
         .collect())
 }
 
 /// Admission against the world's descriptor and the runtime content it
 /// describes; tests substitute descriptors to reach ambiguous names.
-pub(crate) fn admit_in_pool(
+pub(crate) fn admit_in_world(
     pool: &ContentPool,
     content: &ContentPack,
     deck: &Deck,

@@ -20,7 +20,7 @@ use unicode_normalization::UnicodeNormalization;
 
 use super::{
     content_pool,
-    deck_admission::{admit_in_pool, DeckIssue, DeckSection},
+    deck_admission::{admit_in_world, DeckIssue, DeckSection},
     pool_content, ContentError, ContentPool, PoolDefinition,
 };
 use crate::{cards::content_pack::ContentPack, state::deck::Deck, world::WORLD_POOL};
@@ -76,14 +76,15 @@ pub struct DeckImport {
 /// position in a supply), each carrying its line diagnostics.
 #[derive(Clone, Debug)]
 pub enum DecklistError {
-    Pool(ContentError),
+    /// The installed world could not be read.
+    World(ContentError),
     Rejected(BTreeMap<String, Decklist>),
 }
 
 impl std::fmt::Display for DecklistError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Pool(error) => write!(f, "{error}"),
+            Self::World(error) => write!(f, "{error}"),
             Self::Rejected(decklists) => {
                 let mut lines = Vec::new();
                 for (label, decklist) in decklists {
@@ -103,7 +104,7 @@ impl std::fmt::Display for DecklistError {
 
 impl From<ContentError> for DecklistError {
     fn from(error: ContentError) -> Self {
-        Self::Pool(error)
+        Self::World(error)
     }
 }
 
@@ -263,7 +264,7 @@ fn name_key(name: &str) -> String {
 /// Resolve front or full double-faced names; reverse-only, ambiguous and
 /// unknown names are rejected without substitution. Then admit natively,
 /// attributing each admission issue to every source line that named the card.
-fn admit_with_pool(
+fn admit_with_world(
     decklist: &Decklist,
     pool: &ContentPool,
     content: &ContentPack,
@@ -338,7 +339,7 @@ fn admit_with_pool(
             ..entry.clone()
         });
     }
-    for issue in admit_in_pool(pool, content, &deck) {
+    for issue in admit_in_world(pool, content, &deck) {
         let lines = match (issue.section, &issue.card_name) {
             (Some(section), Some(name)) => source_lines
                 .get(&(section, name.clone()))
@@ -375,7 +376,7 @@ pub fn admit_decklists(decklists: &[(String, Decklist)]) -> Result<Vec<DeckImpor
     let mut admitted = Vec::new();
     let mut rejected = BTreeMap::new();
     for (label, decklist) in decklists {
-        match admit_with_pool(decklist, &pool, &content) {
+        match admit_with_world(decklist, &pool, &content) {
             Ok(imported) => admitted.push(imported),
             Err(decklist) => {
                 rejected.insert(label.clone(), decklist);
@@ -414,7 +415,7 @@ mod tests {
     const VILLAIN: &str = "20 Island\n";
 
     fn admit(decklist: &Decklist, pool: &ContentPool) -> Result<DeckImport, Decklist> {
-        admit_with_pool(decklist, pool, &pool_content(WORLD_POOL).unwrap())
+        admit_with_world(decklist, pool, &pool_content(WORLD_POOL).unwrap())
     }
 
     fn import_match(hero: &str, villain: &str) -> Result<Vec<DeckImport>, DecklistError> {

@@ -156,11 +156,11 @@
         },
         {
           "path": "managym/src/cards/deck_admission.rs",
-          "sha256": "61700a062936337f1116a639dca7de700683b22e6effffb930c7ec911f7101b5"
+          "sha256": "c95f85560c4c32dbb48d7173c4f9979bdd5b531b222b599573cb9d752ec5da20"
         },
         {
           "path": "managym/src/cards/decklist.rs",
-          "sha256": "d0648098cf21bed18ce7c2811f8890ffe000c75cf5accad8968e422018d3e168"
+          "sha256": "e9cf1b1610810b8c0c1544b8ca42fc7de3a64ac7f5be90563d977124a774676e"
         },
         {
           "path": "managym/src/cards/fixtures.rs",
@@ -176,7 +176,7 @@
         },
         {
           "path": "managym/src/cards/setups.rs",
-          "sha256": "39bfa701dbc52744911760ff1ad20a65af3efcffc46eabf661d83a7b1a04a7f1"
+          "sha256": "0ddcb0cf9a288ee9a5358729a5b0cee79dcd25bdfddc64a4b4556d9e6bb1f8e8"
         },
         {
           "path": "managym/src/cards/tokens.rs",
@@ -567,7 +567,7 @@
           "sha256": "23ac765196d97fb350c0e3e2337bacc5d8e42bd6c47edb7999fb0907d32bfa8d"
         }
       ],
-      "sha256": "a5478fb0cc078458ddacdbe56783b3883713a8dcc2ba4e246b65cdbfd1fc6ef7"
+      "sha256": "2c10ee165dadce7783d6f5205612cffa8d68229609b809633b3db177e2b1eb55"
     },
     "seed": 0
   },

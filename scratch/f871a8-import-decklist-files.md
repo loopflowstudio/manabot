@@ -95,7 +95,7 @@ whole input; saved imports re-admit against the installed world.
 
 `state::deck` (identity byte-equal to the retained Python digest);
 `cards::deck_admission` (`admit_deck(&Deck)`, `check_decks(&[Deck])` reading
-the world once, `DeckIssue.line`, crate-private `admit_in_pool`; rules are
+the world once, `DeckIssue.line`, crate-private `admit_in_world`; rules are
 `DEVELOPMENT_RULESET`); `cards::decklist` (`Decklist`, `parse_decklist`,
 `read_decklist`, `DeckImport {decklist, deck}`, `admit_decklists(labelled)`,
 `Decklist::validate_deck(&Deck)`), all against the installed world only;
@@ -118,6 +118,11 @@ The authored-match parity receipt (`conformance/authored-match-parity-w17-v1`)
 hashes source files; regenerate it (`uv run python -m academy.authored_match_parity
 write`) after any further source edit, including formatting.
 
+Compress check (2026-10-30): debug lib deck_admission/decklist/setups/
+vector_env 27 passed, clippy/fmt clean; world/mirror/matchups/training-decks/
+decklist/catalog/Academy-decklist/match/self-play/elemental/boundaries/
+learning-state 122 passed; parity receipt rewritten and verified.
+
 Check (2026-10-30, world-only + deck source): debug `cargo test --no-fail-fast`
 all pass (after the 1a cut), lib deck_admission/decklist/setups/vector_env/pool/
 world 40 passed and clippy clean after `check_decks`; decklist/training-deck/
@@ -127,6 +132,10 @@ errors; parity receipt rewritten, verifies. Gate owns the affected-area suites.
 
 ## Delete — do not maintain
 
+Done (compress): the `authored-pack-v1` roster binding (`AUTHORED_PACK_BINDING`,
+`_binds_roster`, `_setup_world(roster=)`, `bound_pack`) — a pool-era form; setup
+bindings are main's again (exact pair; Elemental roster), world bindings are
+`deck_world`. Main's mirror/matchup/world tests restored unchanged.
 Done (this pass): pack/pool arguments of `admit_deck`/`admit_decklists`/
 `validate_deck`/`development_rejection`; Python `admit_deck` (now
 `check_decks`); `Deck.player(content_pack)`; explicit-pool admission for
