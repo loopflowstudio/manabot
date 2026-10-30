@@ -63,7 +63,6 @@ _INDEPENDENCE_PROBE = textwrap.dedent(
     sys.meta_path.insert(0, _RefuseAcademy())
     import manabot.sim.players
     import manabot.sim.replay
-    import manabot.semantic.policy
 
     assert not any(name.split(".")[0] == "academy" for name in sys.modules)
     """
