@@ -2311,7 +2311,7 @@ mod payment_tests {
         let root = witness(&game);
         let before_hand = game.state.zones.size(ZoneType::Hand, player);
 
-        // Keep a divergent sibling alive throughout all nested rollbacks.
+        // Keep a divergent sibling alive throughout all nested restores.
         let mut sibling = game.clone();
         apply_payment_action(&mut sibling, |a| matches!(a, Action::Decline { .. }));
         let sibling_witness = witness(&sibling);
