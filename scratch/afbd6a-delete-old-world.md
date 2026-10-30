@@ -84,3 +84,10 @@ names stay (`kicker_cost` column, content-pack JSON `"kicker"`), so no receipt
 or fixture bytes move. Debug `cargo test --test cards` (310), clippy
 `--all-targets -D warnings`, and `tests/sim/test_heuristic.py` (27) after a
 rebuild pass. Remaining: gate/CI; Jack Heart reviews before merge.
+
+Concept review, 2026-10-30 (second pass, after `optional_cost`): nothing to
+change. `CardDefinition` holds exactly the steer's field set; every former
+one-off field is a `StaticAbility` or `AdditionalCost` variant, read by match
+(the remaining accessors are one-variant lookups). No definition-level field
+name survives outside frozen evidence; `no_maximum_hand_size` remains only as
+the player status the static sets. No open product choice.
