@@ -572,8 +572,7 @@ impl Game {
 }
 
 /// Highest obligation code `decision_code` assigns. Captured continuation
-/// frames are validated against it, so a new `Decision` variant's code must
-/// stay within it.
+/// frames are validated against it; raise it with each new code.
 pub const MAX_DECISION_CODE: u8 = 20;
 
 /// A suspended obligation's stable code in `ContinuationFrame::decision`
@@ -824,8 +823,8 @@ mod tests {
         };
         let player = PlayerId(0);
         let predicate = CardPredicate::default();
-        // One value per variant; `decision_code`'s exhaustive match makes a
-        // new variant fail to compile until it has a code.
+        // One value per variant. `decision_code`'s exhaustive match makes a
+        // new variant fail to compile until it has a code; add it here too.
         let decisions = [
             Decision::Payment(PaymentProgress::new(
                 player,
