@@ -121,13 +121,22 @@ Scryfall id.
    Compress after the merge: both encoders write player columns in column
    order; the native one-use `shows_everything` gate is inlined.
 
+28. Second sync (2026-10-29): T2 head `89e320c48` (possible worlds v3, Academy
+   ability-use statuses) and T1 head `2c50c8793` (`world` pool key, card
+   catalog under `cards/`). T2's exhaust / once-each-turn / firebending card
+   props became `permanentNotes` entries (one Academy note authority; wording
+   matches the LLM text, "firebending N until end of turn").
+
 ## Remaining
 
-- World release items (w15 conformance receipts) and browser proof.
+- World release for w18 (shared with T2): `semantic-kernel-w17-v1` and
+  `authored-match-w17-v1` receipts, the Academy w17 demo, navigation,
+  trigger-order, learn and public-commitment fixtures all fail identity checks
+  under w18 (22 `tests/academy` failures plus the authority receipt); browser proof.
 
-Check (item 27, debug, 2026-10-29): every `cargo test` target passes except the
-w15 `semantic_conformance_tests` pair (cards 383, rules 131, lib 122, schema
-tests after regeneration); clippy `--all-targets -D warnings` and fmt clean.
-pytest: CLAUDE.md world suite 66; model+semantic+env+verify+Academy protocol
-567 pass after the Temur width fix (parity 8). Academy: svelte-check clean,
-permanent-notes and GameBoard vitest pass.
+Check (item 28, debug, 2026-10-29): every `cargo test` target passes except the
+`semantic_conformance_tests` pair (w17 manifest under w18); cards 384, rules
+131, lib 122; clippy `--all-targets -D warnings` and fmt clean. pytest: CLAUDE.md
+world suite 66; model+semantic+env+verify 556 before the first Academy fixture
+failure; `test_ur_lessons_increment` 8. Academy: svelte-check clean; permanent-notes,
+PermanentRow and GameBoard vitest pass.
