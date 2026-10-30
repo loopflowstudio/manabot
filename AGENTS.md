@@ -116,13 +116,18 @@ checkpoints or experiment evidence.
 - Native scalar/vector observation buffers bind continuation input semantics by
   relation width: v2/v3 have 32 columns, v4 has 33, v5 has 48; validity
   remains column 31. V5 widens player rows to 64, card rows to 55 and
-  permanent rows to 52 (v1–v4: 40 / 41 / 29), validity last.
-  Preserve the frozen widths and derive buffers from `ObservationSpace`.
+  permanent rows to 37 (v1–v4: 40 / 41 / 29), validity last, and adds a
+  `facts` block (128 × 12, one row per `FactKind` fact about a player or
+  permanent). Open-ended vocabularies (counter kinds, added subtypes, set
+  names, used abilities, continuous-effect records, copy effects and their
+  exceptions) are fact kinds, never
+  columns. Preserve the frozen widths and derive buffers from
+  `ObservationSpace`.
 - New observation state reaches the policy input (native and Python encoders
   in parity), the LLM text observation and the learning tokens in the change
   that adds it; a frozen policy-input version never silently falls behind.
   `managym/tests/cards/observability.rs` names each `Observation` field's
-  tensor columns and fails to compile when a field is unlisted.
+  tensor columns or fact kind and fails to compile when a field is unlisted.
 - Saved observation configurations use `ObservationConfig.from_checkpoint` so
   an absent policy-input version retains v1 semantics. Fresh construction uses
   the current version. Keep version-specific zero/default exclusions stable:
@@ -239,9 +244,11 @@ primitive defined once.
 A permanent's activated abilities are `Game::activated_abilities_for` (printed,
 then granted, e.g. an Equipment's `AbilityGrant`); activation, payment
 and offer code indexes only that list, never `card.activated_abilities`.
-Whether a permanent has lost its abilities is `Game::has_lost_abilities`
-(until-end-of-turn loss or an Aura's `SetCharacteristics`); never read
-`Permanent.abilities_lost` alone.
+Whether a permanent has lost its abilities is `Game::has_lost_abilities`,
+which reads continuous-effect records and an Aura's `SetCharacteristics`.
+A change that lasts until end of turn, or for any other duration, is an
+`Effect::ApplyContinuous` record (`state/effect.rs`; expiry in
+`flow/effects.rs`), never a new `Permanent` or `Player` field.
 
 Activated abilities that function from hand or graveyard set
 `ActivatedAbilityDefinition.zone` (landcycling included); they are offered as

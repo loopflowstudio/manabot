@@ -147,10 +147,9 @@ mana, `Game::zone_cast_cost`/`may_play_from_zone`, `ZoneEntry`.
 - Item 19 (with Fire Nation Palace): Name/creature types appear only while an effect sets them; spell keyword
   grants reach `Observation`, not the Academy stack view. `.pyi` now also lists `Permanent`'s
   existing `exile_if_dies_this_turn` and `temp_subtypes`.
-- `rules::structured_offers::structured_offer_rejects_fabricated_and_stale_ids_without_mutation`
-  failed once at `structured_offers.rs:329` in a full debug `rules_tests` run,
-  then passed alone and on a full rerun. It is untouched here and may compare a
-  nondeterministic `Debug` rendering. Gate should watch for it.
+- The intermittent "rejection must not mutate state" failures in
+  `structured_offers` / `structured_attacker_offers` were the shared default
+  `ContentPack`'s lazy caches in `Game`'s `Debug`; fixed at item 33.
 
 ## Item 23 (policy input v5) — 2026-10-29
 
@@ -254,10 +253,6 @@ T2's operator choices are at `a5587df5a:scratch/questions.md`. New since
   count row in `belief/encoding.py` (pool − hand).
   2026-10-30 (concept review 4, 1b): the tracker's accounting now counts the
   slot; which hand card was foretold is assumed uniform by count (MTG-215).
-- `rules_tests::structured_offer_rejects_fabricated_and_stale_ids_without_mutation`
-  failed 2 of 9 full `rules_tests` runs (Debug output of the root changed
-  after a rejected stale submission); passes alone and in 7 later runs. It
-  touches no possible-world code; likely order/timing-dependent shared state.
 
 ## afbd6a (delete old world), 2026-10-30 — headless choices
 
@@ -318,10 +313,8 @@ T2's operator choices are at `a5587df5a:scratch/questions.md`. New since
 - w17 evidence re-recorded in place (semantic kernel 14 cases / 3401
   commands; authored-match receipt and parity 142 commands; public commitment
   69 commitments, no gaps; Academy demos, choice navigation, trigger order).
-- Known, pre-existing on T3 before this sync: `tests/infra/test_rules_inventory.py`
-  fails on the stale audit anchor `managym/src/state/ability.rs::ModifyTriggeringPermanent`
-  (T3 replaced that variant with continuous-effect records); the
-  `docs/rules/audit-2026-10` rows for 400.7j and 608.2k need new anchors.
+- Realign repaired the stale `ModifyTriggeringPermanent` audit anchors (rules
+  400.7j, 608.2k now anchor `AffectedSpec::TriggeringPermanent`).
 
 ## T5 (a7234f) — 2026-10-30 operator choices
 
@@ -332,5 +325,5 @@ T2's operator choices are at `a5587df5a:scratch/questions.md`. New since
   Kept cards stay in order: exact for surveil 1, the only printed amount.
 - Joo Dee's fixture entry was added from Scryfall's card API with the refresh
   script's fields, not a full bulk refresh (which reorders the file).
-- WORLDS.md count 166 → 168 is a relative +2 (Joo Dee new, Ran and Shaw out of
-  `INCOMPLETE`); the Python pool reports 189 eligible rows by its own counting.
+- `world` reports 239 eligible definitions (T3's 236 plus Joo Dee, Ran and
+  Shaw, Phoenix Fleet Airship).
