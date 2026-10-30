@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>558daa concept review 3</title>
+<style>
+:root{--fg:#222;--bg:#fbfaf7;--mute:#666;--rule:#ddd;--prop:#8a5a00;--code:#f0eee8}
+@media (prefers-color-scheme:dark){:root{--fg:#e6e3dc;--bg:#1b1a18;--mute:#a09c94;--rule:#3a3833;--prop:#e0b050;--code:#2a2925}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 Georgia,serif}
+main{max-width:42rem;margin:0 auto;padding:2rem 1.25rem 4rem}
+header p{color:var(--mute);font-size:.9rem;margin:.2rem 0}
+h1{font-size:1.5rem;margin-bottom:.4rem}h2{font-size:1.15rem;margin-top:2.2rem;border-top:1px solid var(--rule);padding-top:1rem}
+code{background:var(--code);padding:0 .25em;border-radius:3px;font-size:.88em}
+.prop{color:var(--prop)}.prop::before{content:"Proposed: ";font-weight:bold}
+table{border-collapse:collapse;width:100%;font-size:.92rem}td,th{border-bottom:1px solid var(--rule);padding:.4rem;text-align:left;vertical-align:top}
+</style></head><body><main>
+<header>
+<h1>Cull 558daa: concept review 3</h1>
+<p>Task 558daa · step: concept-review (headless) · 2026-10-30</p>
+<p>Built from: <code>scratch/jack-heart-558daa-cull-everything-the.md</code>, Jack Heart's held-list steer (comment f57280ee), <code>git diff main...HEAD</code>, <code>.lf/wave/*</code>, <code>lf wave list</code></p>
+</header>
+
+<p><strong>Decision needed: none.</strong> The implemented cull matches the accepted concepts. Two words in moved wave memory still need fixing.</p>
+
+<h2>Actions → concepts → APIs</h2>
+<table>
+<tr><th>Action</th><th>Before</th><th>After (existing on branch)</th></tr>
+<tr><td>Search explores a line</td><td>clone, clone+undo, or page-COW driver</td><td>full <code>Game</code> clone fork; no undo or journal</td></tr>
+<tr><td>Academy shows advice</td><td>live belief runtime + fixture advice</td><td><code>/api/advice</code> serves fixture advice only</td></tr>
+<tr><td>Agent reads wave context</td><td><code>wave/</code> + <code>.lf/wave/</code></td><td><code>.lf/wave/{academy,engine,eval,training}</code>, matching <code>lf wave list</code></td></tr>
+<tr><td>Conformance drift</td><td>14 stored tapes</td><td>seeds + <code>trace_sha256</code>; mismatch writes the regenerated case</td></tr>
+</table>
+
+<h2>The mismatch</h2>
+<p>Wave memory moved over verbatim kept two things the accepted rules retire:</p>
+<ul>
+<li><code>.lf/wave/academy/MEMORY.md</code>: "he is not confident" infers a pronoun.
+ <p class="prop">"Jack Heart is not confident".</p></li>
+<li><code>.lf/wave/engine/MEMORY.md</code>: "the rules engine Fantasia specifically needs" uses the old project name in live guidance.
+ <p class="prop">"the rules engine Manabot specifically needs". The <code>fantasia-website</code> service id stays.</p></li>
+</ul>
+
+<h2>Checked and unchanged</h2>
+<p>No code still references live advice, undo or journal calls, branching drivers or top-level <code>wave/</code>. <code>journal_mode=WAL</code> is SQLite. The frozen benchmark and audit records are left as written. CLAUDE.md's test and doc anchors resolve.</p>
+
+<h2>Questions</h2>
+<ol><li>None open. Outcome: the design changed (wording), so the loop goes back to implement.</li></ol>
+</main></body></html>
