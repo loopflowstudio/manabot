@@ -120,9 +120,9 @@ pub enum GameEvent {
         player: PlayerId,
     },
     /// The creatures that dealt combat damage to a player in one combat
-    /// damage step, with the player each damaged (CR 510.2).
+    /// damage step (CR 510.2).
     CombatDamageToPlayers {
-        hits: Vec<(PermanentId, PlayerId)>,
+        creatures: Vec<PermanentId>,
     },
     /// One simultaneous state-based death batch in deterministic object order.
     PermanentsDied {

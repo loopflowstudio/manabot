@@ -508,18 +508,16 @@ impl Game {
         }
         let cast_spell = (old_zone == Some(ZoneType::Stack))
             .then(|| self.find_spell_on_stack_index(card))
-            .flatten();
-        let was_cast = cast_spell.is_some();
-        let cast_x = cast_spell.map_or(0, |index| match &self.state.stack_objects[index] {
-            StackObject::Spell(spell) => spell.x,
-            _ => 0,
-        });
-        if old_zone == Some(ZoneType::Stack) {
-            if let Some(index) = self.find_spell_on_stack_index(card) {
+            .flatten()
+            .map(|index| {
                 self.journal_stack();
-                self.state.stack_objects.remove(index);
-            }
-        }
+                self.state.stack_objects.remove(index)
+            });
+        let was_cast = cast_spell.is_some();
+        let cast_x = match cast_spell {
+            Some(StackObject::Spell(spell)) => spell.x,
+            _ => 0,
+        };
 
         let holder = match (to_zone, entry.controller) {
             (ZoneType::Battlefield, Some(controller)) => controller,

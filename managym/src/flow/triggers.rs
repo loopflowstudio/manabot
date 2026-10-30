@@ -835,15 +835,13 @@ impl Game {
                 }
             }
             (
-                TriggerCondition::CreatureDealsCombatDamageToPlayer { subject },
-                GameEvent::CombatDamageToPlayers { hits },
-            ) => hits.iter().any(|(creature, _)| {
-                self.subject_matches_permanent(subject, source_card, source_controller, *creature)
-            }),
+                TriggerCondition::CreatureDealsCombatDamageToPlayer { .. },
+                GameEvent::CombatDamageToPlayers { .. },
+            ) => self.trigger_multiplicity(condition, source_card, source_controller, event) > 0,
             (
                 TriggerCondition::OneOrMoreDealCombatDamageToPlayer { predicate },
-                GameEvent::CombatDamageToPlayers { hits },
-            ) => hits.iter().any(|(creature, _)| {
+                GameEvent::CombatDamageToPlayers { creatures },
+            ) => creatures.iter().any(|creature| {
                 self.state.permanents[*creature]
                     .as_ref()
                     .is_some_and(|permanent| permanent.controller == source_controller)
@@ -941,15 +939,15 @@ impl Game {
         match (condition, event) {
             (
                 TriggerCondition::CreatureDealsCombatDamageToPlayer { subject },
-                GameEvent::CombatDamageToPlayers { hits },
-            ) => hits
+                GameEvent::CombatDamageToPlayers { creatures },
+            ) => creatures
                 .iter()
-                .filter(|(creature, _)| {
+                .filter(|creature| {
                     self.subject_matches_permanent(
                         subject,
                         source_card,
                         source_controller,
-                        *creature,
+                        **creature,
                     )
                 })
                 .count(),

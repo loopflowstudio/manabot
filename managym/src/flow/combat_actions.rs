@@ -176,7 +176,7 @@ impl Game {
 
             if !was_blocked {
                 if self.apply_combat_player_damage(attacker_ref, defender, attacker_power) {
-                    hits.push((attacker_id, defender));
+                    hits.push(attacker_id);
                 }
                 continue;
             }
@@ -219,11 +219,11 @@ impl Game {
                 && remaining_damage > 0
                 && self.apply_combat_player_damage(attacker_ref, defender, remaining_damage)
             {
-                hits.push((attacker_id, defender));
+                hits.push(attacker_id);
             }
         }
         if !hits.is_empty() {
-            self.emit(GameEvent::CombatDamageToPlayers { hits });
+            self.emit(GameEvent::CombatDamageToPlayers { creatures: hits });
         }
     }
 

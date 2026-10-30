@@ -130,6 +130,12 @@ and Monk (Crescent Island Temple) off `TOKENS_AWAITING_PRODUCER`; extend the new
 
 Compress (2026-10-30): turn-history writes go through `Game::update_turn_history`
 (journals only on change); one `attack_and_settle` card-test helper.
+Compress after slice 5's first five cards: `CombatDamageToPlayers { creatures }`
+(the defender is always the non-active player); `trigger_multiplicity` is the
+one count of connecting creatures for `CreatureDealsCombatDamageToPlayer`;
+the leaving spell is removed from the stack once and read for `cast_x`.
+Debug `cargo test --lib --test cards --test rules_tests` and clippy pass; the
+extension is rebuilt at gate.
 
 Check (2026-10-30, after slice 5's first five cards): debug `cargo test` all targets, clippy `-D warnings`, fmt, observation parity, static-ability tokens, rules inventory pass; extension rebuilt, Scryfall fixture refreshed (274 cards), `semantic-kernel-w17-v1` re-recorded. Other w17 digest-bound Python evidence stays for gate.
 

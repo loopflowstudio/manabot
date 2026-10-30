@@ -10826,17 +10826,6 @@ fn invasion_tactics_pumps_on_entry_and_draws_once_for_connecting_allies() {
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand);
 }
 
-/// Pass priority until a trigger asks for a target.
-fn until_target_choice(s: &mut Scenario) {
-    for _ in 0..10 {
-        if s.action_space().kind == ActionSpaceKind::ChooseTarget {
-            return;
-        }
-        s.pass_priority();
-    }
-    panic!("no target choice: {:?}", s.action_space());
-}
-
 /// Appa airbends any number of other nonland permanents you control (lands
 /// and Appa are not offered); casting one from exile makes an Ally, casting
 /// from hand does not.
@@ -10850,7 +10839,7 @@ fn appa_airbends_any_number_and_makes_an_ally_for_casts_from_exile() {
     let forest = s.force_permanent_on_battlefield(0, "Forest");
     let ogre_cards = ogres.map(|ogre| card_of(&s, ogre));
     cast(&mut s, "Appa, Steadfast Guardian");
-    until_target_choice(&mut s);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     let offered = offered_targets(&s);
     assert!(!offered.contains(&Target::Permanent(forest)));
     assert_eq!(offered.len(), 2, "only the two Ogres: {offered:?}");
