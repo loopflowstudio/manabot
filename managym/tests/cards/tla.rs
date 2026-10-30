@@ -4385,39 +4385,70 @@ fn foretell_is_unavailable_on_an_opponents_turn() {
     assert!(!foretell_offered(&mut s, comet));
 }
 
-/// Determinization resamples an opponent's face-down foretold card from the
-/// unseen cards with foretell, keeping its grant on the exiled card.
+/// With two foretold cards, determinization fills each face-down slot with a
+/// distinct foretell-bearing card: one slot never takes the other's card, so
+/// every card stays in exactly one zone and each foretold card keeps one grant.
 #[test]
-fn determinize_resamples_an_opponents_foretold_card() {
-    let mut s = five_color_setup(&["Sozin's Comet", "Gray Ogre"]);
-    let comet = library_card(&s, 0, "Sozin's Comet");
-    s.game_mut().move_card(comet, ZoneType::Hand);
-    assert!(foretell_offered(&mut s, comet));
-    choose(
-        &mut s,
-        |a| matches!(a, Action::Foretell { card, .. } if *card == comet),
-    );
+fn determinize_fills_two_foretold_slots_with_distinct_cards() {
+    let mut s = five_color_setup(&["Sozin's Comet"]);
+    let a = library_card(&s, 0, "Sozin's Comet");
+    s.game_mut().move_card(a, ZoneType::Hand);
+    let b = library_card(&s, 0, "Sozin's Comet");
+    s.game_mut().move_card(b, ZoneType::Hand);
+    let comets = [a, b];
+    s.set_player_mana_pool(0, "4");
+    for comet in comets {
+        assert!(foretell_offered(&mut s, comet));
+        choose(
+            &mut s,
+            |a| matches!(a, Action::Foretell { card, .. } if *card == comet),
+        );
+    }
+    let zones = [
+        ZoneType::Library,
+        ZoneType::Hand,
+        ZoneType::Battlefield,
+        ZoneType::Graveyard,
+        ZoneType::Stack,
+        ZoneType::Exile,
+        ZoneType::Command,
+    ];
     let mut resampled = false;
-    for seed in 0..32 {
+    for seed in 0..256 {
         let mut game = s.game().clone();
         game.determinize(PlayerId(1), seed);
-        let exiled = game
+        let mut seen = BTreeMap::new();
+        for player in [PlayerId(0), PlayerId(1)] {
+            for zone in zones {
+                for &card in game.state.zones.zone_cards(zone, player) {
+                    assert_eq!(game.state.zones.zone_of(card), Some(zone));
+                    *seen.entry(card.0).or_insert(0) += 1;
+                }
+            }
+        }
+        for index in 0..game.state.cards.len() {
+            assert_eq!(seen.get(&index), Some(&1), "card {index} in one zone");
+        }
+        let foretold = game
             .state
             .zones
             .zone_cards(ZoneType::Exile, PlayerId(0))
             .clone();
-        assert_eq!(exiled.len(), 1);
-        let foretold = exiled[0];
-        assert_eq!(game.state.cards[foretold].name, "Sozin's Comet");
-        let grant = &game.state.cast_permissions.exile_grants[0];
-        assert_eq!(Some(grant.object), game.current_object_ref(foretold));
-        resampled |= foretold != comet;
-        if foretold != comet {
-            assert!(matches!(
-                game.state.zones.zone_of(comet),
-                Some(ZoneType::Hand | ZoneType::Library)
-            ));
+        assert_eq!(foretold.len(), 2);
+        let grants = &game.state.cast_permissions.exile_grants;
+        assert_eq!(grants.iter().filter(|grant| grant.foretold).count(), 2);
+        for card in &foretold {
+            assert_eq!(game.state.cards[*card].name, "Sozin's Comet");
+            let object = game.current_object_ref(*card);
+            assert_eq!(
+                grants
+                    .iter()
+                    .filter(|grant| Some(grant.object) == object)
+                    .count(),
+                1
+            );
         }
+        resampled |= foretold.iter().any(|card| !comets.contains(card));
     }
     assert!(resampled);
 }

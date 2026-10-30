@@ -181,8 +181,8 @@ mana, `Game::zone_cast_cost`/`may_play_from_zone`, `ZoneEntry`.
   unobserved: SBAs consume the first before any decision, and the second is
   read only while its own entry resolves.
 
-## T2 notes at the second merge (head `89e320c48`) — 2026-10-29
+## T2 notes at the second and third merges (heads `89e320c48`, `a5587df5a`) — 2026-10-29
 
-T2's operator choices are at `89e320c48:scratch/questions.md`. New since
+T2's operator choices are at `a5587df5a:scratch/questions.md`. New since
 `d218e1dc2`: possible worlds v3 resample foretold cards (ordered slots,
 `P(m, F)` fill factor); belief priors are not yet foretold-aware.

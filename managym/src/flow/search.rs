@@ -45,8 +45,9 @@ impl Game {
     /// - `perspective`'s own library is reshuffled (its order is unknown to
     ///   them, but its contents are determined by the public zones + hand).
     ///
-    /// - the opponent's face-down foretold cards are each drawn from the
-    ///   same unseen pool, restricted to cards with foretell.
+    /// - the opponent's face-down foretold slots are filled from the same
+    ///   unseen pool's first foretell-bearing cards, as possible-world
+    ///   materialization fills them.
     ///
     /// Public facts and own choices are preserved; opponent private choices refresh.
     pub fn determinize(&mut self, perspective: PlayerId, seed: u64) {
@@ -54,20 +55,13 @@ impl Game {
         let opponent = PlayerId((perspective.0 + 1) % 2);
         self.journal_zones();
         let (mut known, mut residual) = self.hidden_hand_partition(opponent);
-        let foretold = self.foretold_cards(opponent);
-        residual.extend(foretold.iter().copied());
+        residual.extend(self.foretold_cards(opponent));
         residual.sort_unstable_by_key(|card| card.0);
         residual.shuffle(&mut rng);
-        for old in foretold {
-            let index = residual
-                .iter()
-                .position(|card| self.state.cards[*card].foretell.is_some())
-                .expect("a foretold card is in its own pool");
-            let new = residual.remove(index);
-            if new != old {
-                self.resample_foretold(opponent, old, new);
-            }
-        }
+        assert!(
+            self.fill_foretold_slots(opponent, &mut residual),
+            "foretold cards are in their own pool"
+        );
         let unknown_slots = self.state.zones.size(ZoneType::Hand, opponent) - known.len();
         let library = residual.split_off(unknown_slots);
         known.extend(residual);
