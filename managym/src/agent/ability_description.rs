@@ -392,6 +392,7 @@ fn target_description(t: &TargetSpec) -> String {
         TargetSpec::SpellOrAbilityWithSingleTarget => {
             "spell or ability with a single target".into()
         }
+        TargetSpec::Ability => "activated or triggered ability".into(),
         TargetSpec::SpellOrPermanent { min_mana_value } => {
             format!("spell or permanent with mana value at least {min_mana_value}")
         }
@@ -667,6 +668,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         ReturnToHand { target } => format!("Return {} to its owner's hand",target_description(target)),
         DealDamage { amount, target } => format!("Deal {amount} damage to {}",target_description(target)),
         CounterSpell { target } => format!("Counter {}",target_description(target)),
+        CounterAbility { target } => format!("Counter {}",target_description(target)),
         DrawCards { count } => format!("Draw {} cards", value_description(count)),
         LoseLife { player, amount } => format!("{} loses {} life",player_description(player),value_description(amount)),
         MassDamage { amount } => format!("Deal {amount} damage to each creature"),

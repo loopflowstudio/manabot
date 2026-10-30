@@ -658,6 +658,11 @@ pub enum Effect {
     CounterSpell {
         target: TargetSpec,
     },
+    /// "Counter target activated or triggered ability" (CR 701.6b): the
+    /// ability leaves the stack and does nothing; spells are not affected.
+    CounterAbility {
+        target: TargetSpec,
+    },
     /// Resolving player draws `count` cards, read at resolution. No target.
     DrawCards {
         count: EffectValue,
@@ -1054,6 +1059,8 @@ pub enum TargetSpec {
     Spell,
     /// "target spell or ability with a single target".
     SpellOrAbilityWithSingleTarget,
+    /// "target activated or triggered ability" on the stack.
+    Ability,
     /// "target spell or permanent with mana value `min_mana_value` or
     /// greater" (Divide by Zero).
     SpellOrPermanent {
@@ -1266,7 +1273,7 @@ impl Effect {
             Effect::Discard => None,
             Effect::ReturnToHand { target } => Some(target),
             Effect::DealDamage { target, .. } => Some(target),
-            Effect::CounterSpell { target } => Some(target),
+            Effect::CounterSpell { target } | Effect::CounterAbility { target } => Some(target),
             Effect::PutCounters { target, .. } | Effect::PutSourceCountersOnTarget { target } => {
                 Some(target)
             }

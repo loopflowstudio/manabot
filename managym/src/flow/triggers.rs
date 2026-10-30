@@ -603,6 +603,14 @@ impl Game {
                     object => Target::StackAbility(object.id()),
                 })
                 .collect(),
+            TargetSpec::Ability => self
+                .state
+                .stack_objects
+                .iter()
+                .rev()
+                .filter(|object| !matches!(object, StackObject::Spell(_)))
+                .map(|object| Target::StackAbility(object.id()))
+                .collect(),
             _ => Vec::new(),
         };
         // Preserve offer order: players or newest spells first, then permanents

@@ -1249,6 +1249,12 @@ impl Game {
                 }
                 None
             }
+            Effect::CounterAbility { .. } => {
+                if let Target::StackAbility(ability) = self.present_primary_target(frame)? {
+                    self.counter_ability(ability, frame.source);
+                }
+                None
+            }
             Effect::CreateNonlegendaryCopy => {
                 let source = frame.source?;
                 let original = &self.state.cards[source];
@@ -2104,10 +2110,14 @@ impl Game {
                     }
             }
             Target::StackAbility(id) => {
-                *spec == TargetSpec::SpellOrAbilityWithSingleTarget
-                    && self
-                        .find_ability_on_stack_index(id)
-                        .is_some_and(|index| self.state.stack_objects[index].targets().len() == 1)
+                self.find_ability_on_stack_index(id)
+                    .is_some_and(|index| match spec {
+                        TargetSpec::Ability => true,
+                        TargetSpec::SpellOrAbilityWithSingleTarget => {
+                            self.state.stack_objects[index].targets().len() == 1
+                        }
+                        _ => false,
+                    })
             }
             Target::GraveyardCard(object) => match spec {
                 TargetSpec::GraveyardCardYouOwn { predicate } => {

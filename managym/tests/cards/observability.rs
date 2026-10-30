@@ -546,6 +546,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::PutCountersOnCreatedToken { .. } => "Effect::PutCountersOnCreatedToken",
         Effect::CopyTriggeringObject => "Effect::CopyTriggeringObject",
         Effect::ChangeTarget { .. } => "Effect::ChangeTarget",
+        Effect::CounterAbility { .. } => "Effect::CounterAbility",
         Effect::ExileWithSource { .. } => "Effect::ExileWithSource",
         Effect::CastExiledWithSource { .. } => "Effect::CastExiledWithSource",
         Effect::GainLifeValue { .. } => "Effect::GainLifeValue",
@@ -559,7 +560,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 106;
+const EFFECT_VARIANTS: usize = 107;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -870,6 +871,9 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::ChangeTarget {
             target: TargetSpec::SpellOrAbilityWithSingleTarget,
+        },
+        Effect::CounterAbility {
+            target: TargetSpec::Ability,
         },
         Effect::GainLifeValue {
             amount: EffectValue::ExcessDamage,
