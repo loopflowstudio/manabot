@@ -277,9 +277,11 @@ def identity_removed(case: DecisionCase) -> dict[str, torch.Tensor]:
     if case.family in columns:
         obs["actions"][..., columns[case.family]] = 0
     elif case.family == "target":
-        obs["opponent_permanents"][
-            ..., observation_schema.PERMANENT_DEFINITION_INDEX
-        ] = 0
+        permanents = obs["opponent_permanents"]
+        permanents[..., observation_schema.PERMANENT_DEFINITION_INDEX] = 0
+        # Policy input v5 also orders permanents by timestamp (CR 613.7).
+        if permanents.shape[-1] == observation_schema.PERMANENT_DIM:
+            permanents[..., observation_schema.PERMANENT_TIMESTAMP_INDEX] = 0
     else:
         obs["semantic_cards"].zero_()
     return obs
