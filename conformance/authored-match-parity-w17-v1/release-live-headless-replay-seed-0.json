@@ -32,11 +32,11 @@
         },
         {
           "path": "academy/server.py",
-          "sha256": "79cf98c11377468b401d21c29d72ab4c6af89c7fe881882e8f2774b1353870f3"
+          "sha256": "c54a443fe737e0e57c7ed4a6ff563ee437fcde79ed67ebe13117f32660eb76b8"
         },
         {
           "path": "academy/trace.py",
-          "sha256": "6ba04f9b1fed2736929ad9f0aaf4c6906029ea1c5e52f38e0d8a9b31878c3671"
+          "sha256": "1101807a0d9749f59cf24b4bfcb43a6b8731418cffe3fb52cf13446115ca1eb7"
         },
         {
           "path": "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
@@ -160,7 +160,7 @@
         },
         {
           "path": "managym/src/cards/decklist.rs",
-          "sha256": "ede4e9cb2175f558a44f846bba1b881d76f002dbf08d4419a18d346af4a00393"
+          "sha256": "b02aeb9868d049dfdfe482f475d086c17316e571798cb069428f732e01e84d78"
         },
         {
           "path": "managym/src/cards/fixtures.rs",
@@ -476,7 +476,7 @@
         },
         {
           "path": "managym/src/python/deck_bindings.rs",
-          "sha256": "2d0e2d2bbb821a9829ef608afb87e74aed4d4397f15adcdf12349be6986be037"
+          "sha256": "810c632ea21fb476a7874715322c4fc29cdf08ce9b62964e3cd0ef42fcf40da5"
         },
         {
           "path": "managym/src/python/mod.rs",
@@ -563,7 +563,7 @@
           "sha256": "23ac765196d97fb350c0e3e2337bacc5d8e42bd6c47edb7999fb0907d32bfa8d"
         }
       ],
-      "sha256": "de069c63dabe72ef4ba4a8faf8e55b02f3e82c4f56cd9c16896f71bd39d8cc4d"
+      "sha256": "ff3d31951bfd4d93a8ba7bfa9e8844261704ff71e37269a5c85f0aa677d78f3b"
     },
     "seed": 0
   },

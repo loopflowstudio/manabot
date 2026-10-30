@@ -19,8 +19,8 @@ use crate::{
     cards::{
         deck_admission::{admit_deck as native_admit_deck, DeckIssue, DEVELOPMENT_RULESET},
         decklist::{
-            admit_decklists as native_admit_decklists, import_match as native_import_match,
-            parse_decklist, read_decklist, DeckEntry, DeckImport, Decklist, DecklistError,
+            admit_decklists as native_admit_decklists, parse_decklist, read_decklist, DeckEntry,
+            DeckImport, Decklist, DecklistError,
         },
     },
     state::deck::Deck,
@@ -316,17 +316,6 @@ fn admit_decklists(
     native_admit_decklists(&decklists, pack_key).map_err(|e| decklist_error(py, e))
 }
 
-/// Admit a match's `(hero, villain)` decklists, rejecting both together.
-#[pyfunction]
-fn import_match(
-    py: Python<'_>,
-    hero: Decklist,
-    villain: Decklist,
-    pack_key: &str,
-) -> PyResult<(DeckImport, DeckImport)> {
-    native_import_match(&hero, &villain, pack_key).map_err(|e| decklist_error(py, e))
-}
-
 pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("DeckImportError", py.get_type_bound::<DeckImportError>())?;
     m.add(
@@ -341,6 +330,5 @@ pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("DEVELOPMENT_RULESET", DEVELOPMENT_RULESET)?;
     m.add_function(wrap_pyfunction!(admit_deck, m)?)?;
     m.add_function(wrap_pyfunction!(admit_decklists, m)?)?;
-    m.add_function(wrap_pyfunction!(import_match, m)?)?;
     Ok(())
 }

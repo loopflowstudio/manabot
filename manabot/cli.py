@@ -212,9 +212,11 @@ def sim_command(
     try:
         sim_config, runtime_config = load_sim_config(preset, set_values)
         if hero_deck_file is not None and villain_deck_file is not None:
-            hero, villain = managym.import_match(
-                managym.Decklist.read(hero_deck_file),
-                managym.Decklist.read(villain_deck_file),
+            hero, villain = managym.admit_decklists(
+                [
+                    ("hero", managym.Decklist.read(hero_deck_file)),
+                    ("villain", managym.Decklist.read(villain_deck_file)),
+                ],
                 content_pool,
             )
             config = sim_config.model_dump()

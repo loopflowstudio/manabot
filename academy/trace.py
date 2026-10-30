@@ -78,7 +78,14 @@ class GameConfig:
                 raise ValueError("Recorded sideboard requires positive integer counts")
         if self.hero_source is not None or self.villain_source is not None:
             # Imported: re-admit each retained source against the installed world.
-            seats = (
+            if (
+                self.content_pack is None
+                or self.hero_source is None
+                or self.villain_source is None
+            ):
+                raise ValueError("Imported trace requires both sources and its pool")
+            configs = []
+            for name, source, deck, sideboard in (
                 ("Hero", self.hero_source, self.hero_deck, self.hero_sideboard),
                 (
                     "Villain",
@@ -86,17 +93,14 @@ class GameConfig:
                     self.villain_deck,
                     self.villain_sideboard,
                 ),
-            )
-            if self.content_pack is None or any(seat[1] is None for seat in seats):
-                raise ValueError("Imported trace requires both sources and its pool")
-            for _, source, deck, sideboard in seats:
+            ):
                 managym.Decklist.from_dict(source).validate_deck(
                     self.content_pack, managym.Deck(deck, sideboard)
                 )
-            return [
-                managym.PlayerConfig(name, deck, sideboard, self.content_pack)
-                for name, _, deck, sideboard in seats
-            ]
+                configs.append(
+                    managym.PlayerConfig(name, deck, sideboard, self.content_pack)
+                )
+            return configs
         pack = curated_pack_for_matchup(self.hero_deck_name, self.villain_deck_name)
         configs: list[managym.PlayerConfig] = []
         if pack is not None:

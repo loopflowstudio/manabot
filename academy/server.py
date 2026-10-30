@@ -727,11 +727,16 @@ def _parse_game_config(config: Any) -> GameConfig:
                 f"villain_sims must be between 1 and {villain_module.MAX_SEARCH_SIMS}."
             )
 
-    imported: tuple[str, managym.DeckImport, managym.DeckImport] | None = None
+    # Private import provenance (see `GameConfig.hero_source`); empty for named decks.
+    provenance: dict[str, Any] = {}
     if "deck_import" in data:
         deck_import = DeckImportInput.model_validate(data["deck_import"])
         hero_import, villain_import = deck_import.admit()
-        imported = (deck_import.pack_key, hero_import, villain_import)
+        provenance = {
+            "content_pack": deck_import.pack_key,
+            "hero_source": hero_import.decklist.to_dict(),
+            "villain_source": villain_import.decklist.to_dict(),
+        }
         hero_deck, villain_deck = hero_import.deck.main, villain_import.deck.main
         hero_deck_name = villain_deck_name = "imported"
         selected_pack = None
@@ -802,15 +807,7 @@ def _parse_game_config(config: Any) -> GameConfig:
         villain_deterministic = opponent.deterministic
 
     return GameConfig(
-        **(
-            {}
-            if imported is None
-            else {
-                "content_pack": imported[0],
-                "hero_source": imported[1].decklist.to_dict(),
-                "villain_source": imported[2].decklist.to_dict(),
-            }
-        ),
+        **provenance,
         hero_deck=hero_deck,
         villain_deck=villain_deck,
         hero_sideboard=sideboards["hero"],

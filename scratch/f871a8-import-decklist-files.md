@@ -44,8 +44,8 @@ set-file definition) merged 2026-10-30; synced at cd86469b1.
 `cards::deck_admission` (`admit_deck(pack, &Deck)`, `DeckIssue.line`,
 crate-private `admit_in_pool`; the world's rules are `DEVELOPMENT_RULESET`, no
 caller ruleset); `cards::decklist` (`Decklist`, `parse_decklist`, `read_decklist`,
-`DeckImport {decklist, deck}`, `admit_decklists`, `import_match -> (hero,
-villain)`, `Decklist::validate_deck`); `python/deck_bindings.rs` (frozen
+`DeckImport {decklist, deck}`, `admit_decklists` (labelled; a match labels
+`hero`/`villain`), `Decklist::validate_deck`); `python/deck_bindings.rs` (frozen
 `manabot.managym` classes, `to_dict`/`from_dict`, pickle/copy, Pydantic core
 schema; `DeckImportError.decklists`; `DEVELOPMENT_RULESET`).
 Each deck is stored once: `MatchConfig` holds the decks plus private
@@ -65,11 +65,13 @@ write`) after any further source edit, including formatting.
 Check (2026-10-30, concept-review corrections): debug `cargo test --no-fail-fast`
 all pass; decklist/training-deck/Academy-decklist (incl. new rematch test)/
 checkpoint-catalog/advice/match/matchups/mirror/boundaries/parity 86 passed;
-UI vitest `game.svelte.test.ts` 16 passed, svelte-check 0 errors.
+UI vitest `game.svelte.test.ts` 16 passed, svelte-check 0 errors. Compress
+(drop `import_match`): lib decklist tests, clippy, decklist/Academy/training-deck/
+match/advice/matchups/mirror/boundaries 81 passed; parity receipt rewritten, verifies.
 
 ## Delete — do not maintain
 
-Done: `ImportedMatch` (`setup_id`, `swapped`, `validate_current`,
+Done: `import_match` (Rust and Python; callers use `admit_decklists`), `ImportedMatch` (`setup_id`, `swapped`, `validate_current`,
 `validate_setup`), `PoolIdentity`, the caller `ruleset` parameter (Rust, Python,
 Academy `DeckImportInput`, UI payload), `GameConfig.imported_decks`, tracked
 `.DS_Store`; earlier `manabot/decklist.py` and its Python parser tests,

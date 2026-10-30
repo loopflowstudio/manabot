@@ -10,8 +10,8 @@
 //! re-admitted against the installed world when its record loads
 //! ([`Decklist::validate_deck`]).
 //!
-//! Entry points: [`parse_decklist`], [`read_decklist`], [`admit_decklists`],
-//! [`import_match`] and [`Decklist::validate_deck`].
+//! Entry points: [`parse_decklist`], [`read_decklist`], [`admit_decklists`]
+//! and [`Decklist::validate_deck`].
 
 use std::{collections::BTreeMap, io::Read, path::Path};
 
@@ -392,24 +392,6 @@ pub fn admit_decklists(
     }
 }
 
-/// Admit one match's two decklists, labelled `hero` and `villain`.
-pub fn import_match(
-    hero: &Decklist,
-    villain: &Decklist,
-    pack_key: &str,
-) -> Result<(DeckImport, DeckImport), DecklistError> {
-    let mut imports = admit_decklists(
-        &[
-            ("hero".into(), hero.clone()),
-            ("villain".into(), villain.clone()),
-        ],
-        pack_key,
-    )?;
-    let villain = imports.pop().expect("two admitted decklists");
-    let hero = imports.pop().expect("two admitted decklists");
-    Ok((hero, villain))
-}
-
 impl Decklist {
     /// Re-import this retained source against the installed world; it must
     /// admit to exactly `deck`, so a tampered source or deck, or a world that
@@ -437,6 +419,16 @@ mod tests {
 
     fn admit(decklist: &Decklist, pool: &ContentPool) -> Result<DeckImport, Decklist> {
         admit_with_pool(decklist, pool, &pool_content(PACK).unwrap())
+    }
+
+    fn import_match(hero: &str, villain: &str) -> Result<Vec<DeckImport>, DecklistError> {
+        admit_decklists(
+            &[
+                ("hero".into(), parse_decklist(hero, "hero.txt")),
+                ("villain".into(), parse_decklist(villain, "villain.txt")),
+            ],
+            PACK,
+        )
     }
 
     fn lines(decklist: &Decklist) -> Vec<(Option<usize>, &str)> {
@@ -569,12 +561,7 @@ mod tests {
             "1 Forest\nSideboard\n0 Island",
             "1001 Forest",
         ] {
-            let error = import_match(
-                &parse_decklist(source, "hero.txt"),
-                &parse_decklist(VILLAIN, "villain.txt"),
-                PACK,
-            )
-            .unwrap_err();
+            let error = import_match(source, VILLAIN).unwrap_err();
             let DecklistError::Rejected(rejected) = &error else {
                 panic!("{error}");
             };
@@ -585,25 +572,17 @@ mod tests {
 
     #[test]
     fn retained_sources_reject_tampering_and_ignore_presentation() {
-        let (hero, _) = import_match(
-            &parse_decklist(&HERO.replace('\n', "\r\n"), "hero.txt"),
-            &parse_decklist(VILLAIN, "villain.txt"),
-            PACK,
-        )
-        .unwrap();
+        let hero = import_match(&HERO.replace('\n', "\r\n"), VILLAIN).unwrap()[0].clone();
         hero.decklist.validate_deck(PACK, &hero.deck).unwrap();
         let restored: DeckImport =
             serde_json::from_str(&serde_json::to_string(&hero).unwrap()).unwrap();
         assert_eq!(restored, hero);
-        let (reformatted, _) = import_match(
-            &parse_decklist(
-                "10 mountain\n5 Forest\n5 forest\n2 Avatar Enthusiasts\nSideboard\n1 Island",
-                "other.txt",
-            ),
-            &parse_decklist(VILLAIN, "villain.txt"),
-            PACK,
+        let reformatted = import_match(
+            "10 mountain\n5 Forest\n5 forest\n2 Avatar Enthusiasts\nSideboard\n1 Island",
+            VILLAIN,
         )
-        .unwrap();
+        .unwrap()[0]
+            .clone();
         assert_eq!(reformatted.deck, hero.deck);
         reformatted
             .decklist

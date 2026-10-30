@@ -23,6 +23,8 @@ class DeckImportInput(BaseModel):
     def admit(self) -> tuple[managym.DeckImport, managym.DeckImport]:
         """The admitted `(hero, villain)` imports. Raises `managym.DeckImportError`
         with each failing seat's diagnosed decklist."""
-        return managym.import_match(
-            self.hero.decklist(), self.villain.decklist(), self.pack_key
+        hero, villain = managym.admit_decklists(
+            [("hero", self.hero.decklist()), ("villain", self.villain.decklist())],
+            self.pack_key,
         )
+        return hero, villain

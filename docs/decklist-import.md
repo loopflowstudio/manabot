@@ -64,8 +64,12 @@ configuration is:
 import managym
 from manabot.infra.config import MatchConfig
 
-hero, villain = managym.import_match(
-    managym.Decklist.read("hero.txt"), managym.Decklist.read("villain.txt"), "world"
+hero, villain = managym.admit_decklists(
+    [
+        ("hero", managym.Decklist.read("hero.txt")),
+        ("villain", managym.Decklist.read("villain.txt")),
+    ],
+    "world",
 )
 match = MatchConfig.from_import("world", hero, villain)
 ```

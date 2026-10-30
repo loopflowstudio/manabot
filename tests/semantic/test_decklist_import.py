@@ -34,13 +34,20 @@ HERO = "# Novel development deck\nMain\n10 Forest\n10 Mountain\n2 Avatar Enthusi
 VILLAIN = "20 Island\n"
 
 
+def _import_match(hero: Decklist, villain: Decklist) -> tuple[DeckImport, DeckImport]:
+    first, second = managym.admit_decklists(
+        [("hero", hero), ("villain", villain)], PACK
+    )
+    return first, second
+
+
 def _import_files(hero: Path, villain: Path) -> tuple[DeckImport, DeckImport]:
-    return managym.import_match(Decklist.read(hero), Decklist.read(villain), PACK)
+    return _import_match(Decklist.read(hero), Decklist.read(villain))
 
 
 def _imported_match() -> MatchConfig:
     return MatchConfig.from_import(
-        PACK, *managym.import_match(Decklist(HERO), Decklist(VILLAIN), PACK)
+        PACK, *_import_match(Decklist(HERO), Decklist(VILLAIN))
     )
 
 
@@ -81,7 +88,7 @@ def test_decklist_novel_setup_resolves_same_identity_from_files(tmp_path: Path) 
 def test_decklist_errors_carry_each_failing_seat_with_line_issues() -> None:
     source = "10 Forest\n1 Definitely Not A Card\nSideboard\n1 Accumulate Wisdom\n"
     with pytest.raises(DeckImportError) as caught:
-        managym.import_match(Decklist(source), Decklist(VILLAIN), PACK)
+        _import_match(Decklist(source), Decklist(VILLAIN))
     assert list(caught.value.decklists) == ["hero"]
     decklist = caught.value.decklists["hero"]
     assert decklist.source == source

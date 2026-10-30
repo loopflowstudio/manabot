@@ -358,10 +358,9 @@ def admit_decklists(
 ) -> list[DeckImport]:
     """Admit every decklist or raise ``DeckImportError`` keyed by label."""
 
-def import_match(
-    hero: Decklist, villain: Decklist, pack_key: str
-) -> tuple[DeckImport, DeckImport]:
-    """Admit a match's ``(hero, villain)`` decklists or raise ``DeckImportError``."""
+def admit_deck(pack_key: str, deck: Deck) -> list[DeckIssue]:
+    """Construction and eligibility issues for one deck; empty when admitted."""
+
 def authored_deck_setup(pack_key: str, deck_key: str) -> PlayerConfig: ...
 
 class ZoneEnum(IntEnum):
