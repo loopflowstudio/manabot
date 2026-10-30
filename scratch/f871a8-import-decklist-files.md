@@ -159,7 +159,7 @@ validate response (`world_version`, `card_digest`). `content_pool` stays for
 authored packs' vocabulary (`policy_catalog`, `authored_match_receipt`).
 Check: debug lib world/pool 4 passed, clippy/fmt clean; world/catalog/
 policy-catalog/training-decks/decklist/Academy-decklist 48 passed; parity
-receipt rewritten, verifies.
+receipt rewritten, verifies; decklist-import 8 passed after 69e245a31.
 
 ## Open for Jack Heart's review (not decided)
 
@@ -186,7 +186,7 @@ reads them; admission never does. Removing them changes vocabulary binding.
 
 ## Remaining
 
-- CI on PR #395 (head 5e7f0cacc) was pending at reconciliation; gate owns the
+- PR #395 head is 69e245a31 (world_identity done); gate owns CI and the
   affected-area suites (`docs/development/validation.md`) before publish.
 - Deferred by decision: curriculum, mirrors, 17Lands source, random deck
   generation (a second source would bring a Python per-stream queue), Academy 1a.
