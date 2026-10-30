@@ -133,16 +133,15 @@ before T4's own gate.
 
 ## Remaining
 
-- 27 of 75 cards (48 defined): Destined Confrontation; Teo, Spirited Glider;
-  Ty Lee, Chi Blocker; Boiling Rock Rioter; Buzzard-Wasp Colony; Fatal
-  Fissure; The Fire Nation Drill; Fire Navy Trebuchet; Raven Eagle; Ruinous
-  Waterbending; Wolfbat; Combustion Man; Firebender Ascension; Jeong Jeong,
-  the Deserter; Jet's Brainwashing; Price of Freedom; Redirect Lightning;
-  Zhao, the Moon Slayer; Avatar Destiny; Bumi, King of Three Trials; Earth
-  Rumble; Iroh, Tea Master; Katara, the Fearless; Sandbender Scavengers;
-  Sokka, Tenacious Tactician; Toph, Hardheaded Teacher; Zuko, Conflicted.
-  Mechanics each needs: slice 6 "Left" above. New turn facts go in
-  `PlayerTurnHistory`; no half-defined cards.
+- 10 of 75 cards (65 defined): Boiling Rock Rioter; Firebender Ascension;
+  Jeong Jeong, the Deserter; Jet's Brainwashing; Redirect Lightning; Zhao, the
+  Moon Slayer; Avatar Destiny; Bumi, King of Three Trials; Iroh, Tea Master;
+  Zuko, Conflicted. Slice 7 (2026-10-30) defined the other 17 in four
+  commits (`fc3e5ae74`..`5d870e814`): granted triggers and extra occurrences,
+  graveyard triggers and finality, general delayed triggers
+  (`Effect::CreateDelayedTrigger`; earthbend's return is one), `ForPlayer`,
+  keep-creatures, while-you-control durations, keyword loss, "this way"
+  discards, source-power-bounded targets.
 - Gate: Python suites bound to the w17 content digest (`authored-match-w17-v1`,
   `authored-match-parity-w17-v1`, `public-commitment-parity-w17-v1`, choice
   navigation, decision surface, learn evidence/setup, trigger order, belief
@@ -167,3 +166,7 @@ Nation Cadets and Tolls of War. "If you do" stays the optional-payment shape.
 T3-sync details: `scratch/questions.md` (T4 and T3-sync sections).
 
 Check (2026-10-30, `2f73cd16f`): debug `cargo test --no-fail-fast` all targets, 820 passed, 0 failed; clippy `-D warnings` and fmt clean; `semantic-kernel-w17-v1` re-recorded at `888f5d359` (14 cases / 3396 commands), Scryfall fixture refreshed for the 16 new cards. Other w17 digest-bound Python evidence stays for gate.
+
+Approval (Jack Heart, 2026-10-30): T4 approved in full — all 75 cards with the
+review decisions above — publish and ship without another review. When the
+running Graph stops (e.g. at `demo`), the operator runs `lf ship 488a40`.
