@@ -68,8 +68,9 @@ use managym::{
         card::{
             ActivatedAbilityDefinition, AdditionalCost, BlockRestriction, CardDefinition, CardType,
             CounterThreshold, Keywords, PowerCda, Restriction, SacrificeCost, SetCharacteristics,
-            SpellCostReduction, StaticAbility, StaticKeywordGrant, StaticPtBuff, StaticRestriction,
-            StaticScope, StaticTriggeredGrant, StaticTypeGrant, TargetCostReduction,
+            SpellCostReduction, StaticAbility, StaticKeywordGrant, StaticLandType, StaticPtBuff,
+            StaticRestriction, StaticScope, StaticTriggeredGrant, StaticTypeGrant,
+            TargetCostReduction,
         },
         mana::{Mana, ManaCost},
         permanent::Permanent,
@@ -537,7 +538,8 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ForPlayer { .. } => "Effect::ForPlayer",
         Effect::RestoreController(_) => "Effect::RestoreController",
         Effect::EachPlayerKeepsCreatures { .. } => "Effect::EachPlayerKeepsCreatures",
-        Effect::ExileSourceFromGraveyard { .. } => "Effect::ExileSourceFromGraveyard",
+        Effect::MoveSourceFromGraveyard { .. } => "Effect::MoveSourceFromGraveyard",
+        Effect::ReturnMilledThisWay { .. } => "Effect::ReturnMilledThisWay",
         Effect::MayDiscard { .. } => "Effect::MayDiscard",
         Effect::ExileSourceAndReturn { .. } => "Effect::ExileSourceAndReturn",
         Effect::GainControl { .. } => "Effect::GainControl",
@@ -555,7 +557,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 103;
+const EFFECT_VARIANTS: usize = 104;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -834,8 +836,12 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::RestoreController(PlayerId(0)),
         Effect::EachPlayerKeepsCreatures { max_total_power: 4 },
-        Effect::ExileSourceFromGraveyard {
+        Effect::MoveSourceFromGraveyard {
+            to: ZoneType::Exile,
             then: vec![Effect::Discard],
+        },
+        Effect::ReturnMilledThisWay {
+            predicate: CardPredicate::creature(),
         },
         Effect::MayDiscard {
             then: vec![Effect::Discard],
@@ -1287,6 +1293,20 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "katara_the_fearless_makes_ally_triggers_trigger_an_additional_time",
         ),
+        StaticAbility::EntersTapped(_) => witnessed(
+            "StaticAbility::EntersTapped",
+            Seen::Via("the entering permanent's tapped column"),
+            "Zhao, the Moon Slayer",
+            "tla",
+            "zhao_taps_nonbasic_lands_and_makes_them_mountains_once_he_conquers",
+        ),
+        StaticAbility::SetsLandType(_) => witnessed(
+            "StaticAbility::SetsLandType",
+            Seen::Via("the land's abilities-lost column and added-subtype fact row"),
+            "Zhao, the Moon Slayer",
+            "tla",
+            "zhao_taps_nonbasic_lands_and_makes_them_mountains_once_he_conquers",
+        ),
         StaticAbility::TriggeredGrant(_) => witnessed(
             "StaticAbility::TriggeredGrant",
             Seen::Via("the granted ability's stack rows and their effects"),
@@ -1375,6 +1395,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
             toughness: 0,
             per_creature_type_max: None,
             per_color_among: None,
+            per_graveyard_matching: None,
         }),
         StaticAbility::CharacteristicPower(PowerCda::CreaturesYouControl),
         StaticAbility::Ward(PaymentCost::Waterbend { generic: 4 }),
@@ -1411,9 +1432,19 @@ fn static_witnesses() -> Vec<StaticAbility> {
         StaticAbility::TypeGrant(StaticTypeGrant {
             scope: StaticScope::This,
             types: vec![CardType::Land],
+            subtypes: Vec::new(),
         }),
         StaticAbility::AttacksDespiteDefender(Condition::YourTurn),
         StaticAbility::TriggersAdditionalTime(CardPredicate::subtype("Ally")),
+        StaticAbility::EntersTapped(CardPredicate::creature()),
+        StaticAbility::SetsLandType(StaticLandType {
+            predicate: CardPredicate::creature(),
+            subtype: "Mountain".into(),
+            while_counters: CounterThreshold {
+                kind: CounterKind::Conqueror,
+                count: 1,
+            },
+        }),
         StaticAbility::TriggeredGrant(StaticTriggeredGrant {
             scope: StaticScope::This,
             ability: Box::new(Ability::Triggered {

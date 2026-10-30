@@ -10,7 +10,7 @@ use crate::{
         trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
-        card::Restriction,
+        card::{Restriction, StaticAbility},
         game_object::{CardId, Incarnation, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
         permanent::CounterKind,
         permanent::Permanent,
@@ -572,7 +572,11 @@ impl Game {
         let card_def = &self.state.cards[card];
         if (old_zone == Some(ZoneType::Battlefield) || to_zone == ZoneType::Battlefield)
             && (card_def.attached_characteristics().is_some()
-                || card_def.attached_grants().next().is_some())
+                || card_def.attached_grants().next().is_some()
+                || card_def
+                    .statics
+                    .iter()
+                    .any(|ability| matches!(ability, StaticAbility::SetsLandType(_))))
         {
             self.invalidate_mana_cache(PlayerId(0));
             self.invalidate_mana_cache(PlayerId(1));

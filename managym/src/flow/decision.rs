@@ -233,6 +233,10 @@ pub enum Decision {
         player: PlayerId,
         cards: Vec<CardId>,
         if_declined: Vec<Effect>,
+        /// The chosen card goes to the battlefield under `player`'s control
+        /// rather than to their hand.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        to_battlefield: bool,
     },
     /// Candidates come from the current library, not stored or pinned cards.
     SearchBasicLand {
@@ -1646,10 +1650,27 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::SelectMilled { player, cards, .. }, Action::SelectCard { card, .. })
-                if cards.contains(card) =>
-            {
-                self.reveal_card_to_hand(*card, *player);
+            (
+                Decision::SelectMilled {
+                    player,
+                    cards,
+                    to_battlefield,
+                    ..
+                },
+                Action::SelectCard { card, .. },
+            ) if cards.contains(card) => {
+                if *to_battlefield {
+                    self.move_card_with_entry(
+                        *card,
+                        ZoneType::Battlefield,
+                        crate::flow::proposed_event::ZoneEntry {
+                            controller: Some(*player),
+                            ..Default::default()
+                        },
+                    );
+                } else {
+                    self.reveal_card_to_hand(*card, *player);
+                }
                 self.run_frame(suspended.frame);
                 Ok(())
             }

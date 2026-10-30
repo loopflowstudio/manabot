@@ -255,6 +255,10 @@ pub struct StaticPtBuff {
     /// (Earthen Ally): the bonus is multiplied by that color count.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub per_color_among: Option<CardPredicate>,
+    /// "+P/+T for each [predicate] card in your graveyard" (Avatar
+    /// Destiny): the bonus is multiplied by that count.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub per_graveyard_matching: Option<CardPredicate>,
 }
 
 /// A static type-adding effect (CR 613.1d layer 4): "[scope] are [types] in
@@ -265,6 +269,10 @@ pub struct StaticPtBuff {
 pub struct StaticTypeGrant {
     pub scope: StaticScope,
     pub types: Vec<CardType>,
+    /// Subtypes added with them ("is an Avatar in addition to its other
+    /// types").
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub subtypes: Vec<String>,
 }
 
 /// "Enchanted creature loses all abilities and is a [creature_types] with base
@@ -292,6 +300,15 @@ pub struct StaticKeywordGrant {
     pub scope: StaticScope,
     pub condition: Option<Condition>,
     pub keywords: Keywords,
+}
+
+/// [`StaticAbility::SetsLandType`]: matching lands become `subtype` while
+/// the source has its counters.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct StaticLandType {
+    pub predicate: CardPredicate,
+    pub subtype: String,
+    pub while_counters: CounterThreshold,
 }
 
 /// A static triggered-ability grant (CR 613.1f layer 6): "[scope] have
@@ -598,6 +615,13 @@ pub enum StaticAbility {
     /// "This creature can attack as though it didn't have defender" while
     /// the condition holds for its controller (Platypus-Bear).
     AttacksDespiteDefender(Condition),
+    /// "[predicate] permanents enter tapped" (Zhao, the Moon Slayer's
+    /// nonbasic lands), for every player (CR 614.1c).
+    EntersTapped(CardPredicate),
+    /// "As long as this has [threshold], [predicate] lands are [subtype]"
+    /// (CR 305.7): they lose all other land types and abilities and have
+    /// that basic land type's mana ability.
+    SetsLandType(StaticLandType),
     /// "If a triggered ability of a [predicate] you control triggers, that
     /// ability triggers an additional time" (CR 603.2d). Each such permanent
     /// adds one occurrence.

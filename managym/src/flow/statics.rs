@@ -194,7 +194,10 @@ impl Game {
                     .per_color_among
                     .as_ref()
                     .map_or(1, |predicate| self.colors_among(controller, predicate));
-                let times = per_type * per_color;
+                let per_card = buff.per_graveyard_matching.as_ref().map_or(1, |predicate| {
+                    self.count_graveyard_matching(controller, predicate) as i32
+                });
+                let times = per_type * per_color * per_card;
                 power += buff.power * times;
                 toughness += buff.toughness * times;
             }
@@ -331,6 +334,45 @@ impl Game {
         self.state.cards[card].attached_characteristics()
     }
 
+    /// A static land-type overwrite on a printed land (Zhao, the Moon
+    /// Slayer): the setting permanent's timestamp and the basic land type.
+    /// Matching reads printed characteristics, and the setter's own loss only
+    /// from records, so this never recurses.
+    pub(crate) fn land_type_overwrite(
+        &self,
+        permanent_id: PermanentId,
+    ) -> Option<(ObjectId, &str)> {
+        let permanent = self.state.permanents[permanent_id].as_ref()?;
+        let card = &self.state.cards[permanent.card];
+        if !card.types.is_land() {
+            return None;
+        }
+        [PlayerId(0), PlayerId(1)]
+            .into_iter()
+            .flat_map(|player| self.state.zones.zone_cards(ZoneType::Battlefield, player))
+            .filter_map(|&setter_card| {
+                let setter_id = self.state.card_to_permanent[setter_card]?;
+                let setter = self.state.permanents[setter_id].as_ref()?;
+                self.state.cards[setter_card]
+                    .statics
+                    .iter()
+                    .find_map(|ability| match ability {
+                        StaticAbility::SetsLandType(set)
+                            if setter.counter_count(set.while_counters.kind)
+                                >= set.while_counters.count
+                                && set.predicate.matches_card(card)
+                                && !self.effects_on(setter_id).any(|effect| {
+                                    effect.modification == Modification::LoseAllAbilities
+                                }) =>
+                        {
+                            Some((setter.timestamp, set.subtype.as_str()))
+                        }
+                        _ => None,
+                    })
+            })
+            .max_by_key(|(timestamp, _)| *timestamp)
+    }
+
     /// Whether the permanent has lost all abilities (an effect record, or an
     /// Aura that sets its characteristics). Its printed abilities predate
     /// any loss; `effective_keywords` keeps later grants.
@@ -343,6 +385,25 @@ impl Game {
     pub fn added_subtypes(&self, permanent_id: PermanentId) -> Vec<&str> {
         let aura = self.set_characteristics_timestamp(permanent_id);
         let mut subtypes: Vec<&str> = Vec::new();
+        for (source_id, controller, card) in self.static_sources() {
+            for grant in card
+                .type_grants()
+                .filter(|grant| !grant.subtypes.is_empty())
+            {
+                if self.static_scope_applies(
+                    &grant.scope,
+                    source_id,
+                    controller,
+                    permanent_id,
+                    ScopeView::Types,
+                ) {
+                    subtypes.extend(grant.subtypes.iter().map(String::as_str));
+                }
+            }
+        }
+        if let Some((_, subtype)) = self.land_type_overwrite(permanent_id) {
+            subtypes.push(subtype);
+        }
         for effect in self.effects_on(permanent_id) {
             if let Modification::AddSubtypes(added) = &effect.modification {
                 if effect.follows(aura) {
@@ -851,7 +912,12 @@ impl Game {
         {
             return false;
         }
-        let has_subtype = |name: &str| self.permanent_has_subtype(permanent_id, name);
+        // Layer-4 scopes read printed subtypes, so subtype grants never
+        // recurse.
+        let has_subtype = |name: &str| match view {
+            ScopeView::Types => card.has_subtype(name),
+            _ => self.permanent_has_subtype(permanent_id, name),
+        };
         if predicate
             .subtype
             .as_deref()

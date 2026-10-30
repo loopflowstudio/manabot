@@ -12433,3 +12433,95 @@ fn firebender_ascension_counts_attack_triggers_and_copies_them_at_four() {
         "firebending and its copy"
     );
 }
+
+/// The enchanted creature gets +1/+1 per creature card in your graveyard and
+/// is an Avatar; when it dies, mill its power, return the Aura to hand and a
+/// milled creature card to the battlefield.
+#[test]
+fn avatar_destiny_grows_with_your_graveyard_and_returns_when_its_creature_dies() {
+    let mut s = five_color_setup(&[
+        "Avatar Destiny",
+        "Gray Ogre",
+        "Craw Wurm",
+        "Lightning Strike",
+    ]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    plant_in_graveyard(&mut s, 0, "Gray Ogre");
+    plant_in_graveyard(&mut s, 0, "Craw Wurm");
+    let aura = cast(&mut s, "Avatar Destiny");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(s.game().effective_pt(ogre), (4, 4));
+    assert!(s.game().added_subtypes(ogre).contains(&"Avatar"));
+
+    let milled = pin_top(&mut s, &["Craw Wurm", "Forest", "Forest", "Forest"]);
+    s.game_mut().state.permanents[ogre].as_mut().unwrap().damage = 1;
+    cast(&mut s, "Lightning Strike");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    for card in &milled {
+        assert_eq!(
+            zone_of(&s, *card),
+            Some(ZoneType::Graveyard),
+            "mills its power, 4"
+        );
+    }
+    select_card(&mut s, milled[0]);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, aura), Some(ZoneType::Hand));
+    assert_eq!(zone_of(&s, milled[0]), Some(ZoneType::Battlefield));
+}
+
+/// Nonbasic lands enter tapped; with a conqueror counter they are Mountains
+/// that only tap for {R}.
+#[test]
+fn zhao_taps_nonbasic_lands_and_makes_them_mountains_once_he_conquers() {
+    let mut s = five_color_unfunded_setup(&[
+        "Zhao, the Moon Slayer",
+        "Abandoned Air Temple",
+        "Jet's Brainwashing",
+    ]);
+    let zhao = s.force_permanent_on_battlefield(0, "Zhao, the Moon Slayer");
+    s.force_permanent_on_battlefield(0, "Forest");
+    let temple = enter_battlefield(&mut s, "Abandoned Air Temple");
+    settle(&mut s);
+    assert!(tapped(&s, temple), "a nonbasic land enters tapped");
+    let forest = enter_battlefield(&mut s, "Forest");
+    assert!(!tapped(&s, forest));
+    s.game_mut().state.permanents[temple]
+        .as_mut()
+        .unwrap()
+        .tapped = false;
+    let red = force_new_card_in_hand(&mut s, 0, "Jet's Brainwashing");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_cast(&s, red), "the temple taps for {{W}}");
+
+    s.set_player_mana_pool(0, "7");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    activate(&mut s, zhao, 0);
+    settle(&mut s);
+    assert_eq!(counters_of(&s, zhao, CounterKind::Conqueror), 1);
+    assert!(s.game().has_lost_abilities(temple));
+    assert!(s.game().added_subtypes(temple).contains(&"Mountain"));
+    assert!(can_cast(&s, red), "a Mountain taps for {{R}}");
+    cast_card(&mut s, red);
+    if s.action_space().kind == ActionSpaceKind::PayOrNot {
+        choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    }
+    assert!(s.choose_target(Target::Permanent(zhao)));
+    assert_eq!(
+        s.action_space().actions,
+        vec![Action::ActivateAbility {
+            player: PlayerId(0),
+            permanent: temple,
+            ability_index: 0,
+        }],
+        "only the Mountain's {{T}}: Add {{R}} pays"
+    );
+    s.step_action(0);
+    assert!(tapped(&s, temple), "paid with the Mountain");
+    assert!(
+        !s.game().has_lost_abilities(forest),
+        "basic lands keep theirs"
+    );
+}

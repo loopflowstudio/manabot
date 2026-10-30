@@ -92,6 +92,9 @@ fn condition_description(condition: &TriggerCondition) -> String {
             subject: TriggerSubject::This,
         } => "When this attacks".into(),
         TriggerCondition::Attacks {
+            subject: TriggerSubject::EnchantedCreature,
+        } => "When enchanted creature attacks".into(),
+        TriggerCondition::Attacks {
             subject: TriggerSubject::AnotherYouControl(predicate),
         } => format!(
             "When one or more other {} you control attack",
@@ -172,6 +175,7 @@ fn subject_description(subject: &TriggerSubject) -> String {
             "another {} you control",
             predicate_description(p, "permanent")
         ),
+        TriggerSubject::EnchantedCreature => "enchanted creature".into(),
         TriggerSubject::AnyYouControl(p) => {
             format!("a {} you control", predicate_description(p, "permanent"))
         }
@@ -557,7 +561,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
         ReturnGraveyardTarget { target, to: GraveyardReturn::Hand } => format!("Return {} to your hand",target_description(target)),
         ReturnGraveyardTarget { target, to: GraveyardReturn::Battlefield } => format!("Return {} to the battlefield",target_description(target)),
         ReturnGraveyardTarget { target, to: GraveyardReturn::BattlefieldTapped } => format!("Put {} onto the battlefield tapped",target_description(target)),
-        ExileSourceFromGraveyard { then } => format!("You may exile this card from your graveyard. If you do, {}", effects_description(then)),
+        MoveSourceFromGraveyard { to, then } => format!("Put this card from your graveyard into {to:?}. If you do, {}", effects_description(then)),
+        ReturnMilledThisWay { predicate } => format!("Return up to one {} milled this way to the battlefield under your control", predicate_description(predicate, "card")),
         MillCards { count, target: None } => format!("Mill {} cards", value_description(count)),
         MillCards { count, target: Some(target) } => format!("{} mills {} cards", target_description(target), value_description(count)),
         MillAndSelect { count, predicate, if_declined, if_milled } => {

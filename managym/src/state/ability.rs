@@ -285,6 +285,8 @@ pub enum TriggerSubject {
     AnotherYouControl(CardPredicate),
     /// "this or another [predicate] you control"
     AnyYouControl(CardPredicate),
+    /// "enchanted creature": the object the source Aura is attached to.
+    EnchantedCreature,
 }
 
 /// The players an effect affects, relative to its controller.
@@ -455,10 +457,18 @@ pub enum Effect {
         #[serde(skip_serializing_if = "GraveyardReturn::is_hand")]
         to: GraveyardReturn,
     },
-    /// "You may exile it": the dying source's card, from the graveyard it
-    /// just went to; only if that happened, run `then`.
-    ExileSourceFromGraveyard {
+    /// Move the card a departed source became, from the graveyard it just
+    /// went to, to `to` ("you may exile it", "return this card to its
+    /// owner's hand"); only if that happened, run `then`.
+    MoveSourceFromGraveyard {
+        to: ZoneType,
         then: Vec<Effect>,
+    },
+    /// "Return up to one [predicate] card milled this way to the
+    /// battlefield under your control": a choice among the cards the
+    /// resolution's latest mill moved, still in the graveyard.
+    ReturnMilledThisWay {
+        predicate: CardPredicate,
     },
     MillCards {
         count: EffectValue,
@@ -1134,6 +1144,7 @@ impl Effect {
                 ..
             } => true,
             Effect::Earthbend { count: value, .. }
+            | Effect::MillCards { count: value, .. }
             | Effect::DrawCards { count: value }
             | Effect::GainLifeValue { amount: value }
             | Effect::DealDamageValue { amount: value, .. }
@@ -1269,7 +1280,7 @@ impl Effect {
                 .chain(otherwise.iter())
                 .find_map(|effect| effect.target_spec()),
             Effect::SacrificeSource { then }
-            | Effect::ExileSourceFromGraveyard { then }
+            | Effect::MoveSourceFromGraveyard { then, .. }
             | Effect::MayDiscard { then }
             | Effect::ForPlayer { effects: then, .. }
             | Effect::MaySacrifice { then, .. }
@@ -1301,6 +1312,7 @@ impl Effect {
             | Effect::ExileSourceAndReturn { .. }
             | Effect::PutCountersOnCreatedToken { .. }
             | Effect::CopyTriggeringObject
+            | Effect::ReturnMilledThisWay { .. }
             | Effect::PutTriggeringCountersOnSource
             | Effect::RestoreController(_)
             | Effect::EachPlayerKeepsCreatures { .. }

@@ -1339,6 +1339,9 @@ impl Game {
                             .iter()
                             .any(|attacker| self.permanent_matches_predicate(*attacker, predicate))
                 }
+                TriggerSubject::EnchantedCreature => attackers
+                    .iter()
+                    .any(|attacker| self.is_enchanted_by(*attacker, source_card)),
             },
             (
                 TriggerCondition::AttacksAlone { subject },
@@ -1363,6 +1366,9 @@ impl Game {
                     TriggerSubject::AnyYouControl(predicate) => {
                         *player == source_controller
                             && self.permanent_matches_predicate(*attacker, predicate)
+                    }
+                    TriggerSubject::EnchantedCreature => {
+                        self.is_enchanted_by(*attacker, source_card)
                     }
                 }
             }
@@ -1569,6 +1575,15 @@ impl Game {
                     && source_was_on_battlefield
                     && matches(predicate)
             }
+            // The Aura is still attached to the departed object as the
+            // event is matched (CR 603.10a).
+            TriggerSubject::EnchantedCreature => self.state.card_to_permanent[source_card]
+                .and_then(|aura| self.state.permanents[aura].as_ref())
+                .and_then(|aura| aura.attached_to)
+                .is_some_and(|attached| {
+                    attached.entity.0 == moved_card.0
+                        && self.state.object_lki.contains_key(&attached)
+                }),
         }
     }
 
@@ -1593,7 +1608,15 @@ impl Game {
                 permanent.controller == source_controller
                     && self.permanent_matches_predicate(permanent_id, predicate)
             }
+            TriggerSubject::EnchantedCreature => self.is_enchanted_by(permanent_id, source_card),
         }
+    }
+
+    /// Whether the Aura card `aura` is on the battlefield attached to the
+    /// permanent.
+    fn is_enchanted_by(&self, permanent_id: PermanentId, aura: CardId) -> bool {
+        self.state.card_to_permanent[aura].and_then(|aura| self.attached_permanent(aura))
+            == Some(permanent_id)
     }
 
     fn permanent_is_other(&self, permanent_id: PermanentId, source_card: CardId) -> bool {

@@ -487,6 +487,19 @@ impl Game {
                 }
             }));
         }
+        // A land-type overwrite's mana ability postdates its ability loss.
+        if let Some((_, subtype)) = self.land_type_overwrite(permanent) {
+            if let Some((_, mana)) = BASIC_LAND_TYPES.iter().find(|(name, _)| *name == subtype) {
+                abilities.push(ActivatedAbilityDefinition {
+                    tap_source: true,
+                    effects: vec![Effect::AddMana {
+                        mana: Mana::parse(mana),
+                        until_end_of_combat: false,
+                    }],
+                    ..Default::default()
+                });
+            }
+        }
         for ability in &mut abilities {
             self.price_activation(source.controller, purpose, ability);
         }

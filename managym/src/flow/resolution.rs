@@ -650,7 +650,7 @@ impl Game {
                 }
                 None
             }
-            Effect::ExileSourceFromGraveyard { then } => {
+            Effect::MoveSourceFromGraveyard { to, then } => {
                 let card = frame.source?;
                 let source = frame.source_ref?;
                 // The card the dying object became (CR 400.7): its next
@@ -659,7 +659,14 @@ impl Game {
                 if current.incarnation.0 == source.incarnation.0 + 1
                     && self.state.zones.zone_of(card) == Some(ZoneType::Graveyard)
                 {
-                    self.move_card(card, ZoneType::Exile);
+                    match to {
+                        ZoneType::Hand => {
+                            self.reveal_card_to_hand(card, self.state.cards[card].owner)
+                        }
+                        to => {
+                            self.move_card(card, *to);
+                        }
+                    }
                     frame.prepend_effects(then.iter().cloned());
                 }
                 None
@@ -673,10 +680,28 @@ impl Game {
                     None => frame.controller,
                 };
                 let count = self.effect_value(count, frame).max(0) as usize;
-                for card in self.library_top(player, count) {
+                frame.this_way = self.library_top(player, count);
+                for card in frame.this_way.clone() {
                     self.move_card(card, ZoneType::Graveyard);
                 }
                 None
+            }
+            Effect::ReturnMilledThisWay { predicate } => {
+                let cards: Vec<_> = frame
+                    .this_way
+                    .iter()
+                    .copied()
+                    .filter(|card| {
+                        self.state.zones.zone_of(*card) == Some(ZoneType::Graveyard)
+                            && predicate.matches_card(&self.state.cards[*card])
+                    })
+                    .collect();
+                (!cards.is_empty()).then_some(Decision::SelectMilled {
+                    player: frame.controller,
+                    cards,
+                    if_declined: Vec::new(),
+                    to_battlefield: true,
+                })
             }
             Effect::MillAndSelect {
                 count,
@@ -707,6 +732,7 @@ impl Game {
                         player: frame.controller,
                         cards,
                         if_declined: if_declined.clone(),
+                        to_battlefield: false,
                     })
                 }
             }

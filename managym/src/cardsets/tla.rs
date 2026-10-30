@@ -12,8 +12,9 @@ use crate::state::{
         ActivatedAbilityDefinition, ActivationZone, AdditionalCost, BlockRestriction,
         CardDefinition, CardType, CardTypes, CounterThreshold, Keywords, ManaAbility, PowerCda,
         ReplacementEffect, Restriction, SacrificeCost, SetCharacteristics, SpellCostReduction,
-        StaticAbility, StaticKeywordGrant, StaticPtBuff, StaticRestriction, StaticScope,
-        StaticTriggeredGrant, StaticTypeGrant, TargetCostReduction, TriggeredManaAbility,
+        StaticAbility, StaticKeywordGrant, StaticLandType, StaticPtBuff, StaticRestriction,
+        StaticScope, StaticTriggeredGrant, StaticTypeGrant, TargetCostReduction,
+        TriggeredManaAbility,
     },
     mana::{Color, Mana, ManaCost, ManaUse},
     permanent::CounterKind,
@@ -50,6 +51,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         allies_at_last(),
         appa_loyal_sky_bison(),
         appa_steadfast_guardian(),
+        avatar_destiny(),
         avatar_enthusiasts(),
         avatar_s_wrath(),
         azula_always_lies(),
@@ -287,6 +289,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         yue_the_moon_spirit(),
         yuyan_archers(),
         zhao_ruthless_admiral(),
+        zhao_the_moon_slayer(),
         zuko_conflicted(),
         zuko_exiled_prince(),
         zuko_s_conviction(),
@@ -616,6 +619,7 @@ fn air_nomad_legacy() -> CardDefinition {
             toughness: 1,
             per_creature_type_max: None,
             per_color_among: None,
+            per_graveyard_matching: None,
         })],
         text_box: text_box.into(),
         ..Default::default()
@@ -942,6 +946,60 @@ fn appa_steadfast_guardian() -> CardDefinition {
                 }],
             },
         ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn avatar_destiny() -> CardDefinition {
+    let text_box = "Enchant creature you control\nEnchanted creature gets +1/+1 for each creature card in your graveyard and is an Avatar in addition to its other types.\nWhen enchanted creature dies, mill cards equal to its power. Return this card to its owner's hand and up to one creature card milled this way to the battlefield under your control.";
+
+    CardDefinition {
+        key: "tla.avatar_destiny",
+        scryfall_id: "4d74da72-8443-4fce-9d64-d2041f6a3292",
+        name: "Avatar Destiny".into(),
+        mana_cost: Some(ManaCost::parse("{2}{G}{G}")),
+        types: CardTypes::new([CardType::Enchantment]),
+        subtypes: vec!["Aura".into()],
+        statics: vec![
+            StaticAbility::PtBuff(StaticPtBuff {
+                scope: StaticScope::Attached,
+                condition: None,
+                power: 1,
+                toughness: 1,
+                per_creature_type_max: None,
+                per_color_among: None,
+                per_graveyard_matching: Some(CardPredicate::creature()),
+            }),
+            StaticAbility::TypeGrant(StaticTypeGrant {
+                scope: StaticScope::Attached,
+                types: Vec::new(),
+                subtypes: vec!["Avatar".into()],
+            }),
+        ],
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::Dies {
+                subject: TriggerSubject::EnchantedCreature,
+            },
+            intervening_if: None,
+            effects: vec![
+                Effect::MillCards {
+                    count: EffectValue::TriggeringPower,
+                    target: None,
+                },
+                Effect::MoveSourceFromGraveyard {
+                    to: ZoneType::Hand,
+                    then: vec![],
+                },
+                Effect::ReturnMilledThisWay {
+                    predicate: CardPredicate::creature(),
+                },
+            ],
+        }],
+        spell_effects: vec![Effect::AttachSourceTo {
+            target: TargetSpec::CreatureYouControl,
+        }],
+        targeting: vec![TargetRequirement::one(TargetSpec::CreatureYouControl)],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -2421,6 +2479,7 @@ fn diligent_zookeeper() -> CardDefinition {
             toughness: 1,
             per_creature_type_max: Some(10),
             per_color_among: None,
+            per_graveyard_matching: None,
         })],
         text_box: text_box.into(),
         ..Default::default()
@@ -2745,6 +2804,7 @@ fn earth_rumble_wrestlers() -> CardDefinition {
                 toughness: 0,
                 per_creature_type_max: None,
                 per_color_among: None,
+                per_graveyard_matching: None,
             }),
             StaticAbility::KeywordGrant(StaticKeywordGrant {
                 scope: StaticScope::This,
@@ -2911,6 +2971,7 @@ fn earthen_ally() -> CardDefinition {
                 subtype: Some("Ally".into()),
                 ..Default::default()
             }),
+            per_graveyard_matching: None,
         })],
         text_box: text_box.into(),
         ..Default::default()
@@ -3599,6 +3660,7 @@ fn first_time_flyer() -> CardDefinition {
             toughness: 1,
             per_creature_type_max: None,
             per_color_among: None,
+            per_graveyard_matching: None,
         })],
         text_box: text_box.into(),
         ..Default::default()
@@ -4012,6 +4074,7 @@ fn glider_staff() -> CardDefinition {
                 toughness: 1,
                 per_creature_type_max: None,
                 per_color_among: None,
+                per_graveyard_matching: None,
             }),
             StaticAbility::KeywordGrant(StaticKeywordGrant {
                 scope: StaticScope::Attached,
@@ -5303,6 +5366,7 @@ fn kyoshi_battle_fan() -> CardDefinition {
             toughness: 0,
             per_creature_type_max: None,
             per_color_among: None,
+            per_graveyard_matching: None,
         })],
         text_box: text_box.into(),
         ..Default::default()
@@ -5827,6 +5891,7 @@ fn messenger_hawk() -> CardDefinition {
             toughness: 0,
             per_creature_type_max: None,
             per_color_among: None,
+            per_graveyard_matching: None,
         })],
         text_box: text_box.into(),
         ..Default::default()
@@ -5869,6 +5934,7 @@ fn meteor_sword() -> CardDefinition {
             toughness: 3,
             per_creature_type_max: None,
             per_color_among: None,
+            per_graveyard_matching: None,
         })],
         text_box: text_box.into(),
         ..Default::default()
@@ -7398,7 +7464,8 @@ fn sandbender_scavengers() -> CardDefinition {
                 intervening_if: None,
                 effects: vec![Effect::OptionalPayment {
                     cost: PaymentCost::Mana(ManaCost::default()),
-                    if_paid: vec![Effect::ExileSourceFromGraveyard {
+                    if_paid: vec![Effect::MoveSourceFromGraveyard {
+                        to: ZoneType::Exile,
                         then: vec![Effect::WhenYouDo {
                             effects: vec![Effect::ReturnGraveyardTarget {
                                 target: within_power(),
@@ -8059,6 +8126,7 @@ fn suki_courageous_rescuer() -> CardDefinition {
             toughness: 0,
             per_creature_type_max: None,
             per_color_among: None,
+            per_graveyard_matching: None,
         })],
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::OnceEachTurn {
@@ -8232,6 +8300,7 @@ fn swampsnare_trap() -> CardDefinition {
                 toughness: -3,
                 per_creature_type_max: None,
                 per_color_among: None,
+                per_graveyard_matching: None,
             }),
         ],
         text_box: text_box.into(),
@@ -9030,6 +9099,7 @@ fn toph_the_first_metalbender() -> CardDefinition {
                 ..Default::default()
             }),
             types: vec![CardType::Land],
+            subtypes: Vec::new(),
         })],
         text_box: text_box.into(),
         ..Default::default()
@@ -9298,6 +9368,7 @@ fn twin_blades() -> CardDefinition {
             toughness: 1,
             per_creature_type_max: None,
             per_color_among: None,
+            per_graveyard_matching: None,
         })],
         text_box: text_box.into(),
         ..Default::default()
@@ -10062,6 +10133,7 @@ fn white_lotus_reinforcements() -> CardDefinition {
             toughness: 1,
             per_creature_type_max: None,
             per_color_among: None,
+            per_graveyard_matching: None,
         })],
         text_box: text_box.into(),
         ..Default::default()
@@ -10268,6 +10340,52 @@ fn zhao_ruthless_admiral() -> CardDefinition {
                 )],
             },
         ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn zhao_the_moon_slayer() -> CardDefinition {
+    let text_box = "Menace\nNonbasic lands enter tapped.\n{7}: Put a conqueror counter on Zhao.\nAs long as Zhao has a conqueror counter on him, nonbasic lands are Mountains. (They lose all other land types and abilities and have \"{T}: Add {R}.\")";
+    let nonbasic_land = || CardPredicate {
+        card_type: Some(CardType::Land),
+        nonbasic: true,
+        ..Default::default()
+    };
+
+    CardDefinition {
+        key: "tla.zhao_the_moon_slayer",
+        scryfall_id: "f1015bf5-de98-41f3-b6b1-ed95f7465944",
+        name: "Zhao, the Moon Slayer".into(),
+        mana_cost: Some(ManaCost::parse("{1}{R}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Soldier".into()],
+        power: Some(2),
+        toughness: Some(2),
+        keywords: Keywords {
+            menace: true,
+            ..Default::default()
+        },
+        statics: vec![
+            StaticAbility::EntersTapped(nonbasic_land()),
+            StaticAbility::SetsLandType(StaticLandType {
+                predicate: nonbasic_land(),
+                subtype: "Mountain".into(),
+                while_counters: CounterThreshold {
+                    kind: CounterKind::Conqueror,
+                    count: 1,
+                },
+            }),
+        ],
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            mana_cost: ManaCost::parse("{7}"),
+            effects: vec![Effect::PutCountersOnSource {
+                count: EffectValue::Fixed(1),
+                kind: CounterKind::Conqueror,
+            }],
+            ..Default::default()
+        }],
         text_box: text_box.into(),
         ..Default::default()
     }

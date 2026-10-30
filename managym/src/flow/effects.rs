@@ -111,7 +111,12 @@ impl Game {
             .filter(|effect| effect.modification == Modification::LoseAllAbilities)
             .map(|effect| effect.timestamp)
             .last();
-        recorded.max(self.set_characteristics_timestamp(permanent_id))
+        recorded
+            .max(self.set_characteristics_timestamp(permanent_id))
+            .max(
+                self.land_type_overwrite(permanent_id)
+                    .map(|(timestamp, _)| timestamp),
+            )
     }
 
     /// "Can't be blocked this turn."

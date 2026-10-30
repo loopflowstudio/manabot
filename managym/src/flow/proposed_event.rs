@@ -7,6 +7,7 @@
 
 use crate::{
     flow::{event::GameEvent, game::Game},
+    state::card::StaticAbility,
     state::{
         card::ReplacementEffect,
         game_object::{CardId, EntityId, ObjectRef, PermanentId, PlayerId},
@@ -255,7 +256,31 @@ impl Game {
                 // Entering objects come under their owner's control; the
                 // condition reads that player's battlefield before the move.
                 let entering_controller = self.state.cards[*card].owner;
-                self.state.cards[*card]
+                // "[predicate] permanents enter tapped" from the battlefield.
+                let static_tapped = [PlayerId(0), PlayerId(1)]
+                    .into_iter()
+                    .flat_map(|player| self.battlefield_permanents(player))
+                    .filter(|id| !self.has_lost_abilities(*id))
+                    .flat_map(|id| {
+                        let permanent = self.state.permanents[id].as_ref().unwrap();
+                        self.state.cards[permanent.card]
+                            .statics
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, ability)| {
+                                matches!(ability, StaticAbility::EntersTapped(predicate)
+                                    if predicate.matches_card(&self.state.cards[*card]))
+                            })
+                            .filter_map(move |(index, _)| {
+                                Some(ReplacementCandidate {
+                                    source: self.permanent_object_ref(id)?,
+                                    definition_index: index,
+                                    effect: ReplacementEffect::EntersTapped,
+                                })
+                            })
+                    })
+                    .collect::<Vec<_>>();
+                let mut own: Vec<_> = self.state.cards[*card]
                     .replacement_effects
                     .iter()
                     .enumerate()
@@ -286,7 +311,9 @@ impl Game {
                             effect,
                         })
                     })
-                    .collect()
+                    .collect();
+                own.extend(static_tapped);
+                own
             }
             _ => Vec::new(),
         };
@@ -440,6 +467,15 @@ impl Game {
         let Some(target) = self.permanent_object_ref(permanent_id) else {
             return false;
         };
+        // A land-type overwrite's counters change other players' mana.
+        if self.state.cards[CardId::from(target.entity)]
+            .statics
+            .iter()
+            .any(|ability| matches!(ability, StaticAbility::SetsLandType(_)))
+        {
+            self.invalidate_mana_cache(PlayerId(0));
+            self.invalidate_mana_cache(PlayerId(1));
+        }
         self.apply_proposed_event(ProposedEvent::CounterChange {
             target,
             kind,
