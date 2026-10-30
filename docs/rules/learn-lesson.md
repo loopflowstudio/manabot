@@ -136,7 +136,11 @@ their absence, and reconnect or a changed decision resets the selector.
   Retrieval reveals the definition, then uses ordinary movement from no zone
   to Hand. It neither allocates a copy nor draws, shuffles or casts. A consumed
   copy cannot be retrieved again from hand, graveyard or exile.
-- Both players know setup and remaining definition counts. Only the owner sees
+- Decklist disclosure is a match option (`MatchConfig.decklists`, Academy's
+  new-game form; native `PlayerConfig.disclosure`). Open decklists, the
+  default, give both players each other's main deck, unseen, sideboard and
+  remaining-sideboard definition counts. Closed decklists show each player only
+  their own lists, and retrievals are known only as reveals. Only the owner sees
   outside candidate identities. Opponent hands and uncommitted candidates stay
   private; outside candidates are not fabricated in-game ObjectRefs.
 - Public hand knowledge is a minimum multiset of definitions, never hand slots

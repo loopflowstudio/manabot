@@ -117,6 +117,11 @@ checkpoints or experiment evidence.
   relation width: v2/v3 have 32 columns, v4 and v5 have 33; validity remains
   column 31. At 33, the player row width tells v4 (40) from v5 (60).
   Preserve the frozen widths and derive buffers from `ObservationSpace`.
+- Decklist disclosure (open by default, or closed) lives on native
+  `PlayerConfig.disclosure`, written by `MatchConfig.decklists` and Academy
+  `GameConfig.decklists`. Observations, search and possible worlds read it
+  through `Game::decklist_known`/`require_open_decklist`; never filter decklist
+  information in an encoder or the browser.
 - Saved observation configurations use `ObservationConfig.from_checkpoint` so
   an absent policy-input version retains v1 semantics. Fresh construction uses
   the current version. Keep version-specific zero/default exclusions stable:

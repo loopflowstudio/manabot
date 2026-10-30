@@ -42,6 +42,9 @@ pub const EVENT_DIM: usize = 7;
 pub const ZONE_DIM: usize = 7;
 pub const PHASE_DIM: usize = 5;
 pub const STEP_DIM: usize = 12;
+/// v5 decklist rows: definition id + 1, then the main, unseen, sideboard and
+/// remaining-sideboard counts (`PlayerData` decklist maps).
+pub const DECKLIST_DIM: usize = 5;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ObservationEncoderConfig {
@@ -109,6 +112,15 @@ impl ObservationEncoderConfig {
         }
     }
 
+    /// Two seats of decklist rows at v5; absent before.
+    pub fn decklists_len(&self) -> usize {
+        if self.policy_input_version >= 5 {
+            2 * self.max_cards_per_player * DECKLIST_DIM
+        } else {
+            0
+        }
+    }
+
     pub fn cards_len(&self) -> usize {
         self.max_cards_per_player * self.card_dim()
     }
@@ -143,6 +155,7 @@ pub struct EncodedObservation {
     pub relations: Vec<f32>,
     pub semantic_cards: Vec<f32>,
     pub known_hand: Vec<f32>,
+    pub decklists: Vec<f32>,
     pub agent_player: Vec<f32>,
     pub opponent_player: Vec<f32>,
     pub agent_cards: Vec<f32>,
@@ -166,6 +179,7 @@ pub struct EncodedObservationMut<'a> {
     pub relations: &'a mut [f32],
     pub semantic_cards: &'a mut [f32],
     pub known_hand: &'a mut [f32],
+    pub decklists: &'a mut [f32],
     pub agent_player: &'a mut [f32],
     pub opponent_player: &'a mut [f32],
     pub agent_cards: &'a mut [f32],
@@ -192,6 +206,7 @@ impl EncodedObservation {
             relations: &mut self.relations,
             semantic_cards: &mut self.semantic_cards,
             known_hand: &mut self.known_hand,
+            decklists: &mut self.decklists,
             agent_player: &mut self.agent_player,
             opponent_player: &mut self.opponent_player,
             agent_cards: &mut self.agent_cards,
@@ -260,6 +275,7 @@ pub fn encode(
         relations: vec![0.0; config.relations_len()],
         semantic_cards: vec![0.0; 2 * config.max_cards_per_player],
         known_hand: vec![0.0; 4 * config.max_cards_per_player],
+        decklists: vec![0.0; config.decklists_len()],
         agent_player: vec![0.0; config.player_dim()],
         opponent_player: vec![0.0; config.player_dim()],
         agent_cards: vec![0.0; config.cards_len()],
@@ -298,6 +314,7 @@ pub fn encode_into(
         out.known_hand.len(),
         4 * config.max_cards_per_player,
     )?;
+    validate_buffer_len("decklists", out.decklists.len(), config.decklists_len())?;
     validate_buffer_len("agent_player", out.agent_player.len(), config.player_dim())?;
     validate_buffer_len(
         "opponent_player",
@@ -423,6 +440,7 @@ pub fn encode_into(
     }
     out.semantic_cards.fill(0.0);
     out.known_hand.fill(0.0);
+    out.decklists.fill(0.0);
     out.agent_player.fill(0.0);
     out.opponent_player.fill(0.0);
     out.agent_cards.fill(0.0);
@@ -467,6 +485,22 @@ pub fn encode_into(
     }
     for (slot, card) in obs.agent_sideboard.iter().enumerate() {
         out.semantic_cards[obs.agent_cards.len() + slot] = (card.registry_key + 1) as f32;
+    }
+    if config.policy_input_version >= 5 {
+        for (seat, player) in [&obs.agent, &obs.opponent].into_iter().enumerate() {
+            let rows = decklist_rows(player);
+            if rows.len() > config.max_cards_per_player {
+                return Err(ObservationEncodeError::Capacity {
+                    field: "decklist definitions",
+                    capacity: config.max_cards_per_player,
+                    actual: rows.len(),
+                });
+            }
+            for (slot, row) in rows.iter().enumerate() {
+                let offset = (seat * config.max_cards_per_player + slot) * DECKLIST_DIM;
+                out.decklists[offset..offset + DECKLIST_DIM].copy_from_slice(row);
+            }
+        }
     }
 
     let mut object_to_index: HashMap<i32, i32> = HashMap::with_capacity(
@@ -589,6 +623,31 @@ pub fn encode_into(
     }
 
     Ok(())
+}
+
+/// One row per definition in the union of a known player's main deck and
+/// sideboard, sorted by definition id; none for a closed decklist. Unseen
+/// counts are a subset of the main deck's definitions plus retrieved
+/// sideboard copies, so the union covers every count map.
+fn decklist_rows(player: &PlayerData) -> Vec<[f32; DECKLIST_DIM]> {
+    let maps = [
+        &player.main_counts,
+        &player.unseen_counts,
+        &player.sideboard_counts,
+        &player.remaining_sideboard_counts,
+    ];
+    let mut rows: std::collections::BTreeMap<u32, [f32; DECKLIST_DIM]> = Default::default();
+    for (column, counts) in maps.into_iter().enumerate() {
+        for (definition, count) in counts.iter().flatten() {
+            let row = rows.entry(*definition).or_insert_with(|| {
+                let mut row = [0.0; DECKLIST_DIM];
+                row[0] = (definition + 1) as f32;
+                row
+            });
+            row[column + 1] = *count as f32;
+        }
+    }
+    rows.into_values().collect()
 }
 
 fn validate_buffer_len(
@@ -1030,6 +1089,8 @@ mod tests {
                 zone_counts: [40, 2, 1, 0, 0, 0, 0],
                 graveyard_lessons: 0,
                 known_hand: Default::default(),
+                main_counts: Default::default(),
+                unseen_counts: Default::default(),
                 sideboard_counts: Default::default(),
                 remaining_sideboard_counts: Default::default(),
                 combat_mana: 0,
@@ -1055,6 +1116,8 @@ mod tests {
                 zone_counts: [39, 3, 1, 0, 0, 0, 0],
                 graveyard_lessons: 0,
                 known_hand: Default::default(),
+                main_counts: Default::default(),
+                unseen_counts: Default::default(),
                 sideboard_counts: Default::default(),
                 remaining_sideboard_counts: Default::default(),
                 combat_mana: 0,
@@ -1368,6 +1431,7 @@ mod tests {
             relations: &mut [],
             semantic_cards: &mut semantic_cards,
             known_hand: &mut known_hand,
+            decklists: &mut [],
             agent_player: &mut agent_player,
             opponent_player: &mut opponent_player,
             agent_cards: &mut agent_cards,

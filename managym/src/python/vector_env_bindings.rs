@@ -42,6 +42,7 @@ struct ObservationBuffers {
     relations: Option<Py<PyAny>>,
     semantic_cards: Py<PyAny>,
     known_hand: Py<PyAny>,
+    decklists: Option<Py<PyAny>>,
     agent_player: Py<PyAny>,
     opponent_player: Py<PyAny>,
     agent_cards: Py<PyAny>,
@@ -393,6 +394,24 @@ fn read_observation_buffers(
             "float32",
         )?
         .unbind(),
+        decklists: if c.policy_input_version >= 5 {
+            Some(
+                require_numpy_array(
+                    buffers,
+                    "decklists",
+                    &[
+                        n,
+                        2,
+                        c.max_cards_per_player,
+                        crate::agent::observation_encoder::DECKLIST_DIM,
+                    ],
+                    "float32",
+                )?
+                .unbind(),
+            )
+        } else {
+            None
+        },
         semantic_cards: require_numpy_array(
             buffers,
             "semantic_cards",
@@ -796,6 +815,7 @@ struct SendObservationFieldSlices {
     relations: Option<SendSlice<f32>>,
     semantic_cards: SendSlice<f32>,
     known_hand: SendSlice<f32>,
+    decklists: Option<SendSlice<f32>>,
     agent_player: SendSlice<f32>,
     opponent_player: SendSlice<f32>,
     agent_cards: SendSlice<f32>,
@@ -875,6 +895,17 @@ impl SendObservationFieldSlices {
             },
             // SAFETY: each call uses disjoint per-env rows.
             known_hand: unsafe { slice::from_raw_parts_mut(known_hand_ptr, known_hand_len) },
+            decklists: if let Some(buffer) = self.decklists {
+                // SAFETY: the registered buffer is partitioned into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.decklists_len())?,
+                        config.decklists_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
             // SAFETY: each call uses disjoint per-env rows.
             semantic_cards: unsafe {
                 slice::from_raw_parts_mut(semantic_cards_ptr, semantic_cards_len)
@@ -1012,6 +1043,11 @@ fn with_send_write_buffers<R>(
     let semantic_cards_buffer =
         typed_numpy_buffer::<f32>(py, &buffers.semantic_cards, "semantic_cards")?;
     let known_hand_buffer = typed_numpy_buffer::<f32>(py, &buffers.known_hand, "known_hand")?;
+    let decklists_buffer = buffers
+        .decklists
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "decklists"))
+        .transpose()?;
     let agent_player_buffer = typed_numpy_buffer::<f32>(py, &buffers.agent_player, "agent_player")?;
     let opponent_player_buffer =
         typed_numpy_buffer::<f32>(py, &buffers.opponent_player, "opponent_player")?;
@@ -1056,6 +1092,10 @@ fn with_send_write_buffers<R>(
             .map(|buffer| send_slice_from_buffer(py, buffer, "relations"))
             .transpose()?,
         known_hand: send_slice_from_buffer(py, &known_hand_buffer, "known_hand")?,
+        decklists: decklists_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "decklists"))
+            .transpose()?,
         semantic_cards: send_slice_from_buffer(py, &semantic_cards_buffer, "semantic_cards")?,
         agent_player: send_slice_from_buffer(py, &agent_player_buffer, "agent_player")?,
         opponent_player: send_slice_from_buffer(py, &opponent_player_buffer, "opponent_player")?,

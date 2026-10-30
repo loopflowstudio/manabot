@@ -713,6 +713,15 @@ def _parse_game_config(config: Any) -> GameConfig:
         if not 0 <= seed < 2**64:
             raise ValueError("seed must be an unsigned 64-bit integer.")
 
+    decklists = data.get("decklists", "open")
+    if decklists not in ("open", "closed"):
+        raise ValueError("decklists must be 'open' or 'closed'.")
+    if decklists == "closed" and villain_type == "search":
+        raise ValueError(
+            "The search opponent samples hidden cards from open decklists; "
+            "choose open decklists or another opponent."
+        )
+
     villain_sims: int | None = None
     if villain_type == "search":
         sims_value = data.get("villain_sims", villain_module.DEFAULT_SEARCH_SIMS)
@@ -798,6 +807,7 @@ def _parse_game_config(config: Any) -> GameConfig:
         stops=_parse_stops(data.get("stops")),
         stop_on_stack=_parse_flag(data, "stop_on_stack", True),
         auto_pass=_parse_flag(data, "auto_pass", True),
+        decklists=decklists,
     )
 
 

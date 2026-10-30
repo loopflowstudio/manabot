@@ -72,6 +72,7 @@ impl Game {
         let mut zones = ZoneManager::default();
 
         for (player_index, config) in player_configs.iter().enumerate() {
+            players[player_index].disclosure = config.disclosure;
             for (name, qty) in &config.decklist {
                 for _ in 0..*qty {
                     let card = content

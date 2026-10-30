@@ -440,10 +440,17 @@ pub struct LegacyPlayerView {
     pub library_count: u32,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub known_hand: BTreeMap<String, u32>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub sideboard_counts: BTreeMap<String, u32>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub remaining_sideboard_counts: BTreeMap<String, u32>,
+    /// Decklist counts by definition, present only when this frame's viewer
+    /// knows the player's decklist (its own, or an open opponent's). Absent
+    /// means hidden; an empty map means known and empty.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub main_counts: Option<BTreeMap<String, u32>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unseen_counts: Option<BTreeMap<String, u32>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sideboard_counts: Option<BTreeMap<String, u32>>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remaining_sideboard_counts: Option<BTreeMap<String, u32>>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub sideboard: Vec<SideboardCardView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

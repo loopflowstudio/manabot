@@ -252,11 +252,14 @@ class PlayerConfig:
         decklist: Dict[str, int],
         sideboard: Optional[Dict[str, int]] = None,
         content_pack: str | None = None,
+        disclosure: Literal["open", "closed"] = "open",
     ) -> None: ...
     name: str
     decklist: Dict[str, int]
     sideboard: Dict[str, int]
     content_pack: str | None
+    # Whether the opponent knows this player's main deck and sideboard.
+    disclosure: Literal["open", "closed"]
 
 def authored_deck_setup(pack_key: str, deck_key: str) -> PlayerConfig: ...
 
@@ -403,8 +406,13 @@ class Player:
     zone_counts: List[int]
     graveyard_lessons: int
     known_hand: Dict[int, int]
-    sideboard_counts: Dict[int, int]
-    remaining_sideboard_counts: Dict[int, int]
+    # Decklist counts by definition id; None when the viewer's opponent has a
+    # closed decklist. Unseen counts the library, plus an opponent's hand and
+    # face-down foretold cards; remaining counts sideboard copies outside the game.
+    main_counts: Optional[Dict[int, int]]
+    unseen_counts: Optional[Dict[int, int]]
+    sideboard_counts: Optional[Dict[int, int]]
+    remaining_sideboard_counts: Optional[Dict[int, int]]
     combat_mana: int
     mana: tuple[int, int, int, int, int, int]
     lesson_mana: tuple[int, int, int, int, int, int]

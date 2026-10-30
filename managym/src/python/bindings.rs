@@ -45,7 +45,11 @@ use crate::{
     flow::turn::{PhaseKind, StepKind},
     python::convert::{info_dict_to_pydict, require_numpy_array, shape_to_vec},
     search_state::SearchStateWitness,
-    state::{mana::ManaCost, player::PlayerConfig, zone::ZoneType},
+    state::{
+        mana::ManaCost,
+        player::{DecklistDisclosure, PlayerConfig},
+        zone::ZoneType,
+    },
 };
 
 #[cfg(feature = "python")]
@@ -249,6 +253,21 @@ fn encoded_to_dict<'py>(
             &[2, config.max_cards_per_player, 2],
         )?,
     )?;
+    if config.policy_input_version >= 5 {
+        dict.set_item(
+            "decklists",
+            to_numpy_array_f32(
+                py,
+                &np,
+                &encoded.decklists,
+                &[
+                    2,
+                    config.max_cards_per_player,
+                    crate::agent::observation_encoder::DECKLIST_DIM,
+                ],
+            )?,
+        )?;
+    }
 
     Ok(dict)
 }
@@ -948,25 +967,55 @@ pub struct PyPlayerConfig {
     pub sideboard: HashMap<String, usize>,
     #[pyo3(get, set)]
     pub content_pack: Option<String>,
+    /// `"open"` (default) or `"closed"`: whether the opponent knows this
+    /// player's main deck and sideboard.
+    pub disclosure: DecklistDisclosure,
+}
+
+#[cfg(feature = "python")]
+fn parse_disclosure(value: &str) -> PyResult<DecklistDisclosure> {
+    match value {
+        "open" => Ok(DecklistDisclosure::Open),
+        "closed" => Ok(DecklistDisclosure::Closed),
+        other => Err(PyValueError::new_err(format!(
+            "decklist disclosure must be 'open' or 'closed', got {other:?}"
+        ))),
+    }
 }
 
 #[cfg(feature = "python")]
 #[pymethods]
 impl PyPlayerConfig {
     #[new]
-    #[pyo3(signature = (name, decklist, sideboard=None, content_pack=None))]
+    #[pyo3(signature = (name, decklist, sideboard=None, content_pack=None, disclosure="open"))]
     fn new(
         name: String,
         decklist: HashMap<String, usize>,
         sideboard: Option<HashMap<String, usize>>,
         content_pack: Option<String>,
-    ) -> Self {
-        Self {
+        disclosure: &str,
+    ) -> PyResult<Self> {
+        Ok(Self {
             name,
             decklist,
             sideboard: sideboard.unwrap_or_default(),
             content_pack,
+            disclosure: parse_disclosure(disclosure)?,
+        })
+    }
+
+    #[getter]
+    fn disclosure(&self) -> &'static str {
+        match self.disclosure {
+            DecklistDisclosure::Open => "open",
+            DecklistDisclosure::Closed => "closed",
         }
+    }
+
+    #[setter]
+    fn set_disclosure(&mut self, value: &str) -> PyResult<()> {
+        self.disclosure = parse_disclosure(value)?;
+        Ok(())
     }
 }
 
@@ -978,6 +1027,7 @@ impl From<PyPlayerConfig> for PlayerConfig {
             decklist: value.decklist.into_iter().collect(),
             sideboard: value.sideboard.into_iter().collect(),
             content_pack: value.content_pack,
+            disclosure: value.disclosure,
         }
     }
 }
@@ -1002,10 +1052,16 @@ pub struct PyPlayer {
     pub graveyard_lessons: i32,
     #[pyo3(get)]
     pub known_hand: BTreeMap<u32, u32>,
+    /// Decklist counts by definition; `None` when the opponent's decklist is
+    /// closed to this observation's viewer.
     #[pyo3(get)]
-    pub sideboard_counts: BTreeMap<u32, u32>,
+    pub main_counts: Option<BTreeMap<u32, u32>>,
     #[pyo3(get)]
-    pub remaining_sideboard_counts: BTreeMap<u32, u32>,
+    pub unseen_counts: Option<BTreeMap<u32, u32>>,
+    #[pyo3(get)]
+    pub sideboard_counts: Option<BTreeMap<u32, u32>>,
+    #[pyo3(get)]
+    pub remaining_sideboard_counts: Option<BTreeMap<u32, u32>>,
     #[pyo3(get, set)]
     pub combat_mana: i32,
     #[pyo3(get)]
@@ -1068,6 +1124,8 @@ impl From<PlayerData> for PyPlayer {
             zone_counts: value.zone_counts.to_vec(),
             graveyard_lessons: value.graveyard_lessons,
             known_hand: value.known_hand,
+            main_counts: value.main_counts,
+            unseen_counts: value.unseen_counts,
             sideboard_counts: value.sideboard_counts,
             remaining_sideboard_counts: value.remaining_sideboard_counts,
             combat_mana: value.combat_mana,
@@ -1097,6 +1155,8 @@ impl From<PyPlayer> for PlayerData {
             zone_counts,
             graveyard_lessons: value.graveyard_lessons,
             known_hand: value.known_hand,
+            main_counts: value.main_counts,
+            unseen_counts: value.unseen_counts,
             sideboard_counts: value.sideboard_counts,
             remaining_sideboard_counts: value.remaining_sideboard_counts,
             combat_mana: value.combat_mana,
@@ -3913,6 +3973,7 @@ fn authored_deck_setup(pack_key: &str, deck_key: &str) -> PyResult<PyPlayerConfi
         decklist: config.decklist.into_iter().collect(),
         sideboard: config.sideboard.into_iter().collect(),
         content_pack: Some(pack_key.to_string()),
+        disclosure: config.disclosure,
     })
 }
 

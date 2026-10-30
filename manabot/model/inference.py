@@ -168,6 +168,9 @@ class PolicyInference:
             admit_definition_ids(obs["known_hand"][..., 0], size, self._lookup)
             if self._lookup is not None
             else None,
+            admit_definition_ids(obs["decklists"][..., 0], size, self._lookup)
+            if self._lookup is not None and "decklists" in obs
+            else None,
         )
         # Belief-enabled policies add validity rows inside ActorCritic; retain their
         # complete check there. Plain policies can check the same rows on CPU.
@@ -179,6 +182,8 @@ class PolicyInference:
         joins = {"cards": references.cards, "permanents": references.permanents}
         if references.known is not None:
             joins["known"] = references.known
+        if references.decklists is not None:
+            joins["decklists"] = references.decklists
         moved, transfers = transfer(
             {**obs, **{f"references/{key}": value for key, value in joins.items()}},
             self.device,
@@ -190,6 +195,7 @@ class PolicyInference:
                 moved["references/cards"],
                 moved["references/permanents"],
                 moved.get("references/known"),
+                moved.get("references/decklists"),
             ),
             objects_checked,
             transfers,

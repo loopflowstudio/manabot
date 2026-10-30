@@ -341,3 +341,30 @@ class PlayerRegistration(StrictModel):
     @property
     def identity_sha256(self) -> str:
         return canonical_sha256(self.model_dump())
+
+
+# Player kinds that act from their own observation alone. Every other kind
+# samples the opponent's hidden cards from their decklist (determinized,
+# PUCT, local-update and demo search) and needs an open decklist.
+OBSERVATION_ONLY_KINDS = frozenset(
+    {"checkpoint", "heuristic", "random", "scripted_greedy"}
+)
+
+
+def require_open_decklists(
+    decklists: Literal["open", "closed"], registrations: list[PlayerRegistration]
+) -> None:
+    """Refuse search players in a closed-decklist match before any game starts.
+
+    Native sampling would refuse at the first decision anyway; this names the
+    player instead of failing mid-game.
+    """
+    if decklists == "open":
+        return
+    for registration in registrations:
+        kind = registration.player_spec.get("kind")
+        if kind not in OBSERVATION_ONLY_KINDS:
+            raise ValueError(
+                f"player {registration.player_id} ({kind}) samples hidden cards "
+                "from the opponent's decklist and cannot play a closed-decklist match"
+            )

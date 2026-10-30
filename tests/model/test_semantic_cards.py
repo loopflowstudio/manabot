@@ -56,11 +56,18 @@ def test_programs_and_known_definitions_reach_actual_policy(learn_root):  # noqa
     forgotten["known_hand"].zero_()
     _, forgotten_value = agent(forgotten)
     assert not torch.equal(value, forgotten_value)
+    # The opponent's open decklist (main, unseen and sideboard rows) also
+    # reaches the value; a closed decklist would encode as these zero rows.
+    assert public["decklists"][0, 1, :, 1].sum() == 41
+    closed = {key: value.clone() for key, value in public.items()}
+    closed["decklists"][:, 1].zero_()
+    _, closed_value = agent(closed)
+    assert not torch.equal(value, closed_value)
     for seed in (17, 91):
         hidden = engine.clone_env()
         hidden.determinize(seed, perspective=1 - actor)
         encoded = space.encode(hidden.observation_for_player(1 - actor))
-        for key in ("semantic_cards", "known_hand"):
+        for key in ("semantic_cards", "known_hand", "decklists"):
             np.testing.assert_array_equal(encoded[key], public[key][0].numpy())
 
 

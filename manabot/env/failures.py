@@ -33,6 +33,9 @@ class PlayerSetup(BaseModel):
     decklist: dict[str, int]
     sideboard: dict[str, int]
     content_pack: str | None
+    disclosure: Literal["open", "closed"] = Field(
+        default="open", exclude_if=lambda value: value == "open"
+    )
 
     @classmethod
     def retain(cls, player: managym.PlayerConfig) -> "PlayerSetup":
@@ -41,6 +44,7 @@ class PlayerSetup(BaseModel):
             decklist=player.decklist,
             sideboard=player.sideboard,
             content_pack=player.content_pack,
+            disclosure=player.disclosure,
         )
 
     def native(self) -> managym.PlayerConfig:

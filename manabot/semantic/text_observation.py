@@ -516,11 +516,19 @@ class _Renderer:
                 )
             if player.no_maximum_hand_size:
                 lines.append("Has no maximum hand size for the rest of the game.")
-            for label, quantities in (
-                ("Publicly known hand minima", player.known_hand),
-                ("Initial sideboard", player.sideboard_counts),
-                ("Remaining sideboard", player.remaining_sideboard_counts),
-            ):
+            counts: list[tuple[str, dict[int, int]]] = [
+                ("Publicly known hand minima", player.known_hand)
+            ]
+            if player.main_counts is None:
+                lines.append("Decklist: closed.")
+            else:
+                counts += [
+                    ("Main deck", player.main_counts),
+                    ("Unseen cards", player.unseen_counts or {}),
+                    ("Initial sideboard", player.sideboard_counts or {}),
+                    ("Remaining sideboard", player.remaining_sideboard_counts or {}),
+                ]
+            for label, quantities in counts:
                 lines.append(
                     label
                     + ": "

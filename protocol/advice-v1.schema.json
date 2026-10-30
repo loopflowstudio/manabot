@@ -2715,6 +2715,23 @@
           "title": "Life",
           "type": "integer"
         },
+        "main_counts": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "maximum": 4294967295,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Main Counts"
+        },
         "mana": {
           "anyOf": [
             {
@@ -2773,13 +2790,21 @@
           "type": "integer"
         },
         "remaining_sideboard_counts": {
-          "additionalProperties": {
-            "maximum": 4294967295,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "title": "Remaining Sideboard Counts",
-          "type": "object"
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "maximum": 4294967295,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Remaining Sideboard Counts"
         },
         "restricted_mana": {
           "items": {
@@ -2796,13 +2821,21 @@
           "type": "array"
         },
         "sideboard_counts": {
-          "additionalProperties": {
-            "maximum": 4294967295,
-            "minimum": 0,
-            "type": "integer"
-          },
-          "title": "Sideboard Counts",
-          "type": "object"
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "maximum": 4294967295,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sideboard Counts"
         },
         "stack": {
           "items": {
@@ -2810,6 +2843,23 @@
           },
           "title": "Stack",
           "type": "array"
+        },
+        "unseen_counts": {
+          "anyOf": [
+            {
+              "additionalProperties": {
+                "maximum": 4294967295,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unseen Counts"
         },
         "zone_counts": {
           "additionalProperties": {

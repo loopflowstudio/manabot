@@ -380,16 +380,6 @@ pub struct HiddenHandConstraints {
     pub foretell: BTreeSet<String>,
 }
 
-/// The opponent's unseen cards: Hand ∪ Library ∪ face-down foretold exile.
-fn unseen_cards(game: &Game, opponent: PlayerId) -> Vec<CardId> {
-    let mut cards: Vec<CardId> = [ZoneType::Hand, ZoneType::Library]
-        .into_iter()
-        .flat_map(|zone| game.state.zones.zone_cards(zone, opponent).iter().copied())
-        .collect();
-    cards.extend(game.foretold_cards(opponent));
-    cards
-}
-
 /// Card-name multiset of `cards`.
 fn name_counts(game: &Game, cards: impl IntoIterator<Item = CardId>) -> BTreeMap<String, u32> {
     let mut counts = BTreeMap::new();
@@ -408,7 +398,11 @@ impl HiddenHandConstraints {
             "viewer must name a player"
         );
         let opponent = PlayerId((viewer.0 + 1) % 2);
-        let unseen = unseen_cards(game, opponent);
+        assert!(
+            game.decklist_known(opponent, viewer),
+            "possible worlds require the opponent's open decklist"
+        );
+        let unseen = game.unseen_cards(opponent, viewer);
         let foretell = unseen
             .iter()
             .filter(|card| game.state.cards[**card].foretell().is_some())
@@ -516,7 +510,7 @@ impl HiddenHandConstraints {
         // Group the opponent's unseen CardIds by name, sorted ascending so
         // the lowest CardIds of each name go to the hand deterministically.
         let mut by_name: BTreeMap<String, Vec<CardId>> = BTreeMap::new();
-        for card in unseen_cards(&branch, opponent) {
+        for card in branch.unseen_cards(opponent, self.viewer) {
             by_name
                 .entry(branch.state.cards[card].name.clone())
                 .or_default()
@@ -1047,7 +1041,7 @@ impl PossibleWorldSpace {
             }
         }
         let current_hand_size = source.state.zones.size(ZoneType::Hand, self.opponent) as u32;
-        if name_counts(source, unseen_cards(source, self.opponent)) != self.pool
+        if name_counts(source, source.unseen_cards(self.opponent, self.viewer)) != self.pool
             || current_hand_size != self.hand_size
             || source.foretold_cards(self.opponent).len() as u32 != self.foretold
         {

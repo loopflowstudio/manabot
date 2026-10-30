@@ -67,11 +67,31 @@ PERMANENT_EXHAUSTED_INDEX = LEGACY_PERMANENT_DIM - 1
 PERMANENT_ONCE_EACH_TURN_INDEX = PERMANENT_EXHAUSTED_INDEX + 1
 PERMANENT_FIREBENDING_INDEX = PERMANENT_ONCE_EACH_TURN_INDEX + 1
 PERMANENT_DIM = PERMANENT_FIREBENDING_INDEX + 2
+# v5 decklist rows: definition id + 1, then main, unseen, sideboard and
+# remaining-sideboard counts. A closed opponent's rows are all zero.
+DECKLIST_DIM = 5
+_DECKLIST_COUNTS = (
+    "main_counts",
+    "unseen_counts",
+    "sideboard_counts",
+    "remaining_sideboard_counts",
+)
 
 
 # -----------------------------------------------------------------------------
 # Observation Encoding
 # -----------------------------------------------------------------------------
+def _decklist_rows(player: managym.Player) -> list[tuple[int, ...]]:
+    """Reference implementation of native v5 decklist rows: one per
+    definition in a known player's main deck and sideboard, sorted."""
+    rows: dict[int, list[int]] = {}
+    for column, name in enumerate(_DECKLIST_COUNTS, start=1):
+        for definition, count in (getattr(player, name) or {}).items():
+            row = rows.setdefault(int(definition), [int(definition) + 1, 0, 0, 0, 0])
+            row[column] = int(count)
+    return [tuple(rows[definition]) for definition in sorted(rows)]
+
+
 class ObservationEncoder:
     """
     Encodes each typed chunk (player, cards, permanents, etc.) into fixed-size arrays,
@@ -139,6 +159,11 @@ class ObservationEncoder:
             ),
             "semantic_cards": (2, self.cards_per_player),
             "known_hand": (2, self.cards_per_player, 2),
+            **(
+                {"decklists": (2, self.cards_per_player, DECKLIST_DIM)}
+                if self.config.policy_input_version >= 5
+                else {}
+            ),
             # Game objects
             "agent_player": (1, self.player_dim),
             "opponent_player": (1, self.player_dim),
@@ -248,6 +273,19 @@ class ObservationEncoder:
                 sorted(player.known_hand.items())
             ):
                 out["known_hand"][seat, slot] = (int(definition) + 1, count)
+        if self.config.policy_input_version >= 5:
+            out["decklists"] = np.zeros(
+                (2, self.cards_per_player, DECKLIST_DIM), dtype=np.float32
+            )
+            for seat, player in enumerate((obs.agent, obs.opponent)):
+                rows = _decklist_rows(player)
+                if len(rows) > self.cards_per_player:
+                    raise ValueError(
+                        "observation capacity exceeded: decklist definitions "
+                        f"{len(rows)} > {self.cards_per_player}"
+                    )
+                for slot, row in enumerate(rows):
+                    out["decklists"][seat, slot] = row
         outside = obs.agent_sideboard
         start = len(obs.agent_cards)
         if start + len(outside) > self.cards_per_player:

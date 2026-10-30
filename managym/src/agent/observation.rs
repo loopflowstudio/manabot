@@ -59,8 +59,25 @@ pub struct PlayerData {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub no_maximum_hand_size: bool,
     pub known_hand: BTreeMap<u32, u32>,
-    pub sideboard_counts: BTreeMap<u32, u32>,
-    pub remaining_sideboard_counts: BTreeMap<u32, u32>,
+    /// Decklist counts by definition id, present when the viewer knows this
+    /// player's decklist: always its own, and an opponent's open decklist
+    /// (`DecklistDisclosure`). `None` means hidden; `Some` of an empty map
+    /// means known and empty.
+    ///
+    /// The initial main deck.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub main_counts: Option<BTreeMap<u32, u32>>,
+    /// Owned cards the viewer cannot see (`Game::unseen_cards`): the
+    /// library, plus hand and face-down foretold exile for an opponent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub unseen_counts: Option<BTreeMap<u32, u32>>,
+    /// The initial sideboard.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sideboard_counts: Option<BTreeMap<u32, u32>>,
+    /// Sideboard copies still outside the game, in no zone. Learn retrieval
+    /// lowers it and undo restores it; it counts copies Learn cannot fetch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remaining_sideboard_counts: Option<BTreeMap<u32, u32>>,
 }
 
 /// Mana that may be spent only on the named purposes (CR 106.6): spells with
@@ -536,8 +553,8 @@ impl Observation {
                 focus: Vec::new(),
             });
 
-        let agent = Self::player_data(game, agent_player, true);
-        let opponent = Self::player_data(game, opponent_player, false);
+        let agent = Self::player_data(game, agent_player, agent_player);
+        let opponent = Self::player_data(game, opponent_player, agent_player);
 
         let mut obs = Self {
             continuation: game.continuation_frames(agent_player),
@@ -566,8 +583,23 @@ impl Observation {
         obs
     }
 
-    fn player_data(game: &Game, player: PlayerId, is_agent: bool) -> PlayerData {
+    /// Copies of each definition id among `cards`.
+    fn definition_counts(
+        game: &Game,
+        cards: impl IntoIterator<Item = CardId>,
+    ) -> BTreeMap<u32, u32> {
+        let mut counts = BTreeMap::new();
+        for card in cards {
+            *counts
+                .entry(game.state.cards[card].definition_id.0)
+                .or_default() += 1;
+        }
+        counts
+    }
+
+    fn player_data(game: &Game, player: PlayerId, viewer: PlayerId) -> PlayerData {
         let p = &game.state.players[player.0];
+        let is_agent = player == viewer;
         let mut zone_counts = [0_i32; 7];
         for (zone_index, count) in zone_counts.iter_mut().enumerate() {
             *count = game
@@ -576,20 +608,32 @@ impl Observation {
                 .size(Self::zone_from_index(zone_index), player) as i32;
         }
 
-        let mut sideboard_counts = BTreeMap::new();
-        let mut remaining_sideboard_counts = BTreeMap::new();
-        for card in &p.sideboard {
-            let definition = game.state.cards[*card].definition_id.0;
-            *sideboard_counts.entry(definition).or_default() += 1;
-            if game.state.zones.zone_of(*card).is_none() {
-                *remaining_sideboard_counts.entry(definition).or_default() += 1;
-            }
-        }
+        let (main_counts, unseen_counts, sideboard_counts, remaining_sideboard_counts) =
+            if game.decklist_known(player, viewer) {
+                let outside = p
+                    .sideboard
+                    .iter()
+                    .copied()
+                    .filter(|card| game.state.zones.zone_of(*card).is_none());
+                (
+                    Some(Self::definition_counts(game, p.deck.iter().copied())),
+                    Some(Self::definition_counts(
+                        game,
+                        game.unseen_cards(player, viewer),
+                    )),
+                    Some(Self::definition_counts(game, p.sideboard.iter().copied())),
+                    Some(Self::definition_counts(game, outside)),
+                )
+            } else {
+                (None, None, None, None)
+            };
 
         // Regular and combat mana together, as the player may spend it.
         let mut pool = p.mana_pool.clone();
         pool.add(&p.combat_mana_pool);
         PlayerData {
+            main_counts,
+            unseen_counts,
             sideboard_counts,
             remaining_sideboard_counts,
             player_index: p.index as i32,

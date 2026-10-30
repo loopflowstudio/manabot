@@ -82,7 +82,11 @@ class ActorCritic(nn.Module):
         if config.semantic_pack is not None:
             from .semantic_cards import SemanticCardEncoder
 
-            self.semantic_cards = SemanticCardEncoder(config.semantic_pack, embed_dim)
+            self.semantic_cards = SemanticCardEncoder(
+                config.semantic_pack,
+                embed_dim,
+                decklists=enc.config.policy_input_version >= 5,
+            )
         else:
             # Generic worlds still distinguish card definitions. The content
             # manifest binds the vocabulary; this is identity, not rules transfer.

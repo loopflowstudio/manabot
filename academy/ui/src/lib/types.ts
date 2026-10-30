@@ -103,6 +103,10 @@ export interface PlayerState {
   inspected?: CardState[];
   sideboard?: SideboardCard[];
   known_hand?: Record<string, number>;
+  /** Decklist counts, present only when the viewer knows this player's
+   *  decklist (its own, or an open opponent's). Absent means closed. */
+  main_counts?: Record<string, number>;
+  unseen_counts?: Record<string, number>;
   sideboard_counts?: Record<string, number>;
   remaining_sideboard_counts?: Record<string, number>;
   player_index: number;
@@ -552,7 +556,11 @@ export interface TraceConfig {
   villain_checkpoint?: string | null;
   villain_deterministic?: boolean;
   asset_pack?: AssetPackReference | null;
+  decklists?: Decklists;
 }
+
+/** Open: both players know each other's main deck and sideboard. Closed: neither. */
+export type Decklists = 'open' | 'closed';
 
 export interface AssetPackReference {
   id: string;

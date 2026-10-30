@@ -75,6 +75,7 @@ impl RolloutPool {
         let hero = action_space.player.ok_or_else(|| {
             AgentError("rollout_pool: no agent player in current action space".to_string())
         })?;
+        game.require_open_decklist(hero)?;
         let num_actions = action_space.actions.len();
         if num_actions == 0 {
             return Err(AgentError(
