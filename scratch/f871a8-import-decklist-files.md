@@ -22,8 +22,9 @@ below this Task's entries; they are main's, not this Task's.
   lists are checked upfront; no pre-registration defines compatibility.
 - **Checkpoints bind worlds, not regimes.** A portable checkpoint holds weights,
   architecture/inference config, I/O contracts and the world binding; the run
-  owns decks, sources, sampler, seeds and recovery. Pool-bound checkpoints play
-  any deck the pool admits; authored/Elemental ones keep exact setups.
+  owns its deck source, seeds and recovery. World-bound (`deck_world`)
+  checkpoints play any deck the world admits; authored/Elemental ones keep
+  exact setups.
 - **Scope.** One PR, stop before merge. Training matchups primary; Academy
   secondary. `uniform-distinct-v1` (two different decks, unbiased seats, native
   reset seed); curriculum, mirrors, 17Lands and the Academy 1a draft redesign
@@ -61,8 +62,8 @@ supported definition in `cardsets/`). Implement direction:
 
 - **1a — no pool in deck admission.** Decks are checked against the installed
   world. Remove the pool/pack argument from `admit_deck`, `admit_decklists`,
-  `Decklist::validate_deck`; `TrainingDecks.pool`; regime `decks: {pool, files}`
-  becomes `decks: {files}`; drop `manabot sim --content-pool`; drop Academy
+  `Decklist::validate_deck`; `TrainingDecks.pool` and regime `decks` (now a
+  deck source, above); drop `manabot sim --content-pool`; drop Academy
   `pack_key` and the **Content pool** field in `DeckImport.svelte`;
   `MatchConfig.from_import` takes no pack. A deck-run checkpoint binds the world
   (version, content digest, rules, I/O contract), not a `content_pool` with a
@@ -148,6 +149,24 @@ authored keys in `content_pack_for_match`; `TrainingDecks` (`pool`, `sources`,
 caller `ruleset`, `GameConfig.imported_decks`, `manabot/decklist.py`,
 `catalog.DeckSetup`, `deck_collection.py`, checkpoint deck bindings (list at
 c1dd6c71c).
+
+## Open for Jack Heart's review (not decided)
+
+Two remaining "content" names touch deck surfaces against the no-content
+direction; both are main's names, so renaming is left as a choice:
+- **a)** keep main's `PlayerConfig.content_pack` selector; deck matches carry
+  `"world"` (`managym.WORLD_SETUP`), so `MatchConfig.content_pack` still shows;
+- **b)** add a non-"content" selector for deck matches (or infer world from the
+  absence of an authored key) and rename main's field.
+Authored packs keep `content_pool` descriptors because main's policy vocabulary
+reads them; admission never does. Removing them changes vocabulary binding.
+
+## Remaining
+
+- CI on PR #395 (head 5e7f0cacc) was pending at reconciliation; gate owns the
+  affected-area suites (`docs/development/validation.md`) before publish.
+- Deferred by decision: curriculum, mirrors, 17Lands source, random deck
+  generation (a second source would bring a Python per-stream queue), Academy 1a.
 
 ## Handoff
 
