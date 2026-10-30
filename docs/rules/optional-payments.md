@@ -43,8 +43,9 @@ Effect or Decision.
 
 The ten-deck pack is `elemental-world-v2`. Its w11 source, IR, fixtures and
 learning schema 7 were in `content/semantic/w11` and now live at the revisions
-that recorded them; current decklists are in `content/semantic/current/setups.json`. Academy's version 2 asset manifest binds the same
-ten exact setups and local treatments to the new content. Native action kinds,
+that recorded them; current decklists are in
+`content/semantic/current/setups.json`. Academy's version 2 asset manifest binds
+the same ten exact setups and local treatments to the new content. Native action kinds,
 order and observation tensor dimensions remain unchanged: ordinary optional
 mana exposes PayOrNot; waterbend exposes Waterbend; immediate colors expose
 Modal; decline may expose Discard. All choices use the same native legal offers

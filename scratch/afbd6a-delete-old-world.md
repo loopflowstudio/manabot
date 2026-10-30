@@ -91,3 +91,32 @@ one-off field is a `StaticAbility` or `AdditionalCost` variant, read by match
 (the remaining accessors are one-variant lookups). No definition-level field
 name survives outside frozen evidence; `no_maximum_hand_size` remains only as
 the player status the static sets. No open product choice.
+
+## Demo, 2026-10-30 (headless; standing in for Jack Heart)
+
+Ran through the real configured path (`scratch/tools/demo_afbd6a.py`, rebuilt `.so`):
+- `managym.card_definitions_json()`: 207 definitions; tokens are exactly the 11
+  `token.*` definitions (Ally, Ballistic Boulder, Bear, Clue, Dragon, Food, Human
+  Soldier, Monk, Soldier, Spirit, Treasure); `tla.rs` has no `is_token`.
+- 16 `StaticAbility` variants and 3 `AdditionalCost` variants (Kicker, Sacrifice,
+  Waterbend) each appear on a real card.
+- Four w17 games (ur-lessons vs gw-allies, seeds 0–3, random legal actions,
+  `skip_trivial` on) ran to terminal (137–435 decisions).
+- `content/semantic/` holds only `current/`; `manabot/semantic` has no compiler or
+  coverage; `conformance/` is 3.1 MB, the four w17 corpora only. Live references to
+  deleted roots remain only as history in `WORLDS.md` and `docs/repository-archive.md`.
+- PR #403 CI: every check green at HEAD 525adc80f; mergeable.
+Decision: advance. Remaining: Jack Heart's review before merge (task rule).
+Page: `scratch/demo.html`.
+
+## Gate, 2026-10-30
+
+Diff review: no debug output, TODOs or live references to deleted roots outside
+history (`WORLDS.md`, `docs/repository-archive.md`, Academy pack `source_uri`
+provenance, dated chapter reviews). `docs/rules/elemental-{combat,sacrifice,temur}.md`
+still name `content/semantic/v1`/`w7`/`w8` paths; they are dated w7–w9 contracts
+(frozen), left as written. Reflowed one long line in `optional-payments.md`.
+Checks: tracked code unchanged since 525adc80f, whose PR #403 CI is all green
+(Rust, Python unit, Integration main/long, Semantic Kernel and Protocol
+conformance, Academy UI/Integration, packaging); reused, no local rerun for a
+docs-only reflow. Remaining: Jack Heart's review before merge.
