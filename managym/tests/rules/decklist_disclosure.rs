@@ -46,12 +46,12 @@ fn assert_known(player: &PlayerData, config: &PlayerConfig, unseen: u32) {
     let main = player.main_counts.as_ref().expect("main deck known");
     assert_eq!(
         main.values().sum::<u32>() as usize,
-        config.decklist.values().sum::<usize>()
+        config.deck.main.values().sum::<usize>()
     );
     let sideboard = player.sideboard_counts.as_ref().expect("sideboard known");
     assert_eq!(
         sideboard.values().sum::<u32>() as usize,
-        config.sideboard.values().sum::<usize>()
+        config.deck.sideboard.values().sum::<usize>()
     );
     assert_eq!(player.remaining_sideboard_counts.as_ref(), Some(sideboard));
     let unseen_counts = player.unseen_counts.as_ref().expect("unseen known");

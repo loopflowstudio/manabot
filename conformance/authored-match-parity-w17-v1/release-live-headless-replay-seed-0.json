@@ -96,7 +96,7 @@
         },
         {
           "path": "managym/src/agent/observation.rs",
-          "sha256": "38d465291c5bb26e2a98961862a07b9aaea637275a4fef4e50a4a125b0eb213f"
+          "sha256": "94f187ae4f844b54c734fafcf57fe2de90e2e04eb5e14c093b5e21cdd4b12319"
         },
         {
           "path": "managym/src/agent/observation_encoder.rs",
@@ -547,7 +547,7 @@
           "sha256": "23ac765196d97fb350c0e3e2337bacc5d8e42bd6c47edb7999fb0907d32bfa8d"
         }
       ],
-      "sha256": "68f62085fabfc5f2a5cefab3fa25d231768e9c811708e110d793e251900608c0"
+      "sha256": "bc70913ac005e3d43c7e5d56887717a5f3a9cadb4d5248e9509cb55e314afcb2"
     },
     "seed": 0
   },

@@ -75,7 +75,7 @@ pub struct PlayerData {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sideboard_counts: Option<BTreeMap<u32, u32>>,
     /// Sideboard copies still outside the game, in no zone. Learn retrieval
-    /// lowers it and undo restores it; it counts copies Learn cannot fetch.
+    /// lowers it; it counts copies Learn cannot fetch.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remaining_sideboard_counts: Option<BTreeMap<u32, u32>>,
 }
