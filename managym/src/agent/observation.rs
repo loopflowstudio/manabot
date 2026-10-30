@@ -1408,6 +1408,7 @@ impl Observation {
             GameEvent::CardDrawn { .. }
             | GameEvent::PermanentTapped { .. }
             | GameEvent::PermanentTargeted { .. }
+            | GameEvent::CombatDamageToPlayers { .. }
             | GameEvent::AttackersDeclared { .. }
             | GameEvent::StepStarted { .. } => Vec::new(),
         }

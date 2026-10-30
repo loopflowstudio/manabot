@@ -777,6 +777,12 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::YouCastSpell { .. } => "TriggerCondition::YouCastSpell",
         TriggerCondition::PlayerCastsSpell { .. } => "TriggerCondition::PlayerCastsSpell",
         TriggerCondition::AttacksWithAnother => "TriggerCondition::AttacksWithAnother",
+        TriggerCondition::CreatureDealsCombatDamageToPlayer { .. } => {
+            "TriggerCondition::CreatureDealsCombatDamageToPlayer"
+        }
+        TriggerCondition::OneOrMoreDealCombatDamageToPlayer { .. } => {
+            "TriggerCondition::OneOrMoreDealCombatDamageToPlayer"
+        }
         TriggerCondition::EntersTheBattlefield { .. } => "TriggerCondition::EntersTheBattlefield",
         TriggerCondition::Dies { .. } => "TriggerCondition::Dies",
         TriggerCondition::Attacks { .. } => "TriggerCondition::Attacks",
@@ -836,6 +842,12 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             predicate: CardPredicate::creature(),
         },
         TriggerCondition::AttacksWithAnother,
+        TriggerCondition::CreatureDealsCombatDamageToPlayer {
+            subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
+        },
+        TriggerCondition::OneOrMoreDealCombatDamageToPlayer {
+            predicate: CardPredicate::creature(),
+        },
     ]
 }
 
@@ -861,6 +873,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::Kicked => "Condition::Kicked",
         Condition::TargetMatches(_) => "Condition::TargetMatches",
         Condition::TargetDealtDamageThisTurn => "Condition::TargetDealtDamageThisTurn",
+        Condition::SourceCountersAtLeast { .. } => "Condition::SourceCountersAtLeast",
     }
 }
 
@@ -885,6 +898,10 @@ fn condition_witnesses() -> Vec<Condition> {
         Condition::Kicked,
         Condition::TargetMatches(CardPredicate::creature()),
         Condition::TargetDealtDamageThisTurn,
+        Condition::SourceCountersAtLeast {
+            kind: CounterKind::Quest,
+            count: 4,
+        },
     ]
 }
 

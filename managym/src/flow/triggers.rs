@@ -432,12 +432,16 @@ impl Game {
                         event,
                     )
                 {
-                    fired.push((
-                        source.card,
-                        ability_index,
-                        source.controller,
-                        source.lki.clone(),
-                    ));
+                    let times =
+                        self.trigger_multiplicity(condition, source.card, source.controller, event);
+                    for _ in 0..times {
+                        fired.push((
+                            source.card,
+                            ability_index,
+                            source.controller,
+                            source.lki.clone(),
+                        ));
+                    }
                 }
             }
         }
@@ -803,6 +807,21 @@ impl Game {
                 }
             }
             (
+                TriggerCondition::CreatureDealsCombatDamageToPlayer { subject },
+                GameEvent::CombatDamageToPlayers { hits },
+            ) => hits.iter().any(|(creature, _)| {
+                self.subject_matches_permanent(subject, source_card, source_controller, *creature)
+            }),
+            (
+                TriggerCondition::OneOrMoreDealCombatDamageToPlayer { predicate },
+                GameEvent::CombatDamageToPlayers { hits },
+            ) => hits.iter().any(|(creature, _)| {
+                self.state.permanents[*creature]
+                    .as_ref()
+                    .is_some_and(|permanent| permanent.controller == source_controller)
+                    && self.permanent_matches_predicate(*creature, predicate)
+            }),
+            (
                 TriggerCondition::BecomesTapped { subject },
                 GameEvent::PermanentTapped { permanent, .. },
             ) => {
@@ -861,6 +880,35 @@ impl Game {
                 },
             ) => *player == source_controller && nth_this_turn == n,
             _ => false,
+        }
+    }
+
+    /// How many times one event triggers a matching ability: once, except
+    /// "whenever a creature ... deals combat damage to a player", which
+    /// triggers for each creature that did (CR 603.2c).
+    fn trigger_multiplicity(
+        &self,
+        condition: &TriggerCondition,
+        source_card: CardId,
+        source_controller: PlayerId,
+        event: &GameEvent,
+    ) -> usize {
+        match (condition, event) {
+            (
+                TriggerCondition::CreatureDealsCombatDamageToPlayer { subject },
+                GameEvent::CombatDamageToPlayers { hits },
+            ) => hits
+                .iter()
+                .filter(|(creature, _)| {
+                    self.subject_matches_permanent(
+                        subject,
+                        source_card,
+                        source_controller,
+                        *creature,
+                    )
+                })
+                .count(),
+            _ => 1,
         }
     }
 

@@ -37,7 +37,9 @@ fn walk(value: &Value, path: String, in_if_condition: bool, found: &mut Vec<Stri
         Value::Object(fields) => {
             for (key, field) in fields {
                 let child = format!("{path}/{key}");
-                if key == "TargetMatches" && !in_if_condition {
+                if matches!(key.as_str(), "TargetMatches" | "SourceCountersAtLeast")
+                    && !in_if_condition
+                {
                     found.push(child.clone());
                 }
                 match (key.as_str(), field) {

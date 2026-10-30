@@ -83,18 +83,19 @@ impl Game {
         (dealt - lethal).max(0)
     }
 
+    /// Whether any damage was dealt (prevention may leave none).
     pub(crate) fn apply_combat_player_damage(
         &mut self,
         source: Option<ObjectRef>,
         player: PlayerId,
         amount: i32,
-    ) {
+    ) -> bool {
         self.apply_proposed_event(ProposedEvent::Damage {
             source,
             target: ProposedDamageTarget::Player(player),
             amount,
             combat: true,
-        });
+        })
     }
 
     pub(crate) fn apply_combat_permanent_damage(

@@ -105,6 +105,14 @@ fn condition_description(condition: &TriggerCondition) -> String {
         TriggerCondition::AttacksAlone { subject } => {
             format!("When {} attacks alone", subject_description(subject))
         }
+        TriggerCondition::CreatureDealsCombatDamageToPlayer { subject } => format!(
+            "When {} deals combat damage to a player",
+            subject_description(subject)
+        ),
+        TriggerCondition::OneOrMoreDealCombatDamageToPlayer { predicate } => format!(
+            "When one or more {} you control deal combat damage to a player",
+            predicate_description(predicate, "creatures")
+        ),
         TriggerCondition::BecomesTapped { subject } => {
             format!("When {} becomes tapped", subject_description(subject))
         }
@@ -173,6 +181,10 @@ fn condition_text(condition: &Condition) -> String {
             predicate_description(predicate, "permanent")
         ),
         Condition::TargetDealtDamageThisTurn => "that target was dealt damage this turn".into(),
+        Condition::SourceCountersAtLeast { kind, count } => format!(
+            "this has {count} or more {} counters",
+            kind.name().replace('_', " ")
+        ),
     }
 }
 
@@ -291,6 +303,7 @@ pub(crate) fn counter_description(kind: CounterKind) -> &'static str {
         CounterKind::PlusOnePlusOne => "+1/+1",
         CounterKind::Stun => "stun",
         CounterKind::Fire => "fire",
+        CounterKind::Quest => "quest",
         CounterKind::DoubleStrike => "double strike",
     }
 }

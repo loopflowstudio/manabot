@@ -76,6 +76,16 @@ pub enum TriggerCondition {
     AttacksAlone {
         subject: TriggerSubject,
     },
+    /// "Whenever [subject] deals combat damage to a player": once for each
+    /// creature that does (`AnyYouControl`: "a creature you control").
+    CreatureDealsCombatDamageToPlayer {
+        subject: TriggerSubject,
+    },
+    /// "Whenever one or more [predicate] you control deal combat damage to a
+    /// player": once per combat damage step.
+    OneOrMoreDealCombatDamageToPlayer {
+        predicate: CardPredicate,
+    },
     /// "Whenever [subject] becomes tapped."
     BecomesTapped {
         subject: TriggerSubject,
@@ -159,6 +169,13 @@ pub enum Condition {
     /// turn, read from its last known information once it has left ("Exile
     /// target creature. If it was dealt damage this turn, ...").
     TargetDealtDamageThisTurn,
+    /// Resolution only: the resolving ability's source permanent has `count`
+    /// or more `kind` counters ("Then if it has four or more quest counters
+    /// on it").
+    SourceCountersAtLeast {
+        kind: CounterKind,
+        count: i32,
+    },
 }
 
 impl Condition {
@@ -168,7 +185,8 @@ impl Condition {
         match self {
             Condition::Kicked
             | Condition::TargetMatches(_)
-            | Condition::TargetDealtDamageThisTurn => true,
+            | Condition::TargetDealtDamageThisTurn
+            | Condition::SourceCountersAtLeast { .. } => true,
             Condition::AnyOf(conditions) => conditions.iter().any(Condition::is_resolution_only),
             Condition::YourTurn
             | Condition::Always

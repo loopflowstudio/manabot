@@ -627,6 +627,10 @@ impl Game {
                     matches!(target, Target::Permanent(id)
                         if self.permanent_matches_predicate(id, predicate))
                 }),
+            Condition::SourceCountersAtLeast { kind, count } => frame
+                .and_then(|frame| self.source_permanent_id(frame))
+                .and_then(|id| self.state.permanents[id].as_ref())
+                .is_some_and(|permanent| permanent.counter_count(*kind) >= *count),
             Condition::TargetDealtDamageThisTurn => {
                 let Some(Target::Permanent(permanent_id)) =
                     frame.and_then(EffectFrame::primary_target)

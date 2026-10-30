@@ -14,6 +14,8 @@ pub enum CounterKind {
     Fire,
     /// CR 122.1b keyword counter.
     DoubleStrike,
+    /// No rules meaning of its own; cards count it (the Ascensions).
+    Quest,
 }
 
 impl CounterKind {
@@ -24,14 +26,16 @@ impl CounterKind {
             CounterKind::Stun => "stun",
             CounterKind::Fire => "fire",
             CounterKind::DoubleStrike => "double_strike",
+            CounterKind::Quest => "quest",
         }
     }
 
-    pub const ALL: [CounterKind; 4] = [
+    pub const ALL: [CounterKind; 5] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
         CounterKind::DoubleStrike,
+        CounterKind::Quest,
     ];
 }
 

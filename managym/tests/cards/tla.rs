@@ -10748,3 +10748,80 @@ fn earth_rumble_wrestlers_grow_with_a_land_creature_or_a_land_entry_this_turn() 
     assert_eq!(s.game().effective_pt(wrestlers), (3, 4), "a new turn");
     assert!(!observed_keywords(&s, wrestlers).trample);
 }
+
+/// Attack with player 0's `attackers`, let player 1 decline to block, and
+/// settle combat damage and its triggers with default choices.
+fn hit_and_settle(s: &mut Scenario, attackers: &[PermanentId]) {
+    attack_and_settle(s, attackers, None);
+    s.advance_to_step(StepKind::PostcombatMain);
+    settle(s);
+}
+
+/// One trigger per creature that connects; the fourth quest counter draws.
+#[test]
+fn waterbender_ascension_counts_each_connecting_creature_and_draws_at_four() {
+    let mut s = five_color_setup(&["Waterbender Ascension", "Gray Ogre"]);
+    let ascension = s.force_permanent_on_battlefield(0, "Waterbender Ascension");
+    let ogres = [
+        s.force_permanent_on_battlefield(0, "Gray Ogre"),
+        s.force_permanent_on_battlefield(0, "Gray Ogre"),
+    ];
+    let hand = s.zone_size(0, ZoneType::Hand);
+    hit_and_settle(&mut s, &ogres);
+    assert_eq!(counters_of(&s, ascension, CounterKind::Quest), 2);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand, "below four: no draw");
+
+    let mut s = five_color_setup(&["Waterbender Ascension", "Gray Ogre"]);
+    let ascension = s.force_permanent_on_battlefield(0, "Waterbender Ascension");
+    set_counters(&mut s, ascension, CounterKind::Quest, 3);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let hand = s.zone_size(0, ZoneType::Hand);
+    hit_and_settle(&mut s, &[ogre]);
+    assert_eq!(counters_of(&s, ascension, CounterKind::Quest), 4);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 1);
+}
+
+#[test]
+fn waterbender_ascension_waterbends_a_creature_unblockable() {
+    let mut s = five_color_setup(&["Waterbender Ascension", "Gray Ogre"]);
+    let ascension = s.force_permanent_on_battlefield(0, "Waterbender Ascension");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let helper = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.set_player_mana_pool(0, "3");
+    activate(&mut s, ascension, 0);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);
+    assert!(s.choose_waterbend_tap(helper));
+    assert!(s.take_action_by_type(ActionType::PayCost));
+    settle(&mut s);
+    assert!(s.game().cant_be_blocked(ogre));
+}
+
+/// Entry pumps the team; any number of connecting Allies draw one card, and
+/// a non-Ally connecting draws none.
+#[test]
+fn invasion_tactics_pumps_on_entry_and_draws_once_for_connecting_allies() {
+    let mut s = five_color_setup(&["Invasion Tactics", "Earth Kingdom Jailer", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    enter_and_settle(&mut s, "Invasion Tactics");
+    assert_eq!(s.game().effective_pt(ogre), (4, 4));
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().effective_pt(ogre), (2, 2), "until end of turn");
+
+    let mut s = five_color_setup(&["Invasion Tactics", "Earth Kingdom Jailer", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(0, "Invasion Tactics");
+    let allies = [
+        s.force_permanent_on_battlefield(0, "Earth Kingdom Jailer"),
+        s.force_permanent_on_battlefield(0, "Earth Kingdom Jailer"),
+    ];
+    let hand = s.zone_size(0, ZoneType::Hand);
+    hit_and_settle(&mut s, &allies);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 1);
+
+    let mut s = five_color_setup(&["Invasion Tactics", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(0, "Invasion Tactics");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let hand = s.zone_size(0, ZoneType::Hand);
+    hit_and_settle(&mut s, &[ogre]);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand);
+}

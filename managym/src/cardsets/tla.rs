@@ -129,6 +129,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         iguana_parrot(),
         invasion_reinforcements(),
         invasion_submersible(),
+        invasion_tactics(),
         iroh_grand_lotus(),
         iroh_s_demonstration(),
         itll_quench_ya(),
@@ -233,6 +234,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         wartime_protestors(),
         water_tribe_captain(),
         water_tribe_rallier(),
+        waterbender_ascension(),
         waterbending_lesson(),
         waterbending_scroll(),
         watery_grasp(),
@@ -3778,6 +3780,44 @@ fn invasion_submersible() -> CardDefinition {
             ],
             ..Default::default()
         }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn invasion_tactics() -> CardDefinition {
+    let text_box = "When this enchantment enters, creatures you control get +2/+2 until end of turn.\nWhenever one or more Allies you control deal combat damage to a player, draw a card.";
+
+    CardDefinition {
+        key: "tla.invasion_tactics",
+        scryfall_id: "27c6330d-49f6-4707-b4d4-d1411fa422eb",
+        name: "Invasion Tactics".into(),
+        mana_cost: Some(ManaCost::parse("{4}{G}")),
+        types: CardTypes::new([CardType::Enchantment]),
+        abilities: vec![
+            Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::until_end_of_turn(
+                    AffectedSpec::EachYouControl(CardPredicate::creature()),
+                    Modification::pump(2, 2),
+                )],
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::OneOrMoreDealCombatDamageToPlayer {
+                    predicate: CardPredicate {
+                        subtype: Some("Ally".into()),
+                        ..Default::default()
+                    },
+                },
+                intervening_if: None,
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
+            },
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -7872,6 +7912,51 @@ fn water_tribe_rallier() -> CardDefinition {
                     ..Default::default()
                 },
             }],
+            ..Default::default()
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn waterbender_ascension() -> CardDefinition {
+    let text_box = "Whenever a creature you control deals combat damage to a player, put a quest counter on this enchantment. Then if it has four or more quest counters on it, draw a card.\nWaterbend {4}: Target creature can't be blocked this turn. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)";
+
+    CardDefinition {
+        key: "tla.waterbender_ascension",
+        scryfall_id: "3f57e0f9-e232-489c-b991-d0d23f75d8dd",
+        name: "Waterbender Ascension".into(),
+        mana_cost: Some(ManaCost::parse("{1}{U}")),
+        types: CardTypes::new([CardType::Enchantment]),
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::CreatureDealsCombatDamageToPlayer {
+                subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
+            },
+            intervening_if: None,
+            effects: vec![
+                Effect::PutCountersOnSource {
+                    count: 1,
+                    kind: CounterKind::Quest,
+                },
+                Effect::If {
+                    condition: Condition::SourceCountersAtLeast {
+                        kind: CounterKind::Quest,
+                        count: 4,
+                    },
+                    then: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                    otherwise: vec![],
+                },
+            ],
+        }],
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            mana_cost: ManaCost::parse("{4}"),
+            waterbend: true,
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::Target(TargetSpec::Creature),
+                Modification::CantBeBlocked,
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),
