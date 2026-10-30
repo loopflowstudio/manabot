@@ -81,6 +81,21 @@ vocabularies as v5 fact rows (`FactKind`).
   `ActiveIf { SacrificedThisTurnAtLeast(1), BeginningOfYourEndStep }` with an
   `IfCondition` recheck (CR 603.4).
 
+## Concept review (headless, 2026-10-30, HEAD `00724828c`) — nothing to change
+
+Checked the code against Jack Heart's design review (comment 10a31948). The
+copy authority is `create_token_copy`, which stores `CopyEffect { of,
+exceptions }`. Exceptions use T3's `Modification` and are observed through
+`FactKind::Copy` / `CopyException`. Turn history lives on `TurnState` in T4's
+shape. The Airship is built only from existing condition, trigger and crew
+values plus one self-relative static. No product choice is open.
+
+Considered but not adopted: folding `CreatureWithCounters` and
+`CreatureWithNamesakes` into one `CreatureWhile(<self condition>)` variant.
+Both cover "this is an artifact creature as long as …", but the change would
+re-key an existing card's learning tokens and no accepted decision calls for
+it. If a third self-animation condition appears, merge them then.
+
 ## Remaining
 
 - Gate: re-record the content-digest-bound w17 evidence

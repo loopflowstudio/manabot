@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>T5 concept review — permanent copying</title>
+<title>T5 concept review: permanent copying</title>
 <style>
   :root { color-scheme: light dark; --fg:#1d1b18; --bg:#faf7f1; --mute:#6b655c; --line:#d9d2c5; --prop:#8a4b12; --code:#efe9dd; }
   @media (prefers-color-scheme: dark) { :root { --fg:#ece6da; --bg:#1a1916; --mute:#a39b8e; --line:#3a362f; --prop:#e0a160; --code:#26241f; } }
@@ -11,54 +11,55 @@
   main { max-width:44rem; margin:0 auto; padding:2.5rem 1.25rem 4rem; }
   header p { color:var(--mute); font-size:.9rem; margin:.2rem 0; }
   h1 { font-size:1.6rem; margin:0 0 .5rem; } h2 { font-size:1.2rem; margin-top:2.5rem; }
-  code { font:.88em ui-monospace, Menlo, monospace; background:var(--code); padding:.05em .3em; border-radius:3px; }
+  code { font:.88em ui-monospace, Menlo, monospace; background:var(--code); padding:.05em .3em; border-radius:3px; overflow-wrap:anywhere; }
   .proposed { border-left:3px solid var(--prop); padding-left:1rem; }
-  .proposed::before { content:"Proposed"; display:block; color:var(--prop); font-size:.8rem; letter-spacing:.05em; text-transform:uppercase; }
+  .proposed::before { content:"Considered, not adopted"; display:block; color:var(--prop); font-size:.8rem; letter-spacing:.05em; text-transform:uppercase; }
   .existing { border-left:3px solid var(--line); padding-left:1rem; }
-  .existing::before { content:"Existing"; display:block; color:var(--mute); font-size:.8rem; letter-spacing:.05em; text-transform:uppercase; }
+  .existing::before { content:"Implemented"; display:block; color:var(--mute); font-size:.8rem; letter-spacing:.05em; text-transform:uppercase; }
   table { border-collapse:collapse; width:100%; font-size:.92rem; } td, th { text-align:left; padding:.4rem .5rem; border-bottom:1px solid var(--line); vertical-align:top; }
+  .wrap { overflow-x:auto; }
   .lead { font-size:1.08rem; }
 </style>
 </head>
 <body><main>
 <header>
   <h1>T5 concept review: permanent copying</h1>
-  <p>Task a7234f · step: concept review (headless) · 2026-10-30</p>
-  <p>Built from <code>scratch/jack-heart/a7234f-tla-t5-permanent.md</code>, <code>managym/src/flow/zones.rs</code>, <code>flow/decision.rs</code>, <code>flow/action.rs</code>, <code>agent/observation.rs</code>, <code>cards/tokens.rs</code>, <code>manabot/semantic/text_observation.py</code></p>
+  <p>Task a7234f · step: concept review (headless) · 2026-10-30 · HEAD <code>00724828c</code></p>
+  <p>Built from <code>scratch/jack-heart/a7234f-tla-t5-permanent.md</code>, <code>managym/src/cardsets/tla.rs</code>, <code>managym/src/state/card.rs</code>, <code>managym/src/state/ability.rs</code>, <code>managym/src/flow/statics.rs</code>, <code>managym/tests/cards/observability.rs</code></p>
 </header>
 
-<p class="lead"><strong>Decision needed: none.</strong> No product choice is open. Two refinements follow from Jack Heart's accepted directions and go back to implement. Phoenix Fleet Airship still waits on T3/T4 publication, which is a dependency, not a decision.</p>
+<p class="lead"><strong>Decision needed: none.</strong> The implementation matches Jack Heart's design review (comment 10a31948). Nothing goes back to implement. The remaining work is the gate's re-recording of w17 evidence and a later sync onto T4.</p>
 
 <h2>Actions → concepts → APIs</h2>
-<table>
-  <tr><th>Player action</th><th>Concept</th><th>API</th></tr>
-  <tr><td>Activate Joo Dee (sorcery speed)</td><td>activated ability with sorcery timing</td><td><code>ActivatedAbilityDefinition.sorcery_timing</code>, checked in <code>check_activation_terms</code></td></tr>
-  <tr><td>Surveil 1: bin the card or keep it on top</td><td>surveil decision on the inspect surface</td><td><code>Decision::Surveil</code> → <code>SelectCard</code> / <code>Decline</code></td></tr>
-  <tr><td>Get a token copy (Joo Dee, Ran and Shaw, later Airship)</td><td>copiable values = the card's definition</td><td><code>Effect::CreateTokenCopy { nonlegendary }</code> → <code>Game::create_token_copy</code></td></tr>
-</table>
-
-<h2>The consequential mismatch: surveil buttons don't say what they do</h2>
 <div class="existing">
-  <p>Surveil reuses the LookAndSelect surface. Elsewhere on that surface, <code>SelectCard</code> means “put into hand”. Here it means “put into graveyard”. Only the stage text says so. <code>action_description</code> has no surveil case, so the buttons get the generic select and decline labels.</p>
-</div>
-<div class="proposed">
-  <p>Label surveil choices in the shared engine authority (<code>flow/action.rs</code>): “Put &lt;card&gt; into your graveyard” and “Keep on top”. Academy, LLM text and replays then read the same labels. No action type changes, so <code>ACTION_TYPE_DIM</code> and checkpoints stay as they are. This applies Jack Heart's 2026-10-21 direction: labels clarify the shared contract, and they are fixed at the shared authority, not in the browser.</p>
-</div>
-
-<h2>Settled: what a copy looks like to the observer</h2>
-<div class="existing">
-  <p>A copy token keeps its source's <code>definition_id</code>. The learning tokens and the text definition line describe the printed definition, including “legendary” for Ran and Shaw. The object's row carries the current facts: <code>is_token</code> = yes, <code>is_legendary</code> = no.</p>
-</div>
-<div class="proposed">
-  <p>Keep this split. Copies get no definition ids or catalog entries of their own. Add a witness test that the rows of a nonlegendary copy show the difference while the copy shares the source's definition key.</p>
+<div class="wrap"><table>
+  <tr><th>Player action / event</th><th>Concept</th><th>API</th></tr>
+  <tr><td>Activate Joo Dee (sorcery speed): surveil, copy, sacrifice</td><td>activated ability with T3's sorcery timing; surveil on the inspect surface</td><td><code>sorcery_timing</code> in <code>check_activation_terms</code>; <code>Effect::Surveil</code></td></tr>
+  <tr><td>Get a token copy (Joo Dee, Ran and Shaw, Airship)</td><td>copy effect: copiable values of the root definition plus exceptions</td><td><code>Effect::CreateTokenCopy { exceptions }</code> → <code>Game::create_token_copy</code> → <code>Card.copy: CopyEffect { of, exceptions }</code></td></tr>
+  <tr><td>Ran and Shaw's copy isn't legendary</td><td>exception from the same vocabulary as layered effects</td><td><code>Modification::Nonlegendary</code>, read by <code>permanent_is_legendary</code></td></tr>
+  <tr><td>Sacrifice a permanent</td><td>this turn's history for each player, shared with T4 raid</td><td><code>TurnState.history[p].permanents_sacrificed</code>; <code>StaticCondition::SacrificedThisTurnAtLeast</code></td></tr>
+  <tr><td>Eight Airships make each one a creature</td><td>self-relative animation</td><td><code>StaticAbility::CreatureWithNamesakes(8)</code> in <code>permanent_is_animated</code></td></tr>
+  <tr><td>Agent / human sees the copy</td><td>modified characteristics are stated as inputs, not just results</td><td><code>FactKind::Copy</code>, <code>FactKind::CopyException</code>; text "copy of D&lt;n&gt;, except isn't legendary"; protocol <code>copy_of</code></td></tr>
+</table></div>
 </div>
 
-<h2>Normal path, failure, recovery</h2>
-<p><strong>Normal path.</strong> Joo Dee surveils. The copy enters before the sacrifice, and the sacrifice can take the original. <strong>Failure.</strong> The source leaves before resolution. The copy is made from the retained card as it last existed. <strong>Counterexample to watch.</strong> A card that surveils 2 or more would need reordering. The pool prints none, and the limit is documented on the variant.</p>
+<h2>The one mismatch examined</h2>
+<p>Two static variants express the same effect, "this is an artifact creature as long as …", and differ only in their self-relative condition:</p>
+<p><code>CreatureWithCounters(CounterThreshold)</code> (an existing TLA card) and <code>CreatureWithNamesakes(u32)</code> (Airship, new).</p>
+<div class="proposed">
+<p>A single variant, <code>CreatureWhile(SelfCondition::{Counters, Namesakes})</code>, would read better. It is not required by any accepted decision, though, and it would re-key an existing card's learning tokens. Not adopted. Merge them when a third self-animation condition appears.</p>
+</div>
+
+<h2>Challenge</h2>
+<ul>
+  <li><strong>Normal path:</strong> Ran and Shaw is cast with three Dragons/Lessons in the graveyard. The token copy has <code>of</code> = Ran and Shaw and <code>exceptions</code> = [Nonlegendary], so the legend rule leaves both permanents.</li>
+  <li><strong>Failure:</strong> Joo Dee is removed while its ability is on the stack. The copy uses last known information from the retained card.</li>
+  <li><strong>Recovery / chain:</strong> a copy of the copy carries the exceptions (CR 707.9b). The Airship's intervening-if is checked again on resolution (CR 603.4).</li>
+</ul>
 
 <h2>Questions</h2>
 <ol>
-  <li>None open. Outcome: <strong>the design changed</strong> (surveil labels plus the copy-row witness), so the next step is implement.</li>
+  <li>None open. The step advances.</li>
 </ol>
 </main></body>
 </html>
