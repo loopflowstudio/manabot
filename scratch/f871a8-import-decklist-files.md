@@ -1,8 +1,9 @@
 # PR D: decklist import and reproducible training on decklists
 
 Full history, usage sketches and settled reviews: c1dd6c71c:scratch/f871a8-import-decklist-files.md
-(earlier: e3b4f0583, d8fc9833c). Stacked on PR #394 (Task 892c47, typed Rust
-cards, one world w16, first-printing keys, support = set-file definition).
+(earlier: e3b4f0583, d8fc9833c). Based on main fa5e13b23 since PR #394 (Task
+892c47: typed Rust cards, one open world w17, first-printing keys, support =
+set-file definition) merged 2026-10-30; synced at cd86469b1.
 
 ## Accepted direction (Jack Heart)
 
@@ -40,8 +41,8 @@ cards, one world w16, first-printing keys, support = set-file definition).
 ## Implemented
 
 `state::deck` (identity byte-equal to the retained Python digest);
-`semantic::deck_admission` (`DeckIssue.line`, `admit_in_pool`);
-`semantic::decklist` (`Decklist`, `parse_decklist`, `read_decklist`,
+`cards::deck_admission` (`admit_deck`, `DeckIssue.line`, crate-private
+`admit_in_pool`); `cards::decklist` (`Decklist`, `parse_decklist`, `read_decklist`,
 `DeckImport {decklist, deck}`, `ImportedMatch` with `setup_id`/`swapped`/
 `validate_current`/`validate_setup`, `admit_decklists`, `import_match`);
 `python/deck_bindings.rs` (frozen `manabot.managym` classes, `to_dict`/
@@ -50,13 +51,15 @@ cards, one world w16, first-printing keys, support = set-file definition).
 /`from_files` admit natively; `set_training_decks`, producer admission and
 `validate_agent_decks` are unchanged in behavior.
 
-Check (2026-10-30): debug `cargo test --no-fail-fast` fails only
-`semantic_conformance_tests` (w15 manifest, ur-vs-gw-5eed digest; #394's);
-clippy `--all-targets --all-features -D warnings` clean; decklist/training-deck/
-Academy-decklist/self-play/uniform 30 passed; boundaries/catalog/world/recovery/
-game-error/capture/matchups/mirror 143 passed; tests/academy + CLAUDE.md world
-set: 30 failures, all w13/w15 fixtures, receipts or learning-schema 8≠7 against
-w16 (#394's evidence, not regenerated here).
+The authored-match parity receipt (`conformance/authored-match-parity-w17-v1`)
+hashes every `managym/src/*.rs`; it was regenerated after the sync (source hash
+only, behavior parity unchanged) and must be regenerated after further Rust edits.
+
+Check (2026-10-30, after sync): debug `cargo test --no-fail-fast` all pass;
+decklist/training-deck/Academy-decklist/match/matchups/mirror/world/boundaries
+84 passed; tests/academy + CLAUDE.md world set 324 passed, 2 failed only on the
+locally absent artifact `experiments/data/rul-9-played-workloads-v1.measurement.json`
+(in the manifest; fetch from the artifact store, not a branch defect).
 
 ## Delete — do not maintain
 
@@ -69,5 +72,5 @@ c1dd6c71c).
 
 Copied evidence (scratch/tla-evidence, scratch/tla-card-ledger.jsonl) is kept
 out of staging by local exclusions; stage explicit owned paths and use
-`lf commit --no-add`. Scratch sits just under its token target while #394's
-tracked notes are present; keep this note short until #394 lands.
+`lf commit --no-add`. PR #395 is open against main for Jack Heart's review; no
+merge or auto-merge.
