@@ -98,3 +98,15 @@ Jack Heart accepted 1b: T2 fixes only the tracker's foretold-slot accounting
 (done; test `test_foretell_moves_a_hidden_hand_card_to_the_slot_and_cast_leaves_it`);
 the prior and posterior over foretold slots are MTG-215. Analysis and options:
 `scratch/concept-review.html`.
+
+## Concept review (headless, 2026-10-30, at `67077c5e9`)
+
+Nothing to change and no open product choice. The accepted steers are all
+reflected: one card representation with Scryfall ids, per-set card tests,
+observability in both tensor and tokens (v5), exile permissions and the
+hand-only lock visible to every viewer, restricted mana split by class, the
+open world w17 with WORLDS.md's freeze paragraph, and the tracker counting the
+foretold slot. The remaining foretell-unaware belief pieces (the hand prior,
+`draw_unknown`, and the library row `pool − hand` in `belief/encoding.py`) need
+a distribution over slot contents, so they are MTG-215 under Jack Heart's 1b,
+not T2. Next: the gate.
