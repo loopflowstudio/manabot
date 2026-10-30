@@ -112,7 +112,13 @@ impl Game {
                 && self
                     .lookup_current_permanent(*object)
                     .ok()
-                    .is_some_and(|id| self.exiled_if_it_would_die(id))
+                    .is_some_and(|id| {
+                        // A finality counter (CR 122.1h) or an effect.
+                        self.exiled_if_it_would_die(id)
+                            || self.state.permanents[id].as_ref().is_some_and(|permanent| {
+                                permanent.counter_count(CounterKind::Finality) > 0
+                            })
+                    })
             {
                 *to = ZoneType::Exile;
             }

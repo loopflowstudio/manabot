@@ -69,7 +69,7 @@ use managym::{
             ActivatedAbilityDefinition, AdditionalCost, BlockRestriction, CardDefinition, CardType,
             CounterThreshold, Keywords, PowerCda, Restriction, SacrificeCost, SetCharacteristics,
             SpellCostReduction, StaticAbility, StaticKeywordGrant, StaticPtBuff, StaticRestriction,
-            StaticScope, StaticTypeGrant, TargetCostReduction,
+            StaticScope, StaticTriggeredGrant, StaticTypeGrant, TargetCostReduction,
         },
         mana::{Mana, ManaCost},
         permanent::Permanent,
@@ -500,6 +500,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ReturnGrantorToHand => "Effect::ReturnGrantorToHand",
         Effect::ShuffleAttachedIntoLibrary => "Effect::ShuffleAttachedIntoLibrary",
         Effect::ReturnSourceToHand => "Effect::ReturnSourceToHand",
+        Effect::ReturnSourceToBattlefield { .. } => "Effect::ReturnSourceToBattlefield",
         Effect::GainLifeValue { .. } => "Effect::GainLifeValue",
         Effect::AddOneColorManaValue { .. } => "Effect::AddOneColorManaValue",
         Effect::AddManaValue { .. } => "Effect::AddManaValue",
@@ -511,7 +512,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 89;
+const EFFECT_VARIANTS: usize = 90;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -773,6 +774,9 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::ReturnGrantorToHand,
         Effect::ShuffleAttachedIntoLibrary,
         Effect::ReturnSourceToHand,
+        Effect::ReturnSourceToBattlefield {
+            counter: CounterKind::Finality,
+        },
         Effect::GainLifeValue {
             amount: EffectValue::ExcessDamage,
         },
@@ -841,6 +845,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::ActiveIf { .. } => "TriggerCondition::ActiveIf",
         TriggerCondition::AttacksAlone { .. } => "TriggerCondition::AttacksAlone",
         TriggerCondition::BeginningOfYourEndStep => "TriggerCondition::BeginningOfYourEndStep",
+        TriggerCondition::InGraveyard { .. } => "TriggerCondition::InGraveyard",
     }
 }
 
@@ -905,6 +910,9 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::OneOrMoreDealCombatDamageToPlayer {
             predicate: CardPredicate::creature(),
         },
+        TriggerCondition::InGraveyard {
+            condition: Box::new(TriggerCondition::YouDrawNthCardThisTurn { n: 2 }),
+        },
     ]
 }
 
@@ -932,6 +940,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::TargetDealtDamageThisTurn => "Condition::TargetDealtDamageThisTurn",
         Condition::SourceCountersAtLeast { .. } => "Condition::SourceCountersAtLeast",
         Condition::SourceTapped => "Condition::SourceTapped",
+        Condition::TargetCardExiled(_) => "Condition::TargetCardExiled",
     }
 }
 
@@ -961,6 +970,7 @@ fn condition_witnesses() -> Vec<Condition> {
             count: 4,
         },
         Condition::SourceTapped,
+        Condition::TargetCardExiled(CardPredicate::creature()),
     ]
 }
 
@@ -1178,6 +1188,20 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "platypus_bear_mills_two_and_attacks_once_a_lesson_is_in_your_graveyard",
         ),
+        StaticAbility::TriggersAdditionalTime(_) => witnessed(
+            "StaticAbility::TriggersAdditionalTime",
+            Seen::Via("each additional occurrence's stack row"),
+            "Katara, the Fearless",
+            "tla",
+            "katara_the_fearless_makes_ally_triggers_trigger_an_additional_time",
+        ),
+        StaticAbility::TriggeredGrant(_) => witnessed(
+            "StaticAbility::TriggeredGrant",
+            Seen::Via("the granted ability's stack rows and their effects"),
+            "Sokka, Tenacious Tactician",
+            "tla",
+            "sokka_tenacious_tactician_gives_allies_menace_and_prowess_and_makes_allies",
+        ),
     }
 }
 
@@ -1290,6 +1314,15 @@ fn static_witnesses() -> Vec<StaticAbility> {
             types: vec![CardType::Land],
         }),
         StaticAbility::AttacksDespiteDefender(Condition::YourTurn),
+        StaticAbility::TriggersAdditionalTime(CardPredicate::subtype("Ally")),
+        StaticAbility::TriggeredGrant(StaticTriggeredGrant {
+            scope: StaticScope::This,
+            ability: Box::new(Ability::Triggered {
+                condition: TriggerCondition::YouScry,
+                intervening_if: None,
+                effects: vec![Effect::Discard],
+            }),
+        }),
     ]
 }
 

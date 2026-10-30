@@ -152,7 +152,10 @@ fn condition_description(condition: &TriggerCondition) -> String {
             format!("When an opponent draws card {n} this turn")
         }
         TriggerCondition::InGraveyard { condition } => {
-            format!("{} (while this is in your graveyard)", condition_description(condition))
+            format!(
+                "{} (while this is in your graveyard)",
+                condition_description(condition)
+            )
         }
     }
 }

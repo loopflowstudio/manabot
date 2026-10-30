@@ -547,9 +547,9 @@ impl Game {
                         event,
                     )
                 {
-                    let times = self
-                        .trigger_multiplicity(condition, source.card, source.controller, event)
-                        + self.additional_trigger_times(source);
+                    let times =
+                        self.trigger_multiplicity(condition, source.card, source.controller, event)
+                            + self.additional_trigger_times(source);
                     for _ in 0..times {
                         fired.push(FiredTrigger {
                             source: source.clone(),
@@ -570,9 +570,9 @@ impl Game {
                     true,
                     event,
                 ) {
-                    let times = self
-                        .trigger_multiplicity(condition, source.card, source.controller, event)
-                        + self.additional_trigger_times(source);
+                    let times =
+                        self.trigger_multiplicity(condition, source.card, source.controller, event)
+                            + self.additional_trigger_times(source);
                     for _ in 0..times {
                         fired.push(FiredTrigger {
                             source: source.clone(),
@@ -606,11 +606,13 @@ impl Game {
             {
                 self.spend_once_each_turn((source_lki.object_ref, ability_index));
             }
-            let reads_triggering_permanent = granted
-                .as_deref()
-                .unwrap_or(self.state.cards[source_card].abilities[ability_index].effects())
-                .iter()
-                .any(Effect::reads_triggering_permanent);
+            let reads_triggering_permanent = match &granted {
+                Some(effects) => effects.iter().any(Effect::reads_triggering_permanent),
+                None => self.state.cards[source_card].abilities[ability_index]
+                    .effects()
+                    .iter()
+                    .any(Effect::reads_triggering_permanent),
+            };
             let context = if reads_triggering_permanent {
                 match event {
                     GameEvent::CardMoved {

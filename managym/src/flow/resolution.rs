@@ -723,7 +723,8 @@ impl Game {
             }
             Effect::Destroy { .. } | Effect::Exile { .. } => {
                 let target = self.present_primary_target(frame);
-                if let (Effect::Exile { .. }, Some(Target::GraveyardCard(object))) = (effect, target)
+                if let (Effect::Exile { .. }, Some(Target::GraveyardCard(object))) =
+                    (effect, target)
                 {
                     self.move_card(CardId::from(object.entity), ZoneType::Exile);
                     return None;

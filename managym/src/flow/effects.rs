@@ -20,7 +20,6 @@ use crate::{
         effect::{Affected, ContinuousEffect, EffectDuration, Modification},
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId},
         mana::Color,
-        permanent::CounterKind,
     },
 };
 
@@ -108,13 +107,9 @@ impl Game {
         self.permanent_has_modification(permanent_id, &Modification::CantBlock)
     }
 
-    /// "If it would die this turn, exile it instead", or a finality
-    /// counter (CR 122.1h).
+    /// "If it would die this turn, exile it instead."
     pub fn exiled_if_it_would_die(&self, permanent_id: PermanentId) -> bool {
         self.permanent_has_modification(permanent_id, &Modification::ExileIfWouldDie)
-            || self.state.permanents[permanent_id]
-                .as_ref()
-                .is_some_and(|permanent| permanent.counter_count(CounterKind::Finality) > 0)
     }
 
     /// Whether an effect makes the permanent an artifact creature.

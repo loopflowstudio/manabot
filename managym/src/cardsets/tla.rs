@@ -4679,9 +4679,9 @@ fn katara_the_fearless() -> CardDefinition {
         subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
         power: Some(3),
         toughness: Some(3),
-        statics: vec![StaticAbility::TriggersAdditionalTime(CardPredicate::subtype(
-            "Ally",
-        ))],
+        statics: vec![StaticAbility::TriggersAdditionalTime(
+            CardPredicate::subtype("Ally"),
+        )],
         text_box: text_box.into(),
         ..Default::default()
     }

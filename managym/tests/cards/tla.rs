@@ -11699,11 +11699,11 @@ fn katara_the_fearless_makes_ally_triggers_trigger_an_additional_time() {
         "Katara, the Fearless",
         "Sokka, Tenacious Tactician",
         "Yip Yip!",
-        "Mai, Scornful Striker",
     ]);
     let katara = s.force_permanent_on_battlefield(0, "Katara, the Fearless");
     let sokka = s.force_permanent_on_battlefield(0, "Sokka, Tenacious Tactician");
-    s.force_permanent_on_battlefield(0, "Mai, Scornful Striker");
+    s.game_mut().create_token("Monk", PlayerId(0), false);
+    let monk = s.battlefield_permanents_named(0, "Monk")[0];
     cast(&mut s, "Yip Yip!");
     assert!(s.choose_target(Target::Permanent(katara)));
     settle(&mut s);
@@ -11714,7 +11714,7 @@ fn katara_the_fearless_makes_ally_triggers_trigger_an_additional_time() {
         "Yip Yip! and granted prowess twice"
     );
     assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 2);
-    assert_eq!(s.life(0), 18, "Mai is not an Ally: you lose 2 once");
+    assert_eq!(s.game().effective_pt(monk), (2, 2), "not an Ally: once");
 }
 
 /// Entering and attacking each exile up to one card from any graveyard; a
@@ -11752,12 +11752,16 @@ fn raven_eagle_exiles_graveyard_cards_clues_creatures_and_drains_on_your_second_
 /// finality counter; dying again exiles it.
 #[test]
 fn wolfbat_returns_from_your_graveyard_on_your_second_draw_with_a_finality_counter() {
-    let mut s = five_color_setup(&["Wolfbat"]);
+    let mut s = five_color_setup(&["Wolfbat", "Lightning Strike"]);
     let wolfbat = plant_in_graveyard(&mut s, 0, "Wolfbat");
     s.advance_to_active_step(0, StepKind::Main);
     s.game_mut().draw_cards(PlayerId(0), 1);
     resolve_until_priority(&mut s);
-    assert_eq!(zone_of(&s, wolfbat), Some(ZoneType::Graveyard), "first draw");
+    assert_eq!(
+        zone_of(&s, wolfbat),
+        Some(ZoneType::Graveyard),
+        "first draw"
+    );
     s.game_mut().draw_cards(PlayerId(0), 1);
     pass_until(&mut s, ActionSpaceKind::PayOrNot);
     assert!(s.take_action_by_type(ActionType::PayCost));
@@ -11765,7 +11769,8 @@ fn wolfbat_returns_from_your_graveyard_on_your_second_draw_with_a_finality_count
     let returned = s.game().state.card_to_permanent[wolfbat].expect("returned");
     assert_eq!(counters_of(&s, returned, CounterKind::Finality), 1);
 
-    let object = s.game().permanent_object_ref(returned).unwrap();
-    s.game_mut().destroy_object(object);
+    cast(&mut s, "Lightning Strike");
+    assert!(s.choose_target(Target::Permanent(returned)));
+    settle(&mut s);
     assert_eq!(zone_of(&s, wolfbat), Some(ZoneType::Exile), "finality");
 }
