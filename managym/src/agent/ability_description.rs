@@ -4,8 +4,8 @@
 
 use crate::state::{
     ability::{
-        Ability, AffectedSpec, Effect, EffectValue, LinkedChooser, LinkedGrant, PaymentCost,
-        PlayerSelector, StaticCondition, TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, AffectedSpec, Condition, Effect, EffectValue, LinkedChooser, LinkedGrant,
+        PaymentCost, PlayerSelector, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{Card, CardType, Keywords},
     effect::{EffectDuration, Modification},
@@ -24,9 +24,17 @@ pub(crate) fn trigger_description(card: &Card, index: usize, inline: Option<&[Ef
             effects_description(effects)
         );
     }
-    let Ability::Triggered { condition, effects } = &card.abilities[index];
+    let Ability::Triggered {
+        condition,
+        intervening_if,
+        effects,
+    } = &card.abilities[index];
+    let intervening = intervening_if
+        .as_ref()
+        .map(|condition| format!(", if {}", condition_text(condition)))
+        .unwrap_or_default();
     format!(
-        "{} — {}: {}",
+        "{} — {}{intervening}: {}",
         card.name,
         condition_description(condition),
         effects_description(effects)
@@ -47,7 +55,7 @@ fn condition_description(condition: &TriggerCondition) -> String {
         } => format!(
             "{} (while {})",
             condition_description(condition),
-            static_description(active_if)
+            condition_text(active_if)
         ),
         TriggerCondition::Sacrificed {
             predicate,
@@ -129,36 +137,42 @@ fn subject_description(subject: &TriggerSubject) -> String {
     }
 }
 
-fn static_description(condition: &StaticCondition) -> String {
+fn condition_text(condition: &Condition) -> String {
     match condition {
-        StaticCondition::YourTurn => "it is your turn".into(),
-        StaticCondition::Always => "always".into(),
-        StaticCondition::CardsDrawnAtLeast { count } => {
+        Condition::YourTurn => "it is your turn".into(),
+        Condition::Always => "always".into(),
+        Condition::CardsDrawnAtLeast { count } => {
             format!("you have drawn at least {count} cards this turn")
         }
-        StaticCondition::GraveyardAtLeast { count, predicate } => format!(
+        Condition::GraveyardAtLeast { count, predicate } => format!(
             "your graveyard has at least {count} {} cards",
             predicate_description(predicate, "matching")
         ),
-        StaticCondition::ControlsMatching { predicate } => format!(
+        Condition::ControlsMatching { predicate } => format!(
             "you control a {}",
             predicate_description(predicate, "permanent")
         ),
-        StaticCondition::UnspentManaAtLeast { count } => {
+        Condition::UnspentManaAtLeast { count } => {
             format!("you have {count} or more unspent mana")
         }
-        StaticCondition::AttackedThisTurn => "you attacked this turn".into(),
-        StaticCondition::LandEnteredThisTurn => {
+        Condition::AttackedThisTurn => "you attacked this turn".into(),
+        Condition::LandEnteredThisTurn => {
             "a land entered the battlefield under your control this turn".into()
         }
-        StaticCondition::SacrificedThisTurnAtLeast { count } => {
+        Condition::SacrificedThisTurnAtLeast { count } => {
             format!("you have sacrificed {count} or more permanents this turn")
         }
-        StaticCondition::AnyOf(conditions) => conditions
+        Condition::AnyOf(conditions) => conditions
             .iter()
-            .map(static_description)
+            .map(condition_text)
             .collect::<Vec<_>>()
             .join(" or "),
+        Condition::Kicked => "it was kicked".into(),
+        Condition::TargetMatches(predicate) => format!(
+            "that target is a {}",
+            predicate_description(predicate, "permanent")
+        ),
+        Condition::TargetDealtDamageThisTurn => "that target was dealt damage this turn".into(),
     }
 }
 
@@ -497,9 +511,9 @@ fn effect_description(effect: &Effect) -> Option<String> {
         Discard => "Discard a card".into(),
         DealDamageValue { amount, target } => format!("Deal X damage to {}, where X is {}",target_description(target),value_description(amount)),
         PutCountersValue { count, target } => format!("Put X +1/+1 counters on {}, where X is {}",target_description(target),value_description(count)),
-        IfCondition { condition: StaticCondition::Always, effects, .. } => effects_description(effects),
-        IfCondition { condition, effects, otherwise } if otherwise.is_empty() => format!("If {}: {}",static_description(condition),effects_description(effects)),
-        IfCondition { condition, effects, otherwise } => format!("If {}: {}. Otherwise: {}",static_description(condition),effects_description(effects),effects_description(otherwise)),
+        If { condition: Condition::Always, then, .. } => effects_description(then),
+        If { condition, then, otherwise } if otherwise.is_empty() => format!("If {}: {}",condition_text(condition),effects_description(then)),
+        If { condition, then, otherwise } => format!("If {}: {}. Otherwise: {}",condition_text(condition),effects_description(then),effects_description(otherwise)),
         ReturnToHand { target } => format!("Return {} to its owner's hand",target_description(target)),
         DealDamage { amount, target } => format!("Deal {amount} damage to {}",target_description(target)),
         CounterSpell { target } => format!("Counter {}",target_description(target)),
@@ -527,8 +541,6 @@ fn effect_description(effect: &Effect) -> Option<String> {
         Learn => "Learn: you may reveal a Lesson you own from outside the game and put it into your hand, or discard a card to draw a card, or decline".into(),
         Modal { modes } => format!("Choose one — {}",modes.iter().enumerate().map(|(i,m)| format!("({}) {}",i+1,effects_description(m))).collect::<Vec<_>>().join("; ")),
         CounterUnlessPays { cost } => format!("Counter the spell unless its controller pays {}",cost_description(cost)),
-        IfKicked { then, otherwise } => format!("If kicked: {}. Otherwise: {}",effects_description(then),effects_description(otherwise)),
-        IfGraveyardAtLeast { count, predicate, then, otherwise } => format!("If your graveyard has at least {count} {}: {}. Otherwise: {}",predicate_description(predicate,"cards"),effects_description(then),effects_description(otherwise)),
         TargetCreaturesDealPowerDamageToLastTarget => "Each chosen creature except the last target deals damage equal to its power to the last target".into(),
         Earthbend { count, target } => { let count = value_description(count); format!("Earthbend {count} {}: it becomes a 0/0 creature with haste that's still a land; put {count} +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped",target_description(target)) },
         ReturnSourceToBattlefieldTapped => "Return this card to the battlefield tapped".into(),
@@ -546,8 +558,6 @@ fn effect_description(effect: &Effect) -> Option<String> {
         ShuffleAttachedIntoLibrary => "The attached creature's owner shuffles it into their library".into(),
         RemoveCounters { up_to, chosen: None, target } => format!("Remove up to {up_to} counters from {}",target_description(target)),
         RemoveCounters { chosen: Some(kind), target, .. } => format!("Remove a {} counter from {}",counter_description(*kind),target_description(target)),
-        IfTargetMatches { predicate, then } => format!("If that target is a {}: {}",predicate_description(predicate,"permanent"),effects_description(then)),
-        IfTargetDealtDamageThisTurn { then } => format!("If that target was dealt damage this turn: {}",effects_description(then)),
         ForEachTarget { effects } => format!("For each chosen target: {}",effects_description(effects)),
         PutCountersOnEachMatching { count, predicate, other } => format!("Put {} +1/+1 counters on each {}{} you control",value_description(count),if *other { "other " } else { "" },predicate_description(predicate,"permanent")),
     })

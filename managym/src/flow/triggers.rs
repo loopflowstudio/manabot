@@ -409,8 +409,16 @@ impl Game {
             for (ability_index, ability) in
                 self.state.cards[source.card].abilities.iter().enumerate()
             {
-                let Ability::Triggered { condition, .. } = ability;
-                if (!matches!(condition, TriggerCondition::OnceEachTurn { .. })
+                let Ability::Triggered {
+                    condition,
+                    intervening_if,
+                    ..
+                } = ability;
+                // CR 603.4: an intervening "if" is checked as the trigger
+                // event occurs, and again on resolution.
+                if intervening_if.as_ref().is_none_or(|condition| {
+                    self.check_static_condition(condition, source.controller)
+                }) && (!matches!(condition, TriggerCondition::OnceEachTurn { .. })
                     || !self
                         .state
                         .turn

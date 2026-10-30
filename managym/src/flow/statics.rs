@@ -31,12 +31,12 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use crate::{
-    flow::game::Game,
+    flow::{decision::EffectFrame, game::Game},
     state::{
-        ability::StaticCondition,
+        ability::Condition,
         card::{Card, CardType, Keywords, PowerCda, Restriction, SetCharacteristics, StaticScope},
         effect::Modification,
-        game_object::{CardId, ObjectId, PermanentId, PlayerId},
+        game_object::{CardId, ObjectId, PermanentId, PlayerId, Target},
         permanent::CounterKind,
         predicate::CardPredicate,
         zone::ZoneType,
@@ -567,38 +567,75 @@ impl Game {
                 .is_some_and(|condition| self.check_static_condition(condition, player))
     }
 
-    /// Evaluate a static condition for `controller` ("you").
+    /// Answer a game-state condition for `controller` ("you"): statics,
+    /// `ActiveIf` and intervening-if clauses. Resolution-only questions have
+    /// no resolving frame here and answer false; definition checks keep them
+    /// out of these contexts.
     pub(crate) fn check_static_condition(
         &self,
-        condition: &StaticCondition,
+        condition: &Condition,
         controller: PlayerId,
     ) -> bool {
+        debug_assert!(
+            !condition.is_resolution_only(),
+            "resolution-only condition outside Effect::If: {condition:?}"
+        );
+        self.check_condition(condition, controller, None)
+    }
+
+    /// Answer `condition` for `controller`, reading `frame` for the
+    /// resolution-only questions (CR 608.2c).
+    pub(crate) fn check_condition(
+        &self,
+        condition: &Condition,
+        controller: PlayerId,
+        frame: Option<&EffectFrame>,
+    ) -> bool {
         match condition {
-            StaticCondition::Always => true,
-            StaticCondition::YourTurn => self.active_player() == controller,
-            StaticCondition::CardsDrawnAtLeast { count } => {
+            Condition::Always => true,
+            Condition::YourTurn => self.active_player() == controller,
+            Condition::CardsDrawnAtLeast { count } => {
                 self.state.turn.history[controller.0].cards_drawn >= *count
             }
-            StaticCondition::GraveyardAtLeast { count, predicate } => {
+            Condition::GraveyardAtLeast { count, predicate } => {
                 self.count_graveyard_matching(controller, predicate) >= *count
             }
-            StaticCondition::ControlsMatching { predicate } => self
+            Condition::ControlsMatching { predicate } => self
                 .battlefield_permanents(controller)
                 .into_iter()
                 .any(|id| self.permanent_matches_predicate(id, predicate)),
-            StaticCondition::UnspentManaAtLeast { count } => {
+            Condition::UnspentManaAtLeast { count } => {
                 u32::from(self.pooled_mana(controller).total()) >= *count
             }
-            StaticCondition::AttackedThisTurn => self.state.turn.history[controller.0].attacked,
-            StaticCondition::LandEnteredThisTurn => {
-                self.state.turn.history[controller.0].land_entered
-            }
-            StaticCondition::SacrificedThisTurnAtLeast { count } => {
+            Condition::AttackedThisTurn => self.state.turn.history[controller.0].attacked,
+            Condition::LandEnteredThisTurn => self.state.turn.history[controller.0].land_entered,
+            Condition::SacrificedThisTurnAtLeast { count } => {
                 self.state.turn.history[controller.0].permanents_sacrificed >= *count
             }
-            StaticCondition::AnyOf(conditions) => conditions
+            Condition::AnyOf(conditions) => conditions
                 .iter()
-                .any(|condition| self.check_static_condition(condition, controller)),
+                .any(|condition| self.check_condition(condition, controller, frame)),
+            Condition::Kicked => frame.is_some_and(|frame| frame.kicked),
+            Condition::TargetMatches(predicate) => frame
+                .and_then(|frame| self.present_primary_target(frame))
+                .is_some_and(|target| {
+                    matches!(target, Target::Permanent(id)
+                        if self.permanent_matches_predicate(id, predicate))
+                }),
+            Condition::TargetDealtDamageThisTurn => {
+                let Some(Target::Permanent(permanent_id)) =
+                    frame.and_then(EffectFrame::primary_target)
+                else {
+                    return false;
+                };
+                // A departed target answers from its last known information.
+                match self.state.permanents[permanent_id].as_ref() {
+                    Some(permanent) => permanent.dealt_damage_this_turn,
+                    None => self
+                        .departed_permanent_lki(permanent_id)
+                        .is_some_and(|lki| lki.dealt_damage_this_turn),
+                }
+            }
         }
     }
 

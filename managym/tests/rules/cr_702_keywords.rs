@@ -700,6 +700,7 @@ fn cr_702_ward_counters_an_opponents_triggered_ability() {
         &mut s,
         ogre,
         Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },

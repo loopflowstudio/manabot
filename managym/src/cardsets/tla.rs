@@ -4,8 +4,8 @@ use crate::state::ability::AffectedSpec;
 use crate::state::effect::Modification;
 use crate::state::{
     ability::{
-        Ability, Effect, EffectValue, LinkedChooser, LinkedGrant, MilledBonus, PaymentCost,
-        PlayerSelector, StaticCondition, TargetRequirement, TargetSpec, TriggerCondition,
+        Ability, Condition, Effect, EffectValue, LinkedChooser, LinkedGrant, MilledBonus,
+        PaymentCost, PlayerSelector, TargetRequirement, TargetSpec, TriggerCondition,
         TriggerSubject,
     },
     card::{
@@ -271,6 +271,7 @@ fn aang_s_iceberg() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -322,7 +323,8 @@ fn aang_s_journey() -> CardDefinition {
         types: CardTypes::new([CardType::Sorcery]),
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![
-            Effect::IfKicked {
+            Effect::If {
+                condition: Condition::Kicked,
                 then: vec![
                     Effect::SearchBasicLand {
                         subtype: None,
@@ -377,6 +379,7 @@ fn aang_the_last_airbender() -> CardDefinition {
         },
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
@@ -405,6 +408,7 @@ fn aang_the_last_airbender() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::YouCastSpell {
                     predicate: CardPredicate {
                         subtype: Some("Lesson".into()),
@@ -487,11 +491,13 @@ fn accumulate_wisdom() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{1}{U}")),
         types: CardTypes::new([CardType::Instant]),
         subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::IfGraveyardAtLeast {
-            count: 3,
-            predicate: CardPredicate {
-                subtype: Some("Lesson".into()),
-                ..Default::default()
+        spell_effects: vec![Effect::If {
+            condition: Condition::GraveyardAtLeast {
+                count: 3,
+                predicate: CardPredicate {
+                    subtype: Some("Lesson".into()),
+                    ..Default::default()
+                },
             },
             then: vec![Effect::PutTopCardsInHand { count: 3 }],
             otherwise: vec![Effect::LookAndSelect {
@@ -551,6 +557,7 @@ fn air_nomad_legacy() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{W}{U}")),
         types: CardTypes::new([CardType::Enchantment]),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -747,6 +754,7 @@ fn avatar_enthusiasts() -> CardDefinition {
         power: Some(2),
         toughness: Some(2),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::AnotherYouControl(CardPredicate {
                     subtype: Some("Ally".into()),
@@ -899,6 +907,7 @@ fn azula_cunning_usurper() -> CardDefinition {
         toughness: Some(4),
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::Attacks {
                     subject: TriggerSubject::This,
                 },
@@ -908,6 +917,7 @@ fn azula_cunning_usurper() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
@@ -957,6 +967,7 @@ fn azula_on_the_hunt() -> CardDefinition {
         toughness: Some(3),
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::Attacks {
                     subject: TriggerSubject::This,
                 },
@@ -966,6 +977,7 @@ fn azula_on_the_hunt() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::Attacks {
                     subject: TriggerSubject::This,
                 },
@@ -1034,6 +1046,7 @@ fn badgermole() -> CardDefinition {
         power: Some(4),
         toughness: Some(4),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -1072,6 +1085,7 @@ fn badgermole_cub() -> CardDefinition {
         power: Some(2),
         toughness: Some(2),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -1181,6 +1195,7 @@ fn benevolent_river_spirit() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -1203,6 +1218,7 @@ fn bitter_work() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{1}{R}{G}")),
         types: CardTypes::new([CardType::Enchantment]),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::AnyYouControl(CardPredicate {
                     card_type: Some(CardType::Creature),
@@ -1242,6 +1258,7 @@ fn boar_q_pine() -> CardDefinition {
         power: Some(2),
         toughness: Some(2),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::YouCastSpell {
                 predicate: CardPredicate {
                     not_card_types: vec![CardType::Creature],
@@ -1384,6 +1401,7 @@ fn callous_inspector() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Dies {
                 subject: TriggerSubject::This,
             },
@@ -1422,6 +1440,7 @@ fn canyon_crawler() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -1468,6 +1487,7 @@ fn cat_gator() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -1503,6 +1523,7 @@ fn cat_owl() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
@@ -1595,6 +1616,7 @@ fn compassionate_healer() -> CardDefinition {
         power: Some(2),
         toughness: Some(2),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::BecomesTapped {
                 subject: TriggerSubject::This,
             },
@@ -1652,6 +1674,7 @@ fn crescent_island_temple() -> CardDefinition {
         subtypes: vec!["Shrine".into()],
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
@@ -1666,6 +1689,7 @@ fn crescent_island_temple() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::AnotherYouControl(CardPredicate {
                         subtype: Some("Shrine".into()),
@@ -1699,9 +1723,10 @@ fn cruel_administrator() -> CardDefinition {
         toughness: Some(4),
         replacement_effects: vec![ReplacementEffect::EntersWithPlusOneCounters {
             count: 1,
-            condition: Some(StaticCondition::AttackedThisTurn),
+            condition: Some(Condition::AttackedThisTurn),
         }],
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
@@ -1764,6 +1789,7 @@ fn curious_farm_animals() -> CardDefinition {
         power: Some(1),
         toughness: Some(1),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Dies {
                 subject: TriggerSubject::This,
             },
@@ -1847,6 +1873,7 @@ fn dai_li_agents() -> CardDefinition {
         toughness: Some(4),
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
@@ -1882,6 +1909,7 @@ fn dai_li_agents() -> CardDefinition {
                 ],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::Attacks {
                     subject: TriggerSubject::This,
                 },
@@ -2046,6 +2074,7 @@ fn dragon() -> CardDefinition {
         is_token: true,
         color_override: Some(Colors::from([Color::Red])),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
@@ -2075,28 +2104,18 @@ fn dragonfly_swarm() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::ActiveIf {
-                active_if: StaticCondition::GraveyardAtLeast {
-                    count: 1,
-                    predicate: CardPredicate {
-                        subtype: Some("Lesson".into()),
-                        ..Default::default()
-                    },
-                },
-                condition: Box::new(TriggerCondition::Dies {
-                    subject: TriggerSubject::This,
-                }),
+            condition: TriggerCondition::Dies {
+                subject: TriggerSubject::This,
             },
-            effects: vec![Effect::IfGraveyardAtLeast {
+            intervening_if: Some(Condition::GraveyardAtLeast {
                 count: 1,
                 predicate: CardPredicate {
                     subtype: Some("Lesson".into()),
                     ..Default::default()
                 },
-                then: vec![Effect::DrawCards {
-                    count: EffectValue::Fixed(1),
-                }],
-                otherwise: vec![],
+            }),
+            effects: vec![Effect::DrawCards {
+                count: EffectValue::Fixed(1),
             }],
         }],
         ward: Some(ManaCost::parse("{1}")),
@@ -2122,6 +2141,7 @@ fn earth_kingdom_jailer() -> CardDefinition {
         power: Some(3),
         toughness: Some(3),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -2198,6 +2218,7 @@ fn earth_kingdom_soldier() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -2242,6 +2263,7 @@ fn earth_kings_lieutenant() -> CardDefinition {
         },
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::AnotherYouControl(CardPredicate {
                         subtype: Some("Ally".into()),
@@ -2254,6 +2276,7 @@ fn earth_kings_lieutenant() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
@@ -2276,15 +2299,15 @@ fn earth_kings_lieutenant() -> CardDefinition {
 fn earth_rumble_wrestlers() -> CardDefinition {
     let text_box = "Reach\nThis creature gets +1/+0 and has trample as long as you control a land creature or a land entered the battlefield under your control this turn.";
     let condition = || {
-        Some(StaticCondition::AnyOf(vec![
-            StaticCondition::ControlsMatching {
+        Some(Condition::AnyOf(vec![
+            Condition::ControlsMatching {
                 predicate: CardPredicate {
                     card_type: Some(CardType::Land),
                     card_types_any: vec![CardType::Creature],
                     ..Default::default()
                 },
             },
-            StaticCondition::LandEnteredThisTurn,
+            Condition::LandEnteredThisTurn,
         ]))
     };
 
@@ -2335,6 +2358,7 @@ fn earth_village_ruffians() -> CardDefinition {
         power: Some(3),
         toughness: Some(1),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Dies {
                 subject: TriggerSubject::This,
             },
@@ -2588,8 +2612,9 @@ fn fire_nation_cadets() -> CardDefinition {
         power: Some(1),
         toughness: Some(2),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::ActiveIf {
-                active_if: StaticCondition::GraveyardAtLeast {
+                active_if: Condition::GraveyardAtLeast {
                     count: 1,
                     predicate: CardPredicate {
                         subtype: Some("Lesson".into()),
@@ -2637,10 +2662,8 @@ fn fire_nation_engineer() -> CardDefinition {
         // Attacking this turn cannot be undone, so the intervening-if
         // condition still holds as the ability resolves (CR 603.4).
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::ActiveIf {
-                active_if: StaticCondition::AttackedThisTurn,
-                condition: Box::new(TriggerCondition::BeginningOfYourEndStep),
-            },
+            condition: TriggerCondition::BeginningOfYourEndStep,
+            intervening_if: Some(Condition::AttackedThisTurn),
             effects: vec![Effect::TargetClause {
                 requirement: TargetRequirement {
                     shares_creature_type: false,
@@ -2681,12 +2704,10 @@ fn fire_nation_raider() -> CardDefinition {
         // Attacking this turn cannot be undone, so the intervening-if
         // condition still holds as the ability resolves (CR 603.4).
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::ActiveIf {
-                active_if: StaticCondition::AttackedThisTurn,
-                condition: Box::new(TriggerCondition::EntersTheBattlefield {
-                    subject: TriggerSubject::This,
-                }),
+            condition: TriggerCondition::EntersTheBattlefield {
+                subject: TriggerSubject::This,
             },
+            intervening_if: Some(Condition::AttackedThisTurn),
             effects: vec![Effect::CreateToken {
                 token_name: "Clue".into(),
                 count: 1,
@@ -2748,6 +2769,7 @@ fn fire_nation_warship() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Dies {
                 subject: TriggerSubject::This,
             },
@@ -2784,6 +2806,7 @@ fn fire_sages() -> CardDefinition {
         power: Some(2),
         toughness: Some(2),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
@@ -2815,7 +2838,8 @@ fn firebending_lesson() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{R}")),
         types: CardTypes::new([CardType::Instant]),
         subtypes: vec!["Lesson".into()],
-        spell_effects: vec![Effect::IfKicked {
+        spell_effects: vec![Effect::If {
+            condition: Condition::Kicked,
             then: vec![Effect::DealDamage {
                 amount: 5,
                 target: TargetSpec::Creature,
@@ -2853,6 +2877,7 @@ fn firebending_student() -> CardDefinition {
         toughness: Some(2),
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::YouCastSpell {
                     predicate: CardPredicate {
                         not_card_types: vec![CardType::Creature],
@@ -2865,6 +2890,7 @@ fn firebending_student() -> CardDefinition {
                 )],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::Attacks {
                     subject: TriggerSubject::This,
                 },
@@ -2899,7 +2925,7 @@ fn first_time_flyer() -> CardDefinition {
         },
         static_pt_buffs: vec![StaticPtBuff {
             scope: StaticScope::This,
-            condition: Some(StaticCondition::GraveyardAtLeast {
+            condition: Some(Condition::GraveyardAtLeast {
                 count: 1,
                 predicate: CardPredicate {
                     subtype: Some("Lesson".into()),
@@ -2963,6 +2989,7 @@ fn flopsie_bumi_s_buddy() -> CardDefinition {
         power: Some(4),
         toughness: Some(4),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -3044,7 +3071,7 @@ fn foggy_swamp_hunters() -> CardDefinition {
         toughness: Some(4),
         static_keyword_grants: vec![StaticKeywordGrant {
             scope: StaticScope::This,
-            condition: Some(StaticCondition::CardsDrawnAtLeast { count: 2 }),
+            condition: Some(Condition::CardsDrawnAtLeast { count: 2 }),
             keywords: Keywords {
                 lifelink: true,
                 menace: true,
@@ -3073,6 +3100,7 @@ fn foggy_swamp_spirit_keeper() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::YouDrawNthCardThisTurn { n: 2 },
             effects: vec![Effect::CreateToken {
                 token_name: "Spirit".into(),
@@ -3152,6 +3180,7 @@ fn forecasting_fortune_teller() -> CardDefinition {
         power: Some(1),
         toughness: Some(3),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -3284,6 +3313,7 @@ fn glider_kids() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -3305,6 +3335,7 @@ fn glider_staff() -> CardDefinition {
         types: CardTypes::new([CardType::Artifact]),
         subtypes: vec!["Equipment".into()],
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -3370,7 +3401,7 @@ fn gran_gran() -> CardDefinition {
                 not_card_types: vec![CardType::Creature],
                 ..Default::default()
             },
-            condition: StaticCondition::GraveyardAtLeast {
+            condition: Condition::GraveyardAtLeast {
                 count: 3,
                 predicate: CardPredicate {
                     subtype: Some("Lesson".into()),
@@ -3380,6 +3411,7 @@ fn gran_gran() -> CardDefinition {
             generic: 1,
         }],
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::BecomesTapped {
                 subject: TriggerSubject::This,
             },
@@ -3486,6 +3518,7 @@ fn hama_the_bloodbender() -> CardDefinition {
         power: Some(3),
         toughness: Some(3),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -3526,6 +3559,7 @@ fn haru_hidden_talent() -> CardDefinition {
         power: Some(1),
         toughness: Some(1),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::AnotherYouControl(CardPredicate {
                     subtype: Some("Ally".into()),
@@ -3642,6 +3676,7 @@ fn hog_monkey() -> CardDefinition {
         power: Some(3),
         toughness: Some(2),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::BeginningOfYourCombat,
             effects: vec![Effect::until_end_of_turn(
                 AffectedSpec::Target(TargetSpec::PermanentYouControl {
@@ -3696,6 +3731,7 @@ fn honest_work() -> CardDefinition {
             toughness: 1,
         }),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -3769,6 +3805,7 @@ fn iguana_parrot() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::YouCastSpell {
                 predicate: CardPredicate {
                     not_card_types: vec![CardType::Creature],
@@ -3802,6 +3839,7 @@ fn invasion_reinforcements() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -3830,6 +3868,7 @@ fn invasion_submersible() -> CardDefinition {
         power: Some(0),
         toughness: Some(0),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -3890,6 +3929,7 @@ fn iroh_grand_lotus() -> CardDefinition {
         toughness: Some(5),
         grants_flashback: true,
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
@@ -4003,6 +4043,7 @@ fn jeong_jeongs_deserters() -> CardDefinition {
         power: Some(1),
         toughness: Some(2),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -4032,6 +4073,7 @@ fn jet_freedom_fighter() -> CardDefinition {
         toughness: Some(1),
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
@@ -4046,6 +4088,7 @@ fn jet_freedom_fighter() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::Dies {
                     subject: TriggerSubject::This,
                 },
@@ -4086,7 +4129,7 @@ fn june_bounty_hunter() -> CardDefinition {
         subtypes: vec!["Human".into(), "Mercenary".into()],
         power: Some(2),
         toughness: Some(2),
-        unblockable_if: Some(StaticCondition::CardsDrawnAtLeast { count: 2 }),
+        unblockable_if: Some(Condition::CardsDrawnAtLeast { count: 2 }),
         activated_abilities: vec![ActivatedAbilityDefinition {
             sacrifice: Some(SacrificeCost {
                 predicate: CardPredicate {
@@ -4129,6 +4172,7 @@ fn katara_water_tribe_s_hope() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -4179,6 +4223,7 @@ fn knowledge_seeker() -> CardDefinition {
         },
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::YouDrawNthCardThisTurn { n: 2 },
                 effects: vec![Effect::PutCountersOnSource {
                     count: 1,
@@ -4186,6 +4231,7 @@ fn knowledge_seeker() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::Dies {
                     subject: TriggerSubject::This,
                 },
@@ -4213,6 +4259,7 @@ fn kyoshi_battle_fan() -> CardDefinition {
         types: CardTypes::new([CardType::Artifact]),
         subtypes: vec!["Equipment".into()],
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -4257,6 +4304,7 @@ fn kyoshi_island_plaza() -> CardDefinition {
         subtypes: vec!["Shrine".into()],
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
@@ -4275,6 +4323,7 @@ fn kyoshi_island_plaza() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::AnotherYouControl(CardPredicate {
                         subtype: Some("Shrine".into()),
@@ -4350,6 +4399,7 @@ fn kyoshi_warriors() -> CardDefinition {
         power: Some(3),
         toughness: Some(3),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -4379,6 +4429,7 @@ fn lo_and_li_twin_tutors() -> CardDefinition {
         power: Some(2),
         toughness: Some(2),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -4477,6 +4528,7 @@ fn mai_jaded_edge() -> CardDefinition {
         power: Some(1),
         toughness: Some(3),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::YouCastSpell {
                 predicate: CardPredicate {
                     not_card_types: vec![CardType::Creature],
@@ -4520,6 +4572,7 @@ fn mai_scornful_striker() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::PlayerCastsSpell {
                 predicate: CardPredicate {
                     not_card_types: vec![CardType::Creature],
@@ -4551,6 +4604,7 @@ fn master_pakku() -> CardDefinition {
         toughness: Some(3),
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::YouCastSpell {
                     predicate: CardPredicate {
                         not_card_types: vec![CardType::Creature],
@@ -4563,6 +4617,7 @@ fn master_pakku() -> CardDefinition {
                 )],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::BecomesTapped {
                     subject: TriggerSubject::This,
                 },
@@ -4601,6 +4656,7 @@ fn master_piandao() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
@@ -4701,6 +4757,7 @@ fn messenger_hawk() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -4713,7 +4770,7 @@ fn messenger_hawk() -> CardDefinition {
         }],
         static_pt_buffs: vec![StaticPtBuff {
             scope: StaticScope::This,
-            condition: Some(StaticCondition::CardsDrawnAtLeast { count: 2 }),
+            condition: Some(Condition::CardsDrawnAtLeast { count: 2 }),
             power: 2,
             toughness: 0,
             per_creature_type_max: None,
@@ -4735,6 +4792,7 @@ fn meteor_sword() -> CardDefinition {
         types: CardTypes::new([CardType::Artifact]),
         subtypes: vec!["Equipment".into()],
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -4831,10 +4889,11 @@ fn momo_friendly_flier() -> CardDefinition {
                 card_type: Some(CardType::Creature),
                 ..Default::default()
             },
-            condition: StaticCondition::Always,
+            condition: Condition::Always,
             generic: 1,
         }],
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::AnotherYouControl(CardPredicate {
                     flying: true,
@@ -4869,6 +4928,7 @@ fn mongoose_lizard() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -4910,6 +4970,7 @@ fn monk() -> CardDefinition {
         is_token: true,
         color_override: Some(Colors::from([Color::Red])),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::YouCastSpell {
                 predicate: CardPredicate {
                     not_card_types: vec![CardType::Creature],
@@ -5017,6 +5078,7 @@ fn northern_air_temple() -> CardDefinition {
         subtypes: vec!["Shrine".into()],
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
@@ -5030,6 +5092,7 @@ fn northern_air_temple() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::AnotherYouControl(CardPredicate {
                         subtype: Some("Shrine".into()),
@@ -5078,16 +5141,19 @@ fn obsessive_pursuit() -> CardDefinition {
         types: CardTypes::new([CardType::Enchantment]),
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
                 effects: clue(),
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::BeginningOfYourUpkeep,
                 effects: clue(),
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::Attacks {
                     subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
                 },
@@ -5098,9 +5164,9 @@ fn obsessive_pursuit() -> CardDefinition {
                             count: EffectValue::PermanentsSacrificedThisTurn,
                             target: attacking_creature(),
                         },
-                        Effect::IfCondition {
-                            condition: StaticCondition::SacrificedThisTurnAtLeast { count: 3 },
-                            effects: vec![Effect::until_end_of_turn(
+                        Effect::If {
+                            condition: Condition::SacrificedThisTurnAtLeast { count: 3 },
+                            then: vec![Effect::until_end_of_turn(
                                 AffectedSpec::Target(attacking_creature()),
                                 Modification::AddKeywords(Keywords {
                                     lifelink: true,
@@ -5244,6 +5310,7 @@ fn ostrich_horse() -> CardDefinition {
         power: Some(3),
         toughness: Some(1),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -5278,6 +5345,7 @@ fn otter_penguin() -> CardDefinition {
         power: Some(2),
         toughness: Some(1),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::YouDrawNthCardThisTurn { n: 2 },
             effects: vec![
                 Effect::until_end_of_turn(AffectedSpec::Source, Modification::pump(1, 2)),
@@ -5334,6 +5402,7 @@ fn ozai_the_phoenix_king() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
@@ -5344,7 +5413,7 @@ fn ozai_the_phoenix_king() -> CardDefinition {
         }],
         static_keyword_grants: vec![StaticKeywordGrant {
             scope: StaticScope::This,
-            condition: Some(StaticCondition::UnspentManaAtLeast { count: 6 }),
+            condition: Some(Condition::UnspentManaAtLeast { count: 6 }),
             keywords: Keywords {
                 flying: true,
                 indestructible: true,
@@ -5458,6 +5527,7 @@ fn pirate_peddlers() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Sacrificed {
                 predicate: CardPredicate::default(),
                 controller_only: true,
@@ -5490,6 +5560,7 @@ fn platypus_bear() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -5498,7 +5569,7 @@ fn platypus_bear() -> CardDefinition {
                 target: None,
             }],
         }],
-        attacks_despite_defender: Some(StaticCondition::GraveyardAtLeast {
+        attacks_despite_defender: Some(Condition::GraveyardAtLeast {
             count: 1,
             predicate: CardPredicate {
                 subtype: Some("Lesson".into()),
@@ -5523,6 +5594,7 @@ fn pretending_poxbearers() -> CardDefinition {
         power: Some(2),
         toughness: Some(1),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Dies {
                 subject: TriggerSubject::This,
             },
@@ -5595,6 +5667,7 @@ fn rabaroo_troop() -> CardDefinition {
         power: Some(3),
         toughness: Some(5),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::AnyYouControl(CardPredicate {
                     card_type: Some(CardType::Land),
@@ -5650,6 +5723,7 @@ fn ran_and_shaw() -> CardDefinition {
         },
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::Attacks {
                     subject: TriggerSubject::This,
                 },
@@ -5659,29 +5733,19 @@ fn ran_and_shaw() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
-                condition: TriggerCondition::ActiveIf {
-                    active_if: StaticCondition::GraveyardAtLeast {
-                        count: 3,
-                        predicate: CardPredicate {
-                            subtypes_any: vec!["Dragon".into(), "Lesson".into()],
-                            ..Default::default()
-                        },
-                    },
-                    condition: Box::new(TriggerCondition::WasCast {
-                        condition: Box::new(TriggerCondition::EntersTheBattlefield {
-                            subject: TriggerSubject::This,
-                        }),
+                condition: TriggerCondition::WasCast {
+                    condition: Box::new(TriggerCondition::EntersTheBattlefield {
+                        subject: TriggerSubject::This,
                     }),
                 },
-                effects: vec![Effect::IfGraveyardAtLeast {
+                intervening_if: Some(Condition::GraveyardAtLeast {
                     count: 3,
                     predicate: CardPredicate {
                         subtypes_any: vec!["Dragon".into(), "Lesson".into()],
                         ..Default::default()
                     },
-                    then: vec![Effect::CreateNonlegendaryCopy],
-                    otherwise: vec![],
-                }],
+                }),
+                effects: vec![Effect::CreateNonlegendaryCopy],
             },
         ],
         activated_abilities: vec![ActivatedAbilityDefinition {
@@ -5715,15 +5779,15 @@ fn raucous_audience() -> CardDefinition {
         toughness: Some(1),
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,
-            effects: vec![Effect::IfCondition {
-                condition: StaticCondition::ControlsMatching {
+            effects: vec![Effect::If {
+                condition: Condition::ControlsMatching {
                     predicate: CardPredicate {
                         min_power: Some(4),
                         card_type: Some(CardType::Creature),
                         ..Default::default()
                     },
                 },
-                effects: vec![Effect::AddMana {
+                then: vec![Effect::AddMana {
                     mana: Mana::parse("GG"),
                     until_end_of_combat: false,
                 }],
@@ -5905,6 +5969,7 @@ fn rough_rhino_cavalry() -> CardDefinition {
         power: Some(5),
         toughness: Some(5),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
@@ -5949,6 +6014,7 @@ fn rowdy_snowballers() -> CardDefinition {
         power: Some(2),
         toughness: Some(2),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -5981,6 +6047,7 @@ fn rumble_arena() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -6075,7 +6142,7 @@ fn secret_tunnel() -> CardDefinition {
         name: "Secret Tunnel".into(),
         types: CardTypes::new([CardType::Land]),
         subtypes: vec!["Cave".into()],
-        unblockable_if: Some(StaticCondition::Always),
+        unblockable_if: Some(Condition::Always),
         mana_abilities: vec![ManaAbility {
             mana: Mana::parse("1"),
         }],
@@ -6147,7 +6214,7 @@ fn serpent_of_the_pass() -> CardDefinition {
         subtypes: vec!["Serpent".into()],
         power: Some(6),
         toughness: Some(5),
-        flash_if: Some(StaticCondition::GraveyardAtLeast {
+        flash_if: Some(Condition::GraveyardAtLeast {
             count: 3,
             predicate: CardPredicate {
                 subtype: Some("Lesson".into()),
@@ -6241,13 +6308,15 @@ fn sold_out() -> CardDefinition {
             Effect::Exile {
                 target: TargetSpec::Creature,
             },
-            Effect::IfTargetDealtDamageThisTurn {
+            Effect::If {
+                condition: Condition::TargetDealtDamageThisTurn,
                 then: vec![Effect::CreateToken {
                     token_name: "Clue".into(),
                     count: 1,
                     tapped_and_attacking: false,
                     attach_source: false,
                 }],
+                otherwise: vec![],
             },
         ],
         text_box: text_box.into(),
@@ -6270,12 +6339,14 @@ fn sokka_bold_boomeranger() -> CardDefinition {
         toughness: Some(1),
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
                 effects: vec![Effect::OptionalDiscardDraw { count: 1, up_to: 2 }],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::YouCastSpell {
                     predicate: CardPredicate {
                         any_of: vec![
@@ -6320,6 +6391,7 @@ fn sokka_lateral_strategist() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::AttacksWithAnother,
             effects: vec![Effect::DrawCards {
                 count: EffectValue::Fixed(1),
@@ -6404,6 +6476,7 @@ fn soldier() -> CardDefinition {
         is_token: true,
         color_override: Some(Colors::from([Color::Red])),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
@@ -6454,6 +6527,7 @@ fn south_pole_voyager() -> CardDefinition {
         power: Some(2),
         toughness: Some(2),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::AnyYouControl(CardPredicate {
                     subtype: Some("Ally".into()),
@@ -6488,6 +6562,7 @@ fn southern_air_temple() -> CardDefinition {
         subtypes: vec!["Shrine".into()],
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
@@ -6503,6 +6578,7 @@ fn southern_air_temple() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::AnotherYouControl(CardPredicate {
                         subtype: Some("Shrine".into()),
@@ -6616,7 +6692,8 @@ fn spirit_water_revival() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{1}{U}{U}")),
         types: CardTypes::new([CardType::Sorcery]),
         spell_effects: vec![
-            Effect::IfKicked {
+            Effect::If {
+                condition: Condition::Kicked,
                 then: vec![
                     Effect::ShuffleGraveyardIntoLibrary,
                     Effect::DrawCards {
@@ -6650,6 +6727,7 @@ fn suki_kyoshi_warrior() -> CardDefinition {
         subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
         toughness: Some(4),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
@@ -6720,6 +6798,7 @@ fn sun_warriors() -> CardDefinition {
         power: Some(3),
         toughness: Some(5),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
@@ -6798,6 +6877,7 @@ fn team_avatar() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{2}{W}")),
         types: CardTypes::new([CardType::Enchantment]),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::AttacksAlone {
                 subject: TriggerSubject::AnyYouControl(CardPredicate {
                     card_type: Some(CardType::Creature),
@@ -6856,6 +6936,7 @@ fn the_boulder_ready_to_rumble() -> CardDefinition {
         power: Some(4),
         toughness: Some(4),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
@@ -6890,6 +6971,7 @@ fn the_earth_king() -> CardDefinition {
         toughness: Some(2),
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
@@ -6901,6 +6983,7 @@ fn the_earth_king() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::Attacks {
                     subject: TriggerSubject::AnyYouControl(CardPredicate {
                         card_type: Some(CardType::Creature),
@@ -6989,6 +7072,7 @@ fn the_lion_turtle() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -7025,7 +7109,7 @@ fn the_lion_turtle() -> CardDefinition {
         static_restrictions: vec![StaticRestriction {
             scope: StaticScope::This,
             kind: Restriction::CantAttackOrBlock,
-            unless: Some(StaticCondition::GraveyardAtLeast {
+            unless: Some(Condition::GraveyardAtLeast {
                 count: 3,
                 predicate: CardPredicate {
                     subtype: Some("Lesson".into()),
@@ -7052,6 +7136,7 @@ fn the_mechanist_aerial_artisan() -> CardDefinition {
         power: Some(1),
         toughness: Some(3),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::YouCastSpell {
                 predicate: CardPredicate {
                     not_card_types: vec![CardType::Creature],
@@ -7135,6 +7220,7 @@ fn the_spirit_oasis() -> CardDefinition {
         subtypes: vec!["Shrine".into()],
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
@@ -7148,6 +7234,7 @@ fn the_spirit_oasis() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::AnotherYouControl(CardPredicate {
                         subtype: Some("Shrine".into()),
@@ -7234,10 +7321,12 @@ fn tiger_seal() -> CardDefinition {
         },
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::YouDrawNthCardThisTurn { n: 2 },
                 effects: vec![Effect::UntapSource],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::BeginningOfYourUpkeep,
                 effects: vec![Effect::TapSource],
             },
@@ -7258,6 +7347,7 @@ fn tolls_of_war() -> CardDefinition {
         types: CardTypes::new([CardType::Enchantment]),
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
@@ -7269,9 +7359,10 @@ fn tolls_of_war() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::OnceEachTurn {
                     condition: Box::new(TriggerCondition::ActiveIf {
-                        active_if: StaticCondition::YourTurn,
+                        active_if: Condition::YourTurn,
                         condition: Box::new(TriggerCondition::Sacrificed {
                             predicate: CardPredicate::default(),
                             controller_only: true,
@@ -7306,6 +7397,7 @@ fn toph_the_blind_bandit() -> CardDefinition {
         power: Some(0),
         toughness: Some(3),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -7334,6 +7426,7 @@ fn toph_the_first_metalbender() -> CardDefinition {
         power: Some(3),
         toughness: Some(3),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::BeginningOfYourEndStep,
             effects: vec![Effect::Earthbend {
                 count: EffectValue::Fixed(2),
@@ -7370,6 +7463,7 @@ fn treetop_freedom_fighters() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -7494,6 +7588,7 @@ fn tundra_tank() -> CardDefinition {
         toughness: Some(4),
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::Attacks {
                     subject: TriggerSubject::This,
                 },
@@ -7503,6 +7598,7 @@ fn tundra_tank() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
@@ -7580,6 +7676,7 @@ fn twin_blades() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -7636,10 +7733,11 @@ fn uncle_iroh() -> CardDefinition {
                 subtype: Some("Lesson".into()),
                 ..Default::default()
             },
-            condition: StaticCondition::Always,
+            condition: Condition::Always,
             generic: 1,
         }],
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
@@ -7695,6 +7793,7 @@ fn unlucky_cabbage_merchant() -> CardDefinition {
         toughness: Some(2),
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
@@ -7706,6 +7805,7 @@ fn unlucky_cabbage_merchant() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::Sacrificed {
                     predicate: CardPredicate {
                         subtype: Some("Food".into()),
@@ -7751,6 +7851,7 @@ fn vindictive_warden() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
@@ -7790,27 +7891,17 @@ fn walltop_sentries() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::ActiveIf {
-                active_if: StaticCondition::GraveyardAtLeast {
-                    count: 1,
-                    predicate: CardPredicate {
-                        subtype: Some("Lesson".into()),
-                        ..Default::default()
-                    },
-                },
-                condition: Box::new(TriggerCondition::Dies {
-                    subject: TriggerSubject::This,
-                }),
+            condition: TriggerCondition::Dies {
+                subject: TriggerSubject::This,
             },
-            effects: vec![Effect::IfGraveyardAtLeast {
+            intervening_if: Some(Condition::GraveyardAtLeast {
                 count: 1,
                 predicate: CardPredicate {
                     subtype: Some("Lesson".into()),
                     ..Default::default()
                 },
-                then: vec![Effect::GainLife { amount: 2 }],
-                otherwise: vec![],
-            }],
+            }),
+            effects: vec![Effect::GainLife { amount: 2 }],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -7831,6 +7922,7 @@ fn wandering_musicians() -> CardDefinition {
         power: Some(2),
         toughness: Some(5),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
@@ -7907,6 +7999,7 @@ fn wartime_protestors() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::AnotherYouControl(CardPredicate {
                     subtype: Some("Ally".into()),
@@ -8178,11 +8271,11 @@ fn yip_yip() -> CardDefinition {
                 AffectedSpec::Target(TargetSpec::CreatureYouControl),
                 Modification::pump(2, 2),
             ),
-            Effect::IfTargetMatches {
-                predicate: CardPredicate {
+            Effect::If {
+                condition: Condition::TargetMatches(CardPredicate {
                     subtype: Some("Ally".into()),
                     ..Default::default()
-                },
+                }),
                 then: vec![Effect::until_end_of_turn(
                     AffectedSpec::Target(TargetSpec::CreatureYouControl),
                     Modification::AddKeywords(Keywords {
@@ -8190,6 +8283,7 @@ fn yip_yip() -> CardDefinition {
                         ..Default::default()
                     }),
                 )],
+                otherwise: vec![],
             },
         ],
         targeting: vec![TargetRequirement {
@@ -8258,6 +8352,7 @@ fn yuyan_archers() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -8283,6 +8378,7 @@ fn zhao_ruthless_admiral() -> CardDefinition {
         toughness: Some(4),
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::Attacks {
                     subject: TriggerSubject::This,
                 },
@@ -8292,6 +8388,7 @@ fn zhao_ruthless_admiral() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::Sacrificed {
                     predicate: CardPredicate::default(),
                     controller_only: true,
@@ -8322,6 +8419,7 @@ fn zuko_exiled_prince() -> CardDefinition {
         power: Some(4),
         toughness: Some(3),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
@@ -8349,7 +8447,8 @@ fn zuko_s_conviction() -> CardDefinition {
         name: "Zuko's Conviction".into(),
         mana_cost: Some(ManaCost::parse("{B}")),
         types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![Effect::IfKicked {
+        spell_effects: vec![Effect::If {
+            condition: Condition::Kicked,
             then: vec![Effect::ReturnGraveyardTarget {
                 target: TargetSpec::GraveyardCardYouOwn {
                     predicate: CardPredicate {

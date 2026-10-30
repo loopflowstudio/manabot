@@ -246,7 +246,19 @@ impl Game {
             else {
                 return;
             };
-            let Ability::Triggered { effects, .. } = ability;
+            let Ability::Triggered {
+                intervening_if,
+                effects,
+                ..
+            } = ability;
+            // CR 603.4: an intervening "if" that no longer holds removes the
+            // ability from the stack doing nothing.
+            if intervening_if
+                .as_ref()
+                .is_some_and(|condition| !self.check_static_condition(condition, source_controller))
+            {
+                return;
+            }
             (effects, triggered.ability_index)
         };
 
@@ -408,7 +420,7 @@ impl Game {
         }
     }
 
-    fn present_primary_target(&self, frame: &EffectFrame) -> Option<Target> {
+    pub(crate) fn present_primary_target(&self, frame: &EffectFrame) -> Option<Target> {
         frame
             .primary_target()
             .filter(|target| self.target_is_present(*target))
@@ -1027,13 +1039,13 @@ impl Game {
                 player: frame.controller,
                 remaining: 1,
             }),
-            Effect::IfCondition {
+            Effect::If {
                 condition,
-                effects,
+                then,
                 otherwise,
             } => {
-                let branch = if self.check_static_condition(condition, frame.controller) {
-                    effects
+                let branch = if self.check_condition(condition, frame.controller, Some(frame)) {
+                    then
                 } else {
                     otherwise
                 };
@@ -1304,22 +1316,6 @@ impl Game {
                     }],
                 )))
             }
-            Effect::IfKicked { then, otherwise } => {
-                let branch = if frame.kicked { then } else { otherwise };
-                frame.prepend_effects(branch.iter().cloned());
-                None
-            }
-            Effect::IfGraveyardAtLeast {
-                count,
-                predicate,
-                then,
-                otherwise,
-            } => {
-                let matches = self.count_graveyard_matching(frame.controller, predicate);
-                let branch = if matches >= *count { then } else { otherwise };
-                frame.prepend_effects(branch.iter().cloned());
-                None
-            }
             Effect::TargetCreaturesDealPowerDamageToLastTarget => {
                 let (victim_slot, attackers) = frame.targets.split_last()?;
                 if !victim_slot.legal {
@@ -1482,32 +1478,6 @@ impl Game {
             Effect::TapTarget { .. } => {
                 if let Some(Target::Permanent(permanent_id)) = self.present_primary_target(frame) {
                     self.tap_permanent(permanent_id, false);
-                }
-                None
-            }
-            Effect::IfTargetDealtDamageThisTurn { then } => {
-                let Some(Target::Permanent(permanent_id)) = frame.primary_target() else {
-                    return None;
-                };
-                // A departed target answers from its last known information.
-                let dealt = match self.state.permanents[permanent_id].as_ref() {
-                    Some(permanent) => permanent.dealt_damage_this_turn,
-                    None => self
-                        .departed_permanent_lki(permanent_id)
-                        .is_some_and(|lki| lki.dealt_damage_this_turn),
-                };
-                if dealt {
-                    frame.prepend_effects(then.iter().cloned());
-                }
-                None
-            }
-            Effect::IfTargetMatches { predicate, then } => {
-                let Some(Target::Permanent(permanent_id)) = self.present_primary_target(frame)
-                else {
-                    return None;
-                };
-                if self.permanent_matches_predicate(permanent_id, predicate) {
-                    frame.prepend_effects(then.iter().cloned());
                 }
                 None
             }

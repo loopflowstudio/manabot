@@ -18,6 +18,7 @@ fn prophetic_prism() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{2}")),
         types: CardTypes::new([CardType::Artifact]),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },

@@ -197,6 +197,7 @@ impl ContentPack {
         // counter it unless that player pays [cost]."
         if let Some(ward_cost) = definition.ward.clone() {
             definition.abilities.push(Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::BecomesTargeted {
                     subject: TriggerSubject::This,
                 },

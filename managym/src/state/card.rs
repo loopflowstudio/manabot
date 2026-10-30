@@ -2,7 +2,7 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use super::{
     ability::{
-        effect_target_requirements, Ability, Effect, StaticCondition, TargetRequirement, TargetSpec,
+        effect_target_requirements, Ability, Condition, Effect, TargetRequirement, TargetSpec,
     },
     game_object::{ObjectId, ObjectRef, PlayerId},
     mana::{Color, Colors, Mana, ManaCost},
@@ -222,7 +222,7 @@ pub enum StaticScope {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct StaticPtBuff {
     pub scope: StaticScope,
-    pub condition: Option<StaticCondition>,
+    pub condition: Option<Condition>,
     pub power: i32,
     pub toughness: i32,
     /// "+P/+T for each of its creature types, to a maximum of N" (Diligent
@@ -269,7 +269,7 @@ pub struct SetCharacteristics {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct StaticKeywordGrant {
     pub scope: StaticScope,
-    pub condition: Option<StaticCondition>,
+    pub condition: Option<Condition>,
     pub keywords: Keywords,
 }
 
@@ -295,7 +295,7 @@ pub struct StaticRestriction {
     pub kind: Restriction,
     /// "... unless [condition]" for the source's controller (The Lion-Turtle).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub unless: Option<StaticCondition>,
+    pub unless: Option<Condition>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
@@ -334,7 +334,7 @@ pub enum ReplacementEffect {
     EntersWithPlusOneCounters {
         count: i32,
         #[serde(skip_serializing_if = "Option::is_none")]
-        condition: Option<StaticCondition>,
+        condition: Option<Condition>,
     },
     /// This object enters with X counters of `kind`, X being the value
     /// announced as it was cast, otherwise 0 (CR 107.3m, 614.1c).
@@ -491,7 +491,7 @@ pub struct ActivatedAbilityDefinition {
 pub struct SpellCostReduction {
     pub first_on_own_turn: bool,
     pub predicate: CardPredicate,
-    pub condition: StaticCondition,
+    pub condition: Condition,
     pub generic: u8,
 }
 
@@ -516,7 +516,7 @@ pub struct CardDefinition {
     pub library_top_casting: Option<CardPredicate>,
     /// "If [condition], you may cast this spell as though it had flash."
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub flash_if: Option<StaticCondition>,
+    pub flash_if: Option<Condition>,
     /// `cost_reduction_per` counts cards in your graveyard, not permanents
     /// you control.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -532,7 +532,7 @@ pub struct CardDefinition {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attached_characteristics: Option<SetCharacteristics>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub unblockable_if: Option<StaticCondition>,
+    pub unblockable_if: Option<Condition>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sacrifice_cost: Option<SacrificeCost>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
@@ -621,7 +621,7 @@ pub struct CardDefinition {
     /// "This creature can attack as though it didn't have defender" while
     /// the condition holds for its controller (Platypus-Bear).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub attacks_despite_defender: Option<StaticCondition>,
+    pub attacks_despite_defender: Option<Condition>,
     /// Replacement/prevention definitions consumed by the proposed-event
     /// pipeline. Empty vectors are omitted so existing content-pack digests
     /// remain stable until production content actually adopts the feature.

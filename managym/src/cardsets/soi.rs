@@ -25,6 +25,7 @@ fn tireless_tracker() -> CardDefinition {
         toughness: Some(2),
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::AnyYouControl(CardPredicate {
                         card_type: Some(CardType::Land),
@@ -39,6 +40,7 @@ fn tireless_tracker() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::Sacrificed {
                     predicate: CardPredicate {
                         subtype: Some("Clue".into()),

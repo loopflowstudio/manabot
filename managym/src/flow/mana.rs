@@ -570,11 +570,11 @@ impl Game {
         controller: PlayerId,
     ) -> Option<Effect> {
         match effect {
-            Effect::IfCondition {
+            Effect::If {
                 condition,
-                effects,
+                then,
                 otherwise,
-            } if [effects, otherwise].iter().all(|branch| {
+            } if [then, otherwise].iter().all(|branch| {
                 matches!(
                     branch.as_slice(),
                     [Effect::AddMana {
@@ -585,7 +585,7 @@ impl Game {
             }) =>
             {
                 let branch = if self.check_static_condition(condition, controller) {
-                    effects
+                    then
                 } else {
                     otherwise
                 };

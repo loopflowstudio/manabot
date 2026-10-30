@@ -1502,7 +1502,7 @@
       "tests": [],
       "gap": "ExileLink retains exiled CardId only; leave/reenter-exile tracking remains unproved. General cost-moved objects and multi-zone effects need exact destination identity.",
       "anchors": [
-        "managym/src/state/ability.rs::ModifyTriggeringPermanent",
+        "managym/src/state/ability.rs::TriggeringPermanent",
         "managym/src/flow/resolution.rs::ExileUntilSourceLeaves",
         "managym/src/flow/zones.rs::handle_leaves_battlefield"
       ]
@@ -1773,18 +1773,17 @@
     },
     "603.4": {
       "status": "partial",
-      "scope": "Ran and Shaw checks graveyard threshold at entry and resolution using authored condition/effect branches.",
-      "authority": "managym/src/flow/triggers.rs:trigger_condition_fires; managym/src/flow/resolution.rs:execute_frame_effect; managym/src/cardsets/tla.rs:Ran and Shaw",
+      "scope": "Ability::Triggered.intervening_if is checked as the trigger event occurs and again on resolution (Ran and Shaw, raid, Dragonfly Swarm, Proft's Eidetic Memory).",
+      "authority": "managym/src/flow/triggers.rs:check_triggers_for_event; managym/src/flow/resolution.rs:resolve_triggered_ability; managym/src/state/ability.rs:Ability::Triggered",
       "dispersion": "staged responsibilities; no competing authority established",
-      "comments": "ActiveIf documents fire-time only plus explicit effect branch for intervening-if; trigger_condition_fires comment is narrower than that dual use.",
+      "comments": "One intervening_if field replaces the ActiveIf-plus-effect-branch pairs; ActiveIf remains for conditionally granted abilities and state-limited trigger events, which are not rechecked.",
       "tests": [
         "managym/tests/cards/tla.rs:ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution"
       ],
-      "gap": "ActiveIf also models conditional ability existence, which must not always be rechecked. No generic intervening-if field; per-card pairing must remain deliberate.",
+      "gap": "Placement-time state changes between the event and stack placement are not rechecked (CR 603.4 asks at the event and on resolution).",
       "anchors": [
-        "managym/src/flow/triggers.rs::trigger_condition_fires",
-        "managym/src/flow/resolution.rs::execute_frame_effect",
-        "managym/src/cardsets/tla.rs::Ran and Shaw",
+        "managym/src/flow/triggers.rs::check_triggers_for_event",
+        "managym/src/flow/resolution.rs::resolve_triggered_ability",
         "managym/tests/cards/tla.rs::ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution"
       ]
     },
@@ -2232,17 +2231,16 @@
     },
     "608.2a": {
       "status": "partial",
-      "scope": "Explicit resolution branches recheck Ran and Shaw/Proft conditions.",
-      "authority": "managym/src/flow/resolution.rs:resolve_triggered_ability; managym/src/flow/resolution.rs:IfCondition",
+      "scope": "Intervening-if clauses are rechecked on resolution; an ability whose condition fails does nothing.",
+      "authority": "managym/src/flow/resolution.rs:resolve_triggered_ability",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [
         "managym/tests/cards/tla.rs:ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution"
       ],
-      "gap": "No generic intervening-if wrapper; conditionally existing abilities must not acquire blanket rechecks.",
+      "gap": "Conditionally existing abilities (ActiveIf) are deliberately not rechecked.",
       "anchors": [
         "managym/src/flow/resolution.rs::resolve_triggered_ability",
-        "managym/src/flow/resolution.rs::IfCondition",
         "managym/tests/cards/tla.rs::ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution"
       ]
     },
@@ -2371,7 +2369,7 @@
       "gap": "Exact permanent slot prevents following reentry; changed-characteristic response and cost-referenced objects not independently witnessed.",
       "anchors": [
         "managym/src/flow/triggers.rs::check_triggers_for_event",
-        "managym/src/flow/resolution.rs::ModifyTriggeringPermanent"
+        "managym/src/flow/resolution.rs::AffectedSpec::TriggeringPermanent"
       ]
     },
     "608.2m": {

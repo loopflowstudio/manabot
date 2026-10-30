@@ -8,6 +8,11 @@ use super::zone::ZoneType;
 pub enum Ability {
     Triggered {
         condition: TriggerCondition,
+        /// Intervening "if" clause (CR 603.4): the ability triggers only if
+        /// this holds when its trigger event occurs, and does nothing unless
+        /// it still holds as it resolves.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        intervening_if: Option<Condition>,
         effects: Vec<Effect>,
     },
 }
@@ -95,20 +100,24 @@ pub enum TriggerCondition {
         n: u32,
     },
     /// The inner condition only fires while `active_if` holds for the
-    /// ability's controller. Used for conditionally-granted triggered
-    /// abilities ("has firebending 2 as long as there's a Lesson card in
-    /// your graveyard") and the fire-time half of intervening-if clauses
-    /// (CR 603.4; re-check at resolution with an effect branch).
+    /// ability's controller: a conditionally granted triggered ability
+    /// ("has firebending 2 as long as there's a Lesson card in your
+    /// graveyard") or a trigger event limited to a game state ("during your
+    /// turn"). Intervening-if clauses are `Ability::Triggered::intervening_if`.
     ActiveIf {
-        active_if: StaticCondition,
+        active_if: Condition,
         condition: Box<TriggerCondition>,
     },
 }
 
-/// A game-state condition for conditional statics and intervening-if
-/// checks, evaluated for a specific controller ("you").
+/// The one vocabulary for "if ..." and "as long as ...": a question asked
+/// of a specific controller ("you"). Statics, `ActiveIf` and intervening-if
+/// clauses ask it of the game state alone; `Effect::If` asks it as an
+/// instruction resolves, when the resolution-only questions
+/// ([`Condition::is_resolution_only`]) can also read the resolving spell or
+/// ability. Definitions never use those outside `Effect::If`.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum StaticCondition {
+pub enum Condition {
     YourTurn,
     Always,
     CardsDrawnAtLeast {
@@ -140,7 +149,38 @@ pub enum StaticCondition {
     /// At least one alternative holds ("as long as you control a land
     /// creature or a land entered the battlefield under your control this
     /// turn").
-    AnyOf(Vec<StaticCondition>),
+    AnyOf(Vec<Condition>),
+    /// Resolution only: the resolving spell was kicked (CR 702.33).
+    Kicked,
+    /// Resolution only: the frame's primary target is still a permanent and
+    /// matches [predicate] ("if that creature is an Ally").
+    TargetMatches(CardPredicate),
+    /// Resolution only: the frame's primary target was dealt damage this
+    /// turn, read from its last known information once it has left ("Exile
+    /// target creature. If it was dealt damage this turn, ...").
+    TargetDealtDamageThisTurn,
+}
+
+impl Condition {
+    /// Whether answering needs a resolving spell or ability, so the
+    /// condition is meaningful only inside `Effect::If`.
+    pub fn is_resolution_only(&self) -> bool {
+        match self {
+            Condition::Kicked
+            | Condition::TargetMatches(_)
+            | Condition::TargetDealtDamageThisTurn => true,
+            Condition::AnyOf(conditions) => conditions.iter().any(Condition::is_resolution_only),
+            Condition::YourTurn
+            | Condition::Always
+            | Condition::CardsDrawnAtLeast { .. }
+            | Condition::GraveyardAtLeast { .. }
+            | Condition::ControlsMatching { .. }
+            | Condition::UnspentManaAtLeast { .. }
+            | Condition::AttackedThisTurn
+            | Condition::LandEnteredThisTurn
+            | Condition::SacrificedThisTurnAtLeast { .. } => false,
+        }
+    }
 }
 
 /// Which game objects an event-based trigger condition watches.
@@ -416,9 +456,11 @@ pub enum Effect {
         count: EffectValue,
         target: TargetSpec,
     },
-    IfCondition {
-        condition: StaticCondition,
-        effects: Vec<Effect>,
+    /// "If [condition], [then]; otherwise, [otherwise]", asked as this
+    /// instruction resolves (CR 608.2c), of the resolving player and frame.
+    If {
+        condition: Condition,
+        then: Vec<Effect>,
         #[serde(skip_serializing_if = "Vec::is_empty")]
         otherwise: Vec<Effect>,
     },
@@ -570,19 +612,6 @@ pub enum Effect {
     CounterUnlessPays {
         cost: ManaCost,
     },
-    /// Branch on whether the resolving spell was kicked (CR 702.33).
-    IfKicked {
-        then: Vec<Effect>,
-        otherwise: Vec<Effect>,
-    },
-    /// Branch on "if there are `count` or more cards matching [predicate]
-    /// in your graveyard", evaluated at resolution.
-    IfGraveyardAtLeast {
-        count: usize,
-        predicate: CardPredicate,
-        then: Vec<Effect>,
-        otherwise: Vec<Effect>,
-    },
     /// Allies at Last: all chosen targets except the last each deal damage
     /// equal to their power to the last target. Targeting is declared on
     /// the card (`CardDefinition::targeting`).
@@ -647,18 +676,6 @@ pub enum Effect {
         up_to: i32,
         chosen: Option<CounterKind>,
         target: TargetSpec,
-    },
-    /// Run `then` only if the frame's primary target currently matches
-    /// [predicate] ("if that creature is an Ally, ...").
-    IfTargetMatches {
-        predicate: CardPredicate,
-        then: Vec<Effect>,
-    },
-    /// Run `then` only if the frame's primary target was dealt damage this
-    /// turn, read from its last known information once it has left ("Exile
-    /// target creature. If it was dealt damage this turn, ...").
-    IfTargetDealtDamageThisTurn {
-        then: Vec<Effect>,
     },
     /// Run the inner effects once per chosen target, with that target as
     /// the primary target (Fancy Footwork: "untap one or two target
@@ -897,12 +914,6 @@ impl Effect {
             Effect::DealDamageValue { target, .. } | Effect::PutCountersValue { target, .. } => {
                 Some(target)
             }
-            Effect::IfCondition {
-                effects, otherwise, ..
-            } => effects
-                .iter()
-                .chain(otherwise)
-                .find_map(Effect::target_spec),
             Effect::Discard => None,
             Effect::ReturnToHand { target } => Some(target),
             Effect::DealDamage { target, .. } => Some(target),
@@ -922,18 +933,13 @@ impl Effect {
                 if_declined: otherwise,
                 ..
             }
-            | Effect::IfKicked { then, otherwise }
-            | Effect::IfGraveyardAtLeast {
+            | Effect::If {
                 then, otherwise, ..
             } => then
                 .iter()
                 .chain(otherwise.iter())
                 .find_map(|effect| effect.target_spec()),
-            Effect::IfTargetMatches { then, .. }
-            | Effect::IfTargetDealtDamageThisTurn { then }
-            | Effect::SacrificeSource { then } => {
-                then.iter().find_map(|effect| effect.target_spec())
-            }
+            Effect::SacrificeSource { then } => then.iter().find_map(|effect| effect.target_spec()),
             Effect::CreateNonlegendaryCopy
             | Effect::AirbendAll { .. }
             | Effect::OpponentsCastOnlyFromHand

@@ -190,3 +190,9 @@ T2's operator choices are at `a5587df5a:scratch/questions.md`. New since
   `EffectValue`, like `DrawCards.count`.
 - Slice 4: a land entering is read from its printed card type as it enters.
 - Slice 3: The Earth King counts attacking power-4+ creatures as its search resolves ("that many"), not as declared; one removed in response lowers the count.
+- 2026-10-30 (implement): T3's worktree was already merging main `10eeb1f55`
+  (35 conflicts left), converting T3's own `CardDefinition` fields into
+  `StaticAbility`/`AdditionalCost` variants. T4 aborted its own merge of that
+  commit so it would not build a second, competing conversion. T4 builds slice 5
+  on its current base and then merges T3's synced head, applying only T4's
+  part (ward, tokens, `TOKENS_AWAITING_PRODUCER`, guards).

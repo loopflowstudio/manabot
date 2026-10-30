@@ -21,6 +21,7 @@ fn bastion_of_remembrance() -> CardDefinition {
         types: CardTypes::new([CardType::Enchantment]),
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
@@ -32,6 +33,7 @@ fn bastion_of_remembrance() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::Dies {
                     subject: TriggerSubject::AnyYouControl(CardPredicate {
                         card_type: Some(CardType::Creature),

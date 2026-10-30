@@ -245,6 +245,7 @@ fn cr_704_3_simultaneous_departures_share_trigger_source_snapshot() {
     assert_ne!(first, second);
 
     let ability = Ability::Triggered {
+        intervening_if: None,
         condition: TriggerCondition::Dies {
             subject: TriggerSubject::AnotherYouControl(CardPredicate::creature()),
         },

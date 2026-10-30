@@ -819,6 +819,7 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
     let (mut game, source, ..) = fixture();
     game.state.cards[source].abilities = vec![
         Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Dies {
                 subject: TriggerSubject::This,
             },
@@ -827,6 +828,7 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
             }],
         },
         Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },

@@ -73,7 +73,10 @@ one `PlayerTurnHistory`, `EntersWithPlusOneCounters { count, condition }`.
 Done in slice 4 (no parallel path remains): `DrawCardsValue`, `DrainLifeValue`,
 `TriggeringPlayerLosesLife`, `DealDamageToController`,
 `DealDamageToEachOpponent`, the trigger effect scan for the caster,
-`TurnState::cards_drawn_this_turn`.
+`TurnState::cards_drawn_this_turn`. Done with the concept review:
+`StaticCondition`, `IfCondition`, `IfKicked`, `IfGraveyardAtLeast`,
+`IfTargetMatches`, `IfTargetDealtDamageThisTurn`, and the ActiveIf-plus-If
+intervening-if pairs.
 
 ## Upstream (observed 2026-10-30)
 
@@ -106,34 +109,17 @@ Compress (2026-10-30): turn-history writes go through `Game::update_turn_history
 
 Check (2026-10-30, after compress `3bbf7dce2`): debug `cargo test` all targets, fmt, clippy `-D warnings`, observation parity, text observation, experience protocol, current content and attachment join pass; schemas regenerated, extension rebuilt.
 
-## Concept review (2026-10-30, proposed — awaiting Jack Heart)
+## Concept review (Jack Heart, 2026-10-30, accepted 1a 2a 3a — done)
 
-Card author's action: transcribe "if …" from Oracle text. Today it has six
-spellings: `StaticCondition` (statics, `IfCondition`), `IfKicked`,
-`IfGraveyardAtLeast` (duplicates `StaticCondition::GraveyardAtLeast`),
-`IfTargetMatches`, `IfTargetDealtDamageThisTurn`, and an intervening-if
-(CR 603.4) written twice by hand: `TriggerCondition::ActiveIf` for the fire
-check plus a matching `If*` effect for the resolution re-check (TLA examples
-at `cardsets/tla.rs` ~5663 and ~7792; the two copies can silently disagree).
-
-Proposal:
-1. One `Condition` vocabulary (rename `StaticCondition`), asked of "you",
-   plus resolution-only questions (`Kicked`, `TargetMatches(predicate)`,
-   `TargetDealtDamageThisTurn`) that are invalid in a static context.
-2. One `Effect::If { condition, then, otherwise }`; delete `IfKicked`,
-   `IfGraveyardAtLeast`, `IfTargetMatches`, `IfTargetDealtDamageThisTurn`.
-3. Intervening-if becomes `Ability::Triggered { intervening_if:
-   Option<Condition>, .. }`; the engine checks it when the trigger would be
-   put on the stack and again on resolution (CR 603.4). `ActiveIf` stays only
-   for conditionally granted triggers ("has X as long as Y").
-Consequences: tokens/observability guard entries collapse to one If and one
-Condition match; `Condition::evaluate(ctx)` takes a context that has a frame
-only at resolution; a resolution-only question in a static is rejected by a
-definition check test. Counterexample to test: "if you do" (reflexive,
-slice 6) is not a game-state condition — it stays the existing optional
-payment/reflexive shape, not `Condition`.
-Open: 1 (do it), 2 (scope: now in T4 vs. separate Task), 3 (where
-resolution-only conditions live: one enum + check vs. a separate type).
+One `Condition` (was `StaticCondition`) with resolution-only questions
+`Kicked`, `TargetMatches(predicate)`, `TargetDealtDamageThisTurn`
+(`Condition::is_resolution_only`); one `Effect::If { condition, then,
+otherwise }`; `Ability::Triggered { intervening_if }` checked at the trigger
+event and on resolution (CR 603.4). Ran and Shaw, raid (Fire Nation Engineer,
+Raider), Dragonfly Swarm, Walltop Sentries and Proft's Eidetic Memory migrated;
+`ActiveIf` stays for Fire Nation Cadets (granted firebending) and Tolls of War
+("during your turn"). `tests/cards/definitions.rs` rejects resolution-only
+conditions outside `Effect::If`. "If you do" stays the optional-payment shape.
 
 T3 sync (2026-10-30, onto T3 `636f90bf8`): T3 replaced temporary permanent
 modifiers with continuous-effect records and renamed the world w17. T4's

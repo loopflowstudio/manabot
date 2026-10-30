@@ -117,6 +117,7 @@ fn attack_trigger_creates_tapped_and_attacking_token() {
         &mut s,
         ogre_card,
         Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
@@ -161,6 +162,7 @@ fn one_or_more_attack_trigger_fires_once() {
         &mut s,
         ogre_a_card,
         Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
             },
@@ -193,6 +195,7 @@ fn haste_attacker_fires_attack_trigger_on_entry_turn() {
         &mut s,
         goblin_card,
         Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
@@ -223,6 +226,7 @@ fn becomes_tapped_fires_when_attacker_taps() {
         &mut s,
         ogre_card,
         Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::BecomesTapped {
                 subject: TriggerSubject::This,
             },
@@ -256,6 +260,7 @@ fn vigilance_attacker_does_not_become_tapped() {
         &mut s,
         angel_card,
         Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::BecomesTapped {
                 subject: TriggerSubject::This,
             },
@@ -293,6 +298,7 @@ fn tapped_for_mana_trigger() {
         &mut s,
         elves_card,
         Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::TappedForMana {
                 subject: TriggerSubject::This,
             },
@@ -325,6 +331,7 @@ fn attack_tap_is_not_tapped_for_mana() {
         &mut s,
         ogre_card,
         Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::TappedForMana {
                 subject: TriggerSubject::This,
             },
@@ -350,6 +357,7 @@ fn dies_trigger_fires_on_death() {
         &mut s,
         ogre_card,
         Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Dies {
                 subject: TriggerSubject::This,
             },
@@ -375,6 +383,7 @@ fn bounce_is_not_death() {
         &mut s,
         ogre_card,
         Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Dies {
                 subject: TriggerSubject::This,
             },

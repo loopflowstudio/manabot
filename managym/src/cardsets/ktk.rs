@@ -29,6 +29,7 @@ fn monastery_swiftspear() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::YouCastSpell {
                 predicate: CardPredicate {
                     not_card_types: vec![CardType::Creature],

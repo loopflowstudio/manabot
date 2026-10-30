@@ -57,8 +57,8 @@ use managym::{
     cards::tokens::{definition_tokens, name_value, TokenKind},
     state::{
         ability::{
-            Ability, AffectedSpec, Effect, EffectValue, LinkedChooser, LinkedGrant, PaymentCost,
-            PlayerSelector, StaticCondition, TargetRequirement, TargetSpec, TriggerCondition,
+            Ability, AffectedSpec, Condition, Effect, EffectValue, LinkedChooser, LinkedGrant,
+            PaymentCost, PlayerSelector, TargetRequirement, TargetSpec, TriggerCondition,
             TriggerSubject,
         },
         card::{CardDefinition, CardType, Keywords},
@@ -412,7 +412,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::Discard => "Effect::Discard",
         Effect::DealDamageValue { .. } => "Effect::DealDamageValue",
         Effect::PutCountersValue { .. } => "Effect::PutCountersValue",
-        Effect::IfCondition { .. } => "Effect::IfCondition",
+        Effect::If { .. } => "Effect::If",
         Effect::ReturnToHand { .. } => "Effect::ReturnToHand",
         Effect::DealDamage { .. } => "Effect::DealDamage",
         Effect::CounterSpell { .. } => "Effect::CounterSpell",
@@ -435,8 +435,6 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::Learn => "Effect::Learn",
         Effect::Modal { .. } => "Effect::Modal",
         Effect::CounterUnlessPays { .. } => "Effect::CounterUnlessPays",
-        Effect::IfKicked { .. } => "Effect::IfKicked",
-        Effect::IfGraveyardAtLeast { .. } => "Effect::IfGraveyardAtLeast",
         Effect::TargetCreaturesDealPowerDamageToLastTarget => {
             "Effect::TargetCreaturesDealPowerDamageToLastTarget"
         }
@@ -445,8 +443,6 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ExileUntilSourceLeaves { .. } => "Effect::ExileUntilSourceLeaves",
         Effect::AddMana { .. } => "Effect::AddMana",
         Effect::UntapTarget { .. } => "Effect::UntapTarget",
-        Effect::IfTargetMatches { .. } => "Effect::IfTargetMatches",
-        Effect::IfTargetDealtDamageThisTurn { .. } => "Effect::IfTargetDealtDamageThisTurn",
         Effect::ForEachTarget { .. } => "Effect::ForEachTarget",
         Effect::PutCountersOnEachMatching { .. } => "Effect::PutCountersOnEachMatching",
         Effect::Airbend { .. } => "Effect::Airbend",
@@ -485,7 +481,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 86;
+const EFFECT_VARIANTS: usize = 82;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -560,9 +556,9 @@ fn effect_witnesses() -> Vec<Effect> {
             count: value(),
             target: target(),
         },
-        Effect::IfCondition {
-            condition: StaticCondition::YourTurn,
-            effects: draw(),
+        Effect::If {
+            condition: Condition::YourTurn,
+            then: draw(),
             otherwise: vec![],
         },
         Effect::ReturnToHand { target: target() },
@@ -628,16 +624,6 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::CounterUnlessPays {
             cost: ManaCost::parse("{2}"),
         },
-        Effect::IfKicked {
-            then: draw(),
-            otherwise: vec![],
-        },
-        Effect::IfGraveyardAtLeast {
-            count: 2,
-            predicate: creature(),
-            then: draw(),
-            otherwise: vec![],
-        },
         Effect::TargetCreaturesDealPowerDamageToLastTarget,
         Effect::Earthbend {
             count: EffectValue::Fixed(1),
@@ -650,11 +636,6 @@ fn effect_witnesses() -> Vec<Effect> {
             until_end_of_combat: true,
         },
         Effect::UntapTarget { target: target() },
-        Effect::IfTargetMatches {
-            predicate: creature(),
-            then: draw(),
-        },
-        Effect::IfTargetDealtDamageThisTurn { then: draw() },
         Effect::ForEachTarget { effects: draw() },
         Effect::PutCountersOnEachMatching {
             count: EffectValue::SourcePower,
@@ -828,7 +809,7 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::BeginningOfYourCombat,
         TriggerCondition::YouDrawNthCardThisTurn { n: 2 },
         TriggerCondition::ActiveIf {
-            active_if: StaticCondition::YourTurn,
+            active_if: Condition::YourTurn,
             condition: enters(),
         },
         TriggerCondition::AttacksAlone {
@@ -849,6 +830,49 @@ fn ability_token(ability: &Ability) -> &'static str {
     match ability {
         Ability::Triggered { .. } => "Ability::Triggered",
     }
+}
+
+/// The token every `Condition` variant contributes. No wildcard.
+fn condition_token(condition: &Condition) -> &'static str {
+    match condition {
+        Condition::YourTurn => "Condition::YourTurn",
+        Condition::Always => "Condition::Always",
+        Condition::CardsDrawnAtLeast { .. } => "Condition::CardsDrawnAtLeast",
+        Condition::GraveyardAtLeast { .. } => "Condition::GraveyardAtLeast",
+        Condition::ControlsMatching { .. } => "Condition::ControlsMatching",
+        Condition::UnspentManaAtLeast { .. } => "Condition::UnspentManaAtLeast",
+        Condition::AttackedThisTurn => "Condition::AttackedThisTurn",
+        Condition::LandEnteredThisTurn => "Condition::LandEnteredThisTurn",
+        Condition::SacrificedThisTurnAtLeast { .. } => "Condition::SacrificedThisTurnAtLeast",
+        Condition::AnyOf(_) => "Condition::AnyOf",
+        Condition::Kicked => "Condition::Kicked",
+        Condition::TargetMatches(_) => "Condition::TargetMatches",
+        Condition::TargetDealtDamageThisTurn => "Condition::TargetDealtDamageThisTurn",
+    }
+}
+
+/// One value of every `Condition` variant.
+fn condition_witnesses() -> Vec<Condition> {
+    vec![
+        Condition::YourTurn,
+        Condition::Always,
+        Condition::CardsDrawnAtLeast { count: 2 },
+        Condition::GraveyardAtLeast {
+            count: 1,
+            predicate: CardPredicate::creature(),
+        },
+        Condition::ControlsMatching {
+            predicate: CardPredicate::creature(),
+        },
+        Condition::UnspentManaAtLeast { count: 3 },
+        Condition::AttackedThisTurn,
+        Condition::LandEnteredThisTurn,
+        Condition::SacrificedThisTurnAtLeast { count: 2 },
+        Condition::AnyOf(vec![Condition::YourTurn]),
+        Condition::Kicked,
+        Condition::TargetMatches(CardPredicate::creature()),
+        Condition::TargetDealtDamageThisTurn,
+    ]
 }
 
 // ---------------------------------------------------------------------------
@@ -936,6 +960,7 @@ fn every_effect_variant_reaches_the_learning_tokens() {
 fn every_trigger_condition_and_ability_reaches_the_learning_tokens() {
     for condition in trigger_witnesses() {
         let ability = Ability::Triggered {
+            intervening_if: None,
             condition: condition.clone(),
             effects: vec![Effect::DrawCards {
                 count: EffectValue::Fixed(1),
@@ -954,6 +979,40 @@ fn every_trigger_condition_and_ability_reaches_the_learning_tokens() {
             );
         }
     }
+}
+
+#[test]
+fn every_condition_reaches_the_learning_tokens() {
+    let witnesses = condition_witnesses();
+    let names: BTreeSet<_> = witnesses.iter().map(condition_token).collect();
+    assert_eq!(names.len(), witnesses.len(), "one witness per variant");
+    for condition in witnesses {
+        let tokens = tokens_of(&spell(vec![Effect::If {
+            condition: condition.clone(),
+            then: vec![Effect::Discard],
+            otherwise: vec![],
+        }]));
+        let expected = (TokenKind::Variant, name_value(condition_token(&condition)));
+        assert!(tokens.contains(&expected), "{condition:?}");
+    }
+}
+
+#[test]
+fn an_intervening_if_reaches_the_learning_tokens() {
+    let definition = CardDefinition {
+        name: "Witness".into(),
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::BeginningOfYourEndStep,
+            intervening_if: Some(Condition::AttackedThisTurn),
+            effects: vec![Effect::Discard],
+        }],
+        ..Default::default()
+    };
+    let expected = (
+        TokenKind::Variant,
+        name_value(condition_token(&Condition::AttackedThisTurn)),
+    );
+    assert!(tokens_of(&definition).contains(&expected));
 }
 
 #[test]
