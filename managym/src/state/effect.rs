@@ -60,6 +60,13 @@ pub enum Modification<N = i32> {
     KeepUnspentMana(Color),
     /// Rules effect on a player: no maximum hand size (CR 402.2).
     NoMaximumHandSize,
+    /// Layer 2 (CR 613.1b): the record's controller controls the object;
+    /// when the record ends with the object still theirs, control returns
+    /// to `previous`. Only resolutions create it (`Effect::GainControl`).
+    ControlChanged { previous: PlayerId },
+    /// The source's triggered ability chose mode `mode` ("choose one that
+    /// hasn't been chosen"); lasts as long as the object.
+    ModeChosen { mode: u8 },
 }
 
 impl<N> Modification<N> {
@@ -86,6 +93,10 @@ impl<N> Modification<N> {
             Self::ExileIfWouldDie => Modification::ExileIfWouldDie,
             Self::KeepUnspentMana(color) => Modification::KeepUnspentMana(*color),
             Self::NoMaximumHandSize => Modification::NoMaximumHandSize,
+            Self::ControlChanged { previous } => Modification::ControlChanged {
+                previous: *previous,
+            },
+            Self::ModeChosen { mode } => Modification::ModeChosen { mode: *mode },
         }
     }
 }

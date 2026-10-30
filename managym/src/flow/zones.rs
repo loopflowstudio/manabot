@@ -580,6 +580,34 @@ impl Game {
         true
     }
 
+    /// Give `controller` control of a battlefield permanent (CR 108.4): it
+    /// moves to their battlefield without changing zones, and has not been
+    /// under their control continuously since their turn began (CR 302.6).
+    /// "For as long as you control" effects of its previous controller end.
+    pub(crate) fn change_control(&mut self, permanent_id: PermanentId, controller: PlayerId) {
+        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+            return;
+        };
+        if permanent.controller == controller {
+            return;
+        }
+        let (card, previous) = (permanent.card, permanent.controller);
+        self.journal_permanent(permanent_id);
+        let permanent = self.state.permanents[permanent_id].as_mut().unwrap();
+        permanent.controller = controller;
+        permanent.summoning_sick = true;
+        permanent.attacking = false;
+        self.journal_zone_move(card);
+        self.state
+            .zones
+            .move_card(card, controller, ZoneType::Battlefield);
+        self.invalidate_mana_cache(previous);
+        self.invalidate_mana_cache(controller);
+        if let Some(object) = self.permanent_object_ref(permanent_id) {
+            self.end_effects_for_control_change(object, controller);
+        }
+    }
+
     /// Leave-the-battlefield bookkeeping: fire delayed triggers watching the
     /// object (earthbend returns) and end "exiled until this leaves" durations
     /// (Jailer links — the exiled card returns immediately, no stack).

@@ -144,6 +144,17 @@ impl Game {
         self.permanent_has_modification(permanent_id, &Modification::ExileIfWouldDie)
     }
 
+    /// The modes the permanent's "choose one that hasn't been chosen"
+    /// ability has chosen.
+    pub(crate) fn chosen_modes(&self, permanent_id: PermanentId) -> Vec<usize> {
+        self.effects_on(permanent_id)
+            .filter_map(|effect| match effect.modification {
+                Modification::ModeChosen { mode } => Some(usize::from(mode)),
+                _ => None,
+            })
+            .collect()
+    }
+
     /// Whether an effect makes the permanent an artifact creature.
     pub fn becomes_artifact_creature(&self, permanent_id: PermanentId) -> bool {
         self.permanent_has_modification(permanent_id, &Modification::BecomeArtifactCreature)
@@ -203,7 +214,30 @@ impl Game {
             return;
         }
         self.journal_effects();
+        // A control change that ends hands its object back (CR 613.1b).
+        let returned: Vec<_> = self
+            .state
+            .effects
+            .iter()
+            .filter(|effect| ends(effect))
+            .filter_map(|effect| match (effect.affected, &effect.modification) {
+                (Affected::Object(object), Modification::ControlChanged { previous }) => {
+                    Some((object, effect.controller, *previous))
+                }
+                _ => None,
+            })
+            .collect();
         self.state.effects.retain(|effect| !ends(effect));
+        for (object, holder, previous) in returned {
+            if let Ok(id) = self.lookup_current_permanent(object) {
+                if self.state.permanents[id]
+                    .as_ref()
+                    .is_some_and(|permanent| permanent.controller == holder)
+                {
+                    self.change_control(id, previous);
+                }
+            }
+        }
         self.invalidate_mana_cache(PlayerId(0));
         self.invalidate_mana_cache(PlayerId(1));
     }

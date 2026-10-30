@@ -72,6 +72,9 @@ pub struct PendingTrigger {
     /// the spell that became it (CR 107.3m); otherwise 0.
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub x: u8,
+    /// The modes of a "choose up to" ability chosen so far.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub chosen_modes: Vec<usize>,
     /// Delayed triggers carry their effects inline instead of referencing
     /// `Card::abilities` (`ability_index` is unused when set).
     pub inline_effects: Option<Vec<Effect>>,

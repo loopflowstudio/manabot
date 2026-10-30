@@ -135,6 +135,9 @@ fn condition_description(condition: &TriggerCondition) -> String {
         TriggerCondition::BeginningOfYourUpkeep => "At the beginning of your upkeep".into(),
         TriggerCondition::BeginningOfYourCombat => "At the beginning of your combat".into(),
         TriggerCondition::BeginningOfYourEndStep => "At the beginning of your end step".into(),
+        TriggerCondition::BeginningOfYourFirstMainPhase => {
+            "At the beginning of your first main phase".into()
+        }
         TriggerCondition::YouDrawNthCardThisTurn { n } => {
             format!("When you draw card {n} this turn")
         }
@@ -406,6 +409,9 @@ fn value_description(value: &EffectValue) -> String {
         EffectValue::Fixed(value) => value.to_string(),
         EffectValue::X => "the announced value of X".into(),
         EffectValue::Half(value) => format!("half of {}, rounded down", value_description(value)),
+        EffectValue::OwnedPermanentsOpponentsControl => {
+            "the number of permanents you own that your opponents control".into()
+        }
         EffectValue::CreaturesWithCounters => {
             "the number of creatures you control with +1/+1 counters".into()
         }
@@ -577,11 +583,19 @@ fn effect_description(effect: &Effect) -> Option<String> {
         ExileTopCardPlayThisTurn => "Exile the top card of your library. You may play that card this turn".to_string(),
         ExileLinked { chooser, zone, predicate, up_to, grant, target } => format!("{} {} {} {} from {}; {}", match chooser { LinkedChooser::Controller => "You exile", LinkedChooser::TargetPlayer => "That player exiles" }, if *up_to { "up to one" } else { "a" }, predicate_description(predicate, "card"), match zone { ZoneType::Battlefield => "they control", _ => "" }, target_description(target), match grant { LinkedGrant::WaterbendManaValue => "for as long as you control this, you may cast it during your turn by waterbending {X}, where X is its mana value", LinkedGrant::FlashAnyMana => "during your turn, you may cast it as though it had flash, spending mana of any type" }),
         ExileUntilNonlandCastFree { below } => format!("Exile cards from the top of your library until you exile a nonland card. You may cast that card without paying its mana cost if its mana value is less than {}. If you don't cast it this way, put it into your hand", value_description(below)),
-        TriggerModes { modes } => format!(
-            "Choose one — {}",
+        TriggerModes { modes, up_to, unchosen } => format!(
+            "Choose {} — {}",
+            match (up_to, unchosen) {
+                (Some(value), _) => format!("up to {}", value_description(value)),
+                (None, true) => "one that hasn't been chosen".into(),
+                (None, false) => "one".into(),
+            },
             modes.iter().map(|mode| effects_description(mode)).collect::<Vec<_>>().join("; or ")
         ),
         PutSourceCountersOnTarget { .. } => "Put its counters on target creature you control".into(),
+        ExileSourceAndReturn { player } => format!("Exile this, then return it to the battlefield under the control of {}", player_description(player)),
+        GainControl { player, target, duration } => format!("{} gains control of {}{}", player_description(player), target_description(target), match duration { EffectDuration::EndOfTurn => " until end of turn", _ => "" }),
+        PutCountersOnCreatedToken { count } => format!("Put {} +1/+1 counters on that token", value_description(count)),
         ExileAndReturn { .. } => "Exile target creature you control, then return it to the battlefield under its owner's control".into(),
         WhenYouDo { effects } => format!("When you do: {}", effects_description(effects)),
         CreateDelayedTrigger { event, effects } => format!(
@@ -777,6 +791,10 @@ fn continuous_description(
             format!("{color:?}").to_lowercase()
         ),
         Modification::NoMaximumHandSize => format!("{subject} have no maximum hand size{until}"),
+        Modification::ControlChanged { .. } => {
+            format!("You control {}{until}", subject.to_lowercase())
+        }
+        Modification::ModeChosen { mode } => format!("{subject} has chosen mode {}", mode + 1),
     }
 }
 

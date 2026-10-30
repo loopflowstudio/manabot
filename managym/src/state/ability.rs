@@ -120,6 +120,8 @@ pub enum TriggerCondition {
     BeginningOfYourUpkeep,
     BeginningOfYourCombat,
     BeginningOfYourEndStep,
+    /// "At the beginning of your first main phase" (the precombat main).
+    BeginningOfYourFirstMainPhase,
     /// "Whenever you draw your Nth card each turn." The per-player draw
     /// count resets every turn (see `PlayerTurnHistory::cards_drawn`).
     YouDrawNthCardThisTurn {
@@ -346,6 +348,8 @@ pub enum EffectValue {
     /// last known information once it has left ("where X is that
     /// creature's power").
     TriggeringPower,
+    /// Permanents `controller` owns that an opponent controls.
+    OwnedPermanentsOpponentsControl,
     /// Half the inner value, rounded down ("half X cards, rounded down").
     Half(Box<EffectValue>),
 }
@@ -511,6 +515,22 @@ pub enum Effect {
     /// exiled card for {2} rather than its mana cost.
     Airbend {
         target: TargetSpec,
+    },
+    /// "Exile this, then return it to the battlefield under [player]'s
+    /// control": the source returns as a new object (CR 400.7).
+    ExileSourceAndReturn {
+        player: PlayerSelector,
+    },
+    /// "[player] gains control of [the target]" for `duration` (CR 613.1b).
+    GainControl {
+        player: PlayerSelector,
+        target: TargetSpec,
+        duration: EffectDuration,
+    },
+    /// Put `count` +1/+1 counters on the token the resolution created last
+    /// ("Put a +1/+1 counter on that token for each ...").
+    PutCountersOnCreatedToken {
+        count: EffectValue,
     },
     /// "Exile [target], then return it to the battlefield under its
     /// owner's control": it returns as a new object (CR 400.7).
@@ -800,6 +820,15 @@ pub enum Effect {
     /// effect.
     TriggerModes {
         modes: Vec<Vec<Effect>>,
+        /// "Choose up to [value] —": that many distinct modes or fewer,
+        /// read as the ability is put on the stack; their effects run in
+        /// printed order (CR 700.2d).
+        #[serde(skip_serializing_if = "Option::is_none")]
+        up_to: Option<EffectValue>,
+        /// "Choose one that hasn't been chosen": a mode the source object has
+        /// chosen before is not offered (recorded as `ModeChosen`).
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        unchosen: bool,
     },
     /// Spell-level modes are selected during casting. Within a resolving
     /// ability this remains a resolution-time choice.
@@ -1188,6 +1217,7 @@ impl Effect {
             | Effect::Exile { target }
             | Effect::Airbend { target }
             | Effect::ExileAndReturn { target }
+            | Effect::GainControl { target, .. }
             | Effect::ReturnToHandDrawIfControlled { target } => Some(target),
             Effect::SearchBasicLand { .. }
             | Effect::OptionalDiscardDraw { .. }
@@ -1253,6 +1283,8 @@ impl Effect {
             | Effect::PutCountersOnSource { .. }
             | Effect::TapSource
             | Effect::CreateDelayedTrigger { .. }
+            | Effect::ExileSourceAndReturn { .. }
+            | Effect::PutCountersOnCreatedToken { .. }
             | Effect::PutTriggeringCountersOnSource
             | Effect::RestoreController(_)
             | Effect::EachPlayerKeepsCreatures { .. }

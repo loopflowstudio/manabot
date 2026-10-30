@@ -33,6 +33,7 @@ fn queue_effects(s: &mut Scenario, source: CardId, effects: Vec<Effect>) {
         ordering_class: TriggerOrderingClass::Ordinary,
         context: None,
         player: None,
+        chosen_modes: Vec::new(),
         inline_effects: Some(effects),
         x: 0,
     });

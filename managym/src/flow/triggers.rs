@@ -16,6 +16,7 @@ use crate::{
     state::{
         ability::{Ability, Effect, TargetSpec, TriggerCondition, TriggerSubject},
         card::CardType,
+        effect::{EffectDuration, Modification},
         game_object::{CardId, ObjectLki, ObjectRef, PermanentId, PlayerId, Target},
         mana::{Color, Mana},
         stack_object::{StackObject, TriggeredAbilityOnStack},
@@ -190,23 +191,32 @@ impl Game {
             // mode that has legal targets it is removed (CR 700.2a).
             if let Some(modes) = self.unchosen_trigger_modes(&trigger) {
                 let legal = self.legal_trigger_modes(&trigger, &modes);
-                if legal.is_empty() {
+                let up_to = matches!(
+                    self.trigger_mode_rule(&trigger),
+                    Some(Effect::TriggerModes { up_to: Some(_), .. })
+                );
+                if up_to && (legal.is_empty() || self.trigger_modes_left(&trigger) == 0) {
+                    // "Choose up to": the chosen modes, in printed order.
+                    trigger.inline_effects = Some(self.chosen_mode_effects(&trigger, &modes));
+                } else if legal.is_empty() {
                     continue;
+                } else {
+                    let controller = trigger.controller;
+                    self.state.trigger_placement.as_mut().unwrap().placing = Some(trigger);
+                    return Some(ActionSpace {
+                        player: Some(controller),
+                        kind: ActionSpaceKind::Modal,
+                        actions: legal
+                            .into_iter()
+                            .map(|mode| Action::ChooseMode {
+                                player: controller,
+                                mode,
+                            })
+                            .chain(up_to.then_some(Action::Decline { player: controller }))
+                            .collect(),
+                        focus: Vec::new(),
+                    });
                 }
-                let controller = trigger.controller;
-                self.state.trigger_placement.as_mut().unwrap().placing = Some(trigger);
-                return Some(ActionSpace {
-                    player: Some(controller),
-                    kind: ActionSpaceKind::Modal,
-                    actions: legal
-                        .into_iter()
-                        .map(|mode| Action::ChooseMode {
-                            player: controller,
-                            mode,
-                        })
-                        .collect(),
-                    focus: Vec::new(),
-                });
             }
             let Some(requirements) = self.trigger_requirements(&trigger) else {
                 continue;
@@ -275,7 +285,7 @@ impl Game {
         }
     }
 
-    /// The modes of a placing trigger whose mode is not yet chosen.
+    /// The modes of a placing trigger whose modes are not yet chosen.
     pub(crate) fn unchosen_trigger_modes(
         &self,
         trigger: &PendingTrigger,
@@ -283,6 +293,14 @@ impl Game {
         if trigger.inline_effects.is_some() {
             return None;
         }
+        match self.trigger_mode_rule(trigger)? {
+            Effect::TriggerModes { modes, .. } => Some(modes.clone()),
+            _ => None,
+        }
+    }
+
+    /// The placing trigger's `Effect::TriggerModes`, its only effect.
+    fn trigger_mode_rule(&self, trigger: &PendingTrigger) -> Option<&Effect> {
         match self
             .state
             .cards
@@ -291,13 +309,51 @@ impl Game {
             .get(trigger.ability_index)?
             .effects()
         {
-            [Effect::TriggerModes { modes }] => Some(modes.clone()),
+            [rule @ Effect::TriggerModes { .. }] => Some(rule),
             _ => None,
         }
     }
 
-    /// Modes whose every required target has a legal candidate.
+    /// How many modes the placing trigger may still choose: one, or "up to"
+    /// its value less those chosen.
+    fn trigger_modes_left(&self, trigger: &PendingTrigger) -> usize {
+        match self.trigger_mode_rule(trigger) {
+            Some(Effect::TriggerModes {
+                up_to: Some(value), ..
+            }) => usize::try_from(self.controller_value(value, trigger.controller))
+                .unwrap_or(0)
+                .saturating_sub(trigger.chosen_modes.len()),
+            _ => 1,
+        }
+    }
+
+    /// Modes the placing trigger may choose next: every required target has
+    /// a legal candidate, it is not chosen already, and an "unchosen" rule's
+    /// source has not chosen it before.
     fn legal_trigger_modes(&self, trigger: &PendingTrigger, modes: &[Vec<Effect>]) -> Vec<usize> {
+        let unchosen = matches!(
+            self.trigger_mode_rule(trigger),
+            Some(Effect::TriggerModes { unchosen: true, .. })
+        );
+        let chosen_before = match trigger
+            .source_ref
+            .map(|source| self.lookup_current_permanent(source))
+        {
+            Some(Ok(id)) if unchosen => self.chosen_modes(id),
+            _ => Vec::new(),
+        };
+        self.targetable_trigger_modes(trigger, modes)
+            .into_iter()
+            .filter(|mode| !trigger.chosen_modes.contains(mode) && !chosen_before.contains(mode))
+            .collect()
+    }
+
+    /// Modes whose every required target has a legal candidate.
+    fn targetable_trigger_modes(
+        &self,
+        trigger: &PendingTrigger,
+        modes: &[Vec<Effect>],
+    ) -> Vec<usize> {
         let source = trigger
             .source_ref
             .and_then(|source| self.lookup_current_permanent(source).ok());
@@ -338,12 +394,71 @@ impl Game {
         {
             return Err(AgentError("illegal trigger mode".into()));
         }
+        let rule = self.trigger_mode_rule(trigger).cloned();
+        let source = trigger
+            .source_ref
+            .and_then(|source| self.lookup_current_permanent(source).ok());
+        let trigger = self
+            .state
+            .trigger_placement
+            .as_mut()
+            .and_then(|p| p.placing.as_mut())
+            .expect("validated trigger");
+        match rule {
+            Some(Effect::TriggerModes { up_to: Some(_), .. }) => trigger.chosen_modes.push(mode),
+            Some(Effect::TriggerModes { unchosen, .. }) => {
+                trigger.inline_effects = Some(modes[mode].clone());
+                if let (true, Some(source)) = (unchosen, source) {
+                    let affected = self.affected_permanent(source);
+                    let controller = player;
+                    let card = self.state.permanents[source].as_ref().map(|p| p.card);
+                    self.apply_continuous(
+                        card,
+                        controller,
+                        affected,
+                        Modification::ModeChosen {
+                            mode: u8::try_from(mode).unwrap_or(u8::MAX),
+                        },
+                        EffectDuration::Indefinite,
+                    );
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// The effects of the placing trigger's chosen modes, in printed order.
+    fn chosen_mode_effects(&self, trigger: &PendingTrigger, modes: &[Vec<Effect>]) -> Vec<Effect> {
+        let mut chosen = trigger.chosen_modes.clone();
+        chosen.sort_unstable();
+        chosen
+            .into_iter()
+            .flat_map(|mode| modes[mode].iter().cloned())
+            .collect()
+    }
+
+    /// Stop choosing an "up to" trigger's modes.
+    fn stop_choosing_trigger_modes(&mut self, player: PlayerId) -> Result<(), AgentError> {
+        let trigger = self
+            .state
+            .trigger_placement
+            .as_ref()
+            .and_then(|p| p.placing.as_ref())
+            .ok_or_else(|| AgentError("no pending trigger".into()))?;
+        let modes = self
+            .unchosen_trigger_modes(trigger)
+            .ok_or_else(|| AgentError("no pending trigger mode".into()))?;
+        if trigger.controller != player {
+            return Err(AgentError("not the trigger's controller".into()));
+        }
+        let effects = self.chosen_mode_effects(trigger, &modes);
         self.state
             .trigger_placement
             .as_mut()
             .and_then(|p| p.placing.as_mut())
             .expect("validated trigger")
-            .inline_effects = Some(modes[mode].clone());
+            .inline_effects = Some(effects);
         Ok(())
     }
 
@@ -354,6 +469,13 @@ impl Game {
             .as_ref()
             .and_then(|p| p.placing.as_ref())
             .ok_or_else(|| AgentError("no pending trigger".into()))?;
+        if matches!(
+            self.trigger_mode_rule(trigger),
+            Some(Effect::TriggerModes { up_to: Some(_), .. })
+        ) && trigger.inline_effects.is_none()
+        {
+            return self.stop_choosing_trigger_modes(player);
+        }
         let requirements = self
             .trigger_requirements(trigger)
             .ok_or_else(|| AgentError("missing triggered ability".into()))?;
@@ -672,6 +794,7 @@ impl Game {
                 context,
                 player,
                 x,
+                chosen_modes: Vec::new(),
                 inline_effects: granted,
             });
             self.state.trigger_enqueue_counter = self
@@ -896,6 +1019,7 @@ impl Game {
             context,
             player: None,
             x: 0,
+            chosen_modes: Vec::new(),
             inline_effects: Some(effects),
         });
         self.state.trigger_enqueue_counter = self
@@ -941,6 +1065,7 @@ impl Game {
                 context: None,
                 player: None,
                 x: 0,
+                chosen_modes: Vec::new(),
                 inline_effects: None,
             });
             self.state.trigger_enqueue_counter = self
@@ -1273,6 +1398,12 @@ impl Game {
                 TriggerCondition::BeginningOfYourEndStep,
                 GameEvent::StepStarted {
                     step: StepKind::End,
+                },
+            )
+            | (
+                TriggerCondition::BeginningOfYourFirstMainPhase,
+                GameEvent::StepStarted {
+                    step: StepKind::Main,
                 },
             ) => self.active_player() == source_controller,
             (

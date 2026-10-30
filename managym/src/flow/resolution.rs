@@ -101,6 +101,17 @@ impl Game {
             EffectValue::PermanentsSacrificedThisTurn => {
                 self.state.turn.history[controller.0].permanents_sacrificed as i32
             }
+            EffectValue::OwnedPermanentsOpponentsControl => self
+                .battlefield_permanents(PlayerId(1 - controller.0))
+                .into_iter()
+                .filter(|id| {
+                    self.state.permanents[*id]
+                        .as_ref()
+                        .is_some_and(|permanent| {
+                            self.state.cards[permanent.card].owner == controller
+                        })
+                })
+                .count() as i32,
             EffectValue::Half(inner) => self.controller_value(inner, controller).div_euclid(2),
         }
     }
@@ -793,6 +804,60 @@ impl Game {
                     }
                 } else if let Some(permanent) = self.state.permanents[id].as_ref() {
                     self.move_card(permanent.card, ZoneType::Exile);
+                }
+                None
+            }
+            Effect::ExileSourceAndReturn { player } => {
+                let [player] = self.selected_players(player, frame)[..] else {
+                    return None;
+                };
+                let id = self.source_permanent_id(frame)?;
+                let card = self.state.permanents[id].as_ref()?.card;
+                self.move_card(card, ZoneType::Exile);
+                if self.state.zones.zone_of(card) == Some(ZoneType::Exile) {
+                    self.move_card_with_entry(
+                        card,
+                        ZoneType::Battlefield,
+                        crate::flow::proposed_event::ZoneEntry {
+                            controller: Some(player),
+                            ..Default::default()
+                        },
+                    );
+                }
+                None
+            }
+            Effect::GainControl {
+                player, duration, ..
+            } => {
+                let Some(Target::Permanent(id)) = self.present_primary_target(frame) else {
+                    return None;
+                };
+                let [player] = self.selected_players(player, frame)[..] else {
+                    return None;
+                };
+                let previous = self.state.permanents[id].as_ref()?.controller;
+                self.change_control(id, player);
+                let affected = self.affected_permanent(id);
+                self.apply_continuous(
+                    frame.source,
+                    player,
+                    affected,
+                    Modification::ControlChanged { previous },
+                    *duration,
+                );
+                None
+            }
+            Effect::PutCountersOnCreatedToken { count } => {
+                let count = self.effect_value(count, frame);
+                if let Some(token) = frame.created {
+                    if self.permanent_object_ref(token).is_some() {
+                        self.put_counters(
+                            token,
+                            CounterKind::PlusOnePlusOne,
+                            count,
+                            frame.controller,
+                        );
+                    }
                 }
                 None
             }

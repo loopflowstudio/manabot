@@ -445,6 +445,14 @@ impl ContinuousEffectData {
                 "KeepUnspentMana"
             }
             Modification::NoMaximumHandSize => "NoMaximumHandSize",
+            Modification::ControlChanged { previous } => {
+                data.amount = Some(previous.0 as i32);
+                "ControlChanged"
+            }
+            Modification::ModeChosen { mode } => {
+                data.amount = Some(i32::from(*mode));
+                "ModeChosen"
+            }
         }
         .to_string();
         data

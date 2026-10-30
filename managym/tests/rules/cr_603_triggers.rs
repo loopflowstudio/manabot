@@ -132,6 +132,7 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
             ordering_class: managym::flow::trigger::TriggerOrderingClass::Ordinary,
             context: None,
             player: None,
+            chosen_modes: Vec::new(),
             inline_effects: None,
             x: 0,
         },
@@ -148,6 +149,7 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
             ordering_class: managym::flow::trigger::TriggerOrderingClass::Ordinary,
             context: None,
             player: None,
+            chosen_modes: Vec::new(),
             inline_effects: None,
             x: 0,
         },
@@ -268,6 +270,7 @@ fn cr_603_trigger_flush_happens_after_sba_check() {
         ordering_class: managym::flow::trigger::TriggerOrderingClass::Ordinary,
         context: None,
         player: None,
+        chosen_modes: Vec::new(),
         inline_effects: None,
         x: 0,
     });

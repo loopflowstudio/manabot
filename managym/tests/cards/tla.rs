@@ -12210,3 +12210,136 @@ fn earth_rumble_earthbends_then_your_creature_fights_theirs() {
     assert!(s.battlefield_permanents_named(1, "Gray Ogre").is_empty());
     assert_eq!(permanent(&s, wurm).damage, 2);
 }
+
+/// Unkicked: the creature can't block and you get a Clue. Kicked: you also
+/// control it, untapped and hasty, until end of turn.
+#[test]
+fn jet_s_brainwashing_stops_a_blocker_and_kicked_steals_it_for_the_turn() {
+    let mut s = five_color_setup(&["Jet's Brainwashing", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    cast(&mut s, "Jet's Brainwashing");
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert!(s.game().cant_block(ogre));
+    assert_eq!(permanent(&s, ogre).controller, PlayerId(1));
+    assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
+
+    let mut s = five_color_setup(&["Jet's Brainwashing", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.game_mut().state.permanents[ogre].as_mut().unwrap().tapped = true;
+    cast(&mut s, "Jet's Brainwashing");
+    assert!(s.take_action_by_type(ActionType::PayCost));
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(permanent(&s, ogre).controller, PlayerId(0));
+    assert_eq!(s.battlefield_permanents_named(0, "Gray Ogre"), vec![ogre]);
+    assert!(!tapped(&s, ogre));
+    assert!(s.game().effective_keywords(ogre).haste);
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert_eq!(
+        permanent(&s, ogre).controller,
+        PlayerId(1),
+        "returned at cleanup"
+    );
+}
+
+/// Entering makes a Food. At your combat you may give a permanent you
+/// control to the opponent; then an Ally token gets a counter per permanent
+/// you own that they control.
+#[test]
+fn iroh_tea_master_gives_a_permanent_away_for_a_grown_ally() {
+    let mut s = five_color_setup(&["Iroh, Tea Master", "Gray Ogre"]);
+    play_and_settle(&mut s, "Iroh, Tea Master");
+    let food = s.battlefield_permanents_named(0, "Food")[0];
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    target_opponent(&mut s);
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(food)));
+    pass_until(&mut s, ActionSpaceKind::PayOrNot);
+    assert!(s.take_action_by_type(ActionType::PayCost));
+    resolve_until_priority(&mut s);
+    assert_eq!(permanent(&s, food).controller, PlayerId(1));
+    let ally = s.battlefield_permanents_named(0, "Ally")[0];
+    assert_eq!(counters(&s, ally), 1);
+    assert_eq!(s.game().effective_pt(ally), (2, 2));
+}
+
+/// Each first main phase you lose 2 and take a mode not chosen before; the
+/// last sends Zuko to the opponent, where a new object starts fresh.
+#[test]
+fn zuko_conflicted_takes_each_mode_once_then_switches_sides() {
+    let mut s = five_color_setup(&["Zuko, Conflicted"]);
+    let zuko = s.force_permanent_on_battlefield(0, "Zuko, Conflicted");
+    let zuko_card = card_of(&s, zuko);
+    let life = s.life(0);
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    s.advance_until(
+        |s| s.action_space().kind == ActionSpaceKind::Modal,
+        "Zuko's modes".into(),
+    );
+    let modes = |s: &Scenario| {
+        s.action_space()
+            .actions
+            .iter()
+            .filter_map(|a| match a {
+                Action::ChooseMode { mode, .. } => Some(*mode),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(modes(&s), vec![0, 1, 2, 3]);
+    choose_mode(&mut s, 1);
+    resolve_until_priority(&mut s);
+    assert_eq!(counters(&s, zuko), 1);
+    assert_eq!(s.life(0), life - 2);
+
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Upkeep);
+    s.advance_until(
+        |s| s.action_space().kind == ActionSpaceKind::Modal,
+        "Zuko's modes".into(),
+    );
+    assert_eq!(modes(&s), vec![0, 2, 3], "the counter mode was chosen");
+    choose_mode(&mut s, 3);
+    resolve_until_priority(&mut s);
+    let moved = s.game().state.card_to_permanent[zuko_card].expect("returned");
+    assert_eq!(permanent(&s, moved).controller, PlayerId(1));
+    assert_eq!(counters(&s, moved), 0, "a new object");
+}
+
+/// Bumi chooses up to as many modes as Lesson cards in your graveyard.
+#[test]
+fn bumi_chooses_up_to_one_mode_per_lesson_in_your_graveyard() {
+    let mut s = five_color_setup(&["Bumi, King of Three Trials", "Yip Yip!"]);
+    plant_in_graveyard(&mut s, 0, "Yip Yip!");
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    enter_battlefield(&mut s, "Bumi, King of Three Trials");
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    choose_mode(&mut s, 0);
+    settle(&mut s);
+    let bumi = permanent_named(&s, "Bumi, King of Three Trials");
+    assert_eq!(counters(&s, bumi), 3, "one Lesson: one mode");
+    assert_eq!(counters(&s, forest), 0);
+
+    let mut s = five_color_setup(&["Bumi, King of Three Trials", "Yip Yip!", "Price of Freedom"]);
+    plant_in_graveyard(&mut s, 0, "Yip Yip!");
+    plant_in_graveyard(&mut s, 0, "Price of Freedom");
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    enter_battlefield(&mut s, "Bumi, King of Three Trials");
+    pass_until(&mut s, ActionSpaceKind::Modal);
+    choose_mode(&mut s, 2);
+    choose_mode(&mut s, 0);
+    assert_eq!(
+        s.action_space().kind,
+        ActionSpaceKind::ChooseTarget,
+        "two chosen"
+    );
+    assert!(s.choose_target(Target::Permanent(forest)));
+    settle(&mut s);
+    let bumi = permanent_named(&s, "Bumi, King of Three Trials");
+    assert_eq!(counters(&s, bumi), 3);
+    assert_eq!(counters(&s, forest), 3);
+}

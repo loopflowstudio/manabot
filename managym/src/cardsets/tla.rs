@@ -67,6 +67,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         boiling_rock_prison(),
         boomerang_basics(),
         bumi_bash(),
+        bumi_king_of_three_trials(),
         buzzard_wasp_colony(),
         callous_inspector(),
         canyon_crawler(),
@@ -148,10 +149,12 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         invasion_tactics(),
         iroh_grand_lotus(),
         iroh_s_demonstration(),
+        iroh_tea_master(),
         itll_quench_ya(),
         jasmine_dragon_tea_shop(),
         jeong_jeongs_deserters(),
         jet_freedom_fighter(),
+        jet_s_brainwashing(),
         june_bounty_hunter(),
         katara_bending_prodigy(),
         katara_the_fearless(),
@@ -281,6 +284,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         yue_the_moon_spirit(),
         yuyan_archers(),
         zhao_ruthless_admiral(),
+        zuko_conflicted(),
         zuko_exiled_prince(),
         zuko_s_conviction(),
         zuko_s_exile(),
@@ -806,6 +810,8 @@ fn allies_at_last() -> CardDefinition {
 fn appa_loyal_sky_bison() -> CardDefinition {
     let text_box = "Flying\nWhenever Appa enters or attacks, choose one —\n• Target creature you control gains flying until end of turn.\n• Airbend another target nonland permanent you control. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)";
     let modes = || Effect::TriggerModes {
+        up_to: None,
+        unchosen: false,
         modes: vec![
             vec![Effect::until_end_of_turn(
                 AffectedSpec::Target(TargetSpec::CreatureYouControl),
@@ -1608,6 +1614,57 @@ fn bumi_bash() -> CardDefinition {
                     },
                 }],
             ],
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn bumi_king_of_three_trials() -> CardDefinition {
+    let text_box = "When Bumi enters, choose up to X, where X is the number of Lesson cards in your graveyard —\n• Put three +1/+1 counters on Bumi.\n• Target player scries 3.\n• Earthbend 3. (Target land you control becomes a 0/0 creature with haste that's still a land. Put three +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)";
+
+    CardDefinition {
+        key: "tla.bumi_king_of_three_trials",
+        scryfall_id: "a268697b-22b0-4e1b-a5b6-d9be95025e57",
+        name: "Bumi, King of Three Trials".into(),
+        mana_cost: Some(ManaCost::parse("{5}{G}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Noble".into(), "Ally".into()],
+        power: Some(4),
+        toughness: Some(4),
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::EntersTheBattlefield {
+                subject: TriggerSubject::This,
+            },
+            intervening_if: None,
+            effects: vec![Effect::TriggerModes {
+                up_to: Some(EffectValue::GraveyardMatching {
+                    base: 0,
+                    predicate: CardPredicate::subtype("Lesson"),
+                }),
+                unchosen: false,
+                modes: vec![
+                    vec![Effect::PutCountersOnSource {
+                        count: EffectValue::Fixed(3),
+                        kind: CounterKind::PlusOnePlusOne,
+                    }],
+                    vec![Effect::TargetClause {
+                        requirement: TargetRequirement::one(TargetSpec::Player),
+                        effects: vec![Effect::ForPlayer {
+                            player: PlayerSelector::Target(Box::new(TargetSpec::Player)),
+                            effects: vec![Effect::Scry { count: 3 }],
+                        }],
+                    }],
+                    vec![Effect::TargetClause {
+                        requirement: TargetRequirement::one(TargetSpec::LandYouControl),
+                        effects: vec![Effect::Earthbend {
+                            count: EffectValue::Fixed(3),
+                            target: TargetSpec::LandYouControl,
+                        }],
+                    }],
+                ],
+            }],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -4654,6 +4711,79 @@ fn iroh_s_demonstration() -> CardDefinition {
     }
 }
 
+fn iroh_tea_master() -> CardDefinition {
+    let text_box = "When Iroh enters, create a Food token.\nAt the beginning of combat on your turn, you may have target opponent gain control of target permanent you control. When you do, create a 1/1 white Ally creature token. Put a +1/+1 counter on that token for each permanent you own that your opponents control.";
+    let yours = || TargetSpec::PermanentYouControl {
+        predicate: CardPredicate::default(),
+    };
+
+    CardDefinition {
+        key: "tla.iroh_tea_master",
+        scryfall_id: "d1f5e10d-0a89-4129-9717-a921f20d3616",
+        name: "Iroh, Tea Master".into(),
+        mana_cost: Some(ManaCost::parse("{1}{R}{W}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Citizen".into(), "Ally".into()],
+        power: Some(2),
+        toughness: Some(2),
+        abilities: vec![
+            Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::CreateToken {
+                    token_name: "Food".into(),
+                    count: 1,
+                    tapped_and_attacking: false,
+                    attach_source: false,
+                }],
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::BeginningOfYourCombat,
+                intervening_if: None,
+                // In a two-player game the target opponent is the opponent.
+                effects: vec![
+                    Effect::TargetClause {
+                        requirement: TargetRequirement::one(TargetSpec::Opponent),
+                        effects: vec![],
+                    },
+                    Effect::TargetClause {
+                        requirement: TargetRequirement::one(yours()),
+                        effects: vec![Effect::OptionalPayment {
+                            cost: PaymentCost::Mana(ManaCost::default()),
+                            if_paid: vec![
+                                Effect::GainControl {
+                                    player: PlayerSelector::EachOpponent,
+                                    target: yours(),
+                                    duration: EffectDuration::Indefinite,
+                                },
+                                Effect::WhenYouDo {
+                                    effects: vec![
+                                        Effect::CreateToken {
+                                            token_name: "Ally".into(),
+                                            count: 1,
+                                            tapped_and_attacking: false,
+                                            attach_source: false,
+                                        },
+                                        Effect::PutCountersOnCreatedToken {
+                                            count: EffectValue::OwnedPermanentsOpponentsControl,
+                                        },
+                                    ],
+                                },
+                            ],
+                            if_declined: vec![],
+                        }],
+                    },
+                ],
+            },
+        ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
 fn itll_quench_ya() -> CardDefinition {
     let text_box = "Counter target spell unless its controller pays {2}.";
 
@@ -4798,6 +4928,54 @@ fn jet_freedom_fighter() -> CardDefinition {
                 }],
             },
         ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn jet_s_brainwashing() -> CardDefinition {
+    let text_box = "Kicker {3} (You may pay an additional {3} as you cast this spell.)\nTarget creature can't block this turn. If this spell was kicked, gain control of that creature until end of turn, untap it, and it gains haste until end of turn.\nCreate a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")";
+
+    CardDefinition {
+        key: "tla.jet_s_brainwashing",
+        scryfall_id: "b17e8bdb-4b91-4a9d-bfe1-8a55f0bd040b",
+        name: "Jet's Brainwashing".into(),
+        mana_cost: Some(ManaCost::parse("{R}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        spell_effects: vec![
+            Effect::until_end_of_turn(
+                AffectedSpec::Target(TargetSpec::Creature),
+                Modification::CantBlock,
+            ),
+            Effect::If {
+                condition: Condition::Kicked,
+                then: vec![
+                    Effect::GainControl {
+                        player: PlayerSelector::You,
+                        target: TargetSpec::Creature,
+                        duration: EffectDuration::EndOfTurn,
+                    },
+                    Effect::UntapTarget {
+                        target: TargetSpec::Creature,
+                    },
+                    Effect::until_end_of_turn(
+                        AffectedSpec::Target(TargetSpec::Creature),
+                        Modification::AddKeywords(Keywords {
+                            haste: true,
+                            ..Default::default()
+                        }),
+                    ),
+                ],
+                otherwise: vec![],
+            },
+            Effect::CreateToken {
+                token_name: "Clue".into(),
+                count: 1,
+                tapped_and_attacking: false,
+                attach_source: false,
+            },
+        ],
+        additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{3}"))],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -5713,6 +5891,8 @@ fn momo_playful_pet() -> CardDefinition {
             },
             intervening_if: None,
             effects: vec![Effect::TriggerModes {
+                up_to: None,
+                unchosen: false,
                 modes: vec![
                     vec![Effect::CreateToken {
                         token_name: "Food".into(),
@@ -9970,6 +10150,57 @@ fn zhao_ruthless_admiral() -> CardDefinition {
                 )],
             },
         ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn zuko_conflicted() -> CardDefinition {
+    let text_box = "At the beginning of your first main phase, choose one that hasn't been chosen and you lose 2 life —\n• Draw a card.\n• Put a +1/+1 counter on Zuko.\n• Add {R}.\n• Exile Zuko, then return him to the battlefield under an opponent's control.";
+    let mode = |effect: Effect| {
+        vec![
+            Effect::LoseLife {
+                player: PlayerSelector::You,
+                amount: EffectValue::Fixed(2),
+            },
+            effect,
+        ]
+    };
+
+    CardDefinition {
+        key: "tla.zuko_conflicted",
+        scryfall_id: "9d555cab-ec86-4f27-bca2-7d01f79c3f46",
+        name: "Zuko, Conflicted".into(),
+        mana_cost: Some(ManaCost::parse("{B}{R}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Rogue".into()],
+        power: Some(2),
+        toughness: Some(3),
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::BeginningOfYourFirstMainPhase,
+            intervening_if: None,
+            effects: vec![Effect::TriggerModes {
+                up_to: None,
+                unchosen: true,
+                modes: vec![
+                    mode(Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }),
+                    mode(Effect::PutCountersOnSource {
+                        count: EffectValue::Fixed(1),
+                        kind: CounterKind::PlusOnePlusOne,
+                    }),
+                    mode(Effect::AddMana {
+                        mana: Mana::parse("R"),
+                        until_end_of_combat: false,
+                    }),
+                    mode(Effect::ExileSourceAndReturn {
+                        player: PlayerSelector::EachOpponent,
+                    }),
+                ],
+            }],
+        }],
         text_box: text_box.into(),
         ..Default::default()
     }

@@ -36,6 +36,10 @@ export function effectNote(effect: ContinuousEffect): string {
         return `keeps unspent ${(effect.color ?? '').toLowerCase()} mana`;
       case 'NoMaximumHandSize':
         return 'no maximum hand size';
+      case 'ControlChanged':
+        return `control changed from seat ${(effect.amount ?? 0) + 1}`;
+      case 'ModeChosen':
+        return `mode ${(effect.amount ?? 0) + 1} already chosen`;
       default:
         return effect.modification;
     }

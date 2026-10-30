@@ -86,6 +86,7 @@ fn trigger(source: CardId, effects: Vec<Effect>, order: u64) -> PendingTrigger {
         ordering_class: crate::flow::trigger::TriggerOrderingClass::Ordinary,
         context: None,
         player: None,
+        chosen_modes: Vec::new(),
         inline_effects: Some(effects),
         x: 0,
     }

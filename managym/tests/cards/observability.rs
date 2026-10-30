@@ -270,6 +270,14 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
             "Modification::KeepUnspentMana",
             Seen::Player(PLAYER_KEEPS_RED_MANA_INDEX, PLAYER_KEEPS_RED_MANA_INDEX + 1),
         ),
+        Modification::ControlChanged { .. } => (
+            "Modification::ControlChanged",
+            Seen::Via("the permanent's row moves to its new controller's permanents"),
+        ),
+        Modification::ModeChosen { .. } => (
+            "Modification::ModeChosen",
+            Seen::Actions("a chosen mode is no longer offered"),
+        ),
         Modification::NoMaximumHandSize => (
             "Modification::NoMaximumHandSize",
             Seen::Player(
@@ -313,10 +321,14 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
         permanent(Modification::ExileIfWouldDie),
         (true, Modification::KeepUnspentMana(Color::Red)),
         (true, Modification::NoMaximumHandSize),
+        permanent(Modification::ControlChanged {
+            previous: PlayerId(1),
+        }),
+        permanent(Modification::ModeChosen { mode: 1 }),
     ]
 }
 
-const MODIFICATION_VARIANTS: usize = 14;
+const MODIFICATION_VARIANTS: usize = 16;
 
 /// The fact-row duration code of each `EffectDuration`; no wildcard.
 fn duration_code(duration: EffectDuration) -> f32 {
@@ -527,6 +539,9 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::EachPlayerKeepsCreatures { .. } => "Effect::EachPlayerKeepsCreatures",
         Effect::ExileSourceFromGraveyard { .. } => "Effect::ExileSourceFromGraveyard",
         Effect::MayDiscard { .. } => "Effect::MayDiscard",
+        Effect::ExileSourceAndReturn { .. } => "Effect::ExileSourceAndReturn",
+        Effect::GainControl { .. } => "Effect::GainControl",
+        Effect::PutCountersOnCreatedToken { .. } => "Effect::PutCountersOnCreatedToken",
         Effect::GainLifeValue { .. } => "Effect::GainLifeValue",
         Effect::AddOneColorManaValue { .. } => "Effect::AddOneColorManaValue",
         Effect::AddManaValue { .. } => "Effect::AddManaValue",
@@ -538,7 +553,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 98;
+const EFFECT_VARIANTS: usize = 101;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -775,6 +790,8 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::CastLibraryTopFree,
         Effect::WhenYouDo { effects: draw() },
         Effect::TriggerModes {
+            up_to: None,
+            unchosen: false,
             modes: vec![draw(), vec![Effect::Scry { count: 1 }]],
         },
         Effect::PutSourceCountersOnTarget {
@@ -820,6 +837,17 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::MayDiscard {
             then: vec![Effect::Discard],
+        },
+        Effect::ExileSourceAndReturn {
+            player: PlayerSelector::EachOpponent,
+        },
+        Effect::GainControl {
+            player: PlayerSelector::You,
+            target: TargetSpec::Creature,
+            duration: EffectDuration::EndOfTurn,
+        },
+        Effect::PutCountersOnCreatedToken {
+            count: EffectValue::OwnedPermanentsOpponentsControl,
         },
         Effect::GainLifeValue {
             amount: EffectValue::ExcessDamage,
@@ -890,6 +918,9 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::AttacksAlone { .. } => "TriggerCondition::AttacksAlone",
         TriggerCondition::BeginningOfYourEndStep => "TriggerCondition::BeginningOfYourEndStep",
         TriggerCondition::InGraveyard { .. } => "TriggerCondition::InGraveyard",
+        TriggerCondition::BeginningOfYourFirstMainPhase => {
+            "TriggerCondition::BeginningOfYourFirstMainPhase"
+        }
     }
 }
 
@@ -957,6 +988,7 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::InGraveyard {
             condition: Box::new(TriggerCondition::YouDrawNthCardThisTurn { n: 2 }),
         },
+        TriggerCondition::BeginningOfYourFirstMainPhase,
     ]
 }
 
