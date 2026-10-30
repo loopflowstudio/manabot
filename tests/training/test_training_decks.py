@@ -39,7 +39,7 @@ from manabot.training.state.recovery import admit_recovery_identities
 import managym
 from managym import MAX_DECKLIST_BYTES, Deck, DeckImportError, Decklist
 
-PACK = "tla-pool-v1"
+PACK = "world"
 ROSTER_PACK = "elemental-world-v2"
 
 

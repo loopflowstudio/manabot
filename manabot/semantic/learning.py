@@ -1,10 +1,14 @@
-"""Versioned, viewer-safe semantic-program projection for learning.
+"""Viewer-safe projection of card rules for learning.
 
-The rules engine remains authoritative. This module binds semantic IR to one
-immutable ContentPack manifest, builds a shared typed token graph, and maps only
-already-viewer-safe Observation objects into that graph. Current IR is compiled
-natively from the typed Rust set definitions and read through
-``managym.semantic_ir_json``; frozen historical IR is read from an explicit path.
+The rules engine remains authoritative and is also the only source of card
+programs: ``managym.learning_catalog`` walks each pack definition (the same
+``CardDefinition`` the engine runs) into typed tokens. This module binds that
+catalog to one ContentPack manifest and maps only already-viewer-safe
+Observation objects into it. Rows are ``CardDefId`` values.
+
+Principal types: ``LearningSchema`` (token kinds and object roles),
+``BoundSemanticPack`` (a catalog bound to one manifest) and the projection
+and batch records it produces.
 """
 
 from __future__ import annotations
@@ -13,22 +17,18 @@ from dataclasses import dataclass
 import hashlib
 import json
 from pathlib import Path
-import re
-from typing import Any, Iterable, Mapping, Sequence
+from typing import Any, Mapping, Sequence
 
 import numpy as np
 
-from .compiler import IR_SCHEMA_VERSION, Opcode, ProgramKind, canonical_json
-
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SCHEMA_PATH = ROOT / "content/semantic/current/learning_schema.json"
-DEFAULT_PACK_KEY = "ur-lessons-vs-gw-allies"
+SCHEMA_VERSION = 9
 
-# Explicit current packs shared by live-manifest and policy binding. Historical
-# or research IR outside this catalog requires an explicit path.
+# Explicit current packs shared by live-manifest and policy binding.
 CURRENT_PACK_KEYS = frozenset(
     {
-        "tla-pool-v1",
+        "world",
         "tla-baseline-v1",
         "ur-lessons-vs-gw-allies",
         "elemental-combat-v1",
@@ -40,12 +40,40 @@ CURRENT_PACK_KEYS = frozenset(
     }
 )
 
+# Token kinds as numbered by the engine (``cards::tokens::TokenKind``).
+TOKEN_KINDS = {
+    "padding": 0,
+    "structure": 1,
+    "field": 2,
+    "variant": 3,
+    "integer": 4,
+    "boolean": 5,
+    "text": 6,
+    "definition_ref": 7,
+    "null": 8,
+    "program_kind": 9,
+}
 
-def current_ir_document(pack_key: str) -> dict[str, Any]:
-    """The natively compiled IR for one current pack."""
-    import managym  # Native only on this path; historical readers stay pure.
+# Program spans as numbered by the engine (``cards::tokens::ProgramKind``).
+PROGRAM_KINDS = {
+    "triggered": 1,
+    "mana": 2,
+    "triggered_mana": 3,
+    "activated": 4,
+    "spell": 5,
+}
 
-    return dict(json.loads(managym.semantic_ir_json(pack_key)))
+
+def canonical_json(value: Any) -> str:
+    """Sorted keys, no whitespace, UTF-8 without ASCII escaping."""
+    return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def token_value(name: str) -> int:
+    """The engine's stable token value for a Rust name or printed category."""
+    import managym  # Native only on this path.
+
+    return int(managym.learning_token_value(name))
 
 
 class SemanticProjectionError(ValueError):
@@ -56,16 +84,12 @@ class UnknownSchemaError(SemanticProjectionError):
     """A schema version is not supported."""
 
 
-class UnknownOpcodeError(SemanticProjectionError):
-    """An instruction opcode is unknown or disagrees with its name."""
-
-
 class ContentPackBindingError(SemanticProjectionError):
-    """The checked IR cannot bind exactly to a ContentPack manifest."""
+    """The catalog cannot bind exactly to a ContentPack manifest."""
 
 
 class UnadmittedDefinitionError(SemanticProjectionError):
-    """A visible runtime definition is absent from the semantic IR."""
+    """A visible runtime definition is absent from the catalog."""
 
 
 class ArtifactCompatibilityError(SemanticProjectionError):
@@ -128,97 +152,39 @@ class LearningSchema:
     raw: dict[str, Any]
     schema_hash: str
     token_kinds: dict[str, int]
-    structures: dict[str, int]
-    fields: dict[str, int]
     program_kinds: dict[str, int]
-    opcodes: dict[str, int]
-    enums: dict[str, dict[str, int]]
-    special_roles: dict[str, int]
     object_roles: dict[str, int]
     identity_modes: dict[str, int]
-    local_role_base: int
 
     @classmethod
     def load(cls, path: str | Path = DEFAULT_SCHEMA_PATH) -> "LearningSchema":
         raw = _load_json(Path(path))
         version = _integer(raw.get("schema_version"), "learning_schema.schema_version")
-        if version not in {2, 3, 4, 5, 6, 7, 8}:
+        if version != SCHEMA_VERSION:
             raise UnknownSchemaError(
-                f"learning_schema.schema_version: expected 2, 3, 4, 5, 6, 7 or 8, got {version}"
-            )
-        ir_version = _integer(
-            raw.get("ir_schema_version"), "learning_schema.ir_schema_version"
-        )
-        if ir_version != IR_SCHEMA_VERSION:
-            raise UnknownSchemaError(
-                "learning_schema.ir_schema_version: "
-                f"expected {IR_SCHEMA_VERSION}, got {ir_version}"
+                f"learning_schema.schema_version: expected {SCHEMA_VERSION}, got {version}"
             )
         layout = _integer(
-            raw.get("array_layout_version"),
-            "learning_schema.array_layout_version",
+            raw.get("array_layout_version"), "learning_schema.array_layout_version"
         )
         if layout != 1:
             raise UnknownSchemaError(
                 f"learning_schema.array_layout_version: expected 1, got {layout}"
             )
-
         token_kinds = _validate_id_map(
             raw.get("token_kinds"), "learning_schema.token_kinds", allow_zero=True
         )
-        required_token_kinds = {
-            "padding",
-            "structure",
-            "field",
-            "program_kind",
-            "opcode",
-            "integer",
-            "boolean",
-            "enum",
-            "role",
-            "definition_ref",
-            "null",
-        }
-        if set(token_kinds) != required_token_kinds:
+        if token_kinds != TOKEN_KINDS:
             raise SemanticProjectionError(
-                "learning_schema.token_kinds: expected exactly "
-                f"{sorted(required_token_kinds)}"
+                "learning_schema.token_kinds disagrees with the engine's TokenKind"
             )
-        if token_kinds["padding"] != 0:
-            raise SemanticProjectionError(
-                "learning_schema.token_kinds.padding: expected 0"
-            )
-
         program_kinds = _validate_id_map(
             raw.get("program_kinds"), "learning_schema.program_kinds"
         )
-        expected_program_kinds = {kind.name.lower(): int(kind) for kind in ProgramKind}
-        if program_kinds != expected_program_kinds:
+        if program_kinds != PROGRAM_KINDS:
             raise SemanticProjectionError(
-                "learning_schema.program_kinds disagrees with compiler ProgramKind"
+                "learning_schema.program_kinds disagrees with the engine's ProgramKind"
             )
-
-        opcodes = _validate_id_map(raw.get("opcodes"), "learning_schema.opcodes")
-        # Frozen schemas admit only the opcode prefix available at publication.
-        max_opcode = {2: 23, 3: 50, 4: 55, 5: 61, 6: 64, 7: 65, 8: 65}[version]
-        expected_opcodes = {
-            opcode.name.lower(): int(opcode)
-            for opcode in Opcode
-            if int(opcode) <= max_opcode
-        }
-        if opcodes != expected_opcodes:
-            raise SemanticProjectionError(
-                "learning_schema.opcodes disagrees with compiler Opcode"
-            )
-
-        enums = {
-            _string(name, "learning_schema.enums.key"): _validate_id_map(
-                values, f"learning_schema.enums.{name}"
-            )
-            for name, values in _mapping(
-                raw.get("enums"), "learning_schema.enums"
-            ).items()
-        }
         expected_dtypes = {
             "boolean_mask": "bool",
             "index": "int32",
@@ -229,148 +195,18 @@ class LearningSchema:
             raise SemanticProjectionError(
                 f"learning_schema.dtypes: expected {expected_dtypes!r}"
             )
-
         return cls(
             raw=raw,
             schema_hash=_hash_json(raw),
             token_kinds=token_kinds,
-            structures=_validate_id_map(
-                raw.get("structures"), "learning_schema.structures"
-            ),
-            fields=_validate_id_map(raw.get("fields"), "learning_schema.fields"),
             program_kinds=program_kinds,
-            opcodes=opcodes,
-            enums=enums,
-            special_roles=_validate_id_map(
-                raw.get("special_roles"), "learning_schema.special_roles"
-            ),
             object_roles=_validate_id_map(
                 raw.get("object_roles"), "learning_schema.object_roles"
             ),
             identity_modes=_validate_id_map(
                 raw.get("identity_modes"), "learning_schema.identity_modes"
             ),
-            local_role_base=_integer(
-                raw.get("local_role_base"), "learning_schema.local_role_base"
-            ),
         )
-
-
-def _walk_instructions(instructions: Sequence[Any]) -> Iterable[Mapping[str, Any]]:
-    for raw_instruction in instructions:
-        instruction = _mapping(raw_instruction, "instruction")
-        yield instruction
-        for mode in instruction.get("modes", []):
-            yield from _walk_instructions(_sequence(mode, "instruction.modes[]"))
-        for field in ("then", "otherwise", "body", "if_paid", "if_declined"):
-            nested = instruction.get(field)
-            if nested is not None:
-                yield from _walk_instructions(_sequence(nested, f"instruction.{field}"))
-
-
-@dataclass(frozen=True)
-class SemanticIr:
-    raw: dict[str, Any]
-    ir_hash: str
-    definitions: tuple[Mapping[str, Any], ...]
-    programs: tuple[Mapping[str, Any], ...]
-
-    @classmethod
-    def load(
-        cls,
-        schema: LearningSchema,
-        path: str | Path | None = None,
-        *,
-        pack_key: str = DEFAULT_PACK_KEY,
-    ) -> "SemanticIr":
-        """Read frozen IR from ``path``, or current IR for ``pack_key``."""
-        raw = current_ir_document(pack_key) if path is None else _load_json(Path(path))
-        version = _integer(raw.get("schema_version"), "semantic_ir.schema_version")
-        if version != schema.raw["ir_schema_version"]:
-            raise UnknownSchemaError(
-                "semantic_ir.schema_version: "
-                f"expected {schema.raw['ir_schema_version']}, got {version}"
-            )
-        declared_hash = _string(raw.get("ir_hash"), "semantic_ir.ir_hash")
-        unhashed = dict(raw)
-        del unhashed["ir_hash"]
-        actual_hash = _hash_json(unhashed)
-        if declared_hash != actual_hash:
-            raise SemanticProjectionError(
-                f"semantic_ir.ir_hash: expected {actual_hash}, got {declared_hash}"
-            )
-
-        definitions = tuple(
-            _mapping(item, f"semantic_ir.definitions[{index}]")
-            for index, item in enumerate(
-                _sequence(raw.get("definitions"), "semantic_ir.definitions")
-            )
-        )
-        programs = tuple(
-            _mapping(item, f"semantic_ir.programs[{index}]")
-            for index, item in enumerate(
-                _sequence(raw.get("programs"), "semantic_ir.programs")
-            )
-        )
-        for index, definition in enumerate(definitions):
-            if (
-                _integer(
-                    definition.get("semantic_index"),
-                    f"semantic_ir.definitions[{index}].semantic_index",
-                )
-                != index
-            ):
-                raise SemanticProjectionError(
-                    f"semantic_ir.definitions[{index}]: non-canonical semantic_index"
-                )
-            for program_index in _sequence(
-                definition.get("program_indexes"),
-                f"semantic_ir.definitions[{index}].program_indexes",
-            ):
-                program_row = _integer(program_index, "definition.program_indexes[]")
-                if not 0 <= program_row < len(programs):
-                    raise SemanticProjectionError(
-                        f"semantic_ir.definitions[{index}]: invalid program index {program_row}"
-                    )
-
-        for index, program in enumerate(programs):
-            if (
-                _integer(
-                    program.get("program_index"), f"program[{index}].program_index"
-                )
-                != index
-            ):
-                raise SemanticProjectionError(
-                    f"semantic_ir.programs[{index}]: non-canonical program_index"
-                )
-            definition_index = _integer(
-                program.get("definition_index"), f"program[{index}].definition_index"
-            )
-            if not 0 <= definition_index < len(definitions):
-                raise SemanticProjectionError(
-                    f"semantic_ir.programs[{index}]: invalid definition index"
-                )
-            kind_name = _string(program.get("kind_name"), f"program[{index}].kind_name")
-            kind = _integer(program.get("kind"), f"program[{index}].kind")
-            expected_kind = schema.program_kinds.get(kind_name)
-            if expected_kind is None or kind != expected_kind:
-                raise SemanticProjectionError(
-                    f"semantic_ir.programs[{index}]: unknown or mismatched kind {kind_name!r}/{kind}"
-                )
-            instructions = _sequence(
-                program.get("instructions"), f"program[{index}].instructions"
-            )
-            for instruction in _walk_instructions(instructions):
-                op_name = _string(instruction.get("op_name"), "instruction.op_name")
-                opcode = _integer(instruction.get("opcode"), "instruction.opcode")
-                expected_opcode = schema.opcodes.get(op_name)
-                if expected_opcode is None:
-                    raise UnknownOpcodeError(f"unknown opcode name {op_name!r}")
-                if opcode != expected_opcode:
-                    raise UnknownOpcodeError(
-                        f"opcode {opcode} disagrees with {op_name!r} ({expected_opcode})"
-                    )
-        return cls(raw, actual_hash, definitions, programs)
 
 
 @dataclass(frozen=True)
@@ -400,416 +236,41 @@ class SemanticCatalog:
             )
         )
 
+    @classmethod
+    def from_native(cls, raw: Mapping[str, Any]) -> "SemanticCatalog":
+        """Read the arrays ``managym.learning_catalog`` returns."""
 
-class _TokenBuilder:
-    _MANA_FIELDS = {
-        "generic": "mana_generic",
-        "W": "mana_w",
-        "U": "mana_u",
-        "B": "mana_b",
-        "R": "mana_r",
-        "G": "mana_g",
-        "C": "mana_c",
-    }
-
-    def __init__(self, schema: LearningSchema, ir: SemanticIr):
-        self.schema = schema
-        self.ir = ir
-        self.kinds: list[int] = []
-        self.values: list[int] = []
-        self.references: list[tuple[int, int]] = []
-
-    def emit(self, kind: str, value: int) -> int:
-        if kind not in self.schema.token_kinds:
-            raise SemanticProjectionError(f"unknown token kind {kind!r}")
-        self.kinds.append(self.schema.token_kinds[kind])
-        self.values.append(int(value))
-        return len(self.kinds) - 1
-
-    def structure(self, name: str) -> None:
-        try:
-            value = self.schema.structures[name]
-        except KeyError as error:
-            raise SemanticProjectionError(f"unknown structure {name!r}") from error
-        self.emit("structure", value)
-
-    def field(self, name: str) -> None:
-        try:
-            value = self.schema.fields[name]
-        except KeyError as error:
-            raise SemanticProjectionError(f"unknown semantic field {name!r}") from error
-        self.emit("field", value)
-
-    def enum(self, domain: str, value: str) -> None:
-        try:
-            encoded = self.schema.enums[domain][value]
-        except KeyError as error:
-            raise SemanticProjectionError(
-                f"unknown {domain} categorical value {value!r}"
-            ) from error
-        self.emit("enum", encoded)
-
-    def role(self, value: str, roles: Mapping[str, int]) -> None:
-        if value in roles:
-            encoded = self.schema.local_role_base + roles[value]
-        else:
-            try:
-                encoded = self.schema.special_roles[value]
-            except KeyError as error:
-                raise SemanticProjectionError(
-                    f"unknown semantic role {value!r}"
-                ) from error
-        self.emit("role", encoded)
-
-    def mana(self, value: str, context: str) -> None:
-        counts: dict[str, int] = {name: 0 for name in self._MANA_FIELDS}
-        digits = ""
-        hybrids = re.findall(r"\{([WUBRG])/([WUBRG])\}", value)
-        if hybrids and self.schema.raw["schema_version"] < 3:
-            raise SemanticProjectionError(
-                f"{context}: hybrid mana requires the current schema"
-            )
-        ordinary = (
-            re.sub(r"\{[WUBRG]/[WUBRG]\}", "", value).replace("{", "").replace("}", "")
-        )
-        for char in ordinary:
-            if char.isdigit():
-                digits += char
-                continue
-            if digits:
-                counts["generic"] += int(digits)
-                digits = ""
-            if char not in counts:
-                raise SemanticProjectionError(
-                    f"{context}: unsupported mana symbol {char!r}"
-                )
-            counts[char] += 1
-        if digits:
-            counts["generic"] += int(digits)
-        self.structure("mana_begin")
-        for component in ("generic", "W", "U", "B", "R", "G", "C"):
-            count = counts[component]
-            if count:
-                self.field(self._MANA_FIELDS[component])
-                self.emit("integer", count)
-        for first, second in hybrids:
-            self.structure("hybrid_begin")
-            self.enum("color", first)
-            self.enum("color", second)
-            self.structure("hybrid_end")
-        self.structure("mana_end")
-
-    def _domain_for_string(self, field: str, value: str, context: str) -> str:
-        if field in {"types", "types_any"}:
-            return "card_type"
-        if field == "values" and value in self.schema.enums["card_type"]:
-            return "card_type"
-        if field == "values" and value in self.schema.enums["subtype"]:
-            return "subtype"
-        if field == "value":
-            if value in self.schema.enums["card_type"]:
-                return "card_type"
-            if value in self.schema.enums["subtype"]:
-                return "subtype"
-        fixed = {
-            "colors": "color",
-            "subtype": "subtype",
-            "direction": "direction",
-            "target_binding": "target_binding",
-            "keywords": "keyword",
-            "subtypes": "subtype",
-            "supertypes": "supertype",
-            "event": "trigger_event",
-            "duration": "duration",
-            "until": "duration",
-            "zone": "zone",
-            "controller": "controller",
-            "destination": "destination",
-            "remainder": "remainder",
-            "remainder_order": "ordering",
-        }
-        if field in fixed:
-            return fixed[field]
-        if field == "kind":
-            if context in {"selector", "predicate", "condition", "subject", "quantity"}:
-                return context
-        raise SemanticProjectionError(
-            f"{context}.{field}: no typed categorical domain for {value!r}"
-        )
-
-    def value(
-        self,
-        field: str,
-        value: Any,
-        *,
-        context: str,
-        roles: Mapping[str, int],
-    ) -> None:
-        if value is None:
-            self.emit("null", 0)
-            return
-        if isinstance(value, bool):
-            self.emit("boolean", int(value))
-            return
-        if isinstance(value, int):
-            self.emit("integer", value)
-            return
-        if isinstance(value, str):
-            if field in {"mana", "mana_cost", "kicker", "cost", "or_mana"}:
-                self.mana(value, f"{context}.{field}")
-            elif field in {"role", "sources", "target"}:
-                self.role(value, roles)
-            else:
-                self.enum(self._domain_for_string(field, value, context), value)
-            return
-        if isinstance(value, Mapping):
-            nested_context = {
-                "amount": "quantity",
-                "count": "quantity",
-                "power": "quantity",
-                "affinity": "predicate",
-                "condition": "condition",
-                "if": "condition",
-                "predicate": "predicate",
-                "predicates": "predicate",
-                "selector": "selector",
-                "subject": "subject",
-            }.get(field, "object")
-            self.object(value, context=nested_context, roles=roles)
-            return
-        if isinstance(value, Sequence):
-            self.list(field, value, context=context, roles=roles)
-            return
-        raise SemanticProjectionError(
-            f"{context}.{field}: unsupported typed value {type(value).__name__}"
-        )
-
-    def list(
-        self,
-        field: str,
-        values: Sequence[Any],
-        *,
-        context: str,
-        roles: Mapping[str, int],
-    ) -> None:
-        if field == "modes":
-            self.structure("list_begin")
-            for mode in values:
-                self.structure("list_begin")
-                for instruction in _sequence(mode, "mode"):
-                    self.instruction(_mapping(instruction, "mode instruction"), roles)
-                self.structure("list_end")
-            self.structure("list_end")
-            return
-        if field in {"then", "otherwise", "body", "if_paid", "if_declined"}:
-            self.structure(f"{field}_begin")
-            for instruction in values:
-                self.instruction(_mapping(instruction, f"{context}.{field}[]"), roles)
-            self.structure(f"{field}_end")
-            return
-        self.structure("list_begin")
-        for item in values:
-            self.value(field, item, context=context, roles=roles)
-        self.structure("list_end")
-
-    def object(
-        self,
-        value: Mapping[str, Any],
-        *,
-        context: str,
-        roles: Mapping[str, int],
-    ) -> None:
-        structure_context = (
-            context
-            if context
-            in {
-                "selector",
-                "predicate",
-                "condition",
-                "subject",
-            }
-            else "object"
-        )
-        self.structure(f"{structure_context}_begin")
-        for field in sorted(value, key=self._field_sort_key):
-            if field in {"op_name", "opcode"}:
-                continue
-            self.field(field)
-            self.value(field, value[field], context=context, roles=roles)
-        self.structure(f"{structure_context}_end")
-
-    def _field_sort_key(self, field: str) -> int:
-        if field == "definition_index":
-            field = "definition_ref"
-        try:
-            return self.schema.fields[field]
-        except KeyError as error:
-            raise SemanticProjectionError(
-                f"unknown semantic field {field!r}"
-            ) from error
-
-    def instruction(
-        self, instruction: Mapping[str, Any], roles: Mapping[str, int]
-    ) -> None:
-        self.structure("instruction_begin")
-        op_name = _string(instruction.get("op_name"), "instruction.op_name")
-        opcode = _integer(instruction.get("opcode"), "instruction.opcode")
-        expected = self.schema.opcodes.get(op_name)
-        if expected is None or opcode != expected:
-            raise UnknownOpcodeError(
-                f"unknown or mismatched opcode {op_name!r}/{opcode}"
-            )
-        self.emit("opcode", opcode)
-        for field in sorted(
-            (key for key in instruction if key not in {"op_name", "opcode"}),
-            key=self._field_sort_key,
-        ):
-            self.field("definition_ref" if field == "definition_index" else field)
-            if field == "definition_index":
-                target = _integer(instruction[field], "instruction.definition_index")
-                if not 0 <= target < len(self.ir.definitions):
-                    raise SemanticProjectionError(
-                        f"instruction.definition_index: invalid row {target}"
-                    )
-                source = self.emit("definition_ref", 0)
-                self.references.append((source, target))
-            else:
-                self.value(
-                    field, instruction[field], context="instruction", roles=roles
-                )
-        self.structure("instruction_end")
-
-    def definition(self, definition: Mapping[str, Any]) -> None:
-        self.structure("definition_begin")
-        self.structure("characteristics_begin")
-        characteristics = _mapping(
-            definition.get("characteristics"), "definition.characteristics"
-        )
-        for field in sorted(characteristics, key=self._field_sort_key):
-            self.field(field)
-            self.value(
-                field, characteristics[field], context="characteristics", roles={}
-            )
-        self.structure("characteristics_end")
-        self.structure("programs_begin")
-        self.structure("programs_end")
-        self.structure("definition_end")
-
-    def program(self, program: Mapping[str, Any]) -> None:
-        raw_targets = _sequence(program.get("targets"), "program.targets")
-        roles: dict[str, int] = {}
-        for index, raw_target in enumerate(raw_targets):
-            target = _mapping(raw_target, f"program.targets[{index}]")
-            name = _string(target.get("role"), f"program.targets[{index}].role")
-            if name in roles:
-                raise SemanticProjectionError(f"duplicate target role {name!r}")
-            roles[name] = index
-
-        self.structure("program_begin")
-        kind_name = _string(program.get("kind_name"), "program.kind_name")
-        kind = _integer(program.get("kind"), "program.kind")
-        if self.schema.program_kinds.get(kind_name) != kind:
-            raise SemanticProjectionError(
-                f"unknown or mismatched program kind {kind_name!r}"
-            )
-        self.emit("program_kind", kind)
-
-        if "cost" in program:
-            self.field("cost")
-            self.structure("cost_begin")
-            cost = _mapping(program["cost"], "program.cost")
-            for field in sorted(cost, key=self._field_sort_key):
-                self.field(field)
-                self.value(field, cost[field], context="cost", roles=roles)
-            self.structure("cost_end")
-
-        self.field("targets")
-        self.structure("targets_begin")
-        for index, raw_target in enumerate(raw_targets):
-            target = _mapping(raw_target, f"program.targets[{index}]")
-            self.structure("target_begin")
-            for field in ("role", "min", "max", "selector"):
-                if field not in target:
-                    raise SemanticProjectionError(
-                        f"program.targets[{index}]: missing field {field!r}"
-                    )
-                self.field(field)
-                self.value(field, target[field], context="target", roles=roles)
-            unknown = set(target) - {"role", "min", "max", "selector"}
-            if unknown:
-                raise SemanticProjectionError(
-                    f"program.targets[{index}]: unknown fields {sorted(unknown)}"
-                )
-            self.structure("target_end")
-        self.structure("targets_end")
-
-        if "trigger" in program:
-            self.field("trigger")
-            self.structure("trigger_begin")
-            trigger = _mapping(program["trigger"], "program.trigger")
-            for field in sorted(trigger, key=self._field_sort_key):
-                self.field(field)
-                self.value(field, trigger[field], context="trigger", roles=roles)
-            self.structure("trigger_end")
-
-        self.field("instructions")
-        self.structure("instructions_begin")
-        for instruction in _sequence(
-            program.get("instructions"), "program.instructions"
-        ):
-            self.instruction(_mapping(instruction, "program.instructions[]"), roles)
-        self.structure("instructions_end")
-        self.structure("program_end")
-
-    def build(self) -> SemanticCatalog:
-        definition_offsets = [0]
-        for definition in self.ir.definitions:
-            self.definition(definition)
-            definition_offsets.append(len(self.kinds))
-
-        program_offsets = [len(self.kinds)]
-        for program in self.ir.programs:
-            self.program(program)
-            program_offsets.append(len(self.kinds))
-
-        definition_program_offsets = [0]
-        definition_program_rows: list[int] = []
-        for definition in self.ir.definitions:
-            definition_program_rows.extend(
-                _integer(item, "definition.program_indexes[]")
-                for item in _sequence(
-                    definition.get("program_indexes"), "definition.program_indexes"
-                )
-            )
-            definition_program_offsets.append(len(definition_program_rows))
-
-        arrays = SemanticCatalog(
-            token_kind=np.asarray(self.kinds, dtype=np.uint16),
-            token_value=np.asarray(self.values, dtype=np.int32),
-            definition_offsets=np.asarray(definition_offsets, dtype=np.int32),
-            program_offsets=np.asarray(program_offsets, dtype=np.int32),
-            definition_program_offsets=np.asarray(
-                definition_program_offsets, dtype=np.int32
-            ),
-            definition_program_rows=np.asarray(definition_program_rows, dtype=np.int32),
-            definition_ref_source_tokens=np.asarray(
-                [source for source, _ in self.references], dtype=np.int32
-            ),
-            definition_ref_target_rows=np.asarray(
-                [target for _, target in self.references], dtype=np.int32
-            ),
-        )
-        for value in arrays.__dict__.values():
+        def array(name: str, dtype: type) -> np.ndarray:
+            value = np.asarray(_sequence(raw.get(name), name), dtype=dtype)
             value.setflags(write=False)
-        return arrays
+            return value
+
+        return cls(
+            token_kind=array("token_kind", np.uint16),
+            token_value=array("token_value", np.int32),
+            definition_offsets=array("definition_offsets", np.int32),
+            program_offsets=array("program_offsets", np.int32),
+            definition_program_offsets=array("definition_program_offsets", np.int32),
+            definition_program_rows=array("definition_program_rows", np.int32),
+            definition_ref_source_tokens=array(
+                "definition_ref_source_tokens", np.int32
+            ),
+            definition_ref_target_rows=array("definition_ref_target_rows", np.int32),
+        )
+
+    @property
+    def definitions(self) -> int:
+        return len(self.definition_offsets) - 1
+
+    @property
+    def programs(self) -> int:
+        return len(self.program_offsets) - 1
 
 
 @dataclass(frozen=True)
 class SemanticArtifactHeader:
     learning_schema_version: int
     learning_schema_hash: str
-    semantic_ir_schema_version: int
-    semantic_ir_hash: str
     content_pack_schema_version: int
     content_pack_hash: str
     semantic_pack_hash: str
@@ -826,8 +287,6 @@ class SemanticArtifactHeader:
             "identity_mode": self.identity_mode,
             "learning_schema_hash": self.learning_schema_hash,
             "learning_schema_version": self.learning_schema_version,
-            "semantic_ir_hash": self.semantic_ir_hash,
-            "semantic_ir_schema_version": self.semantic_ir_schema_version,
             "semantic_pack_hash": self.semantic_pack_hash,
         }
 
@@ -920,13 +379,15 @@ class SemanticObjectBatch:
 @dataclass(frozen=True)
 class BoundSemanticPack:
     schema: LearningSchema
-    ir: SemanticIr
+    pack_key: str | None
     content_pack_schema_version: int
     content_pack_hash: str
     binding_hash: str
     semantic_pack_hash: str
     definition_row_by_card_def_id: dict[int, int]
     catalog: SemanticCatalog
+    # Diagnostics only: catalog rows' printed names, never tokens.
+    registry_names: tuple[str, ...]
 
     @classmethod
     def bind(
@@ -934,36 +395,41 @@ class BoundSemanticPack:
         manifest: Mapping[str, Any],
         *,
         schema_path: str | Path | None = None,
-        ir_path: str | Path | None = None,
     ) -> "BoundSemanticPack":
-        provenance = manifest.get("compiled_semantics")
-        pack_key = DEFAULT_PACK_KEY
-        if (
-            isinstance(provenance, Mapping)
-            and provenance.get("pack_key") in CURRENT_PACK_KEYS
-        ):
-            pack_key = provenance["pack_key"]
-        schema = LearningSchema.load(schema_path or DEFAULT_SCHEMA_PATH)
-        ir = SemanticIr.load(schema, ir_path, pack_key=pack_key)
-        if isinstance(provenance, Mapping) and (
-            provenance.get("pack_key") != ir.raw["pack_key"]
-            or provenance.get("ir_hash") != ir.ir_hash
-            or provenance.get("source_hash") != ir.raw["source_hash"]
-        ):
-            raise ContentPackBindingError("Compiled IR differs from the live pack")
+        """Bind the engine's catalog for the manifest's pack (or the default pack).
+
+        The catalog's content digest must equal the manifest's, so the tokens
+        describe exactly the definitions the match runs. Manifest IDs join
+        catalog rows by registry name, so rows never depend on ID allocation.
+        """
+        import managym  # Native only on this path; historical readers stay pure.
+
         manifest = _mapping(manifest, "content_pack_manifest")
+        pack_key = manifest.get("pack_key")
+        if pack_key is not None:
+            pack_key = _string(pack_key, "content_pack_manifest.pack_key")
+        schema = LearningSchema.load(schema_path or DEFAULT_SCHEMA_PATH)
+        raw = _mapping(managym.learning_catalog(pack_key), "learning_catalog")
         pack_schema = _integer(
             manifest.get("schema_version"), "content_pack_manifest.schema_version"
         )
         pack_hash = _string(
             manifest.get("content_digest"), "content_pack_manifest.content_digest"
         )
-        manifest_definitions = _sequence(
-            manifest.get("definitions"), "content_pack_manifest.definitions"
-        )
-        id_by_name: dict[str, int] = {}
-        seen_ids: set[int] = set()
-        for index, raw_definition in enumerate(manifest_definitions):
+        if raw.get("content_digest") != pack_hash:
+            raise ContentPackBindingError("learning catalog differs from the live pack")
+        catalog = SemanticCatalog.from_native(raw)
+
+        row_by_name = {
+            _string(name, "learning_catalog.registry_names[]"): row
+            for row, name in enumerate(
+                _sequence(raw.get("registry_names"), "learning_catalog.registry_names")
+            )
+        }
+        rows_by_id: dict[int, int] = {}
+        for index, raw_definition in enumerate(
+            _sequence(manifest.get("definitions"), "content_pack_manifest.definitions")
+        ):
             definition = _mapping(
                 raw_definition, f"content_pack_manifest.definitions[{index}]"
             )
@@ -975,63 +441,45 @@ class BoundSemanticPack:
                 definition.get("registry_name"),
                 f"content_pack_manifest.definitions[{index}].registry_name",
             )
-            if card_def_id in seen_ids:
+            if card_def_id in rows_by_id:
                 raise ContentPackBindingError(f"duplicate CardDefId {card_def_id}")
-            if registry_name in id_by_name:
+            try:
+                row = row_by_name[registry_name]
+            except KeyError as error:
+                raise ContentPackBindingError(
+                    f"manifest definition {registry_name!r} does not bind"
+                ) from error
+            if row in rows_by_id.values():
                 raise ContentPackBindingError(
                     f"duplicate ContentPack registry name {registry_name!r}"
                 )
-            seen_ids.add(card_def_id)
-            id_by_name[registry_name] = card_def_id
-
-        rows_by_id: dict[int, int] = {}
-        for row, semantic_definition in enumerate(ir.definitions):
-            binding = _mapping(
-                semantic_definition.get("content_pack_binding"),
-                f"semantic_ir.definitions[{row}].content_pack_binding",
-            )
-            if binding.get("kind") != "legacy_registry_name":
-                raise ContentPackBindingError(
-                    f"semantic definition {row}: unsupported binding {binding.get('kind')!r}"
-                )
-            registry_name = _string(
-                binding.get("value"),
-                f"semantic_ir.definitions[{row}].content_pack_binding.value",
-            )
-            try:
-                card_def_id = id_by_name[registry_name]
-            except KeyError as error:
-                raise ContentPackBindingError(
-                    f"semantic definition {row} does not bind: {registry_name!r}"
-                ) from error
-            if card_def_id in rows_by_id:
-                raise ContentPackBindingError(
-                    f"CardDefId {card_def_id} is bound by multiple semantic definitions"
-                )
             rows_by_id[card_def_id] = row
+        if len(rows_by_id) != catalog.definitions:
+            raise ContentPackBindingError("catalog definitions do not all bind")
 
-        binding_receipt = [
-            {"card_def_id": card_def_id, "definition_row": row}
-            for card_def_id, row in sorted(rows_by_id.items())
-        ]
-        binding_hash = _hash_json(binding_receipt)
+        binding_hash = _hash_json(
+            [
+                {"card_def_id": card_def_id, "definition_row": row}
+                for card_def_id, row in sorted(rows_by_id.items())
+            ]
+        )
         semantic_pack_hash = _hash_json(
             {
                 "content_pack_hash": pack_hash,
                 "content_pack_schema_version": pack_schema,
                 "learning_schema_hash": schema.schema_hash,
-                "semantic_ir_hash": ir.ir_hash,
             }
         )
         return cls(
             schema=schema,
-            ir=ir,
+            pack_key=pack_key,
             content_pack_schema_version=pack_schema,
             content_pack_hash=pack_hash,
             binding_hash=binding_hash,
             semantic_pack_hash=semantic_pack_hash,
             definition_row_by_card_def_id=rows_by_id,
-            catalog=_TokenBuilder(schema, ir).build(),
+            catalog=catalog,
+            registry_names=tuple(row_by_name),
         )
 
     @classmethod
@@ -1040,7 +488,6 @@ class BoundSemanticPack:
         env: Any,
         *,
         schema_path: str | Path | None = None,
-        ir_path: str | Path | None = None,
     ) -> "BoundSemanticPack":
         try:
             manifest = env.content_pack_manifest()
@@ -1048,22 +495,26 @@ class BoundSemanticPack:
             raise ContentPackBindingError(
                 "environment does not expose content_pack_manifest()"
             ) from error
-        return cls.bind(manifest, schema_path=schema_path, ir_path=ir_path)
+        return cls.bind(manifest, schema_path=schema_path)
+
+    @property
+    def definition_count(self) -> int:
+        return self.catalog.definitions
 
     def definition_row(self, card_def_id: int) -> int:
-        """Return the admitted semantic row for one runtime definition."""
+        """Return the catalog row for one runtime definition."""
 
         try:
             return self.definition_row_by_card_def_id[card_def_id]
         except KeyError as error:
             raise UnadmittedDefinitionError(
-                f"visible CardDefId {card_def_id} is absent from semantic IR"
+                f"visible CardDefId {card_def_id} is absent from the learning catalog"
             ) from error
 
     def program_rows(self, definition_row: int) -> tuple[int, ...]:
-        """Return the typed program rows owned by one semantic definition."""
+        """Return the program rows owned by one definition."""
 
-        if not 0 <= definition_row < len(self.ir.definitions):
+        if not 0 <= definition_row < self.catalog.definitions:
             raise SemanticProjectionError(
                 f"definition row {definition_row} is outside the semantic catalog"
             )
@@ -1203,7 +654,7 @@ class BoundSemanticPack:
             definition_program_mask[row, :size] = True
 
         refs_by_program: list[list[tuple[int, int]]] = [
-            [] for _ in range(len(self.ir.programs))
+            [] for _ in range(self.catalog.programs)
         ]
         for source, target in zip(
             self.catalog.definition_ref_source_tokens,
@@ -1250,8 +701,6 @@ class BoundSemanticPack:
         return SemanticArtifactHeader(
             learning_schema_version=int(self.schema.raw["schema_version"]),
             learning_schema_hash=self.schema.schema_hash,
-            semantic_ir_schema_version=int(self.ir.raw["schema_version"]),
-            semantic_ir_hash=self.ir.ir_hash,
             content_pack_schema_version=self.content_pack_schema_version,
             content_pack_hash=self.content_pack_hash,
             semantic_pack_hash=self.semantic_pack_hash,
@@ -1295,17 +744,16 @@ __all__ = [
     "BoundSemanticPack",
     "ContentPackBindingError",
     "CURRENT_PACK_KEYS",
-    "DEFAULT_PACK_KEY",
     "DEFAULT_SCHEMA_PATH",
     "LearningSchema",
+    "PROGRAM_KINDS",
     "SemanticArtifactHeader",
     "SemanticCatalog",
-    "SemanticIr",
     "SemanticObjectBatch",
     "SemanticObjectProjection",
     "SemanticProjectionError",
+    "TOKEN_KINDS",
     "UnadmittedDefinitionError",
-    "current_ir_document",
-    "UnknownOpcodeError",
     "UnknownSchemaError",
+    "token_value",
 ]

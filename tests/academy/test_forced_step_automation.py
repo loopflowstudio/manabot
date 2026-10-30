@@ -1,4 +1,4 @@
-"""Forced play stays recorded and stops at the next actual decision."""
+"""Native skipping keeps forced decisions away from people and policies."""
 
 from pathlib import Path
 
@@ -11,8 +11,9 @@ from academy.server import GameSession
 import managym
 
 
-def test_forced_actions_keep_commands_logs_and_real_choices(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("auto_pass", [True, False])
+def test_forced_decisions_never_surface(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, auto_pass: bool
 ) -> None:
     choose = villain.choose_bot
     policy_calls: list[int] = []
@@ -27,19 +28,22 @@ def test_forced_actions_keep_commands_logs_and_real_choices(
 
     monkeypatch.setattr(villain, "choose_bot", choose_meaningful)
     session = GameSession(tmp_path, capture_authority_evidence=True)
-    opening = session.new_game(
+    session.new_game(
         {
             "hero_deck": {"Mountain": 14, "Gray Ogre": 8},
             "villain_deck": {"Island": 20},
             "villain_type": "passive",
             "seed": 3,
+            "auto_pass": auto_pass,
         }
     )
-    logs = list(opening.get("log", []))
     frame = ExperienceFrame.model_validate(
         session.current_recovery("reconnect")["frame"]
     )
+    log: list[str] = []
     for index in range(30):
+        if frame.prompt is None:
+            break
         assert len(frame.offers) > 1
         offer = next(
             (
@@ -49,7 +53,6 @@ def test_forced_actions_keep_commands_logs_and_real_choices(
             ),
             frame.offers[0],
         )
-        assert frame.prompt is not None
         command = Command(
             command_id=f"forced-proof.{index}",
             match_id=frame.match_id,
@@ -60,64 +63,57 @@ def test_forced_actions_keep_commands_logs_and_real_choices(
         )
         result = session.hero_command(command.model_dump(mode="json"))
         assert result["status"] == "accepted"
+        log.extend(result["update"].get("log", []))
         frame = ExperienceFrame.model_validate(result["update"]["frame"])
-        logs.extend(result["update"].get("log", []))
-        assert (
-            session.hero_command(command.model_dump(mode="json"))["status"]
-            == "duplicate"
+
+    assert session.env is not None
+    assert session.env.skip_trivial_count() > 0
+    assert session.trace is not None
+    assert all(len(event.actions) > 1 for event in session.trace.events)
+    automatic = [row for row in session.authority_transitions if row.automatic]
+    assert all(row.action_type == "PRIORITY_PASS_PRIORITY" for row in automatic)
+    assert log.count("Auto: Pass priority") == len(automatic)
+    assert policy_calls
+
+
+def test_priority_automation_is_logged(tmp_path: Path) -> None:
+    """Passes outside configured stops are real choices, logged as automation."""
+    session = GameSession(tmp_path, capture_authority_evidence=True)
+    session.new_game(
+        {
+            "hero_deck": "elemental_ur",
+            "villain_deck": "elemental_gw",
+            "villain_type": "passive",
+            "seed": 0,
+        }
+    )
+    frame = ExperienceFrame.model_validate(
+        session.current_recovery("reconnect")["frame"]
+    )
+    log: list[str] = []
+    for index in range(6):
+        assert frame.prompt is not None
+        offer = next(
+            (row for row in frame.offers if row.action_type == "PRIORITY_PLAY_LAND"),
+            next(
+                row
+                for row in frame.offers
+                if row.action_type == "PRIORITY_PASS_PRIORITY"
+            ),
         )
-        recovered = ExperienceFrame.model_validate(
-            session.current_recovery("reconnect")["frame"]
+        command = Command(
+            command_id=f"automation-log.{index}",
+            match_id=frame.match_id,
+            expected_revision=frame.revision,
+            prompt_id=frame.prompt.id,
+            offer_id=offer.id,
+            answers=[],
         )
-        assert recovered.prompt == frame.prompt
-        assert recovered.offers == frame.offers
-        if any(
-            row.automatic and row.action_space != "PRIORITY"
-            for row in session.authority_transitions
-        ):
-            break
-    else:
-        raise AssertionError("Expected a forced non-priority action in ordinary play")
+        result = session.hero_command(command.model_dump(mode="json"))
+        assert result["status"] == "accepted"
+        log.extend(result["update"].get("log", []))
+        frame = ExperienceFrame.model_validate(result["update"]["frame"])
 
     automatic = [row for row in session.authority_transitions if row.automatic]
-    assert any(row.action_space != "PRIORITY" for row in automatic)
-    assert all(
-        row.legal_action_count == 1 or row.action_type == "PRIORITY_PASS_PRIORITY"
-        for row in automatic
-    )
-    assert all(
-        row.source == "auto" and row.command and row.semantic_receipt
-        for row in automatic
-    )
-    assert all(
-        row.semantic_receipt.command_id == row.command["command_id"]
-        for row in automatic
-    )
-    assert session.trace is not None
-    forced = [
-        event
-        for event in session.trace.events
-        if event.auto and len(event.actions) == 1
-    ]
-    for event in forced:
-        prefix = "Auto: Opponent: " if event.actor == "villain" else "Auto: "
-        assert f"{prefix}{event.action_description}" in logs
-    assert any(event.actor == "villain" for event in forced)
-    assert policy_calls
-    auto_ids = {row.command["command_id"] for row in automatic}
-    assert not any(row.command_id in auto_ids for row in session.canonical_decisions)
-
-
-def test_disabling_automation_retains_forced_prompt(tmp_path: Path) -> None:
-    session = GameSession(tmp_path)
-    opening = session.new_game(
-        {"villain_type": "passive", "seed": 3, "auto_pass": False}
-    )
-    assert len(opening["actions"]) == 1
-    assert session.trace is not None
-    assert not session.trace.events
-    before = session.revision
-    result = session.set_stops(None, None, True)
-    assert session.revision > before + 1
-    assert len(result["actions"]) > 1
-    assert any(event.auto for event in session.trace.events)
+    assert automatic
+    assert log.count("Auto: Pass priority") == len(automatic)

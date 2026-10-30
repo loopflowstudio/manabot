@@ -206,7 +206,7 @@ def sim_command(
     ),
     villain_deck_file: Path | None = typer.Option(None, help="UTF-8 opponent decklist"),
     content_pool: str = typer.Option(
-        "tla-pool-v1", help="Qualified native content pool"
+        "world", help="Qualified native content pool"
     ),
 ) -> None:
     if (hero_deck_file is None) != (villain_deck_file is None):

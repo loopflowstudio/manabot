@@ -29,7 +29,7 @@ from manabot.sim.sim import load_player, simulate_models
 import managym
 from managym import DeckImportError, Decklist, ImportedMatch
 
-PACK = "tla-pool-v1"
+PACK = "world"
 HERO = "# Novel development deck\nMain\n10 Forest\n10 Mountain\n2 Avatar Enthusiasts\nSideboard\n1 Island\n"
 VILLAIN = "20 Island\n"
 
@@ -64,14 +64,13 @@ def test_decklist_novel_setup_resolves_same_identity_from_files(tmp_path: Path) 
         == imported.hero.deck.main
         for key in managym.authored_deck_keys("elemental-world-v2")
     )
-    env = managym.Env(seed=7, skip_trivial=False)
+    env = managym.Env(seed=7)
     env.reset(Match(config).to_rust())
     assert (
         env.content_pack_manifest()["content_digest"] == imported.pool["content_digest"]
     )
     assert (
-        env.content_pack_manifest()["compiled_semantics"]
-        == imported.pool["compiled_semantics"]
+        env.content_pack_manifest()["world_version"] == imported.pool["world_version"]
     )
 
 

@@ -7,10 +7,14 @@ use managym::{
     state::zone::ZoneType,
 };
 
-use super::helpers::*;
+use crate::support::game::*;
 
 fn setup_shivan_with_mountains(seed: u64, mountain_count: usize) -> Scenario {
-    let mut s = Scenario::new(shivan_deck(), mountain_deck(), seed);
+    let mut s = Scenario::new(
+        deck_of("Mountain", "Shivan Dragon"),
+        deck(&[("Mountain", 40)]),
+        seed,
+    );
     let shivan = s.force_permanent_on_battlefield(0, "Shivan Dragon");
     s.game_mut().state.permanents[shivan]
         .as_mut()

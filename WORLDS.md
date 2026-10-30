@@ -26,9 +26,10 @@ was dead on arrival in exp-10.)
 | **w14** | in development, MTG-195, 2026-10-26 | 40 / 41 / 28 / 17; controller-selected trigger placement and policy-input v3 occurrence joins | unchanged authored packs; fresh w14 conformance and play fixtures | no strength baseline |
 | **w15** | in development, MTG-177, 2026-10-27 | 40 / 41 / 28 / 17; retained resolution eligibility, policy-input v4 relations 64 × 33 | unchanged authored packs; fresh integrated conformance and play fixtures | no strength baseline |
 | **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
+| **w17** | in development, Task 892c47, 2026-10-29 | 40 / 41 / 29 / 17; cards in engine rules types, learning schema 9 tokens derived from them, attacking permanent column | `world` (the default pack); `semantic-kernel-w17-v1`, `authored-match-w17-v1` and `authored-match-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
 
-**Current development world: w16.** `managym.WORLD_VERSION` identifies live runs. Earlier
-checkpoints (including w15) are **not comparable** to w16; do not reuse their
+**Current development world: w17.** `managym.WORLD_VERSION` identifies live runs. Earlier
+checkpoints (including w16) are **not comparable** to w17; do not reuse their
 win rates or load them as current-world policies. Shape alone is insufficient
 identity. Exp-11 historically ported opponent components with
 `port_legacy_state_dict` and behavioral validation; that utility is now retired.
@@ -44,7 +45,44 @@ revision that recorded it and build that engine; current code carries no rules
 compatibility shims. Frozen evidence (IR, receipts, checkpoints) stays readable
 in place and is never rewritten.
 
-## w16: one card authority (not yet frozen)
+## w17: one card representation (not yet frozen)
+
+Each card is a function returning the engine's own `CardDefinition`, written in
+its rules types, in the set file of its first printing; the authoring language
+(`cards/authoring.rs`), the in-process compiler (`semantic/compile.rs`) and IR
+parsing and interpretation for current content are deleted. All 161 definitions
+were generated once from w16's lowering and proven JSON-identical to it. Each
+definition carries its key and the Scryfall id of that printing; neither enters
+content digests, so default and authored pack digests equal w16's. Five cards
+moved to their actual first printing (`roe.prophetic_prism`,
+`mh2.tireless_provisioner`, `ptk.corrupt_court_official`, `eld.epic_downfall`,
+`ths.lightning_strike`); every set-file card is supported unless marked
+incomplete.
+
+Learning tokens are derived in Rust (`managym.learning_catalog`) by walking each
+definition with a `serde` serializer: learning schema **9**, token values are
+stable hashes of Rust and printed names, and IR opcodes, roles and enums are
+gone. `BoundSemanticPack` binds by content digest and registry name. Manifests
+carry `pack_key` (replacing `compiled_semantics` with its IR and source hashes);
+`content_pool` rows add `scryfall_id` and name the card key `key`. The world
+pool is `world` (formerly `tla-pool-v1`): it describes the default pack, so it
+shares that pack's `CardDefId`s and digest; rules fixtures are unsupported rows
+without a key. Card catalog modules (`setups`, `pool`, `tokens`) live under
+`cards/`. Permanent observations add an
+`attacking` column (width 28 → 29) and LLM text, so the state is no longer
+visible only through the event window. `tests/cards/observability.rs` guards
+that every keyword, permanent and player status and `Effect`/`TriggerCondition`
+/`Ability` variant names its tensor column or token.
+
+Fresh `conformance/semantic-kernel-w17-v1` replays (same cases as w15),
+`authored-match-parity-w17-v1` (the 142-Command w17 authored tape) and Academy
+`*-w17.json` demo, choice-navigation and trigger-order fixtures bind this world;
+each w17 demo reaches the same decision revision as its w15 predecessor. The
+public-commitment parity proof now replays the w17 authored tape, but has no w17
+receipt yet: belief transport rejects Command 68, where a card revealed from the
+library enters the villain's hand.
+
+## w16: one card authority (superseded by w17)
 
 Cards are typed Rust functions in the file of the set that first printed them
 under `managym/src/cardsets/` (`tla.rs`, `stx.rs`, `lea.rs`, …), each defined

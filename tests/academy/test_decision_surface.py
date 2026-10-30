@@ -115,7 +115,7 @@ def _study_every_boundary(session: GameSession, revisions: list[int]) -> None:
     assert retained.decisions == replay.decisions
 
 
-def test_precision_treasure_boundaries(tmp_path: Path) -> None:
+def test_precision_forced_treasure_payment(tmp_path: Path) -> None:
     session = GameSession(tmp_path)
     try:
         initial = session.new_game({"demo": "precision"})
@@ -161,41 +161,23 @@ def test_precision_treasure_boundaries(tmp_path: Path) -> None:
             sacrifice.subjects[0].object.display_id
             == context.targets[0].object.display_id
         )
-        frame = _choose(session, frame, sacrifice)
-        context = frame.projection.decision_context
-        assert context.stage == "payment"
-        assert context.reserved_sacrifice.entity_id == victim
-        assert context.mana_cost == "{B}"
-        assert any(
-            card.name == "Treasure" for card in frame.projection.agent.battlefield
-        )
         revisions.append(frame.revision)
-        frame = _choose(session, frame, _label(frame, "Activate ability: Treasure"))
+        frame = _choose(session, frame, sacrifice)
+        # Treasure is the only mana source left, so its activation, {B} and the
+        # final payment are forced; native skipping commits them in order.
         context = frame.projection.decision_context
-        assert context.stage == "mana_color"
-        assert context.source.label == "Deadly Precision"
-        assert context.reserved_sacrifice.entity_id == victim
-        assert any("sacrificed Treasure" in fact for fact in context.recent_facts)
+        assert context.stage not in {"payment", "mana_color"}
         assert not any(
             card.name == "Treasure" for card in frame.projection.agent.battlefield
         )
-        assert frame.projection.agent.mana == (0, 0, 0, 0, 0, 0)
-        assert [offer.label for offer in frame.offers] == ["Add {B}"]
-        revisions.append(frame.revision)
-        frame = _choose(session, frame, frame.offers[0])
-        assert frame.projection.agent.mana == (0, 0, 1, 0, 0, 0)
-        assert frame.projection.decision_context.stage == "payment"
-        revisions.append(frame.revision)
-        frame = _choose(
-            session,
-            frame,
-            next(offer for offer in frame.offers if offer.action_type == "PAY_COST"),
+        facts = context.recent_facts
+        treasure = next(
+            i for i, fact in enumerate(facts) if "sacrificed Treasure" in fact
         )
-        assert frame.projection.agent.mana == (0, 0, 0, 0, 0, 0)
         assert any(
-            "Deadly Precision was cast" in fact
-            for fact in frame.projection.decision_context.recent_facts
+            "Deadly Precision was cast" in fact for fact in facts[treasure + 1 :]
         )
+        assert all(len(row.frame.offers) > 1 for row in session.canonical_decisions)
         # The other viewer receives public pools, no pending private context,
         # private hand, or inspection candidates from the acting player.
         other = viewer_view(

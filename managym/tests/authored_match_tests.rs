@@ -1,8 +1,13 @@
-// Authored-match proof: the selected product decks play to terminal on compiled semantics.
+// Authored-match proof: the selected product decks play to terminal on their authored pack.
 
-use managym::{flow::event::GameEvent, semantic::SemanticPack, state::player::PlayerConfig, Game};
+use managym::{
+    cards::setups::{authored_pack, AuthoredPack},
+    flow::event::GameEvent,
+    state::player::PlayerConfig,
+    Game,
+};
 
-fn authored_configs(pack: &SemanticPack) -> Vec<PlayerConfig> {
+fn authored_configs(pack: &AuthoredPack) -> Vec<PlayerConfig> {
     vec![
         pack.player_config("UR Lessons", "ur_lessons")
             .expect("UR setup"),
@@ -11,7 +16,7 @@ fn authored_configs(pack: &SemanticPack) -> Vec<PlayerConfig> {
     ]
 }
 
-fn jeong_configs(pack: &SemanticPack) -> Vec<PlayerConfig> {
+fn jeong_configs(pack: &AuthoredPack) -> Vec<PlayerConfig> {
     vec![
         pack.player_config("UR Lessons", "ur_lessons")
             .expect("UR setup"),
@@ -21,18 +26,14 @@ fn jeong_configs(pack: &SemanticPack) -> Vec<PlayerConfig> {
 }
 
 #[test]
-fn exact_authored_match_runs_to_a_winner_on_compiled_semantics() {
-    let semantic = SemanticPack::current("two_deck").expect("checked-in semantic IR parses");
-    let mut game = Game::new(authored_configs(&semantic), 0, true);
-    let provenance = game
-        .state
-        .content
-        .compiled_semantics()
-        .expect("exact authored decks select compiled semantics");
-
-    assert_eq!(provenance.pack_key, semantic.pack_key);
-    assert_eq!(provenance.ir_hash, semantic.ir_hash);
-    assert_eq!(game.state.content.len(), semantic.definitions.len());
+fn exact_authored_match_runs_to_a_winner_on_its_authored_pack() {
+    let pack = authored_pack("two_deck").unwrap();
+    let mut game = Game::new(authored_configs(pack), 0, true);
+    assert_eq!(game.state.content.pack_key(), Some(pack.pack_key.as_str()));
+    assert_eq!(
+        game.state.content.content_digest(),
+        pack.content.content_digest()
+    );
 
     let winner = game
         .random_playout(100_000, None)
@@ -63,32 +64,31 @@ fn exact_authored_match_runs_to_a_winner_on_compiled_semantics() {
 
 #[test]
 fn jeong_increment_selects_its_exact_pack_in_either_seat_order() {
-    let semantic = SemanticPack::current("jeong_increment").expect("checked-in Jeong IR parses");
-    let configs = jeong_configs(&semantic);
+    let pack = authored_pack("jeong_increment").unwrap();
+    let configs = jeong_configs(pack);
 
     for player_configs in [configs.clone(), configs.into_iter().rev().collect()] {
         let game = Game::new(player_configs, 23, true);
-        let provenance = game
-            .state
-            .content
-            .compiled_semantics()
-            .expect("exact Jeong decks select compiled semantics");
-        assert_eq!(provenance.pack_key, "tla-jeong-increment-v1");
-        assert_eq!(provenance.ir_hash, semantic.ir_hash);
-        assert_eq!(provenance.source_hash, semantic.source_hash);
+        assert_eq!(
+            game.state.content.pack_key(),
+            Some("tla-jeong-increment-v1")
+        );
+        assert_eq!(
+            game.state.content.content_digest(),
+            pack.content.content_digest()
+        );
     }
 }
 
 #[test]
-fn tampered_jeong_deck_does_not_select_a_compiled_pack() {
-    let semantic = SemanticPack::current("jeong_increment").expect("checked-in Jeong IR parses");
-    let mut configs = jeong_configs(&semantic);
+fn tampered_jeong_deck_does_not_select_an_authored_pack() {
+    let mut configs = jeong_configs(authored_pack("jeong_increment").unwrap());
     let deck = &mut configs[1].deck.main;
     deck.remove("Jeong Jeong's Deserters");
     *deck.entry("Plains".to_owned()).or_default() += 1;
 
     let game = Game::new(configs, 23, true);
-    assert!(game.state.content.compiled_semantics().is_none());
+    assert!(game.state.content.pack_key().is_none());
 }
 
 #[test]
@@ -105,22 +105,19 @@ fn non_authored_decks_keep_the_general_content_pack() {
         true,
     );
 
-    assert!(game.state.content.compiled_semantics().is_none());
+    assert!(game.state.content.pack_key().is_none());
 }
 
 #[test]
-fn elemental_validation_rosters_select_compiled_content_and_play_to_terminal() {
-    let semantic = SemanticPack::current("elemental").unwrap();
+fn elemental_validation_rosters_select_authored_content_and_play_to_terminal() {
+    let pack = authored_pack("elemental").unwrap();
     let configs = vec![
-        semantic.player_config("left", "elemental_left").unwrap(),
-        semantic.player_config("right", "elemental_right").unwrap(),
+        pack.player_config("left", "elemental_left").unwrap(),
+        pack.player_config("right", "elemental_right").unwrap(),
     ];
     for configs in [configs.clone(), configs.into_iter().rev().collect()] {
         let mut game = Game::new(configs, 161, true);
-        assert_eq!(
-            game.state.content.compiled_semantics().unwrap().ir_hash,
-            semantic.ir_hash
-        );
+        assert_eq!(game.state.content.pack_key(), Some(pack.pack_key.as_str()));
         assert!(game.random_playout(100_000, None).unwrap().is_some());
         assert!(game.is_game_over());
     }

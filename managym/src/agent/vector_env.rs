@@ -98,7 +98,7 @@ impl VectorEnv {
         if !self.player_configs.is_empty() {
             return Err(AgentError("uniform roster must be set before reset".into()));
         }
-        let pack = crate::semantic::SemanticPack::current("optional_payments")
+        let pack = crate::cards::setups::authored_pack("optional_payments")
             .map_err(|e| AgentError(e.to_string()))?;
         let expected: Vec<PlayerConfig> = pack
             .decks
@@ -155,9 +155,8 @@ impl VectorEnv {
                     "training decks must share one content pool".into(),
                 ));
             }
-            if let Some(message) =
-                crate::semantic::deck_admission::development_rejection(pack, player)
-                    .map_err(|error| AgentError(error.to_string()))?
+            if let Some(message) = crate::cards::deck_admission::development_rejection(pack, player)
+                .map_err(|error| AgentError(error.to_string()))?
             {
                 return Err(AgentError(format!(
                     "training deck {}: {message}",
@@ -774,7 +773,7 @@ mod tests {
     fn training_decks_are_admitted_distinct_replayable_and_replaceable() {
         let deck = |name: &str| {
             let mut player = PlayerConfig::new(name, BTreeMap::from([(name.into(), 12)]));
-            player.content_pack = Some("tla-pool-v1".into());
+            player.content_pack = Some("world".into());
             player
         };
         let decks: Vec<_> = ["Plains", "Mountain", "Forest"].map(deck).into();
@@ -852,7 +851,7 @@ mod tests {
     }
 
     fn elemental_roster() -> Vec<PlayerConfig> {
-        let pack = crate::semantic::SemanticPack::current("optional_payments").unwrap();
+        let pack = crate::cards::setups::authored_pack("optional_payments").unwrap();
         pack.decks
             .iter()
             .map(|d| {

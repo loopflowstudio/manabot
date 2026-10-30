@@ -92,7 +92,7 @@ class SemanticCardEncoder(nn.Module):
 
         # Structure, execution order, program boundaries and referenced token
         # definitions come from the checked catalog. Nothing is truncated.
-        rows = [definition_tokens(row) for row in range(len(pack.ir.definitions))]
+        rows = [definition_tokens(row) for row in range(pack.definition_count)]
         width = max(map(len, rows))
         self.token_vocabulary = tuple(sorted(vocabulary))
         self.catalog_shape = CatalogShape(

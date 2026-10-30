@@ -55,7 +55,9 @@ class GameConfig(BaseModel):
     max_seconds: float = Field(default=3600, gt=0)
     deck: dict[str, int] = {"Mountain": 24, "Gray Ogre": 24, "Lightning Bolt": 12}
     match: MatchConfig | None = None
-    skip_trivial: bool = False
+    # Forced decisions (one legal action) are resolved natively, never sent to a
+    # model. Disable only to exercise forced-decision paths themselves.
+    skip_trivial: bool = True
     opponent_checkpoint: Path | None = None
     # Stop before another decision after this reported spend. An in-flight
     # decision (including its repair) can exceed the threshold; this is no hard cap.
@@ -78,6 +80,10 @@ class GameSummary(BaseModel):
     replay_matches: bool = True
     final_digest: str | None = None
     mode: str
+    # Frozen identities of both players; absent for random control, hosted
+    # sessions and receipts written before version accounting.
+    model_behavior_version: str | None = None
+    opponent_sha256: str | None = None
     # Monotonic host intervals; native execution includes capture validation.
     observations: dict[str, float] = Field(default_factory=dict)
     model_latencies: list[float] = Field(default_factory=list)
@@ -87,6 +93,13 @@ class GameSummary(BaseModel):
     output_tokens: int = 0
     token_split_attempts: int = 0
     generation_attempts: int = 0
+    # Attempts whose reasoning reached the thinking budget and was closed by the
+    # harness; these still answer and are not fallbacks.
+    forced_closes: int = 0
+    # Model decisions offered exactly one legal reference despite native skipping.
+    single_choice_decisions: int = 0
+    # Forced decisions the native environment resolved without any player.
+    skipped_trivial: int | None = None
     llm_phases: dict[str, float] = Field(default_factory=dict)
 
     prompt_tokens: int = 0
@@ -176,8 +189,49 @@ def _game_mode(
 ) -> str:
     if session is None:
         return "random-v-checkpoint-control" if checkpoint else "random-control"
-    model = "openrouter" if session.identity.runtime == "openrouter-chat-v1" else "qwen"
+    model = {
+        "openrouter-chat-v1": "openrouter",
+        "openrouter-decisions-v1": "openrouter-decisions",
+    }.get(session.identity.runtime, "qwen")
     return f"{model}-v-{'checkpoint' if checkpoint else 'random'}"
+
+
+def _record_inference_usage(
+    summary: GameSummary, result: SelectionResult, *, game: str
+) -> None:
+    """Retain attempt totals and live diagnostics, including repairs and failures.
+
+    Output and split totals preserve the receipt's token counts, including any
+    inserted closing delimiter. Offline reports separately count generated tokens.
+    """
+    for attempt in result.attempts:
+        summary.generation_attempts += 1
+        summary.output_tokens += attempt.output_tokens or 0
+        for name in ("encode_seconds", "generation_seconds", "validation_seconds"):
+            seconds = getattr(attempt, name)
+            if seconds is not None:
+                summary.llm_phases[name] = summary.llm_phases.get(name, 0) + seconds
+        response = attempt.response
+        if response is None:
+            continue
+        summary.token_split_attempts += response.reasoning_tokens is not None
+        summary.reasoning_tokens += response.reasoning_tokens or 0
+        summary.answer_tokens += response.answer_tokens or 0
+        summary.forced_closes += response.forced_close_at is not None
+        # Measured per attempt so slow decoding is visible during a campaign.
+        seconds = attempt.generation_seconds or 0
+        print(
+            f"QWEN {game} decision={summary.decisions} "
+            f"legal={len(result.decision.legal_references)} "
+            f"prompt={attempt.prompt_tokens} "
+            f"reasoning={response.reasoning_tokens} "
+            f"answer={response.answer_tokens} "
+            f"forced={response.forced_close_at is not None} "
+            f"seconds={seconds:.1f} "
+            f"tok/s={len(response.token_ids) / seconds if seconds else 0:.1f} "
+            f"origin={result.origin}",
+            flush=True,
+        )
 
 
 def _record_hosted_usage(summary: GameSummary, result: "OpenRouterResult") -> None:
@@ -187,22 +241,28 @@ def _record_hosted_usage(summary: GameSummary, result: "OpenRouterResult") -> No
     never implies that a request without usage was free.
     """
     for attempt in result.attempts:
-        usage = attempt.completion.usage if attempt.completion else None
+        if not attempt.dispatched:
+            continue
+        usage = attempt.usage
         if usage is None or usage.cost is None:
             summary.unpriced_attempts += 1
         if usage is None:
             continue
-        summary.prompt_tokens += usage.prompt_tokens
-        summary.completion_tokens += usage.completion_tokens
+        # Both transports retain these counters alongside their native usage.
+        summary.prompt_tokens += attempt.prompt_tokens or 0
+        summary.completion_tokens += attempt.output_tokens or 0
         summary.reported_cost_usd += usage.cost or 0
-        if usage.prompt_tokens_details:
-            summary.cached_tokens += usage.prompt_tokens_details.cached_tokens or 0
+        chat_usage = attempt.completion.usage if attempt.completion else None
+        if chat_usage is None:
+            continue
+        if chat_usage.prompt_tokens_details:
+            summary.cached_tokens += chat_usage.prompt_tokens_details.cached_tokens or 0
             summary.cache_write_tokens += (
-                usage.prompt_tokens_details.cache_write_tokens or 0
+                chat_usage.prompt_tokens_details.cache_write_tokens or 0
             )
-        if usage.completion_tokens_details:
+        if chat_usage.completion_tokens_details:
             summary.reasoning_tokens += (
-                usage.completion_tokens_details.reasoning_tokens or 0
+                chat_usage.completion_tokens_details.reasoning_tokens or 0
             )
 
 
@@ -249,6 +309,8 @@ def play(
     if session:
         summary.model_load_seconds = session.load_seconds
         retain(out / "runtime.json", session.identity.model_dump_json(indent=2))
+        if isinstance(session, InferenceSession):
+            summary.model_behavior_version = session.behavior_version
     origins: Counter[str] = Counter()
     latencies: list[float] = []
     try:
@@ -268,7 +330,9 @@ def play(
                 out / "opponent.json",
                 configured_opponent.identity.model_dump_json(indent=2),
             )
+            summary.opponent_sha256 = configured_opponent.identity.sha256
         if opponent is not None:
+            summary.opponent_sha256 = opponent.sha256
             opponent.admit(players, config.opponent_seed)
         with observe("native_reset"):
             env = managym.Env(seed=config.seed, skip_trivial=config.skip_trivial)
@@ -300,6 +364,9 @@ def play(
                 supplied = DecisionInput(
                     text=decision.text,
                     legal_references=tuple(a.reference for a in decision.actions),
+                    action_descriptions={
+                        a.reference: a.description for a in decision.actions
+                    },
                     representation_id=decision.representation_version,
                     source_identity={"capture_digest": decision.capture_digest},
                 )
@@ -322,27 +389,9 @@ def play(
                 progress(result)
                 summary.model_decisions += 1
                 summary.model_latencies.append(result.seconds)
+                summary.single_choice_decisions += len(supplied.legal_references) == 1
                 if isinstance(result, SelectionResult):
-                    for attempt in result.attempts:
-                        summary.generation_attempts += 1
-                        summary.output_tokens += attempt.output_tokens or 0
-                        for name in (
-                            "encode_seconds",
-                            "generation_seconds",
-                            "validation_seconds",
-                        ):
-                            seconds = getattr(attempt, name)
-                            if seconds is not None:
-                                summary.llm_phases[name] = (
-                                    summary.llm_phases.get(name, 0) + seconds
-                                )
-                        if attempt.response is not None:
-                            if attempt.response.reasoning_tokens is not None:
-                                summary.token_split_attempts += 1
-                            summary.reasoning_tokens += (
-                                attempt.response.reasoning_tokens or 0
-                            )
-                            summary.answer_tokens += attempt.response.answer_tokens or 0
+                    _record_inference_usage(summary, result, game=out.name)
                 else:
                     _record_hosted_usage(summary, result)
                 if result.failure is not None:
@@ -414,6 +463,8 @@ def play(
         summary.failure = f"{type(error).__name__}: {error}"
     finally:
         summary.game_seconds = time.monotonic() - started
+        if env is not None:
+            summary.skipped_trivial = env.skip_trivial_count()
         if env is not None and replay is not None:
             summary.final_digest = env.state_digest()
         summary.origins = dict(origins)

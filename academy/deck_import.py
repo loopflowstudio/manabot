@@ -16,7 +16,7 @@ class DeckFileInput(BaseModel):
 
 class DeckImportInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    pack_key: str = Field(default="tla-pool-v1", max_length=100)
+    pack_key: str = Field(default="world", max_length=100)
     ruleset: str = Field(default="development-v1", max_length=100)
     hero: DeckFileInput
     villain: DeckFileInput

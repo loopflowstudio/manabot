@@ -168,7 +168,7 @@ def collect_choices(
         ]
         if swapped:
             configs.reverse()
-        env = managym.Env(seed=seed, skip_trivial=False)
+        env = managym.Env(seed=seed)
         raw, _ = env.reset(configs)
         trace: list[int] = []
         for step in range(1200):

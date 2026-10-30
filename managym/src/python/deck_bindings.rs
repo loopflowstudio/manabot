@@ -1,5 +1,5 @@
 //! Python surface of decks and decklist imports (`state::deck`,
-//! `semantic::decklist`). Records convert to and from their serde JSON form and
+//! `cards::decklist`). Records convert to and from their serde JSON form and
 //! validate as Pydantic fields, so manabot configurations and Academy traces
 //! hold the native record itself rather than a Python copy.
 #![allow(clippy::useless_conversion)]
@@ -16,7 +16,7 @@ use serde::{de::DeserializeOwned, Serialize};
 
 use super::bindings::PyPlayerConfig;
 use crate::{
-    semantic::{
+    cards::{
         deck_admission::{admit_deck as native_admit_deck, DeckIssue, DEVELOPMENT_RULESET},
         decklist::{
             admit_decklists as native_admit_decklists, import_match as native_import_match,
@@ -218,8 +218,8 @@ json_record!(DeckEntry {
     }
 
     #[getter]
-    fn semantic_key(&self) -> Option<String> {
-        self.semantic_key.clone()
+    fn key(&self) -> Option<String> {
+        self.key.clone()
     }
 });
 
@@ -380,7 +380,7 @@ pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("DeckImportError", py.get_type_bound::<DeckImportError>())?;
     m.add(
         "MAX_DECKLIST_BYTES",
-        crate::semantic::decklist::MAX_SOURCE_BYTES,
+        crate::cards::decklist::MAX_SOURCE_BYTES,
     )?;
     m.add_class::<Deck>()?;
     m.add_class::<DeckIssue>()?;

@@ -17,28 +17,30 @@ def test_checked_public_commitment_receipt_closes_selected_trace() -> None:
     receipt = verify_receipt()
 
     assert receipt["summary"] == {
-        "commands": 132,
-        "commitments": 62,
-        "unadmitted_commands": 70,
-        "tracker_records_per_viewer": 132,
-        "consumed_commitments": 62,
+        "commands": 142,
+        "commitments": 69,
+        "unadmitted_commands": 73,
+        "tracker_records_per_viewer": {"0": 68, "1": 142},
+        "consumed_commitments": 55,
         "rules_provider_gaps": 0,
         "identity_stream_mismatches": 0,
         "negative_proof_mutations": 0,
     }
     assert receipt["identity"]["authority_receipt_sha256"] == (AUTHORITY_RECEIPT_SHA256)
-    assert receipt["identity_stream"][29]["public_commitment"] == {
+    assert receipt["identity_stream"][30]["public_commitment"] == {
         "kind": "discard",
         "card": "Island",
     }
-    assert receipt["identity_stream"][40]["public_commitment"] == {
-        "kind": "decline_discard"
+    assert receipt["identity_stream"][102]["public_commitment"] == {
+        "kind": "decline_learn"
     }
     stream_hashes = {
         surface["identity_stream_sha256"] for surface in receipt["surfaces"].values()
     }
     assert len(stream_hashes) == 1
-    assert {tracker["records"] for tracker in receipt["trackers"].values()} == {132}
+    assert {
+        viewer: tracker["records"] for viewer, tracker in receipt["trackers"].items()
+    } == {"0": 68, "1": 142}
 
 
 def test_public_commitment_receipt_binds_hypothesis_atomicity_and_frozen_evidence() -> (

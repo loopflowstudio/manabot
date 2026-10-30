@@ -22,7 +22,7 @@ def _request() -> dict[str, object]:
         "seed": 7,
         "auto_pass": False,
         "deck_import": {
-            "pack_key": "tla-pool-v1",
+            "pack_key": "world",
             "hero": {
                 "filename": "novel.txt",
                 "source": "# private note\n10 Forest\n10 Mountain\n2 Avatar Enthusiasts\nSideboard\n1 Island",
@@ -42,7 +42,7 @@ def test_imported_setup_matches_manabot_reconnect_and_rebuilt_root(
     imported = managym.ImportedMatch.from_dict(config.imported_decks)
     match_config = MatchConfig.from_import(imported)
     match_config.hero, match_config.villain = "Hero", "Villain"
-    bot = managym.Env(seed=7, skip_trivial=False)
+    bot = managym.Env(seed=7)
     bot.reset(Match(match_config).to_rust())
     assert bot.content_pack_manifest() == session.env.content_pack_manifest()
     assert bot.search_witness_json() == session.env.search_witness_json()
@@ -54,7 +54,7 @@ def test_imported_setup_matches_manabot_reconnect_and_rebuilt_root(
     assert recovery["frame"]["offers"] == first["frame"]["offers"]
     assert "private note" not in json.dumps(recovery)
     restored = GameConfig(**asdict(config))
-    rebuilt = managym.Env(seed=7, skip_trivial=False)
+    rebuilt = managym.Env(seed=7)
     rebuilt.reset(restored.to_rust())
     assert rebuilt.search_witness_json() == bot.search_witness_json()
     restored.hero_sideboard = {"Mountain": 1}

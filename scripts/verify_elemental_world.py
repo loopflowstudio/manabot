@@ -45,9 +45,9 @@ def check(left: str, right: str, *, seed: int, cap: int) -> Result:
     configs = [
         managym.authored_deck_setup(PACK, "elemental_" + key) for key in (left, right)
     ]
-    root = managym.Env(seed=seed, skip_trivial=False)
+    root = managym.Env(seed=seed)
     root.reset(configs)
-    replay = managym.Env(seed=seed, skip_trivial=False)
+    replay = managym.Env(seed=seed)
     replay.reset(configs)
     rng = random.Random(seed)
     tape = hashlib.sha256()

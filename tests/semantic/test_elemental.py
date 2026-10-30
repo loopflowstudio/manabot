@@ -97,11 +97,11 @@ def _engine() -> tuple[managym.Env, managym.Observation]:
 def test_compiled_search_reaches_belief_and_public_history_consumers() -> None:
     engine, obs = _engine()
     pack = BoundSemanticPack.from_env(engine)
-    assert pack.schema.raw["schema_version"] == 3
+    assert pack.schema.raw["schema_version"] == 9
     assert len(pack.definition_row_by_card_def_id) == 51
     pack.pad_catalog()  # All programs fit the declared budget without truncation.
     wrong = deepcopy(engine.content_pack_manifest())
-    wrong["compiled_semantics"]["ir_hash"] = "0" * 64
+    wrong["content_digest"] = "0" * 64
     with pytest.raises(ContentPackBindingError):
         BoundSemanticPack.bind(wrong)
     cast = next(

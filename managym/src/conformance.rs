@@ -112,25 +112,25 @@ impl Orientation {
     }
     fn content(self) -> Result<Arc<crate::cards::content_pack::ContentPack>, String> {
         match self {
-            Self::ElementalWorldGrVsUg | Self::ElementalWorldUgVsGr => Ok(Arc::new(
-                crate::semantic::SemanticPack::current("optional_payments")
-                    .and_then(|pack| pack.compile_content_pack())
-                    .map_err(|error| error.to_string())?,
+            Self::ElementalWorldGrVsUg | Self::ElementalWorldUgVsGr => Ok(Arc::clone(
+                &crate::cards::setups::authored_pack("optional_payments")
+                    .map_err(|error| error.to_string())?
+                    .content,
             )),
-            Self::TemurLeftVsRight | Self::TemurRightVsLeft => Ok(Arc::new(
-                crate::semantic::SemanticPack::current("temur")
-                    .and_then(|pack| pack.compile_content_pack())
-                    .map_err(|error| error.to_string())?,
+            Self::TemurLeftVsRight | Self::TemurRightVsLeft => Ok(Arc::clone(
+                &crate::cards::setups::authored_pack("temur")
+                    .map_err(|error| error.to_string())?
+                    .content,
             )),
-            Self::SacrificeLeftVsRight | Self::SacrificeRightVsLeft => Ok(Arc::new(
-                crate::semantic::SemanticPack::current("sacrifice")
-                    .and_then(|pack| pack.compile_content_pack())
-                    .map_err(|error| error.to_string())?,
+            Self::SacrificeLeftVsRight | Self::SacrificeRightVsLeft => Ok(Arc::clone(
+                &crate::cards::setups::authored_pack("sacrifice")
+                    .map_err(|error| error.to_string())?
+                    .content,
             )),
-            Self::ElementalLeftVsRight | Self::ElementalRightVsLeft => Ok(Arc::new(
-                crate::semantic::SemanticPack::current("elemental")
-                    .and_then(|pack| pack.compile_content_pack())
-                    .map_err(|error| error.to_string())?,
+            Self::ElementalLeftVsRight | Self::ElementalRightVsLeft => Ok(Arc::clone(
+                &crate::cards::setups::authored_pack("elemental")
+                    .map_err(|error| error.to_string())?
+                    .content,
             )),
             _ => Ok(default_content_pack()),
         }

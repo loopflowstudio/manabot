@@ -326,7 +326,7 @@
       "sequence": 25
     }
   ],
-  "artifact_hash": "d0bc2e1fb13625a6c146c861e115ead11689d2e1c06e5149ce3e617e08185905",
+  "artifact_hash": "6450230f1dff0398f2c7ee8a7da8302abdcaa2872d895cca6aee17ee9e55e3c7",
   "artifact_schema_version": 1,
   "cards": [
     {
@@ -1146,7 +1146,7 @@
     "untested_cards": []
   },
   "coverage_status": "complete",
-  "evidence_hash": "fe6b61c726f27e1968233115793f2c1908e49f1755c4cf07f0a35c7b0df45a24",
+  "evidence_hash": "c9865999a10c5864442af83d7ad85a740bf3cf9b7d060312f88f365d95901d7e",
   "pack_key": "ur-lessons-vs-gw-allies",
   "policy": {
     "max_kernel_change_share": {
@@ -1651,123 +1651,123 @@
   },
   "tests": [
     {
-      "identifier": "rules::stage2_cards::accumulate_wisdom_look_three_pick_one_rest_to_bottom",
+      "identifier": "tla::accumulate_wisdom_look_three_pick_one_rest_to_bottom",
       "key": "accumulate_wisdom",
-      "path": "managym/tests/rules/stage2_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage2_cards::allies_at_last_affinity_and_two_attackers",
+      "identifier": "tla::allies_at_last_affinity_and_two_attackers",
       "key": "allies_at_last",
-      "path": "managym/tests/rules/stage2_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage2_cards::waterbend_taps_do_not_trigger_badgermole_cub",
+      "identifier": "tla::waterbend_taps_do_not_trigger_badgermole_cub",
       "key": "badgermole_waterbend",
-      "path": "managym/tests/rules/stage2_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage3_cards::firebending_only_triggers_with_lesson_in_graveyard",
+      "identifier": "tla::firebending_only_triggers_with_lesson_in_graveyard",
       "key": "cadets_firebending",
-      "path": "managym/tests/rules/stage3_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage3_cards::cadets_pump_ability_buffs_until_end_of_turn",
+      "identifier": "tla::cadets_pump_ability_buffs_until_end_of_turn",
       "key": "cadets_pump",
-      "path": "managym/tests/rules/stage3_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage3_cards::healer_tap_gains_life_and_scries",
+      "identifier": "tla::healer_tap_gains_life_and_scries",
       "key": "compassionate_healer",
-      "path": "managym/tests/rules/stage3_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage2_cards::divide_by_zero_bounces_spell_from_stack",
+      "identifier": "stx::divide_by_zero_bounces_spell_from_stack",
       "key": "divide_by_zero",
-      "path": "managym/tests/rules/stage2_cards.rs",
+      "path": "managym/tests/cards/stx.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage3_cards::dragonfly_swarm_death_trigger_needs_lesson_at_fire_time",
+      "identifier": "tla::dragonfly_swarm_death_trigger_needs_lesson_at_fire_time",
       "key": "dragonfly_death",
-      "path": "managym/tests/rules/stage3_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage3_cards::dragonfly_swarm_power_counts_noncreature_nonland_graveyard_cards",
+      "identifier": "tla::dragonfly_swarm_power_counts_noncreature_nonland_graveyard_cards",
       "key": "dragonfly_power",
-      "path": "managym/tests/rules/stage3_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage3_cards::jailer_exiles_and_returns_on_leaving",
+      "identifier": "tla::jailer_exiles_and_returns_on_leaving",
       "key": "earth_kingdom_jailer",
-      "path": "managym/tests/rules/stage3_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage3_cards::lieutenant_counters_each_other_ally_and_grows",
+      "identifier": "tla::lieutenant_counters_each_other_ally_and_grows",
       "key": "earth_kings_lieutenant",
-      "path": "managym/tests/rules/stage3_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage3_cards::earthbend_animates_land_with_counter",
+      "identifier": "tla::earthbend_animates_land_with_counter",
       "key": "earthbend_animates",
-      "path": "managym/tests/rules/stage3_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage3_cards::animated_land_dies_and_returns_tapped_as_plain_land",
+      "identifier": "tla::animated_land_dies_and_returns_tapped_as_plain_land",
       "key": "earthbend_returns",
-      "path": "managym/tests/rules/stage3_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage3_cards::fancy_footwork_untaps_and_buffs_one_or_two_targets",
+      "identifier": "tla::fancy_footwork_untaps_and_buffs_one_or_two_targets",
       "key": "fancy_footwork",
-      "path": "managym/tests/rules/stage3_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage2_cards::firebending_lesson_kicked_deals_five",
+      "identifier": "tla::firebending_lesson_kicked_deals_five",
       "key": "firebending_lesson_kicker",
-      "path": "managym/tests/rules/stage2_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage3_cards::first_time_flyer_conditional_static_recomputes_on_read",
+      "identifier": "tla::first_time_flyer_conditional_static_recomputes_on_read",
       "key": "first_time_flyer_static",
-      "path": "managym/tests/rules/stage3_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::tla_cards::fortune_teller_clue_sacrifices_to_draw_and_ceases_to_exist",
+      "identifier": "tla::fortune_teller_clue_sacrifices_to_draw_and_ceases_to_exist",
       "key": "fortune_teller_clue",
-      "path": "managym/tests/rules/tla_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage2_cards::igneous_inspiration_deals_three_then_learns",
+      "identifier": "stx::igneous_inspiration_deals_three_then_learns",
       "key": "igneous_inspiration",
-      "path": "managym/tests/rules/stage2_cards.rs",
+      "path": "managym/tests/cards/stx.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::tla_cards::invasion_reinforcements_flash_cast_on_opponents_turn",
+      "identifier": "tla::invasion_reinforcements_flash_cast_on_opponents_turn",
       "key": "invasion_flash",
-      "path": "managym/tests/rules/tla_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::tla_cards::kyoshi_warriors_etb_creates_ally_token_via_stack",
+      "identifier": "tla::kyoshi_warriors_etb_creates_ally_token_via_stack",
       "key": "kyoshi_token",
-      "path": "managym/tests/rules/tla_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
@@ -1777,63 +1777,63 @@
       "runner": "rust"
     },
     {
-      "identifier": "rules::tla_cards::otter_penguin_buffs_on_second_draw_only_and_resets",
+      "identifier": "tla::otter_penguin_buffs_on_second_draw_only_and_resets",
       "key": "otter_penguin",
-      "path": "managym/tests/rules/tla_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage2_cards::pop_quiz_draws_then_learn_discard_draws",
+      "identifier": "stx::pop_quiz_draws_then_learn_discard_draws",
       "key": "pop_quiz_learn",
-      "path": "managym/tests/rules/stage2_cards.rs",
+      "path": "managym/tests/cards/stx.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage2_cards::quench_controller_declines_and_spell_is_countered",
+      "identifier": "tla::quench_controller_declines_and_spell_is_countered",
       "key": "quench_payment",
-      "path": "managym/tests/rules/stage2_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::tla_cards::south_pole_voyager_second_resolution_draws",
+      "identifier": "tla::south_pole_voyager_second_resolution_draws",
       "key": "south_pole_voyager",
-      "path": "managym/tests/rules/tla_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage3_cards::suki_power_tracks_creature_count_and_attack_makes_a_token",
+      "identifier": "tla::suki_power_tracks_creature_count_and_attack_makes_a_token",
       "key": "suki_attack",
-      "path": "managym/tests/rules/stage3_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::tla_cards::tiger_seal_taps_at_upkeep_and_untaps_on_second_draw",
+      "identifier": "tla::tiger_seal_taps_at_upkeep_and_untaps_on_second_draw",
       "key": "tiger_seal",
-      "path": "managym/tests/rules/tla_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage2_cards::ward_asks_spell_controller_and_counters_on_decline",
+      "identifier": "stx::ward_asks_spell_controller_and_counters_on_decline",
       "key": "ward_payment",
-      "path": "managym/tests/rules/stage2_cards.rs",
+      "path": "managym/tests/cards/stx.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage2_cards::waterbend_pays_entirely_with_creature_taps",
+      "identifier": "tla::waterbend_pays_entirely_with_creature_taps",
       "key": "waterbend_payment",
-      "path": "managym/tests/rules/stage2_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage3_cards::anthem_buffs_other_allies_only",
+      "identifier": "tla::anthem_buffs_other_allies_only",
       "key": "white_lotus_anthem",
-      "path": "managym/tests/rules/stage3_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     },
     {
-      "identifier": "rules::stage3_cards::yip_yip_buffs_and_grants_flying_to_allies_only",
+      "identifier": "tla::yip_yip_buffs_and_grants_flying_to_allies_only",
       "key": "yip_yip",
-      "path": "managym/tests/rules/stage3_cards.rs",
+      "path": "managym/tests/cards/tla.rs",
       "runner": "rust"
     }
   ],

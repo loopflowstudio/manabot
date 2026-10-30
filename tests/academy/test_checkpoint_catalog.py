@@ -150,7 +150,7 @@ def test_replaced_checkpoint_cannot_replace_playable_match(runs: Path) -> None:
 
 def _deck_import() -> dict[str, object]:
     return {
-        "pack_key": "tla-pool-v1",
+        "pack_key": "world",
         "hero": {"source": "10 Forest\n10 Mountain\n2 Avatar Enthusiasts"},
         "villain": {"source": "20 Island"},
     }
@@ -165,9 +165,9 @@ def test_imported_decks_play_pool_checkpoints_and_refuse_setup_bindings(
     from manabot.model.checkpoint import save_checkpoint
 
     space = ObservationSpace()
-    agent = ActorCritic(space, ModelConfig(semantic_pack="tla-pool-v1"))
+    agent = ActorCritic(space, ModelConfig(semantic_pack="world"))
     pool = runs / "pool" / "step_0.pt"
-    save_checkpoint(agent, space, pool, content_pool="tla-pool-v1")
+    save_checkpoint(agent, space, pool, content_pool="world")
     rng = random.Random(0)
     with TestClient(app) as client:
         message = _new_game_error(

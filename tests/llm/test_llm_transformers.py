@@ -19,8 +19,8 @@ from transformers import (
 )
 from transformers.models.qwen3_5.configuration_qwen3_5 import Qwen3_5VisionConfig
 
-from manabot.llm import transformers_runtime
-from manabot.llm.schema import DecisionInput, InferenceConfig, Message
+from manabot.llm import tokenization, transformers_runtime
+from manabot.llm.schema import DecisionInput, InferenceConfig, Message, Sampling
 from manabot.llm.selection import select
 
 
@@ -109,10 +109,18 @@ def test_transformers_template_tokens_and_generation(
             )
     model.save_pretrained(tmp_path)
 
-    def snapshot(repo_id: str, *, revision: str, allow_patterns: list[str]) -> str:
+    def snapshot(
+        repo_id: str,
+        *,
+        revision: str,
+        allow_patterns: list[str],
+        local_files_only: bool = False,
+    ) -> str:
+        assert not local_files_only
         return str(tmp_path)
 
     monkeypatch.setattr(transformers_runtime, "snapshot_download", snapshot)
+    monkeypatch.setattr(tokenization, "snapshot_download", snapshot)
     config = InferenceConfig(
         model_id="offline/tiny",
         model_revision="a" * 40,
@@ -198,4 +206,27 @@ def test_transformers_template_tokens_and_generation(
     with pytest.raises(ValueError, match="declared context"):
         transformers_runtime.TransformersRuntime(
             config.model_copy(update={"context_tokens": 257})
+        )
+
+    # Sampling is explicit and seeded from the exact prompt; the worker's draws
+    # repeat for a repeated prompt. Presence penalty has no Transformers support.
+    sampling = Sampling(temperature=1.0, top_p=0.95, top_k=20, seed=183)
+    sampled = transformers_runtime.TransformersRuntime(
+        config.model_copy(update={"decoding": "sampled", "sampling": sampling})
+    )
+    assert sampled.identity.generation_config["do_sample"] is True
+    assert sampled.identity.generation_config["top_k"] == 20
+    draws = [
+        sampled.generate(encoded, deadline=time.monotonic() + 30).token_ids
+        for _ in range(2)
+    ]
+    assert draws[0] == draws[1]
+    with pytest.raises(ValueError, match="presence_penalty"):
+        transformers_runtime.TransformersRuntime(
+            config.model_copy(
+                update={
+                    "decoding": "sampled",
+                    "sampling": sampling.model_copy(update={"presence_penalty": 1.5}),
+                }
+            )
         )

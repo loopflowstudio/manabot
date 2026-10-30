@@ -1,47 +1,38 @@
 //! Final Fantasy.
-use crate::cards::authoring::{
-    Card, CardType, Characteristics, Event, Op, Predicate, PrintedPower, Program, ProgramKind,
-    Subject, Trigger,
+use crate::state::{
+    ability::{Ability, Effect, TriggerCondition, TriggerSubject},
+    card::{CardDefinition, CardType, CardTypes},
+    mana::ManaCost,
+    predicate::CardPredicate,
 };
 
-pub(super) fn cards() -> Vec<Card> {
+pub(super) fn cards() -> Vec<CardDefinition> {
     vec![sazh_s_chocobo()]
 }
 
-fn sazh_s_chocobo() -> Card {
+fn sazh_s_chocobo() -> CardDefinition {
     let text_box =
         "Landfall — Whenever a land you control enters, put a +1/+1 counter on this creature.";
 
-    Card {
-        characteristics: Characteristics {
-            mana_cost: Some("G"),
-            subtypes: Some(vec!["Bird"]),
-            types: vec![CardType::Creature],
-            keywords: Some(vec![]),
-            power: Some(PrintedPower::Fixed(0)),
-            toughness: Some(1),
-            token: Some(false),
-            supertypes: Some(vec![]),
-            ..Default::default()
-        },
+    CardDefinition {
         key: "fin.sazh_s_chocobo",
-        programs: vec![Program::new(
-            "p0",
-            ProgramKind::Triggered,
-            vec![Op::PutCounters {
-                count: 1,
-                target: "source",
-            }],
-        )
-        .trigger(Trigger::new(
-            Event::EntersBattlefield,
-            Subject::AnyYouControl {
-                predicate: Predicate::CardType {
-                    value: CardType::Land,
-                },
+        scryfall_id: "dda6b4d0-1b60-46b0-b321-b9ffe15afff4",
+        name: "Sazh's Chocobo".into(),
+        mana_cost: Some(ManaCost::parse("{G}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Bird".into()],
+        power: Some(0),
+        toughness: Some(1),
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::EntersTheBattlefield {
+                subject: TriggerSubject::AnyYouControl(CardPredicate {
+                    card_type: Some(CardType::Land),
+                    ..Default::default()
+                }),
             },
-        ))],
-        registry_name: "Sazh's Chocobo",
-        text_box,
+            effects: vec![Effect::PutCountersOnSource { count: 1 }],
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
     }
 }

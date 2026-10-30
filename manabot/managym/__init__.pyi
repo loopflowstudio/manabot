@@ -6,14 +6,10 @@ from typing import Any, Dict, List, Literal, Optional, Tuple, TypedDict
 
 import numpy as np
 
-class CompiledContentIdentity(TypedDict):
-    pack_key: str
-    ir_hash: str
-    source_hash: str
-
 class PoolDefinition(TypedDict):
-    card_def_id: int | None
-    semantic_key: str | None
+    card_def_id: int
+    key: str | None
+    scryfall_id: str | None
     registry_name: str
     eligibility: Literal["eligible", "unsupported"]
     reason: str | None
@@ -22,18 +18,33 @@ class ContentPool(TypedDict):
     pack_key: str
     world_version: str
     content_digest: str
-    compiled_semantics: CompiledContentIdentity
     definitions: list[PoolDefinition]
 
 def content_pool(pack_key: str) -> ContentPool: ...
 def set_cards(sets: list[str]) -> list[PoolDefinition]:
-    """World pool rows for typed cards whose key prefix is in ``sets``."""
+    """World pool rows for cards whose key prefix is in ``sets``."""
 
 def unsupported_cards(names: list[str]) -> list[str]:
     """Distinct names the current world does not support for deck entry."""
 
-def semantic_ir_json(pack_key: str) -> str:
-    """Canonical IR compiled natively from the typed set definitions."""
+class LearningCatalog(TypedDict):
+    pack_key: str | None
+    content_digest: str
+    registry_names: list[str]
+    token_kind: list[int]
+    token_value: list[int]
+    definition_offsets: list[int]
+    program_offsets: list[int]
+    definition_program_offsets: list[int]
+    definition_program_rows: list[int]
+    definition_ref_source_tokens: list[int]
+    definition_ref_target_rows: list[int]
+
+def learning_catalog(pack_key: str | None = None) -> LearningCatalog:
+    """Learning tokens for every definition of a pack, rows by CardDefId."""
+
+def learning_token_value(name: str) -> int:
+    """The learning catalog's stable token value for a Rust or printed name."""
 
 class PreparedPossibleWorldMaterializer:
     @property
@@ -299,7 +310,7 @@ class DeckEntry:
     @property
     def card_def_id(self) -> int | None: ...
     @property
-    def semantic_key(self) -> str | None: ...
+    def key(self) -> str | None: ...
     def to_dict(self) -> dict[str, Any]: ...
 
 class Decklist:
@@ -337,7 +348,6 @@ class PoolIdentity(TypedDict):
     pack_key: str
     world_version: str
     content_digest: str
-    compiled_semantics: CompiledContentIdentity
 
 class ImportedMatch:
     """Private two-seat import record; never attach it to viewer frames."""
@@ -567,6 +577,9 @@ class Permanent:
     toughness: int
     is_animated: bool
     has_exile_link: bool
+    exile_if_dies_this_turn: bool
+    attacking: bool
+    temp_subtypes: List[str]
     # Effective keywords (printed + until-EOT grants).
     keywords: Keywords
 

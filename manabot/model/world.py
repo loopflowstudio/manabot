@@ -3,7 +3,7 @@
 Two binding forms exist. A pool binding (`pool_world`) names a
 content pool by its native descriptor: the model may play any deck that pool
 admits, whatever decks trained it. A setup binding (`checkpoint_world`) names
-exact setups. Over a compiled authored pack it names the pack's complete
+exact setups. Over an authored pack it names the pack's complete
 authored roster, whichever pair trained it; the Elemental packs did so before
 the form was versioned, and new bindings over other authored packs carry
 `setup_binding: authored-pack-v1`. Unversioned bindings over other packs keep
@@ -146,7 +146,7 @@ def _authored_roster(pack_key: str) -> list[dict] | None:
 
 
 def bound_pack(binding: Mapping[str, Any]) -> str | None:
-    """Compiled content pack a binding names, or None for default content."""
+    """Content pack a binding names, or None for default content."""
     if "content_pool" in binding:
         return binding["content_pool"]["pack_key"]
     return _manifest_pack(binding["content_manifest"])
@@ -156,7 +156,7 @@ def validate_policy_input(agent: Any, binding: dict) -> None:
     pack_key = bound_pack(binding)
     if pack_key is not None and agent.config.semantic_pack != pack_key:
         raise ValueError(
-            "compiled matchup checkpoint requires its complete semantic program input"
+            "authored matchup checkpoint requires its complete semantic program input"
         )
 
 
@@ -190,7 +190,7 @@ def pool_world(pack_key: str, observation_space: Any) -> dict:
 def checkpoint_world(player_configs: Sequence[Any], observation_space: Any) -> dict:
     """Bind the actual configured world, never a default-deck surrogate.
 
-    A match of authored decks from one compiled pack binds that pack's
+    A match of authored decks from one authored pack binds that pack's
     complete roster, so the model may execute any pair native reset admits.
     Other setups bind their exact pair. Seats may reverse without changing
     compatibility; each deck stays paired with its own sideboard. Names and
@@ -229,8 +229,10 @@ def _setup_world(
 
 
 def _manifest_pack(manifest: Mapping[str, Any]) -> str | None:
-    compiled = manifest.get("compiled_semantics")
-    return compiled["pack_key"] if compiled is not None else None
+    pack_key = manifest.get("pack_key")
+    if pack_key is not None and not isinstance(pack_key, str):
+        raise ValueError("invalid authored content pack selection")
+    return pack_key
 
 
 def _schema_file_digest(pack_key: str | None) -> str:
@@ -239,14 +241,7 @@ def _schema_file_digest(pack_key: str | None) -> str:
 
 def checkpoint_configs(binding: Mapping[str, Any]) -> list[managym.PlayerConfig]:
     """Reconstruct a representative root without dropping authored pack identity."""
-    compiled = binding["content_manifest"].get("compiled_semantics")
-    pack_key = None
-    if compiled is not None:
-        if not isinstance(compiled, dict) or not isinstance(
-            compiled.get("pack_key"), str
-        ):
-            raise ValueError("invalid compiled content pack selection")
-        pack_key = compiled["pack_key"]
+    pack_key = _manifest_pack(binding["content_manifest"])
     return [
         managym.PlayerConfig(str(index), setup["deck"], setup["sideboard"], pack_key)
         for index, setup in enumerate(binding["setups"][:2])

@@ -2,9 +2,9 @@
 //!
 //! A [`ContentPack`] maps registry names to stable [`CardDefId`]s and shared
 //! [`CardDefinition`]s. The default pack holds every current card; authored
-//! setups and pools build packs from compiled semantic IR
-//! ([`ContentPack::from_compiled_semantics`]). Packs carry a digest and manifest
-//! so derived consumers bind to exactly one content identity.
+//! setups and pools build keyed packs from chosen definitions
+//! ([`ContentPack::from_definitions`]). Packs carry a digest and manifest so
+//! derived consumers bind to exactly one content identity.
 
 use std::{
     collections::BTreeMap,
@@ -62,27 +62,21 @@ pub struct ContentPackDefinitionManifest {
     pub registry_name: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct CompiledSemanticManifest {
-    pub pack_key: String,
-    pub ir_hash: String,
-    pub source_hash: String,
-}
-
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ContentPackManifest {
     pub world_version: String,
     pub schema_version: u32,
     pub content_digest: String,
-    pub compiled_semantics: Option<CompiledSemanticManifest>,
+    /// The authored setup or pool this pack was built for; `None` for the
+    /// default pack.
+    pub pack_key: Option<String>,
     pub definitions: Vec<ContentPackDefinitionManifest>,
 }
 
 #[derive(Clone, Debug)]
 pub struct ContentPack {
     pub schema_version: u32,
-    compiled_semantics: Option<CompiledSemanticManifest>,
+    pack_key: Option<String>,
     cards_by_name: BTreeMap<String, CardDefId>,
     definitions: Vec<Arc<CardDefinition>>,
     digest: OnceLock<String>,
@@ -92,6 +86,31 @@ pub struct ContentPack {
 /// Legacy Rust name retained for conformance callers. Match state owns a
 /// shared `Arc<ContentPack>` rather than cloning this value.
 pub type CardRegistry = ContentPack;
+
+/// Every current card from `cardsets/` and the rules fixtures, in default-pack
+/// order. [`LEGACY_ORDER`] keeps the historical prefix (and so its `CardDefId`s)
+/// that older evidence records; the remaining cards follow by name, then
+/// [`TRAILING_ORDER`].
+fn default_order() -> Vec<CardDefinition> {
+    let mut cards = crate::cardsets::catalog()
+        .iter()
+        .cloned()
+        .chain([fixtures::crossroads_of_destiny()])
+        .map(|definition| (definition.name.clone(), definition))
+        .collect::<BTreeMap<_, _>>();
+    let mut take = |name: &str| {
+        cards
+            .remove(name)
+            .unwrap_or_else(|| panic!("ordered card {name} has no definition"))
+    };
+    let legacy = LEGACY_ORDER.map(&mut take);
+    let trailing = TRAILING_ORDER.map(&mut take);
+    legacy
+        .into_iter()
+        .chain(cards.into_values())
+        .chain(trailing)
+        .collect()
+}
 
 static DEFAULT_CONTENT_PACK: OnceLock<Arc<ContentPack>> = OnceLock::new();
 
@@ -127,7 +146,7 @@ impl ContentPack {
             world_version: crate::WORLD_VERSION.into(),
             schema_version: self.schema_version,
             content_digest: self.content_digest(),
-            compiled_semantics: self.compiled_semantics.clone(),
+            pack_key: self.pack_key.clone(),
             definitions: self
                 .definition_entries()
                 .map(|(card_def_id, definition)| ContentPackDefinitionManifest {
@@ -141,27 +160,19 @@ impl ContentPack {
 
 impl Default for ContentPack {
     fn default() -> Self {
-        let mut out = Self {
-            schema_version: CONTENT_PACK_SCHEMA_VERSION,
-            compiled_semantics: None,
-            cards_by_name: BTreeMap::new(),
-            digest: OnceLock::new(),
-            public_definitions: OnceLock::new(),
-            definitions: Vec::new(),
-        };
-        out.register_all_cards();
-        out
+        Self::from_definitions(None, default_order())
     }
 }
 
 impl ContentPack {
-    pub(crate) fn from_compiled_semantics(
+    /// A pack of exactly `definitions`, in order.
+    pub(crate) fn from_definitions(
+        pack_key: Option<String>,
         definitions: Vec<CardDefinition>,
-        compiled_semantics: CompiledSemanticManifest,
     ) -> Self {
         let mut out = Self {
             schema_version: CONTENT_PACK_SCHEMA_VERSION,
-            compiled_semantics: Some(compiled_semantics),
+            pack_key,
             cards_by_name: BTreeMap::new(),
             digest: OnceLock::new(),
             public_definitions: OnceLock::new(),
@@ -173,46 +184,9 @@ impl ContentPack {
         out
     }
 
-    pub fn compiled_semantics(&self) -> Option<&CompiledSemanticManifest> {
-        self.compiled_semantics.as_ref()
-    }
-
-    /// Register every current card: typed set definitions lowered once by
-    /// `semantic::compile`, the native set-file definitions and the rules
-    /// fixtures. [`LEGACY_ORDER`] keeps the historical prefix (and so its
-    /// `CardDefId`s) that older evidence records; the remaining typed cards
-    /// follow by name, then [`TRAILING_ORDER`].
-    pub fn register_all_cards(&mut self) {
-        let mut typed = crate::semantic::SemanticPack::current("pool")
-            .and_then(|pack| pack.lower_definitions())
-            .expect("current definitions compile")
-            .into_iter()
-            .map(|definition| (definition.name.clone(), definition))
-            .collect::<BTreeMap<_, _>>();
-        let mut native = crate::cardsets::native_cards()
-            .into_iter()
-            .chain([fixtures::crossroads_of_destiny()])
-            .map(|definition| (definition.name.clone(), definition))
-            .collect::<BTreeMap<_, _>>();
-        let mut take = |name: &str| {
-            typed
-                .remove(name)
-                .or_else(|| native.remove(name))
-                .unwrap_or_else(|| panic!("ordered card {name} has no definition"))
-        };
-        let legacy = LEGACY_ORDER.map(&mut take);
-        let trailing = TRAILING_ORDER.map(&mut take);
-        assert!(
-            native.is_empty(),
-            "native cards outside the registration order"
-        );
-        for definition in legacy
-            .into_iter()
-            .chain(std::mem::take(&mut typed).into_values())
-            .chain(trailing)
-        {
-            self.register_card(definition);
-        }
+    /// The authored setup or pool this pack was built for.
+    pub fn pack_key(&self) -> Option<&str> {
+        self.pack_key.as_deref()
     }
 
     pub fn register_card(&mut self, mut definition: CardDefinition) {

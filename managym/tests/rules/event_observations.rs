@@ -7,7 +7,7 @@ use managym::{
     state::{game_object::PlayerId, stack_object::StackObject, zone::ZoneType},
 };
 
-use super::helpers::*;
+use crate::support::game::*;
 
 fn cast_llanowar_elves(
     seed: u64,
@@ -16,7 +16,11 @@ fn cast_llanowar_elves(
     managym::state::game_object::CardId,
     Vec<GameEvent>,
 ) {
-    let mut s = Scenario::new(forest_elves_deck(), mountain_deck(), seed);
+    let mut s = Scenario::new(
+        deck(&[("Forest", 24), ("Llanowar Elves", 36)]),
+        deck(&[("Mountain", 40)]),
+        seed,
+    );
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Forest");
     s.force_card_in_hand(0, "Llanowar Elves");
@@ -43,7 +47,11 @@ fn cast_llanowar_elves(
 }
 
 fn cast_manowar_to_trigger(seed: u64) -> Vec<GameEvent> {
-    let mut s = Scenario::new(manowar_deck(), island_deck(), seed);
+    let mut s = Scenario::new(
+        deck_of("Island", "Man-o'-War"),
+        deck(&[("Island", 40)]),
+        seed,
+    );
     let islands: Vec<_> = s
         .game()
         .state
@@ -116,7 +124,11 @@ fn spell_events_are_observable_for_creature_spells() {
 
 #[test]
 fn combat_damage_emits_damage_and_life_change_events() {
-    let mut s = Scenario::new(forest_elves_deck(), forest_deck(), 7102);
+    let mut s = Scenario::new(
+        deck(&[("Forest", 24), ("Llanowar Elves", 36)]),
+        deck(&[("Forest", 40)]),
+        7102,
+    );
     s.setup_attacker_ready();
     let attacker = s
         .battlefield_permanents_named(0, "Llanowar Elves")

@@ -59,7 +59,6 @@ class Env(gym.Env):
 
         Args:
             observation_space: The ObservationSpace we use to encode raw observations.
-            skip_trivial: Passed to the underlying managym.Env constructor.
             render_mode: Gymnasium render mode, e.g. "human" or None.
         """
         super().__init__()

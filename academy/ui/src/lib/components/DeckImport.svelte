@@ -7,7 +7,7 @@
   ] as const;
   let enabled = $state(gameStore.deckImport !== null);
   let draft = $state(gameStore.deckImport ?? {
-    pack_key: 'tla-pool-v1', ruleset: 'development-v1',
+    pack_key: 'world', ruleset: 'development-v1',
     hero: { source: '', filename: 'hero.txt' },
     villain: { source: '', filename: 'villain.txt' },
   });

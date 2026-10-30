@@ -1452,6 +1452,8 @@ pub struct PyPermanent {
     #[pyo3(get, set)]
     pub exile_if_dies_this_turn: bool,
     #[pyo3(get, set)]
+    pub attacking: bool,
+    #[pyo3(get, set)]
     pub temp_subtypes: Vec<String>,
     /// Effective keywords (printed + until-EOT grants).
     #[pyo3(get, set)]
@@ -1475,6 +1477,7 @@ impl From<PermanentData> for PyPermanent {
             is_animated: value.is_animated,
             has_exile_link: value.has_exile_link,
             exile_if_dies_this_turn: value.exile_if_dies_this_turn,
+            attacking: value.attacking,
             temp_subtypes: value.temp_subtypes,
             keywords: value.keywords.into(),
         }
@@ -1498,6 +1501,7 @@ impl From<PyPermanent> for PermanentData {
             is_animated: value.is_animated,
             has_exile_link: value.has_exile_link,
             exile_if_dies_this_turn: value.exile_if_dies_this_turn,
+            attacking: value.attacking,
             temp_subtypes: value.temp_subtypes,
             keywords: value.keywords.into(),
         }
@@ -2908,15 +2912,7 @@ impl PyEnv {
         out.set_item("world_version", manifest.world_version)?;
         out.set_item("schema_version", manifest.schema_version)?;
         out.set_item("content_digest", manifest.content_digest)?;
-        if let Some(compiled) = manifest.compiled_semantics {
-            let semantic = PyDict::new_bound(py);
-            semantic.set_item("pack_key", compiled.pack_key)?;
-            semantic.set_item("ir_hash", compiled.ir_hash)?;
-            semantic.set_item("source_hash", compiled.source_hash)?;
-            out.set_item("compiled_semantics", semantic)?;
-        } else {
-            out.set_item("compiled_semantics", py.None())?;
-        }
+        out.set_item("pack_key", manifest.pack_key)?;
         let definitions = PyList::empty_bound(py);
         for entry in manifest.definitions {
             let definition = PyDict::new_bound(py);
@@ -3593,12 +3589,9 @@ impl PyEnv {
 }
 
 #[cfg(feature = "python")]
-fn authored_pack(pack_key: &str) -> PyResult<&'static crate::semantic::SemanticPack> {
-    crate::semantic::SemanticPack::catalog()
-        .map_err(|error| PyValueError::new_err(error.to_string()))?
-        .iter()
-        .find(|pack| pack.pack_key == pack_key)
-        .ok_or_else(|| PyValueError::new_err(format!("unknown authored pack {pack_key:?}")))
+fn authored_pack(pack_key: &str) -> PyResult<&'static crate::cards::setups::AuthoredPack> {
+    crate::cards::setups::authored_pack_for_key(pack_key)
+        .map_err(|error| PyValueError::new_err(error.to_string()))
 }
 
 /// Distinct card names this world does not support for deck entry, sorted.
@@ -3610,30 +3603,68 @@ fn unsupported_cards(names: Vec<String>) -> PyResult<Vec<String>> {
         .map_err(|error| PyValueError::new_err(error.to_string()))
 }
 
-/// The compiled semantic IR for one current pack, as canonical JSON. The
-/// learning projection binds these exact documents; nothing is read from disk.
+/// Learning tokens for every definition of a pack (`None`: the default pack),
+/// derived from the engine's card definitions. Rows are `CardDefId`s; the
+/// pack's `content_digest` names the content they encode.
 #[cfg(feature = "python")]
 #[pyfunction]
-fn semantic_ir_json(pack_key: &str) -> PyResult<String> {
-    crate::semantic::compile::document_for_pack(pack_key)
-        .map(|document| document.to_string())
-        .map_err(|error| PyValueError::new_err(error.to_string()))
+#[pyo3(signature = (pack_key=None))]
+fn learning_catalog(py: Python<'_>, pack_key: Option<&str>) -> PyResult<PyObject> {
+    let content = match pack_key {
+        Some(key) => crate::cards::pool_content(key)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?,
+        None => crate::cards::content_pack::default_content_pack(),
+    };
+    let catalog = crate::cards::tokens::learning_catalog(&content)
+        .map_err(|error| PyValueError::new_err(error.to_string()))?;
+    let out = PyDict::new_bound(py);
+    out.set_item("pack_key", pack_key)?;
+    out.set_item("content_digest", content.content_digest())?;
+    // Binding only: names join a manifest's CardDefIds to catalog rows.
+    out.set_item(
+        "registry_names",
+        content
+            .definitions()
+            .map(|definition| definition.name.clone())
+            .collect::<Vec<_>>(),
+    )?;
+    out.set_item("token_kind", catalog.token_kind)?;
+    out.set_item("token_value", catalog.token_value)?;
+    out.set_item("definition_offsets", catalog.definition_offsets)?;
+    out.set_item("program_offsets", catalog.program_offsets)?;
+    out.set_item(
+        "definition_program_offsets",
+        catalog.definition_program_offsets,
+    )?;
+    out.set_item("definition_program_rows", catalog.definition_program_rows)?;
+    out.set_item(
+        "definition_ref_source_tokens",
+        catalog.definition_ref_source_tokens,
+    )?;
+    out.set_item(
+        "definition_ref_target_rows",
+        catalog.definition_ref_target_rows,
+    )?;
+    Ok(out.into())
+}
+
+/// The stable token value the learning catalog uses for a Rust name
+/// (`"Effect::DealDamage"`, a field, or a printed category such as `"Ally"`).
+#[cfg(feature = "python")]
+#[pyfunction]
+fn learning_token_value(name: &str) -> i32 {
+    crate::cards::tokens::name_value(name)
 }
 
 #[cfg(feature = "python")]
 #[pyfunction]
 fn content_pool(py: Python<'_>, pack_key: &str) -> PyResult<PyObject> {
-    let pool = crate::semantic::content_pool(pack_key)
-        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let pool =
+        crate::cards::content_pool(pack_key).map_err(|e| PyValueError::new_err(e.to_string()))?;
     let out = PyDict::new_bound(py);
     out.set_item("pack_key", pool.pack_key)?;
     out.set_item("world_version", pool.world_version)?;
     out.set_item("content_digest", pool.content_digest)?;
-    let compiled = PyDict::new_bound(py);
-    compiled.set_item("pack_key", pool.compiled_semantics.pack_key)?;
-    compiled.set_item("ir_hash", pool.compiled_semantics.ir_hash)?;
-    compiled.set_item("source_hash", pool.compiled_semantics.source_hash)?;
-    out.set_item("compiled_semantics", compiled)?;
     out.set_item("definitions", pool_rows(py, pool.definitions)?)?;
     Ok(out.into())
 }
@@ -3651,19 +3682,20 @@ fn set_cards(py: Python<'_>, sets: Vec<String>) -> PyResult<PyObject> {
 #[cfg(feature = "python")]
 fn pool_rows<'py>(
     py: Python<'py>,
-    rows: Vec<crate::semantic::PoolDefinition>,
+    rows: Vec<crate::cards::PoolDefinition>,
 ) -> PyResult<Bound<'py, PyList>> {
     let definitions = PyList::empty_bound(py);
     for row in rows {
         let item = PyDict::new_bound(py);
-        item.set_item("card_def_id", row.card_def_id.map(|id| id.0))?;
-        item.set_item("semantic_key", row.semantic_key)?;
+        item.set_item("card_def_id", row.card_def_id.0)?;
+        item.set_item("key", row.key)?;
+        item.set_item("scryfall_id", row.scryfall_id)?;
         item.set_item("registry_name", row.registry_name)?;
         item.set_item(
             "eligibility",
             match row.eligibility {
-                crate::semantic::Eligibility::Eligible => "eligible",
-                crate::semantic::Eligibility::Unsupported => "unsupported",
+                crate::cards::Eligibility::Eligible => "eligible",
+                crate::cards::Eligibility::Unsupported => "unsupported",
             },
         )?;
         item.set_item("reason", row.reason)?;
@@ -3784,7 +3816,8 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(authored_deck_keys, m)?)?;
     m.add_function(wrap_pyfunction!(content_pool, m)?)?;
     m.add_function(wrap_pyfunction!(set_cards, m)?)?;
-    m.add_function(wrap_pyfunction!(semantic_ir_json, m)?)?;
+    m.add_function(wrap_pyfunction!(learning_catalog, m)?)?;
+    m.add_function(wrap_pyfunction!(learning_token_value, m)?)?;
     m.add_function(wrap_pyfunction!(unsupported_cards, m)?)?;
     m.add_function(wrap_pyfunction!(validate_observation_json, m)?)?;
     m.add_function(wrap_pyfunction!(parse_continuation_frames_json, m)?)?;

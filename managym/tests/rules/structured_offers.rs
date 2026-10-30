@@ -20,10 +20,14 @@ use managym::{
     Game,
 };
 
-use super::helpers::*;
+use crate::support::game::*;
 
 fn bolt_priority_scenario() -> Scenario {
-    let mut scenario = Scenario::new(bolt_deck(), ogre_deck(), 181);
+    let mut scenario = Scenario::new(
+        deck_of("Mountain", "Lightning Bolt"),
+        deck_of("Mountain", "Gray Ogre"),
+        181,
+    );
     scenario.advance_to_active_step(0, StepKind::Main);
     scenario.game_mut().scenario_clear_hand(PlayerId(0));
     scenario.game_mut().scenario_clear_hand(PlayerId(1));
@@ -228,7 +232,7 @@ fn structured_offer_pass_is_legacy_equivalent() {
 #[test]
 fn structured_offer_candidates_are_uncapped_past_legacy_tensor_width() {
     let mut scenario = Scenario::new(
-        bolt_deck(),
+        deck_of("Mountain", "Lightning Bolt"),
         BTreeMap::from([("Gray Ogre".to_string(), 40)]),
         182,
     );
@@ -416,7 +420,11 @@ fn fixture_candidate(id: u32, subject: SubjectRef, label: &str) -> Candidate {
 
 #[test]
 fn compound_blockers_bind_roles_and_stop_at_priority() {
-    let mut scenario = Scenario::new(ogre_deck(), ogre_deck(), 991);
+    let mut scenario = Scenario::new(
+        deck_of("Mountain", "Gray Ogre"),
+        deck_of("Mountain", "Gray Ogre"),
+        991,
+    );
     scenario.advance_to_active_step(0, StepKind::Main);
     let attacker = scenario.force_permanent_on_battlefield(0, "Gray Ogre");
     scenario.game_mut().state.permanents[attacker]
@@ -491,7 +499,7 @@ fn compound_waterbend_subset_is_order_independent_and_forced_suffix_safe() {
                 ("Water Tribe Rallier".to_string(), 16),
                 ("Gray Ogre".to_string(), 8),
             ]),
-            ogre_deck(),
+            deck_of("Mountain", "Gray Ogre"),
             992,
         );
         scenario.advance_to_active_step(0, StepKind::Main);
@@ -566,7 +574,11 @@ fn compound_waterbend_subset_is_order_independent_and_forced_suffix_safe() {
 
 #[test]
 fn structured_compound_menace_retains_sequential_support() {
-    let mut scenario = Scenario::new(boggart_brute_deck(), ogre_deck(), 993);
+    let mut scenario = Scenario::new(
+        deck_of("Mountain", "Boggart Brute"),
+        deck_of("Mountain", "Gray Ogre"),
+        993,
+    );
     scenario.advance_to_active_step(0, StepKind::Main);
     let attacker = scenario.force_permanent_on_battlefield(0, "Boggart Brute");
     scenario.game_mut().state.permanents[attacker]
@@ -610,7 +622,7 @@ fn structured_compound_menace_retains_sequential_support() {
 fn structured_compound_flying_attack_has_optionless_blocker_roles() {
     let mut scenario = Scenario::new(
         BTreeMap::from([("Island".to_string(), 20), ("Wind Drake".to_string(), 20)]),
-        ogre_deck(),
+        deck_of("Mountain", "Gray Ogre"),
         994,
     );
     scenario.advance_to_active_step(0, StepKind::Main);
@@ -669,7 +681,7 @@ fn structured_compound_waterbend_effects_or_competing_mana_stay_sequential() {
                 ("Gray Ogre".to_string(), 8),
                 (excluded.to_string(), 8),
             ]),
-            ogre_deck(),
+            deck_of("Mountain", "Gray Ogre"),
             995,
         );
         scenario.advance_to_active_step(0, StepKind::Main);

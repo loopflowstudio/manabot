@@ -27,7 +27,7 @@
 use std::collections::{BTreeSet, HashMap};
 
 use managym::cards::content_pack::CardRegistry;
-use managym::semantic::SemanticPack;
+use managym::cards::setups::authored_pack;
 use managym::state::card::{CardDefinition, CardType};
 use managym::state::mana::{Color, ManaCost};
 
@@ -189,9 +189,7 @@ fn engine_pt(printed: Option<i32>, cda: bool) -> Option<String> {
 #[test]
 fn every_registered_real_card_matches_scryfall() {
     let registry = CardRegistry::default();
-    let research = SemanticPack::current("complexity")
-        .and_then(|pack| pack.compile_content_pack())
-        .expect("complexity catalog compiles");
+    let research = std::sync::Arc::clone(&authored_pack("complexity").unwrap().content);
     let fixture = fixture();
     let cost_exceptions = sanctioned_cost_deviations();
     let mut failures: Vec<String> = Vec::new();

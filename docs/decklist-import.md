@@ -52,7 +52,7 @@ For a bounded ordinary manabot startup proof using the example files
 uv run manabot sim \
   --hero-deck-file docs/decklists/forest-mountain.txt \
   --villain-deck-file docs/decklists/islands.txt \
-  --content-pool tla-pool-v1 \
+  --content-pool world \
   --set sim.num_games=1 --set sim.num_threads=1 --set sim.max_steps=4
 ```
 
@@ -64,7 +64,7 @@ import managym
 from manabot.infra.config import MatchConfig
 
 imported = managym.import_match(
-    managym.Decklist.read("hero.txt"), managym.Decklist.read("villain.txt"), "tla-pool-v1"
+    managym.Decklist.read("hero.txt"), managym.Decklist.read("villain.txt"), "world"
 )
 match = MatchConfig.from_import(imported)
 ```
@@ -101,8 +101,8 @@ from manabot.training.regime import TrainingRegime
 
 values = recipe.model_dump(mode="json")
 values.pop("match")
-values["decks"] = {"pool": "tla-pool-v1", "files": ["white.txt", "blue.txt", "red.txt"]}
-values["agent"]["semantic_pack"] = "tla-pool-v1"
+values["decks"] = {"pool": "world", "files": ["white.txt", "blue.txt", "red.txt"]}
+values["agent"]["semantic_pack"] = "world"
 regime = TrainingRegime.model_validate(values)
 ```
 

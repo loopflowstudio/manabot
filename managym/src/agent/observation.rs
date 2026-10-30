@@ -212,6 +212,10 @@ pub struct PermanentData {
     /// This permanent holds cards in exile until it leaves (Jailer).
     pub has_exile_link: bool,
     pub exile_if_dies_this_turn: bool,
+    /// Declared as an attacker in the current combat. Omitted when false, so
+    /// observations retained before this field stay canonical.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub attacking: bool,
     pub temp_subtypes: Vec<String>,
     /// Effective keywords — printed keywords unioned with until-EOT grants
     /// (Yip Yip! flying, Enter the Avatar State, ...). The card entry keeps
@@ -601,6 +605,7 @@ impl Observation {
             is_summoning_sick: permanent.summoning_sick,
             plus1_counters: permanent.plus1_counters,
             exile_if_dies_this_turn: permanent.exile_if_dies_this_turn,
+            attacking: permanent.attacking,
             temp_subtypes: permanent.temp_subtypes.clone(),
             cant_be_blocked_this_turn: permanent.cant_be_blocked_this_turn,
             power,

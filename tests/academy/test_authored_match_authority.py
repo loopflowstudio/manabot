@@ -4,10 +4,9 @@ import json
 
 from academy.authored_match_receipt import (
     DEFAULT_RECEIPT_PATH,
-    SEMANTIC_PACK_KEY,
+    _program_index,
     generate_authored_match_receipt,
 )
-from manabot.semantic.learning import current_ir_document
 
 
 def test_release_stack_authored_match_receipt_is_terminal_and_authoritative():
@@ -46,15 +45,11 @@ def test_release_stack_authored_match_receipt_is_terminal_and_authoritative():
         for row in decisions
     )
 
-    semantic_ir = current_ir_document(SEMANTIC_PACK_KEY)
-    admitted = {program["semantic_key"] for program in semantic_ir["programs"]}
-    encountered = {
-        program["semantic_key"] for program in checked["encountered_typed_programs"]
-    }
+    _, programs = _program_index()
+    admitted = set(programs)
+    encountered = {program["key"] for program in checked["encountered_typed_programs"]}
     referenced = {
-        semantic_key
-        for decision in decisions
-        for semantic_key in decision["encountered_programs"]
+        key for decision in decisions for key in decision["encountered_programs"]
     }
     assert encountered == referenced
     assert encountered
