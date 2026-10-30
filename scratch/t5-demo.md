@@ -38,3 +38,13 @@ The decision to iterate was the agent's, made in Jack Heart's place.
 Checks: debug `cargo test --lib agent::continuation` passed 5/5; `cargo clippy
 --all-targets` was clean; `tests/semantic/test_text_observation.py` passed
 37/37; continuation-input and trigger-order tests passed 20/20.
+
+## Third pass at `24d959b52` (2026-10-30): advance
+
+Re-ran both scripts against the built extension (exports
+`MAX_DECISION_CODE` = 20). Joo Dee: surveil, then the sacrifice choice, leaving
+the token "copy of D1" and "This turn: sacrificed 1 permanents." Ran and Shaw:
+the legend rule ran on the forced copies; the cast copy is "copy of D2, except
+isn't legendary". Phoenix Fleet Airship: an end-step copy reads "copy of D2".
+`tests/semantic/test_text_observation.py` passed 38/38. The agent advanced in
+Jack Heart's place because no demo gap remained.
