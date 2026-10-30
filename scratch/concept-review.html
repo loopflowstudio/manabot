@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Concept review — a deck run names its decks, not a surrogate pair</title>
+<title>Concept review — an import is two decks and their sources, not a match record</title>
 <style>
   :root { color-scheme: light dark; --fg:#1d1b18; --bg:#faf8f4; --mute:#6b655c; --line:#ddd6ca; --prop:#2f6b4f; --old:#9a3b2f; --code:#f0ece4; }
   @media (prefers-color-scheme: dark) { :root { --fg:#ebe6dd; --bg:#1a1916; --mute:#a39d92; --line:#3a3731; --prop:#7fc4a0; --old:#e08a7c; --code:#26241f; } }
@@ -25,48 +25,50 @@
 <body>
 <main>
 <header>
-  <p>Task f871a8 · Import decklist files · concept-review (headless Graph step) · 2026-10-28 · HEAD 8dcfa33b9</p>
-  <p>Built from <code>scratch/f871a8-import-decklist-files.md</code>, <code>manabot/training/execution.py</code>, <code>manabot/infra/provenance.py</code>, <code>manabot/training/regime.py</code>, <code>manabot/training/decks.py</code>, <code>manabot/experiment/study.py</code>, <code>managym/src/agent/vector_env.rs</code></p>
+  <p>Task f871a8 · Import decklist files · concept-review (headless Graph step) · 2026-10-30 · HEAD d09a234d6</p>
+  <p>Built from <code>scratch/f871a8-import-decklist-files.md</code>, <code>managym/src/cards/decklist.rs</code>, <code>managym/src/cards/deck_admission.rs</code>, <code>manabot/infra/config.py</code>, <code>academy/trace.py</code>, <code>academy/server.py</code>, <code>academy/deck_import.py</code>, <code>manabot/training/decks.py</code></p>
 </header>
 
-<h1>Decision: a deck run's record should identify its decks, not a representative pair</h1>
-<p>No product choice is open. Jack Heart's accepted model already settles this: the run records the decks it used, and each fact has one owner. The next implement pass removes a surrogate identity.</p>
+<h1>An import is two decks and their sources, not a second match record</h1>
+<p>No decision is needed: every change below follows from Jack Heart&#39;s accepted &ldquo;one deck concept&rdquo; and &ldquo;the world&#39;s native validation decides&rdquo;. The page records the next implement direction.</p>
 
 <h2>Actions → concepts → APIs</h2>
-<pre>Supply decklists        → Deck (counts)            → TrainingDecks.from_files / regime.decks
-Train on them           → native roots             → VectorEnv.set_training_decks, reset admission
-Export / load the model → world (pool descriptor)  → pool_world / validate_checkpoint_world
-Play or evaluate        → any pool-admitted deck   → validate_agent_decks
-Record / resume the run → run identities           → _runtime_identities(root_match)   &lt;- mismatch</pre>
-
-<h2>The mismatch</h2>
 <div class="old">
-<p class="tag">Existing behavior</p>
-<p><code>TrainingRegime.root_match</code> derives the first two sorted decks so a game can be opened. The design records that pair as &ldquo;never serialized&rdquo;, but <code>_runtime_identities</code> passes it to <code>runtime_fingerprints</code>, which writes it into <code>run.identities</code>:</p>
-<pre>"matchup":        {hero: &lt;deck 1&gt;, villain: &lt;deck 2&gt;, ...}
-"matchup_sha256": sha256(that pair)</pre>
-<p>That lands in run.json, every failure capture and recovery comparison. Study and arena registration read <code>matchup_sha256</code> as the setup a player trained on.</p>
+<p class="tag">Existing</p>
+<pre>upload two files ─▶ Decklist ×2 ─▶ import_match(hero, villain, pack_key, ruleset)
+                                   └▶ ImportedMatch {pool identity, ruleset,
+                                        hero: DeckImport{decklist, deck},
+                                        villain: DeckImport{decklist, deck}}
+play / rematch   ─▶ MatchConfig {hero_deck, villain_deck, sideboards,
+                                 imported_decks: ImportedMatch}
+                    └▶ validate_setup: decks == imported decks
+                                     &amp;&amp; pool identity == installed</pre>
 </div>
 <div class="prop">
-<p class="tag">Proposed (next implement)</p>
-<pre>"training_decks":        {"pool": "tla-pool-v1", "sha256": TrainingDecks.digest}
-# no "matchup" / "matchup_sha256" for a deck run</pre>
-<p>Content, observation and action identities still come from opening the pool. Resume compares the supply identity. Consumers that only handle authored matchups (monitoring, study arenas, card evaluation) reject a deck run with an explicit diagnostic and do not read a surrogate. Authored runs, Elemental runs and frozen evidence keep the identities they have now.</p>
+<p class="tag">Proposed</p>
+<pre>upload two files ─▶ Decklist ×2 ─▶ admit_decklists({hero, villain}, pack_key)
+                                   └▶ DeckImport ×2 {decklist, deck}
+play / rematch   ─▶ MatchConfig {hero_deck, villain_deck, sideboards,
+                                 hero_source, villain_source: Decklist?}
+                    └▶ native admission at reset (as for every deck);
+                       retained source re-imports to the same deck</pre>
 </div>
 
-<h2>Normal path, failure, recovery</h2>
-<ol>
-  <li>Normal: a three-deck run records the pool and the supply digest. Each game's actual pair is still recorded per game attempt.</li>
-  <li>Failure: changing one decklist on resume changes the supply digest and is rejected, as it is now through <code>decks_digest</code>.</li>
-  <li>Counterexample to check: an authored run's identities must stay byte-identical, because frozen evidence compares <code>matchup_sha256</code>.</li>
-</ol>
+<h2>The consequential mismatch</h2>
+<p>Each imported deck is stored twice &mdash; in <code>MatchConfig</code> and inside <code>ImportedMatch</code> &mdash; so <code>validate_setup</code> must prove the copies agree on every config build and trace load. Worse, the copy binds <code>PoolIdentity</code> equality, so adding any card makes every imported Academy trace and rematch unloadable, while curated traces and training decks are simply re-admitted. That is the pre-registration the accepted design removed.</p>
 
-<h2>Unchanged, recorded elsewhere</h2>
-<p>The checkpoint <code>bc</code> producer links are deferred (questions.md). The internal name <code>uniform_roster</code> no longer gates admission. The Academy draft redesign (1a) is accepted but deferred.</p>
+<h2>Next implement direction</h2>
+<ol>
+  <li>Replace <code>ImportedMatch</code> with per-seat private <code>Decklist</code> sources on <code>MatchConfig</code> and the Academy trace; delete <code>setup_id</code>, <code>swapped</code>, <code>validate_setup</code>.</li>
+  <li>Re-admit imported records against the installed world; drop pool-identity pinning. Tape divergence stays the existing replay check&#39;s job.</li>
+  <li>Remove the caller-supplied <code>ruleset</code> (only <code>development-v1</code> exists; any other value can only error). Keep the named constant in responses.</li>
+  <li>Remove the committed <code>.DS_Store</code>.</li>
+</ol>
+<p>Must survive: whole-input rejection with retained source and line issues; rematch editor prefill; viewer-safe trace export; Commands, stale rejection, reconnect, replay/fork identity.</p>
 
 <h2>Questions</h2>
 <ol>
-  <li>None open. The accepted decisions settle this direction.</li>
+  <li>None open. Objections to 1&ndash;3 would be corrections to the accepted design, e.g. &ldquo;2b: imported traces should pin the content digest after all&rdquo;.</li>
 </ol>
 </main>
 </body>

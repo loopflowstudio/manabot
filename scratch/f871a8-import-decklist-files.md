@@ -68,6 +68,46 @@ Done: `manabot/decklist.py` and its Python parser/face/ambiguity tests (now in
 deck bindings, `env.match.parse_deck`, `validate_imported_players` (list at
 c1dd6c71c).
 
+## Next implement direction (concept review, 2026-10-30, no person present)
+
+Settled by the accepted decisions above; no new product choice.
+
+1. **One copy of each deck; sources are provenance only.** Today an import is
+   stored twice: `MatchConfig.hero_deck`/`villain_deck` (+ sideboards) and
+   `imported_decks: ImportedMatch` (pool, ruleset, two `DeckImport`s each with a
+   `Deck`), so `validate_setup` must prove they agree on every `MatchConfig`
+   and trace load. Replace `ImportedMatch` with per-seat source records:
+   `MatchConfig` keeps the decks and gains private
+   `hero_source`/`villain_source: Decklist | None` (Academy trace the same).
+   `import_match` returns the two `DeckImport`s (or is replaced by
+   `admit_decklists` with seat labels); `MatchConfig.from_import` takes them.
+   Delete `ImportedMatch`, `setup_id`, `swapped` (seat swap moves two fields),
+   `validate_setup` and the trace's dict round-trip. Keep the source-truthfulness
+   check at record load as "re-importing a retained source yields this seat's
+   deck", one helper on `Decklist`/`DeckImport`, not a match-level record.
+2. **The world's validation decides, not pool-identity equality.**
+   `validate_current` rejects any imported record once `content_digest`
+   changes (any card edit), while curated traces and training decks load and
+   are re-admitted natively. Imported traces/rematches re-admit their sources
+   against the installed world like everything else; drop `PoolIdentity` from
+   the record. The validate endpoint may still report `world_version`/
+   `content_digest` as information. Counterexample kept: a changed world can
+   make an old tape diverge — that is the existing replay/canonical-replay
+   check's job for every trace, not a decklist-only gate.
+3. **The ruleset is the world's, not the caller's.** `development-v1` is the
+   only ruleset, yet `admit_deck`, `admit_decklists`, `import_match` and
+   Academy's `DeckImportInput.ruleset` accept a free string that can only
+   error. Remove the parameter; keep `DEVELOPMENT_RULESET` as the named
+   constant the validate response and CLI report. Adding a tournament format
+   later is a review decision and would reintroduce a choice then.
+4. **Remove the committed `.DS_Store`** (added by 2497dfa01 "lf pr open").
+
+Must survive: whole-input rejection with retained source and line issues;
+rematch prefills the editor from retained sources; viewer-safe trace export
+strips decks when sources are present; Commands, stale rejection, reconnect and
+replay/fork identity. Regenerate the authored-match parity source hash after
+Rust edits; run debug `cargo test` and the decklist/Academy/match test sets.
+
 ## Handoff
 
 Copied evidence (scratch/tla-evidence, scratch/tla-card-ledger.jsonl) is kept
