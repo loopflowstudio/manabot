@@ -21,7 +21,6 @@ use crate::{
         decklist::{
             admit_decklists as native_admit_decklists, import_match as native_import_match,
             parse_decklist, read_decklist, DeckEntry, DeckImport, Decklist, DecklistError,
-            ImportedMatch,
         },
     },
     state::deck::Deck,
@@ -263,6 +262,13 @@ json_record!(Decklist {
     fn issues(&self) -> Vec<DeckIssue> {
         self.issues.clone()
     }
+
+    /// Raise `ValueError` unless this retained source re-admits to exactly
+    /// `deck` against the installed world.
+    #[pyo3(name = "validate_deck")]
+    fn py_validate_deck(&self, pack_key: &str, deck: Deck) -> PyResult<()> {
+        self.validate_deck(pack_key, &deck).map_err(value_error)
+    }
 });
 
 json_record!(DeckImport {
@@ -274,57 +280,6 @@ json_record!(DeckImport {
     #[getter]
     fn deck(&self) -> Deck {
         self.deck.clone()
-    }
-});
-
-json_record!(ImportedMatch {
-    /// The bound pool identity (`ContentPool` without definitions).
-    #[getter]
-    fn pool(&self, py: Python<'_>) -> PyResult<PyObject> {
-        to_python(py, &self.pool)
-    }
-
-    #[getter]
-    fn ruleset(&self) -> String {
-        self.ruleset.clone()
-    }
-
-    #[getter]
-    fn hero(&self) -> DeckImport {
-        self.hero.clone()
-    }
-
-    #[getter]
-    fn villain(&self) -> DeckImport {
-        self.villain.clone()
-    }
-
-    #[getter(setup_id)]
-    fn py_setup_id(&self) -> String {
-        self.setup_id()
-    }
-
-    #[pyo3(name = "swapped")]
-    fn py_swapped(&self) -> Self {
-        self.swapped()
-    }
-
-    /// Raise `ValueError` unless both retained sources re-admit to exactly
-    /// this record against the installed pool.
-    #[pyo3(name = "validate_current")]
-    fn py_validate_current(&self) -> PyResult<()> {
-        self.validate_current().map_err(value_error)
-    }
-
-    #[pyo3(name = "validate_setup", signature = (content_pack, hero, villain))]
-    fn py_validate_setup(
-        &self,
-        content_pack: Option<&str>,
-        hero: Deck,
-        villain: Deck,
-    ) -> PyResult<()> {
-        self.validate_setup(content_pack, &hero, &villain)
-            .map_err(value_error)
     }
 });
 
@@ -346,34 +301,30 @@ fn decklist_error(py: Python<'_>, error: DecklistError) -> PyErr {
 
 /// Construction and eligibility issues for one deck, without allocating a game.
 #[pyfunction]
-#[pyo3(signature = (pack_key, deck, ruleset=DEVELOPMENT_RULESET))]
-fn admit_deck(pack_key: &str, deck: Deck, ruleset: &str) -> PyResult<Vec<DeckIssue>> {
-    native_admit_deck(pack_key, &deck, ruleset).map_err(value_error)
+fn admit_deck(pack_key: &str, deck: Deck) -> PyResult<Vec<DeckIssue>> {
+    native_admit_deck(pack_key, &deck).map_err(value_error)
 }
 
 /// Admit labelled decklists, rejecting all of them with `DeckImportError`
 /// (its `decklists` maps each failing label to its diagnosed record).
 #[pyfunction]
-#[pyo3(signature = (decklists, pack_key, ruleset=DEVELOPMENT_RULESET))]
 fn admit_decklists(
     py: Python<'_>,
     decklists: Vec<(String, Decklist)>,
     pack_key: &str,
-    ruleset: &str,
 ) -> PyResult<Vec<DeckImport>> {
-    native_admit_decklists(&decklists, pack_key, ruleset).map_err(|e| decklist_error(py, e))
+    native_admit_decklists(&decklists, pack_key).map_err(|e| decklist_error(py, e))
 }
 
+/// Admit a match's `(hero, villain)` decklists, rejecting both together.
 #[pyfunction]
-#[pyo3(signature = (hero, villain, pack_key, ruleset=DEVELOPMENT_RULESET))]
 fn import_match(
     py: Python<'_>,
     hero: Decklist,
     villain: Decklist,
     pack_key: &str,
-    ruleset: &str,
-) -> PyResult<ImportedMatch> {
-    native_import_match(&hero, &villain, pack_key, ruleset).map_err(|e| decklist_error(py, e))
+) -> PyResult<(DeckImport, DeckImport)> {
+    native_import_match(&hero, &villain, pack_key).map_err(|e| decklist_error(py, e))
 }
 
 pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -387,7 +338,7 @@ pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<DeckEntry>()?;
     m.add_class::<Decklist>()?;
     m.add_class::<DeckImport>()?;
-    m.add_class::<ImportedMatch>()?;
+    m.add("DEVELOPMENT_RULESET", DEVELOPMENT_RULESET)?;
     m.add_function(wrap_pyfunction!(admit_deck, m)?)?;
     m.add_function(wrap_pyfunction!(admit_decklists, m)?)?;
     m.add_function(wrap_pyfunction!(import_match, m)?)?;
