@@ -17,12 +17,12 @@ class DeckFileInput(BaseModel):
 class DeckImportInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     pack_key: str = Field(default="world", max_length=100)
-    ruleset: str = Field(default="development-v1", max_length=100)
     hero: DeckFileInput
     villain: DeckFileInput
 
-    def admit(self) -> managym.ImportedMatch:
-        """Raises `managym.DeckImportError` with each failing seat's diagnosed decklist."""
+    def admit(self) -> tuple[managym.DeckImport, managym.DeckImport]:
+        """The admitted `(hero, villain)` imports. Raises `managym.DeckImportError`
+        with each failing seat's diagnosed decklist."""
         return managym.import_match(
-            self.hero.decklist(), self.villain.decklist(), self.pack_key, self.ruleset
+            self.hero.decklist(), self.villain.decklist(), self.pack_key
         )

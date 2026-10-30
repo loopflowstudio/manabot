@@ -8,7 +8,7 @@ from fastapi.testclient import TestClient
 from managym.decision import SemanticContractError
 import pytest
 
-from academy import server
+from academy import server, trace as trace_store
 from academy.trace import GameConfig, prepare_trace_payload
 from manabot.env.match import Match
 from manabot.infra.config import MatchConfig
@@ -39,9 +39,19 @@ def test_imported_setup_matches_manabot_reconnect_and_rebuilt_root(
     first = session.new_game(_request())
     assert session.trace is not None
     config = session.trace.config
-    imported = managym.ImportedMatch.from_dict(config.imported_decks)
-    match_config = MatchConfig.from_import(imported)
-    match_config.hero, match_config.villain = "Hero", "Villain"
+    assert config.content_pack is not None
+    assert config.hero_source is not None and config.villain_source is not None
+    match_config = MatchConfig(
+        content_pack=config.content_pack,
+        hero_source=managym.Decklist.from_dict(config.hero_source),
+        villain_source=managym.Decklist.from_dict(config.villain_source),
+        hero="Hero",
+        villain="Villain",
+        hero_deck=config.hero_deck,
+        villain_deck=config.villain_deck,
+        hero_sideboard=config.hero_sideboard,
+        villain_sideboard=config.villain_sideboard,
+    )
     bot = managym.Env(seed=7)
     bot.reset(Match(match_config).to_rust())
     assert bot.content_pack_manifest() == session.env.content_pack_manifest()
@@ -58,7 +68,7 @@ def test_imported_setup_matches_manabot_reconnect_and_rebuilt_root(
     rebuilt.reset(restored.to_rust())
     assert rebuilt.search_witness_json() == bot.search_witness_json()
     restored.hero_sideboard = {"Mountain": 1}
-    with pytest.raises(ValueError, match="admitted decklist"):
+    with pytest.raises(ValueError, match="retained source"):
         restored.to_rust()
     restored.hero_sideboard = {"Island": True}
     with pytest.raises(ValueError, match="positive integer counts"):
@@ -66,7 +76,8 @@ def test_imported_setup_matches_manabot_reconnect_and_rebuilt_root(
     public = prepare_trace_payload(
         {"config": asdict(config), "events": [], "final_observation": {}}
     )
-    assert "imported_decks" not in public["config"]
+    assert "hero_source" not in public["config"]
+    assert "villain_source" not in public["config"]
     assert public["config"]["hero_deck"] == {}
     assert public["config"]["villain_sideboard"] == {}
     offer = bot_contract.frame.find_verb("pass_priority")
@@ -115,3 +126,28 @@ def test_imported_invalid_setup_does_not_replace_live_game(tmp_path: Path) -> No
     with pytest.raises(ValueError):
         session.new_game(request)
     assert session.env.search_witness_json() == witness
+
+
+def test_rematch_re_admits_retained_sources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(trace_store, "TRACES_DIR", tmp_path)
+    server.SESSION_REGISTRY.clear()
+    with TestClient(server.app) as client:
+        with client.websocket_connect("/ws/play") as websocket:
+            websocket.send_json({"type": "new_game", "config": _request()})
+            assert websocket.receive_json()["type"] == "observation"
+            (record,) = server.SESSION_REGISTRY.values()
+            assert record.game.trace is not None
+            first = record.game.trace.config
+            websocket.send_json({"type": "rematch", "grant_revision": 1, "config": {}})
+            assert websocket.receive_json()["type"] == "observation"
+            assert record.game.trace is not None
+            second = record.game.trace.config
+    assert second is not first
+    assert second.content_pack == first.content_pack == "world"
+    assert second.hero_source == first.hero_source
+    assert second.villain_source == first.villain_source
+    assert first.hero_source is not None
+    assert first.hero_source["source"].startswith("# private note")
+    assert second.hero_deck == first.hero_deck

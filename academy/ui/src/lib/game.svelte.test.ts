@@ -244,7 +244,7 @@ describe('GameStore', () => {
     const store = createGameStore();
     const source = '# retained comment\n10 Forest\nSideboard\n1 Island';
     store.deckImport = {
-      pack_key: 'world', ruleset: 'development-v1',
+      pack_key: 'world',
       hero: { source, filename: 'hero.txt' },
       villain: { source: '20 Island', filename: 'villain.txt' },
     };

@@ -56,24 +56,27 @@ uv run manabot sim \
   --set sim.num_games=1 --set sim.num_threads=1 --set sim.max_steps=4
 ```
 
-The CLI prints the admitted setup identity before simulation. Programmatic
+The CLI prints the construction ruleset and both admitted deck identities
+before simulation. Programmatic
 configuration is:
 
 ```python
 import managym
 from manabot.infra.config import MatchConfig
 
-imported = managym.import_match(
+hero, villain = managym.import_match(
     managym.Decklist.read("hero.txt"), managym.Decklist.read("villain.txt"), "world"
 )
-match = MatchConfig.from_import(imported)
+match = MatchConfig.from_import("world", hero, villain)
 ```
 
 Failures raise `managym.DeckImportError`, whose `decklists` maps each failing
-seat to its decklist with line issues. The serialized match retains source, resolved definitions, construction ruleset,
-and exact world/content/compiled identities. Reordering lines does not change
-the setup identity. A changed pool rejects a retained import instead of silently
-reinterpreting it. Existing native Commands, reconnect, replay and forks retain
+seat to its decklist with line issues. The serialized match holds each seat's
+deck once and retains that seat's admitted decklist privately as provenance
+(`hero_source`/`villain_source`). Loading the match re-imports each retained
+source against the installed world, which must admit it to exactly that seat's
+deck; a world that no longer admits the list rejects the record, as it would any
+other deck. Reordering lines or comments does not change a deck's identity. Existing native Commands, reconnect, replay and forks retain
 their ordinary authority checks.
 
 Checkpoint players on imported setups pass the same execution admission as

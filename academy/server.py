@@ -727,15 +727,17 @@ def _parse_game_config(config: Any) -> GameConfig:
                 f"villain_sims must be between 1 and {villain_module.MAX_SEARCH_SIMS}."
             )
 
-    imported = None
+    imported: tuple[str, managym.DeckImport, managym.DeckImport] | None = None
     if "deck_import" in data:
-        imported = DeckImportInput.model_validate(data["deck_import"]).admit()
-        hero_deck, villain_deck = imported.hero.deck.main, imported.villain.deck.main
+        deck_import = DeckImportInput.model_validate(data["deck_import"])
+        hero_import, villain_import = deck_import.admit()
+        imported = (deck_import.pack_key, hero_import, villain_import)
+        hero_deck, villain_deck = hero_import.deck.main, villain_import.deck.main
         hero_deck_name = villain_deck_name = "imported"
         selected_pack = None
         sideboards = {
-            "hero": imported.hero.deck.sideboard,
-            "villain": imported.villain.deck.sideboard,
+            "hero": hero_import.deck.sideboard,
+            "villain": villain_import.deck.sideboard,
         }
     else:
         hero_deck, hero_deck_name = _normalize_deck(
@@ -800,7 +802,15 @@ def _parse_game_config(config: Any) -> GameConfig:
         villain_deterministic = opponent.deterministic
 
     return GameConfig(
-        imported_decks=None if imported is None else imported.to_dict(),
+        **(
+            {}
+            if imported is None
+            else {
+                "content_pack": imported[0],
+                "hero_source": imported[1].decklist.to_dict(),
+                "villain_source": imported[2].decklist.to_dict(),
+            }
+        ),
         hero_deck=hero_deck,
         villain_deck=villain_deck,
         hero_sideboard=sideboards["hero"],
@@ -2880,20 +2890,18 @@ def _dispatch_table_request(
                 **({"seed": previous.seed} if previous.seed_was_requested else {}),
                 **config,
             }
-            if previous.imported_decks is not None:
-                imported = managym.ImportedMatch.from_dict(previous.imported_decks)
-                imported.validate_current()
+            if previous.hero_source is not None and previous.villain_source is not None:
+                # New game re-admits the retained sources against the installed world.
                 config["deck_import"] = {
-                    "pack_key": imported.pool["pack_key"],
-                    "ruleset": imported.ruleset,
+                    "pack_key": previous.content_pack,
                     **{
                         seat: {
-                            "source": deck.decklist.source,
-                            "filename": deck.decklist.filename,
+                            "source": source["source"],
+                            "filename": source["filename"],
                         }
-                        for seat, deck in (
-                            ("hero", imported.hero),
-                            ("villain", imported.villain),
+                        for seat, source in (
+                            ("hero", previous.hero_source),
+                            ("villain", previous.villain_source),
                         )
                     },
                 }
@@ -3645,7 +3653,7 @@ def import_arena_watch(payload: dict[str, Any]) -> dict[str, Any]:
 @app.post("/api/decklists/validate")
 def validate_decklists(payload: DeckImportInput) -> dict[str, Any]:
     try:
-        imported = payload.admit()
+        payload.admit()
     except managym.DeckImportError as error:
         return {
             "admitted": False,
@@ -3655,11 +3663,11 @@ def validate_decklists(payload: DeckImportInput) -> dict[str, Any]:
         }
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
+    pool = managym.content_pool(payload.pack_key)
     return {
         "admitted": True,
-        "setup_id": imported.setup_id,
-        "ruleset": imported.ruleset,
-        "pack_key": imported.pool["pack_key"],
-        "world_version": imported.pool["world_version"],
-        "content_digest": imported.pool["content_digest"],
+        "ruleset": managym.DEVELOPMENT_RULESET,
+        "pack_key": pool["pack_key"],
+        "world_version": pool["world_version"],
+        "content_digest": pool["content_digest"],
     }

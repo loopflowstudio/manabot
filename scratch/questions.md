@@ -15,6 +15,14 @@ c1dd6c71c:scratch/questions.md.
   is now `.decklist`, and `Deck` serializes as `{decklist, sideboard}`, so the
   unreleased `setup_id`/training-deck digests changed; `Deck.identity` keeps the
   retained value. `ImportedMatch.pool` is a dict in Python.
+- 2026-10-30 (concept-review corrections): Academy's `GameConfig` is a
+  dataclass persisted through `asdict`/JSON, so it keeps each seat's source in
+  `Decklist` JSON form (`hero_source`/`villain_source: dict | None`) beside a new
+  `content_pack`, and reads it with `Decklist.from_dict` on load; `MatchConfig`
+  holds native `Decklist`s. The CLI now prints both `Deck.identity` values
+  instead of the deleted `setup_id`; the validate endpoint drops `setup_id`.
+  `validate_deck` compares only the re-admitted deck, so retained resolved
+  entries (card ids) are provenance and may go stale without rejecting.
 - 2026-10-30 (sync onto main fa5e13b23, #394 squashed): merged with the last
   integrated #394 commit 86ebe9ccf as base so #394's later changes win. Deck
   admission and decklists moved from the deleted `semantic` module into

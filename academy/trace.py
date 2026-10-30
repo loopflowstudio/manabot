@@ -57,7 +57,11 @@ class GameConfig:
     hero_sideboard: dict[str, int] = field(default_factory=dict)
     villain_sideboard: dict[str, int] = field(default_factory=dict)
     watch_players: list[str] | None = None
-    imported_decks: dict[str, Any] | None = None
+    # Private import provenance: the world pool and each seat's admitted
+    # decklist (``managym.Decklist`` JSON form). Viewer exports strip them.
+    content_pack: str | None = None
+    hero_source: dict[str, Any] | None = None
+    villain_source: dict[str, Any] | None = None
 
     def to_rust(self) -> list[managym.PlayerConfig]:
         """Rebuild the recorded root with its explicit outside-game copies."""
@@ -72,20 +76,26 @@ class GameConfig:
                 for name, count in sideboard.items()
             ):
                 raise ValueError("Recorded sideboard requires positive integer counts")
-        if self.imported_decks is not None:
-            imported = managym.ImportedMatch.from_dict(self.imported_decks)
-            pack_key = imported.pool["pack_key"]
-            imported.validate_setup(
-                pack_key,
-                managym.Deck(self.hero_deck, self.hero_sideboard),
-                managym.Deck(self.villain_deck, self.villain_sideboard),
+        if self.hero_source is not None or self.villain_source is not None:
+            # Imported: re-admit each retained source against the installed world.
+            seats = (
+                ("Hero", self.hero_source, self.hero_deck, self.hero_sideboard),
+                (
+                    "Villain",
+                    self.villain_source,
+                    self.villain_deck,
+                    self.villain_sideboard,
+                ),
             )
-            return [
-                managym.PlayerConfig(name, deck, sideboard, pack_key)
-                for name, deck, sideboard in (
-                    ("Hero", self.hero_deck, self.hero_sideboard),
-                    ("Villain", self.villain_deck, self.villain_sideboard),
+            if self.content_pack is None or any(seat[1] is None for seat in seats):
+                raise ValueError("Imported trace requires both sources and its pool")
+            for _, source, deck, sideboard in seats:
+                managym.Decklist.from_dict(source).validate_deck(
+                    self.content_pack, managym.Deck(deck, sideboard)
                 )
+            return [
+                managym.PlayerConfig(name, deck, sideboard, self.content_pack)
+                for name, _, deck, sideboard in seats
             ]
         pack = curated_pack_for_matchup(self.hero_deck_name, self.villain_deck_name)
         configs: list[managym.PlayerConfig] = []
@@ -270,7 +280,8 @@ def prepare_trace_payload(
     config = prepared.get("config", {})
     config.pop("villain_checkpoint", None)
     config.pop("seed", None)
-    if config.pop("imported_decks", None) is not None:
+    sources = [config.pop(key, None) for key in ("hero_source", "villain_source")]
+    if any(source is not None for source in sources):
         # Submitted lists are private setup provenance. Native viewer observations
         # still expose exactly the public information in the shared contract.
         for key in ("hero_deck", "villain_deck", "hero_sideboard", "villain_sideboard"):

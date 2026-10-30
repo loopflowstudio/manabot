@@ -5,22 +5,23 @@
 //! and line-specific issues. Importing resolves each entry's name against a
 //! content pool and admits the resulting [`Deck`] through the same native
 //! construction admission game creation uses, so a decklist never carries a
-//! second legality policy. [`ImportedMatch`] is the private setup record of a
-//! two-file import, binding the pool identity it was admitted against.
+//! second legality policy. A match retains each seat's admitted [`Decklist`]
+//! privately beside that seat's deck, as provenance only; a retained source is
+//! re-admitted against the installed world when its record loads
+//! ([`Decklist::validate_deck`]).
 //!
 //! Entry points: [`parse_decklist`], [`read_decklist`], [`admit_decklists`],
-//! [`import_match`] and [`ImportedMatch::validate_current`].
+//! [`import_match`] and [`Decklist::validate_deck`].
 
 use std::{collections::BTreeMap, io::Read, path::Path};
 
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use unicode_normalization::UnicodeNormalization;
 
 use super::{
     content_pool,
     deck_admission::{admit_in_pool, DeckIssue, DeckSection},
-    pool_content, ContentError, ContentPool, PoolDefinition, PoolIdentity,
+    pool_content, ContentError, ContentPool, PoolDefinition,
 };
 use crate::{cards::content_pack::ContentPack, state::deck::Deck};
 
@@ -69,20 +70,6 @@ pub struct Decklist {
 pub struct DeckImport {
     pub decklist: Decklist,
     pub deck: Deck,
-}
-
-/// Private two-seat setup record; never attach submitted lists to viewer frames.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[cfg_attr(
-    feature = "python",
-    pyo3::pyclass(frozen, eq, module = "manabot.managym")
-)]
-#[serde(deny_unknown_fields)]
-pub struct ImportedMatch {
-    pub pool: PoolIdentity,
-    pub ruleset: String,
-    pub hero: DeckImport,
-    pub villain: DeckImport,
 }
 
 /// Decklists that failed admission, keyed by the caller's label (a seat, or a
@@ -280,7 +267,6 @@ fn admit_with_pool(
     decklist: &Decklist,
     pool: &ContentPool,
     content: &ContentPack,
-    ruleset: &str,
 ) -> Result<DeckImport, Decklist> {
     let mut names: BTreeMap<String, Vec<&PoolDefinition>> = BTreeMap::new();
     let mut reverse_faces: BTreeMap<String, &str> = BTreeMap::new();
@@ -352,7 +338,7 @@ fn admit_with_pool(
             ..entry.clone()
         });
     }
-    for issue in admit_in_pool(pool, content, &deck, ruleset) {
+    for issue in admit_in_pool(pool, content, &deck) {
         let lines = match (issue.section, &issue.card_name) {
             (Some(section), Some(name)) => source_lines
                 .get(&(section, name.clone()))
@@ -386,14 +372,13 @@ fn admit_with_pool(
 pub fn admit_decklists(
     decklists: &[(String, Decklist)],
     pack_key: &str,
-    ruleset: &str,
 ) -> Result<Vec<DeckImport>, DecklistError> {
     let pool = content_pool(pack_key)?;
     let content = pool_content(pack_key)?;
     let mut admitted = Vec::new();
     let mut rejected = BTreeMap::new();
     for (label, decklist) in decklists {
-        match admit_with_pool(decklist, &pool, &content, ruleset) {
+        match admit_with_pool(decklist, &pool, &content) {
             Ok(imported) => admitted.push(imported),
             Err(decklist) => {
                 rejected.insert(label.clone(), decklist);
@@ -407,114 +392,38 @@ pub fn admit_decklists(
     }
 }
 
+/// Admit one match's two decklists, labelled `hero` and `villain`.
 pub fn import_match(
     hero: &Decklist,
     villain: &Decklist,
     pack_key: &str,
-    ruleset: &str,
-) -> Result<ImportedMatch, DecklistError> {
+) -> Result<(DeckImport, DeckImport), DecklistError> {
     let mut imports = admit_decklists(
         &[
             ("hero".into(), hero.clone()),
             ("villain".into(), villain.clone()),
         ],
         pack_key,
-        ruleset,
     )?;
     let villain = imports.pop().expect("two admitted decklists");
     let hero = imports.pop().expect("two admitted decklists");
-    Ok(ImportedMatch {
-        pool: content_pool(pack_key)?.identity(),
-        ruleset: ruleset.into(),
-        hero,
-        villain,
-    })
+    Ok((hero, villain))
 }
 
-impl ImportedMatch {
-    /// Game identity: pool, ruleset and both decks. Filenames, line order and
-    /// comments cannot change it.
-    pub fn setup_id(&self) -> String {
-        let value = serde_json::json!({
-            "decks": [&self.hero.deck, &self.villain.deck],
-            "pool": &self.pool,
-            "ruleset": &self.ruleset,
-        });
-        format!("{:x}", Sha256::digest(canonical_json(&value).as_bytes()))
-    }
-
-    /// The same imports with seats exchanged.
-    pub fn swapped(&self) -> Self {
-        Self {
-            hero: self.villain.clone(),
-            villain: self.hero.clone(),
-            ..self.clone()
+impl Decklist {
+    /// Re-import this retained source against the installed world; it must
+    /// admit to exactly `deck`, so a tampered source or deck, or a world that
+    /// no longer admits the list, rejects the record that retained it.
+    pub fn validate_deck(&self, pack_key: &str, deck: &Deck) -> Result<(), String> {
+        let source = parse_decklist(&self.source, &self.filename);
+        match admit_decklists(&[(self.filename.clone(), source)], pack_key) {
+            Ok(imports) if imports[0].deck == *deck => Ok(()),
+            Ok(_) => Err(format!(
+                "{}: recorded deck differs from its retained source",
+                self.filename
+            )),
+            Err(error) => Err(error.to_string()),
         }
-    }
-
-    /// Re-admit both retained sources against the installed pool; the record
-    /// must match exactly, so tampered sources, decks or stale pools reject.
-    pub fn validate_current(&self) -> Result<(), String> {
-        let pool = content_pool(&self.pool.pack_key).map_err(|error| error.to_string())?;
-        if pool.identity() != self.pool {
-            return Err("Imported deck content identity differs from the installed pool".into());
-        }
-        let content = pool_content(&self.pool.pack_key).map_err(|error| error.to_string())?;
-        for retained in [&self.hero, &self.villain] {
-            let source = parse_decklist(&retained.decklist.source, &retained.decklist.filename);
-            if admit_with_pool(&source, &pool, &content, &self.ruleset).as_ref() != Ok(retained) {
-                return Err("Recorded imported deck differs from its admitted source".into());
-            }
-        }
-        Ok(())
-    }
-
-    /// Bind a consumer's playable setup to this record: re-admit the sources,
-    /// then require the same pool and both seats' decks.
-    pub fn validate_setup(
-        &self,
-        content_pack: Option<&str>,
-        hero: &Deck,
-        villain: &Deck,
-    ) -> Result<(), String> {
-        self.validate_current()?;
-        if content_pack != Some(self.pool.pack_key.as_str())
-            || hero != &self.hero.deck
-            || villain != &self.villain.deck
-        {
-            return Err("Match differs from its admitted decklist files".into());
-        }
-        Ok(())
-    }
-}
-
-/// Compact JSON with object keys sorted, independent of serde_json features.
-fn canonical_json(value: &serde_json::Value) -> String {
-    match value {
-        serde_json::Value::Object(map) => {
-            let mut keys: Vec<_> = map.keys().collect();
-            keys.sort();
-            let fields: Vec<_> = keys
-                .into_iter()
-                .map(|key| {
-                    format!(
-                        "{}:{}",
-                        serde_json::Value::String(key.clone()),
-                        canonical_json(&map[key])
-                    )
-                })
-                .collect();
-            format!("{{{}}}", fields.join(","))
-        }
-        serde_json::Value::Array(items) => format!(
-            "[{}]",
-            items
-                .iter()
-                .map(canonical_json)
-                .collect::<Vec<_>>()
-                .join(",")
-        ),
-        other => other.to_string(),
     }
 }
 
@@ -527,12 +436,7 @@ mod tests {
     const VILLAIN: &str = "20 Island\n";
 
     fn admit(decklist: &Decklist, pool: &ContentPool) -> Result<DeckImport, Decklist> {
-        admit_with_pool(
-            decklist,
-            pool,
-            &pool_content(PACK).unwrap(),
-            super::super::deck_admission::DEVELOPMENT_RULESET,
-        )
+        admit_with_pool(decklist, pool, &pool_content(PACK).unwrap())
     }
 
     fn lines(decklist: &Decklist) -> Vec<(Option<usize>, &str)> {
@@ -669,7 +573,6 @@ mod tests {
                 &parse_decklist(source, "hero.txt"),
                 &parse_decklist(VILLAIN, "villain.txt"),
                 PACK,
-                "development-v1",
             )
             .unwrap_err();
             let DecklistError::Rejected(rejected) = &error else {
@@ -678,49 +581,42 @@ mod tests {
             assert_eq!(rejected.keys().collect::<Vec<_>>(), ["hero"]);
             assert!(error.to_string().starts_with("hero hero.txt:"));
         }
-        let error = import_match(
-            &parse_decklist(HERO, "hero.txt"),
-            &parse_decklist(VILLAIN, "villain.txt"),
-            PACK,
-            "standard",
-        )
-        .unwrap_err();
-        assert!(error.to_string().contains("ruleset"));
     }
 
     #[test]
-    fn retained_imports_reject_tampering_and_ignore_presentation() {
-        let imported = import_match(
+    fn retained_sources_reject_tampering_and_ignore_presentation() {
+        let (hero, _) = import_match(
             &parse_decklist(&HERO.replace('\n', "\r\n"), "hero.txt"),
             &parse_decklist(VILLAIN, "villain.txt"),
             PACK,
-            "development-v1",
         )
         .unwrap();
-        imported.validate_current().unwrap();
-        let restored: ImportedMatch =
-            serde_json::from_str(&serde_json::to_string(&imported).unwrap()).unwrap();
-        assert_eq!(restored, imported);
-        assert!(serde_json::to_value(&imported).unwrap()["pool"]
-            .get("definitions")
-            .is_none());
-        let reformatted = import_match(
+        hero.decklist.validate_deck(PACK, &hero.deck).unwrap();
+        let restored: DeckImport =
+            serde_json::from_str(&serde_json::to_string(&hero).unwrap()).unwrap();
+        assert_eq!(restored, hero);
+        let (reformatted, _) = import_match(
             &parse_decklist(
                 "10 mountain\n5 Forest\n5 forest\n2 Avatar Enthusiasts\nSideboard\n1 Island",
                 "other.txt",
             ),
             &parse_decklist(VILLAIN, "villain.txt"),
             PACK,
-            "development-v1",
         )
         .unwrap();
-        assert_eq!(reformatted.setup_id(), imported.setup_id());
+        assert_eq!(reformatted.deck, hero.deck);
+        reformatted
+            .decklist
+            .validate_deck(PACK, &hero.deck)
+            .unwrap();
 
-        let mut tampered = imported.clone();
-        tampered.hero.decklist.source = "10 Island".into();
-        assert!(tampered.validate_current().unwrap_err().contains("source"));
-        let mut stale = imported.clone();
-        stale.pool.content_digest = "stale".into();
-        assert!(stale.validate_current().unwrap_err().contains("identity"));
+        let mut tampered = hero.decklist.clone();
+        tampered.source = "10 Island".into();
+        let error = tampered.validate_deck(PACK, &hero.deck).unwrap_err();
+        assert!(error.contains("retained source"), "{error}");
+        let mut unadmitted = hero.decklist.clone();
+        unadmitted.source = "1 Definitely Not A Card".into();
+        let error = unadmitted.validate_deck(PACK, &hero.deck).unwrap_err();
+        assert!(error.contains("Unknown card name"), "{error}");
     }
 }

@@ -205,24 +205,27 @@ def sim_command(
         None, help="UTF-8 main/sideboard decklist"
     ),
     villain_deck_file: Path | None = typer.Option(None, help="UTF-8 opponent decklist"),
-    content_pool: str = typer.Option(
-        "world", help="Qualified native content pool"
-    ),
+    content_pool: str = typer.Option("world", help="Qualified native content pool"),
 ) -> None:
     if (hero_deck_file is None) != (villain_deck_file is None):
         raise typer.BadParameter("Supply both --hero-deck-file and --villain-deck-file")
     try:
         sim_config, runtime_config = load_sim_config(preset, set_values)
         if hero_deck_file is not None and villain_deck_file is not None:
-            imported = managym.import_match(
+            hero, villain = managym.import_match(
                 managym.Decklist.read(hero_deck_file),
                 managym.Decklist.read(villain_deck_file),
                 content_pool,
             )
             config = sim_config.model_dump()
-            config["match"] = MatchConfig.from_import(imported).model_dump()
+            config["match"] = MatchConfig.from_import(
+                content_pool, hero, villain
+            ).model_dump()
             sim_config = type(sim_config).model_validate(config)
-            typer.echo(f"Admitted {imported.ruleset} setup {imported.setup_id}")
+            typer.echo(
+                f"Admitted {managym.DEVELOPMENT_RULESET} decks "
+                f"{hero.deck.identity} vs {villain.deck.identity}"
+            )
     except (ValueError, OSError) as error:
         raise typer.BadParameter(str(error)) from error
     run_simulation(sim_config, runtime_config)

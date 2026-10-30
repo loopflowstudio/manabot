@@ -22,9 +22,7 @@ mod pool;
 pub mod setups;
 pub mod tokens;
 
-pub use pool::{
-    content_pool, pool_content, ContentPool, Eligibility, PoolDefinition, PoolIdentity,
-};
+pub use pool::{content_pool, pool_content, ContentPool, Eligibility, PoolDefinition};
 
 pub(crate) use setups::content_pack_for_match;
 

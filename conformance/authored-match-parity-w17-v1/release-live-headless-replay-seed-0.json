@@ -32,11 +32,11 @@
         },
         {
           "path": "academy/server.py",
-          "sha256": "fe88458dcd1d23a4cc9061e9c3fb248eee9713230d614b2992693b9910a8402c"
+          "sha256": "79cf98c11377468b401d21c29d72ab4c6af89c7fe881882e8f2774b1353870f3"
         },
         {
           "path": "academy/trace.py",
-          "sha256": "9552718f9a5d955b75a5472884b08fe463eba74b2a45b445475238bd3525b24d"
+          "sha256": "6ba04f9b1fed2736929ad9f0aaf4c6906029ea1c5e52f38e0d8a9b31878c3671"
         },
         {
           "path": "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
@@ -156,11 +156,11 @@
         },
         {
           "path": "managym/src/cards/deck_admission.rs",
-          "sha256": "7edf29100130e589580a4021627db142d5a653e5736e4c74ae7a909930854b97"
+          "sha256": "fa66678291c9641102984b5fd87879e4dd31f803e8e67033e8af607e0883a8fe"
         },
         {
           "path": "managym/src/cards/decklist.rs",
-          "sha256": "5710f4f15e719d241d231375070d6dda125d05f988634995cec4e5795f9d81da"
+          "sha256": "ede4e9cb2175f558a44f846bba1b881d76f002dbf08d4419a18d346af4a00393"
         },
         {
           "path": "managym/src/cards/fixtures.rs",
@@ -168,11 +168,11 @@
         },
         {
           "path": "managym/src/cards/mod.rs",
-          "sha256": "a5f796110e451a5799c9a43307a1615efd99392b0c42c286703b7949b1d8c912"
+          "sha256": "d1b620d7df8a03566500051c08edc7162605cb93b7da76b44a8bfd51a0b4e90b"
         },
         {
           "path": "managym/src/cards/pool.rs",
-          "sha256": "296b9a0be1a4465df96950411ae2bd066c604fc4df8d397152ceef50ee84ccea"
+          "sha256": "4ba2f22451ecac355af44387a638dcadd120e2c53f823b4996ef1f7dac30104e"
         },
         {
           "path": "managym/src/cards/setups.rs",
@@ -476,7 +476,7 @@
         },
         {
           "path": "managym/src/python/deck_bindings.rs",
-          "sha256": "487e69db22add7bd93617fb40afd04726a5dee739e9fda15b741238108deef44"
+          "sha256": "2d0e2d2bbb821a9829ef608afb87e74aed4d4397f15adcdf12349be6986be037"
         },
         {
           "path": "managym/src/python/mod.rs",
@@ -563,7 +563,7 @@
           "sha256": "23ac765196d97fb350c0e3e2337bacc5d8e42bd6c47edb7999fb0907d32bfa8d"
         }
       ],
-      "sha256": "4028ea93e9c2d17f851ef6a8dee5423db512c95751dbd3957049326c9366011e"
+      "sha256": "de069c63dabe72ef4ba4a8faf8e55b02f3e82c4f56cd9c16896f71bd39d8cc4d"
     },
     "seed": 0
   },

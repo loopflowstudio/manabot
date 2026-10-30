@@ -333,6 +333,8 @@ class Decklist:
     def entries(self) -> list[DeckEntry]: ...
     @property
     def issues(self) -> list[DeckIssue]: ...
+    def validate_deck(self, pack_key: str, deck: Deck) -> None:
+        """Raise ``ValueError`` unless this source re-admits to exactly ``deck``."""
     def to_dict(self) -> dict[str, Any]: ...
     @staticmethod
     def from_dict(value: Any) -> Decklist: ...
@@ -344,51 +346,22 @@ class DeckImport:
     def deck(self) -> Deck: ...
     def to_dict(self) -> dict[str, Any]: ...
 
-class PoolIdentity(TypedDict):
-    pack_key: str
-    world_version: str
-    content_digest: str
-
-class ImportedMatch:
-    """Private two-seat import record; never attach it to viewer frames."""
-
-    @property
-    def pool(self) -> PoolIdentity: ...
-    @property
-    def ruleset(self) -> str: ...
-    @property
-    def hero(self) -> DeckImport: ...
-    @property
-    def villain(self) -> DeckImport: ...
-    @property
-    def setup_id(self) -> str: ...
-    def swapped(self) -> ImportedMatch: ...
-    def validate_current(self) -> None: ...
-    def validate_setup(
-        self, content_pack: str | None, hero: Deck, villain: Deck
-    ) -> None: ...
-    def to_dict(self) -> dict[str, Any]: ...
-    @staticmethod
-    def from_dict(value: Any) -> ImportedMatch: ...
-
 class DeckImportError(ValueError):
     decklists: dict[str, Decklist]
 
 MAX_DECKLIST_BYTES: int
+DEVELOPMENT_RULESET: str
 
 def admit_decklists(
     decklists: list[tuple[str, Decklist]],
     pack_key: str,
-    ruleset: str = "development-v1",
 ) -> list[DeckImport]:
     """Admit every decklist or raise ``DeckImportError`` keyed by label."""
 
 def import_match(
-    hero: Decklist,
-    villain: Decklist,
-    pack_key: str,
-    ruleset: str = "development-v1",
-) -> ImportedMatch: ...
+    hero: Decklist, villain: Decklist, pack_key: str
+) -> tuple[DeckImport, DeckImport]:
+    """Admit a match's ``(hero, villain)`` decklists or raise ``DeckImportError``."""
 def authored_deck_setup(pack_key: str, deck_key: str) -> PlayerConfig: ...
 
 class ZoneEnum(IntEnum):
@@ -698,6 +671,4 @@ class ManaOutput:
     mana: list[int]
     lesson: list[int]
 
-def admit_deck(
-    pack_key: str, deck: Deck, ruleset: str = "development-v1"
-) -> list[DeckIssue]: ...
+def admit_deck(pack_key: str, deck: Deck) -> list[DeckIssue]: ...

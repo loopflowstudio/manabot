@@ -1,7 +1,7 @@
 """Decklist files through managym's Python surface into manabot setups.
 
 Parsing, name resolution and admission diagnostics are tested natively in
-`managym/src/semantic/decklist.rs`; these tests cover file reading, retained
+`managym/src/cards/decklist.rs`; these tests cover file reading, retained
 records in configurations, the sim CLI and checkpoint execution.
 """
 
@@ -27,51 +27,55 @@ from manabot.model.world import validate_agent_setup
 from manabot.sim.player import ModelPlayer
 from manabot.sim.sim import load_player, simulate_models
 import managym
-from managym import DeckImportError, Decklist, ImportedMatch
+from managym import DeckImport, DeckImportError, Decklist
 
 PACK = "world"
 HERO = "# Novel development deck\nMain\n10 Forest\n10 Mountain\n2 Avatar Enthusiasts\nSideboard\n1 Island\n"
 VILLAIN = "20 Island\n"
 
 
-def _import_files(hero: Path, villain: Path) -> ImportedMatch:
+def _import_files(hero: Path, villain: Path) -> tuple[DeckImport, DeckImport]:
     return managym.import_match(Decklist.read(hero), Decklist.read(villain), PACK)
+
+
+def _imported_match() -> MatchConfig:
+    return MatchConfig.from_import(
+        PACK, *managym.import_match(Decklist(HERO), Decklist(VILLAIN), PACK)
+    )
 
 
 def test_decklist_novel_setup_resolves_same_identity_from_files(tmp_path: Path) -> None:
     hero, villain = tmp_path / "hero.txt", tmp_path / "villain.txt"
     hero.write_bytes(HERO.replace("\n", "\r\n").encode())
     villain.write_text(VILLAIN)
-    imported = _import_files(hero, villain)
-    assert imported.hero.decklist.source == HERO.replace("\n", "\r\n")
-    assert imported.hero.decklist.filename == "hero.txt"
-    assert "definitions" not in imported.to_dict()["pool"]
-    config = MatchConfig.from_import(imported)
+    imported, villain_import = _import_files(hero, villain)
+    assert imported.decklist.source == HERO.replace("\n", "\r\n")
+    assert imported.decklist.filename == "hero.txt"
+    config = MatchConfig.from_import(PACK, imported, villain_import)
+    dumped = config.model_dump(mode="json")
+    assert dumped["hero_source"] == imported.decklist.to_dict()
+    assert dumped["hero_deck"] == imported.deck.main
+    assert "deck" not in dumped["hero_source"]
     restored = MatchConfig.model_validate_json(config.model_dump_json())
-    assert restored.imported_decks == imported
-    assert restored.imported_decks.setup_id == imported.setup_id
-    assert imported.hero.deck.main == {
+    assert restored == config
+    assert restored.hero_source == imported.decklist
+    assert imported.deck.main == {
         "Forest": 10,
         "Mountain": 10,
         "Avatar Enthusiasts": 2,
     }
-    assert imported.hero.deck.sideboard == {"Island": 1}
-    assert all(
-        entry.card_def_id is not None for entry in imported.hero.decklist.entries
-    )
+    assert imported.deck.sideboard == {"Island": 1}
+    assert all(entry.card_def_id is not None for entry in imported.decklist.entries)
     assert not any(
         managym.authored_deck_setup("elemental-world-v2", key).decklist
-        == imported.hero.deck.main
+        == imported.deck.main
         for key in managym.authored_deck_keys("elemental-world-v2")
     )
     env = managym.Env(seed=7)
     env.reset(Match(config).to_rust())
-    assert (
-        env.content_pack_manifest()["content_digest"] == imported.pool["content_digest"]
-    )
-    assert (
-        env.content_pack_manifest()["world_version"] == imported.pool["world_version"]
-    )
+    pool = managym.content_pool(PACK)
+    assert env.content_pack_manifest()["content_digest"] == pool["content_digest"]
+    assert env.content_pack_manifest()["world_version"] == pool["world_version"]
 
 
 def test_decklist_errors_carry_each_failing_seat_with_line_issues() -> None:
@@ -111,37 +115,34 @@ def test_sim_cli_preserves_overrides_with_optional_deck_files(
     assert len(configs) == 1
     assert configs[0].max_steps == 4
     assert configs[0].hero == "random"
-    imported = configs[0].match.imported_decks
+    match = configs[0].match
     if with_files:
-        assert imported is not None
-        assert imported.hero.decklist.source == HERO
-        assert imported.setup_id in result.output
+        assert match.hero_source is not None
+        assert match.hero_source.source == HERO
+        hero_deck = managym.Deck(match.hero_deck, match.hero_sideboard)
+        assert hero_deck.identity in result.output
     else:
-        assert imported is None
+        assert match.hero_source is None and match.villain_source is None
 
 
-def test_retained_import_rejects_tampered_sources_and_setups() -> None:
-    imported = managym.import_match(Decklist(HERO), Decklist(VILLAIN), PACK)
-    retained = imported.to_dict()
-    retained["hero"]["decklist"]["source"] = "10 Island"
-    with pytest.raises(ValueError, match="source"):
-        ImportedMatch.from_dict(retained).validate_current()
-    retained = imported.to_dict()
-    retained["pool"]["content_digest"] = "stale"
-    with pytest.raises(ValueError, match="identity"):
-        MatchConfig.model_validate(
-            {
-                **MatchConfig.from_import(imported).model_dump(),
-                "imported_decks": retained,
-            }
-        )
-    edited = MatchConfig.from_import(imported).model_dump()
+def test_retained_sources_reject_tampering_and_follow_seat_swaps() -> None:
+    config = _imported_match()
+    tampered = config.model_dump()
+    tampered["hero_source"]["source"] = "10 Island"
+    with pytest.raises(ValueError, match="retained source"):
+        MatchConfig.model_validate(tampered)
+    edited = config.model_dump()
     edited["villain_deck"] = {"Island": 19}
-    with pytest.raises(ValueError, match="admitted decklist"):
+    with pytest.raises(ValueError, match="retained source"):
         MatchConfig.model_validate(edited)
-    swapped = Match(MatchConfig.from_import(imported)).swapped().config
-    assert swapped.imported_decks == imported.swapped()
-    assert swapped.hero_deck == imported.villain.deck.main
+    unpooled = config.model_dump()
+    del unpooled["content_pack"]
+    with pytest.raises(ValueError, match="content_pack"):
+        MatchConfig.model_validate(unpooled)
+    swapped = Match(config).swapped().config
+    assert swapped.hero_source == config.villain_source
+    assert swapped.villain_source == config.hero_source
+    assert swapped.hero_deck == config.villain_deck
 
 
 def _untrained(path: Path, pack: str = PACK, **binding: object) -> None:
@@ -177,7 +178,7 @@ def test_decklist_pool_checkpoint_simulates_imported_files(tmp_path: Path) -> No
     hero, villain = tmp_path / "hero.txt", tmp_path / "villain.txt"
     hero.write_text(HERO)
     villain.write_text(VILLAIN)
-    match = MatchConfig.from_import(_import_files(hero, villain))
+    match = MatchConfig.from_import(PACK, *_import_files(hero, villain))
     pool = tmp_path / "pool.pt"
     _untrained(pool, content_pool=PACK)
     model = _RecordingModel(pool)
@@ -199,8 +200,7 @@ def test_decklist_pool_checkpoint_simulates_imported_files(tmp_path: Path) -> No
 def test_decklist_setup_bound_checkpoint_rejects_imported_files(
     tmp_path: Path, pack: str, decks: tuple[str, str]
 ) -> None:
-    imported = managym.import_match(Decklist(HERO), Decklist(VILLAIN), PACK)
-    match = MatchConfig.from_import(imported)
+    match = _imported_match()
     path = tmp_path / "authored.pt"
     _untrained(
         path,

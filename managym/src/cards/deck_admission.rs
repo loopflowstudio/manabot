@@ -57,13 +57,9 @@ impl DeckIssue {
     }
 }
 
-fn construction_issues(deck: &Deck, ruleset: &str) -> Vec<DeckIssue> {
+/// The world's construction rules ([`DEVELOPMENT_RULESET`]).
+fn construction_issues(deck: &Deck) -> Vec<DeckIssue> {
     let mut issues = Vec::new();
-    if ruleset != DEVELOPMENT_RULESET {
-        issues.push(DeckIssue::format(format!(
-            "unknown construction ruleset {ruleset:?}; choose {DEVELOPMENT_RULESET}"
-        )));
-    }
     if deck.main.is_empty() {
         issues.push(DeckIssue {
             section: Some(DeckSection::Main),
@@ -98,16 +94,11 @@ fn construction_issues(deck: &Deck, ruleset: &str) -> Vec<DeckIssue> {
 
 /// Return actionable construction/content issues without allocating a game.
 /// Env setup invokes this same admission for every submitted non-preset deck.
-pub fn admit_deck(
-    pack_key: &str,
-    deck: &Deck,
-    ruleset: &str,
-) -> Result<Vec<DeckIssue>, ContentError> {
+pub fn admit_deck(pack_key: &str, deck: &Deck) -> Result<Vec<DeckIssue>, ContentError> {
     Ok(admit_in_pool(
         &content_pool(pack_key)?,
         &*pool_content(pack_key)?,
         deck,
-        ruleset,
     ))
 }
 
@@ -116,9 +107,8 @@ pub(crate) fn admit_in_pool(
     pool: &ContentPool,
     content: &ContentPack,
     deck: &Deck,
-    ruleset: &str,
 ) -> Vec<DeckIssue> {
-    let mut issues = construction_issues(deck, ruleset);
+    let mut issues = construction_issues(deck);
     for (section, cards) in [
         (DeckSection::Main, &deck.main),
         (DeckSection::Sideboard, &deck.sideboard),
@@ -170,7 +160,7 @@ pub fn development_rejection(
     pack_key: &str,
     player: &PlayerConfig,
 ) -> Result<Option<String>, ContentError> {
-    let issues = admit_deck(pack_key, &player.deck, DEVELOPMENT_RULESET)?;
+    let issues = admit_deck(pack_key, &player.deck)?;
     Ok((!issues.is_empty()).then(|| {
         issues
             .iter()
@@ -191,11 +181,9 @@ mod tests {
         let main = BTreeMap::from([("Forest".into(), 10), ("Mountain".into(), 10)]);
         let sideboard = BTreeMap::from([("Island".into(), 1)]);
         let deck = Deck::new(main.clone(), sideboard);
-        assert!(admit_deck("world", &deck, DEVELOPMENT_RULESET)
-            .unwrap()
-            .is_empty());
+        assert!(admit_deck("world", &deck).unwrap().is_empty());
         let unsupported = Deck::new(main, BTreeMap::from([("Accumulate Wisdom".into(), 1)]));
-        let issues = admit_deck("world", &unsupported, DEVELOPMENT_RULESET).unwrap();
+        let issues = admit_deck("world", &unsupported).unwrap();
         assert!(issues
             .iter()
             .any(|issue| issue.code == "unsupported"
@@ -208,20 +196,17 @@ mod tests {
             BTreeMap::from([("Forest".into(), 8)]),
             BTreeMap::from([("Island".into(), 20)]),
         );
-        assert!(construction_issues(&deck, DEVELOPMENT_RULESET).is_empty());
-        assert!(construction_issues(&deck, "standard")
-            .iter()
-            .any(|issue| issue.code == "format"));
+        assert!(construction_issues(&deck).is_empty());
     }
 
     #[test]
     fn empty_zero_and_overflowing_allocations_reject() {
-        assert!(!construction_issues(&Deck::default(), DEVELOPMENT_RULESET).is_empty());
+        assert!(!construction_issues(&Deck::default()).is_empty());
         let deck = Deck::new(
             BTreeMap::from([("Forest".into(), 0)]),
             BTreeMap::from([("Island".into(), usize::MAX), ("Mountain".into(), 2)]),
         );
-        let issues = construction_issues(&deck, DEVELOPMENT_RULESET);
+        let issues = construction_issues(&deck);
         assert!(issues.iter().any(|issue| issue.code == "count"));
         assert!(issues
             .iter()

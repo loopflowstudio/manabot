@@ -41,72 +41,41 @@ set-file definition) merged 2026-10-30; synced at cd86469b1.
 ## Implemented
 
 `state::deck` (identity byte-equal to the retained Python digest);
-`cards::deck_admission` (`admit_deck`, `DeckIssue.line`, crate-private
-`admit_in_pool`); `cards::decklist` (`Decklist`, `parse_decklist`, `read_decklist`,
-`DeckImport {decklist, deck}`, `ImportedMatch` with `setup_id`/`swapped`/
-`validate_current`/`validate_setup`, `admit_decklists`, `import_match`);
-`python/deck_bindings.rs` (frozen `manabot.managym` classes, `to_dict`/
-`from_dict`, pickle/copy, Pydantic core schema; `DeckImportError.decklists`).
-`MatchConfig.from_import` builds imported matches; `TrainingDecks.from_decklists`
-/`from_files` admit natively; `set_training_decks`, producer admission and
-`validate_agent_decks` are unchanged in behavior.
+`cards::deck_admission` (`admit_deck(pack, &Deck)`, `DeckIssue.line`,
+crate-private `admit_in_pool`; the world's rules are `DEVELOPMENT_RULESET`, no
+caller ruleset); `cards::decklist` (`Decklist`, `parse_decklist`, `read_decklist`,
+`DeckImport {decklist, deck}`, `admit_decklists`, `import_match -> (hero,
+villain)`, `Decklist::validate_deck`); `python/deck_bindings.rs` (frozen
+`manabot.managym` classes, `to_dict`/`from_dict`, pickle/copy, Pydantic core
+schema; `DeckImportError.decklists`; `DEVELOPMENT_RULESET`).
+Each deck is stored once: `MatchConfig` holds the decks plus private
+`hero_source`/`villain_source: Decklist | None`; `MatchConfig.from_import(pack,
+hero, villain)` builds imported matches, and loading re-admits each source
+against the installed world (`validate_deck`). Academy's `GameConfig` keeps
+`content_pack` and the two sources (JSON form); `to_rust`, rematch and the
+validate endpoint re-admit against the installed world, and viewer export
+strips the sources and decks. `TrainingDecks.from_decklists`/`from_files` admit
+natively; `set_training_decks`, producer admission and `validate_agent_decks`
+are unchanged in behavior.
 
 The authored-match parity receipt (`conformance/authored-match-parity-w17-v1`)
-hashes every `managym/src/*.rs`; it was regenerated after the sync (source hash
-only, behavior parity unchanged) and must be regenerated after further Rust edits.
+hashes source files; regenerate it (`uv run python -m academy.authored_match_parity
+write`) after any further source edit, including formatting.
 
-Check (2026-10-30, after sync): debug `cargo test --no-fail-fast` all pass;
-decklist/training-deck/Academy-decklist/match/matchups/mirror/world/boundaries
-84 passed; tests/academy + CLAUDE.md world set 324 passed, 2 failed only on the
-locally absent artifact `experiments/data/rul-9-played-workloads-v1.measurement.json`
-(in the manifest; fetch from the artifact store, not a branch defect).
+Check (2026-10-30, concept-review corrections): debug `cargo test --no-fail-fast`
+all pass; decklist/training-deck/Academy-decklist (incl. new rematch test)/
+checkpoint-catalog/advice/match/matchups/mirror/boundaries/parity 86 passed;
+UI vitest `game.svelte.test.ts` 16 passed, svelte-check 0 errors.
 
 ## Delete — do not maintain
 
-Done: `manabot/decklist.py` and its Python parser/face/ambiguity tests (now in
-`decklist.rs`); `catalog.DeckSetup`; unused `Decklist.source_sha256`; earlier `deck_collection.py`, checkpoint
+Done: `ImportedMatch` (`setup_id`, `swapped`, `validate_current`,
+`validate_setup`), `PoolIdentity`, the caller `ruleset` parameter (Rust, Python,
+Academy `DeckImportInput`, UI payload), `GameConfig.imported_decks`, tracked
+`.DS_Store`; earlier `manabot/decklist.py` and its Python parser tests,
+`catalog.DeckSetup`, `Decklist.source_sha256`, `deck_collection.py`, checkpoint
 deck bindings, `env.match.parse_deck`, `validate_imported_players` (list at
 c1dd6c71c).
-
-## Next implement direction (concept review, 2026-10-30, no person present)
-
-Settled by the accepted decisions above; no new product choice.
-
-1. **One copy of each deck; sources are provenance only.** Today an import is
-   stored twice: `MatchConfig.hero_deck`/`villain_deck` (+ sideboards) and
-   `imported_decks: ImportedMatch` (pool, ruleset, two `DeckImport`s each with a
-   `Deck`), so `validate_setup` must prove they agree on every `MatchConfig`
-   and trace load. Replace `ImportedMatch` with per-seat source records:
-   `MatchConfig` keeps the decks and gains private
-   `hero_source`/`villain_source: Decklist | None` (Academy trace the same).
-   `import_match` returns the two `DeckImport`s (or is replaced by
-   `admit_decklists` with seat labels); `MatchConfig.from_import` takes them.
-   Delete `ImportedMatch`, `setup_id`, `swapped` (seat swap moves two fields),
-   `validate_setup` and the trace's dict round-trip. Keep the source-truthfulness
-   check at record load as "re-importing a retained source yields this seat's
-   deck", one helper on `Decklist`/`DeckImport`, not a match-level record.
-2. **The world's validation decides, not pool-identity equality.**
-   `validate_current` rejects any imported record once `content_digest`
-   changes (any card edit), while curated traces and training decks load and
-   are re-admitted natively. Imported traces/rematches re-admit their sources
-   against the installed world like everything else; drop `PoolIdentity` from
-   the record. The validate endpoint may still report `world_version`/
-   `content_digest` as information. Counterexample kept: a changed world can
-   make an old tape diverge — that is the existing replay/canonical-replay
-   check's job for every trace, not a decklist-only gate.
-3. **The ruleset is the world's, not the caller's.** `development-v1` is the
-   only ruleset, yet `admit_deck`, `admit_decklists`, `import_match` and
-   Academy's `DeckImportInput.ruleset` accept a free string that can only
-   error. Remove the parameter; keep `DEVELOPMENT_RULESET` as the named
-   constant the validate response and CLI report. Adding a tournament format
-   later is a review decision and would reintroduce a choice then.
-4. **Remove the committed `.DS_Store`** (added by 2497dfa01 "lf pr open").
-
-Must survive: whole-input rejection with retained source and line issues;
-rematch prefills the editor from retained sources; viewer-safe trace export
-strips decks when sources are present; Commands, stale rejection, reconnect and
-replay/fork identity. Regenerate the authored-match parity source hash after
-Rust edits; run debug `cargo test` and the decklist/Academy/match test sets.
 
 ## Handoff
 
