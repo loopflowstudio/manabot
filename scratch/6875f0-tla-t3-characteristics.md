@@ -146,3 +146,11 @@ Check (2026-10-30, at the third sync): debug `cargo test` all binaries pass
 clippy `--all-targets -D warnings`, conformance check and fuzz (seed 24301, 32
 cases) clean; `tests/academy` 261 pass; world/observation-shape set plus
 `tests/belief`, `tests/env`, text observation 301 pass; ruff clean. Realign (2026-10-30): PR #398 `a5587df5a` and #394 `2c50c8793` heads unchanged and contained; Academy shared-table/study/experience protocol and CI-selection tests 74 pass (`tests/eval/test_arena_log_conformance.py` needs undeclared `duckdb`, unchanged from main).
+
+Concept review (2026-10-30, after the third sync): no change. The implemented
+change matches the accepted model (derived characteristics, complete
+observation, all three encodings, one card representation). Two recorded items
+are not T3 product choices: the in-place v5/w18 extension is a reversible
+versioning assumption (no checkpoint uses either; `scratch/questions.md`), and
+the opponent's sideboard counts in the `Observation` and LLM text predate T3
+(on main), so that visibility question stays Jack Heart's, outside this Task.
