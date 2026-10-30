@@ -129,10 +129,11 @@ impl VectorEnv {
 
     /// Replace the training decks sampled at subsequent roots.
     ///
-    /// Every deck passes the content pool's native admission before the
-    /// replacement takes effect; on any error the previous decks remain. Games
-    /// already underway keep their decks. Membership never grants permission:
-    /// game creation admits each submitted deck again.
+    /// Every deck is submitted to the world ([`crate::world::WORLD_POOL`]) and
+    /// passes its native admission before the replacement takes effect; on any
+    /// error the previous decks remain. Games already underway keep their
+    /// decks. Membership never grants permission: game creation admits each
+    /// submitted deck again.
     pub fn set_training_decks(&mut self, decks: Vec<PlayerConfig>) -> Result<(), AgentError> {
         if !self.uniform_roster.is_empty() && !self.uniform_roster.distinct {
             return Err(AgentError(
@@ -144,18 +145,14 @@ impl VectorEnv {
                 "uniform-distinct-v1 requires at least two training decks".into(),
             ));
         }
-        let pack = decks[0]
-            .content_pack
-            .as_deref()
-            .ok_or_else(|| AgentError("training decks require an explicit content pool".into()))?;
         let mut distinct = std::collections::BTreeSet::new();
         for player in &decks {
-            if player.content_pack.as_deref() != Some(pack) {
+            if player.content_pack.as_deref() != Some(crate::world::WORLD_POOL) {
                 return Err(AgentError(
-                    "training decks must share one content pool".into(),
+                    "training decks must be submitted to the world".into(),
                 ));
             }
-            if let Some(message) = crate::cards::deck_admission::development_rejection(pack, player)
+            if let Some(message) = crate::cards::deck_admission::development_rejection(player)
                 .map_err(|error| AgentError(error.to_string()))?
             {
                 return Err(AgentError(format!(

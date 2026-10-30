@@ -79,7 +79,6 @@ export class GameStore {
   // localStorage and sent with new_game.
   decks = $state<DeckSelection>(loadStoredDeckSelection());
   deckImport = $state<{
-    pack_key: string;
     hero: { source: string; filename: string };
     villain: { source: string; filename: string };
   } | null>(null);

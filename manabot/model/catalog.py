@@ -197,7 +197,13 @@ _BINDING_FIELDS = (
         ),
     ),
     ("content_manifest", _content_mismatch),
-    ("content_pool", _content_mismatch),
+    (
+        "world_digest",
+        lambda trained, engine: (
+            f"world cards differ: trained on {str(trained)[:12]}, "
+            f"engine has {str(engine)[:12]}"
+        ),
+    ),
     (
         "input_schema",
         lambda trained, engine: "observation tensor shapes differ from this engine",

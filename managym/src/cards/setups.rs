@@ -16,7 +16,7 @@ use serde::Deserialize;
 
 use super::ContentError;
 use crate::{
-    cards::content_pack::ContentPack,
+    cards::content_pack::{default_content_pack, ContentPack},
     cardsets,
     state::{ability::Effect, card::CardDefinition, player::PlayerConfig},
 };
@@ -249,12 +249,12 @@ pub(crate) fn created_tokens(definition: &CardDefinition) -> BTreeSet<String> {
 
 /// The pack a match runs on, or `None` for the default pack.
 ///
-/// An explicit `content_pack` must be shared by both configs. When it names an
-/// authored pack whose setups both decks are, that pack runs; otherwise every
-/// deck must pass development admission against the named pool, whose content
-/// then runs. Authored presets never qualify cards for arbitrary decks, and an
-/// explicit pool never falls back. Without one, configs whose decklists equal
-/// one authored setup's run on it, and ambiguity fails closed.
+/// An explicit `content_pack` must be shared by both configs. The world
+/// ([`crate::world::WORLD_POOL`]) runs any decks that pass development
+/// admission, on the default pack. An authored pack key runs only that pack's
+/// own setups: authored packs are fixed setups, never deck-admission targets,
+/// and an explicit selection never falls back. Without one, configs whose
+/// decklists equal one authored setup's run on it, and ambiguity fails closed.
 pub(crate) fn content_pack_for_match(
     player_configs: &[PlayerConfig],
 ) -> Result<Option<Arc<ContentPack>>, ContentError> {
@@ -266,20 +266,27 @@ pub(crate) fn content_pack_for_match(
                 .any(|p| p.content_pack.as_ref() != Some(key))
         {
             return Err(ContentError(
-                "explicit content pool requires two players with the same pack key".into(),
+                "explicit content pack requires two players with the same pack key".into(),
             ));
         }
-        if let Some(pack) = packs.iter().find(|pack| &pack.pack_key == key) {
-            if player_configs.iter().all(|p| admits(pack, p)) {
-                return Ok(Some(Arc::clone(&pack.content)));
+        if key == crate::world::WORLD_POOL {
+            for player in player_configs {
+                if let Some(message) = super::deck_admission::development_rejection(player)? {
+                    return Err(ContentError(message));
+                }
             }
+            return Ok(Some(default_content_pack()));
         }
-        for player in player_configs {
-            if let Some(message) = super::deck_admission::development_rejection(key, player)? {
-                return Err(ContentError(message));
-            }
+        let pack = packs
+            .iter()
+            .find(|pack| &pack.pack_key == key)
+            .ok_or_else(|| ContentError(format!("unknown explicit content pack {key}")))?;
+        if !player_configs.iter().all(|p| admits(pack, p)) {
+            return Err(ContentError(
+                "explicit pack requires two admitted authored setups".into(),
+            ));
         }
-        return super::pool_content(key).map(Some);
+        return Ok(Some(Arc::clone(&pack.content)));
     }
     Ok(select(player_configs, packs)?.map(|pack| Arc::clone(&pack.content)))
 }
@@ -345,7 +352,7 @@ mod tests {
     }
 
     #[test]
-    fn explicit_pool_selection_admits_novel_decks_and_never_falls_back() {
+    fn world_selection_admits_novel_decks_and_never_falls_back() {
         let mut first = PlayerConfig::new(
             "first",
             BTreeMap::from([("Forest".into(), 10), ("Mountain".into(), 10)]),
@@ -356,12 +363,14 @@ mod tests {
         let content = content_pack_for_match(&[first.clone(), second.clone()])
             .unwrap()
             .unwrap();
-        assert!(Arc::ptr_eq(
-            &content,
-            &super::super::pool_content(crate::world::WORLD_POOL).unwrap()
-        ));
+        assert!(Arc::ptr_eq(&content, &default_content_pack()));
         first.deck.sideboard.insert("Water Tribe Rallier".into(), 1);
-        assert!(content_pack_for_match(&[first, second]).is_err());
+        assert!(content_pack_for_match(&[first, second.clone()]).is_err());
+        // An authored pack key never admits decks outside its own setups.
+        let mut novel = PlayerConfig::new("novel", BTreeMap::from([("Forest".into(), 20)]));
+        novel.content_pack = Some("ur-lessons-vs-gw-allies".into());
+        second.content_pack = novel.content_pack.clone();
+        assert!(content_pack_for_match(&[novel, second]).is_err());
     }
 
     #[test]

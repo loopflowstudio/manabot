@@ -150,13 +150,12 @@ def test_replaced_checkpoint_cannot_replace_playable_match(runs: Path) -> None:
 
 def _deck_import() -> dict[str, object]:
     return {
-        "pack_key": "world",
         "hero": {"source": "10 Forest\n10 Mountain\n2 Avatar Enthusiasts"},
         "villain": {"source": "20 Island"},
     }
 
 
-def test_imported_decks_play_pool_checkpoints_and_refuse_setup_bindings(
+def test_imported_decks_play_world_checkpoints_and_refuse_setup_bindings(
     runs: Path,
 ) -> None:
     from manabot.env.observation import ObservationSpace
@@ -166,8 +165,8 @@ def test_imported_decks_play_pool_checkpoints_and_refuse_setup_bindings(
 
     space = ObservationSpace()
     agent = ActorCritic(space, ModelConfig(semantic_pack="world"))
-    pool = runs / "pool" / "step_0.pt"
-    save_checkpoint(agent, space, pool, content_pool="world")
+    world = runs / "world" / "step_0.pt"
+    save_checkpoint(agent, space, world, player_configs=None)
     rng = random.Random(0)
     with TestClient(app) as client:
         message = _new_game_error(
@@ -185,7 +184,7 @@ def test_imported_decks_play_pool_checkpoints_and_refuse_setup_bindings(
                     "type": "new_game",
                     "config": {
                         "villain_type": "checkpoint",
-                        "opponent_sha256": _sha(pool),
+                        "opponent_sha256": _sha(world),
                         "deck_import": _deck_import(),
                         "seed": 7,
                     },
@@ -201,7 +200,7 @@ def test_imported_decks_play_pool_checkpoints_and_refuse_setup_bindings(
                 websocket.send_json({"type": "action", "index": choice["index"]})
                 payload = websocket.receive_json()
     [(_, trace)] = _recorded_traces(trace_store.TRACES_DIR)
-    assert trace["config"]["opponent"]["sha256"] == _sha(pool)
+    assert trace["config"]["opponent"]["sha256"] == _sha(world)
     villain_turns = [
         event for event in trace["events"] if event.get("actor") == "villain"
     ]

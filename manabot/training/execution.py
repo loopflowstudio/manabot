@@ -176,12 +176,12 @@ def validate_regime(
             raise ValueError(
                 "elemental-uniform requires complete Elemental policy input"
             )
-    if regime.decks is not None:
+    if regime.deck_source is not None:
         if require_current_world:
-            regime.decks.check()
-        if regime.agent.semantic_pack != regime.decks.pool:
+            regime.deck_source.check()
+        if regime.agent.semantic_pack != managym.WORLD_SETUP:
             raise ValueError(
-                "training decks require the complete pool policy vocabulary"
+                "a deck source requires the complete world policy vocabulary"
             )
     if regime.agent.belief_count_buckets:
         raise ValueError("regime stages do not produce belief inputs")
@@ -189,9 +189,9 @@ def validate_regime(
 
 
 def _checkpoint_world(regime: TrainingRegime) -> dict[str, Any]:
-    """A deck-supplied run exports its pool's world, never its training decks."""
-    if regime.decks is not None:
-        return {"content_pool": regime.decks.pool}
+    """A deck-source run exports the world, never its deck source."""
+    if regime.deck_source is not None:
+        return {"player_configs": None}
     return {"player_configs": Match(regime.root_match).to_rust()}
 
 
@@ -201,14 +201,11 @@ def _runtime_identities(
     identities = runtime_fingerprints(
         seed, match_config=regime.root_match, observation_space=space
     )
-    if regime.decks is not None:
-        # Opening the pool fixes content and input identities; the run's setup
+    if regime.deck_source is not None:
+        # Opening the world fixes content and input identities; the run's setup
         # is the supply it samples, never the representative pair it opened.
         del identities["matchup"], identities["matchup_sha256"]
-        identities.update(
-            content_pool=regime.decks.pool,
-            training_decks_sha256=regime.decks.digest,
-        )
+        identities.update(deck_source_sha256=regime.deck_source.digest)
     identities.update(
         architecture=architecture_identity(regime.agent, space),
         hardware={
@@ -1236,7 +1233,7 @@ def _execute_regime(
                         else None,
                         root=stage.root,
                         matchup_curriculum=stage.matchup_curriculum,
-                        decks=regime.decks,
+                        deck_source=regime.deck_source,
                         device=stage.execution.device,
                         workers=stage.execution.workers,
                     )

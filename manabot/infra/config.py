@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from managym import Deck, DeckImport, Decklist
+from managym import WORLD_SETUP, Deck, DeckImport, Decklist
 
 
 def _default_deck() -> dict[str, int]:
@@ -57,6 +57,8 @@ class ObservationConfig(BaseConfig):
 class MatchConfig(BaseConfig):
     """Parameters passed to the match builder."""
 
+    # An authored pack key runs that pack's fixed setups; `WORLD_SETUP` submits
+    # the decks to the installed world's admission.
     content_pack: str | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
@@ -84,18 +86,16 @@ class MatchConfig(BaseConfig):
         ):
             if source is None:
                 continue
-            if self.content_pack is None:
-                raise ValueError("an imported decklist requires its content_pack")
-            source.validate_deck(self.content_pack, Deck(main, sideboard))
+            if self.content_pack != WORLD_SETUP:
+                raise ValueError("an imported decklist plays in the world")
+            source.validate_deck(Deck(main, sideboard))
         return self
 
     @classmethod
-    def from_import(
-        cls, pack_key: str, hero: DeckImport, villain: DeckImport
-    ) -> "MatchConfig":
-        """The playable setup of two admitted decklists."""
+    def from_import(cls, hero: DeckImport, villain: DeckImport) -> "MatchConfig":
+        """The playable setup of two admitted decklists, in the world."""
         return cls(
-            content_pack=pack_key,
+            content_pack=WORLD_SETUP,
             hero_source=hero.decklist,
             villain_source=villain.decklist,
             hero_deck=hero.deck.main,

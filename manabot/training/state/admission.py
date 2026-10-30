@@ -53,17 +53,17 @@ def copy_verified_artifact(
 
 
 def _admit_setups(agent: object, regime: TrainingRegime) -> None:
-    """Admit a policy for a regime's setups: its match, or its whole deck supply.
+    """Admit a policy for a regime's setups: its match, or its whole deck source.
 
-    A deck run admits a checkpoint only if its world may play every deck in the
-    supply, never a representative pair; the shared world rule decides.
+    A deck run admits a checkpoint only if its world may play every deck the
+    source lists, never a representative pair; the shared world rule decides.
     """
-    if regime.decks is None:
+    if regime.deck_source is None:
         validate_agent_setup(agent, Match(regime.root_match).to_rust())
         return
     if getattr(agent, "world_binding", None) is None:
-        raise ValueError("training decks require a checkpoint bound to a world")
-    validate_agent_decks(agent, regime.decks.players())
+        raise ValueError("a deck source requires a checkpoint bound to a world")
+    validate_agent_decks(agent, regime.deck_source.players())
 
 
 def admit_policy(

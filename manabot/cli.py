@@ -205,7 +205,6 @@ def sim_command(
         None, help="UTF-8 main/sideboard decklist"
     ),
     villain_deck_file: Path | None = typer.Option(None, help="UTF-8 opponent decklist"),
-    content_pool: str = typer.Option("world", help="Qualified native content pool"),
 ) -> None:
     if (hero_deck_file is None) != (villain_deck_file is None):
         raise typer.BadParameter("Supply both --hero-deck-file and --villain-deck-file")
@@ -216,13 +215,10 @@ def sim_command(
                 [
                     ("hero", managym.Decklist.read(hero_deck_file)),
                     ("villain", managym.Decklist.read(villain_deck_file)),
-                ],
-                content_pool,
+                ]
             )
             config = sim_config.model_dump()
-            config["match"] = MatchConfig.from_import(
-                content_pool, hero, villain
-            ).model_dump()
+            config["match"] = MatchConfig.from_import(hero, villain).model_dump()
             sim_config = type(sim_config).model_validate(config)
             typer.echo(
                 f"Admitted {managym.DEVELOPMENT_RULESET} decks "

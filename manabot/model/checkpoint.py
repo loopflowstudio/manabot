@@ -32,7 +32,7 @@ from manabot.model.architecture import (
 )
 from manabot.model.world import (
     checkpoint_world,
-    pool_world,
+    deck_world,
     validate_checkpoint_world,
     validate_policy_input,
 )
@@ -166,24 +166,22 @@ def save_checkpoint(
     obs_space: ObservationSpace,
     path: str | Path,
     *,
-    player_configs: list[managym.PlayerConfig] | None = None,
-    content_pool: str | None = None,
+    player_configs: list[managym.PlayerConfig] | None,
     extra: dict[str, Any] | None = None,
     belief_schema: BeliefEncodingSchema | None = None,
 ) -> None:
     """Save a portable policy with its explicit world, input and value semantics.
 
-    Bind either exact setups or a whole content pool, never both.
+    `player_configs` binds those setups; `None` binds the world itself, so the
+    policy may play any deck the world admits.
     """
 
-    if (player_configs is None) == (content_pool is None):
-        raise ValueError("bind exactly one of player_configs or content_pool")
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     checkpoint = {
         "world_binding": (
-            pool_world(content_pool, obs_space)
-            if content_pool is not None
+            deck_world(obs_space)
+            if player_configs is None
             else checkpoint_world(player_configs, obs_space)
         ),
         "architecture": architecture_receipt(agent).model_dump(mode="json"),

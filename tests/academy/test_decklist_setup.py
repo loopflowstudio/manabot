@@ -22,7 +22,6 @@ def _request() -> dict[str, object]:
         "seed": 7,
         "auto_pass": False,
         "deck_import": {
-            "pack_key": "world",
             "hero": {
                 "filename": "novel.txt",
                 "source": "# private note\n10 Forest\n10 Mountain\n2 Avatar Enthusiasts\nSideboard\n1 Island",
@@ -39,10 +38,9 @@ def test_imported_setup_matches_manabot_reconnect_and_rebuilt_root(
     first = session.new_game(_request())
     assert session.trace is not None
     config = session.trace.config
-    assert config.content_pack is not None
     assert config.hero_source is not None and config.villain_source is not None
     match_config = MatchConfig(
-        content_pack=config.content_pack,
+        content_pack=managym.WORLD_SETUP,
         hero_source=managym.Decklist.from_dict(config.hero_source),
         villain_source=managym.Decklist.from_dict(config.villain_source),
         hero="Hero",
@@ -145,7 +143,6 @@ def test_rematch_re_admits_retained_sources(
             assert record.game.trace is not None
             second = record.game.trace.config
     assert second is not first
-    assert second.content_pack == first.content_pack == "world"
     assert second.hero_source == first.hero_source
     assert second.villain_source == first.villain_source
     assert first.hero_source is not None

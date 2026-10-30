@@ -17,7 +17,7 @@ use serde::{de::DeserializeOwned, Serialize};
 use super::bindings::PyPlayerConfig;
 use crate::{
     cards::{
-        deck_admission::{admit_deck as native_admit_deck, DeckIssue, DEVELOPMENT_RULESET},
+        deck_admission::{check_decks as native_check_decks, DeckIssue, DEVELOPMENT_RULESET},
         decklist::{
             admit_decklists as native_admit_decklists, parse_decklist, read_decklist, DeckEntry,
             DeckImport, Decklist, DecklistError,
@@ -152,13 +152,12 @@ json_record!(Deck {
         self.identity()
     }
 
-    /// A seat setup named by the deck's identity.
-    #[pyo3(signature = (content_pack=None))]
-    fn player(&self, content_pack: Option<String>) -> PyPlayerConfig {
+    /// A seat setup named by the deck's identity, submitted to the world.
+    fn player(&self) -> PyPlayerConfig {
         PyPlayerConfig {
             name: self.identity(),
             deck: self.clone(),
-            content_pack,
+            content_pack: Some(crate::world::WORLD_POOL.into()),
         }
     }
 });
@@ -266,8 +265,8 @@ json_record!(Decklist {
     /// Raise `ValueError` unless this retained source re-admits to exactly
     /// `deck` against the installed world.
     #[pyo3(name = "validate_deck")]
-    fn py_validate_deck(&self, pack_key: &str, deck: Deck) -> PyResult<()> {
-        self.validate_deck(pack_key, &deck).map_err(value_error)
+    fn py_validate_deck(&self, deck: Deck) -> PyResult<()> {
+        self.validate_deck(&deck).map_err(value_error)
     }
 });
 
@@ -299,10 +298,11 @@ fn decklist_error(py: Python<'_>, error: DecklistError) -> PyErr {
     }
 }
 
-/// Construction and eligibility issues for one deck, without allocating a game.
+/// Each deck's construction and eligibility issues in this world, in order,
+/// without allocating a game.
 #[pyfunction]
-fn admit_deck(pack_key: &str, deck: Deck) -> PyResult<Vec<DeckIssue>> {
-    native_admit_deck(pack_key, &deck).map_err(value_error)
+fn check_decks(decks: Vec<Deck>) -> PyResult<Vec<Vec<DeckIssue>>> {
+    native_check_decks(&decks).map_err(value_error)
 }
 
 /// Admit labelled decklists, rejecting all of them with `DeckImportError`
@@ -311,9 +311,8 @@ fn admit_deck(pack_key: &str, deck: Deck) -> PyResult<Vec<DeckIssue>> {
 fn admit_decklists(
     py: Python<'_>,
     decklists: Vec<(String, Decklist)>,
-    pack_key: &str,
 ) -> PyResult<Vec<DeckImport>> {
-    native_admit_decklists(&decklists, pack_key).map_err(|e| decklist_error(py, e))
+    native_admit_decklists(&decklists).map_err(|e| decklist_error(py, e))
 }
 
 pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -328,7 +327,9 @@ pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Decklist>()?;
     m.add_class::<DeckImport>()?;
     m.add("DEVELOPMENT_RULESET", DEVELOPMENT_RULESET)?;
-    m.add_function(wrap_pyfunction!(admit_deck, m)?)?;
+    // `PlayerConfig.content_pack` selection of decks submitted to the world.
+    m.add("WORLD_SETUP", crate::world::WORLD_POOL)?;
+    m.add_function(wrap_pyfunction!(check_decks, m)?)?;
     m.add_function(wrap_pyfunction!(admit_decklists, m)?)?;
     Ok(())
 }

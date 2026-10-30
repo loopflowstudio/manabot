@@ -29,15 +29,13 @@ from manabot.sim.sim import load_player, simulate_models
 import managym
 from managym import DeckImport, DeckImportError, Decklist
 
-PACK = "world"
+PACK = managym.WORLD_SETUP
 HERO = "# Novel development deck\nMain\n10 Forest\n10 Mountain\n2 Avatar Enthusiasts\nSideboard\n1 Island\n"
 VILLAIN = "20 Island\n"
 
 
 def _import_match(hero: Decklist, villain: Decklist) -> tuple[DeckImport, DeckImport]:
-    first, second = managym.admit_decklists(
-        [("hero", hero), ("villain", villain)], PACK
-    )
+    first, second = managym.admit_decklists([("hero", hero), ("villain", villain)])
     return first, second
 
 
@@ -46,9 +44,7 @@ def _import_files(hero: Path, villain: Path) -> tuple[DeckImport, DeckImport]:
 
 
 def _imported_match() -> MatchConfig:
-    return MatchConfig.from_import(
-        PACK, *_import_match(Decklist(HERO), Decklist(VILLAIN))
-    )
+    return MatchConfig.from_import(*_import_match(Decklist(HERO), Decklist(VILLAIN)))
 
 
 def test_decklist_novel_setup_resolves_same_identity_from_files(tmp_path: Path) -> None:
@@ -58,7 +54,7 @@ def test_decklist_novel_setup_resolves_same_identity_from_files(tmp_path: Path) 
     imported, villain_import = _import_files(hero, villain)
     assert imported.decklist.source == HERO.replace("\n", "\r\n")
     assert imported.decklist.filename == "hero.txt"
-    config = MatchConfig.from_import(PACK, imported, villain_import)
+    config = MatchConfig.from_import(imported, villain_import)
     dumped = config.model_dump(mode="json")
     assert dumped["hero_source"] == imported.decklist.to_dict()
     assert dumped["hero_deck"] == imported.deck.main
@@ -80,9 +76,9 @@ def test_decklist_novel_setup_resolves_same_identity_from_files(tmp_path: Path) 
     )
     env = managym.Env(seed=7)
     env.reset(Match(config).to_rust())
-    pool = managym.content_pool(PACK)
-    assert env.content_pack_manifest()["content_digest"] == pool["content_digest"]
-    assert env.content_pack_manifest()["world_version"] == pool["world_version"]
+    world = managym.content_pool(PACK)
+    assert env.content_pack_manifest()["content_digest"] == world["content_digest"]
+    assert env.content_pack_manifest()["world_version"] == world["world_version"]
 
 
 def test_decklist_errors_carry_each_failing_seat_with_line_issues() -> None:
@@ -142,10 +138,10 @@ def test_retained_sources_reject_tampering_and_follow_seat_swaps() -> None:
     edited["villain_deck"] = {"Island": 19}
     with pytest.raises(ValueError, match="retained source"):
         MatchConfig.model_validate(edited)
-    unpooled = config.model_dump()
-    del unpooled["content_pack"]
-    with pytest.raises(ValueError, match="content_pack"):
-        MatchConfig.model_validate(unpooled)
+    authored = config.model_dump()
+    authored["content_pack"] = "ur-lessons-vs-gw-allies"
+    with pytest.raises(ValueError, match="plays in the world"):
+        MatchConfig.model_validate(authored)
     swapped = Match(config).swapped().config
     assert swapped.hero_source == config.villain_source
     assert swapped.villain_source == config.hero_source
@@ -181,16 +177,16 @@ class _RecordingModel(ModelPlayer):
         return action
 
 
-def test_decklist_pool_checkpoint_simulates_imported_files(tmp_path: Path) -> None:
+def test_decklist_world_checkpoint_simulates_imported_files(tmp_path: Path) -> None:
     hero, villain = tmp_path / "hero.txt", tmp_path / "villain.txt"
     hero.write_text(HERO)
     villain.write_text(VILLAIN)
-    match = MatchConfig.from_import(PACK, *_import_files(hero, villain))
-    pool = tmp_path / "pool.pt"
-    _untrained(pool, content_pool=PACK)
-    model = _RecordingModel(pool)
+    match = MatchConfig.from_import(*_import_files(hero, villain))
+    world = tmp_path / "world.pt"
+    _untrained(world, player_configs=None)
+    model = _RecordingModel(world)
     config = SimulationConfig(
-        hero=str(pool), num_games=1, num_threads=1, max_steps=40, match=match
+        hero=str(world), num_games=1, num_threads=1, max_steps=40, match=match
     )
     stats = simulate_models(model, load_player("random"), config)
     assert len(stats.games) == 1

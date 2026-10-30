@@ -3,8 +3,10 @@
 Decks and decklists are managym concepts. `managym.Deck` is a deck's main and
 sideboard counts; `managym.Decklist` is one submitted file (exact source,
 filename, entries and line issues). Parsing, card-name resolution and
-construction admission all run natively against the selected content pool, so
-Academy and manabot share one importer. The initial `development-v1` ruleset is for development
+construction admission all run natively against the installed world, so
+Academy and manabot share one importer. A deck needs only a world: its cards are
+supported when the world defines them. Set restrictions such as TLA-only are
+filters for choosing or generating decks (`managym.set_cards`), not admission. The initial `development-v1` ruleset is for development
 play. It does not assert Standard or any other tournament legality.
 
 Files are UTF-8 text, at most 64 KiB. Each entry is a positive integer, whitespace,
@@ -29,8 +31,9 @@ Sideboard
 The source, filename and line references survive validation errors. Unknown or
 ambiguous names, unsupported cards, bad counts and construction issues are
 reported without substituting cards. Card resolution is offline. Eligibility
-comes from the selected versioned native pool, including its program/face/token
-closure; registration alone does not make a card eligible.
+comes from the installed world: a defined card is supported unless its set file
+marks it incomplete. Authored setups (curated matchups, the Elemental roster)
+are fixed setups, never import targets.
 
 Development construction requires a nonempty main deck, positive quantities,
 and eligible non-token cards in either section. There is no tournament deck-size,
@@ -52,7 +55,6 @@ For a bounded ordinary manabot startup proof using the example files
 uv run manabot sim \
   --hero-deck-file docs/decklists/forest-mountain.txt \
   --villain-deck-file docs/decklists/islands.txt \
-  --content-pool world \
   --set sim.num_games=1 --set sim.num_threads=1 --set sim.max_steps=4
 ```
 
@@ -68,10 +70,9 @@ hero, villain = managym.admit_decklists(
     [
         ("hero", managym.Decklist.read("hero.txt")),
         ("villain", managym.Decklist.read("villain.txt")),
-    ],
-    "world",
+    ]
 )
-match = MatchConfig.from_import("world", hero, villain)
+match = MatchConfig.from_import(hero, villain)
 ```
 
 Failures raise `managym.DeckImportError`, whose `decklists` maps each failing
@@ -85,67 +86,69 @@ their ordinary authority checks.
 
 Checkpoint players on imported setups pass the same execution admission as
 every other match (`manabot.model.world.validate_agent_setup`). A checkpoint
-bound to the importing content pool plays any decks that pool admits; a
-checkpoint bound to authored setups, such as a curated matchup or the Elemental
+bound to the world plays any decks the world admits; a checkpoint bound to authored setups, such as a curated matchup or the Elemental
 roster, refuses imported decks even when tensor dimensions agree. Simulation
 and Academy apply this check before the first game; `random` and `default`
 need no checkpoint, and no training is required to use the importer.
 
 ## Training on decklists
 
-A training run supplies decks and samples matches from them. In an ordinary
-`TrainingRegime`, set `decks` to the content pool and the decklist files, and
-`agent.semantic_pack` to the same pool key, and omit `match`: the decks are
-the regime's only record of its setups, and a regime that also authors a
-`match` is rejected. Producer policies are admitted against the pool, by
-checking every deck, rather than against one pair. Existing self-play stage
-settings remain in use. Deck stages require `behavior: current-self`, one
-producer, ordinary roots and the default fixed curriculum field. For example,
-adapting an existing recipe in Python (this only constructs a configuration):
+A training run has a deck source: a way to get the decks for each new game,
+not a list of files. Experiments are Python, so the experiment builds the
+source however it likes and places it in the regime as `deck_source`, with
+`agent.semantic_pack` set to `"world"` and no `match`: the source is the
+regime's only record of its setups, and a regime that also authors a `match` is
+rejected. Producer policies are admitted against the world, by checking every
+deck the source lists, rather than against one pair. Deck stages require
+`behavior: current-self`, one producer, ordinary roots and the default fixed
+curriculum field. For example (this only constructs a configuration):
 
 ```python
+import managym
+from manabot.training.decks import UniformDecks
 from manabot.training.regime import TrainingRegime
 
+imports = managym.admit_decklists(
+    [(path, managym.Decklist.read(path)) for path in ("white.txt", "blue.txt")]
+)
 values = recipe.model_dump(mode="json")
 values.pop("match")
-values["decks"] = {"pool": "world", "files": ["white.txt", "blue.txt", "red.txt"]}
+values["deck_source"] = UniformDecks(decks=tuple(i.deck for i in imports))
 values["agent"]["semantic_pack"] = "world"
 regime = TrainingRegime.model_validate(values)
 ```
 
-Loading checks the whole list before training: any invalid or unsupported
-source fails with its filename and line diagnostics, and nothing is silently
-filtered. The regime embeds the admitted decks and their UTF-8 source records,
-so recovery never rereads a mutable path. Lists with equal normalized contents
-are one deck, retaining every source record without increasing its sampling
-weight. At least two distinct lists are required. Construction remains
+`managym.check_decks(decks)` is the cheap upfront check: each deck's issues in
+the installed world, in order, with no game allocated. Validating a regime runs
+it over the source's decks, so an unsupported deck fails before training. Game
+creation still admits every deck natively. Construction remains
 `development-v1`, not tournament legality.
 
-`uniform-distinct-v1` chooses two different decks at each native game root,
-uniformly over ordered pairs. Either deck is equally likely to be on the play.
-Draws use the native reset seed in a separate RNG domain from shuffling and
-policy inference; recovery reproduces deck pair, seats and game seed, and
-rejects a run whose decks, sources or recorded state differ. Storage is linear
-in the number of decks, with no all-pairs table. All games use the whole pool's
-fixed semantic vocabulary.
+`UniformDecks` (`uniform-distinct-v1`) is the one source so far: at each native
+game root it chooses two different decks from its distinct list, uniformly over
+ordered pairs, so either deck is equally likely to be on the play. Draws use the
+native reset seed in a separate RNG domain from shuffling and policy inference;
+exact resume reproduces deck pair, seats and game seed, and rejects a run whose
+source or recorded state differs. Storage is linear in the number of decks,
+with no all-pairs table. All games use the world's semantic vocabulary.
 
 Decks are submitted to the world, not registered with it. The native vector
 may replace its training decks between roots; each replacement, and every game
-creation, passes the pool's native admission first, so an unsupported deck is
+creation, passes the world's native admission first, so an unsupported deck is
 rejected before any game starts and running games keep their decks.
 
-Policy exports from such a run bind the pool's world — its native content
-descriptor, rules versions, observation and learning schema — and nothing
-about the training decks, sources or sampling. The model can play any deck the
-same pool admits, including decks it never trained on; unsupported cards and a
-changed pool, rules or input contract are still rejected. The run, not the
-checkpoint, records the decks it used. Exact-setup exports for authored matches
-and the Elemental roster keep their established binding.
+Policy exports from such a run bind the world — its version and card digest
+(`world_digest`), rules versions, observation and learning schema — and nothing
+about the deck source. The model can play any deck the world admits, including
+decks it never trained on; unsupported cards and a changed world, rules or
+input contract are still rejected. The run, not the checkpoint, records the
+decks it used. Exact-setup exports for authored matches and the Elemental
+roster keep their established binding.
 
 Existing exposure counters report game starts, environment decisions, learner
 transitions and terminal games separately. Uniform starts do not imply uniform
 transition exposure. Failure receipts retain the actual setups each game was
-created with, the run's deck digest and reset seed. Existing Elemental recipes
+created with, the run's deck-source digest and reset seed. Existing Elemental recipes
 keep their original roster admission, mirror distribution, seed sequence and
 serialization.
 

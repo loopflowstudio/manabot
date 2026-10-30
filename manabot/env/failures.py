@@ -380,7 +380,7 @@ class CapturedVector(_Capture):
         """Replace decks for later roots; evidence keeps each game's actual setup."""
         self.native.set_training_decks(decks)
         self._sampled_roots = True
-        self.identities["training_decks"] = {
+        self.identities["deck_source"] = {
             "digest": digest,
             "sampling_policy": "uniform-distinct-v1",
             "deck_ids": [player.name for player in decks],

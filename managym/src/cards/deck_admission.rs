@@ -1,5 +1,8 @@
-//! Construction admission for submitted development decks. Content eligibility
-//! belongs to the pool descriptor; this module never infers rules from names.
+//! Construction admission for submitted development decks. A submitted deck
+//! needs only the installed world: its cards are supported when the world
+//! defines them ([`crate::world`]). Set restrictions belong to deck making, not
+//! admission. Content eligibility comes from the world's descriptor rows; this
+//! module never infers rules from names.
 
 use serde::{Deserialize, Serialize};
 
@@ -7,6 +10,7 @@ use super::{content_pool, pool_content, ContentError, ContentPool, Eligibility};
 use crate::{
     cards::content_pack::ContentPack,
     state::{deck::Deck, player::PlayerConfig},
+    world::WORLD_POOL,
 };
 
 pub const DEVELOPMENT_RULESET: &str = "development-v1";
@@ -93,16 +97,25 @@ fn construction_issues(deck: &Deck) -> Vec<DeckIssue> {
 }
 
 /// Return actionable construction/content issues without allocating a game.
-/// Env setup invokes this same admission for every submitted non-preset deck.
-pub fn admit_deck(pack_key: &str, deck: &Deck) -> Result<Vec<DeckIssue>, ContentError> {
-    Ok(admit_in_pool(
-        &content_pool(pack_key)?,
-        &*pool_content(pack_key)?,
-        deck,
-    ))
+/// Env setup invokes this same admission for every deck submitted to the world.
+pub fn admit_deck(deck: &Deck) -> Result<Vec<DeckIssue>, ContentError> {
+    Ok(check_decks(std::slice::from_ref(deck))?.remove(0))
 }
 
-/// Admission against one pool descriptor and the runtime content it describes.
+/// Each deck's issues in this world, in input order; an empty entry admits.
+/// One cheap upfront check for a batch: the world is read once, no game is
+/// allocated, and game creation still admits every deck again.
+pub fn check_decks(decks: &[Deck]) -> Result<Vec<Vec<DeckIssue>>, ContentError> {
+    let descriptor = content_pool(WORLD_POOL)?;
+    let content = pool_content(WORLD_POOL)?;
+    Ok(decks
+        .iter()
+        .map(|deck| admit_in_pool(&descriptor, &content, deck))
+        .collect())
+}
+
+/// Admission against the world's descriptor and the runtime content it
+/// describes; tests substitute descriptors to reach ambiguous names.
 pub(crate) fn admit_in_pool(
     pool: &ContentPool,
     content: &ContentPack,
@@ -119,12 +132,12 @@ pub(crate) fn admit_in_pool(
                 .iter()
                 .filter(|row| &row.registry_name == name);
             let (code, reason) = match (rows.next(), rows.next()) {
-                (None, _) => ("unknown", "card is not in the selected content pool"),
+                (None, _) => ("unknown", "card is not defined in this world"),
                 (Some(row), None) if row.eligibility != Eligibility::Eligible => (
                     "unsupported",
                     row.reason
                         .as_deref()
-                        .unwrap_or("card is not supported in this pool"),
+                        .unwrap_or("card is not supported in this world"),
                 ),
                 (Some(row), None) => {
                     let definition = content.definition(row.card_def_id);
@@ -137,10 +150,7 @@ pub(crate) fn admit_in_pool(
                         ),
                     }
                 }
-                _ => (
-                    "ambiguous",
-                    "card name identifies multiple pool definitions",
-                ),
+                _ => ("ambiguous", "card name identifies multiple definitions"),
             };
             issues.push(DeckIssue {
                 line: None,
@@ -156,11 +166,8 @@ pub(crate) fn admit_in_pool(
 
 /// Why a player's submitted deck fails development admission, or `None` when it
 /// passes. Game creation and training-deck replacement share this rejection.
-pub fn development_rejection(
-    pack_key: &str,
-    player: &PlayerConfig,
-) -> Result<Option<String>, ContentError> {
-    let issues = admit_deck(pack_key, &player.deck)?;
+pub fn development_rejection(player: &PlayerConfig) -> Result<Option<String>, ContentError> {
+    let issues = admit_deck(&player.deck)?;
     Ok((!issues.is_empty()).then(|| {
         issues
             .iter()
@@ -177,13 +184,16 @@ mod tests {
     use super::*;
 
     #[test]
-    fn novel_pool_decks_admit_without_an_authored_setup() {
+    fn novel_decks_admit_against_the_world_without_an_authored_setup() {
         let main = BTreeMap::from([("Forest".into(), 10), ("Mountain".into(), 10)]);
         let sideboard = BTreeMap::from([("Island".into(), 1)]);
         let deck = Deck::new(main.clone(), sideboard);
-        assert!(admit_deck("world", &deck).unwrap().is_empty());
+        assert!(admit_deck(&deck).unwrap().is_empty());
         let unsupported = Deck::new(main, BTreeMap::from([("Accumulate Wisdom".into(), 1)]));
-        let issues = admit_deck("world", &unsupported).unwrap();
+        let checked = check_decks(&[deck, unsupported.clone()]).unwrap();
+        assert!(checked[0].is_empty());
+        assert_eq!(checked[1], admit_deck(&unsupported).unwrap());
+        let issues = &checked[1];
         assert!(issues
             .iter()
             .any(|issue| issue.code == "unsupported"

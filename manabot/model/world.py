@@ -1,8 +1,9 @@
 """Mandatory rules, content and input binding for ordinary policy checkpoints.
 
-Two binding forms exist. A pool binding (`pool_world`) names a
-content pool by its native descriptor: the model may play any deck that pool
-admits, whatever decks trained it. A setup binding (`checkpoint_world`) names
+Two binding forms exist. A world binding (`deck_world`) names the installed
+world and its card digest (`world_digest`) beside the shared rules and input
+contract: the model
+may play any deck the world admits, whatever decks trained it. A setup binding (`checkpoint_world`) names
 exact setups. Over an authored pack it names the pack's complete
 authored roster, whichever pair trained it; the Elemental packs did so before
 the form was versioned, and new bindings over other authored packs carry
@@ -60,16 +61,16 @@ def validate_agent_setup(
     binding = getattr(agent, "world_binding", None)
     if binding is None:
         return
-    pooled = "content_pool" in binding
+    world_bound = _binds_world(binding)
     actual = _setups(player_configs)
-    if not pooled and not _binds_roster(binding) and not allow_deck_repetition:
+    if not world_bound and not _binds_roster(binding) and not allow_deck_repetition:
         if actual != binding["setups"]:
             raise ValueError("checkpoint setup differs from the execution match")
         return
     if len(actual) != 2:
         raise ValueError("execution requires two decks")
     validate_agent_decks(agent, player_configs)
-    if pooled:
+    if world_bound:
         return
     pack_key = bound_pack(binding)
     # Native reset admits any pair of a pack's authored decks, mirrors included;
@@ -95,19 +96,18 @@ def validate_agent_decks(
 ) -> None:
     """Check that a checkpoint may play every one of these decks, in any pairing.
 
-    A pool binding admits each deck its pool admits natively; a setup binding
+    A world binding admits each deck the world admits natively; a setup binding
     admits only the decks of its setups. Match shape (seat count, explicit
     pack selection) belongs to `validate_agent_setup`.
     """
     binding = getattr(agent, "world_binding", None)
     if binding is None:
         return
-    pack_key = bound_pack(binding)
-    if "content_pool" in binding:
-        # Any deck the bound pool admits may execute; unsupported cards never do.
-        if any(p.content_pack != pack_key for p in player_configs):
-            raise ValueError("execution deck is outside the checkpoint's content pool")
-        admit_pool_decks(pack_key, player_configs)
+    if _binds_world(binding):
+        # Any deck the world admits may execute; unsupported cards never do.
+        if any(p.content_pack != managym.WORLD_SETUP for p in player_configs):
+            raise ValueError("execution deck is not submitted to the world")
+        admit_world_decks(player_configs)
         return
     if any(setup not in binding["setups"] for setup in _setups(player_configs)):
         raise ValueError(
@@ -116,17 +116,19 @@ def validate_agent_decks(
         )
 
 
-def admit_pool_decks(
-    pack_key: str | None, player_configs: Sequence[managym.PlayerConfig]
-) -> None:
-    """Admit every deck by the pool's native validation; membership grants nothing."""
-    for player in player_configs:
-        issues = managym.admit_deck(pack_key, player.deck)
+def admit_world_decks(player_configs: Sequence[managym.PlayerConfig]) -> None:
+    """Admit every deck by the world's native validation; membership grants nothing."""
+    checked = managym.check_decks([player.deck for player in player_configs])
+    for player, issues in zip(player_configs, checked, strict=True):
         if issues:
             raise ValueError(
-                f"deck {player.name} is not admitted by {pack_key}: "
+                f"deck {player.name} is not admitted by world {WORLD}: "
                 + "; ".join(issue.message for issue in issues)
             )
+
+
+def _binds_world(binding: Mapping[str, Any]) -> bool:
+    return "world_digest" in binding
 
 
 def _binds_roster(binding: Mapping[str, Any]) -> bool:
@@ -140,15 +142,15 @@ def _authored_roster(pack_key: str) -> list[dict] | None:
     """The pack's complete authored setups, or None when it authors no decks."""
     try:
         keys = managym.authored_deck_keys(pack_key)
-    except ValueError:  # pool packs author no decks
+    except ValueError:  # packs without authored decks
         return None
     return _setups([managym.authored_deck_setup(pack_key, key) for key in keys])
 
 
 def bound_pack(binding: Mapping[str, Any]) -> str | None:
     """Content pack a binding names, or None for default content."""
-    if "content_pool" in binding:
-        return binding["content_pool"]["pack_key"]
+    if _binds_world(binding):
+        return managym.WORLD_SETUP
     return _manifest_pack(binding["content_manifest"])
 
 
@@ -178,12 +180,15 @@ def _input_binding(observation_space: Any) -> dict:
     }
 
 
-def pool_world(pack_key: str, observation_space: Any) -> dict:
-    """Bind a content pool's descriptor, independent of any deck."""
+def deck_world(observation_space: Any) -> dict:
+    """Bind the installed world and input contract, independent of any deck.
+
+    `world_digest` changes whenever the world's cards change.
+    """
     return {
         **_input_binding(observation_space),
-        "content_pool": managym.content_pool(pack_key),
-        "learning_schema_sha256": _schema_file_digest(pack_key),
+        "world_digest": managym.content_pool(managym.WORLD_SETUP)["content_digest"],
+        "learning_schema_sha256": _schema_file_digest(managym.WORLD_SETUP),
     }
 
 
@@ -253,9 +258,9 @@ def expected_world(
     observation_space: Any,
     player_configs: Sequence[managym.PlayerConfig] | None = None,
 ) -> dict:
-    """Rebuild a binding's form from this runtime; pool bindings need no deck."""
-    if "content_pool" in binding:
-        return pool_world(binding["content_pool"]["pack_key"], observation_space)
+    """Rebuild a binding's form from this runtime; world bindings need no deck."""
+    if _binds_world(binding):
+        return deck_world(observation_space)
     configs = player_configs
     if configs is None:
         configs = checkpoint_configs(binding)

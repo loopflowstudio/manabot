@@ -100,6 +100,6 @@ def test_authored_mirrors_keep_complete_content_manifest() -> None:
         wrong = mirror.to_rust()
         wrong[0].content_pack = None
         with pytest.raises(
-            RuntimeError, match="explicit content pool requires two players"
+            RuntimeError, match="explicit content pack requires two players"
         ):
             engine.reset(wrong)

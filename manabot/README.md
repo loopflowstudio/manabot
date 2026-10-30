@@ -93,8 +93,9 @@ content manifest and input schema. Authored decks from one compiled pack bind
 that pack's complete authored roster (`setup_binding: authored-pack-v1`; the
 Elemental packs unmarked), so the model executes any pair native reset admits,
 whichever pair trained it. Other setups, and historical unmarked bindings over
-other packs, bind their exact pair. Deck-supplied runs bind their content pool
-with `pool_world`. Missing or mismatched bindings fail before weights load. Seat reversal preserves each deck's sideboard. Policy checkpoint
+other packs, bind their exact pair. Deck-source runs bind the world itself
+(`deck_world`: version, card digest, rules and input contract), so the model
+plays any deck the world admits. Missing or mismatched bindings fail before weights load. Seat reversal preserves each deck's sideboard. Policy checkpoint
 writers require explicit `player_configs`; never infer training setup from
 tensor dimensions or the default deck.
 
@@ -430,4 +431,4 @@ no writable model memory. Tokenizer/model recovery belongs to the caller;
 `TextDecision.check_token_budget` checks the complete prompt without truncation.
 
 [Decklist file import](../docs/decklist-import.md) admits novel development decks
-through the shared native pool for simulation and Academy play.
+against the installed world for simulation and Academy play.

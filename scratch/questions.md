@@ -29,6 +29,23 @@ c1dd6c71c:scratch/questions.md.
   `managym/src/cards/` (`deck_admission`, `decklist`); `content_pack_for_match`
   lives in `cards/setups.rs`. `PoolIdentity` drops `compiled_semantics`;
   `DeckEntry.semantic_key` is `key`; the pool key is `"world"`.
+- 2026-10-30 (1a/2a + deck source): authored packs still have `content_pool`
+  descriptors, because main's policy vocabulary (`bind_policy_catalog`,
+  `learning_catalog`, authored receipts) reads them; deck import and admission
+  never do. Removing those descriptors would change main's vocabulary binding,
+  so it is left for review rather than done here.
+- 2026-10-30: `PlayerConfig.content_pack` (main's setup selector) stays; decks
+  submitted to the world carry the value `"world"` (`managym.WORLD_SETUP`), so an
+  imported pair equal to an authored setup cannot silently run on that pack.
+  `MatchConfig.content_pack` therefore still appears on deck matches. A
+  dedicated non-"content" field would rename main's selector; flagged for review.
+- 2026-10-30: `UniformDecks` keeps the experiment's deck order (order selects
+  each seeded draw and is in the digest); duplicates reject rather than dedupe.
+  Native `set_training_decks` remains the one source implementation; a Python
+  per-stream queue waits for a second source (random generation).
+- 2026-10-30: the checkpoint world binding names the card digest `world_digest`
+  (the default pack's content digest); setup bindings keep `content_manifest`
+  because frozen checkpoints carry it.
 - Old worlds run from their recorded git revision; no in-process rules shims.
 - 2026-10-29: the 14 setup-used incomplete TLA cards keep their definitions and
   are listed in one `tla::INCOMPLETE` const (key, missing behavior) beside

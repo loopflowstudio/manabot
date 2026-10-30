@@ -279,7 +279,8 @@ class Deck:
     def sideboard(self) -> dict[str, int]: ...
     @property
     def identity(self) -> str: ...
-    def player(self, content_pack: str | None = None) -> PlayerConfig: ...
+    def player(self) -> PlayerConfig:
+        """A seat named by the deck's identity, submitted to the world (``WORLD_SETUP``)."""
     def to_dict(self) -> dict[str, Any]: ...
     @staticmethod
     def from_dict(value: Any) -> Deck: ...
@@ -333,8 +334,9 @@ class Decklist:
     def entries(self) -> list[DeckEntry]: ...
     @property
     def issues(self) -> list[DeckIssue]: ...
-    def validate_deck(self, pack_key: str, deck: Deck) -> None:
-        """Raise ``ValueError`` unless this source re-admits to exactly ``deck``."""
+    def validate_deck(self, deck: Deck) -> None:
+        """Raise ``ValueError`` unless this source re-admits to exactly ``deck``
+        in the installed world."""
     def to_dict(self) -> dict[str, Any]: ...
     @staticmethod
     def from_dict(value: Any) -> Decklist: ...
@@ -351,15 +353,16 @@ class DeckImportError(ValueError):
 
 MAX_DECKLIST_BYTES: int
 DEVELOPMENT_RULESET: str
+# `PlayerConfig.content_pack` selection of decks submitted to the installed world.
+WORLD_SETUP: str
 
-def admit_decklists(
-    decklists: list[tuple[str, Decklist]],
-    pack_key: str,
-) -> list[DeckImport]:
-    """Admit every decklist or raise ``DeckImportError`` keyed by label."""
+def admit_decklists(decklists: list[tuple[str, Decklist]]) -> list[DeckImport]:
+    """Admit every decklist against the installed world or raise
+    ``DeckImportError`` keyed by label."""
 
-def admit_deck(pack_key: str, deck: Deck) -> list[DeckIssue]:
-    """Construction and eligibility issues for one deck; empty when admitted."""
+def check_decks(decks: list[Deck]) -> list[list[DeckIssue]]:
+    """Each deck's construction and eligibility issues in the installed world, in
+    order; an empty list admits. Allocates no game; game creation admits again."""
 
 def authored_deck_setup(pack_key: str, deck_key: str) -> PlayerConfig: ...
 

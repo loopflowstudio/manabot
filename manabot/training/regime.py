@@ -12,7 +12,7 @@ from pydantic import (
 )
 
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
-from manabot.training.decks import TrainingDecks
+from manabot.training.decks import UniformDecks
 from manabot.training.state.game_errors import GameErrorPolicy
 
 
@@ -551,12 +551,12 @@ class TrainingRegime(Strict):
     schema_version: Literal[1, 2] = 2
     id: str
     world: str
-    # Exactly one owner of the run's setups: an authored match, or the run-owned
-    # deck supply. Checkpoints bind the pool's world, never these decks.
+    # Exactly one owner of the run's setups: an authored match, or a deck source
+    # giving each new game its decks. Checkpoints bind the world, never these.
     match: MatchConfig | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
-    decks: TrainingDecks | None = Field(
+    deck_source: UniformDecks | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
     observation: ObservationConfig = ObservationConfig()
@@ -575,20 +575,6 @@ class TrainingRegime(Strict):
         default=1, ge=1, le=1000, exclude_if=lambda value: value == 1
     )
     selection: Literal["last-complete-raw"] = "last-complete-raw"
-
-    @model_validator(mode="before")
-    @classmethod
-    def read_decks(cls, value: object) -> object:
-        """Embed decklist files at load so recovery never rereads mutable paths."""
-        if not isinstance(value, dict) or value.get("decks") is None:
-            return value
-        source = value["decks"]
-        decks = (
-            TrainingDecks.from_files(source["files"], source["pool"])
-            if isinstance(source, dict) and "files" in source
-            else TrainingDecks.model_validate(source)
-        )
-        return {**value, "decks": decks}
 
     @model_validator(mode="before")
     @classmethod
@@ -632,8 +618,8 @@ class TrainingRegime(Strict):
         opens a game where one is needed (fingerprints, collector construction)
         and is never part of the regime record or its digest.
         """
-        if self.decks is not None:
-            return self.decks.match_config()
+        if self.deck_source is not None:
+            return self.deck_source.match_config()
         assert self.match is not None
         return self.match
 
@@ -643,13 +629,13 @@ class TrainingRegime(Strict):
 
     @model_validator(mode="after")
     def references(self) -> "TrainingRegime":
-        if self.match is None and self.decks is None:
-            raise ValueError("regime requires a match or training decks")
-        if self.match is not None and self.decks is not None:
+        if self.match is None and self.deck_source is None:
+            raise ValueError("regime requires a match or a deck source")
+        if self.match is not None and self.deck_source is not None:
             raise ValueError(
-                "training decks own the run's setups; remove the authored match"
+                "the deck source owns the run's setups; remove the authored match"
             )
-        if self.decks is not None and any(
+        if self.deck_source is not None and any(
             not isinstance(stage, TrainSelfPlay)
             or stage.behavior != "current-self"
             or stage.execution.workers != 1
@@ -658,7 +644,7 @@ class TrainingRegime(Strict):
             for stage in self.stages
         ):
             raise ValueError(
-                "training decks require current-self, one producer, ordinary roots and no curriculum"
+                "a deck source requires current-self, one producer, ordinary roots and no curriculum"
             )
         tolerant = any(
             isinstance(stage, TrainSelfPlay) and stage.game_errors is not None

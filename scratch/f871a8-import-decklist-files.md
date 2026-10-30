@@ -94,53 +94,51 @@ whole input; saved imports re-admit against the installed world.
 ## Implemented
 
 `state::deck` (identity byte-equal to the retained Python digest);
-`cards::deck_admission` (`admit_deck(pack, &Deck)`, `DeckIssue.line`,
-crate-private `admit_in_pool`; the world's rules are `DEVELOPMENT_RULESET`, no
-caller ruleset); `cards::decklist` (`Decklist`, `parse_decklist`, `read_decklist`,
-`DeckImport {decklist, deck}`, `admit_decklists` (labelled; a match labels
-`hero`/`villain`), `Decklist::validate_deck`); `python/deck_bindings.rs` (frozen
-`manabot.managym` classes, `to_dict`/`from_dict`, pickle/copy, Pydantic core
-schema; `DeckImportError.decklists`; `DEVELOPMENT_RULESET`).
-Each deck is stored once: `MatchConfig` holds the decks plus private
-`hero_source`/`villain_source: Decklist | None`; `MatchConfig.from_import(pack,
-hero, villain)` builds imported matches, and loading re-admits each source
-against the installed world (`validate_deck`). Academy's `GameConfig` keeps
-`content_pack` and the two sources (JSON form); `to_rust`, rematch and the
-validate endpoint re-admit against the installed world, and viewer export
-strips the sources and decks. `TrainingDecks.from_decklists`/`from_files` admit
-natively; `set_training_decks`, producer admission and `validate_agent_decks`
-are unchanged in behavior.
+`cards::deck_admission` (`admit_deck(&Deck)`, `check_decks(&[Deck])` reading
+the world once, `DeckIssue.line`, crate-private `admit_in_pool`; rules are
+`DEVELOPMENT_RULESET`); `cards::decklist` (`Decklist`, `parse_decklist`,
+`read_decklist`, `DeckImport {decklist, deck}`, `admit_decklists(labelled)`,
+`Decklist::validate_deck(&Deck)`), all against the installed world only;
+`python/deck_bindings.rs` (frozen `manabot.managym` classes, `check_decks`,
+`WORLD_SETUP`, `Deck.player()` submits to the world).
+`content_pack_for_match`: `"world"` admits each deck and runs the default pack;
+an authored key runs only its own setups (main's rule); no fallback.
+`MatchConfig` holds decks plus private `hero_source`/`villain_source`;
+`from_import(hero, villain)` sets `content_pack="world"`; loading re-admits each
+source. Academy `GameConfig` keeps only the two sources (JSON form); no
+`pack_key` in payload, UI or validate response (which reports world version and
+digest). Training: regime `deck_source: UniformDecks` (`uniform-distinct-v1`,
+distinct decks in the experiment's order, native draw from the reset seed);
+identities `deck_source_sha256`; collector/failure evidence record the source
+digest and each game's actual decks. Deck-run checkpoints: `deck_world` binds
+`world`, `world_digest` (card digest), rules, input and learning schema; no
+pack, pool or source.
 
 The authored-match parity receipt (`conformance/authored-match-parity-w17-v1`)
 hashes source files; regenerate it (`uv run python -m academy.authored_match_parity
 write`) after any further source edit, including formatting.
 
-Check (2026-10-30, concept-review corrections): debug `cargo test --no-fail-fast`
-all pass; decklist/training-deck/Academy-decklist (incl. new rematch test)/
-checkpoint-catalog/advice/match/matchups/mirror/boundaries/parity 86 passed;
-UI vitest `game.svelte.test.ts` 16 passed, svelte-check 0 errors. Compress
-(drop `import_match`): lib decklist tests, clippy, decklist/Academy/training-deck/
-match/advice/matchups/mirror/boundaries 81 passed; parity receipt rewritten, verifies.
-After the T2 sync: `academy.authored_match_parity verify` OK; decklist/
-training-deck/Academy-decklist/match 39 passed. PR #395 CI pending on the sync.
+Check (2026-10-30, world-only + deck source): debug `cargo test --no-fail-fast`
+all pass (after the 1a cut), lib deck_admission/decklist/setups/vector_env/pool/
+world 40 passed and clippy clean after `check_decks`; decklist/training-deck/
+Academy-decklist/checkpoint-catalog/mirror/matchups/match/world/boundaries/
+self-play/elemental-uniform 91 passed; UI vitest 16 passed, svelte-check 0
+errors; parity receipt rewritten, verifies. Gate owns the affected-area suites.
 
 ## Delete — do not maintain
 
-Done: `import_match` (Rust and Python; callers use `admit_decklists`), `ImportedMatch` (`setup_id`, `swapped`, `validate_current`,
-`validate_setup`), `PoolIdentity`, the caller `ruleset` parameter (Rust, Python,
-Academy `DeckImportInput`, UI payload), `GameConfig.imported_decks`, tracked
-`.DS_Store`; earlier `manabot/decklist.py` and its Python parser tests,
-`catalog.DeckSetup`, `Decklist.source_sha256`, `deck_collection.py`, checkpoint
-deck bindings, `env.match.parse_deck`, `validate_imported_players` (list at
+Done (this pass): pack/pool arguments of `admit_deck`/`admit_decklists`/
+`validate_deck`/`development_rejection`; Python `admit_deck` (now
+`check_decks`); `Deck.player(content_pack)`; explicit-pool admission for
+authored keys in `content_pack_for_match`; `TrainingDecks` (`pool`, `sources`,
+`from_decklists`, `from_files`); regime `decks: {pool, files}` and `read_decks`;
+`training_decks_sha256`/`content_pool` identities; `pool_world`,
+`admit_pool_decks`, checkpoint `content_pool`/`save_checkpoint(content_pool=)`;
+`manabot sim --content-pool`; Academy `pack_key`, `GameConfig.content_pack`,
+**Content pool** field. Earlier: `import_match`, `ImportedMatch`, `PoolIdentity`,
+caller `ruleset`, `GameConfig.imported_decks`, `manabot/decklist.py`,
+`catalog.DeckSetup`, `deck_collection.py`, checkpoint deck bindings (list at
 c1dd6c71c).
-
-## Concept review (2026-10-30, after T2 sync)
-
-Implementation matches the accepted direction: one `Deck`, decklists and
-admission native, sources re-admitted against the installed world, no caller
-ruleset, training decks checked upfront, checkpoints bound to the world only.
-No open product choice. Gate nit: `manabot/managym/__init__.pyi` declares
-`admit_deck` twice (keep the documented one beside `admit_decklists`).
 
 ## Handoff
 

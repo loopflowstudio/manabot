@@ -7,7 +7,6 @@
   ] as const;
   let enabled = $state(gameStore.deckImport !== null);
   let draft = $state(gameStore.deckImport ?? {
-    pack_key: 'world',
     hero: { source: '', filename: 'hero.txt' },
     villain: { source: '', filename: 'villain.txt' },
   });
@@ -71,7 +70,6 @@
   <p class="mt-2 text-sm text-ink-2">Development format — supported cards only, no tournament legality claim. Sideboards are fixed outside-game copies. Checkpoint opponents are not available for imported decks.</p>
   <label class="mt-3 flex items-center gap-2"><input type="checkbox" bind:checked={enabled} onchange={update} /> Use imported decks for the next game</label>
   {#if enabled}
-    <label class="mt-3 block text-sm">Content pool <input class="ml-2 rounded border border-line p-2" bind:value={draft.pack_key} oninput={update} /></label>
     <p class="mt-2 text-sm text-ink-2">One “count card name” per line. Optional Main and Sideboard headings; # starts a full-line comment.</p>
     <div class="mt-3 grid gap-4 md:grid-cols-2">
       {#each seats as { key, label }}

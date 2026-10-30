@@ -2,8 +2,8 @@
 //!
 //! A [`Decklist`] is one submitted document in the `counted-lines-v1` dialect:
 //! its exact source text (BOM and newlines included), filename, parsed entries
-//! and line-specific issues. Importing resolves each entry's name against a
-//! content pool and admits the resulting [`Deck`] through the same native
+//! and line-specific issues. Importing resolves each entry's name against the
+//! installed world's cards and admits the resulting [`Deck`] through the same native
 //! construction admission game creation uses, so a decklist never carries a
 //! second legality policy. A match retains each seat's admitted [`Decklist`]
 //! privately beside that seat's deck, as provenance only; a retained source is
@@ -23,13 +23,13 @@ use super::{
     deck_admission::{admit_in_pool, DeckIssue, DeckSection},
     pool_content, ContentError, ContentPool, PoolDefinition,
 };
-use crate::{cards::content_pack::ContentPack, state::deck::Deck};
+use crate::{cards::content_pack::ContentPack, state::deck::Deck, world::WORLD_POOL};
 
 pub const DIALECT: &str = "counted-lines-v1";
 /// Operational bound on one source document, not a construction rule.
 pub const MAX_SOURCE_BYTES: usize = 65_536;
 
-/// One counted line. Resolution replaces `name` with the pool's registry name
+/// One counted line. Resolution replaces `name` with the world's registry name
 /// and fills the definition identity; parsing alone leaves them empty.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(
@@ -367,14 +367,11 @@ fn admit_with_pool(
     }
 }
 
-/// Admit labelled decklists against one pool, rejecting the whole input when
-/// any document has an issue; nothing is silently filtered.
-pub fn admit_decklists(
-    decklists: &[(String, Decklist)],
-    pack_key: &str,
-) -> Result<Vec<DeckImport>, DecklistError> {
-    let pool = content_pool(pack_key)?;
-    let content = pool_content(pack_key)?;
+/// Admit labelled decklists against the installed world, rejecting the whole
+/// input when any document has an issue; nothing is silently filtered.
+pub fn admit_decklists(decklists: &[(String, Decklist)]) -> Result<Vec<DeckImport>, DecklistError> {
+    let pool = content_pool(WORLD_POOL)?;
+    let content = pool_content(WORLD_POOL)?;
     let mut admitted = Vec::new();
     let mut rejected = BTreeMap::new();
     for (label, decklist) in decklists {
@@ -396,9 +393,9 @@ impl Decklist {
     /// Re-import this retained source against the installed world; it must
     /// admit to exactly `deck`, so a tampered source or deck, or a world that
     /// no longer admits the list, rejects the record that retained it.
-    pub fn validate_deck(&self, pack_key: &str, deck: &Deck) -> Result<(), String> {
+    pub fn validate_deck(&self, deck: &Deck) -> Result<(), String> {
         let source = parse_decklist(&self.source, &self.filename);
-        match admit_decklists(&[(self.filename.clone(), source)], pack_key) {
+        match admit_decklists(&[(self.filename.clone(), source)]) {
             Ok(imports) if imports[0].deck == *deck => Ok(()),
             Ok(_) => Err(format!(
                 "{}: recorded deck differs from its retained source",
@@ -413,22 +410,18 @@ impl Decklist {
 mod tests {
     use super::*;
 
-    const PACK: &str = "world";
     const HERO: &str = "# Novel development deck\nMain\n10 Forest\n10 Mountain\n2 Avatar Enthusiasts\nSideboard\n1 Island\n";
     const VILLAIN: &str = "20 Island\n";
 
     fn admit(decklist: &Decklist, pool: &ContentPool) -> Result<DeckImport, Decklist> {
-        admit_with_pool(decklist, pool, &pool_content(PACK).unwrap())
+        admit_with_pool(decklist, pool, &pool_content(WORLD_POOL).unwrap())
     }
 
     fn import_match(hero: &str, villain: &str) -> Result<Vec<DeckImport>, DecklistError> {
-        admit_decklists(
-            &[
-                ("hero".into(), parse_decklist(hero, "hero.txt")),
-                ("villain".into(), parse_decklist(villain, "villain.txt")),
-            ],
-            PACK,
-        )
+        admit_decklists(&[
+            ("hero".into(), parse_decklist(hero, "hero.txt")),
+            ("villain".into(), parse_decklist(villain, "villain.txt")),
+        ])
     }
 
     fn lines(decklist: &Decklist) -> Vec<(Option<usize>, &str)> {
@@ -472,7 +465,7 @@ mod tests {
 
     #[test]
     fn names_resolve_by_normalized_key_and_sum_counts() {
-        let pool = content_pool(PACK).unwrap();
+        let pool = content_pool(WORLD_POOL).unwrap();
         let reformatted = parse_decklist(
             "10 mountain\n5 Forest\n5  FOREST\n2 Avatar Enthusiasts\nSideboard\n1 Island",
             "x",
@@ -497,7 +490,7 @@ mod tests {
 
     #[test]
     fn unknown_unsupported_and_ambiguous_entries_name_their_lines() {
-        let mut pool = content_pool(PACK).unwrap();
+        let mut pool = content_pool(WORLD_POOL).unwrap();
         let source = "10 Forest\n1 Definitely Not A Card\nSideboard\n1 Accumulate Wisdom\n2 Accumulate Wisdom\nMain\n1 Accumulate Wisdom\n";
         let rejected = admit(&parse_decklist(source, "x"), &pool).unwrap_err();
         assert_eq!(rejected.source, source);
@@ -525,7 +518,7 @@ mod tests {
 
     /// The pool with Forest renamed to a two-face registry name.
     fn double_faced_pool() -> ContentPool {
-        let mut pool = content_pool(PACK).unwrap();
+        let mut pool = content_pool(WORLD_POOL).unwrap();
         for row in &mut pool.definitions {
             if row.registry_name == "Forest" {
                 row.registry_name = "Front Face // Back Face".into();
@@ -573,7 +566,7 @@ mod tests {
     #[test]
     fn retained_sources_reject_tampering_and_ignore_presentation() {
         let hero = import_match(&HERO.replace('\n', "\r\n"), VILLAIN).unwrap()[0].clone();
-        hero.decklist.validate_deck(PACK, &hero.deck).unwrap();
+        hero.decklist.validate_deck(&hero.deck).unwrap();
         let restored: DeckImport =
             serde_json::from_str(&serde_json::to_string(&hero).unwrap()).unwrap();
         assert_eq!(restored, hero);
@@ -584,18 +577,15 @@ mod tests {
         .unwrap()[0]
             .clone();
         assert_eq!(reformatted.deck, hero.deck);
-        reformatted
-            .decklist
-            .validate_deck(PACK, &hero.deck)
-            .unwrap();
+        reformatted.decklist.validate_deck(&hero.deck).unwrap();
 
         let mut tampered = hero.decklist.clone();
         tampered.source = "10 Island".into();
-        let error = tampered.validate_deck(PACK, &hero.deck).unwrap_err();
+        let error = tampered.validate_deck(&hero.deck).unwrap_err();
         assert!(error.contains("retained source"), "{error}");
         let mut unadmitted = hero.decklist.clone();
         unadmitted.source = "1 Definitely Not A Card".into();
-        let error = unadmitted.validate_deck(PACK, &hero.deck).unwrap_err();
+        let error = unadmitted.validate_deck(&hero.deck).unwrap_err();
         assert!(error.contains("Unknown card name"), "{error}");
     }
 }

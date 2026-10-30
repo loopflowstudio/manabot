@@ -57,9 +57,8 @@ class GameConfig:
     hero_sideboard: dict[str, int] = field(default_factory=dict)
     villain_sideboard: dict[str, int] = field(default_factory=dict)
     watch_players: list[str] | None = None
-    # Private import provenance: the world pool and each seat's admitted
-    # decklist (``managym.Decklist`` JSON form). Viewer exports strip them.
-    content_pack: str | None = None
+    # Private import provenance: each seat's decklist (``managym.Decklist``
+    # JSON form), admitted by the world. Viewer exports strip them.
     hero_source: dict[str, Any] | None = None
     villain_source: dict[str, Any] | None = None
 
@@ -78,12 +77,8 @@ class GameConfig:
                 raise ValueError("Recorded sideboard requires positive integer counts")
         if self.hero_source is not None or self.villain_source is not None:
             # Imported: re-admit each retained source against the installed world.
-            if (
-                self.content_pack is None
-                or self.hero_source is None
-                or self.villain_source is None
-            ):
-                raise ValueError("Imported trace requires both sources and its pool")
+            if self.hero_source is None or self.villain_source is None:
+                raise ValueError("Imported trace requires both sources")
             configs = []
             for name, source, deck, sideboard in (
                 ("Hero", self.hero_source, self.hero_deck, self.hero_sideboard),
@@ -95,10 +90,10 @@ class GameConfig:
                 ),
             ):
                 managym.Decklist.from_dict(source).validate_deck(
-                    self.content_pack, managym.Deck(deck, sideboard)
+                    managym.Deck(deck, sideboard)
                 )
                 configs.append(
-                    managym.PlayerConfig(name, deck, sideboard, self.content_pack)
+                    managym.PlayerConfig(name, deck, sideboard, managym.WORLD_SETUP)
                 )
             return configs
         pack = curated_pack_for_matchup(self.hero_deck_name, self.villain_deck_name)

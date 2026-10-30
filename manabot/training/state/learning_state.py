@@ -109,9 +109,7 @@ def _admit_setup_transfer(source: MatchConfig, regime: TrainingRegime) -> None:
     """A deck switch stays inside the agent's semantic pack and changes decks."""
     pack = regime.agent.semantic_pack
     if regime.match is None:
-        raise ValueError(
-            "setup transfer requires an authored match, not training decks"
-        )
+        raise ValueError("setup transfer requires an authored match, not a deck source")
     if source == regime.match:
         raise ValueError("setup transfer must change the match")
     if source.content_pack != pack or regime.match.content_pack != pack:
@@ -158,7 +156,7 @@ def admit_learning_state(
         source.regime.world != regime.world
         or source.regime.agent != regime.agent
         or source.regime.observation != regime.observation
-        or source.regime.decks != regime.decks
+        or source.regime.deck_source != regime.deck_source
         or source.regime.match != source_match
         or source.regime.schedule_clock != regime.schedule_clock
     ):

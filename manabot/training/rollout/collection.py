@@ -47,7 +47,7 @@ from manabot.sim.rollout import (
     RandomBatchController,
     _allocate_buffers,
 )
-from manabot.training.decks import TrainingDecks, pair_match
+from manabot.training.decks import UniformDecks, pair_match
 from manabot.training.rollout.matchups import (
     Curriculum,
     elemental_roster,
@@ -62,7 +62,7 @@ from manabot.training.state.game_errors import (
     GameErrorState,
     GameOutcome,
 )
-from managym import Deck
+from managym import WORLD_SETUP, Deck
 
 OPPONENT_MODES = ("random", "frozen", "self", "learning")
 
@@ -217,22 +217,20 @@ class SeatRoutedCollector:
         recovery_max_game_microsteps: int | None = None,
         root: str | None = None,
         matchup_curriculum: Curriculum = "fixed",
-        decks: TrainingDecks | None = None,
+        deck_source: UniformDecks | None = None,
         workers: int = 1,
         game_errors: GameErrorPolicy | None = None,
         record_attempt: Callable[[GameAttempt], GameErrorState] | None = None,
     ) -> None:
-        # The supply's identity is fixed for the collector; every snapshot and
-        # game attempt records it, so hash the source records once.
-        self._decks_digest = decks.digest if decks is not None else None
-        if decks is not None:
+        # The source's identity is fixed for the collector; every snapshot and
+        # game attempt records it, so hash it once.
+        self._decks_digest = deck_source.digest if deck_source is not None else None
+        if deck_source is not None:
             if matchup_curriculum != "fixed":
-                raise ValueError("training decks cannot be combined with a curriculum")
-            if match.config.content_pack != decks.pool:
-                raise ValueError(
-                    "collector match differs from its training decks' pool"
-                )
-            self._uniform_roster = decks.players()
+                raise ValueError("a deck source cannot be combined with a curriculum")
+            if match.config.content_pack != WORLD_SETUP:
+                raise ValueError("deck-source games play in the world")
+            self._uniform_roster = deck_source.players()
         elif matchup_curriculum == "elemental-uniform":
             self._uniform_roster = elemental_roster(match)
         else:
@@ -328,8 +326,8 @@ class SeatRoutedCollector:
                 if self._uniform_roster
                 else stream_matches(match, num_envs, matchup_curriculum)
             )
-            if decks is not None:
-                self._env.set_training_decks(self._uniform_roster, decks.digest)
+            if deck_source is not None:
+                self._env.set_training_decks(self._uniform_roster, deck_source.digest)
             elif self._uniform_roster:
                 self._env.set_uniform_roster(self._uniform_roster)
             if matchup_curriculum in ("fixed", "elemental-uniform"):
@@ -393,7 +391,7 @@ class SeatRoutedCollector:
     def restore(self, state: CollectorSnapshot, check: Callable[[], None]) -> None:
         """Replay into a fresh collector; reject divergence before any learning."""
         if getattr(state, "decks_digest", None) != self._decks_digest:
-            raise ValueError("collector training decks identity mismatch")
+            raise ValueError("collector deck source identity mismatch")
         if self.stats.micro_steps or self._journal:
             raise ValueError("restore requires a fresh collector")
         if state.current_games is not None:

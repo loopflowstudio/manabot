@@ -134,14 +134,13 @@ def runtime_fingerprints(
 def authored_matchup_sha256(identities: Mapping[str, Any], consumer: str) -> str:
     """The authored setup a run trained on, for consumers registered against one.
 
-    A deck run samples a supply (`training_decks_sha256`) and has no single
+    A deck run draws from a source (`deck_source_sha256`) and has no single
     matchup; such consumers reject it rather than read a representative pair.
     """
-    if "training_decks_sha256" in identities:
+    if "deck_source_sha256" in identities:
         raise ValueError(
-            f"{consumer} requires an authored matchup; this run sampled training "
-            f"decks {identities['training_decks_sha256']} from pool "
-            f"{identities['content_pool']}"
+            f"{consumer} requires an authored matchup; this run drew decks from "
+            f"source {identities['deck_source_sha256']}"
         )
     return identities["matchup_sha256"]
 

@@ -733,7 +733,6 @@ def _parse_game_config(config: Any) -> GameConfig:
         deck_import = DeckImportInput.model_validate(data["deck_import"])
         hero_import, villain_import = deck_import.admit()
         provenance = {
-            "content_pack": deck_import.pack_key,
             "hero_source": hero_import.decklist.to_dict(),
             "villain_source": villain_import.decklist.to_dict(),
         }
@@ -2890,17 +2889,11 @@ def _dispatch_table_request(
             if previous.hero_source is not None and previous.villain_source is not None:
                 # New game re-admits the retained sources against the installed world.
                 config["deck_import"] = {
-                    "pack_key": previous.content_pack,
-                    **{
-                        seat: {
-                            "source": source["source"],
-                            "filename": source["filename"],
-                        }
-                        for seat, source in (
-                            ("hero", previous.hero_source),
-                            ("villain", previous.villain_source),
-                        )
-                    },
+                    seat: {"source": source["source"], "filename": source["filename"]}
+                    for seat, source in (
+                        ("hero", previous.hero_source),
+                        ("villain", previous.villain_source),
+                    )
                 }
             if previous.opponent is not None:
                 config["opponent_sha256"] = previous.opponent["sha256"]
@@ -3660,11 +3653,10 @@ def validate_decklists(payload: DeckImportInput) -> dict[str, Any]:
         }
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
-    pool = managym.content_pool(payload.pack_key)
+    world = managym.content_pool(managym.WORLD_SETUP)
     return {
         "admitted": True,
         "ruleset": managym.DEVELOPMENT_RULESET,
-        "pack_key": pool["pack_key"],
-        "world_version": pool["world_version"],
-        "content_digest": pool["content_digest"],
+        "world_version": world["world_version"],
+        "content_digest": world["content_digest"],
     }
