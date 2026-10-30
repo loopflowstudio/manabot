@@ -1,8 +1,8 @@
 # T3 — characteristics, counters, replacements, attachments (Task 6875f0)
 
 Brief: the Task directive (49 cards, obligations in `docs/rules/tla/allocation.jsonl`,
-`planned_pr == "T3"`). Stacked on T1 (892c47, PR #394; last synced at head `01e8f9975`)
-and merged with T2 at PR #398 head `a5587df5a`. Every merge needs Jack Heart's review.
+`planned_pr == "T3"`). T1 (#394) and T2 (#398) are on main; PR #399 targets main
+and carries main `10eeb1f55`. Every merge needs Jack Heart's review.
 Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
 
 ## Done (49 of 49)
@@ -166,66 +166,38 @@ Scryfall id.
    three inline timestamp comparisons. `PermanentData.plus1_counters` stays
    (pre-T3 wire field in every retained fixture).
 
+33. Merge of main `10eeb1f55` (afbd6a: statics and additional costs as
+   `StaticAbility`/`AdditionalCost` variants, old-world machinery deleted) as
+   `3cef39b8e`. T3's one-off `CardDefinition` fields became variants (list in
+   `scratch/questions.md`). Realign after it re-recorded what the merge left
+   stale (authored-match parity receipt; belief v3 receipt pins), repointed
+   the 400.7j / 608.2k audit anchors from the removed
+   `ModifyTriggeringPermanent` to `AffectedSpec::TriggeringPermanent`, allowed
+   `clippy::large_enum_variant` on `AdditionalCost` (T3's wider
+   `CardPredicate` grew `SacrificeCost`), and gave `ContentPack` a `Debug`
+   that omits its lazy `OnceLock` caches: the shared default pack filled them
+   from other test threads, which was the intermittent "rejection must not
+   mutate state" failure in `structured_offers` / `structured_attacker_offers`.
+
 ## Remaining
 
 - Browser proof (Playwright e2e) is CI's.
+- Jack Heart's review of PR #399.
+- Outside T3 (Jack Heart's call): the opponent's sideboard counts in the
+  `Observation` and LLM text predate T3 (`scratch/questions.md`, item 23).
 
-Check (2026-10-30, after the main merge and w17 rename): debug `cargo test`
-all binaries pass (lib 122, cards 388, rules 136 + 2 ignored, …); fmt and
-clippy `--all-targets -D warnings` clean; w17 evidence re-recorded in place
-(kernel unchanged, parity receipts repinned, Academy fixtures same revisions);
-world/observation-shape set plus `tests/academy`, `tests/belief`, `tests/env`,
-`tests/verify`, `tests/semantic` 767 pass; Academy vitest 119 and svelte-check
-clean; ruff clean on changed files.
+Check (2026-10-30, after the `10eeb1f55` merge and realign repairs): debug
+`cargo test` all binaries pass (lib 122, cards 394, rules 136 + 2 ignored; one
+run hit the now-fixed `Debug` flake); fmt and clippy `--all-targets -D warnings`
+clean; extension rebuilt; world/observation-shape set plus `tests/academy`,
+`tests/belief`, `tests/env`, `tests/verify`, `tests/semantic`,
+`tests/infra` pass after re-recording (746 + 61).
 
-Concept review (2026-10-30, after the third sync): no change. The implemented
-change matches the accepted model (derived characteristics, complete
-observation, all three encodings, one card representation). Two recorded items
-are not T3 product choices: the in-place v5/w18 extension is a reversible
-versioning assumption (no checkpoint uses either; `scratch/questions.md`), and
-the opponent's sideboard counts in the `Observation` and LLM text predate T3
-(on main), so that visibility question stays Jack Heart's, outside this Task.
+## Accepted: world numbers name freezes (Jack Heart, 2026-10-30)
 
-PR #399 base retargeted to T2 (`jack-heart/87e012-tla-t2-casting`) at Jack Heart's request, 2026-10-30; merged T2 head `0ad38cffe` (scratch-only changes) as `953843968`.
-
-## Concept review with Jack Heart (2026-10-30, at demo, after #394 merged)
-
-Page: `scratch/concept-review.html`. This is a proposal. Nothing in it is accepted.
-
-Mismatch: when does the world number change? WORLDS.md says worlds are "frozen
-deliberately (batch the shape changes)", but the stack bumps on every change.
-- w16, w17 and w18 were each created within about two days.
-- #394 is now on main as w17 (`fa5e13b23`), with no checkpoint or baseline.
-- T2 (#398) and T3 (#399) both write w18.
-- T3's standing assumption is that if T2 lands first, T3 takes w19 and policy
-  input v6, which means renaming the version and recording the receipts again.
-- About 3 of T3's commits re-record or re-pin evidence after a sync.
-
-Safety doesn't depend on the number. `checkpoint_incompatibility`
-(`manabot/model/catalog.py`) compares the whole `world_binding`: the world, the
-content manifest and digest, the input schema shapes and the learning-schema
-hash. It rejects any checkpoint whose binding differs.
-
-Proposal:
-- A world number names a freeze, not a merge.
-- Main carries one development world. Merged shape changes extend it in place.
-- Freezing is a deliberate act: re-run the headline baselines, record the
-  receipts, mark it frozen in WORLDS.md, and start the next number.
-- Policy input versions follow the same rule: v5 stays open until a freeze or
-  a checkpoint someone means to keep.
-- Receipts still update with every shape change, because the tests compare
-  digests. What goes away is the renumbering, plus the "w19 if T2 lands
-  first" contingency.
-
-Applied to the stack:
-- Either rename w18 back to w17 (main's open world), with T2 and T3 extending
-  it; or keep w18 as the TLA batch's one development world.
-- Either way, T3 doesn't take w19 or v6 when T2 lands.
-
-Counterexample: someone trains a checkpoint on the unfrozen world and the next
-merge changes its shape. The binding rejects it field by field, so nothing
-loads silently. The run was on an unfrozen world, so it carries no comparability
-promise.
+Proposal page `scratch/concept-review.html`. Safety does not depend on the
+number: `checkpoint_incompatibility` (`manabot/model/catalog.py`) rejects any
+checkpoint whose whole `world_binding` differs.
 
 Accepted, Jack Heart 2026-10-30 ("1a, 2a"): a world number names a deliberate
 freeze, not a merge. Main carries one open world; merged rules or shape changes

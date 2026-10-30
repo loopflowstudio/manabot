@@ -152,7 +152,7 @@
         },
         {
           "path": "managym/src/cards/content_pack.rs",
-          "sha256": "1e8181936ad500a9b49a2b0cb647cd53fa0c98ac22692ba683d606b59da244cc"
+          "sha256": "c61bb4a85404b80479dcb02e226439672286881418bd3403905b766a60b60a49"
         },
         {
           "path": "managym/src/cards/fixtures.rs",
@@ -284,7 +284,7 @@
         },
         {
           "path": "managym/src/cardsets/tokens.rs",
-          "sha256": "daaf435650aeeb8ecebda9e465c7b06e5e529e1bebf85d9425aa63c048c580f9"
+          "sha256": "286a4ab41cdde877e3e3df5a91889f0c8290e8755bb555f828764db641992405"
         },
         {
           "path": "managym/src/cardsets/vis.rs",
@@ -336,7 +336,7 @@
         },
         {
           "path": "managym/src/flow/combat_actions.rs",
-          "sha256": "00a4779e199d318057e65dabe7f380e9ca5d22826f1d1eb11c53b71f95bcaa13"
+          "sha256": "78d8cf6c41106c50e52610630f364e1996aa0fa6374fd588f3f94d28caa42522"
         },
         {
           "path": "managym/src/flow/damage.rs",
@@ -368,7 +368,7 @@
         },
         {
           "path": "managym/src/flow/mana.rs",
-          "sha256": "73f51bee1d53ad4fb5b23d2e8d5f275c0d8ee15ac05b07d375334e67e40db69f"
+          "sha256": "d23bc9ffcb002c3e1ac3ada1223b8024fa3f2bab6853f03c61ade30dcab81efc"
         },
         {
           "path": "managym/src/flow/mod.rs",
@@ -492,7 +492,7 @@
         },
         {
           "path": "managym/src/state/card.rs",
-          "sha256": "efb211201b5c3341bf24cd8a25ee34afca47116cc3973c3a3e2023213abf90f0"
+          "sha256": "bf2bb20983f92b70c2afa83d8e9424a652fb06caf2d2b294c62eefc1bf28c504"
         },
         {
           "path": "managym/src/state/effect.rs",
@@ -559,7 +559,7 @@
           "sha256": "7253f4b013ddbb65f2f9509324d3c59739e9ca08f16ad7bb5d2c92e16a928d3c"
         }
       ],
-      "sha256": "e78bad07607c8b599c1cd272585715b650296dfab88d11cac8ee51f209d9962b"
+      "sha256": "37c197a856f899ce4582d90df9c73adbffd85a270b324fbd3d379362c43967b7"
     },
     "seed": 0
   },
