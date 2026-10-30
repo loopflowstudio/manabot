@@ -560,7 +560,8 @@ impl Game {
         // its creature's controller, possibly the opponent, can produce.
         let card_def = &self.state.cards[card];
         if (old_zone == Some(ZoneType::Battlefield) || to_zone == ZoneType::Battlefield)
-            && (card_def.attached_characteristics.is_some() || !card_def.attached_grants.is_empty())
+            && (card_def.attached_characteristics().is_some()
+                || card_def.attached_grants().next().is_some())
         {
             self.invalidate_mana_cache(PlayerId(0));
             self.invalidate_mana_cache(PlayerId(1));

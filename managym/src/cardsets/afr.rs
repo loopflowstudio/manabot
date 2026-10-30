@@ -1,7 +1,7 @@
 //! Adventures in the Forgotten Realms.
 use crate::state::{
     ability::{Effect, TargetSpec},
-    card::{CardDefinition, CardType, CardTypes, SacrificeCost},
+    card::{AdditionalCost, CardDefinition, CardType, CardTypes, SacrificeCost},
     mana::ManaCost,
     predicate::CardPredicate,
 };
@@ -19,14 +19,14 @@ fn deadly_dispute() -> CardDefinition {
         name: "Deadly Dispute".into(),
         mana_cost: Some(ManaCost::parse("{1}{B}")),
         types: CardTypes::new([CardType::Instant]),
-        sacrifice_cost: Some(SacrificeCost {
+        additional_costs: vec![AdditionalCost::Sacrifice(SacrificeCost {
             predicate: CardPredicate {
                 card_types_any: vec![CardType::Artifact, CardType::Creature],
                 ..Default::default()
             },
             another: false,
             or_mana: None,
-        }),
+        })],
         spell_effects: vec![
             Effect::DrawCards { count: 2 },
             Effect::CreateToken {

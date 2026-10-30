@@ -7,7 +7,10 @@ use crate::{
         game::Game,
         proposed_event::{ProposedDamageTarget, ProposedEvent},
     },
-    state::game_object::{CardId, ObjectRef, PermanentId, PlayerId},
+    state::{
+        card::StaticAbility,
+        game_object::{CardId, ObjectRef, PermanentId, PlayerId},
+    },
 };
 
 impl Game {
@@ -206,9 +209,9 @@ impl Game {
         if delta > 0
             && [PlayerId(0), PlayerId(1)].into_iter().any(|owner| {
                 self.battlefield_permanents(owner).into_iter().any(|id| {
-                    self.state.permanents[id]
-                        .as_ref()
-                        .is_some_and(|p| self.state.cards[p.card].prevents_life_gain)
+                    self.state.permanents[id].as_ref().is_some_and(|p| {
+                        self.state.cards[p.card].has_static(&StaticAbility::PlayersCantGainLife)
+                    })
                 })
             })
         {

@@ -15,13 +15,13 @@ a target side by seat: from seat 0 it burns itself with Igneous Inspiration.
 - Instant timing: nothing in its own upkeep or draw step. Instants without a
   target that matters now (card draw, selection) and draw or life abilities
   wait for the opponent's end step, so the turn's mana goes to permanents first.
-- Targets: effect polarity is derived from the semantic card sources (damage,
-  destroy, bounce, counter and exile are harmful; pumps, untaps and keyword
-  grants are beneficial). Harmful effects go to the opponent's side, beneficial
-  ones to its own. Removal is held until it kills something (with the damage
-  the available mana and graveyard Lessons allow), burn that can hit players
-  until it kills a creature or the opponent, counters until the opponent has a
-  spell on the stack.
+- Targets: effect polarity is derived from the engine's card definitions
+  (`managym.card_definitions_json`: damage, destroy, bounce, counter and exile
+  are harmful; pumps, untaps and keyword grants are beneficial). Harmful
+  effects go to the opponent's side, beneficial ones to its own. Removal is
+  held until it kills something (with the damage the available mana and
+  graveyard Lessons allow), burn that can hit players until it kills a creature
+  or the opponent, counters until the opponent has a spell on the stack.
 - Card choices: Learn takes a Lesson (removal while the opponent has creatures);
   discards are spare lands or else the costliest card, optional ones declined;
   a look-and-select keeps a land while short of four.
@@ -54,6 +54,7 @@ from dataclasses import dataclass
 from functools import cache
 import json
 from pathlib import Path
+import re
 from typing import Any, Literal
 
 from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, ZoneEnum
@@ -65,46 +66,41 @@ import managym
 
 Polarity = Literal["harmful", "beneficial"]
 
-# Card programs the player reads, first definition of a name winning: the shared
-# research catalog (the product two-deck definitions plus research cards such as
-# Lightning Bolt) and the Elemental world's ten decks. A targeted spell missing
-# from these falls back to v1's seat-ordered target and can hit its own side.
-_CONTENT = Path(__file__).resolve().parents[2] / "content/semantic"
-SEMANTIC_SOURCES = (
-    _CONTENT / "v1/complexity.source.json",
-    _CONTENT / "w11/elemental_world.source.json",
-)
-
-# Ops that act on a target role, by what they do to that target's controller.
-HARMFUL_OPS = frozenset(
+# Effects that act on a spell's target, by what they do to that target's
+# controller. Names are the engine's `Effect` variants.
+HARMFUL_EFFECTS = frozenset(
     {
-        "deal_damage",
-        "deal_damage_value",
-        "deal_power_damage",
-        "destroy",
-        "exile",
-        "exile_with_controller_token",
-        "exile_until_source_leaves",
-        "return_to_hand",
-        "return_to_hand_draw_if_controlled",
-        "counter_spell",
-        "counter_unless_pays",
-        "discard_target_player",
+        "DealDamage",
+        "DealDamageValue",
+        "TargetCreaturesDealPowerDamageToLastTarget",
+        "Destroy",
+        "Exile",
+        "ExileWithControllerToken",
+        "ExileUntilSourceLeaves",
+        "ReturnToHand",
+        "ReturnToHandDrawIfControlled",
+        "CounterSpell",
+        "CounterUnlessPays",
+        "DiscardTargetPlayer",
     }
 )
-BENEFICIAL_OPS = frozenset(
+BENEFICIAL_EFFECTS = frozenset(
     {
-        "untap",
-        "grant_keywords",
-        "earthbend",
-        "buff_target_value",
-        "cant_be_blocked_target",
-        "add_subtype",
+        "UntapTarget",
+        "GrantKeywordsToTarget",
+        "Earthbend",
+        "BuffTargetValue",
+        "CantBeBlockedTarget",
+        "AddSubtypeToTarget",
     }
+)
+# Effects with no `target` field that still act on the spell's target.
+IMPLICIT_TARGET_EFFECTS = frozenset(
+    {"CounterUnlessPays", "TargetCreaturesDealPowerDamageToLastTarget"}
 )
 
 # ---------------------------------------------------------------------------
-# Card knowledge derived from the semantic source
+# Card knowledge derived from the engine card definitions
 
 
 @dataclass(frozen=True)
@@ -125,126 +121,208 @@ class TargetedSpell:
     pump: tuple[int, int] = (0, 0)
 
 
-def _target_ops(ops: list[dict[str, Any]], roles: set[str]) -> list[dict[str, Any]]:
-    """Every op, at any nesting depth, whose target is one of `roles`."""
-    found: list[dict[str, Any]] = []
-    for op in ops:
-        for value in op.values():
-            if isinstance(value, list) and value and isinstance(value[0], dict):
-                if "op" in value[0]:
-                    found.extend(_target_ops(value, roles))
-        if op.get("target") in roles or op.get("target") == "current_target":
-            found.append(op)
+Effect = dict[str, Any] | str
+
+
+# A continuous effect on the target, by its modification, read as the
+# targeted effect it amounts to.
+_TARGET_MODIFICATIONS = {
+    "AddKeywords": "GrantKeywordsToTarget",
+    "CantBeBlocked": "CantBeBlockedTarget",
+    "AddSubtypes": "AddSubtypeToTarget",
+}
+
+
+def _variant(effect: Effect) -> tuple[str, Any]:
+    """An effect's variant name and body (unit variants serialize as strings).
+
+    `ApplyContinuous` reads as what it does to whom: a fixed P/T change on the
+    target is `BuffTarget`, any other on the target `BuffTargetValue`, a
+    keyword, subtype or unblockability grant to the target its `*Target`
+    name, and a P/T change on the source `ModifyUntilEot`. Other continuous
+    effects keep their name and carry no polarity.
+    """
+    if isinstance(effect, str):
+        return effect, {}
+    ((name, body),) = effect.items()
+    if name != "ApplyContinuous":
+        return name, body
+    affected = body["affected"]
+    modification, change = _variant(body["modification"])
+    if modification == "ModifyPt":
+        power, toughness = change["power"], change["toughness"]
+        fixed = "Fixed" in power and "Fixed" in toughness
+        if affected == "Source" and fixed:
+            return "ModifyUntilEot", {
+                "power_delta": power["Fixed"],
+                "toughness_delta": toughness["Fixed"],
+            }
+        if isinstance(affected, dict) and "Target" in affected:
+            if fixed:
+                return "BuffTarget", {
+                    "power": power["Fixed"],
+                    "toughness": toughness["Fixed"],
+                    "target": affected["Target"],
+                }
+            return "BuffTargetValue", {"target": affected["Target"]}
+    if isinstance(affected, dict) and "Target" in affected:
+        return _TARGET_MODIFICATIONS.get(modification, name), {
+            "target": affected["Target"]
+        }
+    return name, body
+
+
+def _children(name: str, body: Any) -> list[list[Effect]]:
+    """Nested effect lists of one effect. A modal spell's side depends on the
+    chosen mode, so mode bodies stay opaque to polarity and damage."""
+    if name == "Modal" or not isinstance(body, dict):
+        return []
+    return [
+        value
+        for value in body.values()
+        if isinstance(value, list) and value and isinstance(value[0], (dict, str))
+    ]
+
+
+def _target_effects(effects: list[Effect]) -> list[tuple[str, Any]]:
+    """Every effect, at any depth outside modes, that acts on the target."""
+    found: list[tuple[str, Any]] = []
+    for effect in effects:
+        name, body = _variant(effect)
+        for nested in _children(name, body):
+            found.extend(_target_effects(nested))
+        if name in IMPLICIT_TARGET_EFFECTS or (
+            isinstance(body, dict) and "target" in body
+        ):
+            found.append((name, body))
     return found
 
 
-def _damage(ops: list[dict[str, Any]], roles: set[str], kicked: bool) -> int:
-    """Largest damage to a target role, following kicker branches as given."""
+def _specs(effects: list[Effect]) -> list[Any]:
+    """Target specs in program order, including those inside modes."""
+    specs: list[Any] = []
+    for effect in effects:
+        name, body = _variant(effect)
+        if not isinstance(body, dict):
+            continue
+        if name == "TargetClause":
+            specs.append(body["requirement"]["spec"])
+        elif "target" in body:
+            specs.append(body["target"])
+        for key, value in body.items():
+            if key == "modes":
+                for mode in value:
+                    specs.extend(_specs(mode))
+            elif isinstance(value, list) and value and isinstance(value[0], dict):
+                specs.extend(_specs(value))
+    return specs
+
+
+def _selector(spec: Any) -> str:
+    """A target spec's variant in snake case: `CreatureOrPlayer` is
+    `creature_or_player`."""
+    name = spec if isinstance(spec, str) else next(iter(spec))
+    return re.sub(r"(?<!^)(?=[A-Z])", "_", name).lower()
+
+
+def _damage(effects: list[Effect], kicked: bool) -> int:
+    """Largest damage to the target, following kicker branches as given."""
     best = 0
-    for op in ops:
-        if op["op"] == "branch":
-            if op["condition"].get("kind") == "kicked":
-                taken = [op["then"] if kicked else op.get("otherwise", [])]
-            else:
-                taken = [op["then"], op.get("otherwise", [])]
-            best = max([best, *(_damage(b, roles, kicked) for b in taken)])
+    for effect in effects:
+        name, body = _variant(effect)
+        if name == "IfKicked":
+            branch = body["then"] if kicked else body.get("otherwise", [])
+            best = max(best, _damage(branch, kicked))
             continue
-        for value in op.values():
-            if isinstance(value, list) and value and isinstance(value[0], dict):
-                if "op" in value[0]:
-                    best = max(best, _damage(value, roles, kicked))
-        if op.get("target") not in roles:
-            continue
-        if op["op"] == "deal_damage":
-            best = max(best, op["amount"])
-        elif op["op"] == "deal_damage_value" and "base" in op["amount"]:
-            best = max(best, op["amount"]["base"])
+        for nested in _children(name, body):
+            best = max(best, _damage(nested, kicked))
+        if name == "DealDamage":
+            best = max(best, body["amount"])
+        elif name == "DealDamageValue" and "GraveyardMatching" in body["amount"]:
+            best = max(best, body["amount"]["GraveyardMatching"]["base"])
     return best
 
 
-def _lesson_damage(ops: list[dict[str, Any]], roles: set[str]) -> bool:
-    return any(
-        op["op"] == "deal_damage_value"
-        and op["amount"].get("predicate") == {"kind": "subtype", "value": "Lesson"}
-        for op in _target_ops(ops, roles)
+def _counts_lessons(amount: dict[str, Any]) -> bool:
+    """Whether a damage amount grows per Lesson in the caster's graveyard."""
+    predicate = amount.get("GraveyardMatching", {}).get("predicate", {})
+    return predicate.get("subtype") == "Lesson" and not any(
+        value for key, value in predicate.items() if key != "subtype"
     )
 
 
-def _op_polarity(op: dict[str, Any]) -> Polarity | None:
-    if op["op"] in HARMFUL_OPS:
+def _effect_polarity(name: str, body: Any) -> Polarity | None:
+    if name in HARMFUL_EFFECTS:
         return "harmful"
-    if op["op"] in BENEFICIAL_OPS:
+    if name in BENEFICIAL_EFFECTS:
         return "beneficial"
-    if op["op"] == "modify_pt":
-        change = op.get("power", 0) + op.get("toughness", 0)
+    if name == "BuffTarget":
+        change = body["power"] + body["toughness"]
         return "beneficial" if change > 0 else "harmful" if change < 0 else None
     return None
 
 
-def derive_targeted_spells(source: dict[str, Any]) -> dict[str, TargetedSpell]:
-    """Map card name to its targeted spell program, by semantic source.
+def derive_targeted_spells(
+    definitions: list[dict[str, Any]],
+) -> dict[str, TargetedSpell]:
+    """Map card name to its targeted spell, from engine definitions.
 
-    A program whose target ops are unknown or of mixed polarity gets polarity
+    A spell whose target effects are unknown or of mixed polarity gets polarity
     None, and the player falls back to v1 for it.
     """
     spells: dict[str, TargetedSpell] = {}
-    for definition in source["definitions"]:
-        for program in definition.get("programs", []):
-            targets = program.get("targets", [])
-            if program["kind"] != "spell" or not targets:
-                continue
-            roles = {t["role"] for t in targets}
-            ops = _target_ops(program["ops"], roles)
-            # Ops with no polarity (such as "exile if it dies") ride along with
-            # the effect that decides the side.
-            polarities = {_op_polarity(op) for op in ops} - {None}
-            pumps = [op for op in ops if op["op"] == "modify_pt"]
-            spells[definition["registry_name"]] = TargetedSpell(
-                polarity=polarities.pop() if len(polarities) == 1 else None,
-                selector=targets[0]["selector"]["kind"],
-                side_restricted=all(
-                    t["selector"]["kind"].endswith(
-                        ("_you_control", "_opponent_controls")
-                    )
-                    for t in targets
-                ),
-                damage=_damage(program["ops"], roles, kicked=False),
-                kicked_damage=_damage(program["ops"], roles, kicked=True),
-                lesson_damage=_lesson_damage(program["ops"], roles),
-                pump=(
-                    sum(op.get("power", 0) for op in pumps),
-                    sum(op.get("toughness", 0) for op in pumps),
-                ),
-            )
+    for definition in definitions:
+        effects = definition.get("spell_effects", [])
+        specs = [row["spec"] for row in definition.get("targeting", [])]
+        specs = specs or _specs(effects)
+        if not specs:
+            continue
+        targeted = _target_effects(effects)
+        # Effects with no polarity (such as "exile if it dies") ride along with
+        # the effect that decides the side.
+        polarities = {_effect_polarity(*effect) for effect in targeted} - {None}
+        pumps = [body for name, body in targeted if name == "BuffTarget"]
+        spells[definition["name"]] = TargetedSpell(
+            polarity=polarities.pop() if len(polarities) == 1 else None,
+            selector=_selector(specs[0]),
+            side_restricted=all(
+                _selector(spec).endswith(("_you_control", "_opponent_controls"))
+                for spec in specs
+            ),
+            damage=_damage(effects, kicked=False),
+            kicked_damage=_damage(effects, kicked=True),
+            lesson_damage=any(
+                name == "DealDamageValue" and _counts_lessons(body["amount"])
+                for name, body in targeted
+            ),
+            pump=(
+                sum(body["power"] for body in pumps),
+                sum(body["toughness"] for body in pumps),
+            ),
+        )
     return spells
 
 
 def heuristic_source_paths() -> list[Path]:
-    """Files whose bytes define this player's behavior, for arena identity."""
+    """Files whose bytes define this player's behavior, for arena identity.
+
+    Its card knowledge comes from the world's engine definitions, which the
+    world version and content digest identify.
+    """
     sim = Path(__file__).resolve().parent
-    return [
-        Path(__file__).resolve(),
-        sim / "anchors.py",
-        *SEMANTIC_SOURCES,
-    ]
+    return [Path(__file__).resolve(), sim / "anchors.py"]
 
 
 @cache
-def _sources() -> tuple[dict[str, Any], ...]:
-    return tuple(json.loads(path.read_text()) for path in SEMANTIC_SOURCES)
-
-
 def _definitions() -> list[dict[str, Any]]:
-    return [d for source in _sources() for d in source["definitions"]]
+    return json.loads(managym.card_definitions_json())
 
 
 @cache
 def instant_names() -> frozenset[str]:
-    """Card names whose definition is an instant, by semantic source."""
+    """Card names whose definition is an instant."""
     return frozenset(
-        d["registry_name"]
-        for d in _definitions()
-        if "instant" in d.get("characteristics", {}).get("types", [])
+        d["name"] for d in _definitions() if "Instant" in d["types"]["types"]
     )
 
 
@@ -266,32 +344,24 @@ def abilities() -> Abilities:
     spare: set[str] = set()
     pump: set[str] = set()
     for definition in _definitions():
-        name = definition["registry_name"]
-        for program in definition.get("programs", []):
-            if program["kind"] != "activated":
+        name = definition["name"]
+        for ability in definition.get("activated_abilities", []):
+            if ability.get("zone", "Battlefield") != "Battlefield":
                 continue
-            ops = program["ops"]
-            kinds = {op["op"] for op in ops}
-            if kinds <= {"search_basic_lands"}:
-                prompt.add(name)
-            elif kinds <= {"draw_cards", "gain_life"}:
-                spare.add(name)
-            elif all(
-                op["op"] == "modify_pt"
-                and op.get("target") == "source"
-                and op.get("power", 0) > 0
-                for op in ops
-            ):
-                pump.add(name)
+            for effect in ability["effects"]:
+                kind, body = _variant(effect)
+                if kind == "SearchBasicLand":
+                    prompt.add(name)
+                elif kind in {"DrawCards", "GainLife"}:
+                    spare.add(name)
+                elif kind == "ModifyUntilEot" and body["power_delta"] > 0:
+                    pump.add(name)
     return Abilities(frozenset(prompt), frozenset(spare), frozenset(pump))
 
 
 @cache
 def targeted_spells() -> dict[str, TargetedSpell]:
-    spells: dict[str, TargetedSpell] = {}
-    for source in reversed(_sources()):
-        spells.update(derive_targeted_spells(source))
-    return spells
+    return derive_targeted_spells(_definitions())
 
 
 # ---------------------------------------------------------------------------

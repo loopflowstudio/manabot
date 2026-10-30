@@ -36,7 +36,7 @@ use managym::{
     flow::{event::GameEvent, turn::StepKind},
     possible_worlds::{viewer_observation, PossibleWorldSpace},
     state::{
-        card::Keywords,
+        card::{Keywords, StaticAbility},
         effect::Modification,
         game_object::{CardId, PermanentId, PlayerId, Target},
         mana::{Color, Mana, ManaCost, ManaUse},
@@ -6455,7 +6455,14 @@ fn a_static_haste_grant_lets_a_creature_tap_the_turn_it_enters() {
     let mut s = five_color_unfunded_setup(&["Badgermole", "Llanowar Elves"]);
     let badgermole = s.force_permanent_on_battlefield(0, "Badgermole");
     let card = card_of(&s, badgermole);
-    s.game_mut().state.cards[card].static_keyword_grants[0].keywords = Keywords {
+    let statics = &mut s.game_mut().state.cards[card].statics;
+    let Some(StaticAbility::KeywordGrant(grant)) = statics
+        .iter_mut()
+        .find(|ability| matches!(ability, StaticAbility::KeywordGrant(_)))
+    else {
+        panic!("Badgermole grants keywords");
+    };
+    grant.keywords = Keywords {
         haste: true,
         ..Default::default()
     };
@@ -9822,7 +9829,7 @@ fn corrected_card_characteristics_match_oracle() {
     let lesson = card("Firebending Lesson");
     assert_eq!(lesson.mana_cost.as_ref().unwrap().mana_value, 1);
     assert!(lesson.types.is_instant());
-    assert_eq!(lesson.kicker.as_ref().unwrap().mana_value, 4);
+    assert_eq!(lesson.optional_cost().unwrap().mana_value, 4);
     assert!(lesson.has_subtype("Lesson"));
 
     assert!(card("It'll Quench Ya!").has_subtype("Lesson"));
@@ -9834,7 +9841,7 @@ fn corrected_card_characteristics_match_oracle() {
     let suki = card("Suki, Kyoshi Warrior");
     assert!(suki.supertypes.iter().any(|s| s == "legendary"));
     assert_eq!(suki.toughness, Some(4));
-    assert!(suki.power_cda.is_some());
+    assert!(suki.power_cda().is_some());
 }
 
 #[test]

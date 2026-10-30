@@ -34,7 +34,10 @@ use crate::{
     flow::game::Game,
     state::{
         ability::StaticCondition,
-        card::{Card, CardType, Keywords, PowerCda, Restriction, SetCharacteristics, StaticScope},
+        card::{
+            Card, CardType, Keywords, PowerCda, Restriction, SetCharacteristics, StaticAbility,
+            StaticScope,
+        },
         effect::Modification,
         game_object::{CardId, ObjectId, PermanentId, PlayerId},
         permanent::CounterKind,
@@ -99,7 +102,7 @@ impl Game {
         let (mut base_power, mut base_toughness) = if permanent.animated {
             (0, 0)
         } else {
-            let power = match &card.power_cda {
+            let power = match card.power_cda() {
                 Some(cda) => self.cda_power(cda, permanent.controller),
                 None => card.power.unwrap_or(0),
             };
@@ -170,7 +173,7 @@ impl Game {
         let mut power = 0;
         let mut toughness = 0;
         for (source_id, controller, card) in self.static_sources() {
-            for buff in &card.static_pt_buffs {
+            for buff in card.pt_buffs() {
                 if !self.static_scope_applies(
                     &buff.scope,
                     source_id,
@@ -207,7 +210,7 @@ impl Game {
             if !self.follows(source_id, after) {
                 continue;
             }
-            for grant in &card.static_keyword_grants {
+            for grant in card.keyword_grants() {
                 if self.static_scope_applies(
                     &grant.scope,
                     source_id,
@@ -232,7 +235,7 @@ impl Game {
         let card = &self.state.cards[card_id];
         let mut keywords = card.keywords;
         for (_, source_controller, source) in self.static_sources() {
-            for grant in &source.static_keyword_grants {
+            for grant in source.keyword_grants() {
                 if let StaticScope::SpellsYouControl(predicate) = &grant.scope {
                     if source_controller == controller
                         && predicate.matches_card(card)
@@ -260,11 +263,15 @@ impl Game {
                     .iter()
                     .filter_map(move |&card_id| {
                         let card = &self.state.cards[card_id];
-                        if card.static_pt_buffs.is_empty()
-                            && card.static_keyword_grants.is_empty()
-                            && card.static_restrictions.is_empty()
-                            && card.static_type_grants.is_empty()
-                        {
+                        if !card.statics.iter().any(|ability| {
+                            matches!(
+                                ability,
+                                StaticAbility::PtBuff(_)
+                                    | StaticAbility::KeywordGrant(_)
+                                    | StaticAbility::Restriction(_)
+                                    | StaticAbility::TypeGrant(_)
+                            )
+                        }) {
                             return None;
                         }
                         let permanent_id = self.state.card_to_permanent[card_id]?;
@@ -291,7 +298,7 @@ impl Game {
     /// any: the latest by timestamp.
     fn set_characteristics_source(&self, permanent_id: PermanentId) -> Option<PermanentId> {
         self.attachments_on(permanent_id)
-            .filter(|(_, card)| card.attached_characteristics.is_some())
+            .filter(|(_, card)| card.attached_characteristics().is_some())
             .max_by_key(|(aura, _)| {
                 self.state.permanents[*aura]
                     .as_ref()
@@ -319,7 +326,7 @@ impl Game {
     ) -> Option<&SetCharacteristics> {
         let aura = self.set_characteristics_source(permanent_id)?;
         let card = self.state.permanents[aura].as_ref()?.card;
-        self.state.cards[card].attached_characteristics.as_ref()
+        self.state.cards[card].attached_characteristics()
     }
 
     /// Whether the permanent has lost all abilities (an effect record, or an
@@ -380,7 +387,7 @@ impl Game {
     fn granted_card_types(&self, target_id: PermanentId) -> Vec<CardType> {
         let mut types = Vec::new();
         for (source_id, controller, card) in self.static_sources() {
-            for grant in &card.static_type_grants {
+            for grant in card.type_grants() {
                 if self.static_scope_applies(
                     &grant.scope,
                     source_id,
@@ -494,7 +501,7 @@ impl Game {
     /// `target_id`.
     pub(crate) fn has_restriction(&self, target_id: PermanentId, kind: Restriction) -> bool {
         self.static_sources().any(|(source_id, controller, card)| {
-            card.static_restrictions.iter().any(|restriction| {
+            card.restrictions().any(|restriction| {
                 restriction.kind == kind
                     && restriction
                         .unless
@@ -561,8 +568,7 @@ impl Game {
         granted_flash
             || card.is_instant_speed()
             || card
-                .flash_if
-                .as_ref()
+                .flash_if()
                 .is_some_and(|condition| self.check_static_condition(condition, player))
     }
 

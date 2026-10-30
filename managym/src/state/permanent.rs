@@ -160,7 +160,7 @@ impl Permanent {
     pub fn animated_creature(&self, card: &Card) -> bool {
         self.animated
             || card
-                .creature_with_counters
+                .creature_with_counters()
                 .is_some_and(|threshold| self.counter_count(threshold.kind) >= threshold.count)
     }
 

@@ -149,7 +149,7 @@ def source_paths() -> list[Path]:
         ("academy", {".py"}),
         ("managym/src", {".rs"}),
         ("manabot/managym", {".py", ".pyi"}),
-        ("content/semantic/v1", {".json"}),
+        ("content/semantic/current", {".json"}),
     ):
         paths.update(
             path

@@ -9,7 +9,7 @@ use crate::{
     flow::game::Game,
     state::{
         ability::Effect,
-        card::{AbilityGrant, ActivatedAbilityDefinition, ReplacementEffect},
+        card::{AbilityGrant, ActivatedAbilityDefinition, ReplacementEffect, StaticAbility},
         game_object::{PermanentId, PlayerId},
         mana::{Color, Mana, ManaCost, ManaUse},
     },
@@ -474,21 +474,18 @@ impl Game {
             self.extend_own_abilities(permanent, &mut abilities);
         }
         for (grantor, card) in self.attachments_on(permanent) {
-            if lost && card.attached_characteristics.is_none() {
+            if lost && card.attached_characteristics().is_none() {
                 continue;
             }
             let grantor = self
                 .permanent_object_ref(grantor)
                 .expect("battlefield permanent has an exact identity");
-            abilities.extend(
-                card.attached_grants
-                    .iter()
-                    .enumerate()
-                    .map(|(index, ability)| ActivatedAbilityDefinition {
-                        granted_by: Some(AbilityGrant { grantor, index }),
-                        ..ability.clone()
-                    }),
-            );
+            abilities.extend(card.attached_grants().enumerate().map(|(index, ability)| {
+                ActivatedAbilityDefinition {
+                    granted_by: Some(AbilityGrant { grantor, index }),
+                    ..ability.clone()
+                }
+            }));
         }
         for ability in &mut abilities {
             self.price_activation(source.controller, purpose, ability);
@@ -514,11 +511,13 @@ impl Game {
         }
         for grant in self.battlefield_permanents(source.controller) {
             let grant = self.state.permanents[grant].as_ref().unwrap();
-            if self.state.cards[grant.card]
-                .mana_grant
-                .iter()
-                .any(|predicate| self.permanent_matches_predicate(permanent, predicate))
-            {
+            if self.state.cards[grant.card].statics.iter().any(|ability| {
+                matches!(
+                    ability,
+                    StaticAbility::GrantsAnyColorManaAbility(predicate)
+                        if self.permanent_matches_predicate(permanent, predicate)
+                )
+            }) {
                 abilities.push(ActivatedAbilityDefinition {
                     tap_source: true,
                     effects: vec![Effect::any_color_mana()],

@@ -3,7 +3,7 @@ use crate::state::{
     ability::{
         Ability, Effect, EffectValue, StaticCondition, TargetSpec, TriggerCondition, TriggerSubject,
     },
-    card::{CardDefinition, CardType, CardTypes},
+    card::{CardDefinition, CardType, CardTypes, StaticAbility},
     mana::ManaCost,
 };
 
@@ -21,7 +21,7 @@ fn proft_s_eidetic_memory() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{1}{U}")),
         types: CardTypes::new([CardType::Enchantment]),
         supertypes: vec!["Legendary".into()],
-        no_maximum_hand_size: true,
+        statics: vec![StaticAbility::NoMaximumHandSize],
         abilities: vec![
             Ability::Triggered {
                 condition: TriggerCondition::EntersTheBattlefield {

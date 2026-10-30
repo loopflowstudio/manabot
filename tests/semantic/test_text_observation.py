@@ -434,7 +434,7 @@ def test_an_ally_is_cast_from_the_visible_top_of_the_library() -> None:
     stack = capture_text_decision(env).text.split(
         "Stack (native order, top to bottom):\n", 1
     )[1]
-    assert stack.startswith("S1: spell [D2]; controller You; source C2 (Hakoda,")
+    assert stack.startswith("S1: spell [D1]; controller You; source C2 (Hakoda,")
 
 
 _KEYWORDS = (
