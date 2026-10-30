@@ -3,7 +3,7 @@
 Directive: Jack Heart, 2026-10-30 (Task 558daa). Was stacked on afbd6a; #403
 merged into main (10eeb1f55) and this branch merged it (8db3b2fe8), so the PR
 targets main and its diff is the cull alone.
-Status: third pass implements Jack Heart's 2026-10-30 decisions on the held list (all in this one PR; open PRs rebase); awaiting gate/demo. Stop at review/demo; no merge.
+Status: compress pass after the third pass; third pass implements Jack Heart's 2026-10-30 decisions on the held list (all in this one PR; open PRs rebase); awaiting gate/demo. Stop at review/demo; no merge.
 
 ## Approach
 
@@ -87,6 +87,10 @@ Third pass — Jack Heart's decisions on the held list (2026-10-30, comment f572
 - CI: duplicate conformance steps already cut (ae9c5c2a5); fuzz kept.
 - docs (7cad8dae5): 29 top-level/architecture/development docs → `development.md`, `training.md`, `evaluation.md`, `search-and-beliefs.md`, `llm.md`, `academy.md` (+ unchanged `ARCHITECTURE.md`; `experiment-metrics.md` kept, reports parse it); written by parallel agents against code, superseded detail linked at a74f31828; inbound links/anchors repointed repo-wide (frozen `docs/rules/audit-2026-10`, `.lf/chapters`, `experiments/data` untouched) and every anchor checked. Unverified claims were dropped, not guessed; `experiments/ataraxos-transfer.md` already imported a missing `learned_belief_local_search` (pre-existing).
 
+Compress pass (2026-10-30; protected set re-read, #383/#395/#399/#402 still open, held list unchanged — the "remaining cull" candidates named in the step feedback were already cut in the second pass):
+- managym: `flow/event_log.rs` `EventLog` → plain `Vec<GameEvent>` (after the COW cut it only wrapped a Vec; `serde(transparent)` kept the hashed bytes identical); `match_fixtures::FixtureSummary`, `action_kind_name` and the summary fields only the deleted benchmark printed → `build_fixture` returns the `Game` and checks its shape directly; `edit_cast_permissions` clone-compare-assign (journal leftover) → direct edits; three single-call test wrappers in `flow/decision.rs` inlined (their clone/restore assertions are the fork-isolation contract search relies on, so they stay).
+- receipt: authored-match parity `relevant_source` regenerated for the deleted/edited sources.
+
 ## Kept on purpose
 
 - All four w17 conformance corpora: each has a current reader (Rust conformance tests/CI; Academy parity scripts and tests).
@@ -113,3 +117,4 @@ Still held (outside Jack's 2026-10-30 decisions; files in open PRs):
 - Second pass (cd8778588): debug `cargo test` (opt-level 1, as CI) 665 passed / 0 failed; `cargo fmt --check`, clippy `--all-targets` clean; CLAUDE.md world-change suite 65 passed; focused pytest over touched tests + `tests/belief tests/semantic` 363 passed / 3 failed (the three above) / 1 skipped; Academy `npm run check` 0 errors.
 - Third pass (after 7cad8dae5 + inventory anchors): debug `cargo test` (opt-level 1) 650 passed / 0 failed; `cargo fmt --check`; clippy `--all-targets` with and without `python,benchmark` clean; `semantic_conformance check` 14 cases / 3,401 commands; authored-match parity 142 commands, no divergence; website 21 passed. Focused pytest (world-change suite + `tests/academy tests/env tests/sim tests/infra`, touched training/model tests) 700 passed / 10 failed / 1 skipped → after repointing renamed-test anchors in `docs/rules/audit-2026-10/{index.jsonl,reviews.json}` the inventory passes; the other 9 are pre-existing: the two known (`test_conditional_search`, `test_search_runtime` seed 197) plus 7 that fail identically at a74f31828 with its own rebuilt extension (`test_public_commitment_parity` ×2: missing local `experiments/data/rul-9-played-workloads-v1.measurement.json`; `test_ur_lessons_increment` ×4: permanent width 32 == 29; `test_rollout::test_selects_valid_actions_only`: unadmitted card definition). Academy UI unchanged since the 0-error check.
 
+- Compress pass: debug `cargo test` (opt-level 1) 650 passed / 0 failed; `cargo fmt --check`; clippy `--all-targets -D warnings` with and without `python,benchmark` clean; authored-match parity rewritten (142 commands, no divergence). World-change suite + `tests/academy tests/env tests/sim tests/infra tests/belief`: 730 passed / 11 failed, all on the known pre-existing list above. Academy UI untouched this pass.
