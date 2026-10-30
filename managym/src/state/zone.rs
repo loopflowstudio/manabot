@@ -198,10 +198,6 @@ impl ZoneManager {
         self.zone_cards(zone, player).len()
     }
 
-    pub fn total_size(&self, zone: ZoneType) -> usize {
-        self.size(zone, PlayerId(0)) + self.size(zone, PlayerId(1))
-    }
-
     pub fn zone_cards(&self, zone: ZoneType, player: PlayerId) -> &Vec<CardId> {
         let idx = player.0;
         match zone {

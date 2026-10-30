@@ -520,7 +520,7 @@
         },
         {
           "path": "managym/src/state/zone.rs",
-          "sha256": "774a40a82698a87dc1955014f0160c55c45e78bbffc878249e40ebdd77f254ca"
+          "sha256": "18ff7d19bd2ffcb7a495aca1df4516aaf0d766de6591a4e676446c32fd1268a6"
         },
         {
           "path": "managym/src/study.rs",
@@ -543,7 +543,7 @@
           "sha256": "23ac765196d97fb350c0e3e2337bacc5d8e42bd6c47edb7999fb0907d32bfa8d"
         }
       ],
-      "sha256": "38c5c21e9b7f6aa821d03f25a8404849afc0ebca066bb78d5f66ef4f9789567d"
+      "sha256": "ec5709a02a75d5de4e102ed4bf62e8c73169022335a7aad767109aa4c6f0fda6"
     },
     "seed": 0
   },
