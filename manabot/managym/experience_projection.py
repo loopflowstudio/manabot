@@ -162,15 +162,7 @@ def _serialize_permanent(
 
 def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
     """Effect-derived state, present only when an effect applies."""
-    counters = {
-        kind: count
-        for kind, count in (
-            ("stun", int(permanent.stun_counters)),
-            ("fire", int(permanent.fire_counters)),
-            ("double_strike", int(permanent.double_strike_counters)),
-        )
-        if count
-    }
+    counters = {kind: int(count) for kind, count in permanent.counters.items() if count}
     values: dict[str, Any] = {
         "counters": counters or None,
         "attached_to": permanent.attached_to,
@@ -180,8 +172,29 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
         "blocking": permanent.blocking,
         "abilities_lost": bool(permanent.abilities_lost) or None,
         "used_abilities": list(permanent.used_abilities) or None,
+        "effects": _effects(permanent.effects) or None,
     }
     return {key: value for key, value in values.items() if value is not None}
+
+
+def _effects(effects: list[managym.ContinuousEffect]) -> list[dict[str, Any]]:
+    """Continuous-effect records in timestamp order, absent values omitted."""
+    out = []
+    for effect in effects:
+        values: dict[str, Any] = {
+            "modification": effect.modification,
+            "power": effect.power,
+            "toughness": effect.toughness,
+            "amount": effect.amount,
+            "keywords": list(effect.keywords) or None,
+            "subtypes": list(effect.subtypes) or None,
+            "color": effect.color,
+            "duration": effect.duration,
+            "source": effect.source_name,
+            "timestamp": int(effect.timestamp),
+        }
+        out.append({key: value for key, value in values.items() if value is not None})
+    return out
 
 
 def _serialize_player(
@@ -265,6 +278,7 @@ def _serialize_player(
         },
         **({"keeps_red_mana": True} if player.keeps_red_mana else {}),
         **({"no_maximum_hand_size": True} if player.no_maximum_hand_size else {}),
+        **({"effects": _effects(player.effects)} if player.effects else {}),
         "hand": grouped_cards["HAND"],
         "graveyard": grouped_cards["GRAVEYARD"],
         "exile": grouped_cards["EXILE"],

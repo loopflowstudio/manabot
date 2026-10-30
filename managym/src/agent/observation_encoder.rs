@@ -2,8 +2,7 @@ use std::{collections::HashMap, fmt};
 
 use crate::{
     agent::observation::{
-        CardData, ContinuousEffectData, EventData, Observation, PermanentData, PlayerData,
-        TurnData,
+        CardData, ContinuousEffectData, EventData, Observation, PermanentData, PlayerData, TurnData,
     },
     cards::tokens::name_value,
     flow::turn::{PhaseKind, StepKind},
@@ -1005,7 +1004,12 @@ fn facts(obs: &Observation) -> Vec<Fact> {
             push(object, FactKind::SetName, name_value(name), 1.0);
         }
         for creature_type in permanent.creature_types.iter().flatten() {
-            push(object, FactKind::SetCreatureType, name_value(creature_type), 1.0);
+            push(
+                object,
+                FactKind::SetCreatureType,
+                name_value(creature_type),
+                1.0,
+            );
         }
         for index in &permanent.used_abilities {
             push(object, FactKind::UsedAbility, *index as i32, 1.0);
@@ -1101,7 +1105,7 @@ fn encode_facts(
     }
     out.fill(0.0);
     let ranks = timestamp_ranks(obs);
-    for (row, fact) in out.chunks_exact_mut(FACT_DIM).zip(&facts) {
+    for (row, fact) in out.as_chunks_mut::<FACT_DIM>().0.iter_mut().zip(&facts) {
         row[FACT_OBJECT_INDEX] = object_to_index
             .get(&fact.object)
             .map_or(0.0, |index| (index + 1) as f32);
@@ -1329,6 +1333,7 @@ mod tests {
                 restricted_mana: Vec::new(),
                 hand_only_until: None,
                 no_maximum_hand_size: false,
+                effects: Vec::new(),
             },
             agent_sideboard: Vec::new(),
             agent_cards: vec![
@@ -1355,6 +1360,7 @@ mod tests {
                 restricted_mana: Vec::new(),
                 hand_only_until: None,
                 no_maximum_hand_size: false,
+                effects: Vec::new(),
             },
             opponent_cards: vec![make_card(221, ZoneType::Hand, false, 1, 1, 1)],
             opponent_permanents: vec![make_permanent(444, false)],
@@ -1663,6 +1669,7 @@ mod tests {
             opponent_permanents: &mut opponent_permanents,
             actions: &mut actions,
             events: &mut events,
+            facts: &mut [],
             action_focus: &mut action_focus,
             agent_player_valid: &mut agent_player_valid,
             opponent_player_valid: &mut opponent_player_valid,

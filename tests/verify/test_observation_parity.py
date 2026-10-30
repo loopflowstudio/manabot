@@ -9,10 +9,18 @@ import pytest
 from manabot.env.observation import (
     CARD_DIM,
     CARD_PERMISSION_INDEX,
+    FACT_DURATION_INDEX,
+    FACT_EFFECT,
+    FACT_ID_INDEX,
+    FACT_KIND_INDEX,
+    FACT_OBJECT_INDEX,
+    FACT_ORDER_INDEX,
+    FACT_SOURCE_INDEX,
+    FACT_VALID_INDEX,
+    FACT_VALUE_INDEX,
     PERMANENT_ATTACHED_INDEX,
-    PERMANENT_GRANTED_LAND_INDEX,
     PERMANENT_DIM,
-    PERMANENT_STUN_INDEX,
+    PERMANENT_GRANTED_LAND_INDEX,
     PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX,
     RELATION_KEYWORDS_INDEX,
     RELATION_X_INDEX,
@@ -332,6 +340,11 @@ def test_elemental_indestructible_encoding_preserves_outside_and_definition_colu
     assert actual["agent_permanents"][0, 24] == permanent.registry_key + 1
 
 
+def _token_low(name: str) -> int:
+    """The low 16 bits of a learning-token value, as fact rows store it."""
+    return managym.learning_token_value(name) & 0xFFFF
+
+
 # Policy input v5 encodes every Observation fact. These states reach its new
 # columns through real T3 games and through each observed field directly.
 _T3_DECK = {
@@ -369,8 +382,13 @@ def test_v5_native_and_python_encoders_agree_on_t3_games() -> None:
             permanents = np.concatenate(
                 (actual["agent_permanents"], actual["opponent_permanents"])
             )
+            facts = actual["facts"]
             for name, seen in (
-                ("stun", permanents[:, PERMANENT_STUN_INDEX]),
+                (
+                    "stun",
+                    facts[:, FACT_ID_INDEX + 1] == _token_low("CounterKind::stun"),
+                ),
+                ("effect", facts[:, FACT_KIND_INDEX] == FACT_EFFECT),
                 ("attached", permanents[:, PERMANENT_ATTACHED_INDEX]),
                 ("granted land", permanents[:, PERMANENT_GRANTED_LAND_INDEX]),
                 ("stack X", actual["relations"][:, RELATION_X_INDEX]),
@@ -390,6 +408,7 @@ def test_v5_native_and_python_encoders_agree_on_t3_games() -> None:
     # Seeded play reaches every new column, so parity covers each of them.
     assert reached == {
         "stun",
+        "effect",
         "attached",
         "granted land",
         "stack X",
@@ -405,16 +424,31 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     env.scenario_force_battlefield(1, "Forest")
     obs = env.scenario_refresh()
     mine, theirs = obs.agent_permanents[0], obs.opponent_permanents[0]
-    mine.stun_counters, mine.fire_counters, mine.double_strike_counters = 1, 2, 3
+    mine.counters = {"stun": 1, "fire": 2, "double_strike": 3}
     mine.attached_to = theirs.id
     mine.name, mine.creature_types = "Humble Merchant", ["Citizen"]
     mine.is_granted_land, mine.granted_firebending = True, 4
     mine.temp_subtypes = ["Island", "Construct", "Citizen"]
     mine.attacking, mine.blocking, mine.abilities_lost = True, theirs.id, True
     mine.used_abilities = [1, 5]
+    # Later than both permanents (ranks 1 and 2).
+    base = max(mine.timestamp, theirs.timestamp)
+    assert mine.timestamp < theirs.timestamp
+    pump = managym.ContinuousEffect()
+    pump.modification, pump.power, pump.toughness = "ModifyPt", 2, 0
+    pump.duration, pump.timestamp = "EndOfTurn", base + 1
+    grant = managym.ContinuousEffect()
+    grant.modification, grant.keywords = "AddKeywords", ["flying", "trample"]
+    grant.duration, grant.timestamp = "EndOfTurn", base + 2
+    grant.source_registry_key = theirs.registry_key
+    mine.effects = [pump, grant]
     obs.agent_permanents = [mine]
     agent = obs.agent
     agent.keeps_red_mana = agent.no_maximum_hand_size = True
+    kept = managym.ContinuousEffect()
+    kept.modification, kept.color = "KeepUnspentMana", "Red"
+    kept.duration, kept.timestamp = "EndOfTurn", base + 3
+    agent.effects = [kept]
     obs.agent = agent
 
     encoder = ObservationEncoder(ObservationConfig(policy_input_version=5))
@@ -425,14 +459,24 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     row = actual["agent_permanents"][0]
     host = 2 + 2 * encoder.cards_per_player + encoder.perms_per_player
     # Attacking (v4 column 27), then v5: exhausted, once each turn, granted
-    # firebending, counters, attachment join, set characteristics, granted
-    # land, temporary subtypes and a count, blocking join, lost abilities,
-    # used-ability flags and a count, validity.
+    # firebending, attachment join, granted land, blocking join, lost
+    # abilities, timestamp rank, validity.
     np.testing.assert_allclose(
-        row[27:PERMANENT_DIM],
-        [1, 0, 0, 0.4, 0.1, 0.2, 0.3, host + 1, 1, 1, 0, 1, 0, 0, 0, 1, 1]
-        + [host + 1, 1, 0, 1, 0, 0, 1, 1],
+        row[27:PERMANENT_DIM], [1, 0, 0, 0.4, host + 1, 1, host + 1, 1, 1, 1]
     )
+    # Fact rows, in order: counters, added subtypes, set name and creature
+    # type, used abilities, then effect records (one row per keyword).
+    facts = actual["facts"]
+    kinds = facts[facts[:, FACT_VALID_INDEX] == 1, FACT_KIND_INDEX].tolist()
+    assert kinds == [1, 1, 1, 2, 2, 2, 3, 4, 5, 5, 6, 6, 6, 6]
+    effects = facts[facts[:, FACT_KIND_INDEX] == FACT_EFFECT]
+    # The agent's player row comes first; its record is the latest.
+    np.testing.assert_allclose(
+        effects[:, [FACT_OBJECT_INDEX, FACT_VALUE_INDEX, FACT_DURATION_INDEX]],
+        [[1, 0, 1], [host + 1, 0.2, 1], [host + 1, 0, 1], [host + 1, 0, 1]],
+    )
+    assert effects[:, FACT_ORDER_INDEX].tolist() == [5, 3, 4, 4]
+    assert effects[2, FACT_SOURCE_INDEX] == theirs.registry_key + 1
     np.testing.assert_allclose(
         actual["agent_player"][0, PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX:],
         [1, obs.turn.turn_number / 20, 0, 1],

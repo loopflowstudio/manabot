@@ -32,8 +32,8 @@ use managym::{
         observation_encoder::{
             encode, EncodedObservation, FactKind, ObservationEncoderConfig, CARD_DIM,
             CARD_PERMISSION_INDEX, CARD_X_INDEX, FACT_DETAIL_INDEX, FACT_DIM, FACT_DURATION_INDEX,
-            FACT_ID_INDEX, FACT_KIND_INDEX, FACT_OBJECT_INDEX, FACT_ORDER_INDEX,
-            FACT_SOURCE_INDEX, FACT_VALID_INDEX, FACT_VALUE_INDEX, PERMANENT_ABILITIES_LOST_INDEX,
+            FACT_ID_INDEX, FACT_KIND_INDEX, FACT_OBJECT_INDEX, FACT_ORDER_INDEX, FACT_SOURCE_INDEX,
+            FACT_VALID_INDEX, FACT_VALUE_INDEX, PERMANENT_ABILITIES_LOST_INDEX,
             PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX, PERMANENT_DIM,
             PERMANENT_EXHAUSTED_INDEX, PERMANENT_FIREBENDING_INDEX, PERMANENT_GRANTED_LAND_INDEX,
             PERMANENT_ONCE_EACH_TURN_INDEX, PERMANENT_TIMESTAMP_INDEX, PLAYER_DIM,
@@ -55,8 +55,8 @@ use managym::{
     cards::tokens::{definition_tokens, name_value, TokenKind},
     state::{
         ability::{
-            AffectedSpec, Ability, Effect, EffectValue, LinkedChooser, LinkedGrant, PaymentCost, StaticCondition,
-            TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+            Ability, AffectedSpec, Effect, EffectValue, LinkedChooser, LinkedGrant, PaymentCost,
+            StaticCondition, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
         },
         card::{CardDefinition, CardType, Keywords},
         mana::{Mana, ManaCost},
@@ -205,9 +205,10 @@ fn player_fields(player: &Player) -> [(&'static str, Seen); 11] {
 /// here and given a witness in [`modification_witnesses`].
 fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) {
     match modification {
-        Modification::AddSubtypes(_) => {
-            ("Modification::AddSubtypes", Seen::Fact(FactKind::AddedSubtype))
-        }
+        Modification::AddSubtypes(_) => (
+            "Modification::AddSubtypes",
+            Seen::Fact(FactKind::AddedSubtype),
+        ),
         Modification::BecomeArtifactCreature => {
             ("Modification::BecomeArtifactCreature", Seen::Permanent(8))
         }
@@ -867,7 +868,9 @@ fn every_permanent_and_player_field_names_where_it_is_seen() {
             Seen::Permanent(column) => assert!(column < width, "{field}"),
             Seen::Player(start, end) => assert!(start < end && end <= width, "{field}"),
             Seen::Via(place) | Seen::Transient(place) => assert!(!place.is_empty(), "{field}"),
-            Seen::Fact(_) | Seen::Identity => {}
+            // Fact rows of a kind that states a permanent's field.
+            Seen::Fact(kind) => assert!(fact_field(kind).starts_with("PermanentData."), "{field}"),
+            Seen::Identity => {}
         }
     }
 }
@@ -880,7 +883,11 @@ fn every_continuous_effect_variant_reaches_the_learning_tokens() {
         .iter()
         .map(|(_, modification)| modification_seen(modification).0)
         .collect();
-    assert_eq!(names.len(), MODIFICATION_VARIANTS, "one witness per variant");
+    assert_eq!(
+        names.len(),
+        MODIFICATION_VARIANTS,
+        "one witness per variant"
+    );
     for (on_player, modification) in witnesses {
         let affected = if on_player {
             AffectedSpec::You
@@ -937,10 +944,14 @@ fn printed_and_granted_keywords_set_their_card_and_permanent_columns_and_tokens(
         assert!(keyword_columns(keywords)[index].1, "{name}");
 
         let mut granted = base_game.clone();
-        granted.state.permanents[ogre]
-            .as_mut()
-            .unwrap()
-            .temp_keywords = keywords;
+        let affected = granted.affected_permanent(ogre).unwrap();
+        granted.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected],
+            Modification::AddKeywords(keywords),
+            EffectDuration::EndOfTurn,
+        );
         let (_, after) = observe(&granted, 0);
         assert_eq!(
             changed(permanent_row(&base), permanent_row(&after)),
@@ -1005,17 +1016,7 @@ fn each_permanent_status_moves_its_named_column() {
         "tapped" => permanent.tapped = !permanent.tapped,
         "summoning_sick" => permanent.summoning_sick = !permanent.summoning_sick,
         "damage" => permanent.damage = 1,
-        "temp_power" => permanent.temp_power = 2,
-        "temp_toughness" => permanent.temp_toughness = 2,
-        "plus1_counters" => permanent.plus1_counters = 1,
-        "temp_base_power" => permanent.temp_base_power = Some(5),
-        "temp_base_toughness" => permanent.temp_base_toughness = Some(5),
-        "cant_be_blocked_this_turn" => permanent.cant_be_blocked_this_turn = true,
-        "firebending_this_turn" => permanent.firebending_this_turn = 2,
         "animated" => permanent.animated = true,
-        "abilities_lost" => permanent.abilities_lost = true,
-        "temp_subtypes" => permanent.temp_subtypes = vec!["Avatar".into()],
-        "exile_if_dies_this_turn" => permanent.exile_if_dies_this_turn = true,
         "attacking" => permanent.attacking = true,
         other => panic!("no directed mutation for {other}"),
     };
@@ -1026,12 +1027,9 @@ fn each_permanent_status_moves_its_named_column() {
         if matches!(field, "card" | "controller") {
             continue; // Identity of the row itself; covered by the encoder's own tests.
         }
-        if matches!(
-            field,
-            "attached_to" | "becomes_creature" | "exhausted" | "activated_this_turn"
-        ) {
-            // Need a real attachment, animation or ability; the directed v5
-            // tests below reach these states through play.
+        if matches!(field, "attached_to" | "timestamp") {
+            // Need a real attachment, or other timestamps to be ranked
+            // among; the directed v5 tests below reach these states.
             continue;
         }
         let mut game = base_game.clone();
@@ -1059,8 +1057,6 @@ fn player_life_and_mana_move_their_named_columns() {
             "life" => player.life = 7,
             "mana_pool" => player.mana_pool = Mana::parse("R"),
             "combat_mana_pool" => player.combat_mana_pool = Mana::parse("R"),
-            "no_maximum_hand_size" => player.no_maximum_hand_size = true,
-            "keeps_red_mana" => player.keeps_red_mana = true,
             other => panic!("no directed mutation for {other}"),
         }
         let (_, after) = observe(&game, 0);
@@ -1144,7 +1140,7 @@ enum Buffer {
     Permanent,
     Relation,
     Action,
-    Fact,
+    Facts,
 }
 
 impl Buffer {
@@ -1156,7 +1152,7 @@ impl Buffer {
             Buffer::Permanent => PERMANENT_DIM,
             Buffer::Relation => RELATION_DIM_V5,
             Buffer::Action => managym::agent::observation_encoder::ACTION_DIM,
-            Buffer::Fact => FACT_DIM,
+            Buffer::Facts => FACT_DIM,
         }
     }
 
@@ -1165,7 +1161,7 @@ impl Buffer {
         match self {
             Buffer::Player => None,
             Buffer::Relation => Some(31),
-            Buffer::Fact => Some(FACT_VALID_INDEX),
+            Buffer::Facts => Some(FACT_VALID_INDEX),
             _ => Some(self.width() - 1),
         }
     }
@@ -1357,13 +1353,13 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         temp_subtypes => [
             column(Permanent, 26),
             Fact(FactKind::AddedSubtype),
-            Columns(Fact, FACT_ID_INDEX, 2),
+            Columns(Facts, FACT_ID_INDEX, 2),
         ],
         keywords => [Rows("keywords below")],
         counters => [
             Fact(FactKind::Counter),
-            Columns(Fact, FACT_ID_INDEX, 2),
-            column(Fact, FACT_VALUE_INDEX),
+            Columns(Facts, FACT_ID_INDEX, 2),
+            column(Facts, FACT_VALUE_INDEX),
         ],
         attached_to => [Join(Permanent, PERMANENT_ATTACHED_INDEX)],
         name => [Fact(FactKind::SetName)],
@@ -1376,16 +1372,17 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         timestamp => [column(Permanent, PERMANENT_TIMESTAMP_INDEX)],
     }));
     fields.extend(encoding!(ContinuousEffectData {
-        modification => [Fact(FactKind::Effect), Columns(Fact, FACT_ID_INDEX, 2)],
-        power => [column(Fact, FACT_VALUE_INDEX)],
-        toughness => [column(Fact, FACT_VALUE_INDEX + 1)],
-        amount => [column(Fact, FACT_VALUE_INDEX)],
-        keywords => [Columns(Fact, FACT_DETAIL_INDEX, 2)],
-        subtypes => [Columns(Fact, FACT_DETAIL_INDEX, 2)],
-        color => [Columns(Fact, FACT_DETAIL_INDEX, 2)],
-        duration => [column(Fact, FACT_DURATION_INDEX)],
-        source_registry_key => [Join(Fact, FACT_SOURCE_INDEX)],
-        timestamp => [column(Fact, FACT_ORDER_INDEX)],
+        modification => [Fact(FactKind::Effect), Columns(Facts, FACT_ID_INDEX, 2)],
+        power => [column(Facts, FACT_VALUE_INDEX)],
+        toughness => [column(Facts, FACT_VALUE_INDEX + 1)],
+        amount => [column(Facts, FACT_VALUE_INDEX)],
+        keywords => [Columns(Facts, FACT_DETAIL_INDEX, 2)],
+        subtypes => [Columns(Facts, FACT_DETAIL_INDEX, 2)],
+        color => [Columns(Facts, FACT_DETAIL_INDEX, 2)],
+        duration => [column(Facts, FACT_DURATION_INDEX)],
+        source_registry_key => [Join(Facts, FACT_SOURCE_INDEX)],
+        source_name => [Definition],
+        timestamp => [column(Facts, FACT_ORDER_INDEX)],
     }));
     fields.extend(encoding!(StackObjectData {
         description => [Definition],
@@ -1529,7 +1526,7 @@ fn every_observed_field_names_its_v5_encoding_and_every_v5_column_is_claimed() {
         "every fact kind is claimed by the field it states"
     );
     for index in FACT_STRUCTURE {
-        claimed.insert((Buffer::Fact, index));
+        claimed.insert((Buffer::Facts, index));
     }
     for index in RELATION_STRUCTURE {
         claimed.insert((Buffer::Relation, index));
@@ -1540,7 +1537,7 @@ fn every_observed_field_names_its_v5_encoding_and_every_v5_column_is_claimed() {
         Buffer::Permanent,
         Buffer::Relation,
         Buffer::Action,
-        Buffer::Fact,
+        Buffer::Facts,
     ] {
         for index in (0..buffer.width()).filter(|i| Some(*i) != buffer.validity()) {
             assert!(
@@ -1683,9 +1680,13 @@ fn on_permanent(s: &Scenario, id: PermanentId) -> Affected {
 fn facts_about(s: &Scenario, viewer: usize, object_index: usize) -> Vec<Vec<f32>> {
     encoded(s, viewer, 5)
         .facts
-        .chunks_exact(FACT_DIM)
-        .filter(|row| row[FACT_VALID_INDEX] == 1.0 && row[FACT_OBJECT_INDEX] == (object_index + 1) as f32)
-        .map(<[f32]>::to_vec)
+        .as_chunks::<FACT_DIM>()
+        .0
+        .iter()
+        .filter(|row| {
+            row[FACT_VALID_INDEX] == 1.0 && row[FACT_OBJECT_INDEX] == (object_index + 1) as f32
+        })
+        .map(|row| row.to_vec())
         .collect()
 }
 
@@ -1889,7 +1890,11 @@ fn each_added_subtype_reaches_a_fact_row() {
         );
         let rows = facts_about(&changed, 0, object_index(&changed, 0, ogre));
         fact_row(&rows, FactKind::AddedSubtype, name_value(subtype));
-        let effect = fact_row(&rows, FactKind::Effect, name_value("Modification::AddSubtypes"));
+        let effect = fact_row(
+            &rows,
+            FactKind::Effect,
+            name_value("Modification::AddSubtypes"),
+        );
         assert_eq!(
             effect[FACT_DETAIL_INDEX..FACT_DETAIL_INDEX + 2],
             id_columns(name_value(subtype))
@@ -2402,7 +2407,11 @@ fn each_modification_reaches_an_effect_fact_row_with_its_duration_and_order() {
             EffectDuration::Indefinite,
         );
         let (name, _) = modification_seen(&modification);
-        let row = fact_row(&facts_about(&s, 0, index), FactKind::Effect, name_value(name));
+        let row = fact_row(
+            &facts_about(&s, 0, index),
+            FactKind::Effect,
+            name_value(name),
+        );
         assert_eq!(
             row[FACT_DURATION_INDEX],
             duration_code(EffectDuration::Indefinite),
@@ -2444,8 +2453,10 @@ fn a_later_record_has_a_later_order_than_an_earlier_one() {
             < order("Modification::LoseAllAbilities")
     );
     // CR 613.7: the later grant survives the earlier loss.
-    assert!(managym::agent::observation::Observation::for_player(s.game(), PlayerId(0))
-        .opponent_permanents[0]
-        .keywords
-        .flying);
+    assert!(
+        managym::agent::observation::Observation::for_player(s.game(), PlayerId(0))
+            .opponent_permanents[0]
+            .keywords
+            .flying
+    );
 }

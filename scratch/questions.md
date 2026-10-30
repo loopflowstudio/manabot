@@ -186,3 +186,24 @@ mana, `Game::zone_cast_cost`/`may_play_from_zone`, `ZoneEntry`.
 T2's operator choices are at `a5587df5a:scratch/questions.md`. New since
 `d218e1dc2`: possible worlds v3 resample foretold cards (ordered slots,
 `P(m, F)` fill factor); belief priors are not yet foretold-aware.
+
+- 2026-10-30 (continuous effects as records), implement-time refinements of the
+  accepted model, reversible:
+  - A set fixed at resolution (CR 611.2c) is one record per object sharing a
+    timestamp, rather than a `Locked(Vec<ObjectRef>)` record, so every read
+    indexes by affected object.
+  - Durations are `EndOfTurn` and `Indefinite` only; `EndOfCombat`,
+    `UntilYourNextTurn` and `WhileSourceOnBattlefield` join when a card needs
+    one (no T3 card does). "Grant ability" stays the Equipment/Aura static.
+  - The timestamp clock is the object-id generator (a permanent's `id` is its
+    entering timestamp; attaching renews `Permanent.timestamp`).
+  - Rules effects (can't be blocked, exile if it would die, kept mana, hand
+    size) are not abilities, so losing all abilities does not end them.
+  - The Observation keeps `plus1_counters` (pre-T3 consumers) and `counters`
+    holds the other kinds, so they partition rather than duplicate.
+  - The model hashes fact ids into 4096 embedding buckets (collisions
+    possible); reusing the semantic-card token table for fact ids is a
+    follow-up if it matters.
+  - Ability descriptions of continuous effects are generated uniformly
+    (`continuous_description`), so some offer texts change wording
+    ("can't be blocked until end of turn").

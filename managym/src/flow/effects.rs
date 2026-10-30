@@ -65,10 +65,7 @@ impl Game {
 
     /// Records affecting the permanent's current incarnation, in timestamp
     /// order.
-    pub fn effects_on(
-        &self,
-        permanent_id: PermanentId,
-    ) -> impl Iterator<Item = &ContinuousEffect> {
+    pub fn effects_on(&self, permanent_id: PermanentId) -> impl Iterator<Item = &ContinuousEffect> {
         let object = self.permanent_object_ref(permanent_id);
         self.state
             .effects
@@ -77,10 +74,7 @@ impl Game {
     }
 
     /// Records affecting a player, in timestamp order.
-    pub fn player_effects(
-        &self,
-        player: PlayerId,
-    ) -> impl Iterator<Item = &ContinuousEffect> {
+    pub fn player_effects(&self, player: PlayerId) -> impl Iterator<Item = &ContinuousEffect> {
         self.state
             .effects
             .iter()

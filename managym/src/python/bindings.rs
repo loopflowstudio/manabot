@@ -30,10 +30,9 @@ use crate::{
         env::{Env, PreparedPossibleWorldMaterializer},
         observation::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
-            ContinuousEffectData, EventData,
-            EventEntityKind, EventType, KeywordData, Observation, PermanentData, PlayerData,
-            RestrictedManaData, SideboardCardData, StackObjectData, StackObjectKindData,
-            StackTargetData, StackTargetKindData, TurnData,
+            ContinuousEffectData, EventData, EventEntityKind, EventType, KeywordData, Observation,
+            PermanentData, PlayerData, RestrictedManaData, SideboardCardData, StackObjectData,
+            StackObjectKindData, StackTargetData, StackTargetKindData, TurnData,
         },
         observation_encoder::{ObservationEncoderConfig, ACTION_DIM},
         structured_offer::{OfferId as StructuredOfferId, OfferSubmission, StructuredOfferSet},
@@ -1065,6 +1064,8 @@ pub struct PyContinuousEffect {
     #[pyo3(get, set)]
     pub source_registry_key: Option<i32>,
     #[pyo3(get, set)]
+    pub source_name: Option<String>,
+    #[pyo3(get, set)]
     pub timestamp: i32,
 }
 
@@ -1090,6 +1091,7 @@ impl From<ContinuousEffectData> for PyContinuousEffect {
             color: value.color,
             duration: value.duration,
             source_registry_key: value.source_registry_key,
+            source_name: value.source_name,
             timestamp: value.timestamp,
         }
     }
@@ -1108,6 +1110,7 @@ impl From<PyContinuousEffect> for ContinuousEffectData {
             color: value.color,
             duration: value.duration,
             source_registry_key: value.source_registry_key,
+            source_name: value.source_name,
             timestamp: value.timestamp,
         }
     }
@@ -3875,14 +3878,6 @@ fn unsupported_cards(names: Vec<String>) -> PyResult<Vec<String>> {
         .map_err(|error| PyValueError::new_err(error.to_string()))
 }
 
-/// The learning-token value of a Rust or printed name; policy-input fact rows
-/// use the same ids.
-#[cfg(feature = "python")]
-#[pyfunction]
-fn name_value(name: &str) -> i32 {
-    crate::cards::tokens::name_value(name)
-}
-
 /// Learning tokens for every definition of a pack (`None`: the default pack),
 /// derived from the engine's card definitions. Rows are `CardDefId`s; the
 /// pack's `content_digest` names the content they encode.
@@ -4098,7 +4093,6 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(content_pool, m)?)?;
     m.add_function(wrap_pyfunction!(set_cards, m)?)?;
     m.add_function(wrap_pyfunction!(learning_catalog, m)?)?;
-    m.add_function(wrap_pyfunction!(name_value, m)?)?;
     m.add_function(wrap_pyfunction!(learning_token_value, m)?)?;
     m.add_function(wrap_pyfunction!(unsupported_cards, m)?)?;
     m.add_function(wrap_pyfunction!(validate_observation_json, m)?)?;

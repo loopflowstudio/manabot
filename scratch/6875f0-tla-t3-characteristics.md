@@ -135,7 +135,38 @@ Scryfall id.
    decision revisions as w17), trigger-order root/content digests, and the
    four possible-world v3 belief receipts (the schema binds the content digest).
 
+30. Continuous effects as records (2026-10-30, Jack Heart's direction below).
+   `state/effect.rs` (`ContinuousEffect`, `Modification<N>`, `EffectDuration`,
+   `Affected`) and `flow/effects.rs` (apply, queries, expiry) replace every
+   per-object until-EOT field; `GameState.effects` is journaled whole and
+   hashed (`MATCH_STATE_HASH_VERSION` 11). `statics.rs` applies statics and
+   records by layer, then timestamp; `Permanent.timestamp` (renewed on attach,
+   CR 613.7e) orders statics. 23 one-off `Effect` variants became
+   `Effect::ApplyContinuous { affected: AffectedSpec, modification, duration }`
+   (+ `PutCountersOnTriggeringPermanent`); set files converted with
+   `scratch/tools/convert_continuous.py`. Day of Black Sun's loss is a record.
+31. Counters map and v5 facts (Jack Heart's "1a 2a" review, below).
+   `Counters` is one fixed `CounterKind` → count map (+1/+1 included,
+   serialized as a map of present kinds). v5 permanent rows drop per-kind
+   columns (52 → 37, adding a timestamp rank); a `facts` buffer (128 × 12,
+   `FactKind`) carries counters, added subtypes, set name/creature types,
+   used abilities and effect records, with learning-token ids. Native and
+   Python encoders, PyO3 (`facts` buffer, `ContinuousEffect`), model
+   (`manabot/model/facts.py`, joined into object embeddings), LLM text
+   (`effect_phrase`), Academy notes (`effectNote`) and the experience
+   protocol carry the records.
+
 ## Remaining
+
+- Rust test migration to records (delegated pass), new directed rules tests
+  (timestamp order, expiry, zone change, undo, determinism).
+- Rust: `ContinuousEffectData.source_name`; experience wire view
+  (`experience.rs`) + regenerated protocol schemas; decision capture binds
+  effect source definitions.
+- Rebuild the extension; Python parity/text/model tests; Academy check.
+- Re-record w18 evidence (state digests changed): semantic kernel,
+  authored-match + parity, public-commitment parity, Academy fixtures,
+  trigger-order digests, belief receipts.
 
 - If T2 lands on main first, its w18 evidence is frozen and T3 takes w19 (and
   v6) instead; the open in-place assumption is in `scratch/questions.md`.
@@ -290,3 +321,33 @@ Proof:
   - hash and determinism stability
 - Native/Python v5 parity; guard and directed observability tests for each
   `Modification` and `Duration`; debug `cargo test`; the AGENTS.md world suite.
+
+## Accepted: open vocabularies as data (Jack Heart, 2026-10-30, PR review "1a 2a")
+
+Page: `scratch/pr-review.html`. Both changes land in this diff, together with
+the continuous-effects records.
+- Counters (1a): `Permanent.counters` becomes one `CounterKind → count` map,
+  with +1/+1 included. `plus1_counters` and the named fields in `Counters` go
+  away. A new counter kind is one enum variant. Readers use one accessor
+  (`counter_count(kind)`), and serialization stays omitted-when-empty with a
+  stable key order for hashes.
+- Encoding (2a): v5 (still open, so it extends in place) encodes open-ended
+  vocabularies as rows of (object index, vocabulary kind, vocabulary id, value),
+  joined to objects the way relations and the attachment link are. The rows
+  cover:
+  - counter kinds
+  - subtypes gained or set by an effect
+  - a set name, as a definition or name id
+  - set creature types
+  - used or exhausted ability indices
+  - continuous-effect records
+
+  The per-kind columns go away: stun, fire and double-strike counters,
+  `TEMP_SUBTYPES` and its "other" count, the used-ability flags and their
+  "other" count, and the characteristics-set bool. Generic columns stay, such as
+  tapped, damage, the effective P/T derived values and the keyword block. Row
+  capacity is fixed in `ObservationSpace`, and overflow fails explicitly like
+  the other blocks. Vocabulary ids come from the same Rust enums and tables as
+  the learning tokens, so the tensor and the tokens share one vocabulary. The
+  guard test claims each row kind exhaustively, and the directed tests assert on
+  rows, not columns. Native/Python parity holds.

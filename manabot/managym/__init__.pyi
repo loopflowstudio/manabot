@@ -409,6 +409,8 @@ class Player:
     lesson_mana: tuple[int, int, int, int, int, int]
     restricted_mana: List[RestrictedMana]
     hand_only_until: Optional[int]
+    # Continuous effects on this player, in timestamp order.
+    effects: list[ContinuousEffect]
 
 class RestrictedMana:
     spells: List[str]
@@ -454,6 +456,26 @@ class SideboardCard:
     registry_key: int
     name: str
 
+class ContinuousEffect:
+    """One continuous-effect record on a player or permanent (CR 611, 613)."""
+
+    # Modification variant: ModifyPt, SetBasePt, AddKeywords, AddSubtypes,
+    # BecomeArtifactCreature, LoseAllAbilities, Firebending, CantBeBlocked,
+    # ExileIfWouldDie, KeepUnspentMana or NoMaximumHandSize.
+    modification: str
+    power: int | None
+    toughness: int | None
+    amount: int | None
+    keywords: list[str]
+    subtypes: list[str]
+    color: str | None
+    # EndOfTurn or Indefinite.
+    duration: str
+    source_registry_key: int | None
+    # The source's printed name (public: the spell or ability resolved).
+    source_name: str | None
+    timestamp: int
+
 class Permanent:
     id: int
     registry_key: int
@@ -475,9 +497,8 @@ class Permanent:
     temp_subtypes: List[str]
     # Effective keywords (printed + until-EOT grants).
     keywords: Keywords
-    stun_counters: int
-    fire_counters: int
-    double_strike_counters: int
+    # Counters other than +1/+1 by kind (stun, fire, double_strike).
+    counters: dict[str, int]
     # Permanent id this Aura or Equipment is attached to.
     attached_to: int | None
     # Name and creature types set by an effect; None while printed ones apply.
@@ -487,6 +508,10 @@ class Permanent:
     blocking: int | None
     abilities_lost: bool
     used_abilities: list[int]
+    # Continuous effects on this permanent, in timestamp order.
+    effects: list[ContinuousEffect]
+    # Its timestamp (CR 613.7d/e).
+    timestamp: int
 
 class Turn:
     turn_number: int

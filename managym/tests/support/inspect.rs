@@ -8,6 +8,7 @@ use managym::{
     flow::turn::{PhaseKind, StepKind},
     state::{
         card::Keywords,
+        effect::Modification,
         game_object::{CardId, PermanentId, PlayerId},
         permanent::{CounterKind, Permanent},
         stack_object::StackObject,
@@ -267,6 +268,18 @@ pub fn tapped(s: &Scenario, id: PermanentId) -> bool {
 
 pub fn keywords(s: &Scenario, id: PermanentId) -> Keywords {
     s.game().effective_keywords(id)
+}
+
+/// The summed +power/+toughness of the permanent's `ModifyPt` records
+/// (layer 7c effects from resolved spells and abilities).
+pub fn pt_modifications(s: &Scenario, id: PermanentId) -> (i32, i32) {
+    s.game()
+        .effects_on(id)
+        .filter_map(|effect| match effect.modification {
+            Modification::ModifyPt { power, toughness } => Some((power, toughness)),
+            _ => None,
+        })
+        .fold((0, 0), |(p, t), (dp, dt)| (p + dp, t + dt))
 }
 
 // ---------------------------------------------------------------------------

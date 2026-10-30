@@ -21,6 +21,7 @@ from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
 from manabot.model.compound import CompoundDecoder, CompoundOutput
 from manabot.model.continuation import ContinuationEncoder
+from manabot.model.facts import FactEncoder
 from manabot.model.inference import PreparedObservation
 from manabot.model.recent_events import RecentEventEncoder
 from manabot.model.semantic_cards import admit_definition_ids
@@ -245,6 +246,10 @@ class ActorCritic(nn.Module):
                 nn.init.zeros_(layer.weight)
                 nn.init.zeros_(layer.bias)
                 layers.append(layer)
+        # Policy input v5 fact rows (counter kinds, added subtypes, set
+        # characteristics, spent abilities, continuous-effect records) join
+        # their objects. Built last so earlier parameters keep their draws.
+        self.facts = FactEncoder(embed_dim) if enc.shows_everything else None
 
         # When True, forward() stashes raw pre-mask logits on
         # self.last_raw_logits for offline diagnosis. Off by default: the
@@ -578,6 +583,8 @@ class ActorCritic(nn.Module):
         objects = torch.cat(object_parts, dim=1)
         if self._link_columns:
             objects = self._join_permanent_links(obs, objects)
+        if self.facts is not None:
+            objects = self.facts(obs["facts"], objects)
         # History and current continuation both inform objects and focus-free actions.
         shared_context = None
         frame_context = None

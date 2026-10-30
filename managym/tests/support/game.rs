@@ -17,7 +17,7 @@ use managym::{
         effect::{Affected, EffectDuration, Modification},
         game_object::{CardId, PermanentId, PlayerId},
         mana::Mana,
-        permanent::Permanent,
+        permanent::{CounterKind, Permanent},
         player::PlayerConfig,
         zone::ZoneType,
     },
@@ -412,6 +412,15 @@ pub fn player_effect(
         modification,
         duration,
     );
+}
+
+/// Set a permanent's counters of one kind, without events (scenario setup).
+pub fn set_counters(s: &mut Scenario, id: PermanentId, kind: CounterKind, count: i32) {
+    let permanent = s.game_mut().state.permanents[id]
+        .as_mut()
+        .expect("permanent on the battlefield");
+    let current = permanent.counter_count(kind);
+    permanent.change_counters(kind, count - current);
 }
 
 pub fn inject_ability(s: &mut Scenario, card_id: CardId, ability: Ability) {

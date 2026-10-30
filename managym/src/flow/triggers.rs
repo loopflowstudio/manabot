@@ -509,10 +509,7 @@ impl Game {
             let Some(permanent) = self.state.permanents[attacker].as_ref() else {
                 continue;
             };
-            let (controller, card) = (
-                permanent.controller,
-                permanent.card,
-            );
+            let (controller, card) = (permanent.controller, permanent.card);
             if amount == 0 {
                 continue;
             }

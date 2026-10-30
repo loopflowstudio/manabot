@@ -51,18 +51,11 @@ pub struct Player {
     pub name: String,
     pub life: i32,
     pub drew_when_empty: bool,
-    /// "You have no maximum hand size for the rest of the game" (CR 402.2).
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub no_maximum_hand_size: bool,
     pub alive: bool,
     pub mana_pool: Mana,
     /// Mana that lasts until end of combat (firebending) — persists across
     /// combat steps instead of emptying, empties as combat ends.
     pub combat_mana_pool: Mana,
-    /// "Until end of turn, you don't lose unspent red mana as steps and
-    /// phases end" (The Last Agni Kai); ends in the cleanup step.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub keeps_red_mana: bool,
 }
 
 impl Player {
@@ -76,11 +69,9 @@ impl Player {
             name: name.into(),
             life: 20,
             drew_when_empty: false,
-            no_maximum_hand_size: false,
             alive: true,
             mana_pool: Mana::default(),
             combat_mana_pool: Mana::default(),
-            keeps_red_mana: false,
         }
     }
 }

@@ -7,6 +7,7 @@ use managym::{
     state::{
         card::ReplacementEffect,
         game_object::{PlayerId, Target},
+        permanent::CounterKind,
         zone::ZoneType,
     },
 };
@@ -159,7 +160,7 @@ fn cr_614_1c_enters_tapped_and_with_counters_before_card_moved_commits() {
         .as_ref()
         .expect("entered permanent facts");
     assert!(permanent.tapped);
-    assert_eq!(permanent.plus1_counters, 2);
+    assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 2);
     assert_ne!(s.game().current_object_ref(card), Some(old_ref));
     assert!(s.drain_events().contains(&GameEvent::CardMoved {
         card,
@@ -192,5 +193,5 @@ fn entry_replacements_do_not_modify_other_objects_or_nonbattlefield_moves() {
         .as_ref()
         .expect("mountain facts");
     assert!(!permanent.tapped);
-    assert_eq!(permanent.plus1_counters, 0);
+    assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 0);
 }

@@ -377,17 +377,24 @@ pub struct ContinuousEffectData {
     /// Definition of the spell or ability's source.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source_registry_key: Option<i32>,
+    /// The source's printed name: public, since the spell or ability resolved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_name: Option<String>,
     /// Timestamp order (CR 613.7); larger is later, comparable across
     /// records and permanents in one observation.
     pub timestamp: i32,
 }
 
 impl ContinuousEffectData {
-    fn new(effect: &ContinuousEffect) -> Self {
+    fn new(game: &Game, effect: &ContinuousEffect) -> Self {
         let mut data = Self {
             modification: String::new(),
             duration: format!("{:?}", effect.duration),
             source_registry_key: effect.source.map(|id| id.0 as i32),
+            source_name: effect
+                .source
+                .and_then(|id| game.state.content.definition(id))
+                .map(|definition| definition.name.clone()),
             timestamp: effect.timestamp.0 as i32,
             ..Default::default()
         };
@@ -432,7 +439,7 @@ impl ContinuousEffectData {
             .effects
             .iter()
             .filter(|effect| Some(effect.affected) == affected)
-            .map(Self::new)
+            .map(|effect| Self::new(game, effect))
             .collect()
     }
 }
