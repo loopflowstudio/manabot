@@ -160,3 +160,9 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   `manabot/sim/conditional_search.py`, so the two code-source advice fixtures
   cannot verify their source bundle; editing `advice.py` changes no behavior.
 - `visual-references` archived with Doppler `manabot/prd` R2 credentials.
+- 2026-10-30 (second pass): the directive conditioned deleting
+  `semantic/policy.py` *and* the belief demo cluster on dropping `belief-demo`
+  without editing `cli.py` (#395). The condition concerns the demo only:
+  `semantic/policy.py` has no CLI path, so it was deleted; the demo cluster is held.
+- 2026-10-30: `belief/__init__.py` keeps a 15-name lazy map, against CLAUDE.md's
+  "re-export nothing", because `tests/belief/{support,test_state}.py` (#395) read it.

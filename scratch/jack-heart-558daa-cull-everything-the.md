@@ -3,7 +3,7 @@
 Directive: Jack Heart, 2026-10-30 (Task 558daa). Was stacked on afbd6a; #403
 merged into main (10eeb1f55) and this branch merged it (8db3b2fe8), so the PR
 targets main and its diff is the cull alone.
-Status: first cull pass implemented; awaiting gate/demo. Stop at review/demo; no merge.
+Status: second cull pass implemented (remaining unprotected candidates cut); awaiting gate/demo. Stop at review/demo; no merge.
 
 ## Approach
 
@@ -17,6 +17,19 @@ Status: first cull pass implemented; awaiting gate/demo. Stop at review/demo; no
    fmt, focused pytest, Academy UI check.
 4. Delivery: all area commits go in ONE PR (Jack Heart, 2026-10-30). Local
    per-area commits are fine; do not split into multiple or stacked PRs.
+
+## Jack Heart decisions, 2026-10-30 (held-back list)
+
+1. Search branching: forking is the search strategy now. Cut the rejected branching drivers (ClonePlusUndoDriver/DensePageCowUndoDriver, Game COW helpers, paged event log, benchmark.rs, bin/branching_bench.rs, scripts/bench_branching.py + tests). Do not wait on #399.
+   flow/undo.rs + journal_* calls: evaluate whether undo is correct and complete today (perfect or very close). If it is not, cut it too and record the evidence in the ledger. A follow-up Task for undo will be filed: Jack wants undo in Academy eventually. If it is near-perfect, keep it and say why.
+2. CI: cut the duplicate semantic-conformance job (keep fuzz coverage somewhere).
+3. Top-level wave/: remove it entirely; bring wave content up to current Loopflow standards under .lf/ (no legacy wave/ anywhere). Jack explicitly authorizes this write.
+4. Do the seeds + checkpoint-hash form for semantic-kernel-w17-v1 (failures write the regenerated case on mismatch). Do not wait on #395/#399.
+5. Do the docs consolidation into ~6 current-system files. Do not wait on open PRs; they will rebase.
+6. Remove Academy's live belief runtime (academy/live_advice.py + server.py hooks); Jack is not confident the belief code works.
+7. Remove: website landing-page assets, experiments/planning/, the old S3 publisher (experiment/artifacts.py; update CLAUDE.md/tests that name it), recipes/ataraxos.py + training/presets/ataraxos-mtg-v1.json.
+
+Behavior limits and frozen-evidence rules still apply. Update the ledger and held-back list accordingly.
 
 ## Deletion ledger
 
@@ -58,6 +71,12 @@ manabot (8ab966b4a; ~3,300 code/test/doc lines + 26k lines of unread fixture JSO
 
 Receipt change (7e61a050b): `conformance/authored-match-parity-w17-v1` receipt regenerated; only its `relevant_source` file hashes changed (it hashes every `managym/src/**/*.rs`). Parity result unchanged (142 commands, no divergence).
 
+Second pass (protected set re-read from `gh api pulls/{383,395,399,402}/files`, 2026-10-30):
+- manabot (38c692e14): `EvaluationContract` family (contract, profile, schedule, promotion, rating, roots, caps, `BASE_ANCHOR_IDS`) → tests read only the INT-6 fixture's key and anchors, now via typed `tests/eval/arena_fixture.py`; validator-only test dropped, cohort digest still asserted. `belief/__init__.py` map trimmed to the 15 names protected helpers read; three unprotected tests import defining modules.
+- repository (ae9c5c2a5): `scripts/bench_study_branch.py` + test, `scripts/verify_elemental_world.py` (world.md cites it at a74f31828; frozen reports/preregistrations keep their citations); `semantic-conformance` CI job keeps only fuzz (every path selecting it also selects Rust Tests, which runs `semantic_conformance_tests` incl. `check_root`); stale corpus/scratch citations in `docs/rules/{optional-payments,learn-lesson}.md` → archive paths / plain checkpoint names.
+- managym (05d5e2ac4): `ZoneManager::total_size`; parity receipt `relevant_source` re-hashed (result unchanged: 142 commands, no divergence).
+- manabot (cd8778588): `semantic/policy.py` + test (test-only; no CLI path; boundary probe keeps the sim entry points).
+
 ## Kept on purpose
 
 - All four w17 conformance corpora: each has a current reader (Rust conformance tests/CI; Academy parity scripts and tests).
@@ -69,28 +88,12 @@ Receipt change (7e61a050b): `conformance/authored-match-parity-w17-v1` receipt r
 - `PassivePolicy` (reached via `build_opponent_policy("passive")`); `PriorityState.pass_count` (hashed into the match-state hash).
 - `scripts/generate_advice_fixture.py`, `generate_conditional_strategy_fixture.py`: sole generators of live fixtures.
 
-## Remaining cull
-
-Freed by the #403 merge (no open PR edits these files; not yet done):
-- `manabot/semantic/policy.py` (556, test-only); belief demo cluster
-  (`belief/demo.py`, `recipes/belief.py`, `belief/population.py`, ~1,460) —
-  the `belief-demo` CLI commands that reach it are in `cli.py` (#395), so delete
-  the modules only with that CLI entry, or wait.
-- `EvaluationContract` family in `eval/models.py`, `flat_mc.aggregate_records`,
-  `match.parse_deck`, `action_cases.identity_removed`, `belief/__init__.py`
-  re-export map.
-- `academy/semantic_boundary.py` (test-only; remove it from
-  `authored_match_parity._source_manifest`, which re-hashes the receipt), and
-  `advice.py` `int13_result_to_surface_deltas`/`policy_mass_is_non_uniform`
-  (their tests are in `tests/academy/test_advice.py`, #395).
-- `scripts/bench_study_branch.py` + test; `scripts/verify_elemental_world.py`
-  with its citation in `docs/rules/elemental/world.md`.
-- CI: drop the `semantic-conformance` job's duplicated test and `check`, keeping
-  `fuzz` (`ci.yml`).
-- Stale citations in `docs/rules/{optional-payments,learn-lesson}.md`.
-- `ZoneManager::total_size` (`state/zone.rs`).
+## Held
 
 Still held by an open PR:
+- #395: belief demo cluster (`belief/demo.py`, `recipes/belief.py`, `belief/population.py`) — reached by `belief-demo`/`belief-learn-demo` in `cli.py`; `tests/belief/test_state.py` imports the demo too. `match.parse_deck` (`env/match.py`). Remaining `belief/__init__.py` map (read by `tests/belief/{support,test_state}.py`).
+- #399: `action_cases.identity_removed` (`verify/action_cases.py`); `flat_mc.aggregate_records` (imported by `tests/sim/test_rollout.py`); `academy/semantic_boundary.py` (removing it edits `authored_match_parity._source_manifest`).
+- #395: `advice.py` `int13_result_to_surface_deltas`/`policy_mass_is_non_uniform` (tests in `tests/academy/test_advice.py`).
 - #399: search-branching drivers — `flow/undo.rs` (766), `journal_*` calls in
   `flow/*.rs`, `benchmark.rs` (1,276), plus the free `game.rs` COW helpers,
   `flow/event_log.rs` paged log, `search_state.rs` undo drivers,
@@ -120,5 +123,5 @@ Still held by an open PR:
 - Website landing-page assets (`/` redirects to the blog), `experiments/planning/`, MTG-186 drivers (an Etude migration test imports them), `seat_comparison.py` (sample file in `test_experiment_files.py`), `experiment/artifacts.py` (old S3 publisher; CLAUDE.md names its test), `verify/decision_profile.py` (only `wilson_interval` used), `recipes/ataraxos.py` (test fixture), `training/presets/ataraxos-mtg-v1.json`.
 ## Checks
 
-- Pre-existing failures seen at base, unrelated to the cull: `tests/sim/test_conditional_search.py` (INT-13 root digest), `tests/sim/test_search_runtime.py::test_seed_197_checkpoint_model_abis_match_the_registry` (w17 world binding), `tests/verify/test_observation_parity.py::test_elemental_indestructible_encoding_preserves_outside_and_definition_columns` (55 == 41; file untouched by this branch).
-- Realign 2026-10-30: protected-set membership recomputed from `gh api pulls/{383,395,399,402}/files` after #403 merged; no tests rerun (no code changed).
+- Pre-existing at base (fail identically with this branch's changes stashed): `tests/belief/test_belief_agent.py::test_keystone_demo_changes_belief_tokens_and_hides_actual_truth` (zero deltas), `tests/belief/test_state.py::test_native_projection_preserves_canonical_receipt_bytes` (receipt digest), `tests/semantic/test_temur.py::test_temur_finishes_through_the_production_training_observation_path` (60 == 40, v5 player width); earlier: `tests/sim/test_conditional_search.py`, `tests/sim/test_search_runtime.py::test_seed_197_checkpoint_model_abis_match_the_registry`, `tests/verify/test_observation_parity.py::test_elemental_indestructible_encoding_preserves_outside_and_definition_columns`.
+- Second pass (cd8778588): debug `cargo test` (opt-level 1, as CI) 665 passed / 0 failed; `cargo fmt --check`, clippy `--all-targets` clean; CLAUDE.md world-change suite 65 passed; focused pytest over touched tests + `tests/belief tests/semantic` 363 passed / 3 failed (the three above) / 1 skipped; Academy `npm run check` 0 errors.
