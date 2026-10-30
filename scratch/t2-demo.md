@@ -55,3 +55,9 @@ against the current extension: both outputs byte-identical to `run.log` and
 No tracked change outside `scratch/` since `f821ee4c0`; T1 #394 still open at
 `2c50c8793`. `t2_demo.py … 60` and `t2_demo_foretell.py` outputs again
 byte-identical to `run.log` and `foretell.log`. Advance.
+
+## Re-run, decision pass 1 at `8220f8332` (2026-10-30)
+
+No tracked change outside `scratch/` since `a5587df5a`; T1 #394 still open at
+`2c50c8793`. `t2_demo.py … 60` and `t2_demo_foretell.py` outputs byte-identical to
+`run.log` and `foretell.log` (60 games, winners 24/36, no errors). Advance.
