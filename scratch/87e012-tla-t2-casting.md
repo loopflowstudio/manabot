@@ -87,6 +87,9 @@ debug `semantic_conformance_tests` 6 pass on `semantic-kernel-w17-v1`; belief,
 learn contract, Academy fixtures/parity 142 pass; arena admission 66 pass;
 `npm run check` 0 errors. Full debug `cargo test`, vitest and e2e: gate.
 
+2026-10-30 compress: tracker `_TransportFacts` derives `known_exits` from its
+slot/hand split instead of storing it; `pytest tests/belief` 93 pass. Gate owns the rest.
+
 ## Concept review 4, with Jack Heart (2026-10-30)
 
 Jack Heart accepted 1b: T2 fixes only the tracker's foretold-slot accounting
