@@ -31,10 +31,12 @@ decklist data separate from card behavior; see
 
 Dependencies flow: python → agent → flow → state/infra.
 
-The semantic kernel direction — typed card programs, exact object identity,
-structured offers, proposed events, forking — is documented in
-[docs/research/semantic-kernel.md](../docs/research/semantic-kernel.md), with
-conformance fixtures under [conformance/](../conformance/).
+[docs/research/semantic-kernel.md](../docs/research/semantic-kernel.md) is the
+dated 2026-07-15 research record on typed card programs, exact object identity,
+structured offers and proposed events; conformance fixtures live under
+[conformance/](../conformance/). Its undo, journal and page-COW sections were
+superseded by full-clone forking ([docs/ARCHITECTURE.md §10](../docs/ARCHITECTURE.md)
+and the w2-182/198/199 benchmark reports under `experiments/`).
 
 Authored setups come from `AuthoredPack::player_config` (Python:
 `managym.authored_deck_setup(pack_key, deck_key)`). Carry that complete config
