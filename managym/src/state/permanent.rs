@@ -16,6 +16,10 @@ pub enum CounterKind {
     DoubleStrike,
     /// No rules meaning of its own; cards count it (the Ascensions).
     Quest,
+    /// CR 122.1h: a permanent with one that would die is exiled instead.
+    Finality,
+    /// No rules meaning of its own; cards count it (Zhao, the Moon Slayer).
+    Conqueror,
 }
 
 impl CounterKind {
@@ -27,15 +31,19 @@ impl CounterKind {
             CounterKind::Fire => "fire",
             CounterKind::DoubleStrike => "double_strike",
             CounterKind::Quest => "quest",
+            CounterKind::Finality => "finality",
+            CounterKind::Conqueror => "conqueror",
         }
     }
 
-    pub const ALL: [CounterKind; 5] = [
+    pub const ALL: [CounterKind; 7] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
         CounterKind::DoubleStrike,
         CounterKind::Quest,
+        CounterKind::Finality,
+        CounterKind::Conqueror,
     ];
 }
 

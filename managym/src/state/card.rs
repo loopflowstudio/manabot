@@ -274,6 +274,14 @@ pub struct StaticKeywordGrant {
     pub keywords: Keywords,
 }
 
+/// A static triggered-ability grant (CR 613.1f layer 6): "[scope] have
+/// [ability]". Each covered permanent is the source of its own occurrences.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct StaticTriggeredGrant {
+    pub scope: StaticScope,
+    pub ability: Box<Ability>,
+}
+
 /// "As long as this has N or more [kind] counters on it" (War Balloon).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct CounterThreshold {
@@ -570,6 +578,13 @@ pub enum StaticAbility {
     /// "This creature can attack as though it didn't have defender" while
     /// the condition holds for its controller (Platypus-Bear).
     AttacksDespiteDefender(Condition),
+    /// "If a triggered ability of a [predicate] you control triggers, that
+    /// ability triggers an additional time" (CR 603.2d). Each such permanent
+    /// adds one occurrence.
+    TriggersAdditionalTime(CardPredicate),
+    /// A triggered ability this card grants while on the battlefield
+    /// ("Other Allies you control have prowess").
+    TriggeredGrant(StaticTriggeredGrant),
 }
 
 /// Which blocks a creature's blocking restriction forbids (CR 509.1b).
@@ -761,6 +776,21 @@ impl CardDefinition {
     pub fn keyword_grants(&self) -> impl Iterator<Item = &StaticKeywordGrant> {
         self.statics.iter().filter_map(|ability| match ability {
             StaticAbility::KeywordGrant(grant) => Some(grant),
+            _ => None,
+        })
+    }
+
+    pub fn triggered_grants(&self) -> impl Iterator<Item = &StaticTriggeredGrant> {
+        self.statics.iter().filter_map(|ability| match ability {
+            StaticAbility::TriggeredGrant(grant) => Some(grant),
+            _ => None,
+        })
+    }
+
+    /// The predicate of each "triggers an additional time" ability.
+    pub fn additional_trigger_predicates(&self) -> impl Iterator<Item = &CardPredicate> {
+        self.statics.iter().filter_map(|ability| match ability {
+            StaticAbility::TriggersAdditionalTime(predicate) => Some(predicate),
             _ => None,
         })
     }

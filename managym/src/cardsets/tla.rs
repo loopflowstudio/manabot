@@ -13,7 +13,7 @@ use crate::state::{
         CardDefinition, CardType, CardTypes, CounterThreshold, Keywords, ManaAbility, PowerCda,
         ReplacementEffect, Restriction, SacrificeCost, SetCharacteristics, SpellCostReduction,
         StaticAbility, StaticKeywordGrant, StaticPtBuff, StaticRestriction, StaticScope,
-        StaticTypeGrant, TargetCostReduction, TriggeredManaAbility,
+        StaticTriggeredGrant, StaticTypeGrant, TargetCostReduction, TriggeredManaAbility,
     },
     mana::{Color, Mana, ManaCost, ManaUse},
     permanent::CounterKind,
@@ -148,6 +148,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         jet_freedom_fighter(),
         june_bounty_hunter(),
         katara_bending_prodigy(),
+        katara_the_fearless(),
         katara_water_tribe_s_hope(),
         knowledge_seeker(),
         kyoshi_battle_fan(),
@@ -190,6 +191,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         rabaroo_troop(),
         ran_and_shaw(),
         raucous_audience(),
+        raven_eagle(),
         razor_rings(),
         realm_of_koh(),
         rebellious_captives(),
@@ -205,6 +207,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         serpent_of_the_pass(),
         serpents_pass(),
         shared_roots(),
+        sokka_tenacious_tactician(),
         sold_out(),
         sokka_bold_boomeranger(),
         sokka_lateral_strategist(),
@@ -260,6 +263,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         white_lotus_hideout(),
         white_lotus_reinforcements(),
         white_lotus_tile(),
+        wolfbat(),
         yip_yip(),
         yue_the_moon_spirit(),
         yuyan_archers(),
@@ -4662,6 +4666,27 @@ fn katara_bending_prodigy() -> CardDefinition {
     }
 }
 
+fn katara_the_fearless() -> CardDefinition {
+    let text_box = "If a triggered ability of an Ally you control triggers, that ability triggers an additional time.";
+
+    CardDefinition {
+        key: "tla.katara_the_fearless",
+        scryfall_id: "b0a18f8b-7364-4375-b2e1-e2f15978517f",
+        name: "Katara, the Fearless".into(),
+        mana_cost: Some(ManaCost::parse("{G}{W}{U}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+        power: Some(3),
+        toughness: Some(3),
+        statics: vec![StaticAbility::TriggersAdditionalTime(CardPredicate::subtype(
+            "Ally",
+        ))],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
 fn katara_water_tribe_s_hope() -> CardDefinition {
     let text_box = "Vigilance\nWhen Katara enters, create a 1/1 white Ally creature token.\nWaterbend {X}: Creatures you control have base power and toughness X/X until end of turn. X can't be 0. Activate only during your turn. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)";
 
@@ -6389,6 +6414,73 @@ fn raucous_audience() -> CardDefinition {
     }
 }
 
+fn raven_eagle() -> CardDefinition {
+    let text_box = "Flying\nWhenever this creature enters or attacks, exile up to one target card from a graveyard. If a creature card is exiled this way, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")\nWhenever you draw your second card each turn, each opponent loses 1 life and you gain 1 life.";
+    let graveyard_card = || TargetSpec::GraveyardCard {
+        predicate: CardPredicate::default(),
+    };
+    let exile = || {
+        vec![Effect::TargetClause {
+            requirement: TargetRequirement::up_to(1, graveyard_card()),
+            effects: vec![
+                Effect::Exile {
+                    target: graveyard_card(),
+                },
+                Effect::If {
+                    condition: Condition::TargetCardExiled(CardPredicate::creature()),
+                    then: vec![Effect::CreateToken {
+                        token_name: "Clue".into(),
+                        count: 1,
+                        tapped_and_attacking: false,
+                        attach_source: false,
+                    }],
+                    otherwise: vec![],
+                },
+            ],
+        }]
+    };
+
+    CardDefinition {
+        key: "tla.raven_eagle",
+        scryfall_id: "2262f24b-db6b-4f86-96d0-47a20fc015ab",
+        name: "Raven Eagle".into(),
+        mana_cost: Some(ManaCost::parse("{2}{B}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Bird".into(), "Assassin".into()],
+        power: Some(2),
+        toughness: Some(3),
+        keywords: Keywords {
+            flying: true,
+            ..Default::default()
+        },
+        abilities: vec![
+            Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: exile(),
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::Attacks {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: exile(),
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::YouDrawNthCardThisTurn { n: 2 },
+                intervening_if: None,
+                effects: vec![Effect::DrainLife {
+                    amount: EffectValue::Fixed(1),
+                }],
+            },
+        ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
 fn razor_rings() -> CardDefinition {
     let text_box = "Razor Rings deals 4 damage to target attacking or blocking creature. You gain life equal to the excess damage dealt this way.";
 
@@ -6877,6 +6969,72 @@ fn shared_roots() -> CardDefinition {
             bottom_source: false,
             to_hand: false,
         }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn sokka_tenacious_tactician() -> CardDefinition {
+    let text_box = "Menace, prowess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)\nOther Allies you control have menace and prowess.\nWhenever you cast a noncreature spell, create a 1/1 white Ally creature token.";
+    let noncreature = || CardPredicate {
+        not_card_types: vec![CardType::Creature],
+        ..Default::default()
+    };
+    let prowess = || Ability::Triggered {
+        intervening_if: None,
+        condition: TriggerCondition::YouCastSpell {
+            predicate: noncreature(),
+        },
+        effects: vec![Effect::until_end_of_turn(
+            AffectedSpec::Source,
+            Modification::pump(1, 1),
+        )],
+    };
+    let other_allies = || StaticScope::OtherYouControl(CardPredicate::subtype("Ally"));
+
+    CardDefinition {
+        key: "tla.sokka_tenacious_tactician",
+        scryfall_id: "f0fa5897-1da7-488f-bb19-1632e969c050",
+        name: "Sokka, Tenacious Tactician".into(),
+        mana_cost: Some(ManaCost::parse("{1}{U}{R}{W}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+        power: Some(3),
+        toughness: Some(3),
+        keywords: Keywords {
+            menace: true,
+            ..Default::default()
+        },
+        abilities: vec![
+            prowess(),
+            Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::YouCastSpell {
+                    predicate: noncreature(),
+                },
+                effects: vec![Effect::CreateToken {
+                    token_name: "Ally".into(),
+                    count: 1,
+                    tapped_and_attacking: false,
+                    attach_source: false,
+                }],
+            },
+        ],
+        statics: vec![
+            StaticAbility::KeywordGrant(StaticKeywordGrant {
+                scope: other_allies(),
+                condition: None,
+                keywords: Keywords {
+                    menace: true,
+                    ..Default::default()
+                },
+            }),
+            StaticAbility::TriggeredGrant(StaticTriggeredGrant {
+                scope: other_allies(),
+                ability: Box::new(prowess()),
+            }),
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -9052,6 +9210,40 @@ fn white_lotus_tile() -> CardDefinition {
             ..Default::default()
         }],
         replacement_effects: vec![ReplacementEffect::EntersTapped],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn wolfbat() -> CardDefinition {
+    let text_box = "Flying\nWhenever you draw your second card each turn, you may pay {B}. If you do, return this card from your graveyard to the battlefield with a finality counter on it. (If a creature with a finality counter on it would die, exile it instead.)";
+
+    CardDefinition {
+        key: "tla.wolfbat",
+        scryfall_id: "2ae83b4e-e5a4-4c98-8d16-eef3c71b8ff2",
+        name: "Wolfbat".into(),
+        mana_cost: Some(ManaCost::parse("{2}{B}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Wolf".into(), "Bat".into()],
+        power: Some(2),
+        toughness: Some(2),
+        keywords: Keywords {
+            flying: true,
+            ..Default::default()
+        },
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::InGraveyard {
+                condition: Box::new(TriggerCondition::YouDrawNthCardThisTurn { n: 2 }),
+            },
+            intervening_if: None,
+            effects: vec![Effect::OptionalPayment {
+                cost: PaymentCost::Mana(ManaCost::parse("{B}")),
+                if_paid: vec![Effect::ReturnSourceToBattlefield {
+                    counter: CounterKind::Finality,
+                }],
+                if_declined: vec![],
+            }],
+        }],
         text_box: text_box.into(),
         ..Default::default()
     }

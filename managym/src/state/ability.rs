@@ -137,6 +137,12 @@ pub enum TriggerCondition {
     OpponentDrawsNthCardThisTurn {
         n: u32,
     },
+    /// The inner condition, for an ability that functions only while its
+    /// card is in its owner's graveyard (CR 113.6k): "you" is the owner, and
+    /// the ability's source is that graveyard object.
+    InGraveyard {
+        condition: Box<TriggerCondition>,
+    },
     /// The inner condition only fires while `active_if` holds for the
     /// ability's controller: a conditionally granted triggered ability
     /// ("has firebending 2 as long as there's a Lesson card in your
@@ -206,6 +212,10 @@ pub enum Condition {
     /// Source question: the ability's source permanent is tapped ("if Katara
     /// is tapped").
     SourceTapped,
+    /// Resolution only: the frame's primary target was a card in a
+    /// graveyard that this resolution exiled, and it matches [predicate]
+    /// ("If a creature card is exiled this way").
+    TargetCardExiled(CardPredicate),
 }
 
 impl Condition {
@@ -226,7 +236,8 @@ impl Condition {
         match self {
             Condition::Kicked
             | Condition::TargetMatches(_)
-            | Condition::TargetDealtDamageThisTurn => true,
+            | Condition::TargetDealtDamageThisTurn
+            | Condition::TargetCardExiled(_) => true,
             Condition::AnyOf(conditions) => conditions.iter().any(Condition::is_resolution_only),
             Condition::SourceCountersAtLeast { .. }
             | Condition::SourceTapped
@@ -664,6 +675,12 @@ pub enum Effect {
     /// "Return this card from your graveyard to your hand": only the exact
     /// graveyard object the ability came from (CR 400.7).
     ReturnSourceToHand,
+    /// "Return this card from your graveyard to the battlefield with a
+    /// [counter] counter on it": only the exact graveyard object the ability
+    /// came from, under its owner's control.
+    ReturnSourceToBattlefield {
+        counter: CounterKind,
+    },
     /// Resolving player gains `amount` life.
     GainLife {
         amount: i32,
@@ -857,6 +874,10 @@ pub enum TargetSpec {
         predicate: CardPredicate,
     },
     GraveyardCardYouOwn {
+        predicate: CardPredicate,
+    },
+    /// "target [predicate] card from a graveyard": any player's.
+    GraveyardCard {
         predicate: CardPredicate,
     },
     Player,
@@ -1111,6 +1132,7 @@ impl Effect {
             | Effect::ReturnGrantorToHand
             | Effect::ShuffleAttachedIntoLibrary
             | Effect::ReturnSourceToHand
+            | Effect::ReturnSourceToBattlefield { .. }
             | Effect::GainLife { .. }
             | Effect::GainLifeValue { .. }
             | Effect::AddManaValue { .. }

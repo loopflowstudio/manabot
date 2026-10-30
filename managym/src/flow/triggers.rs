@@ -6,6 +6,7 @@ use crate::{
     flow::{
         event::GameEvent,
         game::Game,
+        statics::ScopeView,
         trigger::{PendingTrigger, TriggerId, TriggerOrderingClass, TriggerPlacement},
         turn::StepKind,
     },
@@ -18,6 +19,14 @@ use crate::{
         zone::ZoneType,
     },
 };
+
+/// One occurrence of a matched triggered ability, before it waits to be
+/// placed: a printed ability by index, or a granted one's effects.
+struct FiredTrigger {
+    source: TriggerSourceSnapshot,
+    ability_index: usize,
+    granted: Option<Vec<Effect>>,
+}
 
 /// Exact battlefield source facts used while matching one or more committed
 /// events. SBA batches reuse one sorted snapshot so simultaneous departures
@@ -423,6 +432,12 @@ impl Game {
                 .filter_map(|card| self.current_object_ref(*card))
                 .map(Target::GraveyardCard)
                 .collect(),
+            TargetSpec::GraveyardCard { .. } => [PlayerId(0), PlayerId(1)]
+                .into_iter()
+                .flat_map(|player| self.state.zones.zone_cards(ZoneType::Graveyard, player))
+                .filter_map(|card| self.current_object_ref(*card))
+                .map(Target::GraveyardCard)
+                .collect(),
             TargetSpec::Player | TargetSpec::Opponent | TargetSpec::CreatureOrPlayer => {
                 vec![Target::Player(PlayerId(0)), Target::Player(PlayerId(1))]
             }
@@ -499,7 +514,8 @@ impl Game {
 
     fn check_triggers_for_event(&mut self, event: &GameEvent, sources: &[TriggerSourceSnapshot]) {
         self.granted_firebending_triggers(event);
-        let mut fired = Vec::new();
+        self.graveyard_triggers(event);
+        let mut fired: Vec<FiredTrigger> = Vec::new();
         for source in sources.iter().filter(|source| !source.lki.abilities_lost) {
             for (ability_index, ability) in
                 self.state.cards[source.card].abilities.iter().enumerate()
@@ -531,35 +547,71 @@ impl Game {
                         event,
                     )
                 {
-                    let times =
-                        self.trigger_multiplicity(condition, source.card, source.controller, event);
+                    let times = self
+                        .trigger_multiplicity(condition, source.card, source.controller, event)
+                        + self.additional_trigger_times(source);
                     for _ in 0..times {
-                        fired.push((
-                            source.card,
+                        fired.push(FiredTrigger {
+                            source: source.clone(),
                             ability_index,
-                            source.controller,
-                            source.lki.clone(),
-                        ));
+                            granted: None,
+                        });
+                    }
+                }
+            }
+            for ability in self.granted_triggered_abilities(source) {
+                let Ability::Triggered {
+                    condition, effects, ..
+                } = &ability;
+                if self.trigger_condition_fires(
+                    condition,
+                    source.card,
+                    source.controller,
+                    true,
+                    event,
+                ) {
+                    let times = self
+                        .trigger_multiplicity(condition, source.card, source.controller, event)
+                        + self.additional_trigger_times(source);
+                    for _ in 0..times {
+                        fired.push(FiredTrigger {
+                            source: source.clone(),
+                            ability_index: 0,
+                            granted: Some(effects.clone()),
+                        });
                     }
                 }
             }
         }
 
-        for (source_card, ability_index, controller, source_lki) in fired {
-            if matches!(
-                &self.state.cards[source_card].abilities[ability_index],
-                Ability::Triggered {
-                    condition: TriggerCondition::OnceEachTurn { .. },
-                    ..
-                }
-            ) {
+        for FiredTrigger {
+            source,
+            ability_index,
+            granted,
+        } in fired
+        {
+            let TriggerSourceSnapshot {
+                card: source_card,
+                controller,
+                lki: source_lki,
+            } = source;
+            if granted.is_none()
+                && matches!(
+                    &self.state.cards[source_card].abilities[ability_index],
+                    Ability::Triggered {
+                        condition: TriggerCondition::OnceEachTurn { .. },
+                        ..
+                    }
+                )
+            {
                 self.spend_once_each_turn((source_lki.object_ref, ability_index));
             }
-            let context = if self.state.cards[source_card].abilities[ability_index]
-                .effects()
+            let reads_triggering_permanent = granted
+                .as_deref()
+                .unwrap_or(self.state.cards[source_card].abilities[ability_index].effects())
                 .iter()
-                .any(Effect::reads_triggering_permanent)
-            {
+                .any(Effect::reads_triggering_permanent);
+            let context = if reads_triggering_permanent {
                 match event {
                     GameEvent::CardMoved {
                         card,
@@ -619,7 +671,7 @@ impl Game {
                 context,
                 player,
                 x,
-                inline_effects: None,
+                inline_effects: granted,
             });
             self.state.trigger_enqueue_counter = self
                 .state
@@ -627,6 +679,49 @@ impl Game {
                 .checked_add(1)
                 .expect("trigger occurrence identity exhausted");
         }
+    }
+
+    /// Triggered abilities static grants give the battlefield source
+    /// (CR 613.1f), in battlefield order of the granting permanents.
+    fn granted_triggered_abilities(&self, source: &TriggerSourceSnapshot) -> Vec<Ability> {
+        let Ok(target) = self.lookup_current_permanent(source.lki.object_ref) else {
+            return Vec::new();
+        };
+        self.static_sources()
+            .flat_map(|(grantor, controller, card)| {
+                card.triggered_grants()
+                    .filter(move |grant| {
+                        self.static_scope_applies(
+                            &grant.scope,
+                            grantor,
+                            controller,
+                            target,
+                            ScopeView::Rules,
+                        )
+                    })
+                    .map(|grant| (*grant.ability).clone())
+            })
+            .collect()
+    }
+
+    /// Extra occurrences of one of `source`'s triggered abilities: one for
+    /// each permanent its controller controls whose "triggers an additional
+    /// time" covers the source (CR 603.2d), as the source is or last was.
+    fn additional_trigger_times(&self, source: &TriggerSourceSnapshot) -> usize {
+        let current = self.lookup_current_permanent(source.lki.object_ref).ok();
+        let card = &self.state.cards[source.card];
+        self.static_sources()
+            .filter(|(_, controller, _)| *controller == source.controller)
+            .map(|(_, _, grantor)| {
+                grantor
+                    .additional_trigger_predicates()
+                    .filter(|predicate| match current {
+                        Some(id) => self.permanent_matches_predicate(id, predicate),
+                        None => predicate.matches_card_with_power(card, source.lki.power),
+                    })
+                    .count()
+            })
+            .sum()
     }
 
     /// Granted firebending (CR 702.187): each attacking creature with
@@ -658,6 +753,52 @@ impl Game {
                 until_end_of_combat: true,
             };
             self.enqueue_delayed_trigger(source, lki, controller, vec![effect]);
+        }
+    }
+
+    /// Abilities that function from their owner's graveyard (CR 113.6k):
+    /// the exact graveyard object is the source, and its owner controls it.
+    fn graveyard_triggers(&mut self, event: &GameEvent) {
+        let mut fired = Vec::new();
+        for owner in [PlayerId(0), PlayerId(1)] {
+            for &card in self.state.zones.zone_cards(ZoneType::Graveyard, owner) {
+                for (ability_index, ability) in self.state.cards[card].abilities.iter().enumerate()
+                {
+                    let Ability::Triggered {
+                        condition: TriggerCondition::InGraveyard { condition },
+                        ..
+                    } = ability
+                    else {
+                        continue;
+                    };
+                    if self.trigger_condition_fires(condition, card, owner, false, event) {
+                        fired.push((card, ability_index, owner));
+                    }
+                }
+            }
+        }
+        for (card, ability_index, owner) in fired {
+            self.state.pending_triggers.push(PendingTrigger {
+                targets: Vec::new(),
+                target_req_indices: Vec::new(),
+                requirement_index: 0,
+                source_card: card,
+                source_ref: self.current_object_ref(card),
+                source_lki: None,
+                ability_index,
+                controller: owner,
+                id: TriggerId(self.state.trigger_enqueue_counter),
+                ordering_class: TriggerOrderingClass::Ordinary,
+                context: None,
+                player: None,
+                x: 0,
+                inline_effects: None,
+            });
+            self.state.trigger_enqueue_counter = self
+                .state
+                .trigger_enqueue_counter
+                .checked_add(1)
+                .expect("trigger occurrence identity exhausted");
         }
     }
 
@@ -697,12 +838,15 @@ impl Game {
     /// the battlefield, plus — for zone changes — the moved card itself, so
     /// that leave-the-battlefield abilities look back in time (CR 603.6c).
     pub(crate) fn snapshot_trigger_sources(&self) -> Vec<TriggerSourceSnapshot> {
+        let grants = self
+            .static_sources()
+            .any(|(_, _, card)| card.triggered_grants().next().is_some());
         let mut sources: Vec<_> = self
             .state
             .permanents
             .iter()
             .flatten()
-            .filter(|permanent| !self.state.cards[permanent.card].abilities.is_empty())
+            .filter(|permanent| grants || !self.state.cards[permanent.card].abilities.is_empty())
             .filter_map(|permanent| {
                 self.snapshot_current_permanent(permanent.card)
                     .map(|lki| TriggerSourceSnapshot {

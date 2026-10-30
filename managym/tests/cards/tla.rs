@@ -11660,3 +11660,112 @@ fn countering_an_ability_emits_ability_countered() {
         .iter()
         .any(|event| matches!(event, GameEvent::SpellCountered { .. })));
 }
+
+/// Its prowess and each Ally's granted prowess trigger on a noncreature
+/// spell, as does the Ally token it makes; other Allies have menace.
+#[test]
+fn sokka_tenacious_tactician_gives_allies_menace_and_prowess_and_makes_allies() {
+    let mut s = five_color_setup(&["Sokka, Tenacious Tactician", "Yip Yip!", "Gray Ogre"]);
+    let sokka = s.force_permanent_on_battlefield(0, "Sokka, Tenacious Tactician");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.game_mut().create_token("Ally", PlayerId(0), false);
+    let ally = s.battlefield_permanents_named(0, "Ally")[0];
+    assert!(keywords(&s, sokka).menace);
+    assert!(s.game().effective_keywords(ally).menace, "granted");
+    assert!(!s.game().effective_keywords(ogre).menace, "not an Ally");
+
+    cast(&mut s, "Yip Yip!");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(s.game().effective_pt(sokka), (4, 4));
+    assert_eq!(s.game().effective_pt(ally), (2, 2), "granted prowess");
+    assert_eq!(s.game().effective_pt(ogre), (4, 4), "Yip Yip! only");
+    assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 2);
+
+    cast(&mut s, "Gray Ogre");
+    settle(&mut s);
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Ally").len(),
+        2,
+        "a creature spell"
+    );
+}
+
+/// An Ally's triggered abilities, printed or granted, trigger twice under
+/// Katara; a non-Ally's trigger once.
+#[test]
+fn katara_the_fearless_makes_ally_triggers_trigger_an_additional_time() {
+    let mut s = five_color_setup(&[
+        "Katara, the Fearless",
+        "Sokka, Tenacious Tactician",
+        "Yip Yip!",
+        "Mai, Scornful Striker",
+    ]);
+    let katara = s.force_permanent_on_battlefield(0, "Katara, the Fearless");
+    let sokka = s.force_permanent_on_battlefield(0, "Sokka, Tenacious Tactician");
+    s.force_permanent_on_battlefield(0, "Mai, Scornful Striker");
+    cast(&mut s, "Yip Yip!");
+    assert!(s.choose_target(Target::Permanent(katara)));
+    settle(&mut s);
+    assert_eq!(s.game().effective_pt(sokka), (5, 5), "its prowess twice");
+    assert_eq!(
+        s.game().effective_pt(katara),
+        (7, 7),
+        "Yip Yip! and granted prowess twice"
+    );
+    assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 2);
+    assert_eq!(s.life(0), 18, "Mai is not an Ally: you lose 2 once");
+}
+
+/// Entering and attacking each exile up to one card from any graveyard; a
+/// creature card makes a Clue. Your second draw each turn drains 1.
+#[test]
+fn raven_eagle_exiles_graveyard_cards_clues_creatures_and_drains_on_your_second_draw() {
+    let mut s = five_color_setup(&["Raven Eagle", "Gray Ogre", "Lightning Strike"]);
+    let ogre = plant_in_graveyard(&mut s, 1, "Gray Ogre");
+    let ogre_object = s.game().current_object_ref(ogre).unwrap();
+    let strike = plant_in_graveyard(&mut s, 0, "Lightning Strike");
+    let strike_object = s.game().current_object_ref(strike).unwrap();
+    enter_battlefield(&mut s, "Raven Eagle");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::GraveyardCard(ogre_object)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, ogre), Some(ZoneType::Exile));
+    assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
+
+    let eagle = permanent_named(&s, "Raven Eagle");
+    attack_and_settle(&mut s, &[eagle], Some(Target::GraveyardCard(strike_object)));
+    assert_eq!(zone_of(&s, strike), Some(ZoneType::Exile));
+    assert_eq!(
+        s.battlefield_permanents_named(0, "Clue").len(),
+        1,
+        "not a creature card"
+    );
+
+    let (mine, theirs) = (s.life(0), s.life(1));
+    s.game_mut().draw_cards(PlayerId(0), 2);
+    resolve_until_priority(&mut s);
+    assert_eq!((s.life(0), s.life(1)), (mine + 1, theirs - 1));
+}
+
+/// From the graveyard, your second draw offers {B} to return it with a
+/// finality counter; dying again exiles it.
+#[test]
+fn wolfbat_returns_from_your_graveyard_on_your_second_draw_with_a_finality_counter() {
+    let mut s = five_color_setup(&["Wolfbat"]);
+    let wolfbat = plant_in_graveyard(&mut s, 0, "Wolfbat");
+    s.advance_to_active_step(0, StepKind::Main);
+    s.game_mut().draw_cards(PlayerId(0), 1);
+    resolve_until_priority(&mut s);
+    assert_eq!(zone_of(&s, wolfbat), Some(ZoneType::Graveyard), "first draw");
+    s.game_mut().draw_cards(PlayerId(0), 1);
+    pass_until(&mut s, ActionSpaceKind::PayOrNot);
+    assert!(s.take_action_by_type(ActionType::PayCost));
+    settle(&mut s);
+    let returned = s.game().state.card_to_permanent[wolfbat].expect("returned");
+    assert_eq!(counters_of(&s, returned, CounterKind::Finality), 1);
+
+    let object = s.game().permanent_object_ref(returned).unwrap();
+    s.game_mut().destroy_object(object);
+    assert_eq!(zone_of(&s, wolfbat), Some(ZoneType::Exile), "finality");
+}

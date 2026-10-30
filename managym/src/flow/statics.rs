@@ -253,7 +253,7 @@ impl Game {
 
     /// Battlefield permanents whose cards project static P/T, keyword or
     /// restriction effects, with their controllers.
-    fn static_sources(&self) -> impl Iterator<Item = (PermanentId, PlayerId, &Card)> {
+    pub(crate) fn static_sources(&self) -> impl Iterator<Item = (PermanentId, PlayerId, &Card)> {
         [PlayerId(0), PlayerId(1)]
             .into_iter()
             .flat_map(move |player| {
@@ -270,6 +270,8 @@ impl Game {
                                     | StaticAbility::KeywordGrant(_)
                                     | StaticAbility::Restriction(_)
                                     | StaticAbility::TypeGrant(_)
+                                    | StaticAbility::TriggersAdditionalTime(_)
+                                    | StaticAbility::TriggeredGrant(_)
                             )
                         }) {
                             return None;
@@ -426,7 +428,7 @@ impl Game {
 
     /// Whether a static scope from `source_id` (controlled by `controller`)
     /// covers `target_id`, reading the characteristics `view` allows.
-    fn static_scope_applies(
+    pub(crate) fn static_scope_applies(
         &self,
         scope: &StaticScope,
         source_id: PermanentId,
@@ -668,6 +670,17 @@ impl Game {
                 source_permanent().is_some_and(|permanent| permanent.counter_count(*kind) >= *count)
             }
             Condition::SourceTapped => source_permanent().is_some_and(|permanent| permanent.tapped),
+            Condition::TargetCardExiled(predicate) => {
+                let Some(Target::GraveyardCard(object)) =
+                    frame.and_then(EffectFrame::primary_target)
+                else {
+                    return false;
+                };
+                let card = CardId::from(object.entity);
+                self.current_object_ref(card) != Some(object)
+                    && self.state.zones.zone_of(card) == Some(ZoneType::Exile)
+                    && predicate.matches_card(&self.state.cards[card])
+            }
             Condition::TargetDealtDamageThisTurn => {
                 let Some(Target::Permanent(permanent_id)) =
                     frame.and_then(EffectFrame::primary_target)

@@ -722,7 +722,13 @@ impl Game {
                     })
             }
             Effect::Destroy { .. } | Effect::Exile { .. } => {
-                let Some(Target::Permanent(id)) = self.present_primary_target(frame) else {
+                let target = self.present_primary_target(frame);
+                if let (Effect::Exile { .. }, Some(Target::GraveyardCard(object))) = (effect, target)
+                {
+                    self.move_card(CardId::from(object.entity), ZoneType::Exile);
+                    return None;
+                }
+                let Some(Target::Permanent(id)) = target else {
                     return None;
                 };
                 if matches!(effect, Effect::Destroy { .. }) {
@@ -1363,6 +1369,26 @@ impl Game {
                 }
                 None
             }
+            Effect::ReturnSourceToBattlefield { counter } => {
+                let card = frame.source?;
+                let owner = self.state.cards[card].owner;
+                if frame.source_ref.is_some()
+                    && self.current_object_ref(card) == frame.source_ref
+                    && self.state.zones.contains(card, ZoneType::Graveyard, owner)
+                {
+                    let mut counters = crate::state::permanent::Counters::default();
+                    counters.change(*counter, 1);
+                    self.move_card_with_entry(
+                        card,
+                        ZoneType::Battlefield,
+                        crate::flow::proposed_event::ZoneEntry {
+                            counters,
+                            ..Default::default()
+                        },
+                    );
+                }
+                None
+            }
             Effect::GainLife { amount } => {
                 self.gain_life(frame.controller, *amount);
                 None
@@ -1791,6 +1817,12 @@ impl Game {
                     self.current_object_ref(card) == Some(object)
                         && self.state.zones.zone_of(card) == Some(ZoneType::Graveyard)
                         && self.state.cards[card].owner == controller
+                        && predicate.matches_card(&self.state.cards[card])
+                }
+                TargetSpec::GraveyardCard { predicate } => {
+                    let card = CardId::from(object.entity);
+                    self.current_object_ref(card) == Some(object)
+                        && self.state.zones.zone_of(card) == Some(ZoneType::Graveyard)
                         && predicate.matches_card(&self.state.cards[card])
                 }
                 _ => false,

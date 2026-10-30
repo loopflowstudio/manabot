@@ -151,6 +151,9 @@ fn condition_description(condition: &TriggerCondition) -> String {
         TriggerCondition::OpponentDrawsNthCardThisTurn { n } => {
             format!("When an opponent draws card {n} this turn")
         }
+        TriggerCondition::InGraveyard { condition } => {
+            format!("{} (while this is in your graveyard)", condition_description(condition))
+        }
     }
 }
 
@@ -204,6 +207,10 @@ fn condition_text(condition: &Condition) -> String {
         ),
         Condition::TargetDealtDamageThisTurn => "that target was dealt damage this turn".into(),
         Condition::SourceTapped => "this is tapped".into(),
+        Condition::TargetCardExiled(predicate) => format!(
+            "a {} was exiled this way",
+            predicate_description(predicate, "card")
+        ),
         Condition::SourceCountersAtLeast { kind, count } => format!(
             "this has {count} or more {} counters",
             kind.name().replace('_', " ")
@@ -327,6 +334,8 @@ pub(crate) fn counter_description(kind: CounterKind) -> &'static str {
         CounterKind::Stun => "stun",
         CounterKind::Fire => "fire",
         CounterKind::Quest => "quest",
+        CounterKind::Finality => "finality",
+        CounterKind::Conqueror => "conqueror",
         CounterKind::DoubleStrike => "double strike",
     }
 }
@@ -343,6 +352,10 @@ fn target_description(t: &TargetSpec) -> String {
         ),
         TargetSpec::GraveyardCardYouOwn { predicate } => format!(
             "{} in your graveyard",
+            predicate_description(predicate, "card")
+        ),
+        TargetSpec::GraveyardCard { predicate } => format!(
+            "{} from a graveyard",
             predicate_description(predicate, "card")
         ),
         TargetSpec::Permanent { predicate } => predicate_description(predicate, "permanent"),
@@ -592,6 +605,10 @@ fn effect_description(effect: &Effect) -> Option<String> {
         PutCounters { count, kind, target } => format!("Put {count} {} counters on {}",counter_description(*kind),target_description(target)),
         TapSource => "Tap this".into(), UntapSource => "Untap this".into(),
         ReturnSourceToHand => "Return this card from your graveyard to your hand".into(),
+        ReturnSourceToBattlefield { counter } => format!(
+            "Return this card from your graveyard to the battlefield with a {} counter on it",
+            counter_description(*counter)
+        ),
         GainLife { amount } => format!("You gain {amount} life"),
         GainLifeValue { amount } => format!("You gain life equal to {}", value_description(amount)),
         AddManaValue { mana, amount, until_end_of_combat } => format!("Add {} for each of {}{}", mana_description(mana), value_description(amount), if *until_end_of_combat { ". This mana lasts until end of combat" } else { "" }),
