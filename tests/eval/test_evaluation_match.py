@@ -299,7 +299,7 @@ def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path):
         )
     )
     torch.manual_seed(83)
-    agent = ActorCritic(space, ModelConfig(semantic_pack="ur-lessons-vs-gw-allies"))
+    agent = ActorCritic(space, ModelConfig(world="ur-lessons-vs-gw-allies"))
     path = tmp_path / "fixture.pt"
     from manabot.env.match import Match
 

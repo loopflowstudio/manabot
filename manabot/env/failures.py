@@ -23,7 +23,7 @@ from typing import Any, Literal
 from uuid import uuid4
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 import managym
 
@@ -32,7 +32,8 @@ class PlayerSetup(BaseModel):
     name: str
     decklist: dict[str, int]
     sideboard: dict[str, int]
-    content_pack: str | None
+    # Earlier evidence names the selector `content_pack`.
+    world: str | None = Field(validation_alias=AliasChoices("world", "content_pack"))
 
     @classmethod
     def retain(cls, player: managym.PlayerConfig) -> "PlayerSetup":
@@ -40,7 +41,7 @@ class PlayerSetup(BaseModel):
             name=player.name,
             decklist=player.decklist,
             sideboard=player.sideboard,
-            content_pack=player.content_pack,
+            world=player.world,
         )
 
     def native(self) -> managym.PlayerConfig:
@@ -340,7 +341,8 @@ class CapturedVector(_Capture):
             for i in range(num_envs)
         ]
         self.next_seeds = [game.seed for game in self.games]
-        self._roster: list[PlayerSetup] = []
+        # Sampled roots pick setups natively at reset; evidence reads them back.
+        self._sampled_roots = False
 
     def __getattr__(self, name: str) -> Any:
         # PyO3 buffer/inspection APIs are untyped; mutation is explicit below.
@@ -371,7 +373,19 @@ class CapturedVector(_Capture):
 
     def set_uniform_roster(self, roster: list[managym.PlayerConfig]) -> None:
         self.native.set_uniform_roster(roster)
-        self._roster = [PlayerSetup.retain(player) for player in roster]
+        self._sampled_roots = True
+
+    def set_training_decks(
+        self, decks: list[managym.PlayerConfig], digest: str
+    ) -> None:
+        """Replace decks for later roots; evidence keeps each game's actual setup."""
+        self.native.set_training_decks(decks)
+        self._sampled_roots = True
+        self.identities["deck_source"] = {
+            "digest": digest,
+            "sampling_policy": "uniform-distinct-v1",
+            "deck_ids": [player.name for player in decks],
+        }
 
     def reset_all_into_buffers(self, players: list[managym.PlayerConfig]) -> None:
         self.reset_each_into_buffers([players for _ in self.games])
@@ -384,7 +398,7 @@ class CapturedVector(_Capture):
             game.restart(seed)
         with self._guard(lambda: self._evidence_for(self.games, "reset")):
             self.native.reset_each_into_buffers(players)
-        self._synchronize()
+        self._synchronize(reset=True)
 
     def reset_seeds_into_buffers(self, seeds: list[int]) -> None:
         self.next_seeds = list(seeds)
@@ -392,17 +406,19 @@ class CapturedVector(_Capture):
             game.restart(seed)
         with self._guard(lambda: self._evidence_for(self.games, "reset")):
             self.native.reset_seeds_into_buffers(seeds)
-        self._synchronize()
+        self._synchronize(reset=True)
 
-    def _synchronize(self) -> None:
-        if self._roster:
-            for game, (a, b) in zip(
-                self.games, self.native.current_matchup_indices(), strict=True
-            ):
-                game.players = [self._roster[a], self._roster[b]]
-        for game, seed in zip(
-            self.games, self.native.current_game_seeds(), strict=True
+    def _synchronize(self, *, reset: bool = False) -> None:
+        seeds = self.native.current_game_seeds()
+        if self._sampled_roots and (
+            reset or any(game.seed != seed for game, seed in zip(self.games, seeds))
         ):
+            # Sampled roots record the native setup actually created.
+            for game, players in zip(
+                self.games, self.native.current_player_configs(), strict=True
+            ):
+                game.players = [PlayerSetup.retain(player) for player in players]
+        for game, seed in zip(self.games, seeds, strict=True):
             if game.seed != seed:
                 game.restart(seed)
         self.next_seeds = [
@@ -411,6 +427,20 @@ class CapturedVector(_Capture):
 
     def step_into_buffers(
         self, actions: list[int], active: list[bool] | None = None
+    ) -> None:
+        self._step(actions, active, isolated=False)
+
+    def step_isolated_into_buffers(
+        self, actions: list[int], active: list[bool] | None = None
+    ) -> None:
+        self._step(actions, active, isolated=True)
+
+    def replace_failed_into_buffers(self, active: list[bool]) -> None:
+        self.native.replace_failed_into_buffers(active)
+        self._synchronize()
+
+    def _step(
+        self, actions: list[int], active: list[bool] | None, *, isolated: bool
     ) -> None:
         enabled = active if active is not None else [True] * len(self.games)
         actors = self.native.current_agent_indices()
@@ -425,7 +455,10 @@ class CapturedVector(_Capture):
                 game.frame = frame
                 attempted.append(game)
         with self._guard(lambda: self._evidence_for(attempted, "step")):
-            self.native.step_into_buffers(actions, active)
+            if isolated:
+                self.native.step_isolated_into_buffers(actions, active)
+            else:
+                self.native.step_into_buffers(actions, active)
         self._synchronize()
 
 

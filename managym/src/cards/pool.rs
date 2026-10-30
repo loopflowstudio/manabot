@@ -1,12 +1,14 @@
-//! Content eligibility shared by deck import and native admission.
+//! Content descriptors: one row per definition of a pack, with its support.
 //!
 //! Every pack key names one [`ContentPack`] with one descriptor row per
 //! definition. The world pool ([`crate::world::WORLD_POOL`]) describes the
-//! default pack, so it shares that pack's `CardDefId`s and digest; authored
-//! setups hold their decks' cards. A defined card is eligible unless its set
-//! file marks it incomplete ([`cardsets::incomplete`]); tokens and rules
-//! fixtures are never deck entries. Setup construction policy belongs to the
-//! admission caller, not this catalog.
+//! default pack, so it shares that pack's `CardDefId`s and digest; it is the
+//! only descriptor deck import and admission read. Authored setups' packs hold
+//! their decks' cards and are described for policy vocabularies only; they
+//! are fixed setups, never deck-admission targets. A defined card is eligible
+//! unless its set file marks it incomplete ([`cardsets::incomplete`]); tokens
+//! and rules fixtures are never deck entries. Setup construction policy belongs
+//! to the admission caller, not this catalog.
 
 use std::{
     collections::BTreeMap,

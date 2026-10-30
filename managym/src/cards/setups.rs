@@ -4,7 +4,7 @@
 //! [`ContentPack`] holding exactly the deck cards and the tokens they create,
 //! in key order, plus the decks as player configurations. A match whose two
 //! decklists equal an authored setup's runs on that pack
-//! ([`content_pack_for_authored_match`]); every other match uses the default
+//! ([`content_pack_for_match`]); every other match uses the default
 //! pack. Card behavior comes only from the set files; this file is decklists.
 
 use std::{
@@ -16,7 +16,7 @@ use serde::Deserialize;
 
 use super::ContentError;
 use crate::{
-    cards::content_pack::ContentPack,
+    cards::content_pack::{default_content_pack, ContentPack},
     cardsets,
     state::{ability::Effect, card::CardDefinition, player::PlayerConfig},
 };
@@ -55,7 +55,7 @@ pub struct AuthoredDeck {
 impl AuthoredDeck {
     /// Whether `config` plays exactly this deck and sideboard.
     fn matches(&self, config: &PlayerConfig) -> bool {
-        self.cards == config.decklist && self.sideboard == config.sideboard
+        self.cards == config.deck.main && self.sideboard == config.deck.sideboard
     }
 }
 
@@ -247,15 +247,45 @@ pub(crate) fn created_tokens(definition: &CardDefinition) -> BTreeSet<String> {
     out
 }
 
-/// The authored pack for an exact two-deck match, if one is authored.
+/// The pack a match runs on, or `None` for the default pack.
 ///
-/// An explicit `content_pack` on the configs must name an authored pack and
-/// both decks must be its setups; otherwise configs whose decklists equal one
-/// authored setup's run on it, and ambiguity fails closed.
-pub(crate) fn content_pack_for_authored_match(
+/// An explicit `world` selection must be shared by both configs. The world
+/// ([`crate::world::WORLD_POOL`]) runs any decks that pass development
+/// admission, on the default pack. An authored pack key runs only that pack's
+/// own setups: authored packs are fixed setups, never deck-admission targets,
+/// and an explicit selection never falls back. Without one, configs whose
+/// decklists equal one authored setup's run on it, and ambiguity fails closed.
+pub(crate) fn content_pack_for_match(
     player_configs: &[PlayerConfig],
 ) -> Result<Option<Arc<ContentPack>>, ContentError> {
-    Ok(select(player_configs, authored_packs()?)?.map(|pack| Arc::clone(&pack.content)))
+    let packs = authored_packs()?;
+    if let Some(key) = player_configs.iter().find_map(|p| p.world.as_ref()) {
+        if player_configs.len() != 2 || player_configs.iter().any(|p| p.world.as_ref() != Some(key))
+        {
+            return Err(ContentError(
+                "explicit pack requires two players with the same pack key".into(),
+            ));
+        }
+        if key == crate::world::WORLD_POOL {
+            for player in player_configs {
+                if let Some(message) = super::deck_admission::development_rejection(player)? {
+                    return Err(ContentError(message));
+                }
+            }
+            return Ok(Some(default_content_pack()));
+        }
+        let pack = packs
+            .iter()
+            .find(|pack| &pack.pack_key == key)
+            .ok_or_else(|| ContentError(format!("unknown explicit content pack {key}")))?;
+        if !player_configs.iter().all(|p| admits(pack, p)) {
+            return Err(ContentError(
+                "explicit pack requires two admitted authored setups".into(),
+            ));
+        }
+        return Ok(Some(Arc::clone(&pack.content)));
+    }
+    Ok(select(player_configs, packs)?.map(|pack| Arc::clone(&pack.content)))
 }
 
 fn admits(pack: &AuthoredPack, config: &PlayerConfig) -> bool {
@@ -266,22 +296,6 @@ fn select<'a>(
     player_configs: &[PlayerConfig],
     packs: &'a [AuthoredPack],
 ) -> Result<Option<&'a AuthoredPack>, ContentError> {
-    if let Some(key) = player_configs.iter().find_map(|p| p.content_pack.as_ref()) {
-        let pack = packs
-            .iter()
-            .find(|pack| &pack.pack_key == key)
-            .ok_or_else(|| ContentError(format!("unknown explicit content pack {key}")))?;
-        if player_configs.len() != 2
-            || player_configs
-                .iter()
-                .any(|p| p.content_pack.as_ref() != Some(key) || !admits(pack, p))
-        {
-            return Err(ContentError(
-                "explicit pack requires two admitted authored setups".into(),
-            ));
-        }
-        return Ok(Some(pack));
-    }
     let matches = packs
         .iter()
         .filter(|pack| exact(pack, player_configs))
@@ -325,27 +339,54 @@ mod tests {
         ]
     }
 
+    fn pack_key(player_configs: &[PlayerConfig]) -> String {
+        content_pack_for_match(player_configs)
+            .unwrap()
+            .unwrap()
+            .pack_key()
+            .unwrap()
+            .to_owned()
+    }
+
+    #[test]
+    fn world_selection_admits_novel_decks_and_never_falls_back() {
+        let mut first = PlayerConfig::new(
+            "first",
+            BTreeMap::from([("Forest".into(), 10), ("Mountain".into(), 10)]),
+        );
+        first.world = Some(crate::world::WORLD_POOL.into());
+        let mut second = PlayerConfig::new("second", BTreeMap::from([("Island".into(), 20)]));
+        second.world = first.world.clone();
+        let content = content_pack_for_match(&[first.clone(), second.clone()])
+            .unwrap()
+            .unwrap();
+        assert!(Arc::ptr_eq(&content, &default_content_pack()));
+        first.deck.sideboard.insert("Water Tribe Rallier".into(), 1);
+        assert!(content_pack_for_match(&[first, second.clone()]).is_err());
+        // An authored pack key never admits decks outside its own setups.
+        let mut novel = PlayerConfig::new("novel", BTreeMap::from([("Forest".into(), 20)]));
+        novel.world = Some("ur-lessons-vs-gw-allies".into());
+        second.world = novel.world.clone();
+        assert!(content_pack_for_match(&[novel, second]).is_err());
+    }
+
     #[test]
     fn explicit_mirrors_preserve_pack_and_reject_unadmitted_setups() {
-        let packs = authored_packs().unwrap();
         let pack = authored_pack_for_key("ur-lessons-vs-gw-allies").unwrap();
         for deck in &pack.decks {
             let mut config = pack.player_config(&deck.key, &deck.key).unwrap();
-            config.content_pack = Some(pack.pack_key.clone());
+            config.world = Some(pack.pack_key.clone());
             let pair = vec![config.clone(), config.clone()];
-            assert_eq!(
-                select(&pair, packs).unwrap().unwrap().pack_key,
-                pack.pack_key
-            );
+            assert_eq!(pack_key(&pair), pack.pack_key);
             let mut wrong = pair.clone();
-            wrong[0].content_pack = None;
-            assert!(select(&wrong, packs).is_err());
+            wrong[0].world = None;
+            assert!(content_pack_for_match(&wrong).is_err());
             wrong = pair.clone();
-            wrong[0].decklist.clear();
-            assert!(select(&wrong, packs).is_err());
+            wrong[0].deck.main.clear();
+            assert!(content_pack_for_match(&wrong).is_err());
             wrong = pair.clone();
-            wrong[0].content_pack = Some("missing-pack".into());
-            assert!(select(&wrong, packs).is_err());
+            wrong[0].world = Some("missing-pack".into());
+            assert!(content_pack_for_match(&wrong).is_err());
         }
     }
 
@@ -362,12 +403,8 @@ mod tests {
         }
         for deck in &pack.decks {
             let mut config = pack.player_config(&deck.key, &deck.key).unwrap();
-            config.content_pack = Some(pack.pack_key.clone());
-            let pair = [config.clone(), config];
-            assert_eq!(
-                select(&pair, packs).unwrap().unwrap().pack_key,
-                "mtg122-complexity-v1"
-            );
+            config.world = Some(pack.pack_key.clone());
+            assert_eq!(pack_key(&[config.clone(), config]), "mtg122-complexity-v1");
         }
         // An ordinary product pair still chooses the original product pack.
         let product = authored_pack("two_deck").unwrap();

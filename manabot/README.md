@@ -89,13 +89,15 @@ linked capture audit for boundaries and supervision limits.
 Ordinary checkpoints require `world_binding` from
 `manabot.model.world.checkpoint_world(actual_player_configs, observation_space)`.
 This binds native `WORLD_VERSION`, rules schemas, full deck/sideboard pairs,
-content manifest and input schema. Missing or mismatched bindings fail before
+content manifest and input schema. Deck-source runs bind the world itself
+(`deck_world`: version, card digest, rules and input contract), so the model
+plays any deck the world admits. Missing or mismatched bindings fail before
 weights load. Seat reversal preserves each deck's sideboard. Policy checkpoint
 writers require explicit `player_configs`; never infer training setup from
 tensor dimensions or the default deck.
 
 For the compiled Allies/Lessons matchup, use
-`ModelConfig(semantic_pack="ur-lessons-vs-gw-allies")`. The ordinary model joins
+`ModelConfig(world="ur-lessons-vs-gw-allies")`. The ordinary model joins
 viewer-safe `semantic_cards` transport IDs to complete checked catalog programs,
 including characteristics and referenced definitions; `known_hand` contains
 public definition minima, not hidden hand slots. Selected compiled checkpoints
@@ -424,3 +426,6 @@ It retains native inputs, prompts, bindings, malformed/stale checks and executio
 receipts. This uses bounded public policy history v1; it loads no model and has
 no writable model memory. Tokenizer/model recovery belongs to the caller;
 `TextDecision.check_token_budget` checks the complete prompt without truncation.
+
+[Decklist file import](../docs/decklist-import.md) admits novel development decks
+against the installed world for simulation and Academy play.

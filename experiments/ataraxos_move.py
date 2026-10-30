@@ -14,7 +14,7 @@ def ataraxos_move() -> TrainingRegime:
         world=managym.WORLD_VERSION,
         match=selected_match(),
         agent=ModelConfig(
-            semantic_pack=PACK,
+            world=PACK,
             hidden_dim=16,
             num_attention_heads=2,
             value_kind="categorical_wdl",

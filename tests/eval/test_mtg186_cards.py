@@ -27,9 +27,7 @@ def _checkpoint(path: Path, seed: int, trial: str) -> Player:
     space = ObservationSpace()
     model = ActorCritic(
         space,
-        ModelConfig(
-            hidden_dim=8, num_attention_heads=2, semantic_pack="elemental-world-v2"
-        ),
+        ModelConfig(hidden_dim=8, num_attention_heads=2, world="elemental-world-v2"),
     )
     save_checkpoint(
         model,

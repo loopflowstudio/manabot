@@ -12,6 +12,7 @@ from pydantic import (
 )
 
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
+from manabot.training.decks import UniformDecks
 from manabot.training.state.game_errors import GameErrorPolicy
 
 
@@ -291,7 +292,7 @@ class LearningStateImport(Strict):
 
     `source_match` declares a deck switch: the parent trained on exactly this
     match and this segment continues on the regime's. Both must name the
-    agent's own semantic pack, so card identities and the learned programs
+    agent's own world, so card identities and the learned programs
     keep their meaning; only deck/sideboard composition changes. Omitted, the
     parent's match must equal the regime's.
 
@@ -586,7 +587,14 @@ class TrainingRegime(Strict):
     schema_version: Literal[1, 2] = 2
     id: str
     world: str
-    match: MatchConfig
+    # Exactly one owner of the run's setups: an authored match, or a deck source
+    # giving each new game its decks. Checkpoints bind the world, never these.
+    match: MatchConfig | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    deck_source: UniformDecks | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
     observation: ObservationConfig = ObservationConfig()
     agent: ModelConfig = ModelConfig()
     stages: list[Operation] = Field(min_length=1)
@@ -639,11 +647,41 @@ class TrainingRegime(Strict):
         return values
 
     @property
+    def root_match(self) -> MatchConfig:
+        """The authored match, or a deck run's derived representative pair.
+
+        A deck run's sampled roots come from the native draw; this pair only
+        opens a game where one is needed (fingerprints, collector construction)
+        and is never part of the regime record or its digest.
+        """
+        if self.deck_source is not None:
+            return self.deck_source.match_config()
+        assert self.match is not None
+        return self.match
+
+    @property
     def recoverable(self) -> bool:
         return self.recovery is not None or self.recovery_max_microsteps is not None
 
     @model_validator(mode="after")
     def references(self) -> "TrainingRegime":
+        if self.match is None and self.deck_source is None:
+            raise ValueError("regime requires a match or a deck source")
+        if self.match is not None and self.deck_source is not None:
+            raise ValueError(
+                "the deck source owns the run's setups; remove the authored match"
+            )
+        if self.deck_source is not None and any(
+            not isinstance(stage, TrainSelfPlay)
+            or stage.behavior != "current-self"
+            or stage.execution.workers != 1
+            or stage.root is not None
+            or stage.matchup_curriculum != "fixed"
+            for stage in self.stages
+        ):
+            raise ValueError(
+                "a deck source requires current-self, one producer, ordinary roots and no curriculum"
+            )
         tolerant = any(
             isinstance(stage, TrainSelfPlay) and stage.game_errors is not None
             for stage in self.stages
@@ -665,10 +703,8 @@ class TrainingRegime(Strict):
             raise ValueError(
                 "learning-state continuation requires one step-target stage without process recovery"
             )
-        if self.agent.recent_events and self.agent.semantic_pack is None:
-            raise ValueError(
-                "recent events require a semantic pack for public identities"
-            )
+        if self.agent.recent_events and self.agent.world is None:
+            raise ValueError("recent events require a world for public identities")
         if self.agent.recent_events and not 1 <= self.observation.max_events <= 32:
             raise ValueError("public history v1 requires 1..32 event rows")
         # The model treatment owns this input contract; callers cannot silently

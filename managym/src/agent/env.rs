@@ -224,9 +224,9 @@ impl Env {
         &mut self,
         player_configs: Vec<PlayerConfig>,
     ) -> Result<(Observation, InfoDict), AgentError> {
-        // Validate explicit authored setup bindings at the fallible environment
+        // Validate explicit content and setup bindings at the fallible environment
         // boundary, before Game construction can panic on invalid content.
-        crate::cards::content_pack_for_authored_match(&player_configs)
+        crate::cards::content_pack_for_match(&player_configs)
             .map_err(|error| AgentError(error.to_string()))?;
         let _scope = self.profiler.track("env_reset");
         self.action_trace = Some(NativeActionTrace {
@@ -280,6 +280,13 @@ impl Env {
     /// Seed of the current game, for private collector recovery.
     pub fn seed(&self) -> u64 {
         self.seed
+    }
+
+    /// Setups this game was reset with; empty before the first reset.
+    pub fn player_configs(&self) -> &[PlayerConfig] {
+        self.action_trace
+            .as_ref()
+            .map_or(&[], |trace| trace.player_configs.as_slice())
     }
 
     /// Number of trivial decision points auto-collapsed by `skip_trivial`

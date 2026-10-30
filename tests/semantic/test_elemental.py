@@ -90,7 +90,7 @@ def test_search_reaches_belief_and_public_history_consumers() -> None:
     torch.set_num_threads(1)
     agent = ActorCritic(
         history_space,
-        ModelConfig(hidden_dim=16, semantic_pack=PACK, recent_events=True),
+        ModelConfig(hidden_dim=16, world=PACK, recent_events=True),
     )
     tensors = {
         key: torch.as_tensor(value).unsqueeze(0) for key, value in encoded.items()

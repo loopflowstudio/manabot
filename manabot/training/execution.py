@@ -172,22 +172,41 @@ def validate_regime(
         and stage.matchup_curriculum == "elemental-uniform"
         for stage in regime.stages
     ):
-        elemental_roster(Match(regime.match))
-        if regime.agent.semantic_pack != "elemental-world-v2":
+        elemental_roster(Match(regime.root_match))
+        if regime.agent.world != "elemental-world-v2":
             raise ValueError(
                 "elemental-uniform requires complete Elemental policy input"
+            )
+    if regime.deck_source is not None:
+        if require_current_world:
+            regime.deck_source.check()
+        if regime.agent.world != managym.WORLD_SETUP:
+            raise ValueError(
+                "a deck source requires the complete world policy vocabulary"
             )
     if regime.agent.belief_count_buckets:
         raise ValueError("regime stages do not produce belief inputs")
     return regime
 
 
+def _checkpoint_setups(regime: TrainingRegime) -> list[managym.PlayerConfig] | None:
+    """Setups a checkpoint binds; a deck-source run binds the world (`None`)."""
+    if regime.deck_source is not None:
+        return None
+    return Match(regime.root_match).to_rust()
+
+
 def _runtime_identities(
     seed: int, regime: TrainingRegime, space: ObservationSpace
 ) -> dict[str, object]:
     identities = runtime_fingerprints(
-        seed, match_config=regime.match, observation_space=space
+        seed, match_config=regime.root_match, observation_space=space
     )
+    if regime.deck_source is not None:
+        # Opening the world fixes content and input identities; the run's setup
+        # is the supply it samples, never the representative pair it opened.
+        del identities["matchup"], identities["matchup_sha256"]
+        identities.update(deck_source_sha256=regime.deck_source.digest)
     identities.update(
         architecture=architecture_identity(regime.agent, space),
         hardware={
@@ -633,7 +652,7 @@ def _execute_regime(
                 model,
                 space,
                 target.with_suffix(".tmp"),
-                player_configs=Match(regime.match).to_rust(),
+                player_configs=_checkpoint_setups(regime),
                 extra={
                     "run_id": run.id,
                     "stage_id": record.id,
@@ -849,7 +868,7 @@ def _execute_regime(
                     games = []
                     for _ in range(stage.games_per_update):
                         target = out / f"{stage.id}-game-{game_index}.jsonl"
-                        match = Match(regime.match)
+                        match = Match(regime.root_match)
                         if game_index % 2:
                             match = match.swapped()
                         tick = time.perf_counter()
@@ -958,7 +977,7 @@ def _execute_regime(
                 record.artifacts["population"] = artifact(population_path)
                 persist()
                 games = []
-                match = Match(regime.match)
+                match = Match(regime.root_match)
                 for index, spec in enumerate(stage.population):
                     target = out / f"{stage.id}-{index}.receipts.jsonl"
                     tick = time.perf_counter()
@@ -1018,7 +1037,7 @@ def _execute_regime(
                 policy_artifact = source.artifacts[stage.weights]
                 dataset = collect_frozen_policy(
                     checkpoint=Path(policy_artifact["path"]),
-                    match_config=regime.match,
+                    match_config=regime.root_match,
                     games=stage.games,
                     seed=seeds["belief_collection"] + game_index,
                     max_steps=stage.max_steps,
@@ -1139,7 +1158,7 @@ def _execute_regime(
                             str(opponent_path)
                         )
                         validate_agent_setup(
-                            opponent_agent, Match(regime.match).to_rust()
+                            opponent_agent, Match(regime.root_match).to_rust()
                         )
                         if opponent_space.encoder.config != space.encoder.config:
                             raise ValueError("frozen opponent observation ABI differs")
@@ -1174,7 +1193,7 @@ def _execute_regime(
                             agent,
                             space,
                             temporary,
-                            player_configs=Match(regime.match).to_rust(),
+                            player_configs=_checkpoint_setups(regime),
                             extra={
                                 "run_id": run.id,
                                 "stage_id": stage.id,
@@ -1223,7 +1242,7 @@ def _execute_regime(
 
                     collector = SeatRoutedCollector(
                         space,
-                        Match(regime.match),
+                        Match(regime.root_match),
                         Reward(RewardConfig()),
                         num_envs=stage.streams,
                         seed=seeds["collection"],
@@ -1245,6 +1264,7 @@ def _execute_regime(
                         else None,
                         root=stage.root,
                         matchup_curriculum=stage.matchup_curriculum,
+                        deck_source=regime.deck_source,
                         device=stage.execution.device,
                         workers=stage.execution.workers,
                     )
@@ -1558,7 +1578,7 @@ def _execute_regime(
                         model,
                         space,
                         temporary,
-                        player_configs=Match(regime.match).to_rust(),
+                        player_configs=_checkpoint_setups(regime),
                         extra={
                             "run_id": run.id,
                             "stage_id": stage.id,
