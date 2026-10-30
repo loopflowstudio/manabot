@@ -911,6 +911,9 @@ impl Game {
                     nth_this_turn,
                 },
             ) => *player == source_controller && nth_this_turn == n,
+            (TriggerCondition::YouScry, GameEvent::Scried { player }) => {
+                *player == source_controller
+            }
             (
                 TriggerCondition::YouPutCountersOnCreature { kind },
                 GameEvent::CountersPut {

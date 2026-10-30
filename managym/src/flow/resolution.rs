@@ -769,6 +769,7 @@ impl Game {
                     offer: FreeCastOffer::Hand {
                         predicate: predicate.clone(),
                     },
+                    spends: None,
                 };
                 (!self.free_cast_candidates(&decision).is_empty()).then_some(decision)
             }
@@ -792,6 +793,7 @@ impl Game {
                 let decision = Decision::CastWithoutPaying {
                     player,
                     offer: FreeCastOffer::Exiled { card },
+                    spends: None,
                 };
                 if i32::from(self.card_mana_value(card)) < limit
                     && !self.free_cast_candidates(&decision).is_empty()
@@ -1079,6 +1081,7 @@ impl Game {
                 player: frame.controller,
                 remaining: 1,
             }),
+            Effect::CastLibraryTopFree => self.library_top_free_cast(frame.controller, None),
             Effect::MayOnceEachTurn { effects } => {
                 let key = (frame.source_ref?, frame.ability?);
                 if self
@@ -1088,6 +1091,10 @@ impl Game {
                     .contains_key(&key)
                 {
                     return None;
+                }
+                // An option that is itself a free cast is spent by casting.
+                if let [Effect::CastLibraryTopFree] = effects.as_slice() {
+                    return self.library_top_free_cast(frame.controller, Some(key));
                 }
                 let mut payment = PaymentProgress::new(
                     frame.controller,
@@ -1305,6 +1312,11 @@ impl Game {
                 None
             }
             Effect::Scry { count } => {
+                if *count > 0 {
+                    self.emit(GameEvent::Scried {
+                        player: frame.controller,
+                    });
+                }
                 let remaining = self.library_top(frame.controller, *count);
                 if remaining.is_empty() {
                     return None;
@@ -1617,6 +1629,25 @@ impl Game {
         };
         self.state.zones.zone_of(permanent.card) == Some(ZoneType::Battlefield)
             && self.permanent_is_creature(permanent_id)
+    }
+
+    /// `player` looks at their library's top card and may cast it for free.
+    fn library_top_free_cast(
+        &self,
+        player: PlayerId,
+        spends: Option<(crate::state::game_object::ObjectRef, usize)>,
+    ) -> Option<Decision> {
+        let card = *self
+            .state
+            .zones
+            .zone_cards(ZoneType::Library, player)
+            .last()?;
+        let decision = Decision::CastWithoutPaying {
+            player,
+            offer: FreeCastOffer::LibraryTop { card },
+            spends,
+        };
+        (!self.free_cast_candidates(&decision).is_empty()).then_some(decision)
     }
 
     pub(crate) fn source_permanent_id(&self, frame: &EffectFrame) -> Option<PermanentId> {

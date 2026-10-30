@@ -11294,3 +11294,60 @@ fn earth_kingdom_general_gains_that_much_life_once_each_turn() {
         "declining kept it"
     );
 }
+
+/// Activate the Planetarium and finish its scry 2 keeping both cards on top.
+fn planetarium_scry(s: &mut Scenario, planetarium: PermanentId) {
+    s.set_player_mana_pool(0, "1");
+    activate(s, planetarium, 0);
+    pass_until(s, ActionSpaceKind::Scry);
+    while s.action_space().kind == ActionSpaceKind::Scry {
+        s.step_action(0);
+    }
+}
+
+/// After a scry, the top card may be cast for free once each turn; a land
+/// on top offers nothing and spends nothing, and declining keeps the option.
+#[test]
+fn planetarium_casts_the_top_card_free_after_a_scry_once_each_turn() {
+    let mut s = five_color_setup(&["Planetarium of Wan Shi Tong", "Gray Ogre"]);
+    let planetarium = s.force_permanent_on_battlefield(0, "Planetarium of Wan Shi Tong");
+    let top = pin_top(&mut s, &["Gray Ogre", "Gray Ogre", "Gray Ogre"]);
+    planetarium_scry(&mut s, planetarium);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(offered_cards(&s), vec![top[0]]);
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut s);
+    assert_eq!(library_top(&s, 0), top[0], "declined: it stays on top");
+
+    clear_summoning_sickness(&mut s, planetarium);
+    s.game_mut().state.permanents[planetarium]
+        .as_mut()
+        .unwrap()
+        .tapped = false;
+    planetarium_scry(&mut s, planetarium);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    select_card(&mut s, top[0]);
+    settle(&mut s);
+    assert_eq!(
+        zone_of(&s, top[0]),
+        Some(ZoneType::Battlefield),
+        "cast free"
+    );
+
+    s.game_mut().state.permanents[planetarium]
+        .as_mut()
+        .unwrap()
+        .tapped = false;
+    planetarium_scry(&mut s, planetarium);
+    settle(&mut s);
+    assert_eq!(library_top(&s, 0), top[1], "used this turn");
+
+    let mut s = five_color_setup(&["Planetarium of Wan Shi Tong", "Gray Ogre"]);
+    let planetarium = s.force_permanent_on_battlefield(0, "Planetarium of Wan Shi Tong");
+    let top = pin_top(&mut s, &["Forest", "Gray Ogre"]);
+    planetarium_scry(&mut s, planetarium);
+    settle(&mut s);
+    assert_eq!(library_top(&s, 0), top[0], "a land is not cast");
+    let used = &s.game().state.turn.ability_triggers_this_turn;
+    assert!(used.is_empty(), "nothing spent");
+}

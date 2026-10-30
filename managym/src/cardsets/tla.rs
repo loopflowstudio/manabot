@@ -177,6 +177,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         path_to_redemption(),
         pillar_launch(),
         pirate_peddlers(),
+        planetarium_of_wan_shi_tong(),
         platypus_bear(),
         pretending_poxbearers(),
         professor_zei_anthropologist(),
@@ -5757,6 +5758,34 @@ fn pirate_peddlers() -> CardDefinition {
             effects: vec![Effect::PutCountersOnSource {
                 count: EffectValue::Fixed(1),
                 kind: CounterKind::PlusOnePlusOne,
+            }],
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn planetarium_of_wan_shi_tong() -> CardDefinition {
+    let text_box = "{1}, {T}: Scry 2.\nWhenever you scry or surveil, look at the top card of your library. You may cast that card without paying its mana cost. Do this only once each turn. (Look at the card after you scry or surveil.)";
+
+    CardDefinition {
+        key: "tla.planetarium_of_wan_shi_tong",
+        scryfall_id: "0ebaf0bf-7aa2-469d-bdbb-0fbf6741eede",
+        name: "Planetarium of Wan Shi Tong".into(),
+        mana_cost: Some(ManaCost::parse("{6}")),
+        types: CardTypes::new([CardType::Artifact]),
+        supertypes: vec!["Legendary".into()],
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            mana_cost: ManaCost::parse("{1}"),
+            tap_source: true,
+            effects: vec![Effect::Scry { count: 2 }],
+            ..Default::default()
+        }],
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::YouScry,
+            intervening_if: None,
+            effects: vec![Effect::MayOnceEachTurn {
+                effects: vec![Effect::CastLibraryTopFree],
             }],
         }],
         text_box: text_box.into(),

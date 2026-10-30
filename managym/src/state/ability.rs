@@ -125,6 +125,9 @@ pub enum TriggerCondition {
     YouPutCountersOnCreature {
         kind: CounterKind,
     },
+    /// "Whenever you scry" (CR 701.22): once per scry instruction with a
+    /// count above zero. (No current effect surveils.)
+    YouScry,
     /// "Whenever an opponent draws their Nth card each turn."
     OpponentDrawsNthCardThisTurn {
         n: u32,
@@ -472,6 +475,10 @@ pub enum Effect {
     ExileUntilNonlandCastFree {
         below: EffectValue,
     },
+    /// "Look at the top card of your library. You may cast that card without
+    /// paying its mana cost." Inside `MayOnceEachTurn`, casting spends the
+    /// option.
+    CastLibraryTopFree,
     /// You may cast a matching spell from your hand without paying its mana cost.
     CastFromHandFree {
         predicate: CardPredicate,
@@ -1026,6 +1033,7 @@ impl Effect {
             | Effect::ExileTopCardPlayThisTurn
             | Effect::ExileUntilNonlandCastFree { .. }
             | Effect::CastFromHandFree { .. }
+            | Effect::CastLibraryTopFree
             | Effect::ShuffleGraveyardIntoLibrary
             | Effect::PlaceTargetInLibrary { .. }
             | Effect::SearchLandsOpponentSplits { .. }

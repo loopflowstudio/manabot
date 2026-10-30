@@ -123,6 +123,10 @@ pub enum GameEvent {
         count: i32,
         by: PlayerId,
     },
+    /// A player scried (CR 701.22).
+    Scried {
+        player: PlayerId,
+    },
     /// A player searched their library (CR 701.23), whatever it found.
     LibrarySearched {
         player: PlayerId,

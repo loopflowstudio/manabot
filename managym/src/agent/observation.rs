@@ -1420,6 +1420,7 @@ impl Observation {
             | GameEvent::CombatDamageToPlayers { .. }
             | GameEvent::LibrarySearched { .. }
             | GameEvent::CountersPut { .. }
+            | GameEvent::Scried { .. }
             | GameEvent::AttackersDeclared { .. }
             | GameEvent::StepStarted { .. } => Vec::new(),
         }

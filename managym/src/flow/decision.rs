@@ -180,6 +180,9 @@ pub enum FreeCastOffer {
     /// One exiled card, put into its owner's hand if not cast (Solstice
     /// Revelations).
     Exiled { card: CardId },
+    /// The top card of the deciding player's library, which they have looked
+    /// at and which stays there if not cast (Planetarium of Wan Shi Tong).
+    LibraryTop { card: CardId },
 }
 
 /// A pending mid-resolution decision, including its own bookkeeping so a
@@ -303,6 +306,10 @@ pub enum Decision {
     CastWithoutPaying {
         player: PlayerId,
         offer: FreeCastOffer,
+        /// The once-each-turn option (exact source, ability index) casting
+        /// spends ("Do this only once each turn"); declining keeps it.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        spends: Option<(ObjectRef, usize)>,
     },
     /// `player` exiles a matching card from `owner`'s graveyard or a
     /// nontoken permanent `owner` controls (or declines, when `up_to`);
@@ -387,6 +394,10 @@ impl Decision {
             Decision::LookAndSelect { looked, .. } => looked,
             Decision::SearchDistinctLands { selected, .. } => selected,
             Decision::OpponentSplitsRevealed { revealed, .. } => revealed,
+            Decision::CastWithoutPaying {
+                offer: FreeCastOffer::LibraryTop { card },
+                ..
+            } => std::slice::from_ref(card),
             Decision::SelectMilled { .. }
             | Decision::SearchBasicLand { .. }
             | Decision::SearchLibraryToHand { .. }
@@ -423,6 +434,17 @@ pub struct SuspendedResolution {
 }
 
 impl Game {
+    /// Record that the exact source took its ability's once-each-turn option.
+    fn spend_once_each_turn(&mut self, key: (ObjectRef, usize)) {
+        self.journal_turn();
+        *self
+            .state
+            .turn
+            .ability_triggers_this_turn
+            .entry(key)
+            .or_default() += 1;
+    }
+
     /// The permanents a pending `Decision::Sacrifice` may select.
     pub(crate) fn sacrifice_decision_candidates(
         &self,
@@ -864,13 +886,7 @@ impl Game {
                     return Err(error);
                 }
                 if let Some(key) = payment.spends {
-                    self.journal_turn();
-                    *self
-                        .state
-                        .turn
-                        .ability_triggers_this_turn
-                        .entry(key)
-                        .or_default() += 1;
+                    self.spend_once_each_turn(key);
                 }
                 let effects = std::mem::take(&mut payment.if_paid);
                 suspended.frame.prepend_effects(effects.into_iter());
@@ -1266,6 +1282,12 @@ impl Game {
                     self.state.suspended_decision = Some(suspended);
                     return Err(AgentError("not a castable offered card".into()));
                 }
+                if let Decision::CastWithoutPaying {
+                    spends: Some(key), ..
+                } = suspended.decision
+                {
+                    self.spend_once_each_turn(key);
+                }
                 // The cast is the effect's last instruction: finish the
                 // resolution, then cast the chosen card onto the stack.
                 let (player, card) = (suspended.decision.player(), *card);
@@ -1301,7 +1323,7 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::CastWithoutPaying { player, offer }, Action::Decline { .. }) => {
+            (Decision::CastWithoutPaying { player, offer, .. }, Action::Decline { .. }) => {
                 if let FreeCastOffer::Exiled { card } = offer {
                     self.reveal_card_to_hand(*card, *player);
                 }
@@ -1500,7 +1522,7 @@ impl Game {
     /// its predicate (one per definition, so resampled copies stay
     /// consistent) or the exiled card, each castable for free right now.
     pub(crate) fn free_cast_candidates(&self, decision: &Decision) -> Vec<CardId> {
-        let Decision::CastWithoutPaying { player, offer } = decision else {
+        let Decision::CastWithoutPaying { player, offer, .. } = decision else {
             return Vec::new();
         };
         let free = CastChoices {
@@ -1526,6 +1548,16 @@ impl Game {
                 .then_some(*card)
                 .into_iter()
                 .collect(),
+            FreeCastOffer::LibraryTop { card } => (self
+                .state
+                .zones
+                .zone_cards(ZoneType::Library, *player)
+                .last()
+                == Some(card)
+                && self.state.cards[*card].types.is_castable())
+            .then_some(*card)
+            .into_iter()
+            .collect(),
         };
         candidates.retain(|card| self.can_cast_with(*player, *card, free));
         candidates.sort_unstable_by_key(|card| (self.state.cards[*card].definition_id, *card));

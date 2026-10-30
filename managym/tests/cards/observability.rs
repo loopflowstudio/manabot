@@ -478,6 +478,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::SacrificeSource { .. } => "Effect::SacrificeSource",
         Effect::MaySacrifice { .. } => "Effect::MaySacrifice",
         Effect::MayOnceEachTurn { .. } => "Effect::MayOnceEachTurn",
+        Effect::CastLibraryTopFree => "Effect::CastLibraryTopFree",
         Effect::ExileSourceSpell => "Effect::ExileSourceSpell",
         Effect::DestroyCreaturesLosingAbilities { .. } => "Effect::DestroyCreaturesLosingAbilities",
         Effect::AttachSourceTo { .. } => "Effect::AttachSourceTo",
@@ -501,7 +502,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 84;
+const EFFECT_VARIANTS: usize = 85;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -735,6 +736,7 @@ fn effect_witnesses() -> Vec<Effect> {
             then: draw(),
         },
         Effect::MayOnceEachTurn { effects: draw() },
+        Effect::CastLibraryTopFree,
         Effect::ExileSourceSpell,
         Effect::DestroyCreaturesLosingAbilities {
             max_mana_value: EffectValue::X,
@@ -815,6 +817,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::YouPutCountersOnCreature { .. } => {
             "TriggerCondition::YouPutCountersOnCreature"
         }
+        TriggerCondition::YouScry => "TriggerCondition::YouScry",
         TriggerCondition::ActiveIf { .. } => "TriggerCondition::ActiveIf",
         TriggerCondition::AttacksAlone { .. } => "TriggerCondition::AttacksAlone",
         TriggerCondition::BeginningOfYourEndStep => "TriggerCondition::BeginningOfYourEndStep",
@@ -852,6 +855,7 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::YouPutCountersOnCreature {
             kind: CounterKind::PlusOnePlusOne,
         },
+        TriggerCondition::YouScry,
         TriggerCondition::ActiveIf {
             active_if: Condition::YourTurn,
             condition: enters(),
