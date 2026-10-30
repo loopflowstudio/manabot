@@ -43,8 +43,9 @@ Settled by accepted direction; implemented 2026-10-30 (labels in
 
 - **Copy identity.** A token copy keeps its source's `definition_id` /
   `registry_key`: learning tokens and the text definition line describe the
-  copied printed definition; the object's row carries what differs
-  (`is_token`, `is_legendary`, later the Airship's granted creature type).
+  copied printed definition; the object's card row carries what differs
+  (`is_token`, `is_legendary`, later the Airship's granted creature type);
+  permanent rows share the key and link to that card row.
   No per-copy definition ids or catalog entries.
 - **Surveil choices name what they do, at the shared authority** (Jack
   Heart's 2026-10-21 shared-decision-surface direction): under
@@ -57,6 +58,60 @@ Settled by accepted direction; implemented 2026-10-30 (labels in
 
 No open product choice. Acceptance still waits on T3/T4 publication
 (Phoenix Fleet Airship); that is a dependency, not a decision.
+
+Re-review 2026-10-30 against the diff at 0ecacebc0: the code matches the
+model above (one `create_token_copy` authority, surveil labels at
+`action_description`, `sorcery_timing` in `check_activation_terms`); nothing
+to change. T4 488a40 still has no PR (running compress); #399 still open.
+
+## Design review (Jack Heart, 2026-10-30, comment 10a31948) — accepted
+
+1. Stack on T3 #399 now; drop this branch's duplicate
+   `ActivatedAbilityDefinition.sorcery_timing` for T3's (same name, already
+   checked in T3's `check_activation_terms`).
+2. Replace tensor-only copy identity (above, "Copy identity") with generic,
+   composable modified-characteristics observation: copy + general
+   exceptions + layered effects, in tensor and tokens. Shape proposed below
+   first.
+3. Sacrifice history on `TurnState`, shared with T4's raid history.
+4. Then define Phoenix Fleet Airship.
+
+## Proposal: modified characteristics (2026-10-30, draft; implemented as written)
+
+A permanent's characteristics are its copiable values (layer 1) modified by
+T3's layered effects (layers 2–7). Observation states each input, never only
+the result:
+
+- **Copy effect as data.** `Card.copy: Option<CopyEffect>` with
+  `CopyEffect { of: CardDefId, exceptions: Vec<Modification> }`: `of` is the
+  printed definition at the root of a copy chain; `exceptions` accumulate
+  down the chain (CR 707.9b: a copy of a copy inherits its exceptions). The
+  card's definition stays the materialized copiable values (every layer
+  reader, legend rule and mana reader already starts there); `create_token_copy`
+  derives it once from `(of, exceptions)` through `Modification::apply_copiable`.
+- **Exceptions reuse T3's `Modification`** (one vocabulary for layer-1
+  exceptions and layered records, one token id per variant). New variant
+  `Modification::Nonlegendary` (loses the legendary supertype). Only
+  characteristic-defining variants are copiable (`apply_copiable` returns
+  false for rules effects; definitions never author those as exceptions,
+  checked by a test over every defined card).
+- **Card authoring:** `Effect::CreateTokenCopy { exceptions: Vec<Modification<EffectValue>> }`
+  replaces `{ nonlegendary }`. Ran and Shaw: `[Nonlegendary]`; Joo Dee and the
+  Airship: `[]`.
+- **Observation:** `PermanentData.copy: Option<CopyData { of: registry_key,
+  exceptions: Vec<ContinuousEffectData-shaped modification> }>` (omitted when
+  none). v5 facts gain `FactKind::Copy` (id: the copied definition's learning
+  token value, source: its registry key + 1) and `FactKind::CopyException`
+  (id/detail/value exactly as `FactKind::Effect` rows, via one shared
+  modification-row helper; no duration or order). Layered effects keep
+  T3's `FactKind::Effect` rows. The permanent row's definition index stays
+  the copied definition (its effective printed characteristics).
+- **Tokens:** `CreateTokenCopy`'s exceptions tokenize as the same
+  `Modification::*` values `ApplyContinuous` produces.
+- **LLM text / Academy:** "copy of Ran and Shaw, except not legendary" as a
+  permanent note, the same words in both.
+- **Guard:** `FactKind` and `Modification` stay exhaustive; witnesses for
+  `Copy`, `CopyException` and `Nonlegendary` (Ran and Shaw).
 
 ## Remaining (after syncing onto T3/T4)
 
@@ -81,4 +136,11 @@ Phoenix Fleet Airship needs, all owned by T3/T4 constructs:
 
 ## Checks
 
-- Debug `cargo test --test cards` after the concept-review refinements: 318/318 pass; extension rebuilt and imports.
+- 2026-10-30 at 0ecacebc0: debug `cargo test --test cards` 318/318 pass (both refinement witnesses included); extension rebuilt 12:08 with the label change.
+
+## pr-publish step, 2026-10-30 (loop 2 pass 2) — not published
+
+Blocked; no `lf sync`/`lf pr publish` run. Jack Heart's launch steer says
+"Stop at demo", and the accepted outcome (Phoenix Fleet Airship) is not
+met: T4 488a40 still has no PR (running compress), T3 #399 still open.
+Publish after syncing onto T3/T4 and defining the Airship.
