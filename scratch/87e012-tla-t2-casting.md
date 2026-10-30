@@ -68,3 +68,9 @@ exhaust, used once-each-turn, granted firebending) in text-5 wording
 2026-10-29 later passes (gate re-runs ×6 through 2026-10-30, concept reviews 7–14, implement, compress ×3, realign ×2, demo re-runs) at T1 `2c50c8793`, main unmoved: no tracked change, no rerun; plan matches code (`lesson_mana` stays the frozen total; per-class split is `restricted_mana`); cards 304 after `912a5d0e9`. PR #398 CI at `a5587df5a` (2026-10-30): all checks pass, including the CI-deferred Playwright (Academy UI) and Clean-machine Play; later commits are scratch-only (CI at `b678524c1` 8 pass, 8 running at the latest gate). T1 #394 head moved to `e6b672753` (2026-10-30, "Clear added scratch files": scratch-only, preparing to land), so no re-sync is needed until it merges. Older results: `git log -p -- scratch/87e012-tla-t2-casting.md`.
 
 2026-10-29 demo (headless, decision pass 1): 60 random T2-deck games through `managym.Env` with no errors; flashback, Zuko impulse and foretell casts offered and taken; the opponent never sees the foretold card. Advance to gate. Record: `scratch/t2-demo.md`.
+
+2026-10-30 publish: synced onto T1 head `e6b672753` (scratch-only merge `b8dbfa319`, no tracked change); `lf pr publish` updated #398 (ready, mergeable). T1 #394 still open, so T2 must not land yet.
+
+2026-10-30 demo decision pass 1 at `b8dbfa319`: T2 demo re-run byte-identical (60 games, no errors, no foretell leak). Advance.
+
+2026-10-30 gate at `b8dbfa319`: no tracked change since the last full gate (merge onto T1 `e6b672753` was scratch-only; main `633dca159` already contained, T1 #394 open and unmoved), so no suite reran. PR #398 CI at `b8dbfa319`: 8 pass (unit, semantic coverage/kernel, clean-machine play, packaging, preflight), 8 pending at gate time.

@@ -49,3 +49,9 @@ No `managym/src` or extension change since `63e5fe407`; T1 #394 still open at
 `2c50c8793`. Each re-run of `t2_demo.py … 60` and `t2_demo_foretell.py` was
 byte-identical to `run.log` and `foretell.log` (60 games, winners 24/36, no
 errors, 0 face-down leaks). Advance.
+
+2026-10-30 decision pass 1, at `b8dbfa319` (synced onto T1 `e6b672753`; #394 still
+open): the implement pass in between made no tracked change. Since `63e5fe407`, the only
+runtime change is `d130bbc90` in `text_observation.py`. Re-ran `t2_demo.py
+scratch/t2-demo/t2-cards.json 60` and `t2_demo_foretell.py`, and both outputs matched
+`run.log` and `foretell.log` byte for byte. Advance.
