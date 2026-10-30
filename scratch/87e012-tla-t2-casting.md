@@ -69,10 +69,8 @@ exhaust, used once-each-turn, granted firebending) in text-5 wording
 
 ## Remaining
 
-- Gate on `cfe477a7b` (debug `cargo test`, CI conformance, arena admission,
-  Academy vitest/e2e); #398 CI was queued there at realign (main unmoved since
-  `fa5e13b23`). Then Jack Heart reviews and lands #398; T3 (6875f0) syncs onto it
-  and inherits the w17 rename.
+- Jack Heart reviews and lands #398; T3 (6875f0) syncs onto it and inherits
+  the w17 rename.
 
 ## Check
 
@@ -88,6 +86,16 @@ public-commitment parity re-written (142 commands, 69 commitments, 0 gaps);
 debug `semantic_conformance_tests` 6 pass on `semantic-kernel-w17-v1`; belief,
 learn contract, Academy fixtures/parity 142 pass; arena admission 66 pass;
 `npm run check` 0 errors. Full debug `cargo test`, vitest and e2e: gate.
+
+2026-10-30 gate (code tree of `cfe477a7b`; later commits touch only scratch):
+#398 CI green on `ddd8868a5`, which includes debug Rust tests, Protocol v1 and
+Semantic Kernel conformance, Python unit tests, Integration main/long, Academy UI
+and Integration, and Clean-machine Play. Local checks: `cargo fmt --check` passes;
+`cargo clippy --all-targets --all-features -D warnings` (opt-level 1) is clean
+with `PYO3_PYTHON=.venv/bin/python`, because the default interpreter is 3.14 and
+too new for PyO3; ruff check/format pass on all 20 changed Python files. Arena
+admission (66) was last run at `9f25fd9e7`; since then only `belief/tracker.py`
+changed, which arena admission does not import. No code change.
 
 2026-10-30 compress: tracker `_TransportFacts` derives `known_exits` from its
 slot/hand split instead of storing it; `pytest tests/belief` 93 pass. Gate owns the rest.
