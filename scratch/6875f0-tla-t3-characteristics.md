@@ -179,6 +179,32 @@ Scryfall id.
    from other test threads, which was the intermittent "rejection must not
    mutate state" failure in `structured_offers` / `structured_attacker_offers`.
 
+## Concept review after item 33 (2026-10-30)
+
+The accepted models (continuous-effect records, counter map, open vocabularies
+as fact rows, one open world w17) match the code: no `temp_*`,
+`keeps_red_mana`, `no_maximum_hand_size` or `Permanent.abilities_lost` state
+remains; WORLDS.md's w17 row and v5 paragraph state the shipped widths. No open
+product choice.
+
+Next implement direction: the guidance this branch added to AGENTS.md
+(`CLAUDE.md` links to it) predates items 30–31 and teaches the old model to
+every later agent. Make it state what the code does:
+- v5 widths: player 63, card 55, permanent **37** (not 52), relation 48,
+  plus the `facts` block (128 × 12, `FactKind`) for open-ended vocabularies.
+  New open-vocabulary state is a fact kind, not a column (Jack Heart's 2a).
+- `observability.rs` names each `Observation` field's tensor columns **or fact
+  kind**.
+- `Game::has_lost_abilities` reads continuous-effect records and an Aura's
+  `SetCharacteristics`; drop "never read `Permanent.abilities_lost` alone"
+  (that field no longer exists). Add one line: an until-end-of-turn or
+  other-duration change is an `Effect::ApplyContinuous` record
+  (`state/effect.rs`, `flow/effects.rs`), never a new `Permanent`/`Player`
+  field.
+Docs only; no code, receipt or world change. Done 2026-10-30: widths checked
+against `ObservationSpace` (player 63, card 55, permanent 37, relation 48,
+facts 128 × 12); grep finds no stale wording.
+
 ## Remaining
 
 - Browser proof (Playwright e2e) is CI's.
