@@ -38,7 +38,7 @@
         checked={stops.auto_pass}
         onchange={(event) => onAutoPassChange?.(event.currentTarget.checked)}
       />
-      Advance forced steps and use priority stops
+      Use priority stops
     </label>
 
     <div class={stops.auto_pass ? '' : 'pointer-events-none opacity-50'}>

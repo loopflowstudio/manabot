@@ -64,6 +64,7 @@ class FakeEngine:
                 "hand_size": self.space.hand_size,
                 "pool": dict(self.space.pool),
                 "known_hand": dict(self.space.known_hand),
+                "foretold": self.space.foretold,
                 "total_weight": str(self.space.total_weight),
                 "worlds": [
                     {
@@ -100,6 +101,7 @@ def _state(
     hand_size: int,
     rows: list[tuple[dict[str, int], int]],
     known_hand: dict[str, int] | None = None,
+    foretold: int = 0,
 ) -> tuple[FakeEngine, PossibleWorldSpace, Observation]:
     engine = FakeEngine()
     space = PossibleWorldSpace(
@@ -111,6 +113,7 @@ def _state(
         hand_size=hand_size,
         pool=tuple(sorted(pool.items())),
         known_hand=tuple(sorted((known_hand or {}).items())),
+        foretold=foretold,
         total_weight=sum(weight for _, weight in rows),
         worlds=tuple(
             PossibleWorld(index, tuple(sorted(hand.items())), weight)
@@ -246,6 +249,60 @@ def test_learn_reveal_survives_secret_draw_and_public_duplicate_departure() -> N
     assert tracker.records[-1].known_exits == ("Lesson",)
     assert tracker.records[-1].hidden_draws == 0
     assert tracker.posterior.probabilities == pytest.approx([1 / 6, 4 / 6, 1 / 6])
+
+
+def test_foretell_moves_a_hidden_hand_card_to_the_slot_and_cast_leaves_it() -> None:
+    # Only "Rite" has foretell: once foretold, the slot holds the only Rite, so
+    # the one-card hand must be an Island.
+    _, before, observation = _state(
+        "before-foretell",
+        1,
+        {"Rite": 1, "Island": 2},
+        2,
+        [({"Rite": 1, "Island": 1}, 2), ({"Island": 2}, 1)],
+    )
+    foretold_engine, _, foretold_observation = _state(
+        "after-foretell",
+        2,
+        {"Rite": 1, "Island": 2},
+        1,
+        [({"Island": 1}, 2)],
+        foretold=1,
+    )
+    model = FixedLikelihood((1.0,))
+    tracker = BeliefTracker(
+        before, observation, likelihood=model, epsilon=0.0, model_id="test"
+    )
+    tracker.observe(
+        foretold_engine,
+        acting=1,
+        transition=_transition(1, 2, None, foretold_observation),
+    )
+    assert tracker.space.foretold == 1
+    assert tracker.records[-1].hidden_draws == 0
+    assert tracker.records[-1].known_exits == ()
+    assert tracker.posterior.probability_of_hand({"Island": 1}) == pytest.approx(1.0)
+
+    cast_engine, _, cast_observation = _state(
+        "cast-from-slot",
+        3,
+        {"Island": 2},
+        1,
+        [({"Island": 1}, 1)],
+    )
+    tracker.observe(
+        cast_engine,
+        acting=1,
+        transition=_transition(
+            2, 3, {"kind": "cast", "card": "Rite"}, cast_observation
+        ),
+        likelihood_root="slot-cast-root",
+    )
+    assert tracker.space.foretold == 0
+    assert tracker.space.hand_size == 1
+    assert tracker.records[-1].known_exits == ("Rite",)
+    assert tracker.records[-1].hidden_draws == 0
+    assert tracker.posterior.probability_of_hand({"Island": 1}) == pytest.approx(1.0)
 
 
 def _tracker_snapshot(tracker: BeliefTracker) -> tuple[Any, ...]:

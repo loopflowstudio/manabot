@@ -23,7 +23,7 @@ import psutil
 
 from manabot.semantic.compiler import canonical_json
 from manabot.semantic.learning import BoundSemanticPack
-from manabot.verify.util import GW_ALLIES_DECK, UR_LESSONS_DECK
+from manabot.verify.games import GW_ALLIES_DECK, UR_LESSONS_DECK
 import managym
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -257,8 +257,8 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         },
         "provenance": header.to_dict(),
         "counts": {
-            "definitions": len(pack.ir.definitions),
-            "programs": len(pack.ir.programs),
+            "definitions": pack.catalog.definitions,
+            "programs": pack.catalog.programs,
             "catalog_tokens": len(pack.catalog.token_kind),
             "definition_references": len(pack.catalog.definition_ref_source_tokens),
             "visible_objects": visible_objects,

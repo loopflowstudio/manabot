@@ -16,9 +16,18 @@ and convergence status are in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
 1. **`src/agent/`**: RL-facing API (`Env`, action spaces, observations)
 2. **`src/flow/`**: Game progression (turns, priority, combat)
 3. **`src/state/`**: Core game state (cards, players, zones, mana)
-4. **`src/cardsets/`**: Card implementations
+4. **`src/cardsets/`**: Card set files (one per printed set); **`src/cards/`**: `ContentPack`, rules fixtures, authored setups, pool support and learning tokens
 5. **`src/infra/`**: Logging and profiler infrastructure
 6. **`src/python/`**: PyO3 bindings and Rust→Python conversions
+
+Each card is a function in the file of its first printing's set under
+`src/cardsets/`, returning the engine's own `CardDefinition` in its rules types
+(`Effect`, `Ability`, `TargetSpec`, …). The engine runs that value directly, and
+the learning catalog (`src/cards/tokens.rs`, `managym.learning_catalog`)
+derives policy tokens from it. `src/world.rs` owns `WORLD_VERSION`, the card/deck
+support check (defined and not marked incomplete) and the set filter. Keep
+decklist data separate from card behavior; see
+[the content contract](../content/semantic/README.md).
 
 Dependencies flow: python → agent → flow → state/infra.
 
@@ -27,7 +36,7 @@ structured offers, proposed events, fork/rollback — is documented in
 [docs/research/semantic-kernel.md](../docs/research/semantic-kernel.md), with
 conformance fixtures under [conformance/](../conformance/).
 
-Authored setups come from `SemanticPack::player_config` (Python:
+Authored setups come from `AuthoredPack::player_config` (Python:
 `managym.authored_deck_setup(pack_key, deck_key)`). Carry that complete config
 when swapping seats or rebuilding roots: deck and sideboard together identify
 an authored setup. `PlayerConfig::new` intentionally gives custom setups an
@@ -45,7 +54,11 @@ use the native Rust implementations so new visibility fields cannot drift.
 Spell-level modes are announced before targets and payment. Independent target
 clauses use `Effect::TargetClause`; effects within a clause share its targets.
 Repeated specs in separate clauses may choose the same object. A resolving
-frame retains its active clause across suspended decisions. Graveyard targets
+frame retains its active clause and each chosen slot's resolution-start eligibility
+across suspended decisions (CR 608.2b). Effects use those retained results; live
+presence checks separately prevent following departed objects (CR 400.7).
+Illegal slots remain positional, and zero optional targets still resolve.
+Graveyard targets
 carry an exact `ObjectRef`, so continuations cannot follow a physical card into
 a later incarnation. Journal permanent mutations at their event authority;
 source-relative effects require the original battlefield object.
@@ -73,7 +86,7 @@ New registered real cards also need their Scryfall shell and Oracle text in
 checks every registration against that snapshot. For an accepted rules-world
 change, record a new versioned conformance corpus and update the CI/test root
 without rewriting earlier receipts. The current corpus is
-[semantic-kernel-w14-v1](../conformance/semantic-kernel-w14-v1/).
+[semantic-kernel-w17-v1](../conformance/semantic-kernel-w17-v1/).
 
 After changing Rust, rebuild the Python extension into the uv-managed venv:
 
@@ -168,7 +181,7 @@ still requires a complete witness. This is finite search, without a general
 large-board performance guarantee.
 
 `Env.capture_decision(viewer, history_capacity=0)` supplies atomic decision capture
-v3: the schema-7 semantic Observation, shared native continuation frames, bound public card
+v4: the schema-7 semantic Observation, shared native continuation frames, bound public card
 characteristics, visible object joins, world/content identity and optional public
 history v1 (0 disables it; 1..32 admits a chronological suffix). Its SHA-256 covers
 all fields except the digest itself using recursively key-sorted compact JSON.
@@ -182,8 +195,10 @@ current-digest validation plus ordinary semantic execution. Portable capture JSO
 is evidence, not execution authority; clones need their own live capture.
 
 
-Fresh policy input v3 includes current stack/continuation relations and a
-decision-local action join for controller-selected trigger placement. Its
+Fresh policy input v5 keeps v4's trigger-placement action joins and retained
+resolution-start eligibility in native current stack/continuation relations, and
+widens player and card rows for cast permissions, the hand-only lock, restricted
+mana by spending subtype and announced X. Its
 layout, legacy checkpoint admission and measurement commands are documented in
 [the observation input contract](../docs/recent-events.md#current-continuation-input).
 The presentation context and text capture derive from the same typed frames;

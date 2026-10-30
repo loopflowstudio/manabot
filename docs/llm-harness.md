@@ -54,9 +54,11 @@ The optional runtime pins Transformers 5.3.0. Its `AutoModelForCausalLM` loads
 Qwen3.5's text decoder from the composite checkpoint without instantiating the
 vision encoder. The retained `runtime.model_class` identifies the loaded class.
 `enable_thinking: false` passes the native template option on both attempts;
-omitting it retains a tokenizer's default. Reasoning-output parsing is not
-supported, and enabling thinking is rejected by configuration validation. The
-same generic loader and configuration still support ordinary causal models.
+omitting it retains a tokenizer's default and historical answer parsing.
+With `enable_thinking: true`, both attempts request reasoning and selection
+requires exactly one closing `</think>` boundary followed by one legal reference.
+Incomplete thinking receives the same protocol repair as any invalid answer.
+The generic loader and configuration also support ordinary causal models.
 
 This configuration pins the small model used for the CPU plumbing smoke. Model
 selection and limits are explicit run inputs; this example does not establish a
@@ -169,12 +171,44 @@ has a hard parent-owned deadline. A timeout retains progress and closes the
 session without selecting an action or automatically restarting. Generation
 does not retain conversational or KV state across game decisions.
 
+Admission binds the pinned inference configuration to the runtime and chat
+template in a `behavior_version`. Each decision has a unique request ID; the
+parent checks it and the returned version, configuration, runtime and decision
+before forwarding progress. A mismatch closes the session without selecting an
+action. Selection receipts retain the version; historical receipts without it
+remain readable and keep an unknown version.
+
+The vLLM server uses that behavior hash as its sole served model name. Startup
+and client admission verify the name through `/v1/models`; completion requests
+route by that hash and reject replies with a missing or different model name.
+The runtime identity retains base server arguments; `vllm-command.json` retains
+the complete command including the derived name, which cannot hash itself.
+This checks the supervised service's declared identity, not an independent
+measurement of loaded GPU weights. Historical receipts remain readable but
+cannot admit a server that only exposes the former model-name route.
+The vLLM campaign freezes that acknowledged identity before admitting games.
+Its worker reads the schedule and inference configuration retained before server
+startup; it does not regenerate the cohort from source defaults.
+Game receipts cannot redefine the cohort's model; changed player identities or
+played games missing either identity stop new admissions and remain in results.
+
+The offline inference report preserves sampled decoding settings, thinking
+budgets and behavior versions. It rejects mixed treatments within one game or
+sequence. `generation_tokens` reports received outputs separately from missing
+responses, excludes harness-inserted closing tokens from generated-token totals,
+and groups reasoning-length distributions by retained native continuation stage.
+Repairs and failed attempts remain in each distribution's population; missing
+splits or captures remain unknown. Historical `output_tokens` still counts every
+retained response token, including inserted delimiters. Reading these receipts
+does not import the executable model or native runtime.
+
 `manabot.verify.llm_game` connects the native text renderer and revision-bound
 Commands to that session. Its functional fixture is a 60-card mirror of 24
 Mountains, 24 Gray Ogres and 12 Lightning Bolts, Qwen in seat zero against a
 seeded uniform random opponent. This is a small engine test deck, not a
-constructed-format deck or a playing-strength benchmark. Native trivial-decision
-skipping is disabled; public history v1/32 is declared, and there is no writable
+constructed-format deck or a playing-strength benchmark. New games enable native
+trivial-decision skipping by default; the historical L4 fixture disabled it.
+Public history v1/32 is declared, and there is no writable
 model memory. Every executed Command is checked against a second native replay.
 
 The separate game configuration admits 8,192 tokens because a local 426-decision

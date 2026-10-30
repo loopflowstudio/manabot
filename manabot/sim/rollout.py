@@ -25,8 +25,10 @@ from typing import Any
 import numpy as np
 import torch
 
-from manabot.env import Env, Match, ObservationSpace
+from manabot.env.env import Env
 from manabot.env.failures import CapturedVector
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.world import validate_agent_setup
@@ -161,7 +163,7 @@ def run_vector_games(
     env steps (decisions surfaced).
     """
 
-    from manabot.verify.util import INTERACTIVE_DECK
+    from manabot.verify.games import INTERACTIVE_DECK
 
     deck = dict(deck or INTERACTIVE_DECK)
     obs_space = ObservationSpace()

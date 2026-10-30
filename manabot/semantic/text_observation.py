@@ -28,7 +28,7 @@ from pydantic import ValidationError
 
 import managym
 
-REPRESENTATION_VERSION = "manabot-text-2"
+REPRESENTATION_VERSION = "manabot-text-5"
 _ZONES = ("library", "hand", "battlefield", "graveyard", "stack", "exile", "command")
 _PHASES = ("beginning", "first main", "combat", "second main", "ending")
 _STEPS = (
@@ -103,6 +103,10 @@ _STAGES = frozenset(
         "legend_rule",
         "order_triggers",
         "trigger_targets",
+        "revealed_hand",
+        "split_revealed",
+        "free_cast",
+        "linked_exile",
     )
 )
 
@@ -174,6 +178,16 @@ def _selectors(mode: int | None, ability: int | None) -> list[str]:
     ]
 
 
+def _spending(restricted: managym.RestrictedMana) -> str:
+    """ "Lesson or Shrine spells", "Ally spells or abilities of Ally sources"."""
+    parts = []
+    if restricted.spells:
+        parts.append(" or ".join(restricted.spells) + " spells")
+    if restricted.abilities:
+        parts.append("abilities of " + " or ".join(restricted.abilities) + " sources")
+    return " or ".join(parts)
+
+
 def _mana(cost: ManaCost | managym.ManaCost | None) -> str:
     if cost is None:
         return "no mana cost"
@@ -212,7 +226,7 @@ def _mana(cost: ManaCost | managym.ManaCost | None) -> str:
             + "}"
         )
     return (symbols or "{0}") + (
-        " (Lesson spending context)" if getattr(cost, "spend_on_lesson", False) else ""
+        " (restricted spending)" if getattr(cost, "spend_on_lesson", False) else ""
     )
 
 
@@ -423,9 +437,12 @@ class _Renderer:
             details.append(
                 f"waterbend {_yes(relation.waterbend)}; may decline {_yes(relation.can_decline)}"
             )
-        for target in relation.targets:
+        for ordinal, target in enumerate(relation.targets, 1):
+            legal = target.legal_at_resolution_start
+            eligibility = "unknown" if legal is None else _yes(legal)
             details.append(
-                f"target clause {target.clause + 1}: {self.fact_reference(target.reference)}"
+                f"target {ordinal}, clause {target.clause + 1}: {self.fact_reference(target.reference)}; "
+                f"Legal when resolution began: {eligibility}"
             )
         if relation.context is not None:
             details.append("trigger context " + self.fact_reference(relation.context))
@@ -473,7 +490,7 @@ class _Renderer:
                     for symbol, count in zip("WUBRGC", player.mana, strict=True)
                 )
                 + ".",
-                "Lesson-only mana: "
+                "Restricted mana: "
                 + ", ".join(
                     f"{symbol} {count}"
                     for symbol, count in zip("WUBRGC", player.lesson_mana, strict=True)
@@ -481,6 +498,24 @@ class _Renderer:
                 + f". Until-end-of-combat mana total: {player.combat_mana}.",
                 f"Lessons in graveyard: {player.graveyard_lessons}.",
             ]
+            for restricted in player.restricted_mana:
+                lines.append(
+                    f"Restricted mana for {_spending(restricted)}: "
+                    + ", ".join(
+                        f"{symbol} {count}"
+                        for symbol, count in zip("WUBRGC", restricted.mana, strict=True)
+                        if count
+                    )
+                    + "."
+                )
+            if player.hand_only_until is not None:
+                lines.append(
+                    "Can cast spells only from hand, overriding permissions to cast "
+                    f"from elsewhere, until {self.name(player.hand_only_until)} "
+                    "begins a turn."
+                )
+            if player.no_maximum_hand_size:
+                lines.append("Has no maximum hand size for the rest of the game.")
             for label, quantities in (
                 ("Publicly known hand minima", player.known_hand),
                 ("Initial sideboard", player.sideboard_counts),
@@ -527,6 +562,12 @@ class _Renderer:
             optional = f"; type flags {flags}" if flags else ""
             if keywords := _keywords(card.keywords):
                 optional += f"; printed keywords {keywords}"
+            if card.face_down:
+                optional += "; foretold, face down (hidden from other players)"
+            if card.x is not None:
+                optional += f"; announced X {card.x}"
+            if card.cast_permission is not None:
+                optional += "; " + self._cast_permission(card.cast_permission)
             lines.append(
                 f"{self.name(card.id)} [{self.definition(card.registry_key)}]: owner {self.name(card.owner_id)}; zone {_enum(_ZONES, int(card.zone))}; card power/toughness {card.power}/{card.toughness}; cost {_mana(card.mana_cost)}; mana value {card.mana_cost.mana_value}{optional}; unlisted type and keyword flags false; token {_yes(card.is_token)}; legendary {_yes(card.is_legendary)}; Ally {_yes(card.is_ally)}; Lesson {_yes(card.is_lesson)}; ward mana value {card.ward_cost}; kicker mana value {card.kicker_cost}. Rules: {card.text_box or '(empty)'}"
             )
@@ -534,13 +575,53 @@ class _Renderer:
             lines.append("Empty.")
         return lines
 
+    def _cast_permission(self, permission: managym.CastPermission) -> str:
+        terms = [
+            "as a land play"
+            if permission.cost is None
+            else f"cast for {_mana(permission.cost)}"
+        ]
+        if permission.this_turn:
+            terms.append("this turn only")
+        if permission.own_turn_only:
+            terms.append("during their own turn only")
+        if permission.after_turn is not None:
+            terms.append(f"only after turn {permission.after_turn}")
+        if permission.source_permanent_id is not None:
+            terms.append(
+                f"while they control {self.name(permission.source_permanent_id)}"
+            )
+        if permission.flash:
+            terms.append("as though it had flash")
+        if permission.any_mana:
+            terms.append("spending mana of any type")
+        if permission.waterbend:
+            terms.append("generic may be paid by waterbending")
+        return (
+            f"may be played from exile by {self.name(permission.player_id)}: "
+            + ", ".join(terms)
+        )
+
     def _permanents_lines(self) -> list[str]:
         state = self.state
         lines: list[str] = []
         for permanent in state.agent_permanents + state.opponent_permanents:
             optional = ""
+            if permanent.attacking:
+                optional += "; attacking"
             if permanent.temp_subtypes:
                 optional += f"; temporary subtypes {', '.join(permanent.temp_subtypes)}"
+            if permanent.exhausted_abilities:
+                optional += f"; exhaust abilities used {permanent.exhausted_abilities}"
+            if permanent.once_each_turn_used:
+                optional += (
+                    "; once-each-turn abilities used this turn "
+                    f"{permanent.once_each_turn_used}"
+                )
+            if permanent.granted_firebending:
+                optional += (
+                    f"; firebending {permanent.granted_firebending} until end of turn"
+                )
             if keywords := _keywords(permanent.keywords):
                 optional += f"; effective keywords {keywords}"
             lines.append(

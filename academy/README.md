@@ -78,15 +78,15 @@ types group creatures, lands, other
 permanents and artifact tokens into bounded battlefield lanes; dense lanes
 compact their cards, then offer explicit paging. Focusing a legal offer reveals
 its objects' pages without submitting a choice. Public mana
-pools, Lesson restrictions and chooser-only inspected cards come from native
+pools, spending restrictions and chooser-only inspected cards come from native
 observations. Historical frames without those fields say details were not recorded.
 
-Academy constructs the native environment with `skip_trivial=False`. With
-automation enabled, sole legal actions for either seat advance through recorded
-authority Commands and appear as **Auto** in the decision log. Disable
-**Advance forced steps and use priority stops** to inspect each forced prompt.
-Priority stop/F6 automation also retains its Commands and automation labels.
-This uses the existing native execution setting; training defaults,
+Academy uses native trivial-decision skipping, like every game runner: the
+engine resolves sole legal actions for either seat, so no forced prompt reaches
+a person or a policy. Disable **Use priority stops** to surface every priority
+window that offers a real choice. Priority stop/F6 automation retains its
+Commands and appears as **Auto** in the decision log; traces from before native
+skipping keep their recorded forced **Auto** steps. Training defaults,
 world identities, tensor inputs and frozen evidence are unchanged. Native
 `decision_context_json` summarizes already-observed choices and the current
 continuation; `decision_offer_subjects_json` binds the exact rule entity,

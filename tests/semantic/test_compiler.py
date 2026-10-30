@@ -3,7 +3,6 @@ from __future__ import annotations
 from copy import deepcopy
 import json
 from pathlib import Path
-import re
 
 import pytest
 
@@ -15,6 +14,7 @@ from manabot.semantic.compiler import (
     default_paths,
     pretty_json,
 )
+import managym
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -97,19 +97,13 @@ def test_coverage_is_complete_for_decks_and_referenced_tokens():
     }
 
 
-def test_content_pack_bindings_all_name_current_rust_definitions():
+def test_content_pack_bindings_all_name_current_rust_definitions() -> None:
     source = _source()
-    cardset_source = "\n".join(
-        path.read_text(encoding="utf-8")
-        for path in sorted((ROOT / "managym" / "src" / "cardsets").glob("*.rs"))
-    )
-    card_source = (ROOT / "managym" / "src" / "state" / "card.rs").read_text(
-        encoding="utf-8"
-    )
-    registered_names = set(re.findall(r'name:\s*"([^"]+)"', cardset_source))
-    registered_names.update(
-        re.findall(r'basic_land\("([^"]+)"', cardset_source + card_source)
-    )
+    registered_names = {
+        row["registry_name"]
+        for row in managym.content_pool("world")["definitions"]
+        if row["card_def_id"] is not None
+    }
 
     adapters = {definition["registry_name"] for definition in source["definitions"]}
     assert adapters <= registered_names

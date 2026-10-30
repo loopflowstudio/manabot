@@ -437,8 +437,10 @@ class TestObservationEncoder:
     def test_object_capacity_rejects_omitted_objects(self, method, capacity, label):
         encoder = ObservationEncoder(ObservationConfig(**{capacity: 1}))
         objects = [SimpleNamespace(id=1), SimpleNamespace(id=2)]
+        # Card rows also read the viewer and turn for cast permissions.
+        context = {"viewer": 0, "turn": 1} if method == "_encode_cards" else {}
         with pytest.raises(ValueError, match=f"capacity exceeded: {label} 2 > 1"):
-            getattr(encoder, method)(objects, is_mine=1.0)
+            getattr(encoder, method)(objects, is_mine=1.0, **context)
         assert encoder.object_to_index == {}
 
     def test_focus_capacity_rejects_partial_action(self) -> None:

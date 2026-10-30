@@ -24,14 +24,15 @@ from manabot.belief.sampling_data import (
     save_dataset,
 )
 from manabot.belief.sampling_fit import fit_belief_sampler, save_belief_sampler
-from manabot.env import Match, ObservationSpace, Reward
 from manabot.env.failures import CaptureScope, capture_scope
-from manabot.infra import RunContext
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import RewardConfig, RuntimeConfig
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.profiler import Profiler
 from manabot.infra.provenance import runtime_fingerprints, source_bundle_sha256
+from manabot.infra.runtime import RunContext
 from manabot.infra.source import source_commit
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.architecture import architecture_identity

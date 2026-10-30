@@ -3,11 +3,12 @@
 import numpy as np
 import pytest
 
-from manabot.env import Match, ObservationSpace, Reward
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.training.rollout.collection import SeatRoutedCollector
-from manabot.verify.util import INTERACTIVE_DECK
+from manabot.verify.games import INTERACTIVE_DECK
 
 
 def _make_collector(

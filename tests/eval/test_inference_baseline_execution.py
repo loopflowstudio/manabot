@@ -7,7 +7,6 @@ from multiprocessing.connection import Connection
 from pathlib import Path
 import time
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
 
 import numpy as np
 import psutil
@@ -29,15 +28,7 @@ from experiments.report_prototype.build import write_report
 from manabot._process import bounded_call
 from manabot.eval.evaluation import EvaluationRequest
 from manabot.reports.inference import EvidenceFile
-from manabot.sim.execution import EvalCompute, EvalExecution
-
-if TYPE_CHECKING:
-    from manabot.llm.schema import (
-        EncodedPrompt,
-        GeneratedResponse,
-        InferenceConfig,
-        Message,
-    )
+from manabot.sim.execution import EvalAllocation, EvalExecution
 
 
 def _protocol(tmp_path: Path, *, trace: Path | None = None, roots: int = 2) -> Protocol:
@@ -55,7 +46,7 @@ def _protocol(tmp_path: Path, *, trace: Path | None = None, roots: int = 2) -> P
     request_path.write_text(request.model_dump_json())
     compute = tmp_path / "compute.json"
     compute.write_text(
-        EvalCompute(
+        EvalAllocation(
             max_active_games=2, max_batch_rows=2, max_delay_seconds=0
         ).model_dump_json()
     )
@@ -298,41 +289,6 @@ def test_instrumentation_pairing_survives_scalar_first_and_repeat_order(
     assert comparison["instrumentation_host_overhead"] == pytest.approx(0.25)
 
 
-class _RecoveryRuntime:
-    """A finite scripted response sequence; no model loading or synthetic load."""
-
-    def __init__(self, config: "InferenceConfig") -> None:
-        from manabot.llm.schema import RuntimeIdentity
-
-        self.responses = iter(("A0", "invalid", "A0", "invalid", "invalid"))
-        self.identity = RuntimeIdentity(
-            runtime="fixture",
-            runtime_version="1",
-            torch_version="unused",
-            python_version="fixture",
-            device_name="cpu",
-            chat_template="fixture",
-            generation_config={},
-        )
-
-    def encode(self, messages: "tuple[Message, ...]") -> "EncodedPrompt":
-        from manabot.llm.schema import EncodedPrompt
-
-        return EncodedPrompt(text=messages[0].content, token_ids=(1, 2))
-
-    def generate(self, prompt: "EncodedPrompt", deadline: float) -> "GeneratedResponse":
-        from manabot.llm.schema import GeneratedResponse
-
-        try:
-            text = next(self.responses)
-        except StopIteration:
-            raise RuntimeError("injected generation failure") from None
-        return GeneratedResponse(text=text, token_ids=(3,), finish_reason="eos")
-
-    def peak_gpu_bytes(self) -> int | None:
-        return None
-
-
 def _llm_failure(
     sender: Connection,
     protocol: Protocol,
@@ -344,6 +300,7 @@ def _llm_failure(
     from manabot.llm.schema import InferenceConfig
     from manabot.llm.session import InferenceSession
     from manabot.verify.llm_game import GameConfig, play
+    from tests.fixtures.llm_process import RecoveryRuntime
 
     config = InferenceConfig(
         model_id="fixture",
@@ -357,7 +314,7 @@ def _llm_failure(
         deadline_seconds=10,
         fallback_seed=7,
     )
-    with InferenceSession(config, factory=_RecoveryRuntime, load_seconds=20) as session:
+    with InferenceSession(config, factory=RecoveryRuntime, load_seconds=20) as session:
         result = play(
             GameConfig(max_decisions=100, max_seconds=30), out / "game", session
         )
@@ -795,7 +752,7 @@ def test_policy_baseline_bounds_batch_collection_window(
     cell = protocol.recipe.cells[0]
     assert cell.execution is not None
     cell.execution.write_text(
-        EvalCompute(max_batch_rows=4, max_delay_seconds=delay).model_dump_json()
+        EvalAllocation(max_batch_rows=4, max_delay_seconds=delay).model_dump_json()
     )
     out = tmp_path / "output"
     out.mkdir()

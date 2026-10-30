@@ -23,7 +23,7 @@ use crate::{
     state::{
         ability::StaticCondition,
         card::{Keywords, PowerCda, StaticScope},
-        game_object::{PermanentId, PlayerId},
+        game_object::{CardId, PermanentId, PlayerId},
         predicate::CardPredicate,
         zone::ZoneType,
     },
@@ -142,6 +142,21 @@ impl Game {
         (power, toughness)
     }
 
+    /// Instant timing for `player` casting `card`: printed instant or flash,
+    /// or a conditional "as though it had flash" that currently holds.
+    pub(crate) fn has_instant_timing(&self, player: PlayerId, card: CardId) -> bool {
+        let granted_flash = self
+            .exile_grant(player, card)
+            .is_some_and(|grant| grant.flash);
+        let card = &self.state.cards[card];
+        granted_flash
+            || card.is_instant_speed()
+            || card
+                .flash_if
+                .as_ref()
+                .is_some_and(|condition| self.check_static_condition(condition, player))
+    }
+
     /// Evaluate a static condition for `controller` ("you").
     pub(crate) fn check_static_condition(
         &self,
@@ -207,8 +222,22 @@ impl Game {
         if predicate.flying && !self.effective_keywords(permanent_id).flying {
             return false;
         }
+        if predicate.with_counter && permanent.plus1_counters <= 0 {
+            return false;
+        }
+        if predicate.attacking
+            && !self
+                .state
+                .combat
+                .as_ref()
+                .is_some_and(|combat| combat.attackers.contains(&permanent_id))
+        {
+            return false;
+        }
         let mut predicate = predicate.clone();
         predicate.flying = false;
+        predicate.with_counter = false;
+        predicate.attacking = false;
         let has_subtype = |name: &str| {
             card.has_subtype(name) || permanent.temp_subtypes.iter().any(|s| s == name)
         };

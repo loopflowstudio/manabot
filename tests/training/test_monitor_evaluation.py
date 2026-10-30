@@ -8,7 +8,8 @@ from typing import Any, Literal
 import pytest
 import torch
 
-from manabot.env import Match, ObservationSpace
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.eval import monitor as monitor
 from manabot.eval.models import EvaluationKey
 from manabot.experiment import checkpoint_evaluation
@@ -18,7 +19,7 @@ from manabot.infra.provenance import runtime_fingerprints
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
 from manabot.reports.training import evaluation_dashboard
-from manabot.sim import players
+from manabot.sim import anchors
 from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import AuthoredMatchup, selected_match
 from manabot.sim.registration import PlayerRegistration
@@ -203,6 +204,7 @@ def test_block_failure_retains_prior_rows_and_costs(
     def play(
         **kwargs: Any,
     ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+        # Without an allocation the checkpoint plays scalar, one block per deal.
         if kwargs["deal_seeds"] == (102,):
             raise TimeoutError("retained block failure")
         return _rows(manifest, (101,)), {"sha256": "trace"}, {"passed": True}
@@ -485,7 +487,7 @@ def test_registration_extraction_preserves_frozen_monitor_identity(
             result.opponent.model_dump()
         )
         assert result.opponent.source_sha256 == monitor.file_sha256(
-            Path(players.__file__)
+            Path(anchors.__file__)
         )
     finally:
         torch.set_num_threads(previous_threads)

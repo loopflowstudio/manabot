@@ -65,6 +65,9 @@ def test_same_deal_seat_swap_retains_and_replays_commands(tmp_path: Path) -> Non
         for game in games
         for decision in game["decisions"]
     )
+    counters = json.loads((tmp_path / "performance.json").read_text())["counters"]
+    assert counters["threads/group_worker"] >= 1
+    assert counters["threads_budget/group_worker"] == 8
 
 
 def test_replay_rejects_a_command_that_was_not_exactly_retained(tmp_path: Path) -> None:
@@ -210,7 +213,9 @@ def test_game_cap_retains_all_four_failed_prefixes_without_draw_credit(tmp_path)
     )
 
 
-def _dead_worker(connection, game, registrations, checkpoint_paths, max_commands):
+def _dead_worker(
+    connection, game, registrations, checkpoint_paths, max_commands, *_endpoint
+):
     import os
 
     connection.send(("phase", game["seat_players"][0]))
@@ -227,7 +232,9 @@ def test_native_worker_crash_and_timeout_are_retained(
 
     _, players = selected_players()
     game = {"seat_players": [p.player_id for p in players], "decisions": []}
-    monkeypatch.setattr(match, "_game_worker", _dead_worker)
+    monkeypatch.setattr(
+        match, "GAME_WORKER", "tests.eval.test_evaluation_match:_dead_worker"
+    )
     if exit_between_polls:
         original_poll = Connection.poll
 
@@ -254,7 +261,7 @@ def test_native_worker_crash_and_timeout_are_retained(
 
 
 def test_policy_exception_retains_player_failure(monkeypatch):
-    from manabot.sim.match import _execute_game
+    from manabot.sim.native_game import execute_game
 
     _, players = selected_players()
     game = {"player_seeds": {p.player_id: 1 for p in players}}
@@ -262,9 +269,9 @@ def test_policy_exception_retains_player_failure(monkeypatch):
     def fail(*args, **kwargs):
         raise RuntimeError("policy failed")
 
-    monkeypatch.setattr("manabot.sim.match.build_registered_player", fail)
+    monkeypatch.setattr("manabot.sim.native_game.build_code_player", fail)
     messages = []
-    _execute_game(game, players, {}, 1, messages.append)
+    execute_game(game, players, {}, 1, messages.append)
     result = messages[-1][1]
     assert result["termination_reason"] == "crash"
     assert result["failed_player_id"] == players[0].player_id
@@ -274,7 +281,7 @@ def test_policy_exception_retains_player_failure(monkeypatch):
 def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path):
     import torch
 
-    from manabot.env import ObservationSpace
+    from manabot.env.observation import ObservationSpace
     from manabot.eval.evaluate import validate_registered_player
     from manabot.infra.config import ModelConfig, ObservationConfig
     from manabot.infra.identity import file_sha256
@@ -294,7 +301,7 @@ def test_checkpoint_observation_bounds_survive_selected_replay(tmp_path):
     torch.manual_seed(83)
     agent = ActorCritic(space, ModelConfig(semantic_pack="ur-lessons-vs-gw-allies"))
     path = tmp_path / "fixture.pt"
-    from manabot.env import Match
+    from manabot.env.match import Match
 
     save_checkpoint(
         agent, space, path, player_configs=Match(selected_match()).to_rust()

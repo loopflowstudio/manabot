@@ -7,9 +7,10 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::{
     agent::{action::ActionSpace, behavior_tracker::BehaviorTracker},
-    cardsets::alpha::ContentPack,
+    cards::content_pack::ContentPack,
     decision::ObjectCandidateAddress,
     flow::{
+        cast_permission::CastPermissions,
         combat::CombatState,
         decision::SuspendedResolution,
         event::GameEvent,
@@ -56,6 +57,8 @@ pub struct GameState {
     pub delayed_triggers: Vec<DelayedTrigger>,
     /// "Exiled until [source] leaves the battlefield" linkages (Jailer).
     pub exile_links: Vec<ExileLink>,
+    /// Exact-object casting grants (airbend) and hand-only restrictions.
+    pub cast_permissions: CastPermissions,
     /// A resolution paused on a mid-resolution player decision.
     pub suspended_decision: Option<SuspendedResolution>,
     pub trigger_enqueue_counter: u64,
@@ -64,25 +67,52 @@ pub struct GameState {
     pub content: Arc<ContentPack>,
 }
 
+/// The object whose activated ability is being activated: a battlefield
+/// permanent, or a card in its owner's hand or graveyard (CR 602.1, 113.6).
+/// Card abilities index the card's printed `activated_abilities`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum ActivationSource {
+    Permanent(PermanentId),
+    Card(CardId),
+}
+
+/// What a caster announces while casting a spell (CR 601.2b) that changes
+/// its total cost or resolution. Serialized flat; `x` and `free` are omitted
+/// when unset so ordinary casts keep their shape.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+pub struct CastChoices {
+    /// The optional additional cost (kicker, or a waterbend additional cost)
+    /// is paid (CR 702.33).
+    pub kicked: bool,
+    /// The announced value of X (CR 107.3, 601.2b).
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub x: u8,
+    /// Cast without paying its mana cost (CR 118.9), as an effect directs;
+    /// timing and zone permissions don't apply (CR 608.2g).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub free: bool,
+}
+
 /// A fully announced spell or activation waiting for selected costs.
 #[derive(Clone, Debug, serde::Serialize)]
 pub enum Payment {
     Spell {
         card: CardId,
-        kicked: bool,
+        #[serde(flatten)]
+        cast: CastChoices,
         mode: Option<usize>,
         targets: Vec<Target>,
         target_req_indices: Vec<usize>,
     },
     Activation {
-        permanent: PermanentId,
+        source: ActivationSource,
         ability_index: usize,
         targets: Vec<Target>,
     },
 }
 
 /// Cast-time / activation-time choice pipeline. Casting a spell walks
-/// KickerChoice? -> ChooseTargets (per requirement) -> payment; activating a
+/// AnnounceX? -> KickerChoice? -> SpellMode? -> ChooseTargets (per requirement) -> payment; activating a
 /// waterbend ability walks Waterbend until the cost is paid.
 #[derive(Clone, Debug, serde::Serialize)]
 pub enum PendingChoice {
@@ -99,22 +129,43 @@ pub enum PendingChoice {
     },
     ActivatedTarget {
         player: PlayerId,
-        permanent: PermanentId,
+        source: ActivationSource,
         ability_index: usize,
     },
+    /// Choosing the card to discard for a "Discard a card" activation cost.
+    DiscardPayment {
+        player: PlayerId,
+        source: ActivationSource,
+        ability_index: usize,
+        targets: Vec<Target>,
+    },
+    /// Announcing X (CR 601.2b): the chosen value is offered as a mode index.
+    AnnounceX {
+        player: PlayerId,
+        card: CardId,
+        #[serde(flatten)]
+        cast: CastChoices,
+    },
     /// "You may pay the kicker cost" (CR 601.2b) — asked before targeting.
-    KickerChoice { player: PlayerId, card: CardId },
+    KickerChoice {
+        player: PlayerId,
+        card: CardId,
+        #[serde(flatten)]
+        cast: CastChoices,
+    },
     SpellMode {
         player: PlayerId,
         card: CardId,
-        kicked: bool,
+        #[serde(flatten)]
+        cast: CastChoices,
     },
     /// Choosing targets for requirement `requirement_index` of the card's
     /// `target_requirements()` (CR 601.2c).
     ChooseTargets {
         player: PlayerId,
         card: CardId,
-        kicked: bool,
+        #[serde(flatten)]
+        cast: CastChoices,
         mode: Option<usize>,
         requirement_index: usize,
         chosen: Vec<Target>,
@@ -122,15 +173,16 @@ pub enum PendingChoice {
         /// Legal, not-yet-chosen targets for the current requirement.
         legal_targets: Vec<Target>,
     },
-    /// Paying a waterbend activation cost: tap artifacts/creatures for {1}
-    /// each, then pay the remainder with mana.
+    /// Paying a waterbend cost (an ability's, or a spell's additional or
+    /// alternative cost): tap artifacts/creatures for {1} each, then pay the
+    /// remainder with mana.
     Waterbend {
         player: PlayerId,
-        permanent: PermanentId,
-        ability_index: usize,
-        /// Generic mana still owed (colored components are paid with mana
-        /// at the end).
+        payment: Box<Payment>,
+        /// Generic mana further taps may still pay.
         remaining_generic: u8,
+        /// Generic mana already paid by taps.
+        tapped: u8,
     },
 }
 
@@ -219,6 +271,7 @@ impl Game {
             trigger_placement,
             delayed_triggers,
             exile_links,
+            cast_permissions,
             suspended_decision,
             trigger_enqueue_counter,
             rng,
@@ -246,6 +299,7 @@ impl Game {
                 trigger_placement: trigger_placement.clone(),
                 delayed_triggers: delayed_triggers.clone(),
                 exile_links: exile_links.clone(),
+                cast_permissions: cast_permissions.clone(),
                 suspended_decision: suspended_decision.clone(),
                 trigger_enqueue_counter: *trigger_enqueue_counter,
                 rng: rng.clone(),

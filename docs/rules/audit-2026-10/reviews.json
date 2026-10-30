@@ -6,7 +6,7 @@
       "inspected_owners": [
         "managym/src/flow/game.rs",
         "managym/src/state/card.rs",
-        "managym/src/semantic/"
+        "managym/src/cardsets/"
       ],
       "evidence": [],
       "gap": "No independent complete-rules oracle. Unknown means unresolved, never assumed conformant.",
@@ -67,7 +67,7 @@
       ],
       "evidence": [
         "managym/tests/rules/cr_106_mana.rs",
-        "managym/tests/rules/temur_cards.rs"
+        "managym/tests/cards/roe.rs"
       ],
       "gap": "The separately landed shared-payment repair is integrated in w13. The Prism/Treasure regression passes through explicit nested choices; no GPU root-cause identity inferred. Phyrexian, snow, variable and two-brid coverage unresolved.",
       "ownership": "dispersed",
@@ -101,8 +101,8 @@
         "managym/src/flow/resolution.rs"
       ],
       "evidence": [
-        "managym/tests/rules/interaction_spells.rs",
-        "managym/tests/rules/stage2_cards.rs"
+        "managym/tests/cards/lea.rs",
+        "managym/tests/cards/tla.rs"
       ],
       "gap": "Target clauses and exact graveyard refs exist; per-subrule legality/recheck, hexproof/controller and partial target invalidation need review.",
       "ownership": "dispersed",
@@ -132,7 +132,7 @@
         "managym/src/flow/resolution.rs"
       ],
       "evidence": [
-        "managym/tests/rules/elemental_cards.rs"
+        "managym/tests/cards/tla.rs"
       ],
       "gap": "No generic typed counter store; negative counter cancellation and stickers cannot be certified.",
       "ownership": "dispersed",
@@ -143,7 +143,7 @@
       "scope": "Definition data rather than physical printed cards; some parts are display-only.",
       "inspected_owners": [
         "managym/src/state/card.rs:CardDefinition",
-        "managym/src/semantic/",
+        "managym/src/cardsets/",
         "managym/tests/fixtures/scryfall_cards.json"
       ],
       "evidence": [
@@ -247,7 +247,7 @@
       "evidence": [
         "managym/tests/rules/cr_601_casting.rs",
         "managym/tests/rules/cr_602_activated_abilities.rs",
-        "managym/tests/rules/temur_cards.rs"
+        "managym/tests/cards/tla.rs"
       ],
       "gap": "Payment execution defect retained for MTG-174; Task 4ba5dd owns optional-payment continuation model, shipped #344 in audited base. No competing rewrite.",
       "ownership": "dispersed",
@@ -280,8 +280,7 @@
         "managym/src/state/permanent.rs:Permanent::effective_keywords"
       ],
       "evidence": [
-        "managym/tests/rules/elemental_cards.rs",
-        "managym/tests/rules/temur_cards.rs"
+        "managym/tests/cards/tla.rs"
       ],
       "gap": "No general timestamp/dependency layer engine or text changing. Incorrect counters-as-7d documentation corrected; counters and additive boosts commute in 7c.",
       "ownership": "dispersed",
@@ -298,7 +297,7 @@
         "managym/src/flow/play.rs"
       ],
       "evidence": [
-        "managym/tests/rules/temur_cards.rs",
+        "managym/tests/cards/roe.rs",
         "managym/tests/rules/cr_106_mana.rs"
       ],
       "gap": "Prism/Treasure execution passes through explicit nested payment choices in w13; arbitrary mana ability classification (especially library-moving costs) remains unresolved.",
@@ -314,8 +313,8 @@
         "managym/src/state/ability.rs:Effect"
       ],
       "evidence": [
-        "managym/tests/rules/interaction_spells.rs",
-        "managym/tests/rules/temur_cards.rs"
+        "managym/tests/cards/lea.rs",
+        "managym/tests/cards/tla.rs"
       ],
       "gap": "Per-subrule resolution audit needed; linked abilities and loyalty procedures unverified. Shared optional-payment contract in docs/rules/optional-payments.md.",
       "ownership": "dispersed",
@@ -346,7 +345,7 @@
       ],
       "evidence": [
         "managym/tests/rules/cr_702_keywords.rs",
-        "managym/tests/rules/elemental_cards.rs"
+        "managym/tests/cards/tla.rs"
       ],
       "gap": "Keywords struct has 14 booleans plus dedicated mechanics; most keywords need explicit admission decisions. Identifier hits are not implementation proof. 701 numbering has shifted (sacrifice now 701.21).",
       "ownership": "dispersed",
@@ -379,7 +378,7 @@
         "managym/src/flow/undo.rs"
       ],
       "evidence": [
-        "managym/tests/rules/temur_cards.rs"
+        "managym/tests/cards/tla.rs"
       ],
       "gap": "Copy token immutability is not general copy/layer support; replay rollback is not CR illegal-action reversal. Do not infer missing mechanics solely from names.",
       "ownership": "dispersed",
@@ -589,14 +588,14 @@
       "authority": "managym/src/state/mana.rs:Mana::payment_remainder, Mana::pay",
       "tests": [
         "managym/tests/rules/cr_106_mana.rs:audit_restricted_mana_never_pays_unrelated_costs",
-        "managym/tests/rules/temur_cards.rs:herbalist_restriction_survives_color_selection_and_cannot_pay_abilities"
+        "managym/tests/cards/tla.rs:herbalist_restriction_survives_color_selection_and_cannot_pay_abilities"
       ],
       "gap": "Other mana restrictions/additional-effect annotations unverified.",
       "comments": "Relevant intent comments exist at the cited authority; not a proof.",
       "dispersion": "dispersed",
       "anchors": [
         "managym/tests/rules/cr_106_mana.rs::audit_restricted_mana_never_pays_unrelated_costs",
-        "managym/tests/rules/temur_cards.rs::herbalist_restriction_survives_color_selection_and_cannot_pay_abilities"
+        "managym/tests/cards/tla.rs::herbalist_restriction_survives_color_selection_and_cannot_pay_abilities"
       ]
     },
     "107.4b": {
@@ -691,7 +690,7 @@
         "managym/tests/rules/cr_400_identity.rs:cr_400_7_death_trigger_keeps_source_lki_across_reentry",
         "managym/src/flow/target_authority_tests.rs:recast_spell_resolves_before_the_old_targeted_ability"
       ],
-      "gap": "StackSpell retains CardId, not ObjectRef: the representation cannot distinguish a recast spell while it is on the stack. The directed ordinary LIFO witness resolves the new spell before the old targeted ability and preserves the new permanent. No supported-play stale-target failure is established; non-LIFO placement and all enumerated exceptions remain unproved.",
+      "gap": "StackSpell retains CardId, not ObjectRef: the representation cannot distinguish a recast spell while it is on the stack. The directed ordinary LIFO witness resolves the new spell before the old targeted ability and preserves the new permanent. No supported-play stale-target failure is established; non-LIFO placement and all enumerated exceptions remain unproved. Earthbend now has a precise failing first-destination identity witness under 400.7e; this is distinct from the still-unproved stack-target recast concern.",
       "comments": "Relevant intent comments exist at the cited authority; not a proof.",
       "dispersion": "dispersed",
       "anchors": [
@@ -719,7 +718,7 @@
       "scope": "Effective costs include selected kicker and generic reductions.",
       "authority": "managym/src/flow/play.rs:Game::effective_spell_cost; managym/src/flow/mana.rs",
       "tests": [
-        "managym/tests/rules/temur_cards.rs"
+        "managym/tests/cards/roe.rs"
       ],
       "gap": "The bounded Prism/Treasure case passes after shared-payment integration; full locked-cost ordering, taxes and alternate costs remain unresolved.",
       "comments": "Relevant intent comments exist at the cited authority; not a proof.",
@@ -751,15 +750,15 @@
       "scope": "Immediate authored mana abilities; Prism cost may use Treasure.",
       "authority": "managym/src/flow/mana.rs; managym/src/flow/play.rs; managym/src/flow/zones.rs",
       "tests": [
-        "managym/tests/rules/temur_cards.rs:prism_consumes_generic_before_adding_chosen_color",
-        "managym/tests/rules/temur_cards.rs:audit_prism_treasure_empty_pool_activation"
+        "managym/tests/cards/roe.rs:prism_consumes_generic_before_adding_chosen_color",
+        "managym/tests/cards/roe.rs:audit_prism_treasure_empty_pool_activation"
       ],
       "gap": "Historical offered-activation failure is closed in integrated w13: explicit Treasure/color choices produce the independently asserted final U pool, consumed Treasure and no stack object. General mana-ability classification and timing remain outside this bounded proof.",
       "comments": "Relevant intent comments exist at the cited authority; not a proof.",
       "dispersion": "dispersed",
       "anchors": [
-        "managym/tests/rules/temur_cards.rs::prism_consumes_generic_before_adding_chosen_color",
-        "managym/tests/rules/temur_cards.rs::audit_prism_treasure_empty_pool_activation"
+        "managym/tests/cards/roe.rs::prism_consumes_generic_before_adding_chosen_color",
+        "managym/tests/cards/roe.rs::audit_prism_treasure_empty_pool_activation"
       ]
     },
     "605.3b": {
@@ -767,15 +766,15 @@
       "scope": "Immediate authored mana abilities; Prism cost may use Treasure.",
       "authority": "managym/src/flow/mana.rs; managym/src/flow/play.rs; managym/src/flow/zones.rs",
       "tests": [
-        "managym/tests/rules/temur_cards.rs:prism_consumes_generic_before_adding_chosen_color",
-        "managym/tests/rules/temur_cards.rs:audit_prism_treasure_empty_pool_activation"
+        "managym/tests/cards/roe.rs:prism_consumes_generic_before_adding_chosen_color",
+        "managym/tests/cards/roe.rs:audit_prism_treasure_empty_pool_activation"
       ],
       "gap": "Historical offered-activation failure is closed in integrated w13: explicit Treasure/color choices produce the independently asserted final U pool, consumed Treasure and no stack object. General mana-ability classification and timing remain outside this bounded proof.",
       "comments": "Relevant intent comments exist at the cited authority; not a proof.",
       "dispersion": "dispersed",
       "anchors": [
-        "managym/tests/rules/temur_cards.rs::prism_consumes_generic_before_adding_chosen_color",
-        "managym/tests/rules/temur_cards.rs::audit_prism_treasure_empty_pool_activation"
+        "managym/tests/cards/roe.rs::prism_consumes_generic_before_adding_chosen_color",
+        "managym/tests/cards/roe.rs::audit_prism_treasure_empty_pool_activation"
       ]
     },
     "613.4": {
@@ -783,7 +782,7 @@
       "scope": "Only additive modifiers and +1/+1 counters; no general dependencies.",
       "authority": "managym/src/flow/statics.rs:Game::effective_pt",
       "tests": [
-        "managym/tests/rules/elemental_cards.rs"
+        "managym/tests/cards/tla.rs"
       ],
       "gap": "Comments previously assigned counters to 7d; corrected to 7c. Timestamp/dependency and switch effects unimplemented. Matrix coverage remains a future investment.",
       "comments": "Relevant intent comments exist at the cited authority; not a proof.",
@@ -795,7 +794,7 @@
       "scope": "Only additive modifiers and +1/+1 counters; no general dependencies.",
       "authority": "managym/src/flow/statics.rs:Game::effective_pt",
       "tests": [
-        "managym/tests/rules/elemental_cards.rs"
+        "managym/tests/cards/tla.rs"
       ],
       "gap": "Comments previously assigned counters to 7d; corrected to 7c. Timestamp/dependency and switch effects unimplemented. Matrix coverage remains a future investment.",
       "comments": "Relevant intent comments exist at the cited authority; not a proof.",
@@ -835,13 +834,15 @@
       "scope": "Creature death boundaries under ordinary damage/deathtouch/indestructible, both controllers.",
       "authority": "managym/src/flow/sba.rs:Game::perform_state_based_actions_with_legends; managym/src/flow/statics.rs:Game::has_lethal_damage",
       "tests": [
-        "managym/tests/rules/cr_704_sba.rs:audit_sba_toughness_damage_indestructible_boundary_matrix"
+        "managym/tests/rules/cr_704_sba.rs:audit_sba_toughness_damage_indestructible_boundary_matrix",
+        "managym/tests/rules/cr_608_resolution.rs:audit_deathtouch_does_not_reapply_after_surviving_an_sba_check"
       ],
-      "gap": "192 independent cases; regeneration and replacement interactions not covered.",
+      "gap": "The bounded lethal matrix remains valid for first checks. A new ignored probe fails: deathtouch_damage persists until cleanup and destroys a creature after it survived an earlier SBA check with indestructible. Keyword removal is synthetic; no admitted-deck response sequence claimed.",
       "comments": "SBA comments distinguish zone move from destruction. New test explains independent 2/2 fixture oracle.",
       "dispersion": "dispersed",
       "anchors": [
-        "managym/tests/rules/cr_704_sba.rs::audit_sba_toughness_damage_indestructible_boundary_matrix"
+        "managym/tests/rules/cr_704_sba.rs::audit_sba_toughness_damage_indestructible_boundary_matrix",
+        "managym/tests/rules/cr_608_resolution.rs::audit_deathtouch_does_not_reapply_after_surviving_an_sba_check"
       ]
     },
     "702.12b": {
@@ -952,19 +953,24 @@
     },
     "608.2b": {
       "status": "partial",
-      "scope": "Restricted stack target resolves when legal; departing sole target prevents all instructions, including untargeted life gain. Existing trigger, Sokka mixed-target and graveyard-incarnation evidence retained.",
-      "authority": "managym/src/flow/resolution.rs:Game::target_is_legal; managym/src/flow/triggers.rs:Game::legal_targets_for_spec",
-      "dispersion": "shared",
-      "comments": "Adjudication and validation limits in unification.md; no full-rule conformance claim.",
+      "scope": "Resolution-start legality retained per chosen clause across spell, activated and triggered instructions, suspended choices, clone and undo. Mixed legal targets survive; all-invalid objects suppress untargeted instructions; zero optional targets resolve.",
+      "authority": "managym/src/flow/resolution.rs:Game::resolution_targets, Game::target_is_legal, Game::target_is_present; managym/src/flow/decision.rs:ResolutionTarget",
+      "dispersion": "shared predicate and one resolution-entry eligibility authority",
+      "comments": "CR 608.2b entry-time eligibility is distinct from CR 400.7 live-object presence. Effects no longer re-evaluate TargetSpec after earlier instructions. Positional target slots and clause identity survive suspension. Acting-viewer continuation and policy/capture v4 project the retained fact without recomputing legality; v2/v3 relation layouts remain frozen.",
       "tests": [
         "managym/src/flow/target_authority_tests.rs",
         "managym/tests/rules/cr_603_triggers.rs",
-        "managym/tests/rules/elemental_cards.rs"
+        "managym/tests/cards/tla.rs",
+        "managym/tests/rules/cr_608_resolution.rs:audit_target_gaining_hexproof_during_resolution_is_still_affected",
+        "managym/src/flow/resolution_tests.rs"
       ],
-      "gap": "Not exhaustive effect/target-clause/identity proof. Stack CardId loses incarnation, but the directed bounce/recast sequence resolves the new spell before the old ability and has no stale-target effect. Activated abilities lack the spell/trigger whole-object all-invalid gate; current targeted effects recheck locally, so a multi-effect activated ability needs a separate witness before expansion.",
+      "gap": "Not exhaustive effect/identity proof or whole-rule conformance. Stack CardId identity remains a representation limit without an admitted-play witness; full LKI and unsupported target types remain outside this repair. Multi-clause activation announcement is not represented. The repair is integrated with MTG-195 in development world w15/hash 10, with policy/capture v4 retaining eligibility. Fresh w15 conformance/demo paths preserve earlier evidence; broader integrated consumer acceptance remains gate-owned. Historical obligation-validation.json retains the original hexproof failure; the repaired draft has separate evidence.",
       "anchors": [
         "managym/src/flow/target_authority_tests.rs::departed_only_target_prevents_even_untargeted_gain_life",
-        "managym/src/flow/target_authority_tests.rs::recast_spell_resolves_before_the_old_targeted_ability"
+        "managym/src/flow/target_authority_tests.rs::recast_spell_resolves_before_the_old_targeted_ability",
+        "managym/tests/rules/cr_608_resolution.rs::audit_target_gaining_hexproof_during_resolution_is_still_affected",
+        "managym/src/flow/resolution.rs::fn resolution_targets(",
+        "managym/src/flow/resolution_tests.rs::resolution_keeps_eligibility_after_hexproof_and_across_choice_clone_and_undo"
       ]
     },
     "115.1c": {
@@ -973,8 +979,12 @@
       "authority": "managym/src/flow/play.rs:Game::activate_ability_action, Game::choose_activated_target, Game::push_activated_ability",
       "dispersion": "shared selection and effect metadata",
       "comments": "Effect::target_spec defines the authored subset. The blanket activation-source exclusion is not documented as a general MTG rule and must not be generalized beyond current cards.",
-      "tests": ["managym/tests/rules/elemental_cards.rs"],
-      "anchors": ["managym/tests/rules/elemental_cards.rs::disciple_targets_another_small_creature_pays_tap_and_survives_source_departure"],
+      "tests": [
+        "managym/tests/cards/tla.rs"
+      ],
+      "anchors": [
+        "managym/tests/cards/tla.rs::disciple_targets_another_small_creature_pays_tap_and_survives_source_departure"
+      ],
       "gap": "Only one activated target is supported by PendingChoice::ActivatedTarget. Source exclusion fits Disciple's 'another' wording but is broader than CR 115.5, which forbids the ability targeting itself on the stack, not its source permanent. General targeted activations need review."
     },
     "115.1d": {
@@ -983,8 +993,14 @@
       "authority": "managym/src/flow/triggers.rs:Game::flush_triggers, Game::choose_trigger_target, Game::place_triggered_ability_on_stack",
       "dispersion": "single trigger selection path",
       "comments": "Trigger source snapshot comment explains committed-event ownership; stack placement and target selection are separate from event matching.",
-      "tests": ["managym/src/flow/target_authority_tests.rs", "managym/tests/rules/cr_603_triggers.rs"],
-      "anchors": ["managym/src/flow/target_authority_tests.rs::restricted_trigger_rejects_low_value_spell_and_counters_legal_spell", "managym/tests/rules/cr_603_triggers.rs::cr_603_6a_manowar_etb_returns_target_creature"],
+      "tests": [
+        "managym/src/flow/target_authority_tests.rs",
+        "managym/tests/rules/cr_603_triggers.rs"
+      ],
+      "anchors": [
+        "managym/src/flow/target_authority_tests.rs::restricted_trigger_rejects_low_value_spell_and_counters_legal_spell",
+        "managym/tests/rules/cr_603_triggers.rs::cr_603_6a_manowar_etb_returns_target_creature"
+      ],
       "gap": "Authored typed effects only; delayed/context-dependent targeting and each keyword's implicit target wording are not exhaustively reviewed. MTG-195 w14 adds controller ordering and resumable target placement."
     },
     "115.2": {
@@ -993,8 +1009,14 @@
       "authority": "managym/src/state/ability.rs:TargetSpec; managym/src/flow/triggers.rs:Game::legal_targets_for_spec; managym/src/flow/resolution.rs:Game::target_is_legal",
       "dispersion": "shared legality, typed enumeration",
       "comments": "Target legality documents current-state rechecks; graveyard lookup checks exact incarnation. Stack-spell identity limits are separately adjudicated in unification.md.",
-      "tests": ["managym/src/flow/target_authority_tests.rs", "managym/tests/rules/elemental_cards.rs"],
-      "anchors": ["managym/src/flow/target_authority_tests.rs::stack_target_mana_value_boundaries_have_explicit_expected_choices", "managym/tests/rules/elemental_cards.rs::ancestry_does_not_follow_a_graveyard_target_into_a_new_incarnation"],
+      "tests": [
+        "managym/src/flow/target_authority_tests.rs",
+        "managym/tests/cards/tla.rs"
+      ],
+      "anchors": [
+        "managym/src/flow/target_authority_tests.rs::stack_target_mana_value_boundaries_have_explicit_expected_choices",
+        "managym/tests/cards/tla.rs::ancestry_does_not_follow_a_graveyard_target_into_a_new_incarnation"
+      ],
       "gap": "No targets for stack abilities, exile or arbitrary graveyards. Missing target forms are unsupported mechanics, not evidence that ordinary permanent targeting bypasses zones."
     },
     "115.3": {
@@ -1003,8 +1025,16 @@
       "authority": "managym/src/flow/play.rs:Game::remaining_legal_targets; managym/src/flow/triggers.rs:Game::choose_trigger_target, Game::flush_triggers",
       "dispersion": "stage-specific selection over shared target requirements",
       "comments": "remaining_legal_targets explicitly documents clause-local distinctness; effect_target_requirements documents independent clauses versus shared 'that target' effects.",
-      "tests": ["managym/src/flow/target_authority_tests.rs", "managym/tests/rules/elemental_cards.rs"],
-      "anchors": ["managym/src/flow/target_authority_tests.rs::trigger_target_distinctness_is_enforced_per_clause_at_submission", "managym/tests/rules/elemental_cards.rs::azula_announces_both_modes_then_binds_independent_targets_including_same_object", "managym/tests/rules/elemental_cards.rs::dai_li_targets_same_land_twice_then_drains_for_creatures_with_counters", "managym/tests/rules/elemental_cards.rs::jet_entry_damage_and_death_choose_up_to_two_distinct_creatures"],
+      "tests": [
+        "managym/src/flow/target_authority_tests.rs",
+        "managym/tests/cards/tla.rs"
+      ],
+      "anchors": [
+        "managym/src/flow/target_authority_tests.rs::trigger_target_distinctness_is_enforced_per_clause_at_submission",
+        "managym/tests/cards/tla.rs::azula_announces_both_modes_then_binds_independent_targets_including_same_object",
+        "managym/tests/cards/tla.rs::dai_li_targets_same_land_twice_then_drains_for_creatures_with_counters",
+        "managym/tests/cards/tla.rs::jet_entry_damage_and_death_choose_up_to_two_distinct_creatures"
+      ],
       "gap": "General retargeting/new-target effects are not implemented by these paths; multi-target activated abilities are not covered. Distinct stages are not duplicate definitions to collapse."
     },
     "115.6": {
@@ -1013,8 +1043,13 @@
       "authority": "managym/src/state/ability.rs:TargetRequirement; managym/src/flow/play.rs:Game::advance_target_selection, Game::decline_activated_target",
       "dispersion": "typed requirement with stage-specific continuations",
       "comments": "TargetRequirement explicitly documents min=0 as 'up to'; continuation code preserves costs after declining.",
-      "tests": ["managym/tests/rules/sacrifice_cards.rs", "managym/tests/rules/stage2_cards.rs"],
-      "anchors": ["managym/tests/rules/sacrifice_cards.rs::farm_animals_can_decline_target_and_still_pay_sacrifice", "managym/tests/rules/stage2_cards.rs::allies_at_last_up_to_zero_attackers_is_legal"],
+      "tests": [
+        "managym/tests/cards/tla.rs"
+      ],
+      "anchors": [
+        "managym/tests/cards/tla.rs::farm_animals_can_decline_target_and_still_pay_sacrifice",
+        "managym/tests/cards/tla.rs::allies_at_last_up_to_zero_attackers_is_legal"
+      ],
       "gap": "These witnesses establish zero-target execution, not every downstream query distinguishing 'requires targets' from 'is targeted', nor general target-changing effects."
     },
     "702.11b": {
@@ -1031,6 +1066,1927 @@
         "managym/src/flow/target_authority_tests.rs::audit_spell_or_permanent_must_respect_opponents_hexproof",
         "managym/src/flow/target_authority_tests.rs::hexproof_target_wordings_preserve_controller_and_predicate_restrictions",
         "managym/src/flow/target_authority_tests.rs::response_hexproof_rechecks_selected_targets_and_all_invalid_stops_ability"
+      ]
+    },
+    "115.1": {
+      "status": "partial",
+      "scope": "Targets are announced before payment/placement for authored spells and abilities.",
+      "authority": "managym/src/flow/play.rs:cast_spell_action; managym/src/flow/triggers.rs:flush_triggers",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_603_triggers.rs:cr_603_3_trigger_uses_stack_and_response_window"
+      ],
+      "gap": "No general retargeting effect. Activated declarations have a narrower single-target shape.",
+      "anchors": [
+        "managym/src/flow/play.rs::cast_spell_action",
+        "managym/src/flow/triggers.rs::flush_triggers",
+        "managym/tests/rules/cr_603_triggers.rs::cr_603_3_trigger_uses_stack_and_response_window"
+      ]
+    },
+    "115.1a": {
+      "status": "partial",
+      "scope": "Spell targeting derives from explicit mode/target clauses, separately from triggered abilities.",
+      "authority": "managym/src/state/card.rs:target_requirements_for_mode; managym/src/state/ability.rs:effect_target_requirements",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/cards/tla.rs:sokka_binds_spell_and_land_separately_and_resolves_with_one_illegal_target"
+      ],
+      "gap": "Authoring correctness is per card, not an Oracle-text parser; no proof for every instant/sorcery.",
+      "anchors": [
+        "managym/src/state/card.rs::target_requirements_for_mode",
+        "managym/src/state/ability.rs::effect_target_requirements",
+        "managym/tests/cards/tla.rs::sokka_binds_spell_and_land_separately_and_resolves_with_one_illegal_target"
+      ]
+    },
+    "115.1b": {
+      "status": "missing",
+      "scope": "Aura spell targets and enchant legality are not represented.",
+      "authority": "managym/src/state/card.rs:CardDefinition; managym/src/state/ability.rs:TargetSpec",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Enchantment type alone supplies neither enchant restrictions nor attachment; require explicit Aura admission.",
+      "anchors": [
+        "managym/src/state/card.rs::CardDefinition",
+        "managym/src/state/ability.rs::TargetSpec"
+      ]
+    },
+    "115.1e": {
+      "status": "partial",
+      "scope": "Earthbend explicitly supplies LandYouControl targeting in its typed effect.",
+      "authority": "managym/src/state/ability.rs:Earthbend",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/cards/tla.rs:earthbend_targets_only_own_lands"
+      ],
+      "gap": "Equip, modular and mutate targeting are absent; keyword targeting is authored case by case.",
+      "anchors": [
+        "managym/src/state/ability.rs::Earthbend",
+        "managym/tests/cards/tla.rs::earthbend_targets_only_own_lands"
+      ]
+    },
+    "115.4": {
+      "status": "partial",
+      "scope": "CreatureOrPlayer enumerates both players and battlefield creatures for any-target damage.",
+      "authority": "managym/src/flow/triggers.rs:legal_targets_for_spec; managym/src/flow/resolution.rs:target_is_legal",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_405_stack.rs:cr_405_1_lifo_resolution"
+      ],
+      "gap": "Planeswalkers and battles are type tags but are omitted by this spec; no general any-target support.",
+      "anchors": [
+        "managym/src/flow/triggers.rs::legal_targets_for_spec",
+        "managym/src/flow/resolution.rs::target_is_legal",
+        "managym/tests/rules/cr_405_stack.rs::cr_405_1_lifo_resolution"
+      ]
+    },
+    "115.5": {
+      "status": "partial",
+      "scope": "Spell target declaration precedes insertion, so the casting spell is not a candidate.",
+      "authority": "managym/src/flow/play.rs:cast_spell_action; managym/src/flow/zones.rs:push_spell_to_stack",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No ability-target representation. Activated source-permanent exclusion is separate and broader than stack-self prohibition; no admitted-card self-target failure proved.",
+      "anchors": [
+        "managym/src/flow/play.rs::cast_spell_action",
+        "managym/src/flow/zones.rs::push_spell_to_stack"
+      ]
+    },
+    "115.7": {
+      "status": "missing",
+      "scope": "Changing targets versus choosing new targets.",
+      "authority": "managym/src/state/ability.rs:Effect; managym/src/state/stack_object.rs:SpellOnStack",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No retargeting operation in Effect or stack mutation flow; this obligation has no implementation or directed witness. Not an admitted-card defect.",
+      "anchors": [
+        "managym/src/state/ability.rs::Effect",
+        "managym/src/state/stack_object.rs::SpellOnStack"
+      ]
+    },
+    "115.7a": {
+      "status": "missing",
+      "scope": "All-or-none change to legal targets, preserving unchanged originals when impossible.",
+      "authority": "managym/src/state/ability.rs:Effect; managym/src/state/stack_object.rs:SpellOnStack",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No retargeting operation in Effect or stack mutation flow; this obligation has no implementation or directed witness. Not an admitted-card defect.",
+      "anchors": [
+        "managym/src/state/ability.rs::Effect",
+        "managym/src/state/stack_object.rs::SpellOnStack"
+      ]
+    },
+    "115.7b": {
+      "status": "missing",
+      "scope": "Change of exactly one target.",
+      "authority": "managym/src/state/ability.rs:Effect; managym/src/state/stack_object.rs:SpellOnStack",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No retargeting operation in Effect or stack mutation flow; this obligation has no implementation or directed witness. Not an admitted-card defect.",
+      "anchors": [
+        "managym/src/state/ability.rs::Effect",
+        "managym/src/state/stack_object.rs::SpellOnStack"
+      ]
+    },
+    "115.7c": {
+      "status": "missing",
+      "scope": "Change of any subset of targets.",
+      "authority": "managym/src/state/ability.rs:Effect; managym/src/state/stack_object.rs:SpellOnStack",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No retargeting operation in Effect or stack mutation flow; this obligation has no implementation or directed witness. Not an admitted-card defect.",
+      "anchors": [
+        "managym/src/state/ability.rs::Effect",
+        "managym/src/state/stack_object.rs::SpellOnStack"
+      ]
+    },
+    "115.7d": {
+      "status": "missing",
+      "scope": "New-target choice preserving illegal unchanged targets.",
+      "authority": "managym/src/state/ability.rs:Effect; managym/src/state/stack_object.rs:SpellOnStack",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No retargeting operation in Effect or stack mutation flow; this obligation has no implementation or directed witness. Not an admitted-card defect.",
+      "anchors": [
+        "managym/src/state/ability.rs::Effect",
+        "managym/src/state/stack_object.rs::SpellOnStack"
+      ]
+    },
+    "115.7e": {
+      "status": "missing",
+      "scope": "Legality evaluated on the final target set.",
+      "authority": "managym/src/state/ability.rs:Effect; managym/src/state/stack_object.rs:SpellOnStack",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No retargeting operation in Effect or stack mutation flow; this obligation has no implementation or directed witness. Not an admitted-card defect.",
+      "anchors": [
+        "managym/src/state/ability.rs::Effect",
+        "managym/src/state/stack_object.rs::SpellOnStack"
+      ]
+    },
+    "115.7f": {
+      "status": "missing",
+      "scope": "Preservation of the original damage/counter division.",
+      "authority": "managym/src/state/ability.rs:Effect; managym/src/state/stack_object.rs:SpellOnStack",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No retargeting operation in Effect or stack mutation flow; this obligation has no implementation or directed witness. Not an admitted-card defect.",
+      "anchors": [
+        "managym/src/state/ability.rs::Effect",
+        "managym/src/state/stack_object.rs::SpellOnStack"
+      ]
+    },
+    "115.8": {
+      "status": "partial",
+      "scope": "Spell mode is retained on SpellOnStack and gates its target requirements.",
+      "authority": "managym/src/state/stack_object.rs:SpellOnStack; managym/src/state/card.rs:spell_effects_for_mode",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/cards/tla.rs:azula_announces_both_modes_then_binds_independent_targets_including_same_object"
+      ],
+      "gap": "Retargeting while preserving modes is not implemented; mode-selection evidence proves only the announcement half.",
+      "anchors": [
+        "managym/src/state/stack_object.rs::SpellOnStack",
+        "managym/src/state/card.rs::spell_effects_for_mode",
+        "managym/tests/cards/tla.rs::azula_announces_both_modes_then_binds_independent_targets_including_same_object"
+      ]
+    },
+    "115.9": {
+      "status": "unknown",
+      "scope": "Selection-time versus current target inspection.",
+      "authority": "managym/src/state/stack_object.rs:targets; managym/src/flow/triggers.rs:trigger_context_for_event",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Stored target lists and ward event context are not implementations of this general inspection wording. No matching authored consumer or independent witness established; leave unverified.",
+      "anchors": [
+        "managym/src/state/stack_object.rs::targets",
+        "managym/src/flow/triggers.rs::trigger_context_for_event"
+      ]
+    },
+    "115.9a": {
+      "status": "unknown",
+      "scope": "Counting target occurrences rather than currently legal targets.",
+      "authority": "managym/src/state/stack_object.rs:targets; managym/src/flow/triggers.rs:trigger_context_for_event",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Stored target lists and ward event context are not implementations of this general inspection wording. No matching authored consumer or independent witness established; leave unverified.",
+      "anchors": [
+        "managym/src/state/stack_object.rs::targets",
+        "managym/src/flow/triggers.rs::trigger_context_for_event"
+      ]
+    },
+    "115.9b": {
+      "status": "unknown",
+      "scope": "Checking current target characteristics while ignoring departed targets.",
+      "authority": "managym/src/state/stack_object.rs:targets; managym/src/flow/triggers.rs:trigger_context_for_event",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Stored target lists and ward event context are not implementations of this general inspection wording. No matching authored consumer or independent witness established; leave unverified.",
+      "anchors": [
+        "managym/src/state/stack_object.rs::targets",
+        "managym/src/flow/triggers.rs::trigger_context_for_event"
+      ]
+    },
+    "115.9c": {
+      "status": "unknown",
+      "scope": "Counting distinct originally chosen targets for targets-only wording.",
+      "authority": "managym/src/state/stack_object.rs:targets; managym/src/flow/triggers.rs:trigger_context_for_event",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Stored target lists and ward event context are not implementations of this general inspection wording. No matching authored consumer or independent witness established; leave unverified.",
+      "anchors": [
+        "managym/src/state/stack_object.rs::targets",
+        "managym/src/flow/triggers.rs::trigger_context_for_event"
+      ]
+    },
+    "115.10": {
+      "status": "partial",
+      "scope": "Sacrifice, discard and library choices occur during resolution without targeted offers.",
+      "authority": "managym/src/flow/resolution.rs:execute_frame_effect; managym/src/flow/decision.rs:suspended_decision_action_space",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_608_resolution.rs:cr_603_5_optional_draw_is_chosen_at_resolution"
+      ],
+      "gap": "No claim for all non-targeted selections or multi-player ordering.",
+      "anchors": [
+        "managym/src/flow/resolution.rs::execute_frame_effect",
+        "managym/src/flow/decision.rs::suspended_decision_action_space",
+        "managym/tests/rules/cr_608_resolution.rs::cr_603_5_optional_draw_is_chosen_at_resolution"
+      ]
+    },
+    "115.10a": {
+      "status": "partial",
+      "scope": "Effect::target_spec distinguishes targeted damage from mass damage and controller effects.",
+      "authority": "managym/src/state/ability.rs:target_spec; managym/src/flow/resolution.rs:execute_frame_effect",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_608_resolution.rs:cr_704_4_sba_waits_for_suspended_resolution_to_finish"
+      ],
+      "gap": "The finite typed effects require per-card authoring; general keyword exceptions are not automatic.",
+      "anchors": [
+        "managym/src/state/ability.rs::target_spec",
+        "managym/src/flow/resolution.rs::execute_frame_effect",
+        "managym/tests/rules/cr_608_resolution.rs::cr_704_4_sba_waits_for_suspended_resolution_to_finish"
+      ]
+    },
+    "115.10b": {
+      "status": "partial",
+      "scope": "Controller life/draw effects do not introduce target choices.",
+      "authority": "managym/src/state/ability.rs:target_spec; managym/src/flow/resolution.rs:execute_frame_effect",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_608_resolution.rs:cr_603_5_optional_draw_is_chosen_at_resolution"
+      ],
+      "gap": "Bounded controller effects only; no complete text interpretation claim.",
+      "anchors": [
+        "managym/src/state/ability.rs::target_spec",
+        "managym/src/flow/resolution.rs::execute_frame_effect",
+        "managym/tests/rules/cr_608_resolution.rs::cr_603_5_optional_draw_is_chosen_at_resolution"
+      ]
+    },
+    "400.7a": {
+      "status": "missing",
+      "scope": "Stack-applied characteristic/control modifications must carry onto the resulting permanent.",
+      "authority": "managym/src/state/stack_object.rs:SpellOnStack; managym/src/flow/zones.rs:commit_zone_move",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "SpellOnStack has no such modifications; Permanent::new resets from the card. No admitted modification effect or witness.",
+      "anchors": [
+        "managym/src/state/stack_object.rs::SpellOnStack",
+        "managym/src/flow/zones.rs::commit_zone_move"
+      ]
+    },
+    "400.7b": {
+      "status": "missing",
+      "scope": "Battlefield-functioning abilities granted by static effects to permanent spells must persist on entry.",
+      "authority": "managym/src/state/stack_object.rs:SpellOnStack; managym/src/state/card.rs:CardDefinition",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No stack-granted battlefield ability representation. Battlefield grants do not establish this exception.",
+      "anchors": [
+        "managym/src/state/stack_object.rs::SpellOnStack",
+        "managym/src/state/card.rs::CardDefinition"
+      ]
+    },
+    "400.7c": {
+      "status": "missing",
+      "scope": "Prevention applying to a permanent spell must continue to its resulting permanent.",
+      "authority": "managym/src/state/card.rs:ReplacementEffect; managym/src/flow/zones.rs:commit_zone_move",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Available prevention is controller-scoped, not a retained spell-to-permanent prevention effect.",
+      "anchors": [
+        "managym/src/state/card.rs::ReplacementEffect",
+        "managym/src/flow/zones.rs::commit_zone_move"
+      ]
+    },
+    "400.7d": {
+      "status": "partial",
+      "scope": "Entry records whether the permanent was cast; Ran and Shaw uses that fact.",
+      "authority": "managym/src/flow/zones.rs:commit_zone_move; managym/src/flow/triggers.rs:trigger_condition_fires",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/cards/tla.rs:ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution"
+      ],
+      "gap": "Paid kicker and spent-mana details are not retained on Permanent; do not generalize was_cast to arbitrary cast provenance.",
+      "anchors": [
+        "managym/src/flow/zones.rs::commit_zone_move",
+        "managym/src/flow/triggers.rs::trigger_condition_fires",
+        "managym/tests/cards/tla.rs::ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution"
+      ]
+    },
+    "400.7e": {
+      "status": "partial",
+      "scope": "Earthbend can find a land in its first public destination after dying.",
+      "authority": "managym/src/flow/zones.rs:handle_leaves_battlefield; managym/src/flow/resolution.rs:ReturnSourceToBattlefieldTapped",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/cards/tla.rs:animated_land_dies_and_returns_tapped_as_plain_land",
+        "managym/tests/rules/cr_608_resolution.rs:audit_earthbend_return_does_not_follow_a_second_zone_change"
+      ],
+      "gap": "Confirmed synthetic failure: the return follows CardId from graveyard into exile and returns the wrong incarnation. Bind the first destination ObjectRef; no supported-deck response sequence is asserted.",
+      "anchors": [
+        "managym/src/flow/zones.rs::handle_leaves_battlefield",
+        "managym/src/flow/resolution.rs::ReturnSourceToBattlefieldTapped",
+        "managym/tests/cards/tla.rs::animated_land_dies_and_returns_tapped_as_plain_land",
+        "managym/tests/rules/cr_608_resolution.rs::audit_earthbend_return_does_not_follow_a_second_zone_change"
+      ]
+    },
+    "400.7f": {
+      "status": "missing",
+      "scope": "An enchanted-permanent departure trigger can find departed Aura objects.",
+      "authority": "managym/src/state/permanent.rs:pub struct Permanent; managym/src/state/ability.rs:TriggerCondition",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No attachment relationships or Aura departure lookup. Exile-until-source-leaves is a different duration rule, not this exception.",
+      "anchors": [
+        "managym/src/state/permanent.rs::pub struct Permanent",
+        "managym/src/state/ability.rs::TriggerCondition"
+      ]
+    },
+    "400.7g": {
+      "status": "partial",
+      "scope": "Granted flashback retains the cast permission/replacement after Iroh leaves.",
+      "authority": "managym/src/flow/play.rs:flashback_cost; managym/src/state/stack_object.rs:SpellOnStack; managym/src/flow/zones.rs:move_card_with_entry",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/cards/tla.rs:flashback_is_exiled_when_countered_after_iroh_leaves"
+      ],
+      "gap": "Only flashback provenance is represented, not arbitrary granted cast abilities.",
+      "anchors": [
+        "managym/src/flow/play.rs::flashback_cost",
+        "managym/src/state/stack_object.rs::SpellOnStack",
+        "managym/src/flow/zones.rs::move_card_with_entry",
+        "managym/tests/cards/tla.rs::flashback_is_exiled_when_countered_after_iroh_leaves"
+      ]
+    },
+    "400.7h": {
+      "status": "unknown",
+      "scope": "Other effects of a casting permission may find the resulting spell.",
+      "authority": "managym/src/flow/play.rs:flashback_cost; managym/src/state/stack_object.rs:SpellOnStack",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Flashback retention is evidence for 400.7g, not every effect that references a spell cast through a permission. No independent witness.",
+      "anchors": [
+        "managym/src/flow/play.rs::flashback_cost",
+        "managym/src/state/stack_object.rs::SpellOnStack"
+      ]
+    },
+    "400.7i": {
+      "status": "missing",
+      "scope": "Other parts of a land-play permission can find the new permanent.",
+      "authority": "managym/src/state/ability.rs:Effect; managym/src/flow/zones.rs:commit_zone_move",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "SearchBasicLand puts a land onto the battlefield, not plays it through a permission; no matching land-play permission effect.",
+      "anchors": [
+        "managym/src/state/ability.rs::Effect",
+        "managym/src/flow/zones.rs::commit_zone_move"
+      ]
+    },
+    "400.7j": {
+      "status": "partial",
+      "scope": "Untargeted triggering-permanent context and exile links retain related objects across selected actions.",
+      "authority": "managym/src/state/ability.rs:ModifyTriggeringPermanent; managym/src/flow/resolution.rs:ExileUntilSourceLeaves; managym/src/flow/zones.rs:handle_leaves_battlefield",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "ExileLink retains exiled CardId only; leave/reenter-exile tracking remains unproved. General cost-moved objects and multi-zone effects need exact destination identity.",
+      "anchors": [
+        "managym/src/state/ability.rs::ModifyTriggeringPermanent",
+        "managym/src/flow/resolution.rs::ExileUntilSourceLeaves",
+        "managym/src/flow/zones.rs::handle_leaves_battlefield"
+      ]
+    },
+    "400.7k": {
+      "status": "missing",
+      "scope": "Madness resolution retains a discarded object across its public-zone move.",
+      "authority": "managym/src/state/ability.rs:Effect; managym/src/state/ability.rs:TriggerCondition",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No madness cast/trigger path or discarded-object continuation.",
+      "anchors": [
+        "managym/src/state/ability.rs::Effect",
+        "managym/src/state/ability.rs::TriggerCondition"
+      ]
+    },
+    "400.7m": {
+      "status": "missing",
+      "scope": "Stickers persist between public zones.",
+      "authority": "managym/src/state/card.rs:Card; managym/src/state/permanent.rs:pub struct Permanent",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No sticker state or carry-over operation; unsupported mechanic.",
+      "anchors": [
+        "managym/src/state/card.rs::Card",
+        "managym/src/state/permanent.rs::pub struct Permanent"
+      ]
+    },
+    "603.1": {
+      "status": "partial",
+      "scope": "Ability::Triggered separates typed conditions from ordered effects.",
+      "authority": "managym/src/state/ability.rs:pub enum Ability; managym/src/flow/triggers.rs:check_triggers_for_event",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "TriggerCondition cites CR 603.1; card definitions own printed wording.",
+      "tests": [
+        "managym/tests/rules/cr_603_triggers.rs:cr_603_6a_manowar_etb_returns_target_creature"
+      ],
+      "gap": "Only the enumerated condition/effect vocabulary is implemented; grammatical form is not parsed.",
+      "anchors": [
+        "managym/src/state/ability.rs::pub enum Ability",
+        "managym/src/flow/triggers.rs::check_triggers_for_event",
+        "managym/tests/rules/cr_603_triggers.rs::cr_603_6a_manowar_etb_returns_target_creature"
+      ]
+    },
+    "603.1a": {
+      "status": "partial",
+      "scope": "Target restrictions reside in target requirements and are checked while placing/resolving triggers.",
+      "authority": "managym/src/flow/triggers.rs:trigger_requirements; managym/src/flow/triggers.rs:choose_trigger_target",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/cards/tla.rs:earthbend_trigger_removed_without_lands"
+      ],
+      "gap": "Uncounterable triggered abilities are not represented; requirements do not cover all post-effect instructions.",
+      "anchors": [
+        "managym/src/flow/triggers.rs::trigger_requirements",
+        "managym/src/flow/triggers.rs::choose_trigger_target",
+        "managym/tests/cards/tla.rs::earthbend_trigger_removed_without_lands"
+      ]
+    },
+    "603.1b": {
+      "status": "missing",
+      "scope": "All-of-multiple-trigger-condition history during a period.",
+      "authority": "managym/src/state/ability.rs:TriggerCondition",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No multi-condition historical conjunction; OnceEachTurn and draw counters have different semantics.",
+      "anchors": [
+        "managym/src/state/ability.rs::TriggerCondition"
+      ]
+    },
+    "603.2": {
+      "status": "partial",
+      "scope": "Committed events enqueue triggers without executing their effects.",
+      "authority": "managym/src/flow/triggers.rs:process_game_events; managym/src/flow/triggers.rs:check_triggers_for_event",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_603_triggers.rs:cr_603_3_trigger_uses_stack_and_response_window"
+      ],
+      "gap": "State triggers and unsupported event conditions are excluded.",
+      "anchors": [
+        "managym/src/flow/triggers.rs::process_game_events",
+        "managym/src/flow/triggers.rs::check_triggers_for_event",
+        "managym/tests/rules/cr_603_triggers.rs::cr_603_3_trigger_uses_stack_and_response_window"
+      ]
+    },
+    "603.2a": {
+      "status": "partial",
+      "scope": "Event matching has no priority/casting-permission gate.",
+      "authority": "managym/src/flow/triggers.rs:check_triggers_for_event; managym/src/flow/zones.rs:move_card_with_entry",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_603_triggers.rs:cr_603_6a_manowar_etb_returns_target_creature"
+      ],
+      "gap": "No independent fixture for every timing prohibition; triggered mana uses a separate immediate path.",
+      "anchors": [
+        "managym/src/flow/triggers.rs::check_triggers_for_event",
+        "managym/src/flow/zones.rs::move_card_with_entry",
+        "managym/tests/rules/cr_603_triggers.rs::cr_603_6a_manowar_etb_returns_target_creature"
+      ]
+    },
+    "603.2b": {
+      "status": "partial",
+      "scope": "StepStarted events match own upkeep and beginning of combat.",
+      "authority": "managym/src/flow/tick.rs:on_step_start; managym/src/flow/triggers.rs:trigger_condition_fires",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Other beginnings and skipped/extra phases have no trigger vocabulary or proof.",
+      "anchors": [
+        "managym/src/flow/tick.rs::on_step_start",
+        "managym/src/flow/triggers.rs::trigger_condition_fires"
+      ]
+    },
+    "603.2c": {
+      "status": "partial",
+      "scope": "Each committed CardMoved can produce an ETB/death trigger; simultaneous death sources share a snapshot.",
+      "authority": "managym/src/flow/triggers.rs:check_triggers_for_event; managym/src/flow/triggers.rs:trigger_condition_fires",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "Attacks documentation explicitly limits its multiplicity; it is not evidence for per-creature attack triggers.",
+      "tests": [
+        "managym/tests/rules/cr_704_sba.rs:cr_704_3_simultaneous_departures_share_trigger_source_snapshot"
+      ],
+      "gap": "Attacks Any/Another explicitly means one-or-more, not per-attacker; multiplicity for general batched events is not implemented.",
+      "anchors": [
+        "managym/src/flow/triggers.rs::check_triggers_for_event",
+        "managym/src/flow/triggers.rs::trigger_condition_fires",
+        "managym/tests/rules/cr_704_sba.rs::cr_704_3_simultaneous_departures_share_trigger_source_snapshot"
+      ]
+    },
+    "603.2d": {
+      "status": "missing",
+      "scope": "Trigger-doubling/multiplication without recursive self-application.",
+      "authority": "managym/src/state/ability.rs:TriggerCondition; managym/src/flow/triggers.rs:check_triggers_for_event",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No trigger-multiplier representation or application step.",
+      "anchors": [
+        "managym/src/state/ability.rs::TriggerCondition",
+        "managym/src/flow/triggers.rs::check_triggers_for_event"
+      ]
+    },
+    "603.2e": {
+      "status": "partial",
+      "scope": "tap_permanent emits only on untapped-to-tapped transitions; entry-tapped is separate.",
+      "authority": "managym/src/flow/zones.rs:tap_permanent; managym/src/flow/triggers.rs:trigger_condition_fires",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Attachment, blocking transitions and untap triggers are not covered; no new behavioral witness.",
+      "anchors": [
+        "managym/src/flow/zones.rs::tap_permanent",
+        "managym/src/flow/triggers.rs::trigger_condition_fires"
+      ]
+    },
+    "603.2f": {
+      "status": "partial",
+      "scope": "Ordinary trigger sources are battlefield permanents plus departed battlefield LKI.",
+      "authority": "managym/src/flow/triggers.rs:snapshot_trigger_sources; managym/src/flow/triggers.rs:trigger_ability_sources",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No general hidden-zone trigger source or visibility test; source discovery omits more than the visibility rule alone requires.",
+      "anchors": [
+        "managym/src/flow/triggers.rs::snapshot_trigger_sources",
+        "managym/src/flow/triggers.rs::trigger_ability_sources"
+      ]
+    },
+    "603.2g": {
+      "status": "partial",
+      "scope": "Trigger matching consumes committed facts; prevented damage emits no damage fact.",
+      "authority": "managym/src/flow/proposed_event.rs:apply_proposed_event; managym/src/flow/triggers.rs:process_game_events",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_614_replacement.rs:cr_615_prevented_damage_emits_no_committed_damage_or_life_event"
+      ],
+      "gap": "Sacrifice remains a separate event even if its graveyard destination is replaced. General replacements remain MTG-196 scope.",
+      "anchors": [
+        "managym/src/flow/proposed_event.rs::apply_proposed_event",
+        "managym/src/flow/triggers.rs::process_game_events",
+        "managym/tests/rules/cr_614_replacement.rs::cr_615_prevented_damage_emits_no_committed_damage_or_life_event"
+      ]
+    },
+    "603.2h": {
+      "status": "unknown",
+      "scope": "Do-this-only-once tracks performance of the optional action, not merely triggering.",
+      "authority": "managym/src/state/ability.rs:OnceEachTurn; managym/src/flow/triggers.rs:check_triggers_for_event",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Current OnceEachTurn counts fires, appropriate to triggers-only-once wording. No do-this-only-once consumer/action-completion tracker established; do not reuse it without review.",
+      "anchors": [
+        "managym/src/state/ability.rs::OnceEachTurn",
+        "managym/src/flow/triggers.rs::check_triggers_for_event"
+      ]
+    },
+    "603.3": {
+      "status": "partial",
+      "scope": "Waiting triggers receive targets and stack objects before priority; effects resolve after passes.",
+      "authority": "managym/src/flow/triggers.rs:flush_triggers; managym/src/flow/triggers.rs:place_triggered_ability_on_stack",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_603_triggers.rs:cr_603_3_trigger_uses_stack_and_response_window"
+      ],
+      "gap": "Trigger ordering choice absent (MTG-195); triggered mana separately resolves immediately.",
+      "anchors": [
+        "managym/src/flow/triggers.rs::flush_triggers",
+        "managym/src/flow/triggers.rs::place_triggered_ability_on_stack",
+        "managym/tests/rules/cr_603_triggers.rs::cr_603_3_trigger_uses_stack_and_response_window"
+      ]
+    },
+    "603.3a": {
+      "status": "partial",
+      "scope": "PendingTrigger and stack trigger retain source controller at collection.",
+      "authority": "managym/src/flow/triggers.rs:check_triggers_for_event; managym/src/flow/triggers.rs:place_triggered_ability_on_stack; managym/src/flow/resolution.rs:resolve_triggered_ability",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_400_identity.rs:cr_400_7_death_trigger_keeps_source_lki_across_reentry"
+      ],
+      "gap": "Delayed-trigger controller derivation is separately limited; explicit control-change response witness not added.",
+      "anchors": [
+        "managym/src/flow/triggers.rs::check_triggers_for_event",
+        "managym/src/flow/triggers.rs::place_triggered_ability_on_stack",
+        "managym/src/flow/resolution.rs::resolve_triggered_ability",
+        "managym/tests/rules/cr_400_identity.rs::cr_400_7_death_trigger_keeps_source_lki_across_reentry"
+      ]
+    },
+    "603.3c": {
+      "status": "missing",
+      "scope": "True modal triggers must choose legal modes during stack placement.",
+      "authority": "managym/src/flow/triggers.rs:flush_triggers; managym/src/state/ability.rs:Modal; managym/src/flow/resolution.rs:execute_frame_effect",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No trigger mode field or placement-time mode decision. Current Effect::Modal trigger consumers encode resolution choices (Lotus Cobra color, Provisioner token, Merchant may), not printed choose-one triggers; do not move them wholesale to placement.",
+      "anchors": [
+        "managym/src/flow/triggers.rs::flush_triggers",
+        "managym/src/state/ability.rs::Modal",
+        "managym/src/flow/resolution.rs::execute_frame_effect"
+      ]
+    },
+    "603.3d": {
+      "status": "partial",
+      "scope": "Target minima/maxima and clause distinctness checked while placing; impossible required targets remove the trigger.",
+      "authority": "managym/src/flow/triggers.rs:flush_triggers; managym/src/flow/triggers.rs:choose_trigger_target",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/cards/tla.rs:earthbend_trigger_removed_without_lands",
+        "managym/tests/rules/cr_603_triggers.rs:cr_603_trigger_flush_happens_after_sba_check"
+      ],
+      "gap": "Division announcements and continuous-effect prohibitions are not general; target choice coverage is bounded.",
+      "anchors": [
+        "managym/src/flow/triggers.rs::flush_triggers",
+        "managym/src/flow/triggers.rs::choose_trigger_target",
+        "managym/tests/cards/tla.rs::earthbend_trigger_removed_without_lands",
+        "managym/tests/rules/cr_603_triggers.rs::cr_603_trigger_flush_happens_after_sba_check"
+      ]
+    },
+    "603.4": {
+      "status": "partial",
+      "scope": "Ran and Shaw checks graveyard threshold at entry and resolution using authored condition/effect branches.",
+      "authority": "managym/src/flow/triggers.rs:trigger_condition_fires; managym/src/flow/resolution.rs:execute_frame_effect; managym/src/cardsets/tla.rs:Ran and Shaw",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "ActiveIf documents fire-time only plus explicit effect branch for intervening-if; trigger_condition_fires comment is narrower than that dual use.",
+      "tests": [
+        "managym/tests/cards/tla.rs:ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution"
+      ],
+      "gap": "ActiveIf also models conditional ability existence, which must not always be rechecked. No generic intervening-if field; per-card pairing must remain deliberate.",
+      "anchors": [
+        "managym/src/flow/triggers.rs::trigger_condition_fires",
+        "managym/src/flow/resolution.rs::execute_frame_effect",
+        "managym/src/cardsets/tla.rs::Ran and Shaw",
+        "managym/tests/cards/tla.rs::ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution"
+      ]
+    },
+    "603.5": {
+      "status": "partial",
+      "scope": "Optional discard/draw and unless-pay decisions occur while the trigger resolves.",
+      "authority": "managym/src/flow/resolution.rs:execute_frame_effect; managym/src/flow/decision.rs:suspended_decision_action_space",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_608_resolution.rs:cr_603_5_optional_draw_is_chosen_at_resolution"
+      ],
+      "gap": "No general optional-effect interpreter; test proves stacking/response/decline for one typed optional effect.",
+      "anchors": [
+        "managym/src/flow/resolution.rs::execute_frame_effect",
+        "managym/src/flow/decision.rs::suspended_decision_action_space",
+        "managym/tests/rules/cr_608_resolution.rs::cr_603_5_optional_draw_is_chosen_at_resolution"
+      ]
+    },
+    "603.6": {
+      "status": "partial",
+      "scope": "ETB/death events and earthbend first-destination returns exist.",
+      "authority": "managym/src/flow/triggers.rs:trigger_condition_fires; managym/src/flow/zones.rs:handle_leaves_battlefield; managym/src/flow/resolution.rs:ReturnSourceToBattlefieldTapped",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/cards/tla.rs:animated_land_dies_and_returns_tapped_as_plain_land",
+        "managym/tests/rules/cr_608_resolution.rs:audit_earthbend_return_does_not_follow_a_second_zone_change"
+      ],
+      "gap": "Confirmed synthetic failure: the return follows CardId from graveyard into exile and returns the wrong incarnation. Bind the first destination ObjectRef; no supported-deck response sequence is asserted.",
+      "anchors": [
+        "managym/src/flow/triggers.rs::trigger_condition_fires",
+        "managym/src/flow/zones.rs::handle_leaves_battlefield",
+        "managym/src/flow/resolution.rs::ReturnSourceToBattlefieldTapped",
+        "managym/tests/cards/tla.rs::animated_land_dies_and_returns_tapped_as_plain_land",
+        "managym/tests/rules/cr_608_resolution.rs::audit_earthbend_return_does_not_follow_a_second_zone_change"
+      ]
+    },
+    "603.6a": {
+      "status": "partial",
+      "scope": "Post-entry source snapshot includes the entering permanent for its own ETB.",
+      "authority": "managym/src/flow/zones.rs:move_card_with_entry; managym/src/flow/triggers.rs:snapshot_trigger_sources",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_603_triggers.rs:cr_603_6a_manowar_etb_returns_target_creature"
+      ],
+      "gap": "Simultaneous multi-entry and abilities removed by continuous effects not proved.",
+      "anchors": [
+        "managym/src/flow/zones.rs::move_card_with_entry",
+        "managym/src/flow/triggers.rs::snapshot_trigger_sources",
+        "managym/tests/rules/cr_603_triggers.rs::cr_603_6a_manowar_etb_returns_target_creature"
+      ]
+    },
+    "603.6b": {
+      "status": "partial",
+      "scope": "Battlefield P/T queries apply static modifiers immediately after entry.",
+      "authority": "managym/src/flow/statics.rs:effective_pt; managym/src/flow/triggers.rs:subject_matches_moved_card",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Trigger subject matching uses printed power and subtype rather than all effective characteristics. Global type/ability-changing effects are outside the represented subset.",
+      "anchors": [
+        "managym/src/flow/statics.rs::effective_pt",
+        "managym/src/flow/triggers.rs::subject_matches_moved_card"
+      ]
+    },
+    "603.6c": {
+      "status": "partial",
+      "scope": "Dies uses battlefield-to-graveyard movement with departure sources; sacrifice has a pre-departure event.",
+      "authority": "managym/src/flow/triggers.rs:trigger_ability_sources; managym/src/flow/zones.rs:sacrifice_permanent",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_704_sba.rs:cr_704_3_simultaneous_departures_share_trigger_source_snapshot"
+      ],
+      "gap": "No general leaves/from-anywhere trigger vocabulary. First-destination tracking failure applies to earthbend, not all death triggers.",
+      "anchors": [
+        "managym/src/flow/triggers.rs::trigger_ability_sources",
+        "managym/src/flow/zones.rs::sacrifice_permanent",
+        "managym/tests/rules/cr_704_sba.rs::cr_704_3_simultaneous_departures_share_trigger_source_snapshot"
+      ]
+    },
+    "603.6d": {
+      "status": "partial",
+      "scope": "EntersTapped and EntersWithPlusOneCounters modify the entry proposal before CardMoved.",
+      "authority": "managym/src/flow/proposed_event.rs:apply_replacement; managym/src/flow/zones.rs:commit_zone_move",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_614_replacement.rs:cr_614_1c_enters_tapped_and_with_counters_before_card_moved_commits"
+      ],
+      "gap": "As-enters choices and replacement copies are unimplemented.",
+      "anchors": [
+        "managym/src/flow/proposed_event.rs::apply_replacement",
+        "managym/src/flow/zones.rs::commit_zone_move",
+        "managym/tests/rules/cr_614_replacement.rs::cr_614_1c_enters_tapped_and_with_counters_before_card_moved_commits"
+      ]
+    },
+    "603.6e": {
+      "status": "missing",
+      "scope": "Aura departure triggers can find both enchanted and Aura destination objects.",
+      "authority": "managym/src/state/permanent.rs:pub struct Permanent; managym/src/state/ability.rs:TriggerCondition",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No Aura attachment/departure implementation. Existing ExileUntilSourceLeaves/ExileLink citations to 603.6e do not justify their duration semantics; correct in a future comment pass.",
+      "anchors": [
+        "managym/src/state/permanent.rs::pub struct Permanent",
+        "managym/src/state/ability.rs::TriggerCondition"
+      ]
+    },
+    "603.7": {
+      "status": "partial",
+      "scope": "A one-shot exact battlefield watcher implements earthbend departure triggers.",
+      "authority": "managym/src/flow/trigger.rs:DelayedTrigger; managym/src/flow/zones.rs:handle_leaves_battlefield",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/cards/tla.rs:animated_land_dies_and_returns_tapped_as_plain_land"
+      ],
+      "gap": "Only the dies/exiled return kind is implemented; general delayed timings and duration are absent.",
+      "anchors": [
+        "managym/src/flow/trigger.rs::DelayedTrigger",
+        "managym/src/flow/zones.rs::handle_leaves_battlefield",
+        "managym/tests/cards/tla.rs::animated_land_dies_and_returns_tapped_as_plain_land"
+      ]
+    },
+    "603.7a": {
+      "status": "partial",
+      "scope": "Earthbend installs its watcher while resolving the animation effect; only later matching departures fire.",
+      "authority": "managym/src/flow/resolution.rs:Earthbend; managym/src/flow/zones.rs:handle_leaves_battlefield",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/cards/tla.rs:animated_land_dies_and_returns_tapped_as_plain_land"
+      ],
+      "gap": "No replacement/static-origin creation path; prior-event non-triggering has no independent new fixture.",
+      "anchors": [
+        "managym/src/flow/resolution.rs::Earthbend",
+        "managym/src/flow/zones.rs::handle_leaves_battlefield",
+        "managym/tests/cards/tla.rs::animated_land_dies_and_returns_tapped_as_plain_land"
+      ]
+    },
+    "603.7b": {
+      "status": "partial",
+      "scope": "Earthbend removes its watcher when the watched permanent departs.",
+      "authority": "managym/src/flow/zones.rs:handle_leaves_battlefield",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/cards/tla.rs:animated_land_dies_and_returns_tapped_as_plain_land"
+      ],
+      "gap": "No stated-duration repeated delayed trigger or simultaneous-event choice; only one-shot departure supported.",
+      "anchors": [
+        "managym/src/flow/zones.rs::handle_leaves_battlefield",
+        "managym/tests/cards/tla.rs::animated_land_dies_and_returns_tapped_as_plain_land"
+      ]
+    },
+    "603.7c": {
+      "status": "partial",
+      "scope": "Watchers reject stale battlefield incarnations; resolving return loses destination identity.",
+      "authority": "managym/src/flow/zones.rs:handle_leaves_battlefield; managym/src/flow/resolution.rs:ReturnSourceToBattlefieldTapped",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_704_sba.rs:cr_400_7_stale_delayed_trigger_reference_is_rejected",
+        "managym/tests/rules/cr_608_resolution.rs:audit_earthbend_return_does_not_follow_a_second_zone_change"
+      ],
+      "gap": "Confirmed synthetic failure: the return follows CardId from graveyard into exile and returns the wrong incarnation. Bind the first destination ObjectRef; no supported-deck response sequence is asserted.",
+      "anchors": [
+        "managym/src/flow/zones.rs::handle_leaves_battlefield",
+        "managym/src/flow/resolution.rs::ReturnSourceToBattlefieldTapped",
+        "managym/tests/rules/cr_704_sba.rs::cr_400_7_stale_delayed_trigger_reference_is_rejected",
+        "managym/tests/rules/cr_608_resolution.rs::audit_earthbend_return_does_not_follow_a_second_zone_change"
+      ]
+    },
+    "603.7d": {
+      "status": "partial",
+      "scope": "Earthbend from spells creates a return watcher.",
+      "authority": "managym/src/flow/resolution.rs:Earthbend; managym/src/flow/triggers.rs:enqueue_delayed_trigger",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Watcher stores the affected land and its controller, not the creating spell/source controller. Usually coincide, but general source/controller semantics are not retained.",
+      "anchors": [
+        "managym/src/flow/resolution.rs::Earthbend",
+        "managym/src/flow/triggers.rs::enqueue_delayed_trigger"
+      ]
+    },
+    "603.7e": {
+      "status": "partial",
+      "scope": "Earthbend from an ability creates a return watcher.",
+      "authority": "managym/src/flow/resolution.rs:Earthbend; managym/src/flow/triggers.rs:enqueue_delayed_trigger",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Watcher retains the land as source, not the creating ability source; control-change distinctions remain unsupported.",
+      "anchors": [
+        "managym/src/flow/resolution.rs::Earthbend",
+        "managym/src/flow/triggers.rs::enqueue_delayed_trigger"
+      ]
+    },
+    "603.7f": {
+      "status": "missing",
+      "scope": "Replacement-created delayed triggers need the replacement source/controller.",
+      "authority": "managym/src/state/card.rs:ReplacementEffect; managym/src/flow/trigger.rs:DelayedTrigger",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No replacement variant creates delayed triggers or retains this provenance.",
+      "anchors": [
+        "managym/src/state/card.rs::ReplacementEffect",
+        "managym/src/flow/trigger.rs::DelayedTrigger"
+      ]
+    },
+    "603.7g": {
+      "status": "missing",
+      "scope": "Static-action-created delayed triggers need source/controller at the action.",
+      "authority": "managym/src/state/ability.rs:Effect; managym/src/flow/trigger.rs:DelayedTrigger",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No such static action permission/creation path.",
+      "anchors": [
+        "managym/src/state/ability.rs::Effect",
+        "managym/src/flow/trigger.rs::DelayedTrigger"
+      ]
+    },
+    "603.7h": {
+      "status": "unknown",
+      "scope": "A delayed trigger created once after N resolutions is distinct from an inline Nth-resolution effect.",
+      "authority": "managym/src/state/ability.rs:OnNthResolutionThisTurn; managym/src/flow/resolution.rs:resolve_triggered_ability",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Current counter immediately gates an effect; it does not prove delayed-trigger creation or repeated-source incarnation behavior.",
+      "anchors": [
+        "managym/src/state/ability.rs::OnNthResolutionThisTurn",
+        "managym/src/flow/resolution.rs::resolve_triggered_ability"
+      ]
+    },
+    "603.8": {
+      "status": "missing",
+      "scope": "State triggers fire on a matching game state and suppress retriggering while pending/stacked.",
+      "authority": "managym/src/state/ability.rs:TriggerCondition; managym/src/flow/triggers.rs:trigger_condition_fires",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No state-trigger condition or pending-instance guard. SBAs cannot substitute for this timing.",
+      "anchors": [
+        "managym/src/state/ability.rs::TriggerCondition",
+        "managym/src/flow/triggers.rs::trigger_condition_fires"
+      ]
+    },
+    "603.9": {
+      "status": "missing",
+      "scope": "Player-loss triggered abilities fire for losses/leaving, except draw departures.",
+      "authority": "managym/src/flow/sba.rs:lose_game; managym/src/state/ability.rs:TriggerCondition",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "lose_game only changes alive; no loss event/trigger condition. Multiplayer leaving is outside admission.",
+      "anchors": [
+        "managym/src/flow/sba.rs::lose_game",
+        "managym/src/state/ability.rs::TriggerCondition"
+      ]
+    },
+    "603.10": {
+      "status": "partial",
+      "scope": "Ordinary source snapshots are post-event; departing sources and simultaneous SBA deaths have look-back handling.",
+      "authority": "managym/src/flow/triggers.rs:trigger_ability_sources; managym/src/flow/triggers.rs:process_game_events_with_sources",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_704_sba.rs:cr_704_3_simultaneous_departures_share_trigger_source_snapshot"
+      ],
+      "gap": "Look-back conditions beyond death/sacrifice are missing; subject characteristics are not a complete LKI snapshot.",
+      "anchors": [
+        "managym/src/flow/triggers.rs::trigger_ability_sources",
+        "managym/src/flow/triggers.rs::process_game_events_with_sources",
+        "managym/tests/rules/cr_704_sba.rs::cr_704_3_simultaneous_departures_share_trigger_source_snapshot"
+      ]
+    },
+    "603.10a": {
+      "status": "partial",
+      "scope": "Death sources share the SBA snapshot; sacrifice predicates see pre-departure state.",
+      "authority": "managym/src/flow/triggers.rs:process_game_events_with_sources; managym/src/flow/zones.rs:sacrifice_permanent",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_704_sba.rs:cr_704_3_simultaneous_departures_share_trigger_source_snapshot",
+        "managym/tests/cards/war.rs:mayhem_keeps_granted_lifelink_after_it_is_sacrificed"
+      ],
+      "gap": "No leave-graveyard or visible-to-hand/library trigger conditions; typed departure predicates do not retain all effective characteristics.",
+      "anchors": [
+        "managym/src/flow/triggers.rs::process_game_events_with_sources",
+        "managym/src/flow/zones.rs::sacrifice_permanent",
+        "managym/tests/rules/cr_704_sba.rs::cr_704_3_simultaneous_departures_share_trigger_source_snapshot",
+        "managym/tests/cards/war.rs::mayhem_keeps_granted_lifelink_after_it_is_sacrificed"
+      ]
+    },
+    "603.10b": {
+      "status": "missing",
+      "scope": "Phasing-out look-back.",
+      "authority": "managym/src/state/permanent.rs:pub struct Permanent",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No corresponding trigger condition/source-history path. A storage field or observable event alone is not trigger implementation.",
+      "anchors": [
+        "managym/src/state/permanent.rs::pub struct Permanent"
+      ]
+    },
+    "603.10c": {
+      "status": "missing",
+      "scope": "Becomes-unattached look-back.",
+      "authority": "managym/src/state/permanent.rs:pub struct Permanent",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No corresponding trigger condition/source-history path. A storage field or observable event alone is not trigger implementation.",
+      "anchors": [
+        "managym/src/state/permanent.rs::pub struct Permanent"
+      ]
+    },
+    "603.10d": {
+      "status": "missing",
+      "scope": "Losing/gaining-control look-back.",
+      "authority": "managym/src/state/ability.rs:TriggerCondition",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No corresponding trigger condition/source-history path. A storage field or observable event alone is not trigger implementation.",
+      "anchors": [
+        "managym/src/state/ability.rs::TriggerCondition"
+      ]
+    },
+    "603.10e": {
+      "status": "missing",
+      "scope": "Countered-spell look-back.",
+      "authority": "managym/src/flow/resolution.rs:counter_spell; managym/src/flow/triggers.rs:trigger_condition_fires",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No corresponding trigger condition/source-history path. A storage field or observable event alone is not trigger implementation.",
+      "anchors": [
+        "managym/src/flow/resolution.rs::counter_spell",
+        "managym/src/flow/triggers.rs::trigger_condition_fires"
+      ]
+    },
+    "603.10f": {
+      "status": "missing",
+      "scope": "Player-loss look-back.",
+      "authority": "managym/src/flow/sba.rs:lose_game; managym/src/flow/triggers.rs:trigger_condition_fires",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No corresponding trigger condition/source-history path. A storage field or observable event alone is not trigger implementation.",
+      "anchors": [
+        "managym/src/flow/sba.rs::lose_game",
+        "managym/src/flow/triggers.rs::trigger_condition_fires"
+      ]
+    },
+    "603.10g": {
+      "status": "not_applicable",
+      "scope": "Planeswalk-away look-back is specific to Planechase.",
+      "authority": "managym/src/flow/setup.rs:new_with_content",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No Planechase state or admission; not a supported two-player rules defect.",
+      "anchors": [
+        "managym/src/flow/setup.rs::new_with_content"
+      ]
+    },
+    "603.11": {
+      "status": "unknown",
+      "scope": "Linked static/triggered paragraphs and middle-of-text trigger conditions.",
+      "authority": "managym/src/state/ability.rs:pub enum Ability; managym/src/state/card.rs:CardDefinition",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Typed card definitions separate abilities but have no general linked-ability identity. No independent reviewed consumer for this obligation.",
+      "anchors": [
+        "managym/src/state/ability.rs::pub enum Ability",
+        "managym/src/state/card.rs::CardDefinition"
+      ]
+    },
+    "603.12": {
+      "status": "missing",
+      "scope": "Reflexive triggers inspect events earlier in the resolving effect that created them.",
+      "authority": "managym/src/state/ability.rs:Effect; managym/src/flow/triggers.rs:enqueue_delayed_trigger",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No reflexive-trigger creation/event-history mechanism. OptionalPayment executes branches inline; it does not create a new response window.",
+      "anchors": [
+        "managym/src/state/ability.rs::Effect",
+        "managym/src/flow/triggers.rs::enqueue_delayed_trigger"
+      ]
+    },
+    "603.12a": {
+      "status": "missing",
+      "scope": "Reflexive multiplicity differs for a repeated-payment choice.",
+      "authority": "managym/src/state/ability.rs:OptionalPayment; managym/src/flow/triggers.rs:enqueue_delayed_trigger",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No reflexive trigger or repeated-payment grouping representation; an inline optional-cost branch is insufficient.",
+      "anchors": [
+        "managym/src/state/ability.rs::OptionalPayment",
+        "managym/src/flow/triggers.rs::enqueue_delayed_trigger"
+      ]
+    },
+    "608.1": {
+      "status": "partial",
+      "scope": "Top stack object resolves after consecutive passes.",
+      "authority": "managym/src/flow/tick.rs:tick_priority; managym/src/flow/resolution.rs:resolve_top_of_stack",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_405_stack.rs:cr_405_1_lifo_resolution"
+      ],
+      "gap": "Ordinary two-player LIFO only; no claim about unsupported state/turn transitions.",
+      "anchors": [
+        "managym/src/flow/tick.rs::tick_priority",
+        "managym/src/flow/resolution.rs::resolve_top_of_stack",
+        "managym/tests/rules/cr_405_stack.rs::cr_405_1_lifo_resolution"
+      ]
+    },
+    "608.2": {
+      "status": "partial",
+      "scope": "Spells, activated abilities and triggers evaluate clause-specific targets at entry, execute a resumable ordered frame, and finalize.",
+      "authority": "managym/src/flow/resolution.rs:resolve_spell_object; managym/src/flow/resolution.rs:resolve_triggered_ability; managym/src/flow/decision.rs:run_frame",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Subrules reviewed individually; generic intervening-if and ability stack lifetime remain narrower.",
+      "anchors": [
+        "managym/src/flow/resolution.rs::resolve_spell_object",
+        "managym/src/flow/resolution.rs::resolve_triggered_ability",
+        "managym/src/flow/decision.rs::run_frame"
+      ]
+    },
+    "608.2a": {
+      "status": "partial",
+      "scope": "Explicit resolution branches recheck Ran and Shaw/Proft conditions.",
+      "authority": "managym/src/flow/resolution.rs:resolve_triggered_ability; managym/src/flow/resolution.rs:IfCondition",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/cards/tla.rs:ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution"
+      ],
+      "gap": "No generic intervening-if wrapper; conditionally existing abilities must not acquire blanket rechecks.",
+      "anchors": [
+        "managym/src/flow/resolution.rs::resolve_triggered_ability",
+        "managym/src/flow/resolution.rs::IfCondition",
+        "managym/tests/cards/tla.rs::ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution"
+      ]
+    },
+    "608.2c": {
+      "status": "partial",
+      "scope": "Frame queue preserves instruction order and replacements mediate mutation.",
+      "authority": "managym/src/flow/decision.rs:run_frame; managym/src/flow/proposed_event.rs:apply_proposed_event",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_608_resolution.rs:cr_704_4_sba_waits_for_suspended_resolution_to_finish"
+      ],
+      "gap": "Later-text modifications must be represented in authoring; queue order alone does not prove all English dependencies.",
+      "anchors": [
+        "managym/src/flow/decision.rs::run_frame",
+        "managym/src/flow/proposed_event.rs::apply_proposed_event",
+        "managym/tests/rules/cr_608_resolution.rs::cr_704_4_sba_waits_for_suspended_resolution_to_finish"
+      ]
+    },
+    "608.2d": {
+      "status": "partial",
+      "scope": "Typed choices suspend the frame during resolution with legal candidate lists.",
+      "authority": "managym/src/flow/resolution.rs:execute_frame_effect; managym/src/flow/decision.rs:suspended_decision_action_space",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_608_resolution.rs:cr_603_5_optional_draw_is_chosen_at_resolution",
+        "managym/tests/rules/cr_608_resolution.rs:cr_704_4_sba_waits_for_suspended_resolution_to_finish"
+      ],
+      "gap": "General damage/counter division and all impossible-choice exceptions are not represented.",
+      "anchors": [
+        "managym/src/flow/resolution.rs::execute_frame_effect",
+        "managym/src/flow/decision.rs::suspended_decision_action_space",
+        "managym/tests/rules/cr_608_resolution.rs::cr_603_5_optional_draw_is_chosen_at_resolution",
+        "managym/tests/rules/cr_608_resolution.rs::cr_704_4_sba_waits_for_suspended_resolution_to_finish"
+      ]
+    },
+    "608.2e": {
+      "status": "unknown",
+      "scope": "Multiple-player action clauses need separate APNAP choice batches.",
+      "authority": "managym/src/flow/decision.rs:run_frame; managym/src/flow/resolution.rs:execute_frame_effect",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Current effects mostly select one player or iterate concrete targets. No independent multi-player simultaneous-choice witness; deterministic iteration is not sufficient.",
+      "anchors": [
+        "managym/src/flow/decision.rs::run_frame",
+        "managym/src/flow/resolution.rs::execute_frame_effect"
+      ]
+    },
+    "608.2f": {
+      "status": "partial",
+      "scope": "MassDamage gathers battlefield permanents and applies damage before returning to priority.",
+      "authority": "managym/src/flow/resolution.rs:MassDamage; managym/src/flow/decision.rs:run_frame",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Mutations are serialized; general simultaneous action groups, controller ordering and snapshot-dependent interactions are unproved.",
+      "anchors": [
+        "managym/src/flow/resolution.rs::MassDamage",
+        "managym/src/flow/decision.rs::run_frame"
+      ]
+    },
+    "608.2g": {
+      "status": "partial",
+      "scope": "OptionalPayment and CounterUnlessPays permit nested mana choices during a suspended resolution.",
+      "authority": "managym/src/flow/resolution.rs:OptionalPayment; managym/src/flow/decision.rs:PaymentProgress",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No general effect allowing spells to be cast during resolution; full payment repair is outside this pass. Existing receipts are historical, not rerun here.",
+      "anchors": [
+        "managym/src/flow/resolution.rs::OptionalPayment",
+        "managym/src/flow/decision.rs::PaymentProgress"
+      ]
+    },
+    "608.2h": {
+      "status": "partial",
+      "scope": "EffectValue reads game counts at execution; damage can use source LKI keywords.",
+      "authority": "managym/src/flow/resolution.rs:effect_value; managym/src/flow/damage.rs:source_keywords",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/cards/war.rs:mayhem_keeps_granted_lifelink_after_it_is_sacrificed"
+      ],
+      "gap": "ObjectLki omits effective P/T and temporary subtypes; not complete current/LKI information for arbitrary effects.",
+      "anchors": [
+        "managym/src/flow/resolution.rs::effect_value",
+        "managym/src/flow/damage.rs::source_keywords",
+        "managym/tests/cards/war.rs::mayhem_keeps_granted_lifelink_after_it_is_sacrificed"
+      ]
+    },
+    "608.2i": {
+      "status": "partial",
+      "scope": "Turn counters retain cards drawn and ability-resolution counts.",
+      "authority": "managym/src/flow/resolution.rs:effect_value; managym/src/flow/resolution.rs:resolve_triggered_ability",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No general historical object-set query; source-card resolution count is not a proof for exact-incarnation history.",
+      "anchors": [
+        "managym/src/flow/resolution.rs::effect_value",
+        "managym/src/flow/resolution.rs::resolve_triggered_ability"
+      ]
+    },
+    "608.2j": {
+      "status": "partial",
+      "scope": "CardPredicate checks each declared characteristic restriction explicitly.",
+      "authority": "managym/src/state/predicate.rs:matches; managym/src/flow/statics.rs:permanent_matches_predicate",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Effective battlefield and printed-card matching are stage-specific; no complete characteristic/continuous-effect coverage.",
+      "anchors": [
+        "managym/src/state/predicate.rs::matches",
+        "managym/src/flow/statics.rs::permanent_matches_predicate"
+      ]
+    },
+    "608.2k": {
+      "status": "partial",
+      "scope": "ModifyTriggeringPermanent uses stored event context without imposing a fresh predicate.",
+      "authority": "managym/src/flow/triggers.rs:check_triggers_for_event; managym/src/flow/resolution.rs:ModifyTriggeringPermanent",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Exact permanent slot prevents following reentry; changed-characteristic response and cost-referenced objects not independently witnessed.",
+      "anchors": [
+        "managym/src/flow/triggers.rs::check_triggers_for_event",
+        "managym/src/flow/resolution.rs::ModifyTriggeringPermanent"
+      ]
+    },
+    "608.2m": {
+      "status": "unknown",
+      "scope": "A resolving frame owns its remaining queue independently of the stack object.",
+      "authority": "managym/src/flow/decision.rs:run_frame; managym/src/flow/resolution.rs:resolve_top_of_stack",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No independent spell-leaves-stack-mid-resolution proof. finalize_frame may move the physical card again; do not infer conformance from resumability.",
+      "anchors": [
+        "managym/src/flow/decision.rs::run_frame",
+        "managym/src/flow/resolution.rs::resolve_top_of_stack"
+      ]
+    },
+    "608.2n": {
+      "status": "partial",
+      "scope": "Spell finalization uses the zone-move authority; flashback can replace graveyard with exile.",
+      "authority": "managym/src/flow/decision.rs:finalize_frame; managym/src/flow/resolution.rs:resolve_top_of_stack",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "resolve_top_of_stack cites 608.2m for final departure, but the applicable final-step rule is 608.2n in the pinned source.",
+      "tests": [
+        "managym/tests/rules/cr_608_resolution.rs:cr_704_4_sba_waits_for_suspended_resolution_to_finish",
+        "managym/tests/cards/tla.rs:flashback_is_exiled_when_countered_after_iroh_leaves"
+      ],
+      "gap": "Activated/triggered abilities are popped before running effects, not as the final step; bounded timing tests do not prove full stack lifetime.",
+      "anchors": [
+        "managym/src/flow/decision.rs::finalize_frame",
+        "managym/src/flow/resolution.rs::resolve_top_of_stack",
+        "managym/tests/rules/cr_608_resolution.rs::cr_704_4_sba_waits_for_suspended_resolution_to_finish",
+        "managym/tests/cards/tla.rs::flashback_is_exiled_when_countered_after_iroh_leaves"
+      ]
+    },
+    "608.2p": {
+      "status": "missing",
+      "scope": "Abilities that trigger on resolution fire after all resolution steps.",
+      "authority": "managym/src/flow/decision.rs:finalize_frame; managym/src/flow/triggers.rs:trigger_condition_fires",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "SpellResolved is emitted but no trigger condition matches it; ability resolutions have no analogous matched event.",
+      "anchors": [
+        "managym/src/flow/decision.rs::finalize_frame",
+        "managym/src/flow/triggers.rs::trigger_condition_fires"
+      ]
+    },
+    "608.3": {
+      "status": "partial",
+      "scope": "Permanent spells use the same frame then enter the battlefield.",
+      "authority": "managym/src/flow/decision.rs:finalize_frame; managym/src/flow/zones.rs:commit_zone_move",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_603_triggers.rs:cr_603_6a_manowar_etb_returns_target_creature"
+      ],
+      "gap": "Aura, mutate and permanent-spell-copy exceptions are separately missing; no family-wide claim.",
+      "anchors": [
+        "managym/src/flow/decision.rs::finalize_frame",
+        "managym/src/flow/zones.rs::commit_zone_move",
+        "managym/tests/rules/cr_603_triggers.rs::cr_603_6a_manowar_etb_returns_target_creature"
+      ]
+    },
+    "608.3a": {
+      "status": "partial",
+      "scope": "Untargeted ordinary permanent spells enter as fresh permanents.",
+      "authority": "managym/src/flow/decision.rs:finalize_frame; managym/src/flow/zones.rs:commit_zone_move; managym/src/state/permanent.rs:pub fn new",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_603_triggers.rs:cr_603_6a_manowar_etb_returns_target_creature"
+      ],
+      "gap": "Permanent::new chooses card.owner, not the resolving spell controller. No spell-control-change effect admitted; future control transfer needs this repaired.",
+      "anchors": [
+        "managym/src/flow/decision.rs::finalize_frame",
+        "managym/src/flow/zones.rs::commit_zone_move",
+        "managym/src/state/permanent.rs::pub fn new",
+        "managym/tests/rules/cr_603_triggers.rs::cr_603_6a_manowar_etb_returns_target_creature"
+      ]
+    },
+    "608.3b": {
+      "status": "missing",
+      "scope": "Targeted permanent spells need legality and bestowed/mutating fallback behavior.",
+      "authority": "managym/src/flow/resolution.rs:resolve_spell_object; managym/src/flow/decision.rs:finalize_frame",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Generic all-invalid target rejection exists but no Aura/bestow/mutate state or creature fallback; no matching admitted spell.",
+      "anchors": [
+        "managym/src/flow/resolution.rs::resolve_spell_object",
+        "managym/src/flow/decision.rs::finalize_frame"
+      ]
+    },
+    "608.3c": {
+      "status": "missing",
+      "scope": "Aura resolution attaches under spell-controller control.",
+      "authority": "managym/src/state/permanent.rs:pub struct Permanent; managym/src/flow/decision.rs:finalize_frame",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No enchant attachment target or attachment state.",
+      "anchors": [
+        "managym/src/state/permanent.rs::pub struct Permanent",
+        "managym/src/flow/decision.rs::finalize_frame"
+      ]
+    },
+    "608.3d": {
+      "status": "missing",
+      "scope": "Mutating creature resolution merges with the target.",
+      "authority": "managym/src/state/permanent.rs:pub struct Permanent; managym/src/flow/decision.rs:finalize_frame",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No merged-permanent representation or mutate resolution.",
+      "anchors": [
+        "managym/src/state/permanent.rs::pub struct Permanent",
+        "managym/src/flow/decision.rs::finalize_frame"
+      ]
+    },
+    "608.3e": {
+      "status": "missing",
+      "scope": "A permanent spell unable to enter goes to its owner graveyard.",
+      "authority": "managym/src/flow/decision.rs:finalize_frame; managym/src/flow/proposed_event.rs:apply_proposed_event",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No general cannot-enter prohibition/fallback; finite entry replacements only.",
+      "anchors": [
+        "managym/src/flow/decision.rs::finalize_frame",
+        "managym/src/flow/proposed_event.rs::apply_proposed_event"
+      ]
+    },
+    "608.3f": {
+      "status": "missing",
+      "scope": "A resolving permanent-spell copy becomes a token without a token-created event.",
+      "authority": "managym/src/state/stack_object.rs:SpellOnStack; managym/src/flow/decision.rs:finalize_frame",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "CreateNonlegendaryCopy copies a permanent directly; it is not a stack spell copy. No stack-copy provenance or transition.",
+      "anchors": [
+        "managym/src/state/stack_object.rs::SpellOnStack",
+        "managym/src/flow/decision.rs::finalize_frame"
+      ]
+    },
+    "608.3g": {
+      "status": "missing",
+      "scope": "A permanent spell static ability can create a delayed trigger on entry.",
+      "authority": "managym/src/state/stack_object.rs:SpellOnStack; managym/src/flow/decision.rs:finalize_frame",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No dash/blitz/warp static entry-delayed creation; was_cast is not this mechanism.",
+      "anchors": [
+        "managym/src/state/stack_object.rs::SpellOnStack",
+        "managym/src/flow/decision.rs::finalize_frame"
+      ]
+    },
+    "704.1": {
+      "status": "partial",
+      "scope": "Automatic supported SBAs run directly, with choice suspension for legends.",
+      "authority": "managym/src/flow/sba.rs:perform_state_based_actions; managym/src/flow/stabilization.rs:stabilize_before_priority",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_704_sba.rs:cr_704_3_sba_trigger_sba_chain_reaches_fixpoint_before_priority"
+      ],
+      "gap": "Only supported SBA kinds; choices do not create stack objects.",
+      "anchors": [
+        "managym/src/flow/sba.rs::perform_state_based_actions",
+        "managym/src/flow/stabilization.rs::stabilize_before_priority",
+        "managym/tests/rules/cr_704_sba.rs::cr_704_3_sba_trigger_sba_chain_reaches_fixpoint_before_priority"
+      ]
+    },
+    "704.1a": {
+      "status": "missing",
+      "scope": "State-triggered abilities must be separate from SBAs.",
+      "authority": "managym/src/state/ability.rs:TriggerCondition; managym/src/flow/sba.rs:perform_state_based_actions",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "The distinction exists architecturally, but state-triggered abilities have no implementation (603.8).",
+      "anchors": [
+        "managym/src/state/ability.rs::TriggerCondition",
+        "managym/src/flow/sba.rs::perform_state_based_actions"
+      ]
+    },
+    "704.2": {
+      "status": "partial",
+      "scope": "Stabilization owns SBA checks independently of a player; legend choices remain player decisions.",
+      "authority": "managym/src/flow/sba.rs:perform_state_based_actions; managym/src/flow/stabilization.rs:stabilize_before_priority",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_608_resolution.rs:cr_704_4_sba_waits_for_suspended_resolution_to_finish"
+      ],
+      "gap": "Checks occur at engine priority/cleanup boundaries, not during a resolving frame.",
+      "anchors": [
+        "managym/src/flow/sba.rs::perform_state_based_actions",
+        "managym/src/flow/stabilization.rs::stabilize_before_priority",
+        "managym/tests/rules/cr_608_resolution.rs::cr_704_4_sba_waits_for_suspended_resolution_to_finish"
+      ]
+    },
+    "704.4": {
+      "status": "partial",
+      "scope": "No life-loss SBA is applied mid-resolution, including at a suspended choice.",
+      "authority": "managym/src/flow/decision.rs:run_frame; managym/src/flow/tick.rs:turn_tick",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_608_resolution.rs:cr_704_4_sba_waits_for_suspended_resolution_to_finish"
+      ],
+      "gap": "Directed life-loss fixture only; temporary zero-toughness and triggered-event collection during suspended resolution remain separate coverage opportunities.",
+      "anchors": [
+        "managym/src/flow/decision.rs::run_frame",
+        "managym/src/flow/tick.rs::turn_tick",
+        "managym/tests/rules/cr_608_resolution.rs::cr_704_4_sba_waits_for_suspended_resolution_to_finish"
+      ]
+    },
+    "704.5": {
+      "status": "partial",
+      "scope": "Implemented dispatch covers life/draw loss, creature deaths, legends and token disappearance.",
+      "authority": "managym/src/flow/sba.rs:perform_state_based_actions_with_legends",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Enumerated missing subrules below are not silently inherited from creature-death tests.",
+      "anchors": [
+        "managym/src/flow/sba.rs::perform_state_based_actions_with_legends"
+      ]
+    },
+    "704.5d": {
+      "status": "partial",
+      "scope": "Tokens leave the battlefield and then are removed from all zones during SBA processing.",
+      "authority": "managym/src/flow/sba.rs:tokens_to_remove",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/engine_events.rs:creature_token_ceases_to_exist_after_dying"
+      ],
+      "gap": "Directed creature-token death proof; token copies of cards/spells and attempted further moves before the check are not established.",
+      "anchors": [
+        "managym/src/flow/sba.rs::tokens_to_remove",
+        "managym/tests/rules/engine_events.rs::creature_token_ceases_to_exist_after_dying"
+      ]
+    },
+    "704.5e": {
+      "status": "missing",
+      "scope": "Spell/card copies cease to exist in prohibited zones.",
+      "authority": "managym/src/state/stack_object.rs:SpellOnStack; managym/src/state/card.rs:Card; managym/src/flow/sba.rs:perform_state_based_actions_with_legends",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "is_token only distinguishes permanent tokens; no separate spell/card-copy lifetime SBA.",
+      "anchors": [
+        "managym/src/state/stack_object.rs::SpellOnStack",
+        "managym/src/state/card.rs::Card",
+        "managym/src/flow/sba.rs::perform_state_based_actions_with_legends"
+      ]
+    },
+    "704.5i": {
+      "status": "missing",
+      "scope": "Zero-loyalty planeswalkers go to the graveyard.",
+      "authority": "managym/src/state/permanent.rs:pub struct Permanent; managym/src/flow/sba.rs:perform_state_based_actions_with_legends",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "CardType::Planeswalker exists but no loyalty state or SBA branch.",
+      "anchors": [
+        "managym/src/state/permanent.rs::pub struct Permanent",
+        "managym/src/flow/sba.rs::perform_state_based_actions_with_legends"
+      ]
+    },
+    "704.5j": {
+      "status": "partial",
+      "scope": "Same-controller duplicate legendary names prompt a keep choice before the simultaneous SBA batch.",
+      "authority": "managym/src/flow/sba.rs:legend_groups; managym/src/flow/decision.rs:LegendRule",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/cards/tla.rs:legend_choice_and_lethal_damage_share_one_sba_batch",
+        "managym/tests/cards/tla.rs:legend_rule_recognizes_existing_lowercase_supertypes"
+      ],
+      "gap": "Copied nonlegendary cards and current lower-case supertypes are supported; all control/name-change and replacement combinations unproved.",
+      "anchors": [
+        "managym/src/flow/sba.rs::legend_groups",
+        "managym/src/flow/decision.rs::LegendRule",
+        "managym/tests/cards/tla.rs::legend_choice_and_lethal_damage_share_one_sba_batch",
+        "managym/tests/cards/tla.rs::legend_rule_recognizes_existing_lowercase_supertypes"
+      ]
+    },
+    "704.5k": {
+      "status": "missing",
+      "scope": "World permanents retain the newest timestamp or all die on ties.",
+      "authority": "managym/src/state/permanent.rs:pub struct Permanent; managym/src/state/player.rs:pub struct Player; managym/src/flow/sba.rs:perform_state_based_actions_with_legends",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No world-supertype timestamp or world-rule branch. Unsupported mechanic, not a reproduced admitted-game failure.",
+      "anchors": [
+        "managym/src/state/permanent.rs::pub struct Permanent",
+        "managym/src/state/player.rs::pub struct Player",
+        "managym/src/flow/sba.rs::perform_state_based_actions_with_legends"
+      ]
+    },
+    "704.5m": {
+      "status": "missing",
+      "scope": "Illegal or unattached Auras go to the graveyard.",
+      "authority": "managym/src/state/permanent.rs:pub struct Permanent; managym/src/state/player.rs:pub struct Player; managym/src/flow/sba.rs:perform_state_based_actions_with_legends",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No attachment/enchant state or Aura SBA. Unsupported mechanic, not a reproduced admitted-game failure.",
+      "anchors": [
+        "managym/src/state/permanent.rs::pub struct Permanent",
+        "managym/src/state/player.rs::pub struct Player",
+        "managym/src/flow/sba.rs::perform_state_based_actions_with_legends"
+      ]
+    },
+    "704.5n": {
+      "status": "missing",
+      "scope": "Illegal Equipment/Fortification attachments detach.",
+      "authority": "managym/src/state/permanent.rs:pub struct Permanent; managym/src/state/player.rs:pub struct Player; managym/src/flow/sba.rs:perform_state_based_actions_with_legends",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No attachment state or detach operation. Unsupported mechanic, not a reproduced admitted-game failure.",
+      "anchors": [
+        "managym/src/state/permanent.rs::pub struct Permanent",
+        "managym/src/state/player.rs::pub struct Player",
+        "managym/src/flow/sba.rs::perform_state_based_actions_with_legends"
+      ]
+    },
+    "704.5p": {
+      "status": "missing",
+      "scope": "Creatures, battles and other forbidden attached permanents detach.",
+      "authority": "managym/src/state/permanent.rs:pub struct Permanent; managym/src/state/player.rs:pub struct Player; managym/src/flow/sba.rs:perform_state_based_actions_with_legends",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No attachment state or type-based detach SBA. Unsupported mechanic, not a reproduced admitted-game failure.",
+      "anchors": [
+        "managym/src/state/permanent.rs::pub struct Permanent",
+        "managym/src/state/player.rs::pub struct Player",
+        "managym/src/flow/sba.rs::perform_state_based_actions_with_legends"
+      ]
+    },
+    "704.5q": {
+      "status": "missing",
+      "scope": "Opposing +1/+1 and -1/-1 counters cancel pairwise.",
+      "authority": "managym/src/state/permanent.rs:pub struct Permanent; managym/src/state/player.rs:pub struct Player; managym/src/flow/sba.rs:perform_state_based_actions_with_legends",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "Only plus1_counters is represented; no -1/-1 counter state. Unsupported mechanic, not a reproduced admitted-game failure.",
+      "anchors": [
+        "managym/src/state/permanent.rs::pub struct Permanent",
+        "managym/src/state/player.rs::pub struct Player",
+        "managym/src/flow/sba.rs::perform_state_based_actions_with_legends"
+      ]
+    },
+    "704.5r": {
+      "status": "missing",
+      "scope": "Counters above a specified cap are removed.",
+      "authority": "managym/src/state/permanent.rs:pub struct Permanent; managym/src/state/player.rs:pub struct Player; managym/src/flow/sba.rs:perform_state_based_actions_with_legends",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No counter-limit ability or capped-counter SBA. Unsupported mechanic, not a reproduced admitted-game failure.",
+      "anchors": [
+        "managym/src/state/permanent.rs::pub struct Permanent",
+        "managym/src/state/player.rs::pub struct Player",
+        "managym/src/flow/sba.rs::perform_state_based_actions_with_legends"
+      ]
+    },
+    "704.5s": {
+      "status": "missing",
+      "scope": "Sagas sacrifice after their final chapter stops waiting/on-stack.",
+      "authority": "managym/src/state/permanent.rs:pub struct Permanent; managym/src/state/player.rs:pub struct Player; managym/src/flow/sba.rs:perform_state_based_actions_with_legends",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No lore counter/chapter tracking or Saga SBA. Unsupported mechanic, not a reproduced admitted-game failure.",
+      "anchors": [
+        "managym/src/state/permanent.rs::pub struct Permanent",
+        "managym/src/state/player.rs::pub struct Player",
+        "managym/src/flow/sba.rs::perform_state_based_actions_with_legends"
+      ]
+    },
+    "704.5t": {
+      "status": "missing",
+      "scope": "Completed dungeons leave once room abilities stop waiting/on-stack.",
+      "authority": "managym/src/state/permanent.rs:pub struct Permanent; managym/src/state/player.rs:pub struct Player; managym/src/flow/sba.rs:perform_state_based_actions_with_legends",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No dungeon progress, room ability or dungeon-removal SBA. Unsupported mechanic, not a reproduced admitted-game failure.",
+      "anchors": [
+        "managym/src/state/permanent.rs::pub struct Permanent",
+        "managym/src/state/player.rs::pub struct Player",
+        "managym/src/flow/sba.rs::perform_state_based_actions_with_legends"
+      ]
+    },
+    "704.5u": {
+      "status": "missing",
+      "scope": "Space sculptor assigns sectors with the specified player ordering.",
+      "authority": "managym/src/state/permanent.rs:pub struct Permanent; managym/src/state/player.rs:pub struct Player; managym/src/flow/sba.rs:perform_state_based_actions_with_legends",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No sector designation or assignment decision. Unsupported mechanic, not a reproduced admitted-game failure.",
+      "anchors": [
+        "managym/src/state/permanent.rs::pub struct Permanent",
+        "managym/src/state/player.rs::pub struct Player",
+        "managym/src/flow/sba.rs::perform_state_based_actions_with_legends"
+      ]
+    },
+    "704.5v": {
+      "status": "missing",
+      "scope": "Zero-defense Sieges leave after their waiting ability is gone.",
+      "authority": "managym/src/state/permanent.rs:pub struct Permanent; managym/src/state/player.rs:pub struct Player; managym/src/flow/sba.rs:perform_state_based_actions_with_legends",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No defense state, Siege subtype logic or pending-ability condition. Unsupported mechanic, not a reproduced admitted-game failure.",
+      "anchors": [
+        "managym/src/state/permanent.rs::pub struct Permanent",
+        "managym/src/state/player.rs::pub struct Player",
+        "managym/src/flow/sba.rs::perform_state_based_actions_with_legends"
+      ]
+    },
+    "704.5w": {
+      "status": "missing",
+      "scope": "Zero-defense non-Siege battles go to the graveyard.",
+      "authority": "managym/src/state/permanent.rs:pub struct Permanent; managym/src/state/player.rs:pub struct Player; managym/src/flow/sba.rs:perform_state_based_actions_with_legends",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No defense state or non-Siege SBA. Unsupported mechanic, not a reproduced admitted-game failure.",
+      "anchors": [
+        "managym/src/state/permanent.rs::pub struct Permanent",
+        "managym/src/state/player.rs::pub struct Player",
+        "managym/src/flow/sba.rs::perform_state_based_actions_with_legends"
+      ]
+    },
+    "704.5x": {
+      "status": "missing",
+      "scope": "Battles lacking a protector choose one or go to the graveyard.",
+      "authority": "managym/src/state/permanent.rs:pub struct Permanent; managym/src/state/player.rs:pub struct Player; managym/src/flow/sba.rs:perform_state_based_actions_with_legends",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No protector state or protector-selection decision. Unsupported mechanic, not a reproduced admitted-game failure.",
+      "anchors": [
+        "managym/src/state/permanent.rs::pub struct Permanent",
+        "managym/src/state/player.rs::pub struct Player",
+        "managym/src/flow/sba.rs::perform_state_based_actions_with_legends"
+      ]
+    },
+    "704.5y": {
+      "status": "missing",
+      "scope": "Battles with an ineligible protector reselect or go to the graveyard.",
+      "authority": "managym/src/state/permanent.rs:pub struct Permanent; managym/src/state/player.rs:pub struct Player; managym/src/flow/sba.rs:perform_state_based_actions_with_legends",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No protector eligibility or reselection path. Unsupported mechanic, not a reproduced admitted-game failure.",
+      "anchors": [
+        "managym/src/state/permanent.rs::pub struct Permanent",
+        "managym/src/state/player.rs::pub struct Player",
+        "managym/src/flow/sba.rs::perform_state_based_actions_with_legends"
+      ]
+    },
+    "704.5z": {
+      "status": "missing",
+      "scope": "Multiple same-controller Roles retain only the newest.",
+      "authority": "managym/src/state/permanent.rs:pub struct Permanent; managym/src/state/player.rs:pub struct Player; managym/src/flow/sba.rs:perform_state_based_actions_with_legends",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No Role attachments or timestamps. Unsupported mechanic, not a reproduced admitted-game failure.",
+      "anchors": [
+        "managym/src/state/permanent.rs::pub struct Permanent",
+        "managym/src/state/player.rs::pub struct Player",
+        "managym/src/flow/sba.rs::perform_state_based_actions_with_legends"
+      ]
+    },
+    "704.5aa": {
+      "status": "missing",
+      "scope": "Start-your-engines sets absent player speed to one.",
+      "authority": "managym/src/state/permanent.rs:pub struct Permanent; managym/src/state/player.rs:pub struct Player; managym/src/flow/sba.rs:perform_state_based_actions_with_legends",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No player speed state or start-your-engines ability. Unsupported mechanic, not a reproduced admitted-game failure.",
+      "anchors": [
+        "managym/src/state/permanent.rs::pub struct Permanent",
+        "managym/src/state/player.rs::pub struct Player",
+        "managym/src/flow/sba.rs::perform_state_based_actions_with_legends"
+      ]
+    },
+    "704.6": {
+      "status": "not_applicable",
+      "scope": "Variant-only additional SBAs.",
+      "authority": "managym/src/flow/setup.rs:new_with_content",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No corresponding variant admission/state. Exactly two players alone does not implement two-player Commander or Planechase.",
+      "anchors": [
+        "managym/src/flow/setup.rs::new_with_content"
+      ]
+    },
+    "704.6a": {
+      "status": "not_applicable",
+      "scope": "Two-Headed Giant team life loss.",
+      "authority": "managym/src/flow/setup.rs:new_with_content",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No corresponding variant admission/state. Exactly two players alone does not implement two-player Commander or Planechase.",
+      "anchors": [
+        "managym/src/flow/setup.rs::new_with_content"
+      ]
+    },
+    "704.6b": {
+      "status": "not_applicable",
+      "scope": "Two-Headed Giant team poison loss.",
+      "authority": "managym/src/flow/setup.rs:new_with_content",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No corresponding variant admission/state. Exactly two players alone does not implement two-player Commander or Planechase.",
+      "anchors": [
+        "managym/src/flow/setup.rs::new_with_content"
+      ]
+    },
+    "704.6c": {
+      "status": "not_applicable",
+      "scope": "Commander damage loss.",
+      "authority": "managym/src/flow/setup.rs:new_with_content",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No corresponding variant admission/state. Exactly two players alone does not implement two-player Commander or Planechase.",
+      "anchors": [
+        "managym/src/flow/setup.rs::new_with_content"
+      ]
+    },
+    "704.6d": {
+      "status": "not_applicable",
+      "scope": "Commander public-zone return choice.",
+      "authority": "managym/src/flow/setup.rs:new_with_content",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No corresponding variant admission/state. Exactly two players alone does not implement two-player Commander or Planechase.",
+      "anchors": [
+        "managym/src/flow/setup.rs::new_with_content"
+      ]
+    },
+    "704.6e": {
+      "status": "not_applicable",
+      "scope": "Archenemy non-ongoing scheme cleanup.",
+      "authority": "managym/src/flow/setup.rs:new_with_content",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No corresponding variant admission/state. Exactly two players alone does not implement two-player Commander or Planechase.",
+      "anchors": [
+        "managym/src/flow/setup.rs::new_with_content"
+      ]
+    },
+    "704.6f": {
+      "status": "not_applicable",
+      "scope": "Planechase phenomenon departure.",
+      "authority": "managym/src/flow/setup.rs:new_with_content",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [],
+      "gap": "No corresponding variant admission/state. Exactly two players alone does not implement two-player Commander or Planechase.",
+      "anchors": [
+        "managym/src/flow/setup.rs::new_with_content"
+      ]
+    },
+    "704.7": {
+      "status": "partial",
+      "scope": "One candidate per exact object combines zero-toughness/lethal/legend results before a movement proposal.",
+      "authority": "managym/src/flow/sba.rs:perform_state_based_actions_with_legends; managym/src/flow/proposed_event.rs:apply_proposed_event",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/cards/tla.rs:legend_choice_and_lethal_damage_share_one_sba_batch"
+      ],
+      "gap": "Regeneration and general shared-result replacement cases absent; replacement ordering belongs to MTG-196.",
+      "anchors": [
+        "managym/src/flow/sba.rs::perform_state_based_actions_with_legends",
+        "managym/src/flow/proposed_event.rs::apply_proposed_event",
+        "managym/tests/cards/tla.rs::legend_choice_and_lethal_damage_share_one_sba_batch"
+      ]
+    },
+    "704.8": {
+      "status": "partial",
+      "scope": "All SBA death-trigger sources share one pre-batch snapshot.",
+      "authority": "managym/src/flow/sba.rs:perform_state_based_actions_with_legends; managym/src/flow/triggers.rs:snapshot_trigger_sources; managym/src/flow/zones.rs:commit_zone_move",
+      "dispersion": "staged responsibilities; no competing authority established",
+      "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
+      "tests": [
+        "managym/tests/rules/cr_704_sba.rs:cr_704_3_simultaneous_departures_share_trigger_source_snapshot"
+      ],
+      "gap": "Departing object LKI is separately captured at each serialized commit and omits P/T/temporary subtypes; source snapshot test does not prove complete pre-batch characteristic LKI.",
+      "anchors": [
+        "managym/src/flow/sba.rs::perform_state_based_actions_with_legends",
+        "managym/src/flow/triggers.rs::snapshot_trigger_sources",
+        "managym/src/flow/zones.rs::commit_zone_move",
+        "managym/tests/rules/cr_704_sba.rs::cr_704_3_simultaneous_departures_share_trigger_source_snapshot"
       ]
     }
   }

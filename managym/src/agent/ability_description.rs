@@ -4,12 +4,13 @@
 
 use crate::state::{
     ability::{
-        Ability, Effect, EffectValue, PaymentCost, StaticCondition, TargetSpec, TriggerCondition,
-        TriggerSubject,
+        Ability, Effect, EffectValue, LinkedChooser, LinkedGrant, PaymentCost, StaticCondition,
+        TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{Card, CardType, Keywords},
     mana::{Mana, ManaCost},
     predicate::CardPredicate,
+    zone::ZoneType,
 };
 
 /// Inline delayed payloads take precedence: their ability index is not a card slot.
@@ -82,6 +83,9 @@ fn condition_description(condition: &TriggerCondition) -> String {
             "When one or more {} you control attack",
             predicate_description(predicate, "permanents")
         ),
+        TriggerCondition::AttacksAlone { subject } => {
+            format!("When {} attacks alone", subject_description(subject))
+        }
         TriggerCondition::BecomesTapped { subject } => {
             format!("When {} becomes tapped", subject_description(subject))
         }
@@ -144,9 +148,12 @@ fn card_type(t: CardType) -> &'static str {
 fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     let CardPredicate {
         flying,
+        with_counter,
+        attacking,
         subtypes_any,
         not_subtypes,
         supertype,
+        any_of,
         min_power,
         card_type: kind,
         card_types_any,
@@ -173,6 +180,17 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     if let Some(t) = kind {
         terms.push(card_type(*t).into());
     }
+    if !any_of.is_empty() {
+        terms.push(format!(
+            "({})",
+            any_of
+                .iter()
+                .map(|alternative| predicate_description(alternative, ""))
+                .map(|text| text.trim().to_string())
+                .collect::<Vec<_>>()
+                .join(" or ")
+        ));
+    }
     if !card_types_any.is_empty() {
         terms.push(format!(
             "({})",
@@ -194,6 +212,12 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     }
     if let Some(n) = min_mana_value {
         terms.push(format!("with mana value at least {n}"));
+    }
+    if *with_counter {
+        terms.push("with a +1/+1 counter on it".into());
+    }
+    if *attacking {
+        terms.insert(0, "attacking".into());
     }
     terms.join(" ")
 }
@@ -230,6 +254,8 @@ fn target_description(t: &TargetSpec) -> String {
 
 fn value_description(value: &EffectValue) -> String {
     match value {
+        EffectValue::Fixed(value) => value.to_string(),
+        EffectValue::X => "the announced value of X".into(),
         EffectValue::CreaturesWithCounters => {
             "the number of creatures you control with +1/+1 counters".into()
         }
@@ -248,18 +274,19 @@ fn value_description(value: &EffectValue) -> String {
 }
 
 pub(crate) fn mana_description(mana: &Mana) -> String {
+    let restricted = mana.restricted_colors();
     let mut text: String = ["W", "U", "B", "R", "G", "C"]
         .into_iter()
         .enumerate()
         .flat_map(|(i, s)| {
             std::iter::repeat_n(
                 format!("{{{s}}}"),
-                mana.mana[i] as usize + mana.lesson[i] as usize,
+                mana.mana[i] as usize + restricted[i] as usize,
             )
         })
         .collect();
-    if mana.lesson.iter().any(|n| *n > 0) {
-        text.push_str(" (Lesson spells only)");
+    for (restriction, _) in mana.restricted() {
+        text.push_str(&format!(" ({} only)", restriction.describe()));
     }
     text
 }
@@ -349,22 +376,50 @@ fn effect_description(effect: &Effect) -> Option<String> {
         DrainLife { amount } => format!("Each opponent loses {amount} life and you gain {amount} life"),
         DrainLifeValue { amount } => format!("Each opponent loses X life and you gain X life, where X is {}",value_description(amount)),
         CantBeBlockedTarget { target } => format!("{} can't be blocked this turn",target_description(target)),
-        ReturnGraveyardTarget { target } => format!("Return {} to your hand",target_description(target)),
-        MillCards { count } => format!("Mill {count} cards"),
-        MillAndSelect { count, predicate, if_declined } => format!("Mill {count} cards. You may return a {} milled this way to your hand. Otherwise: {}",predicate_description(predicate,"card"),effects_description(if_declined)),
+        ReturnGraveyardTarget { target, tapped_onto_battlefield: false } => format!("Return {} to your hand",target_description(target)),
+        ReturnGraveyardTarget { target, tapped_onto_battlefield: true } => format!("Put {} onto the battlefield tapped",target_description(target)),
+        MillCards { count, target: None } => format!("Mill {count} cards"),
+        MillCards { count, target: Some(target) } => format!("{} mills {count} cards", target_description(target)),
+        MillAndSelect { count, predicate, if_declined, if_milled } => {
+            let mut text = format!("Mill {count} cards. You may return a {} milled this way to your hand. Otherwise: {}",predicate_description(predicate,"card"),effects_description(if_declined));
+            if let Some(bonus) = if_milled {
+                text.push_str(&format!(". If a {} is milled this way: {}", predicate_description(&bonus.predicate, "card"), effects_description(&bonus.effects)));
+            }
+            text
+        }
         TargetClause { requirement, effects } => format!("Choose {}–{} {} for this clause: {}",requirement.min,requirement.max,target_description(&requirement.spec),effects_description(effects)),
-        SearchBasicLand { subtype, count, tapped, untap_if_lands, bottom_source } => {
+        SearchBasicLand { subtype, to_hand: true, .. } => format!("Search your library for a {} card, reveal it, put it into your hand, then shuffle",subtype.as_deref().unwrap_or("land")),
+        SearchBasicLand { subtype, count, tapped, untap_if_lands, bottom_source, .. } => {
             let mut text = format!("Search your library for up to {count} basic {} cards and put them onto the battlefield{}. Then shuffle",subtype.as_deref().unwrap_or("land"),if *tapped { " tapped" } else { "" });
             if let Some(n) = untap_if_lands { text.push_str(&format!(". Untap those lands if you control at least {n} lands")); }
             if *bottom_source { text.push_str(". Put this on the bottom of its owner's library"); }
             text
         },
-        OptionalDiscardDraw { count } => format!("You may discard a card. If you do, draw {count} cards"),
+        OptionalDiscardDraw { count, up_to: 1 } => format!("You may discard a card. If you do, draw {count} cards"),
+        OptionalDiscardDraw { count, up_to } => format!("Discard up to {up_to} cards, then draw {count} for each"),
         DiscardTargetPlayer { count, target } => format!("{} discards {count} cards",target_description(target)),
         Destroy { target } => format!("Destroy {}",target_description(target)),
         Exile { target } => format!("Exile {}",target_description(target)),
+        Airbend { target } => format!("Airbend {}. Its owner may cast it from exile for {{2}}",target_description(target)),
+        AirbendAll { predicate } => format!("Airbend all other {}. Their owners may cast them from exile for {{2}}", predicate_description(predicate,"permanents")),
+        OpponentsCastOnlyFromHand => "Until your next turn, your opponents can't cast spells from anywhere other than their hands".to_string(),
+        ExileSourceSpell => "Exile this spell".to_string(),
+        ExileTopCardPlayThisTurn => "Exile the top card of your library. You may play that card this turn".to_string(),
+        GrantFirebendingUntilEot { amount } => format!("Each creature you control gains firebending {amount} until end of turn"),
+        ExileLinked { chooser, zone, predicate, up_to, grant, target } => format!("{} {} {} {} from {}; {}", match chooser { LinkedChooser::Controller => "You exile", LinkedChooser::TargetPlayer => "That player exiles" }, if *up_to { "up to one" } else { "a" }, predicate_description(predicate, "card"), match zone { ZoneType::Battlefield => "they control", _ => "" }, target_description(target), match grant { LinkedGrant::WaterbendManaValue => "for as long as you control this, you may cast it during your turn by waterbending {X}, where X is its mana value", LinkedGrant::FlashAnyMana => "during your turn, you may cast it as though it had flash, spending mana of any type" }),
+        ExileUntilNonlandCastFree { below } => format!("Exile cards from the top of your library until you exile a nonland card. You may cast that card without paying its mana cost if its mana value is less than {}. If you don't cast it this way, put it into your hand", value_description(below)),
+        CastFromHandFree { predicate } => format!("You may cast a {} from your hand without paying its mana cost", predicate_description(predicate, "spell")),
+        NoMaximumHandSize => "You have no maximum hand size for the rest of the game".to_string(),
+        ShuffleGraveyardIntoLibrary => "Shuffle your graveyard into your library".to_string(),
+        RevealHandDiscardChosen { target, predicate } => format!("{} reveals their hand. You choose a {} from it; that player discards it", target_description(target), predicate_description(predicate, "card")),
+        SearchLandsOpponentSplits { count, opponent_picks } => format!("Search your library for up to {count} land cards with different names and reveal them. An opponent chooses {opponent_picks}; put those into your graveyard and the rest onto the battlefield tapped, then shuffle"),
+        OwnerPutsIntoLibrary { target } => format!("The owner of {} puts it into their library second from the top or on the bottom", target_description(target)),
+        PlaceTargetInLibrary { second_from_top: true } => "Put it into its owner's library second from the top".into(),
+        PlaceTargetInLibrary { second_from_top: false } => "Put it on the bottom of its owner's library".into(),
+        SacrificeSource { then } => format!("Sacrifice this. If you do: {}", effects_description(then)),
         BuffTargetValue { power, toughness, target } => format!("{} gets +X/{toughness:+} until end of turn, where X is {}",target_description(target),value_description(power)),
         ReturnToHandDrawIfControlled { target } => format!("Return {} to its owner's hand. If you controlled it, draw a card",target_description(target)),
+        BuffTriggeringPermanentValue { power, toughness } => format!("It gets +X/+Y until end of turn, where X is {} and Y is {}",value_description(power),value_description(toughness)),
         ModifyTriggeringPermanent { counters, keywords } => {
             let mut text = format!("Put {counters} +1/+1 counters on the permanent that caused this trigger");
             let keywords = keywords_description(keywords);
@@ -390,11 +445,13 @@ fn effect_description(effect: &Effect) -> Option<String> {
         PutCountersOnSource { count } => format!("Put {count} +1/+1 counters on this"),
         PutCounters { count, target } => format!("Put {count} +1/+1 counters on {}",target_description(target)),
         TapSource => "Tap this".into(), UntapSource => "Untap this".into(),
+        GrantKeywordsToSource { keywords } => format!("This gains {} until end of turn",keywords_description(keywords)),
+        ReturnSourceToHand => "Return this card from your graveyard to your hand".into(),
         CantBeBlockedThisTurnSource => "This can't be blocked this turn".into(),
         GainLife { amount } => format!("You gain {amount} life"),
         OnNthResolutionThisTurn { n, effect } => format!("If this is resolution {n} of this ability this turn: {}",effects_description(std::slice::from_ref(effect))),
         Scry { count } => format!("Scry {count}"),
-        LookAndSelect { reveal, look, min_select, max_select, predicate } => format!("{} the top {look} cards of your library. Put {min_select}–{max_select} {} from among them into your hand and the rest on the bottom in a random order",if *reveal { "Reveal" } else { "Look at" },predicate_description(predicate,"cards")),
+        LookAndSelect { reveal, look, min_select, max_select, predicate } => format!("{} the top {} cards of your library. Put {min_select}–{max_select} {} from among them into your hand and the rest on the bottom in a random order",if *reveal { "Reveal" } else { "Look at" },value_description(look),predicate_description(predicate,"cards")),
         PutTopCardsInHand { count } => format!("Put the top {count} cards of your library into your hand"),
         Learn => "Learn: you may reveal a Lesson you own from outside the game and put it into your hand, or discard a card to draw a card, or decline".into(),
         Modal { modes } => format!("Choose one — {}",modes.iter().enumerate().map(|(i,m)| format!("({}) {}",i+1,effects_description(m))).collect::<Vec<_>>().join("; ")),
@@ -402,12 +459,13 @@ fn effect_description(effect: &Effect) -> Option<String> {
         IfKicked { then, otherwise } => format!("If kicked: {}. Otherwise: {}",effects_description(then),effects_description(otherwise)),
         IfGraveyardAtLeast { count, predicate, then, otherwise } => format!("If your graveyard has at least {count} {}: {}. Otherwise: {}",predicate_description(predicate,"cards"),effects_description(then),effects_description(otherwise)),
         TargetCreaturesDealPowerDamageToLastTarget => "Each chosen creature except the last target deals damage equal to its power to the last target".into(),
-        Earthbend { count, target } => format!("Earthbend {count} {}: it becomes a 0/0 creature with haste that's still a land; put {count} +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped",target_description(target)),
+        Earthbend { count, target } => { let count = value_description(count); format!("Earthbend {count} {}: it becomes a 0/0 creature with haste that's still a land; put {count} +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped",target_description(target)) },
         ReturnSourceToBattlefieldTapped => "Return this card to the battlefield tapped".into(),
         ExileUntilSourceLeaves { target } => format!("Exile up to one {} until this leaves the battlefield, only if this is still on the battlefield",target_description(target)),
         AddMana { mana, until_end_of_combat } => format!("Add {}{}",mana_description(mana),if *until_end_of_combat { ". This mana lasts until end of combat" } else { "" }),
         BuffTarget { power, toughness, target } => format!("{} gets {power:+}/{toughness:+} until end of turn",target_description(target)),
         UntapTarget { target } => format!("Untap {}",target_description(target)),
+        TapTarget { target } => format!("Tap {}",target_description(target)),
         GrantKeywordsToTarget { keywords, target } => format!("{} gains {} until end of turn",target_description(target),keywords_description(keywords)),
         IfTargetMatches { predicate, then } => format!("If that target is a {}: {}",predicate_description(predicate,"permanent"),effects_description(then)),
         ForEachTarget { effects } => format!("For each chosen target: {}",effects_description(effects)),

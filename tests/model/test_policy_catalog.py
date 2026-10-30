@@ -1,20 +1,21 @@
 """Explicit native catalog binding and shared encoder dimensions, not strength."""
 
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
 import torch
 
-from manabot.env import Match, ObservationSpace
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
-from manabot.model import ActorCritic
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint
 from manabot.model.semantic_cards import SemanticCardEncoder
 from manabot.model.world import checkpoint_world
-from manabot.semantic.learning import BoundSemanticPack, ContentPackBindingError
+from manabot.semantic.learning import ContentPackBindingError
 from manabot.semantic.policy_catalog import bind_policy_catalog
 from manabot.sim.matchup import AuthoredMatchup
+import managym
 
 
 def test_catalog_uses_actual_native_ids_and_shared_encoder() -> None:
@@ -22,7 +23,7 @@ def test_catalog_uses_actual_native_ids_and_shared_encoder() -> None:
     pack = bind_policy_catalog(key)
     encoder = SemanticCardEncoder(key, 8)
     shape = encoder.catalog_shape
-    assert shape.definitions == len(pack.ir.definitions)
+    assert shape.definitions == pack.definition_count
     assert shape.unique_tokens == len(encoder.token_vocabulary)
     assert shape.expanded_tokens == int(encoder.lengths.sum())
     assert shape.padded_tokens == encoder.tokens.numel()
@@ -42,22 +43,24 @@ def test_unknown_catalog_is_not_a_name_alias() -> None:
         SemanticCardEncoder("simple-subset", 8)
 
 
-def test_native_ir_receipt_must_match(monkeypatch: pytest.MonkeyPatch) -> None:
-    original = BoundSemanticPack.bind
-
-    def altered_binding(
-        cls: type[BoundSemanticPack],
-        manifest: dict[str, object],
-        *,
-        ir_path: Path,
-        schema_path: Path,
-    ) -> BoundSemanticPack:
-        pack = original(manifest, ir_path=ir_path, schema_path=schema_path)
-        return replace(pack, ir=replace(pack.ir, ir_hash="not-native-ir"))
-
-    monkeypatch.setattr(BoundSemanticPack, "bind", classmethod(altered_binding))
-    with pytest.raises(ContentPackBindingError, match="differs from IR"):
+def test_native_pool_digest_must_match_the_catalog(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pool = managym.content_pool("ur-lessons-vs-gw-allies")
+    pool["content_digest"] = "0" * 64
+    monkeypatch.setattr(managym, "content_pool", lambda key: pool)
+    with pytest.raises(ContentPackBindingError, match="differs from the live pack"):
         SemanticCardEncoder("ur-lessons-vs-gw-allies", 8)
+
+
+def test_policy_catalog_requires_its_registered_pack(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    pool = managym.content_pool("ur-lessons-vs-gw-allies")
+    pool["pack_key"] = "world"
+    monkeypatch.setattr(managym, "content_pool", lambda key: pool)
+    with pytest.raises(ContentPackBindingError, match="registered pack"):
+        bind_policy_catalog("ur-lessons-vs-gw-allies")
 
 
 @pytest.mark.parametrize(
@@ -88,4 +91,5 @@ def test_research_checkpoint_binds_common_catalog(
     assert loaded.world_binding == payload["world_binding"]
     for name, tensor in agent.state_dict().items():
         assert torch.equal(tensor, loaded.state_dict()[name])
-    assert bind_policy_catalog(key).schema.raw["enums"]["subtype"]["Giant"] > 0
+    catalog = bind_policy_catalog(key).catalog
+    assert managym.learning_token_value("Giant") in set(catalog.token_value.tolist())

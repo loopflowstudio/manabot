@@ -40,6 +40,7 @@ from pydantic import BaseModel, ConfigDict
 
 from manabot.infra.identity import canonical_sha256
 from manabot.sim.execution import EvalCompute, EvalExecution
+from manabot.sim.threads import child_environment
 
 PACK = "elemental-world-v2"
 DECKS = (
@@ -183,21 +184,25 @@ def play_group(request: Request) -> list[GameRow]:
     torch.set_num_threads(1)
     role_a, role_b, leg = _legs(request.group)
     matchup = AuthoredMatchup(pack_key=PACK, role_a=role_a, role_b=role_b)
-    fingerprints = runtime_fingerprints(match_config=matchup.match())
     common = dict(
         world=managym.WORLD_VERSION,
         content_suite=matchup.content_suite,
         information_boundary="acting-viewer",
-        observation_abi_sha256=fingerprints["observation_abi_sha256"],
-        action_abi_sha256=fingerprints["action_abi_sha256"],
         matchup_sha256=canonical_sha256(matchup.match().model_dump()),
         player_seed_derivation_id="arena-pair-deal-player-v1",
     )
     if file_sha256(request.checkpoint) != request.sha256:
         raise ValueError("checkpoint byte identity differs")
-    model, _ = load_checkpoint(request.checkpoint)
+    model, space = load_checkpoint(request.checkpoint)
+    # The checkpoint's own observation space (its saved policy-input version)
+    # names its ABI; served admission rejects any other. The heuristic plays
+    # in the runtime's default space.
+    own = runtime_fingerprints(match_config=matchup.match(), observation_space=space)
+    default = runtime_fingerprints(match_config=matchup.match())
     candidate = PlayerRegistration(
         **common,
+        observation_abi_sha256=own["observation_abi_sha256"],
+        action_abi_sha256=own["action_abi_sha256"],
         player_id="model",
         display_name="Checkpoint",
         role="challenger",
@@ -218,6 +223,8 @@ def play_group(request: Request) -> list[GameRow]:
     )
     heuristic = PlayerRegistration(
         **common,
+        observation_abi_sha256=default["observation_abi_sha256"],
+        action_abi_sha256=default["action_abi_sha256"],
         player_id="heuristic",
         display_name="Heuristic",
         role="anchor",
@@ -392,7 +399,7 @@ def evaluate(
                 text=True,
                 capture_output=True,
                 timeout=GROUP_SECONDS,
-                env={**os.environ, "OMP_NUM_THREADS": "1", "MKL_NUM_THREADS": "1"},
+                env=child_environment(),
             )
             error = None if completed.returncode == 0 else completed.stderr[-4000:]
             output = completed.stdout

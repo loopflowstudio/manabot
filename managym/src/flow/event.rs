@@ -46,6 +46,9 @@ pub enum GameEvent {
         from: Option<ZoneType>,
         to: ZoneType,
         controller: PlayerId,
+        /// The card arrived face down: its identity is not public.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        face_down: bool,
     },
     DamageDealt {
         source: Option<CardId>,

@@ -11,7 +11,9 @@ from academy.curated_pack import CURATED_PACK, JEONG_INCREMENT_PACK
 from academy.play_demo import load_play_demo
 from academy.server import viewer_view
 from academy.trace import GameConfig, load_trace
-from manabot.env import Env, Match, ObservationSpace, Reward
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, RewardConfig
 import managym
 
@@ -70,7 +72,7 @@ def test_session_manabot_and_stored_root_agree(tmp_path: Path, reverse: bool) ->
     )
     config = session.trace.config
     assert (
-        session.env.content_pack_manifest()["compiled_semantics"]["pack_key"]
+        session.env.content_pack_manifest()["pack_key"]
         == CURATED_PACK.semantic_pack_key
     )
     assert sum(config.hero_deck.values()) == (40 if reverse else 41)
@@ -97,14 +99,11 @@ def test_session_manabot_and_stored_root_agree(tmp_path: Path, reverse: bool) ->
     payload = load_trace(session.match_id, tmp_path)
     restored = GameConfig(**payload["config"])
     assert asdict(restored) == asdict(config)
-    # Compare each consumer at its own native decision boundary. Academy
-    # surfaces sole choices; training collapses them using the same setup.
-    rebuilt = managym.Env(seed=restored.seed, skip_trivial=False)
+    # Academy and training share one native decision boundary.
+    assert witness == training_witness
+    rebuilt = managym.Env(seed=restored.seed)
     rebuilt.reset(restored.to_rust())
     assert rebuilt.search_witness_json() == witness
-    training_root = managym.Env(seed=restored.seed, skip_trivial=True)
-    training_root.reset(restored.to_rust())
-    assert training_root.search_witness_json() == training_witness
 
 
 @pytest.mark.parametrize("reverse", [False, True])
@@ -126,7 +125,7 @@ def test_jeong_uses_its_explicit_empty_setup(tmp_path, reverse):
     assert session.trace.config.villain_sideboard == {}
     assert session.asset_pack == JEONG_INCREMENT_PACK.reference
     assert (
-        session.env.content_pack_manifest()["compiled_semantics"]["pack_key"]
+        session.env.content_pack_manifest()["pack_key"]
         == JEONG_INCREMENT_PACK.semantic_pack_key
     )
 

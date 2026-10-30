@@ -166,7 +166,7 @@ def test_full_game_vs_random_villain(isolated_traces):
 
 def _write_tiny_checkpoint(path) -> None:
     """Write a minimal (untrained) ActorCritic checkpoint in the training format."""
-    from manabot.env import ObservationSpace
+    from manabot.env.observation import ObservationSpace
     from manabot.infra.config import ModelConfig, ObservationConfig
     from manabot.model.actor_critic import ActorCritic
 
@@ -209,11 +209,7 @@ def test_new_game_rejects_bad_villain_configs(isolated_traces):
 
 
 def test_named_decks_mirror_verify_util_constants():
-    from manabot.verify.util import (
-        GW_ALLIES_DECK,
-        INTERACTIVE_DECK,
-        UR_LESSONS_DECK,
-    )
+    from manabot.verify.games import GW_ALLIES_DECK, INTERACTIVE_DECK, UR_LESSONS_DECK
 
     assert server.NAMED_DECKS["interactive"] == INTERACTIVE_DECK
     assert server.NAMED_DECKS["ur_lessons"] == UR_LESSONS_DECK
@@ -282,19 +278,11 @@ def test_deck_names_echoed_and_recorded_in_trace(isolated_traces):
 
 
 def test_curated_combat_tape_is_identical_live_trace_and_inspector_fixture(
-    isolated_traces: Path, monkeypatch: pytest.MonkeyPatch
+    isolated_traces: Path,
 ) -> None:
     """One exact UR-vs-GW position crosses every semantic event consumer."""
 
     from manabot.env.observation import ActionEnum
-
-    # Exact retained event revisions bind the original execution preset.
-    native_env = managym.Env
-
-    def historical_env(*, seed: int, skip_trivial: bool) -> managym.Env:
-        return native_env(seed=seed, skip_trivial=True)
-
-    monkeypatch.setattr(server.managym, "Env", historical_env)
 
     def attacking_villain(_env: object, obs: managym.Observation) -> int:
         for index, action in enumerate(obs.action_space.actions):
@@ -424,7 +412,7 @@ def test_jeong_matchup_uses_session_scoped_pack_identity(isolated_traces):
     )
     assert session.env is not None
     manifest = session.env.content_pack_manifest()
-    assert manifest["compiled_semantics"]["pack_key"] == "tla-jeong-increment-v1"
+    assert manifest["pack_key"] == "tla-jeong-increment-v1"
     assert session.content_hash == manifest["content_digest"]
     assert session.content_hash != UNVERSIONED_CONTENT_HASH
     assert session.asset_manifest_hash == server.JEONG_INCREMENT_PACK.manifest_sha256
@@ -526,3 +514,25 @@ def test_hero_view_swaps_terminal_villain_perspective_and_redacts(
     assert data["opponent"]["hand_hidden_count"] == 1
     # The hero still sees their own hand.
     assert data["agent"]["hand"][0]["name"] == "Lightning Bolt"
+
+
+def test_redaction_hides_only_the_opponents_face_down_exile() -> None:
+    """A foretold card is face down: the owner's view lists it, and a view
+    swapped onto the other player removes it while keeping face-up exile."""
+
+    def player(index: int) -> dict[str, object]:
+        return {
+            "player_index": index,
+            "hand": [],
+            "zone_counts": {"HAND": 0, "EXILE": 2},
+            "exile": [
+                {"id": 60 + index, "name": "Sozin's Comet", "face_down": True},
+                {"id": 70 + index, "name": "Gray Ogre"},
+            ],
+        }
+
+    observation: dict[str, object] = {"agent": player(0), "opponent": player(1)}
+    experience_projection.redact_observation(observation)
+
+    assert [card["id"] for card in observation["agent"]["exile"]] == [60, 70]
+    assert [card["id"] for card in observation["opponent"]["exile"]] == [71]

@@ -32,6 +32,9 @@ def priority_root(
     opponent: tuple[str, ...] = (),
 ) -> managym.Env:
     """Seed 23, 20 of each named card per deck; inject at first-main priority."""
+    # Diagnostic exception: the collision proof needs sole-offer continuations
+    # (equal state, distinct pending history) to stay visible. No game is
+    # played for a model or policy from these roots.
     env = managym.Env(seed=23, skip_trivial=False)
     deck = {card: 20 for card in sorted(set(hand + battlefield + opponent))}
     env.reset([managym.PlayerConfig(name, deck) for name in ("a", "b")])

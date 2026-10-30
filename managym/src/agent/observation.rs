@@ -6,9 +6,8 @@ use crate::{
         turn::{PhaseKind, StepKind},
     },
     state::{
-        card::Card,
         game_object::{CardId, ObjectId, PlayerId, Target},
-        mana::ManaCost,
+        mana::{ManaCost, ManaUse, SPEND_SUBTYPES},
         permanent::Permanent,
         stack_object::StackObject,
         zone::ZoneType,
@@ -44,10 +43,103 @@ pub struct PlayerData {
     pub combat_mana: i32,
     /// Public pooled mana by W/U/B/R/G/C; restricted mana remains separate.
     pub mana: [i32; 6],
+    /// Spend-restricted mana by color, whatever its restriction (CR 106.6).
+    /// The name predates restrictions other than Herbalist's Lesson-only mana;
+    /// `restricted_mana` splits this total by restriction.
     pub lesson_mana: [i32; 6],
+    /// Restricted mana by restriction class, in class order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub restricted_mana: Vec<RestrictedManaData>,
+    /// While set, this player can cast spells only from their hand until the
+    /// named player's next turn begins (Avatar's Wrath). It overrides every
+    /// card's `cast_permission`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hand_only_until: Option<i32>,
+    /// No maximum hand size for the rest of the game (Spirit Water Revival).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub no_maximum_hand_size: bool,
     pub known_hand: BTreeMap<u32, u32>,
     pub sideboard_counts: BTreeMap<u32, u32>,
     pub remaining_sideboard_counts: BTreeMap<u32, u32>,
+}
+
+/// Mana that may be spent only on the named purposes (CR 106.6): spells with
+/// one of `spells`' subtypes, or abilities of sources with one of
+/// `abilities`' subtypes. Amounts are W/U/B/R/G/C.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct RestrictedManaData {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub spells: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub abilities: Vec<String>,
+    pub mana: [i32; 6],
+}
+
+impl RestrictedManaData {
+    fn new(restriction: ManaUse, amounts: [u8; 6]) -> Self {
+        let names = |mask: u8| {
+            SPEND_SUBTYPES
+                .iter()
+                .enumerate()
+                .filter(|(bit, _)| mask & 1 << bit != 0)
+                .map(|(_, name)| name.to_string())
+                .collect()
+        };
+        Self {
+            spells: names(restriction.spells),
+            abilities: names(restriction.abilities),
+            mana: amounts.map(i32::from),
+        }
+    }
+
+    /// Whether this mana may pay for a spell or an ability source with `subtype`.
+    pub fn admits(&self, subtype: &str) -> bool {
+        self.spells
+            .iter()
+            .chain(&self.abilities)
+            .any(|name| name == subtype)
+    }
+}
+
+/// A public permission to play an exiled card (airbend, impulse draw,
+/// linked exile, foretell), projected from the engine's exile grant. The
+/// terms describe when it may be used; a pending offer to cast the card
+/// exists only while they are all met and the player is not hand-only.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CastPermissionData {
+    /// The player who may play the card.
+    pub player_id: i32,
+    /// The cost of casting it under this permission, with any-type mana
+    /// already counted as generic; absent for a land, which is played.
+    #[serde(
+        default,
+        deserialize_with = "super::observation_json::optional_mana_cost"
+    )]
+    pub cost: Option<ManaCost>,
+    /// Ends in this turn's cleanup step.
+    #[serde(default)]
+    pub this_turn: bool,
+    /// Usable only during the permitted player's turn.
+    #[serde(default)]
+    pub own_turn_only: bool,
+    /// Usable only on a turn numbered after this one.
+    #[serde(default)]
+    pub after_turn: Option<u32>,
+    /// Lasts while the permitted player controls this permanent.
+    #[serde(default)]
+    pub source_permanent_id: Option<i32>,
+    #[serde(default)]
+    pub flash: bool,
+    #[serde(default)]
+    pub any_mana: bool,
+    /// The cost's generic may be paid by waterbending.
+    #[serde(default)]
+    pub waterbend: bool,
+    /// Foretold: face down, so only its owner sees the card or this permission.
+    #[serde(default)]
+    pub foretold: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -92,6 +184,16 @@ pub struct CardData {
     pub keywords: KeywordData,
     #[serde(deserialize_with = "super::observation_json::mana_cost")]
     pub mana_cost: ManaCost,
+    /// Foretold and face down in exile; listed only for its owner.
+    #[serde(default)]
+    pub face_down: bool,
+    /// The permission to play this card from exile, when it has one.
+    #[serde(default)]
+    pub cast_permission: Option<CastPermissionData>,
+    /// The value of X announced for this spell on the stack (CR 107.3),
+    /// when its mana cost has X.
+    #[serde(default)]
+    pub x: Option<i32>,
 }
 
 /// An owned outside-game copy. The candidate is private to this viewer and
@@ -212,6 +314,20 @@ pub struct PermanentData {
     /// This permanent holds cards in exile until it leaves (Jailer).
     pub has_exile_link: bool,
     pub exile_if_dies_this_turn: bool,
+    /// Declared as an attacker in the current combat. Omitted when false, so
+    /// observations retained before this field stay canonical.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub attacking: bool,
+    /// Exhaust abilities this object has activated; each can never be
+    /// activated again by this object (CR 702.177a).
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub exhausted_abilities: i32,
+    /// "Once each turn" abilities this object has activated this turn.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub once_each_turn_used: i32,
+    /// Firebending granted until end of turn, summed over grants.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub granted_firebending: i32,
     pub temp_subtypes: Vec<String>,
     /// Effective keywords — printed keywords unioned with until-EOT grants
     /// (Yip Yip! flying, Enter the Avatar State, ...). The card entry keeps
@@ -397,7 +513,8 @@ impl Observation {
                                 _ => None,
                             },
                             ability_index: match action {
-                                Action::ActivateAbility { ability_index, .. } => {
+                                Action::ActivateAbility { ability_index, .. }
+                                | Action::ActivateCardAbility { ability_index, .. } => {
                                     Some(*ability_index)
                                 }
                                 _ => None,
@@ -469,6 +586,9 @@ impl Observation {
             }
         }
 
+        // Regular and combat mana together, as the player may spend it.
+        let mut pool = p.mana_pool.clone();
+        pool.add(&p.combat_mana_pool);
         PlayerData {
             sideboard_counts,
             remaining_sideboard_counts,
@@ -483,12 +603,17 @@ impl Observation {
                 &crate::state::predicate::CardPredicate::subtype("Lesson"),
             ) as i32,
             combat_mana: p.combat_mana_pool.total() as i32,
-            mana: std::array::from_fn(|slot| {
-                i32::from(p.mana_pool.mana[slot]) + i32::from(p.combat_mana_pool.mana[slot])
-            }),
-            lesson_mana: std::array::from_fn(|slot| {
-                i32::from(p.mana_pool.lesson[slot]) + i32::from(p.combat_mana_pool.lesson[slot])
-            }),
+            mana: pool.mana.map(i32::from),
+            lesson_mana: pool.restricted_colors().map(i32::from),
+            restricted_mana: pool
+                .restricted()
+                .iter()
+                .map(|(restriction, amounts)| RestrictedManaData::new(*restriction, *amounts))
+                .collect(),
+            hand_only_until: game
+                .hand_only_until(player)
+                .map(|until| game.state.players[until.0].id.0 as i32),
+            no_maximum_hand_size: p.no_maximum_hand_size,
             known_hand: p
                 .known_hand
                 .iter()
@@ -523,12 +648,27 @@ impl Observation {
             if suspended.decision.player() == agent_player {
                 let cards = match &suspended.decision {
                     crate::flow::decision::Decision::SearchBasicLand {
-                        player, subtype, ..
-                    } => game.basic_land_search_candidates(*player, subtype),
+                        player,
+                        subtype,
+                        to_hand,
+                        ..
+                    } => game.basic_land_search_candidates(*player, subtype, *to_hand),
+                    decision @ crate::flow::decision::Decision::DiscardFromRevealedHand {
+                        ..
+                    } => game.revealed_hand_candidates(decision),
+                    decision @ crate::flow::decision::Decision::SearchDistinctLands {
+                        selected,
+                        ..
+                    } => {
+                        let mut cards = selected.clone();
+                        cards.extend(game.distinct_land_search_candidates(decision));
+                        cards
+                    }
                     decision => decision.revealed_cards().to_vec(),
                 };
                 for card in cards {
-                    self.add_card(game, card, ZoneType::Library);
+                    let zone = game.state.zones.zone_of(card).unwrap_or(ZoneType::Library);
+                    self.add_card(game, card, zone);
                 }
             }
         }
@@ -538,13 +678,24 @@ impl Observation {
                 self.add_card(game, *card, ZoneType::Graveyard);
             }
             for card in game.state.zones.zone_cards(ZoneType::Exile, player) {
-                self.add_card(game, *card, ZoneType::Exile);
+                // A foretold card is face down: only its owner sees it.
+                if player == agent_player || !game.is_foretold(*card) {
+                    self.add_card(game, *card, ZoneType::Exile);
+                }
             }
         }
 
         for stack_object in game.state.stack_objects.iter().rev() {
             if let StackObject::Spell(spell) = stack_object {
-                self.add_card(game, spell.card, ZoneType::Stack);
+                let mut card = Self::card_data(game, spell.card, ZoneType::Stack);
+                if game.state.cards[spell.card]
+                    .mana_cost
+                    .as_ref()
+                    .is_some_and(|cost| cost.x > 0)
+                {
+                    card.x = Some(i32::from(spell.x));
+                }
+                self.push_card(card, game.state.cards[spell.card].owner);
             }
         }
     }
@@ -569,16 +720,21 @@ impl Observation {
         }
     }
 
+    /// List a card on its owner's side; see [`Self::push_card`].
     fn add_card(
         &mut self,
         game: &Game,
         card_id: crate::state::game_object::CardId,
         zone: ZoneType,
     ) {
-        let card = &game.state.cards[card_id];
-        let card_data = Self::card_data(game, card, zone);
+        let owner = game.state.cards[card_id].owner;
+        self.push_card(Self::card_data(game, card_id, zone), owner);
+    }
 
-        if card_data.owner_id == self.agent.id {
+    /// List a card on `side`: its owner's, except that battlefield cards
+    /// sit with their permanent's controller, in permanent order.
+    fn push_card(&mut self, card_data: CardData, side: PlayerId) {
+        if side.0 == self.agent.player_index as usize {
             self.agent_cards.push(card_data);
         } else {
             self.opponent_cards.push(card_data);
@@ -601,6 +757,10 @@ impl Observation {
             is_summoning_sick: permanent.summoning_sick,
             plus1_counters: permanent.plus1_counters,
             exile_if_dies_this_turn: permanent.exile_if_dies_this_turn,
+            attacking: permanent.attacking,
+            exhausted_abilities: permanent.exhausted.len() as i32,
+            once_each_turn_used: permanent.activated_this_turn.len() as i32,
+            granted_firebending: i32::from(permanent.firebending_this_turn),
             temp_subtypes: permanent.temp_subtypes.clone(),
             cant_be_blocked_this_turn: permanent.cant_be_blocked_this_turn,
             power,
@@ -623,10 +783,14 @@ impl Observation {
             self.opponent_permanents.push(pdat);
         }
 
-        self.add_card(game, permanent.card, ZoneType::Battlefield);
+        self.push_card(
+            Self::card_data(game, permanent.card, ZoneType::Battlefield),
+            permanent.controller,
+        );
     }
 
-    fn card_data(game: &Game, card: &Card, zone: ZoneType) -> CardData {
+    fn card_data(game: &Game, card_id: CardId, zone: ZoneType) -> CardData {
+        let card = &game.state.cards[card_id];
         CardData {
             zone,
             owner_id: game.state.players[card.owner.0].id.0 as i32,
@@ -669,6 +833,26 @@ impl Observation {
             },
             keywords: KeywordData::from_keywords(&card.keywords),
             mana_cost: card.mana_cost.clone().unwrap_or_default(),
+            face_down: zone == ZoneType::Exile && game.is_foretold(card_id),
+            cast_permission: game
+                .exile_grant_on(card_id)
+                .map(|grant| CastPermissionData {
+                    player_id: game.state.players[grant.player.0].id.0 as i32,
+                    cost: game.grant_cast_cost(grant, card_id),
+                    this_turn: grant.this_turn,
+                    own_turn_only: grant.own_turn_only,
+                    after_turn: grant.after_turn,
+                    source_permanent_id: grant.source.and_then(|source| {
+                        game.lookup_current_permanent(source)
+                            .ok()
+                            .map(|id| id.0 as i32)
+                    }),
+                    flash: grant.flash,
+                    any_mana: grant.any_mana,
+                    waterbend: grant.waterbend,
+                    foretold: grant.foretold,
+                }),
+            x: None,
         }
     }
 
@@ -789,11 +973,13 @@ impl Observation {
                 from,
                 to,
                 controller,
+                face_down,
             } => {
                 let mut data = Self::card_event_data(EventType::CardMoved, *card, *controller);
                 data.from_zone = from.map_or(-1, |zone| zone as i32);
                 data.to_zone = *to as i32;
-                if from.is_none() && *to == ZoneType::Hand {
+                // Outside cards and face-down arrivals name no public object.
+                if (from.is_none() && *to == ZoneType::Hand) || *face_down {
                     data.source_kind = EventEntityKind::None as i32;
                     data.source_id = -1;
                 }
@@ -1020,6 +1206,9 @@ impl Observation {
             Action::PlayLand { card, .. } | Action::CastSpell { card, .. } => {
                 vec![game.state.cards[card].id]
             }
+            Action::ActivateCardAbility { card, .. } | Action::Foretell { card, .. } => {
+                vec![game.state.cards[card].id]
+            }
             Action::ActivateAbility { permanent, .. } => game.state.permanents[*permanent]
                 .as_ref()
                 .map(|perm| vec![perm.id])
@@ -1079,17 +1268,30 @@ impl Observation {
                     .or(match &game.pending_choice {
                         Some(crate::flow::game::PendingChoice::SpellMode { card, .. })
                         | Some(crate::flow::game::PendingChoice::KickerChoice { card, .. })
+                        | Some(crate::flow::game::PendingChoice::AnnounceX { card, .. })
                         | Some(crate::flow::game::PendingChoice::ChooseTargets { card, .. }) => {
                             Some(*card)
                         }
                         Some(crate::flow::game::PendingChoice::ActivatedTarget {
-                            permanent,
+                            source: crate::flow::game::ActivationSource::Card(card),
                             ..
                         })
-                        | Some(crate::flow::game::PendingChoice::Waterbend { permanent, .. }) => {
-                            game.state.permanents[*permanent]
-                                .as_ref()
-                                .map(|perm| perm.card)
+                        | Some(crate::flow::game::PendingChoice::DiscardPayment {
+                            source: crate::flow::game::ActivationSource::Card(card),
+                            ..
+                        }) => Some(*card),
+                        Some(crate::flow::game::PendingChoice::ActivatedTarget {
+                            source: crate::flow::game::ActivationSource::Permanent(permanent),
+                            ..
+                        })
+                        | Some(crate::flow::game::PendingChoice::DiscardPayment {
+                            source: crate::flow::game::ActivationSource::Permanent(permanent),
+                            ..
+                        }) => game.state.permanents[*permanent]
+                            .as_ref()
+                            .map(|perm| perm.card),
+                        Some(crate::flow::game::PendingChoice::Waterbend { payment, .. }) => {
+                            game.payment_source_card(payment)
                         }
                         Some(
                             crate::flow::game::PendingChoice::SacrificePayment { .. }
@@ -1115,13 +1317,15 @@ impl Observation {
                 return false;
             }
         }
-        for card in &self.agent_cards {
-            if card.owner_id != self.agent.id {
-                return false;
-            }
-        }
-        for card in &self.opponent_cards {
-            if card.owner_id != self.opponent.id {
+        // A battlefield card sits with its controller, who may not own it.
+        for (cards, side) in [
+            (&self.agent_cards, self.agent.id),
+            (&self.opponent_cards, self.opponent.id),
+        ] {
+            if cards
+                .iter()
+                .any(|card| card.zone != ZoneType::Battlefield && card.owner_id != side)
+            {
                 return false;
             }
         }
@@ -1157,21 +1361,58 @@ impl Observation {
                 "kicker_cost": card.kicker_cost,
                 "card_types": card.card_types,
                 "keywords": card.keywords,
-                "mana_cost": {
-                    "cost": card.mana_cost.cost[..6]
-                        .iter()
-                        .map(|v| i32::from(*v))
-                        .collect::<Vec<_>>(),
-                    "mana_value": i32::from(card.mana_cost.mana_value),
-                }
+                "mana_cost": mana_cost_json(&card.mana_cost),
             });
-            if !card.mana_cost.hybrid.is_empty() {
-                value["mana_cost"]["hybrid"] = json!(card
-                    .mana_cost
+            if card.face_down {
+                value["face_down"] = json!(true);
+            }
+            if let Some(permission) = &card.cast_permission {
+                value["cast_permission"] = cast_permission_json(permission);
+            }
+            if let Some(x) = card.x {
+                value["x"] = json!(x);
+            }
+            value
+        }
+
+        fn mana_cost_json(cost: &ManaCost) -> Value {
+            let mut value = json!({
+                "cost": cost.cost[..6].iter().map(|v| i32::from(*v)).collect::<Vec<_>>(),
+                "mana_value": i32::from(cost.mana_value),
+            });
+            if !cost.hybrid.is_empty() {
+                value["hybrid"] = json!(cost
                     .hybrid
                     .iter()
                     .map(|pip| [pip[0] as u8, pip[1] as u8])
                     .collect::<Vec<_>>());
+            }
+            value
+        }
+
+        /// Only set terms are written, so the JSON round-trips canonically.
+        fn cast_permission_json(permission: &CastPermissionData) -> Value {
+            let mut value = json!({ "player_id": permission.player_id });
+            if let Some(cost) = &permission.cost {
+                value["cost"] = mana_cost_json(cost);
+            }
+            for (key, set) in [
+                ("this_turn", permission.this_turn),
+                ("own_turn_only", permission.own_turn_only),
+                ("flash", permission.flash),
+                ("any_mana", permission.any_mana),
+                ("waterbend", permission.waterbend),
+                ("foretold", permission.foretold),
+            ] {
+                if set {
+                    value[key] = json!(true);
+                }
+            }
+            if let Some(turn) = permission.after_turn {
+                value["after_turn"] = json!(turn);
+            }
+            if let Some(id) = permission.source_permanent_id {
+                value["source_permanent_id"] = json!(id);
             }
             value
         }

@@ -1,7 +1,4 @@
-# Local imports
-from manabot.infra import ModelConfig
+"""Policy networks, checkpoints and inference.
 
-# Local directory imports
-from .actor_critic import ActorCritic
-
-__all__ = ["ActorCritic", "ModelConfig"]
+Import names from their modules; this package re-exports nothing.
+"""

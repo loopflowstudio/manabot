@@ -99,13 +99,34 @@ test('a pinned local model link selects the model and both Elemental decks', asy
   await expect(page.getByTestId('action-option').first()).toBeVisible();
 });
 
-test('forced steps advance into a real choice and remain visible in the game log', async ({ page }) => {
+test('priority automation advances into a real choice and remains visible in the game log', async ({ page }) => {
+  // Seed 0 gives the hero castable instants once lands are down, so priority
+  // windows outside the configured stops become real choices that automation
+  // passes; earlier windows hold only Pass priority and native skipping takes them.
+  await page.routeWebSocket('**/ws/play', socket => {
+    const server = socket.connectToServer();
+    socket.onMessage(message => {
+      if (typeof message !== 'string') { server.send(message); return; }
+      const payload = JSON.parse(message);
+      if (payload.type === 'new_game') payload.config.seed = 0;
+      server.send(JSON.stringify(payload));
+    });
+  });
   await page.goto('/?hero=elemental_ur&villain=elemental_gw');
   await page.getByTestId('opponent-select').selectOption('passive');
   await page.getByRole('button', { name: 'New Game', exact: true }).click();
   await expect.poll(() => page.getByTestId('action-option').count()).toBeGreaterThan(1);
   await page.getByText('Decision log', { exact: true }).click();
-  await expect(page.getByTestId('log-entry').filter({ hasText: 'Auto: Pass priority' }).first()).toBeVisible();
+  const automated = page.getByTestId('log-entry').filter({ hasText: 'Auto: Pass priority' });
+  for (let input = 0; input < 6 && await automated.count() === 0; input++) {
+    const revision = Number(await page.locator('main').getAttribute('data-frame-revision'));
+    const labels = await page.getByTestId('action-option').allTextContents();
+    const land = labels.findIndex(label => /Play (Island|Mountain)/.test(label));
+    await page.getByTestId('action-option').nth(land === -1 ? labels.findIndex(label => label.includes('Pass priority')) : land).click();
+    await expect.poll(async () => Number(await page.locator('main').getAttribute('data-frame-revision'))).toBeGreaterThan(revision);
+    await expect.poll(() => page.getByTestId('action-option').count()).toBeGreaterThan(1);
+  }
+  await expect(automated.first()).toBeVisible();
   const revision = await page.locator('main').getAttribute('data-frame-revision');
   await page.reload();
   await expect(page.locator('main')).toHaveAttribute('data-frame-revision', revision!);

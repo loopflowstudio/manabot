@@ -1,11 +1,11 @@
 # Worlds
 
-A change to rules meaning or observation/action shape requires a **world version**. Checkpoints,
-shards, and reports are only comparable within a world; cross-world numbers
-never share a table untagged. New worlds are frozen deliberately (batch the
-shape changes), and on each freeze the headline baselines are re-run before
-new claims are made. (Cost of ignoring this, measured: every exp-07 artifact
-was dead on arrival in exp-10.)
+A world number names a frozen world. Main carries at most one open world, and
+merged rules or shape changes extend it in place, updating its receipts.
+Freezing is deliberate: re-run the headline baselines, record the receipts, mark
+the row frozen, and open the next number. Checkpoints are protected by their
+world binding, which rejects any content or shape difference, not by the
+number. A run on an open world makes no comparability claim.
 
 | world | frozen at | shape (player / card / permanent / action-types) | live artifacts | headline baselines |
 |---|---|---|---|---|
@@ -23,18 +23,105 @@ was dead on arrival in exp-10.)
 | **w11** | in development, optional payments, 2026-10-21 | 40 / 41 / 28 / 16; shared typed optional-payment state and learning schema 7 | `elemental-world-v2`; no promoted artifacts | no strength baseline |
 | **w12** | in development, MTG-177, 2026-10-21 | 40 / 41 / 28 / 16; permanent-wide hexproof targeting enforcement | unchanged authored packs; fresh w12 conformance receipts | no strength baseline |
 | **w13** | in development, MTG-177 integration, 2026-10-22 | 40 / 41 / 28 / 16; targeting enforcement plus shared-payment repair | unchanged authored packs; fresh combined-runtime conformance receipts | no strength baseline |
-
 | **w14** | in development, MTG-195, 2026-10-26 | 40 / 41 / 28 / 17; controller-selected trigger placement and policy-input v3 occurrence joins | unchanged authored packs; fresh w14 conformance and play fixtures | no strength baseline |
+| **w15** | in development, MTG-177, 2026-10-27 | 40 / 41 / 28 / 17; retained resolution eligibility, policy-input v4 relations 64 × 33 | unchanged authored packs; fresh integrated conformance and play fixtures | no strength baseline |
+| **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
+| **w17** | open (Tasks 892c47, 87e012), 2026-10-29 | 60 / 55 / 32 / 17 (policy input v5; v1–v4 keep 40 / 41 / 29); cards in engine rules types, learning schema 9 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones | `world` (the default pack): every defined card (166 supported); `semantic-kernel-w17-v1`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
 
-**Current development world: w14.** `managym.WORLD_VERSION` identifies live runs. Earlier
-checkpoints (including w13) are **not comparable** to w14; do not reuse their
+**Open world: w17.** `managym.WORLD_VERSION` identifies live runs. Checkpoints
+from earlier worlds are **not comparable** to w17; do not reuse their
 win rates or load them as current-world policies. Shape alone is insufficient
 identity. Exp-11 historically ported opponent components with
 `port_legacy_state_dict` and behavioral validation; that utility is now retired.
 Current loaders require current-ABI checkpoints. Cross-world *measurements*
 are regenerated, never ported (exp-10's precedent).
 
-Update this table in the same PR as any rules-meaning or shape change.
+Update the open world's row, section and receipts in the same PR as any
+rules-meaning or shape change.
+
+## Running an older world
+
+The engine implements exactly one world. To run an older world, check out the
+revision that recorded it and build that engine; current code carries no rules
+compatibility shims. Frozen evidence (IR, receipts, checkpoints) stays readable
+in place and is never rewritten.
+
+## w17: one card representation and TLA casting (open)
+
+Each card is a function returning the engine's own `CardDefinition`, written in
+its rules types, in the set file of its first printing; the authoring language
+(`cards/authoring.rs`), the in-process compiler (`semantic/compile.rs`) and IR
+parsing and interpretation for current content are deleted. All 161 definitions
+were generated once from w16's lowering and proven JSON-identical to it. Each
+definition carries its key and the Scryfall id of that printing; neither enters
+content digests, so default and authored pack digests equal w16's. Five cards
+moved to their actual first printing (`roe.prophetic_prism`,
+`mh2.tireless_provisioner`, `ptk.corrupt_court_official`, `eld.epic_downfall`,
+`ths.lightning_strike`); every set-file card is supported unless marked
+incomplete.
+
+Learning tokens are derived in Rust (`managym.learning_catalog`) by walking each
+definition with a `serde` serializer: learning schema **9**, token values are
+stable hashes of Rust and printed names, and IR opcodes, roles and enums are
+gone. `BoundSemanticPack` binds by content digest and registry name. Manifests
+carry `pack_key` (replacing `compiled_semantics` with its IR and source hashes);
+`content_pool` rows add `scryfall_id` and name the card key `key`. The world
+pool is `world` (formerly `tla-pool-v1`): it describes the default pack, so it
+shares that pack's `CardDefId`s and digest; rules fixtures are unsupported rows
+without a key. Card catalog modules (`setups`, `pool`, `tokens`) live under
+`cards/`. Permanent observations add an
+`attacking` column (width 28 → 29) and LLM text, so the state is no longer
+visible only through the event window. `tests/cards/observability.rs` guards
+that every keyword, permanent and player status and `Effect`/`TriggerCondition`
+/`Ability` variant names its tensor column or token.
+
+Task 87e012 extends w17 with the 51 cards of TLA batch T2, defined in
+`cardsets/tla.rs` and supported (166 supported in `world`). Rules meaning grows with them: casting from
+exile under exact-object grants (airbend, impulse exile, linked exile, foretell
+face down), a hand-only lock that overrides those grants until its controller's
+next untap, printed and granted flashback, announced X and kicker as one cast
+announcement, free casts during resolution, restricted mana keyed by spending
+class (Lesson, Shrine, Ally spells and ability sources), affinity and
+activation cost reduction, exhaust and once-each-turn activation limits,
+hand- and graveyard-zone activated abilities (landcycling), private library
+searches and choices, and control (a permanent spell enters under its
+controller).
+
+Policy input **v5** is the default; v1–v4 keep their widths. Player rows add
+restricted mana by spending subtype × color (18), the hand-only lock and no
+maximum hand size (40 → 60). Card rows add 12 cast-permission terms and a stack
+spell's announced X (41 → 55). Permanent rows add used exhaust abilities, used
+once-each-turn abilities and granted firebending (29 → 32). In every widened
+row the new terms start at the old validity column and validity stays last.
+Native buffers bind v5 by player width. Learning schema 9 is unchanged: tokens
+derive from the definitions, so new `Effect` variants and card fields appear in
+them without a schema change. Viewers see an opponent's foretold card only as an
+exile count, in JSON, text and tensor alike.
+
+`conformance/semantic-kernel-w17-v1` replays, the authored-match receipt and
+its live/headless parity (`authored-match-w17-v1`, `authored-match-parity-w17-v1`:
+the 142-Command authored tape) and `public-commitment-parity-w17-v1` bind this
+world, re-recorded in place as it grows. Academy `*-w17.json` demo,
+choice-navigation and trigger-order fixtures reach the same decision revisions
+as their w15 predecessors. Belief encoding receipts use possible-world space v3.
+
+## w16: one card authority (superseded by w17)
+
+Cards are typed Rust functions in the file of the set that first printed them
+under `managym/src/cardsets/` (`tla.rs`, `stx.rs`, `lea.rs`, …), each defined
+once. `semantic::compile` lowers them in process into the IR the runtime, pool
+descriptor and learning projection read; no card catalog or IR is generated on
+disk. Definition keys name that set (`lea.forest`, `stx.pop_quiz`, `token.clue`);
+compiled IR was proven identical to w15's content apart from those renames. The
+few cards the typed language cannot express are native `CardDefinition`s in their
+set files; with the rules fixtures they keep the default pack's legacy
+`CardDefId` prefix and content digest.
+
+`managym::world` owns `WORLD_VERSION` and the card/deck support check
+(`managym.unsupported_cards`). The world pool is every defined card from every
+set. A card is supported when its set file defines it with a typed program and
+does not mark it incomplete; tests never gate support. `managym.set_cards`
+narrows the pool to chosen sets, such as `["tla", "lea"]`.
 
 ## w7: Elemental rules and compiled content (not yet frozen)
 
@@ -301,3 +388,25 @@ The existing-card trigger witness uses the explicit scenario recipe in
 `manabot.verify.trigger_order` before ordinary human Commands and agent actions;
 `academy/fixtures/trigger-order-w14.json` retains its root and content identities.
 This is a constructed root, not a seed-only authored-match prefix.
+
+
+## w15: resolution-start target eligibility
+
+CR 608.2b eligibility is evaluated once at resolution entry for each chosen
+clause/target slot, across spells, activated abilities and triggers. Instructions
+and suspended choices retain that result; live presence checks separately reject
+departed objects. Illegal slots remain positional, all-invalid targeted objects
+perform no instructions, and zero optional targets still resolve. Controller-selected
+trigger placement from w14 remains intact.
+
+Canonical mutable-state hash 10 includes the retained eligibility slots. Policy
+input v4 extends the 64 relation rows from 32 to 33 columns, adding unknown/legal/
+illegal eligibility at column 32. Validity stays at column 31; v2/v3 layouts and
+checkpoint omissions remain unchanged. Capture/text v4 carries the same native
+fact, with unchanged embedded decision schema 7. Earlier checkpoints are rejected
+for current-world play, and historical captures retain their recorded semantics.
+
+Fresh `conformance/semantic-kernel-w15-v1` receipts and Academy w15 prefixes bind
+the integrated source. Earlier corpora, demos, authored packs and experiment
+artifacts remain unchanged. These bounded fixtures do not establish exhaustive
+rules correctness, scientific baselines or final release certification.

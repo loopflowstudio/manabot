@@ -86,6 +86,12 @@ checkpoints or experiment evidence.
 - Put imports at the top; use explicit imports and underscore-prefixed private
   helpers. Keep one implementation and one owner for each fact; use git for
   old versions rather than `_new`, `_old`, or `_backup` variants.
+- Import names from their defining modules (`manabot.env.observation`, not
+  `manabot.env`); package `__init__` files re-export nothing, so evaluation
+  game and replay children stay Torch-free
+  (`tests/test_package_boundaries.py` enforces the child modules). Launch
+  evaluation children with `manabot.sim.child.ChildProcess`, not
+  `multiprocessing` spawn, which re-imports the parent's `__main__`.
 
 ### Python typing
 
@@ -107,6 +113,10 @@ checkpoints or experiment evidence.
 - Apply these conventions to new and changed code incrementally. Do not claim
   repository-wide type safety without a passing configured type check, or
   weaken types merely to silence one.
+- Native scalar/vector observation buffers bind continuation input semantics by
+  relation width: v2/v3 have 32 columns, v4 and v5 have 33; validity remains
+  column 31. At 33, the player row width tells v4 (40) from v5 (60).
+  Preserve the frozen widths and derive buffers from `ObservationSpace`.
 - Saved observation configurations use `ObservationConfig.from_checkpoint` so
   an absent policy-input version retains v1 semantics. Fresh construction uses
   the current version. Keep version-specific zero/default exclusions stable:
@@ -130,6 +140,16 @@ checkpoints or experiment evidence.
   code-signature termination on subsequent imports.
 - Inspect a bot in the browser: `./scripts/play` (installs locked local dependencies,
   starts backend + frontend, and stops both on Ctrl-C).
+
+## Forced decisions
+
+Every game runner, benchmark and Academy session uses native trivial-decision
+skipping (`skip_trivial`, on by default); a decision with one legal action is
+never shown to a person or sent to a model or policy (Jack Heart, 2026-10-28).
+Turning it off is for explicit debugging only. Outside tests, the only code
+that does is the constructed-position fixtures listed in
+`tests/env/test_skip_forced_decisions.py`; they play no game for a person,
+model or policy.
 
 ## Testing
 
@@ -168,6 +188,46 @@ checks required by the affected package and workflow.
   Vite dev servers. Running `svelte-kit sync` or a build during browser proofs
   can reload active pages and destroy in-page revision probes; use isolated
   ports and stable generated files for concurrent headless runs.
+
+### Card definitions
+
+Each card is one function in the set file of its first printing under
+`managym/src/cardsets/` (keys `<set>.<card>`; basics are `lea.*`, tokens
+`token.*`), returning the engine's own `CardDefinition` written in its rules
+types (`Effect`, `Ability`, `TargetSpec`, `TriggerCondition`, …). That value is
+the only card representation: there is no authoring language, compiler, IR or
+card JSON. Add the function to its set file's `cards()`. New behavior is a new
+rules-type variant (with a directed test in `tests/cards/<set>.rs`), never
+card-specific logic. Every definition carries `scryfall_id`, the Scryfall card
+id of the printing in its set file (`tests/cards/scryfall.rs` checks shape and
+uniqueness offline; `tests/cards/check_scryfall.py` checks names and sets
+online, never in CI). Rebuild the extension after card changes.
+
+Learning tokens derive from the same definitions (`cards/tokens.rs`,
+`managym.learning_catalog`), so a new variant reaches the policy without a
+vocabulary edit. Every mechanic must be observable in both the observation
+tensor and the tokens: extend the exhaustive guards in
+`tests/cards/observability.rs` (keywords, permanent and player status, `Effect`,
+`TriggerCondition`, `Ability`) and give the mechanic a directed test there.
+
+Support is definition: the world pool is every defined card from every set, and
+a card is supported unless its set file marks it incomplete (`tla::INCOMPLETE`,
+with the missing behavior). Restrict to a set with `world::set_cards` /
+`managym.set_cards`, never with per-pack membership lists. Tests never qualify
+or gate a card. A test about one card goes in `managym/tests/cards/<set>.rs`, the
+set file of that card; engine rules stay in `tests/rules/`, and shared scenario
+helpers live in `tests/support/`. Keep decklists separate from behavior. Keep long printed text in
+a local `text_box` binding so rustfmt can format the definition.
+Default-pack `CardDefId` order lives in `cards/content_pack.rs` (`LEGACY_ORDER`).
+Activated abilities that function from hand or graveyard set `Cost.zone`
+(landcycling uses `Program::landcycling`); they are offered as
+`Action::ActivateCardAbility`. Programs compile in key order, so an ability's
+index follows its program key, not its printed position.
+
+Native fixed mana abilities on a card are additive: multiple fixed productions
+produce all listed colors together. A land that produces one chosen color uses
+one activated modal mana program, not multiple fixed mana programs. Verify each
+choice by paying a real cost and checking the remaining mana.
 
 ### Etude card evaluation
 

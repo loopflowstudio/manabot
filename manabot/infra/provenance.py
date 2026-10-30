@@ -12,11 +12,12 @@ from typing import Any, Iterable
 
 from managym.experience import UNVERSIONED_CONTENT_HASH
 
-from manabot.env import Env, Match, ObservationSpace, Reward
-from manabot.env.observation import ActionEnum
+from manabot.env.env import Env
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ActionEnum, ObservationSpace
 from manabot.infra.config import MatchConfig, RewardConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
-from manabot.verify.util import INTERACTIVE_DECK
+from manabot.verify.games import INTERACTIVE_DECK
 import managym
 
 REPO_ROOT = Path(__file__).resolve().parents[2]

@@ -1,4 +1,19 @@
 {
+  "Aang, the Last Airbender": {
+    "name": "Aang, the Last Airbender",
+    "mana_cost": "{3}{W}",
+    "type_line": "Legendary Creature — Human Avatar Ally",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Flying",
+      "Airbend"
+    ],
+    "oracle_text": "Flying\nWhen Aang enters, airbend up to one other target nonland permanent. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)\nWhenever you cast a Lesson spell, Aang gains lifelink until end of turn.",
+    "colors": [
+      "W"
+    ]
+  },
   "Abandon Attachments": {
     "name": "Abandon Attachments",
     "mana_cost": "{1}{U/R}",
@@ -22,6 +37,34 @@
     "oracle_text": "Look at the top three cards of your library. Put one of those cards into your hand and the rest on the bottom of your library in any order. Put each of those cards into your hand instead if there are three or more Lesson cards in your graveyard.",
     "colors": [
       "U"
+    ]
+  },
+  "Airbender's Reversal": {
+    "name": "Airbender's Reversal",
+    "mana_cost": "{1}{W}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Airbend"
+    ],
+    "oracle_text": "Choose one —\n• Destroy target attacking creature.\n• Airbend target creature you control. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Airbending Lesson": {
+    "name": "Airbending Lesson",
+    "mana_cost": "{2}{W}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Airbend"
+    ],
+    "oracle_text": "Airbend target nonland permanent. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)\nDraw a card.",
+    "colors": [
+      "W"
     ]
   },
   "Allies at Last": {
@@ -58,6 +101,20 @@
     "toughness": "2",
     "keywords": [],
     "oracle_text": "Whenever another Ally you control enters, put a +1/+1 counter on this creature.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Avatar's Wrath": {
+    "name": "Avatar's Wrath",
+    "mana_cost": "{2}{W}{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Airbend"
+    ],
+    "oracle_text": "Choose up to one target creature, then airbend all other creatures. (Exile them. While each one is exiled, its owner may cast it for {2} rather than its mana cost.)\nUntil your next turn, your opponents can't cast spells from anywhere other than their hands.\nExile Avatar's Wrath.",
     "colors": [
       "W"
     ]
@@ -1628,6 +1685,873 @@
     "oracle_text": "",
     "colors": [
       "W"
+    ]
+  },
+  "Earth Kingdom Protectors": {
+    "name": "Earth Kingdom Protectors",
+    "mana_cost": "{W}",
+    "type_line": "Creature — Human Soldier Ally",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Vigilance"
+    ],
+    "oracle_text": "Vigilance\nSacrifice this creature: Another target Ally you control gains indestructible until end of turn. (Damage and effects that say \"destroy\" don't destroy it.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Water Tribe Captain": {
+    "name": "Water Tribe Captain",
+    "mana_cost": "{2}{W}",
+    "type_line": "Creature — Human Soldier Ally",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "{5}: Creatures you control get +1/+1 until end of turn.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Iguana Parrot": {
+    "name": "Iguana Parrot",
+    "mana_cost": "{2}{U}",
+    "type_line": "Creature — Lizard Bird Pirate",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Flying",
+      "Prowess",
+      "Vigilance"
+    ],
+    "oracle_text": "Flying, vigilance\nProwess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Boar-q-pine": {
+    "name": "Boar-q-pine",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Boar Porcupine",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "Whenever you cast a noncreature spell, put a +1/+1 counter on this creature.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Fire Sages": {
+    "name": "Fire Sages",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Human Cleric",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Firebending"
+    ],
+    "oracle_text": "Firebending 1 (Whenever this creature attacks, add {R}. This mana lasts until end of combat.)\n{1}{R}{R}: Put a +1/+1 counter on this creature.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Treetop Freedom Fighters": {
+    "name": "Treetop Freedom Fighters",
+    "mana_cost": "{2}{R}",
+    "type_line": "Creature — Human Rebel Ally",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Haste"
+    ],
+    "oracle_text": "Haste\nWhen this creature enters, create a 1/1 white Ally creature token.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Yuyan Archers": {
+    "name": "Yuyan Archers",
+    "mana_cost": "{1}{R}",
+    "type_line": "Creature — Human Archer",
+    "power": "3",
+    "toughness": "1",
+    "keywords": [
+      "Reach"
+    ],
+    "oracle_text": "Reach\nWhen this creature enters, you may discard a card. If you do, draw a card.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Cunning Maneuver": {
+    "name": "Cunning Maneuver",
+    "mana_cost": "{1}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target creature gets +3/+1 until end of turn.\nCreate a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")",
+    "colors": [
+      "R"
+    ]
+  },
+  "Pillar Launch": {
+    "name": "Pillar Launch",
+    "mana_cost": "{G}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target creature gets +2/+2 and gains reach until end of turn. Untap it.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Airship Engine Room": {
+    "name": "Airship Engine Room",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {U} or {R}.\n{4}, {T}, Sacrifice this land: Draw a card.",
+    "colors": []
+  },
+  "Boiling Rock Prison": {
+    "name": "Boiling Rock Prison",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {B} or {R}.\n{4}, {T}, Sacrifice this land: Draw a card.",
+    "colors": []
+  },
+  "Foggy Bottom Swamp": {
+    "name": "Foggy Bottom Swamp",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {B} or {G}.\n{4}, {T}, Sacrifice this land: Draw a card.",
+    "colors": []
+  },
+  "Kyoshi Village": {
+    "name": "Kyoshi Village",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {G} or {W}.\n{4}, {T}, Sacrifice this land: Draw a card.",
+    "colors": []
+  },
+  "Meditation Pools": {
+    "name": "Meditation Pools",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {G} or {U}.\n{4}, {T}, Sacrifice this land: Draw a card.",
+    "colors": []
+  },
+  "Misty Palms Oasis": {
+    "name": "Misty Palms Oasis",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {W} or {B}.\n{4}, {T}, Sacrifice this land: Draw a card.",
+    "colors": []
+  },
+  "North Pole Gates": {
+    "name": "North Pole Gates",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {W} or {U}.\n{4}, {T}, Sacrifice this land: Draw a card.",
+    "colors": []
+  },
+  "Omashu City": {
+    "name": "Omashu City",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {R} or {G}.\n{4}, {T}, Sacrifice this land: Draw a card.",
+    "colors": []
+  },
+  "Serpent's Pass": {
+    "name": "Serpent's Pass",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {U} or {B}.\n{4}, {T}, Sacrifice this land: Draw a card.",
+    "colors": []
+  },
+  "Sun-Blessed Peak": {
+    "name": "Sun-Blessed Peak",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped.\n{T}: Add {R} or {W}.\n{4}, {T}, Sacrifice this land: Draw a card.",
+    "colors": []
+  },
+  "Rumble Arena": {
+    "name": "Rumble Arena",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Vigilance",
+      "Scry"
+    ],
+    "oracle_text": "Vigilance\nWhen this land enters, scry 1. (Look at the top card of your library. You may put it on the bottom.)\n{T}: Add {C}.\n{1}, {T}: Add one mana of any color.",
+    "colors": []
+  },
+  "Walltop Sentries": {
+    "name": "Walltop Sentries",
+    "mana_cost": "{2}{G}",
+    "type_line": "Creature — Human Soldier Ally",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Reach",
+      "Deathtouch"
+    ],
+    "oracle_text": "Reach, deathtouch\nWhen this creature dies, if there's a Lesson card in your graveyard, you gain 2 life.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Cat-Owl": {
+    "name": "Cat-Owl",
+    "mana_cost": "{3}{W/U}",
+    "type_line": "Creature — Cat Bird",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever this creature attacks, untap target artifact or creature.",
+    "colors": [
+      "U",
+      "W"
+    ]
+  },
+  "Earth Kingdom Soldier": {
+    "name": "Earth Kingdom Soldier",
+    "mana_cost": "{4}{G/W}",
+    "type_line": "Creature — Human Soldier",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [
+      "Vigilance"
+    ],
+    "oracle_text": "Vigilance\nWhen this creature enters, put a +1/+1 counter on each of up to two target creatures you control.",
+    "colors": [
+      "G",
+      "W"
+    ]
+  },
+  "Wandering Musicians": {
+    "name": "Wandering Musicians",
+    "mana_cost": "{3}{R/W}",
+    "type_line": "Creature — Human Bard Ally",
+    "power": "2",
+    "toughness": "5",
+    "keywords": [],
+    "oracle_text": "Whenever this creature attacks, creatures you control get +1/+0 until end of turn.",
+    "colors": [
+      "R",
+      "W"
+    ]
+  },
+  "Earth Village Ruffians": {
+    "name": "Earth Village Ruffians",
+    "mana_cost": "{2}{B/G}",
+    "type_line": "Creature — Human Soldier Rogue",
+    "power": "3",
+    "toughness": "1",
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "When this creature dies, earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)",
+    "colors": [
+      "B",
+      "G"
+    ]
+  },
+  "Earthbending Lesson": {
+    "name": "Earthbending Lesson",
+    "mana_cost": "{3}{G}",
+    "type_line": "Sorcery — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "Earthbend 4. (Target land you control becomes a 0/0 creature with haste that's still a land. Put four +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Fire Nation Attacks": {
+    "name": "Fire Nation Attacks",
+    "mana_cost": "{4}{R}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flashback"
+    ],
+    "oracle_text": "Create two 2/2 red Soldier creature tokens with firebending 1. (Whenever a creature with firebending 1 attacks, add {R}. This mana lasts until end of combat.)\nFlashback {8}{R} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Foggy Swamp Vinebender": {
+    "name": "Foggy Swamp Vinebender",
+    "mana_cost": "{3}{G}",
+    "type_line": "Creature — Human Plant Ally",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [
+      "Waterbend"
+    ],
+    "oracle_text": "This creature can't be blocked by creatures with power 2 or less.\nWaterbend {5}: Put a +1/+1 counter on this creature. Activate only during your turn. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Geyser Leaper": {
+    "name": "Geyser Leaper",
+    "mana_cost": "{4}{U}",
+    "type_line": "Creature — Human Warrior Ally",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Waterbend"
+    ],
+    "oracle_text": "Flying\nWaterbend {4}: Draw a card, then discard a card. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Sandbenders' Storm": {
+    "name": "Sandbenders' Storm",
+    "mana_cost": "{3}{W}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "Choose one —\n• Destroy target creature with power 4 or greater.\n• Earthbend 3. (Target land you control becomes a 0/0 creature with haste that's still a land. Put three +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Rockalanche": {
+    "name": "Rockalanche",
+    "mana_cost": "{2}{G}",
+    "type_line": "Sorcery — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Earthbend",
+      "Flashback"
+    ],
+    "oracle_text": "Earthbend X, where X is the number of Forests you control. (Target land you control becomes a 0/0 creature with haste that's still a land. Put X +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)\nFlashback {5}{G} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Rabaroo Troop": {
+    "name": "Rabaroo Troop",
+    "mana_cost": "{3}{W}{W}",
+    "type_line": "Creature — Rabbit Kangaroo",
+    "power": "3",
+    "toughness": "5",
+    "keywords": [
+      "Plainscycling",
+      "Landcycling",
+      "Typecycling",
+      "Cycling",
+      "Landfall"
+    ],
+    "oracle_text": "Landfall — Whenever a land you control enters, this creature gains flying until end of turn and you gain 1 life.\nPlainscycling {2} ({2}, Discard this card: Search your library for a Plains card, reveal it, put it into your hand, then shuffle.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "Team Avatar": {
+    "name": "Team Avatar",
+    "mana_cost": "{2}{W}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Whenever a creature you control attacks alone, it gets +X/+X until end of turn, where X is the number of creatures you control.\n{2}{W}, Discard this card: It deals damage equal to the number of creatures you control to target creature.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Giant Koi": {
+    "name": "Giant Koi",
+    "mana_cost": "{4}{U}{U}",
+    "type_line": "Creature — Fish",
+    "power": "5",
+    "toughness": "7",
+    "keywords": [
+      "Islandcycling",
+      "Landcycling",
+      "Typecycling",
+      "Waterbend",
+      "Cycling"
+    ],
+    "oracle_text": "Waterbend {3}: This creature can't be blocked this turn. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)\nIslandcycling {2} ({2}, Discard this card: Search your library for an Island card, reveal it, put it into your hand, then shuffle.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Canyon Crawler": {
+    "name": "Canyon Crawler",
+    "mana_cost": "{4}{B}{B}",
+    "type_line": "Creature — Spider Beast",
+    "power": "6",
+    "toughness": "6",
+    "keywords": [
+      "Landcycling",
+      "Food",
+      "Typecycling",
+      "Cycling",
+      "Swampcycling",
+      "Deathtouch"
+    ],
+    "oracle_text": "Deathtouch\nWhen this creature enters, create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")\nSwampcycling {2} ({2}, Discard this card: Search your library for a Swamp card, reveal it, put it into your hand, then shuffle.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Merchant of Many Hats": {
+    "name": "Merchant of Many Hats",
+    "mana_cost": "{1}{B}",
+    "type_line": "Creature — Human Peasant Ally",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "{2}{B}: Return this card from your graveyard to your hand.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Mongoose Lizard": {
+    "name": "Mongoose Lizard",
+    "mana_cost": "{4}{R}{R}",
+    "type_line": "Creature — Mongoose Lizard",
+    "power": "5",
+    "toughness": "6",
+    "keywords": [
+      "Mountaincycling",
+      "Landcycling",
+      "Menace",
+      "Typecycling",
+      "Cycling"
+    ],
+    "oracle_text": "Menace (This creature can't be blocked except by two or more creatures.)\nWhen this creature enters, it deals 1 damage to any target.\nMountaincycling {2} ({2}, Discard this card: Search your library for a Mountain card, reveal it, put it into your hand, then shuffle.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Saber-Tooth Moose-Lion": {
+    "name": "Saber-Tooth Moose-Lion",
+    "mana_cost": "{4}{G}{G}",
+    "type_line": "Creature — Elk Cat",
+    "power": "7",
+    "toughness": "7",
+    "keywords": [
+      "Reach",
+      "Landcycling",
+      "Forestcycling",
+      "Typecycling",
+      "Cycling"
+    ],
+    "oracle_text": "Reach\nForestcycling {2} ({2}, Discard this card: Search your library for a Forest card, reveal it, put it into your hand, then shuffle.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Hog-Monkey": {
+    "name": "Hog-Monkey",
+    "mana_cost": "{2}{B}",
+    "type_line": "Creature — Boar Monkey",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Exhaust"
+    ],
+    "oracle_text": "At the beginning of combat on your turn, target creature you control with a +1/+1 counter on it gains menace until end of turn. (It can't be blocked except by two or more creatures.)\nExhaust — {5}: Put two +1/+1 counters on this creature. (Activate each exhaust ability only once.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Rough Rhino Cavalry": {
+    "name": "Rough Rhino Cavalry",
+    "mana_cost": "{4}{R}",
+    "type_line": "Creature — Human Mercenary",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Exhaust",
+      "Firebending"
+    ],
+    "oracle_text": "Firebending 2 (Whenever this creature attacks, add {R}{R}. This mana lasts until end of combat.)\nExhaust — {8}: Put two +1/+1 counters on this creature. It gains trample until end of turn. (Activate each exhaust ability only once.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Rebellious Captives": {
+    "name": "Rebellious Captives",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Human Peasant Ally",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Exhaust",
+      "Earthbend"
+    ],
+    "oracle_text": "Exhaust — {6}: Put two +1/+1 counters on this creature, then earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped. Activate each exhaust ability only once.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Waterbending Scroll": {
+    "name": "Waterbending Scroll",
+    "mana_cost": "{1}{U}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{6}, {T}: Draw a card. This ability costs {1} less to activate for each Island you control.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Barrels of Blasting Jelly": {
+    "name": "Barrels of Blasting Jelly",
+    "mana_cost": "{1}",
+    "type_line": "Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{1}: Add one mana of any color. Activate only once each turn.\n{5}, {T}, Sacrifice this artifact: It deals 5 damage to target creature.",
+    "colors": []
+  },
+  "Jasmine Dragon Tea Shop": {
+    "name": "Jasmine Dragon Tea Shop",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{T}: Add {C}.\n{T}: Add one mana of any color. Spend this mana only to cast an Ally spell or activate an ability of an Ally source.\n{5}, {T}: Create a 1/1 white Ally creature token.",
+    "colors": []
+  },
+  "White Lotus Hideout": {
+    "name": "White Lotus Hideout",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "{T}: Add {C}.\n{T}: Add one mana of any color. Spend this mana only to cast a Lesson or Shrine spell.\n{1}, {T}: Add one mana of any color.",
+    "colors": []
+  },
+  "Zuko, Exiled Prince": {
+    "name": "Zuko, Exiled Prince",
+    "mana_cost": "{3}{R}",
+    "type_line": "Legendary Creature — Human Noble",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [
+      "Firebending"
+    ],
+    "oracle_text": "Firebending 3 (Whenever this creature attacks, add {R}{R}{R}. This mana lasts until end of combat.)\n{3}: Exile the top card of your library. You may play that card this turn.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Aang's Iceberg": {
+    "name": "Aang's Iceberg",
+    "mana_cost": "{2}{W}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flash",
+      "Waterbend",
+      "Scry"
+    ],
+    "oracle_text": "Flash\nWhen this enchantment enters, exile up to one other target nonland permanent until this enchantment leaves the battlefield.\nWaterbend {3}: Sacrifice this enchantment. If you do, scry 2. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+    "colors": [
+      "W"
+    ]
+  },
+  "North Pole Patrol": {
+    "name": "North Pole Patrol",
+    "mana_cost": "{2}{U}",
+    "type_line": "Creature — Human Soldier Ally",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Waterbend"
+    ],
+    "oracle_text": "{T}: Untap another target permanent you control.\nWaterbend {3}, {T}: Tap target creature an opponent controls. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Zuko's Conviction": {
+    "name": "Zuko's Conviction",
+    "mana_cost": "{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Kicker"
+    ],
+    "oracle_text": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nReturn target creature card from your graveyard to your hand. If this spell was kicked, instead put that card onto the battlefield tapped.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Sokka, Bold Boomeranger": {
+    "name": "Sokka, Bold Boomeranger",
+    "mana_cost": "{U}{R}",
+    "type_line": "Legendary Creature — Human Warrior Ally",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "When Sokka enters, discard up to two cards, then draw that many cards.\nWhenever you cast an artifact or Lesson spell, put a +1/+1 counter on Sokka.",
+    "colors": [
+      "R",
+      "U"
+    ]
+  },
+  "Seismic Sense": {
+    "name": "Seismic Sense",
+    "mana_cost": "{G}",
+    "type_line": "Sorcery — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Look at the top X cards of your library, where X is the number of lands you control. You may reveal a creature or land card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Aang's Journey": {
+    "name": "Aang's Journey",
+    "mana_cost": "{2}",
+    "type_line": "Sorcery — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Kicker"
+    ],
+    "oracle_text": "Kicker {2} (You may pay an additional {2} as you cast this spell.)\nSearch your library for a basic land card. If this spell was kicked, instead search your library for a basic land card and a Shrine card. Reveal those cards, put them into your hand, then shuffle.\nYou gain 2 life.",
+    "colors": []
+  },
+  "Sparring Dummy": {
+    "name": "Sparring Dummy",
+    "mana_cost": "{1}{G}",
+    "type_line": "Artifact Creature — Scarecrow",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [
+      "Mill",
+      "Defender"
+    ],
+    "oracle_text": "Defender\n{T}: Mill a card. You may put a land card milled this way into your hand. You gain 2 life if a Lesson card is milled this way. (To mill a card, put the top card of your library into your graveyard.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Lost Days": {
+    "name": "Lost Days",
+    "mana_cost": "{4}{U}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "The owner of target creature or enchantment puts it into their library second from the top or on the bottom. You create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")",
+    "colors": [
+      "U"
+    ]
+  },
+  "Serpent of the Pass": {
+    "name": "Serpent of the Pass",
+    "mana_cost": "{5}{U}{U}",
+    "type_line": "Creature — Serpent",
+    "power": "6",
+    "toughness": "5",
+    "keywords": [],
+    "oracle_text": "If there are three or more Lesson cards in your graveyard, you may cast this spell as though it had flash.\nThis spell costs {1} less to cast for each noncreature, nonland card in your graveyard.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Elemental Teachings": {
+    "name": "Elemental Teachings",
+    "mana_cost": "{4}{G}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Search your library for up to four land cards with different names and reveal them. An opponent chooses two of those cards. Put the chosen cards into your graveyard and the rest onto the battlefield tapped, then shuffle.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Dai Li Indoctrination": {
+    "name": "Dai Li Indoctrination",
+    "mana_cost": "{1}{B}",
+    "type_line": "Sorcery — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "Choose one —\n• Target opponent reveals their hand. You choose a nonland permanent card from it. That player discards that card.\n• Earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Professor Zei, Anthropologist": {
+    "name": "Professor Zei, Anthropologist",
+    "mana_cost": "{U/R}{U/R}",
+    "type_line": "Legendary Creature — Human Advisor Ally",
+    "power": "0",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "{T}, Discard a card: Draw a card.\n{1}, {T}, Sacrifice Professor Zei: Return target instant or sorcery card from your graveyard to your hand. Activate only during your turn.",
+    "colors": [
+      "R",
+      "U"
+    ]
+  },
+  "United Front": {
+    "name": "United Front",
+    "mana_cost": "{X}{W}{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Create X 1/1 white Ally creature tokens, then put a +1/+1 counter on each creature you control.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Spirit Water Revival": {
+    "name": "Spirit Water Revival",
+    "mana_cost": "{1}{U}{U}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Waterbend"
+    ],
+    "oracle_text": "As an additional cost to cast this spell, you may waterbend {6}. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)\nDraw two cards. If this spell's additional cost was paid, instead shuffle your graveyard into your library, draw seven cards, and you have no maximum hand size for the rest of the game.\nExile Spirit Water Revival.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Yue, the Moon Spirit": {
+    "name": "Yue, the Moon Spirit",
+    "mana_cost": "{3}{U}",
+    "type_line": "Legendary Creature — Spirit Ally",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Vigilance",
+      "Waterbend"
+    ],
+    "oracle_text": "Flying, vigilance\nWaterbend {5}, {T}: You may cast a noncreature spell from your hand without paying its mana cost. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Solstice Revelations": {
+    "name": "Solstice Revelations",
+    "mana_cost": "{2}{R}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Flashback"
+    ],
+    "oracle_text": "Exile cards from the top of your library until you exile a nonland card. You may cast that card without paying its mana cost if the spell's mana value is less than the number of Mountains you control. If you don't cast that card this way, put it into your hand.\nFlashback {6}{R} (You may cast this card from your graveyard for its flashback cost. Then exile it.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Hama, the Bloodbender": {
+    "name": "Hama, the Bloodbender",
+    "mana_cost": "{2}{U/B}{U/B}{U/B}",
+    "type_line": "Legendary Creature — Human Warlock",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Mill",
+      "Waterbend"
+    ],
+    "oracle_text": "When Hama enters, target opponent mills three cards. Exile up to one noncreature, nonland card from that player's graveyard. For as long as you control Hama, you may cast the exiled card during your turn by waterbending {X} rather than paying its mana cost, where X is its mana value. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+    "colors": [
+      "B",
+      "U"
+    ]
+  },
+  "Azula, Cunning Usurper": {
+    "name": "Azula, Cunning Usurper",
+    "mana_cost": "{2}{U}{B}{B}",
+    "type_line": "Legendary Creature — Human Noble Rogue",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Firebending"
+    ],
+    "oracle_text": "Firebending 2 (Whenever this creature attacks, add {R}{R}. This mana lasts until end of combat.)\nWhen Azula enters, target opponent exiles a nontoken creature they control, then they exile a nonland card from their graveyard.\nDuring your turn, you may cast cards exiled with Azula and you may cast them as though they had flash. Mana of any type can be spent to cast those spells.",
+    "colors": [
+      "B",
+      "U"
+    ]
+  },
+  "Sozin's Comet": {
+    "name": "Sozin's Comet",
+    "mana_cost": "{3}{R}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Foretell"
+    ],
+    "oracle_text": "Each creature you control gains firebending 5 until end of turn. (Whenever it attacks, add {R}{R}{R}{R}{R}. This mana lasts until end of combat.)\nForetell {2}{R} (During your turn, you may pay {2} and exile this card from your hand face down. Cast it on a later turn for its foretell cost.)",
+    "colors": [
+      "R"
     ]
   }
 }

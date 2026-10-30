@@ -6,7 +6,8 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.env import Match, ObservationSpace, Reward
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.world import checkpoint_world, validate_agent_setup

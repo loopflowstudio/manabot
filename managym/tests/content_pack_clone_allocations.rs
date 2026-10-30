@@ -8,7 +8,7 @@ use managym::benchmark_allocations;
 
 use managym::{
     benchmark::build_fixture,
-    cardsets::alpha::{default_content_pack, ContentPack},
+    cards::content_pack::{default_content_pack, ContentPack},
     state::card::CardDefinition,
     Game,
 };

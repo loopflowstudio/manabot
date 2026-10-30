@@ -46,6 +46,9 @@
       dimmed={permanent.summoning_sick}
       counters={permanent.plus1_counters}
       temporarySubtypes={permanent.temp_subtypes ?? []}
+      exhaustedAbilities={permanent.exhausted_abilities ?? 0}
+      onceEachTurnUsed={permanent.once_each_turn_used ?? 0}
+      grantedFirebending={permanent.granted_firebending ?? 0}
       damage={permanent.damage}
       onSelect={() => onSelectTarget?.(permanent.id)}
       onHoverStart={() => {

@@ -35,7 +35,8 @@ from experiments.elemental_grid import (
     SCHEDULE_SHA256,
     schedule_sha256,
 )
-from manabot.env import Match, ObservationSpace
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.experiment.config import Baseline, Case, Experiment
 from manabot.experiment.execution import PlannedRun
 from manabot.infra.identity import canonical_json, file_sha256

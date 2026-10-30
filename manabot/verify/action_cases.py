@@ -11,13 +11,17 @@ from typing import Literal
 import numpy as np
 import torch
 
-from manabot.env import ObservationSpace, observation as observation_schema
+from manabot.env import observation as observation_schema
+from manabot.env.observation import ObservationSpace
 import managym
 
 
 def initial(
     *, authored: bool = True, seed: int = 111, deck: dict[str, int] | None = None
 ) -> managym.Env:
+    # Diagnostic exception: `reach` and the outcome probes step constructed
+    # positions one native window at a time, including sole-offer ones. These
+    # fixed cases (CASE_SET) never play a game for a model or policy.
     env = managym.Env(seed=seed, skip_trivial=False)
     configs = (
         [

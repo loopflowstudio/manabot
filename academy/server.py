@@ -923,9 +923,9 @@ class GameSession:
             raise ValueError("Failed to load the selected opponent.") from exc
 
         try:
-            # Forced actions and priority passes are automated at the Academy
-            # layer so every native step retains its Command and provenance.
-            env = managym.Env(seed=seed, skip_trivial=False)
+            # Native skipping resolves sole legal actions, as in every runner;
+            # priority-stop automation still records its Commands here.
+            env = managym.Env(seed=seed)
             obs, _ = env.reset(config.to_rust())
         except BaseException as exc:
             # PyO3's PanicException derives directly from BaseException and has
@@ -937,17 +937,16 @@ class GameSession:
                 "Could not prepare the requested game. The current game is unchanged."
             ) from exc
         manifest = env.content_pack_manifest()
-        compiled = manifest.get("compiled_semantics")
         selected_pack = curated_pack_for_matchup(
             config.hero_deck_name,
             config.villain_deck_name,
         )
         if selected_pack is not None:
             expected_pack_key = selected_pack.semantic_pack_key
-            actual_pack_key = None if compiled is None else compiled.get("pack_key")
+            actual_pack_key = manifest.get("pack_key")
             if actual_pack_key != expected_pack_key:
                 raise ValueError(
-                    "Curated matchup did not select its compiled semantic pack: "
+                    "Curated matchup did not select its authored pack: "
                     f"expected {expected_pack_key!r}, got {actual_pack_key!r}"
                 )
         player_config = raw_config if isinstance(raw_config, dict) else {}
@@ -1458,13 +1457,9 @@ class GameSession:
             )
         event_subjects.update(json.loads(self.env.presentation_subjects_json()))
         self.presentation.observe(next_obs, event_subjects=event_subjects)
-        if auto and len(actions) == 1:
-            label = (
-                f"Opponent: {action_description}"
-                if actor == "villain"
-                else action_description
-            )
-            self._pending_action_log.append(f"Auto: {label}")
+        if auto:
+            # Priority-stop automation stays identifiable in the hero's log.
+            self._pending_action_log.append(f"Auto: {action_description}")
         elif actor == "villain":
             self._pending_action_log.append(f"Villain: {action_description}")
         self.trace.events.append(
@@ -1538,15 +1533,6 @@ class GameSession:
             steps += 1
 
             context = self._build_decision_context(self.obs, viewer=1)
-            if self.auto_pass and len(context.actions) == 1:
-                self._step_and_record(
-                    actor="villain",
-                    action_index=context.actions[0]["index"],
-                    actions=context.actions,
-                    context=context,
-                    auto=True,
-                )
-                continue
             if self._villain_offer_policy is not None:
                 offer_id = int(self._villain_offer_policy(context))
                 action_index = context.action_by_offer.get(offer_id)
@@ -1589,8 +1575,9 @@ class GameSession:
     def _advance(self) -> None:
         """Run the game forward to the next point the hero must see.
 
-        Alternates villain play with forced hero actions and priority passes.
-        Each automatic action uses the same recorded authority path as a click.
+        Alternates villain play with automated hero priority passes. Native
+        skipping already resolved sole legal actions. Each automatic pass uses
+        the same recorded authority path as a click.
         Bounded so a stuck engine cannot spin the server forever.
         """
         if (
@@ -1610,18 +1597,15 @@ class GameSession:
 
             # Hero is to act from here on.
             self._maybe_clear_f6()
-            actions = describe_actions(self.obs)
-            forced = self.auto_pass and len(actions) == 1
-            if not forced and self._should_surface():
+            if self._should_surface():
                 return
 
             if hero_steps >= MAX_AUTOPLAY_STEPS:
                 raise RuntimeError("Hero automatic play exceeded safety step limit.")
             hero_steps += 1
 
-            action_index = (
-                actions[0]["index"] if forced else _pass_priority_index(actions)
-            )
+            actions = describe_actions(self.obs)
+            action_index = _pass_priority_index(actions)
             if action_index is None:
                 return
             self._step_and_record(
@@ -1630,8 +1614,7 @@ class GameSession:
                 actions=actions,
                 auto=True,
             )
-            if not forced:
-                self._auto_passed_since_surface += 1
+            self._auto_passed_since_surface += 1
 
     def _maybe_clear_f6(self) -> None:
         if self._f6_turn is None or self.obs is None:

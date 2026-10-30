@@ -1,16 +1,21 @@
 """The actual policy input separates native pending choices and survives storage."""
 
+from hashlib import sha256
+import json
 from pathlib import Path
 
+from managym.decision_capture import DecisionInput
 import numpy as np
+from pydantic import BaseModel, JsonValue, TypeAdapter
 import pytest
 import torch
 
-from manabot.env import ObservationSpace
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model import ActorCritic
+from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.semantic.decision_contract import SemanticDecisionContract
+from manabot.semantic.text_observation import render_decision
 from manabot.verify.text_observation import collision_branches, native_fixtures
 from manabot.verify.trigger_order import ordering_root
 import managym
@@ -23,7 +28,7 @@ def test_native_continuations_separate_policy_inputs_and_model_outputs() -> None
         env.observation_for_player(env.current_agent_index()) for env in branches
     ]
     assert observations[0].toJSON() == observations[1].toJSON()
-    for version in (1, 2):
+    for version in (1, 2, 3, 4, 5):
         space = ObservationSpace(ObservationConfig(policy_input_version=version))
         encoded = [space.encode(obs) for obs in observations]
         for env, obs, expected in zip(branches, observations, encoded, strict=True):
@@ -37,7 +42,7 @@ def test_native_continuations_separate_policy_inputs_and_model_outputs() -> None
             if not np.array_equal(encoded[0][key], encoded[1][key])
         ]
         assert differences == ([] if version == 1 else ["relations"])
-        if version == 2:
+        if version >= 2:
             agent = ActorCritic(space, ModelConfig(hidden_dim=16, policy_film=True))
             batch = {
                 key: torch.from_numpy(np.stack([obs[key] for obs in encoded]))
@@ -96,7 +101,7 @@ def test_native_fixture_relation_parity_and_other_viewer_safety() -> None:
     )
 
 
-@pytest.mark.parametrize("version", (1, 2))
+@pytest.mark.parametrize("version", (1, 2, 3, 4, 5))
 def test_checkpoint_retains_its_policy_input_version(
     tmp_path: Path, version: int
 ) -> None:
@@ -108,7 +113,7 @@ def test_checkpoint_retains_its_policy_input_version(
     payload = torch.load(path, weights_only=False)
     assert payload["world_binding"]["policy_input_version"] == version
     assert ("policy_input_version" in payload["hypers"]["observation_hypers"]) == (
-        version == 2
+        version >= 2
     )
     restored, restored_space = load_checkpoint(str(path))
     assert restored_space.shapes == space.shapes
@@ -117,7 +122,9 @@ def test_checkpoint_retains_its_policy_input_version(
     for key, value in agent.state_dict().items():
         torch.testing.assert_close(restored.state_dict()[key], value)
     # Changing a saved configuration cannot silently upgrade trained weights.
-    payload["hypers"]["observation_hypers"]["policy_input_version"] = 3 - version
+    payload["hypers"]["observation_hypers"]["policy_input_version"] = (
+        1 if version != 1 else 2
+    )
     torch.save(payload, path)
     with pytest.raises(ValueError):
         load_checkpoint(str(path))
@@ -140,6 +147,145 @@ def test_stack_targets_remain_distinct_after_the_same_committed_cost() -> None:
     current = ObservationSpace()
     left, right = [current.encode(obs) for obs in observations]
     assert not np.array_equal(left["relations"], right["relations"])
+
+
+class EligibilityEvidence(BaseModel):
+    legal: bool
+    capture: dict[str, JsonValue]
+    relations: list[float]
+
+
+def _eligibility_evidence() -> list[EligibilityEvidence]:
+    """Native directed captures; no invented continuation or reconstructed legality."""
+    path = (
+        Path(__file__).parents[1]
+        / "fixtures/resolution-eligibility-captures-v4-w15.json"
+    )
+    return TypeAdapter(list[EligibilityEvidence]).validate_json(path.read_text())
+
+
+def test_retained_eligibility_separates_portable_text_and_policy_input() -> None:
+    torch.manual_seed(608)
+    space = ObservationSpace()
+    agent = ActorCritic(space, ModelConfig(hidden_dim=16))
+    encoded: list[dict[str, np.ndarray]] = []
+    texts: list[str] = []
+    for record in _eligibility_evidence():
+        capture_json = json.dumps(record.capture)
+        capture = DecisionInput.model_validate_json(capture_json)
+        observation = managym.Observation.from_json(
+            json.dumps(capture.observation.viewer_state)
+        )
+        # Schema 7 intentionally excludes continuation. Join the validated capture
+        # frames only for the stateless reference encoder, never an execution Env.
+        tensors = space.encode(observation)
+        rows = space.encoder._encode_relations(
+            capture.frames, observation.agent.player_index
+        )
+        tensors["relations"] = rows
+        np.testing.assert_array_equal(rows, np.array(record.relations).reshape(64, 33))
+        selected = rows[(rows[:, 0] == 2) & (rows[:, 3] == 5)]
+        np.testing.assert_array_equal(selected[:, 22], [1, 2])
+        np.testing.assert_array_equal(selected[:, 29], [1, 2])
+        np.testing.assert_array_equal(selected[:, 32], [1 if record.legal else 2, 1])
+        assert not rows[rows[:, 3] != 5, 32].any()
+        old = ObservationSpace(ObservationConfig(policy_input_version=2))
+        old.encode(observation)
+        np.testing.assert_array_equal(
+            old.encoder._encode_relations(
+                capture.frames, observation.agent.player_index
+            ),
+            rows[:, :32],
+        )
+        text = render_decision(capture_json).text
+        assert f"Legal when resolution began: {'yes' if record.legal else 'no'}" in text
+        texts.append(text)
+        encoded.append(tensors)
+    for start in (0, 2):
+        left, right = encoded[start : start + 2]
+        assert texts[start] != texts[start + 1]
+        for key in left:
+            if key != "relations":
+                np.testing.assert_array_equal(left[key], right[key], err_msg=key)
+        np.testing.assert_array_equal(
+            left["relations"][:, :32], right["relations"][:, :32]
+        )
+        batch = {
+            key: torch.from_numpy(np.stack([left[key], right[key]])) for key in left
+        }
+        _, value = agent(batch)
+        assert not torch.equal(value[0], value[1])
+
+
+def test_historical_capture_eligibility_is_unknown_and_invalid_facts_fail_closed() -> (
+    None
+):
+    record = _eligibility_evidence()[1]
+    payload = record.capture
+    payload["capture_version"] = 3
+    frames = payload["frames"]
+    assert isinstance(frames, list)
+    for frame in frames:
+        assert isinstance(frame, dict) and isinstance(frame["targets"], list)
+        for target in frame["targets"]:
+            assert isinstance(target, dict)
+            del target["legal_at_resolution_start"]
+    del payload["digest"]
+    payload["digest"] = sha256(
+        json.dumps(
+            payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+        ).encode()
+    ).hexdigest()
+    capture = DecisionInput.model_validate_json(json.dumps(payload))
+    assert all(
+        t.legal_at_resolution_start is None for f in capture.frames for t in f.targets
+    )
+    assert (
+        "Legal when resolution began: unknown"
+        in render_decision(json.dumps(payload)).text
+    )
+    for bad in (0, "true", [], {}):
+        fresh = _eligibility_evidence()[0].capture
+        fresh["frames"][1]["targets"][0]["legal_at_resolution_start"] = bad
+        with pytest.raises(ValueError):
+            DecisionInput.model_validate_json(json.dumps(fresh))
+    fresh = _eligibility_evidence()[0].capture
+    fresh["capture_version"] = 3
+    with pytest.raises(ValueError, match="capture v3"):
+        DecisionInput.model_validate_json(json.dumps(fresh))
+    fresh = _eligibility_evidence()[0].capture
+    fresh["frames"][0]["targets"][0]["legal_at_resolution_start"] = True
+    with pytest.raises(ValueError, match="frame relationship"):
+        DecisionInput.model_validate_json(json.dumps(fresh))
+
+
+@pytest.mark.parametrize("version", (1, 2, 3, 4, 5))
+def test_scalar_and_vector_buffers_bind_policy_version_by_width(version: int) -> None:
+    space = ObservationSpace(ObservationConfig(policy_input_version=version))
+    players = [managym.PlayerConfig(name, {"Mountain": 40}) for name in ("a", "b")]
+    scalar = managym.Env(seed=608, skip_trivial=False)
+    observation, _ = scalar.reset(players)
+    expected = space.encode(observation)
+    out = {key: np.zeros_like(value) for key, value in expected.items()}
+    scalar.encode_observation_into(observation, out)
+    for key in out:
+        np.testing.assert_array_equal(out[key], expected[key], err_msg=key)
+    vector = managym.VectorEnv(1, seed=608, skip_trivial=False)
+    buffers = {
+        key: np.zeros((1, *value.shape), dtype=value.dtype)
+        for key, value in expected.items()
+    }
+    buffers.update(
+        {
+            "rewards": np.zeros(1, dtype=np.float64),
+            "terminated": np.zeros(1, dtype=np.uint8),
+            "truncated": np.zeros(1, dtype=np.uint8),
+        }
+    )
+    vector.set_buffers(buffers)
+    vector.reset_all_into_buffers(players)
+    for key in expected:
+        np.testing.assert_array_equal(buffers[key][0], expected[key], err_msg=key)
 
 
 @pytest.mark.parametrize("difference", ["ability", "context"])

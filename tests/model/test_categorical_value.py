@@ -8,7 +8,8 @@ import pytest
 import torch
 import torch.nn.functional as F
 
-from manabot.env import Match, ObservationSpace, Reward
+from manabot.env.match import Match, Reward
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, RewardConfig
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint

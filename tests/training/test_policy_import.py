@@ -8,7 +8,8 @@ import pytest
 import torch
 
 from manabot.belief.sampling_data import read_dataset
-from manabot.env import Match, ObservationSpace
+from manabot.env.match import Match
+from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256, file_sha256

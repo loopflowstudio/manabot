@@ -9,19 +9,19 @@ from typing import Any, cast
 from managym.enums import ActionEnum, ActionSpaceEnum, EventTypeEnum, StepEnum, ZoneEnum
 import pytest
 
-from manabot.env import Env
+from manabot.env.env import Env
 from manabot.eval.admission import register_anchor
 from manabot.eval.models import EvaluationContract
 from manabot.eval.monitor import MonitorProtocol
 from manabot.infra.identity import file_sha256
-from manabot.sim import players
+from manabot.sim import anchors
+from manabot.sim.anchors import ScriptedGreedyPlayer
 from manabot.sim.heuristic import (
     HeuristicPlayer,
     TargetedSpell,
     heuristic_source_paths,
     targeted_spells,
 )
-from manabot.sim.players import ScriptedGreedyPlayer
 
 OWN, OPPONENT = 10, 20
 
@@ -369,7 +369,7 @@ def test_v1_monitor_identity_is_unchanged_and_heuristic_has_its_own() -> None:
     ).anchors[0]
     scripted = register_anchor(candidate, "scripted_greedy", player_id="scripted")
     heuristic = register_anchor(candidate, "heuristic", player_id="heuristic")
-    assert scripted.source_sha256 == file_sha256(Path(players.__file__))
+    assert scripted.source_sha256 == file_sha256(Path(anchors.__file__))
     assert heuristic.source_sha256 != scripted.source_sha256
     assert all(path.exists() for path in heuristic_source_paths())
 

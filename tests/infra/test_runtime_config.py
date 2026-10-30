@@ -6,7 +6,7 @@ Tests for hyperparameter defaults that depend on process environment.
 import os
 import shutil
 
-from manabot.infra import RuntimeConfig
+from manabot.infra.config import RuntimeConfig
 
 
 def test_runs_dir_env_is_used_when_current_directory_was_removed(monkeypatch, tmp_path):

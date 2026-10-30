@@ -15,7 +15,6 @@ from manabot.llm.schema import (
     DecisionInput,
     DecisionObjective,
     EncodedPrompt,
-    Failure,
     FallbackEvidence,
     GeneratedResponse,
     InferenceConfig,
@@ -118,7 +117,12 @@ def select(
     """
     start = time.monotonic() if started is None else started
     deadline = start + config.deadline_seconds
-    result = SelectionResult(decision=decision, config=config, runtime=runtime.identity)
+    result = SelectionResult(
+        decision=decision,
+        config=config,
+        runtime=runtime.identity,
+        behavior_version=runtime.identity.behavior_version(config),
+    )
     attempts: list[Attempt] = []
     messages = decision_messages(decision, thinking=config.enable_thinking)
 
@@ -208,42 +212,33 @@ def select(
                         "origin": origin,
                     }
                 )
-                publish()
-                return result
+                break
             messages = (
                 *messages,
                 Message(role="assistant", content=response.text),
                 Message(role="user", content=REPAIR),
             )
-        check_deadline()
-        fallback = uniform_fallback(decision, config.fallback_seed)
-        result = result.model_copy(
-            update={
-                "selected_reference": decision.legal_references[
-                    fallback.selected_index
-                ],
-                "origin": "fallback",
-                "fallback": fallback,
-            }
-        )
+        else:
+            check_deadline()
+            fallback = uniform_fallback(decision, config.fallback_seed)
+            result = result.model_copy(
+                update={
+                    "selected_reference": decision.legal_references[
+                        fallback.selected_index
+                    ],
+                    "origin": "fallback",
+                    "fallback": fallback,
+                }
+            )
+        # Every action, including fallback, requires successful evidence retention.
+        publish()
     except Exception as error:
-        kind = (
-            "deadline"
-            if isinstance(error, TimeoutError)
-            else "overflow"
-            if isinstance(error, ContextOverflow)
-            else "runtime"
-        )
         if attempts:
             attempts[-1] = attempts[-1].model_copy(
                 update={"seconds": time.monotonic() - attempt_start}
             )
-        result = result.model_copy(
-            update={
-                "failure": Failure(
-                    kind=kind, message=f"{type(error).__name__}: {error}"
-                ),
-            }
+        result = result.invalidate(
+            error, kind="overflow" if isinstance(error, ContextOverflow) else None
         )
-    publish()
+        publish()
     return result

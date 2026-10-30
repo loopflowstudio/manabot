@@ -79,7 +79,7 @@ def test_pack_hash_and_backend_deck_views_derive_from_manifest():
     assert server.DECK_DISPLAY_NAMES["ur_lessons"] == "UR Lessons"
     assert server.DECK_DISPLAY_NAMES["gw_allies"] == "GW Allies"
 
-    from manabot.verify.util import GW_ALLIES_DECK, UR_LESSONS_DECK
+    from manabot.verify.games import GW_ALLIES_DECK, UR_LESSONS_DECK
 
     assert UR_LESSONS_DECK == CURATED_PACK.hero_deck
     assert GW_ALLIES_DECK == CURATED_PACK.villain_deck
