@@ -20,8 +20,7 @@ pub mod study;
 pub mod world;
 
 pub use agent::env::Env;
-pub use agent::vector_env::VectorEnv;
 pub use flow::game::Game;
-pub use state::hash::{MatchStateHash, MATCH_STATE_HASH_VERSION};
+pub use state::hash::MATCH_STATE_HASH_VERSION;
 pub use state::player::PlayerConfig;
 pub use world::WORLD_VERSION;
