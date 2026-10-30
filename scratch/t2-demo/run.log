@@ -1,6 +1,0 @@
-unsupported among deck cards: []
-unsupported among all 51 T2 cards: []
-games: 60 winners: {1: 36, 0: 24} errors: [] 0
-face-down opponent card views: 0 with name/key leaked: 0
-offered T2 action kinds: {'foretell': 223}
-  foretell: Foretell Sozin's Comet
