@@ -134,6 +134,8 @@ impl Game {
                     .is_some_and(|s| matches!(s.decision, Decision::Sacrifice { .. }));
                 if matches!(self.pending_choice, Some(PendingChoice::Crew { .. })) {
                     Some(format!("Tap {} to crew", self.state.cards[*card].name))
+                } else if matches!(self.pending_choice, Some(PendingChoice::TapPayment { .. })) {
+                    Some(format!("Tap {} to pay", self.state.cards[*card].name))
                 } else if sacrifice {
                     Some(format!("Sacrifice {}", self.state.cards[*card].name))
                 } else if let Some(suspended) = &self.state.suspended_decision {
@@ -273,6 +275,11 @@ impl Game {
                 if ability
                     .crew
                     .is_some_and(|power| self.crew_power_available(player, permanent_id) < power)
+                {
+                    continue;
+                }
+                if ability.tap_cost.is_some()
+                    && self.tap_cost_candidates(player, ability).is_empty()
                 {
                     continue;
                 }
@@ -476,6 +483,27 @@ impl Game {
                     focus: Vec::new(),
                 })
             }
+            PendingChoice::TapPayment {
+                player,
+                source,
+                ability_index,
+                ..
+            } => Some(ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: self
+                    .activation_ability(*source, *ability_index)
+                    .map(|ability| self.tap_cost_candidates(*player, &ability))
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter_map(|id| self.state.permanents[id].as_ref())
+                    .map(|permanent| Action::SelectCard {
+                        player: *player,
+                        card: permanent.card,
+                    })
+                    .collect(),
+                focus: Vec::new(),
+            }),
             PendingChoice::DiscardPayment { player, .. } => Some(ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::Discard,
@@ -776,6 +804,11 @@ impl Game {
                 ) =>
             {
                 self.discard_payment_action(*player, *card)
+            }
+            Action::SelectCard { player, card }
+                if matches!(self.pending_choice, Some(PendingChoice::TapPayment { .. })) =>
+            {
+                self.tap_payment_action(*player, *card)
             }
             Action::SelectCard { player, card }
                 if matches!(self.pending_choice, Some(PendingChoice::Crew { .. })) =>

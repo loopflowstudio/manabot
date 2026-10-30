@@ -94,6 +94,10 @@ pub struct CastChoices {
     /// timing and zone permissions don't apply (CR 608.2g).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub free: bool,
+    /// Cast, paying its costs, as a resolving effect directs ("you may
+    /// cast"): timing and zone permissions don't apply (CR 608.2g).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub resolving: bool,
 }
 
 /// A fully announced spell or activation waiting for selected costs.
@@ -140,6 +144,14 @@ pub enum PendingChoice {
         source: ActivationSource,
         ability_index: usize,
         chosen: Vec<Target>,
+    },
+    /// Choosing the permanent to tap for a "Tap an untapped [predicate] you
+    /// control" activation cost.
+    TapPayment {
+        player: PlayerId,
+        source: ActivationSource,
+        ability_index: usize,
+        targets: Vec<Target>,
     },
     /// Choosing the card to discard for a "Discard a card" activation cost.
     DiscardPayment {

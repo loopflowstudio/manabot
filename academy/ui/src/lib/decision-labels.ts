@@ -41,5 +41,6 @@ export function stageLabel(stage: string): string {
     scry: 'Scry', resolution_payment: 'Pay during resolution', resolution_mode: 'Choose an effect',
     discard: 'Choose a discard', select_milled: 'Choose a milled card', legend_rule: 'Choose a legend to keep',
     keep_creatures: 'Choose creatures to keep', retarget: 'Choose a new target',
+    resolution_cast: 'Cast a spell now',
   } as Record<string, string>)[stage] ?? 'Pending decision';
 }

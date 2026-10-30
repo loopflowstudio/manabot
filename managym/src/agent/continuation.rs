@@ -405,6 +405,11 @@ impl Game {
                 source,
                 ability_index,
                 ..
+            }
+            | PendingChoice::TapPayment {
+                source,
+                ability_index,
+                ..
             } => {
                 frame.source = self.activation_reference(*source, viewer);
                 frame.ability = Some(*ability_index);
@@ -544,7 +549,7 @@ impl Game {
                 Decision::SearchDistinctLands { .. } => (14, None),
                 Decision::OpponentSplitsRevealed { .. } => (15, None),
                 Decision::DiscardFromRevealedHand { .. } => (16, None),
-                Decision::CastWithoutPaying { .. } => (17, None),
+                Decision::CastDuringResolution { .. } => (17, None),
                 Decision::ExileLinked { .. } => (18, None),
                 Decision::DistributeCounters { .. } => (19, None),
                 Decision::KeepCreatures { .. } => (20, None),

@@ -489,6 +489,11 @@ pub struct ActivatedAbilityDefinition {
     /// Discard a chosen card from hand as an activation cost.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub discard_card: bool,
+    /// "Tap an untapped [predicate] you control" as an activation cost; the
+    /// source itself qualifies, and summoning sickness doesn't matter (not a
+    /// {T} cost, CR 302.6).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tap_cost: Option<CardPredicate>,
     /// Exhaust: each object may activate this ability only once (CR 702.177a).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub exhaust: bool,

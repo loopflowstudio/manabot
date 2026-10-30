@@ -115,12 +115,21 @@ pub enum DelayedTriggerEvent {
     YouCastSpell(CardPredicate),
 }
 
-/// "Exile [card] until [source] leaves the battlefield" linkage (Earth
-/// Kingdom Jailer). When the exact `source` object leaves the battlefield the
-/// exiled card returns immediately — no trigger, no stack (CR 603.6e). A later
-/// incarnation of the same physical card is not the duration source.
+/// A card exiled with an exact `source` object (CR 607.2a). "Until [source]
+/// leaves the battlefield" (Earth Kingdom Jailer): when it leaves, the
+/// exiled card returns immediately — no trigger, no stack (CR 603.6e).
+/// Otherwise ("exiled with this creature", Boiling Rock Rioter) the card
+/// stays exiled and the link ends. A later incarnation of the same physical
+/// card is not the source.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ExileLink {
     pub source: ObjectRef,
     pub exiled_card: CardId,
+    /// The card returns as the source leaves the battlefield.
+    #[serde(skip_serializing_if = "is_true")]
+    pub returns: bool,
+}
+
+fn is_true(value: &bool) -> bool {
+    *value
 }

@@ -546,6 +546,8 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::PutCountersOnCreatedToken { .. } => "Effect::PutCountersOnCreatedToken",
         Effect::CopyTriggeringObject => "Effect::CopyTriggeringObject",
         Effect::ChangeTarget { .. } => "Effect::ChangeTarget",
+        Effect::ExileWithSource { .. } => "Effect::ExileWithSource",
+        Effect::CastExiledWithSource { .. } => "Effect::CastExiledWithSource",
         Effect::GainLifeValue { .. } => "Effect::GainLifeValue",
         Effect::AddOneColorManaValue { .. } => "Effect::AddOneColorManaValue",
         Effect::AddManaValue { .. } => "Effect::AddManaValue",
@@ -557,7 +559,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 104;
+const EFFECT_VARIANTS: usize = 106;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -858,6 +860,14 @@ fn effect_witnesses() -> Vec<Effect> {
             count: EffectValue::OwnedPermanentsOpponentsControl,
         },
         Effect::CopyTriggeringObject,
+        Effect::ExileWithSource {
+            target: TargetSpec::GraveyardCard {
+                predicate: CardPredicate::default(),
+            },
+        },
+        Effect::CastExiledWithSource {
+            predicate: CardPredicate::subtype("Ally"),
+        },
         Effect::ChangeTarget {
             target: TargetSpec::SpellOrAbilityWithSingleTarget,
         },

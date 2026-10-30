@@ -605,6 +605,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
         ExileSourceAndReturn { player } => format!("Exile this, then return it to the battlefield under the control of {}", player_description(player)),
         GainControl { player, target, duration } => format!("{} gains control of {}{}", player_description(player), target_description(target), match duration { EffectDuration::EndOfTurn => " until end of turn", _ => "" }),
         CopyTriggeringObject => "Copy it. You may choose new targets for the copy".into(),
+        ExileWithSource { target } => format!("Exile {}", target_description(target)),
+        CastExiledWithSource { predicate } => format!("You may cast a {} from among cards you own exiled with this", predicate_description(predicate, "spell")),
         ChangeTarget { target } => format!("Change the target of {}", target_description(target)),
         PutCountersOnCreatedToken { count } => format!("Put {} +1/+1 counters on that token", value_description(count)),
         ExileAndReturn { .. } => "Exile target creature you control, then return it to the battlefield under its owner's control".into(),

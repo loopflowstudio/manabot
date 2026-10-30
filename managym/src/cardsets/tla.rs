@@ -67,6 +67,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         bitter_work(),
         boar_q_pine(),
         boiling_rock_prison(),
+        boiling_rock_rioter(),
         boomerang_basics(),
         bumi_bash(),
         bumi_king_of_three_trials(),
@@ -1608,6 +1609,53 @@ fn boiling_rock_prison() -> CardDefinition {
             },
         ],
         replacement_effects: vec![ReplacementEffect::EntersTapped],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn boiling_rock_rioter() -> CardDefinition {
+    let text_box = "Firebending 1 (Whenever this creature attacks, add {R}. This mana lasts until end of combat.)\nTap an untapped Ally you control: Exile target card from a graveyard.\nWhenever this creature attacks, you may cast an Ally spell from among cards you own exiled with this creature.";
+
+    CardDefinition {
+        key: "tla.boiling_rock_rioter",
+        scryfall_id: "739653cc-35c8-4a66-95d8-3e80fa6114f0",
+        name: "Boiling Rock Rioter".into(),
+        mana_cost: Some(ManaCost::parse("{2}{B}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Human".into(), "Rogue".into(), "Ally".into()],
+        power: Some(3),
+        toughness: Some(3),
+        abilities: vec![
+            Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Attacks {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::AddMana {
+                    mana: Mana::parse("R"),
+                    until_end_of_combat: true,
+                }],
+            },
+            Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::Attacks {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::CastExiledWithSource {
+                    predicate: CardPredicate::subtype("Ally"),
+                }],
+            },
+        ],
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            tap_cost: Some(CardPredicate::subtype("Ally")),
+            effects: vec![Effect::ExileWithSource {
+                target: TargetSpec::GraveyardCard {
+                    predicate: CardPredicate::default(),
+                },
+            }],
+            ..Default::default()
+        }],
         text_box: text_box.into(),
         ..Default::default()
     }

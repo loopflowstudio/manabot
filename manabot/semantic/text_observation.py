@@ -111,6 +111,7 @@ _STAGES = frozenset(
         "distribute_counters",
         "keep_creatures",
         "retarget",
+        "resolution_cast",
     )
 )
 

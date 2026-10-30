@@ -1607,12 +1607,20 @@ impl Observation {
                         | Some(crate::flow::game::PendingChoice::DiscardPayment {
                             source: crate::flow::game::ActivationSource::Card(card),
                             ..
+                        })
+                        | Some(crate::flow::game::PendingChoice::TapPayment {
+                            source: crate::flow::game::ActivationSource::Card(card),
+                            ..
                         }) => Some(*card),
                         Some(crate::flow::game::PendingChoice::ActivatedTarget {
                             source: crate::flow::game::ActivationSource::Permanent(permanent),
                             ..
                         })
                         | Some(crate::flow::game::PendingChoice::DiscardPayment {
+                            source: crate::flow::game::ActivationSource::Permanent(permanent),
+                            ..
+                        })
+                        | Some(crate::flow::game::PendingChoice::TapPayment {
                             source: crate::flow::game::ActivationSource::Permanent(permanent),
                             ..
                         })

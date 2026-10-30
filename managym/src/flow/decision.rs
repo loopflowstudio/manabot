@@ -183,9 +183,9 @@ pub struct OptionalSacrifice {
     pub then: Vec<Effect>,
 }
 
-/// Where a `CastWithoutPaying` decision's candidates come from.
+/// Where a `CastDuringResolution` decision's candidates come from.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum FreeCastOffer {
+pub enum ResolutionCastOffer {
     /// Spells in the deciding player's hand matching `predicate`, read when
     /// offered (Yue, the Moon Spirit).
     Hand { predicate: CardPredicate },
@@ -195,6 +195,12 @@ pub enum FreeCastOffer {
     /// The top card of the deciding player's library, which they have looked
     /// at and which stays there if not cast (Planetarium of Wan Shi Tong).
     LibraryTop { card: CardId },
+    /// Cards matching `predicate` the deciding player owns that are exiled
+    /// with the exact `source` (Boiling Rock Rioter).
+    ExiledWith {
+        source: ObjectRef,
+        predicate: CardPredicate,
+    },
 }
 
 /// A pending mid-resolution decision, including its own bookkeeping so a
@@ -317,11 +323,16 @@ pub enum Decision {
         revealed: Vec<CardId>,
         remaining: usize,
     },
-    /// "You may cast [a spell] without paying its mana cost" while an effect
-    /// resolves (CR 608.2g): choose a candidate from `offer`, or decline.
-    CastWithoutPaying {
+    /// "You may cast [a spell] (without paying its mana cost)" while an
+    /// effect resolves (CR 608.2g): choose a candidate from `offer`, or
+    /// decline. Timing and zone permissions don't apply.
+    CastDuringResolution {
         player: PlayerId,
-        offer: FreeCastOffer,
+        offer: ResolutionCastOffer,
+        /// The caster pays the spell's costs ("you may cast"); otherwise it
+        /// is cast without paying its mana cost.
+        #[serde(skip_serializing_if = "std::ops::Not::not", default)]
+        paid: bool,
         /// The once-each-turn option (exact source, ability index) casting
         /// spends ("Do this only once each turn"); declining keeps it.
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -407,7 +418,7 @@ impl Decision {
             | Decision::SearchLibraryToHand { player, .. }
             | Decision::SearchDistinctLands { player, .. }
             | Decision::DiscardFromRevealedHand { player, .. }
-            | Decision::CastWithoutPaying { player, .. }
+            | Decision::CastDuringResolution { player, .. }
             | Decision::ExileLinked { player, .. }
             | Decision::OpponentSplitsRevealed { player, .. }
             | Decision::OptionalDiscardDraw { player, .. }
@@ -436,15 +447,15 @@ impl Decision {
             Decision::LookAndSelect { looked, .. } => looked,
             Decision::SearchDistinctLands { selected, .. } => selected,
             Decision::OpponentSplitsRevealed { revealed, .. } => revealed,
-            Decision::CastWithoutPaying {
-                offer: FreeCastOffer::LibraryTop { card },
+            Decision::CastDuringResolution {
+                offer: ResolutionCastOffer::LibraryTop { card },
                 ..
             } => std::slice::from_ref(card),
             Decision::SelectMilled { .. }
             | Decision::SearchBasicLand { .. }
             | Decision::SearchLibraryToHand { .. }
             | Decision::DiscardFromRevealedHand { .. }
-            | Decision::CastWithoutPaying { .. }
+            | Decision::CastDuringResolution { .. }
             | Decision::ExileLinked { .. }
             | Decision::OptionalDiscardDraw { .. }
             | Decision::Modal { .. }
@@ -833,8 +844,8 @@ impl Game {
                     actions: select_cards(*player, cards, *up_to),
                 }
             }
-            Decision::CastWithoutPaying { player, .. } => {
-                let cards = self.free_cast_candidates(&suspended.decision);
+            Decision::CastDuringResolution { player, .. } => {
+                let cards = self.resolution_cast_candidates(&suspended.decision);
                 ActionSpace {
                     player: Some(*player),
                     kind: ActionSpaceKind::LookAndSelect,
@@ -1552,15 +1563,15 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::CastWithoutPaying { .. }, Action::SelectCard { card, .. }) => {
+            (Decision::CastDuringResolution { .. }, Action::SelectCard { card, .. }) => {
                 if !self
-                    .free_cast_candidates(&suspended.decision)
+                    .resolution_cast_candidates(&suspended.decision)
                     .contains(card)
                 {
                     self.state.suspended_decision = Some(suspended);
                     return Err(AgentError("not a castable offered card".into()));
                 }
-                if let Decision::CastWithoutPaying {
+                if let Decision::CastDuringResolution {
                     spends: Some(key), ..
                 } = suspended.decision
                 {
@@ -1569,12 +1580,16 @@ impl Game {
                 // The cast is the effect's last instruction: finish the
                 // resolution, then cast the chosen card onto the stack.
                 let (player, card) = (suspended.decision.player(), *card);
+                let paid = matches!(
+                    suspended.decision,
+                    Decision::CastDuringResolution { paid: true, .. }
+                );
                 self.run_frame(suspended.frame);
                 debug_assert!(
                     self.state.suspended_decision.is_none(),
-                    "a free cast ends its resolving effect"
+                    "a cast during resolution ends its resolving effect"
                 );
-                self.begin_free_cast(player, card)
+                self.begin_resolution_cast(player, card, paid)
             }
             (
                 Decision::ExileLinked {
@@ -1601,8 +1616,8 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::CastWithoutPaying { player, offer, .. }, Action::Decline { .. }) => {
-                if let FreeCastOffer::Exiled { card } = offer {
+            (Decision::CastDuringResolution { player, offer, .. }, Action::Decline { .. }) => {
+                if let ResolutionCastOffer::Exiled { card } = offer {
                     self.reveal_card_to_hand(*card, *player);
                 }
                 self.run_frame(suspended.frame);
@@ -1813,19 +1828,26 @@ impl Game {
         }
     }
 
-    /// The cards a `CastWithoutPaying` decision offers: hand spells matching
+    /// The cards a `CastDuringResolution` decision offers: hand spells matching
     /// its predicate (one per definition, so resampled copies stay
     /// consistent) or the exiled card, each castable for free right now.
-    pub(crate) fn free_cast_candidates(&self, decision: &Decision) -> Vec<CardId> {
-        let Decision::CastWithoutPaying { player, offer, .. } = decision else {
+    pub(crate) fn resolution_cast_candidates(&self, decision: &Decision) -> Vec<CardId> {
+        let Decision::CastDuringResolution {
+            player,
+            offer,
+            paid,
+            ..
+        } = decision
+        else {
             return Vec::new();
         };
         let free = CastChoices {
-            free: true,
+            free: !paid,
+            resolving: *paid,
             ..Default::default()
         };
         let mut candidates: Vec<CardId> = match offer {
-            FreeCastOffer::Hand { predicate } => self
+            ResolutionCastOffer::Hand { predicate } => self
                 .state
                 .zones
                 .zone_cards(ZoneType::Hand, *player)
@@ -1836,14 +1858,27 @@ impl Game {
                     card.types.is_castable() && predicate.matches_card(card)
                 })
                 .collect(),
-            FreeCastOffer::Exiled { card } => self
+            ResolutionCastOffer::Exiled { card } => self
                 .state
                 .zones
                 .contains(*card, ZoneType::Exile, *player)
                 .then_some(*card)
                 .into_iter()
                 .collect(),
-            FreeCastOffer::LibraryTop { card } => (self
+            ResolutionCastOffer::ExiledWith { source, predicate } => self
+                .state
+                .exile_links
+                .iter()
+                .filter(|link| link.source == *source)
+                .map(|link| link.exiled_card)
+                .filter(|card| {
+                    let definition = &self.state.cards[*card];
+                    self.state.zones.contains(*card, ZoneType::Exile, *player)
+                        && definition.types.is_castable()
+                        && predicate.matches_card(definition)
+                })
+                .collect(),
+            ResolutionCastOffer::LibraryTop { card } => (self
                 .state
                 .zones
                 .zone_cards(ZoneType::Library, *player)

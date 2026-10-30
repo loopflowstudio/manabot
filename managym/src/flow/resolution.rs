@@ -7,8 +7,8 @@ use std::collections::VecDeque;
 use crate::{
     flow::{
         decision::{
-            Decision, EffectFrame, FrameFinalize, FreeCastOffer, OptionalSacrifice,
-            PaymentProgress, ResolutionTarget,
+            Decision, EffectFrame, FrameFinalize, OptionalSacrifice, PaymentProgress,
+            ResolutionCastOffer, ResolutionTarget,
         },
         event::GameEvent,
         game::Game,
@@ -968,14 +968,15 @@ impl Game {
                 (!self.linked_exile_candidates(&decision).is_empty()).then_some(decision)
             }
             Effect::CastFromHandFree { predicate } => {
-                let decision = Decision::CastWithoutPaying {
+                let decision = Decision::CastDuringResolution {
                     player: frame.controller,
-                    offer: FreeCastOffer::Hand {
+                    paid: false,
+                    offer: ResolutionCastOffer::Hand {
                         predicate: predicate.clone(),
                     },
                     spends: None,
                 };
-                (!self.free_cast_candidates(&decision).is_empty()).then_some(decision)
+                (!self.resolution_cast_candidates(&decision).is_empty()).then_some(decision)
             }
             Effect::ExileUntilNonlandCastFree { below } => {
                 let player = frame.controller;
@@ -994,13 +995,14 @@ impl Game {
                 }
                 let card = nonland?;
                 let limit = self.effect_value(below, frame);
-                let decision = Decision::CastWithoutPaying {
+                let decision = Decision::CastDuringResolution {
                     player,
-                    offer: FreeCastOffer::Exiled { card },
+                    paid: false,
+                    offer: ResolutionCastOffer::Exiled { card },
                     spends: None,
                 };
                 if i32::from(self.card_mana_value(card)) < limit
-                    && !self.free_cast_candidates(&decision).is_empty()
+                    && !self.resolution_cast_candidates(&decision).is_empty()
                 {
                     return Some(decision);
                 }
@@ -1820,8 +1822,43 @@ impl Game {
                 self.state.exile_links.push(ExileLink {
                     source: source_ref,
                     exiled_card,
+                    returns: true,
                 });
                 None
+            }
+            Effect::ExileWithSource { .. } => {
+                let card = match self.present_primary_target(frame)? {
+                    Target::GraveyardCard(object) => CardId::from(object.entity),
+                    Target::Permanent(id) => self.state.permanents[id].as_ref()?.card,
+                    _ => return None,
+                };
+                self.move_card(card, ZoneType::Exile);
+                let source = frame
+                    .source_ref
+                    .filter(|source| self.lookup_current_permanent(*source).is_ok());
+                if let (Some(source), Some(ZoneType::Exile)) =
+                    (source, self.state.zones.zone_of(card))
+                {
+                    self.journal_exile_links();
+                    self.state.exile_links.push(ExileLink {
+                        source,
+                        exiled_card: card,
+                        returns: false,
+                    });
+                }
+                None
+            }
+            Effect::CastExiledWithSource { predicate } => {
+                let decision = Decision::CastDuringResolution {
+                    player: frame.controller,
+                    paid: true,
+                    offer: ResolutionCastOffer::ExiledWith {
+                        source: frame.source_ref?,
+                        predicate: predicate.clone(),
+                    },
+                    spends: None,
+                };
+                (!self.resolution_cast_candidates(&decision).is_empty()).then_some(decision)
             }
             Effect::AddOneColorManaValue { .. } => {
                 frame.prepend_effects(
@@ -1983,12 +2020,13 @@ impl Game {
             .zones
             .zone_cards(ZoneType::Library, player)
             .last()?;
-        let decision = Decision::CastWithoutPaying {
+        let decision = Decision::CastDuringResolution {
             player,
-            offer: FreeCastOffer::LibraryTop { card },
+            paid: false,
+            offer: ResolutionCastOffer::LibraryTop { card },
             spends,
         };
-        (!self.free_cast_candidates(&decision).is_empty()).then_some(decision)
+        (!self.resolution_cast_candidates(&decision).is_empty()).then_some(decision)
     }
 
     pub(crate) fn source_permanent_id(&self, frame: &EffectFrame) -> Option<PermanentId> {

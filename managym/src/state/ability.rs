@@ -881,6 +881,17 @@ pub enum Effect {
     /// Delayed-trigger payload (earthbend): return the source card from
     /// the graveyard or exile to the battlefield tapped.
     ReturnSourceToBattlefieldTapped,
+    /// "Exile [target]": a card in a graveyard or a permanent, exiled with
+    /// the exact source while it is on the battlefield ("cards exiled with
+    /// this creature", CR 607.2a). It stays exiled when the source leaves.
+    ExileWithSource {
+        target: TargetSpec,
+    },
+    /// "You may cast a [predicate] spell from among cards you own exiled
+    /// with this creature", paying its costs, as the effect resolves.
+    CastExiledWithSource {
+        predicate: CardPredicate,
+    },
     /// "Exile [target] until this creature leaves the battlefield." The
     /// exile only happens if the source is still on the battlefield when
     /// this resolves (CR 603.6e pragmatics); the linked card returns
@@ -1260,7 +1271,9 @@ impl Effect {
                 Some(target)
             }
             Effect::Earthbend { target, .. } => Some(target),
-            Effect::ExileUntilSourceLeaves { target } => Some(target),
+            Effect::ExileUntilSourceLeaves { target } | Effect::ExileWithSource { target } => {
+                Some(target)
+            }
             Effect::UntapTarget { target }
             | Effect::TapTarget { target }
             | Effect::AttachSourceTo { target }
@@ -1313,6 +1326,7 @@ impl Effect {
             | Effect::PutCountersOnCreatedToken { .. }
             | Effect::CopyTriggeringObject
             | Effect::ReturnMilledThisWay { .. }
+            | Effect::CastExiledWithSource { .. }
             | Effect::PutTriggeringCountersOnSource
             | Effect::RestoreController(_)
             | Effect::EachPlayerKeepsCreatures { .. }

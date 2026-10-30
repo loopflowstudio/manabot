@@ -100,7 +100,7 @@ impl Game {
                                 | Decision::SearchBasicLand { .. }
                                 | Decision::SearchLibraryToHand { .. }
                                 | Decision::SearchDistinctLands { .. }
-                                | Decision::CastWithoutPaying { .. }
+                                | Decision::CastDuringResolution { .. }
                         )
             });
         if refresh {

@@ -670,7 +670,7 @@ impl Game {
             self.state.exile_links = kept;
             ended
         };
-        for link in ended {
+        for link in ended.into_iter().filter(|link| link.returns) {
             let owner = self.state.cards[link.exiled_card].owner;
             if self
                 .state

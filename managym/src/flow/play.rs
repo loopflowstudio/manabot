@@ -152,7 +152,7 @@ impl Game {
         let card_ref = &self.state.cards[card];
         let mut cost = if cast.free {
             ManaCost::default()
-        } else if self.state.zones.zone_of(card) == Some(ZoneType::Hand) {
+        } else if cast.resolving || self.state.zones.zone_of(card) == Some(ZoneType::Hand) {
             card_ref.mana_cost.clone()?
         } else {
             self.zone_cast_cost(player, card)?
@@ -286,15 +286,17 @@ impl Game {
         self.begin_cast(player, card, CastChoices::default())
     }
 
-    /// Cast `card` without paying its mana cost while an effect resolves
-    /// (CR 608.2g): its timing and zone permissions don't apply.
-    pub(crate) fn begin_free_cast(
+    /// Cast `card` while an effect resolves (CR 608.2g), paying its costs
+    /// or not: its timing and zone permissions don't apply.
+    pub(crate) fn begin_resolution_cast(
         &mut self,
         player: PlayerId,
         card: CardId,
+        paid: bool,
     ) -> Result<(), AgentError> {
         let cast = CastChoices {
-            free: true,
+            free: !paid,
+            resolving: paid,
             ..CastChoices::default()
         };
         self.begin_cast(player, card, cast)
@@ -1262,6 +1264,81 @@ impl Game {
     }
 
     fn begin_activation_payment(
+        &mut self,
+        player: PlayerId,
+        source: ActivationSource,
+        ability_index: usize,
+        targets: Vec<Target>,
+        x: u8,
+    ) -> Result<(), AgentError> {
+        let ability = self
+            .activation_ability(source, ability_index)
+            .ok_or_else(|| AgentError("missing source".into()))?;
+        if ability.tap_cost.is_some() {
+            self.pending_choice = Some(PendingChoice::TapPayment {
+                player,
+                source,
+                ability_index,
+                targets,
+            });
+            return Ok(());
+        }
+        self.continue_activation_payment(player, source, ability_index, targets, x)
+    }
+
+    /// The untapped permanents `player` controls that can pay `ability`'s
+    /// tap cost.
+    pub(crate) fn tap_cost_candidates(
+        &self,
+        player: PlayerId,
+        ability: &ActivatedAbilityDefinition,
+    ) -> Vec<PermanentId> {
+        let Some(predicate) = &ability.tap_cost else {
+            return Vec::new();
+        };
+        self.battlefield_permanents(player)
+            .into_iter()
+            .filter(|id| {
+                self.state.permanents[*id]
+                    .as_ref()
+                    .is_some_and(|permanent| !permanent.tapped)
+                    && self.permanent_matches_predicate(*id, predicate)
+            })
+            .collect()
+    }
+
+    /// Tap the chosen permanent for the pending tap cost, then pay the rest.
+    pub(crate) fn tap_payment_action(
+        &mut self,
+        player: PlayerId,
+        card: CardId,
+    ) -> Result<(), AgentError> {
+        let Some(PendingChoice::TapPayment {
+            player: payer,
+            source,
+            ability_index,
+            targets,
+        }) = self.pending_choice.clone()
+        else {
+            return Err(AgentError("no tap payment pending".into()));
+        };
+        let ability = self
+            .activation_ability(source, ability_index)
+            .ok_or_else(|| AgentError("missing source".into()))?;
+        let tapped = self.state.card_to_permanent[card]
+            .filter(|id| self.tap_cost_candidates(player, &ability).contains(id));
+        let (true, Some(tapped)) = (payer == player, tapped) else {
+            return Err(AgentError(
+                "tap cost must be an untapped permanent you control".into(),
+            ));
+        };
+        self.pending_choice = None;
+        self.tap_permanent(tapped, false);
+        self.continue_activation_payment(player, source, ability_index, targets, 0)
+    }
+
+    /// The activation's remaining costs once any tap cost is paid.
+    fn continue_activation_payment(
         &mut self,
         player: PlayerId,
         source: ActivationSource,

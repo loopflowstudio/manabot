@@ -12525,3 +12525,62 @@ fn zhao_taps_nonbasic_lands_and_makes_them_mountains_once_he_conquers() {
         "basic lands keep theirs"
     );
 }
+
+/// Tapping an Ally exiles a card from a graveyard with the Rioter; when it
+/// attacks, an Ally spell you own exiled with it may be cast, paying its
+/// costs.
+#[test]
+fn boiling_rock_rioter_exiles_with_itself_and_casts_your_exiled_allies() {
+    let mut s = five_color_setup(&["Boiling Rock Rioter", "Ty Lee, Chi Blocker", "Gray Ogre"]);
+    let rioter = s.force_permanent_on_battlefield(0, "Boiling Rock Rioter");
+    let ally = s
+        .game_mut()
+        .create_token("Ally", PlayerId(0), false)
+        .unwrap();
+    let ty_lee = plant_in_graveyard(&mut s, 0, "Ty Lee, Chi Blocker");
+    let theirs = plant_in_graveyard(&mut s, 1, "Gray Ogre");
+    for (card, payer) in [(ty_lee, ally), (theirs, rioter)] {
+        let object = s.game().current_object_ref(card).unwrap();
+        activate(&mut s, rioter, 0);
+        assert!(s.choose_target(Target::GraveyardCard(object)));
+        assert_eq!(
+            s.action_space().kind,
+            ActionSpaceKind::LookAndSelect,
+            "tap an Ally"
+        );
+        let payer_card = card_of(&s, payer);
+        select_card(&mut s, payer_card);
+        settle(&mut s);
+        assert!(tapped(&s, payer));
+        assert_eq!(zone_of(&s, card), Some(ZoneType::Exile));
+        s.game_mut().state.permanents[payer]
+            .as_mut()
+            .unwrap()
+            .tapped = false;
+    }
+    assert_eq!(s.game().state.exile_links.len(), 2);
+
+    clear_summoning_sickness(&mut s, rioter);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    choose(
+        &mut s,
+        |a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == rioter),
+    );
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        s.decline_attack();
+    }
+    // Ty Lee's {2}{U} is paid as she is cast.
+    s.set_player_mana_pool(0, "2U");
+    s.advance_until(
+        |s| {
+            s.action_space().kind == ActionSpaceKind::LookAndSelect
+                && offered_cards(s).contains(&ty_lee)
+        },
+        "the Rioter's cast offer".into(),
+    );
+    assert_eq!(offered_cards(&s), vec![ty_lee], "only an Ally you own");
+    select_card(&mut s, ty_lee);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, ty_lee), Some(ZoneType::Battlefield));
+    assert_eq!(zone_of(&s, theirs), Some(ZoneType::Exile));
+}
