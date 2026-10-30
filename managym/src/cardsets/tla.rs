@@ -43,6 +43,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         accumulate_wisdom(),
         agna_qel_a(),
         air_nomad_legacy(),
+        airbender_ascension(),
         airbender_s_reversal(),
         airbending_lesson(),
         airship_engine_room(),
@@ -92,6 +93,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         earth_kings_lieutenant(),
         earth_rumble_wrestlers(),
         earth_village_ruffians(),
+        earthbender_ascension(),
         earthbending_lesson(),
         earthen_ally(),
         elemental_teachings(),
@@ -591,6 +593,57 @@ fn air_nomad_legacy() -> CardDefinition {
             per_creature_type_max: None,
             per_color_among: None,
         })],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn airbender_ascension() -> CardDefinition {
+    let text_box = "When this enchantment enters, airbend up to one target creature.\nWhenever a creature you control enters, put a quest counter on this enchantment.\nAt the beginning of your end step, if this enchantment has four or more quest counters on it, exile up to one target creature you control, then return it to the battlefield under its owner's control.";
+
+    CardDefinition {
+        key: "tla.airbender_ascension",
+        scryfall_id: "99a90d13-891c-45cc-b1d5-6080ebae5862",
+        name: "Airbender Ascension".into(),
+        mana_cost: Some(ManaCost::parse("{1}{W}")),
+        types: CardTypes::new([CardType::Enchantment]),
+        abilities: vec![
+            Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement::up_to(1, TargetSpec::Creature),
+                    effects: vec![Effect::Airbend {
+                        target: TargetSpec::Creature,
+                    }],
+                }],
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
+                },
+                intervening_if: None,
+                effects: vec![Effect::PutCountersOnSource {
+                    count: EffectValue::Fixed(1),
+                    kind: CounterKind::Quest,
+                }],
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::BeginningOfYourEndStep,
+                intervening_if: Some(Condition::SourceCountersAtLeast {
+                    kind: CounterKind::Quest,
+                    count: 4,
+                }),
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement::up_to(1, TargetSpec::CreatureYouControl),
+                    effects: vec![Effect::ExileAndReturn {
+                        target: TargetSpec::CreatureYouControl,
+                    }],
+                }],
+            },
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -2516,6 +2569,81 @@ fn earth_village_ruffians() -> CardDefinition {
                 target: TargetSpec::LandYouControl,
             }],
         }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn earthbender_ascension() -> CardDefinition {
+    let text_box = "When this enchantment enters, earthbend 2. Then search your library for a basic land card, put it onto the battlefield tapped, then shuffle.\nLandfall — Whenever a land you control enters, put a quest counter on this enchantment. When you do, if it has four or more quest counters on it, put a +1/+1 counter on target creature you control. It gains trample until end of turn.";
+
+    CardDefinition {
+        key: "tla.earthbender_ascension",
+        scryfall_id: "590a58ab-5e98-4031-8aa6-ce396dc1429f",
+        name: "Earthbender Ascension".into(),
+        mana_cost: Some(ManaCost::parse("{2}{G}")),
+        types: CardTypes::new([CardType::Enchantment]),
+        abilities: vec![
+            Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![
+                    Effect::Earthbend {
+                        count: EffectValue::Fixed(2),
+                        target: TargetSpec::LandYouControl,
+                    },
+                    Effect::SearchBasicLand {
+                        subtype: None,
+                        count: EffectValue::Fixed(1),
+                        tapped: true,
+                        untap_if_lands: None,
+                        bottom_source: false,
+                        to_hand: false,
+                    },
+                ],
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::AnyYouControl(CardPredicate {
+                        card_type: Some(CardType::Land),
+                        ..Default::default()
+                    }),
+                },
+                intervening_if: None,
+                // The reflexive trigger's "if" is asked as it would trigger.
+                effects: vec![
+                    Effect::PutCountersOnSource {
+                        count: EffectValue::Fixed(1),
+                        kind: CounterKind::Quest,
+                    },
+                    Effect::If {
+                        condition: Condition::SourceCountersAtLeast {
+                            kind: CounterKind::Quest,
+                            count: 4,
+                        },
+                        then: vec![Effect::WhenYouDo {
+                            effects: vec![
+                                Effect::PutCounters {
+                                    count: 1,
+                                    kind: CounterKind::PlusOnePlusOne,
+                                    target: TargetSpec::CreatureYouControl,
+                                },
+                                Effect::until_end_of_turn(
+                                    AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                                    Modification::AddKeywords(Keywords {
+                                        trample: true,
+                                        ..Default::default()
+                                    }),
+                                ),
+                            ],
+                        }],
+                        otherwise: vec![],
+                    },
+                ],
+            },
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }

@@ -459,6 +459,11 @@ pub enum Effect {
     Airbend {
         target: TargetSpec,
     },
+    /// "Exile [target], then return it to the battlefield under its
+    /// owner's control": it returns as a new object (CR 400.7).
+    ExileAndReturn {
+        target: TargetSpec,
+    },
     /// Airbend every battlefield permanent matching `predicate` other than
     /// the clause's chosen target, if any.
     AirbendAll {
@@ -1036,6 +1041,7 @@ impl Effect {
             | Effect::Destroy { target }
             | Effect::Exile { target }
             | Effect::Airbend { target }
+            | Effect::ExileAndReturn { target }
             | Effect::ReturnToHandDrawIfControlled { target } => Some(target),
             Effect::SearchBasicLand { .. }
             | Effect::OptionalDiscardDraw { .. }

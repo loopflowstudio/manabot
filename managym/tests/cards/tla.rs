@@ -11546,3 +11546,78 @@ fn hei_bai_feeds_on_a_sacrifice_and_passes_its_counters_on_when_it_leaves() {
     settle(&mut s);
     assert_eq!(counters(&s, heir), 2);
 }
+
+/// Entry airbends up to one creature; each creature you control entering
+/// adds a quest counter; at four the end step blinks a creature you control,
+/// which returns as a new object without its counters.
+#[test]
+fn airbender_ascension_airbends_counts_creatures_and_blinks_at_four() {
+    let mut s = five_color_setup(&["Airbender Ascension", "Gray Ogre"]);
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let theirs_card = card_of(&s, theirs);
+    enter_battlefield(&mut s, "Airbender Ascension");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(theirs)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, theirs_card), Some(ZoneType::Exile));
+    let ascension = s.battlefield_permanents_named(0, "Airbender Ascension")[0];
+    enter_battlefield(&mut s, "Gray Ogre");
+    resolve_until_priority(&mut s);
+    assert_eq!(counters_of(&s, ascension, CounterKind::Quest), 1);
+
+    s.advance_to_active_step(0, StepKind::End);
+    assert!(s.game().state.stack_objects.is_empty(), "below four");
+
+    let mut s = five_color_setup(&["Airbender Ascension", "Gray Ogre"]);
+    let ascension = s.force_permanent_on_battlefield(0, "Airbender Ascension");
+    set_counters(&mut s, ascension, CounterKind::Quest, 4);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    set_counters(&mut s, ogre, CounterKind::PlusOnePlusOne, 1);
+    let ogre_card = card_of(&s, ogre);
+    s.advance_to_active_step(0, StepKind::End);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    let returned = s.game().state.card_to_permanent[ogre_card].expect("returned");
+    assert_eq!(counters(&s, returned), 0, "a new object");
+    assert_eq!(
+        counters_of(&s, ascension, CounterKind::Quest),
+        5,
+        "its return is a creature entering"
+    );
+}
+
+/// Entry earthbends then fetches a tapped basic; a land entering adds a
+/// quest counter, and from the fourth a reflexive trigger counters a
+/// creature and gives it trample.
+#[test]
+fn earthbender_ascension_earthbends_fetches_and_rewards_landfall_at_four() {
+    let mut s = five_color_setup(&["Earthbender Ascension", "Gray Ogre"]);
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    enter_battlefield(&mut s, "Earthbender Ascension");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(forest)));
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let land = offered_cards(&s)[0];
+    select_card(&mut s, land);
+    settle(&mut s);
+    assert_eq!(counters(&s, forest), 2);
+    let fetched = s.game().state.card_to_permanent[land].expect("fetched");
+    assert!(tapped(&s, fetched));
+    let ascension = s.battlefield_permanents_named(0, "Earthbender Ascension")[0];
+    assert_eq!(
+        counters_of(&s, ascension, CounterKind::Quest),
+        1,
+        "landfall"
+    );
+
+    set_counters(&mut s, ascension, CounterKind::Quest, 3);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    enter_battlefield(&mut s, "Plains");
+    resolve_until_target(&mut s);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, ascension, CounterKind::Quest), 4);
+    assert_eq!(counters(&s, ogre), 1);
+    assert!(s.game().effective_keywords(ogre).trample);
+}

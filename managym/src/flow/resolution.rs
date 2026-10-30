@@ -720,6 +720,25 @@ impl Game {
                 }
                 None
             }
+            Effect::ExileAndReturn { .. } => {
+                let Some(Target::Permanent(id)) = self.present_primary_target(frame) else {
+                    return None;
+                };
+                let card = self.state.permanents[id].as_ref()?.card;
+                self.move_card(card, ZoneType::Exile);
+                if self.state.zones.zone_of(card) == Some(ZoneType::Exile) {
+                    let owner = self.state.cards[card].owner;
+                    self.move_card_with_entry(
+                        card,
+                        ZoneType::Battlefield,
+                        crate::flow::proposed_event::ZoneEntry {
+                            controller: Some(owner),
+                            ..Default::default()
+                        },
+                    );
+                }
+                None
+            }
             Effect::Airbend { .. } => {
                 if let Some(Target::Permanent(id)) = self.present_primary_target(frame) {
                     self.airbend_permanent(id);
