@@ -59,6 +59,7 @@ exhaust, used once-each-turn, granted firebending) in text-5 wording
 
 ## Remaining
 
+- Jack Heart, 2026-10-30: keep the stack (no folding T2 into #394). Jack merges #394 after review; then retarget #398 to main, sync, confirm per-card tests sit in `tests/cards/`, and land.
 - Land only after #394 lands; re-sync then (re-record the w18 evidence below if T1's world moves).
 
 ## Check
