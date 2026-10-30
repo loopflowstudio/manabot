@@ -49,29 +49,19 @@ evidence is re-recorded at gate with `scratch/tools/regen_*.py` and
    Engineer, Cruel Administrator, Sold Out, Obsessive Pursuit, Earth Rumble
    Wrestlers. New: `PlayerTurnHistory` (observed in the player row),
    `Permanent.dealt_damage_this_turn` (permanent column, LKI),
-   `StaticCondition::{AttackedThisTurn, LandEnteredThisTurn,
+   `Condition::{AttackedThisTurn, LandEnteredThisTurn,
    SacrificedThisTurnAtLeast, AnyOf}`, `EffectValue::PermanentsSacrificedThisTurn`,
-   `Effect::IfTargetDealtDamageThisTurn`, conditional
+   `Condition::TargetDealtDamageThisTurn` (names after the concept review), conditional
    `EntersWithPlusOneCounters`; the design review's effect consolidation
    (`DrawCards { count: EffectValue }`, `LoseLife`/`DealDamageToPlayer` with
    `PlayerSelector`, `DrainLife { amount: EffectValue }`, trigger player).
-5. New event triggers: combat damage to player (Waterbender Ascension, Invasion Tactics),
-   counters placed (Earth Kingdom General), opponent searches (Wan Shi Tong),
-   cast from exile / enter from exile (Appa SG, Fire Lord Zuko), scry/surveil
-   (Planetarium of Wan Shi Tong). Design (2026-10-30, implement): rules
-   events `CombatDamageToPlayers` (one per damage pass, for "one or more"),
-   `DamageDealt.combat` (per creature), `CountersPlaced`, `LibrarySearched`,
-   `Scried`; `TriggerCondition::FromZone { zone, condition }` wraps a cast or
-   entry trigger ("from exile"); the trigger's X (CR 107.3m: the cast spell's
-   X, kept as `Permanent.cast_x`) and the event's amount ("that much") ride on
-   the pending trigger into the frame; `CounterKind::Quest`;
-   `Condition::SourceCountersAtLeast` (resolution only); "do this only once
-   each turn" after a "may" spends the turn's use only when taken.
-   Done (2026-10-30): Waterbender Ascension, Invasion Tactics, Appa,
-   Fire Lord Zuko, Wan Shi Tong (`CombatDamageToPlayers`,
-   `CreatureDealsCombatDamageToPlayer` ×creatures, `OneOrMoreDeal…`,
-   `FromZone`, `OpponentSearchesLibrary`/`LibrarySearched`, `cast_x` →
-   trigger `x`, `EffectValue::Half`, `TargetRequirement::ANY_NUMBER`).
+5. **New event triggers.** Done (2026-10-30): Waterbender Ascension,
+   Invasion Tactics, Appa, Steadfast Guardian, Fire Lord Zuko, Wan Shi Tong
+   (`CombatDamageToPlayers`, `CreatureDealsCombatDamageToPlayer` ×creatures,
+   `OneOrMoreDeal…`, `TriggerCondition::FromZone { zone, condition }`,
+   `OpponentSearchesLibrary`/`LibrarySearched`, `Permanent.cast_x` → the
+   trigger's X (CR 107.3m), `EffectValue::Half`, `TargetRequirement::ANY_NUMBER`,
+   `CounterKind::Quest`, `Condition::SourceCountersAtLeast`).
    Left: Earth Kingdom General and Planetarium share one missing mechanic,
    "you may [act]. Do this only once each turn": the trigger fires every
    time, the choice is offered only while unused this turn, and only taking
@@ -102,59 +92,44 @@ Done in slice 4 (no parallel path remains): `DrawCardsValue`, `DrainLifeValue`,
 `IfTargetMatches`, `IfTargetDealtDamageThisTurn`, and the ActiveIf-plus-If
 intervening-if pairs.
 
-## Upstream (observed 2026-10-30)
+## Upstream (2026-10-30)
 
-T3 (#399) has not merged. Main `10eeb1f55` (Task afbd6a, Jack Heart) reshaped
-w17's `CardDefinition`: one-off fields became `StaticAbility` variants in
-`statics` and `AdditionalCost::{Sacrifice, Kicker, Waterbend}`; tokens moved to
-`cardsets/tokens.rs`; the Python compiler and pre-w17 corpora were deleted or
-archived; `TOKENS_AWAITING_PRODUCER` was added to `tests/cards/observability.rs`.
-The T3/T4 sync onto it must: express T4's `ward` (Dragonfly Swarm, Benevolent
-River Spirit) and additional waterbend as those variants; move T4's tokens
-(Ally, Bear, Clue, Monk, Soldier, …) to `tokens.rs`; take Bear (The Earth King)
-and Monk (Crescent Island Temple) off `TOKENS_AWAITING_PRODUCER`; extend the new
-`static_seen`/`cost_seen` guards; re-record w17 evidence after it.
+Synced: main `10eeb1f55` is an ancestor (through T3's sync, merge
+`98ec26e5b`), and T3's head `4c4dd0217` is merged (`a315216b2`). T4's ward is
+`StaticAbility::Ward`, required waterbend `AdditionalCost::RequiredWaterbend`,
+T4's tokens are in `tokens.rs`, Bear and Monk are off
+`TOKENS_AWAITING_PRODUCER`. T3 (#399) is still open; each T3 head is merged in
+before T4's own gate.
 
 ## Remaining
 
-- Slice 5's last two cards (above) and slice 6 (43 cards): see the slice list; Firebender
+- 43 of 75 cards (32 defined). Slice 5: Earth Kingdom General, Planetarium
+  of Wan Shi Tong (above), and The Unagi of Kyoshi Island (deferred from
+  slice 2): ward—waterbend {4} is not a `Ward(ManaCost)`, and "an opponent
+  draws their second card" needs an opponent form of T1's
+  `YouDrawNthCardThisTurn` (Tiger-Seal).
+  Slice 6: the other 40. Firebender
   Ascension's ETB, Earth Kingdom General's ETB, Invasion Tactics' ETB and
   Raven Eagle's draw clause are expressible today but wait for their other
   clauses (no half-defined cards). New turn facts go in `PlayerTurnHistory`.
-- Sync onto main `10eeb1f55` (above), after or with T3's.
 - Gate: Python suites bound to the w17 content digest (`authored-match-w17-v1`,
   `authored-match-parity-w17-v1`, `public-commitment-parity-w17-v1`, choice navigation, decision surface,
   learn evidence/setup, trigger order, belief canonical receipt; T3's tools
   `scratch/tools/regen_*.py`); Academy vitest for `GameBoard` turn history
   (node_modules absent in this checkout).
 
-Compress (2026-10-30): turn-history writes go through `Game::update_turn_history`
-(journals only on change); one `attack_and_settle` card-test helper.
-Compress after slice 5's first five cards: `CombatDamageToPlayers { creatures }`
-(the defender is always the non-active player); `trigger_multiplicity` is the
-one count of connecting creatures for `CreatureDealsCombatDamageToPlayer`;
-the leaving spell is removed from the stack once and read for `cast_x`.
-Debug `cargo test --lib --test cards --test rules_tests` and clippy pass; the
-extension is rebuilt at gate.
-
-Check (2026-10-30, after slice 5's first five cards): debug `cargo test` all targets, clippy `-D warnings`, fmt, observation parity, static-ability tokens, rules inventory pass; extension rebuilt, Scryfall fixture refreshed (274 cards), `semantic-kernel-w17-v1` re-recorded. Other w17 digest-bound Python evidence stays for gate.
+Compress (2026-10-30): turn-history writes go through
+`Game::update_turn_history`; `CombatDamageToPlayers { creatures }` (the
+defender is the non-active player); `trigger_multiplicity` counts connecting
+creatures; the leaving spell is removed from the stack once.
 
 ## Concept review (Jack Heart, 2026-10-30, accepted 1a 2a 3a — done)
 
-One `Condition` (was `StaticCondition`) with resolution-only questions
-`Kicked`, `TargetMatches(predicate)`, `TargetDealtDamageThisTurn`
-(`Condition::is_resolution_only`); one `Effect::If { condition, then,
-otherwise }`; `Ability::Triggered { intervening_if }` checked at the trigger
-event and on resolution (CR 603.4). Ran and Shaw, raid (Fire Nation Engineer,
-Raider), Dragonfly Swarm, Walltop Sentries and Proft's Eidetic Memory migrated;
-`ActiveIf` stays for Fire Nation Cadets (granted firebending) and Tolls of War
-("during your turn"). `tests/cards/definitions.rs` rejects resolution-only
-conditions outside `Effect::If`. "If you do" stays the optional-payment shape.
+One `Condition` (resolution-only `Kicked`, `TargetMatches`,
+`TargetDealtDamageThisTurn`, rejected outside `Effect::If` by
+`tests/cards/definitions.rs`); one `Effect::If { condition, then, otherwise }`;
+`Ability::Triggered { intervening_if }` (CR 603.4). `ActiveIf` stays for Fire
+Nation Cadets and Tolls of War. "If you do" stays the optional-payment shape.
+T3-sync details: `scratch/questions.md` (T4 and T3-sync sections).
 
-T3 sync (2026-10-30, onto T3 `636f90bf8`): T3 replaced temporary permanent
-modifiers with continuous-effect records and renamed the world w17. T4's
-pump, keyword and target-player effects are `ApplyContinuous` records (new
-`AffectedSpec::EachTargetPlayerControls`); `ModifyTargetPlayerCreatures`,
-`ModifyUntilEot` and `GrantKeywordsToTarget` are gone. v5 widths 67 / 55 / 38
-plus T3's fact rows; `semantic-kernel-w17-v1` re-recorded (14 cases / 3396
-commands) and protocol schemas regenerated.
+Check (2026-10-30, merged tree `a315216b2`): debug `cargo test --no-fail-fast` all targets, 800 passed, 0 failed, after re-recording `semantic-kernel-w17-v1` (14 cases / 3396 commands; state hashes only, from `CombatDamageToPlayers { creatures }`). Other w17 digest-bound Python evidence stays for gate.
