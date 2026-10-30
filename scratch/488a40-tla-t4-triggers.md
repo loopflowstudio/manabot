@@ -55,32 +55,57 @@ evidence is re-recorded at gate with `scratch/tools/regen_*.py` and
    `EntersWithPlusOneCounters`; the design review's effect consolidation
    (`DrawCards { count: EffectValue }`, `LoseLife`/`DealDamageToPlayer` with
    `PlayerSelector`, `DrainLife { amount: EffectValue }`, trigger player).
-5. **New event triggers.** Done (2026-10-30): Waterbender Ascension,
+5. **New event triggers** (done 2026-10-30): Waterbender Ascension,
    Invasion Tactics, Appa, Steadfast Guardian, Fire Lord Zuko, Wan Shi Tong
    (`CombatDamageToPlayers`, `CreatureDealsCombatDamageToPlayer` ×creatures,
-   `OneOrMoreDeal…`, `TriggerCondition::FromZone { zone, condition }`,
-   `OpponentSearchesLibrary`/`LibrarySearched`, `Permanent.cast_x` → the
-   trigger's X (CR 107.3m), `EffectValue::Half`, `TargetRequirement::ANY_NUMBER`,
-   `CounterKind::Quest`, `Condition::SourceCountersAtLeast`).
-   Left: Earth Kingdom General and Planetarium share one missing mechanic,
-   "you may [act]. Do this only once each turn": the trigger fires every
-   time, the choice is offered only while unused this turn, and only taking
-   it spends the use (declining keeps it). Proposed shape: an optional
-   choice keyed by the exact source object and ability index in
-   `TurnState` (the frame learns its ability index), with EKG's
-   `CountersPlaced { permanent, kind, count }` event ("that much" via the
-   trigger's number) and Planetarium's `Scried` event plus a
-   `FreeCastOffer::LibraryTop`. `OnceEachTurn` (fires once) is the wrong
-   shape for both.
-6. Reflexive and delayed triggers, placement-time modes, copies/retargeting,
-   trigger multiplicity (Katara the Fearless), LKI counter transfer, control
-   change, Destined Confrontation's simultaneous choice.
+   `OneOrMoreDeal…`, `TriggerCondition::FromZone`, `OpponentSearchesLibrary`,
+   `Permanent.cast_x`, `EffectValue::Half`, `TargetRequirement::ANY_NUMBER`,
+   `CounterKind::Quest`); The Unagi (`Ward(PaymentCost)`, so ward may be a
+   waterbend; `CounterUnlessPays { cost: PaymentCost }`;
+   `OpponentDrawsNthCardThisTurn`); Earth Kingdom General (`Game::put_counters`
+   → `GameEvent::CountersPut`, `YouPutCountersOnCreature`, trigger X = count;
+   `Effect::MayOnceEachTurn`, keyed by exact source and `EffectFrame.ability`
+   in the turn's once-each-turn uses, spent only on accepting); Planetarium
+   (`GameEvent::Scried`/`YouScry`, `Effect::CastLibraryTopFree` with
+   `FreeCastOffer::LibraryTop { card }`, spent only by casting).
+6. **The rest, in commit-sized groups.** Done (2026-10-30): Beetle-Headed
+   Merchants, Vengeful Villagers (`Effect::MaySacrifice`, optional
+   `Decision::Sacrifice`); Katara, Bending Prodigy, Guru Pathik, Long Feng
+   (source questions `Condition::SourceTapped`/`SourceCountersAtLeast`,
+   allowed in intervening-ifs via `Game::check_intervening_if`); Ty Lee,
+   Artful Acrobat (`Effect::WhenYouDo` reflexive trigger,
+   `Modification::CantBlock`); Suki, Courageous Rescuer
+   (`TriggerCondition::LeavesTheBattlefield`); Momo, Appa, Loyal Sky Bison
+   (`Effect::TriggerModes`, mode chosen at placement, stage `trigger_mode`);
+   Beifong's Bounty Hunters, Hei Bai (`ObjectLki.power`/`counters`,
+   `EffectValue::TriggeringPower`, `Effect::PutSourceCountersOnTarget`);
+   Airbender and Earthbender Ascension (`Effect::ExileAndReturn`).
+   Left: delayed triggers (Fatal Fissure, Fire Navy Trebuchet, Ruinous
+   Waterbending, Jeong Jeong), copies/retargeting (Firebender Ascension,
+   Jeong Jeong, Redirect Lightning), control change (Jet's Brainwashing, Iroh,
+   Zuko, Conflicted), up-to-X and unchosen modes (Bumi, Zuko), trigger
+   multiplicity (Katara, the Fearless), granted prowess (Sokka, Tenacious
+   Tactician), any-graveyard targets (Raven Eagle, Boiling Rock Rioter),
+   a spell's reflexive trigger (Earth Rumble), "if it had counters" (Buzzard-Wasp
+   Colony), finality counters (Wolfbat), LKI-bounded targets (Sandbender
+   Scavengers), simultaneous choices (Destined Confrontation), opponent's
+   choice (Combustion Man), opponent's search (Price of Freedom), discard as
+   a trigger's option and a spell-matching rider (Toph), untap restriction
+   while controlled (Ty Lee, Chi Blocker), hexproof/indestructible loss
+   (The Fire Nation Drill), nonbasic replacement and type overwrite (Zhao,
+   the Moon Slayer), Aura death LKI (Avatar Destiny).
 
 ## Design review (Jack Heart, 2026-10-30, accepted)
 
 Applied in slice 4 (full text: the Task's 2026-10-30 design-review comment):
 one effect vocabulary with `PlayerSelector`, `Permanent.dealt_damage_this_turn`,
 one `PlayerTurnHistory`, `EntersWithPlusOneCounters { count, condition }`.
+
+Follow-up (Jack Heart, 2026-10-30, applied): `Game::counter_ability` emits
+`GameEvent::AbilityCountered` (EventType 13, policy history `Countered`,
+decision context); `Effect::CounterSpell` counters spells only, and a declined
+`CounterUnlessPays` counters the spell or ability it names
+(`PaymentProgress.counters_on_decline`). `CardPredicate.nonbasic` stays.
 
 ## Delete — do not maintain
 
@@ -90,7 +115,9 @@ Done in slice 4 (no parallel path remains): `DrawCardsValue`, `DrainLifeValue`,
 `TurnState::cards_drawn_this_turn`. Done with the concept review:
 `StaticCondition`, `IfCondition`, `IfKicked`, `IfGraveyardAtLeast`,
 `IfTargetMatches`, `IfTargetDealtDamageThisTurn`, and the ActiveIf-plus-If
-intervening-if pairs.
+intervening-if pairs. Done in slices 5–6: `change_plus_one_counters_on_object`
+(placements go through `Game::put_counters`), `CounterSpell`'s ability arm and
+ward's `CounterSpell` decline branch.
 
 ## Upstream (2026-10-30)
 
@@ -103,20 +130,22 @@ before T4's own gate.
 
 ## Remaining
 
-- 43 of 75 cards (32 defined). Slice 5: Earth Kingdom General, Planetarium
-  of Wan Shi Tong (above), and The Unagi of Kyoshi Island (deferred from
-  slice 2): ward—waterbend {4} is not a `Ward(ManaCost)`, and "an opponent
-  draws their second card" needs an opponent form of T1's
-  `YouDrawNthCardThisTurn` (Tiger-Seal).
-  Slice 6: the other 40. Firebender
-  Ascension's ETB, Earth Kingdom General's ETB, Invasion Tactics' ETB and
-  Raven Eagle's draw clause are expressible today but wait for their other
-  clauses (no half-defined cards). New turn facts go in `PlayerTurnHistory`.
+- 27 of 75 cards (48 defined): Destined Confrontation; Teo, Spirited Glider;
+  Ty Lee, Chi Blocker; Boiling Rock Rioter; Buzzard-Wasp Colony; Fatal
+  Fissure; The Fire Nation Drill; Fire Navy Trebuchet; Raven Eagle; Ruinous
+  Waterbending; Wolfbat; Combustion Man; Firebender Ascension; Jeong Jeong,
+  the Deserter; Jet's Brainwashing; Price of Freedom; Redirect Lightning;
+  Zhao, the Moon Slayer; Avatar Destiny; Bumi, King of Three Trials; Earth
+  Rumble; Iroh, Tea Master; Katara, the Fearless; Sandbender Scavengers;
+  Sokka, Tenacious Tactician; Toph, Hardheaded Teacher; Zuko, Conflicted.
+  Mechanics each needs: slice 6 "Left" above. New turn facts go in
+  `PlayerTurnHistory`; no half-defined cards.
 - Gate: Python suites bound to the w17 content digest (`authored-match-w17-v1`,
-  `authored-match-parity-w17-v1`, `public-commitment-parity-w17-v1`, choice navigation, decision surface,
-  learn evidence/setup, trigger order, belief canonical receipt; T3's tools
-  `scratch/tools/regen_*.py`); Academy vitest for `GameBoard` turn history
-  (node_modules absent in this checkout).
+  `authored-match-parity-w17-v1`, `public-commitment-parity-w17-v1`, choice
+  navigation, decision surface, learn evidence/setup, trigger order, belief
+  canonical receipt; T3's tools `scratch/tools/regen_*.py`); Academy vitest
+  for `GameBoard` turn history, `permanent-notes` (`CantBlock`) and
+  `decision-labels` (`trigger_mode`) (node_modules absent in this checkout).
 
 Compress (2026-10-30): turn-history writes go through
 `Game::update_turn_history`; `CombatDamageToPlayers { creatures }` (the
@@ -132,4 +161,9 @@ One `Condition` (resolution-only `Kicked`, `TargetMatches`,
 Nation Cadets and Tolls of War. "If you do" stays the optional-payment shape.
 T3-sync details: `scratch/questions.md` (T4 and T3-sync sections).
 
-Check (2026-10-30, merged tree `a315216b2`): debug `cargo test --no-fail-fast` all targets, 800 passed, 0 failed, after re-recording `semantic-kernel-w17-v1` (14 cases / 3396 commands; state hashes only, from `CombatDamageToPlayers { creatures }`). Other w17 digest-bound Python evidence stays for gate.
+Check (2026-10-30, `888f5d359`): debug `cargo test --no-fail-fast` all targets, 820 passed, 0 failed; clippy `-D warnings` and fmt clean; `semantic-kernel-w17-v1` re-recorded (14 cases / 3396 commands) and the Scryfall fixture refreshed for the 16 new cards. Other w17 digest-bound Python evidence stays for gate.
+
+Design review follow-up (Jack Heart, 2026-10-30): `counter_ability` emits
+`GameEvent::AbilityCountered`; `Effect::CounterSpell` counters spells only (a
+card that counters abilities gets its own variant); ward's
+`CounterUnlessPays` answers both; `CardPredicate.nonbasic` stays its own flag.
