@@ -145,11 +145,11 @@ pipeline: `544ae312c:scratch/892c47-author-tla-cards.md`.
    Playwright spec reads `choice-navigation-w17.json`.
 3. f871a8 told `card_def_id` is required (2026-10-29). Demo; PR394 stays draft.
 
-Check (2026-10-29, after concept-review pass): debug `cargo test --no-fail-fast`
-0 failures; clippy `-D warnings` (with and without `python`) and fmt clean.
-pytest: semantic + model 334 pass/1 skip; current-world arena/monitor/choice
-66 pass; academy 257 pass, 2 fail (public-commitment pair, above); CI
-coverage/compile `--check` steps pass. `rg 'tla-pool-v1|semantic_key'` hits only
-frozen v1/w11 evidence and readers and WORLDS.md history. After 93a542677:
-clippy `-D warnings` clean, `cargo test --test cards` 235 pass,
-`tests/semantic/test_current_content.py` 17 pass.
+Check (2026-10-29, after the parity rebinding): academy pytest 259 pass
+(public-commitment and authored-match receipts regenerated: the latter hashes
+all `managym/src`); current-world arena/monitor set 66 pass; rules inventory 6
+pass; choice-navigation Playwright (release config) 6 pass. PR394 CI at
+38c883f08 all green, including Rust Tests (debug cargo test, clippy) and Python
+Unit Tests; the local debug cargo rerun was cut off by machine load, so CI is
+the Rust evidence. `rg 'tla-pool-v1|semantic_key'` hits only frozen v1/w11
+evidence and readers and WORLDS.md history.
