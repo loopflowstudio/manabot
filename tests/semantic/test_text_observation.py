@@ -677,3 +677,38 @@ def test_a_copy_and_sacrifices_this_turn_are_stated() -> None:
     assert "This turn: sacrificed 2 permanents." in text
     assert "copy of" not in decision.text
     assert "This turn:" not in decision.text
+
+
+def test_joo_dee_surveil_and_copy_play_through_the_text_decision() -> None:
+    """A surveil obligation (code 20) captures as text; resolving Joo Dee
+    leaves a token stated as a copy and one sacrifice this turn."""
+    env = priority_root((), ("Swamp", "Joo Dee, One of Many"))
+    decision = capture_text_decision(env)
+    activate = next(
+        a
+        for a in decision.actions
+        if "Activate" in a.description and "Joo Dee" in a.description
+    )
+    submit_response(env, decision, activate.reference)
+    for _ in range(8):
+        decision = capture_text_decision(env)
+        if "Stage: surveil." in decision.text:
+            break
+        submit_response(env, decision, decision.actions[0].reference)
+    else:
+        raise AssertionError("surveil decision not reached")
+    assert "suspended decision" in decision.text and "; surveil" in decision.text
+    keep = next(a for a in decision.actions if "Keep on top" in a.description)
+    submit_response(env, decision, keep.reference)
+
+    decision = capture_text_decision(env)
+    source = decision.text.split("Source: ", 1)[1].split(" ", 1)[0]
+    original = next(
+        a
+        for a in decision.actions
+        if f"Select {source} " in a.description and "Sacrifice" in a.description
+    )
+    submit_response(env, decision, original.reference)
+    text = capture_text_decision(env).text
+    assert "; copy of D" in text
+    assert "This turn: sacrificed 1 permanents." in text

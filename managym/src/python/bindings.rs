@@ -4117,7 +4117,7 @@ fn parse_continuation_frames_json(
                     .targets
                     .iter()
                     .any(|t| t.legal_at_resolution_start.is_some()))
-            || frame.decision > 13
+            || frame.decision > crate::agent::continuation::MAX_DECISION_CODE
             || frame.parent.is_some_and(|parent| parent >= index)
     }) {
         return Err(PyValueError::new_err(

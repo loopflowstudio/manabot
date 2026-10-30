@@ -162,6 +162,52 @@ def _enum(values: tuple[str, ...], index: int) -> str:
     return values[index]
 
 
+# `ContinuationFrame.decision` by frame kind: an obligation's
+# `continuation::decision_code` (kind 6), a waiting or placing trigger's
+# ordering class (kinds 7 and 8), or the placement cursor's group (kind 9).
+_OBLIGATIONS = (
+    "none",
+    "resolving payment",
+    "mana activation cost",
+    "mana output",
+    "sacrifice",
+    "select milled",
+    "search",
+    "optional discard and draw",
+    "scry",
+    "inspect and select",
+    "mode",
+    "Learn",
+    "discard",
+    "legend rule",
+    "search lands with different names",
+    "split revealed cards",
+    "discard from revealed hand",
+    "cast without paying",
+    "exile linked card",
+    "distribute counters",
+    "surveil",
+)
+_TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
+_PLACEMENT_GROUPS = (
+    "none",
+    "placing active player's ordinary triggers",
+    "placing nonactive player's ordinary triggers",
+    "placing active player's ability-triggered triggers",
+    "placing nonactive player's ability-triggered triggers",
+)
+
+
+def _frame_decision(kind: int, decision: int) -> str:
+    if kind == 6:
+        return _enum(_OBLIGATIONS, decision)
+    if kind in (7, 8):
+        return _enum(_TRIGGER_CLASSES, decision)
+    if kind == 9:
+        return _enum(_PLACEMENT_GROUPS, decision)
+    raise TextEncodingError(f"frame kind {kind} carries no decision")
+
+
 def _keywords(value: Keywords | managym.Keywords) -> str:
     return ", ".join(
         key.replace("_", " ") for key in Keywords.model_fields if getattr(value, key)
@@ -437,28 +483,7 @@ class _Renderer:
         if relation.active_clause is not None:
             details.append(f"active target clause {relation.active_clause + 1}")
         if relation.decision:
-            details.append(
-                _enum(
-                    (
-                        "none",
-                        "resolving payment",
-                        "mana activation cost",
-                        "mana output",
-                        "sacrifice",
-                        "select milled",
-                        "search",
-                        "optional discard and draw",
-                        "scry",
-                        "inspect and select",
-                        "mode",
-                        "Learn",
-                        "discard",
-                        "legend rule",
-                        "order triggers",
-                    ),
-                    relation.decision,
-                )
-            )
+            details.append(_frame_decision(relation.kind, relation.decision))
         if relation.cost is not None:
             details.append(
                 "remaining cost "
