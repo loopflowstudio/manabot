@@ -1,10 +1,10 @@
 # T2 — TLA casting, costs, zone permissions and private zones (Task 87e012)
 
-Stacked on T1 (892c47, PR #394, open; synced at its head `2c50c8793` via `1d650064e`); T2 is PR #398.
+T1 (892c47, PR #394) merged to main as `fa5e13b23`; T2 is PR #398, based on main.
 Task directive lists the 51 cards and obligations; allocation in
 `docs/rules/tla/allocation.jsonl` (`planned_pr: T2`). Every merge needs Jack
-Heart's review; don't arm T2's merge while #394 is open. Status: implementation
-complete on w18; gated.
+Heart's review. Status: implementation complete on the open world w17 (T2
+extends it in place); concept review 4 changes implemented, gate pending.
 
 ## Decisions (reversible operator choices: questions.md)
 
@@ -31,6 +31,16 @@ complete on w18; gated.
   battlefield lists the permanents its player controls.
 - Policy input v5 (default; v1–v4 widths unchanged): player 60, card 55,
   permanent 32; new terms start at the old validity column, validity last.
+- World: T2 extends the open world w17 in place (Jack Heart, 2026-10-30: a
+  world number names a deliberate freeze). w17's receipts and fixtures were
+  replaced by T2's re-recorded ones under the w17 names; WORLDS.md's opening
+  paragraph is the steer's text.
+- Belief tracker (concept review 4, 1b): the foretold slot is public as a
+  count. A foretell moves one unrevealed hand card into the slot (hand −1, no
+  draw); a cast from the slot is a revealed pool exit that never was in hand.
+  `BeliefState.transport(foretold_exits=, hidden_foretells=)`: the foretold
+  card is removed from each hand row uniformly by count and rows the next space
+  excludes are conditioned away; the real prior/posterior over slots is MTG-215.
 
 ## Done
 
@@ -40,7 +50,7 @@ tests in `tests/cards/tla.rs` (flat, card order). Observability: T1's guard
 covers T2's 20 `Effect` variants, `AttacksAlone`, and T2's permanent/player
 status fields; T2's observation-row guard and viewer-safety tests sit beside it
 in `tests/cards/observability.rs`; Python text/encoder parity test for the new
-permanent column. JSON protocol schemas regenerated. WORLDS.md w18.
+permanent column. JSON protocol schemas regenerated. WORLDS.md w17 (open), one section.
 Restricted-mana text names the class, not Lesson-only (`ee9e32383`).
 Possible worlds (concept review 5): the unseen pool is Hand ∪ Library ∪ the
 opponent's face-down foretold cards; the public `foretold` count rides on
@@ -59,19 +69,27 @@ exhaust, used once-each-turn, granted firebending) in text-5 wording
 
 ## Remaining
 
-- Jack Heart, 2026-10-30: keep the stack (no folding T2 into #394). Jack merges #394 after review; then retarget #398 to main, sync, confirm per-card tests sit in `tests/cards/`, and land.
-- Land only after #394 lands; re-sync then (re-record the w18 evidence below if T1's world moves).
+- Gate on `HEAD` (debug `cargo test`, CI conformance, arena admission, Academy
+  vitest/e2e). Then Jack Heart reviews and lands #398; T3 (6875f0) syncs onto it.
 
 ## Check
 
-2026-10-29 gate: w18 world-bound evidence re-recorded beside w17 (kept): `semantic-kernel-w18-v1` (same 14 cases, 3401 commands; test, CI check/fuzz and README roots moved), `authored-match-w18-v1` + `authored-match-parity-w18-v1` (same 142-Command tape, same labels and terminal board, new digests), `public-commitment-parity-w18-v1` (142 commands, 69 commitments, no gaps; needs `manabot.data fetch` of the RUL-9 measurement), Academy `*-w18.json` learn/precision/precision-mana demos, choice-navigation and trigger-order (same decision revisions as w17; tools `scratch/tools/regen_*_w18.py`); belief receipts move to possible-world v3 (w7 kept as excluded history); belief fixture gains its `relations` buffer (pre-existing KeyError, default policy input ≥ v2). Results: debug `cargo test` (opt-level 1) all binaries pass (lib 121, cards 304, rules 131 + 2 ignored, semantic_conformance 6, search_state_contract 12, …); `cargo fmt --check` and `clippy --all-targets -D warnings` clean (`--all-features` blocked locally by the PyO3 interpreter-version check, CI runs no clippy); CI conformance check + fuzz (32 cases) pass on w18. Arena admission/monitoring 66 pass; academy world-bound + belief + batched_eval + `tests/model/` 320 pass, 2 skipped; earlier wider Python pass 259 pass (its 12 failures were the fixtures above plus `test_batched_eval` hung-service timing, which failed only while cargo compiled alongside and passes alone). Academy vitest 109 pass, `npm run check` 0 errors. Ruff check/format clean on changed Python. Playwright e2e and clean-machine play ran in CI (pass, below).
+Through 2026-10-30 (`601ed8f82`, then named w18): full gate passed (debug
+`cargo test` all binaries, fmt/clippy, CI conformance + fuzz, arena admission
+66, Academy/belief/model 320, vitest 109, Playwright and clean-machine play in
+CI); headless demo of 60 T2-deck games, no errors, no foretell leak
+(`scratch/t2-demo.md`). Detail: `git log -p -- scratch/87e012-tla-t2-casting.md`.
 
-2026-10-29 later passes (gate re-runs ×7 through 2026-10-30, concept reviews 7–15, implement ×2 (latest 2026-10-30 at `d570c5f8e`), compress ×4 (latest 2026-10-30 at `125f91b77`, no code change), realign ×2, demo re-runs) at T1 `2c50c8793`, main unmoved: no tracked change, no rerun; plan matches code (`lesson_mana` stays the frozen total; per-class split is `restricted_mana`); cards 304 after `912a5d0e9`. PR #398 CI at `a5587df5a` (2026-10-30): all checks pass, including the CI-deferred Playwright (Academy UI) and Clean-machine Play; later commits are scratch-only (CI at `0ad38cffe`: unit, semantic coverage/kernel, packaging, preflight pass; 8 jobs running at the latest gate, started 11:10Z). T1 #394 head moved to `e6b672753` (2026-10-30, "Clear added scratch files": scratch-only, preparing to land), so no re-sync is needed until it merges. Older results: `git log -p -- scratch/87e012-tla-t2-casting.md`.
+2026-10-30 implement (tracker slot + w17 rename): authored-match receipt
+regenerates byte-identical under w17 (`--check`); authored-match and
+public-commitment parity re-written (142 commands, 69 commitments, 0 gaps);
+debug `semantic_conformance_tests` 6 pass on `semantic-kernel-w17-v1`; belief,
+learn contract, Academy fixtures/parity 142 pass; arena admission 66 pass;
+`npm run check` 0 errors. Full debug `cargo test`, vitest and e2e: gate.
 
-2026-10-29 demo (headless, decision pass 1): 60 random T2-deck games through `managym.Env` with no errors; flashback, Zuko impulse and foretell casts offered and taken; the opponent never sees the foretold card. Advance to gate. Record: `scratch/t2-demo.md`.
+## Concept review 4, with Jack Heart (2026-10-30)
 
-2026-10-30 publish: synced onto T1 head `e6b672753` (scratch-only merge `b8dbfa319`, no tracked change); `lf pr publish` updated #398 (ready, mergeable). T1 #394 still open, so T2 must not land yet.
-
-2026-10-30 demo decision pass 1 at `b8dbfa319`: T2 demo re-run byte-identical (60 games, no errors, no foretell leak). Advance.
-
-2026-10-30 gate at `b8dbfa319`: no tracked change since the last full gate (merge onto T1 `e6b672753` was scratch-only; main `633dca159` already contained, T1 #394 open and unmoved), so no suite reran. PR #398 CI at `b8dbfa319`: 8 pass (unit, semantic coverage/kernel, clean-machine play, packaging, preflight), 8 pending at gate time.
+Jack Heart accepted 1b: T2 fixes only the tracker's foretold-slot accounting
+(done; test `test_foretell_moves_a_hidden_hand_card_to_the_slot_and_cast_leaves_it`);
+the prior and posterior over foretold slots are MTG-215. Analysis and options:
+`scratch/concept-review.html`.

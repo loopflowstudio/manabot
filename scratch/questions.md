@@ -65,7 +65,8 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   types by T1's generator (adapted for X costs and restricted mana) and proven
   Debug-identical to T2's prior lowering for all 206 definitions; T2's
   authoring ops, IR opcodes 66–79, schema-8 growth and Python token-builder
-  edits are gone with the layer. T2 is world **w18**.
+  edits are gone with the layer. T2 extends the open world **w17** in place
+  (Jack Heart, 2026-10-30; it was w18 until then).
 - Card abilities use `ActivateCardAbility` (sharing `PriorityActivateAbility`);
   a discard-cost ability refers to its card's graveyard object after costs.
 - `lesson_mana` stays the total of any restriction; per-class detail is
@@ -106,6 +107,8 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   `BeliefState.draw_unknown`/hidden-draw convolution in `belief/range.py`
   still treat every pool card as hand-or-library, as does the library
   count row in `belief/encoding.py` (pool − hand).
+  2026-10-30 (concept review 4, 1b): the tracker's accounting now counts the
+  slot; which hand card was foretold is assumed uniform by count (MTG-215).
 - `rules_tests::structured_offer_rejects_fabricated_and_stale_ids_without_mutation`
   failed 2 of 9 full `rules_tests` runs (Debug output of the root changed
   after a rejected stale submission); passes alone and in 7 later runs. It

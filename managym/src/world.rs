@@ -19,7 +19,7 @@ use std::collections::BTreeSet;
 use crate::cards::{content_pool, ContentError, Eligibility, PoolDefinition};
 
 /// Rules and observation/action meaning; see `WORLDS.md` for compatibility.
-pub const WORLD_VERSION: &str = "w18";
+pub const WORLD_VERSION: &str = "w17";
 
 /// The pool describing the default pack: every card this world defines, from
 /// every set, with the default pack's `CardDefId`s and digest.

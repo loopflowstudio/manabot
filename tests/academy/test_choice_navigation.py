@@ -25,7 +25,7 @@ class NavigationFixture(BaseModel):
     positions: dict[str, NavigationPosition]
 
 
-FIXTURE = Path(__file__).parents[2] / "academy/fixtures/choice-navigation-w18.json"
+FIXTURE = Path(__file__).parents[2] / "academy/fixtures/choice-navigation-w17.json"
 POSITIONS = NavigationFixture.model_validate_json(FIXTURE.read_text()).positions
 
 

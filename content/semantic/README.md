@@ -38,7 +38,7 @@ pool (`world`, every defined card) to chosen sets.
 
 ## Learning projection
 
-Current execution uses world **w18** and `current/learning_schema.json` (schema
+Current execution uses world **w17** and `current/learning_schema.json` (schema
 **9**). `managym.learning_catalog(pack_key)` walks every definition of a pack
 with a `serde` serializer ([`cards/tokens.rs`](../../managym/src/cards/tokens.rs)):
 struct and variant boundaries, field names, `Effect::…` variants, integers,

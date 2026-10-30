@@ -1,27 +1,71 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>T2 concept review 7</title>
+<title>T2 concept review</title>
 <style>
-  :root { color-scheme: light dark; --fg:#1d1b18; --bg:#faf8f3; --muted:#6b655c; --code:#efeadf; }
-  @media (prefers-color-scheme: dark) { :root { --fg:#e8e3d8; --bg:#1a1916; --muted:#a39c8f; --code:#26241f; } }
-  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 Georgia, serif; }
-  main { max-width:44rem; margin:0 auto; padding:2.5rem 1.25rem 4rem; }
-  h1 { font-size:1.6rem; margin:0 0 .3rem; } h2 { font-size:1.15rem; margin:2.2rem 0 .6rem; }
-  .meta { color:var(--muted); font-size:.85rem; }
-  code { font:13px/1.5 ui-monospace, Menlo, monospace; background:var(--code); border-radius:3px; padding:0 .25em; }
+:root{--bg:#fbf8f2;--fg:#2b2620;--muted:#6f6556;--rule:#e2d9c8;--code:#f2ece0;--accent:#9a4b1c;--prop:#2f6b4f}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#1b1916;--fg:#ece5d8;--muted:#a89d8b;--rule:#3a352d;--code:#26231f;--accent:#e08a52;--prop:#7cc4a0}}
+html,body{overflow-x:hidden}
+body{background:var(--bg);color:var(--fg);font:16px/1.6 ui-serif,Georgia,serif;margin:0}
+main{max-width:46rem;margin:0 auto;padding:2.5rem 16px 4rem}
+h1{font-size:1.6rem;margin:0 0 .3rem;line-height:1.25}
+h2{font-size:1.15rem;margin:2.4rem 0 .6rem;border-top:1px solid var(--rule);padding-top:1.4rem}
+.meta{color:var(--muted);font-size:.85rem}
+pre,code{font:13px/1.5 ui-monospace,Menlo,monospace}
+pre{background:var(--code);padding:.8rem 1rem;overflow-x:auto;border-radius:4px;white-space:pre}
+code{background:var(--code);padding:0 .25em;border-radius:3px;overflow-wrap:anywhere}
+.mismatch{border-left:3px solid var(--accent);padding:.2rem 0 .2rem 1rem;margin:1.2rem 0}
+.proposed{border-left:3px solid var(--prop);padding:.2rem 0 .2rem 1rem;margin:1.2rem 0}
+.tag{font:600 .75rem/1 ui-sans-serif,system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase}
+.tag.now{color:var(--accent)}.tag.prop{color:var(--prop)}
+ol.q>li{margin:1rem 0}ol.q ol{list-style:lower-alpha;margin:.3rem 0}
 </style></head><body><main>
-<h1>T2 concept review 7 (headless)</h1>
-<p class="meta">Task 87e012 (TLA T2) · concept-review step · 2026-10-29 · PR #398 at 31ea5b1ef · built from scratch/87e012-tla-t2-casting.md, scratch/questions.md, managym/src/agent/action.rs, managym/src/flow/action.rs, managym/src/agent/observation.rs</p>
+<h1>Should the belief tracker learn about foretold cards in T2?</h1>
+<p class="meta">Task 87e012 (TLA T2) · concept-review, with Jack Heart · 2026-10-30 · PR #398 at <code>601ed8f82</code>, now on <code>main</code> · built from <code>scratch/87e012-tla-t2-casting.md</code>, <code>scratch/questions.md</code>, <code>manabot/belief/tracker.py</code>, <code>manabot/managym/possible_worlds.py</code>, <code>managym/src/agent/action.rs</code></p>
 
-<h2>Decision needed</h2>
-<p>None. The accepted direction leaves nothing to change, and no product question is open.</p>
+<p><strong>What I need from you:</strong> one decision about scope (question 1). Everything else in T2 already has one concept on every surface. Cast permissions, the hand-only lock, restricted mana by class and the foretold count reach JSON, text, Academy and the policy tensor alike, and the headless reviews since review 4 found nothing to change. One consumer of the foretold slot has been left out.</p>
 
-<h2>Actions → concepts → APIs</h2>
-<p>A player foretells a card with <code>Action::Foretell</code>, which is offered as a <code>PriorityActivateAbility</code> labelled "Foretell X". The <code>foretold</code> exile grant is the only authority for that face-down card. The search bot (<code>Game::determinize</code>) and possible-worlds materialization now share <code>Game::fill_foretold_slots</code>, as review 6 directed. Restricted mana appears in two forms: <code>restricted_mana</code> gives it per class, and <code>lesson_mana</code> gives the total.</p>
+<h2>One interaction</h2>
+<p>A belief-tracking bot plays a TLA deck. Its opponent foretells Sozin's Comet on turn 3, then casts it from exile on turn 5.</p>
+<pre>turn 3  opponent: Foretell (pay {2})   hand 6 → 5   foretold 0 → 1   no card revealed
+turn 5  opponent: cast Sozin's Comet from exile     foretold 1 → 0   card revealed</pre>
 
-<h2>Considered and kept</h2>
-<p><code>lesson_mana</code> now totals every restriction class (Lesson, Shrine and Ally), so the name is narrower than what it counts. It is a frozen surface: it appears in the experience schema, in v4 tensor columns 34–40, and in the Academy and text readers. Renaming it would break those readers without changing what anyone can see. The per-class detail is already in <code>restricted_mana</code>, and this was recorded as an operator choice. It stays as it is.</p>
+<h2>Actions → concepts → consumers</h2>
+<p><span class="tag now">Existing</span></p>
+<pre>Action::Foretell ─▶ ExileCastGrant{foretold} ─▶ face-down card in exile
+  ✓ observation: the owner sees it, the opponent sees a count
+  ✓ policy tensor v5, text, Academy
+  ✓ possible-world space v3 foretold slots, determinize
+  ~ belief priors (range.py, encoding.py): recorded follow-up
+  ✗ belief tracker transition (tracker.py): not recorded</pre>
+
+<div class="mismatch"><p><strong>The mismatch.</strong> The foretold slot is a hidden zone whose size is public. <code>questions.md</code> records the belief <em>priors</em> as a follow-up. What it misses is that the tracker's transition step <em>rejects</em> a foretell outright. From reading <code>tracker.py:317</code>:</p>
+<pre>hidden_draws = Δhand_size + len(exits) - len(returns)
+turn 3:  -1 + 0 - 0 = -1  →  BeliefError("canonical space change has an unexplained hand exit")
+turn 5:  the Comet is counted as an exit from the hand pool, but it left the foretold slot</pre>
+<p>So a belief agent stops the first time its opponent foretells, rather than just playing a little worse. I haven't reproduced this; it is from reading the code.</p></div>
+
+<p><span class="tag prop">Proposed (option a)</span></p>
+<pre>foretell commitment  { kind: "foretell", card: hidden }    hand −1, foretold +1
+cast from the slot   { kind: "cast", card, from: foretold } leaves the slot, not the hand
+hidden_draws = Δhand_size + Δforetold + len(exits) - len(returns)
+posterior    the hand range gives up one hidden card to v3's foretold slots</pre>
+<div class="proposed"><p>The accounting is small. The posterior is the real work: the foretold card was a draw from the hand range, so it has to be removed from that range without being revealed. That is the same work as the recorded prior follow-up. The engine, tensor and actions don't change.</p></div>
+
+<h2>Normal path, failure, recovery</h2>
+<ul>
+<li><strong>Normal:</strong> foretell, then cast it on a later turn. Hand and slot balance at each step, and the cast reveals what was in the slot.</li>
+<li><strong>Failure today:</strong> a generic <code>BeliefError</code> on the first foretell. Recovery means re-rooting the tracker and losing the history.</li>
+<li><strong>What would make this moot:</strong> no belief consumer ever seeing a foretell deck. The belief recipe builds <code>PossibleWorldSpace.from_engine</code> on whatever world it is given, and w18 has foretell cards.</li>
+</ul>
 
 <h2>Questions</h2>
-<ol><li>None open. Belief priors that do not yet account for foretold cards (<code>belief/range.py</code>, <code>belief/encoding.py</code>) are still a recorded follow-up outside T2.</li></ol>
+<ol class="q">
+<li>Belief tracking with foretold cards:
+  <ol>
+  <li>Fix it fully in T2: a foretell commitment, the slot in the accounting, and the prior and posterior over v3's foretold slots, with a tracker test for foretell then cast.</li>
+  <li>T2 fixes only the accounting, so the tracker no longer raises an error. The prior and posterior stay as a follow-up Task for the belief owners, filed now. <em>(My recommendation: it removes the crash without pulling belief modelling into a PR that is already green.)</em></li>
+  <li>A follow-up Task for all of it. Until then T2 makes the tracker raise a named <code>RulesProviderGap("foretell")</code>.</li>
+  <li>Leave it as it is.</li>
+  </ol></li>
+</ol>
 </main></body></html>

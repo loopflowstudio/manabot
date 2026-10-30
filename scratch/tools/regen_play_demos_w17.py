@@ -50,4 +50,4 @@ def regenerate(source: str, target: str) -> None:
 
 
 for name in sys.argv[1:]:
-    regenerate(f"{name}-w17.json", f"{name}-w18.json")
+    regenerate(f"{name}-w17.json", f"{name}-w17.json")
