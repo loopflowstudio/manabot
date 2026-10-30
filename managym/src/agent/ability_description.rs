@@ -137,6 +137,9 @@ fn condition_description(condition: &TriggerCondition) -> String {
         TriggerCondition::YouDrawNthCardThisTurn { n } => {
             format!("When you draw card {n} this turn")
         }
+        TriggerCondition::OpponentDrawsNthCardThisTurn { n } => {
+            format!("When an opponent draws card {n} this turn")
+        }
     }
 }
 
@@ -408,6 +411,13 @@ pub(crate) fn mana_description(mana: &Mana) -> String {
     text
 }
 
+fn payment_description(cost: &PaymentCost) -> String {
+    match cost {
+        PaymentCost::Mana(cost) => cost_description(cost),
+        PaymentCost::Waterbend { generic } => format!("waterbend {generic}"),
+    }
+}
+
 fn cost_description(cost: &ManaCost) -> String {
     let mut text = "{X}".repeat(usize::from(cost.x));
     if cost.cost[6] > 0 {
@@ -485,7 +495,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         ApplyContinuous { affected, modification, duration } => continuous_description(affected, modification, *duration),
         PutCountersOnTriggeringPermanent { count } => format!("Put {count} +1/+1 counters on the permanent that caused this trigger"),
         OptionalPayment { cost, if_paid, if_declined } => {
-            let cost = match cost { PaymentCost::Mana(m) => cost_description(m), PaymentCost::Waterbend { generic } => format!("waterbend {generic}") };
+            let cost = payment_description(cost);
             format!("You may pay {cost}. If paid: {}. Otherwise: {}", effects_description(if_paid), effects_description(if_declined))
         },
         Sacrifice { predicate } => format!("Sacrifice a {}", predicate_description(predicate,"permanent")),
@@ -569,7 +579,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         PutTopCardsInHand { count } => format!("Put the top {count} cards of your library into your hand"),
         Learn => "Learn: you may reveal a Lesson you own from outside the game and put it into your hand, or discard a card to draw a card, or decline".into(),
         Modal { modes } => format!("Choose one — {}",modes.iter().enumerate().map(|(i,m)| format!("({}) {}",i+1,effects_description(m))).collect::<Vec<_>>().join("; ")),
-        CounterUnlessPays { cost } => format!("Counter the spell unless its controller pays {}",cost_description(cost)),
+        CounterUnlessPays { cost } => format!("Counter the spell unless its controller pays {}",payment_description(cost)),
         TargetCreaturesDealPowerDamageToLastTarget => "Each chosen creature except the last target deals damage equal to its power to the last target".into(),
         Earthbend { count, target } => { let count = value_description(count); format!("Earthbend {count} {}: it becomes a 0/0 creature with haste that's still a land; put {count} +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped",target_description(target)) },
         ReturnSourceToBattlefieldTapped => "Return this card to the battlefield tapped".into(),

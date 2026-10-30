@@ -16,7 +16,7 @@ use crate::{
     },
     state::{
         ability::{
-            Ability, AffectedSpec, Effect, EffectValue, LinkedChooser, PaymentCost, PlayerSelector,
+            Ability, AffectedSpec, Effect, EffectValue, LinkedChooser, PlayerSelector,
             TargetRequirement, TargetSpec,
         },
         effect::{Affected, EffectDuration, Modification},
@@ -1342,7 +1342,7 @@ impl Game {
                 let spell_controller = self.state.stack_objects[index].controller();
                 Some(Decision::Payment(PaymentProgress::new(
                     spell_controller,
-                    PaymentCost::Mana(cost.clone()),
+                    cost.clone(),
                     Vec::new(),
                     vec![Effect::CounterSpell {
                         target: TargetSpec::Spell,

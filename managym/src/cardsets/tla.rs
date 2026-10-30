@@ -218,6 +218,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         the_lion_turtle(),
         the_mechanist_aerial_artisan(),
         the_spirit_oasis(),
+        the_unagi_of_kyoshi_island(),
         the_walls_of_ba_sing_se(),
         tiger_dillo(),
         tiger_seal(),
@@ -1251,7 +1252,9 @@ fn benevolent_river_spirit() -> CardDefinition {
             },
             effects: vec![Effect::Scry { count: 2 }],
         }],
-        statics: vec![StaticAbility::Ward(ManaCost::parse("{2}"))],
+        statics: vec![StaticAbility::Ward(PaymentCost::Mana(ManaCost::parse(
+            "{2}",
+        )))],
         additional_costs: vec![AdditionalCost::RequiredWaterbend(ManaCost::parse("{5}"))],
         text_box: text_box.into(),
         ..Default::default()
@@ -2114,7 +2117,7 @@ fn dragonfly_swarm() -> CardDefinition {
             }],
         }],
         statics: vec![
-            StaticAbility::Ward(ManaCost::parse("{1}")),
+            StaticAbility::Ward(PaymentCost::Mana(ManaCost::parse("{1}"))),
             StaticAbility::CharacteristicPower(PowerCda::GraveyardMatching(CardPredicate {
                 not_card_types: vec![CardType::Creature, CardType::Land],
                 ..Default::default()
@@ -4116,7 +4119,7 @@ fn itll_quench_ya() -> CardDefinition {
         types: CardTypes::new([CardType::Instant]),
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![Effect::CounterUnlessPays {
-            cost: ManaCost::parse("{2}"),
+            cost: PaymentCost::Mana(ManaCost::parse("{2}")),
         }],
         targeting: vec![TargetRequirement {
             shares_creature_type: false,
@@ -7375,6 +7378,36 @@ fn the_spirit_oasis() -> CardDefinition {
                 }],
             },
         ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn the_unagi_of_kyoshi_island() -> CardDefinition {
+    let text_box = "Flash\nWard—Waterbend {4}. (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays {4}. They can tap their artifacts and creatures to help. Each one pays for {1}.)\nWhenever an opponent draws their second card each turn, you draw two cards.";
+
+    CardDefinition {
+        key: "tla.the_unagi_of_kyoshi_island",
+        scryfall_id: "0ecd8b38-9ee5-41a5-9b93-21c33fc1a6ff",
+        name: "The Unagi of Kyoshi Island".into(),
+        mana_cost: Some(ManaCost::parse("{3}{U}{U}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Serpent".into()],
+        power: Some(5),
+        toughness: Some(5),
+        keywords: Keywords {
+            flash: true,
+            ..Default::default()
+        },
+        statics: vec![StaticAbility::Ward(PaymentCost::Waterbend { generic: 4 })],
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::OpponentDrawsNthCardThisTurn { n: 2 },
+            intervening_if: None,
+            effects: vec![Effect::DrawCards {
+                count: EffectValue::Fixed(2),
+            }],
+        }],
         text_box: text_box.into(),
         ..Default::default()
     }

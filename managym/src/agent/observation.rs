@@ -1076,7 +1076,7 @@ impl Observation {
             is_lesson: card.has_subtype("Lesson"),
             ward_cost: card
                 .ward()
-                .map(|cost| i32::from(cost.mana_value))
+                .map(|cost| i32::from(cost.mana_cost().mana_value))
                 .unwrap_or(0),
             kicker_cost: card
                 .optional_cost()

@@ -14,7 +14,7 @@ use std::{
 
 use super::fixtures;
 use crate::state::{
-    ability::{Ability, Effect, TriggerCondition, TriggerSubject},
+    ability::{Ability, Effect, PaymentCost, TriggerCondition, TriggerSubject},
     card::{Card, CardDefId, CardDefinition},
     game_object::{ObjectId, PlayerId},
 };
@@ -228,7 +228,8 @@ impl ContentPack {
                             "supertypes": card.supertypes, "subtypes": card.subtypes,
                             "keywords": card.keywords, "power": card.power,
                             "toughness": card.toughness, "kicker": card.optional_cost(),
-                            "ward": card.ward(), "is_token": card.is_token,
+                            "ward": card.ward().map(PaymentCost::mana_cost),
+                            "is_token": card.is_token,
                         })
                     })
                     .collect()

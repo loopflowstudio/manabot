@@ -909,6 +909,13 @@ impl Game {
                     nth_this_turn,
                 },
             ) => *player == source_controller && nth_this_turn == n,
+            (
+                TriggerCondition::OpponentDrawsNthCardThisTurn { n },
+                GameEvent::CardDrawn {
+                    player,
+                    nth_this_turn,
+                },
+            ) => *player != source_controller && nth_this_turn == n,
             _ => false,
         }
     }

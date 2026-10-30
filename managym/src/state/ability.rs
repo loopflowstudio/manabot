@@ -119,6 +119,10 @@ pub enum TriggerCondition {
     YouDrawNthCardThisTurn {
         n: u32,
     },
+    /// "Whenever an opponent draws their Nth card each turn."
+    OpponentDrawsNthCardThisTurn {
+        n: u32,
+    },
     /// The inner condition only fires while `active_if` holds for the
     /// ability's controller: a conditionally granted triggered ability
     /// ("has firebending 2 as long as there's a Lesson card in your
@@ -665,7 +669,7 @@ pub enum Effect {
     /// Reports no target spec of its own — targeting is declared on the
     /// card (`CardDefinition::targeting`) when a choice is required.
     CounterUnlessPays {
-        cost: ManaCost,
+        cost: PaymentCost,
     },
     /// Allies at Last: all chosen targets except the last each deal damage
     /// equal to their power to the last target. Targeting is declared on

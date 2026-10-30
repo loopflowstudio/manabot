@@ -2,7 +2,8 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use super::{
     ability::{
-        effect_target_requirements, Ability, Condition, Effect, TargetRequirement, TargetSpec,
+        effect_target_requirements, Ability, Condition, Effect, PaymentCost, TargetRequirement,
+        TargetSpec,
     },
     game_object::{ObjectId, ObjectRef, PlayerId},
     mana::{Color, Colors, Mana, ManaCost},
@@ -541,8 +542,9 @@ pub enum StaticAbility {
     /// ignored.
     CharacteristicPower(PowerCda),
     /// Ward (CR 702.21): registration expands it into its "becomes the
-    /// target" trigger, "counter it unless that player pays [cost]".
-    Ward(ManaCost),
+    /// target" trigger, "counter it unless that player pays [cost]". The
+    /// cost is mana or a waterbend ("Ward—Waterbend {4}").
+    Ward(PaymentCost),
     /// "You may look at the top card of your library any time" (CR 401.2).
     LookAtLibraryTop,
     /// "You may cast [predicate] spells from the top of your library."
@@ -691,7 +693,7 @@ impl CardDefinition {
         })
     }
 
-    pub fn ward(&self) -> Option<&ManaCost> {
+    pub fn ward(&self) -> Option<&PaymentCost> {
         self.statics.iter().find_map(|ability| match ability {
             StaticAbility::Ward(cost) => Some(cost),
             _ => None,

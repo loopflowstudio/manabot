@@ -11170,3 +11170,66 @@ fn resolve_until_target(s: &mut Scenario) {
     s.game_mut().scenario_refresh_priority().unwrap();
     pass_until(s, ActionSpaceKind::ChooseTarget);
 }
+
+/// Ward—waterbend {4}: the opponent may pay by tapping their own artifacts
+/// and creatures, or decline and have their ability countered.
+#[test]
+fn the_unagi_wards_with_a_waterbend_the_opponent_may_pay_by_tapping() {
+    for pay in [true, false] {
+        let mut s = five_color_setup(&[
+            "The Unagi of Kyoshi Island",
+            "Weaponize the Monsters",
+            "Gray Ogre",
+        ]);
+        let unagi = s.force_permanent_on_battlefield(0, "The Unagi of Kyoshi Island");
+        let weapon = s.force_permanent_on_battlefield(1, "Weaponize the Monsters");
+        let fodder = s.force_permanent_on_battlefield(1, "Gray Ogre");
+        let fodder = card_of(&s, fodder);
+        let helpers: Vec<_> = (0..3)
+            .map(|_| s.force_permanent_on_battlefield(1, "Gray Ogre"))
+            .collect();
+        s.advance_to_active_step(1, StepKind::Main);
+        s.set_player_mana_pool(1, "3");
+        activate_first(&mut s, weapon);
+        assert!(s.choose_target(Target::Permanent(unagi)));
+        select_card(&mut s, fodder);
+        pass_until(&mut s, ActionSpaceKind::Waterbend);
+        assert_eq!(s.action_space().player, Some(PlayerId(1)));
+        if pay {
+            for helper in &helpers {
+                assert!(s.choose_waterbend_tap(*helper));
+            }
+            assert!(s.take_action_by_type(ActionType::PayCost));
+            settle(&mut s);
+            assert_eq!(permanent(&s, unagi).damage, 2, "paid: the ability resolves");
+            assert!(helpers.iter().all(|helper| tapped(&s, *helper)));
+        } else {
+            choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+            settle(&mut s);
+            assert_eq!(permanent(&s, unagi).damage, 0, "countered");
+        }
+    }
+}
+
+/// Only an opponent's second draw in a turn draws you two cards.
+#[test]
+fn the_unagi_draws_two_when_an_opponent_draws_their_second_card() {
+    let mut s = five_color_setup(&["The Unagi of Kyoshi Island"]);
+    s.force_permanent_on_battlefield(0, "The Unagi of Kyoshi Island");
+    s.advance_to_active_step(0, StepKind::Main);
+    let hand = s.zone_size(0, ZoneType::Hand);
+    s.game_mut().draw_cards(PlayerId(0), 2);
+    resolve_until_priority(&mut s);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 2, "your own draws");
+
+    s.game_mut().draw_cards(PlayerId(1), 1);
+    resolve_until_priority(&mut s);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 2, "their first draw");
+    s.game_mut().draw_cards(PlayerId(1), 2);
+    resolve_until_priority(&mut s);
+    assert_eq!(
+        s.zone_size(0, ZoneType::Hand),
+        hand + 4,
+        "two of yours, then two"
+    );
+}

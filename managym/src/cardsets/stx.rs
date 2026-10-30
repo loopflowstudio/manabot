@@ -3,7 +3,7 @@ use crate::state::ability::AffectedSpec;
 use crate::state::effect::Modification;
 use crate::state::{
     ability::{
-        Ability, Effect, EffectValue, TargetRequirement, TargetSpec, TriggerCondition,
+        Ability, Effect, EffectValue, PaymentCost, TargetRequirement, TargetSpec, TriggerCondition,
         TriggerSubject,
     },
     card::{CardDefinition, CardType, CardTypes, Keywords, StaticAbility},
@@ -250,7 +250,9 @@ fn waterfall_aerialist() -> CardDefinition {
             flying: true,
             ..Default::default()
         },
-        statics: vec![StaticAbility::Ward(ManaCost::parse("{2}"))],
+        statics: vec![StaticAbility::Ward(PaymentCost::Mana(ManaCost::parse(
+            "{2}",
+        )))],
         text_box: text_box.into(),
         ..Default::default()
     }

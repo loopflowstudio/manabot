@@ -641,7 +641,7 @@ fn effect_witnesses() -> Vec<Effect> {
             modes: vec![draw(), vec![Effect::Discard]],
         },
         Effect::CounterUnlessPays {
-            cost: ManaCost::parse("{2}"),
+            cost: PaymentCost::Mana(ManaCost::parse("{2}")),
         },
         Effect::TargetCreaturesDealPowerDamageToLastTarget,
         Effect::Earthbend {
@@ -807,6 +807,9 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::YouDrawNthCardThisTurn { .. } => {
             "TriggerCondition::YouDrawNthCardThisTurn"
         }
+        TriggerCondition::OpponentDrawsNthCardThisTurn { .. } => {
+            "TriggerCondition::OpponentDrawsNthCardThisTurn"
+        }
         TriggerCondition::ActiveIf { .. } => "TriggerCondition::ActiveIf",
         TriggerCondition::AttacksAlone { .. } => "TriggerCondition::AttacksAlone",
         TriggerCondition::BeginningOfYourEndStep => "TriggerCondition::BeginningOfYourEndStep",
@@ -840,6 +843,7 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::BeginningOfYourUpkeep,
         TriggerCondition::BeginningOfYourCombat,
         TriggerCondition::YouDrawNthCardThisTurn { n: 2 },
+        TriggerCondition::OpponentDrawsNthCardThisTurn { n: 2 },
         TriggerCondition::ActiveIf {
             active_if: Condition::YourTurn,
             condition: enters(),
@@ -1215,7 +1219,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
             per_color_among: None,
         }),
         StaticAbility::CharacteristicPower(PowerCda::CreaturesYouControl),
-        StaticAbility::Ward(ManaCost::parse("{2}")),
+        StaticAbility::Ward(PaymentCost::Waterbend { generic: 4 }),
         StaticAbility::LookAtLibraryTop,
         StaticAbility::CastFromLibraryTop(creature()),
         StaticAbility::AttachedHas(ActivatedAbilityDefinition::default()),
