@@ -144,7 +144,7 @@ checkpoints or experiment evidence.
   `uv venv --python 3.12`.
 - After changing Rust under `managym/src`, rebuild from the repository root so
   uv uses the pinned root environment instead of creating a nested venv:
-  `uv run maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`,
+  `uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`,
   then place the cp312 `.so` from the wheel at
   `manabot/managym/_managym.cpython-312-darwin.so`. Replace it atomically (write a new
   file, then rename); overwriting a mapped extension in place can trigger macOS
