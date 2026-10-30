@@ -659,7 +659,7 @@ pub fn encode_into(
             {
                 row[PERMANENT_ATTACHED_INDEX] = link(permanent.attached_to);
                 row[PERMANENT_BLOCKING_INDEX] = link(permanent.blocking);
-                row[PERMANENT_TIMESTAMP_INDEX] = ranks[&permanent.timestamp];
+                row[PERMANENT_TIMESTAMP_INDEX] = ranks[&permanent.timestamp()];
             }
         }
     }
@@ -1073,7 +1073,7 @@ fn timestamp_ranks(obs: &Observation) -> std::collections::BTreeMap<i32, f32> {
         .flatten()
         .map(|effect| effect.timestamp);
     let mut stamps: Vec<i32> = permanents
-        .map(|permanent| permanent.timestamp)
+        .map(PermanentData::timestamp)
         .chain(effects)
         .collect();
     stamps.sort_unstable();

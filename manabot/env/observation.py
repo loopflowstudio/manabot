@@ -119,10 +119,15 @@ def _split_id(ident: int) -> Tuple[float, float]:
     return float(ident >> 16), float(ident & 0xFFFF)
 
 
+def _timestamp(perm: managym.Permanent) -> int:
+    """A permanent's timestamp: renewed by an attachment, otherwise its id."""
+    return perm.id if perm.timestamp is None else perm.timestamp
+
+
 def _timestamp_ranks(obs: managym.Observation) -> Dict[int, float]:
     """Rank (1-based) of every permanent and effect timestamp in `obs`."""
     permanents = [*obs.agent_permanents, *obs.opponent_permanents]
-    stamps = {perm.timestamp for perm in permanents}
+    stamps = {_timestamp(perm) for perm in permanents}
     for effects in (
         obs.agent.effects,
         obs.opponent.effects,
@@ -351,7 +356,7 @@ class ObservationEncoder:
                             out[key][row, column] = (
                                 self.object_to_index.get(linked, -1) + 1
                             )
-                    out[key][row, PERMANENT_TIMESTAMP_INDEX] = ranks[perm.timestamp]
+                    out[key][row, PERMANENT_TIMESTAMP_INDEX] = ranks[_timestamp(perm)]
             out["facts"] = self._encode_facts(obs, ranks)
 
         # Validity masks

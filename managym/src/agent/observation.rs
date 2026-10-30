@@ -385,6 +385,13 @@ pub struct ContinuousEffectData {
     pub timestamp: i32,
 }
 
+impl PermanentData {
+    /// Its timestamp: renewed by an attachment, otherwise its id.
+    pub fn timestamp(&self) -> i32 {
+        self.timestamp.unwrap_or(self.id)
+    }
+}
+
 impl ContinuousEffectData {
     fn new(game: &Game, effect: &ContinuousEffect) -> Self {
         let mut data = Self {
@@ -517,9 +524,10 @@ pub struct PermanentData {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<ContinuousEffectData>,
     /// Its timestamp (CR 613.7d/e), the order its static abilities apply in
-    /// among the records.
-    #[serde(default)]
-    pub timestamp: i32,
+    /// among the records; absent while it is `id`, the timestamp it entered
+    /// with (an attachment renews it).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timestamp: Option<i32>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1017,7 +1025,7 @@ impl Observation {
                 .map(|(index, _)| index)
                 .collect(),
             effects: ContinuousEffectData::list(game, game.affected_permanent(perm_id)),
-            timestamp: permanent.timestamp.0 as i32,
+            timestamp: (permanent.timestamp != permanent.id).then_some(permanent.timestamp.0 as i32),
         };
 
         if permanent.controller.0 == self.agent.player_index as usize {

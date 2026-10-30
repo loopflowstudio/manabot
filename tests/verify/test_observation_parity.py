@@ -432,8 +432,9 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     mine.attacking, mine.blocking, mine.abilities_lost = True, theirs.id, True
     mine.used_abilities = [1, 5]
     # Later than both permanents (ranks 1 and 2).
-    base = max(mine.timestamp, theirs.timestamp)
-    assert mine.timestamp < theirs.timestamp
+    assert mine.timestamp is None and theirs.timestamp is None
+    base = max(mine.id, theirs.id)
+    assert mine.id < theirs.id
     pump = managym.ContinuousEffect()
     pump.modification, pump.power, pump.toughness = "ModifyPt", 2, 0
     pump.duration, pump.timestamp = "EndOfTurn", base + 1
@@ -457,7 +458,8 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     for key, value in expected.items():
         np.testing.assert_array_equal(actual[key], value, err_msg=key)
     row = actual["agent_permanents"][0]
-    host = 2 + 2 * encoder.cards_per_player + encoder.perms_per_player
+    own = 2 + 2 * encoder.cards_per_player
+    host = own + encoder.perms_per_player
     # Attacking (v4 column 27), then v5: exhausted, once each turn, granted
     # firebending, attachment join, granted land, blocking join, lost
     # abilities, timestamp rank, validity.
@@ -473,7 +475,7 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     # The agent's player row comes first; its record is the latest.
     np.testing.assert_allclose(
         effects[:, [FACT_OBJECT_INDEX, FACT_VALUE_INDEX, FACT_DURATION_INDEX]],
-        [[1, 0, 1], [host + 1, 0.2, 1], [host + 1, 0, 1], [host + 1, 0, 1]],
+        [[1, 0, 1], [own + 1, 0.2, 1], [own + 1, 0, 1], [own + 1, 0, 1]],
     )
     assert effects[:, FACT_ORDER_INDEX].tolist() == [5, 3, 4, 4]
     assert effects[2, FACT_SOURCE_INDEX] == theirs.registry_key + 1

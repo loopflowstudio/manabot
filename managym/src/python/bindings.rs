@@ -1694,9 +1694,10 @@ pub struct PyPermanent {
     /// Continuous effects on this permanent, in timestamp order.
     #[pyo3(get, set)]
     pub effects: Vec<PyContinuousEffect>,
-    /// Its timestamp (CR 613.7).
+    /// Its timestamp (CR 613.7) when an attachment renewed it; None while
+    /// it is `id`.
     #[pyo3(get, set)]
-    pub timestamp: i32,
+    pub timestamp: Option<i32>,
 }
 
 #[cfg(feature = "python")]

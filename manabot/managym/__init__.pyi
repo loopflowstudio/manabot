@@ -510,8 +510,9 @@ class Permanent:
     used_abilities: list[int]
     # Continuous effects on this permanent, in timestamp order.
     effects: list[ContinuousEffect]
-    # Its timestamp (CR 613.7d/e).
-    timestamp: int
+    # Its timestamp (CR 613.7d/e) when an attachment renewed it; None while
+    # it is `id`, its entering timestamp.
+    timestamp: int | None
 
 class Turn:
     turn_number: int
