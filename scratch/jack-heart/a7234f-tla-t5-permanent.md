@@ -81,20 +81,30 @@ vocabularies as v5 fact rows (`FactKind`).
   `ActiveIf { SacrificedThisTurnAtLeast(1), BeginningOfYourEndStep }` with an
   `IfCondition` recheck (CR 603.4).
 
-## Concept review (headless, 2026-10-30, HEAD `00724828c`) — nothing to change
+## Concept review (headless, 2026-10-30, HEAD `187d4e0d7`) — one change
 
-Checked the code against Jack Heart's design review (comment 10a31948). The
-copy authority is `create_token_copy`, which stores `CopyEffect { of,
-exceptions }`. Exceptions use T3's `Modification` and are observed through
-`FactKind::Copy` / `CopyException`. Turn history lives on `TurnState` in T4's
-shape. The Airship is built only from existing condition, trigger and crew
-values plus one self-relative static. No product choice is open.
+The card, copy, exception, turn-history and Airship model still match Jack
+Heart's design review (comment 10a31948). No product choice is open. The
+`00724828c` review stands: folding `CreatureWithCounters` and
+`CreatureWithNamesakes` into one variant waits for a third self-animation
+condition.
 
-Considered but not adopted: folding `CreatureWithCounters` and
-`CreatureWithNamesakes` into one `CreatureWhile(<self condition>)` variant.
-Both cover "this is an artifact creature as long as …", but the change would
-re-key an existing card's learning tokens and no accepted decision calls for
-it. If a third self-animation condition appears, merge them then.
+The decision-code fix (`2963f8f87`) gives Rust one owner, `decision_code`,
+bounded by `MAX_DECISION_CODE`. Python still has a second copy:
+`_OBLIGATIONS` in `manabot/semantic/text_observation.py` maps codes to
+labels, and nothing ties its length to the native bound. The demo defect was
+this kind of drift: the validator stopped at 13, and the old text table
+labelled code 14 "order triggers". An unlisted code now fails loudly
+(`_enum` raises), but only when a game reaches it.
+
+**Next implement direction:**
+
+- Export `MAX_DECISION_CODE` from the native module beside `WORLD_VERSION`,
+  and add it to `__init__.pyi`.
+- Add a Python test asserting `len(_OBLIGATIONS) == MAX_DECISION_CODE + 1`,
+  so a new code fails in CI rather than mid-game.
+- Do not move the labels into Rust. They are text-rendering vocabulary; the
+  bound is the shared fact.
 
 ## Remaining
 
