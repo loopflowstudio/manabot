@@ -19,7 +19,7 @@ database (`experiments.elemental_long_db`), which is published as one object.
 Two eval runs keep two compute contracts apart: `mtg183-eval-rent` plays the
 frozen scalar path (one Torch thread, one decision per forward pass), and
 `mtg183-eval-batched` plays each group's games concurrently through one
-batched inference service per group (`EvalCompute`), and `mtg183-eval-gpu`
+batched inference service per group (`EvalAllocation`), and `mtg183-eval-gpu`
 plays every group on the machine through one CUDA inference service, so
 concurrent games share one batch (`manabot.eval.endpoint.callback_allocation`).
 The report treats them as separate sources until their agreement is checked.
@@ -76,7 +76,7 @@ from manabot.eval.endpoint import InferenceEndpoint, callback_allocation
 from manabot.experiment.job import TOOLCHAIN_ENV, machine_setup
 from manabot.infra.identity import file_sha256
 from manabot.infra.source import SourceBundle, bind_etude_source, bundle_at
-from manabot.sim.execution import EvalCompute, EvalExecution
+from manabot.sim.execution import EvalAllocation, EvalExecution
 
 SCALAR_RUN = "mtg183-eval-rent"
 BATCHED_RUN = "mtg183-eval-batched"
@@ -94,19 +94,19 @@ CEILINGS = {"cpu32": Decimal("2.0"), "l4": Decimal("0.60"), "a4500": Decimal("0.
 WORKERS = 10
 GROUP_WORKERS_SCALAR = 3
 # Each batched group plays all its games at once; a few groups share the machine.
-BATCHED = EvalCompute(max_active_games=12, max_batch_rows=16)
+BATCHED = EvalAllocation(max_active_games=12, max_batch_rows=16)
 BATCHED_WORKERS = 6
 GPU_RUN = "mtg183-eval-gpu"
 # One machine-wide CUDA service: every concurrent game's decisions share a batch.
 # Each game's native child imports Torch (~225 MB), so active games are sized
 # to the A4500's 32 GB, not to the GPU.
-GPU = EvalCompute(device="cuda", max_active_games=64, max_batch_rows=64)
+GPU = EvalAllocation(device="cuda", max_active_games=64, max_batch_rows=64)
 # Ten matches, four groups each: enough pending games to keep 64 active.
 GPU_WORKERS = 10
 GROUP_WORKERS_GPU = 4
 Mode = Literal["scalar", "batched", "gpu"]
 # Each mode's eval run, concurrent matches, groups per match and compute contract.
-MODES: dict[Mode, tuple[str, int, int, EvalCompute | None]] = {
+MODES: dict[Mode, tuple[str, int, int, EvalAllocation | None]] = {
     "scalar": (SCALAR_RUN, WORKERS, GROUP_WORKERS_SCALAR, None),
     "batched": (BATCHED_RUN, BATCHED_WORKERS, 1, BATCHED),
     "gpu": (GPU_RUN, GPU_WORKERS, GROUP_WORKERS_GPU, GPU),
@@ -131,7 +131,7 @@ class Batch(BaseModel):
     state: EvalState
     units: tuple[str, ...]
     workers: int
-    compute: EvalCompute | None
+    compute: EvalAllocation | None
     # Play every group through one machine-wide allocation under `compute`.
     shared: bool = False
     # Groups of one match playing at once.
@@ -158,7 +158,7 @@ class Receipt(BaseModel):
     seconds: float
     workers: int
     group_workers: int
-    compute: EvalCompute | None
+    compute: EvalAllocation | None
     played: list[Played] = []
     cpus: int | None
     error: str | None

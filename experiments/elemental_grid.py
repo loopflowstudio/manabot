@@ -39,7 +39,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict
 
 from manabot.infra.identity import canonical_sha256
-from manabot.sim.execution import EvalCompute, EvalExecution
+from manabot.sim.execution import EvalAllocation, EvalExecution
 from manabot.sim.threads import child_environment
 
 PACK = "elemental-world-v2"
@@ -125,7 +125,7 @@ class Request(BaseModel):
     # The eval run's folder: when given, each game's card evidence is retained there.
     card_evidence: Path | None = None
     # Shared batched inference for the group's games; None is the frozen scalar path.
-    compute: EvalCompute | None = None
+    compute: EvalAllocation | None = None
 
 
 class GameRow(BaseModel):
@@ -318,7 +318,7 @@ def endpoint_environment(endpoint: Any) -> str:
     )
 
 
-def group_cell(compute: EvalCompute | None) -> Callable[..., Cell]:
+def group_cell(compute: EvalAllocation | None) -> Callable[..., Cell]:
     """How a group plays its cell: through the machine's allocation when
     `ENDPOINT` names one, else in this process (batched per group under `compute`)."""
     from manabot.eval.endpoint import InferenceEndpoint
@@ -337,7 +337,7 @@ def group_cell(compute: EvalCompute | None) -> Callable[..., Cell]:
     return partial(play_cell, execution=group_execution(compute))
 
 
-def group_execution(compute: EvalCompute | None) -> EvalExecution | None:
+def group_execution(compute: EvalAllocation | None) -> EvalExecution | None:
     """One group's allocation under `compute`, bounded by the group's wall time."""
     if compute is None:
         return None

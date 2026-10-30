@@ -41,9 +41,12 @@ import os
 from pathlib import Path
 import re
 import shutil
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
-import duckdb
+# duckdb is the `evaluation` extra; recipe discovery imports every experiment
+# module without it, so the database functions load it themselves.
+if TYPE_CHECKING:
+    import duckdb
 
 EXPERIMENT = "mtg183-elemental-eval"
 BUCKET = "manabot"
@@ -146,6 +149,8 @@ def _read(folder: Folder, key: str) -> bytes | None:
 
 
 def _evidence_db() -> duckdb.DuckDBPyConnection:
+    import duckdb
+
     HOME.mkdir(parents=True, exist_ok=True)
     db = duckdb.connect(str(EVIDENCE))
     db.execute(
@@ -325,6 +330,8 @@ def _stage() -> Path:
             elif relative.parts[0] != "tables" or source.suffix != ".parquet":
                 (target / relative).parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(source, target / relative)
+    import duckdb
+
     mapping = duckdb.connect()
     mapping.execute("CREATE TABLE rekey (old VARCHAR PRIMARY KEY, new VARCHAR)")
     mapping.executemany("INSERT INTO rekey VALUES (?, ?)", list(keys.items()))

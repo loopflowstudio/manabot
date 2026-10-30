@@ -123,7 +123,7 @@ from manabot.eval.card_evaluation import trace_card_tables
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import file_sha256
 from manabot.model.checkpoint import fetch_etude_checkpoint
-from manabot.sim.execution import EvalCompute
+from manabot.sim.execution import EvalAllocation
 from manabot.sim.heuristic import heuristic_source_paths
 from manabot.sim.threads import child_environment
 import managym
@@ -153,7 +153,7 @@ YIELD_TO = r"manabot\.mtg-181-trial-two-seat/.* -m experiments\."
 EVIDENCE = "MTG183_EVAL_EVIDENCE"
 # The eval run's folder, where workers retain card evidence; `follow` sets it.
 CARDS = "MTG183_EVAL_CARDS"
-# An `EvalCompute` as JSON: when set, groups play through shared batched inference.
+# An `EvalAllocation` as JSON: when set, groups play through shared batched inference.
 COMPUTE = "MTG183_EVAL_COMPUTE"
 # How many of a match's groups play at once (default one, in turn); rows keep
 # the groups' order either way.
@@ -475,7 +475,7 @@ class H2HRequest(BaseModel):
     group: Group
     output: Path
     card_evidence: Path | None = None
-    compute: EvalCompute | None = None
+    compute: EvalAllocation | None = None
 
 
 def _local(seated: Player) -> LocalCheckpoint:
@@ -549,7 +549,7 @@ def _play_group(
     """A group's rows and arena trace from its worker; invalid rows and no trace
     when it fails or times out."""
     found = os.environ.get(COMPUTE)
-    compute = None if not found else EvalCompute.model_validate_json(found)
+    compute = None if not found else EvalAllocation.model_validate_json(found)
     if older is None:
         command = ["experiments.elemental_grid"]
         request: BaseModel = Request(
