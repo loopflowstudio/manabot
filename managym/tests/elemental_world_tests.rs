@@ -11,7 +11,7 @@ fn retained_professor_cast_prefix_can_enter_and_finish_mana_payment() {
         pack.player_config("arena-seat-1", "elemental_ug").unwrap(),
     ];
     for config in &mut configs {
-        config.content_pack = Some(pack.pack_key.clone());
+        config.world = Some(pack.pack_key.clone());
     }
     let mut env = managym::agent::env::Env::new(2165384, true, false, false);
     env.reset(configs).unwrap();
@@ -41,7 +41,7 @@ fn every_pair_and_mirror_uses_the_selected_world_and_completes() {
                 semantic.player_config("right", &second.key).unwrap(),
             ];
             for config in &mut configs {
-                config.content_pack = Some(semantic.pack_key.clone());
+                config.world = Some(semantic.pack_key.clone());
             }
             let seed = 16400 + (left * 10 + right) as u64;
             let mut game = Game::new(configs, seed, true);

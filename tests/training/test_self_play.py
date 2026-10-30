@@ -8,8 +8,9 @@ import pytest
 
 from manabot.reports.experiment import load_evidence
 from manabot.reports.self_play import self_play_figures, self_play_points
-from manabot.training.rollout.self_play import SelfPlayCounter, deck_identity
+from manabot.training.rollout.self_play import SelfPlayCounter
 from manabot.training.update_metrics import stage_rows
+import managym
 
 
 def test_both_seats_deck_swaps_and_drawn_games() -> None:
@@ -45,8 +46,11 @@ def test_mirror_and_recovery_keep_seat_counts() -> None:
 
 
 def test_identity_includes_sideboard_and_ignores_dictionary_order() -> None:
-    assert deck_identity({"a": 2, "b": 1}, {}) == deck_identity({"b": 1, "a": 2}, {})
-    assert deck_identity({"a": 2}, {}) != deck_identity({"a": 2}, {"b": 1})
+    assert (
+        managym.Deck({"a": 2, "b": 1}).identity
+        == managym.Deck({"b": 1, "a": 2}).identity
+    )
+    assert managym.Deck({"a": 2}).identity != managym.Deck({"a": 2}, {"b": 1}).identity
 
 
 def test_windows_pool_counts_and_old_reports_remain_unavailable() -> None:

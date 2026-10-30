@@ -32,7 +32,6 @@ import torch
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ACTION_TYPE_DIM, ActionEnum, ObservationSpace
-from manabot.infra.config import MatchConfig
 from manabot.infra.profiler import Profiler
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.inference import PolicyInference
@@ -48,13 +47,14 @@ from manabot.sim.rollout import (
     RandomBatchController,
     _allocate_buffers,
 )
+from manabot.training.decks import UniformDecks, pair_match
 from manabot.training.rollout.matchups import (
     Curriculum,
     elemental_roster,
     stream_matches,
 )
 from manabot.training.rollout.producers import ShardedVectorEnv
-from manabot.training.rollout.self_play import SelfPlayCounter, deck_identity
+from manabot.training.rollout.self_play import SelfPlayCounter
 from manabot.training.state.game_errors import (
     GameAttempt,
     GameErrorLimit,
@@ -62,6 +62,7 @@ from manabot.training.state.game_errors import (
     GameErrorState,
     GameOutcome,
 )
+from managym import WORLD_SETUP, Deck
 
 OPPONENT_MODES = ("random", "frozen", "self", "learning")
 
@@ -185,6 +186,7 @@ class CollectorSnapshot:
     sampling_rng: torch.Tensor
     stats: CollectorStats
     current_games: CurrentGames | None = None
+    decks_digest: str | None = None
 
 
 _ACTION_TYPE_NAMES = {int(member): member.name.lower() for member in ActionEnum}
@@ -215,18 +217,29 @@ class SeatRoutedCollector:
         recovery_max_game_microsteps: int | None = None,
         root: str | None = None,
         matchup_curriculum: Curriculum = "fixed",
+        deck_source: UniformDecks | None = None,
         workers: int = 1,
         game_errors: GameErrorPolicy | None = None,
         record_attempt: Callable[[GameAttempt], GameErrorState] | None = None,
     ) -> None:
-        self._uniform_roster = (
-            elemental_roster(match) if matchup_curriculum == "elemental-uniform" else []
-        )
+        # The source's identity is fixed for the collector; every snapshot and
+        # game attempt records it, so hash it once.
+        self._decks_digest = deck_source.digest if deck_source is not None else None
+        if deck_source is not None:
+            if matchup_curriculum != "fixed":
+                raise ValueError("a deck source cannot be combined with a curriculum")
+            if match.config.world != WORLD_SETUP:
+                raise ValueError("deck-source games play in the world")
+            self._uniform_roster = deck_source.players()
+        elif matchup_curriculum == "elemental-uniform":
+            self._uniform_roster = elemental_roster(match)
+        else:
+            self._uniform_roster = []
         if self._uniform_roster and (
             workers != 1 or root is not None or opponent_mode != "self"
         ):
             raise ValueError(
-                "elemental-uniform requires current-self, one producer and ordinary roots"
+                "per-game roster sampling requires current-self, one producer and ordinary roots"
             )
         if workers not in (1, 2, 4) or workers > num_envs:
             raise ValueError("workers must be 1, 2 or 4 and cannot exceed streams")
@@ -313,7 +326,9 @@ class SeatRoutedCollector:
                 if self._uniform_roster
                 else stream_matches(match, num_envs, matchup_curriculum)
             )
-            if self._uniform_roster:
+            if deck_source is not None:
+                self._env.set_training_decks(self._uniform_roster, deck_source.digest)
+            elif self._uniform_roster:
                 self._env.set_uniform_roster(self._uniform_roster)
             if matchup_curriculum in ("fixed", "elemental-uniform"):
                 self._env.reset_all_into_buffers(match.to_rust())
@@ -370,10 +385,13 @@ class SeatRoutedCollector:
             CurrentGames(self._env.current_game_seeds(), deepcopy(self._game_actions))
             if self._game_recovery_limit is not None
             else None,
+            self._decks_digest,
         )
 
     def restore(self, state: CollectorSnapshot, check: Callable[[], None]) -> None:
         """Replay into a fresh collector; reject divergence before any learning."""
+        if getattr(state, "decks_digest", None) != self._decks_digest:
+            raise ValueError("collector deck source identity mismatch")
         if self.stats.micro_steps or self._journal:
             raise ValueError("restore requires a fresh collector")
         if state.current_games is not None:
@@ -434,26 +452,16 @@ class SeatRoutedCollector:
     def _refresh_roots(self) -> None:
         """Read native sampling after resets, before counting the next game's rows."""
         if self._uniform_roster:
-            self.stream_matches = []
-            for a, b in self._env.current_matchup_indices():
-                first, second = self._uniform_roster[a], self._uniform_roster[b]
-                self.stream_matches.append(
-                    Match(
-                        MatchConfig(
-                            hero=first.name,
-                            villain=second.name,
-                            hero_deck=first.decklist,
-                            villain_deck=second.decklist,
-                            hero_sideboard=first.sideboard,
-                            villain_sideboard=second.sideboard,
-                            content_pack=first.content_pack,
-                        )
-                    )
-                )
+            # Actual native setups, not indices: they remain exact for any deck
+            # the run submitted, even one outside the supply it began with.
+            self.stream_matches = [
+                Match(pair_match(*players))
+                for players in self._env.current_player_configs()
+            ]
         self._self_play_decks = [
             (
-                deck_identity(m.hero_deck, m.hero_sideboard),
-                deck_identity(m.villain_deck, m.villain_sideboard),
+                Deck(m.hero_deck, m.hero_sideboard).identity,
+                Deck(m.villain_deck, m.villain_sideboard).identity,
             )
             for m in self.stream_matches
         ]
@@ -896,6 +904,7 @@ class SeatRoutedCollector:
                 seed=seed,
                 seat=seat,
                 matchup=self.stream_matches[row].config,
+                decks_digest=self._decks_digest,
                 outcome=outcome,
                 actions=[] if completed else list(self._game_actions[row]),
                 error_class=error_class,

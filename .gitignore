@@ -44,3 +44,4 @@ experiments/data/
 .lf/scratch-stash/
 *.dSYM/
 academy/ui/e2e/dense-board-captures/
+.DS_Store

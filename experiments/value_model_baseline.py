@@ -13,7 +13,7 @@ def value_model_baseline() -> TrainingRegime:
         id="value-historical-mean-1",
         world=managym.WORLD_VERSION,
         match=selected_match(),
-        agent=ModelConfig(semantic_pack=PACK),
+        agent=ModelConfig(world=PACK),
         stages=move_checkpoints(2, updates=1, seconds=30),
         wall_seconds=60,
     )

@@ -75,6 +75,7 @@ from .curated_pack import (
     JEONG_INCREMENT_PACK,
     curated_pack_for_matchup,
 )
+from .deck_import import DeckImportInput
 from .opponent import (
     Opponent,
     catalog_opponent,
@@ -179,6 +180,7 @@ DECK_DISPLAY_NAMES = {
     CURATED_PACK.villain_deck_id: CURATED_PACK.villain_display_name,
     JEONG_INCREMENT_PACK.hero_deck_id: JEONG_INCREMENT_PACK.hero_display_name,
     "custom": "Custom",
+    "imported": "Imported deck",
     **{
         row["deck_id"]: row["display_name"]
         for row in ELEMENTAL_WORLD_PACK.manifest["roster"]
@@ -713,44 +715,68 @@ def _parse_game_config(config: Any) -> GameConfig:
                 f"villain_sims must be between 1 and {villain_module.MAX_SEARCH_SIMS}."
             )
 
-    hero_deck, hero_deck_name = _normalize_deck(
-        data.get("hero_deck"), DEFAULT_HERO_DECK_NAME
-    )
-    villain_deck, villain_deck_name = _normalize_deck(
-        data.get("villain_deck"), DEFAULT_VILLAIN_DECK_NAME
-    )
-
-    selected_pack = curated_pack_for_matchup(hero_deck_name, villain_deck_name)
-    if selected_pack is None and any(
-        name in ELEMENTAL_WORLD_PACK.deck_ids
-        for name in (hero_deck_name, villain_deck_name)
-    ):
-        raise ValueError("Elemental decks require two setups from the Elemental roster")
-
-    sideboards = {}
-    for seat, deck_name in (("hero", hero_deck_name), ("villain", villain_deck_name)):
-        pack = selected_pack
-        if pack is None:
-            pack = next(
-                (
-                    candidate
-                    for candidate in CURATED_PACK_CATALOG
-                    if deck_name in candidate.deck_ids
-                ),
-                None,
-            )
-        sideboard = (
-            {} if pack is None else dict(pack.player_config(deck_name, seat).sideboard)
+    # Private import provenance (see `GameConfig.hero_source`); empty for named decks.
+    provenance: dict[str, Any] = {}
+    if "deck_import" in data:
+        deck_import = DeckImportInput.model_validate(data["deck_import"])
+        hero_import, villain_import = deck_import.admit()
+        provenance = {
+            "hero_source": hero_import.decklist.to_dict(),
+            "villain_source": villain_import.decklist.to_dict(),
+        }
+        hero_deck, villain_deck = hero_import.deck.main, villain_import.deck.main
+        hero_deck_name = villain_deck_name = "imported"
+        selected_pack = None
+        sideboards = {
+            "hero": hero_import.deck.sideboard,
+            "villain": villain_import.deck.sideboard,
+        }
+    else:
+        hero_deck, hero_deck_name = _normalize_deck(
+            data.get("hero_deck"), DEFAULT_HERO_DECK_NAME
         )
-        # Named setup cannot silently change when a persisted config is reused.
-        supplied = data.get(f"{seat}_sideboard", sideboard)
-        if (
-            not isinstance(supplied, dict)
-            or supplied != sideboard
-            or any(type(count) is not int for count in supplied.values())
+        villain_deck, villain_deck_name = _normalize_deck(
+            data.get("villain_deck"), DEFAULT_VILLAIN_DECK_NAME
+        )
+
+        selected_pack = curated_pack_for_matchup(hero_deck_name, villain_deck_name)
+        if selected_pack is None and any(
+            name in ELEMENTAL_WORLD_PACK.deck_ids
+            for name in (hero_deck_name, villain_deck_name)
         ):
-            raise ValueError(f"{seat}_sideboard must match the named deck setup")
-        sideboards[seat] = sideboard
+            raise ValueError(
+                "Elemental decks require two setups from the Elemental roster"
+            )
+
+        sideboards = {}
+        for seat, deck_name in (
+            ("hero", hero_deck_name),
+            ("villain", villain_deck_name),
+        ):
+            pack = selected_pack
+            if pack is None:
+                pack = next(
+                    (
+                        candidate
+                        for candidate in CURATED_PACK_CATALOG
+                        if deck_name in candidate.deck_ids
+                    ),
+                    None,
+                )
+            sideboard = (
+                {}
+                if pack is None
+                else dict(pack.player_config(deck_name, seat).sideboard)
+            )
+            # Named setup cannot silently change when a persisted config is reused.
+            supplied = data.get(f"{seat}_sideboard", sideboard)
+            if (
+                not isinstance(supplied, dict)
+                or supplied != sideboard
+                or any(type(count) is not int for count in supplied.values())
+            ):
+                raise ValueError(f"{seat}_sideboard must match the named deck setup")
+            sideboards[seat] = sideboard
 
     villain_checkpoint: str | None = None
     villain_deterministic = False
@@ -768,6 +794,7 @@ def _parse_game_config(config: Any) -> GameConfig:
         villain_deterministic = opponent.deterministic
 
     return GameConfig(
+        **provenance,
         hero_deck=hero_deck,
         villain_deck=villain_deck,
         hero_sideboard=sideboards["hero"],
@@ -2754,6 +2781,15 @@ def _dispatch_table_request(
                 **({"seed": previous.seed} if previous.seed_was_requested else {}),
                 **config,
             }
+            if previous.hero_source is not None and previous.villain_source is not None:
+                # New game re-admits the retained sources against the installed world.
+                config["deck_import"] = {
+                    seat: {"source": source["source"], "filename": source["filename"]}
+                    for seat, source in (
+                        ("hero", previous.hero_source),
+                        ("villain", previous.villain_source),
+                    )
+                }
             if previous.opponent is not None:
                 config["opponent_sha256"] = previous.opponent["sha256"]
         record.game.attempt_owner = participant_id(participant.resume_token)
@@ -3497,3 +3533,25 @@ def import_arena_watch(payload: dict[str, Any]) -> dict[str, Any]:
         return import_arena(payload)
     except (ValueError, KeyError, TypeError) as exc:
         raise HTTPException(400, "arena_import_invalid") from exc
+
+
+@app.post("/api/decklists/validate")
+def validate_decklists(payload: DeckImportInput) -> dict[str, Any]:
+    try:
+        payload.admit()
+    except managym.DeckImportError as error:
+        return {
+            "admitted": False,
+            "documents": {
+                seat: decklist.to_dict() for seat, decklist in error.decklists.items()
+            },
+        }
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
+    world = managym.world_identity()
+    return {
+        "admitted": True,
+        "ruleset": managym.DEVELOPMENT_RULESET,
+        "world_version": world["world_version"],
+        "card_digest": world["card_digest"],
+    }

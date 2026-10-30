@@ -10,10 +10,12 @@ import typer
 
 from manabot.config.load import load_sim_config
 from manabot.config.presets import DEFAULT_SIM_PRESET
+from manabot.infra.config import MatchConfig
 from manabot.recipes.baseline import BASELINE_STEPS, run_baseline
 from manabot.recipes.local import LOCAL_SECONDS, LOCAL_STEPS, run_local
 from manabot.sim.sim import run_simulation
 from manabot.training.regime import TrainingRegime
+import managym
 
 app = typer.Typer(
     help="Manabot training and simulation CLI", pretty_exceptions_show_locals=False
@@ -60,13 +62,6 @@ def named_regime(name: str) -> TrainingRegime:
     regime = recipe()
     assert isinstance(regime, TrainingRegime)
     return regime
-
-
-def _run_sim(preset: str, set_values: list[str]) -> None:
-    sim_config, runtime_config = load_sim_config(
-        preset=preset, set_overrides=set_values
-    )
-    run_simulation(sim_config, runtime_config)
 
 
 @app.command("train")
@@ -206,8 +201,32 @@ def sim_command(
         "--set",
         help="Override config values with key.path=value (repeatable)",
     ),
+    hero_deck_file: Path | None = typer.Option(
+        None, help="UTF-8 main/sideboard decklist"
+    ),
+    villain_deck_file: Path | None = typer.Option(None, help="UTF-8 opponent decklist"),
 ) -> None:
-    _run_sim(preset, set_values or [])
+    if (hero_deck_file is None) != (villain_deck_file is None):
+        raise typer.BadParameter("Supply both --hero-deck-file and --villain-deck-file")
+    try:
+        sim_config, runtime_config = load_sim_config(preset, set_values)
+        if hero_deck_file is not None and villain_deck_file is not None:
+            hero, villain = managym.admit_decklists(
+                [
+                    ("hero", managym.Decklist.read(hero_deck_file)),
+                    ("villain", managym.Decklist.read(villain_deck_file)),
+                ]
+            )
+            config = sim_config.model_dump()
+            config["match"] = MatchConfig.from_import(hero, villain).model_dump()
+            sim_config = type(sim_config).model_validate(config)
+            typer.echo(
+                f"Admitted {managym.DEVELOPMENT_RULESET} decks "
+                f"{hero.deck.identity} vs {villain.deck.identity}"
+            )
+    except (ValueError, OSError) as error:
+        raise typer.BadParameter(str(error)) from error
+    run_simulation(sim_config, runtime_config)
 
 
 @app.command("training-report")

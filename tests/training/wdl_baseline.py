@@ -16,7 +16,7 @@ def wdl_baseline() -> Baseline:
             match=selected_match(),
             observation=ObservationConfig(),
             agent=ModelConfig(
-                semantic_pack=PACK,
+                world=PACK,
                 value_kind="categorical_wdl",
                 value_aggregation="value_token",
                 attention_layers=2,

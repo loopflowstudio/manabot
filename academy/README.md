@@ -249,3 +249,6 @@ earlier ones and resolve first if the stack proceeds without responses. The last
 remaining position is forced. Reload restores the actual pending order or target
 decision, or the current stack if placement has finished. A lost response does not
 undo a submitted choice.
+
+For editable file input and development construction rules, see
+[decklist import](../docs/decklist-import.md).

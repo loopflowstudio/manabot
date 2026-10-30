@@ -49,7 +49,7 @@ from manabot.infra.config import ModelConfig, MatchConfig
 match = MatchConfig.authored(
     "elemental-world-v2", "elemental_ug", "elemental_bg"
 )
-agent = ModelConfig(semantic_pack="elemental-world-v2", policy_film=True)
+agent = ModelConfig(world="elemental-world-v2", policy_film=True)
 ```
 
 These values go into the existing environment/model/trainer configuration.

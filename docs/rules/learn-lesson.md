@@ -16,7 +16,7 @@ identities: **w4 remains the native rules world**. ETU-89 owns training regimes
 and reuses the ordinary checkpoint contract; no second training loader was added.
 The dated September observations below describe the earlier state.
 
-Ordinary policies configured with `semantic_pack="ur-lessons-vs-gw-allies"` now
+Ordinary policies configured with `world="ur-lessons-vs-gw-allies"` now
 join complete checked semantic programs to visible cards and owned outside
 candidates. Definition references are expanded without prefix truncation.
 Public known-hand definition minima enter separate player features; hidden

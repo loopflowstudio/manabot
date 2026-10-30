@@ -7,7 +7,7 @@ use rand_chacha::ChaCha8Rng;
 use crate::{
     agent::behavior_tracker::BehaviorTracker,
     cards::content_pack::{default_content_pack, ContentPack},
-    cards::content_pack_for_authored_match,
+    cards::content_pack_for_match,
     flow::{
         game::{Game, GameState},
         priority::PriorityState,
@@ -24,8 +24,8 @@ use std::sync::Arc;
 
 impl Game {
     pub fn new(player_configs: Vec<PlayerConfig>, seed: u64, skip_trivial: bool) -> Self {
-        let content = content_pack_for_authored_match(&player_configs)
-            .unwrap_or_else(|error| panic!("compiled authored content is invalid: {error}"))
+        let content = content_pack_for_match(&player_configs)
+            .unwrap_or_else(|error| panic!("compiled match content is invalid: {error}"))
             .unwrap_or_else(default_content_pack);
         Self::new_with_content(player_configs, seed, skip_trivial, content)
     }
@@ -44,8 +44,8 @@ impl Game {
         seed: u64,
         skip_trivial: bool,
     ) -> Self {
-        let content = content_pack_for_authored_match(&player_configs)
-            .expect("validated authored content")
+        let content = content_pack_for_match(&player_configs)
+            .expect("validated match content")
             .unwrap_or_else(default_content_pack);
         Self::construct(player_configs, seed, skip_trivial, content, true)
     }
@@ -72,7 +72,7 @@ impl Game {
         let mut zones = ZoneManager::default();
 
         for (player_index, config) in player_configs.iter().enumerate() {
-            for (name, qty) in &config.decklist {
+            for (name, qty) in &config.deck.main {
                 for _ in 0..*qty {
                     let card = content
                         .instantiate(name, PlayerId(player_index), id_gen.next_id())
@@ -88,7 +88,7 @@ impl Game {
 
         // Allocate outside copies after both main decks so setup preserves deal identity.
         for (player_index, config) in player_configs.iter().enumerate() {
-            for (name, qty) in &config.sideboard {
+            for (name, qty) in &config.deck.sideboard {
                 assert!(*qty > 0, "sideboard count must be positive: {name}");
                 let definition_id = content
                     .definition_id(name)

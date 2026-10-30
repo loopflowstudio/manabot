@@ -40,7 +40,7 @@ def _agent(space: ObservationSpace, **kwargs: object) -> ActorCritic:
     torch.set_num_threads(1)
     torch.manual_seed(111)
     settings = ModelConfig.model_validate(
-        {"hidden_dim": 16, "semantic_pack": PACK, "recent_events": True, **kwargs}
+        {"hidden_dim": 16, "world": PACK, "recent_events": True, **kwargs}
     )
     return ActorCritic(space, settings)
 
@@ -143,9 +143,7 @@ def test_semantics_order_padding_and_stateless_reset() -> None:
         torch.testing.assert_close(left, right, atol=1e-6, rtol=1e-5)
     empty = {**obs, "events": torch.empty(1, 0, 12), "events_valid": torch.empty(1, 0)}
     zero = {**obs, "events": padded, "events_valid": torch.zeros_like(validity)}
-    baseline = ActorCritic(
-        ObservationSpace(), ModelConfig(hidden_dim=16, semantic_pack=PACK)
-    )
+    baseline = ActorCritic(ObservationSpace(), ModelConfig(hidden_dim=16, world=PACK))
     baseline.load_state_dict(
         {
             key: value

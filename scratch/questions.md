@@ -221,10 +221,53 @@ they are retained at `1e6015270:scratch/{17lands-for-bots,17lands-for-bots-evide
 # MTG-206 assumptions and dependencies — 2026-10-27
 # TLA direct-Rust decisions
 
-Reversible operator choices made headless (2026-10-28 unless dated); each is
-noted in the PR. Jack Heart's 2026-10-29 direction superseded the qualification
-and pool-membership choices that were here (history: `be2b7586b:scratch/questions.md`).
+# Decklist assumptions
 
+Earlier entries (construction policy, limits, coordination with PR383/PR389,
+inherited MTG-207/MTG-193 notes) are recorded in the plan or at
+c1dd6c71c:scratch/questions.md.
+
+- Excluding mirrors from `uniform-distinct-v1` is an assumption; at least two
+  distinct lists are required. The policy is code-named, not a stored field.
+- Checkpoint `bc` extra still carries run_id/stage_id/regime_digest producer
+  links that predate this branch; producer admission depends on them. Moving
+  them to run records is a separate change.
+- 2026-10-30 (managym move): native parsing approximates Python's `casefold()`
+  with Unicode `to_lowercase()` and splits lines at `\r\n`, `\n` and `\r` only.
+  NFC uses the new `unicode-normalization` dependency. `DeckImport.document`
+  is now `.decklist`, and `Deck` serializes as `{decklist, sideboard}`, so the
+  unreleased `setup_id`/training-deck digests changed; `Deck.identity` keeps the
+  retained value. `ImportedMatch.pool` is a dict in Python.
+- 2026-10-30 (concept-review corrections): Academy's `GameConfig` is a
+  dataclass persisted through `asdict`/JSON, so it keeps each seat's source in
+  `Decklist` JSON form (`hero_source`/`villain_source: dict | None`) beside a new
+  `content_pack`, and reads it with `Decklist.from_dict` on load; `MatchConfig`
+  holds native `Decklist`s. The CLI now prints both `Deck.identity` values
+  instead of the deleted `setup_id`; the validate endpoint drops `setup_id`.
+  `validate_deck` compares only the re-admitted deck, so retained resolved
+  entries (card ids) are provenance and may go stale without rejecting.
+- 2026-10-30 (sync onto main fa5e13b23, #394 squashed): merged with the last
+  integrated #394 commit 86ebe9ccf as base so #394's later changes win. Deck
+  admission and decklists moved from the deleted `semantic` module into
+  `managym/src/cards/` (`deck_admission`, `decklist`); `content_pack_for_match`
+  lives in `cards/setups.rs`. `PoolIdentity` drops `compiled_semantics`;
+  `DeckEntry.semantic_key` is `key`; the pool key is `"world"`.
+- 2026-10-30 (1a/2a + deck source): authored packs still have `content_pool`
+  descriptors, because main's policy vocabulary (`bind_policy_catalog`,
+  `learning_catalog`, authored receipts) reads them; deck import and admission
+  never do. Removing those descriptors would change main's vocabulary binding,
+  so it is left for review rather than done here.
+- 2026-10-30: decks submitted to the world carry the selector value `"world"`
+  (`managym.WORLD_SETUP`), so an imported pair equal to an authored setup cannot
+  silently run on that pack. The selector itself is now `world` (renamed by
+  Jack Heart's decision; see the plan).
+- 2026-10-30: `UniformDecks` keeps the experiment's deck order (order selects
+  each seeded draw and is in the digest); duplicates reject rather than dedupe.
+  Native `set_training_decks` remains the one source implementation; a Python
+  per-stream queue waits for a second source (random generation).
+- 2026-10-30: the checkpoint world binding names the card digest `world_digest`
+  (the default pack's content digest); setup bindings keep `content_manifest`
+  because frozen checkpoints carry it.
 - Old worlds run from their recorded git revision; no in-process rules shims.
 - 2026-10-29: the 14 setup-used incomplete TLA cards keep their definitions and
   are listed in one `tla::INCOMPLETE` const (key, missing behavior) beside
@@ -387,3 +430,10 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   `semantic/policy.py` has no CLI path, so it was deleted; the demo cluster is held.
 - 2026-10-30: `belief/__init__.py` keeps a 15-name lazy map, against CLAUDE.md's
   "re-export nothing", because `tests/belief/{support,test_state}.py` (#395) read it.
+
+## Selector rename assumption (2026-10-30, headless)
+
+New regimes/checkpoints serialize `world`; a run started before the rename
+cannot resume exactly because `regime_digest` hashes the dump (frozen evidence
+still loads and receipts verify). Chose not to hash under old keys there —
+reversible if mid-flight resumes matter.

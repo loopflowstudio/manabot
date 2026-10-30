@@ -16,7 +16,7 @@ from manabot.eval.models import EvaluationKey
 from manabot.eval.monitor import MonitorProtocol, MonitorResult, _request, _summarize
 from manabot.infra.files import atomic_json
 from manabot.infra.identity import canonical_sha256
-from manabot.infra.provenance import source_bundle_sha256
+from manabot.infra.provenance import authored_matchup_sha256, source_bundle_sha256
 from manabot.sim import players
 from manabot.sim.execution import EvalExecution
 from manabot.sim.matchup import SELECTED_SUITE, selected_match
@@ -96,13 +96,13 @@ def checkpoint_manifest(
     matchup = protocol.authored_matchup
     expected_match = matchup.match() if matchup else selected_match()
     suite = matchup.content_suite if matchup else SELECTED_SUITE
-    if run.identities["matchup_sha256"] != canonical_sha256(
+    if authored_matchup_sha256(run.identities, "monitoring") != canonical_sha256(
         expected_match.model_dump()
     ):
         raise ValueError("monitoring requires its exact declared authored setup")
     admission = register_checkpoint(
         path,
-        match=run.regime.match,
+        match=run.regime.root_match,
         content_suite=suite,
         player_id="monitor-checkpoint",
         display_name="Monitored checkpoint",

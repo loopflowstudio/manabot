@@ -70,7 +70,7 @@ def fixture_policy(
     agent = ActorCritic(
         space,
         ModelConfig(
-            hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
+            hidden_dim=8, num_attention_heads=2, world="ur-lessons-vs-gw-allies"
         ),
     )
     path = directory / f"policy-{seed}.pt"
