@@ -64,10 +64,10 @@ fn weaponize_the_monsters() -> CardDefinition {
                 or_mana: None,
             }),
             mana_cost: ManaCost::parse("{2}"),
-            effect: Effect::DealDamage {
+            effects: vec![Effect::DealDamage {
                 amount: 2,
                 target: TargetSpec::CreatureOrPlayer,
-            },
+            }],
             ..Default::default()
         }],
         text_box: text_box.into(),

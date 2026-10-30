@@ -4,8 +4,8 @@
 use crate::{
     flow::{
         event::GameEvent,
-        game::Game,
-        proposed_event::{BattlefieldEntry, ProposedEvent},
+        game::{CastChoices, Game},
+        proposed_event::{ProposedEvent, ZoneEntry},
     },
     state::{
         game_object::{CardId, Incarnation, ObjectRef, PermanentId, PlayerId, Target},
@@ -50,13 +50,18 @@ impl Game {
         &self,
         player: PlayerId,
         subtype: &Option<String>,
+        to_hand: bool,
     ) -> Vec<CardId> {
-        let predicate = CardPredicate {
-            card_type: Some(crate::state::card::CardType::Land),
-            supertype: Some("basic".into()),
+        let mut predicate = CardPredicate {
             subtype: subtype.clone(),
             ..Default::default()
         };
+        // Landcycling finds any card of the subtype ("a Plains card"); a
+        // search to hand without a subtype is for "a basic land card".
+        if !to_hand || subtype.is_none() {
+            predicate.card_type = Some(crate::state::card::CardType::Land);
+            predicate.supertype = Some("basic".into());
+        }
         let mut candidates: Vec<CardId> = self
             .state
             .zones
@@ -88,6 +93,35 @@ impl Game {
         }
     }
 
+    /// `player` reveals their hand: every card in it becomes public
+    /// definition knowledge, as with a card revealed into hand.
+    pub(crate) fn reveal_hand(&mut self, player: PlayerId) {
+        let mut counts = std::collections::BTreeMap::new();
+        for card in self.state.zones.zone_cards(ZoneType::Hand, player).to_vec() {
+            let definition = self.state.cards[card].definition_id;
+            self.emit(GameEvent::CardRevealed {
+                owner: player,
+                definition,
+            });
+            *counts.entry(definition).or_insert(0_u32) += 1;
+        }
+        for (definition, count) in counts {
+            self.set_known_hand_count(player, definition, count);
+        }
+    }
+
+    /// The controller of `card`'s spell on the stack (CR 110.2), or its
+    /// owner once it has left the stack.
+    pub(crate) fn spell_caster(&self, card: CardId) -> PlayerId {
+        self.find_spell_on_stack_index(card)
+            .and_then(|index| match &self.state.stack_objects[index] {
+                StackObject::Spell(spell) => Some(spell.controller),
+                _ => None,
+            })
+            .unwrap_or(self.state.cards[card].owner)
+    }
+
+    /// The permanents `player` controls, in battlefield order.
     pub(crate) fn battlefield_permanents(&self, player: PlayerId) -> Vec<PermanentId> {
         self.state
             .zones
@@ -209,9 +243,9 @@ impl Game {
         self.move_card_with_entry(
             card_id,
             ZoneType::Battlefield,
-            BattlefieldEntry {
+            ZoneEntry {
                 tapped: tapped_and_attacking,
-                ..BattlefieldEntry::default()
+                ..ZoneEntry::default()
             },
         );
 
@@ -231,6 +265,19 @@ impl Game {
             }
         }
         self.invalidate_mana_cache(controller);
+    }
+
+    /// Count permanents a player controls matching a predicate (e.g.
+    /// "for each Island you control").
+    pub(crate) fn count_battlefield_matching(
+        &self,
+        player: PlayerId,
+        predicate: &CardPredicate,
+    ) -> usize {
+        self.battlefield_permanents(player)
+            .into_iter()
+            .filter(|id| self.permanent_matches_predicate(*id, predicate))
+            .count()
     }
 
     /// Count cards in a player's graveyard matching a predicate (e.g.
@@ -273,7 +320,7 @@ impl Game {
         controller: PlayerId,
         targets: Vec<Target>,
         target_req_indices: Vec<usize>,
-        kicked: bool,
+        cast: CastChoices,
     ) {
         let cast_from = self.state.zones.zone_of(card).expect("cast source zone");
         let flashback = cast_from == ZoneType::Graveyard;
@@ -290,7 +337,8 @@ impl Game {
                 source_definition_id: self.state.cards[card].definition_id,
                 targets,
                 target_req_indices,
-                kicked,
+                kicked: cast.kicked,
+                x: cast.x,
                 mode: None,
             }));
     }
@@ -310,14 +358,14 @@ impl Game {
     }
 
     pub fn move_card(&mut self, card: CardId, to_zone: ZoneType) {
-        self.move_card_with_entry(card, to_zone, BattlefieldEntry::default());
+        self.move_card_with_entry(card, to_zone, ZoneEntry::default());
     }
 
     pub(crate) fn move_card_with_entry(
         &mut self,
         card: CardId,
         to_zone: ZoneType,
-        entry: BattlefieldEntry,
+        entry: ZoneEntry,
     ) {
         let from = self.state.zones.zone_of(card);
         let to_zone = if from == Some(ZoneType::Stack) && to_zone != ZoneType::Exile
@@ -343,7 +391,7 @@ impl Game {
         departing_ref: Option<ObjectRef>,
         old_zone: Option<ZoneType>,
         to_zone: ZoneType,
-        entry: BattlefieldEntry,
+        entry: ZoneEntry,
     ) -> bool {
         let owner = self.state.cards[card].owner;
 
@@ -357,7 +405,7 @@ impl Game {
             // Public departures remove one known minimum, regardless of which
             // identical copy left. A secret departure invalidates all facts:
             // retaining a definition-specific decrement would leak that card.
-            if to_zone == ZoneType::Library {
+            if to_zone == ZoneType::Library || entry.face_down {
                 let definitions: Vec<_> = self.state.players[owner.0]
                     .known_hand
                     .keys()
@@ -405,13 +453,18 @@ impl Game {
             }
         }
 
-        self.journal_zone_move(card, owner);
-        self.state.zones.move_card(card, owner, to_zone);
+        let holder = match (to_zone, entry.controller) {
+            (ZoneType::Battlefield, Some(controller)) => controller,
+            _ => owner,
+        };
+        self.journal_zone_move(card);
+        self.state.zones.move_card(card, holder, to_zone);
 
         if to_zone == ZoneType::Battlefield {
             let permanent_id = PermanentId(self.state.permanents.len());
             let mut permanent =
                 Permanent::new(self.state.id_gen.next_id(), card, &self.state.cards[card]);
+            permanent.controller = holder;
             permanent.was_cast = was_cast;
             permanent.tapped = entry.tapped;
             permanent.plus1_counters = entry.plus_one_counters.max(0);
@@ -424,12 +477,18 @@ impl Game {
             self.state.card_to_permanent[card] = Some(permanent_id);
         }
 
+        if old_zone == Some(ZoneType::Battlefield) || to_zone == ZoneType::Battlefield {
+            // The permanent's controller gains or loses its mana abilities,
+            // whoever owns the card.
+            self.invalidate_mana_cache(event_controller);
+        }
         self.capture_card_move(card, old_zone, Some(to_zone), event_controller);
         let event = GameEvent::CardMoved {
             card,
             from: old_zone,
             to: to_zone,
             controller: event_controller,
+            face_down: entry.face_down,
         };
         self.emit(event);
         if old_zone == Some(ZoneType::Battlefield) {
@@ -506,7 +565,6 @@ impl Game {
                 .contains(link.exiled_card, ZoneType::Exile, owner)
             {
                 self.move_card(link.exiled_card, ZoneType::Battlefield);
-                self.invalidate_mana_cache(owner);
             }
         }
     }

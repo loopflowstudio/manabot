@@ -88,10 +88,8 @@ fn audit_generic_and_specific_mana_boundary_matrix() {
     use managym::state::mana::{Mana, ManaCost};
 
     for bits in 0_u8..64 {
-        let pool = Mana {
-            mana: std::array::from_fn(|slot| (bits >> slot) & 1),
-            ..Mana::default()
-        };
+        let mut pool = Mana::default();
+        pool.mana = std::array::from_fn(|slot| (bits >> slot) & 1);
         for (slot, symbol) in ["W", "U", "B", "R", "G", "C"].iter().enumerate() {
             for generic in 0..=2 {
                 let cost = ManaCost::parse(&format!("{generic}{symbol}"));
@@ -121,14 +119,18 @@ fn audit_generic_and_specific_mana_boundary_matrix() {
 /// unrelated cost. Clearing a pool loses both restricted and ordinary mana.
 #[test]
 fn audit_restricted_mana_never_pays_unrelated_costs() {
-    use managym::state::mana::{Mana, ManaCost};
+    use managym::state::mana::{Mana, ManaCost, ManaUse};
 
+    let lesson = ManaUse::spell(["Lesson"]);
     for slot in 0..6 {
         for eligible in [false, true] {
-            let mut pool = Mana::default();
-            pool.lesson[slot] = 1;
+            let mut amounts = [0; 6];
+            amounts[slot] = 1;
+            let mut pool = Mana::restricted_to(lesson, amounts);
             let mut cost = ManaCost::parse("1");
-            cost.spend_on_lesson = eligible;
+            if eligible {
+                cost.purpose = lesson;
+            }
             assert_eq!(pool.can_pay(&cost), eligible);
             if eligible {
                 pool.pay(&cost);

@@ -8,7 +8,7 @@ use managym::{
         turn::StepKind,
     },
     state::{
-        ability::{Effect, TargetSpec},
+        ability::{Effect, EffectValue, TargetSpec},
         game_object::{CardId, PlayerId},
         zone::ZoneType,
     },
@@ -91,7 +91,11 @@ fn cr_603_5_optional_draw_is_chosen_at_resolution() {
     s.advance_to_active_step(0, StepKind::Main);
     let source = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let card = s.game().state.permanents[source].as_ref().unwrap().card;
-    queue_effects(&mut s, card, vec![Effect::OptionalDiscardDraw { count: 1 }]);
+    queue_effects(
+        &mut s,
+        card,
+        vec![Effect::OptionalDiscardDraw { count: 1, up_to: 1 }],
+    );
     let hand = s.zone_size(0, ZoneType::Hand);
     s.pass_priority();
     assert_eq!(s.game().state.stack_objects.len(), 1);
@@ -127,7 +131,7 @@ fn audit_earthbend_return_does_not_follow_a_second_zone_change() {
         &mut s,
         card,
         vec![Effect::Earthbend {
-            count: 1,
+            count: EffectValue::Fixed(1),
             target: TargetSpec::LandYouControl,
         }],
     );

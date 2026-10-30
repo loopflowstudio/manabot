@@ -38,6 +38,7 @@ fn divide_by_zero() -> CardDefinition {
             spec: TargetSpec::SpellOrPermanent { min_mana_value: 1 },
             min: 1,
             max: 1,
+            another: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -116,6 +117,7 @@ fn field_trip() -> CardDefinition {
                 tapped: true,
                 untap_if_lands: None,
                 bottom_source: false,
+                to_hand: false,
             },
             Effect::Learn,
         ],
@@ -171,6 +173,7 @@ fn igneous_inspiration() -> CardDefinition {
             spec: TargetSpec::CreatureOrPlayer,
             min: 1,
             max: 1,
+            another: false,
         }],
         text_box: text_box.into(),
         ..Default::default()

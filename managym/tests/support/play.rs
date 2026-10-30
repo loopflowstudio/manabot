@@ -337,6 +337,15 @@ pub fn cast(s: &mut Scenario, name: &str) -> CardId {
     id
 }
 
+/// Cast `id` from whichever zone currently permits it.
+pub fn cast_card(s: &mut Scenario, id: CardId) {
+    s.game_mut().scenario_refresh_priority().unwrap();
+    choose(
+        s,
+        |a| matches!(a, Action::CastSpell { card, .. } if *card == id),
+    );
+}
+
 /// Like `cast`, but the copy may already be in player 0's hand.
 pub fn cast_owned(s: &mut Scenario, name: &str) -> CardId {
     let card = find_owned_card(s, 0, name);
@@ -372,6 +381,16 @@ pub fn activate(s: &mut Scenario, source: PermanentId, index: usize) {
     choose(s, |a| {
         matches!(a, Action::ActivateAbility { permanent, ability_index, .. }
         if *permanent == source && *ability_index == index)
+    });
+}
+
+/// Activate ability `index` of a card in its hand or graveyard, refreshing
+/// priority first.
+pub fn activate_card(s: &mut Scenario, source: CardId, index: usize) {
+    s.game_mut().scenario_refresh_priority().unwrap();
+    choose(s, |a| {
+        matches!(a, Action::ActivateCardAbility { card, ability_index, .. }
+        if *card == source && *ability_index == index)
     });
 }
 

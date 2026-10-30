@@ -114,7 +114,8 @@ checkpoints or experiment evidence.
   repository-wide type safety without a passing configured type check, or
   weaken types merely to silence one.
 - Native scalar/vector observation buffers bind continuation input semantics by
-  relation width: v2/v3 have 32 columns, v4 has 33; validity remains column 31.
+  relation width: v2/v3 have 32 columns, v4 and v5 have 33; validity remains
+  column 31. At 33, the player row width tells v4 (40) from v5 (60).
   Preserve the frozen widths and derive buffers from `ObservationSpace`.
 - Saved observation configurations use `ObservationConfig.from_checkpoint` so
   an absent policy-input version retains v1 semantics. Fresh construction uses
@@ -218,6 +219,10 @@ set file of that card; engine rules stay in `tests/rules/`, and shared scenario
 helpers live in `tests/support/`. Keep decklists separate from behavior. Keep long printed text in
 a local `text_box` binding so rustfmt can format the definition.
 Default-pack `CardDefId` order lives in `cards/content_pack.rs` (`LEGACY_ORDER`).
+Activated abilities that function from hand or graveyard set `Cost.zone`
+(landcycling uses `Program::landcycling`); they are offered as
+`Action::ActivateCardAbility`. Programs compile in key order, so an ability's
+index follows its program key, not its printed position.
 
 Native fixed mana abilities on a card are additive: multiple fixed productions
 produce all listed colors together. A land that produces one chosen color uses

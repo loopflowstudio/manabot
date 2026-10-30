@@ -56,7 +56,7 @@ def fixture_policy(
     directory: Path,
     seed: int = 83,
     *,
-    policy_input_version: Literal[1, 2, 3, 4] | None = None,
+    policy_input_version: Literal[1, 2, 3, 4, 5] | None = None,
 ) -> tuple[EvaluationKey, PlayerRegistration, PlayerRegistration, Path]:
     contract = EvaluationContract.model_validate_json(
         (Path(__file__).parents[1] / "fixtures/int-6-skill-arena-v1.json").read_bytes()
@@ -156,9 +156,9 @@ def test_row_sampling_is_independent_of_neighbors_and_preserves_rng() -> None:
         sample_rows(logits, torch.zeros_like(masks), [5, 7], False)
 
 
-@pytest.mark.parametrize("version", (1, 2, 3, 4))
+@pytest.mark.parametrize("version", (1, 2, 3, 4, 5))
 def test_served_checkpoint_preserves_input_version(
-    tmp_path: Path, version: Literal[1, 2, 3, 4]
+    tmp_path: Path, version: Literal[1, 2, 3, 4, 5]
 ) -> None:
     key, player, anchor, path = fixture_policy(tmp_path, policy_input_version=version)
     _, trace, replay = play_cell(

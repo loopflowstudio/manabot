@@ -45,14 +45,24 @@ impl Game {
     /// - `perspective`'s own library is reshuffled (its order is unknown to
     ///   them, but its contents are determined by the public zones + hand).
     ///
+    /// - the opponent's face-down foretold slots are filled from the same
+    ///   unseen pool's first foretell-bearing cards, as possible-world
+    ///   materialization fills them.
+    ///
     /// Public facts and own choices are preserved; opponent private choices refresh.
     pub fn determinize(&mut self, perspective: PlayerId, seed: u64) {
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         let opponent = PlayerId((perspective.0 + 1) % 2);
         self.journal_zones();
         let (mut known, mut residual) = self.hidden_hand_partition(opponent);
-        let unknown_slots = self.state.zones.size(ZoneType::Hand, opponent) - known.len();
+        residual.extend(self.foretold_cards(opponent));
+        residual.sort_unstable_by_key(|card| card.0);
         residual.shuffle(&mut rng);
+        assert!(
+            self.fill_foretold_slots(opponent, &mut residual),
+            "foretold cards are in their own pool"
+        );
+        let unknown_slots = self.state.zones.size(ZoneType::Hand, opponent) - known.len();
         let library = residual.split_off(unknown_slots);
         known.extend(residual);
         self.state.zones.reassign_hidden(opponent, known, library);
@@ -68,14 +78,17 @@ impl Game {
             .suspended_decision
             .as_ref()
             .is_some_and(|suspended| {
-                suspended.decision.player() == opponent
-                    && matches!(
-                        suspended.decision,
-                        Decision::Learn { .. }
-                            | Decision::Discard { .. }
-                            | Decision::OptionalDiscardDraw { .. }
-                            | Decision::SearchBasicLand { .. }
-                    )
+                matches!(suspended.decision, Decision::DiscardFromRevealedHand { .. })
+                    || suspended.decision.player() == opponent
+                        && matches!(
+                            suspended.decision,
+                            Decision::Learn { .. }
+                                | Decision::Discard { .. }
+                                | Decision::OptionalDiscardDraw { .. }
+                                | Decision::SearchBasicLand { .. }
+                                | Decision::SearchDistinctLands { .. }
+                                | Decision::CastWithoutPaying { .. }
+                        )
             });
         if refresh {
             if let Some(space) = self.suspended_decision_action_space() {
@@ -132,11 +145,10 @@ impl Game {
         let Some(suspended) = &self.state.suspended_decision else {
             return;
         };
-        let player = suspended.decision.player();
         let revealed = suspended.decision.revealed_cards().to_vec();
-        if revealed.is_empty() {
+        let Some(player) = revealed.first().map(|card| self.state.cards[*card].owner) else {
             return;
-        }
+        };
         for card in &revealed {
             self.state.zones.move_card(*card, player, ZoneType::Library);
         }
