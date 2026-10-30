@@ -203,8 +203,13 @@ regimes 33 passed; parity receipt verifies.
 
 ## Remaining
 
-- Gate owns CI and the
-  affected-area suites (`docs/development/validation.md`) before publish.
+- Gate (2026-10-30, headless, at d5049045e): no code change since the
+  rename's focused checks at 3c440d53a; diff has no debug/TODO leftovers;
+  `ruff check`/`ruff format --check` on 73 changed Python files and
+  `cargo fmt --check` clean. Full matrix and affected-area suites deferred to
+  PR #395 CI on this head (Rust debug, Python unit, Academy/Integration long,
+  Semantic/Protocol conformance, clean-machine, release packaging passed;
+  Integration main passed too: CI fully green; publish job skipped).
 - Deferred by decision: curriculum, mirrors, 17Lands source, random deck
   generation (a second source would bring a Python per-stream queue), Academy 1a.
 
