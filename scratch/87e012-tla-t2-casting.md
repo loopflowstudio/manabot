@@ -65,7 +65,7 @@ exhaust, used once-each-turn, granted firebending) in text-5 wording
 
 2026-10-29 implement (possible worlds v3): `possible_worlds_resample_an_opponents_foretold_card` passes; debug cards 304, lib 121, rules 131 + 2 ignored (one intermittent `structured_offer_rejects_fabricated_and_stale_ids_without_mutation` failure in 2 of 9 runs, see questions), possible_worlds 8, prepared 3; clippy `-D warnings` and fmt clean; extension rebuilt. Pytest belief state/range/tracker/runtime + learn contract 59 pass, 2 fail: `test_native_projection_preserves_canonical_receipt_bytes` (w7 receipt moves with the v3 schema identity; gate's world-bound receipts) and `test_manabot_player_generates_belief_before_ordinary_action` (`KeyError: 'relations'` in `actor_critic.py`, also hit by `test_belief_agent`; outside possible worlds, not checked against HEAD).
 
-2026-10-29 compress (after Academy statuses): nothing to reduce in `Card.svelte`/`PermanentRow.svelte` and its test; scratch 9518/12000 tokens; no checks rerun.
+2026-10-29 compress (possible worlds v3): one `name_counts` helper replaces `unseen_pool` and the known-hand, realized-hand and stale-pool counting loops; unseen cards gathered once per `for_viewer`. Debug lib possible_worlds 8 pass; debug cards possible_worlds 2 pass; clippy `-D warnings` and fmt clean; extension not rebuilt (no behavior change).
 
 2026-10-29 implement (concept review 4): `Card.svelte` prints and names exhaust/once-each-turn/granted-firebending statuses in text-5 wording, fed from `PermanentRow.svelte`; `PermanentRow.svelte.test.ts` 2 pass; Academy `npm run check` 0 errors and `npm run build` pass (after `npm ci`, node 26 runs).
 

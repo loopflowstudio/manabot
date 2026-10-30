@@ -6,9 +6,10 @@
 // branches. The opponent's unseen pool is Hand ∪ Library ∪ face-down foretold
 // cards, matching `Game::determinize`: the viewer sees how many cards are
 // foretold, never which, so a world fixes only the hand and its weight counts
-// every way to fill the foretold slots from the foretell-bearing remainder. manabot beliefs, learned inference, and normalized distributions
-// over this domain are out of scope; weights here are exact combinatorial
-// counts, never probabilities.
+// every way to fill the foretold slots from the foretell-bearing remainder.
+// manabot beliefs, learned inference, and normalized distributions over this
+// domain are out of scope; weights here are exact combinatorial counts, never
+// probabilities.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -389,12 +390,15 @@ fn unseen_cards(game: &Game, opponent: PlayerId) -> Vec<CardId> {
     cards
 }
 
-fn unseen_pool(game: &Game, opponent: PlayerId) -> BTreeMap<String, u32> {
-    let mut pool = BTreeMap::new();
-    for card in unseen_cards(game, opponent) {
-        *pool.entry(game.state.cards[card].name.clone()).or_insert(0) += 1;
+/// Card-name multiset of `cards`.
+fn name_counts(game: &Game, cards: impl IntoIterator<Item = CardId>) -> BTreeMap<String, u32> {
+    let mut counts = BTreeMap::new();
+    for card in cards {
+        *counts
+            .entry(game.state.cards[card].name.clone())
+            .or_insert(0) += 1;
     }
-    pool
+    counts
 }
 
 impl HiddenHandConstraints {
@@ -404,12 +408,13 @@ impl HiddenHandConstraints {
             "viewer must name a player"
         );
         let opponent = PlayerId((viewer.0 + 1) % 2);
-        let pool = unseen_pool(game, opponent);
-        let foretell = unseen_cards(game, opponent)
-            .into_iter()
-            .filter(|card| game.state.cards[*card].foretell.is_some())
-            .map(|card| game.state.cards[card].name.clone())
+        let unseen = unseen_cards(game, opponent);
+        let foretell = unseen
+            .iter()
+            .filter(|card| game.state.cards[**card].foretell.is_some())
+            .map(|card| game.state.cards[*card].name.clone())
             .collect();
+        let pool = name_counts(game, unseen);
         let foretold = game.foretold_cards(opponent).len() as u32;
         let hand_size = game.state.zones.size(ZoneType::Hand, opponent) as u32;
         let source_observation = game
@@ -417,12 +422,7 @@ impl HiddenHandConstraints {
             .expect("valid viewer has a semantic observation")
             .identity;
         let (known, _) = game.hidden_hand_partition(opponent);
-        let mut known_hand = BTreeMap::new();
-        for card in known {
-            *known_hand
-                .entry(game.state.cards[card].name.clone())
-                .or_insert(0) += 1;
-        }
+        let known_hand = name_counts(game, known);
         Self {
             viewer,
             opponent,
@@ -577,13 +577,8 @@ impl HiddenHandConstraints {
         branch.repin_revealed_library_cards();
 
         // Fail closed: the realized hand name-multiset must equal the world.
-        let mut realized: BTreeMap<String, u32> = BTreeMap::new();
-        for &card in branch.state.zones.zone_cards(ZoneType::Hand, opponent) {
-            *realized
-                .entry(branch.state.cards[card].name.clone())
-                .or_insert(0) += 1;
-        }
-        if realized != world.hand {
+        let hand = branch.state.zones.zone_cards(ZoneType::Hand, opponent);
+        if name_counts(&branch, hand.iter().copied()) != world.hand {
             return Err(MaterializeError::InconsistentWorld);
         }
 
@@ -1070,7 +1065,7 @@ impl PossibleWorldSpace {
             }
         }
         let current_hand_size = source.state.zones.size(ZoneType::Hand, self.opponent) as u32;
-        if unseen_pool(source, self.opponent) != self.pool
+        if name_counts(source, unseen_cards(source, self.opponent)) != self.pool
             || current_hand_size != self.hand_size
             || source.foretold_cards(self.opponent).len() as u32 != self.foretold
         {
