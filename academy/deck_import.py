@@ -2,13 +2,16 @@
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from manabot.decklist import ImportedMatch, import_match, parse_decklist
+import managym
 
 
 class DeckFileInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     source: str = Field(max_length=65_536)
     filename: str = Field(default="deck.txt", max_length=255)
+
+    def decklist(self) -> managym.Decklist:
+        return managym.Decklist(self.source, self.filename)
 
 
 class DeckImportInput(BaseModel):
@@ -18,10 +21,8 @@ class DeckImportInput(BaseModel):
     hero: DeckFileInput
     villain: DeckFileInput
 
-    def admit(self) -> ImportedMatch:
-        return import_match(
-            parse_decklist(self.hero.source, self.hero.filename),
-            parse_decklist(self.villain.source, self.villain.filename),
-            self.pack_key,
-            self.ruleset,
+    def admit(self) -> managym.ImportedMatch:
+        """Raises `managym.DeckImportError` with each failing seat's diagnosed decklist."""
+        return managym.import_match(
+            self.hero.decklist(), self.villain.decklist(), self.pack_key, self.ruleset
         )

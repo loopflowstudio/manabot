@@ -72,7 +72,7 @@ impl Game {
         let mut zones = ZoneManager::default();
 
         for (player_index, config) in player_configs.iter().enumerate() {
-            for (name, qty) in &config.decklist {
+            for (name, qty) in &config.deck.main {
                 for _ in 0..*qty {
                     let card = content
                         .instantiate(name, PlayerId(player_index), id_gen.next_id())
@@ -88,7 +88,7 @@ impl Game {
 
         // Allocate outside copies after both main decks so setup preserves deal identity.
         for (player_index, config) in player_configs.iter().enumerate() {
-            for (name, qty) in &config.sideboard {
+            for (name, qty) in &config.deck.sideboard {
                 assert!(*qty > 0, "sideboard count must be positive: {name}");
                 let definition_id = content
                     .definition_id(name)

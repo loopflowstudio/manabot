@@ -18,9 +18,12 @@
 pub mod compile;
 mod content;
 pub mod deck_admission;
+pub mod decklist;
 mod pool;
 
-pub use pool::{content_pool, pool_content, ContentPool, Eligibility, PoolDefinition};
+pub use pool::{
+    content_pool, pool_content, ContentPool, Eligibility, PoolDefinition, PoolIdentity,
+};
 
 pub(crate) use content::content_pack_for_match;
 

@@ -34,7 +34,10 @@ fn learn_authored_setup_keeps_main_decks_and_sideboards_together_in_both_seats()
         40
     );
     assert_eq!(
-        pack.player_config("UR", "ur_lessons").unwrap().sideboard,
+        pack.player_config("UR", "ur_lessons")
+            .unwrap()
+            .deck
+            .sideboard,
         counts(&[
             ("Firebending Lesson", 1),
             ("It'll Quench Ya!", 1),
@@ -42,7 +45,10 @@ fn learn_authored_setup_keeps_main_decks_and_sideboards_together_in_both_seats()
         ])
     );
     assert_eq!(
-        pack.player_config("GW", "gw_allies").unwrap().sideboard,
+        pack.player_config("GW", "gw_allies")
+            .unwrap()
+            .deck
+            .sideboard,
         counts(&[("Yip Yip!", 1), ("Fancy Footwork", 1)])
     );
     for keys in [["ur_lessons", "gw_allies"], ["gw_allies", "ur_lessons"]] {
@@ -57,7 +63,7 @@ fn learn_authored_setup_keeps_main_decks_and_sideboards_together_in_both_seats()
         );
         for (player, config) in configs.iter().enumerate() {
             let roster = &game.state.players[player].sideboard;
-            assert_eq!(roster.len(), config.sideboard.values().sum::<usize>());
+            assert_eq!(roster.len(), config.deck.sideboard.values().sum::<usize>());
             for &card in roster {
                 assert_eq!(game.state.cards[card].owner, PlayerId(player));
                 assert_eq!(game.state.zones.zone_of(card), None);

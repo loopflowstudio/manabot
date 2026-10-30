@@ -1,44 +1,17 @@
-# Decklist assumptions — 2026-10-28
+# Decklist assumptions
 
-- Development construction policy reflects existing engine behavior: nonempty
-  main deck, positive quantities, eligible non-token definitions in either
-  section. No tournament size, copy limit, color or sideboard limit is claimed.
-  Existing authored presets remain available. Sideboards are fixed outside-game
-  copies; importing one does not provide sideboarding between games.
-- Initial pool eligibility is content-owned (892c47); no generic native fallback.
-- Inherited MTG-207 notes remain at c5d406e3d:scratch/questions.md; MTG-193's
-  notes from main remain at 6d069d6e5:scratch/questions.md.
+Earlier entries (construction policy, limits, coordination with PR383/PR389,
+inherited MTG-207/MTG-193 notes) are recorded in the plan or at
+c1dd6c71c:scratch/questions.md.
 
-- Operational import ceiling: 64 KiB source and 1,000 cards per player across
-  both sections. This is resource admission, explicitly not a tournament rule.
-
-- Initial implementation (superseded as a mandatory lifecycle by the latest
-  concept review): use uniform-distinct-v1, drawing two different
-  normalized lists with unbiased ordered seats. Require at least two distinct
-  lists; mirrors and adaptive weights are deferred. Manifest paths resolve at
-  recipe load into an embedded immutable collection, so recovery never depends
-  on a mutable external file. Source records remain private retained evidence.
-- Accepted correction: one deck concept; training submits decks to its verified
-  world's native validation. Fixed lists can be checked upfront. Computed or
-  changing decks must not require a different deck type or registration in a
-  frozen roster. Selection/generation and its recovery state belong to training;
-  checkpoints know the world, not training. Curriculum/generation machinery is
-  future work, not approved implementation scope in this concept pass.
-- Coordination: PR383 d0f48ca96 retains the existing uniform roster sampler and
-  adds adaptive root reassignment separately. Extend that uniform authority;
-  preserve its Elemental sequence and leave reassignment/campaign code alone.
-  PR389 c85470a59 requires no simulation API change for this extension.
-
-- 2026-10-28 (settled by concept review at 821824996): imported setups admit
-  checkpoint players through the shared `validate_agent_setup`. Sim now admits
-  every model player in `simulate_models` (previously sim never checked any
-  setup, imported or not). Academy builds every CheckpointVillain via
-  `build_villain_policy(config.to_rust())`; forks/reconnect build none.
+- Excluding mirrors from `uniform-distinct-v1` is an assumption; at least two
+  distinct lists are required. The policy is code-named, not a stored field.
 - Checkpoint `bc` extra still carries run_id/stage_id/regime_digest producer
   links that predate this branch; producer admission depends on them. Moving
-  them fully to run records is a separate change; no training-deck data remains.
-- Sampling policy is the code-named `uniform-distinct-v1`, not a stored field.
-
-- 2026-10-28: rebuilt on PR #394 (be2b7586b, typed Rust cards, one world,
-  first-printing card keys, no qualification gate) per Jack Heart, replacing the
-  1e0d3c998 content copy. #394's notes remain at 86ebe9ccf:scratch/questions.md.
+  them to run records is a separate change.
+- 2026-10-30 (managym move): native parsing approximates Python's `casefold()`
+  with Unicode `to_lowercase()` and splits lines at `\r\n`, `\n` and `\r` only.
+  NFC uses the new `unicode-normalization` dependency. `DeckImport.document`
+  is now `.decklist`, and `Deck` serializes as `{decklist, sideboard}`, so the
+  unreleased `setup_id`/training-deck digests changed; `Deck.identity` keeps the
+  retained value. `ImportedMatch.pool` is a dict in Python.

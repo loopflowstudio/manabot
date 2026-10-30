@@ -1,4 +1,9 @@
-"""File imports preserve source while native admission owns playable setups."""
+"""Decklist files through managym's Python surface into manabot setups.
+
+Parsing, name resolution and admission diagnostics are tested natively in
+`managym/src/semantic/decklist.rs`; these tests cover file reading, retained
+records in configurations, the sim CLI and checkpoint execution.
+"""
 
 from pathlib import Path
 
@@ -8,65 +13,43 @@ import torch
 from typer.testing import CliRunner
 
 from manabot import cli
-from manabot.decklist import (
-    ContentPool,
-    DeckDocument,
-    DeckImportError,
-    ImportedMatch,
-    admit_document,
-    import_files,
-    import_match,
-    parse_decklist,
-)
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
-from manabot.infra.config import ModelConfig, RuntimeConfig, SimulationConfig
+from manabot.infra.config import (
+    MatchConfig,
+    ModelConfig,
+    RuntimeConfig,
+    SimulationConfig,
+)
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
 from manabot.model.world import validate_agent_setup
 from manabot.sim.player import ModelPlayer
 from manabot.sim.sim import load_player, simulate_models
 import managym
+from managym import DeckImportError, Decklist, ImportedMatch
 
 PACK = "tla-pool-v1"
 HERO = "# Novel development deck\nMain\n10 Forest\n10 Mountain\n2 Avatar Enthusiasts\nSideboard\n1 Island\n"
 VILLAIN = "20 Island\n"
 
 
-def test_decklist_dialect_keeps_original_lines_and_reports_bad_counts() -> None:
-    source = "\ufeffDeck\r\n# comment\r\n2 Forest\r\nSideboard:\r\n0 Island\r\n-1 Mountain\r\n2x Forest\r\n99999999999999999999 Island\r\n"
-    document = parse_decklist(source, "input.txt")
-    assert document.source == source
-    assert document.filename == "input.txt"
-    assert [(entry.line, entry.name, entry.count) for entry in document.entries] == [
-        (3, "Forest", 2)
-    ]
-    assert [(issue.line, issue.code) for issue in document.issues] == [
-        (5, "count"),
-        (6, "count"),
-        (7, "syntax"),
-        (8, "count"),
-    ]
+def _import_files(hero: Path, villain: Path) -> ImportedMatch:
+    return managym.import_match(Decklist.read(hero), Decklist.read(villain), PACK)
 
 
 def test_decklist_novel_setup_resolves_same_identity_from_files(tmp_path: Path) -> None:
     hero, villain = tmp_path / "hero.txt", tmp_path / "villain.txt"
     hero.write_bytes(HERO.replace("\n", "\r\n").encode())
     villain.write_text(VILLAIN)
-    imported = import_files(hero, villain, PACK)
-    assert imported.hero.document.source == HERO.replace("\n", "\r\n")
-    assert "definitions" not in imported.model_dump()["pool"]
-    restored = ImportedMatch.model_validate_json(imported.model_dump_json())
-    restored.validate_current()
-    assert restored.setup_id == imported.setup_id
-    reformatted = import_match(
-        parse_decklist(
-            "10 mountain\n5 Forest\n5 forest\n2 Avatar Enthusiasts\nSideboard\n1 Island"
-        ),
-        parse_decklist(VILLAIN),
-        PACK,
-    )
-    assert imported.setup_id == reformatted.setup_id
+    imported = _import_files(hero, villain)
+    assert imported.hero.decklist.source == HERO.replace("\n", "\r\n")
+    assert imported.hero.decklist.filename == "hero.txt"
+    assert "definitions" not in imported.to_dict()["pool"]
+    config = MatchConfig.from_import(imported)
+    restored = MatchConfig.model_validate_json(config.model_dump_json())
+    assert restored.imported_decks == imported
+    assert restored.imported_decks.setup_id == imported.setup_id
     assert imported.hero.deck.main == {
         "Forest": 10,
         "Mountain": 10,
@@ -74,7 +57,7 @@ def test_decklist_novel_setup_resolves_same_identity_from_files(tmp_path: Path) 
     }
     assert imported.hero.deck.sideboard == {"Island": 1}
     assert all(
-        entry.card_def_id is not None for entry in imported.hero.document.entries
+        entry.card_def_id is not None for entry in imported.hero.decklist.entries
     )
     assert not any(
         managym.authored_deck_setup("elemental-world-v2", key).decklist
@@ -82,32 +65,28 @@ def test_decklist_novel_setup_resolves_same_identity_from_files(tmp_path: Path) 
         for key in managym.authored_deck_keys("elemental-world-v2")
     )
     env = managym.Env(seed=7, skip_trivial=False)
-    env.reset(Match(imported.match_config()).to_rust())
-    assert env.content_pack_manifest()["content_digest"] == imported.pool.content_digest
+    env.reset(Match(config).to_rust())
+    assert (
+        env.content_pack_manifest()["content_digest"] == imported.pool["content_digest"]
+    )
     assert (
         env.content_pack_manifest()["compiled_semantics"]
-        == imported.pool.compiled_semantics.model_dump()
+        == imported.pool["compiled_semantics"]
     )
 
 
-def test_decklist_reports_unknown_unsupported_and_retains_source() -> None:
-    pool = ContentPool.load(PACK)
-    unsupported = next(
-        row.registry_name
-        for row in pool.definitions
-        if row.eligibility == "unsupported"
-    )
-    source = f"10 Forest\n1 Definitely Not A Card\nSideboard\n1 {unsupported}\n2 {unsupported}\nMain\n1 {unsupported}\n"
+def test_decklist_errors_carry_each_failing_seat_with_line_issues() -> None:
+    source = "10 Forest\n1 Definitely Not A Card\nSideboard\n1 Accumulate Wisdom\n"
     with pytest.raises(DeckImportError) as caught:
-        import_match(parse_decklist(source), parse_decklist(VILLAIN), PACK)
-    document = caught.value.documents["hero"]
-    assert document.source == source
-    assert {(issue.line, issue.code) for issue in document.issues} >= {
+        managym.import_match(Decklist(source), Decklist(VILLAIN), PACK)
+    assert list(caught.value.decklists) == ["hero"]
+    decklist = caught.value.decklists["hero"]
+    assert decklist.source == source
+    assert {(issue.line, issue.code) for issue in decklist.issues} == {
         (2, "unknown"),
         (4, "unsupported"),
-        (5, "unsupported"),
-        (7, "unsupported"),
     }
+    assert "hero deck.txt:2" in str(caught.value)
 
 
 @pytest.mark.parametrize("with_files", [False, True])
@@ -136,49 +115,34 @@ def test_sim_cli_preserves_overrides_with_optional_deck_files(
     imported = configs[0].match.imported_decks
     if with_files:
         assert imported is not None
-        assert imported.hero.document.source == HERO
+        assert imported.hero.decklist.source == HERO
         assert imported.setup_id in result.output
     else:
         assert imported is None
 
 
-def test_decklist_ambiguous_names_fail_without_substitution() -> None:
-    pool = ContentPool.load(PACK)
-    forest = next(row for row in pool.definitions if row.registry_name == "Forest")
-    ambiguous = pool.model_copy(
-        update={
-            "definitions": (
-                *pool.definitions,
-                forest.model_copy(update={"registry_name": "FOREST"}),
-            )
-        }
-    )
-    result = admit_document(parse_decklist("10 Forest"), ambiguous, "development-v1")
-    assert isinstance(result, DeckDocument)
-    assert any(issue.code == "ambiguous" and issue.line == 1 for issue in result.issues)
-    assert result.source == "10 Forest"
-
-
-@pytest.mark.parametrize(
-    "source", ["Sideboard\n1 Island", "1 Forest\nSideboard\n0 Island", "1001 Forest"]
-)
-def test_decklist_rejects_construction_errors(source: str) -> None:
-    with pytest.raises(DeckImportError):
-        import_match(parse_decklist(source), parse_decklist(VILLAIN), PACK)
-
-
-def test_decklist_rejects_unknown_format_and_retained_source_tampering() -> None:
-    with pytest.raises(DeckImportError, match="ruleset"):
-        import_match(parse_decklist(HERO), parse_decklist(VILLAIN), PACK, "standard")
-    imported = import_match(parse_decklist(HERO), parse_decklist(VILLAIN), PACK)
-    retained = imported.model_dump()
-    retained["hero"]["document"]["source"] = "10 Island"
+def test_retained_import_rejects_tampered_sources_and_setups() -> None:
+    imported = managym.import_match(Decklist(HERO), Decklist(VILLAIN), PACK)
+    retained = imported.to_dict()
+    retained["hero"]["decklist"]["source"] = "10 Island"
     with pytest.raises(ValueError, match="source"):
-        ImportedMatch.model_validate(retained).validate_current()
-    retained = imported.model_dump()
+        ImportedMatch.from_dict(retained).validate_current()
+    retained = imported.to_dict()
     retained["pool"]["content_digest"] = "stale"
     with pytest.raises(ValueError, match="identity"):
-        ImportedMatch.model_validate(retained).validate_current()
+        MatchConfig.model_validate(
+            {
+                **MatchConfig.from_import(imported).model_dump(),
+                "imported_decks": retained,
+            }
+        )
+    edited = MatchConfig.from_import(imported).model_dump()
+    edited["villain_deck"] = {"Island": 19}
+    with pytest.raises(ValueError, match="admitted decklist"):
+        MatchConfig.model_validate(edited)
+    swapped = Match(MatchConfig.from_import(imported)).swapped().config
+    assert swapped.imported_decks == imported.swapped()
+    assert swapped.hero_deck == imported.villain.deck.main
 
 
 def _untrained(path: Path, pack: str = PACK, **binding: object) -> None:
@@ -214,7 +178,7 @@ def test_decklist_pool_checkpoint_simulates_imported_files(tmp_path: Path) -> No
     hero, villain = tmp_path / "hero.txt", tmp_path / "villain.txt"
     hero.write_text(HERO)
     villain.write_text(VILLAIN)
-    match = import_files(hero, villain, PACK).match_config()
+    match = MatchConfig.from_import(_import_files(hero, villain))
     pool = tmp_path / "pool.pt"
     _untrained(pool, content_pool=PACK)
     model = _RecordingModel(pool)
@@ -236,7 +200,8 @@ def test_decklist_pool_checkpoint_simulates_imported_files(tmp_path: Path) -> No
 def test_decklist_setup_bound_checkpoint_rejects_imported_files(
     tmp_path: Path, pack: str, decks: tuple[str, str]
 ) -> None:
-    imported = import_match(parse_decklist(HERO), parse_decklist(VILLAIN), PACK)
+    imported = managym.import_match(Decklist(HERO), Decklist(VILLAIN), PACK)
+    match = MatchConfig.from_import(imported)
     path = tmp_path / "authored.pt"
     _untrained(
         path,
@@ -244,47 +209,9 @@ def test_decklist_setup_bound_checkpoint_rejects_imported_files(
         player_configs=[managym.authored_deck_setup(pack, key) for key in decks],
     )
     agent, _ = load_checkpoint(str(path))
-    players = Match(imported.match_config()).to_rust()
+    players = Match(match).to_rust()
     with pytest.raises(ValueError, match="outside checkpoint"):
         validate_agent_setup(agent, players)
-    config = SimulationConfig(
-        hero=str(path), num_games=1, match=imported.match_config()
-    )
+    config = SimulationConfig(hero=str(path), num_games=1, match=match)
     with pytest.raises(ValueError, match="outside checkpoint"):
         simulate_models(load_player(str(path)), load_player("random"), config)
-
-
-def _double_faced_pool() -> ContentPool:
-    """The pool with one defined card renamed to a two-face registry name."""
-    pool = ContentPool.load(PACK)
-    card = next(row for row in pool.definitions if row.registry_name == "Forest")
-    return pool.model_copy(
-        update={
-            "definitions": (
-                *(row for row in pool.definitions if row is not card),
-                card.model_copy(update={"registry_name": "Front Face // Back Face"}),
-            )
-        }
-    )
-
-
-@pytest.mark.parametrize("name", ["Front Face", "Front Face // Back Face"])
-def test_decklist_double_faced_entry_resolves_by_front_or_full_name(name: str) -> None:
-    result = admit_document(
-        parse_decklist(f"10 Island\n1 {name}"), _double_faced_pool(), "development-v1"
-    )
-    assert isinstance(result, DeckDocument)
-    assert [entry.name for entry in result.entries] == [
-        "Island",
-        "Front Face // Back Face",
-    ]
-    # Native admission still rejects the synthetic name; resolution is Python's.
-    assert not any(issue.code in {"ambiguous", "face"} for issue in result.issues)
-
-
-def test_decklist_reverse_face_is_not_a_separate_card() -> None:
-    result = admit_document(
-        parse_decklist("10 Island\n1 Back Face"), _double_faced_pool(), "development-v1"
-    )
-    assert isinstance(result, DeckDocument)
-    assert any(issue.code == "face" and issue.line == 2 for issue in result.issues)

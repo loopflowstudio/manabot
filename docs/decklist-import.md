@@ -1,7 +1,10 @@
 # Import decklist files
 
-Academy and manabot resolve files through the same native content pool and
-construction admission. The initial `development-v1` ruleset is for development
+Decks and decklists are managym concepts. `managym.Deck` is a deck's main and
+sideboard counts; `managym.Decklist` is one submitted file (exact source,
+filename, entries and line issues). Parsing, card-name resolution and
+construction admission all run natively against the selected content pool, so
+Academy and manabot share one importer. The initial `development-v1` ruleset is for development
 play. It does not assert Standard or any other tournament legality.
 
 Files are UTF-8 text, at most 64 KiB. Each entry is a positive integer, whitespace,
@@ -54,8 +57,20 @@ uv run manabot sim \
 ```
 
 The CLI prints the admitted setup identity before simulation. Programmatic
-configuration uses `manabot.decklist.import_files(...).match_config()`; the
-serialized match retains source, resolved definitions, construction ruleset,
+configuration is:
+
+```python
+import managym
+from manabot.infra.config import MatchConfig
+
+imported = managym.import_match(
+    managym.Decklist.read("hero.txt"), managym.Decklist.read("villain.txt"), "tla-pool-v1"
+)
+match = MatchConfig.from_import(imported)
+```
+
+Failures raise `managym.DeckImportError`, whose `decklists` maps each failing
+seat to its decklist with line issues. The serialized match retains source, resolved definitions, construction ruleset,
 and exact world/content/compiled identities. Reordering lines does not change
 the setup identity. A changed pool rejects a retained import instead of silently
 reinterpreting it. Existing native Commands, reconnect, replay and forks retain

@@ -57,7 +57,6 @@ from managym.experience_projection import (
 )
 from pydantic import ValidationError
 
-from manabot.decklist import DeckImportError, ImportedMatch
 import managym
 
 from . import trace as trace_store, villain as villain_module
@@ -801,7 +800,7 @@ def _parse_game_config(config: Any) -> GameConfig:
         villain_deterministic = opponent.deterministic
 
     return GameConfig(
-        imported_decks=imported.model_dump(mode="json") if imported else None,
+        imported_decks=None if imported is None else imported.to_dict(),
         hero_deck=hero_deck,
         villain_deck=villain_deck,
         hero_sideboard=sideboards["hero"],
@@ -2899,15 +2898,15 @@ def _dispatch_table_request(
                 **config,
             }
             if previous.imported_decks is not None:
-                imported = ImportedMatch.model_validate(previous.imported_decks)
+                imported = managym.ImportedMatch.from_dict(previous.imported_decks)
                 imported.validate_current()
                 config["deck_import"] = {
-                    "pack_key": imported.pool.pack_key,
+                    "pack_key": imported.pool["pack_key"],
                     "ruleset": imported.ruleset,
                     **{
                         seat: {
-                            "source": deck.document.source,
-                            "filename": deck.document.filename,
+                            "source": deck.decklist.source,
+                            "filename": deck.decklist.filename,
                         }
                         for seat, deck in (
                             ("hero", imported.hero),
@@ -3664,12 +3663,11 @@ def import_arena_watch(payload: dict[str, Any]) -> dict[str, Any]:
 def validate_decklists(payload: DeckImportInput) -> dict[str, Any]:
     try:
         imported = payload.admit()
-    except DeckImportError as error:
+    except managym.DeckImportError as error:
         return {
             "admitted": False,
             "documents": {
-                seat: document.model_dump(mode="json")
-                for seat, document in error.documents.items()
+                seat: decklist.to_dict() for seat, decklist in error.decklists.items()
             },
         }
     except ValueError as error:
@@ -3678,7 +3676,7 @@ def validate_decklists(payload: DeckImportInput) -> dict[str, Any]:
         "admitted": True,
         "setup_id": imported.setup_id,
         "ruleset": imported.ruleset,
-        "pack_key": imported.pool.pack_key,
-        "world_version": imported.pool.world_version,
-        "content_digest": imported.pool.content_digest,
+        "pack_key": imported.pool["pack_key"],
+        "world_version": imported.pool["world_version"],
+        "content_digest": imported.pool["content_digest"],
     }

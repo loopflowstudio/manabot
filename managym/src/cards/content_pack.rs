@@ -62,7 +62,8 @@ pub struct ContentPackDefinitionManifest {
     pub registry_name: String,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct CompiledSemanticManifest {
     pub pack_key: String,
     pub ir_hash: String,

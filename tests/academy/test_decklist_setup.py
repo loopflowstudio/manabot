@@ -10,8 +10,8 @@ import pytest
 
 from academy import server
 from academy.trace import GameConfig, prepare_trace_payload
-from manabot.decklist import ImportedMatch
 from manabot.env.match import Match
+from manabot.infra.config import MatchConfig
 from manabot.semantic.decision_contract import SemanticDecisionContract
 import managym
 
@@ -39,8 +39,8 @@ def test_imported_setup_matches_manabot_reconnect_and_rebuilt_root(
     first = session.new_game(_request())
     assert session.trace is not None
     config = session.trace.config
-    imported = ImportedMatch.model_validate(config.imported_decks)
-    match_config = imported.match_config()
+    imported = managym.ImportedMatch.from_dict(config.imported_decks)
+    match_config = MatchConfig.from_import(imported)
     match_config.hero, match_config.villain = "Hero", "Villain"
     bot = managym.Env(seed=7, skip_trivial=False)
     bot.reset(Match(match_config).to_rust())

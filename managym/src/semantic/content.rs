@@ -60,9 +60,7 @@ impl AuthoredRuntime {
         }
         let mut unmatched = self.setups.iter().collect::<Vec<_>>();
         for config in player_configs {
-            let Some(index) = unmatched.iter().position(|setup| {
-                setup.decklist == config.decklist && setup.sideboard == config.sideboard
-            }) else {
+            let Some(index) = unmatched.iter().position(|setup| setup.deck == config.deck) else {
                 return false;
             };
             unmatched.remove(index);
@@ -125,12 +123,10 @@ pub(crate) fn content_pack_for_match(
         // Authored presets retain their established admission. Their availability
         // does not qualify individual cards for arbitrary submitted combinations.
         if let Some(runtime) = catalog.iter().find(|r| &r.pack_key == key) {
-            if player_configs.iter().all(|p| {
-                runtime
-                    .setups
-                    .iter()
-                    .any(|s| s.decklist == p.decklist && s.sideboard == p.sideboard)
-            }) {
+            if player_configs
+                .iter()
+                .all(|p| runtime.setups.iter().any(|s| s.deck == p.deck))
+            {
                 return Ok(Some(Arc::clone(&runtime.content)));
             }
         }
@@ -175,7 +171,7 @@ mod catalog_tests {
             content.compiled_semantics().unwrap().pack_key,
             "tla-pool-v1"
         );
-        first.sideboard.insert("Airbending Lesson".into(), 1);
+        first.deck.sideboard.insert("Airbending Lesson".into(), 1);
         assert!(content_pack_for_match(&[first, second]).is_err());
     }
 
@@ -203,7 +199,7 @@ mod catalog_tests {
             wrong[0].content_pack = None;
             assert!(content_pack_for_match(&wrong).is_err());
             wrong = pair.clone();
-            wrong[0].decklist.clear();
+            wrong[0].deck.main.clear();
             assert!(content_pack_for_match(&wrong).is_err());
             wrong = pair.clone();
             wrong[0].content_pack = Some("missing-pack".into());
@@ -339,7 +335,7 @@ impl SemanticPack {
         &self,
         key: &str,
     ) -> Result<std::collections::BTreeMap<String, usize>, IrError> {
-        Ok(self.player_config(key, key)?.decklist)
+        Ok(self.player_config(key, key)?.deck.main)
     }
 }
 

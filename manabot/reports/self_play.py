@@ -13,7 +13,6 @@ from typing import TYPE_CHECKING, Literal
 
 from matplotlib.figure import Figure
 
-from manabot.decklist import deck_identity
 from manabot.training.update_metrics import MetricRow
 import managym
 
@@ -79,7 +78,7 @@ def _deck_labels() -> dict[str, str]:
     labels: dict[str, str] = {}
     for key, label in (("ur_lessons", "Lessons"), ("gw_allies", "Allies")):
         setup = managym.authored_deck_setup("ur-lessons-vs-gw-allies", key)
-        labels[deck_identity(dict(setup.decklist), dict(setup.sideboard))] = label
+        labels[setup.deck.identity] = label
     return labels
 
 

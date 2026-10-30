@@ -10,7 +10,6 @@ import pytest
 import torch
 
 from experiments.ataraxos_move import ataraxos_move_scalar
-from manabot.decklist import deck_identity
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
@@ -97,9 +96,7 @@ def test_uniform_collector_recovers_changed_terminal_roots(
         # native pair BEFORE auto-reset, not the pair in the returned observation.
         replay = _collector(recovery, learning_seats=learning_seats)
         expected: dict[str, dict[str, int]] = {}
-        identities = [
-            deck_identity(p.decklist, p.sideboard) for p in elemental_roster(_match())
-        ]
+        identities = [p.deck.identity for p in elemental_roster(_match())]
 
         def key(row: int, pair: tuple[int, int]) -> str:
             seat = "both" if learning_seats == "both" else str(row % 2)

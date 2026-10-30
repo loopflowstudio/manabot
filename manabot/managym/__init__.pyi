@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import IntEnum
+import os
 from typing import Any, Dict, List, Literal, Optional, Tuple, TypedDict
 
 import numpy as np
@@ -234,6 +235,8 @@ class VectorEnv:
     def get_last_info(self) -> List[Dict[str, Any]]: ...
 
 class PlayerConfig:
+    """A seat's setup; ``decklist``/``sideboard`` read ``deck`` under receipt names."""
+
     def __init__(
         self,
         name: str,
@@ -242,10 +245,142 @@ class PlayerConfig:
         content_pack: str | None = None,
     ) -> None: ...
     name: str
-    decklist: Dict[str, int]
-    sideboard: Dict[str, int]
     content_pack: str | None
+    @property
+    def deck(self) -> Deck: ...
+    @property
+    def decklist(self) -> Dict[str, int]: ...
+    @property
+    def sideboard(self) -> Dict[str, int]: ...
 
+class Deck:
+    """Main-deck and sideboard counts; identity derives from this content alone.
+
+    Validates as a Pydantic field and serializes as ``{"decklist", "sideboard"}``.
+    """
+
+    def __init__(
+        self, main: dict[str, int], sideboard: dict[str, int] | None = None
+    ) -> None: ...
+    @property
+    def main(self) -> dict[str, int]: ...
+    @property
+    def sideboard(self) -> dict[str, int]: ...
+    @property
+    def identity(self) -> str: ...
+    def player(self, content_pack: str | None = None) -> PlayerConfig: ...
+    def to_dict(self) -> dict[str, Any]: ...
+    @staticmethod
+    def from_dict(value: Any) -> Deck: ...
+    def __hash__(self) -> int: ...
+
+class DeckIssue:
+    @property
+    def line(self) -> int | None: ...
+    @property
+    def section(self) -> Literal["main", "sideboard"] | None: ...
+    @property
+    def card_name(self) -> str | None: ...
+    @property
+    def code(self) -> str: ...
+    @property
+    def message(self) -> str: ...
+    def to_dict(self) -> dict[str, Any]: ...
+
+class DeckEntry:
+    @property
+    def line(self) -> int: ...
+    @property
+    def section(self) -> Literal["main", "sideboard"]: ...
+    @property
+    def count(self) -> int: ...
+    @property
+    def name(self) -> str: ...
+    @property
+    def card_def_id(self) -> int | None: ...
+    @property
+    def semantic_key(self) -> str | None: ...
+    def to_dict(self) -> dict[str, Any]: ...
+
+class Decklist:
+    """One counted-lines-v1 document: exact source, filename, entries and issues.
+
+    Construction parses; names resolve when the decklist is admitted.
+    """
+
+    def __init__(self, source: str, filename: str = "deck.txt") -> None: ...
+    @staticmethod
+    def read(path: str | os.PathLike[str], filename: str | None = None) -> Decklist:
+        """Bounded UTF-8 read keeping BOM/newline bytes; ``ValueError`` on bad files."""
+    @property
+    def dialect(self) -> str: ...
+    @property
+    def source(self) -> str: ...
+    @property
+    def filename(self) -> str: ...
+    @property
+    def entries(self) -> list[DeckEntry]: ...
+    @property
+    def issues(self) -> list[DeckIssue]: ...
+    @property
+    def source_sha256(self) -> str: ...
+    def to_dict(self) -> dict[str, Any]: ...
+    @staticmethod
+    def from_dict(value: Any) -> Decklist: ...
+
+class DeckImport:
+    @property
+    def decklist(self) -> Decklist: ...
+    @property
+    def deck(self) -> Deck: ...
+    def to_dict(self) -> dict[str, Any]: ...
+
+class PoolIdentity(TypedDict):
+    pack_key: str
+    world_version: str
+    content_digest: str
+    compiled_semantics: CompiledContentIdentity
+
+class ImportedMatch:
+    """Private two-seat import record; never attach it to viewer frames."""
+
+    @property
+    def pool(self) -> PoolIdentity: ...
+    @property
+    def ruleset(self) -> str: ...
+    @property
+    def hero(self) -> DeckImport: ...
+    @property
+    def villain(self) -> DeckImport: ...
+    @property
+    def setup_id(self) -> str: ...
+    def swapped(self) -> ImportedMatch: ...
+    def validate_current(self) -> None: ...
+    def validate_setup(
+        self, content_pack: str | None, hero: Deck, villain: Deck
+    ) -> None: ...
+    def to_dict(self) -> dict[str, Any]: ...
+    @staticmethod
+    def from_dict(value: Any) -> ImportedMatch: ...
+
+class DeckImportError(ValueError):
+    decklists: dict[str, Decklist]
+
+MAX_DECKLIST_BYTES: int
+
+def admit_decklists(
+    decklists: list[tuple[str, Decklist]],
+    pack_key: str,
+    ruleset: str = "development-v1",
+) -> list[DeckImport]:
+    """Admit every decklist or raise ``DeckImportError`` keyed by label."""
+
+def import_match(
+    hero: Decklist,
+    villain: Decklist,
+    pack_key: str,
+    ruleset: str = "development-v1",
+) -> ImportedMatch: ...
 def authored_deck_setup(pack_key: str, deck_key: str) -> PlayerConfig: ...
 
 class ZoneEnum(IntEnum):
@@ -552,15 +687,6 @@ class ManaOutput:
     mana: list[int]
     lesson: list[int]
 
-class DeckAdmissionIssue(TypedDict):
-    section: Literal["main", "sideboard"] | None
-    card_name: str | None
-    code: str
-    message: str
-
 def admit_deck(
-    pack_key: str,
-    main: dict[str, int],
-    sideboard: dict[str, int],
-    ruleset: str = "development-v1",
-) -> list[DeckAdmissionIssue]: ...
+    pack_key: str, deck: Deck, ruleset: str = "development-v1"
+) -> list[DeckIssue]: ...

@@ -47,6 +47,28 @@ pub struct ContentPool {
     pub definitions: Vec<PoolDefinition>,
 }
 
+/// The descriptor without its rows: what a retained import binds for replay.
+/// The installed pool, not this record, owns definition eligibility.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct PoolIdentity {
+    pub pack_key: String,
+    pub world_version: String,
+    pub content_digest: String,
+    pub compiled_semantics: CompiledSemanticManifest,
+}
+
+impl ContentPool {
+    pub fn identity(&self) -> PoolIdentity {
+        PoolIdentity {
+            pack_key: self.pack_key.clone(),
+            world_version: self.world_version.clone(),
+            content_digest: self.content_digest.clone(),
+            compiled_semantics: self.compiled_semantics.clone(),
+        }
+    }
+}
+
 struct PoolRuntime {
     content: Arc<ContentPack>,
     descriptor: ContentPool,

@@ -13,13 +13,6 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.decklist import (
-    MAX_SOURCE_BYTES,
-    Deck,
-    DeckDocument,
-    DeckImportError,
-    parse_decklist,
-)
 from manabot.env.failures import CaptureScope, FailureEvidence, capture_scope
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
@@ -44,21 +37,22 @@ from manabot.training.state.game_errors import (
 )
 from manabot.training.state.recovery import admit_recovery_identities
 import managym
+from managym import MAX_DECKLIST_BYTES, Deck, DeckImportError, Decklist
 
 PACK = "tla-pool-v1"
 ROSTER_PACK = "elemental-world-v2"
 
 
-def _documents(*names: str) -> list[DeckDocument]:
+def _decklists(*names: str) -> list[Decklist]:
     return [
-        parse_decklist(f"10 {name}\nSideboard\n1 Forest\n", f"{name}.txt")
+        Decklist(f"10 {name}\nSideboard\n1 Forest\n", f"{name}.txt")
         for name in names or ("Plains", "Mountain", "Island")
     ]
 
 
 @pytest.fixture
 def decks() -> TrainingDecks:
-    return TrainingDecks.from_documents(_documents(), PACK)
+    return TrainingDecks.from_decklists(_decklists(), PACK)
 
 
 def _agent() -> ActorCritic:
@@ -104,39 +98,39 @@ def _regime(decks: object) -> TrainingRegime:
 
 
 def test_fixed_list_is_checked_upfront_and_keeps_every_source() -> None:
-    documents = _documents() + [
-        parse_decklist(
+    decklists = _decklists() + [
+        Decklist(
             "# another record\r\n5 plains\r\n5 Plains\r\nSideboard\r\n1 Forest\r\n",
             "duplicate.txt",
         )
     ]
-    decks = TrainingDecks.from_documents(documents, PACK)
+    decks = TrainingDecks.from_decklists(decklists, PACK)
     assert len(decks.decks) == 3 and len(decks.sources) == 4
-    assert documents[-1].source in {source.source for source in decks.sources}
-    assert TrainingDecks.from_documents(list(reversed(documents)), PACK) == decks
+    assert decklists[-1].source in {source.source for source in decks.sources}
+    assert TrainingDecks.from_decklists(list(reversed(decklists)), PACK) == decks
     with pytest.raises(DeckImportError) as error:
-        TrainingDecks.from_documents(
-            documents + [parse_decklist("0 Plains\n1 Not A Card", "broken.txt")], PACK
+        TrainingDecks.from_decklists(
+            decklists + [Decklist("0 Plains\n1 Not A Card", "broken.txt")], PACK
         )
     assert "broken.txt:1" in str(error.value) and "broken.txt:2" in str(error.value)
     with pytest.raises(DeckImportError) as unsupported:
-        TrainingDecks.from_documents(
-            documents + [parse_decklist("1 Accumulate Wisdom", "unsupported.txt")], PACK
+        TrainingDecks.from_decklists(
+            decklists + [Decklist("1 Accumulate Wisdom", "unsupported.txt")], PACK
         )
     assert any(
         issue.code == "unsupported"
-        for doc in unsupported.value.documents.values()
+        for doc in unsupported.value.decklists.values()
         for issue in doc.issues
     )
     with pytest.raises(ValueError, match="at least two distinct"):
-        TrainingDecks.from_documents([documents[0], documents[-1]], PACK)
+        TrainingDecks.from_decklists([decklists[0], decklists[-1]], PACK)
     value = decks.model_dump(mode="json")
     value["decks"].reverse()
     with pytest.raises(ValueError, match="sorted distinct"):
         TrainingDecks.model_validate(value)
     # Stored decks are re-admitted by the world itself, not trusted as members.
     stored = decks.model_copy(
-        update={"decks": (*decks.decks, Deck(main={"Rocky Rebuke": 1}))}
+        update={"decks": (*decks.decks, Deck({"Rocky Rebuke": 1}))}
     )
     with pytest.raises(ValueError, match="not admitted"):
         stored.check()
@@ -146,9 +140,9 @@ def test_regime_embeds_files_and_reports_bad_input_before_training(
     tmp_path: Path,
 ) -> None:
     paths = []
-    for document in _documents():
-        path = tmp_path / document.filename
-        path.write_bytes(("﻿" + document.source.replace("\n", "\r\n")).encode("utf-8"))
+    for decklist in _decklists():
+        path = tmp_path / decklist.filename
+        path.write_bytes(("﻿" + decklist.source.replace("\n", "\r\n")).encode("utf-8"))
         paths.append(str(path))
     regime = validate_regime(_regime({"pool": PACK, "files": paths}))
     assert regime.decks is not None and len(regime.decks.decks) == 3
@@ -182,7 +176,7 @@ def test_regime_embeds_files_and_reports_bad_input_before_training(
     Path(paths[1]).write_text("1 Unknown Card")
     with pytest.raises(ValueError, match="Mountain.txt:1: Unknown card name"):
         _regime({"pool": PACK, "files": paths[:2]})
-    Path(paths[1]).write_bytes(b"#" * (MAX_SOURCE_BYTES + 1))
+    Path(paths[1]).write_bytes(b"#" * (MAX_DECKLIST_BYTES + 1))
     with pytest.raises(ValueError, match="64 KiB import limit"):
         _regime({"pool": PACK, "files": paths[:2]})
 
@@ -216,8 +210,8 @@ def test_collector_resets_recovers_seats_seeds_and_exposure(
         assert first._env.current_game_seeds() == restored._env.current_game_seeds()
         assert first.stats.exposure == restored.stats.exposure
         snapshot = first.snapshot()
-        changed = TrainingDecks.from_documents(
-            _documents("Plains", "Mountain", "Island", "Forest"), PACK
+        changed = TrainingDecks.from_decklists(
+            _decklists("Plains", "Mountain", "Island", "Forest"), PACK
         )
         fresh = _collector(changed, recovery)
         with pytest.raises(ValueError, match="training decks identity mismatch"):
@@ -241,9 +235,9 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
     assert inspect_checkpoint(target).compatible
     policy, _ = load_checkpoint(str(target))
 
-    unseen = Deck(main={"Swamp": 10, "Forest": 4}).player(PACK)
+    unseen = Deck({"Swamp": 10, "Forest": 4}).player(PACK)
     validate_agent_setup(policy, [unseen, decks.players()[0]])
-    unsupported = Deck(main={"Swamp": 9, "Rocky Rebuke": 1}).player(PACK)
+    unsupported = Deck({"Swamp": 9, "Rocky Rebuke": 1}).player(PACK)
     with pytest.raises(ValueError, match="not admitted by"):
         validate_agent_setup(policy, [unseen, unsupported])
     other_pack = managym.PlayerConfig("other", {"Swamp": 10}, {}, None)
@@ -291,7 +285,7 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
         _admit_setups(authored, regime)
 
     # The same model collects from a later supply it never trained on.
-    later = TrainingDecks.from_documents(_documents("Swamp", "Forest"), PACK)
+    later = TrainingDecks.from_decklists(_decklists("Swamp", "Forest"), PACK)
     collector = _collector(later)
     try:
         collector.collect(policy, 1)
@@ -307,7 +301,7 @@ def test_later_roots_take_new_decks_and_reject_invalid_ones_before_play(
     collector = _collector(decks)
     env = collector._env
     try:
-        generated = Deck(main={"Swamp": 10, "Rocky Rebuke": 1}).player(PACK)
+        generated = Deck({"Swamp": 10, "Rocky Rebuke": 1}).player(PACK)
         before = env.current_player_configs()
         with pytest.raises(managym.AgentError, match="Rocky Rebuke"):
             env.set_training_decks([decks.players()[0], generated], "generated")
@@ -318,8 +312,8 @@ def test_later_roots_take_new_decks_and_reject_invalid_ones_before_play(
         ] == [[player.decklist for player in pair] for pair in before]
 
         replacement = [
-            Deck(main={"Swamp": 10}).player(PACK),
-            Deck(main={"Forest": 9, "Swamp": 1}).player(PACK),
+            Deck({"Swamp": 10}).player(PACK),
+            Deck({"Forest": 9, "Swamp": 1}).player(PACK),
         ]
         env.set_training_decks(replacement, "replacement")
         assert env.current_player_configs()[0][0].decklist == before[0][0].decklist
@@ -413,7 +407,7 @@ def test_deck_run_identities_name_the_supply_not_a_pair(
     with pytest.raises(ValueError, match="monitoring requires an authored matchup"):
         authored_matchup_sha256(identities, "monitoring")
 
-    changed = _regime(TrainingDecks.from_documents(_documents("Plains", "Swamp"), PACK))
+    changed = _regime(TrainingDecks.from_decklists(_decklists("Plains", "Swamp"), PACK))
     with pytest.raises(ValueError, match="recovery runtime/source identity mismatch"):
         admit_recovery_identities(
             identities, _runtime_identities(7, changed, space), None

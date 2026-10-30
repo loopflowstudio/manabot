@@ -83,7 +83,7 @@ fn jeong_increment_selects_its_exact_pack_in_either_seat_order() {
 fn tampered_jeong_deck_does_not_select_a_compiled_pack() {
     let semantic = SemanticPack::current("jeong_increment").expect("checked-in Jeong IR parses");
     let mut configs = jeong_configs(&semantic);
-    let deck = &mut configs[1].decklist;
+    let deck = &mut configs[1].deck.main;
     deck.remove("Jeong Jeong's Deserters");
     *deck.entry("Plains".to_owned()).or_default() += 1;
 

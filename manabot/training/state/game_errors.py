@@ -21,7 +21,6 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field, model_validator
 
-from manabot.decklist import deck_identity
 from manabot.env.failures import read_failure
 from manabot.env.match import Match
 from manabot.env.replay import (
@@ -102,8 +101,8 @@ class GameErrorState(BaseModel):
         match = attempt.matchup
         cell = ":".join(
             (
-                deck_identity(match.hero_deck, match.hero_sideboard),
-                deck_identity(match.villain_deck, match.villain_sideboard),
+                managym.Deck(match.hero_deck, match.hero_sideboard).identity,
+                managym.Deck(match.villain_deck, match.villain_sideboard).identity,
                 str(attempt.seat),
             )
         )

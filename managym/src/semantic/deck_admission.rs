@@ -3,24 +3,44 @@
 
 use std::collections::BTreeMap;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
-use super::{content_pool, pool_content, Eligibility, IrError};
-use crate::state::player::PlayerConfig;
+use super::{content_pool, pool_content, ContentPool, Eligibility, IrError};
+use crate::{
+    cards::content_pack::ContentPack,
+    state::{deck::Deck, player::PlayerConfig},
+};
 
 pub const DEVELOPMENT_RULESET: &str = "development-v1";
 /// Operational allocation bound, not a tournament construction rule.
 pub const MAX_SETUP_CARDS: usize = 1000;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DeckSection {
     Main,
     Sideboard,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+impl DeckSection {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Main => "main",
+            Self::Sideboard => "sideboard",
+        }
+    }
+}
+
+/// One actionable problem with a submitted deck. `line` is the 1-based source
+/// line when the deck came from a decklist; admission of counts alone has none.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(
+    feature = "python",
+    pyo3::pyclass(frozen, eq, module = "manabot.managym")
+)]
+#[serde(deny_unknown_fields)]
 pub struct DeckIssue {
+    pub line: Option<usize>,
     pub section: Option<DeckSection>,
     pub card_name: Option<String>,
     pub code: String,
@@ -28,8 +48,9 @@ pub struct DeckIssue {
 }
 
 impl DeckIssue {
-    fn format(message: impl Into<String>) -> Self {
+    pub(crate) fn format(message: impl Into<String>) -> Self {
         Self {
+            line: None,
             section: None,
             card_name: None,
             code: "format".into(),
@@ -63,6 +84,7 @@ fn construction_issues(
         for (name, count) in cards {
             if *count == 0 {
                 issues.push(DeckIssue {
+                    line: None,
                     section: Some(section),
                     card_name: Some(name.clone()),
                     code: "count".into(),
@@ -82,18 +104,26 @@ fn construction_issues(
 
 /// Return actionable construction/content issues without allocating a game.
 /// Env setup invokes this same admission for every submitted non-preset deck.
-pub fn admit_deck(
-    pack_key: &str,
-    main: &BTreeMap<String, usize>,
-    sideboard: &BTreeMap<String, usize>,
+pub fn admit_deck(pack_key: &str, deck: &Deck, ruleset: &str) -> Result<Vec<DeckIssue>, IrError> {
+    Ok(admit_in_pool(
+        &content_pool(pack_key)?,
+        &*pool_content(pack_key)?,
+        deck,
+        ruleset,
+    ))
+}
+
+/// Admission against one pool descriptor and the runtime content it describes.
+pub(crate) fn admit_in_pool(
+    pool: &ContentPool,
+    content: &ContentPack,
+    deck: &Deck,
     ruleset: &str,
-) -> Result<Vec<DeckIssue>, IrError> {
-    let pool = content_pool(pack_key)?;
-    let content = pool_content(pack_key)?;
-    let mut issues = construction_issues(main, sideboard, ruleset);
+) -> Vec<DeckIssue> {
+    let mut issues = construction_issues(&deck.main, &deck.sideboard, ruleset);
     for (section, cards) in [
-        (DeckSection::Main, main),
-        (DeckSection::Sideboard, sideboard),
+        (DeckSection::Main, &deck.main),
+        (DeckSection::Sideboard, &deck.sideboard),
     ] {
         for name in cards.keys() {
             let mut rows = pool
@@ -125,6 +155,7 @@ pub fn admit_deck(
                 ),
             };
             issues.push(DeckIssue {
+                line: None,
                 section: Some(section),
                 card_name: Some(name.clone()),
                 code: code.into(),
@@ -132,7 +163,7 @@ pub fn admit_deck(
             });
         }
     }
-    Ok(issues)
+    issues
 }
 
 /// Why a player's submitted deck fails development admission, or `None` when it
@@ -141,12 +172,7 @@ pub fn development_rejection(
     pack_key: &str,
     player: &PlayerConfig,
 ) -> Result<Option<String>, IrError> {
-    let issues = admit_deck(
-        pack_key,
-        &player.decklist,
-        &player.sideboard,
-        DEVELOPMENT_RULESET,
-    )?;
+    let issues = admit_deck(pack_key, &player.deck, DEVELOPMENT_RULESET)?;
     Ok((!issues.is_empty()).then(|| {
         issues
             .iter()
@@ -164,13 +190,12 @@ mod tests {
     fn novel_pool_decks_admit_without_an_authored_setup() {
         let main = BTreeMap::from([("Forest".into(), 10), ("Mountain".into(), 10)]);
         let sideboard = BTreeMap::from([("Island".into(), 1)]);
-        assert!(
-            admit_deck("tla-pool-v1", &main, &sideboard, DEVELOPMENT_RULESET)
-                .unwrap()
-                .is_empty()
-        );
-        let unsupported = BTreeMap::from([("Accumulate Wisdom".into(), 1)]);
-        let issues = admit_deck("tla-pool-v1", &main, &unsupported, DEVELOPMENT_RULESET).unwrap();
+        let deck = Deck::new(main.clone(), sideboard);
+        assert!(admit_deck("tla-pool-v1", &deck, DEVELOPMENT_RULESET)
+            .unwrap()
+            .is_empty());
+        let unsupported = Deck::new(main, BTreeMap::from([("Accumulate Wisdom".into(), 1)]));
+        let issues = admit_deck("tla-pool-v1", &unsupported, DEVELOPMENT_RULESET).unwrap();
         assert!(issues
             .iter()
             .any(|issue| issue.code == "unsupported"

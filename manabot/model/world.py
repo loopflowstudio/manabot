@@ -121,11 +121,11 @@ def admit_pool_decks(
 ) -> None:
     """Admit every deck by the pool's native validation; membership grants nothing."""
     for player in player_configs:
-        issues = managym.admit_deck(pack_key, player.decklist, player.sideboard)
+        issues = managym.admit_deck(pack_key, player.deck)
         if issues:
             raise ValueError(
                 f"deck {player.name} is not admitted by {pack_key}: "
-                + "; ".join(issue["message"] for issue in issues)
+                + "; ".join(issue.message for issue in issues)
             )
 
 

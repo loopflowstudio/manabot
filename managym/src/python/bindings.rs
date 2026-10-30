@@ -5,7 +5,7 @@
 
 #[cfg(feature = "python")]
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::BTreeMap,
     sync::{
         atomic::{AtomicUsize, Ordering},
         Arc, Mutex,
@@ -46,7 +46,7 @@ use crate::{
     flow::turn::{PhaseKind, StepKind},
     python::convert::{info_dict_to_pydict, require_numpy_array, shape_to_vec},
     search_state::SearchStateWitness,
-    state::{mana::ManaCost, player::PlayerConfig, zone::ZoneType},
+    state::{deck::Deck, mana::ManaCost, player::PlayerConfig, zone::ZoneType},
 };
 
 #[cfg(feature = "python")]
@@ -937,16 +937,16 @@ impl From<StackTargetKindEnum> for StackTargetKindData {
     }
 }
 
+/// A seat's setup: player name, the submitted [`Deck`] and its content pack.
+/// `decklist`/`sideboard` read the deck's sections under their receipt names.
 #[cfg(feature = "python")]
 #[pyclass(name = "PlayerConfig")]
 #[derive(Clone)]
 pub struct PyPlayerConfig {
     #[pyo3(get, set)]
     pub name: String,
-    #[pyo3(get, set)]
-    pub decklist: HashMap<String, usize>,
-    #[pyo3(get, set)]
-    pub sideboard: HashMap<String, usize>,
+    #[pyo3(get)]
+    pub deck: Deck,
     #[pyo3(get, set)]
     pub content_pack: Option<String>,
 }
@@ -958,16 +958,25 @@ impl PyPlayerConfig {
     #[pyo3(signature = (name, decklist, sideboard=None, content_pack=None))]
     fn new(
         name: String,
-        decklist: HashMap<String, usize>,
-        sideboard: Option<HashMap<String, usize>>,
+        decklist: BTreeMap<String, usize>,
+        sideboard: Option<BTreeMap<String, usize>>,
         content_pack: Option<String>,
     ) -> Self {
         Self {
             name,
-            decklist,
-            sideboard: sideboard.unwrap_or_default(),
+            deck: Deck::new(decklist, sideboard.unwrap_or_default()),
             content_pack,
         }
+    }
+
+    #[getter]
+    fn decklist(&self) -> BTreeMap<String, usize> {
+        self.deck.main.clone()
+    }
+
+    #[getter]
+    fn sideboard(&self) -> BTreeMap<String, usize> {
+        self.deck.sideboard.clone()
     }
 }
 
@@ -976,8 +985,7 @@ impl From<PyPlayerConfig> for PlayerConfig {
     fn from(value: PyPlayerConfig) -> Self {
         PlayerConfig {
             name: value.name,
-            decklist: value.decklist.into_iter().collect(),
-            sideboard: value.sideboard.into_iter().collect(),
+            deck: value.deck,
             content_pack: value.content_pack,
         }
     }
@@ -988,8 +996,7 @@ impl From<PlayerConfig> for PyPlayerConfig {
     fn from(value: PlayerConfig) -> Self {
         PyPlayerConfig {
             name: value.name,
-            decklist: value.decklist.into_iter().collect(),
-            sideboard: value.sideboard.into_iter().collect(),
+            deck: value.deck,
             content_pack: value.content_pack,
         }
     }
@@ -3736,10 +3743,8 @@ fn authored_deck_setup(pack_key: &str, deck_key: &str) -> PyResult<PyPlayerConfi
         .player_config(deck_key, deck_key)
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
     Ok(PyPlayerConfig {
-        name: config.name,
-        decklist: config.decklist.into_iter().collect(),
-        sideboard: config.sideboard.into_iter().collect(),
         content_pack: Some(pack_key.to_string()),
+        ..config.into()
     })
 }
 
@@ -3751,36 +3756,6 @@ fn authored_deck_keys(pack_key: &str) -> PyResult<Vec<String>> {
         .iter()
         .map(|deck| deck.key.clone())
         .collect())
-}
-
-#[cfg(feature = "python")]
-#[pyfunction]
-#[pyo3(signature = (pack_key, main, sideboard, ruleset="development-v1"))]
-fn admit_deck(
-    py: Python<'_>,
-    pack_key: &str,
-    main: BTreeMap<String, usize>,
-    sideboard: BTreeMap<String, usize>,
-    ruleset: &str,
-) -> PyResult<PyObject> {
-    let issues = crate::semantic::deck_admission::admit_deck(pack_key, &main, &sideboard, ruleset)
-        .map_err(|error| PyValueError::new_err(error.to_string()))?;
-    let result = PyList::empty_bound(py);
-    for issue in issues {
-        let row = PyDict::new_bound(py);
-        row.set_item(
-            "section",
-            issue.section.map(|section| match section {
-                crate::semantic::deck_admission::DeckSection::Main => "main",
-                crate::semantic::deck_admission::DeckSection::Sideboard => "sideboard",
-            }),
-        )?;
-        row.set_item("card_name", issue.card_name)?;
-        row.set_item("code", issue.code)?;
-        row.set_item("message", issue.message)?;
-        result.append(row)?;
-    }
-    Ok(result.into_any().unbind())
 }
 
 #[cfg(feature = "python")]
@@ -3805,7 +3780,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add_class::<PyPlayerConfig>()?;
     m.add_function(wrap_pyfunction!(authored_deck_setup, m)?)?;
-    m.add_function(wrap_pyfunction!(admit_deck, m)?)?;
+    super::deck_bindings::register(py, m)?;
     m.add_function(wrap_pyfunction!(authored_deck_keys, m)?)?;
     m.add_function(wrap_pyfunction!(content_pool, m)?)?;
     m.add_function(wrap_pyfunction!(set_cards, m)?)?;

@@ -10,11 +10,12 @@ import typer
 
 from manabot.config.load import load_sim_config
 from manabot.config.presets import DEFAULT_SIM_PRESET
-from manabot.decklist import import_files
+from manabot.infra.config import MatchConfig
 from manabot.recipes.baseline import BASELINE_STEPS, run_baseline
 from manabot.recipes.local import LOCAL_SECONDS, LOCAL_STEPS, run_local
 from manabot.sim.sim import run_simulation
 from manabot.training.regime import TrainingRegime
+import managym
 
 app = typer.Typer(
     help="Manabot training and simulation CLI", pretty_exceptions_show_locals=False
@@ -213,9 +214,13 @@ def sim_command(
     try:
         sim_config, runtime_config = load_sim_config(preset, set_values)
         if hero_deck_file is not None and villain_deck_file is not None:
-            imported = import_files(hero_deck_file, villain_deck_file, content_pool)
+            imported = managym.import_match(
+                managym.Decklist.read(hero_deck_file),
+                managym.Decklist.read(villain_deck_file),
+                content_pool,
+            )
             config = sim_config.model_dump()
-            config["match"] = imported.match_config().model_dump()
+            config["match"] = MatchConfig.from_import(imported).model_dump()
             sim_config = type(sim_config).model_validate(config)
             typer.echo(f"Admitted {imported.ruleset} setup {imported.setup_id}")
     except (ValueError, OSError) as error:

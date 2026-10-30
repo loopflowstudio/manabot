@@ -110,9 +110,7 @@ impl VectorEnv {
                 roster
                     .iter()
                     .filter(|r| {
-                        r.decklist == e.decklist
-                            && r.sideboard == e.sideboard
-                            && r.content_pack.as_deref() == Some("elemental-world-v2")
+                        r.deck == e.deck && r.content_pack.as_deref() == Some("elemental-world-v2")
                     })
                     .count()
                     != 1
@@ -166,7 +164,7 @@ impl VectorEnv {
                     player.name
                 )));
             }
-            if !distinct.insert((&player.decklist, &player.sideboard)) {
+            if !distinct.insert(&player.deck) {
                 return Err(AgentError(
                     "training decks must be distinct normalized lists".into(),
                 ));
@@ -785,14 +783,14 @@ mod tests {
             .set_training_decks(vec![decks[0].clone(); 2])
             .is_err());
         let mut bad = decks.clone();
-        bad[0].decklist = BTreeMap::from([("Black Lotus".into(), 12)]);
+        bad[0].deck.main = BTreeMap::from([("Black Lotus".into(), 12)]);
         assert!(vector.set_training_decks(bad).is_err());
         vector.set_training_decks(decks.clone()).unwrap();
         vector.reset_all(decks[..2].to_vec()).unwrap();
         let seeds = vector.current_game_seeds();
         let actual = vector.current_player_configs();
         for (index, players) in actual.iter().enumerate() {
-            assert_ne!(players[0].decklist, players[1].decklist);
+            assert_ne!(players[0].deck.main, players[1].deck.main);
             let mut scalar = Env::new(seeds[index], true, false, false);
             scalar.reset(players.clone()).unwrap();
             assert_eq!(
@@ -810,7 +808,7 @@ mod tests {
         // A later root may use a deck nobody registered before training began.
         // An unadmitted replacement fails before any game and keeps prior decks.
         let mut generated = deck("Island");
-        generated.decklist.insert("Rocky Rebuke".into(), 1);
+        generated.deck.main.insert("Rocky Rebuke".into(), 1);
         assert!(vector
             .set_training_decks(vec![decks[0].clone(), generated])
             .is_err());
@@ -872,7 +870,7 @@ mod tests {
         let mut reached = [BTreeSet::new(), BTreeSet::new()];
         let mut vector = VectorEnv::new(2, 174, true, OpponentPolicy::None);
         let mut bad = roster.clone();
-        bad[0].sideboard.clear();
+        bad[0].deck.sideboard.clear();
         assert!(vector.set_uniform_roster(bad).is_err());
         assert!(vector.set_uniform_roster(roster[..9].to_vec()).is_err());
         vector.set_uniform_roster(roster.clone()).unwrap();
@@ -1148,8 +1146,11 @@ mod tests {
             .map(|index| {
                 let mut players = sample_player_configs();
                 players[0].name = format!("Hero {index}");
-                players[0].decklist.insert("Mountain".into(), 12 + index);
-                players[1].sideboard.insert("Gray Ogre".into(), index + 1);
+                players[0].deck.main.insert("Mountain".into(), 12 + index);
+                players[1]
+                    .deck
+                    .sideboard
+                    .insert("Gray Ogre".into(), index + 1);
                 players
             })
             .collect();

@@ -29,7 +29,6 @@ from typing import Any, Literal, TypedDict
 import numpy as np
 import torch
 
-from manabot.decklist import deck_identity
 from manabot.env.failures import CapturedVector
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ACTION_TYPE_DIM, ActionEnum, ObservationSpace
@@ -63,6 +62,7 @@ from manabot.training.state.game_errors import (
     GameErrorState,
     GameOutcome,
 )
+from managym import Deck
 
 OPPONENT_MODES = ("random", "frozen", "self", "learning")
 
@@ -462,8 +462,8 @@ class SeatRoutedCollector:
             ]
         self._self_play_decks = [
             (
-                deck_identity(m.hero_deck, m.hero_sideboard),
-                deck_identity(m.villain_deck, m.villain_sideboard),
+                Deck(m.hero_deck, m.hero_sideboard).identity,
+                Deck(m.villain_deck, m.villain_sideboard).identity,
             )
             for m in self.stream_matches
         ]

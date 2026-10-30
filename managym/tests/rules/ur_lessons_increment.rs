@@ -456,18 +456,18 @@ fn revised_forty_card_deck_completes_and_replays_every_command_exactly() {
         ("Pop Quiz", 1),
         ("Igneous Inspiration", 1),
     ] {
-        *ur.decklist.get_mut(name).unwrap() -= n;
+        *ur.deck.main.get_mut(name).unwrap() -= n;
     }
-    ur.decklist.retain(|_, n| *n > 0);
+    ur.deck.main.retain(|_, n| *n > 0);
     for (name, n) in [
         ("Combustion Technique", 2),
         ("Proft's Eidetic Memory", 1),
         ("Gran-Gran", 1),
         ("Accumulate Wisdom", 1),
     ] {
-        *ur.decklist.entry(name.into()).or_default() += n;
+        *ur.deck.main.entry(name.into()).or_default() += n;
     }
-    assert_eq!(ur.decklist.values().sum::<usize>(), 40);
+    assert_eq!(ur.deck.main.values().sum::<usize>(), 40);
     let gw = semantic.player_config("GW", "gw_allies").unwrap();
     for seed in 0..4 {
         for reverse in [false, true] {

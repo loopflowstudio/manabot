@@ -62,14 +62,10 @@ class Match:
         seat-balanced evaluation.
         """
         imported = self.config.imported_decks
-        if imported is not None:
-            imported = imported.model_copy(
-                update={"hero": imported.villain, "villain": imported.hero}
-            )
         return Match(
             MatchConfig(
                 content_pack=self.config.content_pack,
-                imported_decks=imported,
+                imported_decks=None if imported is None else imported.swapped(),
                 hero=self.villain,
                 villain=self.hero,
                 hero_deck=self.villain_deck,

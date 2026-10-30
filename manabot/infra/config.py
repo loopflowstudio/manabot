@@ -8,7 +8,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from manabot.decklist import Deck, ImportedMatch
+from managym import Deck, ImportedMatch
 
 
 def _default_deck() -> dict[str, int]:
@@ -72,14 +72,28 @@ class MatchConfig(BaseConfig):
 
     @model_validator(mode="after")
     def validate_imported_decks(self) -> "MatchConfig":
+        """Bind the setup fields to retained sources re-admitted by the installed pool."""
         imported = self.imported_decks
         if imported is not None:
             imported.validate_setup(
                 self.content_pack,
-                Deck(main=self.hero_deck, sideboard=self.hero_sideboard),
-                Deck(main=self.villain_deck, sideboard=self.villain_sideboard),
+                Deck(self.hero_deck, self.hero_sideboard),
+                Deck(self.villain_deck, self.villain_sideboard),
             )
         return self
+
+    @classmethod
+    def from_import(cls, imported: ImportedMatch) -> "MatchConfig":
+        """The playable setup of an admitted two-file import."""
+        hero, villain = imported.hero.deck, imported.villain.deck
+        return cls(
+            content_pack=imported.pool["pack_key"],
+            imported_decks=imported,
+            hero_deck=hero.main,
+            villain_deck=villain.main,
+            hero_sideboard=hero.sideboard,
+            villain_sideboard=villain.sideboard,
+        )
 
     @field_validator("hero_sideboard", "villain_sideboard", mode="before")
     @classmethod

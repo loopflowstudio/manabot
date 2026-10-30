@@ -16,7 +16,6 @@ from typing import Any
 
 from managym.experience_projection import redact_observation
 
-from manabot.decklist import Deck, ImportedMatch
 import managym
 
 from .bot_decision import BotDecision
@@ -74,14 +73,15 @@ class GameConfig:
             ):
                 raise ValueError("Recorded sideboard requires positive integer counts")
         if self.imported_decks is not None:
-            imported = ImportedMatch.model_validate(self.imported_decks)
+            imported = managym.ImportedMatch.from_dict(self.imported_decks)
+            pack_key = imported.pool["pack_key"]
             imported.validate_setup(
-                imported.pool.pack_key,
-                Deck(main=self.hero_deck, sideboard=self.hero_sideboard),
-                Deck(main=self.villain_deck, sideboard=self.villain_sideboard),
+                pack_key,
+                managym.Deck(self.hero_deck, self.hero_sideboard),
+                managym.Deck(self.villain_deck, self.villain_sideboard),
             )
             return [
-                managym.PlayerConfig(name, deck, sideboard, imported.pool.pack_key)
+                managym.PlayerConfig(name, deck, sideboard, pack_key)
                 for name, deck, sideboard in (
                     ("Hero", self.hero_deck, self.hero_sideboard),
                     ("Villain", self.villain_deck, self.villain_sideboard),
