@@ -11623,3 +11623,40 @@ fn earthbender_ascension_earthbends_fetches_and_rewards_landfall_at_four() {
     assert_eq!(counters(&s, ogre), 1);
     assert!(s.game().effective_keywords(ogre).trample);
 }
+
+/// Ward countering an ability announces GameEvent::AbilityCountered with the
+/// ability, its source, its controller and the countering source, and no
+/// spell is countered.
+#[test]
+fn countering_an_ability_emits_ability_countered() {
+    let mut s = five_color_setup(&["Dragonfly Swarm", "Weaponize the Monsters", "Gray Ogre"]);
+    let swarm = s.force_permanent_on_battlefield(0, "Dragonfly Swarm");
+    let weapon = s.force_permanent_on_battlefield(1, "Weaponize the Monsters");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let ogre = card_of(&s, ogre);
+    s.advance_to_active_step(1, StepKind::Main);
+    s.set_player_mana_pool(1, "2");
+    activate_first(&mut s, weapon);
+    assert!(s.choose_target(Target::Permanent(swarm)));
+    select_card(&mut s, ogre);
+    pass_until(&mut s, ActionSpaceKind::PayOrNot);
+    s.drain_events();
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    let events = s.drain_events();
+    let countered = events.iter().find_map(|event| match event {
+        GameEvent::AbilityCountered {
+            source_card,
+            controller,
+            by,
+            ..
+        } => Some((*source_card, *controller, *by)),
+        _ => None,
+    });
+    assert_eq!(
+        countered,
+        Some((card_of(&s, weapon), PlayerId(1), Some(card_of(&s, swarm))))
+    );
+    assert!(!events
+        .iter()
+        .any(|event| matches!(event, GameEvent::SpellCountered { .. })));
+}

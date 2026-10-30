@@ -213,6 +213,10 @@ impl Game {
                     GameEvent::SpellCountered { card, .. } => {
                         Some(format!("{} was countered.", self.state.cards[*card].name))
                     }
+                    GameEvent::AbilityCountered { source_card, .. } => Some(format!(
+                        "An ability of {} was countered.",
+                        self.state.cards[*source_card].name
+                    )),
                     _ => None,
                 }
             })

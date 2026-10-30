@@ -650,3 +650,44 @@ fn resolution_eligibility_distinguishes_identical_present_observations() {
         std::fs::write(path, serde_json::to_string_pretty(&evidence).unwrap()).unwrap();
     }
 }
+
+/// Effect::CounterSpell counters spells only: given an ability as its
+/// object (a trigger context), it leaves the ability on the stack.
+#[test]
+fn counter_spell_cannot_affect_an_ability() {
+    let (mut game, first, _) = fixture(PlayerId(0));
+    stack(
+        &mut game,
+        Entry::Activated,
+        PlayerId(1),
+        vec![damage()],
+        vec![Target::Permanent(first)],
+        vec![0],
+    );
+    let ability = game.state.stack_objects[0].id();
+    let source = game
+        .scenario_force_battlefield(PlayerId(0), "Gray Ogre", true)
+        .unwrap();
+    let source_card = game.state.permanents[source].as_ref().unwrap().card;
+    let id = game.state.id_gen.next_id();
+    game.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
+        id,
+        controller: PlayerId(0),
+        source_card,
+        source_ref: game.permanent_object_ref(source),
+        source_lki: None,
+        source_definition_id: game.state.cards[source_card].definition_id,
+        ability_index: 0,
+        targets: Vec::new(),
+        target_req_indices: Vec::new(),
+        context: Some(Target::StackAbility(ability)),
+        player: None,
+        inline_effects: Some(vec![Effect::CounterSpell {
+            target: TargetSpec::Spell,
+        }]),
+        x: 0,
+    }));
+    game.resolve_top_of_stack();
+    assert_eq!(game.state.stack_objects.len(), 1);
+    assert_eq!(game.state.stack_objects[0].id(), ability);
+}

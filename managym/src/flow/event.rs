@@ -72,6 +72,15 @@ pub enum GameEvent {
         card: CardId,
         by: Option<CardId>,
     },
+    /// An activated or triggered ability was countered (CR 701.6b): its
+    /// stack id, the card it came from, its controller and the countering
+    /// source.
+    AbilityCountered {
+        ability: ObjectId,
+        source_card: CardId,
+        controller: PlayerId,
+        by: Option<CardId>,
+    },
     AbilityTriggered {
         source_card: CardId,
         controller: PlayerId,

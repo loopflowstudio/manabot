@@ -168,11 +168,23 @@ impl Game {
 
     /// Counter an activated or triggered ability: it is removed from the
     /// stack and does nothing (CR 701.6b).
-    pub(crate) fn counter_ability(&mut self, id: ObjectId) {
-        if let Some(index) = self.find_ability_on_stack_index(id) {
-            self.journal_stack();
-            self.state.stack_objects.remove(index);
-        }
+    pub(crate) fn counter_ability(&mut self, id: ObjectId, by: Option<CardId>) {
+        let Some(index) = self.find_ability_on_stack_index(id) else {
+            return;
+        };
+        self.journal_stack();
+        let ability = self.state.stack_objects.remove(index);
+        let source_card = match &ability {
+            StackObject::ActivatedAbility(ability) => ability.source_card,
+            StackObject::TriggeredAbility(ability) => ability.source_card,
+            StackObject::Spell(_) => unreachable!("an ability index"),
+        };
+        self.emit(GameEvent::AbilityCountered {
+            ability: id,
+            source_card,
+            controller: ability.controller(),
+            by,
+        });
     }
 
     pub(crate) fn counter_spell(&mut self, card: CardId, by: Option<CardId>) {
@@ -1066,10 +1078,9 @@ impl Game {
                 })
             }
             Effect::CounterSpell { .. } => {
-                match self.present_primary_target(frame)? {
-                    Target::StackSpell(spell) => self.counter_spell(spell, frame.source),
-                    Target::StackAbility(ability) => self.counter_ability(ability),
-                    Target::Player(_) | Target::Permanent(_) | Target::GraveyardCard(_) => {}
+                // Spells only: countering an ability is a different effect.
+                if let Target::StackSpell(spell) = self.present_primary_target(frame)? {
+                    self.counter_spell(spell, frame.source);
                 }
                 None
             }
@@ -1433,14 +1444,10 @@ impl Game {
                     _ => return None,
                 };
                 let spell_controller = self.state.stack_objects[index].controller();
-                Some(Decision::Payment(PaymentProgress::new(
-                    spell_controller,
-                    cost.clone(),
-                    Vec::new(),
-                    vec![Effect::CounterSpell {
-                        target: TargetSpec::Spell,
-                    }],
-                )))
+                let mut payment =
+                    PaymentProgress::new(spell_controller, cost.clone(), Vec::new(), Vec::new());
+                payment.counters_on_decline = frame.primary_target();
+                Some(Decision::Payment(payment))
             }
             Effect::TargetCreaturesDealPowerDamageToLastTarget => {
                 let (victim_slot, attackers) = frame.targets.split_last()?;

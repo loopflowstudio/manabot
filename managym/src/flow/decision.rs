@@ -136,6 +136,10 @@ pub struct PaymentProgress {
     /// spends ("Do this only once each turn").
     #[serde(skip_serializing_if = "Option::is_none")]
     pub spends: Option<(ObjectRef, usize)>,
+    /// The spell or ability declining counters ("counter it unless that
+    /// player pays"): ward answers both.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub counters_on_decline: Option<Target>,
 }
 
 impl PaymentProgress {
@@ -152,6 +156,7 @@ impl PaymentProgress {
             if_paid,
             if_declined,
             spends: None,
+            counters_on_decline: None,
         }
     }
 
@@ -903,6 +908,15 @@ impl Game {
                 Ok(())
             }
             (Decision::Payment(payment), Action::Decline { .. }) if payment.can_decline() => {
+                match payment.counters_on_decline {
+                    Some(Target::StackSpell(card)) => {
+                        self.counter_spell(card, suspended.frame.source)
+                    }
+                    Some(Target::StackAbility(id)) => {
+                        self.counter_ability(id, suspended.frame.source)
+                    }
+                    _ => {}
+                }
                 let effects = std::mem::take(&mut payment.if_declined);
                 suspended.frame.prepend_effects(effects.into_iter());
                 self.run_frame(suspended.frame);

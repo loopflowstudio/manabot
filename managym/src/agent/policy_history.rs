@@ -201,6 +201,15 @@ pub(crate) fn record(game: &mut Game, event: &GameEvent) {
             source_reference(game, *by),
             vec![card_reference(game, *card)],
         ),
+        // The countered ability is gone; its source card stands for it.
+        GameEvent::AbilityCountered {
+            source_card, by, ..
+        } => (
+            Countered,
+            0,
+            source_reference(game, *by),
+            vec![source_reference(game, Some(*source_card))],
+        ),
         _ => return,
     };
     let history = Arc::make_mut(&mut game.policy_history);

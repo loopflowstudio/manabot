@@ -556,6 +556,7 @@ pub enum EventType {
     PermanentsDied = 10,
     TurnStarted = 11,
     CardRevealed = 12,
+    AbilityCountered = 13,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1322,6 +1323,15 @@ impl Observation {
                 EventType::SpellCountered,
                 *card,
                 PlayerId(0),
+            )],
+            GameEvent::AbilityCountered {
+                source_card,
+                controller,
+                ..
+            } => vec![Self::card_event_data(
+                EventType::AbilityCountered,
+                *source_card,
+                *controller,
             )],
             GameEvent::AbilityTriggered {
                 source_card,

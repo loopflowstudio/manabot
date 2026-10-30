@@ -2210,7 +2210,7 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v11:f585fe22e2cb4f687906a3523c917640803f7a7a9b07b942f3fc573b9164d224",
+        "state_hash": "v11:ade8be686a72d4f3eceb24dc813ed75e76ca553d4d0067ebf1ede47142eab8f8",
         "action_space_digest": "34d673b034eaf77539768c178a30f973e10863990d137decb2d1e6f9a8398ff8",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [

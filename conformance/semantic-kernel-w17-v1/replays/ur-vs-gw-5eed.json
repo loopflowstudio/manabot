@@ -1910,7 +1910,7 @@
         }
       },
       "checkpoint": {
-        "state_hash": "v11:8560f2fb7f825f3649055bc91a7a849cf360fb792e81a38001bd2a48e8143d42",
+        "state_hash": "v11:c0e2829b3920af1c3969771d53dc0072da5b476b0a2ffd4ddfd0b9385eb91665",
         "action_space_digest": "ce8e0e374c376969816f820e6dafcc41b0bdd78020e1485f7303ed6ed5e8fffb",
         "pending_choice_digest": "03f88b99c3d8073bba8948d6e762aac443b265f606cc05abd4d172f03a4def6a",
         "event_boundary": [
