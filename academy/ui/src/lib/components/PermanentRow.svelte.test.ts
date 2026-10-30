@@ -18,3 +18,27 @@ it('shows a stunned creature and an equipped creature in their names and margins
   expect(body).toContain('aria-label="Glider Staff (attached to Aang)"');
   expect(body).toMatch(/<li[^>]*>1 stun counter<\/li>/);
 });
+
+it('prints and names ability-use and granted firebending statuses', () => {
+  const cadets = permanent(7, 'Fire Nation Cadets', {
+    exhausted_abilities: 1,
+    once_each_turn_used: 2,
+    granted_firebending: 3,
+  });
+  const { body } = render(PermanentRow, { props: { permanents: [cadets] } });
+  const notes = [
+    'firebending 3 until end of turn',
+    'exhaust abilities used 1',
+    'once-each-turn abilities used this turn 2',
+  ];
+  expect(body).toContain(`aria-label="Fire Nation Cadets (${notes.join(', ')})"`);
+  for (const note of notes) {
+    expect(body).toMatch(new RegExp(`<li[^>]*>${note}</li>`));
+  }
+});
+
+it('omits the statuses when unused', () => {
+  const { body } = render(PermanentRow, { props: { permanents: [permanent(7, 'Fire Nation Cadets')] } });
+  expect(body).toContain('aria-label="Fire Nation Cadets"');
+  expect(body).not.toContain('<li');
+});

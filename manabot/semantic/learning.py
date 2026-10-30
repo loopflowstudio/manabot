@@ -28,7 +28,7 @@ SCHEMA_VERSION = 9
 # Explicit current packs shared by live-manifest and policy binding.
 CURRENT_PACK_KEYS = frozenset(
     {
-        "tla-pool-v1",
+        "world",
         "tla-baseline-v1",
         "ur-lessons-vs-gw-allies",
         "elemental-combat-v1",
@@ -40,7 +40,7 @@ CURRENT_PACK_KEYS = frozenset(
     }
 )
 
-# Token kinds as numbered by the engine (``semantic::tokens::TokenKind``).
+# Token kinds as numbered by the engine (``cards::tokens::TokenKind``).
 TOKEN_KINDS = {
     "padding": 0,
     "structure": 1,
@@ -54,7 +54,7 @@ TOKEN_KINDS = {
     "program_kind": 9,
 }
 
-# Program spans as numbered by the engine (``semantic::tokens::ProgramKind``).
+# Program spans as numbered by the engine (``cards::tokens::ProgramKind``).
 PROGRAM_KINDS = {
     "triggered": 1,
     "mana": 2,

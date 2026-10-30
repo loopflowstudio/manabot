@@ -2,8 +2,7 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
-from dataclasses import replace
+from copy import copy, deepcopy
 from functools import lru_cache
 import hashlib
 import json
@@ -32,17 +31,27 @@ from manabot.belief.tracker import BeliefTracker
 import managym
 
 from . import server, trace as trace_store
-from .authored_match_receipt import HISTORICAL_RECEIPT_PATH
+from .authored_match_receipt import DEFAULT_RECEIPT_PATH
+from .curated_pack import load_curated_pack
 from .replay_index import CanonicalReplayV1
 
 ROOT = Path(__file__).parents[1]
 RECEIPT_PATH = (
-    ROOT / "conformance/public-commitment-parity-v1/"
+    ROOT / "conformance/public-commitment-parity-w17-v1/"
     "release-live-replay-hypothesis-seed-0.json"
 )
 AUTHORITY_RECEIPT_SHA256 = (
-    "57f5e2d1a482831e4e1edeb69632c0b34030d2e8ee701eab9b13b484c6937147"
+    "d4dc54c1376a563868f294bb7e9345aaced0da0321d7961b844404aaaadb1dda"
 )
+COMMAND_COUNT = 142
+COMMITMENT_COUNT = 69
+# The hero discards an Island to Learn here; viewer 1 then admits 484 hands.
+DISCARD_REVISION = 30
+DECLINE_REVISION = 102
+# Commands each viewer's tracker follows. Range transport has no fact for a card
+# revealed from library into a hidden hand, so viewer 0 stops before Command 68
+# (the villain reveals South Pole Voyager); Task 3be183 owns that transport.
+TRACKED_COMMANDS = {0: 68, 1: COMMAND_COUNT}
 RUL9_MEASUREMENT_ARTIFACT_SHA256 = (
     "498df1eda031f1d6ea68f72f792dfd68195bb10eab884b006aa7772b586564da"
 )
@@ -72,12 +81,14 @@ def _require(field: str, expected: object, actual: object) -> None:
 
 
 def _load_authority() -> dict[str, Any]:
-    raw = HISTORICAL_RECEIPT_PATH.read_bytes()
+    raw = DEFAULT_RECEIPT_PATH.read_bytes()
     _require("authority receipt SHA-256", AUTHORITY_RECEIPT_SHA256, _sha256(raw))
     authority = json.loads(raw)
-    _require("authority commands", 132, len(authority["decisions"]))
+    _require("authority commands", COMMAND_COUNT, len(authority["decisions"]))
     _require(
-        "authority terminal revision", 132, authority["terminal_witness"]["revision"]
+        "authority terminal revision",
+        COMMAND_COUNT,
+        authority["terminal_witness"]["revision"],
     )
     return authority
 
@@ -194,13 +205,11 @@ def _negative_proof(
     for name, public_commitment, message in cases:
         tracker_before = _tracker_snapshot(tracker)
         likelihood_calls = likelihood.calls
-        invalid = SemanticTransition(
-            receipt=replace(
-                valid.receipt,
-                public_commitment=public_commitment,
-            ),
-            observation=valid.observation,
-        )
+        # Forge the receipt past its own validation: the tracker must still
+        # refuse a commitment the receipt type would never construct.
+        receipt = copy(valid.receipt)
+        object.__setattr__(receipt, "public_commitment", public_commitment)
+        invalid = SemanticTransition(receipt=receipt, observation=valid.observation)
         try:
             tracker.observe(
                 branch,
@@ -239,8 +248,8 @@ def _fresh_env() -> managym.Env:
     env = managym.Env(seed=0)
     env.reset(
         [
-            managym.PlayerConfig("Hero", dict(server.UR_LESSONS_DECK)),
-            managym.PlayerConfig("Villain", dict(server.GW_ALLIES_DECK)),
+            load_curated_pack().player_config("ur_lessons", "Hero"),
+            load_curated_pack().player_config("gw_allies", "Villain"),
         ]
     )
     return env
@@ -276,13 +285,15 @@ def _run_engine(
         root = env.clone_env()
         frame = DecisionFrame.from_json(env.semantic_decision_frame_json())
         _require("decision actor", int(row["actor"]), frame.actor)
-        if track_beliefs and int(row["from_revision"]) == 29:
+        if track_beliefs and int(row["from_revision"]) == DISCARD_REVISION:
             discard_root = root.clone_env()
             negative = _negative_proof(root, row, trackers[1], likelihood)
         transition = apply_semantic_command(env, _semantic_command(row, frame))
         stream.append(_identity_row(ordinal, int(row["actor"]), transition))
         _require("state after", row["state"]["after"], env.state_digest())
-        for tracker in trackers.values():
+        for viewer, tracker in trackers.items():
+            if ordinal >= TRACKED_COMMANDS[viewer]:
+                continue
             tracker.observe(
                 env,
                 acting=int(row["actor"]),
@@ -290,7 +301,7 @@ def _run_engine(
                 likelihood_root=root,
             )
 
-    _require("terminal command count", 132, len(stream))
+    _require("terminal command count", COMMAND_COUNT, len(stream))
     _require("terminal game", True, env.is_game_over())
     tracker_receipts = {
         str(viewer): {
@@ -466,7 +477,7 @@ def _materialized_discard_proof(root: managym.Env) -> dict[str, Any]:
         root.semantic_observation_json(viewer),
     )
     return {
-        "source_revision": 29,
+        "source_revision": DISCARD_REVISION,
         "viewer": viewer,
         "support_size": space.support_size,
         "public_commitment": dict(transition.receipt.public_commitment or {}),
@@ -480,7 +491,7 @@ def _materialized_discard_proof(root: managym.Env) -> dict[str, Any]:
 
 def _source_manifest() -> dict[str, Any]:
     paths = (
-        "conformance/authored-match-v1/release-stack-ur-vs-gw-seed-0.json",
+        "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
         "academy/public_commitment_parity.py",
         "academy/server.py",
         "manabot/managym/experience_projection.py",
@@ -569,33 +580,34 @@ def build_receipt() -> dict[str, Any]:
         live["identity_stream"],
         replay_surface["identity_stream"],
     )
-    _require("public commitment count", 62, headless["commitments"])
+    _require("public commitment count", COMMITMENT_COUNT, headless["commitments"])
     _require(
-        "revision 29 commitment",
+        "discard commitment",
         {"kind": "discard", "card": "Island"},
-        headless["identity_stream"][29]["public_commitment"],
+        headless["identity_stream"][DISCARD_REVISION]["public_commitment"],
     )
     _require(
-        "revision 40 commitment",
-        {"kind": "decline_discard"},
-        headless["identity_stream"][40]["public_commitment"],
+        "decline commitment",
+        {"kind": "decline_learn"},
+        headless["identity_stream"][DECLINE_REVISION]["public_commitment"],
     )
-    for viewer in ("0", "1"):
-        _require(
-            f"viewer {viewer} tracker records",
-            132,
-            headless["tracker_receipts"][viewer]["records"],
+    # A tracker consumes the opponent's commitments within its tracked prefix.
+    consumed = 0
+    for viewer, tracked in TRACKED_COMMANDS.items():
+        tracker = headless["tracker_receipts"][str(viewer)]
+        _require(f"viewer {viewer} tracker records", tracked, tracker["records"])
+        expected = sum(
+            row["public_commitment"] is not None and row["actor"] != viewer
+            for row in headless["identity_stream"][:tracked]
         )
-    _require(
-        "consumed commitment identities",
-        62,
-        sum(
-            tracker["consumed_commitments"]
-            for tracker in headless["tracker_receipts"].values()
-        ),
-    )
+        _require(
+            f"viewer {viewer} consumed commitments",
+            expected,
+            tracker["consumed_commitments"],
+        )
+        consumed += expected
     if discard_root is None:
-        raise RuntimeError("revision-29 discard root was not retained")
+        raise RuntimeError("discard root was not retained")
     materialized = _materialized_discard_proof(discard_root)
     stream = headless.pop("identity_stream")
     replay_surface.pop("identity_stream")
@@ -613,11 +625,13 @@ def build_receipt() -> dict[str, Any]:
             "relevant_source": _source_manifest(),
         },
         "summary": {
-            "commands": 132,
-            "commitments": 62,
-            "unadmitted_commands": 70,
-            "tracker_records_per_viewer": 132,
-            "consumed_commitments": 62,
+            "commands": COMMAND_COUNT,
+            "commitments": COMMITMENT_COUNT,
+            "unadmitted_commands": COMMAND_COUNT - COMMITMENT_COUNT,
+            "tracker_records_per_viewer": {
+                str(viewer): tracked for viewer, tracked in TRACKED_COMMANDS.items()
+            },
+            "consumed_commitments": consumed,
             "rules_provider_gaps": 0,
             "identity_stream_mismatches": 0,
             "negative_proof_mutations": 0,

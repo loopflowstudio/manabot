@@ -57,7 +57,7 @@ def test_policy_catalog_requires_its_registered_pack(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     pool = managym.content_pool("ur-lessons-vs-gw-allies")
-    pool["pack_key"] = "tla-pool-v1"
+    pool["pack_key"] = "world"
     monkeypatch.setattr(managym, "content_pool", lambda key: pool)
     with pytest.raises(ContentPackBindingError, match="registered pack"):
         bind_policy_catalog("ur-lessons-vs-gw-allies")

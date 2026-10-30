@@ -29,18 +29,18 @@ The default content pack registers every set-file definition plus the rules
 fixtures in `managym/src/cards/fixtures.rs` (Crossroads of Destiny), keeping the
 legacy `CardDefId` prefix. Each authored setup is a pack of exactly its decks'
 cards and the tokens they create, in key order
-([`semantic/setups.rs`](../../managym/src/semantic/setups.rs)); exact authored
+([`cards/setups.rs`](../../managym/src/cards/setups.rs)); exact authored
 decklists, or an explicit `content_pack`, select it. A pack's identity is its
 `content_digest`; its manifest also names its `pack_key` (absent for the default
 pack). `managym.content_pool(pack_key)` exposes native IDs, keys and eligibility
 without starting a game; `managym.set_cards(["tla", "lea"])` narrows the world
-pool (`tla-pool-v1`, every defined card) to chosen sets.
+pool (`world`, every defined card) to chosen sets.
 
 ## Learning projection
 
 Current execution uses world **w18** and `current/learning_schema.json` (schema
 **9**). `managym.learning_catalog(pack_key)` walks every definition of a pack
-with a `serde` serializer ([`semantic/tokens.rs`](../../managym/src/semantic/tokens.rs)):
+with a `serde` serializer ([`cards/tokens.rs`](../../managym/src/cards/tokens.rs)):
 struct and variant boundaries, field names, `Effect::…` variants, integers,
 booleans and printed categories become tokens, so a new rules variant reaches
 the policy without a vocabulary edit. Each definition has a characteristics span

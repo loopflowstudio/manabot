@@ -1,6 +1,6 @@
 //! Every mechanic reaches the policy three ways: match state through the
 //! observation tensor (`agent::observation_encoder`, policy input v5), card
-//! rules through learning tokens (`semantic::tokens`), and both through the
+//! rules through learning tokens (`cards::tokens`), and both through the
 //! LLM text (`manabot/semantic/text_observation.py`, guarded in Python). The
 //! guards destructure or match exhaustively, with no wildcard, so a new
 //! keyword, counter kind, `Observation`, `Permanent` or `Player` field, or
@@ -51,7 +51,7 @@ use managym::{
 };
 use managym::{
     cards::content_pack::default_content_pack,
-    semantic::tokens::{definition_tokens, name_value, TokenKind},
+    cards::tokens::{definition_tokens, name_value, TokenKind},
     state::{
         ability::{
             Ability, Effect, EffectValue, LinkedChooser, LinkedGrant, PaymentCost, StaticCondition,

@@ -15,7 +15,6 @@ pub mod infra;
 pub mod possible_worlds;
 pub mod python;
 pub mod search_state;
-pub mod semantic;
 pub mod state;
 pub mod study;
 pub mod world;

@@ -74,7 +74,7 @@ impl AuthoredPack {
         self.decks
             .iter()
             .find(|deck| deck.key == key)
-            .ok_or_else(|| ContentError::Malformed(format!("unknown authored deck {key:?}")))
+            .ok_or_else(|| ContentError(format!("unknown authored deck {key:?}")))
     }
 
     pub fn player_config(&self, name: &str, key: &str) -> Result<PlayerConfig, ContentError> {
@@ -93,7 +93,7 @@ pub fn authored_packs() -> Result<&'static [AuthoredPack], ContentError> {
     PACKS
         .get_or_init(|| {
             let sources: BTreeMap<String, SetupSource> = serde_json::from_str(SETUPS)
-                .map_err(|error| ContentError::Malformed(format!("setups.json: {error}")))?;
+                .map_err(|error| ContentError(format!("setups.json: {error}")))?;
             sources
                 .into_iter()
                 .map(|(preset, source)| build(preset, source))
@@ -108,7 +108,7 @@ pub fn authored_pack(preset: &str) -> Result<&'static AuthoredPack, ContentError
     authored_packs()?
         .iter()
         .find(|pack| pack.preset == preset)
-        .ok_or_else(|| ContentError::Malformed(format!("unknown authored setup {preset:?}")))
+        .ok_or_else(|| ContentError(format!("unknown authored setup {preset:?}")))
 }
 
 /// The authored setup whose pack key is `pack_key`.
@@ -116,7 +116,7 @@ pub fn authored_pack_for_key(pack_key: &str) -> Result<&'static AuthoredPack, Co
     authored_packs()?
         .iter()
         .find(|pack| pack.pack_key == pack_key)
-        .ok_or_else(|| ContentError::Malformed(format!("unknown content pack {pack_key:?}")))
+        .ok_or_else(|| ContentError(format!("unknown content pack {pack_key:?}")))
 }
 
 fn build(preset: String, source: SetupSource) -> Result<AuthoredPack, ContentError> {
@@ -129,7 +129,7 @@ fn build(preset: String, source: SetupSource) -> Result<AuthoredPack, ContentErr
         .iter()
         .map(|definition| (definition.name.as_str(), definition))
         .collect::<BTreeMap<_, _>>();
-    let context = |message: String| ContentError::Malformed(format!("setup {preset}: {message}"));
+    let context = |message: String| ContentError(format!("setup {preset}: {message}"));
 
     let mut members = BTreeSet::new();
     let mut decks = Vec::new();
@@ -244,15 +244,13 @@ fn select<'a>(
         let pack = packs
             .iter()
             .find(|pack| &pack.pack_key == key)
-            .ok_or_else(|| {
-                ContentError::Malformed(format!("unknown explicit content pack {key}"))
-            })?;
+            .ok_or_else(|| ContentError(format!("unknown explicit content pack {key}")))?;
         if player_configs.len() != 2
             || player_configs
                 .iter()
                 .any(|p| p.content_pack.as_ref() != Some(key) || !admits(pack, p))
         {
-            return Err(ContentError::Malformed(
+            return Err(ContentError(
                 "explicit pack requires two admitted authored setups".into(),
             ));
         }
@@ -265,7 +263,7 @@ fn select<'a>(
     match matches.as_slice() {
         [] => Ok(None),
         [pack] => Ok(Some(pack)),
-        _ => Err(ContentError::Malformed(format!(
+        _ => Err(ContentError(format!(
             "authored content catalog is ambiguous for packs {:?}",
             matches
                 .iter()

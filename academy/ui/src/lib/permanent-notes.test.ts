@@ -34,7 +34,7 @@ describe('permanent notes', () => {
     const zuko = permanent(5, 'Zuko', { granted_firebending: 2 });
     expect(permanentNotes(citizen, [citizen])).toEqual(['creature types set to Citizen']);
     expect(permanentNotes(land, [land])).toEqual(['land through an effect']);
-    expect(permanentNotes(zuko, [zuko])).toEqual(['firebending 2']);
+    expect(permanentNotes(zuko, [zuko])).toEqual(['firebending 2 until end of turn']);
   });
 
   it('states combat assignments, lost abilities and spent activation limits', () => {

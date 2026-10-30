@@ -2,7 +2,7 @@
 // Regression proof for bounded possible-world batches over one live root.
 
 use managym::state::{game_object::PlayerId, zone::ZoneType};
-use managym::{semantic::setups::authored_pack, Env, PlayerConfig};
+use managym::{cards::setups::authored_pack, Env, PlayerConfig};
 
 fn authored_configs() -> Vec<PlayerConfig> {
     let semantic = authored_pack("two_deck").unwrap();

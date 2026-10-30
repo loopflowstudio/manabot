@@ -209,7 +209,7 @@ id of the printing in its set file (`tests/cards/scryfall.rs` checks shape and
 uniqueness offline; `tests/cards/check_scryfall.py` checks names and sets
 online, never in CI). Rebuild the extension after card changes.
 
-Learning tokens derive from the same definitions (`semantic/tokens.rs`,
+Learning tokens derive from the same definitions (`cards/tokens.rs`,
 `managym.learning_catalog`), so a new variant reaches the policy without a
 vocabulary edit. Every mechanic must be observable in both the observation
 tensor and the tokens: extend the exhaustive guards in

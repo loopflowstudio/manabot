@@ -1,5 +1,5 @@
-//! Current TLA cards and their fixed tokens.
-//! Each card is written directly in the engine's rules types.
+//! Avatar: The Last Airbender cards and the tokens they make.
+//! Each card is one function returning its engine `CardDefinition`.
 use crate::state::{
     ability::{
         Ability, Effect, EffectValue, LinkedChooser, LinkedGrant, MilledBonus, PaymentCost,

@@ -19,7 +19,7 @@ import urllib.request
 import managym
 
 USER_AGENT = "manabot-research/0.1"
-WORLD_POOL = "tla-pool-v1"
+WORLD_POOL = "world"
 
 
 def fetch(scryfall_id: str) -> dict:
@@ -35,7 +35,7 @@ def problems(row: dict, card: dict) -> list[str]:
     out = []
     if card["name"] != row["registry_name"]:
         out.append(f"name is {card['name']!r}")
-    key_set = row["semantic_key"].split(".", 1)[0]
+    key_set = row["key"].split(".", 1)[0]
     if key_set == "token":
         if card.get("layout") not in ("token", "double_faced_token"):
             out.append(f"printing {card['set']} is not a token")
@@ -46,12 +46,15 @@ def problems(row: dict, card: dict) -> list[str]:
 
 def main() -> int:
     failures = 0
-    rows = managym.content_pool(WORLD_POOL)["definitions"]
-    for row in sorted(rows, key=lambda row: row["semantic_key"]):
+    # Rules fixtures have no key and no printing.
+    rows = [
+        row for row in managym.content_pool(WORLD_POOL)["definitions"] if row["key"]
+    ]
+    for row in sorted(rows, key=lambda row: row["key"]):
         card = fetch(row["scryfall_id"])
         for problem in problems(row, card):
             failures += 1
-            print(f"{row['semantic_key']}: {problem}")
+            print(f"{row['key']}: {problem}")
         time.sleep(0.1)  # Scryfall asks for at most ten requests a second.
     print(f"checked {len(rows)} definitions, {failures} problems")
     return 1 if failures else 0

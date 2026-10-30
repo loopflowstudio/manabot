@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import positionsJson from '../../fixtures/choice-navigation-w15.json' with { type: 'json' };
+import positionsJson from '../../fixtures/choice-navigation-w17.json' with { type: 'json' };
 import boltJson from '../../../protocol/fixtures/bolt-target.json' with { type: 'json' };
 import type { Command, ExperienceFrame, RecoveryEnvelope } from '../src/lib/types';
 

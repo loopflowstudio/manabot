@@ -12,9 +12,8 @@ and pool-membership choices that were here (history: `be2b7586b:scratch/question
   28 wide here and `attacking` is a v5 column (plan, item 26).
 - 2026-10-29: the 14 setup-used incomplete TLA cards keep their definitions and
   are listed in one `tla::INCOMPLETE` const (key, missing behavior) beside
-  `cards()`, rather than a field on all 269 `Card` literals. Native cards sit in
-  set files as native `CardDefinition`s and are unsupported (no IR, so not in
-  `pool_content`). Crossroads of Destiny moved to `cards/fixtures.rs` but stays
+  `cards()`, rather than a field on every definition. Since the one-representation
+  rewrite every non-token definition outside `INCOMPLETE` is eligible. Crossroads of Destiny moved to `cards/fixtures.rs` but stays
   in the default pack, because Rust integration tests and `manabot/verify` build
   games from it. D1 keeps the `tla-pool-v1` key; `set_cards` is the set filter.
   Undefined TLA cards are no longer listed as unsupported pool rows.
@@ -64,6 +63,21 @@ Main's notes at the syncs live at `6d069d6e5:scratch/questions.md` and `origin/m
   they were (Corrupt Court Official with Ozai's Cruelty in `cards/tla.rs`, Epic
   Downfall with Power Word Kill in `cards/afr.rs`); Lightning Strike has no test
   of its own, so no `ptk.rs`/`ths.rs` test files exist yet.
+- 2026-10-29 (concept review): world pool key becomes `"world"` (not per-world
+  `"w17"`), describing the default pack; row `semantic_key` becomes `key`.
+  Coordinate with f871a8 in one comment. The v1 coverage gate is left for a later
+  Task rather than PR394.
+
+- 2026-10-29 (assumption): superseded corpora now without consumers
+  (`semantic-kernel-w15-v1`, `authored-match-w11-v1`, `authored-match-parity-w11-v1`,
+  `public-commitment-parity-v1`) stay in the tree like w12–w14; archiving them
+  to S3 is a separate publish step, not done here.
+- 2026-10-29 (public-commitment parity, decision): bound to w17 by prefix. Only
+  viewer 0's tracker fails (Command 68, South Pole Voyager revealed from library
+  into hand); viewer 1 consumes the hero's Island discard (30) and
+  `decline_learn` (102) over all 142 Commands. `TRACKED_COMMANDS = {0: 68,
+  1: 142}`; identity-stream parity still covers the whole tape. Task 3be183
+  (engine wave) owns the transport and removing the bound. No xfail.
 
 ## T3 (6875f0) assumptions — 2026-10-29
 
@@ -166,3 +180,9 @@ mana, `Game::zone_cast_cost`/`may_play_from_zone`, `ZoneEntry`.
   indices (no current card has more). `deathtouch_damage` and `was_cast` stay
   unobserved: SBAs consume the first before any decision, and the second is
   read only while its own entry resolves.
+
+## T2 notes at the second merge (head `89e320c48`) — 2026-10-29
+
+T2's operator choices are at `89e320c48:scratch/questions.md`. New since
+`d218e1dc2`: possible worlds v3 resample foretold cards (ordered slots,
+`P(m, F)` fill factor); belief priors are not yet foretold-aware.

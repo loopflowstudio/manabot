@@ -112,22 +112,44 @@ pipeline: `544ae312c:scratch/892c47-author-tla-cards.md`.
    filter, basics in `lea.rs`, card tests by set (`tests/cards.rs`), fixture
    refresh reads the pool.
 
+8. **Concept review (2026-10-29) implemented.** The world pool `"world"`
+   (was `tla-pool-v1`) describes `default_content_pack()` itself: same
+   `CardDefId`s, digest and `Arc`; the Crossroads fixture is an unsupported row
+   with no key ("A rules fixture, not a printed card"), tokens stay unsupported.
+   Pool rows' `semantic_key` is `key` (Rust, PyO3 dict, `.pyi`, Python readers,
+   Academy receipt programs). `semantic/{pool,setups,tokens}.rs` moved to
+   `cards/`; `ContentError` (a message newtype) lives in `cards/mod.rs`; the
+   `semantic` Rust module is gone. Pool rows' `card_def_id` is now required
+   (`CardDefId`, Python `int`), since every row describes a runtime definition.
+   Renames were posted to f871a8 (2026-10-29, at 67b1fad34). Kept deliberately: authored setup packs; v1 Python coverage gate
+   (its evidence identifiers were updated for the flattened card tests).
+9. **World-bound evidence for w17.** New `conformance/semantic-kernel-w17-v1`
+   (w15 cases re-recorded; test + CI root). `authored-match-parity-w17-v1`
+   (142 Commands; dead `HISTORICAL_*` constants removed). Academy
+   `learn/precision/precision-mana-demo-w17.json`, `choice-navigation-w17.json`,
+   `trigger-order-w17.json` re-recorded by offer label (same decision revisions;
+   tools in `scratch/tools/`). `test_ur_lessons_increment` reads the current
+   world instead of pinning w13/28.
+
 ## Remaining
 
-1. Gate: full debug `cargo test`, clippy, focused pytest; regenerate or retire
-   world-bound receipts (parity w11, learn demo/trigger-order w15, w13 increment)
-   — they already mismatched at w16. PR394 update, demo.
+1. **Public-commitment parity bound by prefix (2026-10-29).** Rebound to the
+   w17 tape (curated sideboard configs; Island discard at 30 with 484 worlds,
+   `decline_learn` at 102). Viewer 0's tracker stops before Command 68 (South
+   Pole Voyager revealed from library into hand: no transport fact); viewer 1
+   tracks all 142. `TRACKED_COMMANDS` in `academy/public_commitment_parity.py`;
+   Task 3be183 owns the transport. Receipt
+   `conformance/public-commitment-parity-w17-v1`.
+2. CI fixes: rules-audit evidence paths follow the moved card tests
+   (`tests/cards/<set>.rs`, `cardsets/tla.rs`); the choice-navigation
+   Playwright spec reads `choice-navigation-w17.json`.
+3. f871a8 told `card_def_id` is required (2026-10-29). Demo; PR394 stays draft.
 
-Check (2026-10-29, gate after syncing main 633dca159): debug `cargo test
---no-fail-fast` — only the known w15 semantic-conformance pair fails (cards 235,
-rules 131 + 2 ignored); fmt and clippy `-D warnings` (with and without
-`python`) clean. pytest: semantic + model 341 pass; current-world arena/monitor/
-choice set passes; academy 233 pass, 26 fail — all world-bound receipts and
-demo fixtures (w11 parity, w13 increment, w15 learn/precision/trigger-order
-demos, public-commitment parity) that need regeneration for a frozen world;
-the full suite exceeds the 2 h local limit and lacks duckdb/HF extras.
-Online Scryfall check: 161 definitions, 0 problems.
-
-Compress (2026-10-29): default pack built through `from_definitions(default_order())`;
-authored deck matching is one `AuthoredDeck::matches`. `cargo test` semantic/world
-lib + conformance/content-pack/hash tests pass; clippy `-D warnings` clean.
+Check (2026-10-29, after concept-review pass): debug `cargo test --no-fail-fast`
+0 failures; clippy `-D warnings` (with and without `python`) and fmt clean.
+pytest: semantic + model 334 pass/1 skip; current-world arena/monitor/choice
+66 pass; academy 257 pass, 2 fail (public-commitment pair, above); CI
+coverage/compile `--check` steps pass. `rg 'tla-pool-v1|semantic_key'` hits only
+frozen v1/w11 evidence and readers and WORLDS.md history. After 93a542677:
+clippy `-D warnings` clean, `cargo test --test cards` 235 pass,
+`tests/semantic/test_current_content.py` 17 pass.

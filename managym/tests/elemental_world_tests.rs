@@ -1,5 +1,5 @@
 // Full Elemental admission: exact rosters, complete native coherence and bounded games.
-use managym::{semantic::setups::authored_pack, Game};
+use managym::{cards::setups::authored_pack, Game};
 
 #[test]
 fn retained_professor_cast_prefix_can_enter_and_finish_mana_payment() {

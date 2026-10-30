@@ -20,7 +20,7 @@ from managym import content_pool
 
 MANAGYM = Path(__file__).resolve().parents[2]
 TESTS = MANAGYM / "tests"
-WORLD_POOL = "tla-pool-v1"
+WORLD_POOL = "world"
 
 
 @dataclass
@@ -47,7 +47,9 @@ def _test_functions(path: Path) -> list[tuple[str, set[str]]]:
 def coverage() -> list[CardCoverage]:
     cards: dict[str, CardCoverage] = {}
     for row in content_pool(WORLD_POOL)["definitions"]:
-        set_code = row["semantic_key"].split(".")[0]
+        if row["key"] is None:  # a rules fixture, not a printed card
+            continue
+        set_code = row["key"].split(".")[0]
         if set_code == "token":
             continue
         cards[row["registry_name"]] = CardCoverage(

@@ -1,8 +1,8 @@
 // Authored-match proof: the selected product decks play to terminal on their authored pack.
 
 use managym::{
+    cards::setups::{authored_pack, AuthoredPack},
     flow::event::GameEvent,
-    semantic::setups::{authored_pack, AuthoredPack},
     state::player::PlayerConfig,
     Game,
 };

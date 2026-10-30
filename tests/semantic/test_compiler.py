@@ -101,7 +101,7 @@ def test_content_pack_bindings_all_name_current_rust_definitions() -> None:
     source = _source()
     registered_names = {
         row["registry_name"]
-        for row in managym.content_pool("tla-pool-v1")["definitions"]
+        for row in managym.content_pool("world")["definitions"]
         if row["card_def_id"] is not None
     }
 

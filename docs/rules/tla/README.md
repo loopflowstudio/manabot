@@ -10,11 +10,11 @@ definition keys and counts. The engine runs those definitions directly and
 derives learning tokens from them. Current execution uses world **w18** and
 learning schema **9**.
 
-`managym.content_pool("tla-pool-v1")` is the world pool: every card any set file
+`managym.content_pool("world")` is the world pool: every card any set file
 defines, with definition IDs, keys, Scryfall ids, world/content identity and
 `eligible` or `unsupported` status with a reason. `managym.set_cards(["tla",
 "lea"])` narrows it to TLA cards and basics for deck generation or validation.
-Rust consumers use `semantic::content_pool`, `pool_content` and
+Rust consumers use `cards::content_pool`, `pool_content` and
 `world::set_cards`. Decklist Task **f871a8** owns construction policy, native
 `admit_deck`, input parsing and consumer entry points.
 

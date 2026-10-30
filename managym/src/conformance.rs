@@ -113,22 +113,22 @@ impl Orientation {
     fn content(self) -> Result<Arc<crate::cards::content_pack::ContentPack>, String> {
         match self {
             Self::ElementalWorldGrVsUg | Self::ElementalWorldUgVsGr => Ok(Arc::clone(
-                &crate::semantic::setups::authored_pack("optional_payments")
+                &crate::cards::setups::authored_pack("optional_payments")
                     .map_err(|error| error.to_string())?
                     .content,
             )),
             Self::TemurLeftVsRight | Self::TemurRightVsLeft => Ok(Arc::clone(
-                &crate::semantic::setups::authored_pack("temur")
+                &crate::cards::setups::authored_pack("temur")
                     .map_err(|error| error.to_string())?
                     .content,
             )),
             Self::SacrificeLeftVsRight | Self::SacrificeRightVsLeft => Ok(Arc::clone(
-                &crate::semantic::setups::authored_pack("sacrifice")
+                &crate::cards::setups::authored_pack("sacrifice")
                     .map_err(|error| error.to_string())?
                     .content,
             )),
             Self::ElementalLeftVsRight | Self::ElementalRightVsLeft => Ok(Arc::clone(
-                &crate::semantic::setups::authored_pack("elemental")
+                &crate::cards::setups::authored_pack("elemental")
                     .map_err(|error| error.to_string())?
                     .content,
             )),
