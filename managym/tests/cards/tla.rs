@@ -935,7 +935,8 @@ fn landcyclers_discard_for_two_and_find_their_basic_type() {
     ] {
         let mut s = five_color_setup(&[name]);
         let card = move_from_library(&mut s, 0, name, ZoneType::Hand);
-
+        s.set_player_mana_pool(0, "1");
+        s.game_mut().scenario_refresh_priority().unwrap();
         assert!(!can_activate_card(&s, card), "{name} costs {{2}}");
         s.set_player_mana_pool(0, "2");
         // Programs compile in key order; cycling is the card's only hand ability.
@@ -7097,7 +7098,8 @@ fn iroh_casts_lessons_for_one_and_exiles_on_resolution_or_bounce() {
         enter_and_settle(&mut s, "Iroh, Grand Lotus");
         let lesson = library_card(&s, 0, "Waterbending Lesson");
         s.game_mut().move_card(lesson, ZoneType::Graveyard);
-
+        s.set_player_mana_pool(0, "1");
+        s.game_mut().scenario_refresh_priority().unwrap();
         assert!(can_cast(&s, lesson));
         assert_choice_contract(&s);
         choose(
