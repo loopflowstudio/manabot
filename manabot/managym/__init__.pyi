@@ -695,5 +695,3 @@ class ManaOutput:
     mode: int
     mana: list[int]
     lesson: list[int]
-
-def admit_deck(pack_key: str, deck: Deck) -> list[DeckIssue]: ...
