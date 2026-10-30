@@ -1,9 +1,11 @@
 # PR D: decklist import and reproducible training on decklists
 
 Full history, usage sketches and settled reviews: c1dd6c71c:scratch/f871a8-import-decklist-files.md
-(earlier: e3b4f0583, d8fc9833c). Based on main fa5e13b23 since PR #394 (Task
-892c47: typed Rust cards, one open world w17, first-printing keys, support =
-set-file definition) merged 2026-10-30; synced at cd86469b1.
+(earlier: e3b4f0583, d8fc9833c). Based on main: PR #394 (Task 892c47: typed
+Rust cards, one open world w17, first-printing keys, support = set-file
+definition) and T2 (87e012, c7979d310: 51 TLA cards extending w17) are merged;
+last synced at 886e0b563. Main's T1/T2 notes ride in `scratch/questions.md`
+below this Task's entries; they are main's, not this Task's.
 
 ## Accepted direction (Jack Heart)
 
@@ -68,6 +70,8 @@ checkpoint-catalog/advice/match/matchups/mirror/boundaries/parity 86 passed;
 UI vitest `game.svelte.test.ts` 16 passed, svelte-check 0 errors. Compress
 (drop `import_match`): lib decklist tests, clippy, decklist/Academy/training-deck/
 match/advice/matchups/mirror/boundaries 81 passed; parity receipt rewritten, verifies.
+After the T2 sync: `academy.authored_match_parity verify` OK; decklist/
+training-deck/Academy-decklist/match 39 passed. PR #395 CI pending on the sync.
 
 ## Delete — do not maintain
 
