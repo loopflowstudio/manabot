@@ -2,74 +2,114 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Concept review — an import is two decks and their sources, not a match record</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>One World Decks</title>
 <style>
-  :root { color-scheme: light dark; --fg:#1d1b18; --bg:#faf8f4; --mute:#6b655c; --line:#ddd6ca; --prop:#2f6b4f; --old:#9a3b2f; --code:#f0ece4; }
-  @media (prefers-color-scheme: dark) { :root { --fg:#ebe6dd; --bg:#1a1916; --mute:#a39d92; --line:#3a3731; --prop:#7fc4a0; --old:#e08a7c; --code:#26241f; } }
-  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 Georgia, serif; }
-  main { max-width:44rem; margin:0 auto; padding:2.5rem 1.25rem 4rem; }
-  header p { color:var(--mute); font-size:.9rem; margin:.2rem 0; }
-  h1 { font-size:1.6rem; line-height:1.25; margin:.5rem 0 1rem; }
-  h2 { font-size:1.15rem; margin:2.5rem 0 .75rem; }
-  code, pre { font:.85rem/1.5 ui-monospace, Menlo, monospace; background:var(--code); border-radius:4px; }
-  code { padding:.05rem .3rem; }
-  pre { padding:.9rem 1rem; overflow-x:auto; }
-  .old { border-left:3px solid var(--old); padding-left:1rem; }
-  .prop { border-left:3px solid var(--prop); padding-left:1rem; }
-  .tag { font:600 .75rem/1 ui-sans-serif, system-ui, sans-serif; letter-spacing:.04em; text-transform:uppercase; }
-  .old .tag { color:var(--old); } .prop .tag { color:var(--prop); }
-  ol li { margin:.4rem 0; }
+:root{--bg:#fbfaf7;--fg:#1d1c1a;--mut:#6b675f;--rule:#e4e0d7;--code:#f3f1ec;--now:#fbe5e1;--nowf:#8a2a1c;--prop:#e3f3e1;--propf:#1f5d24;--hl:#fff6db;--link:#2a5d8f}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#171614;--fg:#e9e6df;--mut:#a29d92;--rule:#34312c;--code:#201f1c;--now:#3a1f1b;--nowf:#f0b2a6;--prop:#1c3220;--propf:#a9dfae;--hl:#2e2a1c;--link:#8cb8e6}}
+:root[data-theme=dark]{--bg:#171614;--fg:#e9e6df;--mut:#a29d92;--rule:#34312c;--code:#201f1c;--now:#3a1f1b;--nowf:#f0b2a6;--prop:#1c3220;--propf:#a9dfae;--hl:#2e2a1c;--link:#8cb8e6}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+main{max-width:820px;margin:0 auto;padding:40px 16px 96px}
+h1{font-size:26px;margin:0 0 4px;font-weight:600}
+h2{font-size:19px;margin:48px 0 10px;font-weight:600;border-top:1px solid var(--rule);padding-top:24px}
+.meta{color:var(--mut);font-size:13px;margin:0 0 28px}
+.ask{background:var(--hl);padding:14px 18px;border-radius:6px}
+.ask p{margin:4px 0}
+code{font:0.88em ui-monospace,SFMono-Regular,Menlo,monospace}
+pre{background:var(--code);padding:12px 14px;border-radius:6px;overflow-x:auto;font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;margin:8px 0 4px}
+.cap{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--mut);margin:14px 0 0;overflow-wrap:anywhere}
+.label{display:inline-block;font-size:12px;font-weight:600;letter-spacing:.02em;padding:1px 7px;border-radius:4px;margin-right:6px}
+.now{background:var(--now);color:var(--nowf)}.prop{background:var(--prop);color:var(--propf)}
+table{border-collapse:collapse;width:100%;font-size:14.5px;margin:10px 0}
+th,td{text-align:left;vertical-align:top;padding:8px 10px;border-bottom:1px solid var(--rule)}
+th{font-weight:600;color:var(--mut);font-size:13px}
+td:first-child{width:28%}
+.mut{color:var(--mut);font-size:14.5px}
+ol.q>li{margin:0 0 18px}
+ol.q ul{list-style:none;padding-left:0;margin:6px 0 0}
+ol.q ul li{margin:4px 0}
+@media (max-width:640px){table,thead,tbody,tr,th,td{display:block}thead{display:none}td{border:0;padding:2px 0}tr{border-bottom:1px solid var(--rule);padding:10px 0}td:first-child{width:auto;font-weight:600}td:nth-child(2)::before{content:"Today: ";color:var(--nowf);font-size:13px;font-weight:600}td:nth-child(3)::before{content:"Proposed: ";color:var(--propf);font-size:13px;font-weight:600}}
 </style>
 </head>
 <body>
 <main>
-<header>
-  <p>Task f871a8 · Import decklist files · concept-review (headless Graph step) · 2026-10-30 · HEAD d09a234d6</p>
-  <p>Built from <code>scratch/f871a8-import-decklist-files.md</code>, <code>managym/src/cards/decklist.rs</code>, <code>managym/src/cards/deck_admission.rs</code>, <code>manabot/infra/config.py</code>, <code>academy/trace.py</code>, <code>academy/server.py</code>, <code>academy/deck_import.py</code>, <code>manabot/training/decks.py</code></p>
-</header>
+<h1>Decks should only need a world</h1>
+<p class="meta">Task f871a8 · concept review with Jack Heart · 2026-10-30 · built from <code>db6478111</code>:
+<code>managym/src/world.rs</code>, <code>managym/src/cards/pool.rs</code>, <code>managym/src/cards/decklist.rs</code>,
+<code>manabot/training/decks.py</code>, <code>manabot/cli.py</code>, <code>academy/deck_import.py</code>,
+<code>academy/ui/src/lib/components/DeckImport.svelte</code>, <code>manabot/model/world.py</code>;
+working design <code>scratch/f871a8-import-decklist-files.md</code></p>
 
-<h1>An import is two decks and their sources, not a second match record</h1>
-<p>No decision is needed: every change below follows from Jack Heart&#39;s accepted &ldquo;one deck concept&rdquo; and &ldquo;the world&#39;s native validation decides&rdquo;. The page records the next implement direction.</p>
+<div class="ask">
+<p><strong>Decision needed:</strong> should checking a deck stop asking which “content pool” to use?</p>
+<p>Since #394 the engine has one world: w17, whose cards are every supported definition in <code>cardsets/</code>.
+This branch still makes every deck caller name a pool. For imported and training decks, the only meaningful value
+is <code>"world"</code>.</p>
+</div>
+
+<h2>One interaction: import two decks and play</h2>
+<p><span class="label now">Today</span>Academy’s import panel shows a free-text box beside the two files:</p>
+<pre>Content pool [ world            ]
+Hero deck    [ forest-mountain.txt ]   Villain deck [ islands.txt ]
+                                                   [ Check decklists ]</pre>
+<p class="mut">Type anything other than <code>world</code> and the check fails with <code>unknown content pool</code>, or quietly
+validates against an authored pack such as <code>elemental-world-v2</code>. Nothing on the screen explains the difference.</p>
+<p><span class="label prop">Proposed</span>The box is gone. Both files are checked against the installed world. An
+unsupported card fails on its line exactly as it does today; fix the file and check again.</p>
 
 <h2>Actions → concepts → APIs</h2>
-<div class="old">
-<p class="tag">Existing</p>
-<pre>upload two files ─▶ Decklist ×2 ─▶ import_match(hero, villain, pack_key, ruleset)
-                                   └▶ ImportedMatch {pool identity, ruleset,
-                                        hero: DeckImport{decklist, deck},
-                                        villain: DeckImport{decklist, deck}}
-play / rematch   ─▶ MatchConfig {hero_deck, villain_deck, sideboards,
-                                 imported_decks: ImportedMatch}
-                    └▶ validate_setup: decks == imported decks
-                                     &amp;&amp; pool identity == installed</pre>
-</div>
-<div class="prop">
-<p class="tag">Proposed</p>
-<pre>upload two files ─▶ Decklist ×2 ─▶ admit_decklists({hero, villain}, pack_key)
-                                   └▶ DeckImport ×2 {decklist, deck}
-play / rematch   ─▶ MatchConfig {hero_deck, villain_deck, sideboards,
-                                 hero_source, villain_source: Decklist?}
-                    └▶ native admission at reset (as for every deck);
-                       retained source re-imports to the same deck</pre>
-</div>
+<table>
+<thead><tr><th>Action</th><th><span class="label now">Today</span></th><th><span class="label prop">Proposed</span></th></tr></thead>
+<tbody>
+<tr><td>Check one deck</td><td><code>admit_deck(pack, &amp;Deck)</code></td><td><code>admit_deck(&amp;Deck)</code>, against the installed world</td></tr>
+<tr><td>Import decklist files</td><td><code>admit_decklists(labelled, pack_key)</code></td><td><code>admit_decklists(labelled)</code></td></tr>
+<tr><td>Reload a saved import</td><td><code>Decklist::validate_deck(pack, deck)</code></td><td><code>validate_deck(deck)</code></td></tr>
+<tr><td>Give a run its decks</td><td><code>decks: {pool: world, files: […]}</code>; <code>TrainingDecks.pool</code></td><td><code>decks: {files: […]}</code></td></tr>
+<tr><td>Simulate from files</td><td><code>manabot sim --hero-deck-file … --content-pool world</code></td><td>no <code>--content-pool</code></td></tr>
+<tr><td>Academy import</td><td><code>pack_key</code> field and text box</td><td>neither</td></tr>
+<tr><td>Export a deck-run model</td><td>binding <code>content_pool: {pack_key, world_version, content_digest, …}</code></td><td>binding <code>world: {version, content_digest, rules, I/O}</code>; no pack key</td></tr>
+</tbody>
+</table>
+<p class="mut">The concepts become <strong>world</strong> (rules + cards), <strong>deck</strong> and <strong>decklist</strong>. The
+words “pool” and “pack” no longer appear in any deck interaction.</p>
 
-<h2>The consequential mismatch</h2>
-<p>Each imported deck is stored twice &mdash; in <code>MatchConfig</code> and inside <code>ImportedMatch</code> &mdash; so <code>validate_setup</code> must prove the copies agree on every config build and trace load. Worse, the copy binds <code>PoolIdentity</code> equality, so adding any card makes every imported Academy trace and rematch unloadable, while curated traces and training decks are simply re-admitted. That is the pre-registration the accepted design removed.</p>
+<h2>What doesn’t fit yet: authored packs</h2>
+<p>Elemental, <code>ur-lessons-vs-gw-allies</code> and <code>mtg122-complexity-v1</code> are fixed setups with their own
+content, and their policy vocabulary is the pack’s. Some include definitions the world marks incomplete. Today
+<code>pool.rs:111</code> also registers each one as a deck pool, which is the only reason the pool parameter can take a
+second value.</p>
+<p><span class="label prop">Proposed</span>Authored packs stay fixed setups. Their checkpoints keep setup bindings, because
+their inputs are a different vocabulary, not because of their training regime. They stop being targets for importing or
+admitting decks. Frozen Elemental bindings and evidence are unchanged.</p>
+<p class="mut"><strong>Counterexample that would break this:</strong> someone who needs to import a custom deck built from an
+authored pack’s cards (an Elemental variant, say). I found no caller that does this today. If you want it, answer 2b.</p>
 
-<h2>Next implement direction</h2>
-<ol>
-  <li>Replace <code>ImportedMatch</code> with per-seat private <code>Decklist</code> sources on <code>MatchConfig</code> and the Academy trace; delete <code>setup_id</code>, <code>swapped</code>, <code>validate_setup</code>.</li>
-  <li>Re-admit imported records against the installed world; drop pool-identity pinning. Tape divergence stays the existing replay check&#39;s job.</li>
-  <li>Remove the caller-supplied <code>ruleset</code> (only <code>development-v1</code> exists; any other value can only error). Keep the named constant in responses.</li>
-  <li>Remove the committed <code>.DS_Store</code>.</li>
-</ol>
-<p>Must survive: whole-input rejection with retained source and line issues; rematch editor prefill; viewer-safe trace export; Commands, stale rejection, reconnect, replay/fork identity.</p>
+<h2>Failure and recovery</h2>
+<ul class="mut">
+<li><strong>A card the world doesn’t support:</strong> unchanged. It's rejected on its line, the whole input is rejected,
+and the source text is kept.</li>
+<li><strong>A world change makes a saved import invalid:</strong> unchanged. Reloading re-checks against the installed world
+and reports the failing line.</li>
+<li><strong>An old checkpoint with a <code>content_pool: world</code> binding:</strong> no deck-run checkpoints from this
+branch have been released yet, so the binding can be renamed without a reader for the old form. Checkpoints that already
+exist on main use setup bindings, which this proposal doesn't change.</li>
+</ul>
 
 <h2>Questions</h2>
-<ol>
-  <li>None open. Objections to 1&ndash;3 would be corrections to the accepted design, e.g. &ldquo;2b: imported traces should pin the content digest after all&rdquo;.</li>
+<ol class="q">
+<li>Should deck checking stop asking for a pool?
+<ul><li><strong>1a (recommended)</strong>: yes, everywhere in the table above; decks are checked against the installed world.</li>
+<li><strong>1b</strong>: keep an optional pool argument that defaults to the world, for advanced callers.</li></ul></li>
+<li>Authored packs (Elemental, MTG-122, ur-lessons):
+<ul><li><strong>2a (recommended)</strong>: fixed setups only; no deck import or admission against them; their checkpoints keep setup bindings.</li>
+<li><strong>2b</strong>: also deck targets, so a custom deck can be built from an authored pack’s cards.</li></ul></li>
+<li>Restricting decks to a set, such as TLA-only:
+<ul><li><strong>3a (recommended)</strong>: part of how decks are chosen or generated (<code>world::set_cards</code>); admission only asks whether the world supports the cards.</li>
+<li><strong>3b</strong>: a run declares its allowed sets, and admission enforces them.</li></ul></li>
 </ol>
+<p class="mut">This is a proposal; nothing on this page is implemented. Recorded under “Concept review 2026-10-30” in the
+working design.</p>
 </main>
 </body>
 </html>

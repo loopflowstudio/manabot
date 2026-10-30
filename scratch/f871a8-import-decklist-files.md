@@ -29,6 +29,30 @@ below this Task's entries; they are main's, not this Task's.
   reset seed); curriculum, mirrors, 17Lands and the Academy 1a draft redesign
   are deferred (1a detail at c1dd6c71c).
 
+## Concept review 2026-10-30 (proposed; awaiting Jack Heart)
+
+Since #394 the engine has one world (`world.rs`: w17; its cards are every
+supported definition in `cardsets/`). This branch still makes every deck caller
+name a content pool, and for imported or training decks the only meaningful
+value is `"world"`: `admit_deck(pack, &Deck)`, `admit_decklists(.., pack_key)`,
+`Decklist::validate_deck(pack, ..)`, `TrainingDecks.pool`, regime
+`decks: {pool, files}`, `manabot sim --content-pool`, Academy `pack_key` and a
+free-text **Content pool** field in `DeckImport.svelte`, and checkpoint
+`content_pool` bindings. Authored packs (Elemental, `ur-lessons-vs-gw-allies`,
+`mtg122-complexity-v1`) are also registered as pools (`pool.rs:111`).
+
+Proposal (not accepted): deck admission takes no pool; a deck is checked
+against the installed world. Regime `decks: {files}`; no `--content-pool`; no
+Academy pool field; a deck-run checkpoint binds the world (version, content
+digest, rules and I/O contract). Authored packs stay fixed setups whose
+checkpoints keep setup bindings. A set restriction such as TLA-only belongs to
+how decks are chosen or generated (`world::set_cards`), not to admission.
+
+Open questions (concept-review.html):
+1. Drop the pool parameter from deck admission and the surfaces above?
+2. Are authored packs only fixed setups, or also targets for imported/training decks?
+3. Is a set restriction (TLA-only) a deck-making filter, or a run-level rule checked at admission?
+
 ## Contract
 
 - `counted-lines-v1`: exact source bytes (BOM/CRLF), filename, line
