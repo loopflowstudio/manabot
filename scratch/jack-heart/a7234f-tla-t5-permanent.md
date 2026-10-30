@@ -1,10 +1,10 @@
 # T5 (a7234f): permanent copying — plan and status
 
-Status (2026-10-30): implemented and stacked on T3 #399 (merged T3
+Status (2026-10-30): implemented, demoed through native Commands and the
+LLM/Academy text path (after the `2963f8f87` capture fix), and stacked on T3 #399 (merged T3
 `08bf54de2`, which contains main `10eeb1f55`; main `6f48f5ca0` merged since).
 T3's PR head `4c4dd0217` adds only that main merge and a scratch note, so there
-is nothing to sync from T3. All three cards are defined and supported. Stop at
-demo. T4 488a40 is still implementing with no PR; sync onto it when it
+is nothing to sync from T3. All three cards are defined and supported. T4 488a40 is still implementing with no PR; sync onto it when it
 publishes.
 
 T3's plan, inherited through the stack, is at
@@ -125,45 +125,37 @@ it. If a third self-animation condition appears, merge them then.
 
 ## Checks
 
-- 2026-10-30 (realign, HEAD `b7ddfc29c`): debug `cargo test --test
-  semantic_conformance_tests` passes 4 and fails 2 on "ur-vs-gw-5eed content
-  digest drift", as expected before gate re-records. Earlier passes: debug
-  `cargo test` (cards 408, rules 137, lib 122), clippy, Python parity/text/
-  protocol (55), Academy vitest (13) and svelte-check — see `af0c01977`.
+- 2026-10-30 (realign, HEAD `1a5fa5d1a`): `uv run --extra dev pytest
+  tests/semantic/test_text_observation.py -k joo_dee` passed (1). The fix
+  commit's own checks are in `scratch/t5-demo.md`. Full debug `cargo test` and
+  CI on the fix are left to gate/CI.
 
-## Demo (headless, 2026-10-30, HEAD `edc1fabd8`) — failed on the text path; iterate
+## Demo (headless, 2026-10-30) — text-path gap fixed at `2963f8f87`
 
-This ran headless, with the agent standing in for Jack Heart. No human
-watched it.
+This demo ran headless. The agent stood in for Jack Heart; no human watched it.
+The full record is in `scratch/t5-demo.md`.
 
-- Pass: debug `cargo test --test cards -- joo_dee phoenix_fleet ran_and_shaw`
-  ran all 13 directed tests, and all passed.
-- Pass: the native semantic Commands path
-  (`scratch/tools/demo_t5_contract.py`, built extension from 13:36, after the
-  last Rust change). The script activates Joo Dee's ability, both players
-  pass, and the surveil decision is offered ("Keep on top" / select). The
-  token then shows `copy: {name: "Joo Dee, One of Many", registry_key: 122}`.
-  The sacrifice choice follows, and afterwards the agent's
-  `turn_history.permanents_sacrificed` is 1.
-- **Fail: the LLM text-observation path** (`scratch/tools/demo_t5.py`).
-  `capture_text_decision` at Joo Dee's surveil raises `TextEncodingError:
-  invalid continuation frame relationship`. The frame stack is `[kind 5,
-  kind 6 / decision 20]`. `parse_continuation_frames_json`
-  (`managym/src/python/bindings.rs`, `frame.decision > 13`) rejects every
-  decision code above 13. `continuation.rs` now emits codes up to 20, and
-  this branch adds `Surveil => 20`. Main already emits 14–18, so the stale
-  bound predates T5. T5 still has to fix it: Joo Dee cannot be played by a
-  text/LLM agent, and the acceptance requires play through training and
-  Academy. `text_observation.py` already lists `surveil` in its decision
-  names, so only the validator bound is stale.
-- CI on PR #405: everything passes except `Integration (main)`. Its failures
-  are the 4 known `test_policy_choice_can_learn_either_preference[*-target-*]`
-  cases, which also fail on T3 #399's CI, so T5 inherits them.
-
-Next action (implement): make the validator's upper bound the largest
-decision code from `continuation.rs`, held as one shared constant rather
-than a literal. Add a Python test that captures a text decision at Joo Dee's
-surveil and resolves it to the copy and the sacrifice. Proof: rerun
-`uv run python scratch/tools/demo_t5.py`; it should reach "copy of" and
-"This turn: sacrificed 1 permanent". Also run the text-observation tests and
-debug `cargo test`.
+- The first pass at `edc1fabd8` found a text-path gap. Capture failed
+  everywhere text is captured: LLM runner and session, `verify/llm_game.py`,
+  and Academy's `study_protocol.py`. `parse_continuation_frames_json` rejected
+  `decision > 13`, which ruled out main's codes 14–18 as well as T5's 19
+  (DistributeCounters) and 20 (Surveil). Joo Dee's surveil hit "invalid
+  continuation frame relationship". The tensor path was unaffected.
+- Fixed:
+  - `continuation::decision_code` is the only mapping from obligation to code.
+  - `MAX_DECISION_CODE` (20) bounds the validator in `bindings.rs`.
+  - `every_decision_code_is_within_the_validated_bound` builds every
+    `Decision` variant.
+  - `text_observation.py` labels a frame's `decision` by frame kind
+    (`_frame_decision`), and its obligation table now covers 14–20.
+  - Regression test:
+    `test_joo_dee_surveil_and_copy_play_through_the_text_decision`.
+- Second pass, rebuilt extension, text path:
+  - Joo Dee: surveil, then copy, then sacrifice. The result shows "copy of D1"
+    and "sacrificed 1".
+  - Ran and Shaw: copying a cast Ran and Shaw makes the token nonlegendary.
+  - Airship: the end-step self-copy follows a sacrifice.
+  - Scripts: `scratch/tools/demo_t5.py` and `demo_t5_more.py`.
+- CI on PR #405, before the fix: only `Integration (main)` failed, on the 4
+  inherited `test_policy_choice_can_learn_either_preference[*-target-*]`
+  cases. CI has not yet run on the fix commits.
