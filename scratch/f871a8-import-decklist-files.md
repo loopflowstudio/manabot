@@ -29,29 +29,31 @@ below this Task's entries; they are main's, not this Task's.
   reset seed); curriculum, mirrors, 17Lands and the Academy 1a draft redesign
   are deferred (1a detail at c1dd6c71c).
 
-## Concept review 2026-10-30 (proposed; awaiting Jack Heart)
+## Accepted 2026-10-30 (Jack Heart: 1a, 2a, 3a): decks need only a world
 
 Since #394 the engine has one world (`world.rs`: w17; its cards are every
-supported definition in `cardsets/`). This branch still makes every deck caller
-name a content pool, and for imported or training decks the only meaningful
-value is `"world"`: `admit_deck(pack, &Deck)`, `admit_decklists(.., pack_key)`,
-`Decklist::validate_deck(pack, ..)`, `TrainingDecks.pool`, regime
-`decks: {pool, files}`, `manabot sim --content-pool`, Academy `pack_key` and a
-free-text **Content pool** field in `DeckImport.svelte`, and checkpoint
-`content_pool` bindings. Authored packs (Elemental, `ur-lessons-vs-gw-allies`,
-`mtg122-complexity-v1`) are also registered as pools (`pool.rs:111`).
+supported definition in `cardsets/`). Implement direction:
 
-Proposal (not accepted): deck admission takes no pool; a deck is checked
-against the installed world. Regime `decks: {files}`; no `--content-pool`; no
-Academy pool field; a deck-run checkpoint binds the world (version, content
-digest, rules and I/O contract). Authored packs stay fixed setups whose
-checkpoints keep setup bindings. A set restriction such as TLA-only belongs to
-how decks are chosen or generated (`world::set_cards`), not to admission.
+- **1a — no pool in deck admission.** Decks are checked against the installed
+  world. Remove the pool/pack argument from `admit_deck`, `admit_decklists`,
+  `Decklist::validate_deck`; `TrainingDecks.pool`; regime `decks: {pool, files}`
+  becomes `decks: {files}`; drop `manabot sim --content-pool`; drop Academy
+  `pack_key` and the **Content pool** field in `DeckImport.svelte`;
+  `MatchConfig.from_import` takes no pack. A deck-run checkpoint binds the world
+  (version, content digest, rules, I/O contract), not a `content_pool` with a
+  pack key; no released checkpoint uses the branch's pool form, so no reader for
+  it is needed.
+- **2a — authored packs are fixed setups only.** Elemental,
+  `ur-lessons-vs-gw-allies`, `mtg122-complexity-v1` are not deck-import or
+  admission targets (stop registering them as pools in `pool.rs`). Their
+  checkpoints keep setup bindings because their input vocabulary is the pack's.
+  Frozen Elemental bindings and evidence are unchanged.
+- **3a — set restrictions belong to deck making.** TLA-only and similar are
+  filters used when choosing or generating decks (`world::set_cards`); admission
+  only asks whether the world supports the cards.
 
-Open questions (concept-review.html):
-1. Drop the pool parameter from deck admission and the surfaces above?
-2. Are authored packs only fixed setups, or also targets for imported/training decks?
-3. Is a set restriction (TLA-only) a deck-making filter, or a run-level rule checked at admission?
+Failure/recovery unchanged: unsupported cards reject on their line with the
+whole input; saved imports re-admit against the installed world.
 
 ## Contract
 

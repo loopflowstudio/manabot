@@ -42,7 +42,7 @@ ol.q ul li{margin:4px 0}
 working design <code>scratch/f871a8-import-decklist-files.md</code></p>
 
 <div class="ask">
-<p><strong>Decision needed:</strong> should checking a deck stop asking which “content pool” to use?</p>
+<p><strong>Decided by Jack Heart, 2026-10-30: 1a, 2a, 3a.</strong> Decks are checked against the installed world; authored packs are fixed setups only; set restrictions belong to deck making. Implementation in progress.</p>
 <p>Since #394 the engine has one world: w17, whose cards are every supported definition in <code>cardsets/</code>.
 This branch still makes every deck caller name a pool. For imported and training decks, the only meaningful value
 is <code>"world"</code>.</p>
@@ -108,7 +108,7 @@ exist on main use setup bindings, which this proposal doesn't change.</li>
 <ul><li><strong>3a (recommended)</strong>: part of how decks are chosen or generated (<code>world::set_cards</code>); admission only asks whether the world supports the cards.</li>
 <li><strong>3b</strong>: a run declares its allowed sets, and admission enforces them.</li></ul></li>
 </ol>
-<p class="mut">This is a proposal; nothing on this page is implemented. Recorded under “Concept review 2026-10-30” in the
+<p class="mut">Accepted, not yet implemented. Recorded under “Accepted 2026-10-30” in the
 working design.</p>
 </main>
 </body>
