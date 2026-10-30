@@ -100,6 +100,20 @@
       "W"
     ]
   },
+  "Airbender Ascension": {
+    "name": "Airbender Ascension",
+    "mana_cost": "{1}{W}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Airbend"
+    ],
+    "oracle_text": "When this enchantment enters, airbend up to one target creature.\nWhenever a creature you control enters, put a quest counter on this enchantment.\nAt the beginning of your end step, if this enchantment has four or more quest counters on it, exile up to one target creature you control, then return it to the battlefield under its owner's control.",
+    "colors": [
+      "W"
+    ]
+  },
   "Airbender's Reversal": {
     "name": "Airbender's Reversal",
     "mana_cost": "{1}{W}",
@@ -162,6 +176,21 @@
     "oracle_text": "Target player draws three cards.",
     "colors": [
       "U"
+    ]
+  },
+  "Appa, Loyal Sky Bison": {
+    "name": "Appa, Loyal Sky Bison",
+    "mana_cost": "{4}{W}{W}",
+    "type_line": "Legendary Creature — Bison Ally",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Flying",
+      "Airbend"
+    ],
+    "oracle_text": "Flying\nWhenever Appa enters or attacks, choose one —\n• Target creature you control gains flying until end of turn.\n• Airbend another target nonland permanent you control. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)",
+    "colors": [
+      "W"
     ]
   },
   "Appa, Steadfast Guardian": {
@@ -307,6 +336,33 @@
     "oracle_text": "When this enchantment enters, create a 1/1 white Human Soldier creature token.\nWhenever a creature you control dies, each opponent loses 1 life and you gain 1 life.",
     "colors": [
       "B"
+    ]
+  },
+  "Beetle-Headed Merchants": {
+    "name": "Beetle-Headed Merchants",
+    "mana_cost": "{4}{B}",
+    "type_line": "Creature — Human Citizen",
+    "power": "5",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "Whenever this creature attacks, you may sacrifice another creature or artifact. If you do, draw a card and put a +1/+1 counter on this creature.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Beifong's Bounty Hunters": {
+    "name": "Beifong's Bounty Hunters",
+    "mana_cost": "{2}{B}{G}",
+    "type_line": "Creature — Human Mercenary",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "Whenever a nonland creature you control dies, earthbend X, where X is that creature's power. (Target land you control becomes a 0/0 creature with haste that's still a land. Put X +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)",
+    "colors": [
+      "B",
+      "G"
     ]
   },
   "Benevolent River Spirit": {
@@ -739,6 +795,20 @@
       "W"
     ]
   },
+  "Earth Kingdom General": {
+    "name": "Earth Kingdom General",
+    "mana_cost": "{3}{G}",
+    "type_line": "Creature — Human Soldier Ally",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "When this creature enters, earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)\nWhenever you put one or more +1/+1 counters on a creature, you may gain that much life. Do this only once each turn.",
+    "colors": [
+      "G"
+    ]
+  },
   "Earth Kingdom Jailer": {
     "name": "Earth Kingdom Jailer",
     "mana_cost": "{2}{W}",
@@ -807,6 +877,21 @@
     "oracle_text": "When this creature dies, earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)",
     "colors": [
       "B",
+      "G"
+    ]
+  },
+  "Earthbender Ascension": {
+    "name": "Earthbender Ascension",
+    "mana_cost": "{2}{G}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Earthbend",
+      "Landfall"
+    ],
+    "oracle_text": "When this enchantment enters, earthbend 2. Then search your library for a basic land card, put it onto the battlefield tapped, then shuffle.\nLandfall — Whenever a land you control enters, put a quest counter on this enchantment. When you do, if it has four or more quest counters on it, put a +1/+1 counter on target creature you control. It gains trample until end of turn.",
+    "colors": [
       "G"
     ]
   },
@@ -1407,6 +1492,19 @@
       "G"
     ]
   },
+  "Guru Pathik": {
+    "name": "Guru Pathik",
+    "mana_cost": "{2}{G/U}{G/U}",
+    "type_line": "Legendary Creature — Human Monk Ally",
+    "power": "2",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "When Guru Pathik enters, look at the top five cards of your library. You may reveal a Lesson, Saga, or Shrine card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.\nWhenever you cast a Lesson, Saga, or Shrine spell, put a +1/+1 counter on another target creature you control.",
+    "colors": [
+      "G",
+      "U"
+    ]
+  },
   "Hakoda, Selfless Commander": {
     "name": "Hakoda, Selfless Commander",
     "mana_cost": "{3}{W}",
@@ -1476,6 +1574,19 @@
     "oracle_text": "Choose one —\n• Destroy target creature with no counters on it.\n• Remove up to three counters from target creature.",
     "colors": [
       "B"
+    ]
+  },
+  "Hei Bai, Spirit of Balance": {
+    "name": "Hei Bai, Spirit of Balance",
+    "mana_cost": "{2}{W/B}{W/B}",
+    "type_line": "Legendary Creature — Bear Spirit",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Whenever Hei Bai enters or attacks, you may sacrifice another creature or artifact. If you do, put two +1/+1 counters on Hei Bai.\nWhen Hei Bai leaves the battlefield, put its counters on target creature you control.",
+    "colors": [
+      "B",
+      "W"
     ]
   },
   "Hermitic Herbalist": {
@@ -1711,6 +1822,20 @@
       "B"
     ]
   },
+  "Katara, Bending Prodigy": {
+    "name": "Katara, Bending Prodigy",
+    "mana_cost": "{2}{U}",
+    "type_line": "Legendary Creature — Human Warrior Ally",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Waterbend"
+    ],
+    "oracle_text": "At the beginning of your end step, if Katara is tapped, put a +1/+1 counter on her.\nWaterbend {6}: Draw a card. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+    "colors": [
+      "U"
+    ]
+  },
   "Katara, Water Tribe's Hope": {
     "name": "Katara, Water Tribe's Hope",
     "mana_cost": "{2}{W}{U}{U}",
@@ -1833,6 +1958,19 @@
     "oracle_text": "When Lo and Li enter, search your library for a Lesson or Noble card, reveal it, put it into your hand, then shuffle.\nNoble creatures you control and Lesson spells you control have lifelink.",
     "colors": [
       "B"
+    ]
+  },
+  "Long Feng, Grand Secretariat": {
+    "name": "Long Feng, Grand Secretariat",
+    "mana_cost": "{1}{B/G}{B/G}",
+    "type_line": "Legendary Creature — Human Advisor",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Whenever another creature you control or a land you control is put into a graveyard from the battlefield, put a +1/+1 counter on target creature you control.",
+    "colors": [
+      "B",
+      "G"
     ]
   },
   "Lost Days": {
@@ -2013,6 +2151,23 @@
       "Flying"
     ],
     "oracle_text": "Flying\nThe first non-Lemur creature spell with flying you cast during each of your turns costs {1} less to cast.\nWhenever another creature you control with flying enters, Momo gets +1/+1 until end of turn.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Momo, Playful Pet": {
+    "name": "Momo, Playful Pet",
+    "mana_cost": "{W}",
+    "type_line": "Legendary Creature — Lemur Bat Ally",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [
+      "Scry",
+      "Flying",
+      "Vigilance",
+      "Food"
+    ],
+    "oracle_text": "Flying, vigilance\nWhen Momo leaves the battlefield, choose one —\n• Create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")\n• Put a +1/+1 counter on target creature you control.\n• Scry 2.",
     "colors": [
       "W"
     ]
@@ -2245,6 +2400,18 @@
     "toughness": null,
     "keywords": [],
     "oracle_text": "({T}: Add {W}.)",
+    "colors": []
+  },
+  "Planetarium of Wan Shi Tong": {
+    "name": "Planetarium of Wan Shi Tong",
+    "mana_cost": "{6}",
+    "type_line": "Legendary Artifact",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Scry"
+    ],
+    "oracle_text": "{1}, {T}: Scry 2.\nWhenever you scry or surveil, look at the top card of your library. You may cast that card without paying its mana cost. Do this only once each turn. (Look at the card after you scry or surveil.)",
     "colors": []
   },
   "Platypus-Bear": {
@@ -2843,6 +3010,18 @@
       "U"
     ]
   },
+  "Suki, Courageous Rescuer": {
+    "name": "Suki, Courageous Rescuer",
+    "mana_cost": "{1}{W}{W}",
+    "type_line": "Legendary Creature — Human Warrior Ally",
+    "power": "2",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "Other creatures you control get +1/+0.\nWhenever another permanent you control leaves the battlefield during your turn, create a 1/1 white Ally creature token. This ability triggers only once each turn.",
+    "colors": [
+      "W"
+    ]
+  },
   "Suki, Kyoshi Warrior": {
     "name": "Suki, Kyoshi Warrior",
     "mana_cost": "{2}{G/W}{G/W}",
@@ -2993,6 +3172,22 @@
     "toughness": null,
     "keywords": [],
     "oracle_text": "When The Spirit Oasis enters, draw a card for each Shrine you control.\nWhenever another Shrine you control enters, draw a card.",
+    "colors": [
+      "U"
+    ]
+  },
+  "The Unagi of Kyoshi Island": {
+    "name": "The Unagi of Kyoshi Island",
+    "mana_cost": "{3}{U}{U}",
+    "type_line": "Legendary Creature — Serpent",
+    "power": "5",
+    "toughness": "5",
+    "keywords": [
+      "Ward",
+      "Flash",
+      "Waterbend"
+    ],
+    "oracle_text": "Flash\nWard—Waterbend {4}. (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays {4}. They can tap their artifacts and creatures to help. Each one pays for {1}.)\nWhenever an opponent draws their second card each turn, you draw two cards.",
     "colors": [
       "U"
     ]
@@ -3189,6 +3384,20 @@
       "R"
     ]
   },
+  "Ty Lee, Artful Acrobat": {
+    "name": "Ty Lee, Artful Acrobat",
+    "mana_cost": "{2}{R}",
+    "type_line": "Legendary Creature — Human Performer",
+    "power": "3",
+    "toughness": "2",
+    "keywords": [
+      "Prowess"
+    ],
+    "oracle_text": "Prowess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)\nWhenever Ty Lee attacks, you may pay {1}. When you do, target creature can't block this turn.",
+    "colors": [
+      "R"
+    ]
+  },
   "Typhoid Rats": {
     "name": "Typhoid Rats",
     "mana_cost": "{B}",
@@ -3242,6 +3451,18 @@
     "oracle_text": "When this creature enters, create a Food token. (It's an artifact with \"{2}, {T}, Sacrifice this token: You gain 3 life.\")\nWhenever you sacrifice a Food, you may search your library for a basic land card and put it onto the battlefield tapped. If you search your library this way, put this creature on the bottom of its owner's library, then shuffle.",
     "colors": [
       "G"
+    ]
+  },
+  "Vengeful Villagers": {
+    "name": "Vengeful Villagers",
+    "mana_cost": "{3}{W}",
+    "type_line": "Creature — Human Citizen",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Whenever this creature attacks, choose target creature an opponent controls. Tap it, then you may sacrifice an artifact or creature. If you do, put a stun counter on the chosen creature. (If a permanent with a stun counter would become untapped, remove one from it instead.)",
+    "colors": [
+      "W"
     ]
   },
   "Vindictive Warden": {
