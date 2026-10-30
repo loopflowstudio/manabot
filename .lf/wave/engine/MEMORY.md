@@ -149,7 +149,7 @@ preserves accepted decisions, dated proof limits and source history.
 
 ## Architecture convergence (accepted 2026-07-17)
 
-- managym is the rules engine Fantasia specifically needs, including
+- managym is the rules engine Manabot specifically needs, including
   authoritative match identity/revision, semantic Commands, committed events,
   replay, viewer Observations, and exact forks. Academy and manabot consume this
   authority; they do not reconstruct it.

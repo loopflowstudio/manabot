@@ -58,8 +58,8 @@ Carried from the legacy `game` wave (renamed Academy).
 
 Academy's live belief runtime (a tracked posterior updated on every
 interactive-mirror Command, with no response reading it) and the unused live
-advisor resolvers were removed by Task 558daa at Jack Heart's direction; he is
-not confident the belief code works. `/api/advice` still serves fixture advice.
+advisor resolvers were removed by Task 558daa at Jack Heart's direction; Jack Heart
+is not confident the belief code works. `/api/advice` still serves fixture advice.
 The retired design and its release gates are in git history (`wave/game/MEMORY.md`
 before 558daa).
 

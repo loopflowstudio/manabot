@@ -3,7 +3,7 @@
 Directive: Jack Heart, 2026-10-30 (Task 558daa). Was stacked on afbd6a; #403
 merged into main (10eeb1f55) and this branch merged it (8db3b2fe8), so the PR
 targets main and its diff is the cull alone.
-Status: cull complete; both concept reviews' alignment landed (cf7457bb4..04b1f529d). Next: gate/demo. Stop at review/demo; no merge.
+Status: cull complete; concept reviews 1–3 applied (review 3 wording fixes in .lf/wave/academy and engine MEMORY.md). Next: gate/demo. Stop at review/demo; no merge.
 
 ## Approach
 
@@ -132,6 +132,22 @@ now call it a dated 2026-07-15 record superseded on undo/journal/page-COW by
 full-clone forking; rollout_pool.rs no longer cites `wave/search`. Frozen
 `experiments/w2-*` and `docs/research/etude-vs-phase.md` left as written.
 Verified: `cargo fmt --check` clean; `grep -rn "wave/search" managym/src` empty.
+
+## Concept review 3, 2026-10-30
+
+Checked the branch against Jack Heart's seven held-list decisions. No code
+references remain to live advice, undo/journal, branching drivers or top-level
+`wave/` (`store.py`'s `journal_mode=WAL` is SQLite; `docs/benchmarks` and
+`docs/rules/audit-2026-10` are frozen). `.lf/wave/` matches `lf wave list`
+(academy, engine, eval, training); eval has no GOAL.md, as in #402. CLAUDE.md
+test and doc anchors resolve.
+Next implement direction (wording only; accepted naming and pronoun rules):
+- `.lf/wave/academy/MEMORY.md` "Live advice (retired)": "he is not confident" →
+  "Jack Heart is not confident".
+- `.lf/wave/engine/MEMORY.md` "Architecture convergence": "the rules engine
+  Fantasia specifically needs" → "the rules engine Manabot specifically needs"
+  (live guidance; the service id `fantasia-website` stays).
+No open product choice.
 
 ## Checks
 
