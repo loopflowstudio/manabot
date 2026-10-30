@@ -4,7 +4,7 @@ The damped update is a clipped likelihood-ratio surrogate with two reverse
 KL penalties, not a novel replacement for that surrogate. Targets, behavior
 likelihoods and the magnet are constants. Only current policy/critic logits
 receive gradients. MTG uses same-viewer transitions and an action-type magnet;
-see docs/ataraxos.md for the fidelity boundary and unresolved source details.
+see docs/training.md#ataraxos for the fidelity boundary and unresolved source details.
 """
 
 from dataclasses import dataclass

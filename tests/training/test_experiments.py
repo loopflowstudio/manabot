@@ -24,7 +24,6 @@ from manabot.experiment.config import (
 )
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256
-from manabot.recipes.ataraxos import ataraxos
 from manabot.training.regime import (
     ArtifactReference,
     DampedPolicyLearning,
@@ -32,6 +31,7 @@ from manabot.training.regime import (
     ImportPolicy,
     Learning,
 )
+from tests.training.wdl_baseline import wdl_baseline
 
 
 def _baseline() -> Baseline:
@@ -49,7 +49,7 @@ def _flatten(value: JsonValue, prefix: tuple[str, ...] = ()) -> set[tuple[str, .
 
 
 def test_provenance_covers_complete_configuration_and_explicit_equal_values() -> None:
-    base = ataraxos()
+    base = wdl_baseline()
     resolved = (
         Experiment(
             "audit",
@@ -137,12 +137,12 @@ def test_baseline_and_resolved_artifacts_are_isolated() -> None:
 
 
 def test_snapshot_rejects_missing_defaults() -> None:
-    base = ataraxos()
+    base = wdl_baseline()
     raw = json.loads(base.configuration)
     del raw["agent"]["attention_layers"]
     with pytest.raises(ValueError, match="incomplete"):
         replace(base, configuration=json.dumps(raw)).regime()
-    assert ataraxos().regime().agent.value_kind == "categorical_wdl"
+    assert wdl_baseline().regime().agent.value_kind == "categorical_wdl"
 
 
 @pytest.mark.parametrize(
@@ -273,7 +273,7 @@ def test_compatibility_is_checked_after_independent_components_compose() -> None
         Experiment("invalid", _baseline(), overrides=(no_attention, token)).resolve()
     with pytest.raises(ValidationError, match="requires damped_policy"):
         Experiment(
-            "invalid", ataraxos(), overrides=(LearningRule(Learning()),)
+            "invalid", wdl_baseline(), overrides=(LearningRule(Learning()),)
         ).resolve()
     with pytest.raises(ValidationError, match="compound"):
         Experiment(
@@ -283,7 +283,7 @@ def test_compatibility_is_checked_after_independent_components_compose() -> None
         ).resolve()
     valid = Experiment(
         "ppo",
-        ataraxos(),
+        wdl_baseline(),
         overrides=(
             LearningRule(Learning()),
             ModelOverride(ModelConfig(value_kind="scalar")),

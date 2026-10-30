@@ -23,10 +23,8 @@ from typing import Callable, Sequence
 
 import torch
 
-from manabot.belief.range import BeliefState
 from manabot.belief.sampling import (
     AutoregressiveBeliefSampler,
-    SamplerInput,
     physical_deal_log_prob,
     sample_physical_deal,
 )
@@ -387,117 +385,3 @@ def save_belief_sampler(
         finally:
             temporary.unlink()
     return hashlib.sha256(data).hexdigest()
-
-
-@dataclass(frozen=True, slots=True)
-class ExactReferenceMetrics:
-    """Expected joint log scores under an externally computed exact posterior."""
-
-    reference_identity: str
-    learned_cross_entropy: float
-    physical_cross_entropy: float
-    learned_kl: float
-    physical_kl: float
-    learned_reference_support_mass: float
-
-
-@torch.no_grad()
-def compare_exact_reference(
-    model: AutoregressiveBeliefSampler,
-    inputs: SamplerInput,
-    reference: BeliefState,
-) -> ExactReferenceMetrics:
-    """Consume the existing exact tracker's result on a tractable root.
-
-    The caller must provide the posterior at this same viewer history; this
-    adapter never recomputes action likelihoods or runs its own Bayes tracker.
-    It rejects incompatible physical constraints and missing vocabulary rows.
-    """
-    names = model.schema.card_names
-    pool = dict(reference.space.pool)
-    known = dict(reference.space.known_hand)
-    if (
-        any(name not in names for name in (*pool, *known))
-        or tuple(pool.get(name, 0) for name in names) != inputs.pool_counts
-        or tuple(known.get(name, 0) for name in names) != inputs.known_minima
-        or reference.space.hand_size != inputs.hand_size
-    ):
-        raise ValueError("exact reference physical domain differs from sampler input")
-    if any(
-        name not in names for world in reference.space.worlds for name, _ in world.hand
-    ):
-        raise ValueError(
-            "exact reference contains cards outside the sampler vocabulary"
-        )
-    rows = [
-        tuple(dict(world.hand).get(name, 0) for name in names)
-        for world in reference.space.worlds
-    ]
-    targets = torch.tensor(rows, dtype=torch.int64)
-    batch = [inputs] * len(rows)
-    physical = physical_deal_log_prob(batch, targets)
-    prior_training = model.training
-    model.eval()
-    try:
-        learned = model.log_prob(batch, targets)
-    finally:
-        model.train(prior_training)
-    probabilities = torch.tensor(reference.probabilities, dtype=torch.float64)
-    entropy = reference.entropy
-    learned_ce = float(-(probabilities * learned).sum())
-    physical_ce = float(-(probabilities * physical).sum())
-    return ExactReferenceMetrics(
-        reference_identity=reference.digest,
-        learned_cross_entropy=learned_ce,
-        physical_cross_entropy=physical_ce,
-        learned_kl=learned_ce - entropy,
-        physical_kl=physical_ce - entropy,
-        learned_reference_support_mass=float(learned.exp().sum()),
-    )
-
-
-@dataclass(frozen=True, slots=True)
-class SamplerCohortEvaluation:
-    """Named foreign/adversarial evidence, separate from self-play calibration."""
-
-    training_policy_identity: str
-    evaluation_policy_identity: str
-    cohort_identity: str
-    distribution_shift: bool
-    adversarial_selection: bool
-    metrics: SamplerEvaluation
-
-
-def evaluate_sampler_cohort(
-    result: SamplerFitResult,
-    examples: Sequence[SamplerExample],
-    *,
-    evaluation_policy_identity: str,
-    cohort_identity: str,
-    world_identity: str,
-    adversarial_selection: bool = False,
-    samples: int = 32,
-    seed: int = 0,
-    check: Callable[[], None] | None = None,
-) -> SamplerCohortEvaluation:
-    """Record opponent-assumption mismatch while retaining the safe baseline.
-
-    Cohort selection and label provenance belong to the collection protocol;
-    this method cannot turn synthetic or human-selected rows into human-play
-    evidence. World changes require a newly pinned training/evaluation protocol.
-    """
-    if not evaluation_policy_identity or not cohort_identity:
-        raise ValueError("cohort and evaluation policy identities are required")
-    if world_identity != result.world_identity:
-        raise ValueError("evaluation cohort world differs from fitted sampler")
-    return SamplerCohortEvaluation(
-        training_policy_identity=result.policy_identity,
-        evaluation_policy_identity=evaluation_policy_identity,
-        cohort_identity=cohort_identity,
-        distribution_shift=evaluation_policy_identity != result.policy_identity
-        or adversarial_selection,
-        adversarial_selection=adversarial_selection,
-        metrics=evaluate_sampler(
-            result.model, examples, samples=samples, seed=seed, check=check
-        ),
-    )

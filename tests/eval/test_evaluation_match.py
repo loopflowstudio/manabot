@@ -6,17 +6,16 @@ import time
 import pytest
 
 from manabot.eval.match import derive_seed, play_cell
-from manabot.eval.models import EvaluationContract, MatchRow
+from manabot.eval.models import MatchRow
 from manabot.sim.replay import read_trace, replay_games
 from managym import WORLD_VERSION
+from tests.eval.arena_fixture import arena_fixture
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_comparison_alias_shares_seed_without_changing_default_identity() -> None:
-    contract = EvaluationContract.model_validate(
-        json.loads((ROOT / "tests/fixtures/int-6-skill-arena-v1.json").read_text())
-    )
+    contract = arena_fixture()
     key = contract.key
     default = derive_seed(key, ("candidate-a", "random-v1"), 61001, "candidate-a")
     assert default != derive_seed(
@@ -39,9 +38,7 @@ def test_comparison_alias_shares_seed_without_changing_default_identity() -> Non
 
 
 def test_same_deal_seat_swap_retains_and_replays_commands(tmp_path: Path) -> None:
-    contract = EvaluationContract.model_validate(
-        json.loads((ROOT / "tests/fixtures/int-6-skill-arena-v1.json").read_text())
-    )
+    contract = arena_fixture()
     random, scripted = contract.anchors[:2]
     rows, trace, replay = play_cell(
         key=contract.key,
@@ -71,9 +68,7 @@ def test_same_deal_seat_swap_retains_and_replays_commands(tmp_path: Path) -> Non
 
 
 def test_replay_rejects_a_command_that_was_not_exactly_retained(tmp_path: Path) -> None:
-    contract = EvaluationContract.model_validate(
-        json.loads((ROOT / "tests/fixtures/int-6-skill-arena-v1.json").read_text())
-    )
+    contract = arena_fixture()
     _, trace, _ = play_cell(
         key=contract.key,
         player_a=contract.anchors[0],
@@ -93,9 +88,7 @@ def selected_players():
     from manabot.infra.identity import canonical_sha256
     from manabot.sim.matchup import SELECTED_SUITE, selected_match
 
-    contract = EvaluationContract.model_validate(
-        json.loads((ROOT / "tests/fixtures/int-6-skill-arena-v1.json").read_text())
-    )
+    contract = arena_fixture()
     key = contract.key.model_copy(
         update={"world": WORLD_VERSION, "content_suite": SELECTED_SUITE}
     )
@@ -113,7 +106,7 @@ def selected_players():
 
 
 def test_selected_four_game_block_preserves_decks_sideboards_and_replay(tmp_path):
-    from manabot.eval.rating import bootstrap_population, payoff_matrix
+    from manabot.eval.rating import bootstrap_population
     from manabot.sim.matchup import selected_match
     from manabot.sim.replay import replay_environment
 
@@ -144,9 +137,6 @@ def test_selected_four_game_block_preserves_decks_sideboards_and_replay(tmp_path
             setup.villain_sideboard if ur_seat == 0 else setup.hero_sideboard
         )
         assert env._engine.state_digest() == game["initial_state_digest"]
-    matrix = payoff_matrix(rows)["random-v1__scripted-greedy-v1"]
-    assert matrix["games"] == 4
-    assert sum(matrix["paired_blocks"].values()) == 1
     assert bootstrap_population(rows, seed=83, replicates=5)["failures"] == 0
     games[0]["match_hypers"]["hero_sideboard"] = {}
     assert not replay_games(games).passed

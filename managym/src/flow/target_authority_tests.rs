@@ -725,9 +725,9 @@ fn trigger_order_same_source_joins_preserve_ability_and_causal_context() {
 }
 
 #[test]
-fn trigger_order_target_resume_and_nested_rollback_preserve_round() {
+fn trigger_order_target_resume_and_nested_fork_preserve_round() {
     use crate::agent::action::{Action, ActionSpaceKind};
-    use crate::search_state::{witness, BenchCommand, BranchDriver, ClonePlusUndoDriver};
+    use crate::search_state::witness;
     let (mut game, source, ..) = fixture();
     game.state.pending_triggers = vec![
         trigger(
@@ -744,19 +744,9 @@ fn trigger_order_target_resume_and_nested_rollback_preserve_round() {
     game.state.pending_triggers[0].source_ref = game.current_object_ref(source);
     game.current_action_space = game.flush_triggers();
     let root = witness(&game);
-    let driver = ClonePlusUndoDriver::default();
-    let mut branch = driver.fork_exact(&game);
-    let outer = driver.mark(&mut branch);
-    driver
-        .apply(
-            &mut branch,
-            BenchCommand {
-                action_index: 0,
-                expected_action_hash: None,
-                expected_state_hash: None,
-            },
-        )
-        .unwrap();
+    let mut branch = game.clone();
+    let outer = branch.clone();
+    branch.step(0).unwrap();
     assert_eq!(
         branch.action_space().unwrap().kind,
         ActionSpaceKind::ChooseTarget
@@ -774,18 +764,9 @@ fn trigger_order_target_resume_and_nested_rollback_preserve_round() {
         .unwrap()
         .instruction
         .contains("Lightning Bolt"));
-    let targeting = driver.witness(&branch);
-    let inner = driver.mark(&mut branch);
-    driver
-        .apply(
-            &mut branch,
-            BenchCommand {
-                action_index: 0,
-                expected_action_hash: None,
-                expected_state_hash: None,
-            },
-        )
-        .unwrap();
+    let targeting = witness(&branch);
+    let inner = branch.clone();
+    branch.step(0).unwrap();
     assert_eq!(
         branch.action_space().unwrap().kind,
         ActionSpaceKind::OrderTriggers
@@ -797,10 +778,10 @@ fn trigger_order_target_resume_and_nested_rollback_preserve_round() {
         .actions
         .iter()
         .all(|a| matches!(a, Action::ChooseTrigger { .. })));
-    driver.rollback(&mut branch, inner);
-    assert_eq!(driver.witness(&branch), targeting);
-    driver.rollback(&mut branch, outer);
-    assert_eq!(driver.witness(&branch), root);
+    branch = inner;
+    assert_eq!(witness(&branch), targeting);
+    branch = outer;
+    assert_eq!(witness(&branch), root);
     assert_eq!(witness(&game), root);
 }
 

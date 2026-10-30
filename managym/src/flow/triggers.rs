@@ -415,7 +415,6 @@ impl Game {
                     ..
                 }
             ) {
-                self.journal_turn();
                 *self
                     .state
                     .turn

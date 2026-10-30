@@ -21,7 +21,7 @@ from manabot.env.observation import ObservationSpace
 from manabot.eval.evaluation import EvaluationRequest
 from manabot.eval.execution import bind_execution
 from manabot.eval.match import play_cell
-from manabot.eval.models import EvaluationContract, EvaluationKey
+from manabot.eval.models import EvaluationKey
 from manabot.infra.config import MatchConfig, ModelConfig, ObservationConfig
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.infra.provenance import runtime_fingerprints
@@ -50,6 +50,7 @@ from manabot.sim.serving_protocol import (
     PolicyKey,
 )
 from managym import WORLD_VERSION
+from tests.eval.arena_fixture import arena_fixture
 
 
 def fixture_policy(
@@ -58,9 +59,7 @@ def fixture_policy(
     *,
     policy_input_version: Literal[1, 2, 3, 4, 5] | None = None,
 ) -> tuple[EvaluationKey, PlayerRegistration, PlayerRegistration, Path]:
-    contract = EvaluationContract.model_validate_json(
-        (Path(__file__).parents[1] / "fixtures/int-6-skill-arena-v1.json").read_bytes()
-    )
+    contract = arena_fixture()
     observation = (
         ObservationConfig(policy_input_version=policy_input_version)
         if policy_input_version is not None
@@ -703,9 +702,7 @@ def test_private_callback_endpoint_runs_complete_replayed_block(tmp_path: Path) 
 
     from manabot.eval.endpoint import CallbackEndpoint
 
-    contract = EvaluationContract.model_validate_json(
-        (Path(__file__).parents[1] / "fixtures/int-6-skill-arena-v1.json").read_bytes()
-    )
+    contract = arena_fixture()
     execution = EvalExecution(deadline_unix=time.time() + 120, max_active_games=2)
     with InferenceRuntime(execution, tmp_path / "allocation") as runtime:
         with CallbackEndpoint(runtime) as endpoint:
@@ -731,9 +728,7 @@ def test_expired_allocation_starts_no_games_and_search_stays_unbound(
             EvalExecution(deadline_unix=time.time() - 1), tmp_path / "expired"
         )
     assert not (tmp_path / "expired").exists()
-    contract = EvaluationContract.model_validate_json(
-        (Path(__file__).parents[1] / "fixtures/int-6-skill-arena-v1.json").read_bytes()
-    )
+    contract = arena_fixture()
     # Search players keep their registration and play in their game child.
     _, (search,) = bind_execution(
         contract.key,

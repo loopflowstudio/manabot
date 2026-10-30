@@ -182,8 +182,4 @@ impl IdGenerator {
     pub fn watermark(&self) -> u32 {
         self.next_id
     }
-
-    pub(crate) fn restore(&mut self, watermark: u32) {
-        self.next_id = watermark;
-    }
 }

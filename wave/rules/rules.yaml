@@ -1,3 +1,0 @@
-flow: code
-area: [managym/src/, managym/tests/, manabot/env/, manabot/model/, tests/, docs/]
-direction: [clarity]

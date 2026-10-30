@@ -1,6 +1,6 @@
 import { selectDeck } from './deck-selection';
 import { expect, test } from '@playwright/test';
-import manifest from '../src/lib/packs/elemental-world/v1/manifest.json' with { type: 'json' };
+import manifest from '../src/lib/packs/elemental-world/v2/manifest.json' with { type: 'json' };
 import type { ExperienceFrame } from '../src/lib/types';
 
 for (const [hero, villain] of [['elemental_ug', 'elemental_bg'], ['elemental_bg', 'elemental_ug'], ['elemental_ug', 'elemental_ug']]) {

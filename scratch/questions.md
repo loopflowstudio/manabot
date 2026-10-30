@@ -415,6 +415,22 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   `test_heuristic.py`; the seven it cannot rate (airbend, linked exile, …) get
   polarity `None`, the documented neutral fallback.
 
+## 558daa (cull), 2026-10-30 — headless choices
+
+- Files touched by open PRs #383 #395 #399 #402 #403 were not edited (#403 has since merged; its files are listed as remaining work); their
+  candidates are listed as held in the plan. The authored-match parity receipt
+  (in #395/#399) was regenerated anyway because it hashes every Rust source.
+- Pre-existing: `academy.advice.ADVISOR_SOURCE_PATHS` names the missing
+  `manabot/sim/conditional_search.py`, so the two code-source advice fixtures
+  cannot verify their source bundle; editing `advice.py` changes no behavior.
+- `visual-references` archived with Doppler `manabot/prd` R2 credentials.
+- 2026-10-30 (second pass): the directive conditioned deleting
+  `semantic/policy.py` *and* the belief demo cluster on dropping `belief-demo`
+  without editing `cli.py` (#395). The condition concerns the demo only:
+  `semantic/policy.py` has no CLI path, so it was deleted; the demo cluster is held.
+- 2026-10-30: `belief/__init__.py` keeps a 15-name lazy map, against CLAUDE.md's
+  "re-export nothing", because `tests/belief/{support,test_state}.py` (#395) read it.
+
 ## Selector rename assumption (2026-10-30, headless)
 
 New regimes/checkpoints serialize `world`; a run started before the rename

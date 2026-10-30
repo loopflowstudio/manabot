@@ -5,12 +5,12 @@ from pathlib import Path
 import pytest
 
 from manabot.eval.match import play_cell
-from manabot.eval.models import EvaluationContract
 from manabot.eval.monitor import MonitorProtocol
 from manabot.infra.identity import canonical_sha256
 from manabot.sim.matchup import AuthoredMatchup
 from manabot.sim.replay import read_trace
 from managym import WORLD_VERSION
+from tests.eval.arena_fixture import arena_fixture
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -47,9 +47,7 @@ def test_explicit_matrix_replays_all_cells_without_selected_world_alias(
     tmp_path: Path,
 ) -> None:
     matrix = roster()
-    contract = EvaluationContract.model_validate_json(
-        (ROOT / "tests/fixtures/int-6-skill-arena-v1.json").read_text()
-    )
+    contract = arena_fixture()
     key = contract.key.model_copy(
         update={"world": WORLD_VERSION, "content_suite": matrix.content_suite}
     )

@@ -75,6 +75,14 @@ jobs:
         working-directory: managym
         run: cargo test
 
+      - name: Preserve regenerated conformance cases
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: semantic-conformance-mismatches
+          path: target/semantic-conformance/**/*.json
+          if-no-files-found: ignore
+
   python-unit:
     name: Python Unit Tests
     needs: [changes]
@@ -187,12 +195,8 @@ jobs:
           workspaces: |
             managym -> target
 
-      - name: Check replay, property, and metamorphic evidence
-        run: cargo test --locked --manifest-path managym/Cargo.toml --test semantic_conformance_tests
-
-      - name: Reproduce checked conformance artifacts
-        run: cargo run --locked --manifest-path managym/Cargo.toml --bin semantic_conformance -- check --root conformance/semantic-kernel-w17-v1
-
+      # Rust Tests runs whenever this job does; its semantic_conformance_tests
+      # check the replay, property and metamorphic evidence.
       - name: Run bounded valid-action fuzzing
         run: cargo run --locked --manifest-path managym/Cargo.toml --bin semantic_conformance -- fuzz --root conformance/semantic-kernel-w17-v1 --seed 24301 --cases 32 --max-commands 512 --failure-dir target/semantic-conformance/failures
 

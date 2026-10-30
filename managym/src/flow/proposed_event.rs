@@ -339,7 +339,6 @@ impl Game {
                 let Ok(permanent_id) = self.lookup_current_permanent(target) else {
                     return false;
                 };
-                self.journal_permanent(permanent_id);
                 let Some(permanent) = self.state.permanents[permanent_id].as_mut() else {
                     return false;
                 };

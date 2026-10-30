@@ -11,7 +11,6 @@ import pytest
 
 from manabot.env.env import Env
 from manabot.eval.admission import register_anchor
-from manabot.eval.models import EvaluationContract
 from manabot.eval.monitor import MonitorProtocol
 from manabot.infra.identity import file_sha256
 from manabot.sim import anchors
@@ -22,6 +21,7 @@ from manabot.sim.heuristic import (
     heuristic_source_paths,
     targeted_spells,
 )
+from tests.eval.arena_fixture import arena_fixture
 
 OWN, OPPONENT = 10, 20
 
@@ -379,9 +379,7 @@ def test_v1_monitor_identity_is_unchanged_and_heuristic_has_its_own() -> None:
         == MonitorProtocol(opponent="scripted_greedy").model_dump()
     )
     assert "opponent" not in MonitorProtocol().model_dump()
-    candidate = EvaluationContract.model_validate_json(
-        (Path(__file__).parents[1] / "fixtures/int-6-skill-arena-v1.json").read_bytes()
-    ).anchors[0]
+    candidate = arena_fixture().anchors[0]
     scripted = register_anchor(candidate, "scripted_greedy", player_id="scripted")
     heuristic = register_anchor(candidate, "heuristic", player_id="heuristic")
     assert scripted.source_sha256 == file_sha256(Path(anchors.__file__))

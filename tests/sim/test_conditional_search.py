@@ -12,11 +12,8 @@ from pathlib import Path
 import subprocess
 import sys
 
-from managym.decision import Observation
-from managym.possible_worlds import PossibleWorldSpace
 import pytest
 
-from manabot.belief import CompatibleDealBeliefModel, ViewerHistory
 from manabot.sim.search.branch import REFERENCE_BRANCH_DRIVER_ID
 from manabot.sim.search.conditional import (
     CONDITION_TRUE,
@@ -29,9 +26,7 @@ from manabot.sim.search.conditional import (
     WorldSpec,
     canonical_result_json,
     conditional_determinized_puct,
-    conditional_determinized_puct_beliefs,
     make_prior,
-    make_prior_from_belief,
     make_query_plan,
     result_sha256,
     serialize_result,
@@ -172,50 +167,6 @@ def _run_search_fast(seed: int = SEED) -> ConditionalStrategyResult:
     return result
 
 
-def test_generated_runtime_belief_passes_directly_to_search() -> None:
-    root = _build_root_env()
-    viewer = int(root.current_agent_index())
-    history = ViewerHistory.from_observation(
-        Observation.from_json(root.semantic_observation_json(viewer))
-    )
-    space = PossibleWorldSpace.from_engine(root, viewer)
-    belief = (
-        CompatibleDealBeliefModel()
-        .update(
-            previous=None,
-            world_space=space,
-            viewer_history=history,
-        )
-        .belief
-    )
-
-    prior = make_prior_from_belief(belief)
-    assert prior.prior_sha256 == belief.digest
-    assert prior.weights.tolist() == pytest.approx(belief.probabilities.tolist())
-
-    result = conditional_determinized_puct_beliefs(
-        root,
-        beliefs={"generated": belief},
-        simulations=1,
-        worlds=1,
-        seed=SEED,
-        max_steps=FAST_MAX_STEPS,
-        branch_driver_id=REFERENCE_BRANCH_DRIVER_ID,
-        branch_audit=False,
-    )
-
-    assert [condition.condition_id for condition in result.conditions] == ["generated"]
-    assert result.identities["belief_digests"] == {"generated": belief.digest}
-
-
-# ---------------------------------------------------------------------------
-# Checked fixture: deterministic and identity-pinned
-# ---------------------------------------------------------------------------
-
-
-@pytest.mark.experiment_data(
-    "experiments/data/int-13-conditional-strategy-fixture-v1.json"
-)
 def test_frozen_fixture_payload_is_stable_and_runtime_drift_is_explicit() -> None:
     """Keep INT-13 evidence frozen while checking its behavioral payload."""
 

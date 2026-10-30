@@ -125,7 +125,6 @@ pub struct SemanticTransition {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum SemanticError {
-    NoMatch,
     GameOver,
     NoActiveDecision,
     ViewerOutOfBounds(usize),
@@ -140,7 +139,6 @@ pub enum SemanticError {
 impl std::fmt::Display for SemanticError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::NoMatch => write!(f, "no active match"),
             Self::GameOver => write!(f, "match is over"),
             Self::NoActiveDecision => write!(f, "no active decision to project"),
             Self::ViewerOutOfBounds(viewer) => {

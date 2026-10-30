@@ -14,11 +14,9 @@ use crate::{
         combat::CombatState,
         decision::SuspendedResolution,
         event::GameEvent,
-        event_log::{CowStats, EventLog},
         priority::PriorityState,
         trigger::{DelayedTrigger, ExileLink, PendingTrigger, TriggerPlacement},
         turn::TurnState,
-        undo::UndoJournal,
     },
     state::{
         game_object::{
@@ -47,9 +45,9 @@ pub struct GameState {
     pub stack_objects: Vec<StackObject>,
     pub combat: Option<CombatState>,
     pub mana_cache: [Option<Mana>; 2],
-    pub events: EventLog,
-    pub pending_events: EventLog,
-    pub observation_events: EventLog,
+    pub events: Vec<GameEvent>,
+    pub pending_events: Vec<GameEvent>,
+    pub observation_events: Vec<GameEvent>,
     pub pending_triggers: Vec<PendingTrigger>,
     pub trigger_placement: Option<TriggerPlacement>,
     /// One-shot delayed triggers (earthbend returns) watching specific
@@ -217,7 +215,6 @@ pub struct Game {
     pub pending_choice: Option<PendingChoice>,
     pub skip_trivial_count: usize,
     pub trackers: [BehaviorTracker; 2],
-    pub(crate) undo: Option<UndoJournal>,
 }
 
 impl Clone for Game {
@@ -232,7 +229,6 @@ impl Clone for Game {
             pending_choice: self.pending_choice.clone(),
             skip_trivial_count: self.skip_trivial_count,
             trackers: self.trackers.clone(),
-            undo: None,
             card_capture: None,
         }
     }
@@ -240,82 +236,6 @@ impl Clone for Game {
 
 impl Game {
     pub fn take_observation_events(&mut self) -> Vec<GameEvent> {
-        self.journal_observation_events();
-        self.state.observation_events.take_vec()
-    }
-
-    pub(crate) fn admit_page_cow_root(&mut self) {
-        self.state.events.make_paged_root();
-        self.state.pending_events.make_paged_root();
-        self.state.observation_events.make_paged_root();
-    }
-
-    pub(crate) fn page_cow_fork(&self, stats: Arc<CowStats>) -> Self {
-        let GameState {
-            cards,
-            permanents,
-            card_to_permanent,
-            object_incarnations,
-            object_lki,
-            players,
-            zones,
-            turn,
-            priority,
-            stack_objects,
-            combat,
-            mana_cache,
-            events,
-            pending_events,
-            observation_events,
-            pending_triggers,
-            trigger_placement,
-            delayed_triggers,
-            exile_links,
-            cast_permissions,
-            suspended_decision,
-            trigger_enqueue_counter,
-            rng,
-            id_gen,
-            content,
-        } = &self.state;
-        Self {
-            state: GameState {
-                cards: cards.clone(),
-                permanents: permanents.clone(),
-                card_to_permanent: card_to_permanent.clone(),
-                object_incarnations: object_incarnations.clone(),
-                object_lki: object_lki.clone(),
-                players: players.clone(),
-                zones: zones.clone(),
-                turn: turn.clone(),
-                priority: priority.clone(),
-                stack_objects: stack_objects.clone(),
-                combat: combat.clone(),
-                mana_cache: mana_cache.clone(),
-                events: events.fork_shared(stats.clone()),
-                pending_events: pending_events.fork_shared(stats.clone()),
-                observation_events: observation_events.fork_shared(stats),
-                pending_triggers: pending_triggers.clone(),
-                trigger_placement: trigger_placement.clone(),
-                delayed_triggers: delayed_triggers.clone(),
-                exile_links: exile_links.clone(),
-                cast_permissions: cast_permissions.clone(),
-                suspended_decision: suspended_decision.clone(),
-                trigger_enqueue_counter: *trigger_enqueue_counter,
-                rng: rng.clone(),
-                id_gen: id_gen.clone(),
-                content: content.clone(),
-            },
-            policy_history: self.policy_history.clone(),
-            skip_trivial: self.skip_trivial,
-            current_action_space: self.current_action_space.clone(),
-            decision_epoch: self.decision_epoch,
-            semantic_object_candidates: self.semantic_object_candidates.clone(),
-            pending_choice: self.pending_choice.clone(),
-            skip_trivial_count: self.skip_trivial_count,
-            trackers: self.trackers.clone(),
-            undo: None,
-            card_capture: None,
-        }
+        std::mem::take(&mut self.state.observation_events)
     }
 }

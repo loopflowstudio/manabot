@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { gameStore } from './game.svelte';
-import { LIGHTNING_BOLT_PRESENTATION } from './presentation';
+import { LIGHTNING_BOLT_PRESENTATION } from './presentation-fixtures';
 import { presentationPlayer } from './presentation.svelte';
 import { GameSocketController, parseServerMessage } from './socket.svelte';
 import type {

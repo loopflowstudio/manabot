@@ -49,7 +49,6 @@ impl Game {
             }
             permanent.effective_keywords(card).vigilance
         };
-        self.journal_permanent(permanent_id);
         if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
             permanent.attacking = true;
         }
@@ -58,7 +57,6 @@ impl Game {
             // fires "becomes tapped" triggers.
             self.tap_permanent(permanent_id, false);
         }
-        self.journal_combat();
         if let Some(combat) = self.state.combat.as_mut() {
             combat.attackers.push(permanent_id);
             combat.attacker_to_blockers.entry(permanent_id).or_default();
@@ -77,7 +75,6 @@ impl Game {
                     "block declaration is illegal for this attacker/blocker pair".to_string(),
                 ));
             }
-            self.journal_combat();
             if let Some(combat) = self.state.combat.as_mut() {
                 combat
                     .attacker_to_blockers
@@ -90,7 +87,6 @@ impl Game {
     }
 
     pub(crate) fn resolve_combat_damage(&mut self) {
-        self.journal_combat();
         let Some(combat) = self.state.combat.take() else {
             return;
         };
@@ -313,7 +309,6 @@ impl Game {
             if !self.effective_keywords(attacker_id).menace {
                 continue;
             }
-            self.journal_combat();
             let Some(combat) = self.state.combat.as_mut() else {
                 return;
             };

@@ -194,7 +194,6 @@ impl Game {
 
         // Track per-turn resolutions for "the Nth time this ability has
         // resolved this turn" gating.
-        self.journal_turn();
         let key = (source_card.0, ability_key);
         let count = self
             .state
@@ -224,7 +223,7 @@ impl Game {
     /// CR 608.2b: check every chosen slot against its own clause once, before
     /// any instruction. Zero chosen optional targets still resolve; a nonempty
     /// all-illegal set suppresses the entire spell or ability, even untargeted
-    /// instructions. The retained slots also enter clone/undo and state hashes.
+    /// instructions. The retained slots also enter clones and state hashes.
     fn resolution_targets(
         &self,
         targets: &[Target],
@@ -299,7 +298,6 @@ impl Game {
             Effect::CantBeBlockedTarget { .. } => {
                 let target = self.present_primary_target(frame)?;
                 if let Target::Permanent(id) = target {
-                    self.journal_permanent(id);
                     self.state.permanents[id]
                         .as_mut()?
                         .cant_be_blocked_this_turn = true;
@@ -598,7 +596,6 @@ impl Game {
                 self.move_card(card, ZoneType::Library);
                 if *second_from_top {
                     let owner = self.state.cards[card].owner;
-                    self.journal_zones();
                     let library = self.state.zones.zone_cards_mut(ZoneType::Library, owner);
                     if let Some(index) = library.iter().position(|c| *c == card) {
                         library.remove(index);
@@ -631,7 +628,6 @@ impl Game {
                 for card in graveyard {
                     self.move_card(card, ZoneType::Library);
                 }
-                self.journal_zones();
                 self.state
                     .zones
                     .shuffle(ZoneType::Library, player, &mut self.state.rng);
@@ -643,7 +639,6 @@ impl Game {
                     if !self.permanent_is_battlefield_creature(id) {
                         continue;
                     }
-                    self.journal_permanent(id);
                     if let Some(permanent) = self.state.permanents[id].as_mut() {
                         permanent.firebending_this_turn =
                             permanent.firebending_this_turn.saturating_add(*amount);
@@ -652,7 +647,6 @@ impl Game {
                 None
             }
             Effect::NoMaximumHandSize => {
-                self.journal_player(frame.controller);
                 self.state.players[frame.controller.0].no_maximum_hand_size = true;
                 None
             }
@@ -697,7 +691,6 @@ impl Game {
                 self.permanent_object_ref(id)?;
                 let power = self.effect_value(power, frame);
                 let toughness = self.effect_value(toughness, frame);
-                self.journal_permanent(id);
                 let permanent = self.state.permanents[id].as_mut()?;
                 permanent.temp_power += power;
                 permanent.temp_toughness += toughness;
@@ -709,7 +702,6 @@ impl Game {
                 };
                 self.permanent_object_ref(id)?;
                 self.change_plus_one_counters(id, *counters);
-                self.journal_permanent(id);
                 if let Some(permanent) = self.state.permanents[id].as_mut() {
                     permanent.temp_keywords = permanent.temp_keywords.union(keywords);
                 }
@@ -725,7 +717,6 @@ impl Game {
                         // Bounce a spell: its stack object ceases and the
                         // card returns to its owner's hand.
                         if let Some(index) = self.find_spell_on_stack_index(card) {
-                            self.journal_stack();
                             self.state.stack_objects.remove(index);
                             let owner = self.state.cards[card].owner;
                             self.move_card(card, ZoneType::Hand);
@@ -782,7 +773,6 @@ impl Game {
             } => {
                 for id in self.battlefield_permanents(frame.controller) {
                     if self.permanent_matches_predicate(id, predicate) {
-                        self.journal_permanent(id);
                         let permanent = self.state.permanents[id].as_mut()?;
                         permanent.temp_power += power;
                         permanent.temp_toughness += toughness;
@@ -848,7 +838,6 @@ impl Game {
             Effect::AddSubtypeToTarget { subtype, .. } => {
                 let chosen = self.present_primary_target(frame)?;
                 if let Target::Permanent(id) = chosen {
-                    self.journal_permanent(id);
                     let permanent = self.state.permanents[id].as_mut()?;
                     if !permanent.temp_subtypes.contains(subtype) {
                         permanent.temp_subtypes.push(subtype.clone());
@@ -859,7 +848,6 @@ impl Game {
             Effect::ExileIfDiesThisTurn { .. } => {
                 let chosen = self.present_primary_target(frame)?;
                 if let Target::Permanent(id) = chosen {
-                    self.journal_permanent(id);
                     self.state.permanents[id].as_mut()?.exile_if_dies_this_turn = true;
                 }
                 None
@@ -1072,7 +1060,6 @@ impl Game {
                     return None;
                 };
                 let watched = self.permanent_object_ref(permanent_id)?;
-                self.journal_permanent(permanent_id);
                 let controller = {
                     let permanent = self.state.permanents[permanent_id].as_mut()?;
                     // The land becomes a 0/0 creature with haste that's
@@ -1133,7 +1120,6 @@ impl Game {
                 mana,
                 until_end_of_combat,
             } => {
-                self.journal_player(frame.controller);
                 self.invalidate_mana_cache(frame.controller);
                 let player = &mut self.state.players[frame.controller.0];
                 if *until_end_of_combat {
@@ -1148,7 +1134,6 @@ impl Game {
             } => {
                 let chosen = self.present_primary_target(frame)?;
                 if let Target::Permanent(permanent_id) = chosen {
-                    self.journal_permanent(permanent_id);
                     if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                         permanent.temp_power += power;
                         permanent.temp_toughness += toughness;
@@ -1159,7 +1144,6 @@ impl Game {
             Effect::UntapTarget { .. } => {
                 let chosen = self.present_primary_target(frame)?;
                 if let Target::Permanent(permanent_id) = chosen {
-                    self.journal_permanent(permanent_id);
                     if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                         permanent.untap();
                         let controller = permanent.controller;
@@ -1177,7 +1161,6 @@ impl Game {
             Effect::GrantKeywordsToTarget { keywords, .. } => {
                 let chosen = self.present_primary_target(frame)?;
                 if let Target::Permanent(permanent_id) = chosen {
-                    self.journal_permanent(permanent_id);
                     if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                         permanent.temp_keywords = permanent.temp_keywords.union(keywords);
                     }
@@ -1265,7 +1248,6 @@ impl Game {
 
     fn source_permanent_mut(&mut self, frame: &EffectFrame) -> Option<&mut Permanent> {
         let permanent_id = self.source_permanent_id(frame)?;
-        self.journal_permanent(permanent_id);
         self.state.permanents[permanent_id].as_mut()
     }
 
