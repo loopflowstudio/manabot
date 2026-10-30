@@ -652,7 +652,7 @@ INT-9/14/15/17/18 lineage and their separate evidence limits remain at
 `76afdb68`, regardless of Task completion status.
 
 GOAL.md owns ETU-21/31/34 dispositions (history at `59f16e0d` / `60e2f897`);
-unavailable ed2 advice follows the [live-advice plan](../../docs/plans/live-belief-advice.md).
+unavailable ed2 advice follows the live-advice plan (retired from docs; in git history).
 
 ## Corrected-world training binding (2026-09-29)
 
@@ -1062,7 +1062,7 @@ not a strategic explanation established by scores.
 
 The 05:08 UTC Mini snapshot retains one running seed and two pending seeds.
 SQLite/source hashes bind the local demo; copied status is not live state. [Metric guidance](../../docs/experiment-metrics.md)
-owns semantics and snapshots; [demo evidence](../../docs/evidence/learning-dashboard-2026-10-08.md)
+owns semantics and snapshots; demo evidence (retired from docs; in git history)
 owns measured values and limits.
 
 TrainingRun/VerifyStore remain authoritative; W&B is optional projection.

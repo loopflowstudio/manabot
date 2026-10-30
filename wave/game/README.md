@@ -32,7 +32,7 @@ boundary.
 - Advice shows a policy's distribution at a live decision.
 
 Reference designs: [experience protocol v1](../../docs/architecture/experience-protocol-v1.md)
-and [Phase experience notes](../../docs/research/phase-experience.md). Earlier
+and Phase experience notes (retired from docs; in git history). Earlier
 charters are kept in [legacy-gui-charter.md](legacy-gui-charter.md) and
 [MEMORY.md](MEMORY.md).
 

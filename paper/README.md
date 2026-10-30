@@ -78,9 +78,7 @@ passing the corresponding directory instead of `report.md`.
 
 - `main.tex` / `manabot.pdf`: active results-first paper and built output.
 - `refs.bib`: cited influences and older entries retained for the archives.
-- `drafts/02-platform-and-challenges.tex` / `.pdf`: July platform draft;
-  its extreme random-play seat claims were later retracted.
-- `drafts/01-refuted-ledger.tex`: historical negative-results draft.
 - `understanding.md`: historical findings and corrections, not a live queue.
 
 Frozen reports and archives retain their original claims and corrections.
+The July platform and refuted-ledger drafts are in git history (`drafts/`).

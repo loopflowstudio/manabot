@@ -39,7 +39,6 @@
 
 ## Evidence
 
-- `docs/research/phase-experience.md`
 - `docs/architecture/experience-protocol-v1.md`
 - [Local challenger and shared-history evidence, 2026-09-25](../../docs/evidence/trained-challenger-2026-09-25.md)
 - Legacy implementation notes in `01-play-interface.md` and `05-polish.md`
@@ -55,7 +54,7 @@
 
 ## Live advice carry-forward (2026-09-24)
 
-The [unfinished live-advice design](../../docs/plans/live-belief-advice.md)
+The unfinished live-advice design (retired from docs; in git history)
 preserves ETU-14's pending work and release gates. The current checkout has
 `ed2` pre-command decision addresses, immutable pending roots promoted to Study,
 the Rules conditioning-index binding, and a selected tracked-posterior resolver.

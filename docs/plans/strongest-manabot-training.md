@@ -189,7 +189,7 @@ profile evidence; they must not pretend to perform all calibration anew.
 
 ## Measurement and evaluation
 
-The [candidate versus demo comparison protocol](candidate-demo-comparison.md)
+The candidate versus demo comparison protocol (retired; in git history)
 (ETU-84, 2026-09-29) proposes the concrete local KR 2 cohort, budgets and
 analysis. It awaits Jack Heart's acceptance in the comparison Task's design
 review; this approved budget plan does not itself accept that protocol.
