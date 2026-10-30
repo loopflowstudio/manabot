@@ -131,25 +131,40 @@ pipeline: `544ae312c:scratch/892c47-author-tla-cards.md`.
    tools in `scratch/tools/`). `test_ur_lessons_increment` reads the current
    world instead of pinning w13/28.
 
-## Remaining
-
-1. **Public-commitment parity bound by prefix (2026-10-29).** Rebound to the
-   w17 tape (curated sideboard configs; Island discard at 30 with 484 worlds,
+10. **Public-commitment parity bound by prefix.** Rebound to the w17 tape
+   (curated sideboard configs; Island discard at 30 with 484 worlds,
    `decline_learn` at 102). Viewer 0's tracker stops before Command 68 (South
    Pole Voyager revealed from library into hand: no transport fact); viewer 1
-   tracks all 142. `TRACKED_COMMANDS` in `academy/public_commitment_parity.py`;
-   Task 3be183 owns the transport. Receipt
-   `conformance/public-commitment-parity-w17-v1`.
-2. CI fixes: rules-audit evidence paths follow the moved card tests
-   (`tests/cards/<set>.rs`, `cardsets/tla.rs`); the choice-navigation
-   Playwright spec reads `choice-navigation-w17.json`.
-3. f871a8 told `card_def_id` is required (2026-10-29). Demo; PR394 stays draft.
+   tracks all 142 (`TRACKED_COMMANDS` in `academy/public_commitment_parity.py`;
+   receipt `conformance/public-commitment-parity-w17-v1`). Task 3be183
+   (unstarted) owns the transport and removing the bound.
+11. CI follow-ups: rules-audit evidence cites `tests/cards/<set>.rs` and
+   `cardsets/tla.rs`; the choice-navigation spec reads `choice-navigation-w17.json`.
+   f871a8 was told `card_def_id` is required (comment 2026-10-29 22:47, plus a
+   correction naming `eligibility`/`reason` as the support fields).
 
-Check (2026-10-29, after concept-review pass): debug `cargo test --no-fail-fast`
-0 failures; clippy `-D warnings` (with and without `python`) and fmt clean.
-pytest: semantic + model 334 pass/1 skip; current-world arena/monitor/choice
-66 pass; academy 257 pass, 2 fail (public-commitment pair, above); CI
-coverage/compile `--check` steps pass. `rg 'tla-pool-v1|semantic_key'` hits only
-frozen v1/w11 evidence and readers and WORLDS.md history. After 93a542677:
-clippy `-D warnings` clean, `cargo test --test cards` 235 pass,
-`tests/semantic/test_current_content.py` 17 pass.
+## Concept review, second pass (2026-10-29, headless)
+
+No design change. The implemented concepts match the accepted direction: set
+files are the only card representation; `world` pool = default pack;
+`supports_card`/`unsupported_cards` answer from definitions plus
+`tla::INCOMPLETE`; `set_cards` is the set filter; authored setup packs remain
+decklists only (frozen setups and f871a8's exact-preset selection need their
+identities). The v1 Python coverage gate checks only the frozen v1 corpus, off
+the current path, so it is not the review-record gate Jack Heart removed.
+
+Counterexample to show at demo (settled by Jack Heart's "key prefix" wording,
+not an open choice for this PR): Corrupt Court Official, Epic Downfall and
+Lightning Strike are TLA reprints filed under their first printings (`ptk`,
+`eld`, `ths`), so `set_cards(["tla"])` omits them. No authored TLA deck uses
+them today. A printing-aware "TLA-legal" filter would be a new product concept
+(printings per card), for f871a8 or a later Task if Jack wants it.
+
+## Remaining
+
+1. PR394 CI at head 07fcdb6aa (b1579b887's run was cancelled, so the
+   regenerated authored-match parity receipt has no CI result yet).
+2. Demo; PR394 stays draft.
+
+Check (2026-10-29): academy pytest 259 pass; current-world arena/monitor 66
+pass; CI green at 38c883f08, pending at 07fcdb6aa.

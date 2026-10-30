@@ -13,7 +13,7 @@ and pool-membership choices that were here (history: `be2b7586b:scratch/question
   `cards()`, rather than a field on every definition. Since the one-representation
   rewrite every non-token definition outside `INCOMPLETE` is eligible. Crossroads of Destiny moved to `cards/fixtures.rs` but stays
   in the default pack, because Rust integration tests and `manabot/verify` build
-  games from it. D1 keeps the `tla-pool-v1` key; `set_cards` is the set filter.
+  games from it. `set_cards` is the set filter (pool key since renamed `"world"`).
   Undefined TLA cards are no longer listed as unsupported pool rows.
 - Not rewritten (dated evidence): the Academy curated pack `local_identity` values
   keep pre-rename keys.
