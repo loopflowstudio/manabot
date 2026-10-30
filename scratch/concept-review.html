@@ -34,7 +34,7 @@ ol.q ul li{margin:4px 0}
 </head>
 <body><main>
 <h1>Deck runs and the world</h1>
-<p class="meta">Task f871a8 (PR #395) · concept-review, headless · 2026-10-30 · built from <code>scratch/f871a8-import-decklist-files.md</code>, <code>manabot/infra/config.py</code>, <code>manabot/training/execution.py</code>, <code>manabot/model/world.py</code>, <code>academy/server.py</code>, <code>managym/src/cards/setups.rs</code>, <code>experiments/regimes/*.json</code></p>
+<p class="meta">Task f871a8 (PR #395) · concept-review, headless · 2026-10-30 (re-review at 623df4218) · built from <code>scratch/f871a8-import-decklist-files.md</code>, <code>manabot/infra/config.py</code>, <code>manabot/training/execution.py</code>, <code>manabot/model/world.py</code>, <code>academy/server.py</code>, <code>managym/src/cards/setups.rs</code>, <code>experiments/regimes/*.json</code></p>
 
 <div class="ask">
 <p><strong>Decision needed:</strong> a deck run still writes two of main's “pack” selectors with the value <code>"world"</code>. Does Jack's “the world is the only concept” extend to them?</p>
@@ -50,12 +50,10 @@ ol.q ul li{margin:4px 0}
 <tr><td>Save a deck-run checkpoint</td><td>World binding</td><td><code>deck_world</code>: world, <code>world_digest</code>, rules, I/O</td></tr>
 </table>
 
-<h2>Settled here (names only)</h2>
-<p><span class="label now">now</span>World identity is read through the pool API:</p>
-<pre>managym.content_pool(managym.WORLD_SETUP)["content_digest"]   # academy/server.py, model/world.py</pre>
-<p><span class="label prop">proposed</span>One world-named accessor used at both sites:</p>
-<pre>managym.world_identity()   # version + card digest, typed in __init__.pyi</pre>
-<p class="mut"><code>content_pool</code> stays for authored packs' policy vocabulary.</p>
+<h2>Already settled</h2>
+<p>World identity reads through one world-named accessor, used by checkpoints and Academy (69e245a31):</p>
+<pre>managym.world_identity()   # {world_version, card_digest}</pre>
+<p class="mut">This re-review found no other content, pool or pack names on the Python deck, training or checkpoint surface. Rust admission still reads <code>content_pool(WORLD_POOL)</code> internally; that is main's descriptor plumbing, not a surface. Only the question below remains.</p>
 
 <h2>The open mismatch</h2>
 <p><span class="label now">now</span> A deck run sets main's selectors:</p>

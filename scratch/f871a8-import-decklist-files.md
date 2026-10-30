@@ -160,6 +160,12 @@ authored packs' vocabulary (`policy_catalog`, `authored_match_receipt`).
 Check: debug lib world/pool 4 passed, clippy/fmt clean; world/catalog/
 policy-catalog/training-decks/decklist/Academy-decklist 48 passed; parity
 receipt rewritten, verifies; decklist-import 8 passed after 69e245a31.
+Re-review (2026-10-30, headless, at 623df4218): no further change implied.
+The Python deck/training/checkpoint surface (`Deck`, `DeckIssue`,
+`check_decks`, `world_identity`, `deck_world`, `deck_source`) names no
+content/pool/pack except the two selectors below; Rust admission reading
+`content_pool(WORLD_POOL)` is main's internal descriptor plumbing, not a
+surface. Still blocked on the selector question.
 
 ## Open for Jack Heart's review (not decided)
 
