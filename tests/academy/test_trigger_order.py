@@ -136,7 +136,7 @@ def test_survival_orders_cross_consumers(
     assert session.env.state_digest() == initial_digest == replay.state_digest()
     evidence = json.loads(
         (
-            Path(__file__).parents[2] / "academy/fixtures/trigger-order-w15.json"
+            Path(__file__).parents[2] / "academy/fixtures/trigger-order-w17.json"
         ).read_text()
     )
     capture = json.loads(env.capture_decision(0).to_json())

@@ -1,5 +1,5 @@
 use super::{
-    card::{Card, Keywords},
+    card::{ActivatedAbilityDefinition, Card, Keywords},
     game_object::{CardId, ObjectId, PlayerId},
     mana::Mana,
 };
@@ -20,6 +20,10 @@ pub struct Permanent {
     pub plus1_counters: i32,
     /// "Can't be blocked this turn" — cleared during cleanup.
     pub cant_be_blocked_this_turn: bool,
+    /// Firebending granted until end of turn ("gains firebending 5"): red
+    /// mana added when it attacks, summed over grants. Cleared at cleanup.
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub firebending_this_turn: u8,
     /// Earthbend animation: this permanent is a 0/0 creature with haste in
     /// addition to its printed types (still a land). No duration — it lasts
     /// as long as the permanent does.
@@ -34,9 +38,34 @@ pub struct Permanent {
     pub attacking: bool,
     /// True only for this incarnation entering as a resolving cast spell.
     pub was_cast: bool,
+    /// Exhaust abilities (indices into the card's activated abilities) this
+    /// object has activated; a new object starts fresh (CR 400.7).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub exhausted: Vec<usize>,
+    /// "Once each turn" abilities this object has activated this turn,
+    /// cleared at cleanup.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub activated_this_turn: Vec<usize>,
 }
 
 impl Permanent {
+    /// Whether this object has used up the ability: exhaust once ever
+    /// (CR 702.177a), "once each turn" already this turn (CR 602.5b).
+    pub fn activation_used(&self, index: usize, ability: &ActivatedAbilityDefinition) -> bool {
+        (ability.exhaust && self.exhausted.contains(&index))
+            || (ability.once_each_turn && self.activated_this_turn.contains(&index))
+    }
+
+    /// Record an activation against the ability's use limits.
+    pub fn record_activation(&mut self, index: usize, ability: &ActivatedAbilityDefinition) {
+        if ability.exhaust {
+            self.exhausted.push(index);
+        }
+        if ability.once_each_turn {
+            self.activated_this_turn.push(index);
+        }
+    }
+
     pub fn new(id: ObjectId, card_id: CardId, card: &Card) -> Self {
         Self {
             id,
@@ -50,12 +79,15 @@ impl Permanent {
             temp_toughness: 0,
             plus1_counters: 0,
             cant_be_blocked_this_turn: false,
+            firebending_this_turn: 0,
             animated: false,
             temp_keywords: Keywords::default(),
             temp_subtypes: Vec::new(),
             exile_if_dies_this_turn: false,
             attacking: false,
             was_cast: false,
+            exhausted: Vec::new(),
+            activated_this_turn: Vec::new(),
         }
     }
 
@@ -76,14 +108,16 @@ impl Permanent {
     }
 
     pub fn can_tap(&self, card: &Card) -> bool {
-        !(self.tapped || (self.summoning_sick && self.is_creature(card)))
+        // Haste bypasses sickness; a temporary grant must not erase the
+        // restriction that applies again when the grant expires (CR 702.10).
+        !(self.tapped
+            || (self.summoning_sick
+                && self.is_creature(card)
+                && !self.effective_keywords(card).haste))
     }
 
     pub fn can_attack(&self, card: &Card) -> bool {
-        self.is_creature(card)
-            && !self.effective_keywords(card).defender
-            && !self.tapped
-            && !self.summoning_sick
+        self.is_creature(card) && !self.effective_keywords(card).defender && self.can_tap(card)
     }
 
     pub fn can_block(&self, card: &Card) -> bool {
@@ -135,7 +169,9 @@ impl Permanent {
         self.temp_power = 0;
         self.temp_toughness = 0;
         self.cant_be_blocked_this_turn = false;
+        self.firebending_this_turn = 0;
         self.temp_keywords = Keywords::default();
         self.temp_subtypes.clear();
+        self.activated_this_turn.clear();
     }
 }

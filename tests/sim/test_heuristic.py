@@ -166,6 +166,9 @@ def test_polarity_is_derived_for_every_targeted_spell_in_the_pool() -> None:
         "Yip Yip!": "beneficial",
         "Fancy Footwork": "beneficial",
         "Lightning Bolt": "harmful",
+        "Counterspell": "harmful",
+        "Cunning Maneuver": "beneficial",
+        "Pillar Launch": "beneficial",
         # The Elemental world's ten decks.
         "Boomerang Basics": "harmful",
         "Combustion Technique": "harmful",
@@ -186,6 +189,17 @@ def test_polarity_is_derived_for_every_targeted_spell_in_the_pool() -> None:
         "Origin of Metalbending": None,
         "Sokka's Haiku": None,
         "True Ancestry": None,
+        # TLA T2: earthbending one's own land, and effects (airbend, linked
+        # exile, hand reveal, graveyard return) the heuristic does not rate.
+        "Earthbending Lesson": "beneficial",
+        "Rockalanche": "beneficial",
+        "Airbender's Reversal": None,
+        "Airbending Lesson": None,
+        "Avatar's Wrath": None,
+        "Dai Li Indoctrination": None,
+        "Lost Days": None,
+        "Sandbenders' Storm": None,
+        "Zuko's Conviction": None,
     }
     combustion = spells["Combustion Technique"]
     assert (combustion.damage, combustion.lesson_damage) == (2, True)
@@ -197,24 +211,25 @@ def test_polarity_is_derived_for_every_targeted_spell_in_the_pool() -> None:
     assert not spells["Fancy Footwork"].side_restricted
 
 
-def test_unknown_or_mixed_target_ops_have_no_polarity() -> None:
+def test_unknown_or_mixed_target_effects_have_no_polarity() -> None:
     from manabot.sim.heuristic import derive_targeted_spells
 
-    def source(*ops: dict[str, Any]) -> dict[str, Any]:
-        program = {
-            "kind": "spell",
-            "targets": [{"role": "t", "selector": {"kind": "creature"}}],
-            "ops": [dict(op, target="t") for op in ops],
-        }
-        return {"definitions": [{"registry_name": "X", "programs": [program]}]}
+    def spell(*effects: dict[str, Any]) -> list[dict[str, Any]]:
+        targeting = [{"spec": "Creature", "min": 1, "max": 1}]
+        return [{"name": "X", "spell_effects": list(effects), "targeting": targeting}]
 
-    assert derive_targeted_spells(source({"op": "tap"}))["X"].polarity is None
-    mixed = source({"op": "deal_damage", "amount": 1}, {"op": "untap"})
+    def target(name: str, **fields: Any) -> dict[str, Any]:
+        return {name: {**fields, "target": "Creature"}}
+
+    assert derive_targeted_spells(spell(target("TapTarget")))["X"].polarity is None
+    mixed = spell(target("DealDamage", amount=1), target("UntapTarget"))
     assert derive_targeted_spells(mixed)["X"].polarity is None
-    shrink = source({"op": "modify_pt", "power": -2, "toughness": -2})
+    shrink = spell(target("BuffTarget", power=-2, toughness=-2))
     assert derive_targeted_spells(shrink)["X"] == TargetedSpell(
         "harmful", "creature", False, pump=(-2, -2)
     )
+    modal = spell({"Modal": {"modes": [[target("DealDamage", amount=4)]]}})
+    assert derive_targeted_spells(modal)["X"] == TargetedSpell(None, "creature", False)
 
 
 # Priority -------------------------------------------------------------------

@@ -4,12 +4,12 @@ use managym::{
     state::game_object::PlayerId,
 };
 
-use super::helpers::*;
+use crate::support::game::*;
 
 /// CR 117.3a — The active player receives priority at the start of a main phase.
 #[test]
 fn cr_117_3a_active_player_gets_priority_first() {
-    let mut s = Scenario::new(mountain_deck(), mountain_deck(), 21);
+    let mut s = Scenario::new(deck(&[("Mountain", 40)]), deck(&[("Mountain", 40)]), 21);
 
     s.advance_to_step(StepKind::Main);
 
@@ -20,7 +20,7 @@ fn cr_117_3a_active_player_gets_priority_first() {
 /// CR 117.4 — If all players pass in succession on an empty stack, the game advances.
 #[test]
 fn cr_117_4_all_passes_with_empty_stack_advances_step() {
-    let mut s = Scenario::new(mountain_deck(), mountain_deck(), 22);
+    let mut s = Scenario::new(deck(&[("Mountain", 40)]), deck(&[("Mountain", 40)]), 22);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.pass_priority();
@@ -32,7 +32,7 @@ fn cr_117_4_all_passes_with_empty_stack_advances_step() {
 /// Negative: nonactive player does not get sorcery-speed actions on opponent's turn.
 #[test]
 fn cr_117_negative_nonactive_player_has_only_pass_priority() {
-    let mut s = Scenario::new(mountain_deck(), mountain_deck(), 23);
+    let mut s = Scenario::new(deck(&[("Mountain", 40)]), deck(&[("Mountain", 40)]), 23);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.pass_priority();

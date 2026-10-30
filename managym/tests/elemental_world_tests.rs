@@ -1,11 +1,11 @@
 // Full Elemental admission: exact rosters, complete native coherence and bounded games.
-use managym::{cardsets::alpha::ContentPack, semantic::SemanticPack, Game};
+use managym::{cards::setups::authored_pack, Game};
 
 #[test]
 fn retained_professor_cast_prefix_can_enter_and_finish_mana_payment() {
     // Native failure retained by MTG-175: one Forest, off-color lands and
     // Prophetic Prism can pay 2GG, provided Prism preserves the Forest.
-    let pack = SemanticPack::elemental_world().unwrap();
+    let pack = authored_pack("elemental_world").unwrap();
     let mut configs = vec![
         pack.player_config("arena-seat-0", "elemental_wb").unwrap(),
         pack.player_config("arena-seat-1", "elemental_ug").unwrap(),
@@ -32,38 +32,8 @@ fn retained_professor_cast_prefix_can_enter_and_finish_mana_payment() {
 }
 
 #[test]
-fn selected_world_compiles_every_card_without_reduced_native_rules() {
-    for semantic in [
-        SemanticPack::elemental_world().unwrap(),
-        SemanticPack::optional_payments().unwrap(),
-    ] {
-        assert_eq!(semantic.definitions.len(), 100);
-        assert_eq!(semantic.decks.len(), 10);
-        let compiled = semantic.compile_content_pack().unwrap();
-        let native = ContentPack::default();
-        for definition in &semantic.definitions {
-            let name = &definition.registry_name;
-            let mut actual = compiled
-                .definition(compiled.definition_id(name).unwrap())
-                .unwrap()
-                .clone();
-            let mut expected = native
-                .definition(native.definition_id(name).unwrap())
-                .unwrap()
-                .clone();
-            if expected.targeting.is_empty() {
-                actual.targeting.clear();
-            }
-            actual.abilities.sort_by_key(|a| format!("{a:?}"));
-            expected.abilities.sort_by_key(|a| format!("{a:?}"));
-            assert_eq!(actual, expected, "compiled rules drift for {name}");
-        }
-    }
-}
-
-#[test]
 fn every_pair_and_mirror_uses_the_selected_world_and_completes() {
-    let semantic = SemanticPack::optional_payments().unwrap();
+    let semantic = authored_pack("optional_payments").unwrap();
     for (left, first) in semantic.decks.iter().enumerate() {
         for (right, second) in semantic.decks.iter().enumerate() {
             let mut configs = vec![
@@ -76,8 +46,8 @@ fn every_pair_and_mirror_uses_the_selected_world_and_completes() {
             let seed = 16400 + (left * 10 + right) as u64;
             let mut game = Game::new(configs, seed, true);
             assert_eq!(
-                game.state.content.compiled_semantics().unwrap().ir_hash,
-                semantic.ir_hash
+                game.state.content.pack_key(),
+                Some(semantic.pack_key.as_str())
             );
             let winner = game
                 .random_playout(30_000, None)

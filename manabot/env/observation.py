@@ -49,6 +49,24 @@ LEGACY_RELATION_DIM = 32
 RELATION_DIM = 33
 # V4 appends eligibility; row validity keeps its v2/v3 position.
 RELATION_VALID_INDEX = 31
+# V5 widens player and card rows; v1-v4 keep the legacy widths.
+SPEND_SUBTYPES = ("Lesson", "Shrine", "Ally")
+LEGACY_PLAYER_DIM = 40
+PLAYER_RESTRICTED_INDEX = LEGACY_PLAYER_DIM
+PLAYER_HAND_ONLY_INDEX = PLAYER_RESTRICTED_INDEX + len(SPEND_SUBTYPES) * 6
+PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX = PLAYER_HAND_ONLY_INDEX + 1
+PLAYER_DIM = PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX + 1
+LEGACY_CARD_DIM = 41
+# V5 card terms start where v4's validity flag was; validity stays last.
+CARD_PERMISSION_INDEX = LEGACY_CARD_DIM - 1
+CARD_X_INDEX = CARD_PERMISSION_INDEX + 12
+CARD_DIM = CARD_X_INDEX + 2 + 1
+LEGACY_PERMANENT_DIM = 29
+# V5 permanent terms start where v4's validity flag was; validity stays last.
+PERMANENT_EXHAUSTED_INDEX = LEGACY_PERMANENT_DIM - 1
+PERMANENT_ONCE_EACH_TURN_INDEX = PERMANENT_EXHAUSTED_INDEX + 1
+PERMANENT_FIREBENDING_INDEX = PERMANENT_ONCE_EACH_TURN_INDEX + 1
+PERMANENT_DIM = PERMANENT_FIREBENDING_INDEX + 2
 
 
 # -----------------------------------------------------------------------------
@@ -81,18 +99,23 @@ class ObservationEncoder:
 
         # Define dimensions for players, cards, permanents.
         # Player: life + is_active + zones + phase/step one-hots + gy
-        # lessons + until-end-of-combat mana + pooled and Lesson-only colors.
-        self.player_dim = 2 + self.num_zones + self.num_phases + self.num_steps + 14
+        # lessons + until-end-of-combat mana + pooled and spend-restricted colors;
+        # v5 adds restricted mana by spending subtype, the hand-only lock and
+        # no maximum hand size.
         # Card: zone one-hot + is_mine + P/T + mana value + 6 type flags +
         # 12 keywords + is_token/is_ally/is_lesson tags + ward flag/cost +
-        # kicker flag/cost + hexproof + outside + indestructible + legendary + validity.
-        self.card_dim = (self.num_zones + 1 + 2 + 1 + 6 + 12 + 3 + 4 + 1) + 4
+        # kicker flag/cost + hexproof + outside + indestructible + legendary;
+        # v5 adds cast-permission terms and announced X; validity is last.
+        current = config.policy_input_version >= 5
+        self.player_dim = PLAYER_DIM if current else LEGACY_PLAYER_DIM
+        self.card_dim = CARD_DIM if current else LEGACY_CARD_DIM
         # Permanent: is_mine, tapped, damage, summoning sick, +1/+1 counters,
         # can't-be-blocked-this-turn, effective power/toughness, animated
         # (earthbent land), exile-linkage (Jailer), 13 effective-keyword flags
         # (printed + until-EOT grants), death-to-exile replacement, definition,
-        # temporary Avatar subtype, validity.
-        self.permanent_dim = 28
+        # temporary Avatar subtype, attacking; v5 adds used exhaust and
+        # once-each-turn abilities and granted firebending; validity is last.
+        self.permanent_dim = PERMANENT_DIM if current else LEGACY_PERMANENT_DIM
         self.event_dim = 12 if config.policy_history_version == 1 else 7
 
         # Preserve attack/decline independently of action family and focus.
@@ -209,7 +232,9 @@ class ObservationEncoder:
             ("agent_cards", obs.agent_cards, 1.0),
             ("opponent_cards", obs.opponent_cards, 0.0),
         ):
-            out[key] = self._encode_cards(cards, is_mine=is_mine)
+            out[key] = self._encode_cards(
+                cards, is_mine=is_mine, viewer=obs.agent.id, turn=obs.turn.turn_number
+            )
         # Outside copies occupy explicit rows after visible owner cards. They
         # have no zone bits; the outside marker identifies their location.
         for seat, (cards, player) in enumerate(
@@ -384,6 +409,17 @@ class ObservationEncoder:
 
         arr[28:34] = np.asarray(player.mana, dtype=np.float32) / 10.0
         arr[34:40] = np.asarray(player.lesson_mana, dtype=np.float32) / 10.0
+        if self.player_dim == PLAYER_DIM:
+            # A class admitting several subtypes counts under each.
+            for index, subtype in enumerate(SPEND_SUBTYPES):
+                start = PLAYER_RESTRICTED_INDEX + 6 * index
+                for restricted in player.restricted_mana:
+                    if subtype in (*restricted.spells, *restricted.abilities):
+                        arr[start : start + 6] += (
+                            np.asarray(restricted.mana, dtype=np.float32) / 10.0
+                        )
+            arr[PLAYER_HAND_ONLY_INDEX] = float(player.hand_only_until is not None)
+            arr[PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX] = float(player.no_maximum_hand_size)
 
         self.object_to_index[player.id] = self.current_object_index
         self.current_object_index += 1
@@ -392,16 +428,22 @@ class ObservationEncoder:
     # -------------------------------------------------------------------------
     # Cards (with validity mask support)
     # -------------------------------------------------------------------------
-    def _encode_cards(self, cards: List[managym.Card], is_mine: float) -> np.ndarray:
+    def _encode_cards(
+        self, cards: List[managym.Card], is_mine: float, viewer: int, turn: int
+    ) -> np.ndarray:
         return self._encode_objects(
             items=cards,
             max_items=self.cards_per_player,
             dim=self.card_dim,
             label="Card list",
-            encode_item=lambda card: self._encode_card_features(card, is_mine),
+            encode_item=lambda card: self._encode_card_features(
+                card, is_mine, viewer, turn
+            ),
         )
 
-    def _encode_card_features(self, card: managym.Card, is_mine: float) -> np.ndarray:
+    def _encode_card_features(
+        self, card: managym.Card, is_mine: float, viewer: int, turn: int
+    ) -> np.ndarray:
         arr = np.zeros(self.card_dim, dtype=np.float32)
         i = 0
         zone_val = int(card.zone) & 0xFF
@@ -469,6 +511,29 @@ class ObservationEncoder:
         arr[i] = float(card.keywords.hexproof)
         arr[38] = float(card.keywords.indestructible)
         arr[39] = float(card.is_legendary)
+        if self.card_dim == CARD_DIM:
+            permission = card.cast_permission
+            if permission is not None:
+                base = CARD_PERMISSION_INDEX
+                arr[base] = 1.0
+                arr[base + 1] = float(permission.player_id == viewer)
+                if permission.cost is not None:
+                    arr[base + 2] = 1.0
+                    arr[base + 3] = float(permission.cost.mana_value) / 10.0
+                arr[base + 4] = float(permission.this_turn)
+                arr[base + 5] = float(permission.own_turn_only)
+                # Not usable until a later turn than this one.
+                arr[base + 6] = float(
+                    permission.after_turn is not None and turn <= permission.after_turn
+                )
+                arr[base + 7] = float(permission.source_permanent_id is not None)
+                arr[base + 8] = float(permission.flash)
+                arr[base + 9] = float(permission.any_mana)
+                arr[base + 10] = float(permission.waterbend)
+                arr[base + 11] = float(permission.foretold)
+            if card.x is not None:
+                arr[CARD_X_INDEX] = 1.0
+                arr[CARD_X_INDEX + 1] = float(card.x) / 10.0
         # Set validity flag (card exists)
         arr[-1] = 1.0
         return arr
@@ -519,7 +584,12 @@ class ObservationEncoder:
         arr[23] = float(perm.exile_if_dies_this_turn)
         arr[25] = float(perm.keywords.indestructible)
         arr[26] = float("Avatar" in perm.temp_subtypes)
+        arr[27] = float(perm.attacking)
         arr[PERMANENT_DEFINITION_INDEX] = perm.registry_key + 1
+        if self.permanent_dim == PERMANENT_DIM:
+            arr[PERMANENT_EXHAUSTED_INDEX] = float(perm.exhausted_abilities)
+            arr[PERMANENT_ONCE_EACH_TURN_INDEX] = float(perm.once_each_turn_used)
+            arr[PERMANENT_FIREBENDING_INDEX] = float(perm.granted_firebending) / 10.0
         # Set validity flag (permanent exists)
         arr[-1] = 1.0
         return arr

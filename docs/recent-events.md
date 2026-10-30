@@ -135,7 +135,7 @@ These are correctness fixtures, not scientific training or evaluation evidence.
 ## Current continuation input
 
 Public history and current continuation are separate inputs. Fresh
-`ObservationConfig` uses policy input v4: a native `relations[64,33]` float32
+`ObservationConfig` uses policy input v5: a native `relations[64,33]` float32
 buffer represents ordered stack entries, announced targets and clauses, chosen
 modes/abilities, kicker, reserved sacrifice, suspended payment obligations, and
 waiting triggers with their ability and causal context.
@@ -143,8 +143,11 @@ The version is recorded in checkpoint configuration and world input binding.
 Loading a checkpoint whose observation configuration omits the version selects
 v1, with its original tensors, parameter names and meaning. Loading never trains
 or upgrades those weights. V2/v3 retain their original 32 columns and architecture;
-v4 appends one column without reinterpreting them. Native scalar and vector
-buffers bind the version by their relation width (32 or 33).
+v4 appends one column without reinterpreting them. V5 keeps v4's relations and
+widens player rows to 59 columns and card rows to 55 for exile cast permissions,
+the hand-only lock, restricted mana by spending subtype and announced X
+(`WORLDS.md`, w16). Native scalar and vector buffers bind the version by their
+relation width (32 or 33) and, at 33, their player width (40 or 59).
 
 V1 checkpoints still lack continuation input. A matched-input LLM comparison
 requires a policy trained on the same input version and an explicitly matched public-history
@@ -167,13 +170,13 @@ and frozen-world design.
 
 Each frame contributes a header, followed by ordered target, trigger-context,
 reserved-sacrifice, hybrid-cost and mana-output rows. Mana-output rows reuse
-the mode, mana amounts and Lesson flag columns for each possible output. Columns are:
+the mode, mana amounts and spending-restriction flag columns for each possible output. Columns are:
 
 | Columns | Meaning |
 | --- | --- |
 | 0–4 | Row kind; frame and parent ordinals (one-based); frame kind; controller role |
 | 5–10 | Source definition and object link (one-based); mode, ability, kicker, active clause |
-| 11–21 | Cost present; W/U/B/R/G/C/generic amounts; Lesson restriction; waterbend; decline allowed |
+| 11–21 | Cost present; W/U/B/R/G/C/generic amounts; restricted mana may pay (column name `lesson`); waterbend; decline allowed |
 | 22–29 | Target clause; target definition, object link and player role; hybrid colors; suspended decision kind; target ordinal |
 | 30–31 | Ability resolutions this turn; row validity |
 | 32 (v4 only) | Target legality at resolution start: 0 unknown/not evaluated, 1 legal, 2 illegal |

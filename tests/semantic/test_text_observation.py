@@ -6,10 +6,18 @@ from pathlib import Path
 
 from managym.decision import SemanticContractError
 from managym.decision_capture import DecisionInput
+import numpy as np
 import pytest
 
+from manabot.env.observation import (
+    CARD_PERMISSION_INDEX,
+    PERMANENT_ONCE_EACH_TURN_INDEX,
+    ObservationSpace,
+)
+from manabot.infra.config import ObservationConfig
 from manabot.semantic.text_observation import (
     RepresentationOverflow,
+    TextDecision,
     TextEncodingError,
     capture_text_decision,
     render_decision,
@@ -197,3 +205,85 @@ def test_stack_text_uses_exact_native_links_over_frozen_card_ids() -> None:
     ]
     assert "no current object link" in stack
     assert "targets clause 1: D" in stack
+
+
+def test_ally_restricted_mana_is_not_described_as_lesson_mana() -> None:
+    env = priority_root((), ("Jasmine Dragon Tea Shop",))
+    submit_response(env, capture_text_decision(env), "A0")
+    modes = capture_text_decision(env)
+    green = next(a for a in modes.actions if "Add {G}" in a.description)
+    submit_response(env, modes, green.reference)
+    text = capture_text_decision(env).text
+    assert "Restricted mana: W 0, U 0, B 0, R 0, G 1, C 0." in text
+    assert "Lesson-only" not in text and "Lesson spending" not in text
+    assert "Restricted mana for Ally spells or abilities of Ally sources: G 1." in text
+
+
+def _viewer_observation(decision: TextDecision) -> managym.Observation:
+    source = DecisionInput.model_validate_json(decision.capture_json)
+    return managym.Observation.from_json(json.dumps(source.observation.viewer_state))
+
+
+def test_foretold_card_and_its_permission_reach_only_its_owner() -> None:
+    """Text and both encoders show the owner its foretold card and terms; the
+    opponent's text, JSON and tensor hold no trace beyond the exile count."""
+    env = priority_root(("Sozin's Comet",), ("Mountain", "Mountain"))
+    decision = capture_text_decision(env)
+    foretell = next(a for a in decision.actions if "Foretell" in a.description)
+    submit_response(env, decision, foretell.reference)
+
+    owner = capture_text_decision(env)
+    assert "foretold, face down" in owner.text
+    assert "may be played from exile by You: cast for {2}{R}, only after turn" in (
+        owner.text
+    )
+    space = ObservationSpace(ObservationConfig())
+    owner_rows = space.encode(_viewer_observation(owner))["agent_cards"]
+    assert owner_rows[:, CARD_PERMISSION_INDEX + 11].sum() == 1
+
+    pass_priority = next(a for a in owner.actions if "Pass" in a.description)
+    submit_response(env, owner, pass_priority.reference)
+    opponent = capture_text_decision(env)
+    # The opponent's deck holds Comets too; none of the owner's may show.
+    assert not any(
+        "(Sozin's Comet)" in line and "owner Opponent" in line
+        for line in opponent.text.splitlines()
+    )
+    assert "foretold" not in opponent.text
+    observation = _viewer_observation(opponent)
+    assert all(card.name != "Sozin's Comet" for card in observation.opponent_cards)
+    assert observation.opponent.zone_counts[5] == 1
+    encoded = space.encode(observation)
+    for key in ("agent_cards", "opponent_cards"):
+        assert not encoded[key][:, CARD_PERMISSION_INDEX].any()
+
+
+def test_once_each_turn_use_reaches_text_and_both_encoders() -> None:
+    """Barrels' once-each-turn mana ability, once used, is in the text and in
+    the same v5 permanent column of the reference and native encoders."""
+    env = priority_root((), ("Barrels of Blasting Jelly", "Mountain"))
+    decision = capture_text_decision(env)
+    barrels = next(
+        a
+        for a in decision.actions
+        if "Barrels of Blasting Jelly" in a.description and "Activate" in a.description
+    )
+    submit_response(env, decision, barrels.reference)
+    while (
+        "once-each-turn abilities used this turn 1"
+        not in (decision := capture_text_decision(env)).text
+    ):
+        submit_response(env, decision, decision.actions[0].reference)
+
+    observation = _viewer_observation(decision)
+    space = ObservationSpace(ObservationConfig())
+    encoded = space.encode(observation)
+    row = next(
+        index
+        for index, permanent in enumerate(observation.agent_permanents)
+        if permanent.once_each_turn_used
+    )
+    assert encoded["agent_permanents"][row, PERMANENT_ONCE_EACH_TURN_INDEX] == 1
+    native = env.encode_observation(observation, policy_input_version=5)
+    for key, value in encoded.items():
+        np.testing.assert_array_equal(native[key], value, err_msg=key)

@@ -18,8 +18,7 @@ use crate::{
         action::AgentError,
         observation::Observation,
         observation_encoder::{
-            encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM, CARD_DIM,
-            PERMANENT_DIM, PLAYER_DIM,
+            encode_into, EncodedObservationMut, ObservationEncoderConfig, ACTION_DIM,
         },
         opponent::OpponentPolicy,
         rollout_pool::RolloutPool,
@@ -315,7 +314,21 @@ pub(super) fn buffer_input_version(buffers: &Bound<'_, PyDict>) -> PyResult<u8> 
     let shape: Vec<usize> = relations.getattr("shape")?.extract()?;
     match shape.last() {
         Some(&crate::agent::continuation::LEGACY_RELATION_DIM) => Ok(3),
-        Some(&crate::agent::continuation::RELATION_DIM) => Ok(4),
+        // v5 keeps v4's relations and widens the player rows.
+        Some(&crate::agent::continuation::RELATION_DIM) => {
+            let player: Vec<usize> = buffers
+                .get_item("agent_player")?
+                .ok_or_else(|| PyValueError::new_err("missing agent_player"))?
+                .getattr("shape")?
+                .extract()?;
+            Ok(
+                if player.last() == Some(&crate::agent::observation_encoder::PLAYER_DIM) {
+                    5
+                } else {
+                    4
+                },
+            )
+        }
         _ => Err(PyValueError::new_err(
             "unsupported continuation relation width",
         )),
@@ -387,40 +400,45 @@ fn read_observation_buffers(
             "float32",
         )?
         .unbind(),
-        agent_player: require_numpy_array(buffers, "agent_player", &[n, 1, PLAYER_DIM], "float32")?
-            .unbind(),
+        agent_player: require_numpy_array(
+            buffers,
+            "agent_player",
+            &[n, 1, c.player_dim()],
+            "float32",
+        )?
+        .unbind(),
         opponent_player: require_numpy_array(
             buffers,
             "opponent_player",
-            &[n, 1, PLAYER_DIM],
+            &[n, 1, c.player_dim()],
             "float32",
         )?
         .unbind(),
         agent_cards: require_numpy_array(
             buffers,
             "agent_cards",
-            &[n, c.max_cards_per_player, CARD_DIM],
+            &[n, c.max_cards_per_player, c.card_dim()],
             "float32",
         )?
         .unbind(),
         opponent_cards: require_numpy_array(
             buffers,
             "opponent_cards",
-            &[n, c.max_cards_per_player, CARD_DIM],
+            &[n, c.max_cards_per_player, c.card_dim()],
             "float32",
         )?
         .unbind(),
         agent_permanents: require_numpy_array(
             buffers,
             "agent_permanents",
-            &[n, c.max_permanents_per_player, PERMANENT_DIM],
+            &[n, c.max_permanents_per_player, c.permanent_dim()],
             "float32",
         )?
         .unbind(),
         opponent_permanents: require_numpy_array(
             buffers,
             "opponent_permanents",
-            &[n, c.max_permanents_per_player, PERMANENT_DIM],
+            &[n, c.max_permanents_per_player, c.permanent_dim()],
             "float32",
         )?
         .unbind(),
@@ -813,8 +831,10 @@ impl SendObservationFieldSlices {
         let actions_len = config.actions_len();
         let action_focus_len = config.action_focus_len();
 
-        let agent_player_ptr = self.agent_player.row_ptr(env_index, PLAYER_DIM)?;
-        let opponent_player_ptr = self.opponent_player.row_ptr(env_index, PLAYER_DIM)?;
+        let agent_player_ptr = self.agent_player.row_ptr(env_index, config.player_dim())?;
+        let opponent_player_ptr = self
+            .opponent_player
+            .row_ptr(env_index, config.player_dim())?;
         let agent_cards_ptr = self.agent_cards.row_ptr(env_index, cards_len)?;
         let opponent_cards_ptr = self.opponent_cards.row_ptr(env_index, cards_len)?;
         let agent_permanents_ptr = self.agent_permanents.row_ptr(env_index, permanents_len)?;
@@ -860,9 +880,13 @@ impl SendObservationFieldSlices {
                 slice::from_raw_parts_mut(semantic_cards_ptr, semantic_cards_len)
             },
             // SAFETY: each call uses disjoint per-env rows.
-            agent_player: unsafe { slice::from_raw_parts_mut(agent_player_ptr, PLAYER_DIM) },
+            agent_player: unsafe {
+                slice::from_raw_parts_mut(agent_player_ptr, config.player_dim())
+            },
             // SAFETY: each call uses disjoint per-env rows.
-            opponent_player: unsafe { slice::from_raw_parts_mut(opponent_player_ptr, PLAYER_DIM) },
+            opponent_player: unsafe {
+                slice::from_raw_parts_mut(opponent_player_ptr, config.player_dim())
+            },
             // SAFETY: each call uses disjoint per-env rows.
             agent_cards: unsafe { slice::from_raw_parts_mut(agent_cards_ptr, cards_len) },
             // SAFETY: each call uses disjoint per-env rows.

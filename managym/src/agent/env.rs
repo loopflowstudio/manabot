@@ -9,7 +9,7 @@ use crate::{
         },
         structured_offer::{OfferSubmission, StructuredOfferSet},
     },
-    cardsets::alpha::ContentPackManifest,
+    cards::content_pack::ContentPackManifest,
     decision::{
         Command as SemanticCommand, DecisionFrame, Observation as SemanticObservation,
         SemanticTransition,
@@ -226,7 +226,7 @@ impl Env {
     ) -> Result<(Observation, InfoDict), AgentError> {
         // Validate explicit authored setup bindings at the fallible environment
         // boundary, before Game construction can panic on invalid content.
-        crate::semantic::content_pack_for_authored_match(&player_configs)
+        crate::cards::content_pack_for_authored_match(&player_configs)
             .map_err(|error| AgentError(error.to_string()))?;
         let _scope = self.profiler.track("env_reset");
         self.action_trace = Some(NativeActionTrace {
@@ -1325,7 +1325,7 @@ mod content_pack_contract_tests {
 
     use super::Env;
     use crate::{
-        cardsets::alpha::{default_content_pack, CONTENT_PACK_SCHEMA_VERSION},
+        cards::content_pack::{default_content_pack, CONTENT_PACK_SCHEMA_VERSION},
         state::player::PlayerConfig,
     };
 

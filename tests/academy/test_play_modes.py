@@ -412,7 +412,7 @@ def test_jeong_matchup_uses_session_scoped_pack_identity(isolated_traces):
     )
     assert session.env is not None
     manifest = session.env.content_pack_manifest()
-    assert manifest["compiled_semantics"]["pack_key"] == "tla-jeong-increment-v1"
+    assert manifest["pack_key"] == "tla-jeong-increment-v1"
     assert session.content_hash == manifest["content_digest"]
     assert session.content_hash != UNVERSIONED_CONTENT_HASH
     assert session.asset_manifest_hash == server.JEONG_INCREMENT_PACK.manifest_sha256
@@ -514,3 +514,25 @@ def test_hero_view_swaps_terminal_villain_perspective_and_redacts(
     assert data["opponent"]["hand_hidden_count"] == 1
     # The hero still sees their own hand.
     assert data["agent"]["hand"][0]["name"] == "Lightning Bolt"
+
+
+def test_redaction_hides_only_the_opponents_face_down_exile() -> None:
+    """A foretold card is face down: the owner's view lists it, and a view
+    swapped onto the other player removes it while keeping face-up exile."""
+
+    def player(index: int) -> dict[str, object]:
+        return {
+            "player_index": index,
+            "hand": [],
+            "zone_counts": {"HAND": 0, "EXILE": 2},
+            "exile": [
+                {"id": 60 + index, "name": "Sozin's Comet", "face_down": True},
+                {"id": 70 + index, "name": "Gray Ogre"},
+            ],
+        }
+
+    observation: dict[str, object] = {"agent": player(0), "opponent": player(1)}
+    experience_projection.redact_observation(observation)
+
+    assert [card["id"] for card in observation["agent"]["exile"]] == [60, 70]
+    assert [card["id"] for card in observation["opponent"]["exile"]] == [71]

@@ -13,7 +13,7 @@ Typical selections:
 | UI dependency, build config or asset script | UI checks and clean-machine launch |
 | Academy server, presentation or demo | Academy integration, protocol and UI checks |
 | Training, remote worker or experiment | Manabot integration |
-| Semantic compiler | Manabot integration and semantic coverage |
+| Semantic learning projection | Manabot integration |
 | Website | Python unit and website routing checks |
 | Documentation | Detection and aggregate only |
 | Native engine, shared Python dependencies or CI selector | All checks |

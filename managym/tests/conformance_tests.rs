@@ -26,14 +26,13 @@
 
 use std::collections::{BTreeSet, HashMap};
 
-use managym::cardsets::alpha::CardRegistry;
-use managym::semantic::SemanticPack;
-use managym::state::card::{CardDefinition, CardType};
+use managym::cards::content_pack::CardRegistry;
+use managym::cards::setups::authored_pack;
+use managym::state::card::{AdditionalCost, CardDefinition, CardType};
 use managym::state::mana::{Color, ManaCost};
 
-/// Registered names that are deliberately not real Magic cards (marked
-/// `// not a real card` at the registration). Tokens are excluded via
-/// `is_token` instead.
+/// Registered rules fixtures that are not real Magic cards
+/// (`managym/src/cards/fixtures.rs`). Tokens are excluded via `is_token`.
 const NOT_REAL_CARDS: &[&str] = &["Crossroads of Destiny"];
 
 /// name -> engine mana-cost rendering accepted in place of the Scryfall
@@ -66,7 +65,7 @@ fn fixture() -> HashMap<String, FixtureCard> {
 }
 
 fn render_mana_cost(cost: &ManaCost) -> String {
-    let mut out = String::new();
+    let mut out = "{X}".repeat(usize::from(cost.x));
     let generic = cost.cost[Color::Generic as usize];
     if generic > 0 {
         out.push_str(&format!("{{{generic}}}"));
@@ -115,9 +114,18 @@ fn render_type_line(def: &CardDefinition) -> String {
             }
         })
         .collect();
-    // BTreeSet order is the enum order; every registered card is
-    // single-typed today, so ordering nuances don't arise.
-    for card_type in &def.types.types {
+    // Printed order puts Kindred, Enchantment, Artifact and Land before
+    // Creature ("Artifact Creature"); the engine's set uses enum order.
+    let printed_rank = |card_type: &CardType| match card_type {
+        CardType::Kindred => 0,
+        CardType::Enchantment => 1,
+        CardType::Artifact => 2,
+        CardType::Land => 3,
+        _ => 4,
+    };
+    let mut types: Vec<&CardType> = def.types.types.iter().collect();
+    types.sort_by_key(|card_type| printed_rank(card_type));
+    for card_type in types {
         words.push(
             match card_type {
                 CardType::Creature => "Creature",
@@ -190,9 +198,7 @@ fn engine_pt(printed: Option<i32>, cda: bool) -> Option<String> {
 #[test]
 fn every_registered_real_card_matches_scryfall() {
     let registry = CardRegistry::default();
-    let research = SemanticPack::complexity()
-        .and_then(|pack| pack.compile_content_pack())
-        .expect("complexity catalog compiles");
+    let research = std::sync::Arc::clone(&authored_pack("complexity").unwrap().content);
     let fixture = fixture();
     let cost_exceptions = sanctioned_cost_deviations();
     let mut failures: Vec<String> = Vec::new();
@@ -270,7 +276,7 @@ fn every_registered_real_card_matches_scryfall() {
         }
 
         // Printed power/toughness ("*" = CDA).
-        let power = engine_pt(def.power, def.power_cda.is_some());
+        let power = engine_pt(def.power, def.power_cda().is_some());
         if power != scryfall_pt(fx.power.as_ref()) {
             failures.push(format!(
                 "{name}: power {power:?} != Scryfall {:?}",
@@ -301,8 +307,13 @@ fn every_registered_real_card_matches_scryfall() {
             ("Defender", def.keywords.defender),
             ("Menace", def.keywords.menace),
             ("Hexproof", def.keywords.hexproof),
-            ("Ward", def.ward.is_some()),
-            ("Kicker", def.kicker.is_some()),
+            ("Ward", def.ward().is_some()),
+            (
+                "Kicker",
+                def.additional_costs
+                    .iter()
+                    .any(|cost| matches!(cost, AdditionalCost::Kicker(_))),
+            ),
         ];
         for (keyword, has) in checks {
             if kw(keyword) != has {

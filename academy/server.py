@@ -937,17 +937,16 @@ class GameSession:
                 "Could not prepare the requested game. The current game is unchanged."
             ) from exc
         manifest = env.content_pack_manifest()
-        compiled = manifest.get("compiled_semantics")
         selected_pack = curated_pack_for_matchup(
             config.hero_deck_name,
             config.villain_deck_name,
         )
         if selected_pack is not None:
             expected_pack_key = selected_pack.semantic_pack_key
-            actual_pack_key = None if compiled is None else compiled.get("pack_key")
+            actual_pack_key = manifest.get("pack_key")
             if actual_pack_key != expected_pack_key:
                 raise ValueError(
-                    "Curated matchup did not select its compiled semantic pack: "
+                    "Curated matchup did not select its authored pack: "
                     f"expected {expected_pack_key!r}, got {actual_pack_key!r}"
                 )
         player_config = raw_config if isinstance(raw_config, dict) else {}

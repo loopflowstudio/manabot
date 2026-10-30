@@ -4,7 +4,7 @@ use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use managym::{
-    cardsets::alpha::ContentPack,
+    cards::content_pack::ContentPack,
     state::{
         card::{CardDefId, CardDefinition},
         game_object::{CardId, ObjectId, PlayerId},
@@ -180,6 +180,7 @@ fn stack_identity_is_typed_while_legacy_serialization_is_preserved() {
         targets: Vec::new(),
         target_req_indices: Vec::new(),
         kicked: false,
+        x: 0,
         mode: None,
     };
     let stack_object = StackObject::Spell(spell.clone());

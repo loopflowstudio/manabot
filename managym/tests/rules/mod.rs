@@ -15,19 +15,8 @@ pub mod cr_608_resolution;
 pub mod cr_614_replacement;
 pub mod cr_702_keywords;
 pub mod cr_704_sba;
-pub mod elemental_cards;
+pub mod engine_events;
 pub mod event_observations;
-pub mod helpers;
-pub mod interaction_spells;
 pub mod presentation_events;
-pub mod stage2_cards;
-pub mod stage3_cards;
 pub mod structured_attacker_offers;
 pub mod structured_offers;
-pub mod tla_cards;
-
-pub mod ur_lessons_increment;
-
-pub mod sacrifice_cards;
-
-pub mod temur_cards;

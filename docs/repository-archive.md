@@ -50,17 +50,26 @@ does not admit them under the current runtime. Historical Markdown reports and
 protocols stay available in the repository; their original commands describe
 those historical executions.
 
+## Old-world corpora archived by Task afbd6a (2026-10-30)
+
+Old worlds run from the git revision that recorded them, so corpora that only
+the code of those revisions reads moved to the archive, byte-for-byte, with a
+complete empty-cache restore verified against the originals:
+`authored-match-v1`, `authored-match-w11-v1`, `authored-match-parity-v1`,
+`authored-match-parity-w11-v1`, `public-commitment-parity-v1`,
+`semantic-kernel-w12-v1` through `semantic-kernel-w15-v1`, and the frozen Learn
+cohort `learn-lesson-w4-v3` with its wrapper `scripts/verify-learn-lesson`
+(archived as `experiments/data/archive/scripts/verify-learn-lesson`). The
+wrapper verified only that w4 registration, which the current world rejects.
+The same Task deleted the w1–w11 card sources (`content/semantic/v1`,
+`w7`–`w11`) and the Python card compiler; recover them from git history.
+
 ## What remains in source, and why
 
-- `conformance/semantic-kernel-w13-v1/` is consumed by Rust replay/property tests
-  and the current CI conformance gate. It stays available offline.
-- The v1 and w11 authored-match/parity receipts and public-commitment receipt
-  still have executable Academy consumers. They stay in source; their historical
-  names do not make them unused. Their existing world-admission behavior is unchanged.
-- `conformance/learn-lesson-w4-v3/` remains the declared input of the existing
-  Learn proof wrapper. That wrapper's old wheel layout and historical-world
-  default deserve a separate decision; this cleanup does not silently alter
-  its proof contract.
+- The four w17 corpora in [`conformance/`](../conformance/README.md) are read by
+  Rust conformance tests, CI and Academy parity checks.
+- `academy.learn_lesson_evidence` remains: Academy tests use its attempt
+  verifier, and its `register`/`run`/`verify` modes record a new Learn cohort.
 - `.lf/config.yaml`, current `.lf/wave/` state and referenced `.lf/chapters/`
   records remain. The chapter records are linked by the Engine Wave; they are
   accepted planning evidence, not process scratch. Current rules-specific and

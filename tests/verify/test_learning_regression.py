@@ -139,9 +139,10 @@ def test_frozen_policy_checks_use_ordinary_checkpoint_without_training(
                 plan.evaluation,
             )
             assert admitted.expected_games == 96
-            fixture = decision_case("attack")
+            # An authored-setup case, so its card IDs are the policy's pack.
+            fixture = decision_case("target")
             case = Case(
-                name="attack",
+                name="target",
                 seed=0,
                 swapped=False,
                 trace=[],

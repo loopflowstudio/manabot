@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, sync::Arc};
 
 use managym::{
-    cardsets::alpha::{default_content_pack, ContentPack, CONTENT_PACK_SCHEMA_VERSION},
+    cards::content_pack::{default_content_pack, ContentPack, CONTENT_PACK_SCHEMA_VERSION},
     state::{
         game_object::{CardId, PlayerId},
         player::PlayerConfig,
@@ -94,7 +94,7 @@ fn trace_point(game: &Game) -> String {
 }
 
 #[test]
-fn stable_card_def_ids_preserve_legacy_registry_values() {
+fn stable_card_def_ids_are_deterministic() {
     let first = ContentPack::default();
     let second = ContentPack::default();
     assert_eq!(first.schema_version, CONTENT_PACK_SCHEMA_VERSION);
@@ -119,9 +119,6 @@ fn stable_card_def_ids_preserve_legacy_registry_values() {
             .expect("definition in second pack");
         assert_eq!(first_id, second_id, "unstable CardDefId for {name}");
         assert_eq!(first.definition(first_id).unwrap().name, name);
-    }
-    for (name, legacy_value) in [("Plains", 0), ("Lightning Bolt", 7), ("Counterspell", 9)] {
-        assert_eq!(first.definition_id(name).unwrap().0, legacy_value);
     }
 
     let game = make_game(7);

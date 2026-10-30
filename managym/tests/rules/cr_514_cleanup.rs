@@ -1,11 +1,15 @@
 use managym::{agent::action::ActionType, flow::turn::StepKind};
 
-use super::helpers::*;
+use crate::support::game::*;
 
 /// Gray Ogre (2/2) with 1 non-lethal damage, positioned before cleanup.
 /// Needs 3 Mountains (2R cost), so we play one land per turn for 3 turns.
 fn setup_damaged_creature_before_cleanup() -> (Scenario, managym::state::game_object::PermanentId) {
-    let mut s = Scenario::new(ogre_deck(), mountain_deck(), 111);
+    let mut s = Scenario::new(
+        deck_of("Mountain", "Gray Ogre"),
+        deck(&[("Mountain", 40)]),
+        111,
+    );
 
     // Play one Mountain per turn for 3 turns to afford Gray Ogre (2R).
     for i in 0..3 {

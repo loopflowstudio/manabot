@@ -32,7 +32,6 @@ from manabot.model.world import (
     validate_agent_setup,
     validate_checkpoint_world,
 )
-from manabot.semantic.compiler import compile_paths, pretty_json
 from manabot.semantic.learning import BoundSemanticPack
 from manabot.training.execution import execute_regime
 from manabot.training.regime import Learning, TrainingRegime, TrainSelfPlay
@@ -40,19 +39,9 @@ from manabot.verify.store import VerifyStore
 import managym
 
 PACK = "elemental-world-v2"
-BASE = Path("content/semantic/w11")
 
 
-def test_exact_accepted_lists_inventory_and_compiled_closure() -> None:
-    ir, coverage = compile_paths(
-        BASE / "elemental_world.source.json", BASE / "elemental_world.fixtures.json"
-    )
-    assert (BASE / "generated/elemental_world.ir.json").read_text() == pretty_json(ir)
-    assert (
-        BASE / "generated/elemental_world.coverage.json"
-    ).read_text() == pretty_json(coverage)
-    assert coverage["definition_count"] == 100
-    assert coverage["admission_closure_complete"]
+def test_exact_accepted_lists_match_inventory() -> None:
     accepted = json.loads(Path("docs/rules/elemental/decks.json").read_text())
     with Path("docs/rules/elemental/cube-snapshot.csv").open(newline="") as stream:
         inventory = Counter(row["name"] for row in csv.DictReader(stream))
@@ -91,7 +80,7 @@ def test_both_seats_and_mirrors_preserve_complete_academy_setups(left: str) -> N
             assert actual.content_pack == PACK
         engine = managym.Env(seed=164)
         engine.reset(configs)
-        assert engine.content_pack_manifest()["compiled_semantics"]["pack_key"] == PACK
+        assert engine.content_pack_manifest()["pack_key"] == PACK
 
 
 def test_full_roster_checkpoint_admits_every_pair_and_rejects_drift() -> None:
@@ -147,8 +136,8 @@ def test_ordinary_policy_has_complete_programs_and_trains_on_a_real_offer(
         Match(MatchConfig.authored(PACK, "elemental_ug", "elemental_bg")).to_rust()
     )
     pack = BoundSemanticPack.from_env(native)
-    assert len(pack.ir.definitions) == 100
-    assert pack.schema.raw["schema_version"] == 7
+    assert pack.definition_count == 100
+    assert pack.schema.raw["schema_version"] == 9
     pack.pad_catalog()
     tensors = {
         key: torch.as_tensor(value).unsqueeze(0) for key, value in observation.items()
@@ -320,7 +309,7 @@ def test_academy_records_a_real_elemental_command_with_the_exact_pack(
     )
     assert result["status"] == "accepted"
     assert session.env is not None
-    assert session.env.content_pack_manifest()["compiled_semantics"]["pack_key"] == PACK
+    assert session.env.content_pack_manifest()["pack_key"] == PACK
     assert session.trace is not None
     assert (
         session.trace.config.hero_sideboard

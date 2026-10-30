@@ -4,12 +4,16 @@ use managym::{
     state::{mana::Color, zone::ZoneType},
 };
 
-use super::helpers::*;
+use crate::support::game::*;
 
 /// CR 106.3 — Mana abilities can be activated to produce mana used for casting.
 #[test]
 fn cr_106_3_casting_uses_mana_abilities() {
-    let mut s = Scenario::new(forest_elves_deck(), mountain_deck(), 3);
+    let mut s = Scenario::new(
+        deck(&[("Forest", 24), ("Llanowar Elves", 36)]),
+        deck(&[("Mountain", 40)]),
+        3,
+    );
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Forest");
@@ -50,7 +54,7 @@ fn cr_106_3_casting_uses_mana_abilities() {
 /// CR 106.4 — Unspent mana empties from players' mana pools as steps end.
 #[test]
 fn cr_106_4_mana_pool_empties_between_steps() {
-    let mut s = Scenario::new(mountain_deck(), mountain_deck(), 9);
+    let mut s = Scenario::new(deck(&[("Mountain", 40)]), deck(&[("Mountain", 40)]), 9);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.set_player_mana_pool(0, "3R");
@@ -68,7 +72,7 @@ fn cr_106_4_mana_pool_empties_between_steps() {
 /// Negative: a spell is not castable without enough producible mana.
 #[test]
 fn cr_106_negative_spell_not_available_without_mana() {
-    let mut s = Scenario::new(ogre_only_deck(), mountain_deck(), 15);
+    let mut s = Scenario::new(deck(&[("Gray Ogre", 40)]), deck(&[("Mountain", 40)]), 15);
 
     s.advance_to_active_step(0, StepKind::Main);
     s.force_card_in_hand(0, "Gray Ogre");
@@ -84,10 +88,8 @@ fn audit_generic_and_specific_mana_boundary_matrix() {
     use managym::state::mana::{Mana, ManaCost};
 
     for bits in 0_u8..64 {
-        let pool = Mana {
-            mana: std::array::from_fn(|slot| (bits >> slot) & 1),
-            ..Mana::default()
-        };
+        let mut pool = Mana::default();
+        pool.mana = std::array::from_fn(|slot| (bits >> slot) & 1);
         for (slot, symbol) in ["W", "U", "B", "R", "G", "C"].iter().enumerate() {
             for generic in 0..=2 {
                 let cost = ManaCost::parse(&format!("{generic}{symbol}"));
@@ -117,14 +119,18 @@ fn audit_generic_and_specific_mana_boundary_matrix() {
 /// unrelated cost. Clearing a pool loses both restricted and ordinary mana.
 #[test]
 fn audit_restricted_mana_never_pays_unrelated_costs() {
-    use managym::state::mana::{Mana, ManaCost};
+    use managym::state::mana::{Mana, ManaCost, ManaUse};
 
+    let lesson = ManaUse::spell(["Lesson"]);
     for slot in 0..6 {
         for eligible in [false, true] {
-            let mut pool = Mana::default();
-            pool.lesson[slot] = 1;
+            let mut amounts = [0; 6];
+            amounts[slot] = 1;
+            let mut pool = Mana::restricted_to(lesson, amounts);
             let mut cost = ManaCost::parse("1");
-            cost.spend_on_lesson = eligible;
+            if eligible {
+                cost.purpose = lesson;
+            }
             assert_eq!(pool.can_pay(&cost), eligible);
             if eligible {
                 pool.pay(&cost);
