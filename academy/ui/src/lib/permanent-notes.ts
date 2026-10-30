@@ -17,37 +17,34 @@ export function copyNote(copy: CopyEffect): string {
 function modificationPhrase(effect: ContinuousEffect): string {
   const signed = (value: number | undefined): string =>
     `${(value ?? 0) >= 0 ? '+' : ''}${value ?? 0}`;
-  const phrase = (() => {
-    switch (effect.modification) {
-      case 'ModifyPt':
-        return `${signed(effect.power)}/${signed(effect.toughness)}`;
-      case 'SetBasePt':
-        return `base power/toughness ${effect.power ?? 'unchanged'}/${effect.toughness ?? 'unchanged'}`;
-      case 'AddKeywords':
-        return (effect.keywords ?? []).map(keyword => keyword.replaceAll('_', ' ')).join(', ');
-      case 'AddSubtypes':
-        return `is also ${(effect.subtypes ?? []).join(', ')}`;
-      case 'BecomeArtifactCreature':
-        return 'is an artifact creature';
-      case 'Nonlegendary':
-        return "isn't legendary";
-      case 'LoseAllAbilities':
-        return 'loses all abilities';
-      case 'Firebending':
-        return `firebending ${effect.amount}`;
-      case 'CantBeBlocked':
-        return "can't be blocked";
-      case 'ExileIfWouldDie':
-        return 'exiled instead if it would die';
-      case 'KeepUnspentMana':
-        return `keeps unspent ${(effect.color ?? '').toLowerCase()} mana`;
-      case 'NoMaximumHandSize':
-        return 'no maximum hand size';
-      default:
-        return effect.modification;
-    }
-  })();
-  return phrase;
+  switch (effect.modification) {
+    case 'ModifyPt':
+      return `${signed(effect.power)}/${signed(effect.toughness)}`;
+    case 'SetBasePt':
+      return `base power/toughness ${effect.power ?? 'unchanged'}/${effect.toughness ?? 'unchanged'}`;
+    case 'AddKeywords':
+      return (effect.keywords ?? []).map(keyword => keyword.replaceAll('_', ' ')).join(', ');
+    case 'AddSubtypes':
+      return `is also ${(effect.subtypes ?? []).join(', ')}`;
+    case 'BecomeArtifactCreature':
+      return 'is an artifact creature';
+    case 'Nonlegendary':
+      return "isn't legendary";
+    case 'LoseAllAbilities':
+      return 'loses all abilities';
+    case 'Firebending':
+      return `firebending ${effect.amount}`;
+    case 'CantBeBlocked':
+      return "can't be blocked";
+    case 'ExileIfWouldDie':
+      return 'exiled instead if it would die';
+    case 'KeepUnspentMana':
+      return `keeps unspent ${(effect.color ?? '').toLowerCase()} mana`;
+    case 'NoMaximumHandSize':
+      return 'no maximum hand size';
+    default:
+      return effect.modification;
+  }
 }
 
 // Effect-derived state the observation carries for a permanent, as labels

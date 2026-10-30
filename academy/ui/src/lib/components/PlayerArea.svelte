@@ -152,7 +152,7 @@
   {/if}
   {#if player.turn_history?.permanents_sacrificed}
     <p class="type-caption py-1" data-testid="turn-history">
-      {label} this turn: sacrificed {player.turn_history.permanents_sacrificed} permanents.
+      {label} this turn: sacrificed {player.turn_history.permanents_sacrificed} {player.turn_history.permanents_sacrificed === 1 ? 'permanent' : 'permanents'}.
     </p>
   {/if}
   {#each player.effects ?? [] as effect}

@@ -120,9 +120,8 @@ checkpoints or experiment evidence.
   `facts` block (128 × 12, one row per `FactKind` fact about a player or
   permanent). Open-ended vocabularies (counter kinds, added subtypes, set
   names, used abilities, continuous-effect records, copy effects and their
-  exceptions) are fact kinds, never
-  columns. Preserve the frozen widths and derive buffers from
-  `ObservationSpace`.
+  exceptions) are fact kinds, never columns. Preserve the frozen widths and
+  derive buffers from `ObservationSpace`.
 - New observation state reaches the policy input (native and Python encoders
   in parity), the LLM text observation and the learning tokens in the change
   that adds it; a frozen policy-input version never silently falls behind.

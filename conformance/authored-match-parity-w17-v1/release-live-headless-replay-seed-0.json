@@ -84,7 +84,7 @@
         },
         {
           "path": "managym/src/agent/continuation.rs",
-          "sha256": "425f7b445b7ba561265457118cac097071d4655c92d5da6ddfc287f4fb7e03b4"
+          "sha256": "90a70f446c659bae1315849b637d6bfd0fe02eb5ff631467e4e1306cfbeb8865"
         },
         {
           "path": "managym/src/agent/env.rs",
@@ -468,7 +468,7 @@
         },
         {
           "path": "managym/src/python/bindings.rs",
-          "sha256": "e1ace4b52d7c6c468bf804fa27d01f24d1fc5b82d633695ac9378feb6a821a58"
+          "sha256": "fd0dc88cbff6322954fbc87a8ee4d6143c6330ec89cd9e0c6f3577ca834557bb"
         },
         {
           "path": "managym/src/python/convert.rs",
@@ -559,7 +559,7 @@
           "sha256": "7253f4b013ddbb65f2f9509324d3c59739e9ca08f16ad7bb5d2c92e16a928d3c"
         }
       ],
-      "sha256": "b8ecb40a7201ea5f18828b17ff71c367647b40ac3368cbd4be2ec9bf3fa2287b"
+      "sha256": "e42d693051316a48c5e2cb1f8652ff71e052f15f92077bc3bfd6cb2a292a6b56"
     },
     "seed": 0
   },

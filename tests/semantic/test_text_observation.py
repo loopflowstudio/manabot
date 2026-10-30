@@ -716,4 +716,4 @@ def test_joo_dee_surveil_and_copy_play_through_the_text_decision() -> None:
     submit_response(env, decision, original.reference)
     text = capture_text_decision(env).text
     assert "; copy of D" in text
-    assert "This turn: sacrificed 1 permanents." in text
+    assert "This turn: sacrificed 1 permanent." in text

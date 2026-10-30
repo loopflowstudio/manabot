@@ -1,11 +1,11 @@
 # T5 (a7234f): permanent copying — plan and status
 
 Status (2026-10-30): implemented, demoed through native Commands and the
-LLM/Academy text path (after the `2963f8f87` capture fix), and stacked on T3 #399 (merged T3
-`08bf54de2`, which contains main `10eeb1f55`; main `6f48f5ca0` merged since).
-T3's PR head `4c4dd0217` adds only that main merge and a scratch note, so there
-is nothing to sync from T3. All three cards are defined and supported. T4 488a40 is still implementing with no PR; sync onto it when it
-publishes.
+LLM/Academy text path (after the `2963f8f87` capture fix), and stacked on T3 #399
+at its head `a18902e0e` (merged at gate; it erases the v5 timestamp rank in the
+target-tie case, which clears the 4 inherited `test_action_identity` failures).
+All three cards are defined and supported. T4 488a40 published as draft PR #407
+(on T3, failing CI, still moving); this branch has not synced onto it.
 
 T3's plan, inherited through the stack, is at
 `08bf54de2:scratch/6875f0-tla-t3-characteristics.md`. Two of its accepted
@@ -117,14 +117,15 @@ a third condition.
   (142 commands); public-commitment parity (69 commitments, no gaps); Academy
   demos and choice navigation (same decision revisions); trigger-order
   digests; belief v3 receipt pins.
-- Sync onto T4 488a40 when it publishes. On that sync:
+- Sync onto T4 once #407 leaves draft with its CI settled. Gate left it out on
+  2026-10-30: #407 is a draft with failing Rust, Semantic Kernel, Integration
+  and Academy UI checks and a running Task, and a dry-run merge conflicts in
+  about 25 source files and every evidence replay. On that sync:
   - `PlayerTurnHistory` takes T4's other fields.
   - `cards_drawn_this_turn` moves into the struct.
   - The player column moves to T4's `PLAYER_SACRIFICED_INDEX` position, after
     attacked.
-- Pre-existing on T3 `08bf54de2`, not from this change: 4 of
-  `tests/model/test_action_identity.py::test_policy_choice_can_learn_either_preference`
-  fail (target cases); they fail identically on T3's worktree.
+  - w17 evidence is re-recorded for the combined content digest.
 
 ## Delete — do not maintain
 
@@ -142,6 +143,29 @@ a third condition.
   `test_every_native_decision_code_has_a_label`); `managym.MAX_DECISION_CODE`
   imports as 20. Full debug `cargo test` and CI on the fix commits are left
   to gate/CI.
+
+- 2026-10-30 (gate, tree after merging T3 `a18902e0e`):
+  - `cargo fmt --check`, debug `cargo test` (`CARGO_PROFILE_DEV_OPT_LEVEL=1`,
+    21 targets, 0 failed), `cargo clippy --all-targets --all-features -D
+    warnings`, and `semantic_conformance check` (14 cases / 3401 commands)
+    passed. Clippy's `PYO3_PYTHON` must be absolute; pyo3's build script does
+    not resolve `../.venv` from `managym/`.
+  - Python focused suites passed: the world/observation list in `AGENTS.md`,
+    `tests/model/` (including `test_action_identity`), text observation,
+    observation parity, continuation input, belief state, heuristic, Academy
+    navigation, Learn, experience protocol, authored-match parity, play modes,
+    active training, `test_server -k protocol_v1`, and public-commitment parity
+    (69 commitments, no gaps).
+  - Frontend: vitest (22 passed), `npm run check` (0 errors).
+  - Re-recorded the authored-match parity receipt. Only its source hashes moved,
+    for `continuation.rs` and `bindings.rs`, after the decision-code fix.
+  - Not fixed: `tests/sim/test_rollout.py::TestBatchedSampler::test_selects_valid_actions_only`
+    fails. Its synthetic batch fills every float buffer with noise, which the
+    fact and definition checks reject. CI does not select this file.
+  - Fixes: "sacrificed 1 permanent" singular in LLM text and Academy; the
+    leftover closure in `modificationPhrase` removed.
+  - Deferred to CI: browser suites and clean-machine Play; the local tree has
+    not been pushed.
 
 ## Demo (headless, 2026-10-30) — text-path gap fixed at `2963f8f87`
 

@@ -140,8 +140,8 @@ Policy input **v5** is the default; v1–v4 keep their widths. In every widened
 row the new terms start at the old validity column and validity stays last.
 Player rows add restricted mana by spending subtype × color (18), the
 hand-only lock, no maximum hand size, turn number, seat, kept red mana and
-permanents sacrificed this turn (40 → 64). Card rows add 12 cast-permission terms and a stack spell's
-announced X (41 → 55); a face-down card is foretold, so the foretold term marks
+permanents sacrificed this turn (40 → 64). Card rows add 12 cast-permission
+terms and a stack spell's announced X (41 → 55); a face-down card is foretold, so the foretold term marks
 it. Permanent rows add used exhaust and once-each-turn counts, granted
 firebending, an attachment join, granted land, a blocking join, lost abilities
 and a timestamp rank (29 → 37). Open-ended vocabularies are a `facts` block of
@@ -149,8 +149,7 @@ and a timestamp rank (29 → 37). Open-ended vocabularies are a `facts` block of
 learning-token values in 16-bit halves, two amounts, duration, timestamp rank,
 source definition, validity): counter kinds, effect-added subtypes, a set name
 and creature types, spent abilities, continuous-effect records, and a copy
-effect with its exceptions. Relation
-rows add a frame's X and a spell's granted keywords (33 → 48), so the relation
+effect with its exceptions. Relation rows add a frame's X and a spell's granted keywords (33 → 48), so the relation
 width alone tells v5. Native buffers bind v5 by player width. Learning schema 9
 is unchanged: tokens derive from the definitions, so new `Effect` variants and
 card fields appear in them without a schema change. Viewers see an opponent's
