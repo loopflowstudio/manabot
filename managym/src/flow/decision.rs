@@ -151,6 +151,17 @@ impl PaymentProgress {
     }
 }
 
+/// The optional part of a `Decision::Sacrifice` ("you may sacrifice ... If
+/// you do, ...").
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct OptionalSacrifice {
+    /// The source permanent of an "another" sacrifice, never a candidate.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub excluded: Option<crate::state::game_object::PermanentId>,
+    /// Runs only after a sacrifice.
+    pub then: Vec<Effect>,
+}
+
 /// Where a `CastWithoutPaying` decision's candidates come from.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum FreeCastOffer {
@@ -183,6 +194,9 @@ pub enum Decision {
     Sacrifice {
         player: PlayerId,
         predicate: CardPredicate,
+        /// Set for "you may sacrifice ... If you do": declining is allowed.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        optional: Option<OptionalSacrifice>,
     },
     /// Place one of `remaining` `kind` counters on a tapped creature an
     /// opponent of `player` controls; candidates are read at each placement.
@@ -400,6 +414,26 @@ pub struct SuspendedResolution {
 }
 
 impl Game {
+    /// The permanents a pending `Decision::Sacrifice` may select.
+    pub(crate) fn sacrifice_decision_candidates(
+        &self,
+        decision: &Decision,
+    ) -> Vec<crate::state::game_object::PermanentId> {
+        let Decision::Sacrifice {
+            player,
+            predicate,
+            optional,
+        } = decision
+        else {
+            return Vec::new();
+        };
+        let excluded = optional.as_ref().and_then(|optional| optional.excluded);
+        self.sacrifice_candidates(*player, predicate)
+            .into_iter()
+            .filter(|id| Some(*id) != excluded)
+            .collect()
+    }
+
     fn card_focus(&self, cards: &[CardId]) -> Vec<ObjectId> {
         cards
             .iter()
@@ -542,15 +576,17 @@ impl Game {
                     })
                     .collect(),
             },
-            Decision::Sacrifice { player, predicate } => ActionSpace {
+            Decision::Sacrifice {
+                player, optional, ..
+            } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
                 actions: select_cards(
                     *player,
-                    self.sacrifice_candidates(*player, predicate)
+                    self.sacrifice_decision_candidates(&suspended.decision)
                         .into_iter()
                         .map(|id| self.state.permanents[id].as_ref().unwrap().card),
-                    false,
+                    optional.is_some(),
                 ),
                 focus: source_focus,
             },
@@ -822,6 +858,15 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
+            (
+                Decision::Sacrifice {
+                    optional: Some(_), ..
+                },
+                Action::Decline { .. },
+            ) => {
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
             (Decision::Payment(payment), Action::Decline { .. }) if payment.can_decline() => {
                 let effects = std::mem::take(&mut payment.if_declined);
                 suspended.frame.prepend_effects(effects.into_iter());
@@ -850,9 +895,9 @@ impl Game {
                 }
                 Ok(())
             }
-            (Decision::Sacrifice { player, predicate }, Action::SelectCard { card, .. }) => {
+            (Decision::Sacrifice { .. }, Action::SelectCard { card, .. }) => {
                 let selected = self
-                    .sacrifice_candidates(*player, predicate)
+                    .sacrifice_decision_candidates(&suspended.decision)
                     .into_iter()
                     .find(|id| {
                         self.state.permanents[*id]
@@ -864,6 +909,14 @@ impl Game {
                     return Err(AgentError("illegal sacrifice selection".into()));
                 };
                 self.sacrifice_permanent(selected);
+                if let Decision::Sacrifice {
+                    optional: Some(optional),
+                    ..
+                } = &mut suspended.decision
+                {
+                    let then = std::mem::take(&mut optional.then);
+                    suspended.frame.prepend_effects(then.into_iter());
+                }
                 self.run_frame(suspended.frame);
                 Ok(())
             }

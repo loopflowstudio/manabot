@@ -476,6 +476,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::SearchLandsOpponentSplits { .. } => "Effect::SearchLandsOpponentSplits",
         Effect::PlaceTargetInLibrary { .. } => "Effect::PlaceTargetInLibrary",
         Effect::SacrificeSource { .. } => "Effect::SacrificeSource",
+        Effect::MaySacrifice { .. } => "Effect::MaySacrifice",
         Effect::ExileSourceSpell => "Effect::ExileSourceSpell",
         Effect::DestroyCreaturesLosingAbilities { .. } => "Effect::DestroyCreaturesLosingAbilities",
         Effect::AttachSourceTo { .. } => "Effect::AttachSourceTo",
@@ -499,7 +500,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 82;
+const EFFECT_VARIANTS: usize = 83;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -726,6 +727,11 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::SacrificeSource {
             then: vec![Effect::Scry { count: 2 }],
+        },
+        Effect::MaySacrifice {
+            predicate: creature(),
+            another: true,
+            then: draw(),
         },
         Effect::ExileSourceSpell,
         Effect::DestroyCreaturesLosingAbilities {

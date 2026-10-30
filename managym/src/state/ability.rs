@@ -343,6 +343,16 @@ pub enum Effect {
     Sacrifice {
         predicate: CardPredicate,
     },
+    /// "You may sacrifice [another] [predicate]. If you do, [then]." The
+    /// controller chooses one or declines; `then` runs only after a
+    /// sacrifice.
+    MaySacrifice {
+        predicate: CardPredicate,
+        /// "another": the source permanent is not a candidate.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        another: bool,
+        then: Vec<Effect>,
+    },
     /// Each opponent loses `amount` life and you gain that much.
     DrainLife {
         amount: EffectValue,
@@ -974,7 +984,9 @@ impl Effect {
                 .iter()
                 .chain(otherwise.iter())
                 .find_map(|effect| effect.target_spec()),
-            Effect::SacrificeSource { then } => then.iter().find_map(|effect| effect.target_spec()),
+            Effect::SacrificeSource { then } | Effect::MaySacrifice { then, .. } => {
+                then.iter().find_map(|effect| effect.target_spec())
+            }
             Effect::CreateNonlegendaryCopy
             | Effect::AirbendAll { .. }
             | Effect::OpponentsCastOnlyFromHand

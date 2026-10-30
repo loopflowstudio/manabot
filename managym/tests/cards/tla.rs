@@ -10938,3 +10938,87 @@ fn wan_shi_tong_grows_and_draws_when_an_opponent_searches() {
     assert_eq!(counters(&s, wan), 1);
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 1);
 }
+
+/// Declare player 0's `attackers` and pass priority until a decision other
+/// than priority (the first attack trigger's choice).
+fn attack_until_decision(s: &mut Scenario, attackers: &[PermanentId]) {
+    for attacker in attackers {
+        clear_summoning_sickness(s, *attacker);
+    }
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        let index = s.action_space().actions.iter().position(|action| {
+            matches!(action, Action::DeclareAttacker { permanent, attack: true, .. }
+                if attackers.contains(permanent))
+        });
+        match index {
+            Some(index) => s.step_action(index),
+            None => s.decline_attack(),
+        }
+    }
+    for _ in 0..20 {
+        if s.action_space().kind != ActionSpaceKind::Priority {
+            return;
+        }
+        s.pass_priority();
+    }
+    panic!("no decision followed the attack");
+}
+
+/// Sacrificing another creature draws and grows the merchant; declining does
+/// neither, and the merchant itself is never a candidate.
+#[test]
+fn beetle_headed_merchants_may_sacrifice_another_to_draw_and_grow() {
+    let mut s = five_color_setup(&["Beetle-Headed Merchants", "Gray Ogre"]);
+    let merchants = s.force_permanent_on_battlefield(0, "Beetle-Headed Merchants");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let hand = s.zone_size(0, ZoneType::Hand);
+    attack_until_decision(&mut s, &[merchants]);
+    assert_eq!(offered_cards(&s), vec![card_of(&s, ogre)]);
+    assert!(has_action(&s, |a| matches!(a, Action::Decline { .. })));
+    let ogre_card = card_of(&s, ogre);
+    select_card(&mut s, ogre_card);
+    settle(&mut s);
+    assert!(s.game().state.permanents[ogre].is_none(), "sacrificed");
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 1);
+    assert_eq!(counters(&s, merchants), 1);
+
+    let mut s = five_color_setup(&["Beetle-Headed Merchants", "Gray Ogre"]);
+    let merchants = s.force_permanent_on_battlefield(0, "Beetle-Headed Merchants");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let hand = s.zone_size(0, ZoneType::Hand);
+    attack_until_decision(&mut s, &[merchants]);
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    settle(&mut s);
+    assert!(s.game().state.permanents[ogre].is_some());
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand);
+    assert_eq!(counters(&s, merchants), 0);
+}
+
+/// The chosen creature is tapped either way; only a sacrifice stuns it.
+#[test]
+fn vengeful_villagers_tap_the_target_and_stun_it_after_a_sacrifice() {
+    for sacrifice in [true, false] {
+        let mut s = five_color_setup(&["Vengeful Villagers", "Gray Ogre"]);
+        let villagers = s.force_permanent_on_battlefield(0, "Vengeful Villagers");
+        let fodder = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        let victim = s.force_permanent_on_battlefield(1, "Gray Ogre");
+        attack_until_decision(&mut s, &[villagers]);
+        assert_eq!(offered_targets(&s), vec![Target::Permanent(victim)]);
+        assert!(s.choose_target(Target::Permanent(victim)));
+        pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+        assert!(offered_cards(&s).contains(&card_of(&s, villagers)));
+        if sacrifice {
+            let fodder = card_of(&s, fodder);
+            select_card(&mut s, fodder);
+        } else {
+            choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+        }
+        settle(&mut s);
+        assert!(tapped(&s, victim));
+        assert_eq!(
+            counters_of(&s, victim, CounterKind::Stun),
+            i32::from(sacrifice)
+        );
+    }
+}

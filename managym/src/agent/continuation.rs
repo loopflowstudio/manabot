@@ -526,7 +526,10 @@ impl Game {
                         .collect();
                     (3, resume.as_deref())
                 }
-                Decision::Sacrifice { .. } => (4, None),
+                Decision::Sacrifice { optional, .. } => {
+                    frame.can_decline = optional.is_some();
+                    (4, None)
+                }
                 Decision::SelectMilled { .. } => (5, None),
                 Decision::SearchBasicLand { .. } | Decision::SearchLibraryToHand { .. } => {
                     (6, None)

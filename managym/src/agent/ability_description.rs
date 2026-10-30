@@ -529,6 +529,12 @@ fn effect_description(effect: &Effect) -> Option<String> {
         PlaceTargetInLibrary { second_from_top: true } => "Put it into its owner's library second from the top".into(),
         PlaceTargetInLibrary { second_from_top: false } => "Put it on the bottom of its owner's library".into(),
         SacrificeSource { then } => format!("Sacrifice this. If you do: {}", effects_description(then)),
+        MaySacrifice { predicate, another, then } => format!(
+            "You may sacrifice {}{}. If you do: {}",
+            if *another { "another " } else { "a " },
+            predicate_description(predicate, "permanent"),
+            effects_description(then)
+        ),
         ReturnToHandDrawIfControlled { target } => format!("Return {} to its owner's hand. If you controlled it, draw a card",target_description(target)),
         Discard => "Discard a card".into(),
         DealDamageValue { amount, target } => format!("Deal X damage to {}, where X is {}",target_description(target),value_description(amount)),

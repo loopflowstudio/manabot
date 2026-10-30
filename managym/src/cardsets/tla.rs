@@ -57,6 +57,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         badgermole(),
         badgermole_cub(),
         barrels_of_blasting_jelly(),
+        beetle_headed_merchants(),
         benevolent_river_spirit(),
         bitter_work(),
         boar_q_pine(),
@@ -229,6 +230,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         uncle_iroh(),
         united_front(),
         unlucky_cabbage_merchant(),
+        vengeful_villagers(),
         vindictive_warden(),
         walltop_sentries(),
         wan_shi_tong_librarian(),
@@ -1179,6 +1181,45 @@ fn barrels_of_blasting_jelly() -> CardDefinition {
                 ..Default::default()
             },
         ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn beetle_headed_merchants() -> CardDefinition {
+    let text_box = "Whenever this creature attacks, you may sacrifice another creature or artifact. If you do, draw a card and put a +1/+1 counter on this creature.";
+
+    CardDefinition {
+        key: "tla.beetle_headed_merchants",
+        scryfall_id: "c2eed79f-38c1-4aac-9525-d54cb114f17f",
+        name: "Beetle-Headed Merchants".into(),
+        mana_cost: Some(ManaCost::parse("{4}{B}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Human".into(), "Citizen".into()],
+        power: Some(5),
+        toughness: Some(4),
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::Attacks {
+                subject: TriggerSubject::This,
+            },
+            intervening_if: None,
+            effects: vec![Effect::MaySacrifice {
+                predicate: CardPredicate {
+                    card_types_any: vec![CardType::Creature, CardType::Artifact],
+                    ..Default::default()
+                },
+                another: true,
+                then: vec![
+                    Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    },
+                    Effect::PutCountersOnSource {
+                        count: EffectValue::Fixed(1),
+                        kind: CounterKind::PlusOnePlusOne,
+                    },
+                ],
+            }],
+        }],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -7796,6 +7837,46 @@ fn unlucky_cabbage_merchant() -> CardDefinition {
                 }],
             },
         ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn vengeful_villagers() -> CardDefinition {
+    let text_box = "Whenever this creature attacks, choose target creature an opponent controls. Tap it, then you may sacrifice an artifact or creature. If you do, put a stun counter on the chosen creature. (If a permanent with a stun counter would become untapped, remove one from it instead.)";
+
+    CardDefinition {
+        key: "tla.vengeful_villagers",
+        scryfall_id: "8cabb6ed-5c80-4dab-b96c-9d4d9fe72db7",
+        name: "Vengeful Villagers".into(),
+        mana_cost: Some(ManaCost::parse("{3}{W}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Human".into(), "Citizen".into()],
+        power: Some(3),
+        toughness: Some(3),
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::Attacks {
+                subject: TriggerSubject::This,
+            },
+            intervening_if: None,
+            effects: vec![
+                Effect::TapTarget {
+                    target: TargetSpec::CreatureOpponentControls,
+                },
+                Effect::MaySacrifice {
+                    predicate: CardPredicate {
+                        card_types_any: vec![CardType::Artifact, CardType::Creature],
+                        ..Default::default()
+                    },
+                    another: false,
+                    then: vec![Effect::PutCounters {
+                        count: 1,
+                        kind: CounterKind::Stun,
+                        target: TargetSpec::CreatureOpponentControls,
+                    }],
+                },
+            ],
+        }],
         text_box: text_box.into(),
         ..Default::default()
     }

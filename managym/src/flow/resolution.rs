@@ -7,7 +7,8 @@ use std::collections::VecDeque;
 use crate::{
     flow::{
         decision::{
-            Decision, EffectFrame, FrameFinalize, FreeCastOffer, PaymentProgress, ResolutionTarget,
+            Decision, EffectFrame, FrameFinalize, FreeCastOffer, OptionalSacrifice,
+            PaymentProgress, ResolutionTarget,
         },
         event::GameEvent,
         game::Game,
@@ -510,7 +511,24 @@ impl Game {
                 (!candidates.is_empty()).then_some(Decision::Sacrifice {
                     player: frame.controller,
                     predicate: predicate.clone(),
+                    optional: None,
                 })
+            }
+            Effect::MaySacrifice {
+                predicate,
+                another,
+                then,
+            } => {
+                let excluded = another.then(|| self.source_permanent_id(frame)).flatten();
+                let decision = Decision::Sacrifice {
+                    player: frame.controller,
+                    predicate: predicate.clone(),
+                    optional: Some(OptionalSacrifice {
+                        excluded,
+                        then: then.clone(),
+                    }),
+                };
+                (!self.sacrifice_decision_candidates(&decision).is_empty()).then_some(decision)
             }
             Effect::DistributeCountersToTappedOpponentCreatures { kind, count } => {
                 self.distribute_counters(frame.controller, *kind, *count)
