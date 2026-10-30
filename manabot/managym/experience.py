@@ -353,9 +353,7 @@ class ContinuousEffectView(ProtocolModel):
 class PlayerTurnHistoryView(ProtocolModel):
     """What one player has done this turn."""
 
-    permanents_sacrificed: UInt32 = Field(
-        default=0, exclude_if=lambda value: not value
-    )
+    permanents_sacrificed: UInt32 = Field(default=0, exclude_if=lambda value: not value)
 
 
 class CopyView(ProtocolModel):

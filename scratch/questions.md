@@ -327,3 +327,14 @@ T2's operator choices are at `a5587df5a:scratch/questions.md`. New since
   script's fields, not a full bulk refresh (which reorders the file).
 - `world` reports 239 eligible definitions (T3's 236 plus Joo Dee, Ran and
   Shaw, Phoenix Fleet Airship).
+- 2026-10-30 (T5 implementation, headless):
+  - Copy exceptions reuse T3's `Modification` rather than a separate
+    `CopyException` enum, so exceptions and layered records share one
+    vocabulary and token id.
+  - The protocol field is `copy_of`, because pydantic's `BaseModel.copy`
+    shadows `copy`.
+  - The Airship's static is a self-relative `StaticAbility::CreatureWithNamesakes`,
+    not a conditional `StaticTypeGrant`, since `check_static_condition` has no
+    source.
+  - `/verify` was not run before commits: that Loopflow skill finishes the Task
+    after merge, and T5 stops at demo.
