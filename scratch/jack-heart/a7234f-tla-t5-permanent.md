@@ -128,10 +128,11 @@ rather than mid-game. Done 2026-10-30; extension rebuilt; that test,
 
 ## Checks
 
-- 2026-10-30 (realign, HEAD `1a5fa5d1a`): `uv run --extra dev pytest
-  tests/semantic/test_text_observation.py -k joo_dee` passed (1). The fix
-  commit's own checks are in `scratch/t5-demo.md`. Full debug `cargo test` and
-  CI on the fix are left to gate/CI.
+- 2026-10-30 (realign, HEAD `552636009`): `uv run --extra dev pytest
+  tests/semantic/test_text_observation.py -q` passed (38, including
+  `test_every_native_decision_code_has_a_label`); `managym.MAX_DECISION_CODE`
+  imports as 20. Full debug `cargo test` and CI on the fix commits are left
+  to gate/CI.
 
 ## Demo (headless, 2026-10-30) — text-path gap fixed at `2963f8f87`
 
