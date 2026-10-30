@@ -257,11 +257,10 @@ c1dd6c71c:scratch/questions.md.
   `learning_catalog`, authored receipts) reads them; deck import and admission
   never do. Removing those descriptors would change main's vocabulary binding,
   so it is left for review rather than done here.
-- 2026-10-30: `PlayerConfig.content_pack` (main's setup selector) stays; decks
-  submitted to the world carry the value `"world"` (`managym.WORLD_SETUP`), so an
-  imported pair equal to an authored setup cannot silently run on that pack.
-  `MatchConfig.content_pack` therefore still appears on deck matches. A
-  dedicated non-"content" field would rename main's selector; flagged for review.
+- 2026-10-30: decks submitted to the world carry the selector value `"world"`
+  (`managym.WORLD_SETUP`), so an imported pair equal to an authored setup cannot
+  silently run on that pack. The selector itself is now `world` (renamed by
+  Jack Heart's decision; see the plan).
 - 2026-10-30: `UniformDecks` keeps the experiment's deck order (order selects
   each seeded draw and is in the digest); duplicates reject rather than dedupe.
   Native `set_training_decks` remains the one source implementation; a Python

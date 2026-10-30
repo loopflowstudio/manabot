@@ -4,7 +4,8 @@ Full history, usage sketches and settled reviews: c1dd6c71c:scratch/f871a8-impor
 (earlier: e3b4f0583, d8fc9833c). Based on main: PR #394 (Task 892c47: typed
 Rust cards, one open world w17, first-printing keys, support = set-file
 definition) and T2 (87e012, c7979d310: 51 TLA cards extending w17) are merged;
-last synced at 886e0b563. Main's T1/T2 notes ride in `scratch/questions.md`
+last synced at 6f48f5ca0 (eb1412cd0); origin/main has no newer commits as of
+2026-10-30. Main's T1/T2 notes ride in `scratch/questions.md`
 below this Task's entries; they are main's, not this Task's.
 
 ## Accepted direction (Jack Heart)
@@ -175,9 +176,9 @@ receipt rewritten, verifies; decklist-import 8 passed after 69e245a31.
 Re-review (2026-10-30, headless, at 623df4218): no further change implied.
 The Python deck/training/checkpoint surface (`Deck`, `DeckIssue`,
 `check_decks`, `world_identity`, `deck_world`, `deck_source`) names no
-content/pool/pack except the two selectors below; Rust admission reading
+content/pool/pack; the two selectors were renamed below. Rust admission reading
 `content_pool(WORLD_POOL)` is main's internal descriptor plumbing, not a
-surface. Still blocked on the selector question.
+surface.
 
 ## Selector rename — done (2026-10-30 evening)
 
@@ -206,5 +207,5 @@ regimes 33 passed; parity receipt verifies.
 
 Copied evidence (scratch/tla-evidence, scratch/tla-card-ledger.jsonl) is kept
 out of staging by local exclusions; stage explicit owned paths and use
-`lf commit --no-add`. PR #395 is open against main for Jack Heart's review; no
-merge or auto-merge.
+`lf commit --no-add`. PR #395 is open against main at 3c440d53a (CI running at realign,
+2026-10-30) for Jack Heart's review; no merge or auto-merge.
