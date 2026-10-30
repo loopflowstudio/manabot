@@ -69,8 +69,10 @@ exhaust, used once-each-turn, granted firebending) in text-5 wording
 
 ## Remaining
 
-- Gate on `HEAD` (debug `cargo test`, CI conformance, arena admission, Academy
-  vitest/e2e). Then Jack Heart reviews and lands #398; T3 (6875f0) syncs onto it.
+- Gate on `cfe477a7b` (debug `cargo test`, CI conformance, arena admission,
+  Academy vitest/e2e); #398 CI was queued there at realign (main unmoved since
+  `fa5e13b23`). Then Jack Heart reviews and lands #398; T3 (6875f0) syncs onto it
+  and inherits the w17 rename.
 
 ## Check
 
