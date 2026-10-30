@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>T3 Concept Review</title>
+<title>When Worlds Change</title>
 <style>
 :root{--bg:#fbfaf7;--fg:#22201c;--mute:#6b665d;--rule:#e2ddd3;--code:#f1ede5;--prop:#9a5b13;--propbg:#fbf0e1;--have:#2f6b3a;--gap:#a3322a}
 @media (prefers-color-scheme:dark){:root{--bg:#1a1916;--fg:#e9e5dc;--mute:#a19b90;--rule:#36332d;--code:#26241f;--prop:#e6a65a;--propbg:#2e2416;--have:#7fc28b;--gap:#ef8a80}}
@@ -19,7 +19,7 @@ table{width:100%;border-collapse:collapse;font-size:.92rem;margin:.6rem 0}
 th,td{text-align:left;vertical-align:top;padding:.45rem .5rem;border-bottom:1px solid var(--rule)}
 th{font-weight:600;color:var(--mute);font-size:.82rem}
 .wrap{overflow-x:auto}
-.y{color:var(--have)}.n{color:var(--gap);font-weight:600}.e{color:var(--mute)}
+.n{color:var(--gap);font-weight:600}.y{color:var(--have)}
 .proposed{background:var(--propbg);border:1px dashed var(--prop);border-radius:6px;padding:.8rem 1rem;margin:1rem 0}
 .proposed::before{content:"PROPOSED · not written";display:block;font:600 .72rem ui-sans-serif,system-ui,sans-serif;letter-spacing:.06em;color:var(--prop);margin-bottom:.3rem}
 .flow{font:.82rem ui-monospace,Menlo,monospace;white-space:pre;overflow-x:auto;background:var(--code);padding:.8rem 1rem;border-radius:6px;line-height:1.5}
@@ -31,66 +31,57 @@ ol.q ol{list-style:lower-alpha;margin:.3rem 0}
 <body>
 <main>
 <header>
-<h1>Who sees a stun counter?</h1>
+<h1>When does a world get a new number?</h1>
 <p>Task 6875f0 · TLA T3: characteristics, counters, replacements, attachments</p>
-<p>Concept review with Jack Heart · Task standing at <code>demo</code> · 2026-10-29</p>
-<p>Built from <code>scratch/6875f0-tla-t3-characteristics.md</code>, <code>scratch/questions.md</code>, <code>manabot/env/observation.py</code>, <code>managym/src/agent/observation.rs</code>, <code>managym/src/agent/observation_encoder.rs</code>, <code>manabot/infra/config.py</code></p>
+<p>Concept review with Jack Heart · Task standing at <code>demo</code> · 2026-10-30, after #394 merged</p>
+<p>Built from <code>WORLDS.md</code>, <code>scratch/6875f0-tla-t3-characteristics.md</code>, <code>scratch/questions.md</code>, <code>manabot/model/catalog.py</code>, <code>manabot/model/world.py</code>, <code>git log main..HEAD</code></p>
 </header>
 
-<p class="lead">Decision needed: is a policy input that cannot see T3's new state acceptable, and if so, where is that written down? Today the omission is silent. Humans and LLM bots see stun counters and attachments, but the bot we train does not.</p>
+<p class="lead">Decision needed: does a world number change when a shape change <em>merges</em>, or when someone <em>freezes</em> a world to train and compare on it? Today the stack does the first, while WORLDS.md describes the second. The difference decides whether T3 has to become w19 and policy input v6 if T2 lands first.</p>
 
-<h2>One interaction</h2>
-<p>The opponent casts Crashing Wave. Three stun counters go on your tapped creatures. On your turn they stay tapped and lose a counter each. Separately, you have Trusty Boomerang on creature A rather than creature B.</p>
-<div class="flow">Engine state        Permanent.counters.stun = 1, attached_to = A
-   │
-Observation         PermanentData.stun_counters = 1, attached_to = A   (item 19)
-   ├─► Academy       chip "1 stun", "Trusty Boomerang attached"     (item 20)
-   ├─► LLM text      "stun counters: 1; attached to A"              (item 20)
-   └─► policy v4     tapped = 1, P/T and keywords as modified
-                     · no stun column, no attachment edge · unchanged</div>
-<p>The trained policy sees the creature tapped but cannot tell whether it will untap. It sees A's raised P/T but not that removing A strands the Equipment. Under item 19 the omission was a deliberate choice: keep frozen widths and leave encoding for your PR review. Nothing in the code or docs states that choice.</p>
+<h2>One interaction: landing the stack</h2>
+<div class="flow">today (bump per change)                     proposed (number names a freeze)
+─────────────────────────                   ────────────────────────────────
+#394 merges   → main = w17                  #394 merges   → main = w17 (open)
+#398 merges   → main = w18                  #398 merges   → main = w17 (open), receipts updated
+#399 rebases  → must become w19 + v6        #399 merges   → main = w17 (open), receipts updated
+                rename, re-record receipts,
+                re-pin belief digests
+                                            Jack freezes  → w17 frozen: baselines re-run,
+                                                            receipts recorded; next = w18</div>
+<p>Under today's rule, the number changed three times in about two days (w16, w17, w18), and none of those worlds has a checkpoint or a baseline. About 3 of T3's commits only re-record or re-pin evidence after a sync. The number is churning without protecting anything.</p>
 
-<h2>What each consumer sees (verified)</h2>
-<div class="wrap"><table>
-<tr><th>T3 state</th><th>Observation / Academy / LLM</th><th>Policy v4</th></tr>
-<tr><td>Stun, fire, other counters by kind</td><td class="y">yes</td><td class="n">no (only +1/+1, col 4)</td></tr>
-<tr><td>Equipment / Aura attached to which creature</td><td class="y">yes</td><td class="n">no edge; P/T and keywords show the effect</td></tr>
-<tr><td>Announced X on the stack</td><td class="y">yes</td><td class="n">no</td></tr>
-<tr><td>Granted land type (Toph)</td><td class="y">yes</td><td class="n">no</td></tr>
-<tr><td>Set name / creature types (Honest Work)</td><td class="y">yes</td><td class="e">only indirectly: lost keywords, base P/T</td></tr>
-<tr><td>Granted firebending</td><td class="y">yes</td><td class="n">no</td></tr>
-</table></div>
-<p>No decklist or world uses a T3 card yet, so no current training run is affected. The gap matters once a world puts these cards into a training pool. Then card evaluations, which feed cube design, would measure a bot playing blind, the same pilot confound seen in exp-08b.</p>
+<h2>What actually keeps checkpoints safe (verified)</h2>
+<p><code>checkpoint_incompatibility</code> compares a checkpoint's whole <code>world_binding</code> with the running engine, field by field: the world, the content manifest and its digest, the input schema shapes and the learning-schema hash. A checkpoint trained before a shape change is rejected, with the reason, whatever the world is called. So the number is a <em>label for comparability</em>, not the safety check.</p>
 
 <h2>Actions → concepts → APIs</h2>
 <div class="wrap"><table>
-<tr><th></th><th>Before (as built)</th><th>After (proposed)</th></tr>
-<tr><td>Concept</td><td>"Observations stay complete" — stated for <code>Observation</code>, assumed for everything</td><td><code>Observation</code> is the complete shared decision surface; each policy input version is a frozen, <em>documented</em> projection of it</td></tr>
-<tr><td>Config</td><td><code>policy_input_version: Literal[1,2,3,4]</code>, default 4</td><td>same, with its omissions written beside it; (a) or (b) adds 5</td></tr>
-<tr><td>Encoders</td><td><code>_encode_permanent_features</code> = <code>observation_encoder.rs</code>, 28 columns</td><td>v5: counters by kind, granted land, firebending columns; attachment relation row; stack X. v1–v4 byte-frozen</td></tr>
-<tr><td>Failure</td><td>none: a v4 policy plays T3 cards without warning</td><td>the omission is on record; under (b), v5 lands before T3 cards enter a training pool</td></tr>
+<tr><th>Action</th><th>Today</th><th>Proposed</th></tr>
+<tr><td>Merge a rules or shape change</td><td>bump <code>WORLD_VERSION</code>, add a WORLDS.md section, re-record receipts</td><td>update receipts; the world on main stays open under its number</td></tr>
+<tr><td>Change the policy input</td><td>a new <code>policy_input_version</code> per change</td><td>extend the open version; it freezes with its world or when a checkpoint is kept</td></tr>
+<tr><td>Freeze a world for training and comparison</td><td>implicit, never actually done (the WORLDS.md table says "in development")</td><td>an explicit act: re-run baselines, record receipts, mark it frozen in WORLDS.md, open the next number</td></tr>
+<tr><td>Load an old checkpoint</td><td><code>checkpoint_incompatibility</code> by binding</td><td>unchanged</td></tr>
 </table></div>
 
 <div class="proposed">
-<p style="margin:0">Docstring on <code>ObservationConfig.policy_input_version</code>:</p>
-<p style="margin:.4rem 0 0"><em>Policy input versions are frozen projections of the complete <code>Observation</code>. v4 omits counters other than +1/+1, attachment edges, stack X, granted land types, set names and creature types, and granted firebending. A policy trained on v4 sees only their effects on P/T and keywords.</em></p>
+<p style="margin:0">WORLDS.md opening paragraph:</p>
+<p style="margin:.4rem 0 0"><em>A world number names a frozen world. Main carries at most one open world, and merged rules or shape changes extend it in place, updating its receipts. Freezing is deliberate: re-run the headline baselines, record the receipts, mark the row frozen, and open the next number. Checkpoints are protected by their world binding, which rejects any content or shape difference, not by the number. A run on an open world makes no comparability claim.</em></p>
 </div>
 
 <h2>Counterexample checked</h2>
-<p>"The policy can infer attachment from P/T." It can't, reliably. Two creatures with equal raised P/T, one equipped and one pumped until end of turn, encode identically. Under v4 a stunned tapped creature and an unstunned tapped one also encode identically. These two pairs become the v5 proof: v4 rows are equal and v5 rows differ, with native and Python encoders in parity.</p>
+<p>Someone trains on open w17, and #399 then changes its shape. Loading fails at the binding (input schema or content digest), with the reason. Nothing loads silently. The run never claimed to be comparable, because its world wasn't frozen. If you <em>do</em> want that run kept, freeze w17 before #399 lands, and #399 opens w18. That is still a deliberate act, not a side effect of merging.</p>
 
 <h2>Questions</h2>
 <ol class="q">
-<li>Where does policy encoding of T3 state happen?
+<li>When does a world get a new number?
   <ol>
-  <li>In T3: add policy input v5 now, in both encoders, with v1–v4 frozen.</li>
-  <li><span class="rec">Recommended:</span> write v4's omissions down now, and give v5 its own Task, which must land before any world puts T3 cards into a training pool.</li>
-  <li>Write the omissions down only, and decide on v5 when a world wants these cards.</li>
+  <li><span class="rec">Recommended:</span> only at a deliberate freeze. Merges extend main's open world in place, and policy input versions follow the same rule.</li>
+  <li>On every merged rules or shape change, as now. T3 becomes w19 and v6 if T2 lands first.</li>
   </ol></li>
-<li>Is the contract right: the <code>Observation</code> is complete, and policy versions are documented projections that may omit things?
+<li>If 1a, what is the TLA batch's open world?
   <ol>
-  <li>Yes.</li>
-  <li>No. New engine state must reach the policy in the same change, so a frozen version is never silently behind.</li>
+  <li><span class="rec">Recommended:</span> w17, main's current world. T2 and T3 rename their w18 back to w17 and extend v5 in place.</li>
+  <li>w18. T2 opens it on landing, and T3 through T7 extend it.</li>
   </ol></li>
 </ol>
 </main>

@@ -154,3 +154,139 @@ are not T3 product choices: the in-place v5/w18 extension is a reversible
 versioning assumption (no checkpoint uses either; `scratch/questions.md`), and
 the opponent's sideboard counts in the `Observation` and LLM text predate T3
 (on main), so that visibility question stays Jack Heart's, outside this Task.
+
+PR #399 base retargeted to T2 (`jack-heart/87e012-tla-t2-casting`) at Jack Heart's request, 2026-10-30; merged T2 head `0ad38cffe` (scratch-only changes) as `953843968`.
+
+## Concept review with Jack Heart (2026-10-30, at demo, after #394 merged)
+
+Page: `scratch/concept-review.html`. This is a proposal. Nothing in it is accepted.
+
+Mismatch: when does the world number change? WORLDS.md says worlds are "frozen
+deliberately (batch the shape changes)", but the stack bumps on every change.
+- w16, w17 and w18 were each created within about two days.
+- #394 is now on main as w17 (`fa5e13b23`), with no checkpoint or baseline.
+- T2 (#398) and T3 (#399) both write w18.
+- T3's standing assumption is that if T2 lands first, T3 takes w19 and policy
+  input v6, which means renaming the version and recording the receipts again.
+- About 3 of T3's commits re-record or re-pin evidence after a sync.
+
+Safety doesn't depend on the number. `checkpoint_incompatibility`
+(`manabot/model/catalog.py`) compares the whole `world_binding`: the world, the
+content manifest and digest, the input schema shapes and the learning-schema
+hash. It rejects any checkpoint whose binding differs.
+
+Proposal:
+- A world number names a freeze, not a merge.
+- Main carries one development world. Merged shape changes extend it in place.
+- Freezing is a deliberate act: re-run the headline baselines, record the
+  receipts, mark it frozen in WORLDS.md, and start the next number.
+- Policy input versions follow the same rule: v5 stays open until a freeze or
+  a checkpoint someone means to keep.
+- Receipts still update with every shape change, because the tests compare
+  digests. What goes away is the renumbering, plus the "w19 if T2 lands
+  first" contingency.
+
+Applied to the stack:
+- Either rename w18 back to w17 (main's open world), with T2 and T3 extending
+  it; or keep w18 as the TLA batch's one development world.
+- Either way, T3 doesn't take w19 or v6 when T2 lands.
+
+Counterexample: someone trains a checkpoint on the unfrozen world and the next
+merge changes its shape. The binding rejects it field by field, so nothing
+loads silently. The run was on an unfrozen world, so it carries no comparability
+promise.
+
+Accepted, Jack Heart 2026-10-30 ("1a, 2a"): a world number names a deliberate
+freeze, not a merge. Main carries one open world; merged rules or shape changes
+extend it in place and update its receipts; freezing re-runs the headline
+baselines, records receipts, marks the WORLDS.md row frozen and opens the next
+number. Policy input versions follow the same rule. The TLA batch's open world
+is w17 (main's): T2 and T3 rename their w18 back to w17 and extend v5 in place;
+T3 never takes w19/v6. T2 lands the WORLDS.md opening-paragraph change (page
+wording) and the rename first; T3 follows on its next sync.
+
+## Accepted: continuous effects as records (Jack Heart, 2026-10-30)
+
+Jack Heart, reviewing `Player.keeps_red_mana`: "Redo this to be the architecture
+that will scale to 10s of thousands of cards. IN this diff." That replaces the
+per-object until-end-of-turn fields with one model of continuous effects
+(CR 611, 613), in T3.
+
+Principle: adding cards adds data, never engine fields. A card applies a
+continuous effect by composing a closed vocabulary (what it modifies × whom ×
+how long). A new mechanic adds a variant to that vocabulary, and the exhaustive
+observability guard then forces its tensor, token and LLM encoding.
+
+Model (names are direction; implement may refine them):
+- `Game.effects: Vec<ContinuousEffect>`, kept in timestamp order and journaled
+  for undo like players and permanents. One record holds:
+  - `id`, `timestamp` (a monotonic `Game` counter; CR 613.7)
+  - `source` (`ObjectRef` + definition; last-known information if it left)
+  - `controller`
+  - `affected`:
+    - `Player(PlayerId)`
+    - `Object(ObjectRef)` (one incarnation; CR 400.7 ends it when the object
+      changes zones)
+    - `Locked(Vec<ObjectRef>)`: the set fixed at resolution (CR 611.2c)
+  - `modification`: one typed enum grouped by layer, covering:
+    - layer 4: add/set types and subtypes
+    - layer 6: add keywords, lose all abilities, grant ability, firebending N
+    - layer 7b: set base P/T
+    - layer 7c: modify P/T
+    - rules effects: can't be blocked, exile if it would die, keep unspent mana
+      of a color, no maximum hand size, becomes a creature
+  - `duration`: `EndOfTurn` (CR 514.2), `EndOfCombat`, `WhileSourceOnBattlefield`,
+    `UntilYourNextTurn`, `Game`.
+- Static abilities stay derived from their permanents. They feed the same layer
+  application with the permanent's own timestamp (CR 613.7a/d), so `ScopeView`
+  gathers static and recorded modifications and applies them by layer, then by
+  timestamp. Honest Work's "no timestamps" limitation and ability loss ignoring
+  timestamps (`questions.md`) go away; a later grant now survives an earlier
+  loss. Dependency order (CR 613.8) stays out of scope and is recorded as a
+  limitation unless a T3 card needs it.
+- One read path: every characteristic reader (`effective_keywords`,
+  `has_lost_abilities`, P/T, subtypes, `permanent_is_land`,
+  `activated_abilities_for`) and every rules query (blockability, death
+  replacement, mana emptying, hand size) reads `Game`, never a `temp_*` field.
+  For scale, reads index records by affected object rather than scanning, and
+  characteristics may be cached per state revision if profiling asks for it.
+- Expiry is one function per boundary:
+  - cleanup removes `EndOfTurn`; the end of combat removes `EndOfCombat`
+  - a source leaving removes `WhileSourceOnBattlefield`
+  - an affected object changing zones removes `Object` records for it
+  - `clear_temporary_modifiers` goes away
+- Card authoring: one engine `Effect::ApplyContinuous { affected, modification,
+  duration }`, plus constructor helpers. It replaces `GrantKeywords*`,
+  `set_base_pt`, `BecomeCreatureTarget`, `SetBasePtTarget`,
+  `GrantFirebendingToTarget`, `keep_unspent_red_mana`,
+  `destroy_creatures_losing_abilities`' loss and similar one-offs.
+- Remove: `Permanent.{temp_power, temp_toughness, temp_base_power,
+  temp_base_toughness, temp_keywords, temp_subtypes, abilities_lost,
+  cant_be_blocked_this_turn, firebending_this_turn, exile_if_dies_this_turn}`,
+  `BecomesCreature::EndOfTurn` and `Player.{keeps_red_mana,
+  no_maximum_hand_size}`. `activated_this_turn` and turn counters are turn
+  history, not effects, and stay.
+- Observation: each record visible to its viewers as a row of (affected,
+  modification kind and amount, source definition, duration, timestamp order).
+  It goes in the `Observation`, the policy tensor (v5 extended in place: an
+  effect row block like the relation rows, with a join to the affected object),
+  the learning tokens (modification and duration enums) and the LLM text
+  ("until end of turn: +2/+0, flying (Iroh's Demonstration)"). The derived
+  effective values stay too. The observability guard matches `Modification` and
+  `Duration` exhaustively. Academy shows the records as permanent and player
+  notes.
+- World: w17, extended in place (1a/2a).
+
+Proof:
+- Every existing card test passes unchanged; assertions change only where
+  timestamp order is now correct, and each such change is named.
+- New tests:
+  - timestamp order (a loss, then a later grant; Honest Work, then a pump)
+  - each expiry boundary
+  - the source leaving
+  - the affected object changing zones and returning as a new object
+  - undo and rollback of effect records
+  - viewer safety
+  - hash and determinism stability
+- Native/Python v5 parity; guard and directed observability tests for each
+  `Modification` and `Duration`; debug `cargo test`; the AGENTS.md world suite.
