@@ -176,7 +176,7 @@ fn prism_upfront_payment_preserves_professors_second_green() {
 }
 
 #[test]
-fn prism_payment_offers_execute_and_undo_without_mutating_sibling_forks() {
+fn prism_payment_offers_execute_and_restore_without_mutating_sibling_forks() {
     use managym::{search_state::witness, Game};
 
     fn complete_every_offer(game: &mut Game, spell: CardId, depth: usize) {

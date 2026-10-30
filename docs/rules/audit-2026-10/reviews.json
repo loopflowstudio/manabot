@@ -741,7 +741,7 @@
         "managym/src/flow/target_authority_tests.rs::simultaneous_trigger_orders_have_distinct_rules_outcomes",
         "managym/src/flow/target_authority_tests.rs::audit_same_controller_triggers_require_an_order_choice",
         "managym/src/flow/target_authority_tests.rs::trigger_order_two_passes_precede_controller_and_defer_new_arrivals",
-        "managym/src/flow/target_authority_tests.rs::trigger_order_target_resume_and_nested_rollback_preserve_round",
+        "managym/src/flow/target_authority_tests.rs::trigger_order_target_resume_and_nested_fork_preserve_round",
         "tests/academy/test_trigger_order.py::test_survival_orders_cross_consumers"
       ]
     },

@@ -2103,7 +2103,7 @@ mod learn_tests {
     }
 
     #[test]
-    fn learn_nested_knowledge_and_search_rollback_preserve_retained_roots() {
+    fn learn_nested_knowledge_and_search_fork_preserve_retained_roots() {
         let mut source = small_known_hand_game();
         learn(&mut source);
         source
@@ -2247,7 +2247,7 @@ mod payment_tests {
     }
 
     #[test]
-    fn shared_payment_and_both_continuations_restore_through_nested_command_rollback() {
+    fn shared_payment_and_both_continuations_restore_across_nested_command_forks() {
         for cost in [
             PaymentCost::Mana(ManaCost::parse("{0}")),
             PaymentCost::Waterbend { generic: 0 },
@@ -2282,7 +2282,7 @@ mod payment_tests {
     }
 
     #[test]
-    fn partial_waterbend_and_paid_mana_choice_restore_through_nested_command_rollback() {
+    fn partial_waterbend_and_paid_mana_choice_restore_across_nested_command_forks() {
         let player = PlayerId(0);
         let mut game = payment_game_with_deck(
             PaymentCost::Waterbend { generic: 2 },

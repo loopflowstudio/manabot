@@ -725,7 +725,7 @@ fn trigger_order_same_source_joins_preserve_ability_and_causal_context() {
 }
 
 #[test]
-fn trigger_order_target_resume_and_nested_rollback_preserve_round() {
+fn trigger_order_target_resume_and_nested_fork_preserve_round() {
     use crate::agent::action::{Action, ActionSpaceKind};
     use crate::search_state::witness;
     let (mut game, source, ..) = fixture();

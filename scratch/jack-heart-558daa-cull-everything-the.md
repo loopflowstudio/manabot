@@ -3,7 +3,7 @@
 Directive: Jack Heart, 2026-10-30 (Task 558daa). Was stacked on afbd6a; #403
 merged into main (10eeb1f55) and this branch merged it (8db3b2fe8), so the PR
 targets main and its diff is the cull alone.
-Status: cull complete through the compress pass; main (6f48f5ca0) merged in d8ba8a340 with no reintroduced cut files or citations. Awaiting gate/demo. Stop at review/demo; no merge.
+Status: cull complete through the compress pass; main (6f48f5ca0) merged in d8ba8a340 with no reintroduced cut files or citations. Concept review (2026-10-30) found stale undo/branch-driver guidance; next implement pass is the doc/name alignment below, then gate/demo. Stop at review/demo; no merge.
 
 ## Approach
 
@@ -111,6 +111,20 @@ Still held (outside Jack's 2026-10-30 decisions; files in open PRs):
 - #383/#395: `eval/duel.py` + `tests/training/test_head_to_head.py`.
 - Not decided: MTG-186 drivers (an Etude migration test imports them), `seat_comparison.py`, `verify/decision_profile.py` (only `wilson_interval` used).
 
+## Concept review, 2026-10-30 (done)
+
+Branching is a full clone of the `Game`; the engine has no undo, journal or
+branch driver. Guidance now matches: `managym/README.md` (fork contract,
+`search_state::witness`, policy-history across clone/injection),
+`docs/ARCHITECTURE.md` §10 and contract list (full clone is the strategy;
+benchmarks are the decision record), six undo/rollback test names renamed to
+fork/restore with their `docs/rules/audit-2026-10` anchors, and engine wave
+MEMORY "hash coverage". Deliberately unchanged: frozen
+`marks`/`rollbacks`/`indexed_fallbacks` receipt counters
+(`manabot.search-branching.v1`) and the `LegacyCloneReferenceBackend` oracle.
+Reopen only if a reader needs incremental undo (Academy undo is a separate
+follow-up and must be an explicit shared action on fork snapshots).
+
 ## Checks
 
 - Pre-existing at base (fail identically with this branch's changes stashed): `tests/belief/test_belief_agent.py::test_keystone_demo_changes_belief_tokens_and_hides_actual_truth` (zero deltas), `tests/belief/test_state.py::test_native_projection_preserves_canonical_receipt_bytes` (receipt digest), `tests/semantic/test_temur.py::test_temur_finishes_through_the_production_training_observation_path` (60 == 40, v5 player width); earlier: `tests/sim/test_conditional_search.py`, `tests/sim/test_search_runtime.py::test_seed_197_checkpoint_model_abis_match_the_registry`, `tests/verify/test_observation_parity.py::test_elemental_indestructible_encoding_preserves_outside_and_definition_columns`.
@@ -119,3 +133,4 @@ Still held (outside Jack's 2026-10-30 decisions; files in open PRs):
 
 - Compress pass: debug `cargo test` (opt-level 1) 650 passed / 0 failed; `cargo fmt --check`; clippy `--all-targets -D warnings` with and without `python,benchmark` clean; authored-match parity rewritten (142 commands, no divergence). World-change suite + `tests/academy tests/env tests/sim tests/infra tests/belief`: 730 passed / 11 failed, all on the known pre-existing list above. Academy UI untouched this pass.
 - After merging main (d8ba8a340, Python/experiments only): `uv run --extra dev pytest tests/eval/test_elemental_long.py tests/training/test_learning_state.py tests/test_package_boundaries.py -q` 30 passed; Rust/UI unchanged by the merge.
+- Concept-review pass (guidance/test renames): debug `cargo test` 650 passed / 0 failed; `cargo fmt --check`; clippy `--all-targets -D warnings` clean; `tests/infra/test_rules_inventory.py` 6 passed; no `fn …undo|rollback` test names remain.

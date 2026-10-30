@@ -32,7 +32,7 @@ decklist data separate from card behavior; see
 Dependencies flow: python → agent → flow → state/infra.
 
 The semantic kernel direction — typed card programs, exact object identity,
-structured offers, proposed events, fork/rollback — is documented in
+structured offers, proposed events, forking — is documented in
 [docs/research/semantic-kernel.md](../docs/research/semantic-kernel.md), with
 conformance fixtures under [conformance/](../conformance/).
 
@@ -60,14 +60,14 @@ presence checks separately prevent following departed objects (CR 400.7).
 Illegal slots remain positional, and zero optional targets still resolve.
 Graveyard targets
 carry an exact `ObjectRef`, so continuations cannot follow a physical card into
-a later incarnation. Journal permanent mutations at their event authority;
+a later incarnation. Mutate permanents at their event authority;
 source-relative effects require the original battlefield object.
 
 Public hand knowledge is a minimum multiset of `CardDefId` counts on `Player`,
-not a set of revealed physical cards. Its per-definition changes have dedicated
-undo entries; `journal_player` still captures only scalars. Exercise nested
-choice rollback through normal Commands/branch-driver `apply`: transition
-queues are journaled at that boundary, not by direct calls to resolution helpers.
+not a set of revealed physical cards. Search forks by full clone: clone the
+`Game` before a normal Command `apply` and compare `search_state::witness` to
+check that the source is unchanged. Exercise nested choices through Commands,
+not by direct calls to resolution helpers.
 
 ## Build and test
 
@@ -135,7 +135,7 @@ counts still require the semantic input path during the Learn migration.
 
 The optional [policy-history v1 projection](../docs/training.md#policy-inputs) is a bounded
 derived suffix updated at the native event append. Observation reads share it;
-clone/undo and diagnostic injection must preserve its documented lifecycle.
+clone and diagnostic injection must preserve its documented lifecycle.
 
 `PlayerConfig.content_pack` can explicitly select the compiled authored runtime
 for repeated-deck matches. Both seats must name the same pack and each complete

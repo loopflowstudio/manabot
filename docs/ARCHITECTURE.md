@@ -406,9 +406,10 @@ traversals or playouts, realized latency, inference work, and perspective.
 
 ### 10. Concurrency and performance
 
-Full clone is the correctness reference for branches. Undo, copy-on-write, and
-other backends are admissible only when representation-neutral witnesses,
-legal surfaces, viewer Observations, and transitions remain equivalent.
+Full clone is the branch strategy (Jack Heart, 2026-10-30): search forks a
+`Game` by cloning it and applies Commands to the copy. The [search branching
+decision](benchmarks/search-branching-decision-v1.md) and its benchmark receipts
+record why undo and copy-on-write backends were rejected.
 
 Root state is immutable during concurrent planning. Each worker owns an
 isolated branch and RNG stream. Reductions have a deterministic order.
@@ -687,9 +688,9 @@ Detailed existing contracts remain authoritative within their narrower scope:
   deterministic state-hash domain;
 - [presentation runtime](academy.md#presentation-runtime) describes the
   product projection seam;
-- [search branching contract](benchmarks/search-branching-contract-v1.md) and
+- [search branching decision](benchmarks/search-branching-decision-v1.md) and
   [selected branch driver](benchmarks/selected-branchdriver-teacher-v1.md)
-  constrain branch implementations;
+  record the evidence for full-clone branching;
 - [WORLDS.md](../WORLDS.md) governs current Observation/action world freezes;
 - [manabot research](../manabot/RESEARCH.md) records the broader research and
   evidence program.

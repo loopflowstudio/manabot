@@ -182,7 +182,7 @@ fn library_search_is_private_enters_tapped_and_continues_to_learn() {
 }
 
 #[test]
-fn search_selection_or_decline_and_shuffle_restore_exactly_under_undo() {
+fn search_selection_or_decline_and_shuffle_restore_exactly_from_fork() {
     use managym::search_state::witness;
     let mut s = five_color_setup(&["Field Trip"]);
     cast(&mut s, "Field Trip");

@@ -46,7 +46,7 @@ preserves accepted decisions, dated proof limits and source history.
   Retrieve through ordinary movement after a definition reveal; never create
   copies, invent a zone or duplicate the inventory in consumers. Carry complete
   compiled setup through seats, reset and replay roots.
-- Known hand facts are definition minima with dedicated undo/hash coverage.
+- Known hand facts are definition minima with hash coverage.
   Both search samplers must reserve those facts and weight residual deals,
   without exposing which identical copy was retrieved.
 - Mode-first controls, previews, Back and reconnect have real browser evidence.
