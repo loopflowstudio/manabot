@@ -174,7 +174,7 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
         subtypes_any,
         not_subtypes,
         supertype,
-        not_supertype,
+        nonbasic,
         any_of,
         min_power,
         card_type: kind,
@@ -189,11 +189,9 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
         terms.push("flying".into());
     }
     terms.extend(supertype.iter().cloned());
-    terms.extend(
-        not_supertype
-            .iter()
-            .map(|t| format!("non{}", t.to_lowercase())),
-    );
+    if *nonbasic {
+        terms.push("nonbasic".into());
+    }
     if *token == Some(false) {
         terms.push("nontoken".into());
     }

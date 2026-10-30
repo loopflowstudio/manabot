@@ -1328,7 +1328,7 @@ fn bumi_bash() -> CardDefinition {
                                     ..Default::default()
                                 },
                                 CardPredicate {
-                                    not_supertype: Some("Basic".into()),
+                                    nonbasic: true,
                                     ..Default::default()
                                 },
                             ],

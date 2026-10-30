@@ -2,7 +2,7 @@
   "schema_version": 1,
   "contract_id": "manabot.semantic-kernel-conformance.v1",
   "matchup_source_digest": "e998a100250a88436ce305ce6925bedae358794eb0a4c17568120e7b09b2b30e",
-  "content_digest": "f3c076e9820692393ef4b8334fd02133b8a2676ca8510d70a7db8a7849f86ece",
+  "content_digest": "b199070e3d472531562fd9813b21566ce50d38f1a80750a8c4aae0ab3e84c456",
   "reference": "reference/explicit-step-v1",
   "optimized": "optimized/skip-trivial-v1",
   "limitation": "Both executors share low-level rules/card primitives; this is not a second Comprehensive Rules engine.",
@@ -12,28 +12,28 @@
       "orientation": "ur_lessons_vs_gw_allies",
       "commands": 102,
       "outcome": "terminal",
-      "final_state_hash": "v10:756cf7095199efae7e014443f44d44b994f272acd60eef3809871c1268c3ddc7"
+      "final_state_hash": "v10:8ff1b29853eb27d95c901499a5fc64e3bcad57f4d4e3661c06aca7f1c3af213e"
     },
     {
       "case_id": "gw-vs-ur-5eee",
       "orientation": "gw_allies_vs_ur_lessons",
       "commands": 48,
       "outcome": "terminal",
-      "final_state_hash": "v10:077c2217969801a8f0a3a2bdcd4dcc02c276b1d518db37f13eb5ed2f1d101fc1"
+      "final_state_hash": "v10:fbbfbfd6a7afaca886be9ebbac0d7d3d2885fa85b76f762389a06cb3cea34546"
     },
     {
       "case_id": "ur-vs-gw-5eef",
       "orientation": "ur_lessons_vs_gw_allies",
       "commands": 154,
       "outcome": "terminal",
-      "final_state_hash": "v10:13faef054c7721eafbcf3274edf3fe13590c44c72e4f4e1aa616746115de2cd3"
+      "final_state_hash": "v10:71f7c62c8620724c246fed3af6443829326f9f71f594b3abcaa620824dacb487"
     },
     {
       "case_id": "gw-vs-ur-5ef0",
       "orientation": "gw_allies_vs_ur_lessons",
       "commands": 221,
       "outcome": "terminal",
-      "final_state_hash": "v10:1cfc24db942da8ac3bb2bbd3b569232c8f327f18e1dcc66b0ecfdc5b97a82eb8"
+      "final_state_hash": "v10:a94c91246fc848ce393a6fa258575e3b557d88636f9240f5f1be66fec037d879"
     },
     {
       "case_id": "elemental-161",

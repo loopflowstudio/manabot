@@ -45,7 +45,7 @@ w18 digest-bound evidence is re-recorded at gate with T2's
    (caster as context, only for abilities that read it),
    `TriggerCondition::AttacksWithAnother`, `Effect::TriggeringPlayerLosesLife`,
    `Effect::ModifyTargetPlayerCreatures`, `EffectValue::AttackingMatching`,
-   `CardPredicate::not_supertype`.
+   `CardPredicate::nonbasic`.
 4. Turn history: attacked this turn (raid: Fire Nation Raider/Engineer, Cruel
    Administrator), sacrificed count, damage dealt this turn (Sold Out), land
    entered this turn. Needs observed state (player row columns).
