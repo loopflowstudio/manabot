@@ -83,6 +83,14 @@ Academy `DeckImportInput`, UI payload), `GameConfig.imported_decks`, tracked
 deck bindings, `env.match.parse_deck`, `validate_imported_players` (list at
 c1dd6c71c).
 
+## Concept review (2026-10-30, after T2 sync)
+
+Implementation matches the accepted direction: one `Deck`, decklists and
+admission native, sources re-admitted against the installed world, no caller
+ruleset, training decks checked upfront, checkpoints bound to the world only.
+No open product choice. Gate nit: `manabot/managym/__init__.pyi` declares
+`admit_deck` twice (keep the documented one beside `admit_decklists`).
+
 ## Handoff
 
 Copied evidence (scratch/tla-evidence, scratch/tla-card-ledger.jsonl) is kept
