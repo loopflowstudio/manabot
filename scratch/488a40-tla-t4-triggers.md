@@ -84,7 +84,9 @@ evidence is re-recorded at gate with `scratch/tools/regen_*.py` and
    Waterbending, Jeong Jeong), copies/retargeting (Firebender Ascension,
    Jeong Jeong, Redirect Lightning), control change (Jet's Brainwashing, Iroh,
    Zuko, Conflicted), up-to-X and unchosen modes (Bumi, Zuko), trigger
-   multiplicity (Katara, the Fearless), granted prowess (Sokka, Tenacious
+   multiplicity (Katara, the Fearless), a one-or-more-flying-attackers
+   trigger and a reflexive trigger only when the discarded card is nonland
+   (Teo, Spirited Glider), granted prowess (Sokka, Tenacious
    Tactician), any-graveyard targets (Raven Eagle, Boiling Rock Rioter),
    a spell's reflexive trigger (Earth Rumble), "if it had counters" (Buzzard-Wasp
    Colony), finality counters (Wolfbat), LKI-bounded targets (Sandbender
@@ -121,8 +123,9 @@ ward's `CounterSpell` decline branch.
 
 ## Upstream (2026-10-30)
 
-Synced: main `10eeb1f55` is an ancestor (through T3's sync, merge
-`98ec26e5b`), and T3's head `4c4dd0217` is merged (`a315216b2`). T4's ward is
+Synced: origin/main `6f48f5ca0` is an ancestor (T3's merge `09e6babe5`,
+after T3's sync `98ec26e5b`), and T3's head `4c4dd0217` is merged
+(`a315216b2`); both rechecked at `2f73cd16f`. T4's ward is
 `StaticAbility::Ward`, required waterbend `AdditionalCost::RequiredWaterbend`,
 T4's tokens are in `tokens.rs`, Bear and Monk are off
 `TOKENS_AWAITING_PRODUCER`. T3 (#399) is still open; each T3 head is merged in
@@ -153,7 +156,6 @@ defender is the non-active player); `trigger_multiplicity` counts connecting
 creatures; the leaving spell is removed from the stack once. Second compress: `EffectFrame.ability` is set without
 the resolution counter's `usize::MAX` sentinel; `OnceEachTurnKey` names the
 once-each-turn key and `Game::spend_once_each_turn` is its only writer.
-(Debug `cargo test --no-fail-fast` 820 passed; fmt, clippy clean.)
 
 ## Concept review (Jack Heart, 2026-10-30, accepted 1a 2a 3a — done)
 
@@ -164,9 +166,4 @@ One `Condition` (resolution-only `Kicked`, `TargetMatches`,
 Nation Cadets and Tolls of War. "If you do" stays the optional-payment shape.
 T3-sync details: `scratch/questions.md` (T4 and T3-sync sections).
 
-Check (2026-10-30, `888f5d359`): debug `cargo test --no-fail-fast` all targets, 820 passed, 0 failed; clippy `-D warnings` and fmt clean; `semantic-kernel-w17-v1` re-recorded (14 cases / 3396 commands) and the Scryfall fixture refreshed for the 16 new cards. Other w17 digest-bound Python evidence stays for gate.
-
-Design review follow-up (Jack Heart, 2026-10-30): `counter_ability` emits
-`GameEvent::AbilityCountered`; `Effect::CounterSpell` counters spells only (a
-card that counters abilities gets its own variant); ward's
-`CounterUnlessPays` answers both; `CardPredicate.nonbasic` stays its own flag.
+Check (2026-10-30, `2f73cd16f`): debug `cargo test --no-fail-fast` all targets, 820 passed, 0 failed; clippy `-D warnings` and fmt clean; `semantic-kernel-w17-v1` re-recorded at `888f5d359` (14 cases / 3396 commands), Scryfall fixture refreshed for the 16 new cards. Other w17 digest-bound Python evidence stays for gate.
