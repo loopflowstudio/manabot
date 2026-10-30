@@ -3,12 +3,14 @@ use crate::{
     flow::{
         event::{EventEntity, EventSubject, GameEvent, ObjectEventRef},
         game::Game,
-        turn::{PhaseKind, StepKind},
+        turn::{PhaseKind, PlayerTurnHistory, StepKind},
     },
     state::{
+        card::CardDefId,
+        effect::{Affected, ContinuousEffect, CopyEffect, Modification},
         game_object::{CardId, ObjectId, PlayerId, Target},
         mana::{ManaCost, ManaUse, SPEND_SUBTYPES},
-        permanent::Permanent,
+        permanent::{CounterKind, Permanent},
         stack_object::StackObject,
         zone::ZoneType,
     },
@@ -61,6 +63,15 @@ pub struct PlayerData {
     pub known_hand: BTreeMap<u32, u32>,
     pub sideboard_counts: BTreeMap<u32, u32>,
     pub remaining_sideboard_counts: BTreeMap<u32, u32>,
+    /// Unspent red mana stays until end of turn (The Last Agni Kai).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub keeps_red_mana: bool,
+    /// What this player has done this turn (public: every event in it was).
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub turn_history: PlayerTurnHistory,
+    /// Continuous effects on this player, in timestamp order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effects: Vec<ContinuousEffectData>,
 }
 
 /// Mana that may be spent only on the named purposes (CR 106.6): spells with
@@ -227,7 +238,46 @@ pub struct KeywordData {
     pub indestructible: bool,
 }
 
+/// Number of `KeywordData` flags; tensor keyword blocks follow field order.
+pub const KEYWORD_COUNT: usize = 14;
+
 impl KeywordData {
+    /// Every flag in field order, for fixed-width policy columns.
+    pub fn flags(&self) -> [bool; KEYWORD_COUNT] {
+        let Self {
+            flying,
+            reach,
+            haste,
+            flash,
+            vigilance,
+            trample,
+            first_strike,
+            double_strike,
+            deathtouch,
+            lifelink,
+            defender,
+            menace,
+            hexproof,
+            indestructible,
+        } = *self;
+        [
+            flying,
+            reach,
+            haste,
+            flash,
+            vigilance,
+            trample,
+            first_strike,
+            double_strike,
+            deathtouch,
+            lifelink,
+            defender,
+            menace,
+            hexproof,
+            indestructible,
+        ]
+    }
+
     pub fn from_keywords(keywords: &crate::state::card::Keywords) -> Self {
         Self {
             flying: keywords.flying,
@@ -291,9 +341,181 @@ pub struct StackObjectData {
     pub chosen_mode: Option<usize>,
     pub ability_index: Option<i32>,
     pub targets: Vec<StackTargetData>,
+    /// The announced value of X (CR 107.3); omitted when zero.
+    #[serde(default)]
+    pub x: i32,
+    /// Keywords a static grants this spell while on the stack (a Lesson's
+    /// lifelink); absent when none.
+    #[serde(default)]
+    pub granted_keywords: Option<KeywordData>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+/// One continuous-effect record (`state::effect`) affecting a player or
+/// permanent, as its holder's `effects` list shows it. Every record from a
+/// resolved spell or ability is public.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ContinuousEffectData {
+    /// The `Modification` variant (`ModifyPt`, `AddKeywords`, ...).
+    pub modification: String,
+    /// P/T amounts: the change for `ModifyPt`, the base for `SetBasePt`
+    /// (absent when that base is left alone).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub toughness: Option<i32>,
+    /// Firebending N.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub amount: Option<i32>,
+    /// Keywords gained (field names, `first_strike`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keywords: Vec<String>,
+    /// Subtypes gained.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subtypes: Vec<String>,
+    /// The mana color kept (`Red`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    /// The `EffectDuration` variant (`EndOfTurn`, `Indefinite`).
+    pub duration: String,
+    /// Definition of the spell or ability's source.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_registry_key: Option<i32>,
+    /// The source's printed name: public, since the spell or ability resolved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_name: Option<String>,
+    /// Timestamp order (CR 613.7); larger is later, comparable across
+    /// records and permanents in one observation.
+    pub timestamp: i32,
+}
+
+impl PermanentData {
+    /// Its timestamp: renewed by an attachment, otherwise its id.
+    pub fn timestamp(&self) -> i32 {
+        self.timestamp.unwrap_or(self.id)
+    }
+}
+
+/// The copy effect that made a permanent a copy (CR 707.2). The
+/// permanent's definition is already the copiable values it produced.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CopyData {
+    /// The printed definition at the root of the copy chain.
+    pub registry_key: i32,
+    pub name: String,
+    /// Exceptions that are part of its copiable values (CR 707.9b), in the
+    /// order they applied: modifications with the copied definition as
+    /// source, the permanent's own timestamp and an `Indefinite` duration.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exceptions: Vec<ContinuousEffectData>,
+}
+
+impl CopyData {
+    fn new(game: &Game, copy: &CopyEffect, timestamp: i32) -> Self {
+        Self {
+            registry_key: copy.of.0 as i32,
+            name: game
+                .state
+                .content
+                .definition(copy.of)
+                .map(|definition| definition.name.clone())
+                .unwrap_or_default(),
+            exceptions: copy
+                .exceptions
+                .iter()
+                .map(|exception| {
+                    ContinuousEffectData::of_modification(
+                        game,
+                        exception,
+                        "Indefinite".into(),
+                        Some(copy.of),
+                        timestamp,
+                    )
+                })
+                .collect(),
+        }
+    }
+}
+
+impl ContinuousEffectData {
+    fn new(game: &Game, effect: &ContinuousEffect) -> Self {
+        Self::of_modification(
+            game,
+            &effect.modification,
+            format!("{:?}", effect.duration),
+            effect.source,
+            effect.timestamp.0 as i32,
+        )
+    }
+
+    /// One modification with its provenance: a record's, or a copy
+    /// exception's (`CopyData`).
+    fn of_modification(
+        game: &Game,
+        modification: &Modification,
+        duration: String,
+        source: Option<CardDefId>,
+        timestamp: i32,
+    ) -> Self {
+        let mut data = Self {
+            modification: String::new(),
+            duration,
+            source_registry_key: source.map(|id| id.0 as i32),
+            source_name: source
+                .and_then(|id| game.state.content.definition(id))
+                .map(|definition| definition.name.clone()),
+            timestamp,
+            ..Default::default()
+        };
+        data.modification = match modification {
+            Modification::AddSubtypes(subtypes) => {
+                data.subtypes = subtypes.clone();
+                "AddSubtypes"
+            }
+            Modification::BecomeArtifactCreature => "BecomeArtifactCreature",
+            Modification::Nonlegendary => "Nonlegendary",
+            Modification::AddKeywords(keywords) => {
+                data.keywords = keywords.names().into_iter().map(str::to_owned).collect();
+                "AddKeywords"
+            }
+            Modification::LoseAllAbilities => "LoseAllAbilities",
+            Modification::Firebending(amount) => {
+                data.amount = Some(i32::from(*amount));
+                "Firebending"
+            }
+            Modification::SetBasePt { power, toughness } => {
+                (data.power, data.toughness) = (*power, *toughness);
+                "SetBasePt"
+            }
+            Modification::ModifyPt { power, toughness } => {
+                (data.power, data.toughness) = (Some(*power), Some(*toughness));
+                "ModifyPt"
+            }
+            Modification::CantBeBlocked => "CantBeBlocked",
+            Modification::ExileIfWouldDie => "ExileIfWouldDie",
+            Modification::KeepUnspentMana(color) => {
+                data.color = Some(format!("{color:?}"));
+                "KeepUnspentMana"
+            }
+            Modification::NoMaximumHandSize => "NoMaximumHandSize",
+        }
+        .to_string();
+        data
+    }
+
+    /// The records affecting `affected`, in timestamp order.
+    fn list(game: &Game, affected: Option<Affected>) -> Vec<Self> {
+        game.state
+            .effects
+            .iter()
+            .filter(|effect| Some(effect.affected) == affected)
+            .map(|effect| Self::new(game, effect))
+            .collect()
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PermanentData {
     pub id: i32,
@@ -309,7 +531,8 @@ pub struct PermanentData {
     /// until-EOT deltas, and +1/+1 counters all applied.
     pub power: i32,
     pub toughness: i32,
-    /// Earthbend animation: a land that's also a 0/0 creature.
+    /// A creature only through an effect: earthbend (a land that's also a
+    /// 0/0 creature), crew, or another type-changing effect.
     pub is_animated: bool,
     /// This permanent holds cards in exile until it leaves (Jailer).
     pub has_exile_link: bool,
@@ -333,6 +556,45 @@ pub struct PermanentData {
     /// (Yip Yip! flying, Enter the Avatar State, ...). The card entry keeps
     /// printed keywords; this is what the permanent can actually do now.
     pub keywords: KeywordData,
+    /// Counters other than +1/+1 by kind (CR 122.1; `CounterKind` names in
+    /// snake case), only the kinds present.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub counters: BTreeMap<String, i32>,
+    /// The permanent this Aura or Equipment is attached to (CR 301.5, 303.4).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attached_to: Option<i32>,
+    /// Name and creature types set by an effect (Honest Work); absent while
+    /// the printed ones apply.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub creature_types: Option<Vec<String>>,
+    /// A land only through an effect (a static land-type grant).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub is_granted_land: bool,
+    /// The attacking creature this one blocks (CR 509.1).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocking: Option<i32>,
+    /// It has lost all abilities (CR 613.1f), until end of turn or while an
+    /// Aura sets its characteristics.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub abilities_lost: bool,
+    /// Activated abilities (indices in its ability list) whose limit is
+    /// spent: exhaust (CR 702.177a) or once each turn (CR 602.5b).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub used_abilities: Vec<usize>,
+    /// Continuous effects on this permanent, in timestamp order; the
+    /// effective values above already apply them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effects: Vec<ContinuousEffectData>,
+    /// Its timestamp (CR 613.7d/e), the order its static abilities apply in
+    /// among the records; absent while it is `id`, the timestamp it entered
+    /// with (an attachment renews it).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timestamp: Option<i32>,
+    /// The copy effect that made it a copy; absent for an original.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copy: Option<CopyData>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -613,12 +875,15 @@ impl Observation {
             hand_only_until: game
                 .hand_only_until(player)
                 .map(|until| game.state.players[until.0].id.0 as i32),
-            no_maximum_hand_size: p.no_maximum_hand_size,
+            no_maximum_hand_size: game.has_no_maximum_hand_size_effect(player),
             known_hand: p
                 .known_hand
                 .iter()
                 .map(|(definition, count)| (definition.0, *count))
                 .collect(),
+            keeps_red_mana: game.keeps_unspent_mana(player, crate::state::mana::Color::Red),
+            turn_history: game.state.turn.history[player.0],
+            effects: ContinuousEffectData::list(game, Some(Affected::Player(player))),
         }
     }
 
@@ -640,6 +905,15 @@ impl Observation {
             self.add_card(game, *card, ZoneType::Hand);
         }
 
+        // The top of the agent's own library, when they may look at it any
+        // time (CR 401.2).
+        if let Some(card) = game
+            .library_top_card(agent_player)
+            .filter(|_| game.looks_at_library_top(agent_player))
+        {
+            self.add_card(game, card, ZoneType::Library);
+        }
+
         // Library cards revealed to the agent by a pending mid-resolution
         // decision. Search candidates are derived from the current library;
         // scry/look choices retain their exact cards. Only the deciding player
@@ -653,6 +927,9 @@ impl Observation {
                         to_hand,
                         ..
                     } => game.basic_land_search_candidates(*player, subtype, *to_hand),
+                    crate::flow::decision::Decision::SearchLibraryToHand { player, predicate } => {
+                        game.library_search_candidates(*player, predicate)
+                    }
                     decision @ crate::flow::decision::Decision::DiscardFromRevealedHand {
                         ..
                     } => game.revealed_hand_candidates(decision),
@@ -748,6 +1025,7 @@ impl Observation {
         permanent: &Permanent,
     ) {
         let (power, toughness) = game.effective_pt(perm_id);
+        let set_characteristics = game.set_characteristics(perm_id);
         let pdat = PermanentData {
             id: permanent.id.0 as i32,
             registry_key: game.state.cards[permanent.card].registry_key.0 as i32,
@@ -755,17 +1033,21 @@ impl Observation {
             tapped: permanent.tapped,
             damage: permanent.damage,
             is_summoning_sick: permanent.summoning_sick,
-            plus1_counters: permanent.plus1_counters,
-            exile_if_dies_this_turn: permanent.exile_if_dies_this_turn,
+            plus1_counters: permanent.counter_count(CounterKind::PlusOnePlusOne),
+            exile_if_dies_this_turn: game.exiled_if_it_would_die(perm_id),
             attacking: permanent.attacking,
             exhausted_abilities: permanent.exhausted.len() as i32,
             once_each_turn_used: permanent.activated_this_turn.len() as i32,
-            granted_firebending: i32::from(permanent.firebending_this_turn),
-            temp_subtypes: permanent.temp_subtypes.clone(),
-            cant_be_blocked_this_turn: permanent.cant_be_blocked_this_turn,
+            granted_firebending: i32::from(game.granted_firebending(perm_id)),
+            temp_subtypes: game
+                .added_subtypes(perm_id)
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            cant_be_blocked_this_turn: game.cant_be_blocked(perm_id),
             power,
             toughness,
-            is_animated: permanent.animated,
+            is_animated: game.permanent_is_animated(perm_id),
             has_exile_link: game
                 .permanent_object_ref(perm_id)
                 .is_some_and(|object_ref| {
@@ -775,6 +1057,48 @@ impl Observation {
                         .any(|link| link.source == object_ref)
                 }),
             keywords: KeywordData::from_keywords(&game.effective_keywords(perm_id)),
+            counters: permanent
+                .counters
+                .iter()
+                .filter(|(kind, _)| *kind != CounterKind::PlusOnePlusOne)
+                .map(|(kind, count)| (kind.name().to_string(), count))
+                .collect(),
+            attached_to: permanent
+                .attached_to
+                .and_then(|object| game.object_event_ref(object))
+                .map(|object| object.entity.0 as i32),
+            name: set_characteristics.map(|set| set.named.clone()),
+            creature_types: set_characteristics.map(|_| {
+                game.creature_types(perm_id)
+                    .into_iter()
+                    .map(str::to_owned)
+                    .collect()
+            }),
+            is_granted_land: game.permanent_is_land(perm_id)
+                && !game.state.cards[permanent.card].types.is_land(),
+            blocking: game.state.combat.as_ref().and_then(|combat| {
+                combat
+                    .attacker_to_blockers
+                    .iter()
+                    .find(|(_, blockers)| blockers.contains(&perm_id))
+                    .and_then(|(attacker, _)| game.state.permanents[*attacker].as_ref())
+                    .map(|attacker| attacker.id.0 as i32)
+            }),
+            abilities_lost: game.has_lost_abilities(perm_id),
+            used_abilities: game
+                .activated_abilities_for(perm_id)
+                .iter()
+                .enumerate()
+                .filter(|(index, ability)| permanent.activation_used(*index, ability))
+                .map(|(index, _)| index)
+                .collect(),
+            effects: ContinuousEffectData::list(game, game.affected_permanent(perm_id)),
+            timestamp: (permanent.timestamp != permanent.id)
+                .then_some(permanent.timestamp.0 as i32),
+            copy: game.state.cards[permanent.card]
+                .copy
+                .as_ref()
+                .map(|copy| CopyData::new(game, copy, permanent.timestamp.0 as i32)),
         };
 
         if permanent.controller.0 == self.agent.player_index as usize {
@@ -805,7 +1129,13 @@ impl Observation {
                 .supertypes
                 .iter()
                 .any(|s| s.eq_ignore_ascii_case("legendary")),
-            is_ally: card.has_subtype("Ally"),
+            // A characteristic-setting effect replaces a permanent's types.
+            is_ally: match game.state.card_to_permanent[card_id] {
+                Some(permanent) if zone == ZoneType::Battlefield => {
+                    game.permanent_has_subtype(permanent, "Ally")
+                }
+                _ => card.has_subtype("Ally"),
+            },
             is_lesson: card.has_subtype("Lesson"),
             ward_cost: card
                 .ward()
@@ -885,6 +1215,19 @@ impl Observation {
                 _ => None,
             },
             ability_index: stack_object.ability_index().map(|index| index as i32),
+            x: match stack_object {
+                StackObject::Spell(spell) => i32::from(spell.x),
+                StackObject::ActivatedAbility(ability) => i32::from(ability.x),
+                StackObject::TriggeredAbility(_) => 0,
+            },
+            granted_keywords: match stack_object {
+                StackObject::Spell(spell) => {
+                    let keywords = game.spell_keywords(spell.card, spell.controller);
+                    (!crate::state::is_zero(&keywords))
+                        .then(|| KeywordData::from_keywords(&keywords))
+                }
+                _ => None,
+            },
             targets: stack_object
                 .targets()
                 .iter()
@@ -1285,9 +1628,15 @@ impl Observation {
                         | Some(crate::flow::game::PendingChoice::DiscardPayment {
                             source: crate::flow::game::ActivationSource::Permanent(permanent),
                             ..
-                        }) => game.state.permanents[*permanent]
-                            .as_ref()
-                            .map(|perm| perm.card),
+                        })
+                        | Some(crate::flow::game::PendingChoice::ActivationX {
+                            permanent, ..
+                        })
+                        | Some(crate::flow::game::PendingChoice::Crew { permanent, .. }) => {
+                            game.state.permanents[*permanent]
+                                .as_ref()
+                                .map(|perm| perm.card)
+                        }
                         Some(crate::flow::game::PendingChoice::Waterbend { payment, .. }) => {
                             game.payment_source_card(payment)
                         }
@@ -1426,7 +1775,7 @@ impl Observation {
         }
 
         fn stack_object_json(stack_object: &StackObjectData) -> Value {
-            json!({
+            let mut value = json!({
                 "description": stack_object.description,
                 "stack_object_id": stack_object.stack_object_id,
                 "kind": stack_object.kind as i32,
@@ -1436,7 +1785,14 @@ impl Observation {
                 "ability_index": stack_object.ability_index,
                 "chosen_mode": stack_object.chosen_mode,
                 "targets": stack_object.targets.iter().map(stack_target_json).collect::<Vec<_>>(),
-            })
+            });
+            if stack_object.x != 0 {
+                value["x"] = json!(stack_object.x);
+            }
+            if let Some(keywords) = &stack_object.granted_keywords {
+                value["granted_keywords"] = json!(keywords);
+            }
+            value
         }
 
         let action_json = self

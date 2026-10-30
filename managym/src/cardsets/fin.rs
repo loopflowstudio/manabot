@@ -3,6 +3,7 @@ use crate::state::{
     ability::{Ability, Effect, TriggerCondition, TriggerSubject},
     card::{CardDefinition, CardType, CardTypes},
     mana::ManaCost,
+    permanent::CounterKind,
     predicate::CardPredicate,
 };
 
@@ -30,7 +31,10 @@ fn sazh_s_chocobo() -> CardDefinition {
                     ..Default::default()
                 }),
             },
-            effects: vec![Effect::PutCountersOnSource { count: 1 }],
+            effects: vec![Effect::PutCountersOnSource {
+                count: 1,
+                kind: CounterKind::PlusOnePlusOne,
+            }],
         }],
         text_box: text_box.into(),
         ..Default::default()

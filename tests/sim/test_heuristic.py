@@ -200,6 +200,16 @@ def test_polarity_is_derived_for_every_targeted_spell_in_the_pool() -> None:
         "Lost Days": None,
         "Sandbenders' Storm": None,
         "Zuko's Conviction": None,
+        # TLA T3: modal, distributed or attached effects (stun counters, Auras,
+        # conditional shrinks) the heuristic does not rate.
+        "Razor Rings": "harmful",
+        "Crashing Wave": None,
+        "Heartless Act": None,
+        "Honest Work": None,
+        "Path to Redemption": None,
+        "Swampsnare Trap": None,
+        "The Last Agni Kai": None,
+        "Watery Grasp": None,
     }
     combustion = spells["Combustion Technique"]
     assert (combustion.damage, combustion.lesson_damage) == (2, True)

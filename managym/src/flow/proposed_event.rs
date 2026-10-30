@@ -10,6 +10,7 @@ use crate::{
     state::{
         card::ReplacementEffect,
         game_object::{CardId, EntityId, ObjectRef, PermanentId, PlayerId},
+        permanent::{CounterKind, Counters},
         zone::ZoneType,
     },
 };
@@ -19,8 +20,11 @@ use crate::{
 pub(crate) struct ZoneEntry {
     /// Battlefield: enters tapped.
     pub tapped: bool,
-    /// Battlefield: enters with this many +1/+1 counters.
-    pub plus_one_counters: i32,
+    /// Battlefield: enters with these counters.
+    pub counters: Counters,
+    /// Battlefield: the announced X of the resolving spell becoming this
+    /// permanent.
+    pub x: u8,
     /// Battlefield: enters under this player's control; `None` is its owner.
     /// A resolving permanent spell enters under its controller (CR 110.2).
     pub controller: Option<PlayerId>,
@@ -51,11 +55,6 @@ impl ZoneEntry {
 pub(crate) enum ProposedDamageTarget {
     Player(PlayerId),
     Object(ObjectRef),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum CounterKind {
-    PlusOnePlusOne,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -113,15 +112,14 @@ impl Game {
                 && self
                     .lookup_current_permanent(*object)
                     .ok()
-                    .and_then(|id| self.state.permanents[id].as_ref())
-                    .is_some_and(|permanent| permanent.exile_if_dies_this_turn)
+                    .is_some_and(|id| self.exiled_if_it_would_die(id))
             {
                 *to = ZoneType::Exile;
             }
         }
         let replacements = self.collect_replacements(&event);
         for replacement in replacements {
-            Self::apply_replacement(&mut event, &replacement.effect);
+            self.apply_replacement(&mut event, &replacement);
         }
         // A redirected move keeps only the terms its new destination takes.
         if let ProposedEvent::ZoneMove { to, entry, .. } = &mut event {
@@ -191,10 +189,12 @@ impl Game {
 
     fn collect_replacements(&self, event: &ProposedEvent) -> Vec<ReplacementCandidate> {
         let mut candidates = match event {
-            ProposedEvent::Damage { target, .. } => {
+            ProposedEvent::Damage { source, target, .. } => {
                 let Some(affected_controller) = self.damage_target_controller(*target) else {
                     return Vec::new();
                 };
+                let source_controller =
+                    source.and_then(|source| self.damage_source_controller(source));
                 let mut out = Vec::new();
                 for (index, permanent) in
                     self.state
@@ -205,22 +205,27 @@ impl Game {
                             permanent.as_ref().map(|permanent| (index, permanent))
                         })
                 {
-                    if permanent.controller != affected_controller {
+                    if self.has_lost_abilities(PermanentId(index)) {
                         continue;
                     }
                     let Some(source) = self.permanent_object_ref(PermanentId(index)) else {
                         continue;
                     };
+                    let affected_side = permanent.controller == affected_controller;
+                    let source_side = source_controller == Some(permanent.controller)
+                        && permanent.controller != affected_controller;
                     for (definition_index, effect) in self.state.cards[permanent.card]
                         .replacement_effects
                         .iter()
                         .enumerate()
                     {
-                        if matches!(
-                            effect,
+                        let applies = match effect {
                             ReplacementEffect::PreventDamageToController { .. }
-                                | ReplacementEffect::DoubleDamageToController
-                        ) {
+                            | ReplacementEffect::DoubleDamageToController => affected_side,
+                            ReplacementEffect::OpponentDamagePlusCounters { .. } => source_side,
+                            _ => false,
+                        };
+                        if applies {
                             out.push(ReplacementCandidate {
                                 source,
                                 definition_index,
@@ -241,28 +246,67 @@ impl Game {
                     entity: EntityId::from(*card),
                     incarnation: self.state.object_incarnations[*card],
                 });
+                // Entering objects come under their owner's control; the
+                // condition reads that player's battlefield before the move.
+                let entering_controller = self.state.cards[*card].owner;
                 self.state.cards[*card]
                     .replacement_effects
                     .iter()
                     .enumerate()
-                    .filter(|(_, effect)| {
-                        matches!(
-                            effect,
+                    .filter_map(|(definition_index, effect)| {
+                        let effect = match effect {
                             ReplacementEffect::EntersTapped
-                                | ReplacementEffect::EntersWithPlusOneCounters { .. }
-                        )
-                    })
-                    .map(|(definition_index, effect)| ReplacementCandidate {
-                        source,
-                        definition_index,
-                        effect: effect.clone(),
+                            | ReplacementEffect::EntersWithPlusOneCounters { .. }
+                            | ReplacementEffect::EntersWithXCounters { .. } => effect.clone(),
+                            ReplacementEffect::EntersTappedUnlessControls { predicate }
+                                if !self
+                                    .battlefield_permanents(entering_controller)
+                                    .into_iter()
+                                    .any(|id| self.permanent_matches_predicate(id, predicate)) =>
+                            {
+                                ReplacementEffect::EntersTapped
+                            }
+                            _ => return None,
+                        };
+                        Some(ReplacementCandidate {
+                            source,
+                            definition_index,
+                            effect,
+                        })
                     })
                     .collect()
             }
             _ => Vec::new(),
         };
-        candidates.sort_by_key(|candidate| (candidate.source, candidate.definition_index));
+        // The affected player orders damage replacements (CR 616.1); the
+        // opponent's increase applies last, after prevention and doubling,
+        // which is never worse for that player.
+        candidates.sort_by_key(|candidate| {
+            (
+                matches!(
+                    candidate.effect,
+                    ReplacementEffect::OpponentDamagePlusCounters { .. }
+                ),
+                candidate.source,
+                candidate.definition_index,
+            )
+        });
         candidates
+    }
+
+    /// The controller of a damage source: a permanent, a spell on the
+    /// stack, or the last known information of an object that left.
+    fn damage_source_controller(&self, source: ObjectRef) -> Option<PlayerId> {
+        if let Ok(id) = self.lookup_current_permanent(source) {
+            return self.state.permanents[id].as_ref().map(|p| p.controller);
+        }
+        let card = CardId::from(source.entity);
+        if self.current_object_ref(card) == Some(source) {
+            if let Some(controller) = self.stack_spell_controller(card) {
+                return Some(controller);
+            }
+        }
+        self.object_lki(source).map(|lki| lki.controller)
     }
 
     fn damage_target_controller(&self, target: ProposedDamageTarget) -> Option<PlayerId> {
@@ -277,8 +321,8 @@ impl Game {
         }
     }
 
-    fn apply_replacement(event: &mut ProposedEvent, replacement: &ReplacementEffect) {
-        match (event, replacement) {
+    fn apply_replacement(&self, event: &mut ProposedEvent, candidate: &ReplacementCandidate) {
+        match (event, &candidate.effect) {
             (
                 ProposedEvent::Damage { amount, .. },
                 ReplacementEffect::PreventDamageToController { amount: prevented },
@@ -297,7 +341,27 @@ impl Game {
                 ReplacementEffect::EntersWithPlusOneCounters { count },
             ) => {
                 debug_assert!(*count >= 0, "entry counter count must be nonnegative");
-                entry.plus_one_counters = entry.plus_one_counters.saturating_add((*count).max(0));
+                entry
+                    .counters
+                    .change(CounterKind::PlusOnePlusOne, (*count).max(0));
+            }
+            (
+                ProposedEvent::ZoneMove { entry, .. },
+                ReplacementEffect::EntersWithXCounters { kind },
+            ) => {
+                entry.counters.change(*kind, i32::from(entry.x));
+            }
+            // Damage reduced to zero is no longer dealt (release notes).
+            (
+                ProposedEvent::Damage { amount, .. },
+                ReplacementEffect::OpponentDamagePlusCounters { kind },
+            ) if *amount > 0 => {
+                let counters = self
+                    .lookup_current_permanent(candidate.source)
+                    .ok()
+                    .and_then(|id| self.state.permanents[id].as_ref())
+                    .map_or(0, |permanent| permanent.counter_count(*kind));
+                *amount = amount.saturating_add(counters);
             }
             _ => {}
         }
@@ -333,7 +397,7 @@ impl Game {
             }
             ProposedEvent::CounterChange {
                 target,
-                kind: CounterKind::PlusOnePlusOne,
+                kind,
                 delta,
             } => {
                 let Ok(permanent_id) = self.lookup_current_permanent(target) else {
@@ -343,9 +407,7 @@ impl Game {
                 let Some(permanent) = self.state.permanents[permanent_id].as_mut() else {
                     return false;
                 };
-                let old = permanent.plus1_counters;
-                permanent.plus1_counters = old.saturating_add(delta).max(0);
-                permanent.plus1_counters != old
+                permanent.change_counters(kind, delta)
             }
             ProposedEvent::ZoneMove {
                 card,
@@ -357,15 +419,20 @@ impl Game {
         }
     }
 
-    pub(crate) fn change_plus_one_counters(
+    pub(crate) fn change_counters(
         &mut self,
         permanent_id: PermanentId,
+        kind: CounterKind,
         delta: i32,
     ) -> bool {
         let Some(target) = self.permanent_object_ref(permanent_id) else {
             return false;
         };
-        self.change_plus_one_counters_on_object(target, delta)
+        self.apply_proposed_event(ProposedEvent::CounterChange {
+            target,
+            kind,
+            delta,
+        })
     }
 
     /// Exact-object counter mutation for rules continuations.
@@ -461,7 +528,7 @@ mod tests {
             game.state.permanents[current_permanent]
                 .as_ref()
                 .expect("current permanent")
-                .plus1_counters,
+                .counter_count(CounterKind::PlusOnePlusOne),
             0
         );
 
@@ -474,7 +541,7 @@ mod tests {
             game.state.permanents[current_permanent]
                 .as_ref()
                 .expect("current permanent")
-                .plus1_counters,
+                .counter_count(CounterKind::PlusOnePlusOne),
             2
         );
         assert!(game.apply_proposed_event(ProposedEvent::Destroy { target: current }));

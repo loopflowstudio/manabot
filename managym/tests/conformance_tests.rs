@@ -114,33 +114,22 @@ fn render_type_line(def: &CardDefinition) -> String {
             }
         })
         .collect();
-    // Printed order puts Kindred, Enchantment, Artifact and Land before
-    // Creature ("Artifact Creature"); the engine's set uses enum order.
-    let printed_rank = |card_type: &CardType| match card_type {
-        CardType::Kindred => 0,
-        CardType::Enchantment => 1,
-        CardType::Artifact => 2,
-        CardType::Land => 3,
-        _ => 4,
+    // Printed type order (Kindred, Enchantment, Artifact, Land, then the
+    // permanent and spell types), as in "Legendary Artifact Creature".
+    let printed = |card_type: &CardType| match card_type {
+        CardType::Kindred => (0, "Kindred"),
+        CardType::Enchantment => (1, "Enchantment"),
+        CardType::Artifact => (2, "Artifact"),
+        CardType::Land => (3, "Land"),
+        CardType::Creature => (4, "Creature"),
+        CardType::Planeswalker => (5, "Planeswalker"),
+        CardType::Battle => (6, "Battle"),
+        CardType::Instant => (7, "Instant"),
+        CardType::Sorcery => (8, "Sorcery"),
     };
-    let mut types: Vec<&CardType> = def.types.types.iter().collect();
-    types.sort_by_key(|card_type| printed_rank(card_type));
-    for card_type in types {
-        words.push(
-            match card_type {
-                CardType::Creature => "Creature",
-                CardType::Instant => "Instant",
-                CardType::Sorcery => "Sorcery",
-                CardType::Planeswalker => "Planeswalker",
-                CardType::Land => "Land",
-                CardType::Enchantment => "Enchantment",
-                CardType::Artifact => "Artifact",
-                CardType::Kindred => "Kindred",
-                CardType::Battle => "Battle",
-            }
-            .to_string(),
-        );
-    }
+    let mut types: Vec<_> = def.types.types.iter().map(printed).collect();
+    types.sort_unstable();
+    words.extend(types.into_iter().map(|(_, word)| word.to_string()));
     let mut line = words.join(" ");
     if !def.subtypes.is_empty() {
         line.push_str(" \u{2014} ");

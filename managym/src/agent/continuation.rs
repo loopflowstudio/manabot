@@ -5,6 +5,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
+    agent::observation::{KeywordData, KEYWORD_COUNT},
     flow::{
         decision::{Decision, SuspendedResolution},
         game::{ActivationSource, Game, Payment, PendingChoice},
@@ -18,11 +19,17 @@ use crate::{
     },
 };
 
-/// Policy inputs v2/v3/v4: up to 64 relation rows, 32/33 floats per row. Overflow is an
-/// admission error, never truncation. Zero is padding/absence for selectors.
+/// Policy inputs v2/v3/v4/v5: up to 64 relation rows, 32/33/48 floats per row.
+/// Overflow is an admission error, never truncation. Zero is padding/absence
+/// for selectors. Validity stays at column 31 in every width.
 pub const RELATION_ROWS: usize = 64;
 pub const LEGACY_RELATION_DIM: usize = 32;
 pub const RELATION_DIM: usize = 33;
+/// V5 appends the frame's X (column 33) and its granted keywords (34..48, in
+/// `KeywordData` field order) after v4's eligibility column.
+pub const RELATION_DIM_V5: usize = 48;
+pub const RELATION_X_INDEX: usize = 33;
+pub const RELATION_KEYWORDS_INDEX: usize = 34;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "python", pyo3::pyclass(get_all, frozen))]
@@ -64,6 +71,9 @@ pub struct ContinuationFrame {
     /// 4 announcement, 5 resolution, 6 obligation, 7 waiting trigger,
     /// 8 trigger being placed, 9 two-pass placement cursor.
     pub kind: u8,
+    /// Kind 6: the obligation's `decision_code`. Kinds 7 and 8: trigger
+    /// ordering class (1 ordinary, 2 ability-triggered). Kind 9: placement
+    /// group plus one. Zero otherwise.
     pub decision: u8,
     pub parent: Option<usize>,
     pub controller: usize,
@@ -84,6 +94,14 @@ pub struct ContinuationFrame {
     pub can_decline: bool,
     pub mana_outputs: Vec<ManaOutput>,
     pub resolutions_this_turn: u32,
+    /// The announced value of X (CR 107.3) of the spell or ability this frame
+    /// casts, activates or resolves; zero when it has none.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub x: u8,
+    /// Keywords a static grants this spell on the stack (a Lesson's lifelink),
+    /// in `KeywordData` field order.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub granted_keywords: [bool; KEYWORD_COUNT],
 }
 
 impl ContinuationFrame {
@@ -228,7 +246,7 @@ impl Game {
                     .source_ref
                     .map(|r| self.visible_reference(r, viewer))
                     .unwrap_or_default();
-                source.definition = Some(trigger.source_lki.map_or(
+                source.definition = Some(trigger.source_lki.as_ref().map_or(
                     self.state.cards[trigger.source_card].definition_id.0,
                     |lki| lki.definition_id.0,
                 ));
@@ -298,11 +316,16 @@ impl Game {
                 frame.source = self.card_reference(spell.card, viewer);
                 frame.mode = spell.mode;
                 frame.kicked = spell.kicked;
+                frame.x = spell.x;
+                frame.granted_keywords =
+                    KeywordData::from_keywords(&self.spell_keywords(spell.card, spell.controller))
+                        .flags();
                 &spell.target_req_indices
             }
             StackObject::ActivatedAbility(ability) => {
                 frame.kind = 2;
                 frame.source = self.visible_reference(ability.source_ref, viewer);
+                frame.x = ability.x;
                 &[]
             }
             StackObject::TriggeredAbility(ability) => {
@@ -353,6 +376,7 @@ impl Game {
             } => {
                 frame.source = self.card_reference(*card, viewer);
                 frame.kicked = cast.kicked;
+                frame.x = cast.x;
                 frame.mode = *mode;
                 frame.active_clause = Some(*requirement_index);
                 frame.targets = self.clause_targets(chosen, chosen_req_indices, viewer);
@@ -360,6 +384,7 @@ impl Game {
             PendingChoice::SpellMode { card, cast, .. } => {
                 frame.source = self.card_reference(*card, viewer);
                 frame.kicked = cast.kicked;
+                frame.x = cast.x;
             }
             PendingChoice::KickerChoice { card, .. } | PendingChoice::AnnounceX { card, .. } => {
                 frame.source = self.card_reference(*card, viewer)
@@ -367,14 +392,33 @@ impl Game {
             PendingChoice::ActivatedTarget {
                 source,
                 ability_index,
+                chosen,
                 ..
+            } => {
+                frame.source = self.activation_reference(*source, viewer);
+                frame.ability = Some(*ability_index);
+                frame.active_clause = Some(0);
+                frame.targets = self.clause_targets(chosen, &[], viewer);
             }
-            | PendingChoice::DiscardPayment {
+            PendingChoice::DiscardPayment {
                 source,
                 ability_index,
                 ..
             } => {
                 frame.source = self.activation_reference(*source, viewer);
+                frame.ability = Some(*ability_index);
+            }
+            PendingChoice::ActivationX {
+                permanent,
+                ability_index,
+                ..
+            }
+            | PendingChoice::Crew {
+                permanent,
+                ability_index,
+                ..
+            } => {
+                frame.source = self.target_reference(Target::Permanent(*permanent), viewer);
                 frame.ability = Some(*ability_index);
             }
             PendingChoice::Waterbend {
@@ -420,6 +464,7 @@ impl Game {
                         .unwrap_or_default()
                 }),
             kicked: effect.kicked,
+            x: effect.x,
             resolutions_this_turn: effect.resolutions_this_turn,
             active_clause: Some(effect.active_requirement),
             targets: effect
@@ -448,12 +493,13 @@ impl Game {
                 controller: decision.player().0,
                 ..ContinuationFrame::default()
             };
-            let (kind, resume) = match decision {
+            frame.decision = decision_code(decision);
+            let resume = match decision {
                 Decision::Payment(progress) => {
                     frame.cost(&progress.remaining.mana_cost());
                     frame.waterbend = matches!(progress.remaining, PaymentCost::Waterbend { .. });
                     frame.can_decline = progress.can_decline();
-                    (1, None)
+                    None
                 }
                 Decision::ManaUpfront {
                     permanent,
@@ -464,7 +510,7 @@ impl Game {
                     frame.source = self.target_reference(Target::Permanent(*permanent), viewer);
                     frame.ability = Some(*ability_index);
                     frame.cost(&self.activated_abilities_for(*permanent)[*ability_index].mana_cost);
-                    (2, resume.as_deref())
+                    resume.as_deref()
                 }
                 Decision::ManaChoice {
                     choices, resume, ..
@@ -478,25 +524,10 @@ impl Game {
                             lesson: output.restricted_colors(),
                         })
                         .collect();
-                    (3, resume.as_deref())
+                    resume.as_deref()
                 }
-                Decision::Sacrifice { .. } => (4, None),
-                Decision::SelectMilled { .. } => (5, None),
-                Decision::SearchBasicLand { .. } => (6, None),
-                Decision::OptionalDiscardDraw { .. } => (7, None),
-                Decision::Scry { .. } => (8, None),
-                Decision::LookAndSelect { .. } => (9, None),
-                Decision::Modal { .. } => (10, None),
-                Decision::Learn { .. } => (11, None),
-                Decision::Discard { .. } => (12, None),
-                Decision::LegendRule { .. } => (13, None),
-                Decision::SearchDistinctLands { .. } => (14, None),
-                Decision::OpponentSplitsRevealed { .. } => (15, None),
-                Decision::DiscardFromRevealedHand { .. } => (16, None),
-                Decision::CastWithoutPaying { .. } => (17, None),
-                Decision::ExileLinked { .. } => (18, None),
+                _ => None,
             };
-            frame.decision = kind;
             frames.push(frame);
             let Some(next) = resume else {
                 break;
@@ -517,9 +548,11 @@ impl Game {
                 mode,
                 targets,
                 target_req_indices,
+                ..
             } => {
                 frame.source = self.card_reference(*card, viewer);
                 frame.kicked = cast.kicked;
+                frame.x = cast.x;
                 frame.mode = *mode;
                 frame.targets = self.clause_targets(targets, target_req_indices, viewer);
             }
@@ -527,12 +560,46 @@ impl Game {
                 source,
                 ability_index,
                 targets,
+                x,
             } => {
                 frame.source = self.activation_reference(*source, viewer);
                 frame.ability = Some(*ability_index);
+                frame.x = *x;
                 frame.targets = self.clause_targets(targets, &[], viewer);
             }
         }
+    }
+}
+
+/// Highest obligation code `decision_code` assigns. Captured continuation
+/// frames are validated against it; raise it with each new code.
+pub const MAX_DECISION_CODE: u8 = 20;
+
+/// A suspended obligation's stable code in `ContinuationFrame::decision`
+/// (1..=`MAX_DECISION_CODE`). Codes are part of retained captures: append
+/// new ones, never renumber.
+pub fn decision_code(decision: &Decision) -> u8 {
+    match decision {
+        Decision::Payment(_) => 1,
+        Decision::ManaUpfront { .. } => 2,
+        Decision::ManaChoice { .. } => 3,
+        Decision::Sacrifice { .. } => 4,
+        Decision::SelectMilled { .. } => 5,
+        Decision::SearchBasicLand { .. } | Decision::SearchLibraryToHand { .. } => 6,
+        Decision::OptionalDiscardDraw { .. } => 7,
+        Decision::Scry { .. } => 8,
+        Decision::LookAndSelect { .. } => 9,
+        Decision::Modal { .. } => 10,
+        Decision::Learn { .. } => 11,
+        Decision::Discard { .. } => 12,
+        Decision::LegendRule { .. } => 13,
+        Decision::SearchDistinctLands { .. } => 14,
+        Decision::OpponentSplitsRevealed { .. } => 15,
+        Decision::DiscardFromRevealedHand { .. } => 16,
+        Decision::CastWithoutPaying { .. } => 17,
+        Decision::ExileLinked { .. } => 18,
+        Decision::DistributeCounters { .. } => 19,
+        Decision::Surveil { .. } => 20,
     }
 }
 
@@ -563,10 +630,12 @@ pub fn encode_into(
         });
     }
     let dim = out.len() / RELATION_ROWS;
-    if ![LEGACY_RELATION_DIM, RELATION_DIM].contains(&dim) || out.len() != RELATION_ROWS * dim {
+    if ![LEGACY_RELATION_DIM, RELATION_DIM, RELATION_DIM_V5].contains(&dim)
+        || out.len() != RELATION_ROWS * dim
+    {
         return Err(ObservationEncodeError::InvalidLength {
             field: "relations",
-            expected: RELATION_ROWS * RELATION_DIM,
+            expected: RELATION_ROWS * RELATION_DIM_V5,
             actual: out.len(),
         });
     }
@@ -581,7 +650,7 @@ pub fn encode_into(
     let definition =
         |reference: VisibleReference| reference.definition.map_or(0.0, |id| (id + 1) as f32);
     for (index, frame) in frames.iter().enumerate() {
-        let mut header = [0.0; RELATION_DIM];
+        let mut header = [0.0; RELATION_DIM_V5];
         header[0] = 1.0;
         header[1] = (index + 1) as f32;
         header[2] = frame.parent.map_or(0.0, |p| (p + 1) as f32);
@@ -605,6 +674,10 @@ pub fn encode_into(
         header[28] = frame.decision as f32;
         header[30] = frame.resolutions_this_turn as f32;
         header[31] = 1.0;
+        header[RELATION_X_INDEX] = f32::from(frame.x);
+        for (index, granted) in frame.granted_keywords.iter().enumerate() {
+            header[RELATION_KEYWORDS_INDEX + index] = f32::from(*granted);
+        }
         rows.next().unwrap().copy_from_slice(&header[..dim]);
         let mut reference_row = |kind: f32,
                                  reference: VisibleReference,
@@ -614,7 +687,7 @@ pub fn encode_into(
             let row = rows.next().unwrap();
             row.copy_from_slice(&header[..dim]);
             row[0] = kind;
-            if dim == RELATION_DIM {
+            if dim >= RELATION_DIM {
                 row[32] = legal.map_or(0.0, |value| if value { 1.0 } else { 2.0 });
             }
             row[22] = (clause + 1) as f32;
@@ -737,6 +810,146 @@ mod tests {
         assert_eq!(frames[2].decision, 3);
         assert_eq!(frames[2].parent, Some(1));
         assert_eq!(frames[2].mana_outputs[0].mana, [0, 1, 0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn every_decision_code_is_within_the_validated_bound() {
+        use crate::{
+            flow::decision::{FreeCastOffer, PaymentProgress},
+            state::{
+                ability::LinkedGrant, game_object::PermanentId, permanent::CounterKind,
+                predicate::CardPredicate,
+            },
+        };
+        let player = PlayerId(0);
+        let predicate = CardPredicate::default();
+        // One value per variant. `decision_code`'s exhaustive match makes a
+        // new variant fail to compile until it has a code; add it here too.
+        let decisions = [
+            Decision::Payment(PaymentProgress::new(
+                player,
+                PaymentCost::Waterbend { generic: 1 },
+                vec![],
+                vec![],
+            )),
+            Decision::ManaUpfront {
+                player,
+                permanent: PermanentId(0),
+                ability_index: 0,
+                resume: None,
+            },
+            Decision::ManaChoice {
+                player,
+                choices: vec![],
+                resume: None,
+            },
+            Decision::Sacrifice {
+                player,
+                predicate: predicate.clone(),
+            },
+            Decision::DistributeCounters {
+                player,
+                kind: CounterKind::PlusOnePlusOne,
+                remaining: 1,
+            },
+            Decision::SelectMilled {
+                player,
+                cards: vec![],
+                if_declined: vec![],
+            },
+            Decision::SearchBasicLand {
+                player,
+                subtype: None,
+                remaining: 1,
+                tapped: true,
+                untap_if_lands: None,
+                bottom_source: false,
+                to_hand: false,
+                selected: vec![],
+            },
+            Decision::SearchLibraryToHand {
+                player,
+                predicate: predicate.clone(),
+            },
+            Decision::OptionalDiscardDraw {
+                player,
+                count: 1,
+                remaining: 1,
+                discarded: 0,
+            },
+            Decision::Scry {
+                player,
+                looked: vec![],
+                remaining: vec![],
+                top: vec![],
+                bottom: vec![],
+            },
+            Decision::Surveil {
+                player,
+                looked: vec![],
+            },
+            Decision::LookAndSelect {
+                reveal: false,
+                player,
+                looked: vec![],
+                predicate: predicate.clone(),
+                selected: 0,
+                min_select: 0,
+                max_select: 1,
+            },
+            Decision::SearchDistinctLands {
+                player,
+                remaining: 1,
+                selected: vec![],
+                opponent_picks: 1,
+            },
+            Decision::DiscardFromRevealedHand {
+                player,
+                owner: player,
+                predicate: predicate.clone(),
+            },
+            Decision::OpponentSplitsRevealed {
+                player,
+                owner: player,
+                revealed: vec![],
+                remaining: 1,
+            },
+            Decision::CastWithoutPaying {
+                player,
+                offer: FreeCastOffer::Hand {
+                    predicate: predicate.clone(),
+                },
+            },
+            Decision::ExileLinked {
+                player,
+                owner: player,
+                zone: ZoneType::Graveyard,
+                predicate,
+                up_to: true,
+                grant: LinkedGrant::FlashAnyMana,
+                grantee: player,
+                source: None,
+            },
+            Decision::Modal {
+                player,
+                modes: vec![],
+            },
+            Decision::Learn { player },
+            Decision::Discard {
+                player,
+                remaining: 1,
+            },
+            Decision::LegendRule {
+                player,
+                groups: vec![],
+                keep: vec![],
+            },
+        ];
+        let codes: Vec<u8> = decisions.iter().map(decision_code).collect();
+        assert!(codes
+            .iter()
+            .all(|code| (1..=MAX_DECISION_CODE).contains(code)));
+        assert_eq!(codes.iter().max(), Some(&MAX_DECISION_CODE));
     }
 
     #[test]

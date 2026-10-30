@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>T5 concept review: permanent copying</title>
+<style>
+  :root { color-scheme: light dark; --fg:#1d1b18; --bg:#faf7f1; --mute:#6b655c; --line:#d9d2c5; --prop:#8a4b12; --code:#efe9dd; }
+  @media (prefers-color-scheme: dark) { :root { --fg:#ece6da; --bg:#1a1916; --mute:#a39b8e; --line:#3a362f; --prop:#e0a160; --code:#26241f; } }
+  body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 Georgia, serif; }
+  main { max-width:44rem; margin:0 auto; padding:2.5rem 1.25rem 4rem; }
+  header p { color:var(--mute); font-size:.9rem; margin:.2rem 0; }
+  h1 { font-size:1.6rem; margin:0 0 .5rem; } h2 { font-size:1.2rem; margin-top:2.5rem; }
+  code { font:.88em ui-monospace, Menlo, monospace; background:var(--code); padding:.05em .3em; border-radius:3px; overflow-wrap:anywhere; }
+  .proposed { border-left:3px solid var(--prop); padding-left:1rem; }
+  .proposed::before { content:"Proposed / considered"; display:block; color:var(--prop); font-size:.8rem; letter-spacing:.05em; text-transform:uppercase; }
+  .existing { border-left:3px solid var(--line); padding-left:1rem; }
+  .existing::before { content:"Implemented"; display:block; color:var(--mute); font-size:.8rem; letter-spacing:.05em; text-transform:uppercase; }
+  table { border-collapse:collapse; width:100%; font-size:.92rem; } td, th { text-align:left; padding:.4rem .5rem; border-bottom:1px solid var(--line); vertical-align:top; }
+  .wrap { overflow-x:auto; }
+  .lead { font-size:1.08rem; }
+</style>
+</head>
+<body><main>
+<header>
+  <h1>T5 concept review: permanent copying</h1>
+  <p>Task a7234f · step: concept review (headless) · 2026-10-30 · HEAD <code>187d4e0d7</code></p>
+  <p>Built from <code>scratch/jack-heart/a7234f-tla-t5-permanent.md</code>, <code>managym/src/cardsets/tla.rs</code>, <code>managym/src/state/card.rs</code>, <code>managym/src/state/ability.rs</code>, <code>managym/src/flow/statics.rs</code>, <code>managym/tests/cards/observability.rs</code>, <code>managym/src/agent/continuation.rs</code>, <code>managym/src/python/bindings.rs</code>, <code>manabot/semantic/text_observation.py</code></p>
+</header>
+
+<p class="lead"><strong>Decision needed: none.</strong> The card model still matches Jack Heart&#39;s design review (comment 10a31948). One small change goes back to implement. The demo fix gave Rust a single owner for continuation decision codes, but Python still keeps its own code-to-label table and nothing checks it against the native bound.</p>
+
+<h2>Actions → concepts → APIs</h2>
+<div class="existing">
+<div class="wrap"><table>
+  <tr><th>Player action / event</th><th>Concept</th><th>API</th></tr>
+  <tr><td>Activate Joo Dee (sorcery speed): surveil, copy, sacrifice</td><td>activated ability with T3's sorcery timing; surveil on the inspect surface</td><td><code>sorcery_timing</code> in <code>check_activation_terms</code>; <code>Effect::Surveil</code></td></tr>
+  <tr><td>Get a token copy (Joo Dee, Ran and Shaw, Airship)</td><td>copy effect: copiable values of the root definition plus exceptions</td><td><code>Effect::CreateTokenCopy { exceptions }</code> → <code>Game::create_token_copy</code> → <code>Card.copy: CopyEffect { of, exceptions }</code></td></tr>
+  <tr><td>Ran and Shaw's copy isn't legendary</td><td>exception from the same vocabulary as layered effects</td><td><code>Modification::Nonlegendary</code>, read by <code>permanent_is_legendary</code></td></tr>
+  <tr><td>Sacrifice a permanent</td><td>this turn's history for each player, shared with T4 raid</td><td><code>TurnState.history[p].permanents_sacrificed</code>; <code>StaticCondition::SacrificedThisTurnAtLeast</code></td></tr>
+  <tr><td>Eight Airships make each one a creature</td><td>self-relative animation</td><td><code>StaticAbility::CreatureWithNamesakes(8)</code> in <code>permanent_is_animated</code></td></tr>
+  <tr><td>LLM / Academy text sees a suspended obligation (e.g. surveil)</td><td>a frame&#39;s decision code, labelled by frame kind</td><td><code>continuation::decision_code</code>, <code>MAX_DECISION_CODE</code> (Rust); <code>_OBLIGATIONS</code> / <code>_frame_decision</code> (Python)</td></tr>
+  <tr><td>Agent / human sees the copy</td><td>modified characteristics are stated as inputs, not just results</td><td><code>FactKind::Copy</code>, <code>FactKind::CopyException</code>; text "copy of D&lt;n&gt;, except isn't legendary"; protocol <code>copy_of</code></td></tr>
+</table></div>
+</div>
+
+<h2>The one mismatch: two owners of the decision codes</h2>
+<p>The demo failed because the code table drifted. The validator rejected codes above 13, and the text table labelled code 14 &ldquo;order triggers&rdquo;. <code>2963f8f87</code> fixed the Rust side:</p>
+<pre><code>pub const MAX_DECISION_CODE: u8 = 20;
+pub fn decision_code(decision: &amp;Decision) -&gt; u8 { /* exhaustive match */ }
+// bindings.rs: frame.decision &gt; MAX_DECISION_CODE  =&gt; reject</code></pre>
+<p>Python keeps its own table, <code>_OBLIGATIONS</code>, with 21 labels. A code added without a label raises <code>TextEncodingError</code>, but only when a game reaches it.</p>
+<div class="proposed">
+<p>Export <code>MAX_DECISION_CODE</code> from the native module beside <code>WORLD_VERSION</code> (and in <code>__init__.pyi</code>), then test <code>len(_OBLIGATIONS) == MAX_DECISION_CODE + 1</code>. The labels stay in Python because they are rendering vocabulary; the bound is the shared fact.</p>
+</div>
+
+<h2>Still not adopted</h2>
+<p>Two static variants express the same effect, "this is an artifact creature as long as …", and differ only in their self-relative condition:</p><p><code>CreatureWithCounters(CounterThreshold)</code> (an existing TLA card) and <code>CreatureWithNamesakes(u32)</code> (Airship, new).</p>
+<div class="proposed">
+<p>A single variant, <code>CreatureWhile(SelfCondition::{Counters, Namesakes})</code>, would read better. It is not required by any accepted decision, though, and it would re-key an existing card's learning tokens. Not adopted. Merge them when a third self-animation condition appears.</p>
+</div>
+
+<h2>Challenge</h2>
+<ul>
+  <li><strong>Normal path:</strong> Ran and Shaw is cast with three Dragons/Lessons in the graveyard. The token copy has <code>of</code> = Ran and Shaw and <code>exceptions</code> = [Nonlegendary], so the legend rule leaves both permanents.</li>
+  <li><strong>Failure:</strong> Joo Dee is removed while its ability is on the stack. The copy uses last known information from the retained card.</li>
+  <li><strong>Recovery / chain:</strong> a copy of the copy carries the exceptions (CR 707.9b). The Airship's intervening-if is checked again on resolution (CR 603.4).</li>
+</ul>
+
+<h2>Questions</h2>
+<ol>
+  <li>No product choice is open. The decision-code bound goes back to implement as described above.</li>
+</ol>
+</main></body>
+</html>

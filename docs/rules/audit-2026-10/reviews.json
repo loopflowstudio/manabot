@@ -1496,13 +1496,13 @@
     "400.7j": {
       "status": "partial",
       "scope": "Untargeted triggering-permanent context and exile links retain related objects across selected actions.",
-      "authority": "managym/src/state/ability.rs:ModifyTriggeringPermanent; managym/src/flow/resolution.rs:ExileUntilSourceLeaves; managym/src/flow/zones.rs:handle_leaves_battlefield",
+      "authority": "managym/src/state/ability.rs:AffectedSpec::TriggeringPermanent; managym/src/flow/resolution.rs:ExileUntilSourceLeaves; managym/src/flow/zones.rs:handle_leaves_battlefield",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [],
       "gap": "ExileLink retains exiled CardId only; leave/reenter-exile tracking remains unproved. General cost-moved objects and multi-zone effects need exact destination identity.",
       "anchors": [
-        "managym/src/state/ability.rs::ModifyTriggeringPermanent",
+        "managym/src/state/ability.rs::TriggeringPermanent,",
         "managym/src/flow/resolution.rs::ExileUntilSourceLeaves",
         "managym/src/flow/zones.rs::handle_leaves_battlefield"
       ]
@@ -2363,15 +2363,15 @@
     },
     "608.2k": {
       "status": "partial",
-      "scope": "ModifyTriggeringPermanent uses stored event context without imposing a fresh predicate.",
-      "authority": "managym/src/flow/triggers.rs:check_triggers_for_event; managym/src/flow/resolution.rs:ModifyTriggeringPermanent",
+      "scope": "Triggering-permanent continuous effects and counters use stored event context without imposing a fresh predicate.",
+      "authority": "managym/src/flow/triggers.rs:check_triggers_for_event; managym/src/flow/resolution.rs:AffectedSpec::TriggeringPermanent",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [],
       "gap": "Exact permanent slot prevents following reentry; changed-characteristic response and cost-referenced objects not independently witnessed.",
       "anchors": [
         "managym/src/flow/triggers.rs::check_triggers_for_event",
-        "managym/src/flow/resolution.rs::ModifyTriggeringPermanent"
+        "managym/src/flow/resolution.rs::AffectedSpec::TriggeringPermanent"
       ]
     },
     "608.2m": {

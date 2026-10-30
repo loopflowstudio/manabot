@@ -58,6 +58,24 @@ export interface RestrictedMana {
   mana: number[];
 }
 
+/** One continuous-effect record on a permanent or player (CR 611, 613). */
+export interface ContinuousEffect {
+  /** The engine's `Modification` variant (`ModifyPt`, `AddKeywords`, ...). */
+  modification: string;
+  power?: number;
+  toughness?: number;
+  amount?: number;
+  keywords?: string[];
+  subtypes?: string[];
+  color?: string;
+  /** `EndOfTurn` or `Indefinite`. */
+  duration: string;
+  /** The source's printed name. */
+  source?: string;
+  /** Timestamp order (CR 613.7); larger is later. */
+  timestamp: number;
+}
+
 export interface PermanentState {
   types?: CardTypes;
   is_token?: boolean;
@@ -81,6 +99,36 @@ export interface PermanentState {
   base_power: number | null;
   base_toughness: number | null;
   plus1_counters: number;
+  /** Counters other than +1/+1, by kind (stun, fire, double_strike). */
+  counters?: Record<string, number>;
+  /** The permanent this Aura or Equipment is attached to. */
+  attached_to?: number;
+  /** Creature types set by an effect; `name` is then the set name. */
+  creature_types?: string[];
+  /** A land only through an effect. */
+  is_granted_land?: boolean;
+  /** Attacking in the current combat. */
+  attacking?: boolean;
+  /** The attacking permanent this one blocks. */
+  blocking?: number;
+  /** It has lost all abilities. */
+  abilities_lost?: boolean;
+  /** Activated abilities (indices in its ability list) whose limit is spent. */
+  used_abilities?: number[];
+  /** Continuous effects on it, in timestamp order. */
+  effects?: ContinuousEffect[];
+  /** The copy effect that made it a copy (CR 707.2). */
+  copy_of?: CopyEffect;
+}
+
+export interface PlayerTurnHistory {
+  permanents_sacrificed?: number;
+}
+
+/** A copy effect: the printed card it copies and the exceptions in its copiable values (CR 707.9b). */
+export interface CopyEffect {
+  name: string;
+  exceptions?: ContinuousEffect[];
 }
 
 export interface SideboardCard {
@@ -113,6 +161,12 @@ export interface PlayerState {
   zone_counts: Record<string, number>;
   library_count: number;
   hand_hidden_count?: number;
+  /** Unspent red mana stays until end of turn. */
+  keeps_red_mana?: boolean;
+  /** What this player has done this turn. */
+  turn_history?: PlayerTurnHistory;
+  /** Continuous effects on this player, in timestamp order. */
+  effects?: ContinuousEffect[];
   hand: CardState[];
   graveyard: CardState[];
   exile: CardState[];
@@ -157,6 +211,8 @@ export interface StackEntryView {
   source_permanent?: number;
   ability_index?: number;
   chosen_mode?: number;
+  /** The announced value of X, when above zero. */
+  x?: number;
 }
 
 export interface Observation {

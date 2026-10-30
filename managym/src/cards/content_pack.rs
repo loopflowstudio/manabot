@@ -8,6 +8,7 @@
 
 use std::{
     collections::BTreeMap,
+    fmt,
     sync::{Arc, OnceLock},
 };
 
@@ -37,7 +38,7 @@ pub struct ContentPackManifest {
     pub definitions: Vec<ContentPackDefinitionManifest>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct ContentPack {
     pub schema_version: u32,
     pack_key: Option<String>,
@@ -45,6 +46,20 @@ pub struct ContentPack {
     definitions: Vec<Arc<CardDefinition>>,
     digest: OnceLock<String>,
     public_definitions: OnceLock<Vec<serde_json::Value>>,
+}
+
+/// Omits the lazy `digest` and `public_definitions` caches: they derive from
+/// the definitions, and the default pack is shared across threads, so printing
+/// them would make a match's `Debug` depend on when another reader filled them.
+impl fmt::Debug for ContentPack {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ContentPack")
+            .field("schema_version", &self.schema_version)
+            .field("pack_key", &self.pack_key)
+            .field("cards_by_name", &self.cards_by_name)
+            .field("definitions", &self.definitions)
+            .finish_non_exhaustive()
+    }
 }
 
 /// Legacy Rust name retained for conformance callers. Match state owns a

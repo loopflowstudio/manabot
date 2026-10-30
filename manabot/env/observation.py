@@ -49,13 +49,23 @@ LEGACY_RELATION_DIM = 32
 RELATION_DIM = 33
 # V4 appends eligibility; row validity keeps its v2/v3 position.
 RELATION_VALID_INDEX = 31
-# V5 widens player and card rows; v1-v4 keep the legacy widths.
+# Policy input v5 encodes every Observation fact; managym's
+# observation_encoder.rs owns the layout and these mirror it exactly. V5 widens
+# the player, card and permanent rows; v1-v4 keep the legacy widths.
+RELATION_DIM_V5 = 48
+RELATION_X_INDEX = 33
+RELATION_KEYWORDS_INDEX = 34  # 14 granted spell keywords, KeywordData order
 SPEND_SUBTYPES = ("Lesson", "Shrine", "Ally")
 LEGACY_PLAYER_DIM = 40
 PLAYER_RESTRICTED_INDEX = LEGACY_PLAYER_DIM
 PLAYER_HAND_ONLY_INDEX = PLAYER_RESTRICTED_INDEX + len(SPEND_SUBTYPES) * 6
 PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX = PLAYER_HAND_ONLY_INDEX + 1
-PLAYER_DIM = PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX + 1
+PLAYER_TURN_INDEX = PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX + 1
+PLAYER_SEAT_INDEX = PLAYER_TURN_INDEX + 1
+PLAYER_KEEPS_RED_MANA_INDEX = PLAYER_SEAT_INDEX + 1
+# Turn history: permanents sacrificed this turn.
+PLAYER_SACRIFICED_INDEX = PLAYER_KEEPS_RED_MANA_INDEX + 1
+PLAYER_DIM = PLAYER_SACRIFICED_INDEX + 1
 LEGACY_CARD_DIM = 41
 # V5 card terms start where v4's validity flag was; validity stays last.
 CARD_PERMISSION_INDEX = LEGACY_CARD_DIM - 1
@@ -63,15 +73,74 @@ CARD_X_INDEX = CARD_PERMISSION_INDEX + 12
 CARD_DIM = CARD_X_INDEX + 2 + 1
 LEGACY_PERMANENT_DIM = 29
 # V5 permanent terms start where v4's validity flag was; validity stays last.
+# Open-ended vocabularies are fact rows (below), not columns.
 PERMANENT_EXHAUSTED_INDEX = LEGACY_PERMANENT_DIM - 1
 PERMANENT_ONCE_EACH_TURN_INDEX = PERMANENT_EXHAUSTED_INDEX + 1
 PERMANENT_FIREBENDING_INDEX = PERMANENT_ONCE_EACH_TURN_INDEX + 1
-PERMANENT_DIM = PERMANENT_FIREBENDING_INDEX + 2
+# Object index + 1 of the attachment's host: a join, never a numeric feature.
+PERMANENT_ATTACHED_INDEX = PERMANENT_FIREBENDING_INDEX + 1
+PERMANENT_GRANTED_LAND_INDEX = PERMANENT_ATTACHED_INDEX + 1
+# Object index + 1 of the attacker this creature blocks: a join.
+PERMANENT_BLOCKING_INDEX = PERMANENT_GRANTED_LAND_INDEX + 1
+PERMANENT_ABILITIES_LOST_INDEX = PERMANENT_BLOCKING_INDEX + 1
+# Rank of its timestamp among the observation's timestamps.
+PERMANENT_TIMESTAMP_INDEX = PERMANENT_ABILITIES_LOST_INDEX + 1
+PERMANENT_DIM = PERMANENT_TIMESTAMP_INDEX + 2
+# V5 fact rows: one open-vocabulary fact about a player or permanent, joined to
+# it like relation references. Ids are learning-token values split into 16-bit
+# halves (exact in float32).
+FACT_ROWS = 128
+FACT_OBJECT_INDEX = 0
+FACT_KIND_INDEX = 1
+FACT_ID_INDEX = 2  # high, low
+FACT_DETAIL_INDEX = 4  # high, low: a keyword, subtype or color an effect names
+FACT_VALUE_INDEX = 6  # amounts / 10: count, power or N; then toughness
+FACT_DURATION_INDEX = 8  # 1 until end of turn, 2 indefinite
+FACT_ORDER_INDEX = 9  # timestamp rank (1-based)
+FACT_SOURCE_INDEX = 10  # source definition + 1
+FACT_VALID_INDEX = 11
+FACT_DIM = 12
+# FactKind values (observation_encoder.rs).
+FACT_COUNTER = 1
+FACT_ADDED_SUBTYPE = 2
+FACT_SET_NAME = 3
+FACT_SET_CREATURE_TYPE = 4
+FACT_USED_ABILITY = 5
+FACT_EFFECT = 6
+FACT_COPY = 7
+FACT_COPY_EXCEPTION = 8
+FACT_KINDS = 8
+# Permanent columns that hold object links (joins), in model parameter order.
+PERMANENT_LINK_INDEXES = (PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX)
 
 
 # -----------------------------------------------------------------------------
 # Observation Encoding
 # -----------------------------------------------------------------------------
+def _split_id(ident: int) -> Tuple[float, float]:
+    """A vocabulary id as 16-bit halves, exact in float32."""
+    ident &= 0xFFFFFFFF
+    return float(ident >> 16), float(ident & 0xFFFF)
+
+
+def _timestamp(perm: managym.Permanent) -> int:
+    """A permanent's timestamp: renewed by an attachment, otherwise its id."""
+    return perm.id if perm.timestamp is None else perm.timestamp
+
+
+def _timestamp_ranks(obs: managym.Observation) -> Dict[int, float]:
+    """Rank (1-based) of every permanent and effect timestamp in `obs`."""
+    permanents = [*obs.agent_permanents, *obs.opponent_permanents]
+    stamps = {_timestamp(perm) for perm in permanents}
+    for effects in (
+        obs.agent.effects,
+        obs.opponent.effects,
+        *(perm.effects for perm in permanents),
+    ):
+        stamps.update(effect.timestamp for effect in effects)
+    return {stamp: float(rank + 1) for rank, stamp in enumerate(sorted(stamps))}
+
+
 class ObservationEncoder:
     """
     Encodes each typed chunk (player, cards, permanents, etc.) into fixed-size arrays,
@@ -81,9 +150,13 @@ class ObservationEncoder:
 
     def __init__(self, config: ObservationConfig) -> None:
         self.config = config
-        self.relation_dim = (
-            RELATION_DIM if config.policy_input_version >= 4 else LEGACY_RELATION_DIM
-        )
+        self.shows_everything = config.policy_input_version >= 5
+        if self.shows_everything:
+            self.relation_dim = RELATION_DIM_V5
+        elif config.policy_input_version >= 4:
+            self.relation_dim = RELATION_DIM
+        else:
+            self.relation_dim = LEGACY_RELATION_DIM
         self.cards_per_player = config.max_cards_per_player
         self.perms_per_player = config.max_permanents_per_player
         self.max_actions = config.max_actions
@@ -100,13 +173,13 @@ class ObservationEncoder:
         # Define dimensions for players, cards, permanents.
         # Player: life + is_active + zones + phase/step one-hots + gy
         # lessons + until-end-of-combat mana + pooled and spend-restricted colors;
-        # v5 adds restricted mana by spending subtype, the hand-only lock and
-        # no maximum hand size.
+        # v5 adds restricted mana by spending subtype, the hand-only lock, no
+        # maximum hand size, turn number, seat and kept red mana.
         # Card: zone one-hot + is_mine + P/T + mana value + 6 type flags +
         # 12 keywords + is_token/is_ally/is_lesson tags + ward flag/cost +
         # kicker flag/cost + hexproof + outside + indestructible + legendary;
         # v5 adds cast-permission terms and announced X; validity is last.
-        current = config.policy_input_version >= 5
+        current = self.shows_everything
         self.player_dim = PLAYER_DIM if current else LEGACY_PLAYER_DIM
         self.card_dim = CARD_DIM if current else LEGACY_CARD_DIM
         # Permanent: is_mine, tapped, damage, summoning sick, +1/+1 counters,
@@ -114,7 +187,11 @@ class ObservationEncoder:
         # (earthbent land), exile-linkage (Jailer), 13 effective-keyword flags
         # (printed + until-EOT grants), death-to-exile replacement, definition,
         # temporary Avatar subtype, attacking; v5 adds used exhaust and
-        # once-each-turn abilities and granted firebending; validity is last.
+        # once-each-turn ability counts, granted firebending, attachment join,
+        # granted land, blocking join, lost abilities and timestamp rank;
+        # validity is last. Counter kinds, effect-set subtypes and
+        # characteristics, used abilities and continuous-effect records are
+        # v5 fact rows.
         self.permanent_dim = PERMANENT_DIM if current else LEGACY_PERMANENT_DIM
         self.event_dim = 12 if config.policy_history_version == 1 else 7
 
@@ -137,6 +214,7 @@ class ObservationEncoder:
                 if self.config.policy_input_version >= 2
                 else {}
             ),
+            **({"facts": (FACT_ROWS, FACT_DIM)} if self.shows_everything else {}),
             "semantic_cards": (2, self.cards_per_player),
             "known_hand": (2, self.cards_per_player, 2),
             # Game objects
@@ -266,6 +344,24 @@ class ObservationEncoder:
             ("opponent_permanents", obs.opponent_permanents, 0.0),
         ):
             out[key] = self._encode_perms(perms, is_mine=is_mine)
+        if self.shows_everything:
+            # Hosts may be listed after their attachments, so links follow indexing.
+            ranks = _timestamp_ranks(obs)
+            for key, perms in (
+                ("agent_permanents", obs.agent_permanents),
+                ("opponent_permanents", obs.opponent_permanents),
+            ):
+                for row, perm in enumerate(perms):
+                    for column, linked in (
+                        (PERMANENT_ATTACHED_INDEX, perm.attached_to),
+                        (PERMANENT_BLOCKING_INDEX, perm.blocking),
+                    ):
+                        if linked is not None:
+                            out[key][row, column] = (
+                                self.object_to_index.get(linked, -1) + 1
+                            )
+                    out[key][row, PERMANENT_TIMESTAMP_INDEX] = ranks[_timestamp(perm)]
+            out["facts"] = self._encode_facts(obs, ranks)
 
         # Validity masks
         out["agent_player_valid"] = np.ones((1,), dtype=np.float32)
@@ -300,6 +396,114 @@ class ObservationEncoder:
 
         for key, value in out.items():
             log.debug(f"[SHAPES] {key}: {value.shape}")
+        return out
+
+    def _encode_facts(
+        self, obs: managym.Observation, ranks: Dict[int, float]
+    ) -> np.ndarray:
+        """Reference implementation of native v5 fact rows."""
+        rows: list[np.ndarray] = []
+
+        def push(
+            obj: int,
+            kind: int,
+            ident: int,
+            values: Tuple[float, float],
+            detail: int = 0,
+            provenance: tuple[float, int, int | None] | None = None,
+        ) -> None:
+            """One row; `provenance` is an effect's (duration, timestamp,
+            source registry key), as native `Fact.effect`."""
+            row = np.zeros(FACT_DIM, dtype=np.float32)
+            row[FACT_OBJECT_INDEX] = self.object_to_index.get(obj, -1) + 1
+            row[FACT_KIND_INDEX] = kind
+            row[FACT_ID_INDEX : FACT_ID_INDEX + 2] = _split_id(ident)
+            row[FACT_DETAIL_INDEX : FACT_DETAIL_INDEX + 2] = _split_id(detail)
+            row[FACT_VALUE_INDEX : FACT_VALUE_INDEX + 2] = values
+            if provenance is not None:
+                duration, timestamp, source = provenance
+                row[FACT_DURATION_INDEX] = duration
+                row[FACT_ORDER_INDEX] = ranks[timestamp]
+                if source is not None:
+                    row[FACT_SOURCE_INDEX] = source + 1
+            row[FACT_VALID_INDEX] = 1.0
+            rows.append(row)
+
+        token = managym.learning_token_value
+        permanents = [*obs.agent_permanents, *obs.opponent_permanents]
+        for perm in permanents:
+            if perm.plus1_counters > 0:
+                push(
+                    perm.id,
+                    FACT_COUNTER,
+                    token("CounterKind::plus_one_plus_one"),
+                    (perm.plus1_counters / 10.0, 0.0),
+                )
+            for kind, count in sorted(perm.counters.items()):
+                push(
+                    perm.id,
+                    FACT_COUNTER,
+                    token(f"CounterKind::{kind}"),
+                    (count / 10.0, 0.0),
+                )
+            for subtype in perm.temp_subtypes:
+                push(perm.id, FACT_ADDED_SUBTYPE, token(subtype), (1.0, 0.0))
+            if perm.name is not None:
+                push(perm.id, FACT_SET_NAME, token(perm.name), (1.0, 0.0))
+            for creature_type in perm.creature_types or ():
+                push(perm.id, FACT_SET_CREATURE_TYPE, token(creature_type), (1.0, 0.0))
+            for index in perm.used_abilities:
+                push(perm.id, FACT_USED_ABILITY, index, (1.0, 0.0))
+
+        def push_modification(
+            obj: int, kind: int, effect: managym.ContinuousEffect
+        ) -> None:
+            ident = token(f"Modification::{effect.modification}")
+            amount = effect.power if effect.power is not None else effect.amount
+            values = (
+                (amount or 0) / 10.0,
+                (effect.toughness or 0) / 10.0,
+            )
+            details = [
+                *(token(name) for name in (*effect.keywords, *effect.subtypes)),
+                *(
+                    [token(f"Color::{effect.color}")]
+                    if effect.color is not None
+                    else []
+                ),
+            ] or [0]
+            duration = 1.0 if effect.duration == "EndOfTurn" else 2.0
+            provenance = (duration, effect.timestamp, effect.source_registry_key)
+            for detail in details:
+                push(obj, kind, ident, values, detail, provenance)
+
+        for perm in permanents:
+            if perm.copy is None:
+                continue
+            push(
+                perm.id,
+                FACT_COPY,
+                token("CopyEffect"),
+                (0.0, 0.0),
+                provenance=(2.0, _timestamp(perm), perm.copy.registry_key),
+            )
+            for exception in perm.copy.exceptions:
+                push_modification(perm.id, FACT_COPY_EXCEPTION, exception)
+        holders = [
+            (obs.agent.id, obs.agent.effects),
+            (obs.opponent.id, obs.opponent.effects),
+            *((perm.id, perm.effects) for perm in permanents),
+        ]
+        for obj, effects in holders:
+            for effect in effects:
+                push_modification(obj, FACT_EFFECT, effect)
+        if len(rows) > FACT_ROWS:
+            raise ValueError(
+                f"observation capacity exceeded: facts {len(rows)} > {FACT_ROWS}"
+            )
+        out = np.zeros((FACT_ROWS, FACT_DIM), dtype=np.float32)
+        if rows:
+            out[: len(rows)] = rows
         return out
 
     def _encode_relations(
@@ -340,6 +544,10 @@ class ObservationEncoder:
             row[30] = frame.resolutions_this_turn
             row[28] = frame.decision
             row[RELATION_VALID_INDEX] = 1
+            if self.shows_everything:
+                row[RELATION_X_INDEX] = frame.x
+                # Granted keywords fill the row's remaining columns.
+                row[RELATION_KEYWORDS_INDEX:] = frame.granted_keywords
             rows.append(row)
             for ordinal, target in enumerate(frame.targets, 1):
                 target_row = row.copy()
@@ -348,7 +556,7 @@ class ObservationEncoder:
                     target.clause + 1,
                     ordinal,
                 )
-                if self.config.policy_input_version >= 4:
+                if self.relation_dim >= RELATION_DIM:
                     legal = target.legal_at_resolution_start
                     target_row[32] = 0 if legal is None else (1 if legal else 2)
                 _reference(target_row, target.reference)
@@ -420,6 +628,13 @@ class ObservationEncoder:
                         )
             arr[PLAYER_HAND_ONLY_INDEX] = float(player.hand_only_until is not None)
             arr[PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX] = float(player.no_maximum_hand_size)
+            arr[PLAYER_TURN_INDEX] = float(turn.turn_number) / 20.0
+            # Seat 0 is on the play.
+            arr[PLAYER_SEAT_INDEX] = float(player.player_index)
+            arr[PLAYER_KEEPS_RED_MANA_INDEX] = float(player.keeps_red_mana)
+            arr[PLAYER_SACRIFICED_INDEX] = (
+                float(player.turn_history.permanents_sacrificed) / 10.0
+            )
 
         self.object_to_index[player.id] = self.current_object_index
         self.current_object_index += 1
@@ -590,6 +805,10 @@ class ObservationEncoder:
             arr[PERMANENT_EXHAUSTED_INDEX] = float(perm.exhausted_abilities)
             arr[PERMANENT_ONCE_EACH_TURN_INDEX] = float(perm.once_each_turn_used)
             arr[PERMANENT_FIREBENDING_INDEX] = float(perm.granted_firebending) / 10.0
+            # PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX and
+            # PERMANENT_TIMESTAMP_INDEX are written once every object is indexed.
+            arr[PERMANENT_GRANTED_LAND_INDEX] = float(perm.is_granted_land)
+            arr[PERMANENT_ABILITIES_LOST_INDEX] = float(perm.abilities_lost)
         # Set validity flag (permanent exists)
         arr[-1] = 1.0
         return arr

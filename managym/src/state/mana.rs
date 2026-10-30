@@ -204,6 +204,7 @@ impl ManaCost {
             out.cost[i] = out.cost[i].saturating_add(other.cost[i]);
         }
         out.hybrid.extend_from_slice(&other.hybrid);
+        out.x = out.x.saturating_add(other.x);
         out.update_mana_value();
         out
     }
@@ -575,6 +576,38 @@ impl Mana {
         self.prune();
     }
 
+    /// All unspent mana becomes red, keeping its spending restrictions
+    /// (Ozai, the Phoenix King).
+    pub fn become_red(&mut self) {
+        let red = Color::Red as usize;
+        let all_red = |pool: &mut [u8; 6]| {
+            let total = pool
+                .iter()
+                .fold(0u8, |sum, amount| sum.saturating_add(*amount));
+            *pool = [0; 6];
+            pool[red] = total;
+        };
+        all_red(&mut self.mana);
+        if let Some(classes) = &mut self.restricted {
+            for (_, amounts) in classes.iter_mut() {
+                all_red(amounts);
+            }
+        }
+    }
+
+    /// Only red mana, with its spending restrictions.
+    pub fn red_only(&self) -> Self {
+        let red = Color::Red as usize;
+        let mut kept = Self::default();
+        kept.mana[red] = self.mana[red];
+        for (restriction, amounts) in self.restricted() {
+            let mut only_red = [0; 6];
+            only_red[red] = amounts[red];
+            kept.add_restricted(*restriction, only_red);
+        }
+        kept
+    }
+
     pub fn clear(&mut self) {
         // CR 106.4 — Unspent mana empties from pools as steps/phases end.
         self.mana = [0; 6];
@@ -614,6 +647,15 @@ mod tests {
         assert_eq!(kicked.mana_value, 6);
         assert!(Mana::parse("2RRWG").can_pay(&kicked));
         assert_eq!(kicked.with_generic(0).mana_value, 4);
+    }
+
+    #[test]
+    fn x_counts_zero_until_its_value_is_chosen() {
+        let cost = ManaCost::parse("{X}{R}{R}{R}");
+        assert_eq!((cost.x, cost.mana_value), (1, 3));
+        let paid = cost.with_x(2);
+        assert_eq!((paid.x, paid.mana_value, paid.generic()), (0, 5, 2));
+        assert_eq!(ManaCost::parse("{X}{X}{B}").with_x(3).generic(), 6);
     }
 
     #[test]

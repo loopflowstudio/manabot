@@ -46,6 +46,28 @@ pub const PHASE_STEPS: [&[StepKind]; 5] = [
     &[StepKind::End, StepKind::Cleanup],
 ];
 
+/// What one player has done this turn, for conditions that read turn history
+/// ("if you sacrificed a permanent this turn"). The owner of every such fact:
+/// the turn reset, the state hash and the policy's player row all read this
+/// struct.
+#[derive(
+    Clone,
+    Copy,
+    Debug,
+    Default,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    schemars::JsonSchema,
+)]
+#[serde(deny_unknown_fields)]
+pub struct PlayerTurnHistory {
+    /// Permanents this player sacrificed (CR 701.21).
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub permanents_sacrificed: u32,
+}
+
 #[derive(Clone, Debug, serde::Serialize)]
 pub struct TurnState {
     pub active_player: PlayerId,
@@ -55,6 +77,8 @@ pub struct TurnState {
     /// Cards drawn by each player this turn (for "your Nth card each turn"
     /// triggers). Resets every turn.
     pub cards_drawn_this_turn: [u32; 2],
+    /// Each player's history this turn, by player index. Resets every turn.
+    pub history: [PlayerTurnHistory; 2],
     /// Once-per-turn limits are recorded at collection, by exact source object.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub ability_triggers_this_turn: BTreeMap<(crate::state::game_object::ObjectRef, usize), u32>,
@@ -77,6 +101,7 @@ impl TurnState {
             lands_played: 0,
             spells_cast: [Vec::new(), Vec::new()],
             cards_drawn_this_turn: [0, 0],
+            history: Default::default(),
             ability_resolutions_this_turn: BTreeMap::new(),
             ability_triggers_this_turn: BTreeMap::new(),
             current_phase: 0,
@@ -137,6 +162,7 @@ impl TurnState {
         self.lands_played = 0;
         // Turn-scoped counters reset with the turn.
         self.cards_drawn_this_turn = [0, 0];
+        self.history = Default::default();
         self.spells_cast = [Vec::new(), Vec::new()];
         self.ability_resolutions_this_turn.clear();
         self.ability_triggers_this_turn.clear();

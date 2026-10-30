@@ -28,6 +28,7 @@ fn bastion_of_remembrance() -> CardDefinition {
                     token_name: "Human Soldier".into(),
                     count: 1,
                     tapped_and_attacking: false,
+                    attach_source: false,
                 }],
             },
             Ability::Triggered {

@@ -127,7 +127,7 @@ def _serialize_permanent(
     return {
         **details,
         "id": int(permanent.id),
-        "name": card.name if card else None,
+        "name": permanent.name or (card.name if card else None),
         "text_box": card.text_box if card else "",
         "exile_if_dies_this_turn": bool(permanent.exile_if_dies_this_turn),
         **{
@@ -156,7 +156,60 @@ def _serialize_permanent(
         "base_power": int(card.power) if card else None,
         "base_toughness": int(card.toughness) if card else None,
         "plus1_counters": int(permanent.plus1_counters),
+        **_characteristics(permanent),
     }
+
+
+def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
+    """Effect-derived state, present only when an effect applies."""
+    counters = {kind: int(count) for kind, count in permanent.counters.items() if count}
+    values: dict[str, Any] = {
+        "counters": counters or None,
+        "attached_to": permanent.attached_to,
+        "creature_types": permanent.creature_types,
+        "is_granted_land": bool(permanent.is_granted_land) or None,
+        "attacking": bool(permanent.attacking) or None,
+        "blocking": permanent.blocking,
+        "abilities_lost": bool(permanent.abilities_lost) or None,
+        "used_abilities": list(permanent.used_abilities) or None,
+        "effects": _effects(permanent.effects) or None,
+        "copy_of": _copy(permanent.copy),
+    }
+    return {key: value for key, value in values.items() if value is not None}
+
+
+def _turn_history(history: managym.PlayerTurnHistory) -> dict[str, Any]:
+    """What a player has done this turn, absent facts omitted."""
+    values = {"permanents_sacrificed": history.permanents_sacrificed}
+    return {key: value for key, value in values.items() if value}
+
+
+def _copy(copy: managym.CopyEffect | None) -> dict[str, Any] | None:
+    """The copy effect that made a permanent a copy, or None for an original."""
+    if copy is None:
+        return None
+    exceptions = _effects(copy.exceptions)
+    return {"name": copy.name, **({"exceptions": exceptions} if exceptions else {})}
+
+
+def _effects(effects: list[managym.ContinuousEffect]) -> list[dict[str, Any]]:
+    """Continuous-effect records in timestamp order, absent values omitted."""
+    out = []
+    for effect in effects:
+        values: dict[str, Any] = {
+            "modification": effect.modification,
+            "power": effect.power,
+            "toughness": effect.toughness,
+            "amount": effect.amount,
+            "keywords": list(effect.keywords) or None,
+            "subtypes": list(effect.subtypes) or None,
+            "color": effect.color,
+            "duration": effect.duration,
+            "source": effect.source_name,
+            "timestamp": int(effect.timestamp),
+        }
+        out.append({key: value for key, value in values.items() if value is not None})
+    return out
 
 
 def _serialize_player(
@@ -238,6 +291,14 @@ def _serialize_player(
             str(key): int(count)
             for key, count in player.remaining_sideboard_counts.items()
         },
+        **({"keeps_red_mana": True} if player.keeps_red_mana else {}),
+        **({"no_maximum_hand_size": True} if player.no_maximum_hand_size else {}),
+        **(
+            {"turn_history": turn_history}
+            if (turn_history := _turn_history(player.turn_history))
+            else {}
+        ),
+        **({"effects": _effects(player.effects)} if player.effects else {}),
         "hand": grouped_cards["HAND"],
         "graveyard": grouped_cards["GRAVEYARD"],
         "exile": grouped_cards["EXILE"],
@@ -314,6 +375,7 @@ def decision_surface_view(env: managym.Env, viewer: int) -> dict[str, Any]:
             "source_permanent": entry.source_permanent_id,
             "ability_index": entry.ability_index,
             "chosen_mode": entry.chosen_mode,
+            "x": int(entry.x) or None,
         }
         for entry in observation.stack_objects
     ]

@@ -57,6 +57,9 @@ pub struct GameState {
     pub delayed_triggers: Vec<DelayedTrigger>,
     /// "Exiled until [source] leaves the battlefield" linkages (Jailer).
     pub exile_links: Vec<ExileLink>,
+    /// Continuous effects from resolved spells and abilities, in timestamp
+    /// order (`state::effect`).
+    pub effects: Vec<crate::state::effect::ContinuousEffect>,
     /// Exact-object casting grants (airbend) and hand-only restrictions.
     pub cast_permissions: CastPermissions,
     /// A resolution paused on a mid-resolution player decision.
@@ -108,6 +111,9 @@ pub enum Payment {
         source: ActivationSource,
         ability_index: usize,
         targets: Vec<Target>,
+        /// The announced value of X (CR 602.2b, 601.2b).
+        #[serde(skip_serializing_if = "crate::state::is_zero")]
+        x: u8,
     },
 }
 
@@ -127,10 +133,13 @@ pub enum PendingChoice {
         payment: Box<Payment>,
         cost: Box<crate::state::card::SacrificeCost>,
     },
+    /// Choosing the activation's targets one at a time (CR 602.2b, 601.2c);
+    /// `chosen` holds those already selected for its single clause.
     ActivatedTarget {
         player: PlayerId,
         source: ActivationSource,
         ability_index: usize,
+        chosen: Vec<Target>,
     },
     /// Choosing the card to discard for a "Discard a card" activation cost.
     DiscardPayment {
@@ -153,6 +162,13 @@ pub enum PendingChoice {
         #[serde(flatten)]
         cast: CastChoices,
     },
+    /// Announcing the value of X for an activated ability (CR 602.2b,
+    /// 601.2b) before its waterbend cost is paid.
+    ActivationX {
+        player: PlayerId,
+        permanent: PermanentId,
+        ability_index: usize,
+    },
     SpellMode {
         player: PlayerId,
         card: CardId,
@@ -172,6 +188,15 @@ pub enum PendingChoice {
         chosen_req_indices: Vec<usize>,
         /// Legal, not-yet-chosen targets for the current requirement.
         legal_targets: Vec<Target>,
+    },
+    /// Paying a crew cost (CR 702.122a): tap other untapped creatures one
+    /// at a time until their total power reaches the crew number.
+    Crew {
+        player: PlayerId,
+        permanent: PermanentId,
+        ability_index: usize,
+        /// Power still owed; the cost is paid once it reaches zero.
+        remaining_power: i32,
     },
     /// Paying a waterbend cost (an ability's, or a spell's additional or
     /// alternative cost): tap artifacts/creatures for {1} each, then pay the
@@ -271,6 +296,7 @@ impl Game {
             trigger_placement,
             delayed_triggers,
             exile_links,
+            effects,
             cast_permissions,
             suspended_decision,
             trigger_enqueue_counter,
@@ -299,6 +325,7 @@ impl Game {
                 trigger_placement: trigger_placement.clone(),
                 delayed_triggers: delayed_triggers.clone(),
                 exile_links: exile_links.clone(),
+                effects: effects.clone(),
                 cast_permissions: cast_permissions.clone(),
                 suspended_decision: suspended_decision.clone(),
                 trigger_enqueue_counter: *trigger_enqueue_counter,

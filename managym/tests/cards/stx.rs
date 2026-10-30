@@ -119,9 +119,7 @@ fn eyetwitch_and_poxbearer_deaths_keep_their_different_rewards() {
             "Pretending Poxbearers" => {
                 assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 1)
             }
-            "Knowledge Seeker" => {
-                assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1)
-            }
+            "Knowledge Seeker" => assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1),
             _ => assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 0),
         }
     }

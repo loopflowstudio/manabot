@@ -2,11 +2,12 @@
 //! with `is_token: true`, so copy effects treat tokens and cards alike. Each is
 //! keyed by name and carries the Scryfall id of its first token printing.
 use crate::state::{
-    ability::{Ability, Effect, TriggerCondition, TriggerSubject},
+    ability::{Ability, AffectedSpec, Effect, TriggerCondition, TriggerSubject},
     card::{
         ActivatedAbilityDefinition, BlockRestriction, CardDefinition, CardType, CardTypes,
         Keywords, StaticAbility,
     },
+    effect::Modification,
     mana::{Color, Colors, Mana, ManaCost},
     predicate::CardPredicate,
 };
@@ -202,10 +203,10 @@ fn monk() -> CardDefinition {
                     ..Default::default()
                 },
             },
-            effects: vec![Effect::ModifyUntilEot {
-                power_delta: 1,
-                toughness_delta: 1,
-            }],
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::Source,
+                Modification::pump(1, 1),
+            )],
         }],
         ..creature(base, 1, 1, [Color::Red])
     }

@@ -114,9 +114,20 @@ checkpoints or experiment evidence.
   repository-wide type safety without a passing configured type check, or
   weaken types merely to silence one.
 - Native scalar/vector observation buffers bind continuation input semantics by
-  relation width: v2/v3 have 32 columns, v4 and v5 have 33; validity remains
-  column 31. At 33, the player row width tells v4 (40) from v5 (60).
-  Preserve the frozen widths and derive buffers from `ObservationSpace`.
+  relation width: v2/v3 have 32 columns, v4 has 33, v5 has 48; validity
+  remains column 31. V5 widens player rows to 64, card rows to 55 and
+  permanent rows to 37 (v1–v4: 40 / 41 / 29), validity last, and adds a
+  `facts` block (128 × 12, one row per `FactKind` fact about a player or
+  permanent). Open-ended vocabularies (counter kinds, added subtypes, set
+  names, used abilities, continuous-effect records, copy effects and their
+  exceptions) are fact kinds, never
+  columns. Preserve the frozen widths and derive buffers from
+  `ObservationSpace`.
+- New observation state reaches the policy input (native and Python encoders
+  in parity), the LLM text observation and the learning tokens in the change
+  that adds it; a frozen policy-input version never silently falls behind.
+  `managym/tests/cards/observability.rs` names each `Observation` field's
+  tensor columns or fact kind and fails to compile when a field is unlisted.
 - Saved observation configurations use `ObservationConfig.from_checkpoint` so
   an absent policy-input version retains v1 semantics. Fresh construction uses
   the current version. Keep version-specific zero/default exclusions stable:
@@ -133,7 +144,7 @@ checkpoints or experiment evidence.
   `uv venv --python 3.12`.
 - After changing Rust under `managym/src`, rebuild from the repository root so
   uv uses the pinned root environment instead of creating a nested venv:
-  `uv run maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`,
+  `uv run --extra play maturin build --release -i .venv/bin/python -m managym/Cargo.toml -o managym/target/wheels`,
   then place the cp312 `.so` from the wheel at
   `manabot/managym/_managym.cpython-312-darwin.so`. Replace it atomically (write a new
   file, then rename); overwriting a mapped extension in place can trigger macOS
@@ -225,13 +236,28 @@ set file of that card; engine rules stay in `tests/rules/`, and shared scenario
 helpers live in `tests/support/`. Keep decklists separate from behavior. Keep long printed text in
 a local `text_box` binding so rustfmt can format the definition.
 The default pack registers every definition in name order (`cards/content_pack.rs`).
-Activated abilities that function from hand or graveyard set
-`ActivatedAbilityDefinition.zone` (`ActivationZone`); they are offered as
-`Action::ActivateCardAbility`.
+Card tests mirror the set files: `managym/tests/cards/<set>.rs`, one module per
+set under the single `tests/cards.rs` target. Both test targets mount
+`tests/support/` (`game.rs` builds, `play.rs` acts, `inspect.rs` reads), each
+primitive defined once.
 
-Native fixed mana abilities on a card are additive: multiple fixed productions
+A permanent's activated abilities are `Game::activated_abilities_for` (printed,
+then granted, e.g. an Equipment's `AbilityGrant`); activation, payment
+and offer code indexes only that list, never `card.activated_abilities`.
+Whether a permanent has lost its abilities is `Game::has_lost_abilities`,
+which reads continuous-effect records and an Aura's `SetCharacteristics`.
+A change that lasts until end of turn, or for any other duration, is an
+`Effect::ApplyContinuous` record (`state/effect.rs`; expiry in
+`flow/effects.rs`), never a new `Permanent` or `Player` field.
+
+Activated abilities that function from hand or graveyard set
+`ActivatedAbilityDefinition.zone` (landcycling included); they are offered as
+`Action::ActivateCardAbility`. An ability's index is its position in
+`activated_abilities`.
+
+Fixed mana abilities on a card are additive: multiple fixed productions
 produce all listed colors together. A land that produces one chosen color uses
-one activated modal mana program, not multiple fixed mana programs. Verify each
+one activated modal mana ability, not multiple fixed mana abilities. Verify each
 choice by paying a real cost and checking the remaining mana.
 
 ### Etude card evaluation

@@ -312,7 +312,10 @@ impl Game {
                 ("additional_cost", "Choose an additional cost. A sacrifice selection is reserved until the announced payment completes."),
             Some(PendingChoice::ChooseTargets { .. } | PendingChoice::ActivatedTarget { .. }) =>
                 ("targets", "Choose a target for the current clause. Previously selected targets remain bound to their clauses."),
+            Some(PendingChoice::Crew { .. }) =>
+                ("additional_cost", "Choose a creature to tap for crew. Each tap commits immediately; the cost completes once the tapped creatures' total power reaches the crew number."),
             Some(PendingChoice::SpellMode { .. }) => ("mode", "Choose a spell mode."),
+            Some(PendingChoice::ActivationX { .. }) => ("announcement", "Choose the value of X. Each choice is a value the announced total cost can pay."),
             Some(PendingChoice::KickerChoice { .. }) => ("additional_cost", "Choose whether to include the kicker cost."),
             Some(PendingChoice::AnnounceX { .. }) => ("mode", "Announce the value of X; each offer's mode index is that value."),
             None => match space.kind {
@@ -328,10 +331,11 @@ impl Game {
                 Decision::ManaUpfront { .. } => ("mana_payment", "Pay the mana ability activation cost before choosing its output."),
                 Decision::ManaChoice { .. } => ("mana_color", "Choose the mana to add. The mana ability's activation costs have already committed; this does not open priority."),
                 Decision::Sacrifice { .. } => ("resolution_sacrifice", "Choose a permanent to sacrifice as a resolving effect, not as an announcement cost."),
-                Decision::SearchBasicLand { .. } => ("private_search", "Inspect the permitted library candidates. Choose a land or the legal failure-to-find offer; no library order is disclosed."),
+                Decision::SearchBasicLand { .. } | Decision::SearchLibraryToHand { .. } => ("private_search", "Inspect the permitted library candidates. Choose a card or the legal failure-to-find offer; no library order is disclosed."),
                 Decision::Learn { .. } => ("learn", "Take a Lesson, discard and draw, or decline Learn. Navigation does not commit a choice."),
                 Decision::LookAndSelect { .. } => ("private_inspection", "Choose from the inspected cards using the complete legal offers."),
                 Decision::Scry { .. } => ("scry", "Choose the placement of the inspected cards."),
+                Decision::Surveil { .. } => ("surveil", "Choose inspected cards to put into your graveyard; declining keeps the rest on top."),
                 Decision::Payment(_) => ("resolution_payment", "Choose a legal payment for the resolving effect, or decline when offered. Submitted costs remain committed."),
                 Decision::Modal { .. } => ("resolution_mode", "Choose a mode for the resolving effect."),
                 Decision::Discard { .. } | Decision::OptionalDiscardDraw { .. } => ("discard", "Choose a card to discard, or decline when offered."),
@@ -340,6 +344,7 @@ impl Game {
                 Decision::SearchDistinctLands { .. } => ("private_search", "Inspect the permitted library candidates. Choose a land with a new name, or stop searching; chosen cards are revealed."),
                 Decision::DiscardFromRevealedHand { .. } => ("revealed_hand", "Choose a card from the revealed hand for its owner to discard."),
                 Decision::CastWithoutPaying { .. } => ("free_cast", "Choose a spell to cast without paying its mana cost, or decline."),
+                Decision::DistributeCounters { .. } => ("distribute_counters", "Place the next counter on a tapped creature an opponent controls; each placement is one choice."),
                 Decision::ExileLinked { .. } => ("linked_exile", "Choose a card to exile; the resolving ability's controller may later cast it as that ability allows."),
                 Decision::OpponentSplitsRevealed { .. } => ("split_revealed", "Choose revealed cards for their owner's graveyard; the rest enter the battlefield tapped."),
             };

@@ -107,6 +107,8 @@ _STAGES = frozenset(
         "split_revealed",
         "free_cast",
         "linked_exile",
+        "distribute_counters",
+        "surveil",
     )
 )
 
@@ -158,6 +160,52 @@ def _enum(values: tuple[str, ...], index: int) -> str:
     if not 0 <= index < len(values):
         raise TextEncodingError(f"unsupported enum value {index}")
     return values[index]
+
+
+# `ContinuationFrame.decision` by frame kind: an obligation's
+# `continuation::decision_code` (kind 6), a waiting or placing trigger's
+# ordering class (kinds 7 and 8), or the placement cursor's group (kind 9).
+_OBLIGATIONS = (
+    "none",
+    "resolving payment",
+    "mana activation cost",
+    "mana output",
+    "sacrifice",
+    "select milled",
+    "search",
+    "optional discard and draw",
+    "scry",
+    "inspect and select",
+    "mode",
+    "Learn",
+    "discard",
+    "legend rule",
+    "search lands with different names",
+    "split revealed cards",
+    "discard from revealed hand",
+    "cast without paying",
+    "exile linked card",
+    "distribute counters",
+    "surveil",
+)
+_TRIGGER_CLASSES = ("none", "ordinary trigger", "ability-triggered trigger")
+_PLACEMENT_GROUPS = (
+    "none",
+    "placing active player's ordinary triggers",
+    "placing nonactive player's ordinary triggers",
+    "placing active player's ability-triggered triggers",
+    "placing nonactive player's ability-triggered triggers",
+)
+
+
+def _frame_decision(kind: int, decision: int) -> str:
+    if kind == 6:
+        return _enum(_OBLIGATIONS, decision)
+    if kind in (7, 8):
+        return _enum(_TRIGGER_CLASSES, decision)
+    if kind == 9:
+        return _enum(_PLACEMENT_GROUPS, decision)
+    raise TextEncodingError(f"frame kind {kind} carries no decision")
 
 
 def _keywords(value: Keywords | managym.Keywords) -> str:
@@ -228,6 +276,41 @@ def _mana(cost: ManaCost | managym.ManaCost | None) -> str:
     return (symbols or "{0}") + (
         " (restricted spending)" if getattr(cost, "spend_on_lesson", False) else ""
     )
+
+
+def _turn_history(history: managym.PlayerTurnHistory) -> str:
+    """What a player has done this turn, or empty when nothing yet."""
+    count = history.permanents_sacrificed
+    return f"sacrificed {count} permanents" if count else ""
+
+
+def effect_phrase(effect: managym.ContinuousEffect) -> str:
+    """What one continuous-effect record does, in the words Academy shows."""
+    modification = effect.modification
+    if modification == "ModifyPt":
+        return f"{effect.power:+d}/{effect.toughness:+d}"
+    if modification == "SetBasePt":
+        power = "unchanged" if effect.power is None else effect.power
+        toughness = "unchanged" if effect.toughness is None else effect.toughness
+        return f"base power/toughness {power}/{toughness}"
+    if modification == "AddKeywords":
+        return ", ".join(keyword.replace("_", " ") for keyword in effect.keywords)
+    if modification == "AddSubtypes":
+        return "is also " + ", ".join(effect.subtypes)
+    phrases = {
+        "BecomeArtifactCreature": "is an artifact creature",
+        "Nonlegendary": "isn't legendary",
+        "LoseAllAbilities": "loses all abilities",
+        "Firebending": f"firebending {effect.amount}",
+        "CantBeBlocked": "can't be blocked",
+        "ExileIfWouldDie": "exiled instead if it would die",
+        "KeepUnspentMana": f"keeps unspent {(effect.color or '').lower()} mana",
+        "NoMaximumHandSize": "no maximum hand size",
+    }
+    try:
+        return phrases[modification]
+    except KeyError as error:
+        raise TextEncodingError(f"unknown modification {modification}") from error
 
 
 class _Renderer:
@@ -400,28 +483,7 @@ class _Renderer:
         if relation.active_clause is not None:
             details.append(f"active target clause {relation.active_clause + 1}")
         if relation.decision:
-            details.append(
-                _enum(
-                    (
-                        "none",
-                        "resolving payment",
-                        "mana activation cost",
-                        "mana output",
-                        "sacrifice",
-                        "select milled",
-                        "search",
-                        "optional discard and draw",
-                        "scry",
-                        "inspect and select",
-                        "mode",
-                        "Learn",
-                        "discard",
-                        "legend rule",
-                        "order triggers",
-                    ),
-                    relation.decision,
-                )
-            )
+            details.append(_frame_decision(relation.kind, relation.decision))
         if relation.cost is not None:
             details.append(
                 "remaining cost "
@@ -516,6 +578,12 @@ class _Renderer:
                 )
             if player.no_maximum_hand_size:
                 lines.append("Has no maximum hand size for the rest of the game.")
+            if player.keeps_red_mana:
+                lines.append("Keeps unspent red mana until end of turn.")
+            if history := _turn_history(player.turn_history):
+                lines.append(f"This turn: {history}.")
+            for effect in player.effects:
+                lines.append(f"Effect: {self._effect(effect)}.")
             for label, quantities in (
                 ("Publicly known hand minima", player.known_hand),
                 ("Initial sideboard", player.sideboard_counts),
@@ -624,12 +692,58 @@ class _Renderer:
                 )
             if keywords := _keywords(permanent.keywords):
                 optional += f"; effective keywords {keywords}"
+            optional += self._characteristics(permanent)
             lines.append(
                 f"{self.name(permanent.id)} [{self.definition(permanent.registry_key)}]: controller {self.name(permanent.controller_id)}; power/toughness {permanent.power}/{permanent.toughness}; damage {permanent.damage}; tapped {_yes(permanent.tapped)}; summoning sick {_yes(permanent.is_summoning_sick)}; +1/+1 counters {permanent.plus1_counters}; animated {_yes(permanent.is_animated)}; holds exile link {_yes(permanent.has_exile_link)}; cannot be blocked this turn {_yes(permanent.cant_be_blocked_this_turn)}; exile if dies this turn {_yes(permanent.exile_if_dies_this_turn)}{optional}; unlisted effective keywords false."
             )
         if not state.agent_permanents and not state.opponent_permanents:
             lines.append("Empty.")
         return lines
+
+    def _characteristics(self, permanent: managym.Permanent) -> str:
+        """Effect-derived state, rendered only when present so other text is unchanged."""
+        parts = [
+            f"{kind.replace('_', ' ')} counters {count}"
+            for kind, count in sorted(permanent.counters.items())
+            if count
+        ]
+        if permanent.attached_to is not None:
+            parts.append(f"attached to {self.name(permanent.attached_to)}")
+        if permanent.name is not None:
+            parts.append(f"name set to {permanent.name}")
+        if permanent.creature_types is not None:
+            types = ", ".join(permanent.creature_types) or "none"
+            parts.append(f"creature types set to {types}")
+        if permanent.is_granted_land:
+            parts.append("land through an effect")
+        if permanent.blocking is not None:
+            parts.append(f"blocking {self.name(permanent.blocking)}")
+        if permanent.abilities_lost:
+            parts.append("has lost all abilities")
+        if permanent.used_abilities:
+            used = ", ".join(str(index + 1) for index in permanent.used_abilities)
+            parts.append(f"used-up abilities {used}")
+        if permanent.copy is not None:
+            parts.append(self._copy(permanent.copy))
+        parts.extend(f"effect {self._effect(effect)}" for effect in permanent.effects)
+        return "".join(f"; {part}" for part in parts)
+
+    def _copy(self, copy: managym.CopyEffect) -> str:
+        """A copy effect: what it copies, and the exceptions in its copiable values."""
+        exceptions = " and ".join(effect_phrase(effect) for effect in copy.exceptions)
+        return f"copy of {self.definition(copy.registry_key)}" + (
+            f", except {exceptions}" if exceptions else ""
+        )
+
+    def _effect(self, effect: managym.ContinuousEffect) -> str:
+        """One continuous-effect record: how long, what, and its source."""
+        until = "until end of turn: " if effect.duration == "EndOfTurn" else ""
+        source = (
+            f" (from {self.definition(effect.source_registry_key)})"
+            if effect.source_registry_key is not None
+            else ""
+        )
+        return f"{until}{effect_phrase(effect)}{source}"
 
     def _definitions_lines(self) -> list[str]:
         capture = self.capture
@@ -736,6 +850,12 @@ class _Renderer:
             if item.description:
                 details.append(item.description)
             details.extend(_selectors(item.chosen_mode, item.ability_index))
+            if item.x:
+                details.append(f"X = {item.x}")
+            if item.granted_keywords is not None and (
+                granted := _keywords(item.granted_keywords)
+            ):
+                details.append(f"granted keywords {granted}")
             if targets:
                 details.append("targets " + ", ".join(targets))
             lines.append(

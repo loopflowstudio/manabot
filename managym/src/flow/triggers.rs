@@ -11,6 +11,7 @@ use crate::{
     },
     state::{
         ability::{Ability, Effect, TargetSpec, TriggerCondition, TriggerSubject},
+        card::CardType,
         game_object::{CardId, ObjectLki, ObjectRef, PermanentId, PlayerId, Target},
         mana::{Color, Mana},
         stack_object::{StackObject, TriggeredAbilityOnStack},
@@ -21,7 +22,7 @@ use crate::{
 /// Exact battlefield source facts used while matching one or more committed
 /// events. SBA batches reuse one sorted snapshot so simultaneous departures
 /// see the same pre-batch abilities (CR 603.6c, 704.3).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct TriggerSourceSnapshot {
     card: CardId,
     controller: PlayerId,
@@ -52,6 +53,19 @@ impl Game {
         Some(crate::state::ability::effect_target_requirements(effects))
     }
 
+    /// "Another target" excludes the exact source object.
+    fn excluded_source(
+        &self,
+        trigger: &PendingTrigger,
+        requirement: &crate::state::ability::TargetRequirement,
+    ) -> Option<PermanentId> {
+        if !requirement.another {
+            return None;
+        }
+        let source = trigger.source_ref?;
+        self.lookup_current_permanent(source).ok()
+    }
+
     pub(crate) fn choose_trigger_target(
         &mut self,
         player: PlayerId,
@@ -78,6 +92,9 @@ impl Game {
             || duplicate
             || (requirement.another && self.is_trigger_source(trigger, target))
             || !self.target_is_legal(target, &requirement.spec, player)
+            || self
+                .excluded_source(trigger, requirement)
+                .is_some_and(|id| target == Target::Permanent(id))
         {
             return Err(AgentError("illegal trigger target".into()));
         }
@@ -161,9 +178,11 @@ impl Game {
                     .iter()
                     .filter(|index| **index == trigger.requirement_index)
                     .count();
+                let source = self.excluded_source(&trigger, requirement);
                 let legal: Vec<_> = self
                     .legal_targets_for_spec(&requirement.spec, trigger.controller)
                     .into_iter()
+                    .filter(|target| source.is_none_or(|id| *target != Target::Permanent(id)))
                     .filter(|target| {
                         !(requirement.another && self.is_trigger_source(&trigger, *target))
                     })
@@ -266,6 +285,7 @@ impl Game {
     fn place_triggered_ability_on_stack(&mut self, trigger: PendingTrigger) {
         let source_definition_id = trigger
             .source_lki
+            .as_ref()
             .map(|lki| lki.definition_id)
             .unwrap_or(self.state.cards[trigger.source_card].definition_id);
         let id = self.state.id_gen.next_id();
@@ -383,7 +403,7 @@ impl Game {
     fn check_triggers_for_event(&mut self, event: &GameEvent, sources: &[TriggerSourceSnapshot]) {
         self.granted_firebending_triggers(event);
         let mut fired = Vec::new();
-        for source in sources {
+        for source in sources.iter().filter(|source| !source.lki.abilities_lost) {
             for (ability_index, ability) in
                 self.state.cards[source.card].abilities.iter().enumerate()
             {
@@ -402,7 +422,12 @@ impl Game {
                         event,
                     )
                 {
-                    fired.push((source.card, ability_index, source.controller, source.lki));
+                    fired.push((
+                        source.card,
+                        ability_index,
+                        source.controller,
+                        source.lki.clone(),
+                    ));
                 }
             }
         }
@@ -429,8 +454,11 @@ impl Game {
                 .any(|effect| {
                     matches!(
                         effect,
-                        crate::state::ability::Effect::ModifyTriggeringPermanent { .. }
-                            | crate::state::ability::Effect::BuffTriggeringPermanentValue { .. }
+                        crate::state::ability::Effect::PutCountersOnTriggeringPermanent { .. }
+                            | crate::state::ability::Effect::ApplyContinuous {
+                                affected: crate::state::ability::AffectedSpec::TriggeringPermanent,
+                                ..
+                            }
                     )
                 }) {
                 match event {
@@ -477,14 +505,11 @@ impl Game {
             return;
         };
         for attacker in attackers.clone() {
+            let amount = self.granted_firebending(attacker);
             let Some(permanent) = self.state.permanents[attacker].as_ref() else {
                 continue;
             };
-            let (amount, controller, card) = (
-                permanent.firebending_this_turn,
-                permanent.controller,
-                permanent.card,
-            );
+            let (controller, card) = (permanent.controller, permanent.card);
             if amount == 0 {
                 continue;
             }
@@ -571,7 +596,8 @@ impl Game {
                     .object_lki
                     .iter()
                     .rev()
-                    .find_map(|(object_ref, lki)| (object_ref.entity.0 == card.0).then_some(*lki));
+                    .find(|(object_ref, _)| object_ref.entity.0 == card.0)
+                    .map(|(_, lki)| lki.clone());
                 if let Some(lki) = source_lki {
                     sources.push(TriggerSourceSnapshot {
                         card: *card,
@@ -784,6 +810,12 @@ impl Game {
                 GameEvent::StepStarted {
                     step: StepKind::Upkeep,
                 },
+            )
+            | (
+                TriggerCondition::BeginningOfYourEndStep,
+                GameEvent::StepStarted {
+                    step: StepKind::End,
+                },
             ) => self.active_player() == source_controller,
             (
                 TriggerCondition::YouDrawNthCardThisTurn { n },
@@ -806,8 +838,8 @@ impl Game {
         moved_controller: PlayerId,
     ) -> bool {
         let animated = self.state.card_to_permanent[moved_card]
-            .and_then(|id| self.state.permanents[id].as_ref())
-            .map(|p| p.animated)
+            .filter(|id| self.state.permanents[*id].is_some())
+            .map(|id| self.permanent_is_animated(id))
             .unwrap_or_else(|| {
                 self.state
                     .object_lki
@@ -820,7 +852,7 @@ impl Game {
             predicate.matches(
                 &self.state.cards[moved_card],
                 self.state.cards[moved_card].power.unwrap_or(0),
-                animated,
+                if animated { &[CardType::Creature] } else { &[] },
             )
         };
         match subject {

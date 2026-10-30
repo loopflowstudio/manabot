@@ -600,6 +600,97 @@
         "resulting_frame_hash"
       ]
     },
+    "ContinuousEffectView": {
+      "description": "One continuous-effect record on a permanent or player (CR 611, 613).",
+      "type": "object",
+      "properties": {
+        "amount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "color": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "duration": {
+          "description": "`EndOfTurn` or `Indefinite`.",
+          "type": "string"
+        },
+        "keywords": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "modification": {
+          "description": "The engine's `Modification` variant.",
+          "type": "string"
+        },
+        "power": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        },
+        "source": {
+          "description": "The source's printed name.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "subtypes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "timestamp": {
+          "description": "Timestamp order (CR 613.7).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "toughness": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "int32"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "modification",
+        "duration",
+        "timestamp"
+      ]
+    },
+    "CopyView": {
+      "description": "A copy effect: the printed card it copies and the exceptions that are\npart of its copiable values (CR 707.9b), in application order.",
+      "type": "object",
+      "properties": {
+        "exceptions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ContinuousEffectView"
+          }
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ]
+    },
     "DecisionContextView": {
       "description": "Read-only explanation of the current native continuation. This adds no\nchoices, forecasts, or local transaction state to the experience contract.",
       "type": "object",
@@ -1116,20 +1207,83 @@
     "LegacyPermanentView": {
       "type": "object",
       "properties": {
+        "abilities_lost": {
+          "description": "It has lost all abilities.",
+          "type": "boolean"
+        },
+        "attached_to": {
+          "description": "The permanent this Aura or Equipment is attached to.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "attacking": {
+          "description": "Attacking in the current combat.",
+          "type": "boolean"
+        },
         "base_power": {
           "$ref": "#/$defs/RequiredNullable5"
         },
         "base_toughness": {
           "$ref": "#/$defs/RequiredNullable5"
         },
+        "blocking": {
+          "description": "The attacking permanent this one blocks.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
         "controller_id": {
           "type": "integer",
           "format": "uint32",
           "minimum": 0
         },
+        "copy_of": {
+          "description": "The copy effect that made it a copy (CR 707.2).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CopyView"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "counters": {
+          "description": "Counters other than +1/+1, by kind (`stun`, `fire`, `double_strike`).",
+          "type": "object",
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
+        "creature_types": {
+          "description": "Creature types set by an effect (Honest Work); `name` is then the set name.",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "damage": {
           "type": "integer",
           "format": "int32"
+        },
+        "effects": {
+          "description": "Continuous effects on it, in timestamp order.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ContinuousEffectView"
+          }
         },
         "exhausted_abilities": {
           "description": "Exhaust abilities this object has used (CR 702.177a).",
@@ -1150,6 +1304,10 @@
           "type": "integer",
           "format": "uint32",
           "minimum": 0
+        },
+        "is_granted_land": {
+          "description": "A land only through an effect.",
+          "type": "boolean"
         },
         "is_token": {
           "type": [
@@ -1201,6 +1359,15 @@
               "type": "null"
             }
           ]
+        },
+        "used_abilities": {
+          "description": "Activated abilities (indices in its ability list) whose limit is spent.",
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
         }
       },
       "additionalProperties": false,
@@ -1233,6 +1400,13 @@
             "null"
           ],
           "format": "int32"
+        },
+        "effects": {
+          "description": "Continuous effects on this player, in timestamp order.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ContinuousEffectView"
+          }
         },
         "exile": {
           "type": "array",
@@ -1284,6 +1458,10 @@
           "type": "boolean"
         },
         "is_agent": {
+          "type": "boolean"
+        },
+        "keeps_red_mana": {
+          "description": "Unspent red mana stays until end of turn.",
           "type": "boolean"
         },
         "known_hand": {
@@ -1370,6 +1548,10 @@
           "items": {
             "$ref": "#/$defs/LegacyCardView"
           }
+        },
+        "turn_history": {
+          "description": "What this player has done this turn.",
+          "$ref": "#/$defs/PlayerTurnHistory"
         },
         "zone_counts": {
           "type": "object",
@@ -1510,6 +1692,19 @@
         "pay",
         "special"
       ]
+    },
+    "PlayerTurnHistory": {
+      "description": "What one player has done this turn, for conditions that read turn history\n(\"if you sacrificed a permanent this turn\"). The owner of every such fact:\nthe turn reset, the state hash and the policy's player row all read this\nstruct.",
+      "type": "object",
+      "properties": {
+        "permanents_sacrificed": {
+          "description": "Permanents this player sacrificed (CR 701.21).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
     },
     "PresentationEvent": {
       "type": "object",
@@ -2051,6 +2246,15 @@
           "type": "string"
         },
         "source_permanent": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint32",
+          "minimum": 0
+        },
+        "x": {
+          "description": "The announced value of X, when one was announced above zero.",
           "type": [
             "integer",
             "null"

@@ -16,6 +16,7 @@ from manabot.env.observation import (
 )
 from manabot.infra.config import ObservationConfig
 from manabot.semantic.text_observation import (
+    _OBLIGATIONS,
     RepresentationOverflow,
     TextDecision,
     TextEncodingError,
@@ -26,6 +27,10 @@ from manabot.semantic.text_observation import (
 )
 from manabot.verify.text_observation import collision_branches, priority_root, run_demo
 import managym
+
+
+def test_every_native_decision_code_has_a_label() -> None:
+    assert len(_OBLIGATIONS) == managym.MAX_DECISION_CODE + 1
 
 
 def test_native_decision_demo_retains_all_alternatives_and_collision(
@@ -287,3 +292,428 @@ def test_once_each_turn_use_reaches_text_and_both_encoders() -> None:
     native = env.encode_observation(observation, policy_input_version=5)
     for key, value in encoded.items():
         np.testing.assert_array_equal(native[key], value, err_msg=key)
+
+
+def _redigest(payload: dict[str, object]) -> str:
+    payload.pop("digest")
+    payload["digest"] = sha256(
+        json.dumps(
+            payload, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+        ).encode()
+    ).hexdigest()
+    return json.dumps(payload)
+
+
+def test_effect_derived_characteristics_appear_only_when_present() -> None:
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    decision = capture_text_decision(env)
+    payload = json.loads(decision.capture_json)
+    mountain, ogre = payload["observation"]["viewer_state"]["agent_permanents"]
+    assert render_decision(_redigest(json.loads(decision.capture_json))).text == (
+        decision.text
+    )
+    ogre |= {"counters": {"stun": 2}}
+    mountain |= {
+        "attached_to": ogre["id"],
+        "name": "Citizen",
+        "creature_types": ["Citizen"],
+        "is_granted_land": True,
+    }
+    text = render_decision(_redigest(payload)).text
+    before = decision.text.splitlines()
+    after = text.splitlines()
+    changed = [(old, new) for old, new in zip(before, after) if old != new]
+    assert len(before) == len(after) and len(changed) == 2
+    (mountain_before, mountain_after), (ogre_before, ogre_after) = changed
+    assert mountain_after == mountain_before.replace(
+        "; unlisted effective keywords false.",
+        "; attached to C2 (Gray Ogre); name set to Citizen; creature types set to"
+        " Citizen; land through an effect; unlisted effective keywords false.",
+    )
+    assert ogre_after == ogre_before.replace(
+        "; unlisted effective keywords false.",
+        "; stun counters 2; unlisted effective keywords false.",
+    )
+
+
+def test_stack_text_states_announced_x_only_when_present() -> None:
+    _, env = collision_branches()
+    submit_response(env, capture_text_decision(env), "A0")
+    decision = capture_text_decision(env)
+    assert "X = " not in decision.text
+    payload = json.loads(decision.capture_json)
+    payload["observation"]["viewer_state"]["stack_objects"][0]["x"] = 3
+    stack = render_decision(_redigest(payload)).text.split(
+        "Stack (native order, top to bottom):\n", 1
+    )[1]
+    assert stack.startswith("S1: ") and "; X = 3" in stack.split("\n", 1)[0]
+
+
+def test_stack_text_states_granted_spell_keywords_only_when_present() -> None:
+    _, env = collision_branches()
+    submit_response(env, capture_text_decision(env), "A0")
+    decision = capture_text_decision(env)
+    assert "granted keywords" not in decision.text
+    payload = json.loads(decision.capture_json)
+    keywords = {name: name == "lifelink" for name in _KEYWORDS}
+    payload["observation"]["viewer_state"]["stack_objects"][0]["granted_keywords"] = (
+        keywords
+    )
+    stack = render_decision(_redigest(payload)).text.split(
+        "Stack (native order, top to bottom):\n", 1
+    )[1]
+    assert "; granted keywords lifelink" in stack.split("\n", 1)[0]
+
+
+def test_face_down_card_text_appears_only_when_present() -> None:
+    env = priority_root(("Gray Ogre",), ())
+    decision = capture_text_decision(env)
+    assert "face down" not in decision.text
+    payload = json.loads(decision.capture_json)
+    payload["observation"]["viewer_state"]["agent_cards"][0]["face_down"] = True
+    text = render_decision(_redigest(payload)).text
+    changed = [
+        (old, new)
+        for old, new in zip(decision.text.splitlines(), text.splitlines())
+        if old != new
+    ]
+    assert len(changed) == 1 and "face down" in changed[0][1]
+
+
+def _card_line(text: str, alias: str) -> str:
+    return next(line for line in text.splitlines() if line.startswith(f"{alias} ("))
+
+
+def _foretell(env: managym.Env) -> None:
+    decision = capture_text_decision(env)
+    foretell = next(a for a in decision.actions if "Foretell" in a.description)
+    submit_response(env, decision, foretell.reference)
+
+
+def test_foretell_is_an_ability_offer_naming_the_card() -> None:
+    env = priority_root(("Sozin's Comet",), ("Mountain",) * 6)
+    actions = capture_text_decision(env).text.split("Legal actions:\n", 1)[1]
+    assert actions.splitlines() == [
+        "A0 — Cast C1 (Sozin's Comet).",
+        "A1 — Activate ability of C1 (Sozin's Comet). Native description:"
+        " Foretell Sozin's Comet.",
+        "A2 — Pass priority.",
+    ]
+    _foretell(env)
+    decision = capture_text_decision(env)
+    assert "; zone exile; " in _card_line(decision.text, "C1")
+    assert "; foretold, face down" in _card_line(decision.text, "C1")
+    assert [a.description for a in decision.actions] == ["Pass priority"]
+
+
+def test_a_foretold_card_is_cast_from_exile_on_a_later_turn() -> None:
+    env = priority_root(("Sozin's Comet",), ("Mountain",) * 6)
+    _foretell(env)
+    for _ in range(200):
+        decision = capture_text_decision(env)
+        if (
+            "Turn 3. Phase: first main." in decision.text
+            and "Active player: You. Acting player: You." in decision.text
+        ):
+            break
+        passing = next(
+            (a for a in decision.actions if a.description == "Pass priority"),
+            decision.actions[0],
+        )
+        submit_response(env, decision, passing.reference)
+    else:
+        raise AssertionError("the owner's next main phase was not reached")
+    cast = next(a for a in decision.actions if a.description.startswith("Cast "))
+    alias = cast.description.removeprefix("Cast ").split(" ", 1)[0]
+    assert cast.description == f"Cast {alias} (Sozin's Comet)"
+    line = _card_line(decision.text, alias)
+    assert "; zone exile; " in line and "; foretold, face down" in line
+
+
+def test_an_ally_is_cast_from_the_visible_top_of_the_library() -> None:
+    env = priority_root((), ("Hakoda, Selfless Commander",) + ("Plains",) * 4)
+    decision = capture_text_decision(env)
+    assert decision.actions[0].description == "Cast C1 (Hakoda, Selfless Commander)"
+    assert "; zone library; " in _card_line(decision.text, "C1")
+    submit_response(env, decision, decision.actions[0].reference)
+    stack = capture_text_decision(env).text.split(
+        "Stack (native order, top to bottom):\n", 1
+    )[1]
+    assert stack.startswith("S1: spell [D1]; controller You; source C2 (Hakoda,")
+
+
+_KEYWORDS = (
+    "flying",
+    "reach",
+    "haste",
+    "flash",
+    "vigilance",
+    "trample",
+    "first_strike",
+    "double_strike",
+    "deathtouch",
+    "lifelink",
+    "defender",
+    "menace",
+    "hexproof",
+    "indestructible",
+)
+
+# Every observed field and the LLM text that states it, or why none is needed.
+# A field added to the native observation fails here until it is listed.
+_TEXT_FIELDS: dict[type, dict[str, str]] = {
+    managym.Permanent: {
+        "id": "the permanent's alias",
+        "registry_key": "[definition]",
+        "controller_id": "controller",
+        "tapped": "tapped",
+        "damage": "damage",
+        "is_summoning_sick": "summoning sick",
+        "plus1_counters": "+1/+1 counters",
+        "cant_be_blocked_this_turn": "cannot be blocked this turn",
+        "power": "power/toughness",
+        "toughness": "power/toughness",
+        "is_animated": "animated",
+        "has_exile_link": "holds exile link",
+        "exile_if_dies_this_turn": "exile if dies this turn",
+        "temp_subtypes": "temporary subtypes",
+        "keywords": "effective keywords",
+        "counters": "<kind> counters",
+        "effects": "effect",
+        "copy": "copy of D<n>, except ...",
+        "timestamp": "effects are listed in timestamp order; a permanent's "
+        "static abilities apply in its battlefield order",
+        "attached_to": "attached to",
+        "name": "name set to",
+        "creature_types": "creature types set to",
+        "is_granted_land": "land through an effect",
+        "attacking": "attacking",
+        "exhausted_abilities": "exhaust abilities used",
+        "once_each_turn_used": "once-each-turn abilities used this turn",
+        "granted_firebending": "firebending",
+        "blocking": "blocking",
+        "abilities_lost": "has lost all abilities",
+        "used_abilities": "used-up abilities",
+    },
+    managym.Card: {
+        "id": "the card's alias",
+        "registry_key": "[definition]",
+        "name": "the definition line",
+        "text_box": "Rules:",
+        "owner_id": "owner",
+        "zone": "zone",
+        "power": "card power/toughness",
+        "toughness": "card power/toughness",
+        "mana_cost": "cost",
+        "card_types": "type flags",
+        "keywords": "printed keywords",
+        "is_token": "token",
+        "is_legendary": "legendary",
+        "is_ally": "Ally",
+        "is_lesson": "Lesson",
+        "ward_cost": "ward mana value",
+        "kicker_cost": "kicker mana value",
+        "face_down": "face down",
+        "cast_permission": "may be played from exile by",
+        "x": "announced X",
+    },
+    managym.StackObject: {
+        "stack_object_id": "S<n>",
+        "kind": "spell/activated ability/triggered ability",
+        "controller_id": "controller",
+        "source_card_registry_key": "[definition]",
+        "source_permanent_id": "source",
+        "description": "the ability text",
+        "chosen_mode": "mode",
+        "ability_index": "ability",
+        "targets": "targets",
+        "x": "X =",
+        "granted_keywords": "granted keywords",
+    },
+    managym.Player: {
+        "id": "the player's alias",
+        "player_index": "seat label",
+        "is_agent": "the viewer's own section",
+        "is_active": "active player",
+        "life": "life",
+        "zone_counts": "zone counts",
+        "graveyard_lessons": "graveyard Lessons",
+        "combat_mana": "combat mana",
+        "mana": "mana pool",
+        "lesson_mana": "Restricted mana",
+        "known_hand": "known hand",
+        "sideboard_counts": "Initial sideboard",
+        "remaining_sideboard_counts": "Owned outside-game candidates",
+        "keeps_red_mana": "Keeps unspent red mana",
+        "turn_history": "This turn:",
+        "no_maximum_hand_size": "Has no maximum hand size",
+        "restricted_mana": "Restricted mana for",
+        "hand_only_until": "Can cast spells only from hand",
+        "effects": "Effect:",
+    },
+    managym.ContinuousEffect: {
+        "modification": "the effect phrase",
+        "power": "+P/+T or base power/toughness",
+        "toughness": "+P/+T or base power/toughness",
+        "amount": "firebending N",
+        "keywords": "the keywords gained",
+        "subtypes": "is also",
+        "color": "keeps unspent <color> mana",
+        "duration": "until end of turn:",
+        "source_registry_key": "(from D<n>)",
+        "source_name": "the definition line of (from D<n>)",
+        "timestamp": "listed in timestamp order",
+    },
+    managym.CopyEffect: {
+        "registry_key": "copy of D<n>",
+        "name": "the definition line of D<n>",
+        "exceptions": "except <effect phrase>",
+    },
+    managym.PlayerTurnHistory: {
+        "permanents_sacrificed": "sacrificed N permanents",
+    },
+    managym.Turn: {
+        "turn_number": "Turn",
+        "phase": "Phase",
+        "step": "Step",
+        "active_player_id": "active player",
+        "agent_player_id": "the viewer's own section",
+    },
+}
+
+
+@pytest.mark.parametrize("kind", list(_TEXT_FIELDS), ids=lambda kind: kind.__name__)
+def test_every_observed_field_has_llm_text(kind: type) -> None:
+    observed = {name for name in dir(kind) if not name.startswith("_")}
+    assert observed == set(_TEXT_FIELDS[kind])
+
+
+def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    decision = capture_text_decision(env)
+    payload = json.loads(decision.capture_json)
+    state = payload["observation"]["viewer_state"]
+    mountain, ogre = state["agent_permanents"]
+    ogre |= {"attacking": True, "abilities_lost": True, "used_abilities": [0]}
+    mountain |= {"blocking": ogre["id"]}
+    state["agent"] |= {"keeps_red_mana": True, "no_maximum_hand_size": True}
+    text = render_decision(_redigest(payload)).text
+    assert "; blocking C2 (Gray Ogre);" in text
+    assert "; attacking;" in text
+    assert "; has lost all abilities; used-up abilities 1;" in text
+    assert "Keeps unspent red mana until end of turn." in text
+    assert "Has no maximum hand size for the rest of the game." in text
+
+
+def test_continuous_effect_records_are_stated_in_order_with_duration() -> None:
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    decision = capture_text_decision(env)
+    payload = json.loads(decision.capture_json)
+    state = payload["observation"]["viewer_state"]
+    _, ogre = state["agent_permanents"]
+    ogre["effects"] = [
+        {"modification": "LoseAllAbilities", "duration": "EndOfTurn", "timestamp": 90},
+        {
+            "modification": "ModifyPt",
+            "power": 2,
+            "toughness": 0,
+            "duration": "EndOfTurn",
+            "timestamp": 91,
+        },
+        {
+            "modification": "AddKeywords",
+            "keywords": ["flying", "first_strike"],
+            "duration": "EndOfTurn",
+            "timestamp": 92,
+        },
+        {
+            "modification": "BecomeArtifactCreature",
+            "duration": "Indefinite",
+            "timestamp": 93,
+        },
+    ]
+    state["agent"]["effects"] = [
+        {
+            "modification": "KeepUnspentMana",
+            "color": "Red",
+            "duration": "EndOfTurn",
+            "timestamp": 94,
+        }
+    ]
+    text = render_decision(_redigest(payload)).text
+    assert (
+        "; effect until end of turn: loses all abilities"
+        "; effect until end of turn: +2/+0"
+        "; effect until end of turn: flying, first strike"
+        "; effect is an artifact creature;" in text
+    )
+    assert "Effect: until end of turn: keeps unspent red mana." in text
+    for absent in (
+        "attacking",
+        "blocking",
+        "lost all",
+        "used-up",
+        "Keeps",
+        "hand size",
+    ):
+        assert absent not in decision.text
+
+
+def test_a_copy_and_sacrifices_this_turn_are_stated() -> None:
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    decision = capture_text_decision(env)
+    payload = json.loads(decision.capture_json)
+    state = payload["observation"]["viewer_state"]
+    _, ogre = state["agent_permanents"]
+    ogre["copy"] = {
+        "registry_key": ogre["registry_key"],
+        "name": "Gray Ogre",
+        "exceptions": [
+            {
+                "modification": "Nonlegendary",
+                "duration": "Indefinite",
+                "timestamp": ogre["id"],
+            }
+        ],
+    }
+    state["agent"]["turn_history"] = {"permanents_sacrificed": 2}
+    text = render_decision(_redigest(payload)).text
+    assert "; copy of D" in text and ", except isn't legendary" in text
+    assert "This turn: sacrificed 2 permanents." in text
+    assert "copy of" not in decision.text
+    assert "This turn:" not in decision.text
+
+
+def test_joo_dee_surveil_and_copy_play_through_the_text_decision() -> None:
+    """A surveil obligation (code 20) captures as text; resolving Joo Dee
+    leaves a token stated as a copy and one sacrifice this turn."""
+    env = priority_root((), ("Swamp", "Joo Dee, One of Many"))
+    decision = capture_text_decision(env)
+    activate = next(
+        a
+        for a in decision.actions
+        if "Activate" in a.description and "Joo Dee" in a.description
+    )
+    submit_response(env, decision, activate.reference)
+    for _ in range(8):
+        decision = capture_text_decision(env)
+        if "Stage: surveil." in decision.text:
+            break
+        submit_response(env, decision, decision.actions[0].reference)
+    else:
+        raise AssertionError("surveil decision not reached")
+    assert "suspended decision" in decision.text and "; surveil" in decision.text
+    keep = next(a for a in decision.actions if "Keep on top" in a.description)
+    submit_response(env, decision, keep.reference)
+
+    decision = capture_text_decision(env)
+    source = decision.text.split("Source: ", 1)[1].split(" ", 1)[0]
+    original = next(
+        a
+        for a in decision.actions
+        if f"Select {source} " in a.description and "Sacrifice" in a.description
+    )
+    submit_response(env, decision, original.reference)
+    text = capture_text_decision(env).text
+    assert "; copy of D" in text
+    assert "This turn: sacrificed 1 permanents." in text

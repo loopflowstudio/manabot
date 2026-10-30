@@ -7,7 +7,7 @@ use managym::{
     state::zone::ZoneType,
 };
 
-use crate::support::game::*;
+use crate::support::{game::*, inspect::pt_modifications};
 
 fn setup_shivan_with_mountains(seed: u64, mountain_count: usize) -> Scenario {
     let mut s = Scenario::new(
@@ -58,17 +58,11 @@ fn cr_602_activation_uses_stack_and_resolves_after_passes() {
     assert_eq!(s.zone_size(0, ZoneType::Stack), 0);
 
     let shivan = s.battlefield_permanents_named(0, "Shivan Dragon")[0];
-    let base_temp_power = s.game().state.permanents[shivan]
-        .as_ref()
-        .expect("shivan should exist")
-        .temp_power;
+    let base_temp_power = pt_modifications(&s, shivan).0;
     s.pass_priority();
     s.pass_priority();
 
-    let boosted_temp_power = s.game().state.permanents[shivan]
-        .as_ref()
-        .expect("shivan should exist")
-        .temp_power;
+    let boosted_temp_power = pt_modifications(&s, shivan).0;
     assert_eq!(boosted_temp_power, base_temp_power + 1);
 }
 
@@ -96,10 +90,7 @@ fn cr_602_multiple_activations_stack_and_accumulate() {
     s.pass_priority();
     s.pass_priority();
 
-    let temp_power = s.game().state.permanents[shivan]
-        .as_ref()
-        .expect("shivan should exist")
-        .temp_power;
+    let temp_power = pt_modifications(&s, shivan).0;
     assert_eq!(temp_power, 2);
 }
 
@@ -112,22 +103,10 @@ fn cr_602_shivan_buff_expires_in_cleanup() {
     assert!(s.take_action_by_type(ActionType::PriorityActivateAbility));
     s.pass_priority();
     s.pass_priority();
-    assert_eq!(
-        s.game().state.permanents[shivan]
-            .as_ref()
-            .expect("shivan should exist")
-            .temp_power,
-        1
-    );
+    assert_eq!(pt_modifications(&s, shivan).0, 1);
 
     s.advance_to_active_step(0, StepKind::Cleanup);
-    assert_eq!(
-        s.game().state.permanents[shivan]
-            .as_ref()
-            .expect("shivan should exist")
-            .temp_power,
-        0
-    );
+    assert_eq!(pt_modifications(&s, shivan).0, 0);
 }
 
 /// If the source leaves before resolution, the activation resolves with no effect.
@@ -196,7 +175,10 @@ fn cr_602_policy_preserves_ability_index_and_resolution() {
                 encode, ObservationEncoderConfig, ACTION_ABILITY_INDEX, ACTION_DIM,
             },
         },
-        state::ability::Effect,
+        state::{
+            ability::{AffectedSpec, Effect},
+            effect::Modification,
+        },
     };
     for chosen in 0..2 {
         let mut s = setup_shivan_with_mountains(60220, 1);
@@ -204,10 +186,10 @@ fn cr_602_policy_preserves_ability_index_and_resolution() {
         let card = s.game().state.permanents[shivan].as_ref().unwrap().card;
         // Detach this scenario's printed definition; no production card is added.
         let mut second = s.game().state.cards[card].activated_abilities[0].clone();
-        second.effects = vec![Effect::ModifyUntilEot {
-            power_delta: 0,
-            toughness_delta: 1,
-        }];
+        second.effects = vec![Effect::until_end_of_turn(
+            AffectedSpec::Source,
+            Modification::pump(0, 1),
+        )];
         s.game_mut().state.cards[card]
             .activated_abilities
             .push(second);
@@ -239,9 +221,8 @@ fn cr_602_policy_preserves_ability_index_and_resolution() {
         s.step_action(indices[chosen]);
         s.pass_priority();
         s.pass_priority();
-        let permanent = s.game().state.permanents[shivan].as_ref().unwrap();
         assert_eq!(
-            (permanent.temp_power, permanent.temp_toughness),
+            pt_modifications(&s, shivan),
             if chosen == 0 { (1, 0) } else { (0, 1) }
         );
     }

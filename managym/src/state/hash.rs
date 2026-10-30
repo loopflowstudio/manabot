@@ -20,7 +20,7 @@ use crate::{
 ///
 /// Increment this before changing field inclusion, field order, ordering rules,
 /// serialization, digest algorithm, or the meaning of an encoded identity.
-pub const MATCH_STATE_HASH_VERSION: u32 = 10;
+pub const MATCH_STATE_HASH_VERSION: u32 = 11;
 
 /// A versioned BLAKE3 digest of canonical mutable match state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -53,6 +53,8 @@ impl fmt::Display for MatchStateHash {
 struct CanonicalCard {
     /// Copied tokens can differ from their registered source definition.
     copied_characteristics: Option<super::card::CardDefinition>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    copy: Option<super::effect::CopyEffect>,
     object_id: ObjectId,
     definition_id: CardDefId,
     owner: PlayerId,
@@ -65,6 +67,9 @@ struct CanonicalTurn {
     lands_played: u32,
     spells_cast: [Vec<crate::state::game_object::CardId>; 2],
     cards_drawn_this_turn: [u32; 2],
+    /// Omitted while empty, keeping hashes of states without history unchanged.
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    history: [crate::flow::turn::PlayerTurnHistory; 2],
     #[serde(skip_serializing_if = "Vec::is_empty")]
     ability_triggers_this_turn: Vec<(crate::state::game_object::ObjectRef, usize, u32)>,
     ability_resolutions_this_turn: Vec<(usize, usize, u32)>,
@@ -83,6 +88,7 @@ impl From<&TurnState> for CanonicalTurn {
             lands_played: turn.lands_played,
             spells_cast: turn.spells_cast.clone(),
             cards_drawn_this_turn: turn.cards_drawn_this_turn,
+            history: turn.history,
             ability_triggers_this_turn: turn
                 .ability_triggers_this_turn
                 .iter()
@@ -149,6 +155,7 @@ struct CanonicalMatchState<'a> {
     trigger_placement: &'a Option<crate::flow::trigger::TriggerPlacement>,
     delayed_triggers: &'a [crate::flow::trigger::DelayedTrigger],
     exile_links: &'a [crate::flow::trigger::ExileLink],
+    effects: &'a [crate::state::effect::ContinuousEffect],
     /// Omitted when empty, keeping hashes of states without grants unchanged.
     #[serde(skip_serializing_if = "no_cast_permissions")]
     cast_permissions: &'a crate::flow::cast_permission::CastPermissions,
@@ -186,6 +193,7 @@ impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
             trigger_placement,
             delayed_triggers,
             exile_links,
+            effects,
             cast_permissions,
             suspended_decision,
             trigger_enqueue_counter,
@@ -198,6 +206,7 @@ impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
             .iter()
             .map(|card| CanonicalCard {
                 copied_characteristics: card.is_token.then(|| (**card).clone()),
+                copy: card.copy.clone(),
                 object_id: card.id,
                 definition_id: card.definition_id,
                 owner: card.owner,
@@ -205,7 +214,7 @@ impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
             .collect();
         let object_lki = object_lki
             .iter()
-            .map(|(&object_ref, &lki)| (object_ref, lki))
+            .map(|(&object_ref, lki)| (object_ref, lki.clone()))
             .collect();
         let mut rng = rng.clone();
         let mut rng_probe = [0_u64; 8];
@@ -236,6 +245,7 @@ impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
             trigger_placement,
             delayed_triggers,
             exile_links,
+            effects,
             cast_permissions,
             suspended_decision,
             trigger_enqueue_counter: *trigger_enqueue_counter,
