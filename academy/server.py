@@ -3653,10 +3653,10 @@ def validate_decklists(payload: DeckImportInput) -> dict[str, Any]:
         }
     except ValueError as error:
         raise HTTPException(400, str(error)) from error
-    world = managym.content_pool(managym.WORLD_SETUP)
+    world = managym.world_identity()
     return {
         "admitted": True,
         "ruleset": managym.DEVELOPMENT_RULESET,
         "world_version": world["world_version"],
-        "content_digest": world["content_digest"],
+        "card_digest": world["card_digest"],
     }

@@ -21,6 +21,14 @@ class ContentPool(TypedDict):
     definitions: list[PoolDefinition]
 
 def content_pool(pack_key: str) -> ContentPool: ...
+
+class WorldIdentity(TypedDict):
+    world_version: str
+    card_digest: str
+
+def world_identity() -> WorldIdentity:
+    """The installed world's version and the digest of its cards."""
+
 def set_cards(sets: list[str]) -> list[PoolDefinition]:
     """World pool rows for cards whose key prefix is in ``sets``."""
 

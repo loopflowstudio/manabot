@@ -3822,6 +3822,18 @@ fn content_pool(py: Python<'_>, pack_key: &str) -> PyResult<PyObject> {
     Ok(out.into())
 }
 
+/// The installed world's version and card digest.
+#[cfg(feature = "python")]
+#[pyfunction]
+fn world_identity(py: Python<'_>) -> PyResult<PyObject> {
+    let identity =
+        crate::world::world_identity().map_err(|e| PyValueError::new_err(e.to_string()))?;
+    let out = PyDict::new_bound(py);
+    out.set_item("world_version", identity.world_version)?;
+    out.set_item("card_digest", identity.card_digest)?;
+    Ok(out.into())
+}
+
 /// World pool rows for typed cards whose key prefix is one of `sets`, such as
 /// `["tla", "lea"]` for TLA cards with Alpha's basic lands.
 #[cfg(feature = "python")]
@@ -3968,6 +3980,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     super::deck_bindings::register(py, m)?;
     m.add_function(wrap_pyfunction!(authored_deck_keys, m)?)?;
     m.add_function(wrap_pyfunction!(content_pool, m)?)?;
+    m.add_function(wrap_pyfunction!(world_identity, m)?)?;
     m.add_function(wrap_pyfunction!(set_cards, m)?)?;
     m.add_function(wrap_pyfunction!(learning_catalog, m)?)?;
     m.add_function(wrap_pyfunction!(card_definitions_json, m)?)?;

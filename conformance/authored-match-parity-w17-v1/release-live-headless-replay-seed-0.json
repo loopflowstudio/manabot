@@ -32,7 +32,7 @@
         },
         {
           "path": "academy/server.py",
-          "sha256": "718e7ea58cd3af8287801e45a3e4a6b45f43f0cdf29449c4469a79e1d4961f54"
+          "sha256": "4f52eeadde9d9a675c0c9be6dd1e4e0d595f4dd9693f23f718d48517dc39ef48"
         },
         {
           "path": "academy/trace.py",
@@ -472,7 +472,7 @@
         },
         {
           "path": "managym/src/python/bindings.rs",
-          "sha256": "1be5c2edf8f98f069a958b0e0fb199727460a72fa365f74436aabbdb6303066d"
+          "sha256": "3ceb396f8595d6b47f0c2504c6d704c45d9550a26b6c4ff0831356a2610cb81e"
         },
         {
           "path": "managym/src/python/convert.rs",
@@ -552,7 +552,7 @@
         },
         {
           "path": "managym/src/world.rs",
-          "sha256": "c73d43e5012f514c419e254ad5e0154cb8f8995867c2b91f3e36b3954fead894"
+          "sha256": "33faeefb46f0a2e1eeeffc825830ac719a4c4b54f443fff60100610653d65e83"
         },
         {
           "path": "managym/tests/rules/structured_offers.rs",
@@ -567,7 +567,7 @@
           "sha256": "23ac765196d97fb350c0e3e2337bacc5d8e42bd6c47edb7999fb0907d32bfa8d"
         }
       ],
-      "sha256": "53e84ea15b78ec408fb63f00f75b76c48d4dee1700ae77b9d0cfe66b9c3a881a"
+      "sha256": "c81e570786d919852ef69b8c3d8ac78712fa9994257a7ca85596ecf23b4e025e"
     },
     "seed": 0
   },

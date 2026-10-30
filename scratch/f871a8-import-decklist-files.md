@@ -150,15 +150,16 @@ caller `ruleset`, `GameConfig.imported_decks`, `manabot/decklist.py`,
 `catalog.DeckSetup`, `deck_collection.py`, checkpoint deck bindings (list at
 c1dd6c71c).
 
-## Concept review (2026-10-30, headless): next implement direction
+## Concept review (2026-10-30, headless): world-named identity — done
 
-Settled by "the world is the only concept" (names only, no behavior change):
-- **World identity has a world-named accessor.** Branch code reads the world's
-  identity as `managym.content_pool(managym.WORLD_SETUP)["content_digest"]`
-  (`academy/server.py:3656`, `manabot/model/world.py:162`). Add one native
-  accessor (e.g. `managym.world_identity()` → version and card digest, typed in
-  `__init__.pyi`) and use it at both sites. `content_pool` stays for authored
-  packs' vocabulary (`policy_catalog`, `authored_match_receipt`).
+"The world is the only concept": world identity reads through native
+`managym.world_identity()` → `{world_version, card_digest}` (Rust
+`world::world_identity`), used by `deck_world` (`world_digest`) and the Academy
+validate response (`world_version`, `card_digest`). `content_pool` stays for
+authored packs' vocabulary (`policy_catalog`, `authored_match_receipt`).
+Check: debug lib world/pool 4 passed, clippy/fmt clean; world/catalog/
+policy-catalog/training-decks/decklist/Academy-decklist 48 passed; parity
+receipt rewritten, verifies.
 
 ## Open for Jack Heart's review (not decided)
 

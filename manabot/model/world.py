@@ -159,7 +159,7 @@ def deck_world(observation_space: Any) -> dict:
     """
     return {
         **_input_binding(observation_space),
-        "world_digest": managym.content_pool(managym.WORLD_SETUP)["content_digest"],
+        "world_digest": managym.world_identity()["card_digest"],
         "learning_schema_sha256": _schema_file_digest(managym.WORLD_SETUP),
     }
 
