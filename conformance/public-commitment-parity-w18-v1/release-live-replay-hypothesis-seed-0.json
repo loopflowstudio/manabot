@@ -37,7 +37,7 @@
     }
   },
   "identity": {
-    "authority_receipt_sha256": "e7c432b89b1a3eabbe3bf9b972b526e9d06fb4311843aa52626c176616e750ae",
+    "authority_receipt_sha256": "7d204029edae97a3b3e4a21c015d7d50859aeb4ae1c158acf4dcdb07c8cbf006",
     "command_tape_sha256": "95db76dc71150abd75bd4a771729e0928a59c19232ba442db4eb036cae5a1294",
     "matchup": "ur-lessons-vs-gw-allies",
     "relevant_source": {
@@ -45,11 +45,11 @@
       "files": [
         {
           "path": "conformance/authored-match-w18-v1/release-stack-ur-vs-gw-seed-0.json",
-          "sha256": "e7c432b89b1a3eabbe3bf9b972b526e9d06fb4311843aa52626c176616e750ae"
+          "sha256": "7d204029edae97a3b3e4a21c015d7d50859aeb4ae1c158acf4dcdb07c8cbf006"
         },
         {
           "path": "academy/public_commitment_parity.py",
-          "sha256": "9c3a64d87d38d47098381a4659119004ef3f206c985e4c7b17e7ff80a1bb4111"
+          "sha256": "fc6211641f2b4f6413065f37b43a1afd06557b8940e3a32fe67acb6dd8979004"
         },
         {
           "path": "academy/server.py",
@@ -57,7 +57,7 @@
         },
         {
           "path": "manabot/managym/experience_projection.py",
-          "sha256": "34fe58673eeec47ef862c602044024f833bece8e6a5bcc2d5f16518773982b09"
+          "sha256": "8f6eae8f01a1b4aed669f8690587cf42ddbf4afc551b863a4226cbad5bb4720c"
         },
         {
           "path": "experiments/contracts/int-9-exact-range-v1.json",
@@ -73,7 +73,7 @@
         },
         {
           "path": "manabot/managym/__init__.pyi",
-          "sha256": "df1861ea02cd5dcbc63b9bc4afad222de983e617ea808d245b68f2d458b64cb1"
+          "sha256": "6cd3f8c0c402faa7c1f4b2f624b242075aae1e086a6aedf0b899b59169e6d8f3"
         },
         {
           "path": "manabot/managym/decision.py",
@@ -89,7 +89,7 @@
         },
         {
           "path": "managym/src/agent/structured_offer.rs",
-          "sha256": "5b9bc2b1ec18e1e8d4f11ef7f735db1e8c9515369d938b2fadf24e1af982a1e5"
+          "sha256": "79a64716ecd0436624c2a446ed7649fbc2845d3e5d6aed0011e6ecf4ee637852"
         },
         {
           "path": "managym/src/decision.rs",
@@ -101,11 +101,11 @@
         },
         {
           "path": "managym/src/python/bindings.rs",
-          "sha256": "d259088f2b81e6125c37b8f0e8cb4fad528f8e393b38e7e7d3e5c612c3e4585a"
+          "sha256": "89ab4e8158064d6e6fcf66697a603942b58eedf6ff78899fa45825e96fb0f6d0"
         },
         {
           "path": "managym/tests/cards/stx.rs",
-          "sha256": "20e2972b82a987911bde910a19dd2eb61b989be48a513a3534853006c75447a2"
+          "sha256": "79d2a60d970d1d0d6e879edf235b714ea1d8482dd3ad1131ef1d4d2e899723dc"
         },
         {
           "path": "scripts/verify-public-commitment-parity",
@@ -128,7 +128,7 @@
           "sha256": "d51e57bbacc7fe50716af576be6d4979664501d6d4a48e0f33921a9ad23bb171"
         }
       ],
-      "sha256": "51f084612e5cdb65168af2a66d8db6fedf8e8ad8c88ac1cd2cb10667949d4889"
+      "sha256": "61e6e1f879c99549d301e7b413fabcf87f510a7fc4a66a9b333e003fafee5109"
     },
     "seed": 0,
     "semantic_decision_version": 7
@@ -1495,9 +1495,9 @@
         },
         "1": {
           "consumed_commitments": 34,
-          "history_digest": "56ac649382b6a531daa8328a3bf779e74227a6d076639c68ee5955dbe96d306c",
-          "posterior_digest": "964cd03ec4b5ded86105d58a7ebe728bf2427d30a905ee42fdecd8d8aa7db532",
-          "prior_digest": "758d548036e762793a8b4b478942598741784d3188432d4b1f7afd28ec6e2e2b",
+          "history_digest": "b6631b9ca0d81b25111e85447e6511bd0b79560e22f9cbddc5899419fde3568a",
+          "posterior_digest": "09d855813c5bd45a2f9a2b0a87cfe645a9a5c8eb607f4055ac05ca0ee67f7f16",
+          "prior_digest": "2843b7c788eb1930b294e6948105c6cbdb4db5d3ea0b7820cce2a6066e195821",
           "records": 142
         }
       }
@@ -1527,9 +1527,9 @@
     },
     "1": {
       "consumed_commitments": 34,
-      "history_digest": "56ac649382b6a531daa8328a3bf779e74227a6d076639c68ee5955dbe96d306c",
-      "posterior_digest": "964cd03ec4b5ded86105d58a7ebe728bf2427d30a905ee42fdecd8d8aa7db532",
-      "prior_digest": "758d548036e762793a8b4b478942598741784d3188432d4b1f7afd28ec6e2e2b",
+      "history_digest": "b6631b9ca0d81b25111e85447e6511bd0b79560e22f9cbddc5899419fde3568a",
+      "posterior_digest": "09d855813c5bd45a2f9a2b0a87cfe645a9a5c8eb607f4055ac05ca0ee67f7f16",
+      "prior_digest": "2843b7c788eb1930b294e6948105c6cbdb4db5d3ea0b7820cce2a6066e195821",
       "records": 142
     }
   },

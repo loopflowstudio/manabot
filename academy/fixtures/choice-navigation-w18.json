@@ -259,12 +259,12 @@
           "label": "Pay the cost (Firebending Lesson)"
         }
       ],
-      "digest": "0028b5bae6f290edc875a52bf8db970f9d33e711a78cac8f798584f58f8550be",
+      "digest": "87c1aaf30f1625ffb0c226b809e9807b6ad18f02333824c3d462a62fda29eac3",
       "frame": {
         "protocol": 1,
-        "match_id": "kXxOeHHDVoeDzAvBShyFhg",
+        "match_id": "eFWRs6PXxADa7wMqfSHPaw",
         "revision": 109,
-        "frame_hash": "def103a0a56e67a099e1ac325c96b20375bfa78a8483b7d3c38d73950e0a70e4",
+        "frame_hash": "caa57230509f64dd56ad8f57b78e0046c31dbde73db2b919336fdb230d2a29d5",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -1749,12 +1749,12 @@
           "label": "Cast Pop Quiz"
         }
       ],
-      "digest": "8ee615a745af88970b23a070da996d125d71f44f7966edf97154353cd7550f51",
+      "digest": "64ae2a71b49258e67dc8f975959696c7b7fc25d0953a09485fb19b2d0ab4e483",
       "frame": {
         "protocol": 1,
-        "match_id": "sMjOfdyOiE8F-1jPuPUTSg",
+        "match_id": "hwfGSesQTWzXQEfnrBQeSA",
         "revision": 64,
-        "frame_hash": "9612d7a4edba349f2b74ee1e31c6bd29e980d06969633ccfa21669fe401500d0",
+        "frame_hash": "bbd3320c248b931e2610814b3d347bb4614a25489028856ad83045d18ea709bc",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -2966,12 +2966,12 @@
           "label": "Pass priority"
         }
       ],
-      "digest": "4dcc41ee04d36da9309055b2c8cfed8543afcb6dbb1324de22a4929ce7be5e66",
+      "digest": "be1b0e3a4593cdc631aa1a82f8c0f9794803d197c5cce6f73f91068adb41c797",
       "frame": {
         "protocol": 1,
-        "match_id": "YwgH0Lnf2CkfVgnZbnvTHQ",
+        "match_id": "-tp5ueHp_C-YKWG6lT1iZQ",
         "revision": 90,
-        "frame_hash": "d20c4671fae60f6ae48d7cd973e5f827ac7e1738bb2530827763c5de6bd9f1ec",
+        "frame_hash": "44b17415b690fedf8a4a9332a8c30fe1e93efa21c0c6986e9076a4faf92a08b7",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -4199,12 +4199,12 @@
           "label": "Cast Otter-Penguin"
         }
       ],
-      "digest": "14a1d8b884512d6856a65a6e51ca685b56c49919dd0c0c4cb3fd763ad9cbc5fe",
+      "digest": "5d2529ac1511a9686665336bb0778ddb5612aa03181fb2ec4ef709ddce555e13",
       "frame": {
         "protocol": 1,
-        "match_id": "ugFUlSW5FRz7SUcbUu1mdA",
+        "match_id": "0IT2X9q5xMNJWkDnge-Djg",
         "revision": 36,
-        "frame_hash": "c51c153d68259709bcd82d560051e5e45897014fe48a46308e01c36beba15e90",
+        "frame_hash": "e40bb36e00b780caed6d66adcdfb7309353b74175bb3ad00561692afaaffc733",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -4705,7 +4705,8 @@
                 "toughness": 3,
                 "base_power": 2,
                 "base_toughness": 2,
-                "plus1_counters": 1
+                "plus1_counters": 1,
+                "attacking": true
               },
               {
                 "types": {
@@ -4753,7 +4754,8 @@
                 "toughness": 2,
                 "base_power": 1,
                 "base_toughness": 1,
-                "plus1_counters": 1
+                "plus1_counters": 1,
+                "attacking": true
               },
               {
                 "types": {
@@ -5055,12 +5057,12 @@
           "label": "Cast It'll Quench Ya!"
         }
       ],
-      "digest": "18cbff395af5d13f1d8b1a6a045326789913a79eff3f6f31dd54c13303ab8414",
+      "digest": "e15a22a3c7945c8e72b309892aaaad2356b6038a51c4c85239206a64d7860f3d",
       "frame": {
         "protocol": 1,
-        "match_id": "KhPxT9NQ9-Vai7b_6Du0OA",
+        "match_id": "tGLniGNQypUhbK-U6VoONg",
         "revision": 56,
-        "frame_hash": "5df657cc76b9eb38c47253955dc9bff55235f3bbdbd7c7736a100197e2cd6094",
+        "frame_hash": "61216e2f3ccf202ab2626b747ad79d0c62c2d303591ef49f0d3161a761e07cbd",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -5951,6 +5953,6 @@
     }
   },
   "world": "w11",
-  "source_base_commit": "63e5fe407df57492afa6806b7db9b9de9743da05",
+  "source_base_commit": "b4bef16efe173eb05e9a17fb5559f1f5e44f3180",
   "world_version": "w18"
 }
