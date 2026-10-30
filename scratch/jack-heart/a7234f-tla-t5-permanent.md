@@ -130,3 +130,40 @@ it. If a third self-animation condition appears, merge them then.
   digest drift", as expected before gate re-records. Earlier passes: debug
   `cargo test` (cards 408, rules 137, lib 122), clippy, Python parity/text/
   protocol (55), Academy vitest (13) and svelte-check — see `af0c01977`.
+
+## Demo (headless, 2026-10-30, HEAD `edc1fabd8`) — failed on the text path; iterate
+
+This ran headless, with the agent standing in for Jack Heart. No human
+watched it.
+
+- Pass: debug `cargo test --test cards -- joo_dee phoenix_fleet ran_and_shaw`
+  ran all 13 directed tests, and all passed.
+- Pass: the native semantic Commands path
+  (`scratch/tools/demo_t5_contract.py`, built extension from 13:36, after the
+  last Rust change). The script activates Joo Dee's ability, both players
+  pass, and the surveil decision is offered ("Keep on top" / select). The
+  token then shows `copy: {name: "Joo Dee, One of Many", registry_key: 122}`.
+  The sacrifice choice follows, and afterwards the agent's
+  `turn_history.permanents_sacrificed` is 1.
+- **Fail: the LLM text-observation path** (`scratch/tools/demo_t5.py`).
+  `capture_text_decision` at Joo Dee's surveil raises `TextEncodingError:
+  invalid continuation frame relationship`. The frame stack is `[kind 5,
+  kind 6 / decision 20]`. `parse_continuation_frames_json`
+  (`managym/src/python/bindings.rs`, `frame.decision > 13`) rejects every
+  decision code above 13. `continuation.rs` now emits codes up to 20, and
+  this branch adds `Surveil => 20`. Main already emits 14–18, so the stale
+  bound predates T5. T5 still has to fix it: Joo Dee cannot be played by a
+  text/LLM agent, and the acceptance requires play through training and
+  Academy. `text_observation.py` already lists `surveil` in its decision
+  names, so only the validator bound is stale.
+- CI on PR #405: everything passes except `Integration (main)`. Its failures
+  are the 4 known `test_policy_choice_can_learn_either_preference[*-target-*]`
+  cases, which also fail on T3 #399's CI, so T5 inherits them.
+
+Next action (implement): make the validator's upper bound the largest
+decision code from `continuation.rs`, held as one shared constant rather
+than a literal. Add a Python test that captures a text decision at Joo Dee's
+surveil and resolves it to the copy and the sacrifice. Proof: rerun
+`uv run python scratch/tools/demo_t5.py`; it should reach "copy of" and
+"This turn: sacrificed 1 permanent". Also run the text-observation tests and
+debug `cargo test`.
