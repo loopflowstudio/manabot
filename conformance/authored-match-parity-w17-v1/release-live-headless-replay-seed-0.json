@@ -160,19 +160,19 @@
         },
         {
           "path": "managym/src/cards/mod.rs",
-          "sha256": "7246074ce76dcd0c2a3e8f6de46a86de8c24f24bdf83c68082c726a12dc5d3f0"
+          "sha256": "c3cb459ca82698dca350e9eb9adad3b3a758d8cd655007b143c5fc9f610ecc64"
         },
         {
           "path": "managym/src/cards/pool.rs",
-          "sha256": "59d610dc53e9bcb45229f517153271fc49758e143c8230f40bff398c73e90c21"
+          "sha256": "4ba2f22451ecac355af44387a638dcadd120e2c53f823b4996ef1f7dac30104e"
         },
         {
           "path": "managym/src/cards/setups.rs",
-          "sha256": "1d055d1e8c89ba03db024c330ab7208c022641e5c84e39de4ea12e0d5b52fb86"
+          "sha256": "b4a14e54b54193f6838ce6a6759626b66bc856e8efc8deeda6e9cf5643d806fd"
         },
         {
           "path": "managym/src/cards/tokens.rs",
-          "sha256": "2b79ef9041777c0190c327b0581ef2f987ef435ed2a9c1ab905833b7533c59bf"
+          "sha256": "7ff1802059797350ff949ceac8b59c4d8ed952a45e8b48c4f968e5c2964c75d2"
         },
         {
           "path": "managym/src/cardsets/afr.rs",
@@ -460,7 +460,7 @@
         },
         {
           "path": "managym/src/python/bindings.rs",
-          "sha256": "06f2209a7827cdc4e98092b5362f5f896bdcf1a1369529f283a614923055ce26"
+          "sha256": "6041ceed3608ab5355fdf7d99906ef96476e985f6e11ed9632126a68ed684f46"
         },
         {
           "path": "managym/src/python/convert.rs",
@@ -547,7 +547,7 @@
           "sha256": "23ac765196d97fb350c0e3e2337bacc5d8e42bd6c47edb7999fb0907d32bfa8d"
         }
       ],
-      "sha256": "4b2757c3d5c5287b12441559bb8df69916a3a7fceed716db9ce529b675a53af2"
+      "sha256": "b7ad662e37686f920f43b2a879eaa68e6c87fe9d5b9fe32bf0496ee1b15c991b"
     },
     "seed": 0
   },
