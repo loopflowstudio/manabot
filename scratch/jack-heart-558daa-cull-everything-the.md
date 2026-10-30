@@ -3,7 +3,7 @@
 Directive: Jack Heart, 2026-10-30 (Task 558daa). Was stacked on afbd6a; #403
 merged into main (10eeb1f55) and this branch merged it (8db3b2fe8), so the PR
 targets main and its diff is the cull alone.
-Status: cull complete; concept reviews 1–3 applied (review 3 wording fixes in .lf/wave/academy and engine MEMORY.md). Next: gate/demo. Stop at review/demo; no merge.
+Status: cull complete; concept reviews 1–4 done (review 4: no change). Next: gate/demo. Stop at review/demo; no merge.
 
 ## Approach
 
@@ -148,6 +148,18 @@ Next implement direction (wording only; accepted naming and pronoun rules):
   Fantasia specifically needs" → "the rules engine Manabot specifically needs"
   (live guidance; the service id `fantasia-website` stays).
 No open product choice.
+
+## Concept review 4, 2026-10-30
+
+No change and no open product choice. Review 3's wording fixes are in c34254536.
+Outside frozen evidence (`experiments/protocols/*` source manifests,
+`docs/benchmarks`, `docs/rules/audit-2026-10`, `docs/evidence`), the only
+mentions of retired surfaces are links pinned at a74f31828 and
+`manabot/README.md:111`, which names the `ataraxos-mtg-v1` preset as a frozen
+serialization. That README is held under #395. Every consolidated doc that
+mentions undo or live belief calls it removed. `academy/README.md` "does not
+undo a submitted choice" describes reconnect behavior. The `ataraxos_move`
+commands in `docs/training.md` resolve to `experiments/ataraxos_move.py`.
 
 ## Checks
 
