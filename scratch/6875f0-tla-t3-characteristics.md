@@ -2,7 +2,7 @@
 
 Brief: the Task directive (49 cards, obligations in `docs/rules/tla/allocation.jsonl`,
 `planned_pr == "T3"`). Stacked on T1 (892c47, PR #394; last synced at head `01e8f9975`)
-and merged with T2 at PR #398 head `d218e1dc2`. Every merge needs Jack Heart's review.
+and merged with T2 at PR #398 head `a5587df5a`. Every merge needs Jack Heart's review.
 Card tests live in `managym/tests/cards/tla.rs` (steer, Jack Heart 2026-10-29).
 
 ## Done (49 of 49)
@@ -124,21 +124,25 @@ Scryfall id.
    props became `permanentNotes` entries (one Academy note authority; wording
    matches the LLM text, "firebending N until end of turn").
 
+29. Third sync (2026-10-30): T2 head `a5587df5a` (w18 world-bound evidence,
+   foretold-slot determinization). T3 keeps its in-place v5/w18 extension, so
+   the w18 evidence was re-recorded at T3's widths (63 / 55 / 52, relation 48):
+   `semantic-kernel-w18-v1` via `semantic_conformance record` (same 14 cases /
+   3401 commands), authored-match receipt (digests only), authored-match and
+   public-commitment parity (142 commands, 69 commitments, no gaps; pinned
+   `AUTHORITY_SHA256` / `TERMINAL_STATE` updated), Academy demo and
+   choice-navigation fixtures via T2's `scratch/tools/regen_*_w18.py` (same
+   decision revisions as w17), trigger-order root/content digests, and the
+   four possible-world v3 belief receipts (the schema binds the content digest).
+
 ## Remaining
 
-- Sync T2's PR #398 head `a5587df5a` (31 commits past `89e320c48`, unmerged
-  here): it adds T2's w18 world-bound evidence (`d130bbc90`:
-  `semantic-kernel-w18-v1`, authored-match / parity / public-commitment w18
-  receipts, Academy `*-w18.json` demo, navigation and trigger-order fixtures,
-  belief receipts on possible-world v3) and foretold-slot determinization.
-- World release under T3's w18: T3 extends w18 in place, so after the sync
-  re-record that evidence with T2's `scratch/tools/regen_*_w18.py` and
-  confirm the 22 `tests/academy` failures and the semantic-conformance pair
-  clear; browser proof (Playwright) is CI's. If T2 lands on main first, its
-  w18 evidence is frozen and T3 takes w19 (and v6) instead; the open
-  in-place assumption is in `scratch/questions.md`.
+- If T2 lands on main first, its w18 evidence is frozen and T3 takes w19 (and
+  v6) instead; the open in-place assumption is in `scratch/questions.md`.
+- Browser proof (Playwright e2e) is CI's.
 
-Check (2026-10-29, debug, uncommitted compress edits: `modify_controlled`,
-`unspent_mana_retained`, `requires_target` use, `CounterKind::parse` removed):
-`cargo test` cards 384, rules 131 (+2 ignored), lib 122 pass; clippy
-`--all-targets -D warnings` and fmt clean. Python/Academy last run at item 28.
+Check (2026-10-30, at the third sync): debug `cargo test` all binaries pass
+(lib 122, cards 384, rules 131 + 2 ignored, semantic_conformance 6, …); fmt,
+clippy `--all-targets -D warnings`, conformance check and fuzz (seed 24301, 32
+cases) clean; `tests/academy` 261 pass; world/observation-shape set plus
+`tests/belief`, `tests/env`, text observation 301 pass; ruff clean.
