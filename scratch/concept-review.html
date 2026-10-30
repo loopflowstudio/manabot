@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MTG-214 concept review</title>
+<style>
+:root{color-scheme:light dark;--fg:#222;--bg:#fbfaf7;--mute:#666;--prop:#2a6f3f;--old:#8a3b2e}
+@media (prefers-color-scheme:dark){:root{--fg:#e6e3dc;--bg:#1b1a18;--mute:#9a968e;--prop:#7fc792;--old:#e08b7a}}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 Georgia,serif}
+main{max-width:42rem;margin:0 auto;padding:2rem 1.25rem 4rem}
+h1{font-size:1.5rem;margin:0 0 .25rem}h2{font-size:1.1rem;margin-top:2.25rem}
+.meta{color:var(--mute);font-size:.85rem}code{font-size:.9em}
+.prop{border-left:3px solid var(--prop);padding-left:.8rem}
+.old{border-left:3px solid var(--old);padding-left:.8rem}
+.tag{font:600 .75rem system-ui;letter-spacing:.04em;text-transform:uppercase}
+.prop .tag{color:var(--prop)}.old .tag{color:var(--old)}
+</style></head><body><main>
+<h1>Where does a reader find the current Waves?</h1>
+<p class="meta">Task MTG-214 · step concept-review (headless) · 2026-10-29 ·
+built from <code>.lf/wave/*</code>, <code>wave/README.md</code>, <code>docs/ARCHITECTURE.md</code>,
+<code>scratch/questions.md</code>, Jack Heart's eval-split steer</p>
+
+<p><strong>Outcome (second pass, after <code>4dc25ad61</code>):</strong> nothing to change. The mismatch below is
+implemented; no product choice blocks the Task.</p>
+
+<h2>Actions → concepts → state</h2>
+<p>Someone looking for “what owns this work” opens a Wave's goal and memory. The concepts are four Waves
+(Jack Heart, 2026-10-29): <code>academy</code>, <code>engine</code>, <code>eval</code>, <code>training</code>.
+lf reads them from <code>.lf/wave/&lt;name&gt;/</code>; ids and Linear initiatives are unchanged.</p>
+
+<h2>The mismatch</h2>
+<div class="old"><p class="tag">Existing</p>
+<p><code>wave/README.md</code>: “Manabot's work is organized into <strong>waves</strong>…” then a table of
+<code>intelligence/</code>, <code>rules/</code>, <code>game/</code>, with intelligence owning “arena evaluation”.
+Nothing says this tree is historical or where the live Waves are.</p></div>
+<div class="prop"><p class="tag">Implemented (4dc25ad61)</p>
+<p>An opening note: this is the historical Wave tree, kept because frozen experiments, code comments and
+evidence cite its paths. Current Waves live in <code>.lf/wave/</code>: academy, engine, eval, training.
+Nothing in <code>wave/</code> is renamed or moved.</p></div>
+
+<h2>Checked and kept</h2>
+<ul>
+<li>Rules → engine, intelligence → training, eval memory split (Jack's steer) — consistent with ARCHITECTURE.</li>
+<li>Remaining <code>wave/intelligence</code> and <code>wave/rules</code> references cite historical files that exist.</li>
+<li>No eval or academy GOAL.md: no objective has been set.</li>
+<li>No live pointer to <code>.lf/wave/intelligence</code> or <code>.lf/wave/rules</code> remains. ARCHITECTURE's
+history-encoder link to <code>wave/intelligence/MEMORY.md</code> cites the historical file, which exists.</li>
+</ul>
+
+<h2>Questions (none blocking)</h2>
+<ol>
+<li>Training's objective ends “demonstrate a repeatable challenge to the User under a protocol fixed before
+scoring.” Should that move to a future eval objective? (a) yes, when eval gets a goal (b) no, it stays in training.</li>
+</ol>
+</main></body></html>

@@ -1,3 +1,32 @@
+# MTG-214 Wave rename assumptions — 2026-10-29
+
+- `.lf/wave/rules` → `.lf/wave/engine`: lf's `engine` Wave owns the Rules
+  chapter Projects and the same Linear initiative. Added the engine Wave id
+  (`74d9efbc…`) to its GOAL frontmatter, matching training's explicit id.
+- Academy and eval have empty lf goals and no checked-in files; none created.
+  Only training gets `config.yaml` (`workflow: iterate`), as directed.
+- The top-level `wave/` tree (old `pm:` charters, numbered plans) is historical
+  and cited by frozen experiments and code comments; left unrenamed, as are
+  `.lf/chapters/` records and wave body prose.
+- Live doc pointers moved to `.lf/wave/{engine,training}`. ARCHITECTURE now
+  assigns evaluation to Eval (previously Intelligence); reversible.
+- Eval split (Jack Heart's steer, 2026-10-29): MTG-212 and MTG-188 memory sections
+  moved verbatim to `.lf/wave/eval/MEMORY.md` with cross-pointers; MTG-175 moved
+  to eval in lf. No eval GOAL.md until Jack sets an objective.
+
+## Concept review (2026-10-29)
+
+- Resolved in `4dc25ad61`: `wave/README.md` opens with a note marking `wave/`
+  as the historical tree and naming the current Waves (academy, engine, eval,
+  training). Other `wave/intelligence` / `wave/rules` references cite existing
+  historical files and stay.
+- Not blocking, outside this Task: training's objective ends with "demonstrate
+  a repeatable challenge to the User under a protocol fixed before scoring",
+  which reads like evaluation. Moving it to an eval objective is Jack's choice;
+  this Task changes no objective.
+- Second pass after implement: no further change; no live `.lf/wave/{intelligence,rules}`
+  pointers remain.
+
 # TLA direct-Rust decisions
 
 Reversible operator choices made headless (2026-10-28 unless dated); each is
