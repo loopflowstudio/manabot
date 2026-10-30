@@ -55,3 +55,7 @@ open): the implement pass in between made no tracked change. Since `63e5fe407`, 
 runtime change is `d130bbc90` in `text_observation.py`. Re-ran `t2_demo.py
 scratch/t2-demo/t2-cards.json 60` and `t2_demo_foretell.py`, and both outputs matched
 `run.log` and `foretell.log` byte for byte. Advance.
+
+2026-10-30 decision pass 1, at `0ad38cffe`: only scratch changes since `b8dbfa319`;
+T1 #394 still open at `e6b672753`. `t2_demo.py … 60` and `t2_demo_foretell.py`
+matched `run.log` and `foretell.log` byte for byte. Advance.
