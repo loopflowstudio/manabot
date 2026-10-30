@@ -115,14 +115,10 @@ impl Game {
                 _ => None,
             })
             .collect();
-        if let Some(aura) = self.set_characteristics_source(permanent_id) {
-            let set = self
-                .set_characteristics(permanent_id)
-                .expect("aura sets characteristics");
-            let timestamp = self.state.permanents[aura]
-                .as_ref()
-                .expect("battlefield aura")
-                .timestamp;
+        if let (Some(set), Some(timestamp)) = (
+            self.set_characteristics(permanent_id),
+            self.set_characteristics_timestamp(permanent_id),
+        ) {
             setters.push((timestamp, Some(set.power), Some(set.toughness)));
         }
         setters.sort_by_key(|(timestamp, _, _)| *timestamp);
@@ -293,10 +289,7 @@ impl Game {
 
     /// The Aura attached to `permanent_id` that sets its characteristics, if
     /// any: the latest by timestamp.
-    pub(crate) fn set_characteristics_source(
-        &self,
-        permanent_id: PermanentId,
-    ) -> Option<PermanentId> {
+    fn set_characteristics_source(&self, permanent_id: PermanentId) -> Option<PermanentId> {
         self.attachments_on(permanent_id)
             .filter(|(_, card)| card.attached_characteristics.is_some())
             .max_by_key(|(aura, _)| {
@@ -305,6 +298,18 @@ impl Game {
                     .map(|permanent| permanent.timestamp)
             })
             .map(|(aura, _)| aura)
+    }
+
+    /// The timestamp of the Aura that sets the permanent's characteristics,
+    /// if any (CR 613.7e).
+    pub(crate) fn set_characteristics_timestamp(
+        &self,
+        permanent_id: PermanentId,
+    ) -> Option<ObjectId> {
+        let aura = self.set_characteristics_source(permanent_id)?;
+        self.state.permanents[aura]
+            .as_ref()
+            .map(|permanent| permanent.timestamp)
     }
 
     /// The characteristics an Aura attached to `permanent_id` sets, if any.
@@ -327,17 +332,11 @@ impl Game {
     /// Creature subtypes added by effect records after any characteristic-
     /// setting Aura's timestamp (layer 4).
     pub fn added_subtypes(&self, permanent_id: PermanentId) -> Vec<&str> {
-        let aura = self
-            .set_characteristics_source(permanent_id)
-            .and_then(|aura| {
-                self.state.permanents[aura]
-                    .as_ref()
-                    .map(|permanent| permanent.timestamp)
-            });
+        let aura = self.set_characteristics_timestamp(permanent_id);
         let mut subtypes: Vec<&str> = Vec::new();
         for effect in self.effects_on(permanent_id) {
             if let Modification::AddSubtypes(added) = &effect.modification {
-                if aura.is_none_or(|aura| effect.timestamp > aura) {
+                if effect.follows(aura) {
                     for subtype in added {
                         if !subtypes.contains(&subtype.as_str()) {
                             subtypes.push(subtype);
@@ -675,7 +674,7 @@ impl Game {
         };
         for effect in self.effects_on(permanent_id) {
             if let Modification::AddKeywords(granted) = &effect.modification {
-                if lost.is_none_or(|lost| effect.timestamp > lost) {
+                if effect.follows(lost) {
                     keywords = keywords.union(granted);
                 }
             }

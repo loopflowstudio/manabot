@@ -161,6 +161,10 @@ Scryfall id.
    belief range/tracker); T3's `*-w18*` evidence and fixtures moved over the
    older w17 copies and renamed; WORLDS.md's w17 row and section carry T3.
    Permanent observations omit `timestamp` unless an attachment renewed it.
+   Compress after it: one Aura-timestamp reader
+   (`set_characteristics_timestamp`) and `ContinuousEffect::follows` replace
+   three inline timestamp comparisons. `PermanentData.plus1_counters` stays
+   (pre-T3 wire field in every retained fixture).
 
 ## Remaining
 

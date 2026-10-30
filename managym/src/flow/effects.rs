@@ -94,14 +94,7 @@ impl Game {
             .filter(|effect| effect.modification == Modification::LoseAllAbilities)
             .map(|effect| effect.timestamp)
             .last();
-        let aura = self
-            .set_characteristics_source(permanent_id)
-            .and_then(|aura| {
-                self.state.permanents[aura]
-                    .as_ref()
-                    .map(|permanent| permanent.timestamp)
-            });
-        recorded.max(aura)
+        recorded.max(self.set_characteristics_timestamp(permanent_id))
     }
 
     /// "Can't be blocked this turn."
@@ -123,7 +116,7 @@ impl Game {
     pub fn granted_firebending(&self, permanent_id: PermanentId) -> u8 {
         let lost = self.ability_loss_timestamp(permanent_id);
         self.effects_on(permanent_id)
-            .filter(|effect| lost.is_none_or(|lost| effect.timestamp > lost))
+            .filter(|effect| effect.follows(lost))
             .filter_map(|effect| match effect.modification {
                 Modification::Firebending(amount) => Some(amount),
                 _ => None,
