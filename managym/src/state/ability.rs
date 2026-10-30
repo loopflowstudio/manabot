@@ -1,5 +1,6 @@
-use super::card::Keywords;
+use super::effect::{EffectDuration, Modification};
 use super::mana::{Mana, ManaCost};
+use super::permanent::CounterKind;
 use super::predicate::CardPredicate;
 use super::zone::ZoneType;
 
@@ -75,6 +76,7 @@ pub enum TriggerCondition {
     /// "At the beginning of your upkeep."
     BeginningOfYourUpkeep,
     BeginningOfYourCombat,
+    BeginningOfYourEndStep,
     /// "Whenever you draw your Nth card each turn." The per-player draw
     /// count resets every turn (see `TurnState::cards_drawn_this_turn`).
     YouDrawNthCardThisTurn {
@@ -106,6 +108,18 @@ pub enum StaticCondition {
         count: usize,
         predicate: CardPredicate,
     },
+    /// "if you control a [predicate] permanent".
+    ControlsMatching {
+        predicate: CardPredicate,
+    },
+    /// "as long as you have `count` or more unspent mana" (both pools).
+    UnspentManaAtLeast {
+        count: u32,
+    },
+    /// "if you've sacrificed `count` or more permanents this turn".
+    SacrificedThisTurnAtLeast {
+        count: u32,
+    },
 }
 
 /// Which game objects an event-based trigger condition watches.
@@ -125,6 +139,7 @@ pub enum EffectValue {
     Fixed(i32),
     /// The resolving spell's announced X (CR 107.3).
     X,
+    /// Creatures `controller` controls with +1/+1 counters on them (Dai Li Agents).
     CreaturesWithCounters,
     BattlefieldMatching {
         predicate: CardPredicate,
@@ -136,6 +151,12 @@ pub enum EffectValue {
     CardsDrawnMinus {
         subtract: u32,
     },
+    /// The greatest number of creatures you control that share a creature
+    /// type (CR 205.3m).
+    GreatestSharedCreatureType,
+    /// Excess damage (CR 120.4a) the resolution's latest damage instruction
+    /// dealt to its creature; 0 outside a resolution.
+    ExcessDamage,
 }
 
 /// A resolving obligation, distinct from the effects chosen by its outcome.
@@ -176,20 +197,28 @@ pub enum LinkedGrant {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Effect {
+    /// A continuous effect from this resolution (CR 611): `modification`
+    /// for `affected`, lasting `duration`. The record's amounts are read as
+    /// it resolves.
+    ApplyContinuous {
+        affected: AffectedSpec,
+        modification: Modification<EffectValue>,
+        duration: EffectDuration,
+    },
+    /// Put `count` +1/+1 counters on the exact permanent that caused the
+    /// trigger, without targeting.
+    PutCountersOnTriggeringPermanent {
+        count: i32,
+    },
     /// Create a token that's a copy of the source (CR 707.2, 111.1). The
     /// token copies the source's copiable values: its definition, including
     /// any copy effect already applied to it, and never its counters, damage,
     /// tapped state or non-copy effects. A source that has left the
-    /// battlefield is copied as it last existed there. `nonlegendary` is the
-    /// "except it's not legendary" exception, which becomes part of the
-    /// token's own copiable values (CR 707.9b).
+    /// battlefield is copied as it last existed there. `exceptions` ("except
+    /// it's not legendary") become part of the token's own copiable values
+    /// (CR 707.9b), so a copy of it inherits them.
     CreateTokenCopy {
-        nonlegendary: bool,
-    },
-    ModifyControlled {
-        predicate: CardPredicate,
-        power: i32,
-        toughness: i32,
+        exceptions: Vec<Modification<EffectValue>>,
     },
     OptionalPayment {
         cost: PaymentCost,
@@ -204,9 +233,6 @@ pub enum Effect {
     },
     DrainLife {
         amount: i32,
-    },
-    CantBeBlockedTarget {
-        target: TargetSpec,
     },
     ReturnGraveyardTarget {
         target: TargetSpec,
@@ -286,10 +312,6 @@ pub enum Effect {
     OpponentsCastOnlyFromHand,
     /// "Exile the top card of your library. You may play that card this turn."
     ExileTopCardPlayThisTurn,
-    /// Each creature you control gains firebending until end of turn.
-    GrantFirebendingUntilEot {
-        amount: u8,
-    },
     /// A player exiles a matching card; its controller may cast it as linked.
     ExileLinked {
         chooser: LinkedChooser,
@@ -309,8 +331,6 @@ pub enum Effect {
     CastFromHandFree {
         predicate: CardPredicate,
     },
-    /// You have no maximum hand size for the rest of the game.
-    NoMaximumHandSize,
     /// Shuffle your graveyard into your library.
     ShuffleGraveyardIntoLibrary,
     /// The target's owner chooses second from the top of their library or
@@ -343,24 +363,8 @@ pub enum Effect {
     },
     /// The resolving spell exiles itself instead of going to the graveyard.
     ExileSourceSpell,
-    BuffTargetValue {
-        power: EffectValue,
-        toughness: i32,
-        target: TargetSpec,
-    },
     ReturnToHandDrawIfControlled {
         target: TargetSpec,
-    },
-    /// Modify the exact permanent that caused the trigger, without targeting.
-    ModifyTriggeringPermanent {
-        counters: i32,
-        keywords: Keywords,
-    },
-    /// The permanent whose event fired the trigger gets +X/+Y until end of
-    /// turn, with X and Y computed on resolution.
-    BuffTriggeringPermanentValue {
-        power: EffectValue,
-        toughness: EffectValue,
     },
     Discard,
     DealDamageValue {
@@ -371,16 +375,11 @@ pub enum Effect {
         count: EffectValue,
         target: TargetSpec,
     },
-    AddSubtypeToTarget {
-        target: TargetSpec,
-        subtype: String,
-    },
-    ExileIfDiesThisTurn {
-        target: TargetSpec,
-    },
     IfCondition {
         condition: StaticCondition,
         effects: Vec<Effect>,
+        #[serde(skip_serializing_if = "Vec::is_empty")]
+        otherwise: Vec<Effect>,
     },
     ReturnToHand {
         target: TargetSpec,
@@ -392,15 +391,17 @@ pub enum Effect {
     CounterSpell {
         target: TargetSpec,
     },
-    ModifyUntilEot {
-        power_delta: i32,
-        toughness_delta: i32,
-    },
     /// Resolving player draws `count` cards. No target.
     DrawCards {
         count: usize,
     },
     /// Deal `amount` damage to each creature on the battlefield. No target.
+    /// Each creature with mana value at most `max_mana_value` loses all
+    /// abilities until end of turn, then those creatures are destroyed
+    /// simultaneously (Day of Black Sun).
+    DestroyCreaturesLosingAbilities {
+        max_mana_value: EffectValue,
+    },
     MassDamage {
         amount: i32,
     },
@@ -421,32 +422,57 @@ pub enum Effect {
         token_name: String,
         count: usize,
         tapped_and_attacking: bool,
+        /// "then attach this Equipment to it" (one token).
+        attach_source: bool,
     },
-    /// Put `count` +1/+1 counters on the source permanent.
+    /// Attach the source Equipment to the target creature (CR 701.3). A
+    /// resolving Aura spell instead enters attached to it (CR 303.4f).
+    AttachSourceTo {
+        target: TargetSpec,
+    },
+    /// Exile the object the source Aura or Equipment is attached to.
+    ExileAttached,
+    /// Tap the object the source is attached to.
+    TapAttached,
+    /// Remove all counters from the object the source is attached to.
+    RemoveAllCountersFromAttached,
+    /// "Distribute `count` [kind] counters among any number of tapped
+    /// creatures your opponents control": the controller places them one
+    /// at a time, choosing among the eligible creatures at each placement.
+    DistributeCountersToTappedOpponentCreatures {
+        kind: CounterKind,
+        count: usize,
+    },
+    /// Return the permanent that granted this ability to its owner's hand
+    /// ("Return Trusty Boomerang"); nothing if it has left the battlefield.
+    ReturnGrantorToHand,
+    /// The owner of the object the source is attached to shuffles it into
+    /// their library.
+    ShuffleAttachedIntoLibrary,
+    /// Put `count` counters of `kind` on the source permanent.
     PutCountersOnSource {
         count: i32,
+        kind: CounterKind,
     },
-    /// Put `count` +1/+1 counters on the target.
+    /// Put `count` counters of `kind` on the target.
     PutCounters {
         count: i32,
+        kind: CounterKind,
         target: TargetSpec,
     },
     /// Tap the source permanent.
     TapSource,
     /// Untap the source permanent.
     UntapSource,
-    /// The source permanent can't be blocked this turn.
-    CantBeBlockedThisTurnSource,
-    /// The source permanent gains `keywords` until end of turn.
-    GrantKeywordsToSource {
-        keywords: Keywords,
-    },
     /// "Return this card from your graveyard to your hand": only the exact
     /// graveyard object the ability came from (CR 400.7).
     ReturnSourceToHand,
     /// Resolving player gains `amount` life.
     GainLife {
         amount: i32,
+    },
+    GainLifeValue {
+        amount: EffectValue,
     },
     /// Execute the inner effect only if this is the `n`th time this
     /// ability has resolved this turn ("if this is the second time this
@@ -541,23 +567,37 @@ pub enum Effect {
         mana: Mana,
         until_end_of_combat: bool,
     },
-    /// The target gets +power/+toughness until end of turn.
-    BuffTarget {
-        power: i32,
-        toughness: i32,
-        target: TargetSpec,
+    /// "Add X mana of any one color", X read as the mana ability resolves.
+    AddOneColorManaValue {
+        amount: EffectValue,
+    },
+    /// Add `mana` `amount` times, `amount` read at resolution.
+    AddManaValue {
+        mana: Mana,
+        amount: EffectValue,
+    },
+    /// The first chosen creature fights the last (CR 701.14); records the
+    /// excess damage dealt to the last.
+    FightLastTarget,
+    /// Search your library for a card matching `predicate`, reveal it, put
+    /// it into your hand, then shuffle (CR 701.23).
+    SearchLibraryToHand {
+        predicate: CardPredicate,
     },
     /// Untap the target.
     UntapTarget {
         target: TargetSpec,
     },
-    /// Tap the target (not for mana).
+    /// Tap the target.
     TapTarget {
         target: TargetSpec,
     },
-    /// The target gains the set keywords until end of turn.
-    GrantKeywordsToTarget {
-        keywords: Keywords,
+    /// "Remove up to `up_to` counters from [target]." With `chosen` unset the
+    /// controller picks a present kind or stops; with it set, one counter of
+    /// that kind is removed and the choice repeats for `up_to - 1`.
+    RemoveCounters {
+        up_to: i32,
+        chosen: Option<CounterKind>,
         target: TargetSpec,
     },
     /// Run `then` only if the frame's primary target currently matches
@@ -587,6 +627,40 @@ pub enum Effect {
 pub struct MilledBonus {
     pub predicate: CardPredicate,
     pub effects: Vec<Effect>,
+}
+
+impl Modification<EffectValue> {
+    /// "+power/+toughness".
+    pub fn pump(power: i32, toughness: i32) -> Self {
+        Modification::ModifyPt {
+            power: EffectValue::Fixed(power),
+            toughness: EffectValue::Fixed(toughness),
+        }
+    }
+
+    /// Fixed base power and/or toughness (layer 7b).
+    pub fn base_pt(power: Option<i32>, toughness: Option<i32>) -> Self {
+        Modification::SetBasePt {
+            power: power.map(EffectValue::Fixed),
+            toughness: toughness.map(EffectValue::Fixed),
+        }
+    }
+}
+
+/// Whom a resolving continuous effect affects. A set of permanents is fixed
+/// as the effect resolves (CR 611.2c).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum AffectedSpec {
+    /// The resolving player ("you").
+    You,
+    /// The source permanent.
+    Source,
+    /// The frame's primary target, when it is still a permanent.
+    Target(TargetSpec),
+    /// The permanent whose event fired the trigger.
+    TriggeringPermanent,
+    /// Each permanent the resolving player controls matching the predicate.
+    EachYouControl(CardPredicate),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -627,30 +701,47 @@ pub enum TargetSpec {
 /// `min == 0` encodes "up to"; `max` bounds how many may be chosen.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct TargetRequirement {
+    /// "[N] target creatures that share a creature type" (CR 115.1, 608.2b):
+    /// every chosen target must share one creature type with the others.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub shares_creature_type: bool,
     pub spec: TargetSpec,
     pub min: usize,
     pub max: usize,
     /// "other target": the ability's own source object is not a candidate.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub another: bool,
+    /// "Up to X targets": the announced X replaces `max` (CR 601.2c).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub max_x: bool,
 }
 
 impl TargetRequirement {
     pub fn one(spec: TargetSpec) -> Self {
         Self {
+            shares_creature_type: false,
             spec,
             min: 1,
             max: 1,
             another: false,
+            max_x: false,
+        }
+    }
+
+    /// The most targets this requirement allows with X announced as `x`.
+    pub fn max_for(&self, x: u8) -> usize {
+        if self.max_x {
+            usize::from(x)
+        } else {
+            self.max
         }
     }
 
     pub fn up_to(max: usize, spec: TargetSpec) -> Self {
         Self {
-            spec,
             min: 0,
             max,
-            another: false,
+            ..Self::one(spec)
         }
     }
 }
@@ -688,6 +779,27 @@ impl Effect {
         Self::mana_choice(["W", "U", "B", "R", "G"].map(Mana::parse))
     }
 
+    /// "[affected] [modification] until end of turn."
+    pub fn until_end_of_turn(
+        affected: AffectedSpec,
+        modification: Modification<EffectValue>,
+    ) -> Self {
+        Effect::ApplyContinuous {
+            affected,
+            modification,
+            duration: EffectDuration::EndOfTurn,
+        }
+    }
+
+    /// A continuous effect with no stated duration.
+    pub fn indefinitely(affected: AffectedSpec, modification: Modification<EffectValue>) -> Self {
+        Effect::ApplyContinuous {
+            affected,
+            modification,
+            duration: EffectDuration::Indefinite,
+        }
+    }
+
     pub fn target_spec(&self) -> Option<&TargetSpec> {
         match self {
             Effect::Sacrifice { .. }
@@ -699,24 +811,30 @@ impl Effect {
             Effect::SelectTargetRequirement { .. }
             | Effect::MillAndSelect { .. }
             | Effect::DrainLifeValue { .. } => None,
-            Effect::CantBeBlockedTarget { target }
+            Effect::ApplyContinuous {
+                affected: AffectedSpec::Target(target),
+                ..
+            }
             | Effect::ReturnGraveyardTarget { target, .. }
             | Effect::ExileWithControllerToken { target, .. }
             | Effect::DiscardTargetPlayer { target, .. }
             | Effect::Destroy { target }
             | Effect::Exile { target }
             | Effect::Airbend { target }
-            | Effect::BuffTargetValue { target, .. }
             | Effect::ReturnToHandDrawIfControlled { target } => Some(target),
             Effect::SearchBasicLand { .. }
             | Effect::OptionalDiscardDraw { .. }
-            | Effect::ModifyTriggeringPermanent { .. }
-            | Effect::BuffTriggeringPermanentValue { .. } => None,
-            Effect::DealDamageValue { target, .. }
-            | Effect::PutCountersValue { target, .. }
-            | Effect::ExileIfDiesThisTurn { target }
-            | Effect::AddSubtypeToTarget { target, .. } => Some(target),
-            Effect::IfCondition { effects, .. } => effects.iter().find_map(Effect::target_spec),
+            | Effect::ApplyContinuous { .. }
+            | Effect::PutCountersOnTriggeringPermanent { .. } => None,
+            Effect::DealDamageValue { target, .. } | Effect::PutCountersValue { target, .. } => {
+                Some(target)
+            }
+            Effect::IfCondition {
+                effects, otherwise, ..
+            } => effects
+                .iter()
+                .chain(otherwise)
+                .find_map(Effect::target_spec),
             Effect::Discard => None,
             Effect::ReturnToHand { target } => Some(target),
             Effect::DealDamage { target, .. } => Some(target),
@@ -724,12 +842,12 @@ impl Effect {
             Effect::PutCounters { target, .. } => Some(target),
             Effect::Earthbend { target, .. } => Some(target),
             Effect::ExileUntilSourceLeaves { target } => Some(target),
-            Effect::BuffTarget { target, .. } => Some(target),
             Effect::UntapTarget { target }
             | Effect::TapTarget { target }
+            | Effect::AttachSourceTo { target }
+            | Effect::RemoveCounters { target, .. }
             | Effect::OwnerPutsIntoLibrary { target }
             | Effect::RevealHandDiscardChosen { target, .. } => Some(target),
-            Effect::GrantKeywordsToTarget { target, .. } => Some(target),
             Effect::OnNthResolutionThisTurn { effect, .. } => effect.target_spec(),
             Effect::OptionalPayment {
                 if_paid: then,
@@ -751,27 +869,32 @@ impl Effect {
             | Effect::OpponentsCastOnlyFromHand
             | Effect::ExileSourceSpell
             | Effect::ExileTopCardPlayThisTurn
-            | Effect::GrantFirebendingUntilEot { .. }
             | Effect::ExileUntilNonlandCastFree { .. }
             | Effect::CastFromHandFree { .. }
-            | Effect::NoMaximumHandSize
             | Effect::ShuffleGraveyardIntoLibrary
             | Effect::PlaceTargetInLibrary { .. }
             | Effect::SearchLandsOpponentSplits { .. }
-            | Effect::ModifyControlled { .. }
-            | Effect::ModifyUntilEot { .. }
             | Effect::DrawCards { .. }
             | Effect::MassDamage { .. }
+            | Effect::DestroyCreaturesLosingAbilities { .. }
             | Effect::DamageOpponentCreatures { .. }
             | Effect::CreateTokensValue { .. }
             | Effect::CreateToken { .. }
             | Effect::PutCountersOnSource { .. }
             | Effect::TapSource
             | Effect::UntapSource
-            | Effect::CantBeBlockedThisTurnSource
-            | Effect::GrantKeywordsToSource { .. }
+            | Effect::ExileAttached
+            | Effect::TapAttached
+            | Effect::RemoveAllCountersFromAttached
+            | Effect::DistributeCountersToTappedOpponentCreatures { .. }
+            | Effect::ReturnGrantorToHand
+            | Effect::ShuffleAttachedIntoLibrary
             | Effect::ReturnSourceToHand
             | Effect::GainLife { .. }
+            | Effect::GainLifeValue { .. }
+            | Effect::AddManaValue { .. }
+            | Effect::FightLastTarget
+            | Effect::SearchLibraryToHand { .. }
             | Effect::Scry { .. }
             | Effect::Surveil { .. }
             | Effect::LookAndSelect { .. }
@@ -781,6 +904,7 @@ impl Effect {
             | Effect::CounterUnlessPays { .. }
             | Effect::ReturnSourceToBattlefieldTapped
             | Effect::AddMana { .. }
+            | Effect::AddOneColorManaValue { .. }
             | Effect::ForEachTarget { .. }
             | Effect::PutCountersOnEachMatching { .. }
             | Effect::TargetCreaturesDealPowerDamageToLastTarget => None,
@@ -808,10 +932,8 @@ pub fn effect_target_requirements(effects: &[Effect]) -> Vec<TargetRequirement> 
                     .iter()
                     .any(|effect| matches!(effect, Effect::ExileUntilSourceLeaves { .. }));
                 vec![TargetRequirement {
-                    spec: spec.clone(),
                     min: usize::from(!optional),
-                    max: 1,
-                    another: false,
+                    ..TargetRequirement::one(spec.clone())
                 }]
             })
             .unwrap_or_default()

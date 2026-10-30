@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "contract_id": "manabot.semantic-kernel-conformance.v1",
-  "content_digest": "ce7b6e9204925073b216f6330ebb044a656358b5d67c8955d67773e04b77e5d1",
+  "content_digest": "ed74c7fb9cbe6b82cf6fade37d72870f5538da9fd930fbb59d8ef241d5b75a47",
   "reference": "reference/explicit-step-v1",
   "optimized": "optimized/skip-trivial-v1",
   "limitation": "Both executors share low-level rules/card primitives; this is not a second Comprehensive Rules engine.",
@@ -11,98 +11,98 @@
       "orientation": "ur_lessons_vs_gw_allies",
       "commands": 107,
       "outcome": "terminal",
-      "final_state_hash": "v10:ae16bd583cb31ab8b0999740aac078ae389d5691c17797e28aa4af955d7a5815"
+      "final_state_hash": "v11:876609144ca2e63375a3263d91a1ab48b5c6a727d7d148bf0e06633368db779e"
     },
     {
       "case_id": "gw-vs-ur-5eee",
       "orientation": "gw_allies_vs_ur_lessons",
       "commands": 48,
       "outcome": "terminal",
-      "final_state_hash": "v10:1a409b95c9e9bf8a753daa4db90c3c9e7b5f09ae53d4c9a3ee20302b5f9c25f1"
+      "final_state_hash": "v11:9f2e7a314934b03a698deea7d3ddeaab9cc1dbb72b426488678e9adc144744ca"
     },
     {
       "case_id": "ur-vs-gw-5eef",
       "orientation": "ur_lessons_vs_gw_allies",
       "commands": 154,
       "outcome": "terminal",
-      "final_state_hash": "v10:f859b6a84321865289eb75fb2b84aa01dfa10515cd2b22ecc0642e44f3201b3f"
+      "final_state_hash": "v11:d3536ee2e18bb9a7375746f989c964381fb214c981ecda0bfd520c619bfaa12b"
     },
     {
       "case_id": "gw-vs-ur-5ef0",
       "orientation": "gw_allies_vs_ur_lessons",
       "commands": 221,
       "outcome": "terminal",
-      "final_state_hash": "v10:5e2bbf9ae0499f8982f1dddd92e4671cf5cd318beb8020936841f2c7b7dd75a0"
+      "final_state_hash": "v11:f0d4209359a2ce739989cb7041cebad0bc62191f05e0eec2f9828d3c43c564e8"
     },
     {
       "case_id": "elemental-161",
       "orientation": "elemental_left_vs_right",
       "commands": 129,
       "outcome": "terminal",
-      "final_state_hash": "v10:072ba76e649c0916341e592731f8bcbdb2b1559c5bdea6e40a1416f6aa18eaf7"
+      "final_state_hash": "v11:1d35a479aaa0cfcd3b13860e862dd2818787927ac68694c4873c90ffdd27ca43"
     },
     {
       "case_id": "elemental-162",
       "orientation": "elemental_right_vs_left",
       "commands": 80,
       "outcome": "terminal",
-      "final_state_hash": "v10:59ea546375796fb79aa631b965828b22f926329a94a9a0df7ae6614901e1de6f"
+      "final_state_hash": "v11:4f044d230e69f1e3e1a728a0d52881944dffe0758984bd2256fb5821b2e9614e"
     },
     {
       "case_id": "elemental-163",
       "orientation": "elemental_left_vs_right",
       "commands": 135,
       "outcome": "terminal",
-      "final_state_hash": "v10:f96c075e28ad11689540eb85da28315933ba70dd9212ad2778d18faa21079aab"
+      "final_state_hash": "v11:66115f1327eb139da4ea7722bd3b7c39291a3a26fb694a894e1529153de72caa"
     },
     {
       "case_id": "elemental-164",
       "orientation": "elemental_right_vs_left",
       "commands": 196,
       "outcome": "terminal",
-      "final_state_hash": "v10:bd15cabc6bd406dcfef10ba12ce9eb7c21ea2efa1a56c145b1e25b7fcc0a80b1"
+      "final_state_hash": "v11:1135b3bb61894be943ea62764d53eceafcc02366c61c0af7a802246e7f0aa331"
     },
     {
       "case_id": "sacrifice-162",
       "orientation": "sacrifice_left_vs_right",
       "commands": 154,
       "outcome": "terminal",
-      "final_state_hash": "v10:f715e1d3c1ab9d9319c82a06bbbb17acc5739cfcdca1e86813114ac05c657c31"
+      "final_state_hash": "v11:87404862e66532c6be56fd8dea6aedc71968439b06344f68a8ff4419ea0d9eba"
     },
     {
       "case_id": "sacrifice-163",
       "orientation": "sacrifice_right_vs_left",
       "commands": 243,
       "outcome": "terminal",
-      "final_state_hash": "v10:55d278df62e6c16af98e7f46038b054f5bcea7c774e9c9100591fa829e0ce08b"
+      "final_state_hash": "v11:8569ea37685bf09b2572aa0b8a0e0b96c2962fdde8c5b09a805593915fc48036"
     },
     {
       "case_id": "temur-163",
       "orientation": "temur_left_vs_right",
       "commands": 606,
       "outcome": "terminal",
-      "final_state_hash": "v10:eb718fb4ee40972a319a5e5249b0a10fa957e31330239d80e2e667fb49ee3f07"
+      "final_state_hash": "v11:7848236e8477901b09b2afaf0ad42f861efbede33ce922b5f1383c3d3d493ba6"
     },
     {
       "case_id": "temur-164",
       "orientation": "temur_right_vs_left",
       "commands": 934,
       "outcome": "terminal",
-      "final_state_hash": "v10:3e10ca1b64d3cbd28ed19b6d38086e06d03b6fb83d4e9fe15a5f4c8734ed059b"
+      "final_state_hash": "v11:0139cc8ddf2d13cf1d68cecac2034d18d3a767b0ad4e8286a0da6ceb39a05d1e"
     },
     {
       "case_id": "elemental-world-gr_vs_ug",
       "orientation": "elemental_world_gr_vs_ug",
       "commands": 198,
       "outcome": "terminal",
-      "final_state_hash": "v10:38bebac5db22223e1c04a228d7164b96b8ac805454e5dea0e1076350eac627b0"
+      "final_state_hash": "v11:2c6b39432731e1ee25bbdbbab498be17d8b9126c7a41324166da09065e7aed8c"
     },
     {
       "case_id": "elemental-world-ug_vs_gr",
       "orientation": "elemental_world_ug_vs_gr",
       "commands": 196,
       "outcome": "terminal",
-      "final_state_hash": "v10:774279d4d99b2537559947711725bcea020a51e61e3f883ec06c1e976184fbe6"
+      "final_state_hash": "v11:74a9c0d3f86b7ea2b07b62ea19b70fe4e2190387a75aa8fdea594b0c15178c25"
     }
   ],
   "exercised_prompt_kinds": [

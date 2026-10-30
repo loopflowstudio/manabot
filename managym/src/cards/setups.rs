@@ -18,7 +18,7 @@ use super::ContentError;
 use crate::{
     cards::content_pack::ContentPack,
     cardsets,
-    state::{ability::Effect, card::CardDefinition, player::PlayerConfig},
+    state::{card::CardDefinition, player::PlayerConfig},
 };
 
 const SETUPS: &str = include_str!("../../../content/semantic/current/setups.json");
@@ -193,57 +193,31 @@ fn build(preset: String, source: SetupSource) -> Result<AuthoredPack, ContentErr
     })
 }
 
-/// Names of the token definitions `definition`'s effects create.
+/// Names of the token definitions `definition`'s effects create: every
+/// `token_name` at any depth of its serialized effects, so an effect that nests
+/// others (modes, branches, granted abilities) needs no visitor entry.
 pub(crate) fn created_tokens(definition: &CardDefinition) -> BTreeSet<String> {
-    fn visit(effect: &Effect, out: &mut BTreeSet<String>) {
-        match effect {
-            Effect::CreateToken { token_name, .. }
-            | Effect::CreateTokensValue { token_name, .. }
-            | Effect::ExileWithControllerToken { token_name, .. } => {
-                out.insert(token_name.clone());
+    fn visit(value: &serde_json::Value, out: &mut BTreeSet<String>) {
+        match value {
+            serde_json::Value::Object(fields) => {
+                for (name, field) in fields {
+                    match (name.as_str(), field) {
+                        ("token_name", serde_json::Value::String(token)) => {
+                            out.insert(token.clone());
+                        }
+                        _ => visit(field, out),
+                    }
+                }
             }
-            Effect::OptionalPayment {
-                if_paid,
-                if_declined,
-                ..
-            } => if_paid
-                .iter()
-                .chain(if_declined)
-                .for_each(|e| visit(e, out)),
-            Effect::IfKicked { then, otherwise }
-            | Effect::IfGraveyardAtLeast {
-                then, otherwise, ..
-            } => then.iter().chain(otherwise).for_each(|e| visit(e, out)),
-            Effect::MillAndSelect {
-                if_declined,
-                if_milled,
-                ..
-            } => if_declined
-                .iter()
-                .chain(if_milled.iter().flat_map(|bonus| &bonus.effects))
-                .for_each(|e| visit(e, out)),
-            Effect::SacrificeSource { then } => then.iter().for_each(|e| visit(e, out)),
-            Effect::TargetClause { effects, .. }
-            | Effect::IfCondition { effects, .. }
-            | Effect::ForEachTarget { effects } => effects.iter().for_each(|e| visit(e, out)),
-            Effect::IfTargetMatches { then, .. } => then.iter().for_each(|e| visit(e, out)),
-            Effect::OnNthResolutionThisTurn { effect, .. } => visit(effect, out),
-            Effect::Modal { modes } => modes.iter().flatten().for_each(|e| visit(e, out)),
+            serde_json::Value::Array(items) => items.iter().for_each(|item| visit(item, out)),
             _ => {}
         }
     }
     let mut out = BTreeSet::new();
-    definition
-        .spell_effects
-        .iter()
-        .chain(definition.abilities.iter().flat_map(|a| a.effects()))
-        .chain(
-            definition
-                .activated_abilities
-                .iter()
-                .flat_map(|a| &a.effects),
-        )
-        .for_each(|effect| visit(effect, &mut out));
+    visit(
+        &serde_json::to_value(definition).expect("card definitions serialize"),
+        &mut out,
+    );
     out
 }
 

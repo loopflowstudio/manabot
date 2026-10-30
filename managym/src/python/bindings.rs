@@ -29,10 +29,10 @@ use crate::{
         action::{ActionSpaceKind, ActionType, AgentError},
         env::{Env, PreparedPossibleWorldMaterializer},
         observation::{
-            ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData, EventData,
-            EventEntityKind, EventType, KeywordData, Observation, PermanentData, PlayerData,
-            RestrictedManaData, SideboardCardData, StackObjectData, StackObjectKindData,
-            StackTargetData, StackTargetKindData, TurnData,
+            ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
+            ContinuousEffectData, CopyData, EventData, EventEntityKind, EventType, KeywordData,
+            Observation, PermanentData, PlayerData, RestrictedManaData, SideboardCardData,
+            StackObjectData, StackObjectKindData, StackTargetData, StackTargetKindData, TurnData,
         },
         observation_encoder::{ObservationEncoderConfig, ACTION_DIM},
         structured_offer::{OfferId as StructuredOfferId, OfferSubmission, StructuredOfferSet},
@@ -42,7 +42,7 @@ use crate::{
         Command as ExperienceCommand, CommandId, MatchId, OfferId as ExperienceOfferId, PromptId,
         Revision,
     },
-    flow::turn::{PhaseKind, StepKind},
+    flow::turn::{PhaseKind, PlayerTurnHistory, StepKind},
     python::convert::{info_dict_to_pydict, require_numpy_array, shape_to_vec},
     search_state::SearchStateWitness,
     state::{mana::ManaCost, player::PlayerConfig, zone::ZoneType},
@@ -96,6 +96,20 @@ fn encoded_to_dict<'py>(
 ) -> PyResult<Bound<'py, PyDict>> {
     let np = PyModule::import_bound(py, "numpy")?;
     let dict = PyDict::new_bound(py);
+    if config.policy_input_version >= 5 {
+        dict.set_item(
+            "facts",
+            to_numpy_array_f32(
+                py,
+                &np,
+                &encoded.facts,
+                &[
+                    crate::agent::observation_encoder::FACT_ROWS,
+                    crate::agent::observation_encoder::FACT_DIM,
+                ],
+            )?,
+        )?;
+    }
     if config.policy_input_version >= 2 {
         dict.set_item(
             "relations",
@@ -1007,6 +1021,13 @@ pub struct PyPlayer {
     #[pyo3(get)]
     pub remaining_sideboard_counts: BTreeMap<u32, u32>,
     #[pyo3(get, set)]
+    pub keeps_red_mana: bool,
+    /// What this player has done this turn.
+    #[pyo3(get, set)]
+    pub turn_history: PyPlayerTurnHistory,
+    #[pyo3(get, set)]
+    pub no_maximum_hand_size: bool,
+    #[pyo3(get, set)]
     pub combat_mana: i32,
     #[pyo3(get)]
     pub mana: [i32; 6],
@@ -1017,8 +1038,166 @@ pub struct PyPlayer {
     /// Player id whose next turn ends this player's hand-only casting.
     #[pyo3(get)]
     pub hand_only_until: Option<i32>,
-    #[pyo3(get)]
-    pub no_maximum_hand_size: bool,
+    /// Continuous effects on this player, in timestamp order.
+    #[pyo3(get, set)]
+    pub effects: Vec<PyContinuousEffect>,
+}
+
+/// What one player has done this turn.
+#[cfg(feature = "python")]
+#[pyclass(name = "PlayerTurnHistory")]
+#[derive(Clone, Default)]
+pub struct PyPlayerTurnHistory {
+    #[pyo3(get, set)]
+    pub permanents_sacrificed: u32,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyPlayerTurnHistory {
+    #[new]
+    fn py_new() -> Self {
+        Self::default()
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PlayerTurnHistory> for PyPlayerTurnHistory {
+    fn from(value: PlayerTurnHistory) -> Self {
+        Self {
+            permanents_sacrificed: value.permanents_sacrificed,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PyPlayerTurnHistory> for PlayerTurnHistory {
+    fn from(value: PyPlayerTurnHistory) -> Self {
+        Self {
+            permanents_sacrificed: value.permanents_sacrificed,
+        }
+    }
+}
+
+/// One continuous-effect record on a player or permanent.
+#[cfg(feature = "python")]
+#[pyclass(name = "ContinuousEffect")]
+#[derive(Clone, Default)]
+pub struct PyContinuousEffect {
+    #[pyo3(get, set)]
+    pub modification: String,
+    #[pyo3(get, set)]
+    pub power: Option<i32>,
+    #[pyo3(get, set)]
+    pub toughness: Option<i32>,
+    #[pyo3(get, set)]
+    pub amount: Option<i32>,
+    #[pyo3(get, set)]
+    pub keywords: Vec<String>,
+    #[pyo3(get, set)]
+    pub subtypes: Vec<String>,
+    #[pyo3(get, set)]
+    pub color: Option<String>,
+    #[pyo3(get, set)]
+    pub duration: String,
+    #[pyo3(get, set)]
+    pub source_registry_key: Option<i32>,
+    #[pyo3(get, set)]
+    pub source_name: Option<String>,
+    #[pyo3(get, set)]
+    pub timestamp: i32,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyContinuousEffect {
+    #[new]
+    fn py_new() -> Self {
+        Self::default()
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<ContinuousEffectData> for PyContinuousEffect {
+    fn from(value: ContinuousEffectData) -> Self {
+        Self {
+            modification: value.modification,
+            power: value.power,
+            toughness: value.toughness,
+            amount: value.amount,
+            keywords: value.keywords,
+            subtypes: value.subtypes,
+            color: value.color,
+            duration: value.duration,
+            source_registry_key: value.source_registry_key,
+            source_name: value.source_name,
+            timestamp: value.timestamp,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PyContinuousEffect> for ContinuousEffectData {
+    fn from(value: PyContinuousEffect) -> Self {
+        Self {
+            modification: value.modification,
+            power: value.power,
+            toughness: value.toughness,
+            amount: value.amount,
+            keywords: value.keywords,
+            subtypes: value.subtypes,
+            color: value.color,
+            duration: value.duration,
+            source_registry_key: value.source_registry_key,
+            source_name: value.source_name,
+            timestamp: value.timestamp,
+        }
+    }
+}
+
+/// The copy effect that made a permanent a copy: the printed definition at
+/// the root of the copy chain and the exceptions in its copiable values.
+#[cfg(feature = "python")]
+#[pyclass(name = "CopyEffect")]
+#[derive(Clone, Default)]
+pub struct PyCopyEffect {
+    #[pyo3(get, set)]
+    pub registry_key: i32,
+    #[pyo3(get, set)]
+    pub name: String,
+    #[pyo3(get, set)]
+    pub exceptions: Vec<PyContinuousEffect>,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyCopyEffect {
+    #[new]
+    fn py_new() -> Self {
+        Self::default()
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<CopyData> for PyCopyEffect {
+    fn from(value: CopyData) -> Self {
+        Self {
+            registry_key: value.registry_key,
+            name: value.name,
+            exceptions: value.exceptions.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PyCopyEffect> for CopyData {
+    fn from(value: PyCopyEffect) -> Self {
+        Self {
+            registry_key: value.registry_key,
+            name: value.name,
+            exceptions: value.exceptions.into_iter().map(Into::into).collect(),
+        }
+    }
 }
 
 /// Mana spendable only on the named spell or ability-source subtypes.
@@ -1070,12 +1249,15 @@ impl From<PlayerData> for PyPlayer {
             known_hand: value.known_hand,
             sideboard_counts: value.sideboard_counts,
             remaining_sideboard_counts: value.remaining_sideboard_counts,
+            keeps_red_mana: value.keeps_red_mana,
+            turn_history: value.turn_history.into(),
+            no_maximum_hand_size: value.no_maximum_hand_size,
             combat_mana: value.combat_mana,
             mana: value.mana,
             lesson_mana: value.lesson_mana,
             restricted_mana: value.restricted_mana.into_iter().map(Into::into).collect(),
             hand_only_until: value.hand_only_until,
-            no_maximum_hand_size: value.no_maximum_hand_size,
+            effects: value.effects.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -1099,12 +1281,15 @@ impl From<PyPlayer> for PlayerData {
             known_hand: value.known_hand,
             sideboard_counts: value.sideboard_counts,
             remaining_sideboard_counts: value.remaining_sideboard_counts,
+            keeps_red_mana: value.keeps_red_mana,
+            turn_history: value.turn_history.into(),
+            no_maximum_hand_size: value.no_maximum_hand_size,
             combat_mana: value.combat_mana,
             mana: value.mana,
             lesson_mana: value.lesson_mana,
             restricted_mana: value.restricted_mana.into_iter().map(Into::into).collect(),
             hand_only_until: value.hand_only_until,
-            no_maximum_hand_size: value.no_maximum_hand_size,
+            effects: value.effects.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -1570,6 +1755,38 @@ pub struct PyPermanent {
     /// Effective keywords (printed + until-EOT grants).
     #[pyo3(get, set)]
     pub keywords: PyKeywords,
+    /// Counters other than +1/+1 by kind (`stun`, `fire`, `double_strike`).
+    #[pyo3(get, set)]
+    pub counters: BTreeMap<String, i32>,
+    /// Permanent id this Aura or Equipment is attached to.
+    #[pyo3(get, set)]
+    pub attached_to: Option<i32>,
+    /// Name set by an effect; None while the printed name applies.
+    #[pyo3(get, set)]
+    pub name: Option<String>,
+    /// Creature types set by an effect; None while the printed ones apply.
+    #[pyo3(get, set)]
+    pub creature_types: Option<Vec<String>>,
+    #[pyo3(get, set)]
+    pub is_granted_land: bool,
+    /// The attacker this creature blocks.
+    #[pyo3(get, set)]
+    pub blocking: Option<i32>,
+    #[pyo3(get, set)]
+    pub abilities_lost: bool,
+    /// Activated abilities whose exhaust or once-each-turn limit is spent.
+    #[pyo3(get, set)]
+    pub used_abilities: Vec<usize>,
+    /// Continuous effects on this permanent, in timestamp order.
+    #[pyo3(get, set)]
+    pub effects: Vec<PyContinuousEffect>,
+    /// Its timestamp (CR 613.7) when an attachment renewed it; None while
+    /// it is `id`.
+    #[pyo3(get, set)]
+    pub timestamp: Option<i32>,
+    /// The copy effect that made it a copy (CR 707.2); None for an original.
+    #[pyo3(get, set)]
+    pub copy: Option<PyCopyEffect>,
 }
 
 #[cfg(feature = "python")]
@@ -1595,6 +1812,17 @@ impl From<PermanentData> for PyPermanent {
             granted_firebending: value.granted_firebending,
             temp_subtypes: value.temp_subtypes,
             keywords: value.keywords.into(),
+            counters: value.counters,
+            attached_to: value.attached_to,
+            name: value.name,
+            creature_types: value.creature_types,
+            is_granted_land: value.is_granted_land,
+            blocking: value.blocking,
+            abilities_lost: value.abilities_lost,
+            used_abilities: value.used_abilities,
+            effects: value.effects.into_iter().map(Into::into).collect(),
+            timestamp: value.timestamp,
+            copy: value.copy.map(Into::into),
         }
     }
 }
@@ -1622,6 +1850,17 @@ impl From<PyPermanent> for PermanentData {
             granted_firebending: value.granted_firebending,
             temp_subtypes: value.temp_subtypes,
             keywords: value.keywords.into(),
+            counters: value.counters,
+            attached_to: value.attached_to,
+            name: value.name,
+            creature_types: value.creature_types,
+            is_granted_land: value.is_granted_land,
+            blocking: value.blocking,
+            abilities_lost: value.abilities_lost,
+            used_abilities: value.used_abilities,
+            effects: value.effects.into_iter().map(Into::into).collect(),
+            timestamp: value.timestamp,
+            copy: value.copy.map(Into::into),
         }
     }
 }
@@ -1870,6 +2109,12 @@ pub struct PyStackObject {
     pub ability_index: Option<i32>,
     #[pyo3(get, set)]
     pub targets: Vec<PyStackTarget>,
+    /// The announced value of X (0 when none).
+    #[pyo3(get, set)]
+    pub x: i32,
+    /// Keywords a static grants this spell on the stack; None when none.
+    #[pyo3(get, set)]
+    pub granted_keywords: Option<PyKeywords>,
 }
 
 #[cfg(feature = "python")]
@@ -1885,6 +2130,8 @@ impl From<StackObjectData> for PyStackObject {
             chosen_mode: value.chosen_mode,
             ability_index: value.ability_index,
             targets: value.targets.into_iter().map(PyStackTarget::from).collect(),
+            x: value.x,
+            granted_keywords: value.granted_keywords.map(PyKeywords::from),
         }
     }
 }
@@ -1906,6 +2153,8 @@ impl From<PyStackObject> for StackObjectData {
                 .into_iter()
                 .map(StackTargetData::from)
                 .collect(),
+            x: value.x,
+            granted_keywords: value.granted_keywords.map(KeywordData::from),
         }
     }
 }
@@ -3972,6 +4221,9 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyKeywords>()?;
     m.add_class::<PyManaCost>()?;
     m.add_class::<PyPermanent>()?;
+    m.add_class::<PyContinuousEffect>()?;
+    m.add_class::<PyCopyEffect>()?;
+    m.add_class::<PyPlayerTurnHistory>()?;
     m.add_class::<PyAction>()?;
     m.add_class::<PyActionSpace>()?;
     m.add_class::<PyStackTarget>()?;

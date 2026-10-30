@@ -405,12 +405,17 @@ class Player:
     known_hand: Dict[int, int]
     sideboard_counts: Dict[int, int]
     remaining_sideboard_counts: Dict[int, int]
+    keeps_red_mana: bool
+    # What this player has done this turn.
+    turn_history: PlayerTurnHistory
+    no_maximum_hand_size: bool
     combat_mana: int
     mana: tuple[int, int, int, int, int, int]
     lesson_mana: tuple[int, int, int, int, int, int]
     restricted_mana: List[RestrictedMana]
     hand_only_until: Optional[int]
-    no_maximum_hand_size: bool
+    # Continuous effects on this player, in timestamp order.
+    effects: list[ContinuousEffect]
 
 class RestrictedMana:
     spells: List[str]
@@ -456,6 +461,40 @@ class SideboardCard:
     registry_key: int
     name: str
 
+class ContinuousEffect:
+    """One continuous-effect record on a player or permanent (CR 611, 613)."""
+
+    # Modification variant: ModifyPt, SetBasePt, AddKeywords, AddSubtypes,
+    # BecomeArtifactCreature, Nonlegendary, LoseAllAbilities, Firebending, CantBeBlocked,
+    # ExileIfWouldDie, KeepUnspentMana or NoMaximumHandSize.
+    modification: str
+    power: int | None
+    toughness: int | None
+    amount: int | None
+    keywords: list[str]
+    subtypes: list[str]
+    color: str | None
+    # EndOfTurn or Indefinite.
+    duration: str
+    source_registry_key: int | None
+    # The source's printed name (public: the spell or ability resolved).
+    source_name: str | None
+    timestamp: int
+
+class PlayerTurnHistory:
+    """What one player has done this turn."""
+
+    permanents_sacrificed: int
+
+class CopyEffect:
+    """The copy effect that made a permanent a copy (CR 707.2)."""
+
+    # The printed definition at the root of the copy chain, and its name.
+    registry_key: int
+    name: str
+    # Exceptions in its copiable values (CR 707.9b), in application order.
+    exceptions: list[ContinuousEffect]
+
 class Permanent:
     id: int
     registry_key: int
@@ -477,6 +516,24 @@ class Permanent:
     temp_subtypes: List[str]
     # Effective keywords (printed + until-EOT grants).
     keywords: Keywords
+    # Counters other than +1/+1 by kind (stun, fire, double_strike).
+    counters: dict[str, int]
+    # Permanent id this Aura or Equipment is attached to.
+    attached_to: int | None
+    # Name and creature types set by an effect; None while printed ones apply.
+    name: str | None
+    creature_types: List[str] | None
+    is_granted_land: bool
+    blocking: int | None
+    abilities_lost: bool
+    used_abilities: list[int]
+    # Continuous effects on this permanent, in timestamp order.
+    effects: list[ContinuousEffect]
+    # Its timestamp (CR 613.7d/e) when an attachment renewed it; None while
+    # it is `id`, its entering timestamp.
+    timestamp: int | None
+    # The copy effect that made it a copy; None for an original.
+    copy: CopyEffect | None
 
 class Turn:
     turn_number: int
@@ -516,6 +573,10 @@ class StackObject:
     chosen_mode: int | None
     ability_index: int | None
     targets: List[StackTarget]
+    # The announced value of X (0 when none).
+    x: int
+    # Keywords a static grants this spell on the stack.
+    granted_keywords: Keywords | None
 
 class EventData:
     event_type: EventTypeEnum
@@ -584,6 +645,8 @@ class ContinuationFrame:
     can_decline: bool
     mana_outputs: list[ManaOutput]
     resolutions_this_turn: int
+    x: int
+    granted_keywords: list[bool]
 
 def validate_observation_json(text: str) -> None: ...
 def parse_continuation_frames_json(text: str) -> list[ContinuationFrame]: ...

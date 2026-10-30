@@ -46,6 +46,7 @@
   let preview = $state<CardPreview | null>(null);
   let resultDialog: HTMLDivElement | null = $state(null);
   let resultAction: HTMLButtonElement | null = $state(null);
+  const tablePermanents = $derived([...observation.agent.battlefield, ...observation.opponent.battlefield]);
   const stackCards = $derived([...observation.opponent.stack, ...observation.agent.stack]);
 
   $effect(() => {
@@ -120,6 +121,7 @@
         definitionNames={observation.definition_names ?? {}}
     label={villainLabel}
     player={observation.opponent}
+    {tablePermanents}
     deckName={deckNames?.villain ?? null}
     opponent={true}
     {focusedIds}
@@ -137,11 +139,12 @@
         {#each observation.stack_objects as entry, index}
           <li>{index === 0 ? 'Top' : index + 1} · {entry.label} · {entry.kind.replaceAll('_', ' ')} · Seat {entry.controller + 1}
             {#if entry.source_permanent !== undefined}
-              {#if [...observation.agent.battlefield, ...observation.opponent.battlefield].some(permanent => permanent.id === entry.source_permanent)}
+              {#if tablePermanents.some(permanent => permanent.id === entry.source_permanent)}
                 <button class="underline" onclick={() => inspectTarget(entry.source_permanent!)}>Inspect source</button>
               {:else}<span>Source no longer on the battlefield</span>{/if}
             {/if}
             {#if entry.chosen_mode !== undefined} · Mode {entry.chosen_mode + 1}{/if}
+            {#if entry.x !== undefined} · X = {entry.x}{/if}
           </li>
         {/each}
       </ol>
@@ -189,6 +192,7 @@
         definitionNames={observation.definition_names ?? {}}
       label={heroLabel}
       player={observation.agent}
+      {tablePermanents}
       deckName={deckNames?.hero ?? null}
       {focusedIds}
       {clickableTargets}

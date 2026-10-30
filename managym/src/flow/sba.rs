@@ -4,12 +4,28 @@
 use crate::{
     flow::{event::GameEvent, game::Game},
     state::{
+        effect::Modification,
         game_object::{CardId, PermanentId, PlayerId},
         zone::ZoneType,
     },
 };
 
 impl Game {
+    /// Layer 4 supertype: its copiable values' legendary supertype, unless a
+    /// `Modification::Nonlegendary` record removes it.
+    pub(crate) fn permanent_is_legendary(&self, id: PermanentId) -> bool {
+        let Some(permanent) = self.state.permanents[id].as_ref() else {
+            return false;
+        };
+        self.state.cards[permanent.card]
+            .supertypes
+            .iter()
+            .any(|kind| kind.eq_ignore_ascii_case("legendary"))
+            && !self
+                .effects_on(id)
+                .any(|effect| effect.modification == Modification::Nonlegendary)
+    }
+
     /// Duplicate legendary names, grouped by controller in APNAP order.
     fn legend_groups(&self) -> Vec<Vec<CardId>> {
         let mut groups = Vec::new();
@@ -17,13 +33,11 @@ impl Game {
             let mut names = std::collections::BTreeMap::<&str, Vec<CardId>>::new();
             for id in self.battlefield_permanents(player) {
                 let permanent = self.state.permanents[id].as_ref().expect("battlefield");
-                let card = &self.state.cards[permanent.card];
-                if card
-                    .supertypes
-                    .iter()
-                    .any(|kind| kind.eq_ignore_ascii_case("legendary"))
-                {
-                    names.entry(&card.name).or_default().push(permanent.card);
+                if self.permanent_is_legendary(id) {
+                    names
+                        .entry(self.permanent_name(id))
+                        .or_default()
+                        .push(permanent.card);
                 }
             }
             groups.extend(names.into_values().filter(|cards| cards.len() > 1));
@@ -102,7 +116,10 @@ impl Game {
                 && self.has_lethal_damage(permanent_id)
                 && !self.effective_keywords(permanent_id).indestructible;
             let legend_loser = legend_losers.contains(&permanent.card);
-            if !zero_toughness && !destroy && !legend_loser {
+            // CR 704.5m — An Aura attached to an illegal object or to
+            // nothing is put into its owner's graveyard.
+            let illegal_aura = self.aura_attachment_illegal(permanent_id);
+            if !zero_toughness && !destroy && !legend_loser && !illegal_aura {
                 continue;
             }
             let Some(object_ref) = self.permanent_object_ref(permanent_id) else {
@@ -115,7 +132,7 @@ impl Game {
                 object_ref,
                 event_ref,
                 permanent.controller,
-                destroy && !legend_loser,
+                destroy && !legend_loser && !illegal_aura,
             ));
         }
         candidates.sort_by_key(|(object_ref, _, _, _)| *object_ref);
@@ -148,6 +165,25 @@ impl Game {
             self.emit_observation_event(GameEvent::PermanentsDied { objects: died });
         }
 
+        // CR 704.5n — An Equipment attached to an object that is gone or is
+        // no longer a creature becomes unattached and stays on the battlefield.
+        let detached: Vec<PermanentId> = (0..self.state.permanents.len())
+            .map(PermanentId)
+            .filter(|&id| {
+                self.state.permanents[id].as_ref().is_some_and(|equipment| {
+                    equipment.attached_to.is_some()
+                        && self.state.cards[equipment.card].enchant().is_none()
+                }) && self.attached_creature(id).is_none()
+            })
+            .collect();
+        for permanent_id in detached {
+            self.journal_permanent(permanent_id);
+            if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
+                permanent.attached_to = None;
+            }
+            performed = true;
+        }
+
         // CR 704.5d — A token in a zone other than the battlefield ceases to
         // exist. This runs after the move to the graveyard, so death triggers
         // from tokens have already been enqueued.
@@ -175,6 +211,20 @@ impl Game {
         }
 
         performed
+    }
+
+    /// Whether an Aura is unattached, or attached to itself or an object its
+    /// enchant ability doesn't allow (CR 303.4d, 704.5m).
+    fn aura_attachment_illegal(&self, aura: PermanentId) -> bool {
+        let Some(permanent) = self.state.permanents[aura].as_ref() else {
+            return false;
+        };
+        let Some(enchant) = self.state.cards[permanent.card].enchant() else {
+            return false;
+        };
+        !self.attached_permanent(aura).is_some_and(|object| {
+            object != aura && self.permanent_matches_spec(object, enchant, permanent.controller)
+        })
     }
 
     pub(crate) fn lose_game(&mut self, player: PlayerId) -> bool {

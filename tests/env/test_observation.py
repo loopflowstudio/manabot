@@ -240,6 +240,7 @@ class TestObservationEncoder:
             "semantic_cards",
             "known_hand",
             "relations",
+            "facts",
         }
 
     def test_encode_observation(

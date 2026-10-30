@@ -3,6 +3,7 @@ use crate::state::{
     ability::{Ability, Effect, TriggerCondition, TriggerSubject},
     card::{CardDefinition, CardType, CardTypes},
     mana::ManaCost,
+    permanent::CounterKind,
     predicate::CardPredicate,
 };
 
@@ -34,6 +35,7 @@ fn tireless_tracker() -> CardDefinition {
                     token_name: "Clue".into(),
                     count: 1,
                     tapped_and_attacking: false,
+                    attach_source: false,
                 }],
             },
             Ability::Triggered {
@@ -44,7 +46,10 @@ fn tireless_tracker() -> CardDefinition {
                     },
                     controller_only: true,
                 },
-                effects: vec![Effect::PutCountersOnSource { count: 1 }],
+                effects: vec![Effect::PutCountersOnSource {
+                    count: 1,
+                    kind: CounterKind::PlusOnePlusOne,
+                }],
             },
         ],
         text_box: text_box.into(),

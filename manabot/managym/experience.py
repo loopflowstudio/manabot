@@ -329,6 +329,44 @@ class LegacyCardView(ProtocolModel):
     x: Int32 | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
+class ContinuousEffectView(ProtocolModel):
+    """One continuous-effect record on a permanent or player (CR 611, 613)."""
+
+    modification: str
+    power: Int32 | None = Field(default=None, exclude_if=lambda value: value is None)
+    toughness: Int32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    amount: Int32 | None = Field(default=None, exclude_if=lambda value: value is None)
+    keywords: list[str] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    subtypes: list[str] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    color: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    duration: str
+    source: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    timestamp: UInt32
+
+
+class PlayerTurnHistoryView(ProtocolModel):
+    """What one player has done this turn."""
+
+    permanents_sacrificed: UInt32 = Field(
+        default=0, exclude_if=lambda value: not value
+    )
+
+
+class CopyView(ProtocolModel):
+    """A copy effect: the printed card it copies and its exceptions (CR 707.9b)."""
+
+    name: str
+    exceptions: list[ContinuousEffectView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+
+
 class LegacyPermanentView(ProtocolModel):
     types: LegacyCardTypesView | None = Field(
         default=None, exclude_if=lambda value: value is None
@@ -355,6 +393,30 @@ class LegacyPermanentView(ProtocolModel):
     base_power: Int32 | None
     base_toughness: Int32 | None
     plus1_counters: UInt32
+    counters: dict[str, UInt32] = Field(
+        default_factory=dict, exclude_if=lambda value: not value
+    )
+    attached_to: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    creature_types: list[str] | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    is_granted_land: bool = Field(default=False, exclude_if=lambda value: not value)
+    attacking: bool = Field(default=False, exclude_if=lambda value: not value)
+    blocking: UInt32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    abilities_lost: bool = Field(default=False, exclude_if=lambda value: not value)
+    used_abilities: list[UInt32] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    effects: list[ContinuousEffectView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    copy_of: CopyView | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
 
 
 class SideboardCardView(ProtocolModel):
@@ -410,6 +472,17 @@ class LegacyPlayerView(ProtocolModel):
         default=None,
         exclude_if=lambda value: value is None,
     )
+    keeps_red_mana: bool = Field(default=False, exclude_if=lambda value: not value)
+    turn_history: PlayerTurnHistoryView = Field(
+        default_factory=PlayerTurnHistoryView,
+        exclude_if=lambda value: value == PlayerTurnHistoryView(),
+    )
+    no_maximum_hand_size: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
+    effects: list[ContinuousEffectView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
     hand: list[LegacyCardView]
     graveyard: list[LegacyCardView]
     exile: list[LegacyCardView]
@@ -439,6 +512,7 @@ class StackEntryView(ProtocolModel):
     chosen_mode: UInt32 | None = Field(
         default=None, exclude_if=lambda value: value is None
     )
+    x: UInt32 | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class LegacyHeroObservation(ProtocolModel):

@@ -1,4 +1,6 @@
 //! Strixhaven: School of Mages.
+use crate::state::ability::AffectedSpec;
+use crate::state::effect::Modification;
 use crate::state::{
     ability::{Ability, Effect, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject},
     card::{CardDefinition, CardType, CardTypes, Keywords, StaticAbility},
@@ -35,10 +37,12 @@ fn divide_by_zero() -> CardDefinition {
             Effect::Learn,
         ],
         targeting: vec![TargetRequirement {
+            shares_creature_type: false,
             spec: TargetSpec::SpellOrPermanent { min_mana_value: 1 },
             min: 1,
             max: 1,
             another: false,
+            max_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -55,18 +59,17 @@ fn enthusiastic_study() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{2}{R}")),
         types: CardTypes::new([CardType::Instant]),
         spell_effects: vec![
-            Effect::BuffTarget {
-                power: 3,
-                toughness: 1,
-                target: TargetSpec::Creature,
-            },
-            Effect::GrantKeywordsToTarget {
-                keywords: Keywords {
+            Effect::until_end_of_turn(
+                AffectedSpec::Target(TargetSpec::Creature),
+                Modification::pump(3, 1),
+            ),
+            Effect::until_end_of_turn(
+                AffectedSpec::Target(TargetSpec::Creature),
+                Modification::AddKeywords(Keywords {
                     trample: true,
                     ..Default::default()
-                },
-                target: TargetSpec::Creature,
-            },
+                }),
+            ),
             Effect::Learn,
         ],
         text_box: text_box.into(),
@@ -170,10 +173,12 @@ fn igneous_inspiration() -> CardDefinition {
             Effect::Learn,
         ],
         targeting: vec![TargetRequirement {
+            shares_creature_type: false,
             spec: TargetSpec::CreatureOrPlayer,
             min: 1,
             max: 1,
             another: false,
+            max_x: false,
         }],
         text_box: text_box.into(),
         ..Default::default()

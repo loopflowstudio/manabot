@@ -1544,6 +1544,135 @@
       "title": "CodeSourceArtifact",
       "type": "object"
     },
+    "ContinuousEffectView": {
+      "additionalProperties": false,
+      "description": "One continuous-effect record on a permanent or player (CR 611, 613).",
+      "properties": {
+        "amount": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Amount"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "duration": {
+          "title": "Duration",
+          "type": "string"
+        },
+        "keywords": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Keywords",
+          "type": "array"
+        },
+        "modification": {
+          "title": "Modification",
+          "type": "string"
+        },
+        "power": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Power"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "subtypes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Subtypes",
+          "type": "array"
+        },
+        "timestamp": {
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Timestamp",
+          "type": "integer"
+        },
+        "toughness": {
+          "anyOf": [
+            {
+              "maximum": 2147483647,
+              "minimum": -2147483648,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Toughness"
+        }
+      },
+      "required": [
+        "modification",
+        "duration",
+        "timestamp"
+      ],
+      "title": "ContinuousEffectView",
+      "type": "object"
+    },
+    "CopyView": {
+      "additionalProperties": false,
+      "description": "A copy effect: the printed card it copies and its exceptions (CR 707.9b).",
+      "properties": {
+        "exceptions": {
+          "items": {
+            "$ref": "#/$defs/ContinuousEffectView"
+          },
+          "title": "Exceptions",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "CopyView",
+      "type": "object"
+    },
     "DecisionContextView": {
       "additionalProperties": false,
       "properties": {
@@ -2381,6 +2510,30 @@
     "LegacyPermanentView": {
       "additionalProperties": false,
       "properties": {
+        "abilities_lost": {
+          "default": false,
+          "title": "Abilities Lost",
+          "type": "boolean"
+        },
+        "attached_to": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attached To"
+        },
+        "attacking": {
+          "default": false,
+          "title": "Attacking",
+          "type": "boolean"
+        },
         "base_power": {
           "anyOf": [
             {
@@ -2407,17 +2560,73 @@
           ],
           "title": "Base Toughness"
         },
+        "blocking": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Blocking"
+        },
         "controller_id": {
           "maximum": 4294967295,
           "minimum": 0,
           "title": "Controller Id",
           "type": "integer"
         },
+        "copy_of": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CopyView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "counters": {
+          "additionalProperties": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Counters",
+          "type": "object"
+        },
+        "creature_types": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Creature Types"
+        },
         "damage": {
           "maximum": 2147483647,
           "minimum": -2147483648,
           "title": "Damage",
           "type": "integer"
+        },
+        "effects": {
+          "items": {
+            "$ref": "#/$defs/ContinuousEffectView"
+          },
+          "title": "Effects",
+          "type": "array"
         },
         "exhausted_abilities": {
           "default": 0,
@@ -2443,6 +2652,11 @@
           "minimum": 0,
           "title": "Id",
           "type": "integer"
+        },
+        "is_granted_land": {
+          "default": false,
+          "title": "Is Granted Land",
+          "type": "boolean"
         },
         "is_token": {
           "anyOf": [
@@ -2536,6 +2750,15 @@
             }
           ],
           "default": null
+        },
+        "used_abilities": {
+          "items": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Used Abilities",
+          "type": "array"
         }
       },
       "required": [
@@ -2577,6 +2800,13 @@
           ],
           "default": null,
           "title": "Combat Mana"
+        },
+        "effects": {
+          "items": {
+            "$ref": "#/$defs/ContinuousEffectView"
+          },
+          "title": "Effects",
+          "type": "array"
         },
         "exile": {
           "items": {
@@ -2646,6 +2876,11 @@
         },
         "is_agent": {
           "title": "Is Agent",
+          "type": "boolean"
+        },
+        "keeps_red_mana": {
+          "default": false,
+          "title": "Keeps Red Mana",
           "type": "boolean"
         },
         "known_hand": {
@@ -2810,6 +3045,9 @@
           },
           "title": "Stack",
           "type": "array"
+        },
+        "turn_history": {
+          "$ref": "#/$defs/PlayerTurnHistoryView"
         },
         "zone_counts": {
           "additionalProperties": {
@@ -3274,6 +3512,21 @@
       "title": "PlayerSubject",
       "type": "object"
     },
+    "PlayerTurnHistoryView": {
+      "additionalProperties": false,
+      "description": "What one player has done this turn.",
+      "properties": {
+        "permanents_sacrificed": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Permanents Sacrificed",
+          "type": "integer"
+        }
+      },
+      "title": "PlayerTurnHistoryView",
+      "type": "object"
+    },
     "PolicyMass": {
       "additionalProperties": false,
       "properties": {
@@ -3544,6 +3797,20 @@
           ],
           "default": null,
           "title": "Source Permanent"
+        },
+        "x": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "X"
         }
       },
       "required": [

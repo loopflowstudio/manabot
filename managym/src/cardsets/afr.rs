@@ -33,6 +33,7 @@ fn deadly_dispute() -> CardDefinition {
                 token_name: "Treasure".into(),
                 count: 1,
                 tapped_and_attacking: false,
+                attach_source: false,
             },
         ],
         text_box: text_box.into(),

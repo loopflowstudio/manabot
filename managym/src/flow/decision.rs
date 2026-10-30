@@ -17,6 +17,7 @@ use crate::{
     state::{
         ability::{Effect, LinkedGrant, PaymentCost},
         game_object::{CardId, ObjectId, ObjectRef, PlayerId, Target},
+        permanent::CounterKind,
         predicate::CardPredicate,
         zone::ZoneType,
     },
@@ -29,8 +30,14 @@ pub enum FrameFinalize {
     /// Abilities: nothing to clean up.
     None,
     /// Spells: remove the stack object, then put the card into the
-    /// battlefield (permanents) or graveyard.
-    Spell { card: CardId },
+    /// battlefield (permanents) or graveyard. A resolving Aura spell enters
+    /// attached to `attach_to`, the object its attach instruction chose
+    /// (CR 303.4f).
+    Spell {
+        card: CardId,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        attach_to: Option<ObjectRef>,
+    },
 }
 
 /// A chosen target's clause and eligibility at resolution start (CR 608.2b).
@@ -60,14 +67,23 @@ pub struct EffectFrame {
     pub resolutions_this_turn: u32,
     /// Whether the resolving spell was kicked.
     pub kicked: bool,
-    /// The resolving spell's announced X (0 for abilities).
+    /// The resolving spell's or ability's announced X; 0 without one.
     pub x: u8,
+    /// Excess damage (CR 120.4a) the latest damage instruction dealt to its
+    /// creature, read by a later "the excess damage dealt this way".
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub excess_damage: i32,
     /// Chosen slots, with eligibility retained across instructions and choices.
     pub targets: Vec<ResolutionTarget>,
     pub active_requirement: usize,
     /// Trigger-context object (e.g. the spell that targeted a warded
-    /// permanent) — used as the primary target when none was chosen.
+    /// permanent) — used as the primary target when none was chosen. For an
+    /// activated ability of an Aura or Equipment, the object it was attached to.
     pub context_target: Option<Target>,
+    /// The exact object that granted the resolving ability (CR 400.7: once
+    /// it leaves the battlefield, references to it find nothing).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub grantor: Option<ObjectRef>,
     /// Effects still to execute.
     pub queue: VecDeque<Effect>,
     pub finalize: FrameFinalize,
@@ -165,6 +181,13 @@ pub enum Decision {
         player: PlayerId,
         predicate: CardPredicate,
     },
+    /// Place one of `remaining` `kind` counters on a tapped creature an
+    /// opponent of `player` controls; candidates are read at each placement.
+    DistributeCounters {
+        player: PlayerId,
+        kind: CounterKind,
+        remaining: usize,
+    },
     SelectMilled {
         player: PlayerId,
         cards: Vec<CardId>,
@@ -186,6 +209,12 @@ pub enum Decision {
         to_hand: bool,
         #[serde(skip_serializing_if = "Vec::is_empty")]
         selected: Vec<CardId>,
+    },
+    /// "Search your library for a [predicate] card, reveal it, put it into
+    /// your hand, then shuffle." Candidates come from the current library.
+    SearchLibraryToHand {
+        player: PlayerId,
+        predicate: CardPredicate,
     },
     /// Discard up to `remaining` more cards; then draw `count` per discard.
     OptionalDiscardDraw {
@@ -305,9 +334,11 @@ impl Decision {
             Decision::Payment(payment) => payment.player,
             Decision::ManaUpfront { player, .. }
             | Decision::ManaChoice { player, .. }
-            | Decision::Sacrifice { player, .. } => *player,
+            | Decision::Sacrifice { player, .. }
+            | Decision::DistributeCounters { player, .. } => *player,
             Decision::SelectMilled { player, .. }
             | Decision::SearchBasicLand { player, .. }
+            | Decision::SearchLibraryToHand { player, .. }
             | Decision::SearchDistinctLands { player, .. }
             | Decision::DiscardFromRevealedHand { player, .. }
             | Decision::CastWithoutPaying { player, .. }
@@ -332,13 +363,15 @@ impl Decision {
             Decision::ManaUpfront { .. }
             | Decision::Payment(_)
             | Decision::ManaChoice { .. }
-            | Decision::Sacrifice { .. } => &[],
+            | Decision::Sacrifice { .. }
+            | Decision::DistributeCounters { .. } => &[],
             Decision::Scry { looked, .. } => looked,
             Decision::LookAndSelect { looked, .. } | Decision::Surveil { looked, .. } => looked,
             Decision::SearchDistinctLands { selected, .. } => selected,
             Decision::OpponentSplitsRevealed { revealed, .. } => revealed,
             Decision::SelectMilled { .. }
             | Decision::SearchBasicLand { .. }
+            | Decision::SearchLibraryToHand { .. }
             | Decision::DiscardFromRevealedHand { .. }
             | Decision::CastWithoutPaying { .. }
             | Decision::ExileLinked { .. }
@@ -388,9 +421,11 @@ impl Game {
                 resolutions_this_turn: 0,
                 kicked: false,
                 x: 0,
+                excess_damage: 0,
                 targets: Vec::new(),
                 active_requirement: 0,
                 context_target: None,
+                grantor: None,
                 queue: VecDeque::new(),
                 finalize: FrameFinalize::None,
             },
@@ -411,7 +446,7 @@ impl Game {
     }
 
     fn finalize_frame(&mut self, frame: EffectFrame) {
-        if let FrameFinalize::Spell { card } = frame.finalize {
+        if let FrameFinalize::Spell { card, attach_to } = frame.finalize {
             // A spell that exiled itself ("Exile Avatar's Wrath") has
             // already left the stack (CR 608.2n).
             if self.state.zones.zone_of(card) == Some(ZoneType::Stack) {
@@ -424,9 +459,22 @@ impl Game {
                         ZoneType::Battlefield,
                         crate::flow::proposed_event::ZoneEntry {
                             controller: Some(frame.controller),
+                            x: frame.x,
                             ..Default::default()
                         },
                     );
+                    if let Some(permanent_id) = self.state.card_to_permanent[card] {
+                        if attach_to.is_some() {
+                            self.journal_permanent(permanent_id);
+                            if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
+                                permanent.attached_to = attach_to;
+                            }
+                            // The Aura's grants change the enchanted
+                            // creature's mana abilities, whoever controls it.
+                            self.invalidate_mana_cache(PlayerId(0));
+                            self.invalidate_mana_cache(PlayerId(1));
+                        }
+                    }
                 } else {
                     self.move_card(card, ZoneType::Graveyard);
                 }
@@ -510,6 +558,19 @@ impl Game {
                 ),
                 focus: source_focus,
             },
+            Decision::DistributeCounters { player, .. } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: self
+                    .tapped_opponent_creatures(*player)
+                    .into_iter()
+                    .map(|id| Action::SelectCard {
+                        player: *player,
+                        card: self.state.permanents[id].as_ref().unwrap().card,
+                    })
+                    .collect(),
+                focus: source_focus,
+            },
             Decision::SearchBasicLand {
                 player,
                 subtype,
@@ -521,6 +582,16 @@ impl Game {
                 actions: select_cards(
                     *player,
                     self.basic_land_search_candidates(*player, subtype, *to_hand),
+                    true,
+                ),
+                focus: source_focus,
+            },
+            Decision::SearchLibraryToHand { player, predicate } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: select_cards(
+                    *player,
+                    self.library_search_candidates(*player, predicate),
                     true,
                 ),
                 focus: source_focus,
@@ -807,6 +878,29 @@ impl Game {
                 Ok(())
             }
             (
+                Decision::DistributeCounters {
+                    player,
+                    kind,
+                    remaining,
+                },
+                Action::SelectCard { card, .. },
+            ) => {
+                let selected = self.state.card_to_permanent[*card]
+                    .filter(|id| self.tapped_opponent_creatures(*player).contains(id));
+                let Some(selected) = selected else {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("illegal counter recipient".into()));
+                };
+                self.change_counters(selected, *kind, 1);
+                if let Some(next) = self.distribute_counters(*player, *kind, *remaining - 1) {
+                    suspended.decision = next;
+                    self.state.suspended_decision = Some(suspended);
+                } else {
+                    self.run_frame(suspended.frame);
+                }
+                Ok(())
+            }
+            (
                 Decision::SearchBasicLand {
                     player,
                     subtype,
@@ -854,10 +948,7 @@ impl Game {
                         self.put_on_bottom_of_library(card);
                     }
                 }
-                self.journal_zones();
-                self.state
-                    .zones
-                    .shuffle(ZoneType::Library, player, &mut self.state.rng);
+                self.shuffle_library(player);
                 if untap_if_lands.is_some_and(|minimum| {
                     self.battlefield_permanents(player)
                         .into_iter()
@@ -883,6 +974,25 @@ impl Game {
                     }
                     self.invalidate_mana_cache(player);
                 }
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (
+                Decision::SearchLibraryToHand { player, predicate },
+                Action::SelectCard { .. } | Action::Decline { .. },
+            ) => {
+                let player = *player;
+                if let Action::SelectCard { card, .. } = action {
+                    if !self
+                        .library_search_candidates(player, predicate)
+                        .contains(card)
+                    {
+                        self.state.suspended_decision = Some(suspended);
+                        return Err(AgentError("not a matching card in library".into()));
+                    }
+                    self.reveal_card_to_hand(*card, player);
+                }
+                self.shuffle_library(player);
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -1301,6 +1411,15 @@ impl Game {
             .collect()
     }
 
+    /// The top card of `player`'s library.
+    pub(crate) fn library_top_card(&self, player: PlayerId) -> Option<CardId> {
+        self.state
+            .zones
+            .zone_cards(ZoneType::Library, player)
+            .last()
+            .copied()
+    }
+
     /// The cards an `ExileLinked` decision may exile: matching graveyard
     /// cards, or the cards of matching nontoken permanents `owner` controls.
     pub(crate) fn linked_exile_candidates(&self, decision: &Decision) -> Vec<CardId> {
@@ -1525,9 +1644,11 @@ mod learn_tests {
             resolutions_this_turn: 0,
             kicked: false,
             x: 0,
+            excess_damage: 0,
             targets: vec![],
             active_requirement: 0,
             context_target: None,
+            grantor: None,
             queue: VecDeque::from([Effect::Learn]),
             finalize: FrameFinalize::None,
         });
@@ -2278,9 +2399,11 @@ mod payment_tests {
             resolutions_this_turn: 0,
             kicked: false,
             x: 0,
+            excess_damage: 0,
             targets: vec![],
             active_requirement: 0,
             context_target: None,
+            grantor: None,
             queue: VecDeque::from([
                 Effect::OptionalPayment {
                     cost,

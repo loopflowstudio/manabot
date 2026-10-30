@@ -4,8 +4,9 @@ use super::{
     ability::{
         effect_target_requirements, Ability, Effect, StaticCondition, TargetRequirement, TargetSpec,
     },
-    game_object::{ObjectId, PlayerId},
+    game_object::{ObjectId, ObjectRef, PlayerId},
     mana::{Color, Colors, Mana, ManaCost},
+    permanent::CounterKind,
     predicate::CardPredicate,
     zone::ZoneType,
 };
@@ -136,6 +137,30 @@ pub struct Keywords {
 }
 
 impl Keywords {
+    /// The names of the keywords present (field names, as the learning
+    /// tokens name them), in declaration order.
+    pub fn names(&self) -> Vec<&'static str> {
+        [
+            ("flying", self.flying),
+            ("reach", self.reach),
+            ("haste", self.haste),
+            ("flash", self.flash),
+            ("vigilance", self.vigilance),
+            ("trample", self.trample),
+            ("first_strike", self.first_strike),
+            ("double_strike", self.double_strike),
+            ("deathtouch", self.deathtouch),
+            ("lifelink", self.lifelink),
+            ("defender", self.defender),
+            ("menace", self.menace),
+            ("hexproof", self.hexproof),
+            ("indestructible", self.indestructible),
+        ]
+        .into_iter()
+        .filter_map(|(name, present)| present.then_some(name))
+        .collect()
+    }
+
     /// Keyword-set union (printed keywords plus until-EOT grants).
     pub fn union(&self, other: &Keywords) -> Keywords {
         Keywords {
@@ -179,6 +204,16 @@ pub enum StaticScope {
     /// Reinforcements). Matched against printed characteristics (no
     /// power predicates, to keep P/T computation non-recursive).
     OtherYouControl(CardPredicate),
+    /// "[predicate] you control", including the source (Air Nomad Legacy's
+    /// "creatures you control with flying", Badgermole's "with +1/+1
+    /// counters on them").
+    YouControl(CardPredicate),
+    /// "Equipped creature" / "enchanted creature": the exact creature the
+    /// source Equipment or Aura is attached to.
+    Attached,
+    /// "[predicate] spells you control" (Lo and Li's Lesson spells): stack
+    /// spells only, read by `Game::spell_keywords`; no permanent matches.
+    SpellsYouControl(CardPredicate),
 }
 
 /// A static continuous P/T effect (CR 613.3c layer 7c): "[scope] get(s)
@@ -190,6 +225,87 @@ pub struct StaticPtBuff {
     pub condition: Option<StaticCondition>,
     pub power: i32,
     pub toughness: i32,
+    /// "+P/+T for each of its creature types, to a maximum of N" (Diligent
+    /// Zookeeper): the bonus is multiplied by the affected creature's
+    /// creature-type count, capped at this value.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub per_creature_type_max: Option<i32>,
+    /// "+P/+T for each color among [predicate] permanents you control"
+    /// (Earthen Ally): the bonus is multiplied by that color count.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub per_color_among: Option<CardPredicate>,
+}
+
+/// A static type-adding effect (CR 613.1d layer 4): "[scope] are [types] in
+/// addition to their other types" (Toph, the First Metalbender). It grants no
+/// abilities. Scopes read printed types only, so type computation never
+/// recurses.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct StaticTypeGrant {
+    pub scope: StaticScope,
+    pub types: Vec<CardType>,
+}
+
+/// "Enchanted creature loses all abilities and is a [creature_types] with base
+/// power and toughness P/T named [named]" (Honest Work): one effect across
+/// layers 1, 4, 6 and 7b (CR 613.1) on the exact attached creature. It
+/// replaces the creature's creature types and names, keeps its card types,
+/// supertypes and other subtypes, and leaves the source's own grants
+/// (`attached_grants`) as its only activated abilities.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct SetCharacteristics {
+    /// The name it sets: a rules value, unlike a definition's own `name`, so
+    /// it reaches the learning tokens.
+    pub named: String,
+    pub creature_types: Vec<String>,
+    pub power: i32,
+    pub toughness: i32,
+}
+
+/// A static keyword grant (CR 613.1f layer 6): "[scope] have [keywords]
+/// [as long as condition]". Applies only while the source is on the
+/// battlefield. Scopes read printed characteristics, counters and
+/// non-static keywords, so keyword computation never recurses.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct StaticKeywordGrant {
+    pub scope: StaticScope,
+    pub condition: Option<StaticCondition>,
+    pub keywords: Keywords,
+}
+
+/// "As long as this has N or more [kind] counters on it" (War Balloon).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct CounterThreshold {
+    pub kind: CounterKind,
+    pub count: i32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct TargetCostReduction {
+    pub predicate: CardPredicate,
+    pub generic: u8,
+}
+
+/// A static rule-changing restriction: "[scope] can't attack or block",
+/// "[scope] doesn't untap during its controller's untap step". Applies only
+/// while the source is on the battlefield.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct StaticRestriction {
+    pub scope: StaticScope,
+    pub kind: Restriction,
+    /// "... unless [condition]" for the source's controller (The Lion-Turtle).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unless: Option<StaticCondition>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum Restriction {
+    /// CR 508.1c, 509.1b.
+    CantAttackOrBlock,
+    /// CR 502.3.
+    DoesntUntap,
+    /// "Can't be blocked by more than one creature" (CR 509.1b).
+    CantBeBlockedByMoreThanOne,
 }
 
 /// Declarative replacement/prevention effects supported by the curated
@@ -209,8 +325,22 @@ pub enum ReplacementEffect {
     DoubleDamageToController,
     /// This object enters the battlefield tapped (CR 614.1c).
     EntersTapped,
+    /// This object enters tapped unless its entering controller already
+    /// controls a permanent matching `predicate` (CR 614.1c, 614.12).
+    EntersTappedUnlessControls { predicate: CardPredicate },
     /// This object enters with +1/+1 counters already present (CR 614.1c).
     EntersWithPlusOneCounters { count: i32 },
+    /// This object enters with X counters of `kind`, X being the value
+    /// announced as it was cast, otherwise 0 (CR 107.3m, 614.1c).
+    EntersWithXCounters { kind: CounterKind },
+    /// Damage a source this permanent's controller controls would deal to
+    /// an opponent or a permanent an opponent controls is increased by the
+    /// number of `kind` counters on this permanent (CR 614.1a).
+    OpponentDamagePlusCounters { kind: CounterKind },
+    /// While this permanent is on the battlefield, unspent mana its
+    /// controller would lose as a step or phase ends becomes red instead
+    /// (CR 106.4, 614.1a). Read by `Game::clear_mana_pools`.
+    UnspentManaBecomesRed,
 }
 
 impl ActivatedAbilityDefinition {
@@ -237,23 +367,17 @@ impl ActivatedAbilityDefinition {
         }
     }
 
-    /// Whether the first target chosen on activation (CR 602.2b, 601.2c) is
-    /// required (`Some(true)`) or "up to one" (`Some(false)`); `None` when the
-    /// ability has no targets.
-    fn first_target_required(&self) -> Option<bool> {
-        effect_target_requirements(&self.effects)
-            .first()
-            .map(|requirement| requirement.min > 0)
+    /// The activation's targeting clause (CR 602.2b, 601.2c); activated
+    /// abilities have at most one.
+    pub fn target_requirement(&self) -> Option<TargetRequirement> {
+        self.target_spec()?;
+        effect_target_requirements(&self.effects).into_iter().next()
     }
 
     /// The activation cannot proceed without choosing a target.
     pub fn requires_target(&self) -> bool {
-        self.first_target_required() == Some(true)
-    }
-
-    /// The activation may decline its target ("up to one").
-    pub fn target_is_optional(&self) -> bool {
-        self.first_target_required() == Some(false)
+        self.target_requirement()
+            .is_some_and(|requirement| requirement.min > 0)
     }
 
     pub fn target_spec(&self) -> Option<&TargetSpec> {
@@ -291,6 +415,14 @@ pub struct SacrificeCost {
     pub predicate: CardPredicate,
     pub another: bool,
     pub or_mana: Option<ManaCost>,
+}
+
+/// The exact object whose `attached_grants().nth(index)` an ability granted to
+/// another permanent came from; the stack keeps it after the grantor leaves.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct AbilityGrant {
+    pub grantor: ObjectRef,
+    pub index: usize,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
@@ -332,8 +464,19 @@ pub struct ActivatedAbilityDefinition {
     /// Waterbend cost (CR-style alternative payment): the generic part of
     /// `mana_cost` may be paid by tapping untapped artifacts/creatures the
     /// activating player controls, {1} per permanent tapped. Taps count as
-    /// cost payment rather than a mana ability (CR 702.177).
+    /// cost payment rather than a mana ability (CR 701.67).
     pub waterbend: bool,
+    /// "Crew N": tap any number of other untapped creatures you control
+    /// with total power N or greater (CR 702.122a).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub crew: Option<i32>,
+    /// The least X the activation may announce ("X can't be 0", CR 107.3).
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub x_min: u8,
+    /// Set only on abilities `Game::activated_abilities_for` lists from a
+    /// grantor; printed abilities have none.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub granted_by: Option<AbilityGrant>,
     /// Resolution effects in printed order ("draw a card, then discard a card").
     pub effects: Vec<Effect>,
 }
@@ -394,6 +537,36 @@ pub enum StaticAbility {
     /// Ward (CR 702.21): registration expands it into its "becomes the
     /// target" trigger, "counter it unless that player pays [cost]".
     Ward(ManaCost),
+    /// "You may look at the top card of your library any time" (CR 401.2).
+    LookAtLibraryTop,
+    /// "You may cast [predicate] spells from the top of your library."
+    CastFromLibraryTop(CardPredicate),
+    /// "Equipped creature has \"...\"": an activated ability the creature
+    /// this is attached to has, listed after its own in printed order.
+    AttachedHas(ActivatedAbilityDefinition),
+    /// Characteristics this Aura sets on the creature it enchants.
+    AttachedSetsCharacteristics(SetCharacteristics),
+    /// "This spell costs {N} less to cast if it targets a [predicate]"
+    /// (Swampsnare Trap), read once targets are chosen (CR 601.2f).
+    CostsLessIfTargets(TargetCostReduction),
+    /// A keyword grant this card projects while on the battlefield.
+    KeywordGrant(StaticKeywordGrant),
+    /// An attack, block or untap restriction this card projects while on the
+    /// battlefield.
+    Restriction(StaticRestriction),
+    /// "As long as this has N or more [kind] counters on it, it's an artifact
+    /// creature" (CR 613.1d), read by `Permanent::animated_creature`.
+    CreatureWithCounters(CounterThreshold),
+    /// A type grant this card projects while on the battlefield.
+    TypeGrant(StaticTypeGrant),
+    /// "As long as you control N or more permanents named [this card's
+    /// name], this is an artifact creature" (CR 613.1d; Phoenix Fleet
+    /// Airship). Relative to its own name, so no name enters the rules
+    /// vocabulary.
+    CreatureWithNamesakes(u32),
+    /// "This creature can attack as though it didn't have defender" while
+    /// the condition holds for its controller (Platypus-Bear).
+    AttacksDespiteDefender(StaticCondition),
 }
 
 /// Which blocks a creature's blocking restriction forbids (CR 509.1b).
@@ -416,6 +589,10 @@ pub enum AdditionalCost {
     /// chosen like kicker whose generic mana may be paid by tapping artifacts
     /// and creatures.
     Waterbend(ManaCost),
+    /// "As an additional cost to cast this spell, waterbend [cost]": required,
+    /// and its {X} is announced with the spell's. It adds to the total cost,
+    /// not the mana value (CR 202.3).
+    RequiredWaterbend(ManaCost),
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
@@ -469,14 +646,22 @@ impl CardDefinition {
     pub fn optional_cost(&self) -> Option<&ManaCost> {
         self.additional_costs.iter().find_map(|cost| match cost {
             AdditionalCost::Kicker(kicker) | AdditionalCost::Waterbend(kicker) => Some(kicker),
-            AdditionalCost::Sacrifice(_) => None,
+            AdditionalCost::Sacrifice(_) | AdditionalCost::RequiredWaterbend(_) => None,
         })
     }
 
     pub fn sacrifice_cost(&self) -> Option<&SacrificeCost> {
         self.additional_costs.iter().find_map(|cost| match cost {
             AdditionalCost::Sacrifice(sacrifice) => Some(sacrifice),
-            AdditionalCost::Kicker(_) | AdditionalCost::Waterbend(_) => None,
+            _ => None,
+        })
+    }
+
+    /// The required "waterbend [cost]" additional cost, if printed.
+    pub fn required_waterbend(&self) -> Option<&ManaCost> {
+        self.additional_costs.iter().find_map(|cost| match cost {
+            AdditionalCost::RequiredWaterbend(cost) => Some(cost),
+            _ => None,
         })
     }
 
@@ -515,6 +700,85 @@ impl CardDefinition {
         })
     }
 
+    /// The activated abilities this grants the creature it is attached to,
+    /// in printed order; `AbilityGrant::index` indexes this sequence.
+    pub fn attached_grants(&self) -> impl Iterator<Item = &ActivatedAbilityDefinition> {
+        self.statics.iter().filter_map(|ability| match ability {
+            StaticAbility::AttachedHas(granted) => Some(granted),
+            _ => None,
+        })
+    }
+
+    pub fn attached_characteristics(&self) -> Option<&SetCharacteristics> {
+        self.statics.iter().find_map(|ability| match ability {
+            StaticAbility::AttachedSetsCharacteristics(set) => Some(set),
+            _ => None,
+        })
+    }
+
+    pub fn library_top_casting(&self) -> Option<&CardPredicate> {
+        self.statics.iter().find_map(|ability| match ability {
+            StaticAbility::CastFromLibraryTop(predicate) => Some(predicate),
+            _ => None,
+        })
+    }
+
+    pub fn cost_reduction_if_targets(&self) -> Option<&TargetCostReduction> {
+        self.statics.iter().find_map(|ability| match ability {
+            StaticAbility::CostsLessIfTargets(reduction) => Some(reduction),
+            _ => None,
+        })
+    }
+
+    pub fn creature_with_counters(&self) -> Option<&CounterThreshold> {
+        self.statics.iter().find_map(|ability| match ability {
+            StaticAbility::CreatureWithCounters(threshold) => Some(threshold),
+            _ => None,
+        })
+    }
+
+    pub fn creature_with_namesakes(&self) -> Option<u32> {
+        self.statics.iter().find_map(|ability| match ability {
+            StaticAbility::CreatureWithNamesakes(count) => Some(*count),
+            _ => None,
+        })
+    }
+
+    pub fn attacks_despite_defender(&self) -> Option<&StaticCondition> {
+        self.statics.iter().find_map(|ability| match ability {
+            StaticAbility::AttacksDespiteDefender(condition) => Some(condition),
+            _ => None,
+        })
+    }
+
+    pub fn pt_buffs(&self) -> impl Iterator<Item = &StaticPtBuff> {
+        self.statics.iter().filter_map(|ability| match ability {
+            StaticAbility::PtBuff(buff) => Some(buff),
+            _ => None,
+        })
+    }
+
+    pub fn keyword_grants(&self) -> impl Iterator<Item = &StaticKeywordGrant> {
+        self.statics.iter().filter_map(|ability| match ability {
+            StaticAbility::KeywordGrant(grant) => Some(grant),
+            _ => None,
+        })
+    }
+
+    pub fn restrictions(&self) -> impl Iterator<Item = &StaticRestriction> {
+        self.statics.iter().filter_map(|ability| match ability {
+            StaticAbility::Restriction(restriction) => Some(restriction),
+            _ => None,
+        })
+    }
+
+    pub fn type_grants(&self) -> impl Iterator<Item = &StaticTypeGrant> {
+        self.statics.iter().filter_map(|ability| match ability {
+            StaticAbility::TypeGrant(grant) => Some(grant),
+            _ => None,
+        })
+    }
+
     pub fn has_static(&self, ability: &StaticAbility) -> bool {
         self.statics.contains(ability)
     }
@@ -538,6 +802,9 @@ pub struct Card {
     /// the numeric representation of `definition_id`.
     pub registry_key: ObjectId,
     pub owner: PlayerId,
+    /// The copy effect that made this object a copy (CR 707.2); its
+    /// definition is then the copiable values that effect produced.
+    pub copy: Option<crate::state::effect::CopyEffect>,
     definition: Arc<CardDefinition>,
 }
 
@@ -553,6 +820,7 @@ impl Card {
             definition_id,
             registry_key: ObjectId(definition_id.0),
             owner,
+            copy: None,
             definition,
         }
     }
@@ -577,6 +845,18 @@ impl Card {
     pub fn spell_modes(&self) -> Option<&[Vec<Effect>]> {
         self.spell_effects.iter().find_map(|effect| match effect {
             Effect::Modal { modes } => Some(modes.as_slice()),
+            _ => None,
+        })
+    }
+
+    /// An Aura's enchant restriction (CR 303.4a, 702.5c): what its spell
+    /// targets and what its attached object must keep matching (CR 704.5m).
+    pub fn enchant(&self) -> Option<&TargetSpec> {
+        if !self.has_subtype("Aura") {
+            return None;
+        }
+        self.spell_effects.iter().find_map(|effect| match effect {
+            Effect::AttachSourceTo { target } => Some(target),
             _ => None,
         })
     }

@@ -386,6 +386,101 @@ def test_curated_combat_tape_is_identical_live_trace_and_inspector_fixture(
     assert all(beat["caused_by"] for beat in curated_tape[1:])
 
 
+def test_projection_states_combat_assignments_only_while_they_hold(
+    isolated_traces: Path,
+) -> None:
+    """The live projection carries an attack and a block, omitted otherwise."""
+
+    from manabot.env.observation import ActionEnum
+
+    def attacking_villain(_env: object, obs: managym.Observation) -> int:
+        for index, action in enumerate(obs.action_space.actions):
+            if (
+                int(action.action_type) == int(ActionEnum.DECLARE_ATTACKER)
+                and action.declared is True
+            ):
+                return index
+        for index, action in enumerate(obs.action_space.actions):
+            if int(action.action_type) == int(ActionEnum.PRIORITY_PASS_PRIORITY):
+                return index
+        return 0
+
+    session = server.GameSession(trace_dir=isolated_traces)
+    session.new_game(
+        {
+            "villain_type": "passive",
+            "seed": 203,
+            "hero_deck": "ur_lessons",
+            "villain_deck": "gw_allies",
+            "auto_pass": False,
+        }
+    )
+    assert session.env is not None
+    session.env.scenario_clear_hand(0)
+    session.env.scenario_clear_hand(1)
+    session.env.scenario_force_battlefield(0, "Otter-Penguin", True)
+    session.env.scenario_force_battlefield(1, "Badgermole Cub", True)
+    # A castable instant keeps the hero's priority after blocks a real
+    # decision, so forced-decision skipping stops before combat damage.
+    session.env.scenario_force_battlefield(0, "Mountain", True)
+    session.env.scenario_force_card_in_hand(0, "Firebending Lesson")
+    session.obs = session.env.scenario_refresh()
+    session.published_prompt = None
+    session.villain_policy = attacking_villain
+
+    def battlefield(side: str) -> dict[str, dict[str, object]]:
+        data = experience_projection.serialize_observation(session.obs)
+        return {str(entry["name"]): entry for entry in data[side]["battlefield"]}
+
+    assert "attacking" not in battlefield("opponent")["Badgermole Cub"]
+    blocked = False
+    for step in range(500):
+        frame = session._experience_frame()
+        prompt = session.published_prompt
+        assert prompt is not None and frame["prompt"] is not None
+        if blocked:
+            attacker = battlefield("opponent")["Badgermole Cub"]
+            blocker = battlefield("agent")["Otter-Penguin"]
+            assert attacker["attacking"] is True
+            assert blocker["blocking"] == attacker["id"]
+            assert "attacking" not in blocker
+            break
+        if prompt.action_space == "DECLARE_BLOCKER":
+            assert battlefield("opponent")["Badgermole Cub"]["attacking"] is True
+            assert "blocking" not in battlefield("agent")["Otter-Penguin"]
+            chosen = next(
+                index
+                for index, action in enumerate(prompt.actions)
+                if action["declared"] is True
+            )
+            blocked = True
+        elif prompt.action_space == "DECLARE_ATTACKER":
+            chosen = next(
+                index
+                for index, action in enumerate(prompt.actions)
+                if action["declared"] is False
+            )
+        else:
+            chosen = next(
+                index
+                for index, action in enumerate(prompt.actions)
+                if action["type"] == "PRIORITY_PASS_PRIORITY"
+            )
+        outcome = session.hero_command(
+            {
+                "command_id": f"combat-projection-{step}",
+                "match_id": frame["match_id"],
+                "expected_revision": frame["revision"],
+                "prompt_id": frame["prompt"]["id"],
+                "offer_id": frame["offers"][chosen]["id"],
+                "answers": [],
+            }
+        )
+        assert outcome["status"] == "accepted"
+    else:
+        pytest.fail("the villain never attacked into a block")
+
+
 def test_named_deck_selection_and_custom_deck_names(isolated_traces):
     config = server._parse_game_config(
         {"hero_deck": "gw_allies", "villain_deck": {"Mountain": 40}}

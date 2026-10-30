@@ -19,7 +19,7 @@ use crate::{
         game::{Game, PendingChoice},
         priority::PriorityState,
         trigger::{DelayedTrigger, ExileLink, PendingTrigger, TriggerPlacement},
-        turn::TurnState,
+        turn::{PlayerTurnHistory, TurnState},
     },
     state::{
         card::CardDefId,
@@ -114,7 +114,6 @@ enum EventQueue {
 struct PlayerVitals {
     life: i32,
     drew_when_empty: bool,
-    no_maximum_hand_size: bool,
     alive: bool,
     mana_pool: Mana,
     combat_mana_pool: Mana,
@@ -125,7 +124,6 @@ impl PlayerVitals {
         Self {
             life: player.life,
             drew_when_empty: player.drew_when_empty,
-            no_maximum_hand_size: player.no_maximum_hand_size,
             alive: player.alive,
             mana_pool: player.mana_pool.clone(),
             combat_mana_pool: player.combat_mana_pool.clone(),
@@ -135,7 +133,6 @@ impl PlayerVitals {
     fn restore(self, player: &mut Player) {
         player.life = self.life;
         player.drew_when_empty = self.drew_when_empty;
-        player.no_maximum_hand_size = self.no_maximum_hand_size;
         player.alive = self.alive;
         player.mana_pool = self.mana_pool;
         player.combat_mana_pool = self.combat_mana_pool;
@@ -173,6 +170,7 @@ enum UndoEntry {
     TriggerPlacement(Box<Option<TriggerPlacement>>),
     DelayedTriggers(Vec<DelayedTrigger>),
     ExileLinks(Vec<ExileLink>),
+    Effects(Vec<crate::state::effect::ContinuousEffect>),
     CastPermissions(Box<CastPermissions>),
     SuspendedDecision(Box<Option<SuspendedResolution>>),
     TriggerEnqueueCounter(u64),
@@ -213,6 +211,7 @@ impl UndoEntry {
             Self::PendingTriggers(values) => vec_bytes(values),
             Self::DelayedTriggers(values) => vec_bytes(values),
             Self::ExileLinks(values) => vec_bytes(values),
+            Self::Effects(values) => vec_bytes(values),
             Self::CastPermissions(values) => {
                 size_of::<CastPermissions>()
                     + vec_bytes(&values.exile_grants)
@@ -232,6 +231,9 @@ impl UndoEntry {
                         + vec_bytes(chosen)
                         + vec_bytes(chosen_req_indices)
                         + vec_bytes(legal_targets)
+                }
+                Some(PendingChoice::ActivatedTarget { chosen, .. }) => {
+                    size_of::<PendingChoice>() + vec_bytes(chosen)
                 }
                 Some(_) => size_of::<PendingChoice>(),
                 None => 0,
@@ -307,6 +309,7 @@ impl UndoEntry {
             Self::TriggerPlacement(old) => game.state.trigger_placement = *old,
             Self::DelayedTriggers(old) => game.state.delayed_triggers = old,
             Self::ExileLinks(old) => game.state.exile_links = old,
+            Self::Effects(old) => game.state.effects = old,
             Self::CastPermissions(old) => game.state.cast_permissions = *old,
             Self::SuspendedDecision(old) => game.state.suspended_decision = *old,
             Self::TriggerEnqueueCounter(old) => game.state.trigger_enqueue_counter = old,
@@ -580,7 +583,7 @@ impl Game {
     pub(crate) fn journal_object_lki(&mut self, object: ObjectRef) {
         self.record_undo(UndoEntry::ObjectLki(
             object,
-            self.state.object_lki.get(&object).copied().map(Box::new),
+            self.state.object_lki.get(&object).cloned().map(Box::new),
         ));
     }
 
@@ -590,6 +593,21 @@ impl Game {
 
     pub(crate) fn journal_turn(&mut self) {
         self.record_undo(UndoEntry::Turn(Box::new(self.state.turn.clone())));
+    }
+
+    /// Apply `update` to `player`'s turn history, journaling the turn only
+    /// when a fact actually changes (the journal clones the whole turn).
+    pub(crate) fn update_turn_history(
+        &mut self,
+        player: PlayerId,
+        update: impl FnOnce(&mut PlayerTurnHistory),
+    ) {
+        let mut history = self.state.turn.history[player.0];
+        update(&mut history);
+        if history != self.state.turn.history[player.0] {
+            self.journal_turn();
+            self.state.turn.history[player.0] = history;
+        }
     }
 
     pub(crate) fn journal_priority(&mut self) {
@@ -693,6 +711,10 @@ impl Game {
 
     pub(crate) fn journal_exile_links(&mut self) {
         self.record_undo(UndoEntry::ExileLinks(self.state.exile_links.clone()));
+    }
+
+    pub(crate) fn journal_effects(&mut self) {
+        self.record_undo(UndoEntry::Effects(self.state.effects.clone()));
     }
 
     pub(crate) fn journal_cast_permissions(&mut self) {

@@ -49,7 +49,7 @@ changing the retained w8 schema.
 
 ## Evidence and limits
 
-`managym/tests/rules/temur_cards.rs` exercises restricted spending, chosen colors,
+`managym/tests/cards/` (one file per set) exercises restricted spending, chosen colors,
 Guide grants and removal, Prism's upfront payment, flashback resolution,
 countering and other stack departures, Iroh's turn and ordinary spell timing,
 resolution-time waterbend, Ran and Shaw's cast requirement and graveyard
