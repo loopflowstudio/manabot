@@ -211,7 +211,7 @@ impl ContentPack {
                             "mana_cost": card.mana_cost, "types": card.types,
                             "supertypes": card.supertypes, "subtypes": card.subtypes,
                             "keywords": card.keywords, "power": card.power,
-                            "toughness": card.toughness, "kicker": card.kicker(),
+                            "toughness": card.toughness, "kicker": card.optional_cost(),
                             "ward": card.ward(), "is_token": card.is_token,
                         })
                     })

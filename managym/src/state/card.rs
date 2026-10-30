@@ -463,18 +463,11 @@ pub struct CardDefinition {
 impl CardDefinition {
     /// The optional additional cost a cast may choose to pay: kicker or an
     /// optional waterbend, which both mark the spell kicked.
-    pub fn kicker(&self) -> Option<&ManaCost> {
+    pub fn optional_cost(&self) -> Option<&ManaCost> {
         self.additional_costs.iter().find_map(|cost| match cost {
             AdditionalCost::Kicker(kicker) | AdditionalCost::Waterbend(kicker) => Some(kicker),
             AdditionalCost::Sacrifice(_) => None,
         })
-    }
-
-    /// The optional additional cost is "waterbend [cost]".
-    pub fn kicker_waterbend(&self) -> bool {
-        self.additional_costs
-            .iter()
-            .any(|cost| matches!(cost, AdditionalCost::Waterbend(_)))
     }
 
     pub fn sacrifice_cost(&self) -> Option<&SacrificeCost> {

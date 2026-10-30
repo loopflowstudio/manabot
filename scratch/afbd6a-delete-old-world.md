@@ -39,7 +39,7 @@ Academy fixtures.
 1. Tokens: all 11 in `cardsets/tokens.rs` via `token(...)`/`creature(...)` helpers.
 2. Statics: one `StaticAbility` enum in `CardDefinition.statics`; `sacrifice_cost`/
    `kicker` are `AdditionalCost` variants; accessors (`ward()`, `power_cda()`,
-   `kicker()`) read variants. Learning schema unchanged (serializer-derived tokens;
+   `optional_cost()`) read variants. Learning schema unchanged (serializer-derived tokens;
    catalog bytes change only through the new field/variant names).
 3. Observability: no-wildcard `static_seen`/`cost_seen`, per-variant token + removal
    tests, tensor tests (every witness row naming a column, hand size, unblockable), real-card
@@ -65,3 +65,22 @@ Sync onto T2 (c7979d310), 2026-10-30: T2's new definition fields became
 parity pins and Academy fixtures re-recorded. Debug `cargo test` for the cards,
 conformance and semantic-conformance suites passes, as do the post-world suite,
 the heuristic and the Academy fixture consumers.
+
+## Concept review, 2026-10-30 (headless, against the three steers)
+
+Accepted model holds: `CardDefinition` is identity, characteristics, ability
+lists (`abilities`, `statics`, mana/activated) and the spell's effects, targets
+and `additional_costs`; all 11 tokens are `token.*` definitions;
+`TOKENS_AWAITING_PRODUCER` retires itself (it asserts zero producers).
+`card_definitions_json` is the one structural view of definitions for Python
+(the heuristic); it reads the same serialization the learning tokens use, so it
+adds no second representation. No open product choice.
+
+Implemented 2026-10-30: `kicker()` is now `optional_cost()` (kicker or
+waterbend: the cost a cast may choose to pay, which marks it kicked);
+`kicker_waterbend()` is gone; `cast_waterbend_generic` and the Scryfall
+conformance Kicker check match `AdditionalCost` variants directly. Wire/digest
+names stay (`kicker_cost` column, content-pack JSON `"kicker"`), so no receipt
+or fixture bytes move. Debug `cargo test --test cards` (310), clippy
+`--all-targets -D warnings`, and `tests/sim/test_heuristic.py` (27) after a
+rebuild pass. Remaining: gate/CI; Jack Heart reviews before merge.

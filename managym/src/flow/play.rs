@@ -16,7 +16,7 @@ use crate::{
     },
     state::{
         ability::TargetRequirement,
-        card::{ActivatedAbilityDefinition, ActivationZone, StaticAbility},
+        card::{ActivatedAbilityDefinition, ActivationZone, AdditionalCost, StaticAbility},
         game_object::{CardId, PermanentId, PlayerId, Target},
         mana::{ManaCost, ManaUse},
         stack_object::{ActivatedAbilityOnStack, StackObject},
@@ -115,7 +115,7 @@ impl Game {
         cost = cost.with_x(cast.x);
         cost.purpose = ManaUse::spell(card_ref.subtypes.iter().map(String::as_str));
         if cast.kicked {
-            if let Some(kicker) = card_ref.kicker() {
+            if let Some(kicker) = card_ref.optional_cost() {
                 cost = cost.plus(kicker);
             }
         }
@@ -322,7 +322,9 @@ impl Game {
             kicked: true,
             ..cast
         };
-        if self.state.cards[card].kicker().is_some() && self.can_pay_cast(player, card, kicked) {
+        if self.state.cards[card].optional_cost().is_some()
+            && self.can_pay_cast(player, card, kicked)
+        {
             self.pending_choice = Some(PendingChoice::KickerChoice { player, card, cast });
             return Ok(());
         }
@@ -364,9 +366,17 @@ impl Game {
         cast: CastChoices,
     ) -> u8 {
         let card_ref = &self.state.cards[card];
-        let kicker = match card_ref.kicker() {
-            Some(kicker) if cast.kicked && card_ref.kicker_waterbend() => kicker.generic(),
-            _ => 0,
+        let waterbend = if cast.kicked {
+            card_ref
+                .additional_costs
+                .iter()
+                .find_map(|cost| match cost {
+                    AdditionalCost::Waterbend(waterbend) => Some(waterbend.generic()),
+                    _ => None,
+                })
+                .unwrap_or(0)
+        } else {
+            0
         };
         let granted = !cast.free
             && self
@@ -375,7 +385,7 @@ impl Game {
         if granted {
             u8::MAX
         } else {
-            kicker
+            waterbend
         }
     }
 

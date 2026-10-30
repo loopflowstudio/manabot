@@ -812,7 +812,7 @@ impl Observation {
                 .map(|cost| i32::from(cost.mana_value))
                 .unwrap_or(0),
             kicker_cost: card
-                .kicker()
+                .optional_cost()
                 .map(|cost| i32::from(cost.mana_value))
                 .unwrap_or(0),
             card_types: CardTypeData {

@@ -28,7 +28,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use managym::cards::content_pack::CardRegistry;
 use managym::cards::setups::authored_pack;
-use managym::state::card::{CardDefinition, CardType};
+use managym::state::card::{AdditionalCost, CardDefinition, CardType};
 use managym::state::mana::{Color, ManaCost};
 
 /// Registered rules fixtures that are not real Magic cards
@@ -308,8 +308,12 @@ fn every_registered_real_card_matches_scryfall() {
             ("Menace", def.keywords.menace),
             ("Hexproof", def.keywords.hexproof),
             ("Ward", def.ward().is_some()),
-            // An optional waterbend is kicker-like but not the Kicker keyword.
-            ("Kicker", def.kicker().is_some() && !def.kicker_waterbend()),
+            (
+                "Kicker",
+                def.additional_costs
+                    .iter()
+                    .any(|cost| matches!(cost, AdditionalCost::Kicker(_))),
+            ),
         ];
         for (keyword, has) in checks {
             if kw(keyword) != has {

@@ -7618,7 +7618,7 @@ fn corrected_card_characteristics_match_oracle() {
     let lesson = card("Firebending Lesson");
     assert_eq!(lesson.mana_cost.as_ref().unwrap().mana_value, 1);
     assert!(lesson.types.is_instant());
-    assert_eq!(lesson.kicker().unwrap().mana_value, 4);
+    assert_eq!(lesson.optional_cost().unwrap().mana_value, 4);
     assert!(lesson.has_subtype("Lesson"));
 
     assert!(card("It'll Quench Ya!").has_subtype("Lesson"));
