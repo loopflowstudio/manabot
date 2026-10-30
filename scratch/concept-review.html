@@ -24,11 +24,11 @@
 <body><main>
 <header>
   <h1>T5 concept review: permanent copying</h1>
-  <p>Task a7234f · step: concept review (headless) · 2026-10-30 · HEAD <code>187d4e0d7</code></p>
+  <p>Task a7234f · step: concept review (headless) · 2026-10-30 · HEAD <code>a907cbe22</code></p>
   <p>Built from <code>scratch/jack-heart/a7234f-tla-t5-permanent.md</code>, <code>managym/src/cardsets/tla.rs</code>, <code>managym/src/state/card.rs</code>, <code>managym/src/state/ability.rs</code>, <code>managym/src/flow/statics.rs</code>, <code>managym/tests/cards/observability.rs</code>, <code>managym/src/agent/continuation.rs</code>, <code>managym/src/python/bindings.rs</code>, <code>manabot/semantic/text_observation.py</code></p>
 </header>
 
-<p class="lead"><strong>Decision needed: none.</strong> The card model still matches Jack Heart&#39;s design review (comment 10a31948). One small change goes back to implement. The demo fix gave Rust a single owner for continuation decision codes, but Python still keeps its own code-to-label table and nothing checks it against the native bound.</p>
+<p class="lead"><strong>Decision needed: none, and nothing to change.</strong> The card model still matches Jack Heart&#39;s design review (comment 10a31948). The previous pass sent one change back to implement: tie Python&#39;s decision-code labels to the native bound. <code>552636009</code> made that change as proposed.</p>
 
 <h2>Actions → concepts → APIs</h2>
 <div class="existing">
@@ -44,14 +44,14 @@
 </table></div>
 </div>
 
-<h2>The one mismatch: two owners of the decision codes</h2>
+<h2>Previously the one mismatch: two owners of the decision codes (now resolved)</h2>
 <p>The demo failed because the code table drifted. The validator rejected codes above 13, and the text table labelled code 14 &ldquo;order triggers&rdquo;. <code>2963f8f87</code> fixed the Rust side:</p>
 <pre><code>pub const MAX_DECISION_CODE: u8 = 20;
 pub fn decision_code(decision: &amp;Decision) -&gt; u8 { /* exhaustive match */ }
 // bindings.rs: frame.decision &gt; MAX_DECISION_CODE  =&gt; reject</code></pre>
 <p>Python keeps its own table, <code>_OBLIGATIONS</code>, with 21 labels. A code added without a label raises <code>TextEncodingError</code>, but only when a game reaches it.</p>
-<div class="proposed">
-<p>Export <code>MAX_DECISION_CODE</code> from the native module beside <code>WORLD_VERSION</code> (and in <code>__init__.pyi</code>), then test <code>len(_OBLIGATIONS) == MAX_DECISION_CODE + 1</code>. The labels stay in Python because they are rendering vocabulary; the bound is the shared fact.</p>
+<div class="existing">
+<p>Implemented at <code>552636009</code>: export <code>MAX_DECISION_CODE</code> from the native module beside <code>WORLD_VERSION</code> (and in <code>__init__.pyi</code>), then test <code>len(_OBLIGATIONS) == MAX_DECISION_CODE + 1</code>. The labels stay in Python because they are rendering vocabulary; the bound is the shared fact.</p>
 </div>
 
 <h2>Still not adopted</h2>
@@ -69,7 +69,7 @@ pub fn decision_code(decision: &amp;Decision) -&gt; u8 { /* exhaustive match */ 
 
 <h2>Questions</h2>
 <ol>
-  <li>No product choice is open. The decision-code bound goes back to implement as described above.</li>
+  <li>No product choice is open and no design change is pending. The <code>CreatureWith*</code> fold waits for a third self-animation condition.</li>
 </ol>
 </main></body>
 </html>

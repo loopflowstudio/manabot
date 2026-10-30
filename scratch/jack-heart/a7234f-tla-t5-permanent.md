@@ -99,6 +99,15 @@ rather than mid-game. Done 2026-10-30; extension rebuilt; that test,
 `tests/semantic/test_text_observation.py` (38 passed) and debug
 `cargo test --lib agent::continuation` (5 passed) are green.
 
+## Concept review (headless, 2026-10-30, HEAD `a907cbe22`) — nothing to change
+
+The decision-code direction above is implemented as recorded: `continuation.rs`
+owns `decision_code` and `MAX_DECISION_CODE`, `bindings.rs` validates against it
+and exports it, and the Python label table is tested against it. The card, copy,
+exception, turn-history and Airship model is unchanged since the previous
+review. No product choice is open, and the `CreatureWith*` fold still waits for
+a third condition.
+
 ## Remaining
 
 - Done at publish (2026-10-30): w17 evidence re-recorded in place for T5's
