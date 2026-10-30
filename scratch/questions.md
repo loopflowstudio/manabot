@@ -150,3 +150,13 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   spare-mana and pump abilities. T2's nine new targeted spells are pinned in
   `test_heuristic.py`; the seven it cannot rate (airbend, linked exile, …) get
   polarity `None`, the documented neutral fallback.
+
+## 558daa (cull), 2026-10-30 — headless choices
+
+- Files touched by open PRs #383 #395 #399 #402 #403 were not edited; their
+  candidates are listed as held in the plan. The authored-match parity receipt
+  (in #395/#399) was regenerated anyway because it hashes every Rust source.
+- Pre-existing: `academy.advice.ADVISOR_SOURCE_PATHS` names the missing
+  `manabot/sim/conditional_search.py`, so the two code-source advice fixtures
+  cannot verify their source bundle; editing `advice.py` changes no behavior.
+- `visual-references` archived with Doppler `manabot/prd` R2 credentials.
