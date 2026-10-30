@@ -59,3 +59,10 @@ scratch/t2-demo/t2-cards.json 60` and `t2_demo_foretell.py`, and both outputs ma
 2026-10-30 decision pass 1, at `0ad38cffe`: only scratch changes since `b8dbfa319`;
 T1 #394 still open at `e6b672753`. `t2_demo.py … 60` and `t2_demo_foretell.py`
 matched `run.log` and `foretell.log` byte for byte. Advance.
+
+2026-10-30 decision pass 1, at `ddd8868a5`: since `0ad38cffe`, the runtime changes
+are the w18→w17 rename (`managym/src/world.rs`) and the belief tracker's
+foretold-slot accounting (`manabot/belief/{tracker,range}.py`). The loaded
+extension reports `WORLD_VERSION` `w17`. `t2_demo.py … 60` and
+`t2_demo_foretell.py` matched `run.log` and `foretell.log` byte for byte.
+`pytest tests/belief` passed 93, including the slot test. Advance to the gate.
