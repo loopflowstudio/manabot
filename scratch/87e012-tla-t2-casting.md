@@ -4,7 +4,7 @@ Stacked on T1 (892c47, PR #394, open; synced at its head `2c50c8793` via `1d6500
 Task directive lists the 51 cards and obligations; allocation in
 `docs/rules/tla/allocation.jsonl` (`planned_pr: T2`). Every merge needs Jack
 Heart's review; don't arm T2's merge while #394 is open. Status: implementation
-complete on w18; gate pending.
+complete on w18; gated.
 
 ## Decisions (reversible operator choices: questions.md)
 
@@ -59,10 +59,11 @@ exhaust, used once-each-turn, granted firebending) in text-5 wording
 
 ## Remaining
 
-- Gate: CLAUDE.md arena admission/monitoring suite; Academy vitest suite; world-bound receipts T1 already flagged, plus `tests/belief/test_state.py` w7 belief receipts under possible-world v3; the `'relations'` KeyError in belief runtime/agent tests.
-- Land only after #394 lands; re-sync then.
+- Land only after #394 lands; re-sync then (re-record the w18 evidence below if T1's world moves).
 
 ## Check
+
+2026-10-29 gate: w18 world-bound evidence re-recorded beside w17 (kept): `semantic-kernel-w18-v1` (same 14 cases, 3401 commands; test, CI check/fuzz and README roots moved), `authored-match-w18-v1` + `authored-match-parity-w18-v1` (same 142-Command tape, same labels and terminal board, new digests), `public-commitment-parity-w18-v1` (142 commands, 69 commitments, no gaps; needs `manabot.data fetch` of the RUL-9 measurement), Academy `*-w18.json` learn/precision/precision-mana demos, choice-navigation and trigger-order (same decision revisions as w17; tools `scratch/tools/regen_*_w18.py`); belief receipts move to possible-world v3 (w7 kept as excluded history); belief fixture gains its `relations` buffer (pre-existing KeyError, default policy input ≥ v2). Results: debug `cargo test` (opt-level 1) all binaries pass (lib 121, cards 304, rules 131 + 2 ignored, semantic_conformance 6, search_state_contract 12, …); `cargo fmt --check` and `clippy --all-targets -D warnings` clean (`--all-features` blocked locally by the PyO3 interpreter-version check, CI runs no clippy); CI conformance check + fuzz (32 cases) pass on w18. Arena admission/monitoring 66 pass; academy world-bound + belief + batched_eval + `tests/model/` 320 pass, 2 skipped; earlier wider Python pass 259 pass (its 12 failures were the fixtures above plus `test_batched_eval` hung-service timing, which failed only while cargo compiled alongside and passes alone). Academy vitest 109 pass, `npm run check` 0 errors. Ruff check/format clean on changed Python. Deferred to CI: Playwright e2e (choice-navigation/learn specs now import w18 fixtures), clean-machine play.
 
 2026-10-29 concept review 7 (headless): nothing to change, no open product choice. Review 6's shared `fill_foretold_slots` is in; `Action::Foretell` as a `PriorityActivateAbility` matches the plan. `lesson_mana` (now the total of any restriction) keeps its name: it is a frozen wire/v4-tensor field and `restricted_mana` carries the per-class split.
 
@@ -77,3 +78,5 @@ exhaust, used once-each-turn, granted firebending) in text-5 wording
 2026-10-29 compress (possible worlds v3): one `name_counts` helper replaces `unseen_pool` and the known-hand, realized-hand and stale-pool counting loops; unseen cards gathered once per `for_viewer`. Debug lib possible_worlds 8 pass; debug cards possible_worlds 2 pass; clippy `-D warnings` and fmt clean; extension not rebuilt (no behavior change).
 
 2026-10-29 implement (concept review 4): `Card.svelte` prints and names exhaust/once-each-turn/granted-firebending statuses in text-5 wording, fed from `PermanentRow.svelte`; `PermanentRow.svelte.test.ts` 2 pass; Academy `npm run check` 0 errors and `npm run build` pass (after `npm ci`, node 26 runs).
+
+2026-10-29 demo (headless, decision pass 1): 60 random T2-deck games through `managym.Env` with no errors; flashback, Zuko impulse and foretell casts offered and taken; the opponent never sees the foretold card. Advance to gate. Record: `scratch/t2-demo.md`.

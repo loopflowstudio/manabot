@@ -269,9 +269,10 @@ def test_once_each_turn_use_reaches_text_and_both_encoders() -> None:
         if "Barrels of Blasting Jelly" in a.description and "Activate" in a.description
     )
     submit_response(env, decision, barrels.reference)
-    while "once-each-turn abilities used this turn 1" not in (
-        decision := capture_text_decision(env)
-    ).text:
+    while (
+        "once-each-turn abilities used this turn 1"
+        not in (decision := capture_text_decision(env)).text
+    ):
         submit_response(env, decision, decision.actions[0].reference)
 
     observation = _viewer_observation(decision)

@@ -27,7 +27,7 @@ was dead on arrival in exp-10.)
 | **w15** | in development, MTG-177, 2026-10-27 | 40 / 41 / 28 / 17; retained resolution eligibility, policy-input v4 relations 64 × 33 | unchanged authored packs; fresh integrated conformance and play fixtures | no strength baseline |
 | **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
 | **w17** | in development, Task 892c47, 2026-10-29 | 40 / 41 / 29 / 17; cards in engine rules types, learning schema 9 tokens derived from them, attacking permanent column | `world` (the default pack); `semantic-kernel-w17-v1`, `authored-match-w17-v1` and `authored-match-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
-| **w18** | in development, Task 87e012, 2026-10-29 | 60 / 55 / 32 / 17 (policy input v5; v1–v4 keep 40 / 41 / 29); TLA casting, costs, zone permissions and private zones; exile cast permissions, hand-only lock, restricted mana by class, foretell, control | `world` (the default pack): every defined card (166 supported); conformance receipts not yet regenerated | no strength baseline |
+| **w18** | in development, Task 87e012, 2026-10-29 | 60 / 55 / 32 / 17 (policy input v5; v1–v4 keep 40 / 41 / 29); TLA casting, costs, zone permissions and private zones; exile cast permissions, hand-only lock, restricted mana by class, foretell, control | `world` (the default pack): every defined card (166 supported); `semantic-kernel-w18-v1`, `authored-match-w18-v1`, `authored-match-parity-w18-v1` and `public-commitment-parity-w18-v1` receipts; Academy w18 demo, navigation and trigger-order fixtures | no strength baseline |
 
 **Current development world: w18.** `managym.WORLD_VERSION` identifies live runs. Earlier
 checkpoints (including w17) are **not comparable** to w18; do not reuse their
@@ -70,6 +70,14 @@ Native buffers bind v5 by player width. Learning schema 9 is unchanged: tokens
 derive from the definitions, so new `Effect` variants and card fields appear in
 them without a schema change. Viewers see an opponent's foretold card only as an
 exile count, in JSON, text and tensor alike.
+
+Fresh `conformance/semantic-kernel-w18-v1` replays (same cases as w17), the
+authored-match receipt and its live/headless parity (`authored-match-w18-v1`,
+`authored-match-parity-w18-v1`: the same 142-Command tape as w17, new digests)
+and `public-commitment-parity-w18-v1` bind this world. Academy `*-w18.json`
+demo, choice-navigation and trigger-order fixtures reach the same decision
+revisions as their w17 predecessors. Belief encoding receipts move with
+possible-world space v3.
 
 ## w17: one card representation (superseded by w18)
 

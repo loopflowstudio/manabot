@@ -612,9 +612,7 @@ class _Renderer:
             if permanent.temp_subtypes:
                 optional += f"; temporary subtypes {', '.join(permanent.temp_subtypes)}"
             if permanent.exhausted_abilities:
-                optional += (
-                    f"; exhaust abilities used {permanent.exhausted_abilities}"
-                )
+                optional += f"; exhaust abilities used {permanent.exhausted_abilities}"
             if permanent.once_each_turn_used:
                 optional += (
                     "; once-each-turn abilities used this turn "

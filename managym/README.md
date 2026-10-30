@@ -86,7 +86,7 @@ New registered real cards also need their Scryfall shell and Oracle text in
 checks every registration against that snapshot. For an accepted rules-world
 change, record a new versioned conformance corpus and update the CI/test root
 without rewriting earlier receipts. The current corpus is
-[semantic-kernel-w17-v1](../conformance/semantic-kernel-w17-v1/).
+[semantic-kernel-w18-v1](../conformance/semantic-kernel-w18-v1/).
 
 After changing Rust, rebuild the Python extension into the uv-managed venv:
 
