@@ -30,6 +30,18 @@ below this Task's entries; they are main's, not this Task's.
   reset seed); curriculum, mirrors, 17Lands and the Academy 1a draft redesign
   are deferred (1a detail at c1dd6c71c).
 
+## Accepted 2026-10-30 evening (Jack Heart): the selectors are named `world`
+
+"This is very confusing, can we change them to world as the param name?"
+`MatchConfig`/`PlayerConfig.content_pack` and `ModelConfig.semantic_pack`
+become `world` (deck runs: `world="world"`/the world default; authored setups
+name their own world, e.g. Elemental). No "pack" in these parameter names.
+Constraints: frozen regimes, contracts, protocols and checkpoints that
+serialize `content_pack`/`semantic_pack` still load (read the old key), and
+existing architecture receipts and digest-bound fixtures still verify; do not
+rewrite frozen evidence. Also fix main's `tests/training/test_study.py`
+(merged in 6f48f5ca0), which reads `regime.decks` (now `deck_source`).
+
 ## Accepted 2026-10-30 later (Jack Heart): a run has a way to get its next decks
 
 Supersedes the run-owns-a-deck-list parts of the decisions below.
