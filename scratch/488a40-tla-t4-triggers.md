@@ -80,7 +80,7 @@ evidence is re-recorded at gate with `scratch/tools/regen_*.py` and
    Beifong's Bounty Hunters, Hei Bai (`ObjectLki.power`/`counters`,
    `EffectValue::TriggeringPower`, `Effect::PutSourceCountersOnTarget`);
    Airbender and Earthbender Ascension (`Effect::ExileAndReturn`).
-   Left: delayed triggers (Fatal Fissure, Fire Navy Trebuchet, Ruinous
+   Done later in slice 7 and after (see Remaining): delayed triggers (Fatal Fissure, Fire Navy Trebuchet, Ruinous
    Waterbending, Jeong Jeong), copies/retargeting (Firebender Ascension,
    Jeong Jeong, Redirect Lightning), control change (Jet's Brainwashing, Iroh,
    Zuko, Conflicted), up-to-X and unchosen modes (Bumi, Zuko), trigger
@@ -133,15 +133,20 @@ before T4's own gate.
 
 ## Remaining
 
-- 10 of 75 cards (65 defined): Boiling Rock Rioter; Firebender Ascension;
-  Jeong Jeong, the Deserter; Jet's Brainwashing; Redirect Lightning; Zhao, the
-  Moon Slayer; Avatar Destiny; Bumi, King of Three Trials; Iroh, Tea Master;
-  Zuko, Conflicted. Slice 7 (2026-10-30) defined the other 17 in four
-  commits (`fc3e5ae74`..`5d870e814`): granted triggers and extra occurrences,
-  graveyard triggers and finality, general delayed triggers
-  (`Effect::CreateDelayedTrigger`; earthbend's return is one), `ForPlayer`,
-  keep-creatures, while-you-control durations, keyword loss, "this way"
-  discards, source-power-bounded targets.
+- All 75 cards defined (2026-10-30). The last ten: `379a4576d`..`b1d457756`
+  (control change, copies and retargeting, delayed casts, Aura death LKI,
+  nonbasic type overwrite) and `c0fae7ba6` Boiling Rock Rioter
+  (`ActivatedAbilityDefinition.tap_cost`, `Effect::ExileWithSource` /
+  `CastExiledWithSource`, `ExileLink.returns`, paid
+  `Decision::CastDuringResolution`, renamed from `CastWithoutPaying`).
+- PR review applied (2026-10-30): `351501d22` `Effect::CounterAbility` with
+  `TargetSpec::Ability`; `5e48c58ae` waiting delayed triggers as public
+  continuation frames of kind 10 after every other frame (`decision` = event
+  code, context = watched object, new v5 relation column 48 `this_turn`, so v5
+  relations are 49 wide; v2–v4 encode none), learning schema 10 role
+  `delayed_trigger`, LLM relation text, capture validation admits kind 10.
+- Gate also re-records: the Scryfall fixture for the last ten cards
+  (`scripts/refresh_card_fixture.py`, online) and `semantic-kernel-w17-v1`.
 - Gate: Python suites bound to the w17 content digest (`authored-match-w17-v1`,
   `authored-match-parity-w17-v1`, `public-commitment-parity-w17-v1`, choice
   navigation, decision surface, learn evidence/setup, trigger order, belief
@@ -170,3 +175,8 @@ Check (2026-10-30, `2f73cd16f`): debug `cargo test --no-fail-fast` all targets, 
 Approval (Jack Heart, 2026-10-30): T4 approved in full — all 75 cards with the
 review decisions above — publish and ship without another review. When the
 running Graph stops (e.g. at `demo`), the operator runs `lf ship 488a40`.
+
+PR review (Jack Heart, 2026-10-30, 1a 2b): waiting delayed triggers become
+observed state in T4 (tensor rows beside the stack, tokens, LLM text, guard
+over `DelayedTriggerEvent`, directed test); add `Effect::CounterAbility` now
+(own stack-ability `TargetSpec`, emits `AbilityCountered`). Ship approval holds.

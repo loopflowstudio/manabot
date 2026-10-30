@@ -333,3 +333,12 @@ T2's operator choices are at `a5587df5a:scratch/questions.md`. New since
   asked as it would trigger, not again on resolution. A spent once-each-turn
   option shows as the permanent's once-each-turn count, not by ability index.
   A spell's own "when you do" has no source object yet (Earth Rumble waits).
+- 2026-10-30 (Rioter, PR review): "Tap an untapped Ally you control" is
+  `ActivatedAbilityDefinition.tap_cost: Option<CardPredicate>`, beside the
+  existing `discard_card`/`exhaust` cost fields (an activated-ability cost,
+  not a `CardDefinition` field); tokens carry it via serde. Waiting delayed
+  triggers are v5-only relation frames: v2–v4 tensors drop kind-10 frames so
+  frozen inputs keep their exact rows, while JSON/text show them for every
+  version. The learning role `delayed_trigger` is projected in
+  `BoundSemanticPack.project_observation`; `manabot/semantic/policy.py`'s
+  runtime object rows (keyed by stack id) do not list delayed triggers yet.
