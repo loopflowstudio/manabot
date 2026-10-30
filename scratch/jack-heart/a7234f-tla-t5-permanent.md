@@ -98,12 +98,13 @@ it. If a third self-animation condition appears, merge them then.
 
 ## Remaining
 
-- Gate: re-record the content-digest-bound w17 evidence
-  (`semantic-kernel-w17-v1` via `semantic_conformance record`, the
-  authored-match receipt and parity, public-commitment parity, Academy
-  fixtures; T3's `scratch/tools/regen_*`). Rust `semantic_conformance_tests`
-  fails on "content digest drift" until then. Also run the AGENTS.md world /
-  observation-shape suite.
+- Done at publish (2026-10-30): w17 evidence re-recorded in place for T5's
+  content digest. Semantic kernel: same 14 cases / 3401 commands, only
+  state hashes and content digests moved. Also re-recorded: authored-match
+  receipt, with its SHA pinned in both parity modules; authored-match parity
+  (142 commands); public-commitment parity (69 commitments, no gaps); Academy
+  demos and choice navigation (same decision revisions); trigger-order
+  digests; belief v3 receipt pins.
 - Sync onto T4 488a40 when it publishes. On that sync:
   - `PlayerTurnHistory` takes T4's other fields.
   - `cards_drawn_this_turn` moves into the struct.

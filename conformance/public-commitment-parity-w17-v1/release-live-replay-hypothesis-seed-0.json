@@ -37,7 +37,7 @@
     }
   },
   "identity": {
-    "authority_receipt_sha256": "09b5c62707ef93974f1431a8fb4b5edd78925fcfb0d8ef43168fe21c7f98cf83",
+    "authority_receipt_sha256": "b8e0442a72b4fb169017f32a2b741fc0273893de4b3b0481ea4e8b9317c18667",
     "command_tape_sha256": "95db76dc71150abd75bd4a771729e0928a59c19232ba442db4eb036cae5a1294",
     "matchup": "ur-lessons-vs-gw-allies",
     "relevant_source": {
@@ -45,11 +45,11 @@
       "files": [
         {
           "path": "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
-          "sha256": "09b5c62707ef93974f1431a8fb4b5edd78925fcfb0d8ef43168fe21c7f98cf83"
+          "sha256": "b8e0442a72b4fb169017f32a2b741fc0273893de4b3b0481ea4e8b9317c18667"
         },
         {
           "path": "academy/public_commitment_parity.py",
-          "sha256": "e9962c6238606accace70f8c87d5d599bd9ade010ce7f84a73f3e3babb7a0d13"
+          "sha256": "c9bc42b4e0a3ff93150061c67d6e8e1489b4c6e24c6289197b4083153a54b380"
         },
         {
           "path": "academy/server.py",
@@ -57,7 +57,7 @@
         },
         {
           "path": "manabot/managym/experience_projection.py",
-          "sha256": "fd616d034fe78925678070b488f41ab871126b28b7eab37bbb00852fcbf46819"
+          "sha256": "8ff29b210fd9cf0eec97340b336a4e3615efd4e89a7d0d08bf6039990dd17080"
         },
         {
           "path": "experiments/contracts/int-9-exact-range-v1.json",
@@ -73,7 +73,7 @@
         },
         {
           "path": "manabot/managym/__init__.pyi",
-          "sha256": "9e0226f4e9b381596beb87c59a16a763d7ff020c25c6a3aa4487edfe77464ec5"
+          "sha256": "5c4b60cbb9b5859f3326f134d3854cd21ef85ad3e32dfd322861b56d1a1fd33d"
         },
         {
           "path": "manabot/managym/decision.py",
@@ -101,7 +101,7 @@
         },
         {
           "path": "managym/src/python/bindings.rs",
-          "sha256": "362d7770d364ae98addae98046e00f360e9c4470509dd0c8b82b45809499038d"
+          "sha256": "e1ace4b52d7c6c468bf804fa27d01f24d1fc5b82d633695ac9378feb6a821a58"
         },
         {
           "path": "managym/tests/cards/stx.rs",
@@ -128,7 +128,7 @@
           "sha256": "d51e57bbacc7fe50716af576be6d4979664501d6d4a48e0f33921a9ad23bb171"
         }
       ],
-      "sha256": "09ae3ce4e68c8056136a8a4767dbdd7c5245c2a8223a43490bb78d0cb4745ca9"
+      "sha256": "3ece81ae6190162d977718c4d4e36f58a0aaa06dcd3bae095498bd28c3d9c6e9"
     },
     "seed": 0,
     "semantic_decision_version": 7
@@ -1488,14 +1488,14 @@
       "tracker_receipts": {
         "0": {
           "consumed_commitments": 21,
-          "history_digest": "4fbba5e8fab66f78d9e5a1100ecb68153ed89879eeb174d8011c41e6bfaaf40e",
+          "history_digest": "94a8155f310cc3e2e403e4392114c320d47b72be2f18d167f88955636ae7fc85",
           "posterior_digest": "328281810234788ed375e828684635fb1c0da380cc6299400b27a9429645cb54",
           "prior_digest": "478e2fdbaff531d2d75572ad85e359c2101a606e8bd5e0c91edb69227bdc8436",
           "records": 68
         },
         "1": {
           "consumed_commitments": 34,
-          "history_digest": "2dd224a72208a784c3994920540bbd5e5929d3a02976695c58705e89ef8e89c2",
+          "history_digest": "a61d9732474e201e24af7328b482184bbcca0b7045c3a33baba95684491fc720",
           "posterior_digest": "9e09b22ce96d3bfb46a4beadd02e4837eb4b10256d304c7e6167e62162fc4b5d",
           "prior_digest": "226039832e99bd44cf4369526fe3471243cc3642255f5053c7178bf6be53e4f5",
           "records": 142
@@ -1520,14 +1520,14 @@
   "trackers": {
     "0": {
       "consumed_commitments": 21,
-      "history_digest": "4fbba5e8fab66f78d9e5a1100ecb68153ed89879eeb174d8011c41e6bfaaf40e",
+      "history_digest": "94a8155f310cc3e2e403e4392114c320d47b72be2f18d167f88955636ae7fc85",
       "posterior_digest": "328281810234788ed375e828684635fb1c0da380cc6299400b27a9429645cb54",
       "prior_digest": "478e2fdbaff531d2d75572ad85e359c2101a606e8bd5e0c91edb69227bdc8436",
       "records": 68
     },
     "1": {
       "consumed_commitments": 34,
-      "history_digest": "2dd224a72208a784c3994920540bbd5e5929d3a02976695c58705e89ef8e89c2",
+      "history_digest": "a61d9732474e201e24af7328b482184bbcca0b7045c3a33baba95684491fc720",
       "posterior_digest": "9e09b22ce96d3bfb46a4beadd02e4837eb4b10256d304c7e6167e62162fc4b5d",
       "prior_digest": "226039832e99bd44cf4369526fe3471243cc3642255f5053c7178bf6be53e4f5",
       "records": 142

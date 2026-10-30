@@ -6849,7 +6849,7 @@
         "actor": 0,
         "command_id": "authored-authority.hero.24",
         "resulting_revision": 60,
-        "resulting_state_digest": "ab81d42f883d0382f4d9e49daf07a0ddafc715aa94c20b05654e00124fda4055"
+        "resulting_state_digest": "0cc1cc96c2e0179c7a8c52a6b825c9a0fa7072e0abbb02fbdc64979392a63863"
       },
       "encountered_definition_ids": [
         2,
@@ -6941,7 +6941,7 @@
       ],
       "source": "client",
       "state": {
-        "after": "ab81d42f883d0382f4d9e49daf07a0ddafc715aa94c20b05654e00124fda4055",
+        "after": "0cc1cc96c2e0179c7a8c52a6b825c9a0fa7072e0abbb02fbdc64979392a63863",
         "before": "33edae144dae8f1e01c1501babdbd0de4cd4ac6ffacfc0742bc3e176474fe88b"
       },
       "to_revision": 60
@@ -7024,7 +7024,7 @@
       "source": "client",
       "state": {
         "after": "53bc5c9e9d5f4cf6353f0f2766bf4d7076ca41172ef167332c02f159c6f40174",
-        "before": "ab81d42f883d0382f4d9e49daf07a0ddafc715aa94c20b05654e00124fda4055"
+        "before": "0cc1cc96c2e0179c7a8c52a6b825c9a0fa7072e0abbb02fbdc64979392a63863"
       },
       "to_revision": 61
     },

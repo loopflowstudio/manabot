@@ -1,6 +1,6 @@
 {
   "identity": {
-    "authority_receipt_sha256": "09b5c62707ef93974f1431a8fb4b5edd78925fcfb0d8ef43168fe21c7f98cf83",
+    "authority_receipt_sha256": "b8e0442a72b4fb169017f32a2b741fc0273893de4b3b0481ea4e8b9317c18667",
     "command_tape_sha256": "95db76dc71150abd75bd4a771729e0928a59c19232ba442db4eb036cae5a1294",
     "matchup": "ur-lessons-vs-gw-allies",
     "relevant_source": {
@@ -8,7 +8,7 @@
       "files": [
         {
           "path": "academy/authored_match_parity.py",
-          "sha256": "71a98acac0bc192b959233aee018d68b62c1777fc9f2fc5a09d7c2e8e9a893dd"
+          "sha256": "4b8d0a31e0028cd05013914e906a101e2e828dda420b5f70b5ed032b04b2c9e0"
         },
         {
           "path": "academy/authored_match_receipt.py",
@@ -40,7 +40,7 @@
         },
         {
           "path": "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
-          "sha256": "09b5c62707ef93974f1431a8fb4b5edd78925fcfb0d8ef43168fe21c7f98cf83"
+          "sha256": "b8e0442a72b4fb169017f32a2b741fc0273893de4b3b0481ea4e8b9317c18667"
         },
         {
           "path": "content/semantic/current/setups.json",
@@ -52,11 +52,11 @@
         },
         {
           "path": "manabot/managym/experience.py",
-          "sha256": "c2d2c693f60e5a0c4ee73121ee24a14a004a4f987a17930c94be5c37da5105df"
+          "sha256": "edcccc041aa12c835f7d423b37c45f74d7a138fb9283488961f1634f368adcf8"
         },
         {
           "path": "manabot/managym/experience_projection.py",
-          "sha256": "fd616d034fe78925678070b488f41ab871126b28b7eab37bbb00852fcbf46819"
+          "sha256": "8ff29b210fd9cf0eec97340b336a4e3615efd4e89a7d0d08bf6039990dd17080"
         },
         {
           "path": "manabot/semantic/decision_contract.py",
@@ -72,7 +72,7 @@
         },
         {
           "path": "managym/src/agent/ability_description.rs",
-          "sha256": "2a8d128fd76fb112e0b5714f6a400ea62e12d5db747b40e2e1f5751f33418b70"
+          "sha256": "2ac82410c1d3f0f7a03b7881ca156ebfcd4c3b5cf21ffa9ad18af81a375edd24"
         },
         {
           "path": "managym/src/agent/action.rs",
@@ -84,7 +84,7 @@
         },
         {
           "path": "managym/src/agent/continuation.rs",
-          "sha256": "7e270d92a410df550aeae5d5ddb32c809f26a270d36254b19d260fcbb28a5fb7"
+          "sha256": "425f7b445b7ba561265457118cac097071d4655c92d5da6ddfc287f4fb7e03b4"
         },
         {
           "path": "managym/src/agent/env.rs",
@@ -96,11 +96,11 @@
         },
         {
           "path": "managym/src/agent/observation.rs",
-          "sha256": "b6b236cf732e07da820273509ddbffc09de5a5eb5f7b4bc2c22693b4fe233e49"
+          "sha256": "f42c6aae8a81086941d5aef983580c9a974a3787faac088beeeae353c817dbed"
         },
         {
           "path": "managym/src/agent/observation_encoder.rs",
-          "sha256": "08c5cd5f0a2912cf5f8d9d3dbac4678a0df4081c910eba8d8805ed1d4d0a5321"
+          "sha256": "5b7795112e00a60b2eab80433b1a08552d4e35c86c33b926e23d6e790f4b02c5"
         },
         {
           "path": "managym/src/agent/observation_json.rs",
@@ -280,7 +280,7 @@
         },
         {
           "path": "managym/src/cardsets/tla.rs",
-          "sha256": "cfeb7a99039f94a56869722d5d755c4ac8dedfc6cdd2cc10bebeb1ef6cc47425"
+          "sha256": "21252e75e01a28da8ce727051d687f682dd2872c1d8c2f309b0d59160ff68bee"
         },
         {
           "path": "managym/src/cardsets/tokens.rs",
@@ -312,15 +312,15 @@
         },
         {
           "path": "managym/src/decision_context.rs",
-          "sha256": "748902dfd64938926fb7e011742dbfd996b504779d849c0a3e30e50c6ec2c773"
+          "sha256": "43c6d529647e05993c7e7d5057f329a0e4f5a25d8171f1d6bd5b36a4d0314dac"
         },
         {
           "path": "managym/src/experience.rs",
-          "sha256": "6b7509cfbdc5af14c5849c648c9856c05551fed21a361ad85e999960508af69b"
+          "sha256": "f42ba73ba301463057baeec9565384a9e9e5347da2bf95a9503d3efb852e1282"
         },
         {
           "path": "managym/src/flow/action.rs",
-          "sha256": "8bc9e28d0ca25bf8d0df238215e19657ac5203c14bf49fd07d8f84938a60b0f8"
+          "sha256": "e198c02d418db4f40e255be765f50b1b74659b3040db6e27d08dfb56fdd5aa9b"
         },
         {
           "path": "managym/src/flow/card_capture.rs",
@@ -344,7 +344,7 @@
         },
         {
           "path": "managym/src/flow/decision.rs",
-          "sha256": "4ed97e0d74d3b3da44a8a43b527454a8553e5f1e1c8b7273bc2a394d79e74bb9"
+          "sha256": "4c7004e725691c1bad5e5508fa6a4f88f2f79bbfc2f05e5406546311bf29a0cf"
         },
         {
           "path": "managym/src/flow/effects.rs",
@@ -388,7 +388,7 @@
         },
         {
           "path": "managym/src/flow/resolution.rs",
-          "sha256": "23bcf49fa5f9ad01b0685bb31c8690a923e79c865cfacf57d8bdded972ae2259"
+          "sha256": "ceea68ee34dc872e21235771f62796e3a7683f02e99e19764da6331077326f5b"
         },
         {
           "path": "managym/src/flow/resolution_tests.rs",
@@ -396,7 +396,7 @@
         },
         {
           "path": "managym/src/flow/sba.rs",
-          "sha256": "e6f8d9edc34c6f59b05ee84929c5557f4ffd74f163329bb4a60f39f54581dc31"
+          "sha256": "5bd87ca2817485db06cffdbfe65931879c608182c71aa3bfb9d8fe2d9cc122df"
         },
         {
           "path": "managym/src/flow/scenario.rs",
@@ -416,7 +416,7 @@
         },
         {
           "path": "managym/src/flow/statics.rs",
-          "sha256": "ceaa4f8479ff35e6de861216b4a4fb1d983776371944fc60b47f21fa00707edd"
+          "sha256": "682ba9097eb88eb7faf7799bebcfcc1d567eefd649d7e96eaf57bd924a5e26ea"
         },
         {
           "path": "managym/src/flow/target_authority_tests.rs",
@@ -436,15 +436,15 @@
         },
         {
           "path": "managym/src/flow/turn.rs",
-          "sha256": "6f7fa159ff503f183c0970e983c58351aab08b0ee486f628a42b4cea541c55a0"
+          "sha256": "68c38ba73994d0b33974d0c24b2e6ec04bded8bdfbb66804fb82416513720549"
         },
         {
           "path": "managym/src/flow/undo.rs",
-          "sha256": "a216d68acf88cdbb391de856e8949f2f3e9d439f143c577f65bc4eb637ccc53b"
+          "sha256": "83a8ef0a7f972d987ac14c002f1422304ed9b4f27de4cbfdc1492f018e97973f"
         },
         {
           "path": "managym/src/flow/zones.rs",
-          "sha256": "a58c099f7531067664a17c708c545f5f84e792afd0d324415cbfd1f271e3f451"
+          "sha256": "fc145cf84ddc0f0a38da4d13506a4cb198cdcddb7399241777f37c268616bc0b"
         },
         {
           "path": "managym/src/infra/log.rs",
@@ -468,7 +468,7 @@
         },
         {
           "path": "managym/src/python/bindings.rs",
-          "sha256": "362d7770d364ae98addae98046e00f360e9c4470509dd0c8b82b45809499038d"
+          "sha256": "e1ace4b52d7c6c468bf804fa27d01f24d1fc5b82d633695ac9378feb6a821a58"
         },
         {
           "path": "managym/src/python/convert.rs",
@@ -488,15 +488,15 @@
         },
         {
           "path": "managym/src/state/ability.rs",
-          "sha256": "2ef701316b628f39361ac2967516586e39a4ba75fa0e228661de40c76036901a"
+          "sha256": "82050cd6b130ae92c7f06f40e3cef1a7bd3228ce3eab56f7c8300827e29f5a34"
         },
         {
           "path": "managym/src/state/card.rs",
-          "sha256": "bf2bb20983f92b70c2afa83d8e9424a652fb06caf2d2b294c62eefc1bf28c504"
+          "sha256": "00af223e87f99abcdd06e29ba68c5322ca51c426ec05845115e296ba388328d8"
         },
         {
           "path": "managym/src/state/effect.rs",
-          "sha256": "d89202562f9effcdea83d40fba87d9b5bdada420cb0e0f358df699716e3a512e"
+          "sha256": "898c9652b8c41a94368cc0cd533f3166816788aaae2e766684e3f94053427275"
         },
         {
           "path": "managym/src/state/game_object.rs",
@@ -504,7 +504,7 @@
         },
         {
           "path": "managym/src/state/hash.rs",
-          "sha256": "9b4ef8ebe5de954c3d20b2effbce150d1371bf8a4e9763a5af039816c4228aa4"
+          "sha256": "bf6900e8f7392797aef8b996f2bf5771186cfd982f44244d359f7d7f91a84c77"
         },
         {
           "path": "managym/src/state/mana.rs",
@@ -559,7 +559,7 @@
           "sha256": "7253f4b013ddbb65f2f9509324d3c59739e9ca08f16ad7bb5d2c92e16a928d3c"
         }
       ],
-      "sha256": "37c197a856f899ce4582d90df9c73adbffd85a270b324fbd3d379362c43967b7"
+      "sha256": "b8ecb40a7201ea5f18828b17ff71c367647b40ac3368cbd4be2ec9bf3fa2287b"
     },
     "seed": 0
   },
@@ -1444,14 +1444,14 @@
           "ordered_consequences_sha256": "c03bb1d736a07e7f6e65f8af784e4d065dc2c3b58ddee3b0076c580a29e52868",
           "revision": 60,
           "semantic_event_cursor": 356,
-          "state_witness": "ab81d42f883d0382f4d9e49daf07a0ddafc715aa94c20b05654e00124fda4055",
+          "state_witness": "0cc1cc96c2e0179c7a8c52a6b825c9a0fa7072e0abbb02fbdc64979392a63863",
           "viewer_observation_sha256": [
-            "65206232d701062280608220a763d0f2ef1fdb05448ceb5b8b86b9baa7661f5b",
-            "32833d46f43aa5d38e4c3c17b0d062c8f345d87156b48c3262ca441eb969c7f4"
+            "557f02c726942602f4d0eac716987b1ff62360dae2f9c8372c31c8331e33d0ea",
+            "26256dfb9ac91df5d44eb1c545b4c6d8b61785b6a303b6888d0d24bf185091a7"
           ],
           "viewer_state_sha256": [
-            "938ec68401e9c2a0b10ce741b6e9fd05e4f8b5691db6a7708d49398c90c57165",
-            "887de6c01c4568f301d8499d32ed863b0139683db2f9e1d3cc8d784d7b7dcc3e"
+            "e1f6627977bb2c9a7dea341ce030939e6d8474ef53dce0f09c7b45b4e230a789",
+            "cafa875cdc49edeffdca2d00b5da837f51a4c77ab07214d5342794d73766575a"
           ]
         },
         {
@@ -3451,14 +3451,14 @@
           "ordered_consequences_sha256": "c03bb1d736a07e7f6e65f8af784e4d065dc2c3b58ddee3b0076c580a29e52868",
           "revision": 60,
           "semantic_event_cursor": 356,
-          "state_witness": "ab81d42f883d0382f4d9e49daf07a0ddafc715aa94c20b05654e00124fda4055",
+          "state_witness": "0cc1cc96c2e0179c7a8c52a6b825c9a0fa7072e0abbb02fbdc64979392a63863",
           "viewer_observation_sha256": [
-            "65206232d701062280608220a763d0f2ef1fdb05448ceb5b8b86b9baa7661f5b",
-            "32833d46f43aa5d38e4c3c17b0d062c8f345d87156b48c3262ca441eb969c7f4"
+            "557f02c726942602f4d0eac716987b1ff62360dae2f9c8372c31c8331e33d0ea",
+            "26256dfb9ac91df5d44eb1c545b4c6d8b61785b6a303b6888d0d24bf185091a7"
           ],
           "viewer_state_sha256": [
-            "938ec68401e9c2a0b10ce741b6e9fd05e4f8b5691db6a7708d49398c90c57165",
-            "887de6c01c4568f301d8499d32ed863b0139683db2f9e1d3cc8d784d7b7dcc3e"
+            "e1f6627977bb2c9a7dea341ce030939e6d8474ef53dce0f09c7b45b4e230a789",
+            "cafa875cdc49edeffdca2d00b5da837f51a4c77ab07214d5342794d73766575a"
           ]
         },
         {
@@ -5468,14 +5468,14 @@
           "ordered_consequences_sha256": "c03bb1d736a07e7f6e65f8af784e4d065dc2c3b58ddee3b0076c580a29e52868",
           "revision": 60,
           "semantic_event_cursor": 356,
-          "state_witness": "ab81d42f883d0382f4d9e49daf07a0ddafc715aa94c20b05654e00124fda4055",
+          "state_witness": "0cc1cc96c2e0179c7a8c52a6b825c9a0fa7072e0abbb02fbdc64979392a63863",
           "viewer_observation_sha256": [
-            "65206232d701062280608220a763d0f2ef1fdb05448ceb5b8b86b9baa7661f5b",
-            "32833d46f43aa5d38e4c3c17b0d062c8f345d87156b48c3262ca441eb969c7f4"
+            "557f02c726942602f4d0eac716987b1ff62360dae2f9c8372c31c8331e33d0ea",
+            "26256dfb9ac91df5d44eb1c545b4c6d8b61785b6a303b6888d0d24bf185091a7"
           ],
           "viewer_state_sha256": [
-            "938ec68401e9c2a0b10ce741b6e9fd05e4f8b5691db6a7708d49398c90c57165",
-            "887de6c01c4568f301d8499d32ed863b0139683db2f9e1d3cc8d784d7b7dcc3e"
+            "e1f6627977bb2c9a7dea341ce030939e6d8474ef53dce0f09c7b45b4e230a789",
+            "cafa875cdc49edeffdca2d00b5da837f51a4c77ab07214d5342794d73766575a"
           ]
         },
         {
