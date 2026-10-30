@@ -1,7 +1,11 @@
 use std::{collections::HashMap, fmt};
 
 use crate::{
-    agent::observation::{CardData, EventData, Observation, PermanentData, PlayerData, TurnData},
+    agent::observation::{
+        CardData, ContinuousEffectData, EventData, Observation, PermanentData, PlayerData,
+        TurnData,
+    },
+    cards::tokens::name_value,
     flow::turn::{PhaseKind, StepKind},
     state::mana::SPEND_SUBTYPES,
 };
@@ -30,43 +34,77 @@ pub const CARD_DIM: usize = CARD_X_INDEX + 2 + 1;
 pub const PERMANENT_DEFINITION_INDEX: usize = 24;
 pub const LEGACY_PERMANENT_DIM: usize = 29;
 // V5 permanent terms start where v4's validity flag was; validity stays last.
+// Open-ended vocabularies (counter kinds, subtypes, set characteristics, used
+// abilities, continuous-effect records) are fact rows, not columns.
 pub const PERMANENT_EXHAUSTED_INDEX: usize = LEGACY_PERMANENT_DIM - 1;
 pub const PERMANENT_ONCE_EACH_TURN_INDEX: usize = PERMANENT_EXHAUSTED_INDEX + 1;
 pub const PERMANENT_FIREBENDING_INDEX: usize = PERMANENT_ONCE_EACH_TURN_INDEX + 1;
-/// Counters other than +1/+1 (CR 122.1): stun, fire, double strike.
-pub const PERMANENT_STUN_INDEX: usize = PERMANENT_FIREBENDING_INDEX + 1;
-pub const PERMANENT_FIRE_INDEX: usize = PERMANENT_STUN_INDEX + 1;
-pub const PERMANENT_DOUBLE_STRIKE_COUNTERS_INDEX: usize = PERMANENT_FIRE_INDEX + 1;
 /// Object index + 1 of the permanent this Aura or Equipment is attached to;
 /// zero when unattached. A join like action focus, never a numeric feature.
-pub const PERMANENT_ATTACHED_INDEX: usize = PERMANENT_DOUBLE_STRIKE_COUNTERS_INDEX + 1;
-/// An effect sets the name and creature types (Honest Work). The values
-/// follow from the setter, which the attachment join identifies.
-pub const PERMANENT_CHARACTERISTICS_SET_INDEX: usize = PERMANENT_ATTACHED_INDEX + 1;
-pub const PERMANENT_GRANTED_LAND_INDEX: usize = PERMANENT_CHARACTERISTICS_SET_INDEX + 1;
-/// Temporary subtypes beyond v4's Avatar flag (column 26): one flag each,
-/// then a count of any other, so none is silently dropped.
-pub const PERMANENT_TEMP_SUBTYPES_INDEX: usize = PERMANENT_GRANTED_LAND_INDEX + 1;
-pub const TEMP_SUBTYPES: [&str; 6] = [
-    "Plains",
-    "Island",
-    "Swamp",
-    "Mountain",
-    "Forest",
-    "Construct",
-];
-pub const PERMANENT_OTHER_TEMP_SUBTYPES_INDEX: usize =
-    PERMANENT_TEMP_SUBTYPES_INDEX + TEMP_SUBTYPES.len();
+pub const PERMANENT_ATTACHED_INDEX: usize = PERMANENT_FIREBENDING_INDEX + 1;
+pub const PERMANENT_GRANTED_LAND_INDEX: usize = PERMANENT_ATTACHED_INDEX + 1;
 /// Object index + 1 of the attacker this creature blocks; a join.
-pub const PERMANENT_BLOCKING_INDEX: usize = PERMANENT_OTHER_TEMP_SUBTYPES_INDEX + 1;
+pub const PERMANENT_BLOCKING_INDEX: usize = PERMANENT_GRANTED_LAND_INDEX + 1;
 pub const PERMANENT_ABILITIES_LOST_INDEX: usize = PERMANENT_BLOCKING_INDEX + 1;
-/// Spent activation limits by ability: one flag per ability index below
-/// `USED_ABILITY_FLAGS`, then a count of any later index.
-pub const PERMANENT_USED_ABILITIES_INDEX: usize = PERMANENT_ABILITIES_LOST_INDEX + 1;
-pub const USED_ABILITY_FLAGS: usize = 4;
-pub const PERMANENT_OTHER_USED_ABILITIES_INDEX: usize =
-    PERMANENT_USED_ABILITIES_INDEX + USED_ABILITY_FLAGS;
-pub const PERMANENT_DIM: usize = PERMANENT_OTHER_USED_ABILITIES_INDEX + 2;
+/// Its timestamp's rank among this observation's timestamps (`FACT_ORDER_INDEX`).
+pub const PERMANENT_TIMESTAMP_INDEX: usize = PERMANENT_ABILITIES_LOST_INDEX + 1;
+pub const PERMANENT_DIM: usize = PERMANENT_TIMESTAMP_INDEX + 2;
+
+/// v5 fact rows: one open-vocabulary fact about a player or permanent, joined
+/// to it like relation references. Vocabulary ids are the learning tokens'
+/// values (`cards::tokens::name_value` of the same Rust or printed name), split
+/// into 16-bit halves so f32 keeps them exact.
+pub const FACT_ROWS: usize = 128;
+/// Object index + 1 of the player or permanent the fact is about.
+pub const FACT_OBJECT_INDEX: usize = 0;
+/// `FactKind` value.
+pub const FACT_KIND_INDEX: usize = 1;
+/// Vocabulary id (high, low halves): the counter kind, subtype, name,
+/// creature type, ability index or `Modification` variant.
+pub const FACT_ID_INDEX: usize = 2;
+/// Effect detail id (high, low): a keyword, subtype or color it names.
+pub const FACT_DETAIL_INDEX: usize = 4;
+/// Amounts / 10: a count, power or firebending N, then toughness.
+pub const FACT_VALUE_INDEX: usize = 6;
+/// Effect duration: 1 until end of turn, 2 indefinite.
+pub const FACT_DURATION_INDEX: usize = 8;
+/// Effect timestamp rank among this observation's timestamps (1-based).
+pub const FACT_ORDER_INDEX: usize = 9;
+/// Effect source definition + 1.
+pub const FACT_SOURCE_INDEX: usize = 10;
+pub const FACT_VALID_INDEX: usize = 11;
+pub const FACT_DIM: usize = 12;
+
+/// What a fact row states; numbering is part of policy input v5.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[repr(u8)]
+pub enum FactKind {
+    /// Counters of one kind (+1/+1 included); value: the count.
+    Counter = 1,
+    /// A subtype an effect added.
+    AddedSubtype = 2,
+    /// The name an effect set.
+    SetName = 3,
+    /// A creature type an effect set.
+    SetCreatureType = 4,
+    /// An activated ability (id: its index) whose use limit is spent.
+    UsedAbility = 5,
+    /// A continuous-effect record (id: its `Modification`), one row per
+    /// keyword, subtype or color it names.
+    Effect = 6,
+}
+
+impl FactKind {
+    pub const ALL: [FactKind; 6] = [
+        FactKind::Counter,
+        FactKind::AddedSubtype,
+        FactKind::SetName,
+        FactKind::SetCreatureType,
+        FactKind::UsedAbility,
+        FactKind::Effect,
+    ];
+}
+
 pub const ACTION_TYPE_DIM: usize = 17;
 /// Declaration choice is separate from its family: attack and decline must
 /// have distinct policy inputs even when they focus the same permanent.
@@ -148,6 +186,14 @@ impl ObservationEncoderConfig {
         }
     }
 
+    pub fn facts_len(&self) -> usize {
+        if self.policy_input_version >= 5 {
+            FACT_ROWS * FACT_DIM
+        } else {
+            0
+        }
+    }
+
     pub fn cards_len(&self) -> usize {
         self.max_cards_per_player * self.card_dim()
     }
@@ -180,6 +226,7 @@ impl ObservationEncoderConfig {
 #[derive(Clone, Debug, PartialEq)]
 pub struct EncodedObservation {
     pub relations: Vec<f32>,
+    pub facts: Vec<f32>,
     pub semantic_cards: Vec<f32>,
     pub known_hand: Vec<f32>,
     pub agent_player: Vec<f32>,
@@ -203,6 +250,7 @@ pub struct EncodedObservation {
 
 pub struct EncodedObservationMut<'a> {
     pub relations: &'a mut [f32],
+    pub facts: &'a mut [f32],
     pub semantic_cards: &'a mut [f32],
     pub known_hand: &'a mut [f32],
     pub agent_player: &'a mut [f32],
@@ -229,6 +277,7 @@ impl EncodedObservation {
     pub fn buffers_mut(&mut self) -> EncodedObservationMut<'_> {
         EncodedObservationMut {
             relations: &mut self.relations,
+            facts: &mut self.facts,
             semantic_cards: &mut self.semantic_cards,
             known_hand: &mut self.known_hand,
             agent_player: &mut self.agent_player,
@@ -297,6 +346,7 @@ pub fn encode(
 ) -> Result<EncodedObservation, ObservationEncodeError> {
     let mut encoded = EncodedObservation {
         relations: vec![0.0; config.relations_len()],
+        facts: vec![0.0; config.facts_len()],
         semantic_cards: vec![0.0; 2 * config.max_cards_per_player],
         known_hand: vec![0.0; 4 * config.max_cards_per_player],
         agent_player: vec![0.0; config.player_dim()],
@@ -366,6 +416,7 @@ pub fn encode_into(
         config.action_focus_len(),
     )?;
     validate_buffer_len("events", out.events.len(), config.events_len())?;
+    validate_buffer_len("facts", out.facts.len(), config.facts_len())?;
     validate_buffer_len("agent_player_valid", out.agent_player_valid.len(), 1)?;
     validate_buffer_len("opponent_player_valid", out.opponent_player_valid.len(), 1)?;
     validate_buffer_len(
@@ -591,6 +642,7 @@ pub fn encode_into(
     );
     if config.policy_input_version >= 5 {
         // Hosts may be listed after their attachments, so links follow indexing.
+        let ranks = timestamp_ranks(obs);
         let link = |object: Option<i32>| {
             object
                 .and_then(|object| object_to_index.get(&object))
@@ -608,8 +660,13 @@ pub fn encode_into(
             {
                 row[PERMANENT_ATTACHED_INDEX] = link(permanent.attached_to);
                 row[PERMANENT_BLOCKING_INDEX] = link(permanent.blocking);
+                row[PERMANENT_TIMESTAMP_INDEX] = ranks[&permanent.timestamp];
             }
         }
+    }
+
+    if config.policy_input_version >= 5 {
+        encode_facts(obs, &object_to_index, out.facts)?;
     }
 
     if config.policy_input_version >= 2 {
@@ -890,34 +947,176 @@ fn encode_permanent_features(permanent: &PermanentData, is_mine: f32, out: &mut 
         out[PERMANENT_EXHAUSTED_INDEX] = permanent.exhausted_abilities as f32;
         out[PERMANENT_ONCE_EACH_TURN_INDEX] = permanent.once_each_turn_used as f32;
         out[PERMANENT_FIREBENDING_INDEX] = permanent.granted_firebending as f32 / 10.0;
-        out[PERMANENT_STUN_INDEX] = permanent.stun_counters as f32 / 10.0;
-        out[PERMANENT_FIRE_INDEX] = permanent.fire_counters as f32 / 10.0;
-        out[PERMANENT_DOUBLE_STRIKE_COUNTERS_INDEX] =
-            permanent.double_strike_counters as f32 / 10.0;
-        // PERMANENT_ATTACHED_INDEX is written once every object is indexed.
-        out[PERMANENT_CHARACTERISTICS_SET_INDEX] =
-            bool_to_f32(permanent.name.is_some() || permanent.creature_types.is_some());
+        // PERMANENT_ATTACHED_INDEX and PERMANENT_BLOCKING_INDEX are written
+        // once every object is indexed; PERMANENT_TIMESTAMP_INDEX with facts.
         out[PERMANENT_GRANTED_LAND_INDEX] = bool_to_f32(permanent.is_granted_land);
-        for (offset, subtype) in TEMP_SUBTYPES.iter().enumerate() {
-            out[PERMANENT_TEMP_SUBTYPES_INDEX + offset] =
-                bool_to_f32(permanent.temp_subtypes.iter().any(|s| s == subtype));
-        }
-        out[PERMANENT_OTHER_TEMP_SUBTYPES_INDEX] = permanent
-            .temp_subtypes
-            .iter()
-            .filter(|s| *s != "Avatar" && !TEMP_SUBTYPES.contains(&s.as_str()))
-            .count() as f32;
-        // PERMANENT_BLOCKING_INDEX is written once every object is indexed.
         out[PERMANENT_ABILITIES_LOST_INDEX] = bool_to_f32(permanent.abilities_lost);
-        for index in &permanent.used_abilities {
-            if *index < USED_ABILITY_FLAGS {
-                out[PERMANENT_USED_ABILITIES_INDEX + index] = 1.0;
-            } else {
-                out[PERMANENT_OTHER_USED_ABILITIES_INDEX] += 1.0;
-            }
-        }
     }
     out[out.len() - 1] = 1.0;
+}
+
+/// One fact row before its object join and timestamp rank are known.
+struct Fact {
+    object: i32,
+    kind: FactKind,
+    id: i32,
+    detail: i32,
+    values: [f32; 2],
+    effect: Option<(f32, i32, Option<i32>)>,
+}
+
+/// The facts `PermanentData` and `PlayerData` state as open vocabularies, in
+/// object order (agent, opponent, agent permanents, opponent permanents).
+fn facts(obs: &Observation) -> Vec<Fact> {
+    let mut out = Vec::new();
+    let mut push = |object: i32, kind: FactKind, id: i32, value: f32| {
+        out.push(Fact {
+            object,
+            kind,
+            id,
+            detail: 0,
+            values: [value, 0.0],
+            effect: None,
+        })
+    };
+    let permanents = || obs.agent_permanents.iter().chain(&obs.opponent_permanents);
+    for permanent in permanents() {
+        let object = permanent.id;
+        if permanent.plus1_counters > 0 {
+            push(
+                object,
+                FactKind::Counter,
+                name_value("CounterKind::plus_one_plus_one"),
+                permanent.plus1_counters as f32 / 10.0,
+            );
+        }
+        for (kind, count) in &permanent.counters {
+            push(
+                object,
+                FactKind::Counter,
+                name_value(&format!("CounterKind::{kind}")),
+                *count as f32 / 10.0,
+            );
+        }
+        for subtype in &permanent.temp_subtypes {
+            push(object, FactKind::AddedSubtype, name_value(subtype), 1.0);
+        }
+        if let Some(name) = &permanent.name {
+            push(object, FactKind::SetName, name_value(name), 1.0);
+        }
+        for creature_type in permanent.creature_types.iter().flatten() {
+            push(object, FactKind::SetCreatureType, name_value(creature_type), 1.0);
+        }
+        for index in &permanent.used_abilities {
+            push(object, FactKind::UsedAbility, *index as i32, 1.0);
+        }
+    }
+    let holders = [
+        (obs.agent.id, &obs.agent.effects),
+        (obs.opponent.id, &obs.opponent.effects),
+    ]
+    .into_iter()
+    .chain(permanents().map(|permanent| (permanent.id, &permanent.effects)));
+    for (object, effects) in holders {
+        for effect in effects {
+            effect_facts(object, effect, &mut out);
+        }
+    }
+    out
+}
+
+fn effect_facts(object: i32, effect: &ContinuousEffectData, out: &mut Vec<Fact>) {
+    let id = name_value(&format!("Modification::{}", effect.modification));
+    let duration = match effect.duration.as_str() {
+        "EndOfTurn" => 1.0,
+        _ => 2.0,
+    };
+    let values = [
+        effect.power.or(effect.amount).unwrap_or(0) as f32 / 10.0,
+        effect.toughness.unwrap_or(0) as f32 / 10.0,
+    ];
+    let details: Vec<i32> = effect
+        .keywords
+        .iter()
+        .chain(&effect.subtypes)
+        .map(|name| name_value(name))
+        .chain(
+            effect
+                .color
+                .iter()
+                .map(|color| name_value(&format!("Color::{color}"))),
+        )
+        .collect();
+    for detail in if details.is_empty() { vec![0] } else { details } {
+        out.push(Fact {
+            object,
+            kind: FactKind::Effect,
+            id,
+            detail,
+            values,
+            effect: Some((duration, effect.timestamp, effect.source_registry_key)),
+        });
+    }
+}
+
+/// Rank of each timestamp among the observation's permanents and effect
+/// records (1-based), so order is visible without exposing raw ids.
+fn timestamp_ranks(obs: &Observation) -> std::collections::BTreeMap<i32, f32> {
+    let permanents = obs.agent_permanents.iter().chain(&obs.opponent_permanents);
+    let effects = [&obs.agent.effects, &obs.opponent.effects]
+        .into_iter()
+        .chain(permanents.clone().map(|permanent| &permanent.effects))
+        .flatten()
+        .map(|effect| effect.timestamp);
+    let mut stamps: Vec<i32> = permanents
+        .map(|permanent| permanent.timestamp)
+        .chain(effects)
+        .collect();
+    stamps.sort_unstable();
+    stamps.dedup();
+    stamps
+        .into_iter()
+        .enumerate()
+        .map(|(rank, stamp)| (stamp, (rank + 1) as f32))
+        .collect()
+}
+
+fn split_id(id: i32) -> [f32; 2] {
+    let id = id as u32;
+    [(id >> 16) as f32, (id & 0xffff) as f32]
+}
+
+fn encode_facts(
+    obs: &Observation,
+    object_to_index: &HashMap<i32, i32>,
+    out: &mut [f32],
+) -> Result<(), ObservationEncodeError> {
+    let facts = facts(obs);
+    if facts.len() > FACT_ROWS {
+        return Err(ObservationEncodeError::Capacity {
+            field: "facts",
+            capacity: FACT_ROWS,
+            actual: facts.len(),
+        });
+    }
+    out.fill(0.0);
+    let ranks = timestamp_ranks(obs);
+    for (row, fact) in out.chunks_exact_mut(FACT_DIM).zip(&facts) {
+        row[FACT_OBJECT_INDEX] = object_to_index
+            .get(&fact.object)
+            .map_or(0.0, |index| (index + 1) as f32);
+        row[FACT_KIND_INDEX] = fact.kind as u8 as f32;
+        row[FACT_ID_INDEX..FACT_ID_INDEX + 2].copy_from_slice(&split_id(fact.id));
+        row[FACT_DETAIL_INDEX..FACT_DETAIL_INDEX + 2].copy_from_slice(&split_id(fact.detail));
+        row[FACT_VALUE_INDEX..FACT_VALUE_INDEX + 2].copy_from_slice(&fact.values);
+        if let Some((duration, timestamp, source)) = fact.effect {
+            row[FACT_DURATION_INDEX] = duration;
+            row[FACT_ORDER_INDEX] = ranks[&timestamp];
+            row[FACT_SOURCE_INDEX] = source.map_or(0.0, |key| (key + 1) as f32);
+        }
+        row[FACT_VALID_INDEX] = 1.0;
+    }
+    Ok(())
 }
 
 fn encode_actions(

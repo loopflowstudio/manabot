@@ -529,7 +529,6 @@ impl Game {
             permanent.controller = holder;
             permanent.was_cast = was_cast;
             permanent.tapped = entry.tapped;
-            permanent.plus1_counters = entry.plus_one_counters.max(0);
             permanent.counters = entry.counters;
             event_controller = permanent.controller;
             self.state.permanents.push(Some(permanent));
@@ -611,6 +610,11 @@ impl Game {
                     }
                 }
             }
+        }
+
+        // CR 400.7: continuous effects on the departing object end.
+        if let Some(object) = departing_ref {
+            self.end_effects_on(object);
         }
 
         // "Until this creature leaves the battlefield" durations end now:

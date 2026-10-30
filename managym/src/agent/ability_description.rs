@@ -4,12 +4,13 @@
 
 use crate::state::{
     ability::{
-        Ability, Effect, EffectValue, LinkedChooser, LinkedGrant, PaymentCost, StaticCondition,
-        TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, AffectedSpec, Effect, EffectValue, LinkedChooser, LinkedGrant, PaymentCost,
+        StaticCondition, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{Card, CardType, Keywords},
+    effect::{EffectDuration, Modification},
     mana::{Mana, ManaCost},
-    permanent::{BecomesCreature, CounterKind},
+    permanent::CounterKind,
     predicate::CardPredicate,
     zone::ZoneType,
 };
@@ -347,15 +348,6 @@ fn cost_description(cost: &ManaCost) -> String {
     text
 }
 
-fn base_pt_description(power: Option<i32>, toughness: Option<i32>) -> String {
-    match (power, toughness) {
-        (Some(power), Some(toughness)) => format!("power and toughness {power}/{toughness}"),
-        (Some(power), None) => format!("power {power}"),
-        (None, Some(toughness)) => format!("toughness {toughness}"),
-        (None, None) => "power and toughness unchanged".into(),
-    }
-}
-
 fn keywords_description(k: &Keywords) -> String {
     let Keywords {
         flying,
@@ -411,9 +403,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
     Some(match effect {
         SelectTargetRequirement { .. } => return None,
         CreateNonlegendaryCopy => "Create a nonlegendary token copy of this".into(),
-        ModifyControlled { predicate, power, toughness } => format!("{} you control get {power:+}/{toughness:+} until end of turn", predicate_description(predicate,"permanents")),
-        SetBasePtControlled { predicate, power, toughness } => format!("{} you control have base power and toughness {}/{} until end of turn", predicate_description(predicate,"permanents"), value_description(power), value_description(toughness)),
-        AddSubtypesControlled { predicate, subtypes } => format!("{} you control gain {} until end of turn", predicate_description(predicate,"permanents"), subtypes.join(", ")),
+        ApplyContinuous { affected, modification, duration } => continuous_description(affected, modification, *duration),
+        PutCountersOnTriggeringPermanent { count } => format!("Put {count} +1/+1 counters on the permanent that caused this trigger"),
         OptionalPayment { cost, if_paid, if_declined } => {
             let cost = match cost { PaymentCost::Mana(m) => cost_description(m), PaymentCost::Waterbend { generic } => format!("waterbend {generic}") };
             format!("You may pay {cost}. If paid: {}. Otherwise: {}", effects_description(if_paid), effects_description(if_declined))
@@ -422,7 +413,6 @@ fn effect_description(effect: &Effect) -> Option<String> {
         DealDamageToController { amount } => format!("Deal {amount} damage to you"),
         DrainLife { amount } => format!("Each opponent loses {amount} life and you gain {amount} life"),
         DrainLifeValue { amount } => format!("Each opponent loses X life and you gain X life, where X is {}",value_description(amount)),
-        CantBeBlockedTarget { target } => format!("{} can't be blocked this turn",target_description(target)),
         ReturnGraveyardTarget { target, tapped_onto_battlefield: false } => format!("Return {} to your hand",target_description(target)),
         ReturnGraveyardTarget { target, tapped_onto_battlefield: true } => format!("Put {} onto the battlefield tapped",target_description(target)),
         MillCards { count, target: None } => format!("Mill {count} cards"),
@@ -452,12 +442,9 @@ fn effect_description(effect: &Effect) -> Option<String> {
         OpponentsCastOnlyFromHand => "Until your next turn, your opponents can't cast spells from anywhere other than their hands".to_string(),
         ExileSourceSpell => "Exile this spell".to_string(),
         ExileTopCardPlayThisTurn => "Exile the top card of your library. You may play that card this turn".to_string(),
-        GrantFirebendingUntilEot { amount } => format!("Each creature you control gains firebending {amount} until end of turn"),
-        GrantFirebendingToTarget { amount, target } => format!("{} gains firebending {amount} until end of turn", target_description(target)),
         ExileLinked { chooser, zone, predicate, up_to, grant, target } => format!("{} {} {} {} from {}; {}", match chooser { LinkedChooser::Controller => "You exile", LinkedChooser::TargetPlayer => "That player exiles" }, if *up_to { "up to one" } else { "a" }, predicate_description(predicate, "card"), match zone { ZoneType::Battlefield => "they control", _ => "" }, target_description(target), match grant { LinkedGrant::WaterbendManaValue => "for as long as you control this, you may cast it during your turn by waterbending {X}, where X is its mana value", LinkedGrant::FlashAnyMana => "during your turn, you may cast it as though it had flash, spending mana of any type" }),
         ExileUntilNonlandCastFree { below } => format!("Exile cards from the top of your library until you exile a nonland card. You may cast that card without paying its mana cost if its mana value is less than {}. If you don't cast it this way, put it into your hand", value_description(below)),
         CastFromHandFree { predicate } => format!("You may cast a {} from your hand without paying its mana cost", predicate_description(predicate, "spell")),
-        NoMaximumHandSize => "You have no maximum hand size for the rest of the game".to_string(),
         ShuffleGraveyardIntoLibrary => "Shuffle your graveyard into your library".to_string(),
         RevealHandDiscardChosen { target, predicate } => format!("{} reveals their hand. You choose a {} from it; that player discards it", target_description(target), predicate_description(predicate, "card")),
         SearchLandsOpponentSplits { count, opponent_picks } => format!("Search your library for up to {count} land cards with different names and reveal them. An opponent chooses {opponent_picks}; put those into your graveyard and the rest onto the battlefield tapped, then shuffle"),
@@ -465,27 +452,16 @@ fn effect_description(effect: &Effect) -> Option<String> {
         PlaceTargetInLibrary { second_from_top: true } => "Put it into its owner's library second from the top".into(),
         PlaceTargetInLibrary { second_from_top: false } => "Put it on the bottom of its owner's library".into(),
         SacrificeSource { then } => format!("Sacrifice this. If you do: {}", effects_description(then)),
-        BuffTargetValue { power, toughness, target } => format!("{} gets +X/{toughness:+} until end of turn, where X is {}",target_description(target),value_description(power)),
         ReturnToHandDrawIfControlled { target } => format!("Return {} to its owner's hand. If you controlled it, draw a card",target_description(target)),
-        BuffTriggeringPermanentValue { power, toughness } => format!("It gets +X/+Y until end of turn, where X is {} and Y is {}",value_description(power),value_description(toughness)),
-        ModifyTriggeringPermanent { counters, keywords } => {
-            let mut text = format!("Put {counters} +1/+1 counters on the permanent that caused this trigger");
-            let keywords = keywords_description(keywords);
-            if !keywords.is_empty() { text.push_str(&format!(". It gains {keywords} until end of turn")); }
-            text
-        },
         Discard => "Discard a card".into(),
         DealDamageValue { amount, target } => format!("Deal X damage to {}, where X is {}",target_description(target),value_description(amount)),
         PutCountersValue { count, target } => format!("Put X +1/+1 counters on {}, where X is {}",target_description(target),value_description(count)),
-        AddSubtypeToTarget { target, subtype } => format!("{} becomes a {subtype} in addition to its other types until end of turn",target_description(target)),
-        ExileIfDiesThisTurn { target } => format!("If {} would die this turn, exile it instead",target_description(target)),
         IfCondition { condition: StaticCondition::Always, effects, .. } => effects_description(effects),
         IfCondition { condition, effects, otherwise } if otherwise.is_empty() => format!("If {}: {}",static_description(condition),effects_description(effects)),
         IfCondition { condition, effects, otherwise } => format!("If {}: {}. Otherwise: {}",static_description(condition),effects_description(effects),effects_description(otherwise)),
         ReturnToHand { target } => format!("Return {} to its owner's hand",target_description(target)),
         DealDamage { amount, target } => format!("Deal {amount} damage to {}",target_description(target)),
         CounterSpell { target } => format!("Counter {}",target_description(target)),
-        ModifyUntilEot { power_delta, toughness_delta } => format!("This gets {power_delta:+}/{toughness_delta:+} until end of turn"),
         DrawCards { count } => format!("Draw {count} cards"),
         MassDamage { amount } => format!("Deal {amount} damage to each creature"),
         DestroyCreaturesLosingAbilities { max_mana_value } => format!("Each creature with mana value {} or less loses all abilities until end of turn. Destroy those creatures", value_description(max_mana_value)),
@@ -496,22 +472,11 @@ fn effect_description(effect: &Effect) -> Option<String> {
         PutCountersOnSource { count, kind } => format!("Put {count} {} counters on this",counter_description(*kind)),
         PutCounters { count, kind, target } => format!("Put {count} {} counters on {}",counter_description(*kind),target_description(target)),
         TapSource => "Tap this".into(), UntapSource => "Untap this".into(),
-        GrantKeywordsToSource { keywords } => format!("This gains {} until end of turn",keywords_description(keywords)),
         ReturnSourceToHand => "Return this card from your graveyard to your hand".into(),
-        CantBeBlockedThisTurnSource => "This can't be blocked this turn".into(),
-        SetBasePtUntilEot { power, toughness } => format!("This has base {} until end of turn",base_pt_description(*power,*toughness)),
-        BecomeCreatureTarget { target, duration } => format!("{} becomes an artifact creature{}",target_description(target),match duration { BecomesCreature::EndOfTurn => " until end of turn", BecomesCreature::Incarnation => "" }),
-        SetBasePtTarget { target, power, toughness } => format!("{} has base {} until end of turn",target_description(target),base_pt_description(*power,*toughness)),
-        BecomeCreatureSource { duration } => match duration {
-            BecomesCreature::EndOfTurn => "This becomes an artifact creature until end of turn".into(),
-            BecomesCreature::Incarnation => "This becomes an artifact creature".into(),
-        },
         GainLife { amount } => format!("You gain {amount} life"),
         GainLifeValue { amount } => format!("You gain life equal to {}", value_description(amount)),
         AddManaValue { mana, amount } => format!("Add {} for each of {}", mana_description(mana), value_description(amount)),
-        KeepUnspentRedMana => "Until end of turn, you don't lose unspent red mana as steps and phases end".into(),
         FightLastTarget => "The first target fights the last target".into(),
-        GrantKeywordsControlled { predicate, keywords } => format!("Each {} you control gains {} until end of turn", predicate_description(predicate, "permanent"), keywords_description(keywords)),
         SearchLibraryToHand { predicate } => format!("Search your library for {}, reveal it, put it into your hand, then shuffle", predicate_description(predicate, "card")),
         OnNthResolutionThisTurn { n, effect } => format!("If this is resolution {n} of this ability this turn: {}",effects_description(std::slice::from_ref(effect))),
         Scry { count } => format!("Scry {count}"),
@@ -528,7 +493,6 @@ fn effect_description(effect: &Effect) -> Option<String> {
         ExileUntilSourceLeaves { target } => format!("Exile up to one {} until this leaves the battlefield, only if this is still on the battlefield",target_description(target)),
         AddOneColorManaValue { amount } => format!("Add X mana of any one color, where X is {}",value_description(amount)),
         AddMana { mana, until_end_of_combat } => format!("Add {}{}",mana_description(mana),if *until_end_of_combat { ". This mana lasts until end of combat" } else { "" }),
-        BuffTarget { power, toughness, target } => format!("{} gets {power:+}/{toughness:+} until end of turn",target_description(target)),
         UntapTarget { target } => format!("Untap {}",target_description(target)),
         TapTarget { target } => format!("Tap {}",target_description(target)),
         AttachSourceTo { target } => format!("Attach this to {}",target_description(target)),
@@ -540,11 +504,81 @@ fn effect_description(effect: &Effect) -> Option<String> {
         ShuffleAttachedIntoLibrary => "The attached creature's owner shuffles it into their library".into(),
         RemoveCounters { up_to, chosen: None, target } => format!("Remove up to {up_to} counters from {}",target_description(target)),
         RemoveCounters { chosen: Some(kind), target, .. } => format!("Remove a {} counter from {}",counter_description(*kind),target_description(target)),
-        GrantKeywordsToTarget { keywords, target } => format!("{} gains {} until end of turn",target_description(target),keywords_description(keywords)),
         IfTargetMatches { predicate, then } => format!("If that target is a {}: {}",predicate_description(predicate,"permanent"),effects_description(then)),
         ForEachTarget { effects } => format!("For each chosen target: {}",effects_description(effects)),
         PutCountersOnEachMatching { count, predicate, other } => format!("Put {count} +1/+1 counters on each {}{} you control",if *other { "other " } else { "" },predicate_description(predicate,"permanent")),
     })
+}
+
+/// One sentence for a continuous effect: whom, what, how long.
+fn continuous_description(
+    affected: &AffectedSpec,
+    modification: &Modification<EffectValue>,
+    duration: EffectDuration,
+) -> String {
+    let subject = match affected {
+        AffectedSpec::You => "You".to_string(),
+        AffectedSpec::Source => "This".to_string(),
+        AffectedSpec::Target(target) => target_description(target),
+        AffectedSpec::TriggeringPermanent => "It".to_string(),
+        AffectedSpec::EachYouControl(predicate) => {
+            format!(
+                "Each {} you control",
+                predicate_description(predicate, "permanent")
+            )
+        }
+    };
+    let until = match duration {
+        EffectDuration::EndOfTurn => " until end of turn",
+        EffectDuration::Indefinite => "",
+    };
+    let amount = |value: &EffectValue| match value {
+        EffectValue::Fixed(n) => format!("{n:+}"),
+        other => format!("+({})", value_description(other)),
+    };
+    let base = |value: &Option<EffectValue>| match value {
+        Some(EffectValue::Fixed(n)) => n.to_string(),
+        Some(other) => value_description(other),
+        None => "unchanged".to_string(),
+    };
+    match modification {
+        Modification::AddSubtypes(subtypes) => format!(
+            "{subject} becomes {} in addition to its other types{until}",
+            subtypes.join(" ")
+        ),
+        Modification::BecomeArtifactCreature => {
+            format!("{subject} becomes an artifact creature{until}")
+        }
+        Modification::AddKeywords(keywords) => {
+            format!("{subject} gains {}{until}", keywords_description(keywords))
+        }
+        Modification::LoseAllAbilities => format!("{subject} loses all abilities{until}"),
+        Modification::Firebending(n) => format!("{subject} gains firebending {n}{until}"),
+        Modification::SetBasePt { power, toughness } => format!(
+            "{subject} has base power and toughness {}/{}{until}",
+            base(power),
+            base(toughness)
+        ),
+        Modification::ModifyPt { power, toughness } => {
+            format!(
+                "{subject} gets {}/{}{until}",
+                amount(power),
+                amount(toughness)
+            )
+        }
+        Modification::CantBeBlocked => format!("{subject} can't be blocked{until}"),
+        Modification::ExileIfWouldDie => {
+            format!(
+                "If {} would die{until}, exile it instead",
+                subject.to_lowercase()
+            )
+        }
+        Modification::KeepUnspentMana(color) => format!(
+            "{subject} don't lose unspent {} mana as steps and phases end{until}",
+            format!("{color:?}").to_lowercase()
+        ),
+        Modification::NoMaximumHandSize => format!("{subject} have no maximum hand size{until}"),
+    }
 }
 
 #[cfg(test)]

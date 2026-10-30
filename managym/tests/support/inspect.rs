@@ -254,7 +254,7 @@ pub fn card_of(s: &Scenario, id: PermanentId) -> CardId {
 }
 
 pub fn counters(s: &Scenario, id: PermanentId) -> i32 {
-    permanent(s, id).plus1_counters
+    permanent(s, id).counter_count(CounterKind::PlusOnePlusOne)
 }
 
 pub fn counters_of(s: &Scenario, id: PermanentId, kind: CounterKind) -> i32 {
@@ -266,8 +266,7 @@ pub fn tapped(s: &Scenario, id: PermanentId) -> bool {
 }
 
 pub fn keywords(s: &Scenario, id: PermanentId) -> Keywords {
-    let permanent = permanent(s, id);
-    permanent.effective_keywords(&s.game().state.cards[permanent.card])
+    s.game().effective_keywords(id)
 }
 
 // ---------------------------------------------------------------------------

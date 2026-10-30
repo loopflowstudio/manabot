@@ -14,6 +14,7 @@ use managym::{
     flow::turn::StepKind,
     state::{
         ability::Ability,
+        effect::{Affected, EffectDuration, Modification},
         game_object::{CardId, PermanentId, PlayerId},
         mana::Mana,
         permanent::Permanent,
@@ -379,6 +380,38 @@ pub fn ready(s: &mut Scenario, name: &str) {
         .unwrap()
         .summoning_sick = false;
     s.game_mut().scenario_refresh_priority().unwrap();
+}
+
+/// Record an until-end-of-turn continuous effect on a permanent, as a
+/// resolving spell of player 0 would.
+pub fn until_end_of_turn(s: &mut Scenario, id: PermanentId, modification: Modification) {
+    let affected = s
+        .game()
+        .affected_permanent(id)
+        .expect("permanent on the battlefield");
+    s.game_mut().apply_continuous(
+        None,
+        PlayerId(0),
+        [affected],
+        modification,
+        EffectDuration::EndOfTurn,
+    );
+}
+
+/// Record a continuous effect on a player.
+pub fn player_effect(
+    s: &mut Scenario,
+    player: usize,
+    modification: Modification,
+    duration: EffectDuration,
+) {
+    s.game_mut().apply_continuous(
+        None,
+        PlayerId(player),
+        [Affected::Player(PlayerId(player))],
+        modification,
+        duration,
+    );
 }
 
 pub fn inject_ability(s: &mut Scenario, card_id: CardId, ability: Ability) {

@@ -20,9 +20,7 @@ use crate::{
 pub(crate) struct ZoneEntry {
     /// Battlefield: enters tapped.
     pub tapped: bool,
-    /// Battlefield: enters with this many +1/+1 counters.
-    pub plus_one_counters: i32,
-    /// Battlefield: enters with these counters of other kinds.
+    /// Battlefield: enters with these counters.
     pub counters: Counters,
     /// Battlefield: the announced X of the resolving spell becoming this
     /// permanent.
@@ -114,8 +112,7 @@ impl Game {
                 && self
                     .lookup_current_permanent(*object)
                     .ok()
-                    .and_then(|id| self.state.permanents[id].as_ref())
-                    .is_some_and(|permanent| permanent.exile_if_dies_this_turn)
+                    .is_some_and(|id| self.exiled_if_it_would_die(id))
             {
                 *to = ZoneType::Exile;
             }
@@ -344,19 +341,15 @@ impl Game {
                 ReplacementEffect::EntersWithPlusOneCounters { count },
             ) => {
                 debug_assert!(*count >= 0, "entry counter count must be nonnegative");
-                entry.plus_one_counters = entry.plus_one_counters.saturating_add((*count).max(0));
+                entry
+                    .counters
+                    .change(CounterKind::PlusOnePlusOne, (*count).max(0));
             }
             (
                 ProposedEvent::ZoneMove { entry, .. },
                 ReplacementEffect::EntersWithXCounters { kind },
             ) => {
-                let x = i32::from(entry.x);
-                match kind {
-                    CounterKind::PlusOnePlusOne => {
-                        entry.plus_one_counters = entry.plus_one_counters.saturating_add(x)
-                    }
-                    kind => entry.counters.add(*kind, x),
-                }
+                entry.counters.change(*kind, i32::from(entry.x));
             }
             // Damage reduced to zero is no longer dealt (release notes).
             (
@@ -535,7 +528,7 @@ mod tests {
             game.state.permanents[current_permanent]
                 .as_ref()
                 .expect("current permanent")
-                .plus1_counters,
+                .counter_count(CounterKind::PlusOnePlusOne),
             0
         );
 
@@ -548,7 +541,7 @@ mod tests {
             game.state.permanents[current_permanent]
                 .as_ref()
                 .expect("current permanent")
-                .plus1_counters,
+                .counter_count(CounterKind::PlusOnePlusOne),
             2
         );
         assert!(game.apply_proposed_event(ProposedEvent::Destroy { target: current }));

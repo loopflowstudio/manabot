@@ -15,11 +15,12 @@ use crate::{
     },
     state::{
         ability::{
-            Ability, Effect, EffectValue, LinkedChooser, PaymentCost, TargetRequirement, TargetSpec,
+            Ability, AffectedSpec, Effect, EffectValue, LinkedChooser, PaymentCost,
+            TargetRequirement, TargetSpec,
         },
+        effect::{Affected, EffectDuration, Modification},
         game_object::{CardId, PermanentId, PlayerId, Target},
         permanent::{CounterKind, Permanent},
-        predicate::CardPredicate,
         stack_object::{
             ActivatedAbilityOnStack, SpellOnStack, StackObject, TriggeredAbilityOnStack,
         },
@@ -51,7 +52,7 @@ impl Game {
                     self.permanent_is_battlefield_creature(*id)
                         && self.state.permanents[*id]
                             .as_ref()
-                            .is_some_and(|p| p.plus1_counters > 0)
+                            .is_some_and(|p| p.counter_count(CounterKind::PlusOnePlusOne) > 0)
                 })
                 .count() as i32,
             EffectValue::BattlefieldMatching { predicate } => {
@@ -365,12 +366,30 @@ impl Game {
             .filter(|target| self.target_is_present(*target))
     }
 
-    /// Firebending until end of turn adds to any the permanent already has.
-    fn grant_firebending(&mut self, id: PermanentId, amount: u8) {
-        self.journal_permanent(id);
-        if let Some(permanent) = self.state.permanents[id].as_mut() {
-            permanent.firebending_this_turn =
-                permanent.firebending_this_turn.saturating_add(amount);
+    /// Whom an `ApplyContinuous` affects, fixed now (CR 611.2c).
+    fn resolve_affected(&self, affected: &AffectedSpec, frame: &EffectFrame) -> Vec<Affected> {
+        let permanent = |id: Option<PermanentId>| {
+            id.and_then(|id| self.affected_permanent(id))
+                .into_iter()
+                .collect()
+        };
+        match affected {
+            AffectedSpec::You => vec![Affected::Player(frame.controller)],
+            AffectedSpec::Source => permanent(self.source_permanent_id(frame)),
+            AffectedSpec::Target(_) => permanent(match self.present_primary_target(frame) {
+                Some(Target::Permanent(id)) => Some(id),
+                _ => None,
+            }),
+            AffectedSpec::TriggeringPermanent => permanent(match frame.context_target {
+                Some(Target::Permanent(id)) => Some(id),
+                _ => None,
+            }),
+            AffectedSpec::EachYouControl(predicate) => self
+                .battlefield_permanents(frame.controller)
+                .into_iter()
+                .filter(|&id| self.permanent_matches_predicate(id, predicate))
+                .filter_map(|id| self.affected_permanent(id))
+                .collect(),
         }
     }
 
@@ -383,6 +402,30 @@ impl Game {
         frame: &mut EffectFrame,
     ) -> Option<Decision> {
         match effect {
+            Effect::ApplyContinuous {
+                affected,
+                modification,
+                duration,
+            } => {
+                let affected = self.resolve_affected(affected, frame);
+                let modification = modification.resolve(|value| self.effect_value(value, frame));
+                self.apply_continuous(
+                    frame.source,
+                    frame.controller,
+                    affected,
+                    modification,
+                    *duration,
+                );
+                None
+            }
+            Effect::PutCountersOnTriggeringPermanent { count } => {
+                if let Some(Target::Permanent(id)) = frame.context_target {
+                    if self.permanent_object_ref(id).is_some() {
+                        self.change_counters(id, CounterKind::PlusOnePlusOne, *count);
+                    }
+                }
+                None
+            }
             Effect::Sacrifice { predicate } => {
                 let candidates = self.sacrifice_candidates(frame.controller, predicate);
                 (!candidates.is_empty()).then_some(Decision::Sacrifice {
@@ -400,12 +443,6 @@ impl Game {
             Effect::DrainLife { amount } => {
                 self.change_life(PlayerId(1 - frame.controller.0), -*amount);
                 self.gain_life(frame.controller, *amount);
-                None
-            }
-            Effect::CantBeBlockedTarget { .. } => {
-                if let Some(permanent) = self.target_permanent_mut(frame) {
-                    permanent.cant_be_blocked_this_turn = true;
-                }
                 None
             }
             Effect::ReturnGraveyardTarget {
@@ -739,27 +776,6 @@ impl Game {
                     .shuffle(ZoneType::Library, player, &mut self.state.rng);
                 None
             }
-            Effect::GrantFirebendingUntilEot { amount } => {
-                // CR 611.2c: the creatures it affects are fixed on resolution.
-                for id in self.battlefield_permanents(frame.controller) {
-                    if !self.permanent_is_battlefield_creature(id) {
-                        continue;
-                    }
-                    self.grant_firebending(id, *amount);
-                }
-                None
-            }
-            Effect::GrantFirebendingToTarget { amount, .. } => {
-                if let Some(Target::Permanent(id)) = self.present_primary_target(frame) {
-                    self.grant_firebending(id, *amount);
-                }
-                None
-            }
-            Effect::NoMaximumHandSize => {
-                self.journal_player(frame.controller);
-                self.state.players[frame.controller.0].no_maximum_hand_size = true;
-                None
-            }
             Effect::ExileSourceSpell => {
                 if let Some(card) = frame
                     .source
@@ -769,18 +785,6 @@ impl Game {
                 }
                 None
             }
-            Effect::BuffTargetValue {
-                power,
-                toughness,
-                target,
-            } => self.execute_frame_effect(
-                &Effect::BuffTarget {
-                    power: self.effect_value(power, frame),
-                    toughness: *toughness,
-                    target: target.clone(),
-                },
-                frame,
-            ),
             Effect::ReturnToHandDrawIfControlled { .. } => {
                 let Some(Target::Permanent(id)) = self.present_primary_target(frame) else {
                     return None;
@@ -791,31 +795,6 @@ impl Game {
                 self.return_permanent_to_owner_hand(id);
                 if controlled {
                     frame.queue.push_front(Effect::DrawCards { count: 1 });
-                }
-                None
-            }
-            Effect::BuffTriggeringPermanentValue { power, toughness } => {
-                let Some(Target::Permanent(id)) = frame.context_target else {
-                    return None;
-                };
-                self.permanent_object_ref(id)?;
-                let power = self.effect_value(power, frame);
-                let toughness = self.effect_value(toughness, frame);
-                self.journal_permanent(id);
-                let permanent = self.state.permanents[id].as_mut()?;
-                permanent.temp_power += power;
-                permanent.temp_toughness += toughness;
-                None
-            }
-            Effect::ModifyTriggeringPermanent { counters, keywords } => {
-                let Some(Target::Permanent(id)) = frame.context_target else {
-                    return None;
-                };
-                self.permanent_object_ref(id)?;
-                self.change_counters(id, CounterKind::PlusOnePlusOne, *counters);
-                self.journal_permanent(id);
-                if let Some(permanent) = self.state.permanents[id].as_mut() {
-                    permanent.temp_keywords = permanent.temp_keywords.union(keywords);
                 }
                 None
             }
@@ -871,11 +850,6 @@ impl Game {
                 }
                 None
             }
-            Effect::KeepUnspentRedMana => {
-                self.journal_player(frame.controller);
-                self.state.players[frame.controller.0].keeps_red_mana = true;
-                None
-            }
             Effect::FightLastTarget => {
                 // CR 701.14b: if either creature is an illegal target, has
                 // left the battlefield or is no longer a creature, neither
@@ -909,15 +883,6 @@ impl Game {
                 if last_power > 0 {
                     self.apply_permanent_damage(Some(last_ref), first, last_power);
                 }
-                None
-            }
-            Effect::GrantKeywordsControlled {
-                predicate,
-                keywords,
-            } => {
-                self.modify_controlled(frame.controller, predicate, |permanent| {
-                    permanent.temp_keywords = permanent.temp_keywords.union(keywords);
-                });
                 None
             }
             Effect::SearchLibraryToHand { predicate } => {
@@ -960,43 +925,6 @@ impl Game {
                 self.move_card(id, ZoneType::Battlefield);
                 None
             }
-            Effect::ModifyControlled {
-                predicate,
-                power,
-                toughness,
-            } => {
-                self.modify_controlled(frame.controller, predicate, |permanent| {
-                    permanent.temp_power += power;
-                    permanent.temp_toughness += toughness;
-                });
-                None
-            }
-            Effect::SetBasePtControlled {
-                predicate,
-                power,
-                toughness,
-            } => {
-                let power = self.effect_value(power, frame);
-                let toughness = self.effect_value(toughness, frame);
-                self.modify_controlled(frame.controller, predicate, |permanent| {
-                    permanent.temp_base_power = Some(power);
-                    permanent.temp_base_toughness = Some(toughness);
-                });
-                None
-            }
-            Effect::AddSubtypesControlled {
-                predicate,
-                subtypes,
-            } => {
-                self.modify_controlled(frame.controller, predicate, |permanent| {
-                    for subtype in subtypes {
-                        if !permanent.temp_subtypes.contains(subtype) {
-                            permanent.temp_subtypes.push(subtype.clone());
-                        }
-                    }
-                });
-                None
-            }
             Effect::OptionalPayment {
                 cost,
                 if_paid,
@@ -1007,49 +935,6 @@ impl Game {
                 if_paid.clone(),
                 if_declined.clone(),
             ))),
-            Effect::ModifyUntilEot {
-                power_delta,
-                toughness_delta,
-            } => {
-                if let Some(permanent) = self.source_permanent_mut(frame) {
-                    permanent.temp_power += power_delta;
-                    permanent.temp_toughness += toughness_delta;
-                }
-                None
-            }
-            Effect::SetBasePtUntilEot { power, toughness }
-            | Effect::SetBasePtTarget {
-                power, toughness, ..
-            } => {
-                let permanent = if matches!(effect, Effect::SetBasePtTarget { .. }) {
-                    self.target_permanent_mut(frame)
-                } else {
-                    self.source_permanent_mut(frame)
-                };
-                if let Some(permanent) = permanent {
-                    permanent.temp_base_power = power.or(permanent.temp_base_power);
-                    permanent.temp_base_toughness = toughness.or(permanent.temp_base_toughness);
-                }
-                None
-            }
-            Effect::BecomeCreatureSource { duration }
-            | Effect::BecomeCreatureTarget { duration, .. } => {
-                let permanent = if matches!(effect, Effect::BecomeCreatureTarget { .. }) {
-                    self.target_permanent_mut(frame)
-                } else {
-                    self.source_permanent_mut(frame)
-                };
-                if let Some(permanent) = permanent {
-                    permanent.becomes_creature = permanent.becomes_creature.max(Some(*duration));
-                }
-                None
-            }
-            Effect::GrantKeywordsToSource { keywords } => {
-                if let Some(permanent) = self.source_permanent_mut(frame) {
-                    permanent.temp_keywords = permanent.temp_keywords.union(keywords);
-                }
-                None
-            }
             Effect::Discard => (!self
                 .state
                 .zones
@@ -1093,20 +978,6 @@ impl Game {
                     frame,
                 )
             }
-            Effect::AddSubtypeToTarget { subtype, .. } => {
-                if let Some(permanent) = self.target_permanent_mut(frame) {
-                    if !permanent.temp_subtypes.contains(subtype) {
-                        permanent.temp_subtypes.push(subtype.clone());
-                    }
-                }
-                None
-            }
-            Effect::ExileIfDiesThisTurn { .. } => {
-                if let Some(permanent) = self.target_permanent_mut(frame) {
-                    permanent.exile_if_dies_this_turn = true;
-                }
-                None
-            }
             Effect::DrawCards { count } => {
                 // Drawing from an empty library sets `drew_when_empty`; the player
                 // loses via state-based actions (CR 704.5c), same as the draw step.
@@ -1129,12 +1000,17 @@ impl Game {
                             })
                     })
                     .collect();
-                for id in &creatures {
-                    self.journal_permanent(*id);
-                    if let Some(permanent) = self.state.permanents[*id].as_mut() {
-                        permanent.abilities_lost = true;
-                    }
-                }
+                let affected: Vec<_> = creatures
+                    .iter()
+                    .filter_map(|id| self.affected_permanent(*id))
+                    .collect();
+                self.apply_continuous(
+                    frame.source,
+                    frame.controller,
+                    affected,
+                    Modification::LoseAllAbilities,
+                    EffectDuration::EndOfTurn,
+                );
                 // One simultaneous destruction: leave-the-battlefield abilities
                 // look back at creatures that had already lost them (CR 603.10a).
                 let objects: Vec<_> = creatures
@@ -1259,12 +1135,6 @@ impl Game {
                     && self.state.zones.contains(card, ZoneType::Graveyard, owner)
                 {
                     self.reveal_card_to_hand(card, owner);
-                }
-                None
-            }
-            Effect::CantBeBlockedThisTurnSource => {
-                if let Some(permanent) = self.source_permanent_mut(frame) {
-                    permanent.cant_be_blocked_this_turn = true;
                 }
                 None
             }
@@ -1477,19 +1347,6 @@ impl Game {
                 }
                 None
             }
-            Effect::BuffTarget {
-                power, toughness, ..
-            } => {
-                let chosen = self.present_primary_target(frame)?;
-                if let Target::Permanent(permanent_id) = chosen {
-                    self.journal_permanent(permanent_id);
-                    if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
-                        permanent.temp_power += power;
-                        permanent.temp_toughness += toughness;
-                    }
-                }
-                None
-            }
             Effect::UntapTarget { .. } => {
                 let chosen = self.present_primary_target(frame)?;
                 if let Target::Permanent(permanent_id) = chosen {
@@ -1540,16 +1397,6 @@ impl Game {
             Effect::TapTarget { .. } => {
                 if let Some(Target::Permanent(permanent_id)) = self.present_primary_target(frame) {
                     self.tap_permanent(permanent_id, false);
-                }
-                None
-            }
-            Effect::GrantKeywordsToTarget { keywords, .. } => {
-                let chosen = self.present_primary_target(frame)?;
-                if let Target::Permanent(permanent_id) = chosen {
-                    self.journal_permanent(permanent_id);
-                    if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
-                        permanent.temp_keywords = permanent.temp_keywords.union(keywords);
-                    }
                 }
                 None
             }
@@ -1640,41 +1487,16 @@ impl Game {
         let Some(object) = self.permanent_object_ref(permanent_id) else {
             return;
         };
+        let timestamp = self.state.id_gen.next_id();
         if let Some(equipment) = self.source_permanent_mut(frame) {
             equipment.attached_to = Some(object);
+            // CR 613.7e: an attachment receives a new timestamp.
+            equipment.timestamp = timestamp;
         }
     }
 
     fn source_permanent_mut(&mut self, frame: &EffectFrame) -> Option<&mut Permanent> {
         let permanent_id = self.source_permanent_id(frame)?;
-        self.journal_permanent(permanent_id);
-        self.state.permanents[permanent_id].as_mut()
-    }
-
-    /// Apply `modify` to each permanent `controller` controls that matches
-    /// `predicate`, checked as each is reached ("[predicate] you control
-    /// get/gain ... until end of turn").
-    fn modify_controlled(
-        &mut self,
-        controller: PlayerId,
-        predicate: &CardPredicate,
-        mut modify: impl FnMut(&mut Permanent),
-    ) {
-        for id in self.battlefield_permanents(controller) {
-            if self.permanent_matches_predicate(id, predicate) {
-                self.journal_permanent(id);
-                if let Some(permanent) = self.state.permanents[id].as_mut() {
-                    modify(permanent);
-                }
-            }
-        }
-    }
-
-    /// The frame's still-present primary target, when it is a permanent.
-    fn target_permanent_mut(&mut self, frame: &EffectFrame) -> Option<&mut Permanent> {
-        let Some(Target::Permanent(permanent_id)) = self.present_primary_target(frame) else {
-            return None;
-        };
         self.journal_permanent(permanent_id);
         self.state.permanents[permanent_id].as_mut()
     }

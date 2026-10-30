@@ -1,5 +1,7 @@
 //! Avatar: The Last Airbender cards and the tokens they make.
 //! Each card is one function returning its engine `CardDefinition`.
+use crate::state::ability::AffectedSpec;
+use crate::state::effect::Modification;
 use crate::state::{
     ability::{
         Ability, Effect, EffectValue, LinkedChooser, LinkedGrant, MilledBonus, PaymentCost,
@@ -12,7 +14,7 @@ use crate::state::{
         StaticRestriction, StaticScope, StaticTypeGrant, TargetCostReduction, TriggeredManaAbility,
     },
     mana::{Color, Colors, Mana, ManaCost, ManaUse},
-    permanent::{BecomesCreature, CounterKind},
+    permanent::CounterKind,
     predicate::CardPredicate,
     zone::ZoneType,
 };
@@ -383,12 +385,13 @@ fn aang_the_last_airbender() -> CardDefinition {
                         ..Default::default()
                     },
                 },
-                effects: vec![Effect::GrantKeywordsToSource {
-                    keywords: Keywords {
+                effects: vec![Effect::until_end_of_turn(
+                    AffectedSpec::Source,
+                    Modification::AddKeywords(Keywords {
                         lifelink: true,
                         ..Default::default()
-                    },
-                }],
+                    }),
+                )],
             },
         ],
         text_box: text_box.into(),
@@ -788,11 +791,10 @@ fn azula_always_lies() -> CardDefinition {
                         another: false,
                         max_x: false,
                     },
-                    effects: vec![Effect::BuffTarget {
-                        power: -1,
-                        toughness: -1,
-                        target: TargetSpec::Creature,
-                    }],
+                    effects: vec![Effect::until_end_of_turn(
+                        AffectedSpec::Target(TargetSpec::Creature),
+                        Modification::pump(-1, -1),
+                    )],
                 }],
                 vec![Effect::TargetClause {
                     requirement: TargetRequirement {
@@ -819,11 +821,10 @@ fn azula_always_lies() -> CardDefinition {
                             another: false,
                             max_x: false,
                         },
-                        effects: vec![Effect::BuffTarget {
-                            power: -1,
-                            toughness: -1,
-                            target: TargetSpec::Creature,
-                        }],
+                        effects: vec![Effect::until_end_of_turn(
+                            AffectedSpec::Target(TargetSpec::Creature),
+                            Modification::pump(-1, -1),
+                        )],
                     },
                     Effect::TargetClause {
                         requirement: TargetRequirement {
@@ -1365,9 +1366,10 @@ fn combustion_technique() -> CardDefinition {
                 },
                 target: TargetSpec::Creature,
             },
-            Effect::ExileIfDiesThisTurn {
-                target: TargetSpec::Creature,
-            },
+            Effect::until_end_of_turn(
+                AffectedSpec::Target(TargetSpec::Creature),
+                Modification::ExileIfWouldDie,
+            ),
         ],
         targeting: vec![TargetRequirement {
             shares_creature_type: false,
@@ -1449,11 +1451,10 @@ fn cunning_maneuver() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{1}{R}")),
         types: CardTypes::new([CardType::Instant]),
         spell_effects: vec![
-            Effect::BuffTarget {
-                power: 3,
-                toughness: 1,
-                target: TargetSpec::Creature,
-            },
+            Effect::until_end_of_turn(
+                AffectedSpec::Target(TargetSpec::Creature),
+                Modification::pump(3, 1),
+            ),
             Effect::CreateToken {
                 token_name: "Clue".into(),
                 count: 1,
@@ -1705,15 +1706,16 @@ fn deserter_s_disciple() -> CardDefinition {
         toughness: Some(2),
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,
-            effects: vec![Effect::CantBeBlockedTarget {
-                target: TargetSpec::PermanentYouControl {
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::Target(TargetSpec::PermanentYouControl {
                     predicate: CardPredicate {
                         card_type: Some(CardType::Creature),
                         max_power: Some(2),
                         ..Default::default()
                     },
-                },
-            }],
+                }),
+                Modification::CantBeBlocked,
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -1882,18 +1884,18 @@ fn earth_kingdom_protectors() -> CardDefinition {
         },
         activated_abilities: vec![ActivatedAbilityDefinition {
             sacrifice_source: true,
-            effects: vec![Effect::GrantKeywordsToTarget {
-                keywords: Keywords {
-                    indestructible: true,
-                    ..Default::default()
-                },
-                target: TargetSpec::PermanentYouControl {
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::Target(TargetSpec::PermanentYouControl {
                     predicate: CardPredicate {
                         subtype: Some("Ally".into()),
                         ..Default::default()
                     },
-                },
-            }],
+                }),
+                Modification::AddKeywords(Keywords {
+                    indestructible: true,
+                    ..Default::default()
+                }),
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -2104,19 +2106,19 @@ fn energybending() -> CardDefinition {
         types: CardTypes::new([CardType::Instant]),
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![
-            Effect::AddSubtypesControlled {
-                predicate: CardPredicate {
+            Effect::until_end_of_turn(
+                AffectedSpec::EachYouControl(CardPredicate {
                     card_type: Some(CardType::Land),
                     ..Default::default()
-                },
-                subtypes: vec![
+                }),
+                Modification::AddSubtypes(vec![
                     "Plains".into(),
                     "Island".into(),
                     "Swamp".into(),
                     "Mountain".into(),
                     "Forest".into(),
-                ],
-            },
+                ]),
+            ),
             Effect::DrawCards { count: 1 },
         ],
         text_box: text_box.into(),
@@ -2135,20 +2137,20 @@ fn enter_the_avatar_state() -> CardDefinition {
         types: CardTypes::new([CardType::Instant]),
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![
-            Effect::AddSubtypeToTarget {
-                target: TargetSpec::CreatureYouControl,
-                subtype: "Avatar".into(),
-            },
-            Effect::GrantKeywordsToTarget {
-                keywords: Keywords {
+            Effect::until_end_of_turn(
+                AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                Modification::AddSubtypes(vec!["Avatar".into()]),
+            ),
+            Effect::until_end_of_turn(
+                AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                Modification::AddKeywords(Keywords {
                     flying: true,
                     first_strike: true,
                     lifelink: true,
                     hexproof: true,
                     ..Default::default()
-                },
-                target: TargetSpec::CreatureYouControl,
-            },
+                }),
+            ),
         ],
         targeting: vec![TargetRequirement {
             shares_creature_type: false,
@@ -2178,11 +2180,10 @@ fn fancy_footwork() -> CardDefinition {
                 Effect::UntapTarget {
                     target: TargetSpec::Creature,
                 },
-                Effect::BuffTarget {
-                    power: 2,
-                    toughness: 2,
-                    target: TargetSpec::Creature,
-                },
+                Effect::until_end_of_turn(
+                    AffectedSpec::Target(TargetSpec::Creature),
+                    Modification::pump(2, 2),
+                ),
             ],
         }],
         targeting: vec![TargetRequirement {
@@ -2277,10 +2278,10 @@ fn fire_nation_cadets() -> CardDefinition {
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{2}"),
-            effects: vec![Effect::ModifyUntilEot {
-                power_delta: 1,
-                toughness_delta: 0,
-            }],
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::Source,
+                Modification::pump(1, 0),
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -2302,10 +2303,10 @@ fn fire_nation_palace() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,
             mana_cost: ManaCost::parse("{1}{R}"),
-            effects: vec![Effect::GrantFirebendingToTarget {
-                amount: 4,
-                target: TargetSpec::CreatureYouControl,
-            }],
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                Modification::Firebending(4),
+            )],
             ..Default::default()
         }],
         replacement_effects: vec![ReplacementEffect::EntersTappedUnlessControls {
@@ -2349,9 +2350,10 @@ fn fire_nation_warship() -> CardDefinition {
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             crew: Some(2),
-            effects: vec![Effect::BecomeCreatureSource {
-                duration: BecomesCreature::EndOfTurn,
-            }],
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::Source,
+                Modification::BecomeArtifactCreature,
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -2482,10 +2484,13 @@ fn flexible_waterbender() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{3}"),
             waterbend: true,
-            effects: vec![Effect::SetBasePtUntilEot {
-                power: Some(5),
-                toughness: Some(2),
-            }],
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::Source,
+                Modification::SetBasePt {
+                    power: Some(EffectValue::Fixed(5)),
+                    toughness: Some(EffectValue::Fixed(2)),
+                },
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -2792,7 +2797,10 @@ fn giant_koi() -> CardDefinition {
             ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("{3}"),
                 waterbend: true,
-                effects: vec![Effect::CantBeBlockedThisTurnSource],
+                effects: vec![Effect::until_end_of_turn(
+                    AffectedSpec::Source,
+                    Modification::CantBeBlocked,
+                )],
                 ..Default::default()
             },
         ],
@@ -2976,24 +2984,23 @@ fn hakoda_selfless_commander() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             sacrifice_source: true,
             effects: vec![
-                Effect::ModifyControlled {
-                    predicate: CardPredicate {
+                Effect::until_end_of_turn(
+                    AffectedSpec::EachYouControl(CardPredicate {
                         card_type: Some(CardType::Creature),
                         ..Default::default()
-                    },
-                    power: 0,
-                    toughness: 5,
-                },
-                Effect::GrantKeywordsControlled {
-                    predicate: CardPredicate {
+                    }),
+                    Modification::pump(0, 5),
+                ),
+                Effect::until_end_of_turn(
+                    AffectedSpec::EachYouControl(CardPredicate {
                         card_type: Some(CardType::Creature),
                         ..Default::default()
-                    },
-                    keywords: Keywords {
+                    }),
+                    Modification::AddKeywords(Keywords {
                         indestructible: true,
                         ..Default::default()
-                    },
-                },
+                    }),
+                ),
             ],
             ..Default::default()
         }],
@@ -3173,19 +3180,19 @@ fn hog_monkey() -> CardDefinition {
         toughness: Some(2),
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::BeginningOfYourCombat,
-            effects: vec![Effect::GrantKeywordsToTarget {
-                keywords: Keywords {
-                    menace: true,
-                    ..Default::default()
-                },
-                target: TargetSpec::PermanentYouControl {
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::Target(TargetSpec::PermanentYouControl {
                     predicate: CardPredicate {
                         with_counter: true,
                         card_type: Some(CardType::Creature),
                         ..Default::default()
                     },
-                },
-            }],
+                }),
+                Modification::AddKeywords(Keywords {
+                    menace: true,
+                    ..Default::default()
+                }),
+            )],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             exhaust: true,
@@ -3271,10 +3278,10 @@ fn iguana_parrot() -> CardDefinition {
                     ..Default::default()
                 },
             },
-            effects: vec![Effect::ModifyUntilEot {
-                power_delta: 1,
-                toughness_delta: 1,
-            }],
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::Source,
+                Modification::pump(1, 1),
+            )],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -3358,9 +3365,7 @@ fn invasion_submersible() -> CardDefinition {
             mana_cost: ManaCost::parse("{3}"),
             waterbend: true,
             effects: vec![
-                Effect::BecomeCreatureSource {
-                    duration: BecomesCreature::Incarnation,
-                },
+                Effect::indefinitely(AffectedSpec::Source, Modification::BecomeArtifactCreature),
                 Effect::PutCountersOnSource {
                     count: 3,
                     kind: CounterKind::PlusOnePlusOne,
@@ -3642,14 +3647,16 @@ fn katara_water_tribe_s_hope() -> CardDefinition {
             mana_cost: ManaCost::parse("{X}"),
             waterbend: true,
             x_min: 1,
-            effects: vec![Effect::SetBasePtControlled {
-                predicate: CardPredicate {
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::EachYouControl(CardPredicate {
                     card_type: Some(CardType::Creature),
                     ..Default::default()
+                }),
+                Modification::SetBasePt {
+                    power: Some(EffectValue::X),
+                    toughness: Some(EffectValue::X),
                 },
-                power: EffectValue::X,
-                toughness: EffectValue::X,
-            }],
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -3925,10 +3932,10 @@ fn mai_jaded_edge() -> CardDefinition {
                     ..Default::default()
                 },
             },
-            effects: vec![Effect::ModifyUntilEot {
-                power_delta: 1,
-                toughness_delta: 1,
-            }],
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::Source,
+                Modification::pump(1, 1),
+            )],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             exhaust: true,
@@ -4199,10 +4206,10 @@ fn momo_friendly_flier() -> CardDefinition {
                     ..Default::default()
                 }),
             },
-            effects: vec![Effect::ModifyUntilEot {
-                power_delta: 1,
-                toughness_delta: 1,
-            }],
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::Source,
+                Modification::pump(1, 1),
+            )],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -4273,10 +4280,10 @@ fn monk() -> CardDefinition {
                     ..Default::default()
                 },
             },
-            effects: vec![Effect::ModifyUntilEot {
-                power_delta: 1,
-                toughness_delta: 1,
-            }],
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::Source,
+                Modification::pump(1, 1),
+            )],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -4370,18 +4377,17 @@ fn octopus_form() -> CardDefinition {
         types: CardTypes::new([CardType::Instant]),
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![
-            Effect::BuffTarget {
-                power: 1,
-                toughness: 1,
-                target: TargetSpec::CreatureYouControl,
-            },
-            Effect::GrantKeywordsToTarget {
-                keywords: Keywords {
+            Effect::until_end_of_turn(
+                AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                Modification::pump(1, 1),
+            ),
+            Effect::until_end_of_turn(
+                AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                Modification::AddKeywords(Keywords {
                     hexproof: true,
                     ..Default::default()
-                },
-                target: TargetSpec::CreatureYouControl,
-            },
+                }),
+            ),
             Effect::UntapTarget {
                 target: TargetSpec::CreatureYouControl,
             },
@@ -4456,13 +4462,13 @@ fn origin_of_metalbending() -> CardDefinition {
                         kind: CounterKind::PlusOnePlusOne,
                         target: TargetSpec::CreatureYouControl,
                     },
-                    Effect::GrantKeywordsToTarget {
-                        keywords: Keywords {
+                    Effect::until_end_of_turn(
+                        AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                        Modification::AddKeywords(Keywords {
                             indestructible: true,
                             ..Default::default()
-                        },
-                        target: TargetSpec::CreatureYouControl,
-                    },
+                        }),
+                    ),
                 ],
             ],
         }],
@@ -4520,11 +4526,8 @@ fn otter_penguin() -> CardDefinition {
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::YouDrawNthCardThisTurn { n: 2 },
             effects: vec![
-                Effect::ModifyUntilEot {
-                    power_delta: 1,
-                    toughness_delta: 2,
-                },
-                Effect::CantBeBlockedThisTurnSource,
+                Effect::until_end_of_turn(AffectedSpec::Source, Modification::pump(1, 2)),
+                Effect::until_end_of_turn(AffectedSpec::Source, Modification::CantBeBlocked),
             ],
         }],
         text_box: text_box.into(),
@@ -4656,18 +4659,17 @@ fn pillar_launch() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{G}")),
         types: CardTypes::new([CardType::Instant]),
         spell_effects: vec![
-            Effect::BuffTarget {
-                power: 2,
-                toughness: 2,
-                target: TargetSpec::Creature,
-            },
-            Effect::GrantKeywordsToTarget {
-                keywords: Keywords {
+            Effect::until_end_of_turn(
+                AffectedSpec::Target(TargetSpec::Creature),
+                Modification::pump(2, 2),
+            ),
+            Effect::until_end_of_turn(
+                AffectedSpec::Target(TargetSpec::Creature),
+                Modification::AddKeywords(Keywords {
                     reach: true,
                     ..Default::default()
-                },
-                target: TargetSpec::Creature,
-            },
+                }),
+            ),
             Effect::UntapTarget {
                 target: TargetSpec::Creature,
             },
@@ -4812,12 +4814,13 @@ fn rabaroo_troop() -> CardDefinition {
                 }),
             },
             effects: vec![
-                Effect::GrantKeywordsToSource {
-                    keywords: Keywords {
+                Effect::until_end_of_turn(
+                    AffectedSpec::Source,
+                    Modification::AddKeywords(Keywords {
                         flying: true,
                         ..Default::default()
-                    },
-                },
+                    }),
+                ),
                 Effect::GainLife { amount: 1 },
             ],
         }],
@@ -4895,14 +4898,13 @@ fn ran_and_shaw() -> CardDefinition {
         ],
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{3}{R}"),
-            effects: vec![Effect::ModifyControlled {
-                predicate: CardPredicate {
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::EachYouControl(CardPredicate {
                     subtype: Some("Dragon".into()),
                     ..Default::default()
-                },
-                power: 2,
-                toughness: 0,
-            }],
+                }),
+                Modification::pump(2, 0),
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -5112,12 +5114,13 @@ fn rough_rhino_cavalry() -> CardDefinition {
                     count: 2,
                     kind: CounterKind::PlusOnePlusOne,
                 },
-                Effect::GrantKeywordsToSource {
-                    keywords: Keywords {
+                Effect::until_end_of_turn(
+                    AffectedSpec::Source,
+                    Modification::AddKeywords(Keywords {
                         trample: true,
                         ..Default::default()
-                    },
-                },
+                    }),
+                ),
             ],
             ..Default::default()
         }],
@@ -5282,9 +5285,10 @@ fn secret_tunnel() -> CardDefinition {
                     max_x: false,
                 },
                 effects: vec![Effect::ForEachTarget {
-                    effects: vec![Effect::CantBeBlockedTarget {
-                        target: TargetSpec::CreatureYouControl,
-                    }],
+                    effects: vec![Effect::until_end_of_turn(
+                        AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                        Modification::CantBeBlocked,
+                    )],
                 }],
             }],
             ..Default::default()
@@ -5612,7 +5616,10 @@ fn sozins_comet() -> CardDefinition {
         name: "Sozin's Comet".into(),
         mana_cost: Some(ManaCost::parse("{3}{R}{R}")),
         types: CardTypes::new([CardType::Sorcery]),
-        spell_effects: vec![Effect::GrantFirebendingUntilEot { amount: 5 }],
+        spell_effects: vec![Effect::until_end_of_turn(
+            AffectedSpec::EachYouControl(CardPredicate::creature()),
+            Modification::Firebending(5),
+        )],
         foretell: Some(ManaCost::parse("{2}{R}")),
         text_box: text_box.into(),
         ..Default::default()
@@ -5699,7 +5706,7 @@ fn spirit_water_revival() -> CardDefinition {
                 then: vec![
                     Effect::ShuffleGraveyardIntoLibrary,
                     Effect::DrawCards { count: 7 },
-                    Effect::NoMaximumHandSize,
+                    Effect::indefinitely(AffectedSpec::You, Modification::NoMaximumHandSize),
                 ],
                 otherwise: vec![Effect::DrawCards { count: 2 }],
             },
@@ -5838,20 +5845,23 @@ fn team_avatar() -> CardDefinition {
                     ..Default::default()
                 }),
             },
-            effects: vec![Effect::BuffTriggeringPermanentValue {
-                power: EffectValue::BattlefieldMatching {
-                    predicate: CardPredicate {
-                        card_type: Some(CardType::Creature),
-                        ..Default::default()
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::TriggeringPermanent,
+                Modification::ModifyPt {
+                    power: EffectValue::BattlefieldMatching {
+                        predicate: CardPredicate {
+                            card_type: Some(CardType::Creature),
+                            ..Default::default()
+                        },
+                    },
+                    toughness: EffectValue::BattlefieldMatching {
+                        predicate: CardPredicate {
+                            card_type: Some(CardType::Creature),
+                            ..Default::default()
+                        },
                     },
                 },
-                toughness: EffectValue::BattlefieldMatching {
-                    predicate: CardPredicate {
-                        card_type: Some(CardType::Creature),
-                        ..Default::default()
-                    },
-                },
-            }],
+            )],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             zone: ActivationZone::Hand,
@@ -5921,7 +5931,7 @@ fn the_last_agni_kai() -> CardDefinition {
                 mana: Mana::parse("R"),
                 amount: EffectValue::ExcessDamage,
             },
-            Effect::KeepUnspentRedMana,
+            Effect::until_end_of_turn(AffectedSpec::You, Modification::KeepUnspentMana(Color::Red)),
         ],
         targeting: vec![
             TargetRequirement {
@@ -6044,50 +6054,52 @@ fn the_mechanist_aerial_artisan() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,
             effects: vec![
-                Effect::BecomeCreatureTarget {
-                    target: TargetSpec::PermanentYouControl {
+                Effect::until_end_of_turn(
+                    AffectedSpec::Target(TargetSpec::PermanentYouControl {
                         predicate: CardPredicate {
                             token: Some(true),
                             card_type: Some(CardType::Artifact),
                             ..Default::default()
                         },
-                    },
-                    duration: BecomesCreature::EndOfTurn,
-                },
-                Effect::SetBasePtTarget {
-                    target: TargetSpec::PermanentYouControl {
+                    }),
+                    Modification::BecomeArtifactCreature,
+                ),
+                Effect::until_end_of_turn(
+                    AffectedSpec::Target(TargetSpec::PermanentYouControl {
                         predicate: CardPredicate {
                             token: Some(true),
                             card_type: Some(CardType::Artifact),
                             ..Default::default()
                         },
+                    }),
+                    Modification::SetBasePt {
+                        power: Some(EffectValue::Fixed(3)),
+                        toughness: Some(EffectValue::Fixed(1)),
                     },
-                    power: Some(3),
-                    toughness: Some(1),
-                },
-                Effect::AddSubtypeToTarget {
-                    target: TargetSpec::PermanentYouControl {
+                ),
+                Effect::until_end_of_turn(
+                    AffectedSpec::Target(TargetSpec::PermanentYouControl {
                         predicate: CardPredicate {
                             token: Some(true),
                             card_type: Some(CardType::Artifact),
                             ..Default::default()
                         },
-                    },
-                    subtype: "Construct".into(),
-                },
-                Effect::GrantKeywordsToTarget {
-                    keywords: Keywords {
+                    }),
+                    Modification::AddSubtypes(vec!["Construct".into()]),
+                ),
+                Effect::until_end_of_turn(
+                    AffectedSpec::Target(TargetSpec::PermanentYouControl {
+                        predicate: CardPredicate {
+                            token: Some(true),
+                            card_type: Some(CardType::Artifact),
+                            ..Default::default()
+                        },
+                    }),
+                    Modification::AddKeywords(Keywords {
                         flying: true,
                         ..Default::default()
-                    },
-                    target: TargetSpec::PermanentYouControl {
-                        predicate: CardPredicate {
-                            token: Some(true),
-                            card_type: Some(CardType::Artifact),
-                            ..Default::default()
-                        },
-                    },
-                },
+                    }),
+                ),
             ],
             ..Default::default()
         }],
@@ -6437,20 +6449,21 @@ fn tundra_tank() -> CardDefinition {
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::GrantKeywordsToTarget {
-                    keywords: Keywords {
+                effects: vec![Effect::until_end_of_turn(
+                    AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                    Modification::AddKeywords(Keywords {
                         indestructible: true,
                         ..Default::default()
-                    },
-                    target: TargetSpec::CreatureYouControl,
-                }],
+                    }),
+                )],
             },
         ],
         activated_abilities: vec![ActivatedAbilityDefinition {
             crew: Some(1),
-            effects: vec![Effect::BecomeCreatureSource {
-                duration: BecomesCreature::EndOfTurn,
-            }],
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::Source,
+                Modification::BecomeArtifactCreature,
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -6473,16 +6486,20 @@ fn turtle_duck() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{3}"),
             effects: vec![
-                Effect::SetBasePtUntilEot {
-                    power: Some(4),
-                    toughness: None,
-                },
-                Effect::GrantKeywordsToSource {
-                    keywords: Keywords {
+                Effect::until_end_of_turn(
+                    AffectedSpec::Source,
+                    Modification::SetBasePt {
+                        power: Some(EffectValue::Fixed(4)),
+                        toughness: None,
+                    },
+                ),
+                Effect::until_end_of_turn(
+                    AffectedSpec::Source,
+                    Modification::AddKeywords(Keywords {
                         trample: true,
                         ..Default::default()
-                    },
-                },
+                    }),
+                ),
             ],
             ..Default::default()
         }],
@@ -6513,13 +6530,13 @@ fn twin_blades() -> CardDefinition {
                 Effect::AttachSourceTo {
                     target: TargetSpec::CreatureYouControl,
                 },
-                Effect::GrantKeywordsToTarget {
-                    keywords: Keywords {
+                Effect::until_end_of_turn(
+                    AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                    Modification::AddKeywords(Keywords {
                         double_strike: true,
                         ..Default::default()
-                    },
-                    target: TargetSpec::CreatureYouControl,
-                },
+                    }),
+                ),
             ],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
@@ -6721,14 +6738,13 @@ fn wandering_musicians() -> CardDefinition {
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::ModifyControlled {
-                predicate: CardPredicate {
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::EachYouControl(CardPredicate {
                     card_type: Some(CardType::Creature),
                     ..Default::default()
-                },
-                power: 1,
-                toughness: 0,
-            }],
+                }),
+                Modification::pump(1, 0),
+            )],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -6754,9 +6770,10 @@ fn war_balloon() -> CardDefinition {
         activated_abilities: vec![
             ActivatedAbilityDefinition {
                 crew: Some(3),
-                effects: vec![Effect::BecomeCreatureSource {
-                    duration: BecomesCreature::EndOfTurn,
-                }],
+                effects: vec![Effect::until_end_of_turn(
+                    AffectedSpec::Source,
+                    Modification::BecomeArtifactCreature,
+                )],
                 ..Default::default()
             },
             ActivatedAbilityDefinition {
@@ -6800,13 +6817,16 @@ fn wartime_protestors() -> CardDefinition {
                     ..Default::default()
                 }),
             },
-            effects: vec![Effect::ModifyTriggeringPermanent {
-                counters: 1,
-                keywords: Keywords {
-                    haste: true,
-                    ..Default::default()
-                },
-            }],
+            effects: vec![
+                Effect::PutCountersOnTriggeringPermanent { count: 1 },
+                Effect::until_end_of_turn(
+                    AffectedSpec::TriggeringPermanent,
+                    Modification::AddKeywords(Keywords {
+                        haste: true,
+                        ..Default::default()
+                    }),
+                ),
+            ],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -6827,14 +6847,13 @@ fn water_tribe_captain() -> CardDefinition {
         toughness: Some(3),
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{5}"),
-            effects: vec![Effect::ModifyControlled {
-                predicate: CardPredicate {
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::EachYouControl(CardPredicate {
                     card_type: Some(CardType::Creature),
                     ..Default::default()
-                },
-                power: 1,
-                toughness: 1,
-            }],
+                }),
+                Modification::pump(1, 1),
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -7055,23 +7074,22 @@ fn yip_yip() -> CardDefinition {
         types: CardTypes::new([CardType::Instant]),
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![
-            Effect::BuffTarget {
-                power: 2,
-                toughness: 2,
-                target: TargetSpec::CreatureYouControl,
-            },
+            Effect::until_end_of_turn(
+                AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                Modification::pump(2, 2),
+            ),
             Effect::IfTargetMatches {
                 predicate: CardPredicate {
                     subtype: Some("Ally".into()),
                     ..Default::default()
                 },
-                then: vec![Effect::GrantKeywordsToTarget {
-                    keywords: Keywords {
+                then: vec![Effect::until_end_of_turn(
+                    AffectedSpec::Target(TargetSpec::CreatureYouControl),
+                    Modification::AddKeywords(Keywords {
                         flying: true,
                         ..Default::default()
-                    },
-                    target: TargetSpec::CreatureYouControl,
-                }],
+                    }),
+                )],
             },
         ],
         targeting: vec![TargetRequirement {

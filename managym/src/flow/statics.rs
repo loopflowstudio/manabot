@@ -2,30 +2,25 @@
 // Continuous-effect queries: effective power/toughness, effective keywords,
 // animation-aware type checks, and static-condition evaluation.
 //
-// Supported subset of CR 613.4 (September 25, 2026):
-//   1. base P/T — printed, or characteristic-defining (CR 613.4a layer 7a:
-//      Suki "power = creatures you control", Dragonfly Swarm "power =
-//      noncreature nonland cards in your graveyard"); earthbend animation
-//      sets base 0/0 by construction (lands print no P/T).
-//   2. until-end-of-turn effects that set base power or toughness (layer
-//      7b: Flexible Waterbender, Turtle-Duck). Each replaces the 7a value;
-//      a later setter overwrites an earlier one, which is timestamp order.
-//   3. static continuous P/T effects (layer 7c: anthems and conditional
-//      self-buffs), applied while their source is on the battlefield.
-//   4. until-end-of-turn P/T modifications (also layer 7c; all Milestone-1
-//      effects are additive, so ordering within the layer is immaterial and
-//      no timestamp system is kept).
-//   5. +1/+1 counters (also layer 7c, CR 613.4c).
-// These additive layer-7c terms commute. Layer 7d switches P/T, and is not
-// represented here; neither are general timestamp/dependency interactions.
-// Static type grants (layer 4) add card types; static keyword grants
-// (layer 6) add to printed and until-EOT keywords. Earthbend animation sets
-// base 0/0 (CR 701.66a) even on a permanent that prints P/T.
+// Characteristics apply static abilities and continuous-effect records
+// (`state::effect`) together, by layer and then by timestamp (CR 613.7). A
+// static ability's timestamp is its permanent's (`Permanent::timestamp`); a
+// record's is its own. Supported subset of CR 613 (September 25, 2026):
+//   layer 4: printed types, static type grants, records that add creature
+//     subtypes or make an artifact creature; a characteristic-setting Aura
+//     (`SetCharacteristics`) replaces creature types, so subtypes added
+//     before its timestamp are gone;
+//   layer 6: printed keywords, keyword counters and animation haste, then
+//     static grants and records in timestamp order; losing all abilities
+//     (a record, or a characteristic-setting Aura) removes everything with
+//     an earlier timestamp, so a later grant survives;
+//   layer 7a: printed or characteristic-defining P/T (Suki, Dragonfly
+//     Swarm); earthbend animation sets base 0/0 (CR 701.66a);
+//   layer 7b: setters in timestamp order, the latest winning (the Aura's
+//     set characteristics and records);
+//   layer 7c: static buffs, records and +1/+1 counters, which commute.
+// Layer 7d (switching) and dependency order (CR 613.8) are not represented.
 // "Equipped/enchanted creature" effects follow the exact attached object.
-// An Aura that sets characteristics (`SetCharacteristics`) replaces the
-// enchanted creature's name and creature types, sets base P/T in layer 7b
-// before until-end-of-turn setters, and removes its abilities; timestamps
-// are not kept, so every other ability and grant goes with them.
 // Static restrictions (can't attack or block, doesn't untap, blocker limits)
 // use the same scopes.
 // A scope reads what the layers before its own determine (`ScopeView`):
@@ -40,7 +35,9 @@ use crate::{
     state::{
         ability::StaticCondition,
         card::{Card, CardType, Keywords, PowerCda, Restriction, SetCharacteristics, StaticScope},
-        game_object::{CardId, PermanentId, PlayerId},
+        effect::Modification,
+        game_object::{CardId, ObjectId, PermanentId, PlayerId},
+        permanent::CounterKind,
         predicate::CardPredicate,
         zone::ZoneType,
     },
@@ -98,12 +95,8 @@ impl Game {
         let card = &self.state.cards[permanent.card];
 
         // Layer 7a: base P/T (characteristic-defining, or printed); an
-        // earthbent permanent is a 0/0 creature. A characteristic-setting
-        // Aura's 7b base applies before until-EOT setters.
-        let (base_power, base_toughness) = if let Some(set) = self.set_characteristics(permanent_id)
-        {
-            (set.power, set.toughness)
-        } else if permanent.animated {
+        // earthbent permanent is a 0/0 creature.
+        let (mut base_power, mut base_toughness) = if permanent.animated {
             (0, 0)
         } else {
             let power = match &card.power_cda {
@@ -112,16 +105,46 @@ impl Game {
             };
             (power, card.toughness.unwrap_or(0))
         };
-        // Layer 7b: until-EOT base setters replace the 7a value.
-        let base_power = permanent.temp_base_power.unwrap_or(base_power);
-        let base_toughness = permanent.temp_base_toughness.unwrap_or(base_toughness);
+        // Layer 7b: setters in timestamp order replace the 7a value.
+        let mut setters: Vec<(ObjectId, Option<i32>, Option<i32>)> = self
+            .effects_on(permanent_id)
+            .filter_map(|effect| match effect.modification {
+                Modification::SetBasePt { power, toughness } => {
+                    Some((effect.timestamp, power, toughness))
+                }
+                _ => None,
+            })
+            .collect();
+        if let Some(aura) = self.set_characteristics_source(permanent_id) {
+            let set = self
+                .set_characteristics(permanent_id)
+                .expect("aura sets characteristics");
+            let timestamp = self.state.permanents[aura]
+                .as_ref()
+                .expect("battlefield aura")
+                .timestamp;
+            setters.push((timestamp, Some(set.power), Some(set.toughness)));
+        }
+        setters.sort_by_key(|(timestamp, _, _)| *timestamp);
+        for (_, power, toughness) in setters {
+            base_power = power.unwrap_or(base_power);
+            base_toughness = toughness.unwrap_or(base_toughness);
+        }
 
-        // Layer 7c: static continuous effects from battlefield permanents.
+        // Layer 7c: static continuous effects, records and +1/+1 counters.
         let (static_power, static_toughness) = self.static_pt_bonus(permanent_id);
+        let (record_power, record_toughness) = self
+            .effects_on(permanent_id)
+            .filter_map(|effect| match effect.modification {
+                Modification::ModifyPt { power, toughness } => Some((power, toughness)),
+                _ => None,
+            })
+            .fold((0, 0), |(p, t), (dp, dt)| (p + dp, t + dt));
 
+        let plus_one = permanent.counter_count(CounterKind::PlusOnePlusOne);
         (
-            base_power + static_power + permanent.temp_power + permanent.plus1_counters,
-            base_toughness + static_toughness + permanent.temp_toughness + permanent.plus1_counters,
+            base_power + static_power + record_power + plus_one,
+            base_toughness + static_toughness + record_toughness + plus_one,
         )
     }
 
@@ -132,7 +155,7 @@ impl Game {
                 .into_iter()
                 .filter(|&id| self.permanent_is_land(id))
                 .filter_map(|id| self.state.permanents[id].as_ref())
-                .map(|p| p.plus1_counters)
+                .map(|p| p.counter_count(CounterKind::PlusOnePlusOne))
                 .sum(),
             PowerCda::CreaturesYouControl => self
                 .battlefield_permanents(controller)
@@ -181,10 +204,13 @@ impl Game {
     }
 
     /// Keywords granted to `target_id` by static abilities of battlefield
-    /// permanents (layer 6).
-    fn static_keyword_bonus(&self, target_id: PermanentId) -> Keywords {
+    /// permanents (layer 6) whose timestamps follow `after`.
+    fn static_keyword_bonus(&self, target_id: PermanentId, after: Option<ObjectId>) -> Keywords {
         let mut keywords = Keywords::default();
         for (source_id, controller, card) in self.static_sources() {
+            if !self.follows(source_id, after) {
+                continue;
+            }
             for grant in &card.static_keyword_grants {
                 if self.static_scope_applies(
                     &grant.scope,
@@ -255,25 +281,72 @@ impl Game {
             })
     }
 
-    /// The characteristics an Aura attached to `permanent_id` sets, if any
-    /// (the latest in battlefield order). Attachments are filtered on their
-    /// own `abilities_lost` flag alone, so this never recurses.
+    /// Whether the static ability of `source_id` has a timestamp after
+    /// `after` (no bound: always).
+    fn follows(&self, source_id: PermanentId, after: Option<ObjectId>) -> bool {
+        after.is_none_or(|after| {
+            self.state.permanents[source_id]
+                .as_ref()
+                .is_some_and(|source| source.timestamp > after)
+        })
+    }
+
+    /// The Aura attached to `permanent_id` that sets its characteristics, if
+    /// any: the latest by timestamp.
+    pub(crate) fn set_characteristics_source(
+        &self,
+        permanent_id: PermanentId,
+    ) -> Option<PermanentId> {
+        self.attachments_on(permanent_id)
+            .filter(|(_, card)| card.attached_characteristics.is_some())
+            .max_by_key(|(aura, _)| {
+                self.state.permanents[*aura]
+                    .as_ref()
+                    .map(|permanent| permanent.timestamp)
+            })
+            .map(|(aura, _)| aura)
+    }
+
+    /// The characteristics an Aura attached to `permanent_id` sets, if any.
     pub(crate) fn set_characteristics(
         &self,
         permanent_id: PermanentId,
     ) -> Option<&SetCharacteristics> {
-        self.attachments_on(permanent_id)
-            .filter_map(|(_, card)| card.attached_characteristics.as_ref())
-            .last()
+        let aura = self.set_characteristics_source(permanent_id)?;
+        let card = self.state.permanents[aura].as_ref()?.card;
+        self.state.cards[card].attached_characteristics.as_ref()
     }
 
-    /// Whether the permanent has lost all abilities: until end of turn
-    /// (`Permanent.abilities_lost`) or while an Aura sets its characteristics.
-    pub(crate) fn has_lost_abilities(&self, permanent_id: PermanentId) -> bool {
-        self.state.permanents[permanent_id]
-            .as_ref()
-            .is_some_and(|permanent| permanent.abilities_lost)
-            || self.set_characteristics(permanent_id).is_some()
+    /// Whether the permanent has lost all abilities (an effect record, or an
+    /// Aura that sets its characteristics). Its printed abilities predate
+    /// any loss; `effective_keywords` keeps later grants.
+    pub fn has_lost_abilities(&self, permanent_id: PermanentId) -> bool {
+        self.ability_loss_timestamp(permanent_id).is_some()
+    }
+
+    /// Creature subtypes added by effect records after any characteristic-
+    /// setting Aura's timestamp (layer 4).
+    pub fn added_subtypes(&self, permanent_id: PermanentId) -> Vec<&str> {
+        let aura = self
+            .set_characteristics_source(permanent_id)
+            .and_then(|aura| {
+                self.state.permanents[aura]
+                    .as_ref()
+                    .map(|permanent| permanent.timestamp)
+            });
+        let mut subtypes: Vec<&str> = Vec::new();
+        for effect in self.effects_on(permanent_id) {
+            if let Modification::AddSubtypes(added) = &effect.modification {
+                if aura.is_none_or(|aura| effect.timestamp > aura) {
+                    for subtype in added {
+                        if !subtypes.contains(&subtype.as_str()) {
+                            subtypes.push(subtype);
+                        }
+                    }
+                }
+            }
+        }
+        subtypes
     }
 
     /// The permanent's name (CR 201.2), as set by a characteristic-setting
@@ -301,7 +374,7 @@ impl Game {
             }
             None => printed,
         };
-        printed || permanent.temp_subtypes.iter().any(|s| s == subtype)
+        printed || self.added_subtypes(permanent_id).contains(&subtype)
     }
 
     /// Card types static type grants add to `target_id` (layer 4).
@@ -408,7 +481,11 @@ impl Game {
             .flat_map(move |player| self.state.zones.zone_cards(ZoneType::Battlefield, player))
             .filter_map(move |&card_id| {
                 let source = self.state.card_to_permanent[card_id]?;
-                (!self.state.permanents[source].as_ref()?.abilities_lost
+                // Only records can remove an attachment's own abilities,
+                // so this never recurses.
+                (!self
+                    .effects_on(source)
+                    .any(|effect| effect.modification == Modification::LoseAllAbilities)
                     && self.attached_creature(source) == Some(target))
                 .then(|| (source, &self.state.cards[card_id]))
             })
@@ -452,8 +529,8 @@ impl Game {
         };
         let mut types: Vec<&str> = printed
             .iter()
-            .chain(&permanent.temp_subtypes)
             .map(String::as_str)
+            .chain(self.added_subtypes(permanent_id))
             .filter(|s| !NONCREATURE_SUBTYPES.contains(s))
             .collect();
         types.sort_unstable();
@@ -521,26 +598,28 @@ impl Game {
             .permanents
             .get(permanent_id.0)
             .and_then(|p| p.as_ref())
-            .is_some_and(|permanent| permanent.is_creature(&self.state.cards[permanent.card]))
+            .is_some_and(|permanent| self.state.cards[permanent.card].types.is_creature())
+            || self.permanent_is_animated(permanent_id)
     }
 
-    /// Printed keywords plus until-EOT grants plus animation haste plus
-    /// static grants from battlefield permanents.
-    pub(crate) fn effective_keywords(&self, permanent_id: PermanentId) -> Keywords {
-        let Some(permanent) = self
-            .state
+    /// Whether something other than its printed type makes the permanent a
+    /// creature: earthbend, its own counter threshold, or an effect.
+    pub(crate) fn permanent_is_animated(&self, permanent_id: PermanentId) -> bool {
+        self.state
             .permanents
             .get(permanent_id.0)
             .and_then(|p| p.as_ref())
-        else {
-            return Keywords::default();
-        };
-        if self.has_lost_abilities(permanent_id) {
-            return Keywords::default();
-        }
-        permanent
-            .effective_keywords(&self.state.cards[permanent.card])
-            .union(&self.static_keyword_bonus(permanent_id))
+            .is_some_and(|permanent| permanent.animated_creature(&self.state.cards[permanent.card]))
+            || self.becomes_artifact_creature(permanent_id)
+    }
+
+    /// Layer 6 keywords: printed keywords, keyword counters and animation
+    /// haste, then static grants and records; a loss of all abilities removes
+    /// whatever has an earlier timestamp.
+    pub fn effective_keywords(&self, permanent_id: PermanentId) -> Keywords {
+        let lost = self.ability_loss_timestamp(permanent_id);
+        self.recorded_keywords(permanent_id)
+            .union(&self.static_keyword_bonus(permanent_id, lost))
     }
 
     /// Whether the permanent can pay a {T} cost or attack (CR 302.6): it is
@@ -582,6 +661,28 @@ impl Game {
         self.permanent_matches_with(permanent_id, predicate, ScopeView::Rules)
     }
 
+    /// Keywords before static grants (what layer-4 and layer-6 scopes read):
+    /// intrinsic keywords and records, after any loss.
+    fn recorded_keywords(&self, permanent_id: PermanentId) -> Keywords {
+        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+            return Keywords::default();
+        };
+        let lost = self.ability_loss_timestamp(permanent_id);
+        let mut keywords = if lost.is_some() {
+            Keywords::default()
+        } else {
+            permanent.intrinsic_keywords(&self.state.cards[permanent.card])
+        };
+        for effect in self.effects_on(permanent_id) {
+            if let Modification::AddKeywords(granted) = &effect.modification {
+                if lost.is_none_or(|lost| effect.timestamp > lost) {
+                    keywords = keywords.union(granted);
+                }
+            }
+        }
+        keywords
+    }
+
     /// Match a battlefield permanent against a predicate, counting its
     /// temporary subtypes and animation, reading the power, keywords and
     /// types `view` allows without recursing.
@@ -596,9 +697,7 @@ impl Game {
         };
         let card = &self.state.cards[permanent.card];
         let flying = || match view {
-            ScopeView::Types | ScopeView::Keywords => {
-                permanent.effective_keywords(card).flying && !self.has_lost_abilities(permanent_id)
-            }
+            ScopeView::Types | ScopeView::Keywords => self.recorded_keywords(permanent_id).flying,
             ScopeView::PowerToughness | ScopeView::Rules => {
                 self.effective_keywords(permanent_id).flying
             }
@@ -609,7 +708,7 @@ impl Game {
         {
             return false;
         }
-        if predicate.with_counter && permanent.plus1_counters <= 0 {
+        if predicate.with_counter && permanent.counter_count(CounterKind::PlusOnePlusOne) <= 0 {
             return false;
         }
         if predicate.attacking
@@ -646,7 +745,7 @@ impl Game {
             _ => card.power.unwrap_or(0),
         };
         let mut types = Vec::new();
-        if permanent.animated_creature(card) {
+        if self.permanent_is_animated(permanent_id) {
             types.push(CardType::Creature);
         }
         let reads_types = structural.card_type.is_some()

@@ -262,8 +262,10 @@ impl Game {
             let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
                 continue;
             };
-            let card = &self.state.cards[permanent.card];
-            if permanent.can_block(card) && self.combat_condition_met(permanent_id) {
+            if !permanent.tapped
+                && self.permanent_is_creature(permanent_id)
+                && self.combat_condition_met(permanent_id)
+            {
                 out.push(permanent_id);
             }
         }
@@ -284,7 +286,10 @@ impl Game {
         let blocker_card = &self.state.cards[blocker.card];
         let attacker_card = &self.state.cards[attacker.card];
 
-        if !blocker.can_block(blocker_card) || !self.combat_condition_met(blocker_id) {
+        if blocker.tapped
+            || !self.permanent_is_creature(blocker_id)
+            || !self.combat_condition_met(blocker_id)
+        {
             return false;
         }
 
@@ -306,7 +311,7 @@ impl Game {
         {
             return false;
         }
-        if attacker.cant_be_blocked_this_turn {
+        if self.cant_be_blocked(attacker_id) {
             return false;
         }
         // Blockers are declared one at a time; a second blocker is refused.

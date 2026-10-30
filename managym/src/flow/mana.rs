@@ -11,7 +11,7 @@ use crate::{
         ability::Effect,
         card::{AbilityGrant, ActivatedAbilityDefinition, ReplacementEffect},
         game_object::{PermanentId, PlayerId},
-        mana::{Mana, ManaCost, ManaUse},
+        mana::{Color, Mana, ManaCost, ManaUse},
     },
 };
 
@@ -464,8 +464,8 @@ impl Game {
         let purpose = ManaUse::ability(
             card.subtypes
                 .iter()
-                .chain(&source.temp_subtypes)
-                .map(String::as_str),
+                .map(String::as_str)
+                .chain(self.added_subtypes(permanent)),
         );
         let lost = self.has_lost_abilities(permanent);
         let mut abilities = Vec::new();
@@ -540,15 +540,14 @@ impl Game {
     /// turn (Energybending) add one ability choosing among their colors.
     fn gained_land_type_mana(&self, permanent: PermanentId) -> Option<Effect> {
         let source = self.state.permanents[permanent].as_ref()?;
-        if source.temp_subtypes.is_empty() || !self.permanent_is_land(permanent) {
+        let added = self.added_subtypes(permanent);
+        if added.is_empty() || !self.permanent_is_land(permanent) {
             return None;
         }
         let card = &self.state.cards[source.card];
         let colors: Vec<Mana> = BASIC_LAND_TYPES
             .iter()
-            .filter(|(name, _)| {
-                source.temp_subtypes.iter().any(|s| s == name) && !card.has_subtype(name)
-            })
+            .filter(|(name, _)| added.contains(name) && !card.has_subtype(name))
             .map(|(_, mana)| Mana::parse(mana))
             .collect();
         match colors.as_slice() {
@@ -1287,7 +1286,7 @@ impl Game {
         if self.unspent_mana_becomes_red(player) {
             pool.become_red();
             pool
-        } else if self.state.players[player.0].keeps_red_mana {
+        } else if self.keeps_unspent_mana(player, Color::Red) {
             pool.red_only()
         } else {
             Mana::default()
