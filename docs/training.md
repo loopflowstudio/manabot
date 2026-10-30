@@ -375,7 +375,12 @@ engine. `validate_numerics=True` runs the CUDA numerics gate
 `TrainingJob.continuation` (`LearnerContinuation`) continues another run's
 learner from its published `run.json` and raw/EMA/Adam exports, bound as a
 `LearningStateImport` (see [portable continuation](#portable-learner-continuation));
-the seed must be the parent's. `etude continue` resumes from a policy
+the seed must be the parent's. A parent interrupted before its final exports
+continues only by declaration (`from_monitoring`): from the raw weights of one
+of its monitoring exports, with the EMA reset to them and a fresh Adam. A job
+stops at an update boundary before its watchdog (`stop_reserve_seconds`),
+exports its learner state and ends `paused`; Etude records that attempt as
+succeeded at the update it reached. `etude continue` resumes from a policy
 checkpoint only, which carries no Adam or collector state, so the worker
 refuses it. Pick the machine at launch (`--pool`, `--rent`); read progress with
 `etude status`, `etude logs` and `etude usage`. See Etude's
@@ -576,6 +581,19 @@ into the child run, validates world/setup/architecture and producer metadata,
 and rejects missing or corrupt Adam or inconsistent EMA. Completed or
 allocation-paused producers with complete exports are supported; an
 incomplete upload never silently becomes a weights-only restart.
+
+An interrupted producer has no final exports, so it continues only by
+declaration: `LearningStateImport(..., raw=..., monitoring_update=N)` with no
+`ema` or `optimizer`. `raw` must be the bytes of the producer's monitoring
+export at absolute update `N` (its record's receipt), the origin takes that
+receipt's coordinates, the EMA starts as a copy of the raw weights and Adam
+starts with no moments. The origin's `reset` lists `ema` and `optimizer`, so
+the discontinuity stays visible in every successor record.
+
+`execute_regime(..., stop_reserve_seconds=R)` avoids leaving such a producer:
+a single step-target self-play stage stops at the first update boundary where
+the slowest update so far plus `R` no longer fits in its watchdog, exports
+raw/EMA/Adam and ends `paused`. Etude training jobs always run this way.
 
 `updates` is an **absolute endpoint**. Use `schedule_clock="iteration_fraction"`,
 one self-play stage, no `initial`, no recovery policy, and the parent's seed,

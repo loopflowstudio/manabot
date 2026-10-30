@@ -20,7 +20,7 @@ The analysis is the frozen protocol's
   on each prefix of rated checkpoints; `saturation` applies the declared rule.
 
     uv run --extra artifacts --extra evaluation --extra reports \
-        python -m experiments.elemental_long_report --directory ~/.manabot/mtg183-eval \
+        python -m experiments.elemental_long_report --directory ~/.manabot/mtg183-eval-cards \
         --storage r2://manabot/evaluations --out experiments/data/mtg183
 """
 
@@ -61,6 +61,16 @@ from manabot.eval.rating import (
 ANCHOR = HEURISTIC
 REPLICATES = 2000
 
+# The MTG Elo Project's scale (mtgeloproject.net/faq): ratings rate best-of-three
+# matches, and 200 points is a 60% win expectancy, not chess's 76%, because
+# Magic's variance keeps real match win rates near even. The fit stays on games;
+# `mtg_elo` re-expresses a rating as its best-of-three match win rate against
+# the heuristic on that scale. The heuristic's place on it is a judgment (Jack
+# Heart, 2026-10-28: well below a tournament player, who enters at 1500), not a
+# measurement; only differences from it are measured.
+MTG_DIVISOR = 200 / math.log10(1.5)
+MTG_HEURISTIC = 200.0
+
 
 @dataclass(frozen=True)
 class Results:
@@ -84,7 +94,7 @@ _GAMES = """
     join players a on a.player = s.player
     join seats t on t.run = g.run and t.match = g.match and t.seat = 1
     join players o on o.player = t.player
-    where g.seat = 0 and g.run = ?
+    where g.seat = 0
 """
 
 
@@ -109,15 +119,36 @@ def _current_heuristic() -> set[tuple[str, str | None]]:
 
 
 def load(directory: Path, store: Storage | Path) -> Results:
-    """The state and every stored game; a design unit short of its games is missing."""
+    """The state and every game of the mini's eval run in `store`."""
     state = EvalState.model_validate_json((directory / "state.json").read_bytes())
     with statsdb(EXPERIMENT, store) as db:
-        cursor = db.execute(_GAMES, [RUN])
-        names = [column[0] for column in cursor.description]
-        found = [dict(zip(names, row, strict=True)) for row in cursor.fetchall()]
+        return results(state, _rows(db, f"{_GAMES} and g.run = ?", [RUN]))
+
+
+def load_database(database: Path, state: EvalState) -> Results:
+    """Every game of every eval run in the combined database (`elemental_long_db`)."""
+    import duckdb
+
+    with duckdb.connect(str(database), read_only=True) as db:
+        return results(state, _rows(db, _GAMES, []))
+
+
+def _rows(db: Any, query: str, parameters: list[Any]) -> list[dict[str, Any]]:
+    cursor = db.execute(query, parameters)
+    names = [column[0] for column in cursor.description]
+    return [dict(zip(names, row, strict=True)) for row in cursor.fetchall()]
+
+
+def results(state: EvalState, found: Sequence[dict[str, Any]]) -> Results:
+    """The design's games by unit; a design unit short of its games is missing.
+
+    A pair played by more than one match (a replication, or a batch replayed
+    after it was lost) keeps every valid game: its deals repeat, and the
+    bootstrap resamples by deal, so the repeats stay together.
+    """
     anchors = _current_heuristic()
-    # (newer, older or None, unit kind) → deal → row
-    played: dict[tuple[int, int | None, str], dict[int, GameRow]] = {}
+    # (newer, older or None, unit kind) → (deal, match) → row
+    played: dict[tuple[int, int | None, str], dict[tuple[int, str], GameRow]] = {}
     for row in found:
         if row["opponent_kind"] == "code":
             # Only the current heuristic anchors the curve (protocol amendment).
@@ -127,11 +158,12 @@ def load(directory: Path, store: Storage | Path) -> Results:
         else:
             key = (_updates(row["subject"]), _updates(row["opponent"]), "pair")
         target = played.setdefault(key, {})
-        if row["deal"] in target:
+        identity = (row["deal"], f"{row['run']}/{row['match']}")
+        if identity in target:
             raise ValueError(
-                f"{row['subject']} v {row['opponent']}: deal {row['deal']} twice"
+                f"{row['subject']} v {row['opponent']}: deal {row['deal']} twice in one match"
             )
-        target[row["deal"]] = GameRow(
+        target[identity] = GameRow(
             model_deck=row["deck"],
             heuristic_deck=row["opponent_deck"],
             model_seat=row["game_seat"],
@@ -156,6 +188,12 @@ def load(directory: Path, store: Storage | Path) -> Results:
     roles = {
         (p.newer, p.older): p.role
         for p in pair_design(tuple(sorted(heuristic)), state.endpoint)
+    }
+    # MTG-183's own halving pairs, beside the shared design.
+    roles |= {
+        (u.newer, u.older): u.role
+        for u in units(state)
+        if u.role == "halving" and u.older is not None
     }
     pairs = {
         (newer, older): (roles.get((newer, older), "consecutive"), games)
@@ -575,6 +613,18 @@ def _pct(view: ScoreView) -> str:
     return f"{view.score:.3f} [{view.low:.3f}, {view.high:.3f}]"
 
 
+def best_of_three(p: float) -> float:
+    """A best-of-three match win rate from independent games won with probability `p`."""
+    return p * p * (3 - 2 * p)
+
+
+def mtg_elo(rating: float) -> float:
+    """A game-scale rating (heuristic = 1000) on the MTG Elo Project's match scale."""
+    game = 1 / (1 + 10 ** (-(rating - 1000) / 400))
+    match = best_of_three(game)
+    return MTG_HEURISTIC + MTG_DIVISOR * math.log10(match / (1 - match))
+
+
 def markdown(summary: Summary) -> str:
     lines = [
         f"# MTG-183 seed {summary.seed}: heuristic and checkpoint rating",
@@ -585,8 +635,13 @@ def markdown(summary: Summary) -> str:
         if summary.seat0_elo is not None
         else "",
         "",
-        "| Update | Grid | Heuristic score [95%] | Rating (Elo, heuristic = 1000) [95%] |",
-        "|---:|---|---|---|",
+        "MTG Elo is the MTG Elo Project's scale: best-of-three matches against the"
+        f" heuristic, 200 points a 60% win expectancy, the heuristic placed at"
+        f" {MTG_HEURISTIC:.0f} (a judgment; a tournament player enters at 1500).",
+        "",
+        "| Update | Grid | Heuristic score [95%] | Rating (Elo, heuristic = 1000) [95%]"
+        f" | MTG Elo (Bo3, heuristic = {MTG_HEURISTIC:.0f}) [95%] |",
+        "|---:|---|---|---|---|",
     ]
     for p in summary.curve:
         interval = (
@@ -595,7 +650,16 @@ def markdown(summary: Summary) -> str:
             else ""
         )
         rating = "—" if p.rating is None else f"{p.rating:.0f}{interval}"
-        lines.append(f"| {p.updates:,} | {p.grid} | {_pct(p.heuristic)} | {rating} |")
+        # `mtg_elo` is increasing, so it carries the interval's ends over.
+        mtg_interval = (
+            f" [{mtg_elo(p.rating_interval[0]):.0f}, {mtg_elo(p.rating_interval[2]):.0f}]"
+            if p.rating_interval
+            else ""
+        )
+        mtg = "—" if p.rating is None else f"{mtg_elo(p.rating):.0f}{mtg_interval}"
+        lines.append(
+            f"| {p.updates:,} | {p.grid} | {_pct(p.heuristic)} | {rating} | {mtg} |"
+        )
     lines += [
         "",
         "## Pairs",
@@ -629,20 +693,27 @@ def markdown(summary: Summary) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--directory", type=Path, required=True)
-    parser.add_argument("--storage", required=True)
+    source = parser.add_mutually_exclusive_group(required=True)
+    source.add_argument("--directory", type=Path, help="the mini's eval directory")
+    source.add_argument(
+        "--database", type=Path, help="the combined database (`elemental_long_db`)"
+    )
+    parser.add_argument("--storage", help="where the mini's eval run is (--directory)")
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument("--replicates", type=int, default=REPLICATES)
     args = parser.parse_args()
-    summary = summarize(
-        load(args.directory.expanduser(), storage_from_uri(args.storage)),
-        replicates=args.replicates,
-    )
+    if args.database is not None:
+        # The state the rented batches were planned from: every admitted export.
+        from experiments.elemental_long_rent import admitted
+
+        found = load_database(args.database.expanduser(), admitted())
+    else:
+        found = load(args.directory.expanduser(), storage_from_uri(args.storage))
+    summary = summarize(found, replicates=args.replicates)
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "summary.json").write_text(summary.model_dump_json(indent=2))
     (args.out / "report.md").write_text(markdown(summary))
     print(args.out / "report.md")
-
 
 if __name__ == "__main__":
     main()
