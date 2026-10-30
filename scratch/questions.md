@@ -200,3 +200,4 @@ T2's operator choices are at `a5587df5a:scratch/questions.md`. New since
   its fixed count beside `DrawCardsValue` because engine decisions build it.
 - T4 card tests are appended at the end of `tests/cards/tla.rs`, after the
   cross-card section, rather than interleaved in `cards()` order.
+- Slice 3: The Earth King counts attacking power-4+ creatures as its search resolves ("that many"), not as declared; one removed in response lowers the count.

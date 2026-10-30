@@ -77,7 +77,8 @@ opponent's activated or triggered ability as well as a spell (CR 702.21a): an
 ability on the stack is a `Target::StackAbility`, and countering it removes it
 (CR 701.6b). Life loss is distinct from damage; firebending may add a
 resolution-time amount; "another permanent" sacrifice triggers exclude their
-own source.
+own source. Triggers may watch any player's casts (with the caster as the
+ability's "they") and a creature attacking alongside another.
 
 Observations add, omitted at their defaults: cast permissions, a stack spell's
 announced X, a player's restricted mana, hand-only lock, no maximum hand size

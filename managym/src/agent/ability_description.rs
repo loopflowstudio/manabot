@@ -66,6 +66,13 @@ fn condition_description(condition: &TriggerCondition) -> String {
             "When you cast a {}",
             predicate_description(predicate, "spell")
         ),
+        TriggerCondition::PlayerCastsSpell { predicate } => format!(
+            "When a player casts a {}",
+            predicate_description(predicate, "spell")
+        ),
+        TriggerCondition::AttacksWithAnother => {
+            "When this and at least one other creature attack".into()
+        }
         TriggerCondition::EntersTheBattlefield { subject } => format!(
             "When {} enters the battlefield",
             subject_description(subject)
@@ -167,6 +174,7 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
         subtypes_any,
         not_subtypes,
         supertype,
+        not_supertype,
         any_of,
         min_power,
         card_type: kind,
@@ -181,6 +189,11 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
         terms.push("flying".into());
     }
     terms.extend(supertype.iter().cloned());
+    terms.extend(
+        not_supertype
+            .iter()
+            .map(|t| format!("non{}", t.to_lowercase())),
+    );
     if *token == Some(false) {
         terms.push("nontoken".into());
     }
@@ -310,6 +323,10 @@ fn value_description(value: &EffectValue) -> String {
         }
         EffectValue::ExcessDamage => "the excess damage dealt this way".into(),
         EffectValue::SourcePower => "this permanent's power".into(),
+        EffectValue::AttackingMatching { predicate } => format!(
+            "the number of attacking {} you control",
+            predicate_description(predicate, "creatures")
+        ),
     }
 }
 
@@ -492,6 +509,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
         DrawCards { count } => format!("Draw {count} cards"),
         DrawCardsValue { count } => format!("Draw X cards, where X is {}", value_description(count)),
         LoseLife { amount } => format!("You lose {amount} life"),
+        TriggeringPlayerLosesLife { amount } => format!("That player loses {amount} life"),
+        ModifyTargetPlayerCreatures { power, toughness, target } => format!("Creatures {} controls get {power:+}/{toughness:+} until end of turn", target_description(target)),
         DealDamageToEachOpponent { amount } => format!("Deal {amount} damage to each opponent"),
         MassDamage { amount } => format!("Deal {amount} damage to each creature"),
         DestroyCreaturesLosingAbilities { max_mana_value } => format!("Each creature with mana value {} or less loses all abilities until end of turn. Destroy those creatures", value_description(max_mana_value)),

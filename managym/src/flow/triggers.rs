@@ -470,6 +470,19 @@ impl Game {
                     }
                     _ => None,
                 }
+            } else if let (true, GameEvent::SpellCast { card, .. }) = (
+                self.state.cards[source_card].abilities[ability_index]
+                    .effects()
+                    .iter()
+                    .any(|effect| {
+                        matches!(
+                            effect,
+                            crate::state::ability::Effect::TriggeringPlayerLosesLife { .. }
+                        )
+                    }),
+                event,
+            ) {
+                Some(Target::Player(self.spell_caster(*card)))
             } else {
                 self.trigger_context_for_event(event)
             };
@@ -658,6 +671,23 @@ impl Game {
             (TriggerCondition::YouCastSpell { predicate }, GameEvent::SpellCast { card, .. }) => {
                 self.spell_caster(*card) == source_controller
                     && predicate.matches_card(&self.state.cards[*card])
+            }
+            (
+                TriggerCondition::PlayerCastsSpell { predicate },
+                GameEvent::SpellCast { card, .. },
+            ) => predicate.matches_card(&self.state.cards[*card]),
+            (
+                TriggerCondition::AttacksWithAnother,
+                GameEvent::AttackersDeclared { attackers, .. },
+            ) => {
+                attackers.len() >= 2
+                    && self
+                        .state
+                        .card_to_permanent
+                        .get(source_card.0)
+                        .copied()
+                        .flatten()
+                        .is_some_and(|permanent_id| attackers.contains(&permanent_id))
             }
             // Conditionally-granted abilities: the ability only exists (and
             // so only triggers) while the condition holds for its

@@ -10425,3 +10425,187 @@ fn benevolent_river_spirit_requires_waterbend_five_and_scries_on_entry() {
     assert!(keywords(&s, permanent).flying);
     assert!(s.game().state.cards[spirit].ward.is_some());
 }
+
+/// Declare every listed creature as an attacker, decline the rest, and
+/// resolve attack triggers taking the first offered option of each choice.
+fn attack_with_all(s: &mut Scenario, attackers: &[PermanentId]) {
+    for attacker in attackers {
+        clear_summoning_sickness(s, *attacker);
+    }
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        let index = s.action_space().actions.iter().position(|action| {
+            matches!(action, Action::DeclareAttacker { permanent, attack: true, .. }
+                if attackers.contains(permanent))
+        });
+        match index {
+            Some(index) => s.step_action(index),
+            None => s.decline_attack(),
+        }
+    }
+    for _ in 0..60 {
+        match s.action_space().kind {
+            ActionSpaceKind::Priority if s.game().state.stack_objects.is_empty() => return,
+            ActionSpaceKind::Priority => s.pass_priority(),
+            _ => s.step_action(0),
+        }
+    }
+    panic!("attack triggers did not settle");
+}
+
+/// "They" is the caster, whichever player that is; creature spells do not
+/// trigger it.
+#[test]
+fn mai_scornful_striker_makes_each_noncreature_caster_lose_two() {
+    let mut s = five_color_setup(&["Mai, Scornful Striker", "Rocky Rebuke", "Gray Ogre"]);
+    let mai = s.force_permanent_on_battlefield(0, "Mai, Scornful Striker");
+    assert!(keywords(&s, mai).first_strike);
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    cast(&mut s, "Rocky Rebuke");
+    assert!(s.choose_target(Target::Permanent(mai)));
+    assert!(s.choose_target(Target::Permanent(theirs)));
+    settle(&mut s);
+    assert_eq!(s.game().state.players[0].life, 18);
+    assert_eq!(s.game().state.players[1].life, 20);
+
+    cast(&mut s, "Gray Ogre");
+    settle(&mut s);
+    assert_eq!(s.game().state.players[0].life, 18, "a creature spell");
+
+    s.advance_to_active_step(1, StepKind::Main);
+    let rebuke = force_new_card_in_hand(&mut s, 1, "Rocky Rebuke");
+    let ogre = permanent_named(&s, "Gray Ogre");
+    let attacker = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.set_player_mana_pool(1, "1G");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    cast_card(&mut s, rebuke);
+    assert!(s.choose_target(Target::Permanent(attacker)));
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(s.game().state.players[1].life, 18);
+    assert_eq!(s.game().state.players[0].life, 18);
+}
+
+#[test]
+fn sokka_lateral_strategist_draws_only_when_attacking_with_another_creature() {
+    let mut s = five_color_setup(&["Sokka, Lateral Strategist", "Gray Ogre"]);
+    let sokka = s.force_permanent_on_battlefield(0, "Sokka, Lateral Strategist");
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let hand = s.zone_size(0, ZoneType::Hand);
+    attack_with_all(&mut s, &[sokka]);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand, "the Ogre stays home");
+    assert!(!tapped(&s, sokka), "vigilance");
+
+    let mut s = five_color_setup(&["Sokka, Lateral Strategist", "Gray Ogre"]);
+    let sokka = s.force_permanent_on_battlefield(0, "Sokka, Lateral Strategist");
+    let ogre_too = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let hand = s.zone_size(0, ZoneType::Hand);
+    attack_with_all(&mut s, &[sokka, ogre_too]);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 1);
+}
+
+/// The Bear arrives on entry; the attack search counts the attacking
+/// creatures with power 4 or greater.
+#[test]
+fn the_earth_king_makes_a_bear_and_ramps_once_per_large_attacker() {
+    let mut s = five_color_setup(&["The Earth King", "Craw Wurm"]);
+    play_and_settle(&mut s, "The Earth King");
+    let bear = s.battlefield_permanents_named(0, "Bear")[0];
+    assert_eq!(s.game().effective_pt(bear), (4, 4));
+    let king = permanent_named(&s, "The Earth King");
+    let wurm = s.force_permanent_on_battlefield(0, "Craw Wurm");
+    let lands = |s: &Scenario| {
+        ["Plains", "Island", "Swamp", "Mountain", "Forest"]
+            .into_iter()
+            .flat_map(|name| s.battlefield_permanents_named(0, name))
+            .count()
+    };
+    let before = lands(&s);
+    clear_summoning_sickness(&mut s, bear);
+    attack_with_all(&mut s, &[king, bear, wurm]);
+    assert_eq!(
+        lands(&s),
+        before + 2,
+        "Bear and Craw Wurm, not the 2/2 King"
+    );
+}
+
+#[test]
+fn bitter_work_draws_for_a_large_attacker_and_exhausts_into_earthbend_four() {
+    let mut s = five_color_setup(&["Bitter Work", "Craw Wurm", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(0, "Bitter Work");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let hand = s.zone_size(0, ZoneType::Hand);
+    attack_with_all(&mut s, &[ogre]);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand, "power 2");
+
+    let mut s = five_color_setup(&["Bitter Work", "Craw Wurm", "Forest"]);
+    let work = s.force_permanent_on_battlefield(0, "Bitter Work");
+    let wurm = s.force_permanent_on_battlefield(0, "Craw Wurm");
+    let hand = s.zone_size(0, ZoneType::Hand);
+    attack_with_all(&mut s, &[wurm]);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 1);
+
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    s.set_player_mana_pool(0, "4");
+    activate(&mut s, work, 0);
+    assert!(s.choose_target(Target::Permanent(forest)));
+    settle(&mut s);
+    assert_eq!(s.game().effective_pt(forest), (4, 4));
+    s.set_player_mana_pool(0, "4");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_activate(&s, work), "exhausted");
+
+    let mut s = five_color_setup(&["Bitter Work", "Forest"]);
+    let work = s.force_permanent_on_battlefield(0, "Bitter Work");
+    s.force_permanent_on_battlefield(0, "Forest");
+    s.advance_to_active_step(1, StepKind::Main);
+    s.pass_priority();
+    s.set_player_mana_pool(0, "4");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_activate(&s, work), "only during your turn");
+}
+
+#[test]
+fn how_to_start_a_riot_grants_menace_and_pumps_the_target_players_creatures() {
+    let mut s = five_color_setup(&["How to Start a Riot", "Gray Ogre"]);
+    let mine = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let other = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    cast(&mut s, "How to Start a Riot");
+    assert!(s.choose_target(Target::Permanent(theirs)));
+    assert!(s.choose_target(Target::Player(PlayerId(0))));
+    settle(&mut s);
+    assert!(keywords(&s, theirs).menace);
+    assert!(!keywords(&s, mine).menace);
+    assert_eq!(s.game().effective_pt(mine), (4, 2));
+    assert_eq!(s.game().effective_pt(other), (4, 2));
+    assert_eq!(s.game().effective_pt(theirs), (2, 2));
+}
+
+#[test]
+fn bumi_bash_deals_land_count_damage_or_destroys_a_land_creature_or_nonbasic_land() {
+    let mut s = five_color_setup(&["Bumi Bash", "Craw Wurm", "North Pole Gates"]);
+    for _ in 0..3 {
+        s.force_permanent_on_battlefield(0, "Forest");
+    }
+    let wurm = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    cast(&mut s, "Bumi Bash");
+    choose_mode(&mut s, 0);
+    assert!(s.choose_target(Target::Permanent(wurm)));
+    settle(&mut s);
+    assert_eq!(permanent(&s, wurm).damage, 3);
+
+    let gates = s.force_permanent_on_battlefield(1, "North Pole Gates");
+    let basic = s.force_permanent_on_battlefield(1, "Island");
+    cast(&mut s, "Bumi Bash");
+    choose_mode(&mut s, 1);
+    let targets = offered_targets(&s);
+    assert!(targets.contains(&Target::Permanent(gates)));
+    assert!(!targets.contains(&Target::Permanent(basic)));
+    assert!(!targets.contains(&Target::Permanent(wurm)));
+    assert!(s.choose_target(Target::Permanent(gates)));
+    settle(&mut s);
+    assert!(s.game().state.permanents[gates].is_none());
+}

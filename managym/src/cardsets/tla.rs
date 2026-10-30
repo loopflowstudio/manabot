@@ -56,9 +56,11 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         barrels_of_blasting_jelly(),
         bear(),
         benevolent_river_spirit(),
+        bitter_work(),
         boar_q_pine(),
         boiling_rock_prison(),
         boomerang_basics(),
+        bumi_bash(),
         callous_inspector(),
         canyon_crawler(),
         cat_gator(),
@@ -121,6 +123,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         hermitic_herbalist(),
         hog_monkey(),
         honest_work(),
+        how_to_start_a_riot(),
         iguana_parrot(),
         invasion_reinforcements(),
         invasion_submersible(),
@@ -140,6 +143,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         lo_and_li_twin_tutors(),
         lost_days(),
         mai_jaded_edge(),
+        mai_scornful_striker(),
         master_pakku(),
         master_piandao(),
         meditation_pools(),
@@ -185,6 +189,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         serpents_pass(),
         shared_roots(),
         sokka_bold_boomeranger(),
+        sokka_lateral_strategist(),
         sokka_s_haiku(),
         soldier(),
         solstice_revelations(),
@@ -200,6 +205,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         swampsnare_trap(),
         team_avatar(),
         the_boulder_ready_to_rumble(),
+        the_earth_king(),
         the_last_agni_kai(),
         the_lion_turtle(),
         the_mechanist_aerial_artisan(),
@@ -1167,6 +1173,40 @@ fn benevolent_river_spirit() -> CardDefinition {
     }
 }
 
+fn bitter_work() -> CardDefinition {
+    let text_box = "Whenever you attack a player with one or more creatures with power 4 or greater, draw a card.\nExhaust — {4}: Earthbend 4. Activate only during your turn. (Target land you control becomes a 0/0 creature with haste that's still a land. Put four +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped. Activate each exhaust ability only once.)";
+
+    CardDefinition {
+        key: "tla.bitter_work",
+        scryfall_id: "3e8de6a9-9859-4ed2-8ece-ef80a7209be9",
+        name: "Bitter Work".into(),
+        mana_cost: Some(ManaCost::parse("{1}{R}{G}")),
+        types: CardTypes::new([CardType::Enchantment]),
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::Attacks {
+                subject: TriggerSubject::AnyYouControl(CardPredicate {
+                    card_type: Some(CardType::Creature),
+                    min_power: Some(4),
+                    ..Default::default()
+                }),
+            },
+            effects: vec![Effect::DrawCards { count: 1 }],
+        }],
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            exhaust: true,
+            own_turn_only: true,
+            mana_cost: ManaCost::parse("{4}"),
+            effects: vec![Effect::Earthbend {
+                count: EffectValue::Fixed(4),
+                target: TargetSpec::LandYouControl,
+            }],
+            ..Default::default()
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
 fn boar_q_pine() -> CardDefinition {
     let text_box = "Whenever you cast a noncreature spell, put a +1/+1 counter on this creature.";
 
@@ -1252,6 +1292,51 @@ fn boomerang_basics() -> CardDefinition {
                     ..Default::default()
                 },
             },
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn bumi_bash() -> CardDefinition {
+    let text_box = "Choose one —\n• Bumi Bash deals damage equal to the number of lands you control to target creature.\n• Destroy target land creature or nonbasic land.";
+
+    CardDefinition {
+        key: "tla.bumi_bash",
+        scryfall_id: "e8895479-26cb-4ee8-98ca-6d46c43f0dbd",
+        name: "Bumi Bash".into(),
+        mana_cost: Some(ManaCost::parse("{3}{R}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        spell_effects: vec![Effect::Modal {
+            modes: vec![
+                vec![Effect::DealDamageValue {
+                    amount: EffectValue::BattlefieldMatching {
+                        predicate: CardPredicate {
+                            card_type: Some(CardType::Land),
+                            ..Default::default()
+                        },
+                    },
+                    target: TargetSpec::Creature,
+                }],
+                vec![Effect::Destroy {
+                    target: TargetSpec::Permanent {
+                        predicate: CardPredicate {
+                            card_type: Some(CardType::Land),
+                            any_of: vec![
+                                CardPredicate {
+                                    card_type: Some(CardType::Creature),
+                                    ..Default::default()
+                                },
+                                CardPredicate {
+                                    not_supertype: Some("Basic".into()),
+                                    ..Default::default()
+                                },
+                            ],
+                            ..Default::default()
+                        },
+                    },
+                }],
+            ],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -3419,6 +3504,41 @@ fn honest_work() -> CardDefinition {
     }
 }
 
+fn how_to_start_a_riot() -> CardDefinition {
+    let text_box = "Target creature gains menace until end of turn. (It can't be blocked except by two or more creatures.)\nCreatures target player controls get +2/+0 until end of turn.";
+
+    CardDefinition {
+        key: "tla.how_to_start_a_riot",
+        scryfall_id: "23b3bf1e-ea85-47f5-8473-4d16615f68d7",
+        name: "How to Start a Riot".into(),
+        mana_cost: Some(ManaCost::parse("{2}{R}")),
+        types: CardTypes::new([CardType::Instant]),
+        subtypes: vec!["Lesson".into()],
+        spell_effects: vec![
+            Effect::TargetClause {
+                requirement: TargetRequirement::one(TargetSpec::Creature),
+                effects: vec![Effect::GrantKeywordsToTarget {
+                    keywords: Keywords {
+                        menace: true,
+                        ..Default::default()
+                    },
+                    target: TargetSpec::Creature,
+                }],
+            },
+            Effect::TargetClause {
+                requirement: TargetRequirement::one(TargetSpec::Player),
+                effects: vec![Effect::ModifyTargetPlayerCreatures {
+                    power: 2,
+                    toughness: 0,
+                    target: TargetSpec::Player,
+                }],
+            },
+        ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
 fn iguana_parrot() -> CardDefinition {
     let text_box = "Flying, vigilance\nProwess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)";
 
@@ -4162,6 +4282,37 @@ fn mai_jaded_edge() -> CardDefinition {
                 kind: CounterKind::DoubleStrike,
             }],
             ..Default::default()
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn mai_scornful_striker() -> CardDefinition {
+    let text_box = "First strike\nWhenever a player casts a noncreature spell, they lose 2 life.";
+
+    CardDefinition {
+        key: "tla.mai_scornful_striker",
+        scryfall_id: "74dd4c0e-27b8-4c47-b7a6-a281413cd6b4",
+        name: "Mai, Scornful Striker".into(),
+        mana_cost: Some(ManaCost::parse("{1}{B}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Noble".into(), "Ally".into()],
+        power: Some(2),
+        toughness: Some(2),
+        keywords: Keywords {
+            first_strike: true,
+            ..Default::default()
+        },
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::PlayerCastsSpell {
+                predicate: CardPredicate {
+                    not_card_types: vec![CardType::Creature],
+                    ..Default::default()
+                },
+            },
+            effects: vec![Effect::TriggeringPlayerLosesLife { amount: 2 }],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -5824,6 +5975,32 @@ fn sokka_bold_boomeranger() -> CardDefinition {
     }
 }
 
+fn sokka_lateral_strategist() -> CardDefinition {
+    let text_box = "Vigilance\nWhenever Sokka and at least one other creature attack, draw a card.";
+
+    CardDefinition {
+        key: "tla.sokka_lateral_strategist",
+        scryfall_id: "1326c5db-4615-495f-8e30-376243d91352",
+        name: "Sokka, Lateral Strategist".into(),
+        mana_cost: Some(ManaCost::parse("{1}{W/U}{W/U}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+        power: Some(2),
+        toughness: Some(4),
+        keywords: Keywords {
+            vigilance: true,
+            ..Default::default()
+        },
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::AttacksWithAnother,
+            effects: vec![Effect::DrawCards { count: 1 }],
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
 fn sokka_s_haiku() -> CardDefinition {
     let text_box = "Counter target spell.\nDraw a card, then mill three cards.\nUntap target land.";
 
@@ -6348,6 +6525,60 @@ fn the_boulder_ready_to_rumble() -> CardDefinition {
                 target: TargetSpec::LandYouControl,
             }],
         }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn the_earth_king() -> CardDefinition {
+    let text_box = "When The Earth King enters, create a 4/4 green Bear creature token.\nWhenever one or more creatures you control with power 4 or greater attack, search your library for up to that many basic land cards, put them onto the battlefield tapped, then shuffle.";
+
+    CardDefinition {
+        key: "tla.the_earth_king",
+        scryfall_id: "a8d5dca6-381a-4361-b265-27de8d04335c",
+        name: "The Earth King".into(),
+        mana_cost: Some(ManaCost::parse("{3}{G}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Noble".into(), "Ally".into()],
+        power: Some(2),
+        toughness: Some(2),
+        abilities: vec![
+            Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::CreateToken {
+                    token_name: "Bear".into(),
+                    count: 1,
+                    tapped_and_attacking: false,
+                    attach_source: false,
+                }],
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::Attacks {
+                    subject: TriggerSubject::AnyYouControl(CardPredicate {
+                        card_type: Some(CardType::Creature),
+                        min_power: Some(4),
+                        ..Default::default()
+                    }),
+                },
+                effects: vec![Effect::SearchBasicLand {
+                    subtype: None,
+                    count: EffectValue::AttackingMatching {
+                        predicate: CardPredicate {
+                            card_type: Some(CardType::Creature),
+                            min_power: Some(4),
+                            ..Default::default()
+                        },
+                    },
+                    tapped: true,
+                    untap_if_lands: None,
+                    bottom_source: false,
+                    to_hand: false,
+                }],
+            },
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }

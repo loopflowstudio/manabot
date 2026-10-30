@@ -285,6 +285,8 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::DrawCards { .. } => "Effect::DrawCards",
         Effect::DrawCardsValue { .. } => "Effect::DrawCardsValue",
         Effect::LoseLife { .. } => "Effect::LoseLife",
+        Effect::TriggeringPlayerLosesLife { .. } => "Effect::TriggeringPlayerLosesLife",
+        Effect::ModifyTargetPlayerCreatures { .. } => "Effect::ModifyTargetPlayerCreatures",
         Effect::DealDamageToEachOpponent { .. } => "Effect::DealDamageToEachOpponent",
         Effect::MassDamage { .. } => "Effect::MassDamage",
         Effect::DamageOpponentCreatures { .. } => "Effect::DamageOpponentCreatures",
@@ -368,7 +370,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 109;
+const EFFECT_VARIANTS: usize = 111;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -475,6 +477,12 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::DrawCards { count: 1 },
         Effect::DrawCardsValue { count: value() },
         Effect::LoseLife { amount: 1 },
+        Effect::TriggeringPlayerLosesLife { amount: 2 },
+        Effect::ModifyTargetPlayerCreatures {
+            power: 2,
+            toughness: 0,
+            target: TargetSpec::Player,
+        },
         Effect::DealDamageToEachOpponent { amount: 1 },
         Effect::MassDamage { amount: 1 },
         Effect::DamageOpponentCreatures { amount: 1 },
@@ -775,6 +783,8 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::Sacrificed { .. } => "TriggerCondition::Sacrificed",
         TriggerCondition::OnceEachTurn { .. } => "TriggerCondition::OnceEachTurn",
         TriggerCondition::YouCastSpell { .. } => "TriggerCondition::YouCastSpell",
+        TriggerCondition::PlayerCastsSpell { .. } => "TriggerCondition::PlayerCastsSpell",
+        TriggerCondition::AttacksWithAnother => "TriggerCondition::AttacksWithAnother",
         TriggerCondition::EntersTheBattlefield { .. } => "TriggerCondition::EntersTheBattlefield",
         TriggerCondition::Dies { .. } => "TriggerCondition::Dies",
         TriggerCondition::Attacks { .. } => "TriggerCondition::Attacks",
@@ -830,6 +840,10 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             }),
         },
         TriggerCondition::BeginningOfYourEndStep,
+        TriggerCondition::PlayerCastsSpell {
+            predicate: CardPredicate::creature(),
+        },
+        TriggerCondition::AttacksWithAnother,
     ]
 }
 

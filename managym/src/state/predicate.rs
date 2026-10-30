@@ -32,6 +32,9 @@ pub struct CardPredicate {
     pub not_subtypes: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub supertype: Option<String>,
+    /// Card must not have this supertype ("nonbasic").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub not_supertype: Option<String>,
     /// At least one alternative must match ("artifact or Lesson").
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub any_of: Vec<CardPredicate>,
@@ -108,6 +111,13 @@ impl CardPredicate {
             .supertype
             .as_ref()
             .is_some_and(|s| !card.supertypes.iter().any(|t| t.eq_ignore_ascii_case(s)))
+        {
+            return false;
+        }
+        if self
+            .not_supertype
+            .as_ref()
+            .is_some_and(|s| card.supertypes.iter().any(|t| t.eq_ignore_ascii_case(s)))
         {
             return false;
         }

@@ -164,6 +164,22 @@
       "U"
     ]
   },
+  "Bitter Work": {
+    "name": "Bitter Work",
+    "mana_cost": "{1}{R}{G}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Exhaust",
+      "Earthbend"
+    ],
+    "oracle_text": "Whenever you attack a player with one or more creatures with power 4 or greater, draw a card.\nExhaust — {4}: Earthbend 4. Activate only during your turn. (Target land you control becomes a 0/0 creature with haste that's still a land. Put four +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped. Activate each exhaust ability only once.)",
+    "colors": [
+      "G",
+      "R"
+    ]
+  },
   "Boggart Brute": {
     "name": "Boggart Brute",
     "mana_cost": "{2}{R}",
@@ -188,6 +204,18 @@
     "oracle_text": "Return target nonland permanent to its owner's hand. If you controlled that permanent, draw a card.",
     "colors": [
       "U"
+    ]
+  },
+  "Bumi Bash": {
+    "name": "Bumi Bash",
+    "mana_cost": "{3}{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Choose one —\n• Bumi Bash deals damage equal to the number of lands you control to target creature.\n• Destroy target land creature or nonbasic land.",
+    "colors": [
+      "R"
     ]
   },
   "Cat-Gator": {
@@ -643,6 +671,18 @@
       "W"
     ]
   },
+  "How to Start a Riot": {
+    "name": "How to Start a Riot",
+    "mana_cost": "{2}{R}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Target creature gains menace until end of turn. (It can't be blocked except by two or more creatures.)\nCreatures target player controls get +2/+0 until end of turn.",
+    "colors": [
+      "R"
+    ]
+  },
   "Igneous Inspiration": {
     "name": "Igneous Inspiration",
     "mana_cost": "{2}{R}",
@@ -777,6 +817,20 @@
     "oracle_text": "{T}: Add {G}.",
     "colors": [
       "G"
+    ]
+  },
+  "Mai, Scornful Striker": {
+    "name": "Mai, Scornful Striker",
+    "mana_cost": "{1}{B}",
+    "type_line": "Legendary Creature — Human Noble Ally",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "First strike"
+    ],
+    "oracle_text": "First strike\nWhenever a player casts a noncreature spell, they lose 2 life.",
+    "colors": [
+      "B"
     ]
   },
   "Man-o'-War": {
@@ -1090,6 +1144,21 @@
       "R"
     ]
   },
+  "Sokka, Lateral Strategist": {
+    "name": "Sokka, Lateral Strategist",
+    "mana_cost": "{1}{W/U}{W/U}",
+    "type_line": "Legendary Creature — Human Warrior Ally",
+    "power": "2",
+    "toughness": "4",
+    "keywords": [
+      "Vigilance"
+    ],
+    "oracle_text": "Vigilance\nWhenever Sokka and at least one other creature attack, draw a card.",
+    "colors": [
+      "U",
+      "W"
+    ]
+  },
   "South Pole Voyager": {
     "name": "South Pole Voyager",
     "mana_cost": "{1}{W}",
@@ -1166,6 +1235,18 @@
     "keywords": [],
     "oracle_text": "({T}: Add {B}.)",
     "colors": []
+  },
+  "The Earth King": {
+    "name": "The Earth King",
+    "mana_cost": "{3}{G}",
+    "type_line": "Legendary Creature — Human Noble Ally",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "When The Earth King enters, create a 4/4 green Bear creature token.\nWhenever one or more creatures you control with power 4 or greater attack, search your library for up to that many basic land cards, put them onto the battlefield tapped, then shuffle.",
+    "colors": [
+      "G"
+    ]
   },
   "The Spirit Oasis": {
     "name": "The Spirit Oasis",

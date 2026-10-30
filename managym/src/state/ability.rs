@@ -43,6 +43,11 @@ pub enum TriggerCondition {
     YouCastSpell {
         predicate: CardPredicate,
     },
+    /// "Whenever a player casts a [predicate] spell": any player, including
+    /// you. The caster is the trigger context ("they").
+    PlayerCastsSpell {
+        predicate: CardPredicate,
+    },
     /// "When [subject] enters the battlefield."
     EntersTheBattlefield {
         subject: TriggerSubject,
@@ -58,6 +63,9 @@ pub enum TriggerCondition {
     Attacks {
         subject: TriggerSubject,
     },
+    /// "Whenever [this] and at least one other creature attack": the source
+    /// is among two or more declared attackers.
+    AttacksWithAnother,
     /// "Whenever [subject] attacks alone": exactly one creature was
     /// declared as an attacker (CR 506.5). The attacker is the context.
     AttacksAlone {
@@ -160,6 +168,11 @@ pub enum EffectValue {
     /// The source permanent's current power ("where X is this creature's
     /// power"); 0 once it has left the battlefield or outside a resolution.
     SourcePower,
+    /// Attacking creatures `controller` controls matching `predicate`, as
+    /// the effect resolves ("search for up to that many").
+    AttackingMatching {
+        predicate: CardPredicate,
+    },
 }
 
 /// A resolving obligation, distinct from the effects chosen by its outcome.
@@ -445,6 +458,18 @@ pub enum Effect {
     /// Resolving player loses `amount` life (not damage, CR 119.3).
     LoseLife {
         amount: i32,
+    },
+    /// The player in the trigger context ("they", the caster of the
+    /// triggering spell) loses `amount` life.
+    TriggeringPlayerLosesLife {
+        amount: i32,
+    },
+    /// Creatures the target player controls get +power/+toughness until end
+    /// of turn; the affected set is fixed as it resolves (CR 611.2c).
+    ModifyTargetPlayerCreatures {
+        power: i32,
+        toughness: i32,
+        target: TargetSpec,
     },
     /// The source deals `amount` damage to each opponent of the resolving
     /// player. No target.
@@ -854,6 +879,7 @@ impl Effect {
             | Effect::DealDamageToController { .. }
             | Effect::DealDamageToEachOpponent { .. }
             | Effect::LoseLife { .. }
+            | Effect::TriggeringPlayerLosesLife { .. }
             | Effect::DrawCardsValue { .. }
             | Effect::DrainLife { .. } => None,
             Effect::TargetClause { requirement, .. } => Some(&requirement.spec),
@@ -887,6 +913,7 @@ impl Effect {
                 .find_map(Effect::target_spec),
             Effect::Discard => None,
             Effect::ReturnToHand { target } => Some(target),
+            Effect::ModifyTargetPlayerCreatures { target, .. } => Some(target),
             Effect::DealDamage { target, .. } => Some(target),
             Effect::CounterSpell { target } => Some(target),
             Effect::PutCounters { target, .. } => Some(target),

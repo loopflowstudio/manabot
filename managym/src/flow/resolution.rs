@@ -37,6 +37,16 @@ impl Game {
             EffectValue::SourcePower => self
                 .source_permanent_id(frame)
                 .map_or(0, |id| self.effective_power(id)),
+            EffectValue::AttackingMatching { predicate } => self
+                .battlefield_permanents(frame.controller)
+                .into_iter()
+                .filter(|id| {
+                    self.state.permanents[*id]
+                        .as_ref()
+                        .is_some_and(|permanent| permanent.attacking)
+                        && self.permanent_matches_predicate(*id, predicate)
+                })
+                .count() as i32,
             _ => self.controller_value(value, frame.controller),
         }
     }
@@ -46,7 +56,10 @@ impl Game {
     pub(crate) fn controller_value(&self, value: &EffectValue, controller: PlayerId) -> i32 {
         match value {
             EffectValue::Fixed(value) => *value,
-            EffectValue::X | EffectValue::ExcessDamage | EffectValue::SourcePower => 0,
+            EffectValue::X
+            | EffectValue::ExcessDamage
+            | EffectValue::SourcePower
+            | EffectValue::AttackingMatching { .. } => 0,
             EffectValue::CreaturesWithCounters => self
                 .battlefield_permanents(controller)
                 .into_iter()
@@ -902,6 +915,24 @@ impl Game {
             }
             Effect::LoseLife { amount } => {
                 self.change_life(frame.controller, -*amount);
+                None
+            }
+            Effect::TriggeringPlayerLosesLife { amount } => {
+                if let Some(Target::Player(player)) = frame.context_target {
+                    self.change_life(player, -*amount);
+                }
+                None
+            }
+            Effect::ModifyTargetPlayerCreatures {
+                power, toughness, ..
+            } => {
+                let Some(Target::Player(player)) = self.present_primary_target(frame) else {
+                    return None;
+                };
+                self.modify_controlled(player, &CardPredicate::creature(), |permanent| {
+                    permanent.temp_power += power;
+                    permanent.temp_toughness += toughness;
+                });
                 None
             }
             Effect::DealDamageToEachOpponent { amount } => {
