@@ -2136,9 +2136,9 @@ mod learn_tests {
         assert_eq!(branch.state.players[0].known_hand.values().sum::<u32>(), 1);
         branch.determinize(PlayerId(1), 22);
         branch = inner;
-        assert!(witness(&branch) == departed, "nested rollback");
+        assert!(witness(&branch) == departed, "nested restore");
         branch = outer;
-        assert!(witness(&branch) == before, "outer rollback");
+        assert!(witness(&branch) == before, "outer restore");
         assert!(witness(&source) == before);
         assert!(witness(&sibling) == before);
     }
