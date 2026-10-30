@@ -1025,7 +1025,8 @@ impl Observation {
                 .map(|(index, _)| index)
                 .collect(),
             effects: ContinuousEffectData::list(game, game.affected_permanent(perm_id)),
-            timestamp: (permanent.timestamp != permanent.id).then_some(permanent.timestamp.0 as i32),
+            timestamp: (permanent.timestamp != permanent.id)
+                .then_some(permanent.timestamp.0 as i32),
         };
 
         if permanent.controller.0 == self.agent.player_index as usize {

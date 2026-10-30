@@ -20,13 +20,9 @@ and pool-membership choices that were here (history: `be2b7586b:scratch/question
 - Not rewritten (dated evidence): the Academy curated pack `local_identity` values
   keep pre-rename keys.
 - Full TLA completion remains the eight-PR plan; no merge or new Task authorized.
-- 2026-10-29 (merge of T2 `d218e1dc2`): **assumption for Jack Heart to
-  overrule at review.** T3 extends T2's unfrozen v5 and w18 in place rather
-  than taking v6/w19; no checkpoint exists for either, so this is reversible.
-  T2's rows are the base (v1–v4 keep 40 / 41 / 29, `attacking` stays v4
-  column 27) and T3's columns follow T2's before validity: player 63, card 55,
-  permanent 52. T3 keeps its relation columns (frame X, granted spell
-  keywords; width 48), so the relation width alone tells v5 again.
+- Settled (Jack Heart, 2026-10-30, "1a, 2a"): T3 extends the open w17 and
+  policy input v5 in place; never w19/v6. Widths: player 63, card 55,
+  permanent 37 plus the facts block, relation 48 (v1–v4 keep 40 / 41 / 29).
 - Same merge: T2's `granted_firebending` replaces T3's `firebending`
   observation field; T2's foretold column stands for `face_down` (T3's card
   column is gone). T2's exhausted / once-each-turn counts and T3's

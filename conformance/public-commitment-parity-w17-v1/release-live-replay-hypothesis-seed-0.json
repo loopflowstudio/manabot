@@ -37,7 +37,7 @@
     }
   },
   "identity": {
-    "authority_receipt_sha256": "daa97f1553b89b19996edbdb14bec597e5042f6aa775fd04b104f7baa9f18b34",
+    "authority_receipt_sha256": "977dfc4a950d661bb9e7125cb32b3018d7d2c2156c0374bcdf06ec7655425221",
     "command_tape_sha256": "95db76dc71150abd75bd4a771729e0928a59c19232ba442db4eb036cae5a1294",
     "matchup": "ur-lessons-vs-gw-allies",
     "relevant_source": {
@@ -45,11 +45,11 @@
       "files": [
         {
           "path": "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
-          "sha256": "daa97f1553b89b19996edbdb14bec597e5042f6aa775fd04b104f7baa9f18b34"
+          "sha256": "977dfc4a950d661bb9e7125cb32b3018d7d2c2156c0374bcdf06ec7655425221"
         },
         {
           "path": "academy/public_commitment_parity.py",
-          "sha256": "66cca4f9c6f8bc1261adbc33fbea590c74b8e1a1d326f5217622f9af3b109a02"
+          "sha256": "a11656a7269f2f08344c933d0cea5156cc01cb99681d66b810ef3ecafef51ac1"
         },
         {
           "path": "academy/server.py",
@@ -69,7 +69,7 @@
         },
         {
           "path": "manabot/belief/tracker.py",
-          "sha256": "eebbca036b2848449537f4990f356046775e39ba8c39139cbd9e13b24ec67552"
+          "sha256": "fe7079e161c2f65c715a53552864dbe888a144c4432402f42c033b7d31580c5d"
         },
         {
           "path": "manabot/managym/__init__.pyi",
@@ -117,7 +117,7 @@
         },
         {
           "path": "tests/belief/test_tracker.py",
-          "sha256": "453efe048e69f7b40d79cf439f4539f6a7018427bc7d9761e1ad73cacc80ab0d"
+          "sha256": "585d2af0495dbb3adab431a3599dc1c1421de43b24611b38edbbb03347357ddf"
         },
         {
           "path": "tests/academy/test_public_commitment_parity.py",
@@ -128,7 +128,7 @@
           "sha256": "d51e57bbacc7fe50716af576be6d4979664501d6d4a48e0f33921a9ad23bb171"
         }
       ],
-      "sha256": "70fc58cd877e50b0ad51d55f60d2b9c10f27edfaec6aac78194e9649df9bc151"
+      "sha256": "e881d84adf807c4776fc035ae3a8f6afc204c219268a81ad85d9cb64d1e76044"
     },
     "seed": 0,
     "semantic_decision_version": 7

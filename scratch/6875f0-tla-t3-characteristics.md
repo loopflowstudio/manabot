@@ -156,27 +156,23 @@ Scryfall id.
    (`effect_phrase`), Academy notes (`effectNote`) and the experience
    protocol carry the records.
 
+32. Merge of main `c7979d310` (T2 #398 squashed as w17, 2026-10-30) as
+   `eecbc465f`: T3's tree plus T2's post-`601ed8f82` delta (w18 → w17 rename,
+   belief range/tracker); T3's `*-w18*` evidence and fixtures moved over the
+   older w17 copies and renamed; WORLDS.md's w17 row and section carry T3.
+   Permanent observations omit `timestamp` unless an attachment renewed it.
+
 ## Remaining
 
-- Rust test migration to records (delegated pass), new directed rules tests
-  (timestamp order, expiry, zone change, undo, determinism).
-- Rust: `ContinuousEffectData.source_name`; experience wire view
-  (`experience.rs`) + regenerated protocol schemas; decision capture binds
-  effect source definitions.
-- Rebuild the extension; Python parity/text/model tests; Academy check.
-- Re-record w18 evidence (state digests changed): semantic kernel,
-  authored-match + parity, public-commitment parity, Academy fixtures,
-  trigger-order digests, belief receipts.
-
-- If T2 lands on main first, its w18 evidence is frozen and T3 takes w19 (and
-  v6) instead; the open in-place assumption is in `scratch/questions.md`.
 - Browser proof (Playwright e2e) is CI's.
 
-Check (2026-10-30, at the third sync): debug `cargo test` all binaries pass
-(lib 122, cards 384, rules 131 + 2 ignored, semantic_conformance 6, …); fmt,
-clippy `--all-targets -D warnings`, conformance check and fuzz (seed 24301, 32
-cases) clean; `tests/academy` 261 pass; world/observation-shape set plus
-`tests/belief`, `tests/env`, text observation 301 pass; ruff clean. Realign (2026-10-30): PR #398 `a5587df5a` and #394 `2c50c8793` heads unchanged and contained; Academy shared-table/study/experience protocol and CI-selection tests 74 pass (`tests/eval/test_arena_log_conformance.py` needs undeclared `duckdb`, unchanged from main).
+Check (2026-10-30, after the main merge and w17 rename): debug `cargo test`
+all binaries pass (lib 122, cards 388, rules 136 + 2 ignored, …); fmt and
+clippy `--all-targets -D warnings` clean; w17 evidence re-recorded in place
+(kernel unchanged, parity receipts repinned, Academy fixtures same revisions);
+world/observation-shape set plus `tests/academy`, `tests/belief`, `tests/env`,
+`tests/verify`, `tests/semantic` 767 pass; Academy vitest 119 and svelte-check
+clean; ruff clean on changed files.
 
 Concept review (2026-10-30, after the third sync): no change. The implemented
 change matches the accepted model (derived characteristics, complete

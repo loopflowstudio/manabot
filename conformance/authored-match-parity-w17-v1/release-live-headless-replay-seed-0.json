@@ -1,6 +1,6 @@
 {
   "identity": {
-    "authority_receipt_sha256": "daa97f1553b89b19996edbdb14bec597e5042f6aa775fd04b104f7baa9f18b34",
+    "authority_receipt_sha256": "977dfc4a950d661bb9e7125cb32b3018d7d2c2156c0374bcdf06ec7655425221",
     "command_tape_sha256": "95db76dc71150abd75bd4a771729e0928a59c19232ba442db4eb036cae5a1294",
     "matchup": "ur-lessons-vs-gw-allies",
     "relevant_source": {
@@ -8,11 +8,11 @@
       "files": [
         {
           "path": "academy/authored_match_parity.py",
-          "sha256": "9093dca9303f208356726d3f256f0a632d6383e382a9d60702730edb202e2770"
+          "sha256": "d58914e4e5beebe6ad6a14fa6f58e6beee4adef103fb8201799ddf47b4f44393"
         },
         {
           "path": "academy/authored_match_receipt.py",
-          "sha256": "7c2eecc8419f0c313119908ed6c5440ae82b516b5cc70575ba1f85dfc870923d"
+          "sha256": "cb89bdada15f0ed6fd3675880e8c124dabb767a6784d2551d4ee94571cca6f6a"
         },
         {
           "path": "academy/curated_pack.py",
@@ -40,7 +40,7 @@
         },
         {
           "path": "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
-          "sha256": "daa97f1553b89b19996edbdb14bec597e5042f6aa775fd04b104f7baa9f18b34"
+          "sha256": "977dfc4a950d661bb9e7125cb32b3018d7d2c2156c0374bcdf06ec7655425221"
         },
         {
           "path": "content/semantic/current/setups.json",
@@ -544,7 +544,7 @@
         },
         {
           "path": "managym/src/world.rs",
-          "sha256": "cf9a586af4cb0c9a0d07fd7df76875423cec013ee7e2e6d07cb585804c1246ff"
+          "sha256": "c73d43e5012f514c419e254ad5e0154cb8f8995867c2b91f3e36b3954fead894"
         },
         {
           "path": "managym/tests/rules/structured_offers.rs",
@@ -559,7 +559,7 @@
           "sha256": "7253f4b013ddbb65f2f9509324d3c59739e9ca08f16ad7bb5d2c92e16a928d3c"
         }
       ],
-      "sha256": "96eabbf6dc2dcc08825a4768d9ce649bd3f45543b0b0eadee82e59b9e49b711d"
+      "sha256": "f47a2340e84dce75cdde1628de06deba26cdc566a86ade2f11e83daed8c39a3c"
     },
     "seed": 0
   },
