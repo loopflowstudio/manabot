@@ -13,13 +13,13 @@ instruments.
 
 | module | recipes (`--regime-name`) | runs and reports |
 | --- | --- | --- |
-| [batched_baseline](batched_baseline.py) | `batched_baseline`, `:scale_ladder` ([scale ladder](scale-ladder.md)) | `manabot train` / [Etude](../docs/remote-training.md) |
+| [batched_baseline](batched_baseline.py) | `batched_baseline`, `:scale_ladder` ([scale ladder](scale-ladder.md)) | `manabot train` / [Etude](../docs/training.md#remote-training) |
 | [value_model_baseline](value_model_baseline.py) | `value_model_baseline` ([value models](value-models.md)) | `manabot train` |
-| [ataraxos_move](ataraxos_move.py) | `ataraxos_move`, `:ataraxos_move_scalar` ([guide](../docs/ataraxos.md)) | `manabot train` |
+| [ataraxos_move](ataraxos_move.py) | `ataraxos_move`, `:ataraxos_move_scalar` ([guide](../docs/training.md#ataraxos)) | `manabot train` |
 | [direct_self_play](direct_self_play.py) | `direct_self_play` | `manabot train` |
 | [ataraxos_ablation](ataraxos_ablation.py) | `:rl_control` and four treatment arms ([ablations](ataraxos-mtg-ablations.md)) | `python -m experiments.ataraxos_ablation` |
 | [compound_decisions](compound_decisions.py) | four grouping × estimator arms | `python -m experiments.compound_decisions` |
-| [belief_sampler](belief_sampler.py) | `belief_sampler` ([guide](../docs/belief-sampler.md)) | `manabot train` |
+| [belief_sampler](belief_sampler.py) | `belief_sampler` ([guide](../docs/search-and-beliefs.md#belief-sampler)) | `manabot train` |
 
 ## Etude experiment files
 
@@ -170,5 +170,5 @@ studies. Proposed budgets are separate from ETU-91 and grant no execution author
 [sps-closeout](sps-closeout.md).)
 
 Distributed-RL research and the unexecuted bounded workload plan live in
-[the ETU-108 report](../docs/distributed-rl.md); its benchmark supervisor was
+[the ETU-108 report](../docs/training.md#distributed-training); its benchmark supervisor was
 removed unexecuted and remains in git history.

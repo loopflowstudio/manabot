@@ -19,5 +19,5 @@ Only current-world (w17) corpora with executable consumers stay in source:
 Earlier worlds' corpora (semantic-kernel w8–w15, authored-match and parity v1
 through w11, public-commitment-parity-v1, the Learn w4 cohorts) are archived
 byte-for-byte in S3 under `experiments/data/archive/conformance/`; see the
-[repository archive](../docs/repository-archive.md) for the fetch command. They
+[repository archive](../docs/development.md#retained-evidence-and-archived-corpora) for the fetch command. They
 verify only at the revision that recorded them.

@@ -8,7 +8,7 @@ Fixed-slot mean pooling applies a biased projection to padding and averages over
 invalid slots. Masked mean tests that concrete dependency. A learned value token
 tests aggregation through shared attention, changing policy representations too.
 Neither is a measured remedy for delayed-control failures. Ataraxos source
-analysis lives in [the fidelity guide](../docs/ataraxos.md); the neutral MTG token
+analysis lives in [the fidelity guide](../docs/training.md#ataraxos); the neutral MTG token
 is an explicit adaptation, not an exact paper reproduction.
 
 Eight width-64/four-head recipes cross historical mean/one layer, masked

@@ -253,7 +253,7 @@ def test_numerical_projection_distinguishes_unsampled_and_rejected_updates(
         sections=[],
     )
     html = path.read_text()
-    assert "Numerical health" in html and "numerical-health.md" in html
+    assert "Numerical health" in html and "training.md#numerical-health" in html
     assert "Measured parameter movement" in html
     assert (
         "nonfinite_gradients" in path.with_name("health-diagnostics.json").read_text()

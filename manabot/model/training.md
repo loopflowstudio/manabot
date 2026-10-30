@@ -55,7 +55,7 @@ Scalar value loss is squared error; categorical value loss is cross-entropy to
 loss/draw/win lambda-return mixtures. Actor-only selection retains critic rows;
 actor-and-critic selection removes both. Inclusive quantile selection keeps ties.
 Method provenance, equations and MTG adaptations are in
-[the source fidelity contract](../../docs/ataraxos.md).
+[the source fidelity contract](../../docs/training.md#ataraxos).
 
 Iteration schedules count completed collection/update boundaries, including
 empty-filter skips. EMA advances once at each such boundary. Optimizer steps,
@@ -80,7 +80,7 @@ recovery retains its attempt ledger independently of optimizer snapshots, so
 restoring a committed update cannot erase later failures or replenish the error
 allowance. Source repair requires explicit restart admission; replay advancement
 alone neither admits training nor establishes the original game's outcome.
-See [game crash recovery](../../docs/game-crash-recovery.md) for bounds and limits.
+See [game crash recovery](../../docs/training.md#game-failures) for bounds and limits.
 
 Current recipes use `damped_policy` directly. The historical `ataraxos_move`
 discriminator is rejected: old recipes require pinned source. No compatibility

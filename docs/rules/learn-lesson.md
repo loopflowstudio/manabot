@@ -45,7 +45,7 @@ in `experiments/data/archive/conformance/learn-lesson-w4-v3`. v2 passed all 16 g
 gate repairs to import isolation and diagnostic traceback handling changed the
 source binding, so v3 repeats the same fixed seeds. The earlier unscored v1
 registration and complete v2 receipts are archived (see the
-[repository archive](../repository-archive.md)). At the registered source,
+[repository archive](../development.md#retained-evidence-and-archived-corpora)). At the registered source,
 `./scripts/verify-learn-lesson` rebuilds the extension, checks the consumer
 contracts and verifies all tapes; it rejects source or binary drift instead of
 rewriting receipts. The script and the w4 cohorts now exist only at revisions
@@ -60,7 +60,7 @@ interaction approval remains accepted with its original proof limits.
 
 A confirmed gate blocker is the frozen checkpoint-advice fixture: it records
 action ABI 3 and possible-world ABI 1, whereas the current request uses 6 and 2,
-with different content, replay and observation identities. `docs/development/validation.md`
+with different content, replay and observation identities. `docs/development.md#validation-by-change-area`
 explicitly requires preserving failures in frozen advice as blockers. Neither
 historical fixtures nor checkpoint validation were rewritten to conceal that
 mismatch. The broad Python gate returned 813 passed and 30 failed. Ten failures

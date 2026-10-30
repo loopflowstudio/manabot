@@ -68,7 +68,7 @@ before 558daa).
 [Challenge an identified trained bot through complete games · ETU-79](https://linear.app/loopflow/issue/ETU-79/challenge-an-identified-trained-bot-through-complete-games)
 answers the User's practical question: “if right now were like alright lets
 train our best sofar ...what do we do”. It also owns the training/export proof
-formerly assigned to ETU-78. Use the [local operator workflow](../../../docs/local-trained-challenger.md)
+formerly assigned to ETU-78. Use the [local operator workflow](../../../docs/academy.md#playing-a-trained-challenger)
 and its existing receipts; ETU-80 consumes those measurements. A small search-64
 behavior-cloning run proves the workflow, not current strategic superiority.
 Final proof requires repeated corrected-world executions after ETU-75 with exact
@@ -112,7 +112,7 @@ The existing live/replay presentation consumer now retains a bounded readable
 semantic-event list after playback and skip, supports pause, and preserves
 reading time under reduced motion. Current prompt actor/instruction is separate
 from past-event narration. The board always shows the committed current frame.
-See [presentation runtime](../../../docs/architecture/presentation-runtime.md) for
+See [presentation runtime](../../../docs/academy.md#presentation-runtime) for
 fixture positions and scope. The original reported position is still unknown;
 Bolt-only spell projection remains a known coverage gap. Fixture regressions and
 automated checks do not close human-play or full-game recurrence acceptance.
@@ -134,7 +134,7 @@ more offers, retaining original IDs, duplicates, keyboard focus and ordinary
 Commands. Updates/recovery clear local filtering. Exact native prefixes and
 viewer frames cover nine targets, eight cleanup discards, ten Learn offers,
 six block choices and an optional cost; see the
-[coverage ledger and local walkthrough](../../../docs/choice-navigation.md).
+[coverage ledger and local walkthrough](../../../docs/academy.md#choice-navigation).
 These new fixtures do not identify the original reported awkward position.
 Search versus grouping, the threshold and duplicate-copy clarity still require
 Jack Heart's play judgment; automated checks do not close ETU-77 or chapter KR2.

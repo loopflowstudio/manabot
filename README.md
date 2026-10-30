@@ -67,9 +67,9 @@ Reward is win or loss only: our shaped rewards lost to it
 
 **Hidden information and search.** Belief samplers learn a distribution over
 the opponent's hidden cards from a frozen policy's own games
-([belief sampler](docs/belief-sampler.md)). Search samples hands from that
+([belief sampler](docs/search-and-beliefs.md#belief-sampler)). Search samples hands from that
 belief and uses the frozen policy for continuations at play time
-([local policy search](docs/local-policy-search.md)). It has not yet shown a
+([local policy search](docs/search-and-beliefs.md#local-policy-search)). It has not yet shown a
 strength gain over the policy alone.
 
 **Evaluation by head-to-head play.** Trained agents play each other. A
@@ -95,7 +95,7 @@ wide range of environments.
 ## Versioned installs
 
 Versioned PyPI release preparation, platform support, CPU/CUDA installation and
-maintainer publishing are described in [the release guide](docs/releases.md).
+maintainer publishing are described in [the release guide](docs/development.md#releases).
 [Manabot 0.2.0 is available on PyPI](https://pypi.org/project/manabot/0.2.0/);
 the source workflow below remains available.
 
@@ -192,7 +192,7 @@ not comparable with today's checkpoints:
 | `manabot/` | Agents: models, training, search, beliefs, evaluation, verification ([README](manabot/README.md)) |
 | `experiments/` | Preregistered experiment reports, protocols, and data |
 | `content/` | Card and deck definitions compiled to a typed IR |
-| `conformance/` | Active rules and replay fixtures; [historical corpora in S3](docs/repository-archive.md) |
+| `conformance/` | Active rules and replay fixtures; [historical corpora in S3](docs/development.md#retained-evidence-and-archived-corpora) |
 | `docs/` | Architecture, training operations, rules, and research notes ([index](docs/README.md)) |
 | `paper/` | A working paper draft |
 | `ops/`, `deploy/` | Remote training hardware and deployment |

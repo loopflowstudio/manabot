@@ -114,7 +114,7 @@ its original address/frame/Command; **Return to live** is a separate destination
 Expired roots remain unavailable rather than being reconstructed from the screen.
 
 Long action lists have an optional **Find an action** filter. See the
-[retained choice positions and local walkthrough](../docs/choice-navigation.md)
+[retained choice positions and local walkthrough](../docs/academy.md#choice-navigation)
 for target, discard, Learn, combat and optional-cost coverage.
 
 Development server without the launcher:
@@ -123,7 +123,7 @@ Development server without the launcher:
 uv run uvicorn academy.server:app --port 8000
 ```
 
-The [local challenger workflow](../docs/local-trained-challenger.md)
+The [local challenger workflow](../docs/academy.md#playing-a-trained-challenger)
 covers the built same-origin server, feedback, and read-only SQL.
 
 Any trained checkpoint is selectable from the Opponent menu. The table
@@ -149,8 +149,8 @@ letting process interrupts escape. Do not broaden gameplay error suppression.
 Tests: `uv run --extra dev pytest tests/academy`. The end-to-end browser
 proofs (launch, offline reload, accessibility, release prompts) are under
 [academy/ui/e2e/](../academy/ui/e2e/) and documented in
-[docs/clean-machine-play.md](../docs/clean-machine-play.md) and
-[docs/experience-proof.md](../docs/experience-proof.md).
+[docs/development.md#clean-machine-play-proof](../docs/development.md#clean-machine-play-proof) and
+[experience proof gate](../docs/academy.md#experience-proof-gate).
 
 ## Watch and recorded bot decisions
 
@@ -196,7 +196,7 @@ in the additive `elemental-world-v2` pack, including mirrors. Browse the main
 lists and Lesson pools, click cached card artwork for a printed preview, then
 use the assignment buttons to choose each seat. During play, **Choose decks**
 prepares the next matchup; only **New Game** replaces the current attempt.
-The [local MTG-183 launcher](../docs/local-trained-challenger.md#ten-deck-elemental-play-against-mtg-183)
+The [local MTG-183 launcher](../docs/academy.md#playing-a-trained-challenger)
 pins the latest published checkpoint for CPU play and populates the art cache.
 The decks' 40-card main lists, Lesson pools, local treatments and retained card-identity
 provenance are in the schema-2 roster manifest at

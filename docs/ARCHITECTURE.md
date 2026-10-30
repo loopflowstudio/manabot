@@ -79,14 +79,14 @@ main engine. The loop is declared as data and executed by one runner:
 - **Remote execution.** Etude launches regimes on rented GPUs, ships their
   metrics and checkpoints while they run, and enforces hours and dollars. The
   machine is chosen at launch, never in the experiment. See
-  [remote training](remote-training.md) and
-  [training regimes](training-regimes.md).
+  [remote training](training.md#remote-training) and
+  [training regimes](training.md#regimes-and-stages).
 - **Beliefs.** Belief samplers over the opponent's hidden cards are fit from a
   frozen policy's own complete games. They never feed hidden truth to the
-  acting policy ([belief sampler](belief-sampler.md)).
+  acting policy ([belief sampler](search-and-beliefs.md#belief-sampler)).
 - **Search as an improvement step.** Local search uses the frozen policy for
   continuations and sampled hands for hidden state at play time
-  ([local policy search](local-policy-search.md)).
+  ([local policy search](search-and-beliefs.md#local-policy-search)).
 - **Encoding is identity.** An observation/action shape change is a new world
   ([WORLDS.md](../WORLDS.md)). Checkpoints load only in their world, and a
   nightly baseline check guards against inputs that make distinct choices
@@ -685,7 +685,7 @@ Detailed existing contracts remain authoritative within their narrower scope:
   the current and transitional Academy wire path;
 - [match-state hash v1](architecture/match-state-hash-v1.md) defines one
   deterministic state-hash domain;
-- [presentation runtime](architecture/presentation-runtime.md) describes the
+- [presentation runtime](academy.md#presentation-runtime) describes the
   product projection seam;
 - [search branching contract](benchmarks/search-branching-contract-v1.md) and
   [selected branch driver](benchmarks/selected-branchdriver-teacher-v1.md)

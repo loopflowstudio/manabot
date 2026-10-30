@@ -1,4 +1,4 @@
-"""Small Ataraxos move learning and its scalar-value control (docs/ataraxos.md)."""
+"""Small Ataraxos move learning and its scalar-value control (docs/training.md#ataraxos)."""
 
 from manabot.infra.config import ModelConfig
 from manabot.recipes.builders import PACK, move_checkpoints, with_value_output
