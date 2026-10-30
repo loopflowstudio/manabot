@@ -30,6 +30,10 @@ pub enum TriggerCondition {
     Sacrificed {
         predicate: CardPredicate,
         controller_only: bool,
+        /// "another permanent": the exact source object's own sacrifice
+        /// does not trigger it.
+        #[serde(skip_serializing_if = "std::ops::Not::not", default)]
+        another: bool,
     },
     /// Wrap the whole condition, including ActiveIf. The limit is recorded
     /// when the event fires, once per exact source incarnation and turn.
@@ -153,6 +157,9 @@ pub enum EffectValue {
     /// Excess damage (CR 120.4a) the resolution's latest damage instruction
     /// dealt to its creature; 0 outside a resolution.
     ExcessDamage,
+    /// The source permanent's current power ("where X is this creature's
+    /// power"); 0 once it has left the battlefield or outside a resolution.
+    SourcePower,
 }
 
 /// A resolving obligation, distinct from the effects chosen by its outcome.
@@ -238,7 +245,7 @@ pub enum Effect {
         tapped_onto_battlefield: bool,
     },
     MillCards {
-        count: usize,
+        count: EffectValue,
         /// The target player mills instead of the controller.
         target: Option<TargetSpec>,
     },
@@ -265,8 +272,9 @@ pub enum Effect {
     /// Search is a private choice that always shuffles, including failure to find.
     SearchBasicLand {
         subtype: Option<String>,
-        #[serde(skip_serializing_if = "is_one")]
-        count: usize,
+        /// Up to this many cards, read at resolution.
+        #[serde(skip_serializing_if = "is_fixed_one")]
+        count: EffectValue,
         #[serde(skip_serializing_if = "is_true")]
         tapped: bool,
         #[serde(skip_serializing_if = "Option::is_none")]
@@ -429,6 +437,19 @@ pub enum Effect {
     /// Resolving player draws `count` cards. No target.
     DrawCards {
         count: usize,
+    },
+    /// Resolving player draws a number of cards read at resolution.
+    DrawCardsValue {
+        count: EffectValue,
+    },
+    /// Resolving player loses `amount` life (not damage, CR 119.3).
+    LoseLife {
+        amount: i32,
+    },
+    /// The source deals `amount` damage to each opponent of the resolving
+    /// player. No target.
+    DealDamageToEachOpponent {
+        amount: i32,
     },
     /// Deal `amount` damage to each creature on the battlefield. No target.
     /// Each creature with mana value at most `max_mana_value` loses all
@@ -626,10 +647,13 @@ pub enum Effect {
     AddOneColorManaValue {
         amount: EffectValue,
     },
-    /// Add `mana` `amount` times, `amount` read at resolution.
+    /// Add `mana` `amount` times, `amount` read at resolution;
+    /// `until_end_of_combat` as for [`Effect::AddMana`] (firebending X).
     AddManaValue {
         mana: Mana,
         amount: EffectValue,
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        until_end_of_combat: bool,
     },
     /// "Until end of turn, you don't lose unspent red mana as steps and
     /// phases end" (CR 106.4).
@@ -691,7 +715,7 @@ pub enum Effect {
     /// resolving player controls matching [predicate]; `other` excludes
     /// the source permanent.
     PutCountersOnEachMatching {
-        count: i32,
+        count: EffectValue,
         predicate: CardPredicate,
         other: bool,
     },
@@ -790,6 +814,9 @@ impl TargetRequirement {
 fn is_one(value: &usize) -> bool {
     *value == 1
 }
+fn is_fixed_one(value: &EffectValue) -> bool {
+    *value == EffectValue::Fixed(1)
+}
 fn is_true(value: &bool) -> bool {
     *value
 }
@@ -824,6 +851,9 @@ impl Effect {
         match self {
             Effect::Sacrifice { .. }
             | Effect::DealDamageToController { .. }
+            | Effect::DealDamageToEachOpponent { .. }
+            | Effect::LoseLife { .. }
+            | Effect::DrawCardsValue { .. }
             | Effect::DrainLife { .. } => None,
             Effect::TargetClause { requirement, .. } => Some(&requirement.spec),
             Effect::MillCards { target, .. } => target.as_ref(),

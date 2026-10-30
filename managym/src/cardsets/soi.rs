@@ -45,6 +45,7 @@ fn tireless_tracker() -> CardDefinition {
                         ..Default::default()
                     },
                     controller_only: true,
+                    another: false,
                 },
                 effects: vec![Effect::PutCountersOnSource {
                     count: 1,

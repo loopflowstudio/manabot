@@ -186,3 +186,17 @@ mana, `Game::zone_cast_cost`/`may_play_from_zone`, `ZoneEntry`.
 T2's operator choices are at `a5587df5a:scratch/questions.md`. New since
 `d218e1dc2`: possible worlds v3 resample foretold cards (ordered slots,
 `P(m, F)` fill factor); belief priors are not yet foretold-aware.
+
+## T4 (488a40) assumptions — 2026-10-30
+
+- T4 extends the open w18 in place, like T3 (no checkpoint uses it); the
+  alternative is w19. New cards change the content digest, so w18 evidence is
+  re-recorded once at gate (the set T3 re-recorded in `a8a40323d`).
+- `EffectValue::SourcePower` reads the source's current power and is 0 once
+  it has left the battlefield (LKI power is not captured); firebending X
+  resolves while its attacker is normally still present.
+- Count fields of `MillCards`, `SearchBasicLand` and `PutCountersOnEachMatching`
+  became `EffectValue` instead of adding `*Value` siblings; `DrawCards` keeps
+  its fixed count beside `DrawCardsValue` because engine decisions build it.
+- T4 card tests are appended at the end of `tests/cards/tla.rs`, after the
+  cross-card section, rather than interleaved in `cards()` order.

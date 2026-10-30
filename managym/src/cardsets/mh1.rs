@@ -52,7 +52,7 @@ fn prismatic_vista() -> CardDefinition {
             sacrifice_source: true,
             effects: vec![Effect::SearchBasicLand {
                 subtype: None,
-                count: 1,
+                count: EffectValue::Fixed(1),
                 tapped: false,
                 untap_if_lands: None,
                 bottom_source: false,

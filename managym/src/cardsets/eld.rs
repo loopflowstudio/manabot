@@ -1,6 +1,6 @@
 //! Throne of Eldraine.
 use crate::state::{
-    ability::{Effect, TargetSpec},
+    ability::{Effect, EffectValue, TargetSpec},
     card::{ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes},
     mana::ManaCost,
     predicate::CardPredicate,
@@ -46,7 +46,7 @@ fn fabled_passage() -> CardDefinition {
             sacrifice_source: true,
             effects: vec![Effect::SearchBasicLand {
                 subtype: None,
-                count: 1,
+                count: EffectValue::Fixed(1),
                 tapped: true,
                 untap_if_lands: Some(4),
                 bottom_source: false,

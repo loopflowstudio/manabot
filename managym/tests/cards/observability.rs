@@ -283,6 +283,9 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::CounterSpell { .. } => "Effect::CounterSpell",
         Effect::ModifyUntilEot { .. } => "Effect::ModifyUntilEot",
         Effect::DrawCards { .. } => "Effect::DrawCards",
+        Effect::DrawCardsValue { .. } => "Effect::DrawCardsValue",
+        Effect::LoseLife { .. } => "Effect::LoseLife",
+        Effect::DealDamageToEachOpponent { .. } => "Effect::DealDamageToEachOpponent",
         Effect::MassDamage { .. } => "Effect::MassDamage",
         Effect::DamageOpponentCreatures { .. } => "Effect::DamageOpponentCreatures",
         Effect::CreateTokensValue { .. } => "Effect::CreateTokensValue",
@@ -365,7 +368,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 106;
+const EFFECT_VARIANTS: usize = 109;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -398,7 +401,7 @@ fn effect_witnesses() -> Vec<Effect> {
             tapped_onto_battlefield: false,
         },
         Effect::MillCards {
-            count: 2,
+            count: EffectValue::Fixed(2),
             target: None,
         },
         Effect::MillAndSelect {
@@ -415,7 +418,7 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::SelectTargetRequirement { index: 0 },
         Effect::SearchBasicLand {
             subtype: None,
-            count: 1,
+            count: EffectValue::Fixed(1),
             tapped: true,
             untap_if_lands: None,
             bottom_source: false,
@@ -470,6 +473,9 @@ fn effect_witnesses() -> Vec<Effect> {
             toughness_delta: 1,
         },
         Effect::DrawCards { count: 1 },
+        Effect::DrawCardsValue { count: value() },
+        Effect::LoseLife { amount: 1 },
+        Effect::DealDamageToEachOpponent { amount: 1 },
         Effect::MassDamage { amount: 1 },
         Effect::DamageOpponentCreatures { amount: 1 },
         Effect::CreateTokensValue {
@@ -559,7 +565,7 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::ForEachTarget { effects: draw() },
         Effect::PutCountersOnEachMatching {
-            count: 1,
+            count: EffectValue::SourcePower,
             predicate: creature(),
             other: true,
         },
@@ -731,6 +737,7 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::AddManaValue {
             mana: Mana::parse("R"),
             amount: EffectValue::ExcessDamage,
+            until_end_of_combat: true,
         },
         Effect::KeepUnspentRedMana,
         Effect::FightLastTarget,
@@ -795,6 +802,7 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::Sacrificed {
             predicate: CardPredicate::creature(),
             controller_only: true,
+            another: true,
         },
         TriggerCondition::OnceEachTurn {
             condition: enters(),

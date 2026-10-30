@@ -27,6 +27,7 @@ fn mayhem_devil() -> CardDefinition {
             condition: TriggerCondition::Sacrificed {
                 predicate: CardPredicate::default(),
                 controller_only: false,
+                another: false,
             },
             effects: vec![Effect::DealDamage {
                 amount: 1,

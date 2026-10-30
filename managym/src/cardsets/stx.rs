@@ -1,6 +1,9 @@
 //! Strixhaven: School of Mages.
 use crate::state::{
-    ability::{Ability, Effect, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject},
+    ability::{
+        Ability, Effect, EffectValue, TargetRequirement, TargetSpec, TriggerCondition,
+        TriggerSubject,
+    },
     card::{CardDefinition, CardType, CardTypes, Keywords},
     mana::ManaCost,
 };
@@ -115,7 +118,7 @@ fn field_trip() -> CardDefinition {
         spell_effects: vec![
             Effect::SearchBasicLand {
                 subtype: Some("Forest".into()),
-                count: 1,
+                count: EffectValue::Fixed(1),
                 tapped: true,
                 untap_if_lands: None,
                 bottom_source: false,

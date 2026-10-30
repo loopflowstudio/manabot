@@ -51,8 +51,10 @@ fn condition_description(condition: &TriggerCondition) -> String {
         TriggerCondition::Sacrificed {
             predicate,
             controller_only,
+            another,
         } => format!(
-            "When {} {} sacrificed",
+            "When {}{} {} sacrificed",
+            if *another { "another " } else { "" },
             predicate_description(predicate, "permanent"),
             if *controller_only {
                 "you control is"
@@ -307,6 +309,7 @@ fn value_description(value: &EffectValue) -> String {
             format!("the number of cards you have drawn this turn minus {subtract} (minimum zero)")
         }
         EffectValue::ExcessDamage => "the excess damage dealt this way".into(),
+        EffectValue::SourcePower => "this permanent's power".into(),
     }
 }
 
@@ -425,8 +428,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
         CantBeBlockedTarget { target } => format!("{} can't be blocked this turn",target_description(target)),
         ReturnGraveyardTarget { target, tapped_onto_battlefield: false } => format!("Return {} to your hand",target_description(target)),
         ReturnGraveyardTarget { target, tapped_onto_battlefield: true } => format!("Put {} onto the battlefield tapped",target_description(target)),
-        MillCards { count, target: None } => format!("Mill {count} cards"),
-        MillCards { count, target: Some(target) } => format!("{} mills {count} cards", target_description(target)),
+        MillCards { count, target: None } => format!("Mill {} cards", value_description(count)),
+        MillCards { count, target: Some(target) } => format!("{} mills {} cards", target_description(target), value_description(count)),
         MillAndSelect { count, predicate, if_declined, if_milled } => {
             let mut text = format!("Mill {count} cards. You may return a {} milled this way to your hand. Otherwise: {}",predicate_description(predicate,"card"),effects_description(if_declined));
             if let Some(bonus) = if_milled {
@@ -437,7 +440,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         TargetClause { requirement, effects } => format!("Choose {}–{} {} for this clause: {}",requirement.min,if requirement.max_x { "X".to_string() } else { requirement.max.to_string() },target_description(&requirement.spec),effects_description(effects)),
         SearchBasicLand { subtype, to_hand: true, .. } => format!("Search your library for a {} card, reveal it, put it into your hand, then shuffle",subtype.as_deref().unwrap_or("land")),
         SearchBasicLand { subtype, count, tapped, untap_if_lands, bottom_source, .. } => {
-            let mut text = format!("Search your library for up to {count} basic {} cards and put them onto the battlefield{}. Then shuffle",subtype.as_deref().unwrap_or("land"),if *tapped { " tapped" } else { "" });
+            let mut text = format!("Search your library for up to {} basic {} cards and put them onto the battlefield{}. Then shuffle",value_description(count),subtype.as_deref().unwrap_or("land"),if *tapped { " tapped" } else { "" });
             if let Some(n) = untap_if_lands { text.push_str(&format!(". Untap those lands if you control at least {n} lands")); }
             if *bottom_source { text.push_str(". Put this on the bottom of its owner's library"); }
             text
@@ -487,6 +490,9 @@ fn effect_description(effect: &Effect) -> Option<String> {
         CounterSpell { target } => format!("Counter {}",target_description(target)),
         ModifyUntilEot { power_delta, toughness_delta } => format!("This gets {power_delta:+}/{toughness_delta:+} until end of turn"),
         DrawCards { count } => format!("Draw {count} cards"),
+        DrawCardsValue { count } => format!("Draw X cards, where X is {}", value_description(count)),
+        LoseLife { amount } => format!("You lose {amount} life"),
+        DealDamageToEachOpponent { amount } => format!("Deal {amount} damage to each opponent"),
         MassDamage { amount } => format!("Deal {amount} damage to each creature"),
         DestroyCreaturesLosingAbilities { max_mana_value } => format!("Each creature with mana value {} or less loses all abilities until end of turn. Destroy those creatures", value_description(max_mana_value)),
         DamageOpponentCreatures { amount } => format!("Deal {amount} damage to each creature your opponents control"),
@@ -508,7 +514,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         },
         GainLife { amount } => format!("You gain {amount} life"),
         GainLifeValue { amount } => format!("You gain life equal to {}", value_description(amount)),
-        AddManaValue { mana, amount } => format!("Add {} for each of {}", mana_description(mana), value_description(amount)),
+        AddManaValue { mana, amount, until_end_of_combat } => format!("Add {} for each of {}{}", mana_description(mana), value_description(amount), if *until_end_of_combat { ". This mana lasts until end of combat" } else { "" }),
         KeepUnspentRedMana => "Until end of turn, you don't lose unspent red mana as steps and phases end".into(),
         FightLastTarget => "The first target fights the last target".into(),
         GrantKeywordsControlled { predicate, keywords } => format!("Each {} you control gains {} until end of turn", predicate_description(predicate, "permanent"), keywords_description(keywords)),
@@ -543,7 +549,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         GrantKeywordsToTarget { keywords, target } => format!("{} gains {} until end of turn",target_description(target),keywords_description(keywords)),
         IfTargetMatches { predicate, then } => format!("If that target is a {}: {}",predicate_description(predicate,"permanent"),effects_description(then)),
         ForEachTarget { effects } => format!("For each chosen target: {}",effects_description(effects)),
-        PutCountersOnEachMatching { count, predicate, other } => format!("Put {count} +1/+1 counters on each {}{} you control",if *other { "other " } else { "" },predicate_description(predicate,"permanent")),
+        PutCountersOnEachMatching { count, predicate, other } => format!("Put {} +1/+1 counters on each {}{} you control",value_description(count),if *other { "other " } else { "" },predicate_description(predicate,"permanent")),
     })
 }
 

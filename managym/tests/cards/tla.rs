@@ -21,7 +21,7 @@ use crate::support::{
         cast_and_resolve, cast_card, cast_only, cast_owned, castable, choose, choose_mode,
         enter_and_settle, offers_ability, pass_until, play_and_settle, play_land,
         resolve_everything, resolve_top, resolve_until_priority, select_card, settle,
-        settle_targeting_opponent,
+        settle_targeting_opponent, target_opponent,
     },
 };
 use managym::{
@@ -10123,4 +10123,240 @@ fn revised_forty_card_deck_completes_and_replays_every_command_exactly() {
             assert!(game.is_game_over(), "seed {seed}, reverse {reverse}");
         }
     }
+}
+
+/// Attack with player 0's `attacker` from main phase 1 and resolve every
+/// attack trigger, answering target choices with `target`.
+fn attack_and_settle(s: &mut Scenario, attacker: PermanentId, target: Option<Target>) {
+    clear_summoning_sickness(s, attacker);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(s, attacker);
+    for _ in 0..40 {
+        match s.action_space().kind {
+            ActionSpaceKind::ChooseTarget => {
+                assert!(s.choose_target(target.expect("a target choice")));
+            }
+            ActionSpaceKind::OrderTriggers => s.step_action(0),
+            ActionSpaceKind::Priority if s.game().state.stack_objects.is_empty() => return,
+            _ => s.pass_priority(),
+        }
+    }
+    panic!("attack triggers did not settle");
+}
+
+fn combat_red(s: &Scenario) -> u16 {
+    s.game().state.players[0].combat_mana_pool.total()
+}
+
+/// Sacrifice player 0's `victim` to Weaponize the Monsters' "{2}, Sacrifice
+/// a creature" and resolve everything.
+fn sacrifice_to_weaponize(s: &mut Scenario, victim: PermanentId) {
+    let card = card_of(s, victim);
+    s.set_player_mana_pool(0, "2");
+    let weapon = match s.battlefield_permanents_named(0, "Weaponize the Monsters")[..] {
+        [weapon] => weapon,
+        _ => s.force_permanent_on_battlefield(0, "Weaponize the Monsters"),
+    };
+    s.game_mut().scenario_refresh_priority().unwrap();
+    activate_first(s, weapon);
+    target_opponent(s);
+    select_card(s, card);
+    settle(s);
+}
+
+#[test]
+fn azula_on_the_hunt_firebends_two_then_loses_life_for_a_clue_on_attack() {
+    let mut s = five_color_setup(&["Azula, On the Hunt"]);
+    let azula = s.force_permanent_on_battlefield(0, "Azula, On the Hunt");
+    attack_and_settle(&mut s, azula, None);
+    assert_eq!(combat_red(&s), 2);
+    assert_eq!(s.game().state.players[0].life, 19, "life loss, not damage");
+    assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
+}
+
+#[test]
+fn vindictive_warden_pings_each_opponent_and_firebends_one() {
+    let mut s = five_color_setup(&["Vindictive Warden"]);
+    let warden = s.force_permanent_on_battlefield(0, "Vindictive Warden");
+    assert!(keywords(&s, warden).menace);
+    s.set_player_mana_pool(0, "3");
+    activate(&mut s, warden, 0);
+    settle(&mut s);
+    assert_eq!(s.game().state.players[1].life, 19);
+    assert_eq!(s.game().state.players[0].life, 20);
+    attack_and_settle(&mut s, warden, None);
+    assert_eq!(combat_red(&s), 1);
+}
+
+/// Firebending X reads the creature's power as the trigger resolves, so a
+/// pump before attacking adds more red.
+#[test]
+fn firebending_student_adds_red_equal_to_its_current_power() {
+    let mut s = five_color_setup(&["Firebending Student"]);
+    let student = s.force_permanent_on_battlefield(0, "Firebending Student");
+    s.game_mut().state.permanents[student]
+        .as_mut()
+        .unwrap()
+        .temp_power += 2;
+    attack_and_settle(&mut s, student, None);
+    assert_eq!(combat_red(&s), 3);
+}
+
+#[test]
+fn sun_warriors_firebend_for_each_creature_and_make_allies() {
+    let mut s = five_color_setup(&["Sun Warriors", "Gray Ogre"]);
+    let warriors = s.force_permanent_on_battlefield(0, "Sun Warriors");
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.set_player_mana_pool(0, "5");
+    activate(&mut s, warriors, 0);
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 1);
+    attack_and_settle(&mut s, warriors, None);
+    assert_eq!(combat_red(&s), 3, "Sun Warriors, Gray Ogre and the Ally");
+}
+
+#[test]
+fn master_pakku_makes_its_target_mill_one_card_per_lesson_in_your_graveyard() {
+    let mut s = five_color_setup(&["Master Pakku", "Firebending Lesson"]);
+    plant_in_graveyard(&mut s, 0, "Firebending Lesson");
+    plant_in_graveyard(&mut s, 0, "Firebending Lesson");
+    let pakku = s.force_permanent_on_battlefield(0, "Master Pakku");
+    let library = s.zone_size(1, ZoneType::Library);
+    attack_and_settle(&mut s, pakku, Some(Target::Player(PlayerId(1))));
+    assert_eq!(s.zone_size(1, ZoneType::Library), library - 2);
+    assert_eq!(s.zone_size(1, ZoneType::Graveyard), 2);
+}
+
+/// Unlike a fight, only the first target deals damage.
+#[test]
+fn rocky_rebuke_deals_one_sided_power_damage() {
+    let mut s = five_color_setup(&["Rocky Rebuke", "Craw Wurm", "Gray Ogre"]);
+    let wurm = s.force_permanent_on_battlefield(0, "Craw Wurm");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    cast(&mut s, "Rocky Rebuke");
+    assert!(!offered_targets(&s).contains(&Target::Permanent(ogre)));
+    assert!(s.choose_target(Target::Permanent(wurm)));
+    assert!(!offered_targets(&s).contains(&Target::Permanent(wurm)));
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert!(s.game().state.permanents[ogre].is_none());
+    assert_eq!(permanent(&s, wurm).damage, 0);
+}
+
+#[test]
+fn pirate_peddlers_grow_when_you_sacrifice_another_permanent() {
+    let mut s = five_color_setup(&["Pirate Peddlers", "Gray Ogre", "Weaponize the Monsters"]);
+    let peddlers = s.force_permanent_on_battlefield(0, "Pirate Peddlers");
+    assert!(keywords(&s, peddlers).deathtouch);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    sacrifice_to_weaponize(&mut s, ogre);
+    assert_eq!(counters(&s, peddlers), 1);
+}
+
+#[test]
+fn zhao_ruthless_admiral_pumps_your_team_when_you_sacrifice_another_permanent() {
+    let mut s = five_color_setup(&[
+        "Zhao, Ruthless Admiral",
+        "Gray Ogre",
+        "Weaponize the Monsters",
+    ]);
+    let zhao = s.force_permanent_on_battlefield(0, "Zhao, Ruthless Admiral");
+    let ogres = [
+        s.force_permanent_on_battlefield(0, "Gray Ogre"),
+        s.force_permanent_on_battlefield(0, "Gray Ogre"),
+    ];
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    sacrifice_to_weaponize(&mut s, ogres[0]);
+    assert_eq!(s.game().effective_power(zhao), 4);
+    assert_eq!(s.game().effective_power(ogres[1]), 3);
+    assert_eq!(s.game().effective_power(theirs), 2);
+    attack_and_settle(&mut s, zhao, None);
+    assert_eq!(combat_red(&s), 2);
+
+    // Its own sacrifice is not "another permanent".
+    let mut s = five_color_setup(&[
+        "Zhao, Ruthless Admiral",
+        "Gray Ogre",
+        "Weaponize the Monsters",
+    ]);
+    let zhao = s.force_permanent_on_battlefield(0, "Zhao, Ruthless Admiral");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    sacrifice_to_weaponize(&mut s, zhao);
+    assert_eq!(s.game().effective_power(ogre), 2);
+}
+
+/// Shrines count themselves as they enter; "another Shrine" triggers for each
+/// Shrine already in play.
+#[test]
+fn the_spirit_oasis_draws_per_shrine_then_one_per_later_shrine() {
+    let mut s = five_color_setup(&["The Spirit Oasis", "Northern Air Temple"]);
+    s.force_permanent_on_battlefield(0, "Northern Air Temple");
+    let hand = s.zone_size(0, ZoneType::Hand);
+    play_and_settle(&mut s, "The Spirit Oasis");
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 2);
+    play_and_settle(&mut s, "Northern Air Temple");
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 3);
+}
+
+#[test]
+fn northern_air_temple_drains_per_shrine_then_one_per_later_shrine() {
+    let mut s = five_color_setup(&["Northern Air Temple", "The Spirit Oasis"]);
+    s.force_permanent_on_battlefield(0, "The Spirit Oasis");
+    play_and_settle(&mut s, "Northern Air Temple");
+    assert_eq!(s.game().state.players[1].life, 18);
+    assert_eq!(s.game().state.players[0].life, 22);
+    play_and_settle(&mut s, "The Spirit Oasis");
+    assert_eq!(s.game().state.players[1].life, 17);
+    assert_eq!(s.game().state.players[0].life, 23);
+}
+
+#[test]
+fn southern_air_temple_counters_each_creature_per_shrine_then_one_per_later_shrine() {
+    let mut s = five_color_setup(&["Southern Air Temple", "The Spirit Oasis", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(0, "The Spirit Oasis");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    play_and_settle(&mut s, "Southern Air Temple");
+    assert_eq!(counters(&s, ogre), 2);
+    assert_eq!(counters(&s, theirs), 0);
+    play_and_settle(&mut s, "The Spirit Oasis");
+    assert_eq!(counters(&s, ogre), 3);
+}
+
+#[test]
+fn crescent_island_temple_makes_a_prowess_monk_per_shrine_then_one_per_later_shrine() {
+    let mut s = five_color_setup(&["Crescent Island Temple", "The Spirit Oasis"]);
+    s.force_permanent_on_battlefield(0, "The Spirit Oasis");
+    play_and_settle(&mut s, "Crescent Island Temple");
+    assert_eq!(s.battlefield_permanents_named(0, "Monk").len(), 2);
+    play_and_settle(&mut s, "The Spirit Oasis");
+    assert_eq!(s.battlefield_permanents_named(0, "Monk").len(), 3);
+}
+
+#[test]
+fn kyoshi_island_plaza_searches_up_to_one_basic_per_shrine_then_one_per_later_shrine() {
+    let mut s = five_color_setup(&["Kyoshi Island Plaza", "The Spirit Oasis"]);
+    s.force_permanent_on_battlefield(0, "The Spirit Oasis");
+    let lands = |s: &Scenario| {
+        ["Plains", "Island", "Swamp", "Mountain", "Forest"]
+            .into_iter()
+            .flat_map(|name| s.battlefield_permanents_named(0, name))
+            .collect::<Vec<_>>()
+    };
+    let before = lands(&s);
+    cast(&mut s, "Kyoshi Island Plaza");
+    for _ in 0..40 {
+        match s.action_space().kind {
+            ActionSpaceKind::Priority if s.game().state.stack_objects.is_empty() => break,
+            ActionSpaceKind::Priority => s.pass_priority(),
+            _ => s.step_action(0),
+        }
+    }
+    let after = lands(&s);
+    assert_eq!(after.len(), before.len() + 2);
+    assert!(after
+        .iter()
+        .filter(|id| !before.contains(id))
+        .all(|id| tapped(&s, *id)));
 }

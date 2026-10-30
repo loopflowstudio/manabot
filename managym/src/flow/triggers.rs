@@ -645,10 +645,12 @@ impl Game {
                 TriggerCondition::Sacrificed {
                     predicate,
                     controller_only,
+                    another,
                 },
                 GameEvent::PermanentSacrificed { card, controller },
             ) => {
                 (!controller_only || *controller == source_controller)
+                    && !(*another && *card == source_card)
                     && self.state.card_to_permanent[*card]
                         .is_some_and(|id| self.permanent_matches_predicate(id, predicate))
             }

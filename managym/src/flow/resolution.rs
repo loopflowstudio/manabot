@@ -34,6 +34,9 @@ impl Game {
         match value {
             EffectValue::X => i32::from(frame.x),
             EffectValue::ExcessDamage => frame.excess_damage,
+            EffectValue::SourcePower => self
+                .source_permanent_id(frame)
+                .map_or(0, |id| self.effective_power(id)),
             _ => self.controller_value(value, frame.controller),
         }
     }
@@ -43,7 +46,7 @@ impl Game {
     pub(crate) fn controller_value(&self, value: &EffectValue, controller: PlayerId) -> i32 {
         match value {
             EffectValue::Fixed(value) => *value,
-            EffectValue::X | EffectValue::ExcessDamage => 0,
+            EffectValue::X | EffectValue::ExcessDamage | EffectValue::SourcePower => 0,
             EffectValue::CreaturesWithCounters => self
                 .battlefield_permanents(controller)
                 .into_iter()
@@ -438,7 +441,8 @@ impl Game {
                     },
                     None => frame.controller,
                 };
-                for card in self.library_top(player, *count) {
+                let count = self.effect_value(count, frame).max(0) as usize;
+                for card in self.library_top(player, count) {
                     self.move_card(card, ZoneType::Graveyard);
                 }
                 None
@@ -522,7 +526,7 @@ impl Game {
             } => Some(Decision::SearchBasicLand {
                 player: frame.controller,
                 subtype: subtype.clone(),
-                remaining: *count,
+                remaining: self.effect_value(count, frame).max(0) as usize,
                 tapped: *tapped,
                 untap_if_lands: *untap_if_lands,
                 bottom_source: *bottom_source,
@@ -862,13 +866,40 @@ impl Game {
                 self.gain_life(frame.controller, amount);
                 None
             }
-            Effect::AddManaValue { mana, amount } => {
+            Effect::AddManaValue {
+                mana,
+                amount,
+                until_end_of_combat,
+            } => {
                 let count = self.effect_value(amount, frame).max(0);
                 self.journal_player(frame.controller);
                 self.invalidate_mana_cache(frame.controller);
+                let player = &mut self.state.players[frame.controller.0];
+                let pool = if *until_end_of_combat {
+                    &mut player.combat_mana_pool
+                } else {
+                    &mut player.mana_pool
+                };
                 for _ in 0..count {
-                    self.state.players[frame.controller.0].mana_pool.add(mana);
+                    pool.add(mana);
                 }
+                None
+            }
+            Effect::DrawCardsValue { count } => {
+                let count = self.effect_value(count, frame).max(0) as usize;
+                self.draw_cards(frame.controller, count);
+                None
+            }
+            Effect::LoseLife { amount } => {
+                self.change_life(frame.controller, -*amount);
+                None
+            }
+            Effect::DealDamageToEachOpponent { amount } => {
+                self.apply_player_damage(
+                    frame.source_ref,
+                    PlayerId(1 - frame.controller.0),
+                    *amount,
+                );
                 None
             }
             Effect::KeepUnspentRedMana => {
@@ -1601,6 +1632,7 @@ impl Game {
                 other,
             } => {
                 let source_permanent = self.source_permanent_id(frame);
+                let count = self.effect_value(count, frame);
                 for permanent_id in self.battlefield_permanents(frame.controller) {
                     if *other && Some(permanent_id) == source_permanent {
                         continue;
@@ -1608,7 +1640,7 @@ impl Game {
                     if !self.permanent_matches_predicate(permanent_id, predicate) {
                         continue;
                     }
-                    self.change_counters(permanent_id, CounterKind::PlusOnePlusOne, *count);
+                    self.change_counters(permanent_id, CounterKind::PlusOnePlusOne, count);
                 }
                 None
             }
