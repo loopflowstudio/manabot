@@ -64,6 +64,8 @@ exhaust, used once-each-turn, granted firebending) in text-5 wording
 
 ## Check
 
+2026-10-29 concept review 7 (headless): nothing to change, no open product choice. Review 6's shared `fill_foretold_slots` is in; `Action::Foretell` as a `PriorityActivateAbility` matches the plan. `lesson_mana` (now the total of any restriction) keeps its name: it is a frozen wire/v4-tensor field and `restricted_mana` carries the per-class split.
+
 2026-10-29 realign (after syncing T1 `2c50c8793`, scratch and one conformance replay only): plan matches code; `912a5d0e9` dropped the single-slot test, so cards is 304; debug `cargo test --test cards determinize` 2 pass.
 
 2026-10-29 implement (concept review 6): `determinize` and materialization share `fill_foretold_slots`; `determinize_fills_two_foretold_slots_with_distinct_cards` (F = 2, 256 seeds) fails on the old code and passes; debug lib 121, cards 305, rules 131 + 2 ignored, possible_worlds 8, prepared 3, search 11; clippy `--all-targets -D warnings` and fmt clean; extension rebuilt.

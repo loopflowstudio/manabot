@@ -1,60 +1,27 @@
 <!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>T2 concept review 6</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>T2 concept review 7</title>
 <style>
-  :root { color-scheme: light dark; --fg:#1d1b18; --bg:#faf8f3; --muted:#6b655c; --rule:#ddd6c8; --new:#2f6b3a; --old:#8a3b2e; --code:#efeadf; }
-  @media (prefers-color-scheme: dark) { :root { --fg:#e8e3d8; --bg:#1a1916; --muted:#a39c8f; --rule:#3a362f; --new:#8fca97; --old:#e39a8b; --code:#26241f; } }
+  :root { color-scheme: light dark; --fg:#1d1b18; --bg:#faf8f3; --muted:#6b655c; --code:#efeadf; }
+  @media (prefers-color-scheme: dark) { :root { --fg:#e8e3d8; --bg:#1a1916; --muted:#a39c8f; --code:#26241f; } }
   body { margin:0; background:var(--bg); color:var(--fg); font:16px/1.6 Georgia, serif; }
   main { max-width:44rem; margin:0 auto; padding:2.5rem 1.25rem 4rem; }
   h1 { font-size:1.6rem; margin:0 0 .3rem; } h2 { font-size:1.15rem; margin:2.2rem 0 .6rem; }
   .meta { color:var(--muted); font-size:.85rem; }
-  code, pre { font:13px/1.5 ui-monospace, Menlo, monospace; background:var(--code); border-radius:3px; }
-  code { padding:0 .25em; } pre { padding:.8rem 1rem; overflow-x:auto; }
-  .tag { font:600 .72rem ui-sans-serif, system-ui, sans-serif; letter-spacing:.05em; text-transform:uppercase; }
-  .old { color:var(--old); } .new { color:var(--new); }
-  section.cmp > div { border-left:3px solid var(--rule); padding-left:1rem; margin:1rem 0; }
-  ol li { margin:.4rem 0; }
-</style>
-</head>
-<body><main>
-<h1>T2 concept review 6 (headless)</h1>
-<p class="meta">Task 87e012 (TLA T2) · concept-review step · 2026-10-29 · PR #398 at <code>89e320c48</code> · built from <code>scratch/87e012-tla-t2-casting.md</code>, <code>scratch/questions.md</code>, <code>managym/src/flow/search.rs</code>, <code>managym/src/possible_worlds.rs</code>, <code>managym/src/flow/cast_permission.rs</code>, <code>managym/src/state/zone.rs</code></p>
+  code { font:13px/1.5 ui-monospace, Menlo, monospace; background:var(--code); border-radius:3px; padding:0 .25em; }
+</style></head><body><main>
+<h1>T2 concept review 7 (headless)</h1>
+<p class="meta">Task 87e012 (TLA T2) · concept-review step · 2026-10-29 · PR #398 at 31ea5b1ef · built from scratch/87e012-tla-t2-casting.md, scratch/questions.md, managym/src/agent/action.rs, managym/src/flow/action.rs, managym/src/agent/observation.rs</p>
 
 <h2>Decision needed</h2>
-<p>None from a person. Accepted direction (one card representation, viewer-safe foretell, possible worlds v3) already settles the one change below; it goes back to implement.</p>
+<p>None. The accepted direction leaves nothing to change, and no product question is open.</p>
 
 <h2>Actions → concepts → APIs</h2>
-<p>A player foretells a card: <code>Action::Foretell</code> exiles it face down; the <code>foretold</code> exile grant is the only authority that it is hidden and castable later. An opponent's search bot imagines what that card might be: <code>Game::determinize</code> (search) and <code>PossibleWorlds::materialize</code> (belief) refill each face-down slot from the unseen pool, using <code>Game::resample_foretold(old, new)</code>.</p>
+<p>A player foretells a card with <code>Action::Foretell</code>, which is offered as a <code>PriorityActivateAbility</code> labelled "Foretell X". The <code>foretold</code> exile grant is the only authority for that face-down card. The search bot (<code>Game::determinize</code>) and possible-worlds materialization now share <code>Game::fill_foretold_slots</code>, as review 6 directed. Restricted mana appears in two forms: <code>restricted_mana</code> gives it per class, and <code>lesson_mana</code> gives the total.</p>
 
-<h2>The mismatch</h2>
-<section class="cmp">
-<div><p class="tag old">Existing — determinize</p>
-<pre>for old in foretold {
-    new = first foretell card in shuffled residual  // may be another foretold card
-    if new != old { resample_foretold(opponent, old, new) }
-}</pre>
-<p>With two foretold cards A and B, slot A can take B: exile holds B twice and A is zoneless. The next step may draw A, which <code>resample_foretold</code> silently skips (A has no object ref), and A then leaves every zone. Reachable with two Sozin's Comets foretold — a legal four-of deck — whenever a search bot plays against it. The note calling this unreachable assumed one foretold card at a time.</p></div>
-<div><p class="tag new">Proposed — one slot fill for both callers</p>
-<pre>chosen = first F foretell cards of the shuffled unseen pool
-keep slots whose card was chosen
-swap each vacated slot for one incoming chosen card</pre>
-<p>This is exactly what <code>materialize</code> already does (concept review 5). Determinize and materialization share one helper, so the "every card in one zone, one grant per foretold card" invariant has one owner.</p></div>
-</section>
-
-<h2>Normal path, failure, recovery</h2>
-<p>Normal: F = 0 or 1 behaves as today. Failure the change prevents: F = 2 corrupting zones in a search branch. Recovery: nothing to recover; branches are disposable, and the real game state is never resampled. Counterexample that would invalidate the change: a slot whose card must stay fixed for reasons other than being chosen — none exists, because the owner's view never determinizes their own foretold cards.</p>
-
-<h2>Next implement direction</h2>
-<ol>
-<li>Extract the slot-fill from <code>possible_worlds.rs</code> into one <code>Game</code> helper; call it from <code>Game::determinize</code>.</li>
-<li>Directed test: F = 2 foretold cards, many seeds — every card in exactly one zone, exile size unchanged, one foretold grant per slot.</li>
-<li>Rebuild the extension; rerun debug lib, cards and possible-worlds tests.</li>
-</ol>
+<h2>Considered and kept</h2>
+<p><code>lesson_mana</code> now totals every restriction class (Lesson, Shrine and Ally), so the name is narrower than what it counts. It is a frozen surface: it appears in the experience schema, in v4 tensor columns 34–40, and in the Academy and text readers. Renaming it would break those readers without changing what anyone can see. The per-class detail is already in <code>restricted_mana</code>, and this was recorded as an operator choice. It stays as it is.</p>
 
 <h2>Questions</h2>
-<p>No open product choice. Belief-side priors that still ignore foretold cards (<code>belief/range.py</code>, <code>belief/encoding.py</code>) remain a recorded follow-up for belief owners, outside T2.</p>
-</main></body>
-</html>
+<ol><li>None open. Belief priors that do not yet account for foretold cards (<code>belief/range.py</code>, <code>belief/encoding.py</code>) are still a recorded follow-up outside T2.</li></ol>
+</main></body></html>
