@@ -61,3 +61,9 @@ byte-identical to `run.log` and `foretell.log`. Advance.
 No tracked change outside `scratch/` since `a5587df5a`; T1 #394 still open at
 `2c50c8793`. `t2_demo.py … 60` and `t2_demo_foretell.py` outputs byte-identical to
 `run.log` and `foretell.log` (60 games, winners 24/36, no errors). Advance.
+
+## Re-run, decision pass 1 at `4d99796a4` (2026-10-30)
+
+No tracked change outside `scratch/` since `8220f8332`; T1 #394 still open at
+`2c50c8793`. `t2_demo.py … 60` and `t2_demo_foretell.py` outputs byte-identical to
+`run.log` and `foretell.log` (60 games, winners 24/36, no errors, 0 face-down leaks). Advance.
