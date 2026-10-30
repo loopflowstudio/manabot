@@ -32,8 +32,7 @@ impl Game {
         let card = source.card;
         let controller = source.controller;
         let sources = self.snapshot_trigger_sources();
-        self.journal_turn();
-        self.state.turn.history[controller.0].permanents_sacrificed += 1;
+        self.update_turn_history(controller, |history| history.permanents_sacrificed += 1);
         self.emit(GameEvent::PermanentSacrificed { card, controller });
         self.process_game_events_with_sources(&sources);
         self.move_card(card, ZoneType::Graveyard);
@@ -223,8 +222,7 @@ impl Game {
                 if let Some(capture) = &mut self.card_capture {
                     capture.drawing = None;
                 }
-                self.journal_turn();
-                self.state.turn.history[player.0].cards_drawn += 1;
+                self.update_turn_history(player, |history| history.cards_drawn += 1);
                 self.emit(GameEvent::CardDrawn {
                     player,
                     nth_this_turn: self.state.turn.history[player.0].cards_drawn,
@@ -535,11 +533,8 @@ impl Game {
             permanent.counters = entry.counters;
             event_controller = permanent.controller;
             self.state.permanents.push(Some(permanent));
-            if self.state.cards[card].types.is_land()
-                && !self.state.turn.history[holder.0].land_entered
-            {
-                self.journal_turn();
-                self.state.turn.history[holder.0].land_entered = true;
+            if self.state.cards[card].types.is_land() {
+                self.update_turn_history(holder, |history| history.land_entered = true);
             }
             if self.state.card_to_permanent.len() <= card.0 {
                 self.state.card_to_permanent.resize(card.0 + 1, None);

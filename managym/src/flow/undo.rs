@@ -19,7 +19,7 @@ use crate::{
         game::{Game, PendingChoice},
         priority::PriorityState,
         trigger::{DelayedTrigger, ExileLink, PendingTrigger, TriggerPlacement},
-        turn::TurnState,
+        turn::{PlayerTurnHistory, TurnState},
     },
     state::{
         card::CardDefId,
@@ -593,6 +593,21 @@ impl Game {
 
     pub(crate) fn journal_turn(&mut self) {
         self.record_undo(UndoEntry::Turn(Box::new(self.state.turn.clone())));
+    }
+
+    /// Apply `update` to `player`'s turn history, journaling the turn only
+    /// when a fact actually changes (the journal clones the whole turn).
+    pub(crate) fn update_turn_history(
+        &mut self,
+        player: PlayerId,
+        update: impl FnOnce(&mut PlayerTurnHistory),
+    ) {
+        let mut history = self.state.turn.history[player.0];
+        update(&mut history);
+        if history != self.state.turn.history[player.0] {
+            self.journal_turn();
+            self.state.turn.history[player.0] = history;
+        }
     }
 
     pub(crate) fn journal_priority(&mut self) {

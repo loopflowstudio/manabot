@@ -181,16 +181,15 @@ def _selectors(mode: int | None, ability: int | None) -> list[str]:
 
 def _turn_history(history: managym.PlayerTurnHistory) -> str:
     """What a player has done this turn, or empty when nothing yet."""
-    parts = [
-        *(["attacked"] if history.attacked else []),
-        *(
-            [f"sacrificed {history.permanents_sacrificed} permanents"]
-            if history.permanents_sacrificed
-            else []
-        ),
-        *(["had a land enter under their control"] if history.land_entered else []),
-        *([f"drew {history.cards_drawn} cards"] if history.cards_drawn else []),
-    ]
+    parts = []
+    if history.attacked:
+        parts.append("attacked")
+    if history.permanents_sacrificed:
+        parts.append(f"sacrificed {history.permanents_sacrificed} permanents")
+    if history.land_entered:
+        parts.append("had a land enter under their control")
+    if history.cards_drawn:
+        parts.append(f"drew {history.cards_drawn} cards")
     return "; ".join(parts)
 
 

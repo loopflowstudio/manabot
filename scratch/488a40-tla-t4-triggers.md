@@ -105,3 +105,6 @@ rebuilt; `tests/verify/test_observation_parity.py`,
 `tests/academy/test_experience_protocol.py`,
 `tests/semantic/test_current_content.py`, `tests/model/test_attachment_join.py`
 pass.
+Compress (2026-10-30): turn-history writes go through `Game::update_turn_history`
+(journals only on change); one `attack_and_settle` card-test helper. Debug
+`cargo test`, clippy and `test_text_observation.py` pass.

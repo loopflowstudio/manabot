@@ -10125,20 +10125,30 @@ fn revised_forty_card_deck_completes_and_replays_every_command_exactly() {
     }
 }
 
-/// Attack with player 0's `attacker` from main phase 1 and resolve every
-/// attack trigger, answering target choices with `target`.
-fn attack_and_settle(s: &mut Scenario, attacker: PermanentId, target: Option<Target>) {
-    clear_summoning_sickness(s, attacker);
+/// Attack with player 0's `attackers` from main phase 1, declining the rest,
+/// and resolve every attack trigger: target choices take `target` when given,
+/// other choices their first offered option.
+fn attack_and_settle(s: &mut Scenario, attackers: &[PermanentId], target: Option<Target>) {
+    for attacker in attackers {
+        clear_summoning_sickness(s, *attacker);
+    }
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
-    attack_with(s, attacker);
-    for _ in 0..40 {
-        match s.action_space().kind {
-            ActionSpaceKind::ChooseTarget => {
-                assert!(s.choose_target(target.expect("a target choice")));
-            }
-            ActionSpaceKind::OrderTriggers => s.step_action(0),
-            ActionSpaceKind::Priority if s.game().state.stack_objects.is_empty() => return,
-            _ => s.pass_priority(),
+    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+        let index = s.action_space().actions.iter().position(|action| {
+            matches!(action, Action::DeclareAttacker { permanent, attack: true, .. }
+                if attackers.contains(permanent))
+        });
+        match index {
+            Some(index) => s.step_action(index),
+            None => s.decline_attack(),
+        }
+    }
+    for _ in 0..60 {
+        match (s.action_space().kind, target) {
+            (ActionSpaceKind::ChooseTarget, Some(target)) => assert!(s.choose_target(target)),
+            (ActionSpaceKind::Priority, _) if s.game().state.stack_objects.is_empty() => return,
+            (ActionSpaceKind::Priority, _) => s.pass_priority(),
+            _ => s.step_action(0),
         }
     }
     panic!("attack triggers did not settle");
@@ -10168,7 +10178,7 @@ fn sacrifice_to_weaponize(s: &mut Scenario, victim: PermanentId) {
 fn azula_on_the_hunt_firebends_two_then_loses_life_for_a_clue_on_attack() {
     let mut s = five_color_setup(&["Azula, On the Hunt"]);
     let azula = s.force_permanent_on_battlefield(0, "Azula, On the Hunt");
-    attack_and_settle(&mut s, azula, None);
+    attack_and_settle(&mut s, &[azula], None);
     assert_eq!(combat_red(&s), 2);
     assert_eq!(s.game().state.players[0].life, 19, "life loss, not damage");
     assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
@@ -10184,7 +10194,7 @@ fn vindictive_warden_pings_each_opponent_and_firebends_one() {
     settle(&mut s);
     assert_eq!(s.game().state.players[1].life, 19);
     assert_eq!(s.game().state.players[0].life, 20);
-    attack_and_settle(&mut s, warden, None);
+    attack_and_settle(&mut s, &[warden], None);
     assert_eq!(combat_red(&s), 1);
 }
 
@@ -10198,7 +10208,7 @@ fn firebending_student_adds_red_equal_to_its_current_power() {
         .as_mut()
         .unwrap()
         .temp_power += 2;
-    attack_and_settle(&mut s, student, None);
+    attack_and_settle(&mut s, &[student], None);
     assert_eq!(combat_red(&s), 3);
 }
 
@@ -10212,7 +10222,7 @@ fn sun_warriors_firebend_for_each_creature_and_make_allies() {
     activate(&mut s, warriors, 0);
     settle(&mut s);
     assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 1);
-    attack_and_settle(&mut s, warriors, None);
+    attack_and_settle(&mut s, &[warriors], None);
     assert_eq!(combat_red(&s), 3, "Sun Warriors, Gray Ogre and the Ally");
 }
 
@@ -10223,7 +10233,7 @@ fn master_pakku_makes_its_target_mill_one_card_per_lesson_in_your_graveyard() {
     plant_in_graveyard(&mut s, 0, "Firebending Lesson");
     let pakku = s.force_permanent_on_battlefield(0, "Master Pakku");
     let library = s.zone_size(1, ZoneType::Library);
-    attack_and_settle(&mut s, pakku, Some(Target::Player(PlayerId(1))));
+    attack_and_settle(&mut s, &[pakku], Some(Target::Player(PlayerId(1))));
     assert_eq!(s.zone_size(1, ZoneType::Library), library - 2);
     assert_eq!(s.zone_size(1, ZoneType::Graveyard), 2);
 }
@@ -10271,7 +10281,7 @@ fn zhao_ruthless_admiral_pumps_your_team_when_you_sacrifice_another_permanent() 
     assert_eq!(s.game().effective_power(zhao), 4);
     assert_eq!(s.game().effective_power(ogres[1]), 3);
     assert_eq!(s.game().effective_power(theirs), 2);
-    attack_and_settle(&mut s, zhao, None);
+    attack_and_settle(&mut s, &[zhao], None);
     assert_eq!(combat_red(&s), 2);
 
     // Its own sacrifice is not "another permanent".
@@ -10426,33 +10436,6 @@ fn benevolent_river_spirit_requires_waterbend_five_and_scries_on_entry() {
     assert!(s.game().state.cards[spirit].ward.is_some());
 }
 
-/// Declare every listed creature as an attacker, decline the rest, and
-/// resolve attack triggers taking the first offered option of each choice.
-fn attack_with_all(s: &mut Scenario, attackers: &[PermanentId]) {
-    for attacker in attackers {
-        clear_summoning_sickness(s, *attacker);
-    }
-    s.advance_to_active_step(0, StepKind::DeclareAttackers);
-    while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
-        let index = s.action_space().actions.iter().position(|action| {
-            matches!(action, Action::DeclareAttacker { permanent, attack: true, .. }
-                if attackers.contains(permanent))
-        });
-        match index {
-            Some(index) => s.step_action(index),
-            None => s.decline_attack(),
-        }
-    }
-    for _ in 0..60 {
-        match s.action_space().kind {
-            ActionSpaceKind::Priority if s.game().state.stack_objects.is_empty() => return,
-            ActionSpaceKind::Priority => s.pass_priority(),
-            _ => s.step_action(0),
-        }
-    }
-    panic!("attack triggers did not settle");
-}
-
 /// "They" is the caster, whichever player that is; creature spells do not
 /// trigger it.
 #[test]
@@ -10492,7 +10475,7 @@ fn sokka_lateral_strategist_draws_only_when_attacking_with_another_creature() {
     let sokka = s.force_permanent_on_battlefield(0, "Sokka, Lateral Strategist");
     s.force_permanent_on_battlefield(0, "Gray Ogre");
     let hand = s.zone_size(0, ZoneType::Hand);
-    attack_with_all(&mut s, &[sokka]);
+    attack_and_settle(&mut s, &[sokka], None);
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand, "the Ogre stays home");
     assert!(!tapped(&s, sokka), "vigilance");
 
@@ -10500,7 +10483,7 @@ fn sokka_lateral_strategist_draws_only_when_attacking_with_another_creature() {
     let sokka = s.force_permanent_on_battlefield(0, "Sokka, Lateral Strategist");
     let ogre_too = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let hand = s.zone_size(0, ZoneType::Hand);
-    attack_with_all(&mut s, &[sokka, ogre_too]);
+    attack_and_settle(&mut s, &[sokka, ogre_too], None);
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 1);
 }
 
@@ -10522,7 +10505,7 @@ fn the_earth_king_makes_a_bear_and_ramps_once_per_large_attacker() {
     };
     let before = lands(&s);
     clear_summoning_sickness(&mut s, bear);
-    attack_with_all(&mut s, &[king, bear, wurm]);
+    attack_and_settle(&mut s, &[king, bear, wurm], None);
     assert_eq!(
         lands(&s),
         before + 2,
@@ -10536,14 +10519,14 @@ fn bitter_work_draws_for_a_large_attacker_and_exhausts_into_earthbend_four() {
     s.force_permanent_on_battlefield(0, "Bitter Work");
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let hand = s.zone_size(0, ZoneType::Hand);
-    attack_with_all(&mut s, &[ogre]);
+    attack_and_settle(&mut s, &[ogre], None);
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand, "power 2");
 
     let mut s = five_color_setup(&["Bitter Work", "Craw Wurm", "Forest"]);
     let work = s.force_permanent_on_battlefield(0, "Bitter Work");
     let wurm = s.force_permanent_on_battlefield(0, "Craw Wurm");
     let hand = s.zone_size(0, ZoneType::Hand);
-    attack_with_all(&mut s, &[wurm]);
+    attack_and_settle(&mut s, &[wurm], None);
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 1);
 
     s.advance_to_active_step(0, StepKind::PostcombatMain);
@@ -10618,7 +10601,7 @@ fn fire_nation_raider_makes_a_clue_only_after_you_attacked() {
     assert!(s.battlefield_permanents_named(0, "Clue").is_empty());
 
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
-    attack_and_settle(&mut s, ogre, None);
+    attack_and_settle(&mut s, &[ogre], None);
     s.advance_to_active_step(0, StepKind::PostcombatMain);
     enter_and_settle(&mut s, "Fire Nation Raider");
     assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
@@ -10638,7 +10621,7 @@ fn fire_nation_engineer_counters_another_creature_or_vehicle_after_you_attacked(
     assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
 
     s.advance_to_active_step(0, StepKind::Main);
-    attack_and_settle(&mut s, ogre, None);
+    attack_and_settle(&mut s, &[ogre], None);
     s.advance_to_active_step(0, StepKind::End);
     assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
     let targets = offered_targets(&s);
@@ -10661,7 +10644,7 @@ fn cruel_administrator_enters_with_a_counter_after_a_raid_and_makes_soldiers() {
     let first = permanent_named(&s, "Cruel Administrator");
     assert_eq!(counters(&s, first), 0);
 
-    attack_and_settle(&mut s, first, None);
+    attack_and_settle(&mut s, &[first], None);
     let soldiers = s.battlefield_permanents_named(0, "Soldier");
     assert_eq!(soldiers.len(), 1);
     assert!(
@@ -10751,7 +10734,7 @@ fn obsessive_pursuit_counters_an_attacker_per_sacrifice_this_turn() {
             s.game().state.turn.history[0].permanents_sacrificed,
             sacrifices
         );
-        attack_and_settle(&mut s, attacker, Some(Target::Permanent(attacker)));
+        attack_and_settle(&mut s, &[attacker], Some(Target::Permanent(attacker)));
         assert_eq!(counters(&s, attacker), sacrifices as i32);
         assert_eq!(keywords(&s, attacker).lifelink, lifelink, "{sacrifices}");
     }
