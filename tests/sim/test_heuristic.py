@@ -189,6 +189,17 @@ def test_polarity_is_derived_for_every_targeted_spell_in_the_pool() -> None:
         "Origin of Metalbending": None,
         "Sokka's Haiku": None,
         "True Ancestry": None,
+        # TLA T2: earthbending one's own land, and effects (airbend, linked
+        # exile, hand reveal, graveyard return) the heuristic does not rate.
+        "Earthbending Lesson": "beneficial",
+        "Rockalanche": "beneficial",
+        "Airbender's Reversal": None,
+        "Airbending Lesson": None,
+        "Avatar's Wrath": None,
+        "Dai Li Indoctrination": None,
+        "Lost Days": None,
+        "Sandbenders' Storm": None,
+        "Zuko's Conviction": None,
     }
     combustion = spells["Combustion Technique"]
     assert (combustion.damage, combustion.lesson_damage) == (2, True)

@@ -143,3 +143,8 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
 - Fire Nation Attacks now produces Soldier, so it left `TOKENS_AWAITING_PRODUCER`.
 - AGENTS.md T2 note on `Cost.zone`/`Program::landcycling` named the removed IR;
   rewritten as `ActivatedAbilityDefinition.zone` (`ActivationZone`).
+- `manabot/sim/heuristic.py` reads T2's activated-ability `effects` list and
+  skips hand/graveyard abilities (landcycling, foretell) when picking prompt,
+  spare-mana and pump abilities. T2's nine new targeted spells are pinned in
+  `test_heuristic.py`; the seven it cannot rate (airbend, linked exile, …) get
+  polarity `None`, the documented neutral fallback.

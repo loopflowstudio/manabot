@@ -306,13 +306,16 @@ def abilities() -> Abilities:
     for definition in _definitions():
         name = definition["name"]
         for ability in definition.get("activated_abilities", []):
-            kind, body = _variant(ability["effect"])
-            if kind == "SearchBasicLand":
-                prompt.add(name)
-            elif kind in {"DrawCards", "GainLife"}:
-                spare.add(name)
-            elif kind == "ModifyUntilEot" and body["power_delta"] > 0:
-                pump.add(name)
+            if ability.get("zone", "Battlefield") != "Battlefield":
+                continue
+            for effect in ability["effects"]:
+                kind, body = _variant(effect)
+                if kind == "SearchBasicLand":
+                    prompt.add(name)
+                elif kind in {"DrawCards", "GainLife"}:
+                    spare.add(name)
+                elif kind == "ModifyUntilEot" and body["power_delta"] > 0:
+                    pump.add(name)
     return Abilities(frozenset(prompt), frozenset(spare), frozenset(pump))
 
 
