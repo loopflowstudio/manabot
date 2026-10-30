@@ -179,6 +179,11 @@ The Python deck/training/checkpoint surface (`Deck`, `DeckIssue`,
 content/pool/pack; the two selectors were renamed below. Rust admission reading
 `content_pool(WORLD_POOL)` is main's internal descriptor plumbing, not a
 surface.
+Re-review (2026-10-30, headless, after the selector rename at 3c440d53a): no
+change implied. Selector values name a world (`"world"` = installed, or an
+authored world such as `elemental-world-v2`); main's `TrainingRegime.world`
+keeps its version tag (`w17`) and is frozen regime vocabulary, so it is not
+renamed. Every steer through the selector rename is reflected; no open choice.
 
 ## Selector rename — done (2026-10-30 evening)
 
