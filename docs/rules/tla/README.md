@@ -1,8 +1,9 @@
 # TLA content
 
 TLA cards are engine `CardDefinition` functions in
-[`managym/src/cardsets/tla.rs`](../../../managym/src/cardsets/tla.rs), with the
-fixed tokens TLA cards make. Basic lands are Alpha cards (`lea.plains` …
+[`managym/src/cardsets/tla.rs`](../../../managym/src/cardsets/tla.rs); the
+fixed tokens TLA cards make are in
+[`tokens.rs`](../../../managym/src/cardsets/tokens.rs) with every other token. Basic lands are Alpha cards (`lea.plains` …
 `lea.forest` in `lea.rs`); TLA decks admit them as basics. TLA reprints live in
 the set that first printed them (Corrupt Court Official in `ptk.rs`, Epic
 Downfall in `eld.rs`, Lightning Strike in `ths.rs`). Setup manifests only choose

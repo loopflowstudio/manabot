@@ -43,8 +43,7 @@ def source_identity():
             relative = path.relative_to(ROOT).as_posix()
             files[relative] = {"path": relative, "sha256": _sha256(path.read_bytes())}
     for relative in (
-        "scripts/verify-learn-lesson",
-        "content/semantic/v1/learning_schema.json",
+        "content/semantic/current/learning_schema.json",
         "tests/model/test_world.py",
         "tests/model/test_semantic_cards.py",
         "tests/semantic/test_learn_contract.py",
@@ -99,7 +98,9 @@ def verify_attempt(result):
     ]
     _equal("registration", 0, "seed", result["seed"], config.seed)
     _equal(
-        "registration", 0, "setups",
+        "registration",
+        0,
+        "setups",
         [(p.decklist, p.sideboard) for p in expected],
         [(p.decklist, p.sideboard) for p in config.to_rust()],
     )

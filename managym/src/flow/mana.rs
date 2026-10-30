@@ -9,7 +9,7 @@ use crate::{
     flow::game::Game,
     state::{
         ability::Effect,
-        card::ActivatedAbilityDefinition,
+        card::{ActivatedAbilityDefinition, StaticAbility},
         game_object::{PermanentId, PlayerId},
         mana::{Mana, ManaCost, ManaUse},
     },
@@ -457,11 +457,13 @@ impl Game {
         let mut abilities = card.activated_abilities.clone();
         for grant in self.battlefield_permanents(source.controller) {
             let grant = self.state.permanents[grant].as_ref().unwrap();
-            if self.state.cards[grant.card]
-                .mana_grant
-                .iter()
-                .any(|predicate| self.permanent_matches_predicate(permanent, predicate))
-            {
+            if self.state.cards[grant.card].statics.iter().any(|ability| {
+                matches!(
+                    ability,
+                    StaticAbility::GrantsAnyColorManaAbility(predicate)
+                        if self.permanent_matches_predicate(permanent, predicate)
+                )
+            }) {
                 abilities.push(ActivatedAbilityDefinition {
                     tap_source: true,
                     effects: vec![Effect::any_color_mana()],

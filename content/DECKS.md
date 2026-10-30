@@ -1,9 +1,9 @@
 # Decks
 
 The current training matchup, from the *Avatar: The Last Airbender* set. The
-canonical source is
-[`semantic/v1/two_deck.source.json`](semantic/v1/two_deck.source.json); update
-this page when it changes.
+canonical source is the `two_deck` setup in
+[`semantic/current/setups.json`](semantic/current/setups.json); update this page
+when it changes.
 
 Sideboards hold the Lessons that Learn can fetch.
 

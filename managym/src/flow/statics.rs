@@ -22,7 +22,7 @@ use crate::{
     flow::game::Game,
     state::{
         ability::StaticCondition,
-        card::{Keywords, PowerCda, StaticScope},
+        card::{Keywords, PowerCda, StaticAbility, StaticScope},
         game_object::{CardId, PermanentId, PlayerId},
         predicate::CardPredicate,
         zone::ZoneType,
@@ -53,7 +53,7 @@ impl Game {
         let card = &self.state.cards[permanent.card];
 
         // Layer 7a: base P/T (characteristic-defining, or printed).
-        let base_power = match &card.power_cda {
+        let base_power = match card.power_cda() {
             Some(cda) => self.cda_power(cda, permanent.controller),
             None => card.power.unwrap_or(0),
         };
@@ -101,7 +101,11 @@ impl Game {
         for player in [PlayerId(0), PlayerId(1)] {
             for source_card_id in self.state.zones.zone_cards(ZoneType::Battlefield, player) {
                 let card = &self.state.cards[source_card_id];
-                if card.static_pt_buffs.is_empty() {
+                if !card
+                    .statics
+                    .iter()
+                    .any(|ability| matches!(ability, StaticAbility::PtBuff(_)))
+                {
                     continue;
                 }
                 let Some(source_perm_id) = self.state.card_to_permanent[source_card_id] else {
@@ -110,7 +114,10 @@ impl Game {
                 let Some(source_perm) = self.state.permanents[source_perm_id].as_ref() else {
                     continue;
                 };
-                for buff in &card.static_pt_buffs {
+                for ability in &card.statics {
+                    let StaticAbility::PtBuff(buff) = ability else {
+                        continue;
+                    };
                     let applies = match &buff.scope {
                         StaticScope::This => source_perm_id == target_id,
                         StaticScope::OtherYouControl(predicate) => {
@@ -152,8 +159,7 @@ impl Game {
         granted_flash
             || card.is_instant_speed()
             || card
-                .flash_if
-                .as_ref()
+                .flash_if()
                 .is_some_and(|condition| self.check_static_condition(condition, player))
     }
 

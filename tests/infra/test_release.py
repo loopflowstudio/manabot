@@ -43,7 +43,7 @@ def test_release_projects_preserve_native_paths_and_runtime_data(
     assert not (bot / "manabot/arena").exists()
     assert not (bot / "managym/pyproject.toml").exists()
     assert not (bot / "managym/libmanagym.dylib.dSYM").exists()
-    assert (bot / "content/semantic/v1/generated/two_deck.ir.json").is_file()
+    assert (bot / "content/semantic/current/setups.json").is_file()
     assert (bot / "academy/ui/src/lib/packs/elemental-world/v2/manifest.json").is_file()
     assert (bot / "protocol/experience-v1.schema.json").read_bytes() == (
         ROOT / "protocol/experience-v1.schema.json"

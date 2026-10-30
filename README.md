@@ -36,11 +36,11 @@ as typed objects, plus the list of legal actions with the objects each one
 targets.
 
 **Cards as typed programs.** Cards are not parsed from Oracle text and not
-hand-coded per card name. Each card is authored as a typed program
-([content/semantic/](content/semantic/README.md)), compiled to an IR, and run
-by a generic interpreter that rejects anything it cannot execute. The model can
-embed what a card *does* as well as its name, and most new cards are content
-changes rather than engine changes. Rules behavior is pinned by conformance
+hand-coded per card name. Each card is one Rust function returning the
+engine's own `CardDefinition`, written in its rules types
+([content/semantic/](content/semantic/README.md)), and new behavior is a new
+rules variant rather than card-specific logic. The model can embed what a card
+*does* as well as its name: learning tokens derive from the same definitions. Rules behavior is pinned by conformance
 fixtures ([conformance/](conformance/)).
 
 **Versioned worlds.** The observation and action encoding is versioned as a

@@ -43,6 +43,9 @@ class LearningCatalog(TypedDict):
 def learning_catalog(pack_key: str | None = None) -> LearningCatalog:
     """Learning tokens for every definition of a pack, rows by CardDefId."""
 
+def card_definitions_json(pack_key: str | None = None) -> str:
+    """Every pack definition as the JSON its learning tokens serialize."""
+
 def learning_token_value(name: str) -> int:
     """The learning catalog's stable token value for a Rust or printed name."""
 

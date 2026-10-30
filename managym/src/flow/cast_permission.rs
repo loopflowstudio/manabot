@@ -135,7 +135,7 @@ impl Game {
     /// their hand, during their turn, with {2} available (CR 702.143a).
     pub(crate) fn can_foretell(&self, player: PlayerId, card: CardId) -> bool {
         self.active_player() == player
-            && self.state.cards[card].foretell.is_some()
+            && self.state.cards[card].foretell().is_some()
             && self.state.zones.contains(card, ZoneType::Hand, player)
             && self.can_pay_mana_cost(player, &ManaCost::parse(FORETELL_ACTION_COST))
     }
@@ -185,14 +185,14 @@ impl Game {
         let slots = self.foretold_cards(player);
         let bearers = pool
             .iter()
-            .filter(|card| self.state.cards[**card].foretell.is_some())
+            .filter(|card| self.state.cards[**card].foretell().is_some())
             .count();
         if bearers < slots.len() {
             return false;
         }
         let mut chosen = Vec::with_capacity(slots.len());
         pool.retain(|card| {
-            let take = chosen.len() < slots.len() && self.state.cards[*card].foretell.is_some();
+            let take = chosen.len() < slots.len() && self.state.cards[*card].foretell().is_some();
             if take {
                 chosen.push(*card);
             }
@@ -371,7 +371,7 @@ impl Game {
             return None;
         }
         let cost = if grant.foretold {
-            definition.foretell.clone()?
+            definition.foretell().cloned()?
         } else {
             grant
                 .cost

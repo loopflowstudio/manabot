@@ -200,9 +200,8 @@ def commit_all(root: Path, message: str) -> None:
 def make_source_repo(tmp_path: Path) -> Path:
     root = tmp_path / "source"
     files = {
-        "content/semantic/v1/coverage.evidence.json": "{}\n",
-        "content/semantic/v1/generated/two_deck.ir.json": "{}\n",
-        "content/semantic/v1/two_deck.source.json": "{}\n",
+        "content/semantic/current/learning_schema.json": "{}\n",
+        "content/semantic/current/setups.json": "{}\n",
         "docs/benchmarks/search-branching-contract-v1.md": "# contract\n",
         "docs/benchmarks/dense-page-cow-prereg-v1.md": "# prereg\n",
         "managym/Cargo.lock": "# lock\n",
@@ -210,9 +209,8 @@ def make_source_repo(tmp_path: Path) -> Path:
             '[package]\nname = "source-fixture"\nversion = "0.1.0"\n'
         ),
         "managym/src/lib.rs": (
-            'const IR: &str = include_str!("../../content/semantic/v1/generated/two_deck.ir.json");\n'
-            'const SOURCE: &[u8] = include_bytes!("../../content/semantic/v1/two_deck.source.json");\n'
-            'const COVERAGE: &[u8] = include_bytes!("../../content/semantic/v1/coverage.evidence.json");\n'
+            'const SCHEMA: &str = include_str!("../../content/semantic/current/learning_schema.json");\n'
+            'const SETUPS: &str = include_str!("../../content/semantic/current/setups.json");\n'
         ),
         "managym/tests/smoke.rs": "#[test]\nfn smoke() {}\n",
         "pyproject.toml": '[project]\nname = "source-fixture"\nversion = "0.1.0"\n',
@@ -285,12 +283,12 @@ def test_dirty_admitted_input_fails_closed(tmp_path: Path, state: str) -> None:
 
 def test_new_external_compile_time_input_fails_inventory(tmp_path: Path) -> None:
     root = make_source_repo(tmp_path)
-    extra = root / "content/semantic/v1/new.json"
+    extra = root / "content/semantic/current/new.json"
     extra.write_text("{}\n")
     library = root / "managym/src/lib.rs"
     library.write_text(
         library.read_text()
-        + 'const NEW: &str = include_str!("../../content/semantic/v1/new.json");\n'
+        + 'const NEW: &str = include_str!("../../content/semantic/current/new.json");\n'
     )
     with pytest.raises(RuntimeError, match="input inventory mismatch"):
         bench.production_compile_time_inputs(root=root)
