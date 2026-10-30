@@ -42,3 +42,10 @@ allow it, and foretell stays private. No defect; advanced to the gate.
 
 - In-browser Academy proof (a person foretelling and casting from exile) is left to PR review (`./scripts/play`) or Playwright.
 - Not in the demo decks, covered by directed tests in `managym/tests/cards/tla.rs`: Merchant of Many Hats, Yue, Avatar's Wrath, Lost Days.
+
+## Re-run, decision pass 1 after T2 implement/compress/realign/concept review 8 (2026-10-29, `f821ee4c0`)
+
+No `managym/src` or extension change since `63e5fe407`; later commits re-recorded
+w18 evidence and scratch only. Re-ran `t2_demo.py … 60` and `t2_demo_foretell.py`
+against the current extension: both outputs byte-identical to `run.log` and
+`foretell.log` (60 games, winners 24/36, no errors, 0 face-down leaks). Advance.
