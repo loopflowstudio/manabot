@@ -228,7 +228,9 @@ Default-pack `CardDefId` order lives in `cards/content_pack.rs` (`LEGACY_ORDER`)
 Card tests mirror the set files: `managym/tests/cards/<set>.rs`, one module per
 set under the single `tests/cards.rs` target. Both test targets mount
 `tests/support/` (`game.rs` builds, `play.rs` acts, `inspect.rs` reads), each
-primitive defined once.
+primitive defined once. `five_color_setup` decks hold four copies of each listed
+name; a fifth `force_permanent_on_battlefield` of that name returns an existing
+copy, so list another card when a test needs more.
 
 A permanent's activated abilities are `Game::activated_abilities_for` (printed,
 then granted, e.g. an Equipment's `AbilityGrant`); activation, payment

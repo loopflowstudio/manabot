@@ -62,16 +62,25 @@ Nothing replaced yet.
 
 ## Remaining
 
-- Slices 4–6 (54 cards).
+- Slice 4 (next): turn history as observed state — per player "attacked
+  this turn", permanents sacrificed this turn, a land entered this turn, and
+  per permanent "dealt damage this turn" — through `Observation`, native and
+  Python v5 encoders (widen v5 player/permanent rows in place, update
+  CLAUDE.md widths and WORLDS.md), learning tokens, LLM text and Academy notes.
+  Cards: Fire Nation Raider, Fire Nation Engineer, Cruel Administrator, Sold
+  Out, Obsessive Pursuit, Earth Rumble Wrestlers.
+- Slices 5–6 (48 more cards): see the slice list above; Firebender
+  Ascension's ETB, Earth Kingdom General's ETB, Invasion Tactics' ETB and
+  Raven Eagle's draw clause are expressible today but wait for their other
+  clauses (no half-defined cards).
 - Gate: re-record w18 evidence after the last card (`semantic-kernel-w18-v1`
-  is current at slice 1). Python failures after slice 1 are all digest-bound:
+  is current). Python failures after slice 1 are all digest-bound:
   authored-match receipt and parity, public-commitment parity, choice
   navigation, decision surface, learn evidence/setup, trigger order, belief
   canonical receipt (T3's tools: `scratch/tools/regen_*_w18.py`).
 
-Check (slice 3, same as slice 2 plus cards 405 pass):
-Check (slice 2): debug `cargo test` all targets pass after re-recording
-`semantic-kernel-w18-v1` (14 cases, now 3396 commands: ward answers
-abilities) and the heavy benchmark fixture's event count (505 → 509);
-fmt and clippy `-D warnings` clean. Slice 1: `tests/academy tests/belief`
-330 pass, 23 digest-bound fail (gate).
+Check (2026-10-30, after slice 3): debug `cargo test` all targets pass
+(cards 405; `semantic-kernel-w18-v1` re-recorded, 14 cases / 3396 commands —
+ward now answers abilities; heavy benchmark fixture 505 → 509 events), fmt and
+clippy `-D warnings` clean, extension rebuilt. `tests/academy tests/belief`
+(slice 1): 330 pass, 23 digest-bound fail (gate).
