@@ -13,6 +13,7 @@ use crate::{
     flow::{
         event::GameEvent,
         game::{CastChoices, Game},
+        turn::OnceEachTurnKey,
     },
     state::{
         ability::{Effect, EffectValue, LinkedGrant, PaymentCost},
@@ -135,7 +136,7 @@ pub struct PaymentProgress {
     /// The once-each-turn option (exact source, ability index) paying
     /// spends ("Do this only once each turn").
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub spends: Option<(ObjectRef, usize)>,
+    pub spends: Option<OnceEachTurnKey>,
     /// The spell or ability declining counters ("counter it unless that
     /// player pays"): ward answers both.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -314,7 +315,7 @@ pub enum Decision {
         /// The once-each-turn option (exact source, ability index) casting
         /// spends ("Do this only once each turn"); declining keeps it.
         #[serde(skip_serializing_if = "Option::is_none")]
-        spends: Option<(ObjectRef, usize)>,
+        spends: Option<OnceEachTurnKey>,
     },
     /// `player` exiles a matching card from `owner`'s graveyard or a
     /// nontoken permanent `owner` controls (or declines, when `up_to`);
@@ -440,7 +441,7 @@ pub struct SuspendedResolution {
 
 impl Game {
     /// Record that the exact source took its ability's once-each-turn option.
-    fn spend_once_each_turn(&mut self, key: (ObjectRef, usize)) {
+    pub(crate) fn spend_once_each_turn(&mut self, key: OnceEachTurnKey) {
         self.journal_turn();
         *self
             .state

@@ -1,6 +1,9 @@
 use std::collections::BTreeMap;
 
-use crate::state::game_object::PlayerId;
+use crate::state::game_object::{ObjectRef, PlayerId};
+
+/// A once-each-turn use: the exact source object and its ability index.
+pub type OnceEachTurnKey = (ObjectRef, usize);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 #[repr(i32)]
@@ -90,7 +93,7 @@ pub struct TurnState {
     /// `TriggerCondition::OnceEachTurn` is recorded as it fires, an
     /// `Effect::MayOnceEachTurn` option as it is taken.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
-    pub ability_triggers_this_turn: BTreeMap<(crate::state::game_object::ObjectRef, usize), u32>,
+    pub ability_triggers_this_turn: BTreeMap<OnceEachTurnKey, u32>,
     /// Times each triggered ability `(card index, ability index)` has
     /// resolved this turn (for "the Nth time this ability has resolved this
     /// turn" gating). Resets every turn.

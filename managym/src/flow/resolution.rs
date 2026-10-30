@@ -13,6 +13,7 @@ use crate::{
         event::GameEvent,
         game::Game,
         trigger::{DelayedTrigger, DelayedTriggerKind, ExileLink},
+        turn::OnceEachTurnKey,
     },
     state::{
         ability::{
@@ -259,10 +260,9 @@ impl Game {
             .as_ref()
             .map(|lki| lki.controller)
             .unwrap_or(triggered.controller);
-        let (effects, ability_key) = if let Some(effects) = triggered.inline_effects {
-            // Inline (delayed) triggers use a sentinel so their per-turn
-            // resolution count never collides with a printed ability slot.
-            (effects, usize::MAX)
+        // Inline (delayed or chosen-mode) effects have no printed ability.
+        let (effects, ability) = if let Some(effects) = triggered.inline_effects {
+            (effects, None)
         } else {
             let Some(ability) = self
                 .state
@@ -285,7 +285,7 @@ impl Game {
             }) {
                 return;
             }
-            (effects, triggered.ability_index)
+            (effects, Some(triggered.ability_index))
         };
 
         let requirements = crate::state::ability::effect_target_requirements(&effects);
@@ -301,7 +301,9 @@ impl Game {
         // Track per-turn resolutions for "the Nth time this ability has
         // resolved this turn" gating.
         self.journal_turn();
-        let key = (source_card.0, ability_key);
+        // Inline effects count under a sentinel slot that never collides
+        // with a printed ability.
+        let key = (source_card.0, ability.unwrap_or(usize::MAX));
         let count = self
             .state
             .turn
@@ -324,7 +326,7 @@ impl Game {
             context_target: triggered.context,
             triggering_player: triggered.player,
             grantor: None,
-            ability: (ability_key != usize::MAX).then_some(ability_key),
+            ability,
             queue: VecDeque::from(crate::state::ability::bind_effect_clauses(effects)),
             finalize: FrameFinalize::None,
         };
@@ -1696,7 +1698,7 @@ impl Game {
     fn library_top_free_cast(
         &self,
         player: PlayerId,
-        spends: Option<(crate::state::game_object::ObjectRef, usize)>,
+        spends: Option<OnceEachTurnKey>,
     ) -> Option<Decision> {
         let card = *self
             .state

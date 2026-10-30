@@ -150,7 +150,10 @@ before T4's own gate.
 Compress (2026-10-30): turn-history writes go through
 `Game::update_turn_history`; `CombatDamageToPlayers { creatures }` (the
 defender is the non-active player); `trigger_multiplicity` counts connecting
-creatures; the leaving spell is removed from the stack once.
+creatures; the leaving spell is removed from the stack once. Second compress: `EffectFrame.ability` is set without
+the resolution counter's `usize::MAX` sentinel; `OnceEachTurnKey` names the
+once-each-turn key and `Game::spend_once_each_turn` is its only writer.
+(Debug `cargo test --no-fail-fast` 820 passed; fmt, clippy clean.)
 
 ## Concept review (Jack Heart, 2026-10-30, accepted 1a 2a 3a — done)
 

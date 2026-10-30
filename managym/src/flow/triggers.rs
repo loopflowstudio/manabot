@@ -553,13 +553,7 @@ impl Game {
                     ..
                 }
             ) {
-                self.journal_turn();
-                *self
-                    .state
-                    .turn
-                    .ability_triggers_this_turn
-                    .entry((source_lki.object_ref, ability_index))
-                    .or_default() += 1;
+                self.spend_once_each_turn((source_lki.object_ref, ability_index));
             }
             let context = if self.state.cards[source_card].abilities[ability_index]
                 .effects()
