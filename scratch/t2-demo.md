@@ -49,3 +49,9 @@ No `managym/src` or extension change since `63e5fe407`; later commits re-recorde
 w18 evidence and scratch only. Re-ran `t2_demo.py … 60` and `t2_demo_foretell.py`
 against the current extension: both outputs byte-identical to `run.log` and
 `foretell.log` (60 games, winners 24/36, no errors, 0 face-down leaks). Advance.
+
+## Re-run, decision pass 1 at `a5587df5a` (2026-10-29)
+
+No tracked change outside `scratch/` since `f821ee4c0`; T1 #394 still open at
+`2c50c8793`. `t2_demo.py … 60` and `t2_demo_foretell.py` outputs again
+byte-identical to `run.log` and `foretell.log`. Advance.
