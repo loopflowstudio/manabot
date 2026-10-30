@@ -46,6 +46,8 @@ Main's notes at the syncs live at `6d069d6e5:scratch/questions.md` and `origin/m
   (`semantic-kernel-w15-v1`, `authored-match-w11-v1`, `authored-match-parity-w11-v1`,
   `public-commitment-parity-v1`) stay in the tree like w12–w14; archiving them
   to S3 is a separate publish step, not done here.
+  Superseded 2026-10-30 by Jack Heart's steer: afbd6a archived them (and w12–w14,
+  v1, learn-lesson-w4-v3) to `experiments/data/archive/conformance/`.
 - 2026-10-29 (public-commitment parity, decision): bound to w17 by prefix. Only
   viewer 0's tracker fails (Command 68, South Pole Voyager revealed from library
   into hand); viewer 1 consumes the hero's Island discard (30) and

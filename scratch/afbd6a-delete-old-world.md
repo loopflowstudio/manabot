@@ -1,7 +1,8 @@
 # afbd6a — delete old-world card machinery (stacked on #394)
 
 Jack Heart (2026-10-29/30): old worlds run from their recorded git revision; delete
-what only serves them. Diff should be almost all deletions. Status: implementing.
+what only serves them. Diff should be almost all deletions. Status: implemented, including the three
+2026-10-30 steers; remaining: gate/CI and Jack Heart's review (no merge without it).
 
 ## Delete — do not maintain (done)
 
@@ -17,7 +18,8 @@ Academy fixtures.
 - w17 conformance corpus regenerated (receipt shape loses `matchup_source_digest`).
 - Phase matrix: rule-family closure against `v1/coverage.evidence.json` is dropped;
   remaining structural checks stay.
-- Frozen corpora/evidence (w12–w15, experiments, audit, tla docs) untouched.
+- Frozen evidence (experiments, audit, tla docs) untouched; w12–w15 and other
+  old-world corpora archived byte-for-byte to S3 (steer 3 below), not edited.
 
 ## Discovered while implementing
 
@@ -29,7 +31,8 @@ Academy fixtures.
 - 41 Academy fixtures for w7–w15 had no consumer: deleted.
 - `test_learning_regression` fed a default-pack observation to an authored-pack
   policy (passed by CardDefId coincidence): uses an authored case now.
-- Five tokens await producers (`TOKENS_AWAITING_PRODUCER` in observability.rs).
+- Four tokens await producers (`TOKENS_AWAITING_PRODUCER` in observability.rs:
+  Ballistic Boulder, Bear, Dragon, Monk); Soldier gained Fire Nation Attacks from T2.
 
 ## Added scope — Jack Heart steers, 2026-10-30 (implemented)
 
