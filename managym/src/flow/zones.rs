@@ -7,6 +7,7 @@ use crate::{
         event::GameEvent,
         game::{CastChoices, Game},
         proposed_event::{ProposedEvent, ZoneEntry},
+        trigger::{DelayedTrigger, DelayedTriggerEvent},
     },
     state::{
         card::Restriction,
@@ -577,46 +578,39 @@ impl Game {
         true
     }
 
-    /// Leave-the-battlefield bookkeeping: fire one-shot delayed triggers
-    /// (earthbend returns) and end "exiled until this leaves" durations
+    /// Leave-the-battlefield bookkeeping: fire delayed triggers watching the
+    /// object (earthbend returns) and end "exiled until this leaves" durations
     /// (Jailer links — the exiled card returns immediately, no stack).
     fn handle_leaves_battlefield(&mut self, departing_ref: Option<ObjectRef>, to_zone: ZoneType) {
-        // Delayed triggers watching this card fire on dies/exiled and are
-        // dropped otherwise (they watched this battlefield stint only).
-        let watching: Vec<_> = {
-            self.journal_delayed_triggers();
-            let mut kept = Vec::new();
-            let mut fired = Vec::new();
-            for trigger in std::mem::take(&mut self.state.delayed_triggers) {
-                if departing_ref.is_some_and(|object_ref| trigger.watched == object_ref) {
-                    fired.push(trigger);
-                } else if departing_ref
-                    .is_some_and(|object_ref| trigger.watched.entity == object_ref.entity)
-                {
-                    // The watched incarnation is already gone. Never retarget
-                    // a delayed trigger to a later object of the same entity.
-                } else {
-                    kept.push(trigger);
-                }
+        // Delayed triggers watching this object fire as it dies (or is
+        // exiled, for earthbend) and are dropped otherwise: they watched this
+        // battlefield stint only.
+        let watches = |trigger: &DelayedTrigger| match trigger.event {
+            DelayedTriggerEvent::Leaves { watched, .. } => {
+                departing_ref.is_some_and(|object_ref| watched.entity == object_ref.entity)
             }
-            self.state.delayed_triggers = kept;
-            fired
+            _ => false,
         };
-        if matches!(to_zone, ZoneType::Graveyard | ZoneType::Exile) {
+        if self.state.delayed_triggers.iter().any(watches) {
+            self.journal_delayed_triggers();
+            let (watching, kept): (Vec<_>, Vec<_>) =
+                std::mem::take(&mut self.state.delayed_triggers)
+                    .into_iter()
+                    .partition(watches);
+            self.state.delayed_triggers = kept;
+            let departed = departing_ref
+                .and_then(|object_ref| self.object_lki(object_ref))
+                .map(|lki| Target::Permanent(lki.permanent));
             for trigger in watching {
-                match trigger.kind {
-                    crate::flow::trigger::DelayedTriggerKind::ReturnToBattlefieldTapped => {
-                        if let Some(source_lki) = self.object_lki(trigger.watched).cloned() {
-                            self.enqueue_delayed_trigger(
-                                trigger.watched,
-                                source_lki,
-                                trigger.controller,
-                                vec![
-                                    crate::state::ability::Effect::ReturnSourceToBattlefieldTapped,
-                                ],
-                            );
-                        }
-                    }
+                let DelayedTriggerEvent::Leaves { watched, or_exiled } = trigger.event else {
+                    continue;
+                };
+                // Never retarget a delayed trigger to a later object of the
+                // same entity.
+                if Some(watched) == departing_ref
+                    && (to_zone == ZoneType::Graveyard || (or_exiled && to_zone == ZoneType::Exile))
+                {
+                    self.fire_delayed_trigger(&trigger, departed);
                 }
             }
         }

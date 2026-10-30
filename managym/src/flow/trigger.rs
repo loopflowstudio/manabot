@@ -5,6 +5,7 @@
 use crate::state::{
     ability::Effect,
     game_object::{CardId, ObjectLki, ObjectRef, PlayerId, Target},
+    predicate::CardPredicate,
 };
 
 /// Stable occurrence identity; never a strategic ordering preference.
@@ -76,21 +77,36 @@ pub struct PendingTrigger {
     pub inline_effects: Option<Vec<Effect>>,
 }
 
-/// A one-shot delayed triggered ability (CR 603.7) watching a specific
-/// card's next departure from the battlefield. Removed once it fires or
-/// once the watched permanent leaves in a non-matching way.
+/// A delayed triggered ability (CR 603.7) waiting for its event. It fires
+/// with `effects` inline, from `source_card` (the exact `source_ref`, when
+/// that is a battlefield object, supplies last known information).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct DelayedTrigger {
-    pub watched: ObjectRef,
+    pub event: DelayedTriggerEvent,
     pub controller: PlayerId,
-    pub kind: DelayedTriggerKind,
+    pub source_card: CardId,
+    pub source_ref: Option<ObjectRef>,
+    pub effects: Vec<Effect>,
+    /// "this turn": removed in the cleanup step if it has not fired.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub this_turn: bool,
 }
 
+/// What a waiting delayed trigger watches for. All but `CreatureDies` fire
+/// once (CR 603.7c).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum DelayedTriggerKind {
-    /// Earthbend: "When it dies or is exiled, return it to the battlefield
-    /// tapped."
-    ReturnToBattlefieldTapped,
+pub enum DelayedTriggerEvent {
+    /// The exact object dies (or, `or_exiled`, is exiled: earthbend's "when
+    /// it dies or is exiled"). Removed once it leaves the battlefield any
+    /// way; the departed permanent is the trigger's context.
+    Leaves { watched: ObjectRef, or_exiled: bool },
+    /// "Whenever a creature dies".
+    CreatureDies,
+    /// "At the beginning of the next end step"; `context` is the trigger's
+    /// context ("sacrifice that token").
+    NextEndStep { context: Option<Target> },
+    /// "When you next cast a [predicate] spell"; that spell is the context.
+    YouCastSpell(CardPredicate),
 }
 
 /// "Exile [card] until [source] leaves the battlefield" linkage (Earth

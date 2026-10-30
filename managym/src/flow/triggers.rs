@@ -7,7 +7,10 @@ use crate::{
         event::GameEvent,
         game::Game,
         statics::ScopeView,
-        trigger::{PendingTrigger, TriggerId, TriggerOrderingClass, TriggerPlacement},
+        trigger::{
+            DelayedTrigger, DelayedTriggerEvent, PendingTrigger, TriggerId, TriggerOrderingClass,
+            TriggerPlacement,
+        },
         turn::StepKind,
     },
     state::{
@@ -515,6 +518,7 @@ impl Game {
     fn check_triggers_for_event(&mut self, event: &GameEvent, sources: &[TriggerSourceSnapshot]) {
         self.granted_firebending_triggers(event);
         self.graveyard_triggers(event);
+        self.delayed_triggers_for_event(event);
         let mut fired: Vec<FiredTrigger> = Vec::new();
         for source in sources.iter().filter(|source| !source.lki.abilities_lost) {
             for (ability_index, ability) in
@@ -756,6 +760,109 @@ impl Game {
             };
             self.enqueue_delayed_trigger(source, lki, controller, vec![effect]);
         }
+    }
+
+    /// Wait for a delayed triggered ability's event (CR 603.7).
+    pub(crate) fn add_delayed_trigger(&mut self, trigger: DelayedTrigger) {
+        self.journal_delayed_triggers();
+        self.state.delayed_triggers.push(trigger);
+    }
+
+    /// The delayed triggers `event` fires: the dying-creature, end-step and
+    /// cast events. (`Leaves` fires as its object leaves the battlefield.)
+    /// One-shot triggers are removed as they fire (CR 603.7c).
+    fn delayed_triggers_for_event(&mut self, event: &GameEvent) {
+        let creature_died = match event {
+            GameEvent::CardMoved {
+                card,
+                from: Some(ZoneType::Battlefield),
+                to: ZoneType::Graveyard,
+                ..
+            } => {
+                self.state.cards[*card].types.is_creature()
+                    || self
+                        .state
+                        .object_lki
+                        .values()
+                        .filter(|lki| lki.card == *card)
+                        .max_by_key(|lki| lki.object_ref)
+                        .is_some_and(|lki| lki.animated_creature)
+            }
+            _ => false,
+        };
+        let mut fired = Vec::new();
+        let mut spent = Vec::new();
+        for (index, trigger) in self.state.delayed_triggers.iter().enumerate() {
+            let context = match (&trigger.event, event) {
+                (DelayedTriggerEvent::CreatureDies, _) if creature_died => None,
+                (
+                    DelayedTriggerEvent::NextEndStep { context },
+                    GameEvent::StepStarted {
+                        step: StepKind::End,
+                    },
+                ) => {
+                    spent.push(index);
+                    *context
+                }
+                (
+                    DelayedTriggerEvent::YouCastSpell(predicate),
+                    GameEvent::SpellCast { card, .. },
+                ) if self.spell_caster(*card) == trigger.controller
+                    && predicate.matches_card(&self.state.cards[*card]) =>
+                {
+                    spent.push(index);
+                    Some(Target::StackSpell(*card))
+                }
+                _ => continue,
+            };
+            fired.push((trigger.clone(), context));
+        }
+        if !spent.is_empty() {
+            self.journal_delayed_triggers();
+            for index in spent.into_iter().rev() {
+                self.state.delayed_triggers.remove(index);
+            }
+        }
+        for (trigger, context) in fired {
+            self.fire_delayed_trigger(&trigger, context);
+        }
+    }
+
+    /// Put a delayed trigger's occurrence in the waiting list, with its
+    /// source's last known information when that was a battlefield object.
+    pub(crate) fn fire_delayed_trigger(
+        &mut self,
+        trigger: &DelayedTrigger,
+        context: Option<Target>,
+    ) {
+        let source_lki = trigger.source_ref.and_then(|source| {
+            self.object_lki(source).cloned().or_else(|| {
+                (self.current_object_ref(trigger.source_card) == Some(source))
+                    .then(|| self.snapshot_current_permanent(trigger.source_card))
+                    .flatten()
+            })
+        });
+        self.state.pending_triggers.push(PendingTrigger {
+            targets: Vec::new(),
+            target_req_indices: Vec::new(),
+            requirement_index: 0,
+            source_card: trigger.source_card,
+            source_ref: trigger.source_ref,
+            source_lki,
+            ability_index: 0,
+            controller: trigger.controller,
+            id: TriggerId(self.state.trigger_enqueue_counter),
+            ordering_class: TriggerOrderingClass::Ordinary,
+            context,
+            player: None,
+            x: 0,
+            inline_effects: Some(trigger.effects.clone()),
+        });
+        self.state.trigger_enqueue_counter = self
+            .state
+            .trigger_enqueue_counter
+            .checked_add(1)
+            .expect("trigger occurrence identity exhausted");
     }
 
     /// Abilities that function from their owner's graveyard (CR 113.6k):

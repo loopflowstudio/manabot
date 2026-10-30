@@ -288,6 +288,17 @@ impl Game {
     /// "once each turn" limits and "dealt damage this turn" reset.
     pub(crate) fn end_turn_modifiers(&mut self) {
         self.end_turn_effects();
+        if self
+            .state
+            .delayed_triggers
+            .iter()
+            .any(|trigger| trigger.this_turn)
+        {
+            self.journal_delayed_triggers();
+            self.state
+                .delayed_triggers
+                .retain(|trigger| !trigger.this_turn);
+        }
         for index in 0..self.state.permanents.len() {
             let permanent_id = PermanentId(index);
             if self.state.permanents[permanent_id]

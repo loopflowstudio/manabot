@@ -4,8 +4,8 @@ use crate::state::ability::AffectedSpec;
 use crate::state::effect::Modification;
 use crate::state::{
     ability::{
-        Ability, Condition, Effect, EffectValue, LinkedChooser, LinkedGrant, MilledBonus,
-        PaymentCost, PlayerSelector, TargetRequirement, TargetSpec, TriggerCondition,
+        Ability, Condition, DelayedEvent, Effect, EffectValue, LinkedChooser, LinkedGrant,
+        MilledBonus, PaymentCost, PlayerSelector, TargetRequirement, TargetSpec, TriggerCondition,
         TriggerSubject,
     },
     card::{
@@ -100,6 +100,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         energybending(),
         enter_the_avatar_state(),
         fancy_footwork(),
+        fatal_fissure(),
         fated_firepower(),
         fire_lord_zuko(),
         fire_nation_attacks(),
@@ -108,6 +109,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         fire_nation_raider(),
         fire_nation_palace(),
         fire_nation_warship(),
+        fire_navy_trebuchet(),
         fire_sages(),
         firebending_lesson(),
         firebending_student(),
@@ -199,6 +201,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         rocky_rebuke(),
         rough_rhino_cavalry(),
         rowdy_snowballers(),
+        ruinous_waterbending(),
         rumble_arena(),
         saber_tooth_moose_lion(),
         sandbenders_storm(),
@@ -2833,6 +2836,28 @@ fn fancy_footwork() -> CardDefinition {
     }
 }
 
+fn fatal_fissure() -> CardDefinition {
+    let text_box = "Choose target creature. When that creature dies this turn, you earthbend 4. (Target land you control becomes a 0/0 creature with haste that's still a land. Put four +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)";
+
+    CardDefinition {
+        key: "tla.fatal_fissure",
+        scryfall_id: "3343933d-4425-4ede-8d92-876bd0c6df60",
+        name: "Fatal Fissure".into(),
+        mana_cost: Some(ManaCost::parse("{1}{B}")),
+        types: CardTypes::new([CardType::Instant]),
+        targeting: vec![TargetRequirement::one(TargetSpec::Creature)],
+        spell_effects: vec![Effect::CreateDelayedTrigger {
+            event: DelayedEvent::TargetDiesThisTurn,
+            effects: vec![Effect::Earthbend {
+                count: EffectValue::Fixed(4),
+                target: TargetSpec::LandYouControl,
+            }],
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
 fn fated_firepower() -> CardDefinition {
     let text_box = "Flash\nThis enchantment enters with X fire counters on it.\nIf a source you control would deal damage to an opponent or a permanent an opponent controls, it deals that much damage plus an amount of damage equal to the number of fire counters on this enchantment instead.";
 
@@ -3129,6 +3154,46 @@ fn fire_nation_warship() -> CardDefinition {
                 Modification::BecomeArtifactCreature,
             )],
             ..Default::default()
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn fire_navy_trebuchet() -> CardDefinition {
+    let text_box = "Defender, reach\nWhenever you attack, create a 2/1 colorless Construct artifact creature token with flying named Ballistic Boulder that's tapped and attacking. Sacrifice that token at the beginning of the next end step.";
+
+    CardDefinition {
+        key: "tla.fire_navy_trebuchet",
+        scryfall_id: "e58372cc-9a89-47a4-a0db-df5435e26cd3",
+        name: "Fire Navy Trebuchet".into(),
+        mana_cost: Some(ManaCost::parse("{2}{B}")),
+        types: CardTypes::new([CardType::Artifact, CardType::Creature]),
+        subtypes: vec!["Wall".into()],
+        power: Some(0),
+        toughness: Some(4),
+        keywords: Keywords {
+            defender: true,
+            reach: true,
+            ..Default::default()
+        },
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::Attacks {
+                subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
+            },
+            intervening_if: None,
+            effects: vec![
+                Effect::CreateToken {
+                    token_name: "Ballistic Boulder".into(),
+                    count: 1,
+                    tapped_and_attacking: true,
+                    attach_source: false,
+                },
+                Effect::CreateDelayedTrigger {
+                    event: DelayedEvent::NextEndStepForCreatedToken,
+                    effects: vec![Effect::SacrificeTriggeringPermanent],
+                },
+            ],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -6707,6 +6772,36 @@ fn rowdy_snowballers() -> CardDefinition {
                 },
             ],
         }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn ruinous_waterbending() -> CardDefinition {
+    let text_box = "As an additional cost to cast this spell, you may waterbend {4}. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)\nAll creatures get -2/-2 until end of turn. If this spell's additional cost was paid, whenever a creature dies this turn, you gain 1 life.";
+
+    CardDefinition {
+        key: "tla.ruinous_waterbending",
+        scryfall_id: "53161747-c82b-41e8-90ea-7791ea262a85",
+        name: "Ruinous Waterbending".into(),
+        mana_cost: Some(ManaCost::parse("{1}{B}{B}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        subtypes: vec!["Lesson".into()],
+        spell_effects: vec![
+            Effect::until_end_of_turn(
+                AffectedSpec::EachMatching(CardPredicate::creature()),
+                Modification::pump(-2, -2),
+            ),
+            Effect::If {
+                condition: Condition::Kicked,
+                then: vec![Effect::CreateDelayedTrigger {
+                    event: DelayedEvent::CreatureDiesThisTurn,
+                    effects: vec![Effect::GainLife { amount: 1 }],
+                }],
+                otherwise: vec![],
+            },
+        ],
+        additional_costs: vec![AdditionalCost::Waterbend(ManaCost::parse("{4}"))],
         text_box: text_box.into(),
         ..Default::default()
     }

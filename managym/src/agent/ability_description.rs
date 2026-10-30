@@ -4,8 +4,8 @@
 
 use crate::state::{
     ability::{
-        Ability, AffectedSpec, Condition, Effect, EffectValue, LinkedChooser, LinkedGrant,
-        PaymentCost, PlayerSelector, TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, AffectedSpec, Condition, DelayedEvent, Effect, EffectValue, LinkedChooser,
+        LinkedGrant, PaymentCost, PlayerSelector, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{Card, CardType, Keywords},
     effect::{EffectDuration, Modification},
@@ -567,6 +567,21 @@ fn effect_description(effect: &Effect) -> Option<String> {
         PutSourceCountersOnTarget { .. } => "Put its counters on target creature you control".into(),
         ExileAndReturn { .. } => "Exile target creature you control, then return it to the battlefield under its owner's control".into(),
         WhenYouDo { effects } => format!("When you do: {}", effects_description(effects)),
+        CreateDelayedTrigger { event, effects } => format!(
+            "{}, {}",
+            match event {
+                DelayedEvent::TargetDiesThisTurn => "When that creature dies this turn".into(),
+                DelayedEvent::CreatureDiesThisTurn => "Whenever a creature dies this turn".into(),
+                DelayedEvent::NextEndStepForCreatedToken =>
+                    "At the beginning of the next end step".into(),
+                DelayedEvent::YouNextCastThisTurn(predicate) => format!(
+                    "When you next cast a {} this turn",
+                    predicate_description(predicate, "spell")
+                ),
+            },
+            effects_description(effects)
+        ),
+        SacrificeTriggeringPermanent => "Sacrifice that token".into(),
         CastLibraryTopFree => "Look at the top card of your library. You may cast it without paying its mana cost".into(),
         CastFromHandFree { predicate } => format!("You may cast a {} from your hand without paying its mana cost", predicate_description(predicate, "spell")),
         ShuffleGraveyardIntoLibrary => "Shuffle your graveyard into your library".to_string(),
@@ -662,6 +677,9 @@ fn continuous_description(
                 "Each {} you control",
                 predicate_description(predicate, "permanent")
             )
+        }
+        AffectedSpec::EachMatching(predicate) => {
+            format!("Each {}", predicate_description(predicate, "permanent"))
         }
         AffectedSpec::EachTargetPlayerControls(predicate) => format!(
             "Each {} target player controls",

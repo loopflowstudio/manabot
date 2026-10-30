@@ -61,9 +61,9 @@ use managym::{
     cards::tokens::{definition_tokens, learning_catalog, name_value, TokenKind},
     state::{
         ability::{
-            Ability, AffectedSpec, Condition, Effect, EffectValue, LinkedChooser, LinkedGrant,
-            PaymentCost, PlayerSelector, TargetRequirement, TargetSpec, TriggerCondition,
-            TriggerSubject,
+            Ability, AffectedSpec, Condition, DelayedEvent, Effect, EffectValue, LinkedChooser,
+            LinkedGrant, PaymentCost, PlayerSelector, TargetRequirement, TargetSpec,
+            TriggerCondition, TriggerSubject,
         },
         card::{
             ActivatedAbilityDefinition, AdditionalCost, BlockRestriction, CardDefinition, CardType,
@@ -321,17 +321,19 @@ fn affected_token(affected: &AffectedSpec) -> &'static str {
         AffectedSpec::Target(_) => "AffectedSpec::Target",
         AffectedSpec::TriggeringPermanent => "AffectedSpec::TriggeringPermanent",
         AffectedSpec::EachYouControl(_) => "AffectedSpec::EachYouControl",
+        AffectedSpec::EachMatching(_) => "AffectedSpec::EachMatching",
         AffectedSpec::EachTargetPlayerControls(_) => "AffectedSpec::EachTargetPlayerControls",
     }
 }
 
-fn affected_witnesses() -> [AffectedSpec; 6] {
+fn affected_witnesses() -> [AffectedSpec; 7] {
     [
         AffectedSpec::You,
         AffectedSpec::Source,
         AffectedSpec::Target(TargetSpec::Creature),
         AffectedSpec::TriggeringPermanent,
         AffectedSpec::EachYouControl(CardPredicate::creature()),
+        AffectedSpec::EachMatching(CardPredicate::creature()),
         AffectedSpec::EachTargetPlayerControls(CardPredicate::creature()),
     ]
 }
@@ -501,6 +503,8 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ShuffleAttachedIntoLibrary => "Effect::ShuffleAttachedIntoLibrary",
         Effect::ReturnSourceToHand => "Effect::ReturnSourceToHand",
         Effect::ReturnSourceToBattlefield { .. } => "Effect::ReturnSourceToBattlefield",
+        Effect::CreateDelayedTrigger { .. } => "Effect::CreateDelayedTrigger",
+        Effect::SacrificeTriggeringPermanent => "Effect::SacrificeTriggeringPermanent",
         Effect::GainLifeValue { .. } => "Effect::GainLifeValue",
         Effect::AddOneColorManaValue { .. } => "Effect::AddOneColorManaValue",
         Effect::AddManaValue { .. } => "Effect::AddManaValue",
@@ -512,7 +516,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 90;
+const EFFECT_VARIANTS: usize = 92;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -777,6 +781,11 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::ReturnSourceToBattlefield {
             counter: CounterKind::Finality,
         },
+        Effect::CreateDelayedTrigger {
+            event: DelayedEvent::CreatureDiesThisTurn,
+            effects: vec![Effect::GainLife { amount: 1 }],
+        },
+        Effect::SacrificeTriggeringPermanent,
         Effect::GainLifeValue {
             amount: EffectValue::ExcessDamage,
         },
@@ -2015,10 +2024,7 @@ fn cant_be_blocked_if_removes_blocks_from_the_action_tensor() {
 
 /// Defined tokens whose producing card is not defined yet, with that producer.
 /// When the producer lands, its reference makes the token leave this list.
-const TOKENS_AWAITING_PRODUCER: [(&str, &str); 2] = [
-    ("token.ballistic_boulder", "Fire Navy Trebuchet"),
-    ("token.dragon", "The Legend of Roku"),
-];
+const TOKENS_AWAITING_PRODUCER: [(&str, &str); 1] = [("token.dragon", "The Legend of Roku")];
 
 /// Every `token.*` definition is a definition reference from a card that
 /// creates it (or awaits a named producer), and a created token's observation

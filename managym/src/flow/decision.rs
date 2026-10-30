@@ -74,6 +74,9 @@ pub struct EffectFrame {
     /// creature, read by a later "the excess damage dealt this way".
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub excess_damage: i32,
+    /// The token this resolution created last ("that token").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created: Option<crate::state::game_object::PermanentId>,
     /// Chosen slots, with eligibility retained across instructions and choices.
     pub targets: Vec<ResolutionTarget>,
     pub active_requirement: usize,
@@ -488,6 +491,7 @@ impl Game {
                 kicked: false,
                 x: 0,
                 excess_damage: 0,
+                created: None,
                 targets: Vec::new(),
                 active_requirement: 0,
                 context_target: None,
@@ -1737,6 +1741,7 @@ mod learn_tests {
             kicked: false,
             x: 0,
             excess_damage: 0,
+            created: None,
             targets: vec![],
             active_requirement: 0,
             context_target: None,
@@ -2494,6 +2499,7 @@ mod payment_tests {
             kicked: false,
             x: 0,
             excess_damage: 0,
+            created: None,
             targets: vec![],
             active_requirement: 0,
             context_target: None,

@@ -668,6 +668,16 @@ pub enum Effect {
         kind: CounterKind,
         target: TargetSpec,
     },
+    /// Create a delayed triggered ability (CR 603.7): when `event` occurs,
+    /// `effects` trigger from this spell or ability's source. Their targets
+    /// are chosen as the delayed ability is put on the stack.
+    CreateDelayedTrigger {
+        event: DelayedEvent,
+        effects: Vec<Effect>,
+    },
+    /// Sacrifice the permanent the trigger names ("sacrifice that token"),
+    /// if its controller still controls it.
+    SacrificeTriggeringPermanent,
     /// Tap the source permanent.
     TapSource,
     /// Untap the source permanent.
@@ -821,6 +831,22 @@ pub enum Effect {
     },
 }
 
+/// The event a delayed triggered ability created by
+/// [`Effect::CreateDelayedTrigger`] waits for (CR 603.7).
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum DelayedEvent {
+    /// "When that creature dies this turn": the frame's primary target.
+    TargetDiesThisTurn,
+    /// "Whenever a creature dies this turn."
+    CreatureDiesThisTurn,
+    /// "At the beginning of the next end step", about the token the
+    /// resolution created last ("sacrifice that token").
+    NextEndStepForCreatedToken,
+    /// "When you next cast a [predicate] spell this turn"; that spell is
+    /// the delayed ability's context.
+    YouNextCastThisTurn(CardPredicate),
+}
+
 /// Effects that run when any card milled by the same instruction matches.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct MilledBonus {
@@ -860,6 +886,8 @@ pub enum AffectedSpec {
     TriggeringPermanent,
     /// Each permanent the resolving player controls matching the predicate.
     EachYouControl(CardPredicate),
+    /// Each battlefield permanent matching the predicate ("all creatures").
+    EachMatching(CardPredicate),
     /// Each permanent the frame's primary target player controls matching
     /// the predicate ("creatures target player controls").
     EachTargetPlayerControls(CardPredicate),
@@ -1124,6 +1152,8 @@ impl Effect {
             | Effect::CreateToken { .. }
             | Effect::PutCountersOnSource { .. }
             | Effect::TapSource
+            | Effect::CreateDelayedTrigger { .. }
+            | Effect::SacrificeTriggeringPermanent
             | Effect::UntapSource
             | Effect::ExileAttached
             | Effect::TapAttached

@@ -12,13 +12,13 @@ use crate::{
         },
         event::GameEvent,
         game::Game,
-        trigger::{DelayedTrigger, DelayedTriggerKind, ExileLink},
+        trigger::{DelayedTrigger, DelayedTriggerEvent, ExileLink},
         turn::OnceEachTurnKey,
     },
     state::{
         ability::{
-            Ability, AffectedSpec, Effect, EffectValue, LinkedChooser, PaymentCost, PlayerSelector,
-            TargetRequirement, TargetSpec,
+            Ability, AffectedSpec, DelayedEvent, Effect, EffectValue, LinkedChooser, PaymentCost,
+            PlayerSelector, TargetRequirement, TargetSpec,
         },
         effect::{Affected, EffectDuration, Modification},
         game_object::{CardId, ObjectId, PermanentId, PlayerId, Target},
@@ -152,6 +152,7 @@ impl Game {
             kicked: spell.kicked,
             x: spell.x,
             excess_damage: 0,
+            created: None,
             targets,
             active_requirement: 0,
             context_target: None,
@@ -237,6 +238,7 @@ impl Game {
             kicked: false,
             x: ability.x,
             excess_damage: 0,
+            created: None,
             targets,
             active_requirement: 0,
             context_target: attached,
@@ -321,6 +323,7 @@ impl Game {
             kicked: false,
             x: triggered.x,
             excess_damage: 0,
+            created: None,
             targets,
             active_requirement: 0,
             context_target: triggered.context,
@@ -476,6 +479,10 @@ impl Game {
             AffectedSpec::EachYouControl(predicate) => {
                 self.each_controlled_matching(frame.controller, predicate)
             }
+            AffectedSpec::EachMatching(predicate) => [PlayerId(0), PlayerId(1)]
+                .into_iter()
+                .flat_map(|player| self.each_controlled_matching(player, predicate))
+                .collect(),
             AffectedSpec::EachTargetPlayerControls(predicate) => {
                 match self.present_primary_target(frame) {
                     Some(Target::Player(player)) => {
@@ -1264,6 +1271,7 @@ impl Game {
                 for _ in 0..*count {
                     let token =
                         self.create_token(token_name, frame.controller, *tapped_and_attacking);
+                    frame.created = token.or(frame.created);
                     if let Some(token) = token.filter(|_| *attach_source) {
                         self.attach_source_to(frame, token);
                     }
@@ -1342,6 +1350,53 @@ impl Game {
                 let chosen = self.present_primary_target(frame)?;
                 if let Target::Permanent(permanent_id) = chosen {
                     self.put_counters(permanent_id, *kind, *count, frame.controller);
+                }
+                None
+            }
+            Effect::CreateDelayedTrigger { event, effects } => {
+                let (event, this_turn) = match event {
+                    DelayedEvent::TargetDiesThisTurn => {
+                        let Some(Target::Permanent(id)) = self.present_primary_target(frame) else {
+                            return None;
+                        };
+                        let watched = self.permanent_object_ref(id)?;
+                        (
+                            DelayedTriggerEvent::Leaves {
+                                watched,
+                                or_exiled: false,
+                            },
+                            true,
+                        )
+                    }
+                    DelayedEvent::CreatureDiesThisTurn => (DelayedTriggerEvent::CreatureDies, true),
+                    DelayedEvent::NextEndStepForCreatedToken => (
+                        DelayedTriggerEvent::NextEndStep {
+                            context: frame.created.map(Target::Permanent),
+                        },
+                        false,
+                    ),
+                    DelayedEvent::YouNextCastThisTurn(predicate) => {
+                        (DelayedTriggerEvent::YouCastSpell(predicate.clone()), true)
+                    }
+                };
+                self.add_delayed_trigger(DelayedTrigger {
+                    event,
+                    controller: frame.controller,
+                    source_card: frame.source?,
+                    source_ref: frame.source_ref,
+                    effects: effects.clone(),
+                    this_turn,
+                });
+                None
+            }
+            Effect::SacrificeTriggeringPermanent => {
+                if let Some(Target::Permanent(id)) = frame.context_target {
+                    if self.state.permanents[id]
+                        .as_ref()
+                        .is_some_and(|permanent| permanent.controller == frame.controller)
+                    {
+                        self.sacrifice_permanent(id);
+                    }
                 }
                 None
             }
@@ -1531,10 +1586,16 @@ impl Game {
                 }
                 // Delayed trigger: when it dies or is exiled, return it to
                 // the battlefield tapped (CR 603.7 one-shot).
-                self.state.delayed_triggers.push(DelayedTrigger {
-                    watched,
+                self.add_delayed_trigger(DelayedTrigger {
+                    event: DelayedTriggerEvent::Leaves {
+                        watched,
+                        or_exiled: true,
+                    },
                     controller,
-                    kind: DelayedTriggerKind::ReturnToBattlefieldTapped,
+                    source_card: CardId::from(watched.entity),
+                    source_ref: Some(watched),
+                    effects: vec![Effect::ReturnSourceToBattlefieldTapped],
+                    this_turn: false,
                 });
                 None
             }
@@ -1660,6 +1721,7 @@ impl Game {
                         kicked: frame.kicked,
                         x: frame.x,
                         excess_damage: 0,
+                        created: None,
                         targets: vec![ResolutionTarget {
                             requirement: 0,
                             ..target

@@ -11774,3 +11774,109 @@ fn wolfbat_returns_from_your_graveyard_on_your_second_draw_with_a_finality_count
     settle(&mut s);
     assert_eq!(zone_of(&s, wolfbat), Some(ZoneType::Exile), "finality");
 }
+
+/// The chosen creature dying this turn earthbends 4; one that dies on a
+/// later turn does nothing.
+#[test]
+fn fatal_fissure_earthbends_four_when_that_creature_dies_this_turn() {
+    let mut s = five_color_setup(&["Fatal Fissure", "Lightning Strike", "Gray Ogre"]);
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    cast(&mut s, "Fatal Fissure");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    cast(&mut s, "Lightning Strike");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(forest)));
+    settle(&mut s);
+    assert_eq!(counters(&s, forest), 4);
+    assert_eq!(s.game().effective_pt(forest), (4, 4));
+
+    let mut s = five_color_setup(&["Fatal Fissure", "Lightning Strike", "Gray Ogre"]);
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    cast(&mut s, "Fatal Fissure");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    s.advance_to_active_step(1, StepKind::Main);
+    s.advance_to_active_step(0, StepKind::Main);
+    assert!(s.game().state.delayed_triggers.is_empty(), "this turn only");
+    s.set_player_mana_pool(0, "1R");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    cast(&mut s, "Lightning Strike");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(counters(&s, forest), 0);
+}
+
+/// Attacking makes a Ballistic Boulder tapped and attacking, sacrificed at
+/// the next end step; the Trebuchet itself has defender.
+#[test]
+fn fire_navy_trebuchet_attacks_with_a_boulder_sacrificed_at_end_step() {
+    let mut s = five_color_setup(&["Fire Navy Trebuchet", "Gray Ogre"]);
+    let trebuchet = s.force_permanent_on_battlefield(0, "Fire Navy Trebuchet");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    clear_summoning_sickness(&mut s, trebuchet);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    assert!(!s.action_space().actions.iter().any(|action| matches!(
+        action,
+        Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == trebuchet
+    )));
+    let mut s = five_color_setup(&["Fire Navy Trebuchet", "Gray Ogre"]);
+    s.force_permanent_on_battlefield(0, "Fire Navy Trebuchet");
+    let ogre_too = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let _ = ogre;
+    let life = s.life(1);
+    attack_and_settle(&mut s, &[ogre_too], None);
+    let boulder = s.battlefield_permanents_named(0, "Ballistic Boulder")[0];
+    assert!(tapped(&s, boulder));
+    assert!(permanent(&s, boulder).attacking);
+    s.advance_to_active_step(0, StepKind::End);
+    settle(&mut s);
+    assert_eq!(s.life(1), life - 4, "the Ogre and the Boulder hit");
+    assert!(s
+        .battlefield_permanents_named(0, "Ballistic Boulder")
+        .is_empty());
+}
+
+/// All creatures get -2/-2. Paying the waterbend also gains 1 life for each
+/// creature that dies this turn.
+#[test]
+fn ruinous_waterbending_shrinks_everything_and_kicked_gains_life_per_death() {
+    let mut s = five_color_setup(&["Ruinous Waterbending", "Gray Ogre", "Craw Wurm"]);
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let wurm = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    s.set_player_mana_pool(0, "1BB");
+    let life = s.life(0);
+    cast(&mut s, "Ruinous Waterbending");
+    settle(&mut s);
+    assert!(s.battlefield_permanents_named(1, "Gray Ogre").is_empty());
+    assert_eq!(s.game().effective_pt(wurm), (4, 2));
+    assert_eq!(s.life(0), life, "unpaid");
+
+    let mut s = five_color_setup(&[
+        "Ruinous Waterbending",
+        "Gray Ogre",
+        "Craw Wurm",
+        "Lightning Strike",
+    ]);
+    s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let wurm = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    s.set_player_mana_pool(0, "4BBB");
+    let life = s.life(0);
+    cast(&mut s, "Ruinous Waterbending");
+    choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    if s.action_space().kind == ActionSpaceKind::Waterbend {
+        choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
+    }
+    settle(&mut s);
+    assert_eq!(s.life(0), life + 2, "both Ogres");
+    s.set_player_mana_pool(0, "1R");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    cast(&mut s, "Lightning Strike");
+    assert!(s.choose_target(Target::Permanent(wurm)));
+    settle(&mut s);
+    assert_eq!(s.life(0), life + 3, "the Wurm too");
+}
