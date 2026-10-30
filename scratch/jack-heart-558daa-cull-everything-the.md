@@ -131,6 +131,7 @@ Fixed in 04b1f529d: managym/README.md and the semantic-kernel research doc
 now call it a dated 2026-07-15 record superseded on undo/journal/page-COW by
 full-clone forking; rollout_pool.rs no longer cites `wave/search`. Frozen
 `experiments/w2-*` and `docs/research/etude-vs-phase.md` left as written.
+Verified: `cargo fmt --check` clean; `grep -rn "wave/search" managym/src` empty.
 
 ## Checks
 
