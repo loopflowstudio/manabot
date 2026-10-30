@@ -1,6 +1,4 @@
-"""Compiled sacrifice admission and typed learning data for the owned card pool."""
-
-from pathlib import Path
+"""Sacrifice setup: learning catalog binding and training observations."""
 
 import numpy as np
 
@@ -8,24 +6,8 @@ from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, RewardConfig
-from manabot.semantic.compiler import compile_paths, pretty_json
 from manabot.semantic.learning import BoundSemanticPack
 import managym
-
-BASE = Path("content/semantic/v1")
-
-
-def test_sacrifice_artifacts_close_the_owned_cards_and_tokens() -> None:
-    ir, coverage = compile_paths(
-        BASE / "sacrifice.source.json", BASE / "sacrifice.fixtures.json"
-    )
-    assert (BASE / "generated/sacrifice.ir.json").read_text() == pretty_json(ir)
-    assert (BASE / "generated/sacrifice.coverage.json").read_text() == pretty_json(
-        coverage
-    )
-    assert coverage["definition_count"] == 27
-    assert coverage["admission_closure_complete"]
-    assert coverage["no_card_name_dispatch"]
 
 
 def test_sacrifice_live_manifest_binds_every_learning_program() -> None:
@@ -60,4 +42,4 @@ def test_sacrifice_game_uses_the_training_observation_path() -> None:
         assert not info["permanent_space_truncated"]
         if terminal:
             return
-    raise AssertionError("compiled sacrifice game did not terminate")
+    raise AssertionError("sacrifice game did not terminate")

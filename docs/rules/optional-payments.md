@@ -41,10 +41,11 @@ recursively compiled, validated and projected into policy input. Frozen opcode
 `Step::OptionalPayment` at the IR read boundary; it has no separate Step,
 Effect or Decision.
 
-The current ten-deck pack is `elemental-world-v2`, with its source, IR, fixtures
-and learning schema 7 in `content/semantic/w11`. Earlier packs and schemas keep
-their bytes and identities. Academy's version 2 asset manifest binds the same
-ten exact setups and local treatments to the new content. Native action kinds,
+The ten-deck pack is `elemental-world-v2`. Its w11 source, IR, fixtures and
+learning schema 7 were in `content/semantic/w11` and now live at the revisions
+that recorded them; current decklists are in
+`content/semantic/current/setups.json`. Academy's version 2 asset manifest binds
+the same ten exact setups and local treatments to the new content. Native action kinds,
 order and observation tensor dimensions remain unchanged: ordinary optional
 mana exposes PayOrNot; waterbend exposes Waterbend; immediate colors expose
 Modal; decline may expose Discard. All choices use the same native legal offers
@@ -54,7 +55,7 @@ World w11 and match-state hash version 8 identify changed serialized payment
 state and content. Old checkpoints are rejected; historical receipts, `erd1`
 addresses and previous conformance corpora are retained without rewriting.
 The original optional-payment replay evidence belongs to `conformance/semantic-kernel-w11-v1`;
-current-runtime replay evidence belongs to `conformance/semantic-kernel-w13-v1`.
+current-runtime replay evidence belongs to `experiments/data/archive/conformance/semantic-kernel-w13-v1`.
 Native clone/undo and Command replay include payment progress, nested mana
 choices and contributed-object evidence. Recovery replays the ordinary Commands;
 it does not reconstruct payment by interpreting the card's text.

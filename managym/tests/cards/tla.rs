@@ -7823,7 +7823,7 @@ fn corrected_card_characteristics_match_oracle() {
     let lesson = card("Firebending Lesson");
     assert_eq!(lesson.mana_cost.as_ref().unwrap().mana_value, 1);
     assert!(lesson.types.is_instant());
-    assert_eq!(lesson.kicker.as_ref().unwrap().mana_value, 4);
+    assert_eq!(lesson.optional_cost().unwrap().mana_value, 4);
     assert!(lesson.has_subtype("Lesson"));
 
     assert!(card("It'll Quench Ya!").has_subtype("Lesson"));
@@ -7835,7 +7835,7 @@ fn corrected_card_characteristics_match_oracle() {
     let suki = card("Suki, Kyoshi Warrior");
     assert!(suki.supertypes.iter().any(|s| s == "legendary"));
     assert_eq!(suki.toughness, Some(4));
-    assert!(suki.power_cda.is_some());
+    assert!(suki.power_cda().is_some());
 }
 
 #[test]

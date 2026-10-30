@@ -12,8 +12,9 @@ setups are unchanged. Neither world freezes a strength baseline or certifies bal
 
 ## Setup and runtime authority
 
-The current compiled source is `content/semantic/w11/elemental_world.source.json`.
-The original source remains in `content/semantic/v1/elemental_world.source.json`.
+The current decklists are the `optional_payments` setup (`elemental-world-v2`)
+in `content/semantic/current/setups.json`; the w1–w11 sources live at their
+recorded revisions ([WORLDS.md](../../../WORLDS.md#running-an-older-world)).
 Its ten keys are `elemental_gr`, `elemental_gw`, `elemental_ur`, `elemental_ub`,
 `elemental_uw`, `elemental_ug`, `elemental_wr`, `elemental_wb`, `elemental_rb`,
 and `elemental_bg`. UG is the accepted Temur Lessons list, including Iroh,

@@ -32,7 +32,6 @@ from manabot.model.world import (
     validate_agent_setup,
     validate_checkpoint_world,
 )
-from manabot.semantic.compiler import compile_paths, pretty_json
 from manabot.semantic.learning import BoundSemanticPack
 from manabot.training.execution import execute_regime
 from manabot.training.regime import Learning, TrainingRegime, TrainSelfPlay
@@ -40,19 +39,9 @@ from manabot.verify.store import VerifyStore
 import managym
 
 PACK = "elemental-world-v2"
-BASE = Path("content/semantic/w11")
 
 
-def test_exact_accepted_lists_inventory_and_compiled_closure() -> None:
-    ir, coverage = compile_paths(
-        BASE / "elemental_world.source.json", BASE / "elemental_world.fixtures.json"
-    )
-    assert (BASE / "generated/elemental_world.ir.json").read_text() == pretty_json(ir)
-    assert (
-        BASE / "generated/elemental_world.coverage.json"
-    ).read_text() == pretty_json(coverage)
-    assert coverage["definition_count"] == 100
-    assert coverage["admission_closure_complete"]
+def test_exact_accepted_lists_match_inventory() -> None:
     accepted = json.loads(Path("docs/rules/elemental/decks.json").read_text())
     with Path("docs/rules/elemental/cube-snapshot.csv").open(newline="") as stream:
         inventory = Counter(row["name"] for row in csv.DictReader(stream))

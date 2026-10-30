@@ -28,7 +28,7 @@ use std::collections::{BTreeSet, HashMap};
 
 use managym::cards::content_pack::CardRegistry;
 use managym::cards::setups::authored_pack;
-use managym::state::card::{CardDefinition, CardType};
+use managym::state::card::{AdditionalCost, CardDefinition, CardType};
 use managym::state::mana::{Color, ManaCost};
 
 /// Registered rules fixtures that are not real Magic cards
@@ -276,7 +276,7 @@ fn every_registered_real_card_matches_scryfall() {
         }
 
         // Printed power/toughness ("*" = CDA).
-        let power = engine_pt(def.power, def.power_cda.is_some());
+        let power = engine_pt(def.power, def.power_cda().is_some());
         if power != scryfall_pt(fx.power.as_ref()) {
             failures.push(format!(
                 "{name}: power {power:?} != Scryfall {:?}",
@@ -307,9 +307,13 @@ fn every_registered_real_card_matches_scryfall() {
             ("Defender", def.keywords.defender),
             ("Menace", def.keywords.menace),
             ("Hexproof", def.keywords.hexproof),
-            ("Ward", def.ward.is_some()),
-            // A waterbend additional cost rides the kicker field unnamed.
-            ("Kicker", def.kicker.is_some() && !def.kicker_waterbend),
+            ("Ward", def.ward().is_some()),
+            (
+                "Kicker",
+                def.additional_costs
+                    .iter()
+                    .any(|cost| matches!(cost, AdditionalCost::Kicker(_))),
+            ),
         ];
         for (keyword, has) in checks {
             if kw(keyword) != has {

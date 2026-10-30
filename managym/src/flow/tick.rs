@@ -9,7 +9,7 @@ use crate::{
         game::Game,
         turn::{StepKind, TurnState},
     },
-    state::game_object::PlayerId,
+    state::{card::StaticAbility, game_object::PlayerId},
 };
 
 impl Game {
@@ -366,7 +366,8 @@ impl Game {
                 let unlimited = self.state.players[player.0].no_maximum_hand_size
                     || self.battlefield_permanents(player).iter().any(|id| {
                         let permanent = self.state.permanents[*id].as_ref().expect("battlefield");
-                        self.state.cards[permanent.card].no_maximum_hand_size
+                        self.state.cards[permanent.card]
+                            .has_static(&StaticAbility::NoMaximumHandSize)
                     });
                 if !unlimited
                     && self

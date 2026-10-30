@@ -1,11 +1,18 @@
 # Conformance fixtures
 
-These retained fixtures have current executable consumers. The w17 semantic
-kernel corpus drives Rust replay/property checks and CI. Academy still consumes
-the authored-match and public-commitment receipts; the Learn wrapper names its
-w4-v3 cohort.
+Only current-world (w17) corpora with executable consumers stay in source:
 
-Superseded corpora are archived byte-for-byte in S3, under
-`experiments/data/archive/conformance/`. See the [repository archive](../docs/repository-archive.md)
-for the retained boundaries, exact source revision and fetch command. Historical
-source identities and world-admission rules remain authoritative.
+- `semantic-kernel-w17-v1/` — Rust replay, property and Phase-matrix checks
+  (`managym/tests/semantic_conformance_tests.rs`) and the CI conformance gate.
+- `authored-match-w17-v1/` — the authored-match authority receipt
+  (`academy.authored_match_receipt`, `scripts/generate_authored_match_receipt.py`).
+- `authored-match-parity-w17-v1/` — Academy live/headless replay parity
+  (`scripts/verify-authored-match-parity`).
+- `public-commitment-parity-w17-v1/` — Academy public-commitment parity
+  (`scripts/verify-public-commitment-parity`).
+
+Earlier worlds' corpora (semantic-kernel w8–w15, authored-match and parity v1
+through w11, public-commitment-parity-v1, the Learn w4 cohorts) are archived
+byte-for-byte in S3 under `experiments/data/archive/conformance/`; see the
+[repository archive](../docs/repository-archive.md) for the fetch command. They
+verify only at the revision that recorded them.

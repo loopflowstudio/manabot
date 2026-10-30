@@ -16,7 +16,7 @@ use crate::{
     },
     state::{
         ability::TargetRequirement,
-        card::{ActivatedAbilityDefinition, ActivationZone},
+        card::{ActivatedAbilityDefinition, ActivationZone, AdditionalCost, StaticAbility},
         game_object::{CardId, PermanentId, PlayerId, Target},
         mana::{ManaCost, ManaUse},
         stack_object::{ActivatedAbilityOnStack, StackObject},
@@ -69,10 +69,11 @@ impl Game {
         let granted = self.active_player() == player
             && self.battlefield_permanents(player).iter().any(|id| {
                 let source = self.state.permanents[*id].as_ref().unwrap();
-                self.state.cards[source.card].grants_flashback
+                self.state.cards[source.card]
+                    .has_static(&StaticAbility::GraveyardSpellsHaveFlashback)
             });
         if !granted {
-            definition.flashback.clone()
+            definition.flashback().cloned()
         } else if definition.has_subtype("Lesson") {
             Some(ManaCost::parse("{1}"))
         } else {
@@ -114,21 +115,28 @@ impl Game {
         cost = cost.with_x(cast.x);
         cost.purpose = ManaUse::spell(card_ref.subtypes.iter().map(String::as_str));
         if cast.kicked {
-            if let Some(kicker) = &card_ref.kicker {
+            if let Some(kicker) = card_ref.optional_cost() {
                 cost = cost.plus(kicker);
             }
         }
-        if let Some(predicate) = &card_ref.cost_reduction_per {
-            let count = if card_ref.cost_reduction_in_graveyard {
-                self.count_graveyard_matching(player, predicate)
-            } else {
-                self.count_battlefield_matching(player, predicate)
+        for ability in &card_ref.statics {
+            let count = match ability {
+                StaticAbility::CostsLessPerPermanent(predicate) => {
+                    self.count_battlefield_matching(player, predicate)
+                }
+                StaticAbility::CostsLessPerGraveyardCard(predicate) => {
+                    self.count_graveyard_matching(player, predicate)
+                }
+                _ => continue,
             };
             cost = cost.reduced_generic(u8::try_from(count).unwrap_or(u8::MAX));
         }
         for permanent_id in self.battlefield_permanents(player) {
             let permanent = self.state.permanents[permanent_id].as_ref()?;
-            for reduction in &self.state.cards[permanent.card].spell_cost_reductions {
+            for ability in &self.state.cards[permanent.card].statics {
+                let StaticAbility::SpellsCostLess(reduction) = ability else {
+                    continue;
+                };
                 if reduction.first_on_own_turn
                     && (self.active_player() != player
                         || self.state.turn.spells_cast[player.0]
@@ -314,7 +322,9 @@ impl Game {
             kicked: true,
             ..cast
         };
-        if self.state.cards[card].kicker.is_some() && self.can_pay_cast(player, card, kicked) {
+        if self.state.cards[card].optional_cost().is_some()
+            && self.can_pay_cast(player, card, kicked)
+        {
             self.pending_choice = Some(PendingChoice::KickerChoice { player, card, cast });
             return Ok(());
         }
@@ -356,10 +366,14 @@ impl Game {
         cast: CastChoices,
     ) -> u8 {
         let card_ref = &self.state.cards[card];
-        let kicker = match &card_ref.kicker {
-            Some(kicker) if cast.kicked && card_ref.kicker_waterbend => kicker.generic(),
-            _ => 0,
-        };
+        let waterbend = card_ref
+            .additional_costs
+            .iter()
+            .find_map(|cost| match cost {
+                AdditionalCost::Waterbend(waterbend) if cast.kicked => Some(waterbend.generic()),
+                _ => None,
+            })
+            .unwrap_or(0);
         let granted = !cast.free
             && self
                 .exile_grant(player, card)
@@ -367,7 +381,7 @@ impl Game {
         if granted {
             u8::MAX
         } else {
-            kicker
+            waterbend
         }
     }
 
@@ -676,7 +690,7 @@ impl Game {
         targets: Vec<Target>,
         target_req_indices: Vec<usize>,
     ) -> Result<(), AgentError> {
-        let cost = self.state.cards[card].sacrifice_cost.clone();
+        let cost = self.state.cards[card].sacrifice_cost().cloned();
         self.begin_payment(
             player,
             Payment::Spell {

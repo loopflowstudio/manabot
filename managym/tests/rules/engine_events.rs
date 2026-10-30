@@ -17,7 +17,7 @@ use managym::{
     flow::turn::StepKind,
     state::{
         ability::{Ability, Effect, TriggerCondition, TriggerSubject},
-        card::CardType,
+        card::{BlockRestriction, CardType, StaticAbility},
         game_object::PlayerId,
         predicate::CardPredicate,
         zone::ZoneType,
@@ -397,11 +397,15 @@ fn block_restriction_respects_effective_power() {
         .unwrap()
         .summoning_sick = false;
     let attacker_card = card_of(&s, attacker);
-    s.game_mut().state.cards[attacker_card].block_restriction = Some(CardPredicate {
-        card_type: Some(CardType::Creature),
-        max_power: Some(2),
-        ..Default::default()
-    });
+    s.game_mut().state.cards[attacker_card]
+        .statics
+        .push(StaticAbility::BlockRestriction(
+            BlockRestriction::CantBeBlockedBy(CardPredicate {
+                card_type: Some(CardType::Creature),
+                max_power: Some(2),
+                ..Default::default()
+            }),
+        ));
 
     let weak = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let strong = s.force_permanent_on_battlefield(1, "Gray Ogre");

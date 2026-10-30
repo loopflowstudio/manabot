@@ -2,11 +2,11 @@
 //! tensor columns (`agent::observation_encoder`), card rules through learning
 //! tokens (`cards::tokens`). The guards below destructure or match
 //! exhaustively, with no wildcard, so a new keyword, permanent or player
-//! status, `Effect`, `Ability` or `TriggerCondition` variant does not compile
-//! until it names where the policy sees it. Directed tests then put a game in
+//! status, `Effect`, `Ability`, `TriggerCondition`, `StaticAbility` or
+//! `AdditionalCost` variant does not compile until it names where the policy
+//! sees it. Directed tests then put a game in
 //! that state and check the named column or token changes, and viewer-safety
 //! tests check hidden cards change neither.
-
 //!
 //! The observation-row guards destructure each viewer row type
 //! (`CardData`, `PlayerData`, `PermanentData`, `KeywordData`) without `..`, so
@@ -18,13 +18,16 @@
 use std::ops::Range;
 
 use crate::support::{
-    game::{deck, five_color_setup, Scenario},
+    game::{
+        clear_summoning_sickness, deck, five_color_setup, put_onto_battlefield, ur_lessons_setup,
+        Scenario,
+    },
     inspect::{card_of, library_card},
-    play::{activate, cast, choose, choose_mode, settle},
+    play::{activate, cast, choose, choose_mode, resolve_top, settle},
 };
 use managym::{
     agent::{
-        action::Action,
+        action::{Action, ActionSpaceKind},
         observation::{
             CardData, CardTypeData, CastPermissionData, KeywordData, Observation, PermanentData,
             PlayerData,
@@ -37,14 +40,17 @@ use managym::{
         },
     },
     cards::content_pack::default_content_pack,
-    cards::tokens::{definition_tokens, name_value, TokenKind},
+    cards::tokens::{definition_tokens, learning_catalog, name_value, TokenKind},
     flow::turn::StepKind,
     state::{
         ability::{
             Ability, Effect, EffectValue, LinkedChooser, LinkedGrant, PaymentCost, StaticCondition,
             TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
         },
-        card::{ActivatedAbilityDefinition, CardDefinition, Keywords},
+        card::{
+            ActivatedAbilityDefinition, AdditionalCost, BlockRestriction, CardDefinition, Keywords,
+            PowerCda, SacrificeCost, SpellCostReduction, StaticAbility, StaticPtBuff, StaticScope,
+        },
         game_object::{CardId, PermanentId, PlayerId, Target},
         mana::{Mana, ManaCost},
         permanent::Permanent,
@@ -63,10 +69,14 @@ use managym::{
 enum Seen {
     /// Permanent tensor column.
     Permanent(usize),
+    /// Card tensor column.
+    Card(usize),
     /// Player tensor columns `start..end`.
     Player(usize, usize),
     /// Observed through another field named here.
     Via(&'static str),
+    /// Changes which actions are legal (the action tensor), as described.
+    Actions(&'static str),
     /// Never visible at a decision point, with the reason.
     Transient(&'static str),
     /// Object identity or bookkeeping rather than game state.
@@ -609,6 +619,231 @@ fn ability_token(ability: &Ability) -> &'static str {
     }
 }
 
+/// One static ability or additional cost: its learning token, where its
+/// effect is seen beyond that token, and the real card whose directed test in
+/// `tests/cards/<file>.rs` runs it.
+struct Witnessed {
+    token: &'static str,
+    seen: Seen,
+    card: &'static str,
+    file: &'static str,
+    test: &'static str,
+}
+
+const fn witnessed(
+    token: &'static str,
+    seen: Seen,
+    card: &'static str,
+    file: &'static str,
+    test: &'static str,
+) -> Witnessed {
+    Witnessed {
+        token,
+        seen,
+        card,
+        file,
+        test,
+    }
+}
+
+/// No wildcard: a new `StaticAbility` must be named here.
+fn static_seen(ability: &StaticAbility) -> Witnessed {
+    match ability {
+        StaticAbility::GraveyardSpellsHaveFlashback => witnessed(
+            "StaticAbility::GraveyardSpellsHaveFlashback",
+            Seen::Actions("graveyard spells are offered as casts"),
+            "Iroh, Grand Lotus",
+            "tla",
+            "flashback_is_exiled_when_countered_after_iroh_leaves",
+        ),
+        StaticAbility::GrantsAnyColorManaAbility(_) => witnessed(
+            "StaticAbility::GrantsAnyColorManaAbility",
+            Seen::Actions("granted mana abilities make more costs payable"),
+            "Great Divide Guide",
+            "tla",
+            "guide_grants_tap_mana_with_sickness_and_removes_it_on_departure",
+        ),
+        StaticAbility::CantBeBlockedIf(_) => witnessed(
+            "StaticAbility::CantBeBlockedIf",
+            Seen::Actions("declare-blockers offers omit the attacker"),
+            "June, Bounty Hunter",
+            "tla",
+            "june_is_unblockable_after_two_draws",
+        ),
+        StaticAbility::PlayersCantGainLife => witnessed(
+            "StaticAbility::PlayersCantGainLife",
+            Seen::Via("life column: prevented gains leave it unchanged"),
+            "Giant Cindermaw",
+            "blb",
+            "savor_makes_food_with_a_real_tap_cost_and_cindermaw_prevents_its_life_gain",
+        ),
+        StaticAbility::CantAttackOrBlockUnlessYouControlAnother(_) => witnessed(
+            "StaticAbility::CantAttackOrBlockUnlessYouControlAnother",
+            Seen::Actions("attack and block offers omit the creature"),
+            "Tiger-Dillo",
+            "tla",
+            "tiger_dillo_needs_another_four_power_creature_to_be_an_attacker",
+        ),
+        StaticAbility::BlockRestriction(_) => witnessed(
+            "StaticAbility::BlockRestriction",
+            Seen::Actions("block offers omit forbidden pairs"),
+            "Spirit",
+            "tla",
+            "spirit_tokens_cannot_block_or_be_blocked_by_nonspirits",
+        ),
+        StaticAbility::SpellsCostLess(_) => witnessed(
+            "StaticAbility::SpellsCostLess",
+            Seen::Actions("casts become affordable at the reduced cost"),
+            "Gran-Gran",
+            "tla",
+            "gran_gran_reduction_threshold_noncreature_and_generic_floor",
+        ),
+        StaticAbility::CostsLessPerPermanent(_) => witnessed(
+            "StaticAbility::CostsLessPerPermanent",
+            Seen::Actions("the cast becomes affordable at the reduced cost"),
+            "Allies at Last",
+            "tla",
+            "allies_at_last_affinity_and_two_attackers",
+        ),
+        StaticAbility::CostsLessPerGraveyardCard(_) => witnessed(
+            "StaticAbility::CostsLessPerGraveyardCard",
+            Seen::Actions("the cast becomes affordable at the reduced cost"),
+            "Serpent of the Pass",
+            "tla",
+            "serpent_of_the_pass_is_cheaper_per_graveyard_spell_and_flashes_with_three_lessons",
+        ),
+        StaticAbility::FlashIf(_) => witnessed(
+            "StaticAbility::FlashIf",
+            Seen::Actions("the cast is offered at instant timing"),
+            "Serpent of the Pass",
+            "tla",
+            "serpent_of_the_pass_is_cheaper_per_graveyard_spell_and_flashes_with_three_lessons",
+        ),
+        StaticAbility::Flashback(_) => witnessed(
+            "StaticAbility::Flashback",
+            Seen::Actions("the graveyard card is offered as a cast"),
+            "Rockalanche",
+            "tla",
+            "rockalanche_earthbends_by_forests_you_control_and_flashes_back",
+        ),
+        StaticAbility::Foretell(_) => witnessed(
+            "StaticAbility::Foretell",
+            Seen::Actions("foretelling is offered from hand; then the foretold permission columns"),
+            "Sozin's Comet",
+            "tla",
+            "sozins_comet_foretells_face_down_and_casts_on_a_later_turn",
+        ),
+        StaticAbility::NoMaximumHandSize => witnessed(
+            "StaticAbility::NoMaximumHandSize",
+            Seen::Player(3, 4),
+            "Proft's Eidetic Memory",
+            "mkm",
+            "proft_hand_limit_only_while_controlled_and_legend_rule_for_both_card_types",
+        ),
+        StaticAbility::PtBuff(_) => witnessed(
+            "StaticAbility::PtBuff",
+            Seen::Permanent(6),
+            "First-Time Flyer",
+            "tla",
+            "first_time_flyer_conditional_static_recomputes_on_read",
+        ),
+        StaticAbility::CharacteristicPower(_) => witnessed(
+            "StaticAbility::CharacteristicPower",
+            Seen::Permanent(6),
+            "Suki, Kyoshi Warrior",
+            "tla",
+            "suki_power_tracks_creature_count_and_attack_makes_a_token",
+        ),
+        StaticAbility::Ward(_) => witnessed(
+            "StaticAbility::Ward",
+            Seen::Card(33),
+            "Waterfall Aerialist",
+            "stx",
+            "ward_asks_spell_controller_and_counters_on_decline",
+        ),
+    }
+}
+
+fn block_restriction_token(restriction: &BlockRestriction) -> &'static str {
+    match restriction {
+        BlockRestriction::CantBlock(_) => "BlockRestriction::CantBlock",
+        BlockRestriction::CantBeBlockedBy(_) => "BlockRestriction::CantBeBlockedBy",
+    }
+}
+
+/// No wildcard: a new `AdditionalCost` must be named here.
+fn cost_seen(cost: &AdditionalCost) -> Witnessed {
+    match cost {
+        AdditionalCost::Sacrifice(_) => witnessed(
+            "AdditionalCost::Sacrifice",
+            Seen::Actions("the cast is offered only with a sacrifice available"),
+            "Deadly Precision",
+            "tla",
+            "deadly_precision_sacrifices_artifact_before_destroying_a_different_creature",
+        ),
+        AdditionalCost::Kicker(_) => witnessed(
+            "AdditionalCost::Kicker",
+            Seen::Card(35),
+            "Firebending Lesson",
+            "tla",
+            "firebending_lesson_kicked_deals_five",
+        ),
+        AdditionalCost::Waterbend(_) => witnessed(
+            "AdditionalCost::Waterbend",
+            Seen::Card(35),
+            "Spirit Water Revival",
+            "tla",
+            "spirit_water_revival_waterbends_its_additional_cost",
+        ),
+    }
+}
+
+/// One witness per `StaticAbility` variant and `BlockRestriction` side.
+fn static_witnesses() -> Vec<StaticAbility> {
+    let creature = CardPredicate::creature;
+    vec![
+        StaticAbility::GraveyardSpellsHaveFlashback,
+        StaticAbility::GrantsAnyColorManaAbility(creature()),
+        StaticAbility::CantBeBlockedIf(StaticCondition::YourTurn),
+        StaticAbility::PlayersCantGainLife,
+        StaticAbility::CantAttackOrBlockUnlessYouControlAnother(creature()),
+        StaticAbility::BlockRestriction(BlockRestriction::CantBlock(creature())),
+        StaticAbility::BlockRestriction(BlockRestriction::CantBeBlockedBy(creature())),
+        StaticAbility::SpellsCostLess(SpellCostReduction {
+            first_on_own_turn: false,
+            predicate: CardPredicate::default(),
+            condition: StaticCondition::Always,
+            generic: 1,
+        }),
+        StaticAbility::CostsLessPerPermanent(creature()),
+        StaticAbility::CostsLessPerGraveyardCard(creature()),
+        StaticAbility::FlashIf(StaticCondition::YourTurn),
+        StaticAbility::Flashback(ManaCost::parse("{2}")),
+        StaticAbility::Foretell(ManaCost::parse("{2}")),
+        StaticAbility::NoMaximumHandSize,
+        StaticAbility::PtBuff(StaticPtBuff {
+            scope: StaticScope::This,
+            condition: None,
+            power: 2,
+            toughness: 0,
+        }),
+        StaticAbility::CharacteristicPower(PowerCda::CreaturesYouControl),
+        StaticAbility::Ward(ManaCost::parse("{2}")),
+    ]
+}
+
+fn cost_witnesses() -> Vec<AdditionalCost> {
+    vec![
+        AdditionalCost::Sacrifice(SacrificeCost {
+            predicate: CardPredicate::creature(),
+            another: false,
+            or_mana: None,
+        }),
+        AdditionalCost::Kicker(ManaCost::parse("{4}")),
+        AdditionalCost::Waterbend(ManaCost::parse("{6}")),
+    ]
+}
+
 // ---------------------------------------------------------------------------
 // Fixtures.
 
@@ -729,7 +964,10 @@ fn every_permanent_and_player_field_names_where_it_is_seen() {
         match seen {
             Seen::Permanent(column) => assert!(column < width, "{field}"),
             Seen::Player(start, end) => assert!(start < end && end <= width, "{field}"),
-            Seen::Via(place) | Seen::Transient(place) => assert!(!place.is_empty(), "{field}"),
+            Seen::Card(column) => assert!(column < CARD_DIM, "{field}"),
+            Seen::Via(place) | Seen::Actions(place) | Seen::Transient(place) => {
+                assert!(!place.is_empty(), "{field}")
+            }
             Seen::Identity => {}
         }
     }
@@ -948,6 +1186,278 @@ fn learning_tokens_never_carry_names_or_printed_text() {
         if !definition.text_box.is_empty() {
             assert!(!tokens.contains(&(TokenKind::Text, name_value(&definition.text_box))));
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Static abilities and additional costs.
+
+/// The definition of `name` in the default pack.
+fn card_definition(name: &str) -> CardDefinition {
+    let pack = default_content_pack();
+    let id = pack.definition_id(name).unwrap_or_else(|| panic!("{name}"));
+    pack.definition(id).unwrap().clone()
+}
+
+/// The source of `fn name(` through the next top-level `fn` in `source`.
+fn function_body<'a>(source: &'a str, name: &str) -> Option<&'a str> {
+    let start = source.find(&format!("\nfn {name}("))? + 1;
+    let end = source[start..]
+        .find("\nfn ")
+        .map_or(source.len(), |offset| start + offset);
+    Some(&source[start..end])
+}
+
+/// Every variant is witnessed by a real card that prints it, and that card's
+/// named directed test exists in its card test file and names the card.
+#[test]
+fn every_static_and_cost_variant_names_a_real_card_and_its_behavior_test() {
+    let statics = static_witnesses().into_iter().map(|ability| {
+        let row = static_seen(&ability);
+        let printed = card_definition(row.card)
+            .statics
+            .iter()
+            .any(|candidate| std::mem::discriminant(candidate) == std::mem::discriminant(&ability));
+        (row, printed)
+    });
+    let costs = cost_witnesses().into_iter().map(|cost| {
+        let row = cost_seen(&cost);
+        let printed = card_definition(row.card)
+            .additional_costs
+            .iter()
+            .any(|candidate| std::mem::discriminant(candidate) == std::mem::discriminant(&cost));
+        (row, printed)
+    });
+    for (row, printed) in statics.chain(costs) {
+        assert!(printed, "{} does not print {}", row.card, row.token);
+        let path = format!("{}/tests/cards/{}.rs", env!("CARGO_MANIFEST_DIR"), row.file);
+        let source = std::fs::read_to_string(&path).unwrap();
+        let body = function_body(&source, row.test)
+            .unwrap_or_else(|| panic!("{path} has no test {}", row.test));
+        // The test names the card itself or through a setup helper it calls.
+        let card = format!("{:?}", row.card);
+        let runs_card = body.contains(&card)
+            || source
+                .match_indices("\nfn ")
+                .filter_map(|(at, _)| source[at + 4..].split('(').next())
+                .any(|helper| {
+                    body.contains(&format!("{helper}("))
+                        && function_body(&source, helper).is_some_and(|it| it.contains(&card))
+                });
+        assert!(runs_card, "{} does not run {}", row.test, row.card);
+        match row.seen {
+            Seen::Permanent(column) => assert!(column < PERMANENT_DIM - 1, "{}", row.token),
+            Seen::Card(column) => assert!(column < CARD_DIM, "{}", row.token),
+            Seen::Player(start, end) => assert!(start < end && end <= PLAYER_DIM, "{}", row.token),
+            Seen::Via(place) | Seen::Actions(place) | Seen::Transient(place) => {
+                assert!(!place.is_empty(), "{}", row.token)
+            }
+            Seen::Identity => panic!("{} is rules, not identity", row.token),
+        }
+    }
+}
+
+/// Each variant's token is in the real card's tokens, and removing the
+/// ability from the card removes the token and changes the card's tokens.
+#[test]
+fn every_static_and_cost_variant_reaches_the_learning_tokens() {
+    let variant = |name: &str| (TokenKind::Variant, name_value(name));
+    for ability in static_witnesses() {
+        let row = static_seen(&ability);
+        let card = card_definition(row.card);
+        let mut names = vec![row.token];
+        if let StaticAbility::BlockRestriction(restriction) = &ability {
+            names.push(block_restriction_token(restriction));
+        }
+        let tokens = tokens_of(&card);
+        let mut stripped = card.clone();
+        stripped.statics.retain(|candidate| {
+            std::mem::discriminant(candidate) != std::mem::discriminant(&ability)
+        });
+        let without = tokens_of(&stripped);
+        assert_ne!(tokens, without, "{}", row.card);
+        for name in names {
+            assert!(tokens.contains(&variant(name)), "{} lacks {name}", row.card);
+            assert!(!without.contains(&variant(name)), "{name}");
+        }
+        // The token also appears for a bare definition with only this ability.
+        let bare = CardDefinition {
+            name: "Witness".into(),
+            statics: vec![ability.clone()],
+            ..Default::default()
+        };
+        assert!(
+            tokens_of(&bare).contains(&variant(row.token)),
+            "{ability:?}"
+        );
+    }
+    for cost in cost_witnesses() {
+        let row = cost_seen(&cost);
+        let card = card_definition(row.card);
+        let tokens = tokens_of(&card);
+        let mut stripped = card.clone();
+        stripped
+            .additional_costs
+            .retain(|candidate| std::mem::discriminant(candidate) != std::mem::discriminant(&cost));
+        let without = tokens_of(&stripped);
+        assert_ne!(tokens, without, "{}", row.card);
+        assert!(tokens.contains(&variant(row.token)), "{}", row.card);
+        assert!(!without.contains(&variant(row.token)), "{}", row.token);
+    }
+}
+
+/// Every variant whose row names a tensor column moves that column when the
+/// ogre gains it: ward, kicker and optional waterbend set card columns; a P/T buff and
+/// characteristic power move the permanent's power column.
+#[test]
+fn tensor_visible_statics_and_costs_move_their_named_columns() {
+    let (base_game, ogre) = ogre_game();
+    let (base_obs, base) = observe(&base_game, 0);
+    let card = base_game.state.permanents[ogre].as_ref().unwrap().card;
+    let edits = static_witnesses()
+        .into_iter()
+        .map(|ability| {
+            let row = static_seen(&ability);
+            let edit: Box<dyn Fn(&mut CardDefinition)> =
+                Box::new(move |definition| definition.statics.push(ability.clone()));
+            (row, edit)
+        })
+        .chain(cost_witnesses().into_iter().map(|cost| {
+            let row = cost_seen(&cost);
+            let edit: Box<dyn Fn(&mut CardDefinition)> =
+                Box::new(move |definition| definition.additional_costs.push(cost.clone()));
+            (row, edit)
+        }));
+    let mut checked = 0;
+    for (row, edit) in edits {
+        let mut game = base_game.clone();
+        edit(&mut game.state.cards[card]);
+        let (obs, after) = observe(&game, 0);
+        let moved = match row.seen {
+            Seen::Card(column) => changed(
+                card_row(&base_game, &base_obs, &base, ogre),
+                card_row(&game, &obs, &after, ogre),
+            )
+            .contains(&column),
+            Seen::Permanent(column) => {
+                changed(permanent_row(&base), permanent_row(&after)).contains(&column)
+            }
+            _ => continue,
+        };
+        assert!(moved, "{} did not move its column", row.token);
+        checked += 1;
+    }
+    assert_eq!(checked, 5);
+}
+
+/// With no maximum hand size, the hand-count column keeps its size through
+/// cleanup; without it, the controller discards to seven.
+#[test]
+fn no_maximum_hand_size_keeps_the_hand_count_column_through_cleanup() {
+    let Seen::Player(column, _) = static_seen(&StaticAbility::NoMaximumHandSize).seen else {
+        panic!("hand size names a player column");
+    };
+    let hand_column = |has_static: bool| {
+        let mut s = ur_lessons_setup();
+        let proft = put_onto_battlefield(&mut s, 0, "Proft's Eidetic Memory");
+        s.pass_priority();
+        resolve_top(&mut s);
+        if !has_static {
+            let card = card_of(&s, proft);
+            s.game_mut().move_card(card, ZoneType::Hand);
+        }
+        s.game_mut().draw_cards(PlayerId(0), 5);
+        s.advance_to_active_step(0, StepKind::End);
+        resolve_top(&mut s);
+        while s.action_space().kind == ActionSpaceKind::Discard {
+            s.step_action(0);
+        }
+        s.advance_to_active_step(1, StepKind::Upkeep);
+        observe(s.game(), 0).1.agent_player[column]
+    };
+    let kept = hand_column(true);
+    let discarded = hand_column(false);
+    assert_eq!(discarded, 7.0 / 60.0);
+    assert!(kept > discarded, "{kept} vs {discarded}");
+}
+
+/// June's conditional unblockability removes the blocks against it from the
+/// defending player's action tensor.
+#[test]
+fn cant_be_blocked_if_removes_blocks_from_the_action_tensor() {
+    let valid_actions = |draws: usize| {
+        let mut s = five_color_setup(&["June, Bounty Hunter", "Callous Inspector"]);
+        let june = s.force_permanent_on_battlefield(0, "June, Bounty Hunter");
+        s.force_permanent_on_battlefield(1, "Callous Inspector");
+        clear_summoning_sickness(&mut s, june);
+        s.game_mut().draw_cards(PlayerId(0), draws);
+        s.advance_to_active_step(0, StepKind::DeclareAttackers);
+        s.declare_attack();
+        s.advance_to_active_step(0, StepKind::DeclareBlockers);
+        let (_, encoded) = observe(s.game(), 1);
+        encoded.actions_valid.iter().sum::<f32>()
+    };
+    assert!(valid_actions(2) < valid_actions(0));
+}
+
+// ---------------------------------------------------------------------------
+// Tokens.
+
+/// Defined tokens whose producing card is not defined yet, with that producer.
+/// When the producer lands, its reference makes the token leave this list.
+const TOKENS_AWAITING_PRODUCER: [(&str, &str); 4] = [
+    ("token.ballistic_boulder", "Fire Navy Trebuchet"),
+    ("token.bear", "The Earth King"),
+    ("token.dragon", "The Legend of Roku"),
+    ("token.monk", "Crescent Island Temple"),
+];
+
+/// Every `token.*` definition is a definition reference from a card that
+/// creates it (or awaits a named producer), and a created token's observation
+/// carries its characteristics.
+#[test]
+fn every_token_is_referenced_by_its_creator_and_observed_with_its_characteristics() {
+    let pack = default_content_pack();
+    let catalog = learning_catalog(&pack).unwrap();
+    let tokens = managym::cardsets::catalog()
+        .iter()
+        .filter(|definition| definition.key.starts_with("token."))
+        .collect::<Vec<_>>();
+    assert!(!tokens.is_empty());
+    for token in tokens {
+        assert!(token.is_token, "{}", token.key);
+        let row = pack.definition_id(&token.name).unwrap().0 as i32;
+        let referencing = catalog
+            .definition_ref_source_tokens
+            .iter()
+            .zip(&catalog.definition_ref_target_rows)
+            .filter(|(_, &target)| target == row)
+            .count();
+        let awaiting = TOKENS_AWAITING_PRODUCER
+            .iter()
+            .any(|(key, _)| *key == token.key);
+        assert_eq!(
+            referencing > 0,
+            !awaiting,
+            "{}: {referencing} creating references",
+            token.key
+        );
+
+        let (mut game, _) = ogre_game();
+        game.create_token(&token.name, PlayerId(0), false);
+        let (observation, encoded) = observe(&game, 0);
+        let card = observation
+            .agent_cards
+            .iter()
+            .position(|card| card.name == token.name && card.is_token)
+            .unwrap_or_else(|| panic!("{} is not observed", token.key));
+        let card_row = &encoded.agent_cards[card * CARD_DIM..(card + 1) * CARD_DIM];
+        assert_eq!(card_row[29], 1.0, "{} is_token column", token.key);
+        assert_eq!(card_row[8], token.power.unwrap_or(0) as f32 / 10.0);
+        assert_eq!(card_row[9], token.toughness.unwrap_or(0) as f32 / 10.0);
+        assert_eq!(card_row[12], f32::from(token.types.is_creature()));
+        assert_eq!(card_row[13], f32::from(token.types.is_artifact()));
+        assert_eq!(card_row[17], f32::from(token.keywords.flying));
     }
 }
 

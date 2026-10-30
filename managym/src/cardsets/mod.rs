@@ -4,9 +4,9 @@
 //! Each card is one function returning the engine's own [`CardDefinition`],
 //! listed in its set file's `cards()`; [`catalog`] gathers every set. New
 //! behavior is a new `Effect` (or other rules-type) variant, never card-specific
-//! logic. Tokens made by TLA cards live in `tla.rs`; other tokens live in
-//! `tokens.rs`. A set file may mark a defined card incomplete beside its
-//! definitions ([`incomplete`]); every other defined card is supported.
+//! logic. Every token lives in `tokens.rs`. A set file may mark a defined card
+//! incomplete beside its definitions ([`incomplete`]); every other defined card
+//! is supported.
 
 mod afr;
 mod blb;
