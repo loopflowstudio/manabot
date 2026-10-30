@@ -76,8 +76,8 @@ def test_decklist_novel_setup_resolves_same_identity_from_files(tmp_path: Path) 
     )
     env = managym.Env(seed=7)
     env.reset(Match(config).to_rust())
-    world = managym.content_pool(PACK)
-    assert env.content_pack_manifest()["content_digest"] == world["content_digest"]
+    world = managym.world_identity()
+    assert env.content_pack_manifest()["content_digest"] == world["card_digest"]
     assert env.content_pack_manifest()["world_version"] == world["world_version"]
 
 
