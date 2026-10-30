@@ -10360,3 +10360,68 @@ fn kyoshi_island_plaza_searches_up_to_one_basic_per_shrine_then_one_per_later_sh
         .filter(|id| !before.contains(id))
         .all(|id| tapped(&s, *id)));
 }
+
+/// Dragonfly Swarm's ward {1} answers an opponent's activated ability, not
+/// only spells.
+#[test]
+fn dragonfly_swarm_ward_counters_an_opponents_ability_unless_paid() {
+    let mut s = five_color_setup(&["Dragonfly Swarm", "Weaponize the Monsters", "Gray Ogre"]);
+    let swarm = s.force_permanent_on_battlefield(0, "Dragonfly Swarm");
+    let weapon = s.force_permanent_on_battlefield(1, "Weaponize the Monsters");
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let ogre = card_of(&s, ogre);
+    s.advance_to_active_step(1, StepKind::Main);
+    s.set_player_mana_pool(1, "2");
+    activate_first(&mut s, weapon);
+    assert!(s.choose_target(Target::Permanent(swarm)));
+    select_card(&mut s, ogre);
+    pass_until(&mut s, ActionSpaceKind::PayOrNot);
+    assert_eq!(s.action_space().player, Some(PlayerId(1)));
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    assert!(s.game().state.stack_objects.is_empty());
+    assert!(s.game().state.permanents[swarm].is_some());
+}
+
+/// The waterbend {5} is required: two blue alone cannot cast it, while five
+/// tapped creatures pay the rest. It enters with flying and ward and scries 2.
+#[test]
+fn benevolent_river_spirit_requires_waterbend_five_and_scries_on_entry() {
+    let mut s = five_color_unfunded_setup(&["Benevolent River Spirit", "Gray Ogre", "Craw Wurm"]);
+    let spirit = move_to_hand(&mut s, "Benevolent River Spirit");
+    s.set_player_mana_pool(0, "UU");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(!can_cast(&s, spirit));
+
+    let ogres: Vec<PermanentId> = [
+        "Gray Ogre",
+        "Gray Ogre",
+        "Gray Ogre",
+        "Gray Ogre",
+        "Craw Wurm",
+    ]
+    .into_iter()
+    .map(|name| s.force_permanent_on_battlefield(0, name))
+    .collect();
+    s.set_player_mana_pool(0, "UU");
+    s.game_mut().scenario_refresh_priority().unwrap();
+    assert!(
+        can_cast(&s, spirit),
+        "summoning-sick creatures help waterbend"
+    );
+    cast_card(&mut s, spirit);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);
+    for ogre in &ogres {
+        choose(
+            &mut s,
+            |a| matches!(a, Action::WaterbendTap { permanent, .. } if permanent == ogre),
+        );
+    }
+    assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    resolve_top(&mut s);
+    pass_until(&mut s, ActionSpaceKind::Scry);
+    settle(&mut s);
+    let permanent = permanent_named(&s, "Benevolent River Spirit");
+    assert!(keywords(&s, permanent).flying);
+    assert!(s.game().state.cards[spirit].ward.is_some());
+}

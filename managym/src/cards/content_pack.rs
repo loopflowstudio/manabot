@@ -193,8 +193,8 @@ impl ContentPack {
         self.digest.take();
         self.public_definitions.take();
         // Ward (CR 702.21) is a triggered ability: "Whenever this permanent
-        // becomes the target of a spell an opponent controls, counter it
-        // unless that player pays [cost]."
+        // becomes the target of a spell or ability an opponent controls,
+        // counter it unless that player pays [cost]."
         if let Some(ward_cost) = definition.ward.clone() {
             definition.abilities.push(Ability::Triggered {
                 condition: TriggerCondition::BecomesTargeted {

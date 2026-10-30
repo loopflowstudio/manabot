@@ -71,9 +71,9 @@ pub enum TriggerCondition {
     TappedForMana {
         subject: TriggerSubject,
     },
-    /// "Whenever [subject] becomes the target of a spell an opponent
-    /// controls." (Ward, CR 702.21.) The triggering spell is threaded to the
-    /// ability's effects as the trigger context target.
+    /// "Whenever [subject] becomes the target of a spell or ability an
+    /// opponent controls." (Ward, CR 702.21.) The triggering spell or ability
+    /// is threaded to the ability's effects as the trigger context target.
     BecomesTargeted {
         subject: TriggerSubject,
     },
@@ -593,9 +593,10 @@ pub enum Effect {
     Modal {
         modes: Vec<Vec<Effect>>,
     },
-    /// "Counter [the spell] unless its controller pays [cost]." The spell is
-    /// the frame's primary target: either a chosen `TargetSpec::Spell`
-    /// target (It'll Quench Ya!) or the trigger-context spell (ward).
+    /// "Counter [the spell or ability] unless its controller pays [cost]."
+    /// It is the frame's primary target: either a chosen `TargetSpec::Spell`
+    /// target (It'll Quench Ya!) or the trigger-context spell or ability
+    /// (ward).
     /// Reports no target spec of its own — targeting is declared on the
     /// card (`CardDefinition::targeting`) when a choice is required.
     CounterUnlessPays {

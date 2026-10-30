@@ -809,22 +809,31 @@ impl Game {
             card,
             targets: targets.clone(),
         });
-        // Ward (CR 702.21) — targeted permanents see the spell that
-        // targeted them.
+        self.emit_permanents_targeted(&targets, Target::StackSpell(card), player);
+        Ok(())
+    }
+
+    /// Ward (CR 702.21) — each targeted permanent sees, once, the spell or
+    /// ability that targeted it as that object is put on the stack.
+    pub(crate) fn emit_permanents_targeted(
+        &mut self,
+        targets: &[Target],
+        by: Target,
+        by_controller: PlayerId,
+    ) {
         let mut notified = std::collections::HashSet::new();
         for target in targets {
-            if !notified.insert(target) {
+            if !notified.insert(*target) {
                 continue;
             }
-            if let Target::Permanent(permanent) = target {
+            if let Target::Permanent(permanent) = *target {
                 self.emit(GameEvent::PermanentTargeted {
                     permanent,
-                    spell: card,
-                    spell_controller: player,
+                    by,
+                    by_controller,
                 });
             }
         }
-        Ok(())
     }
 
     pub(crate) fn activate_ability_action(
@@ -1796,6 +1805,7 @@ impl Game {
         }
 
         let id = self.state.id_gen.next_id();
+        self.emit_permanents_targeted(&targets, Target::StackAbility(id), player);
         self.push_to_stack(StackObject::ActivatedAbility(ActivatedAbilityOnStack {
             id,
             controller: player,
@@ -1834,6 +1844,7 @@ impl Game {
             .current_object_ref(card)
             .ok_or_else(|| AgentError("missing activation source identity".into()))?;
         let id = self.state.id_gen.next_id();
+        self.emit_permanents_targeted(&targets, Target::StackAbility(id), player);
         self.push_to_stack(StackObject::ActivatedAbility(ActivatedAbilityOnStack {
             id,
             controller: player,

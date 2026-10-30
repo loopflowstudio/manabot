@@ -99,6 +99,10 @@ fn target_reference(game: &Game, target: Target) -> HistoryReference {
     match target {
         Target::Player(player) => HistoryReference::Player(player),
         Target::StackSpell(card) => card_reference(game, card),
+        Target::StackAbility(id) => game
+            .stack_ability_source(id)
+            .map(|card| card_reference(game, card))
+            .unwrap_or(HistoryReference::Unavailable),
         Target::GraveyardCard(object) => card_reference(game, CardId::from(object.entity)),
         Target::Permanent(id) => game
             .permanent_object_ref(id)

@@ -34,7 +34,11 @@ w18 digest-bound evidence is re-recorded at gate with T2's
    `Effect::DrawCardsValue`, valued counts for counters-on-each, mill and
    basic search, `AddManaValue.until_end_of_combat`, `EffectValue::SourcePower`,
    `TriggerCondition::Sacrificed.another`.
-2. Ward against abilities (Dragonfly Swarm, Benevolent River Spirit, The Unagi).
+2. **Ward against abilities** (done 2026-10-30): Dragonfly Swarm (out of
+   `INCOMPLETE`), Benevolent River Spirit. `Target::StackAbility(ObjectId)`;
+   `GameEvent::PermanentTargeted { by, by_controller }` emitted for spells,
+   activated and triggered abilities; `counter_ability`. The Unagi's
+   waterbend ward moves to slice 4 with its draw trigger.
 3. Turn history: attacked this turn (raid: Fire Nation Raider/Engineer, Cruel
    Administrator), sacrificed count, damage dealt this turn (Sold Out), land
    entered this turn. Needs observed state (player row columns).
@@ -52,14 +56,15 @@ Nothing replaced yet.
 
 ## Remaining
 
-- Slices 2–5 (61 cards plus Dragonfly Swarm's review).
+- Slices 3–5 (60 cards).
 - Gate: re-record w18 evidence after the last card (`semantic-kernel-w18-v1`
   is current at slice 1). Python failures after slice 1 are all digest-bound:
   authored-match receipt and parity, public-commitment parity, choice
   navigation, decision surface, learn evidence/setup, trigger order, belief
   canonical receipt (T3's tools: `scratch/tools/regen_*_w18.py`).
 
-Check (slice 1): debug `cargo test` all targets pass (cards 397, lib 122,
-semantic_conformance 6 after re-record; `structured_offers` flake passed
-alone), clippy `-D warnings` clean; `tests/academy tests/belief` 330 pass,
-23 digest-bound fail (gate).
+Check (slice 2): debug `cargo test` all targets pass after re-recording
+`semantic-kernel-w18-v1` (14 cases, now 3396 commands: ward answers
+abilities) and the heavy benchmark fixture's event count (505 → 509);
+fmt and clippy `-D warnings` clean. Slice 1: `tests/academy tests/belief`
+330 pass, 23 digest-bound fail (gate).

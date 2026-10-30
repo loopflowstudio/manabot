@@ -17,7 +17,7 @@ use crate::{
         ability::{
             Ability, Effect, EffectValue, LinkedChooser, PaymentCost, TargetRequirement, TargetSpec,
         },
-        game_object::{CardId, PermanentId, PlayerId, Target},
+        game_object::{CardId, ObjectId, PermanentId, PlayerId, Target},
         permanent::{CounterKind, Permanent},
         predicate::CardPredicate,
         stack_object::{
@@ -130,6 +130,15 @@ impl Game {
             },
         };
         self.run_frame(frame);
+    }
+
+    /// Counter an activated or triggered ability: it is removed from the
+    /// stack and does nothing (CR 701.6b).
+    pub(crate) fn counter_ability(&mut self, id: ObjectId) {
+        if let Some(index) = self.find_ability_on_stack_index(id) {
+            self.journal_stack();
+            self.state.stack_objects.remove(index);
+        }
     }
 
     pub(crate) fn counter_spell(&mut self, card: CardId, by: Option<CardId>) {
@@ -344,6 +353,7 @@ impl Game {
                     && self.state.zones.zone_of(card) == Some(ZoneType::Graveyard)
             }
             Target::StackSpell(card) => self.find_spell_on_stack_index(card).is_some(),
+            Target::StackAbility(id) => self.find_ability_on_stack_index(id).is_some(),
             Target::Player(player) => self.state.players[player.0].alive,
         }
     }
@@ -840,7 +850,7 @@ impl Game {
                             self.invalidate_mana_cache(owner);
                         }
                     }
-                    Target::Player(_) | Target::GraveyardCard(_) => {}
+                    Target::Player(_) | Target::StackAbility(_) | Target::GraveyardCard(_) => {}
                 }
                 None
             }
@@ -857,7 +867,7 @@ impl Game {
                             *amount,
                         );
                     }
-                    Target::StackSpell(_) | Target::GraveyardCard(_) => {}
+                    Target::StackSpell(_) | Target::StackAbility(_) | Target::GraveyardCard(_) => {}
                 }
                 None
             }
@@ -966,11 +976,11 @@ impl Game {
                 })
             }
             Effect::CounterSpell { .. } => {
-                let Some(Target::StackSpell(target_spell)) = self.present_primary_target(frame)
-                else {
-                    return None;
-                };
-                self.counter_spell(target_spell, frame.source);
+                match self.present_primary_target(frame)? {
+                    Target::StackSpell(spell) => self.counter_spell(spell, frame.source),
+                    Target::StackAbility(ability) => self.counter_ability(ability),
+                    Target::Player(_) | Target::Permanent(_) | Target::GraveyardCard(_) => {}
+                }
                 None
             }
             Effect::CreateNonlegendaryCopy => {
@@ -1364,12 +1374,13 @@ impl Game {
                 })
             }
             Effect::CounterUnlessPays { cost } => {
-                let Some(Target::StackSpell(target_spell)) = frame.primary_target() else {
-                    return None;
+                // The spell or ability may already have left the stack (e.g.
+                // it was countered in response) — the effect does nothing.
+                let index = match frame.primary_target()? {
+                    Target::StackSpell(spell) => self.find_spell_on_stack_index(spell)?,
+                    Target::StackAbility(ability) => self.find_ability_on_stack_index(ability)?,
+                    _ => return None,
                 };
-                // The spell may already have left the stack (e.g. it was
-                // countered in response) — the effect does nothing.
-                let index = self.find_spell_on_stack_index(target_spell)?;
                 let spell_controller = self.state.stack_objects[index].controller();
                 Some(Decision::Payment(PaymentProgress::new(
                     spell_controller,
@@ -1754,6 +1765,9 @@ impl Game {
                         _ => false,
                     }
             }
+            // No printed spec targets an ability yet; ward sees one only as
+            // its trigger context.
+            Target::StackAbility(_) => false,
             Target::GraveyardCard(object) => match spec {
                 TargetSpec::GraveyardCardYouOwn { predicate } => {
                     let card = CardId::from(object.entity);

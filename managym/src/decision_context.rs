@@ -63,6 +63,7 @@ impl Game {
                 Some(view)
             }
             Target::StackSpell(card) => self.decision_card(*card),
+            Target::StackAbility(id) => self.decision_card(self.stack_ability_source(*id)?),
             Target::GraveyardCard(reference) => {
                 let mut view = self.decision_card(CardId::from(reference.entity))?;
                 // Keep the announced incarnation even if the card later moved.

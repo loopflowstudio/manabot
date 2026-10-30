@@ -23,7 +23,6 @@ use crate::state::{
 pub(super) const INCOMPLETE: &[super::Incomplete] = &[
     ("tla.accumulate_wisdom", "Controller must order the library remainder (CR 401.4); it is randomized"),
     ("tla.cat_gator", "Any target must include planeswalkers and battles (CR 115.4)"),
-    ("tla.dragonfly_swarm", "Unreviewed until T4: Flying; spell-and-ability ward; graveyard CDA power; conditional death draw."),
     ("ths.lightning_strike", "Any target must include planeswalkers and battles (CR 115.4)"),
     ("tla.ran_and_shaw", "Unreviewed until T5: Flying/firebending; cast-only conditional ETB nonlegendary self copy; Dragon anthem activation."),
     ("tla.suki_kyoshi_warrior", "CDA power must apply outside the battlefield (CR 604.3)"),
@@ -56,6 +55,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         ballistic_boulder(),
         barrels_of_blasting_jelly(),
         bear(),
+        benevolent_river_spirit(),
         boar_q_pine(),
         boiling_rock_prison(),
         boomerang_basics(),
@@ -1133,6 +1133,35 @@ fn bear() -> CardDefinition {
         toughness: Some(4),
         is_token: true,
         color_override: Some(Colors::from([Color::Green])),
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn benevolent_river_spirit() -> CardDefinition {
+    let text_box = "As an additional cost to cast this spell, waterbend {5}. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)\nFlying, ward {2} (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays {2}.)\nWhen this creature enters, scry 2.";
+
+    CardDefinition {
+        key: "tla.benevolent_river_spirit",
+        scryfall_id: "7ffb79cd-d170-4047-89c8-6e85188f30da",
+        name: "Benevolent River Spirit".into(),
+        mana_cost: Some(ManaCost::parse("{U}{U}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Spirit".into()],
+        power: Some(4),
+        toughness: Some(5),
+        keywords: Keywords {
+            flying: true,
+            ..Default::default()
+        },
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::EntersTheBattlefield {
+                subject: TriggerSubject::This,
+            },
+            effects: vec![Effect::Scry { count: 2 }],
+        }],
+        ward: Some(ManaCost::parse("{2}")),
+        waterbend_cost: Some(ManaCost::parse("{5}")),
         text_box: text_box.into(),
         ..Default::default()
     }

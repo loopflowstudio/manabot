@@ -86,11 +86,12 @@ pub enum GameEvent {
         permanent: PermanentId,
         for_mana: bool,
     },
-    /// A permanent became the target of a spell (ward, CR 702.21).
+    /// A permanent became the target of a spell or ability (ward, CR
+    /// 702.21): `by` is a `Target::StackSpell` or `Target::StackAbility`.
     PermanentTargeted {
         permanent: PermanentId,
-        spell: CardId,
-        spell_controller: PlayerId,
+        by: Target,
+        by_controller: PlayerId,
     },
     /// The declare-attackers turn-based action completed with one or more
     /// attackers (CR 508.1 — attack triggers fire on the whole batch).

@@ -481,10 +481,10 @@ fn fixture_with_summary(
         "interactive-heavy-80-w4-v1"
             if summary.card_count != 120
                 || summary.allocated_permanent_slots != 24
-                || summary.committed_event_count != 505 =>
+                || summary.committed_event_count != 509 =>
         {
             return Err(format!(
-                "heavy fixture drift: expected cards/slots/events 120/24/505, got {}/{}/{}",
+                "heavy fixture drift: expected cards/slots/events 120/24/509, got {}/{}/{}",
                 summary.card_count,
                 summary.allocated_permanent_slots,
                 summary.committed_event_count

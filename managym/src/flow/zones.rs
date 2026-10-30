@@ -10,7 +10,7 @@ use crate::{
     },
     state::{
         card::Restriction,
-        game_object::{CardId, Incarnation, ObjectRef, PermanentId, PlayerId, Target},
+        game_object::{CardId, Incarnation, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
         permanent::CounterKind,
         permanent::Permanent,
         predicate::CardPredicate,
@@ -696,6 +696,24 @@ impl Game {
             .stack_objects
             .iter()
             .position(|object| matches!(object, StackObject::Spell(spell) if spell.card == card))
+    }
+
+    /// The stack position of the activated or triggered ability `id`.
+    pub(crate) fn find_ability_on_stack_index(&self, id: ObjectId) -> Option<usize> {
+        self.state
+            .stack_objects
+            .iter()
+            .position(|object| !matches!(object, StackObject::Spell(_)) && object.id() == id)
+    }
+
+    /// The card whose ability `id` is on the stack.
+    pub(crate) fn stack_ability_source(&self, id: ObjectId) -> Option<CardId> {
+        let index = self.find_ability_on_stack_index(id)?;
+        match &self.state.stack_objects[index] {
+            StackObject::ActivatedAbility(ability) => Some(ability.source_card),
+            StackObject::TriggeredAbility(triggered) => Some(triggered.source_card),
+            StackObject::Spell(_) => None,
+        }
     }
 
     /// The controller of `card` while it is a spell on the stack.

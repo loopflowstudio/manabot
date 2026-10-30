@@ -185,6 +185,10 @@ impl Game {
                     VisibleReference::default()
                 }
             }
+            Target::StackAbility(id) => self
+                .stack_ability_source(id)
+                .map(|card| self.card_reference(card, viewer))
+                .unwrap_or_default(),
             Target::GraveyardCard(object) => self.visible_reference(object, viewer),
         }
     }

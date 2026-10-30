@@ -96,7 +96,7 @@ fn condition_description(condition: &TriggerCondition) -> String {
             format!("When {} is tapped for mana", subject_description(subject))
         }
         TriggerCondition::BecomesTargeted { subject } => format!(
-            "When {} becomes the target of an opponent's spell",
+            "When {} becomes the target of an opponent's spell or ability",
             subject_description(subject)
         ),
         TriggerCondition::BeginningOfYourUpkeep => "At the beginning of your upkeep".into(),

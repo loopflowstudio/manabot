@@ -27,7 +27,7 @@ was dead on arrival in exp-10.)
 | **w15** | in development, MTG-177, 2026-10-27 | 40 / 41 / 28 / 17; retained resolution eligibility, policy-input v4 relations 64 × 33 | unchanged authored packs; fresh integrated conformance and play fixtures | no strength baseline |
 | **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
 | **w17** | in development, Task 892c47, 2026-10-29 | 40 / 41 / 29 / 17; cards in engine rules types, learning schema 9 tokens derived from them, attacking permanent column | `world` (the default pack); `semantic-kernel-w17-v1`, `authored-match-w17-v1` and `authored-match-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
-| **w18** | in development, Tasks 87e012 and 6875f0, 2026-10-29 | 63 / 55 / 52 / 17 (policy input v5; v1–v4 keep 40 / 41 / 29); TLA casting, costs, zone permissions and private zones; exile cast permissions, hand-only lock, restricted mana by class, foretell, control; counters by kind, Equipment and Auras, Vehicles, layered type/keyword/P/T grants, ability loss, activation X and crew | `world` (the default pack): every defined card; `semantic-kernel-w18-v1`, `authored-match-w18-v1`, `authored-match-parity-w18-v1` and `public-commitment-parity-w18-v1` receipts; Academy w18 demo, navigation and trigger-order fixtures | no strength baseline |
+| **w18** | in development, Tasks 87e012, 6875f0 and 488a40, 2026-10-29 | 63 / 55 / 52 / 17 (policy input v5; v1–v4 keep 40 / 41 / 29); TLA casting, costs, zone permissions and private zones; exile cast permissions, hand-only lock, restricted mana by class, foretell, control; counters by kind, Equipment and Auras, Vehicles, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers | `world` (the default pack): every defined card; `semantic-kernel-w18-v1`, `authored-match-w18-v1`, `authored-match-parity-w18-v1` and `public-commitment-parity-w18-v1` receipts; Academy w18 demo, navigation and trigger-order fixtures | no strength baseline |
 
 **Current development world: w18.** `managym.WORLD_VERSION` identifies live runs. Earlier
 checkpoints (including w17) are **not comparable** to w18; do not reuse their
@@ -71,6 +71,13 @@ strike). Equipment and Auras attach to an exact object and grant abilities or
 set characteristics; Vehicles crew by tapping creatures. Activated abilities
 may announce X and choose several targets that share a creature type; a
 permanent may let its controller cast the top card of their library.
+
+T4 (Task 488a40) adds triggers, history and stack behavior. Ward answers an
+opponent's activated or triggered ability as well as a spell (CR 702.21a): an
+ability on the stack is a `Target::StackAbility`, and countering it removes it
+(CR 701.6b). Life loss is distinct from damage; firebending may add a
+resolution-time amount; "another permanent" sacrifice triggers exclude their
+own source.
 
 Observations add, omitted at their defaults: cast permissions, a stack spell's
 announced X, a player's restricted mana, hand-only lock, no maximum hand size

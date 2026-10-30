@@ -96,6 +96,8 @@ pub enum Target {
     Player(PlayerId),
     Permanent(PermanentId),
     StackSpell(CardId),
+    /// An activated or triggered ability on the stack, by its stack object id.
+    StackAbility(ObjectId),
     GraveyardCard(ObjectRef),
 }
 

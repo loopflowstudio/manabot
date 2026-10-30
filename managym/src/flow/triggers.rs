@@ -290,6 +290,7 @@ impl Game {
             .unwrap_or(self.state.cards[trigger.source_card].definition_id);
         let id = self.state.id_gen.next_id();
         let targets = trigger.targets;
+        self.emit_permanents_targeted(&targets, Target::StackAbility(id), trigger.controller);
         self.push_to_stack(StackObject::TriggeredAbility(TriggeredAbilityOnStack {
             id,
             controller: trigger.controller,
@@ -395,7 +396,7 @@ impl Game {
     /// reference (e.g. ward counters the spell that targeted its permanent).
     fn trigger_context_for_event(&self, event: &GameEvent) -> Option<Target> {
         match event {
-            GameEvent::PermanentTargeted { spell, .. } => Some(Target::StackSpell(*spell)),
+            GameEvent::PermanentTargeted { by, .. } => Some(*by),
             _ => None,
         }
     }
@@ -788,12 +789,13 @@ impl Game {
                 TriggerCondition::BecomesTargeted { subject },
                 GameEvent::PermanentTargeted {
                     permanent,
-                    spell_controller,
+                    by_controller,
                     ..
                 },
             ) => {
-                // Ward triggers only for spells opponents control (CR 702.21a).
-                *spell_controller != source_controller
+                // Ward triggers only for spells and abilities opponents
+                // control (CR 702.21a).
+                *by_controller != source_controller
                     && self.subject_matches_permanent(
                         subject,
                         source_card,

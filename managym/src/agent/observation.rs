@@ -1076,6 +1076,16 @@ impl Observation {
                     card_id: None,
                 })
             }
+            Target::StackAbility(id) => {
+                game.find_ability_on_stack_index(id)?;
+                Some(StackTargetData {
+                    kind: StackTargetKindData::StackObject,
+                    player_id: None,
+                    permanent_id: None,
+                    stack_object_id: Some(id.0 as i32),
+                    card_id: None,
+                })
+            }
         }
     }
 
@@ -1392,6 +1402,7 @@ impl Observation {
                 crate::state::target::Target::StackSpell(card_id) => {
                     vec![game.state.cards[card_id].id]
                 }
+                crate::state::target::Target::StackAbility(id) => vec![*id],
             },
             Action::ScryCard { card, .. }
             | Action::SelectCard { card, .. }

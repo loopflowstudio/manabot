@@ -147,6 +147,23 @@
       "G"
     ]
   },
+  "Benevolent River Spirit": {
+    "name": "Benevolent River Spirit",
+    "mana_cost": "{U}{U}",
+    "type_line": "Creature — Spirit",
+    "power": "4",
+    "toughness": "5",
+    "keywords": [
+      "Scry",
+      "Flying",
+      "Ward",
+      "Waterbend"
+    ],
+    "oracle_text": "As an additional cost to cast this spell, waterbend {5}. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)\nFlying, ward {2} (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays {2}.)\nWhen this creature enters, scry 2.",
+    "colors": [
+      "U"
+    ]
+  },
   "Boggart Brute": {
     "name": "Boggart Brute",
     "mana_cost": "{2}{R}",
@@ -253,6 +270,8 @@
     "name": "Crescent Island Temple",
     "mana_cost": "{3}{R}",
     "type_line": "Legendary Enchantment — Shrine",
+    "power": null,
+    "toughness": null,
     "keywords": [],
     "oracle_text": "When Crescent Island Temple enters, for each Shrine you control, create a 1/1 red Monk creature token with prowess. (Whenever you cast a noncreature spell, it gets +1/+1 until end of turn.)\nWhenever another Shrine you control enters, create a 1/1 red Monk creature token with prowess.",
     "colors": [
@@ -704,6 +723,8 @@
     "name": "Kyoshi Island Plaza",
     "mana_cost": "{3}{G}",
     "type_line": "Legendary Enchantment — Shrine",
+    "power": null,
+    "toughness": null,
     "keywords": [],
     "oracle_text": "When Kyoshi Island Plaza enters, search your library for up to X basic land cards, where X is the number of Shrines you control. Put those cards onto the battlefield tapped, then shuffle.\nWhenever another Shrine you control enters, search your library for a basic land card, put it onto the battlefield tapped, then shuffle.",
     "colors": [
@@ -843,6 +864,8 @@
     "name": "Northern Air Temple",
     "mana_cost": "{B}",
     "type_line": "Legendary Enchantment — Shrine",
+    "power": null,
+    "toughness": null,
     "keywords": [],
     "oracle_text": "When Northern Air Temple enters, each opponent loses X life and you gain X life, where X is the number of Shrines you control.\nWhenever another Shrine you control enters, each opponent loses 1 life and you gain 1 life.",
     "colors": [
@@ -1004,6 +1027,8 @@
     "name": "Rocky Rebuke",
     "mana_cost": "{1}{G}",
     "type_line": "Instant",
+    "power": null,
+    "toughness": null,
     "keywords": [],
     "oracle_text": "Target creature you control deals damage equal to its power to target creature an opponent controls.",
     "colors": [
@@ -1081,6 +1106,8 @@
     "name": "Southern Air Temple",
     "mana_cost": "{3}{W}",
     "type_line": "Legendary Enchantment — Shrine",
+    "power": null,
+    "toughness": null,
     "keywords": [],
     "oracle_text": "When Southern Air Temple enters, put X +1/+1 counters on each creature you control, where X is the number of Shrines you control.\nWhenever another Shrine you control enters, put a +1/+1 counter on each creature you control.",
     "colors": [
@@ -1144,6 +1171,8 @@
     "name": "The Spirit Oasis",
     "mana_cost": "{2}{U}",
     "type_line": "Legendary Enchantment — Shrine",
+    "power": null,
+    "toughness": null,
     "keywords": [],
     "oracle_text": "When The Spirit Oasis enters, draw a card for each Shrine you control.\nWhenever another Shrine you control enters, draw a card.",
     "colors": [
