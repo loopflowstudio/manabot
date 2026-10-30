@@ -154,17 +154,14 @@ def test_arena_import_keeps_source_and_rejects_tampering(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import copy
-    import json
 
     from academy.watch import import_arena
     from manabot.eval.match import play_cell
-    from manabot.eval.models import EvaluationContract
     from manabot.sim.replay import read_trace
+    from tests.eval.arena_fixture import arena_fixture
 
     monkeypatch.setattr(server.trace_store, "TRACES_DIR", tmp_path / "academy")
-    contract = EvaluationContract.model_validate(
-        json.loads(Path("tests/fixtures/int-6-skill-arena-v1.json").read_text())
-    )
+    contract = arena_fixture()
     _, trace, receipt = play_cell(
         key=contract.key,
         player_a=contract.anchors[0],

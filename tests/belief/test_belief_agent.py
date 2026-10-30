@@ -5,15 +5,11 @@ from managym.possible_worlds import PossibleWorldSpace
 import numpy as np
 import pytest
 
-from manabot.belief import (
-    AgentMemory,
-    BeliefError,
-    CompatibleDealBeliefModel,
-    ViewerHistory,
-    belief_schema_from_engine,
-    encode_belief,
-)
+from manabot.belief.agent import AgentMemory
 from manabot.belief.demo import _runtime_env, run_demo
+from manabot.belief.encoding import belief_schema_from_engine, encode_belief
+from manabot.belief.range import BeliefError
+from manabot.belief.state import CompatibleDealBeliefModel, ViewerHistory
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
 from manabot.model.actor_critic import ActorCritic
