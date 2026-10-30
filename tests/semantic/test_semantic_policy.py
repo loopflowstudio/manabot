@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import pytest
 
-from manabot.semantic import (
+from manabot.semantic.learning import UnadmittedDefinitionError
+from manabot.semantic.policy import (
     SemanticDecision,
     SemanticDecisionAdapter,
     SemanticDecisionError,
-    UnadmittedDefinitionError,
 )
 from manabot.sim.action.structured import (
     DecodedSubmission,

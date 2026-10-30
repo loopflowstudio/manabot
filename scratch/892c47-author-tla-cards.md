@@ -72,76 +72,18 @@ pipeline: `544ae312c:scratch/892c47-author-tla-cards.md`.
   deck-of-card helper; card-specific setups move next to their tests; flat
   `cards/<set>.rs` in card order, no helper-family modules; behavior identical.
 
-## Implemented
+## Implemented (PR394, summary)
 
-1. **One card representation (w17).** Set files return engine `CardDefinition`s
-   (generated once by `scratch/conversion/generate.py` from w16's lowering; all
-   161 proven JSON-identical). `cards/authoring.rs`, `semantic/compile.rs`,
-   `semantic/content.rs`, the IR parser/interpreter and their exclusive tests
-   (`semantic_ir_tests.rs`, `semantic_interpreter_tests.rs`) are deleted.
-   `semantic/` now holds `setups.rs` (authored decklists → packs with token
-   closure), `pool.rs` and `tokens.rs`; `IrError` became `ContentError`.
-2. **Keys and Scryfall ids.** Every definition has `key` and `scryfall_id`
-   (`#[serde(skip)]`, so content digests equal w16's). A first-printing audit
-   moved 5 cards: `roe.prophetic_prism`, `mh2.tireless_provisioner`,
-   `ptk.corrupt_court_official`, `eld.epic_downfall`, `ths.lightning_strike`.
-   `tests/cards/scryfall.rs` (offline) and `tests/cards/check_scryfall.py`
-   (network, maintenance only). Pool rows add `scryfall_id`.
-3. **Learning tokens in Rust.** `semantic::tokens` serializes definitions with a
-   serde `Serializer` (schema 9: kinds structure/field/variant/integer/boolean/
-   text/definition_ref/null/program_kind; values are blake3 name hashes via
-   `managym.learning_token_value`). `managym.learning_catalog(pack_key)`;
-   `BoundSemanticPack` binds by digest + registry name; Python IR token builder,
-   `current_ir_document` and frozen-schema loading are gone (the offline Python
-   compiler stays only for frozen-evidence reproduction). Manifests carry
-   `pack_key` instead of `compiled_semantics`; `ContentPool` drops it.
-4. **Observability.** `tests/cards/observability.rs`: exhaustive guards over
-   `Keywords`, `Permanent`, `Player`, `Effect` (63 witnesses), `TriggerCondition`,
-   `Ability`; directed column/token tests; viewer-safety (hidden opponent cards,
-   no names/text in tokens). New `attacking` permanent column (width 29), Python
-   encoder and LLM text; serialized only when true so retained captures stay
-   canonical.
-5. Academy authored-match receipt names programs from the catalog
-   (`conformance/authored-match-w17-v1`). Docs: AGENTS.md card section,
-   WORLDS.md w17, content/semantic and managym READMEs, TLA notes.
-6. tests/support by purpose: `game.rs`/`play.rs`/`inspect.rs`, each primitive
-   once (renames listed in the commit); card-specific setups beside their tests;
-   flat `cards/<set>.rs` in card order (new `cards/mkm.rs`). Counts unchanged
-   (cards 235, rules 131 + 2 ignored).
-7. Earlier this Task (before 2026-10-29 rewrite): support by definition, set
-   filter, basics in `lea.rs`, card tests by set (`tests/cards.rs`), fixture
-   refresh reads the pool.
-
-8. **Concept review (2026-10-29) implemented.** The world pool `"world"`
-   (was `tla-pool-v1`) describes `default_content_pack()` itself: same
-   `CardDefId`s, digest and `Arc`; the Crossroads fixture is an unsupported row
-   with no key ("A rules fixture, not a printed card"), tokens stay unsupported.
-   Pool rows' `semantic_key` is `key` (Rust, PyO3 dict, `.pyi`, Python readers,
-   Academy receipt programs). `semantic/{pool,setups,tokens}.rs` moved to
-   `cards/`; `ContentError` (a message newtype) lives in `cards/mod.rs`; the
-   `semantic` Rust module is gone. Pool rows' `card_def_id` is now required
-   (`CardDefId`, Python `int`), since every row describes a runtime definition.
-   Renames were posted to f871a8 (2026-10-29, at 67b1fad34). Kept deliberately: authored setup packs; v1 Python coverage gate
-   (its evidence identifiers were updated for the flattened card tests).
-9. **World-bound evidence for w17.** New `conformance/semantic-kernel-w17-v1`
-   (w15 cases re-recorded; test + CI root). `authored-match-parity-w17-v1`
-   (142 Commands; dead `HISTORICAL_*` constants removed). Academy
-   `learn/precision/precision-mana-demo-w17.json`, `choice-navigation-w17.json`,
-   `trigger-order-w17.json` re-recorded by offer label (same decision revisions;
-   tools in `scratch/tools/`). `test_ur_lessons_increment` reads the current
-   world instead of pinning w13/28.
-
-10. **Public-commitment parity bound by prefix.** Rebound to the w17 tape
-   (curated sideboard configs; Island discard at 30 with 484 worlds,
-   `decline_learn` at 102). Viewer 0's tracker stops before Command 68 (South
-   Pole Voyager revealed from library into hand: no transport fact); viewer 1
-   tracks all 142 (`TRACKED_COMMANDS` in `academy/public_commitment_parity.py`;
-   receipt `conformance/public-commitment-parity-w17-v1`). Task 3be183
-   (unstarted) owns the transport and removing the bound.
-11. CI follow-ups: rules-audit evidence cites `tests/cards/<set>.rs` and
-   `cardsets/tla.rs`; the choice-navigation spec reads `choice-navigation-w17.json`.
-   f871a8 was told `card_def_id` is required (comment 2026-10-29 22:47, plus a
-   correction naming `eligibility`/`reason` as the support fields).
+Full list: `2c50c8793:scratch/892c47-author-tla-cards.md`. Set files return
+engine `CardDefinition`s (w17; authoring language, compiler, IR deleted); keys +
+Scryfall ids (`#[serde(skip)]`; five cards moved to first printings); learning
+tokens from a serde serializer (schema 9, `managym.learning_catalog`);
+exhaustive observability guards; `world` pool = default pack; card modules
+under `cards/`; w17 conformance, authored-match, parity and Academy fixtures
+(tools in `scratch/tools/`); public-commitment parity bound by prefix
+(`TRACKED_COMMANDS`, Task 3be183 owns removing it). Renames posted to f871a8
+(2026-10-29). Stacked Task afbd6a later deleted the v1 coverage gate and
+reshaped statics/tokens (see `afbd6a-delete-old-world.md`).
 
 ## Concept review, second pass (2026-10-29, headless)
 

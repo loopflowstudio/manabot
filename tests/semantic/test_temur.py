@@ -1,6 +1,4 @@
-"""Temur compiled admission and current-world learning observations."""
-
-from pathlib import Path
+"""Temur setup: learning catalog binding and training observations."""
 
 import numpy as np
 
@@ -8,21 +6,11 @@ from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationEncoder, ObservationSpace
 from manabot.infra.config import MatchConfig, ObservationConfig, RewardConfig
-from manabot.semantic.compiler import compile_paths, pretty_json
 from manabot.semantic.learning import BoundSemanticPack, LearningSchema
 import managym
 
-BASE = Path("content/semantic/v1")
 
-
-def test_temur_artifacts_and_learning_catalog_close_the_registered_cards() -> None:
-    ir, coverage = compile_paths(
-        BASE / "temur.source.json", BASE / "temur.fixtures.json"
-    )
-    assert (BASE / "generated/temur.ir.json").read_text() == pretty_json(ir)
-    assert (BASE / "generated/temur.coverage.json").read_text() == pretty_json(coverage)
-    assert coverage["definition_count"] == 9
-    assert coverage["admission_closure_complete"]
+def test_temur_learning_catalog_closes_the_registered_cards() -> None:
     env = managym.Env(seed=163, skip_trivial=False)
     env.reset(
         [
@@ -52,7 +40,7 @@ def test_temur_finishes_through_the_production_training_observation_path() -> No
         assert not info["permanent_space_truncated"]
         if terminal:
             return
-    raise AssertionError("compiled Temur game did not terminate")
+    raise AssertionError("Temur game did not terminate")
 
 
 def test_temur_restricted_mana_and_legendary_flags_encode_identically() -> None:

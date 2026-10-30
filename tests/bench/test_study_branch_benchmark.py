@@ -21,7 +21,6 @@ def _rehash(payload: dict) -> dict:
     return payload
 
 
-
 def test_source_closure_includes_bundled_engine_adapters() -> None:
     paths = set(bench.source_paths())
     assert ROOT / "manabot/managym/decision.py" in paths

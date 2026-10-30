@@ -14,6 +14,7 @@ use crate::{
     },
     state::{
         ability::TargetRequirement,
+        card::StaticAbility,
         game_object::{CardId, PermanentId, PlayerId, Target},
         mana::ManaCost,
         stack_object::{ActivatedAbilityOnStack, StackObject},
@@ -59,7 +60,8 @@ impl Game {
             || !self.state.zones.contains(card, ZoneType::Graveyard, player)
             || !self.battlefield_permanents(player).iter().any(|id| {
                 let source = self.state.permanents[*id].as_ref().unwrap();
-                self.state.cards[source.card].grants_flashback
+                self.state.cards[source.card]
+                    .has_static(&StaticAbility::GraveyardSpellsHaveFlashback)
             })
         {
             return None;
@@ -87,11 +89,14 @@ impl Game {
         };
         cost.spend_on_lesson = card_ref.has_subtype("Lesson");
         if kicked {
-            if let Some(kicker) = &card_ref.kicker {
+            if let Some(kicker) = card_ref.kicker() {
                 cost = cost.plus(kicker);
             }
         }
-        if let Some(predicate) = &card_ref.cost_reduction_per {
+        for ability in &card_ref.statics {
+            let StaticAbility::CostsLessPerPermanent(predicate) = ability else {
+                continue;
+            };
             let mut count = 0_u8;
             for permanent_id in self.battlefield_permanents(player) {
                 if self.permanent_matches_predicate(permanent_id, predicate) {
@@ -102,7 +107,10 @@ impl Game {
         }
         for permanent_id in self.battlefield_permanents(player) {
             let permanent = self.state.permanents[permanent_id].as_ref()?;
-            for reduction in &self.state.cards[permanent.card].spell_cost_reductions {
+            for ability in &self.state.cards[permanent.card].statics {
+                let StaticAbility::SpellsCostLess(reduction) = ability else {
+                    continue;
+                };
                 if reduction.first_on_own_turn
                     && (self.active_player() != player
                         || self.state.turn.spells_cast[player.0]
@@ -186,7 +194,7 @@ impl Game {
 
         // CR 601.2b — Optional additional costs (kicker) are chosen before
         // targets. Only offer the choice when the kicked cost is payable.
-        if self.state.cards[card].kicker.is_some() {
+        if self.state.cards[card].kicker().is_some() {
             let kicked_cost = self.effective_spell_cost(player, card, true);
             if kicked_cost.is_some_and(|cost| self.can_pay_with_mana_abilities(player, &cost, None))
             {
@@ -527,7 +535,7 @@ impl Game {
         targets: Vec<Target>,
         target_req_indices: Vec<usize>,
     ) -> Result<(), AgentError> {
-        let cost = self.state.cards[card].sacrifice_cost.clone();
+        let cost = self.state.cards[card].sacrifice_cost().cloned();
         self.begin_payment(
             player,
             Payment::Spell {

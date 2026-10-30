@@ -20,42 +20,6 @@ use crate::state::{
 
 pub const CONTENT_PACK_SCHEMA_VERSION: u32 = 1;
 
-/// The default pack's historical prefix, by printed name.
-const LEGACY_ORDER: [&str; 29] = [
-    "Plains",
-    "Island",
-    "Swamp",
-    "Mountain",
-    "Forest",
-    "Llanowar Elves",
-    "Gray Ogre",
-    "Lightning Bolt",
-    "Ancestral Recall",
-    "Counterspell",
-    "Wind Drake",
-    "Giant Spider",
-    "Raging Goblin",
-    "Serra Angel",
-    "Typhoid Rats",
-    "War Mammoth",
-    "Wall of Stone",
-    "Boggart Brute",
-    "Youthful Knight",
-    "Fencing Ace",
-    "Healer's Hawk",
-    "Craw Wurm",
-    "Shivan Dragon",
-    "Pyroclasm",
-    "Man-o'-War",
-    "Pop Quiz",
-    "Igneous Inspiration",
-    "Divide by Zero",
-    "Waterfall Aerialist",
-];
-
-/// Registered after every other typed definition, by printed name.
-const TRAILING_ORDER: [&str; 2] = ["Crossroads of Destiny", "Proft's Eidetic Memory"];
-
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ContentPackDefinitionManifest {
     pub card_def_id: CardDefId,
@@ -87,28 +51,15 @@ pub struct ContentPack {
 /// shared `Arc<ContentPack>` rather than cloning this value.
 pub type CardRegistry = ContentPack;
 
-/// Every current card from `cardsets/` and the rules fixtures, in default-pack
-/// order. [`LEGACY_ORDER`] keeps the historical prefix (and so its `CardDefId`s)
-/// that older evidence records; the remaining cards follow by name, then
-/// [`TRAILING_ORDER`].
+/// Every current card from `cardsets/` and the rules fixtures, in name order.
 fn default_order() -> Vec<CardDefinition> {
-    let mut cards = crate::cardsets::catalog()
+    crate::cardsets::catalog()
         .iter()
         .cloned()
         .chain([fixtures::crossroads_of_destiny()])
         .map(|definition| (definition.name.clone(), definition))
-        .collect::<BTreeMap<_, _>>();
-    let mut take = |name: &str| {
-        cards
-            .remove(name)
-            .unwrap_or_else(|| panic!("ordered card {name} has no definition"))
-    };
-    let legacy = LEGACY_ORDER.map(&mut take);
-    let trailing = TRAILING_ORDER.map(&mut take);
-    legacy
-        .into_iter()
-        .chain(cards.into_values())
-        .chain(trailing)
+        .collect::<BTreeMap<_, _>>()
+        .into_values()
         .collect()
 }
 
@@ -195,7 +146,7 @@ impl ContentPack {
         // Ward (CR 702.21) is a triggered ability: "Whenever this permanent
         // becomes the target of a spell an opponent controls, counter it
         // unless that player pays [cost]."
-        if let Some(ward_cost) = definition.ward.clone() {
+        if let Some(ward_cost) = definition.ward().cloned() {
             definition.abilities.push(Ability::Triggered {
                 condition: TriggerCondition::BecomesTargeted {
                     subject: TriggerSubject::This,
@@ -260,8 +211,8 @@ impl ContentPack {
                             "mana_cost": card.mana_cost, "types": card.types,
                             "supertypes": card.supertypes, "subtypes": card.subtypes,
                             "keywords": card.keywords, "power": card.power,
-                            "toughness": card.toughness, "kicker": card.kicker,
-                            "ward": card.ward, "is_token": card.is_token,
+                            "toughness": card.toughness, "kicker": card.kicker(),
+                            "ward": card.ward(), "is_token": card.is_token,
                         })
                     })
                     .collect()

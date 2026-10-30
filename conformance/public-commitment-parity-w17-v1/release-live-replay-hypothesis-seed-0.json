@@ -37,7 +37,7 @@
     }
   },
   "identity": {
-    "authority_receipt_sha256": "d4dc54c1376a563868f294bb7e9345aaced0da0321d7961b844404aaaadb1dda",
+    "authority_receipt_sha256": "bdf1456a54149eff9a998489984ed0c9c75a21164271a19eb38a363e06356087",
     "command_tape_sha256": "95db76dc71150abd75bd4a771729e0928a59c19232ba442db4eb036cae5a1294",
     "matchup": "ur-lessons-vs-gw-allies",
     "relevant_source": {
@@ -45,11 +45,11 @@
       "files": [
         {
           "path": "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
-          "sha256": "d4dc54c1376a563868f294bb7e9345aaced0da0321d7961b844404aaaadb1dda"
+          "sha256": "bdf1456a54149eff9a998489984ed0c9c75a21164271a19eb38a363e06356087"
         },
         {
           "path": "academy/public_commitment_parity.py",
-          "sha256": "9973c098f58077708240931c8b05d4781415189bf42d91836dd47f1ca4baf4e1"
+          "sha256": "1e69e1a6a2a2172b67ff3f4fee4ae8b4a881f6450695526187f8b2b5ed675260"
         },
         {
           "path": "academy/server.py",
@@ -89,7 +89,7 @@
         },
         {
           "path": "managym/src/agent/structured_offer.rs",
-          "sha256": "99635e95410b07e64d979287ce8777b52a6542eddabd1e99a6c3439ee311bc70"
+          "sha256": "b59570331360ff5768638bcf543503605257660409eb5e0345df46465bebcd8a"
         },
         {
           "path": "managym/src/decision.rs",
@@ -121,14 +121,14 @@
         },
         {
           "path": "tests/academy/test_public_commitment_parity.py",
-          "sha256": "b377511da2f81e723ed7cee496d491c6b0e335d373b67e4b7b0d713af801e6b6"
+          "sha256": "981f2ad6e2b579e6599d13f9acb25b863afd441f07f204e2e3ee7cb2e1039ee2"
         },
         {
           "path": "tests/sim/test_conditional_search.py",
           "sha256": "d51e57bbacc7fe50716af576be6d4979664501d6d4a48e0f33921a9ad23bb171"
         }
       ],
-      "sha256": "750e8b70b9f7a86ba56945e3936a671f04dee802a59e4d8e9cb33774d733f1d7"
+      "sha256": "1d5f086b8bbc663a554137df094ac2422d525b5ac7e797d0e175bd8c5523c248"
     },
     "seed": 0,
     "semantic_decision_version": 7

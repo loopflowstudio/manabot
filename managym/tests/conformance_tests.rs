@@ -267,7 +267,7 @@ fn every_registered_real_card_matches_scryfall() {
         }
 
         // Printed power/toughness ("*" = CDA).
-        let power = engine_pt(def.power, def.power_cda.is_some());
+        let power = engine_pt(def.power, def.power_cda().is_some());
         if power != scryfall_pt(fx.power.as_ref()) {
             failures.push(format!(
                 "{name}: power {power:?} != Scryfall {:?}",
@@ -298,8 +298,8 @@ fn every_registered_real_card_matches_scryfall() {
             ("Defender", def.keywords.defender),
             ("Menace", def.keywords.menace),
             ("Hexproof", def.keywords.hexproof),
-            ("Ward", def.ward.is_some()),
-            ("Kicker", def.kicker.is_some()),
+            ("Ward", def.ward().is_some()),
+            ("Kicker", def.kicker().is_some()),
         ];
         for (keyword, has) in checks {
             if kw(keyword) != has {

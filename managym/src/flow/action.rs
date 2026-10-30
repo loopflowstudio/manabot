@@ -307,7 +307,7 @@ impl Game {
             Some(cost) => {
                 // Castability gating sees pooled mana too — until-end-of-
                 // combat mana (firebending) must make spells castable.
-                let payable = if let Some(additional) = &self.state.cards[card_id].sacrifice_cost {
+                let payable = if let Some(additional) = self.state.cards[card_id].sacrifice_cost() {
                     let payment = crate::flow::game::Payment::Spell {
                         card: card_id,
                         kicked: false,

@@ -1,4 +1,4 @@
-"""Re-record the w15 Academy play demos for the current world by offer label."""
+"""Re-record the Academy play demos for the current world by offer label."""
 
 import json
 import sys
@@ -50,4 +50,4 @@ def regenerate(source: str, target: str) -> None:
 
 
 for name in sys.argv[1:]:
-    regenerate(f"{name}-w15.json", f"{name}-w17.json")
+    regenerate(f"{name}-w17.json", f"{name}-w17.json")

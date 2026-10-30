@@ -42,8 +42,13 @@ Update this table in the same PR as any rules-meaning or shape change.
 
 The engine implements exactly one world. To run an older world, check out the
 revision that recorded it and build that engine; current code carries no rules
-compatibility shims. Frozen evidence (IR, receipts, checkpoints) stays readable
-in place and is never rewritten.
+compatibility shims and no card content of earlier worlds. The sources, IR,
+learning schemas and Python compiler of w1–w11 (`content/semantic/v1`, `w7`–`w11`,
+`manabot/semantic/compiler.py`), the Academy fixtures of w7–w15 and the
+conformance corpora of w12–w15 exist only at revisions before Task afbd6a (the
+corpora are also archived under `experiments/data/archive/conformance/`), so
+paths to them below name those revisions. Frozen receipts and checkpoints are
+never rewritten.
 
 ## w17: one card representation (not yet frozen)
 
@@ -53,11 +58,19 @@ its rules types, in the set file of its first printing; the authoring language
 parsing and interpretation for current content are deleted. All 161 definitions
 were generated once from w16's lowering and proven JSON-identical to it. Each
 definition carries its key and the Scryfall id of that printing; neither enters
-content digests, so default and authored pack digests equal w16's. Five cards
+content digests. Five cards
 moved to their actual first printing (`roe.prophetic_prism`,
 `mh2.tireless_provisioner`, `ptk.corrupt_court_official`, `eld.epic_downfall`,
 `ths.lightning_strike`); every set-file card is supported unless marked
 incomplete.
+
+Task afbd6a (2026-10-30, same world) reshaped w17's definitions without changing
+behavior: one-off fields became `StaticAbility` and `AdditionalCost` variants
+(`statics`, `additional_costs`), every token moved to `cardsets/tokens.rs`, and
+the default pack registers definitions in name order (the legacy `CardDefId`
+prefix is gone). Content digests, state digests and learning tokens changed, so
+w17 conformance, authored-match, parity and Academy fixtures were re-recorded
+with the same Commands and decision revisions; the learning schema stays 9.
 
 Learning tokens are derived in Rust (`managym.learning_catalog`) by walking each
 definition with a `serde` serializer: learning schema **9**, token values are
@@ -319,7 +332,7 @@ A response that grants hexproof can invalidate a selected target under CR 608.2b
 a departed permanent slot cannot follow a new incarnation of the same card.
 
 Tensor shapes, compiled authored content and learning schema 7 are unchanged.
-The new [w12 corpus](conformance/semantic-kernel-w12-v1/) records fresh runtime
+The new [w12 corpus](experiments/data/archive/conformance/semantic-kernel-w12-v1/) records fresh runtime
 receipts; w11 and earlier corpora, checkpoints and `erd1` evidence stay frozen.
 This bounded repair does not supply trigger-order choices, general protection,
 or stack-spell incarnation guarantees. No strength baseline is claimed.
@@ -333,7 +346,7 @@ differs from the earlier w12 targeting-only corpus. Neither historical receipt
 describes the combined source. w13 identifies this combined runtime; it adds no
 new tensor shape, learning schema, authored cards or payment implementation.
 
-[Fresh conformance evidence](conformance/semantic-kernel-w13-v1/) uses the same
+[Fresh conformance evidence](experiments/data/archive/conformance/semantic-kernel-w13-v1/) uses the same
 bounded case manifest and phase matrix. New w13 Academy demo prefixes use the
 ordinary Command path. All earlier corpora and demo files retain their bytes.
 Current-world admission and monitoring must validate this combined runtime;
@@ -359,7 +372,7 @@ Native offers say “Put on stack next” and describe the exact triggered abili
 or delayed payload. Public stack inspection and text capture reuse that derived
 description; full card text remains available in source inspection.
 
-The new conformance root is `conformance/semantic-kernel-w14-v1`. Existing w13 and
+The new conformance root is `experiments/data/archive/conformance/semantic-kernel-w14-v1`. Existing w13 and
 earlier corpora, play roots, decks and checkpoint evidence are retained unchanged.
 The existing-card trigger witness uses the explicit scenario recipe in
 `manabot.verify.trigger_order` before ordinary human Commands and agent actions;
@@ -383,7 +396,7 @@ checkpoint omissions remain unchanged. Capture/text v4 carries the same native
 fact, with unchanged embedded decision schema 7. Earlier checkpoints are rejected
 for current-world play, and historical captures retain their recorded semantics.
 
-Fresh `conformance/semantic-kernel-w15-v1` receipts and Academy w15 prefixes bind
+Fresh `experiments/data/archive/conformance/semantic-kernel-w15-v1` receipts and Academy w15 prefixes bind
 the integrated source. Earlier corpora, demos, authored packs and experiment
 artifacts remain unchanged. These bounded fixtures do not establish exhaustive
 rules correctness, scientific baselines or final release certification.

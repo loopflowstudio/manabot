@@ -1,6 +1,6 @@
 //! The Brothers' War.
 use crate::state::{
-    card::{CardDefinition, CardType, CardTypes, Keywords},
+    card::{CardDefinition, CardType, CardTypes, Keywords, StaticAbility},
     mana::ManaCost,
 };
 
@@ -24,7 +24,7 @@ fn giant_cindermaw() -> CardDefinition {
             trample: true,
             ..Default::default()
         },
-        prevents_life_gain: true,
+        statics: vec![StaticAbility::PlayersCantGainLife],
         text_box: text_box.into(),
         ..Default::default()
     }
