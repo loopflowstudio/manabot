@@ -3,7 +3,7 @@
 Directive: Jack Heart, 2026-10-30 (Task 558daa). Was stacked on afbd6a; #403
 merged into main (10eeb1f55) and this branch merged it (8db3b2fe8), so the PR
 targets main and its diff is the cull alone.
-Status: cull complete through the compress pass; main (6f48f5ca0) merged in d8ba8a340 with no reintroduced cut files or citations. Concept review (2026-10-30) found stale undo/branch-driver guidance; next implement pass is the doc/name alignment below, then gate/demo. Stop at review/demo; no merge.
+Status: cull complete; both concept reviews' alignment landed (cf7457bb4..04b1f529d). Next: gate/demo. Stop at review/demo; no merge.
 
 ## Approach
 
@@ -124,6 +124,13 @@ MEMORY "hash coverage". Deliberately unchanged: frozen
 (`manabot.search-branching.v1`) and the `LegacyCloneReferenceBackend` oracle.
 Reopen only if a reader needs incremental undo (Academy undo is a separate
 follow-up and must be an explicit shared action on fork snapshots).
+
+## Concept review 2, 2026-10-30
+
+Fixed in 04b1f529d: managym/README.md and the semantic-kernel research doc
+now call it a dated 2026-07-15 record superseded on undo/journal/page-COW by
+full-clone forking; rollout_pool.rs no longer cites `wave/search`. Frozen
+`experiments/w2-*` and `docs/research/etude-vs-phase.md` left as written.
 
 ## Checks
 
