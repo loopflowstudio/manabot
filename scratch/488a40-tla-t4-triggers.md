@@ -57,7 +57,16 @@ evidence is re-recorded at gate with `scratch/tools/regen_*.py` and
    `PlayerSelector`, `DrainLife { amount: EffectValue }`, trigger player).
 5. New event triggers: combat damage to player (Waterbender Ascension, Invasion Tactics),
    counters placed (Earth Kingdom General), opponent searches (Wan Shi Tong),
-   cast from exile / enter from exile (Appa SG, Fire Lord Zuko), scry/surveil.
+   cast from exile / enter from exile (Appa SG, Fire Lord Zuko), scry/surveil
+   (Planetarium of Wan Shi Tong). Design (2026-10-30, implement): rules
+   events `CombatDamageToPlayers` (one per damage pass, for "one or more"),
+   `DamageDealt.combat` (per creature), `CountersPlaced`, `LibrarySearched`,
+   `Scried`; `TriggerCondition::FromZone { zone, condition }` wraps a cast or
+   entry trigger ("from exile"); the trigger's X (CR 107.3m: the cast spell's
+   X, kept as `Permanent.cast_x`) and the event's amount ("that much") ride on
+   the pending trigger into the frame; `CounterKind::Quest`;
+   `Condition::SourceCountersAtLeast` (resolution only); "do this only once
+   each turn" after a "may" spends the turn's use only when taken.
 6. Reflexive and delayed triggers, placement-time modes, copies/retargeting,
    trigger multiplicity (Katara the Fearless), LKI counter transfer, control
    change, Destined Confrontation's simultaneous choice.

@@ -78,9 +78,8 @@ SOURCE_DIGEST_METHOD = "git-ls-tree-sha256-v1"
 # managym/src. The include inventory below makes this list an executable
 # closure rather than a best-effort comment.
 COMPILE_TIME_SOURCE_INPUTS = (
-    "content/semantic/v1/coverage.evidence.json",
-    "content/semantic/v1/generated/two_deck.ir.json",
-    "content/semantic/v1/two_deck.source.json",
+    "content/semantic/current/learning_schema.json",
+    "content/semantic/current/setups.json",
 )
 SOURCE_DIRECTORY_PATHS = (
     "managym/src",

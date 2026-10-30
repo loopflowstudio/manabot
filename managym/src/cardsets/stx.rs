@@ -6,7 +6,7 @@ use crate::state::{
         Ability, Effect, EffectValue, TargetRequirement, TargetSpec, TriggerCondition,
         TriggerSubject,
     },
-    card::{CardDefinition, CardType, CardTypes, Keywords},
+    card::{CardDefinition, CardType, CardTypes, Keywords, StaticAbility},
     mana::ManaCost,
 };
 
@@ -250,7 +250,7 @@ fn waterfall_aerialist() -> CardDefinition {
             flying: true,
             ..Default::default()
         },
-        ward: Some(ManaCost::parse("{2}")),
+        statics: vec![StaticAbility::Ward(ManaCost::parse("{2}"))],
         text_box: text_box.into(),
         ..Default::default()
     }

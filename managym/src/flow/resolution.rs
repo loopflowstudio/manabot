@@ -173,8 +173,8 @@ impl Game {
         // A granted ability keeps its grantor's text after the grantor leaves.
         let definition = match ability.granted_by {
             Some(grant) => self.state.cards[CardId::from(grant.grantor.entity)]
-                .attached_grants
-                .get(grant.index),
+                .attached_grants()
+                .nth(grant.index),
             None => self.state.cards[ability.source_card]
                 .activated_abilities
                 .get(ability.ability_index),

@@ -259,12 +259,12 @@
           "label": "Pay the cost (Firebending Lesson)"
         }
       ],
-      "digest": "b3cfbe975e822c08d255e199373a0afc1677c05c9cd090ac69e6678b0271a7d6",
+      "digest": "eece76bd5e416743b37065d1d8552414385ca5df6c49d88fc0b51fe55e53f66b",
       "frame": {
         "protocol": 1,
-        "match_id": "U2p4u7MOI2Yyb9BG6O6FPA",
+        "match_id": "5gpT00SmzVS2yZGosZl5eQ",
         "revision": 109,
-        "frame_hash": "15cb8016cb272bf6462de3a1c383c7567bdf343f2d2853aeb33b920bff47e419",
+        "frame_hash": "88a75a38cc3360f787317b6b982aa029623a23d41aa652b324c1329316bc2b05",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -1759,12 +1759,12 @@
           "label": "Cast Pop Quiz"
         }
       ],
-      "digest": "99449d8882c59164b5e5955635481dc14d75e041c24f52ce4396cc58d8f9c549",
+      "digest": "41d7d1ece912574a5685db0d55929ece8f4bc0c41b53906c7ba17d85f2b3e36b",
       "frame": {
         "protocol": 1,
-        "match_id": "sMptjU-IiS66TA2AsXLXAw",
+        "match_id": "JeLPnlifayNeKsPUnoNoWg",
         "revision": 64,
-        "frame_hash": "0dd0d1d3d8f8cf3f96cfc3789282edcf12c440b7bfa87a1be182783dc92f34be",
+        "frame_hash": "a4030872276e34f2240de00c5eb7350e47c68eb800b3c48de16b5de8fe980ea3",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -2976,12 +2976,12 @@
           "label": "Pass priority"
         }
       ],
-      "digest": "3b1a45ee534e4122b5aeeaa30f854a5c026ba2242e4755638740ac12cf96f55a",
+      "digest": "cb2d319325a43f5a3fd83f821aae16142df346cf494ca76a50495bc089cb9bda",
       "frame": {
         "protocol": 1,
-        "match_id": "uo8sMOILOfeF1KTNcY9FIQ",
+        "match_id": "6xQ8aGFmaj4ZydYzSKmizg",
         "revision": 90,
-        "frame_hash": "98fd6bd8f079198fd63f0883edb3eda804114782bb5246e46ab48d961b4ce26f",
+        "frame_hash": "0d67af8065d095ba4b85d22fa924cbe28a4f9755d9c1870a9cfc892e96150008",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -4209,12 +4209,12 @@
           "label": "Cast Otter-Penguin"
         }
       ],
-      "digest": "7ca8878e076dab79aa0c07b8e26ecbe9fe23492fd6119d70873ae82ecd4b12e9",
+      "digest": "041e0b647031607b6e0f0f0f32f87bd92adecfa386796fbd285128c25e659994",
       "frame": {
         "protocol": 1,
-        "match_id": "TMm1GnzQvLE1lJZ3f_yvug",
+        "match_id": "24tlWPlz_WvmWoCUjBkKUQ",
         "revision": 36,
-        "frame_hash": "dba9d6652e567852cc9980b170b27fdcf60bc75be46c89698becea3140510556",
+        "frame_hash": "f05cc68a4c973e900343876e294eccc5a567ffd9aff28b4fd6f499687ee491ed",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -5067,12 +5067,12 @@
           "label": "Cast It'll Quench Ya!"
         }
       ],
-      "digest": "25cb0a1825dbcef227ba89e7cda2cca3007482017fbdce779f33eb6a601edda7",
+      "digest": "c993a4436928de0a71833114653075dc46d6fd4a8dd136ffc875e8fb414d9621",
       "frame": {
         "protocol": 1,
-        "match_id": "-H0JDP54ZR0EKl9wX3LelQ",
+        "match_id": "NCB_wF7qTccJlC8LHHdUlw",
         "revision": 56,
-        "frame_hash": "7706db779ac707a561a7b82812933b8522e07c10345ea040de2c2f0061579a79",
+        "frame_hash": "1ebac8c97b5d32d82867a7f2ce092aea25776734cf5b6ec581780b23f0533bb9",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -5963,6 +5963,6 @@
     }
   },
   "world": "w11",
-  "source_base_commit": "eecbc465fa50deb01120cda6ea6103b05841ac1d",
+  "source_base_commit": "f9d242de46f5c71cf6a5be44bd4cf91b2755ed1a",
   "world_version": "w17"
 }

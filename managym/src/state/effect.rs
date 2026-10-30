@@ -123,4 +123,11 @@ impl ContinuousEffect {
     pub fn affects_player(&self, player: PlayerId) -> bool {
         self.affected == Affected::Player(player)
     }
+
+    /// Whether the record's timestamp is later than `after` (no bound:
+    /// always), so an earlier ability loss or characteristic-setting does
+    /// not remove it (CR 613.7).
+    pub fn follows(&self, after: Option<ObjectId>) -> bool {
+        after.is_none_or(|after| self.timestamp > after)
+    }
 }

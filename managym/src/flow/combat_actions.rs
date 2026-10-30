@@ -8,7 +8,7 @@ use crate::{
         game::{CombatDamagePass, Game},
     },
     state::{
-        card::Restriction,
+        card::{BlockRestriction, Restriction, StaticAbility},
         game_object::{PermanentId, PlayerId},
     },
 };
@@ -25,12 +25,14 @@ impl Game {
             return true;
         }
         self.state.cards[permanent.card]
-            .combat_requires_other
-            .as_ref()
-            .is_none_or(|predicate| {
-                self.battlefield_permanents(permanent.controller)
+            .statics
+            .iter()
+            .all(|ability| match ability {
+                StaticAbility::CantAttackOrBlockUnlessYouControlAnother(predicate) => self
+                    .battlefield_permanents(permanent.controller)
                     .into_iter()
-                    .any(|other| other != id && self.permanent_matches_predicate(other, predicate))
+                    .any(|other| other != id && self.permanent_matches_predicate(other, predicate)),
+                _ => true,
             })
     }
 
@@ -246,12 +248,9 @@ impl Game {
         };
         let card = &self.state.cards[permanent.card];
         let defender_applies = self.effective_keywords(permanent_id).defender
-            && card
-                .attacks_despite_defender
-                .as_ref()
-                .is_none_or(|condition| {
-                    !self.check_static_condition(condition, permanent.controller)
-                });
+            && card.attacks_despite_defender().is_none_or(|condition| {
+                !self.check_static_condition(condition, permanent.controller)
+            });
         self.permanent_is_creature(permanent_id)
             && self.permanent_can_tap(permanent_id)
             && !defender_applies
@@ -296,20 +295,26 @@ impl Game {
         }
 
         if !self.has_lost_abilities(blocker_id)
-            && blocker_card
-                .blocking_restriction
-                .as_ref()
-                .is_some_and(|predicate| self.permanent_matches_predicate(attacker_id, predicate))
+            && blocker_card.statics.iter().any(|ability| {
+                matches!(
+                    ability,
+                    StaticAbility::BlockRestriction(BlockRestriction::CantBlock(predicate))
+                        if self.permanent_matches_predicate(attacker_id, predicate)
+                )
+            })
         {
             return false;
         }
         if !self.has_lost_abilities(attacker_id)
-            && self.state.cards[attacker.card]
-                .unblockable_if
-                .as_ref()
-                .is_some_and(|condition| {
+            && attacker_card.statics.iter().any(|ability| match ability {
+                StaticAbility::CantBeBlockedIf(condition) => {
                     self.check_static_condition(condition, attacker.controller)
-                })
+                }
+                StaticAbility::BlockRestriction(BlockRestriction::CantBeBlockedBy(predicate)) => {
+                    self.permanent_matches_predicate(blocker_id, predicate)
+                }
+                _ => false,
+            })
         {
             return false;
         }
@@ -332,13 +337,6 @@ impl Game {
         let blocker_keywords = self.effective_keywords(blocker_id);
         if attacker_keywords.flying && !(blocker_keywords.flying || blocker_keywords.reach) {
             return false;
-        }
-
-        // "This creature can't be blocked by creatures [matching predicate]."
-        if let Some(restriction) = &attacker_card.block_restriction {
-            if self.permanent_matches_predicate(blocker_id, restriction) {
-                return false;
-            }
         }
 
         true

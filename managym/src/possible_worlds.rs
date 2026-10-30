@@ -411,7 +411,7 @@ impl HiddenHandConstraints {
         let unseen = unseen_cards(game, opponent);
         let foretell = unseen
             .iter()
-            .filter(|card| game.state.cards[**card].foretell.is_some())
+            .filter(|card| game.state.cards[**card].foretell().is_some())
             .map(|card| game.state.cards[*card].name.clone())
             .collect();
         let pool = name_counts(game, unseen);

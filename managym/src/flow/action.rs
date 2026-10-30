@@ -394,7 +394,7 @@ impl Game {
         };
         // Castability gating sees pooled mana too — until-end-of-combat mana
         // (firebending) must make spells castable.
-        let Some(additional) = &card.sacrifice_cost else {
+        let Some(additional) = card.sacrifice_cost() else {
             return self.can_pay_cast(player, card_id, cast);
         };
         let payment = Payment::Spell {
