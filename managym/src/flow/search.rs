@@ -53,7 +53,6 @@ impl Game {
     pub fn determinize(&mut self, perspective: PlayerId, seed: u64) {
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         let opponent = PlayerId((perspective.0 + 1) % 2);
-        self.journal_zones();
         let (mut known, mut residual) = self.hidden_hand_partition(opponent);
         residual.extend(self.foretold_cards(opponent));
         residual.sort_unstable_by_key(|card| card.0);

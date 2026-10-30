@@ -44,79 +44,11 @@ impl Default for ZoneManager {
 }
 
 impl ZoneManager {
-    pub(crate) fn allocated_bytes(&self) -> usize {
-        use std::mem::size_of;
-
-        let ordered = self
-            .library
-            .iter()
-            .chain(self.hand.iter())
-            .chain(self.battlefield.iter())
-            .chain(self.graveyard.iter())
-            .chain(self.stack.iter())
-            .chain(self.exile.iter())
-            .chain(self.command.iter())
-            .map(|cards| cards.capacity().saturating_mul(size_of::<CardId>()))
-            .sum::<usize>();
-        ordered
-            + self
-                .card_zones
-                .capacity()
-                .saturating_mul(size_of::<Option<ZoneType>>())
-    }
-
-    pub(crate) fn card_zones_len(&self) -> usize {
-        self.card_zones.len()
-    }
-
-    /// Where `card` currently sits, precisely enough to put it back: its
-    /// holder (see [`Self::move_card`]), zone and index within that zone's
-    /// order. `None` means it is in no zone.
-    pub(crate) fn locate(&self, card: CardId) -> Option<(PlayerId, ZoneType, usize)> {
-        let zone = self.zone_of(card)?;
-        let holder = self.holder_in(card, zone)?;
-        let index = self
-            .zone_cards(zone, holder)
-            .iter()
-            .position(|held| *held == card)?;
-        Some((holder, zone, index))
-    }
-
     /// The player whose `zone` holds `card`.
     fn holder_in(&self, card: CardId, zone: ZoneType) -> Option<PlayerId> {
         [PlayerId(0), PlayerId(1)]
             .into_iter()
             .find(|player| self.zone_cards(zone, *player).contains(&card))
-    }
-
-    /// Inverse of a single [`Self::move_card`] or [`Self::remove_card`].
-    ///
-    /// Restores zone order exactly by reinserting at the recorded index rather
-    /// than pushing, and rewinds the `card_zones` reverse index to the length
-    /// it had before the move, undoing any slot the move appended for a token.
-    pub(crate) fn undo_move(
-        &mut self,
-        card: CardId,
-        from: Option<(PlayerId, ZoneType, usize)>,
-        card_zones_len: usize,
-    ) {
-        if let Some(zone) = self.zone_of(card) {
-            self.remove_from_zone(card, zone);
-        }
-        match from {
-            Some((holder, zone, index)) => {
-                let cards = self.zone_cards_mut(zone, holder);
-                let index = index.min(cards.len());
-                cards.insert(index, card);
-                self.card_zones[card.0] = Some(zone);
-            }
-            None => {
-                if let Some(slot) = self.card_zones.get_mut(card.0) {
-                    *slot = None;
-                }
-            }
-        }
-        self.card_zones.truncate(card_zones_len);
     }
 
     fn ensure_slot(&mut self, card: CardId) {
@@ -283,33 +215,5 @@ impl ZoneManager {
         }
         self.hand[idx] = new_hand;
         self.library[idx] = new_library;
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// A permanent another player controls sits on its controller's
-    /// battlefield; leaving it and undoing that restores the same slot.
-    #[test]
-    fn undo_restores_a_permanent_to_its_controllers_battlefield() {
-        let mut zones = ZoneManager::default();
-        let (card, owner, controller) = (CardId(0), PlayerId(1), PlayerId(0));
-        zones.move_card(card, controller, ZoneType::Battlefield);
-        let from = zones.locate(card);
-        assert_eq!(from, Some((controller, ZoneType::Battlefield, 0)));
-        let card_zones_len = zones.card_zones_len();
-        zones.move_card(card, owner, ZoneType::Graveyard);
-        assert!(zones
-            .zone_cards(ZoneType::Battlefield, controller)
-            .is_empty());
-        assert_eq!(zones.zone_cards(ZoneType::Graveyard, owner), &vec![card]);
-        zones.undo_move(card, from, card_zones_len);
-        assert_eq!(
-            zones.zone_cards(ZoneType::Battlefield, controller),
-            &vec![card]
-        );
-        assert!(zones.zone_cards(ZoneType::Graveyard, owner).is_empty());
     }
 }

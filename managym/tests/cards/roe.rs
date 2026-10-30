@@ -177,10 +177,7 @@ fn prism_upfront_payment_preserves_professors_second_green() {
 
 #[test]
 fn prism_payment_offers_execute_and_undo_without_mutating_sibling_forks() {
-    use managym::{
-        search_state::{witness, BenchCommand, BranchDriver, ClonePlusUndoDriver},
-        Game,
-    };
+    use managym::{search_state::witness, Game};
 
     fn complete_every_offer(game: &mut Game, spell: CardId, depth: usize) {
         if game.state.zones.zone_of(spell) == Some(ZoneType::Stack) {
@@ -190,24 +187,14 @@ fn prism_payment_offers_execute_and_undo_without_mutating_sibling_forks() {
             depth > 0,
             "payment must complete within its three decisions"
         );
-        let driver = ClonePlusUndoDriver::default();
         let root = witness(game);
         let actions = game.action_space().unwrap().actions.clone();
         assert!(!actions.is_empty());
         for action_index in 0..actions.len() {
-            let mark = driver.mark(game);
-            driver
-                .apply(
-                    game,
-                    BenchCommand {
-                        action_index,
-                        expected_action_hash: None,
-                        expected_state_hash: None,
-                    },
-                )
-                .unwrap();
+            let mark = game.clone();
+            game.step(action_index).unwrap();
             complete_every_offer(game, spell, depth - 1);
-            driver.rollback(game, mark);
+            *game = mark;
             assert_eq!(witness(game), root);
         }
     }
@@ -233,8 +220,7 @@ fn prism_payment_offers_execute_and_undo_without_mutating_sibling_forks() {
             |a| matches!(a, Action::CastSpell { card, .. } if *card == professor),
         );
         let root = witness(s.game());
-        let driver = ClonePlusUndoDriver::default();
-        let mut branch = driver.fork_exact(s.game());
+        let mut branch = s.game().clone();
         complete_every_offer(&mut branch, professor, 3);
         assert_eq!(witness(s.game()), root);
         assert_eq!(witness(&branch), root);
@@ -277,11 +263,7 @@ fn prism_upfront_payment_search_preserves_a_required_pooled_white() {
 // arithmetic, not a second call to the feasibility model.
 #[test]
 fn nested_mana_every_offer_completes_replays_and_rolls_back() {
-    use managym::{
-        search_state::{witness, BenchCommand, BranchDriver, ClonePlusUndoDriver},
-        state::game_object::PermanentId,
-        Game,
-    };
+    use managym::{search_state::witness, state::game_object::PermanentId, Game};
 
     struct Expected {
         spell: Option<CardId>,
@@ -299,7 +281,6 @@ fn nested_mana_every_offer_completes_replays_and_rolls_back() {
         *nodes += 1;
         assert!(*nodes <= 256, "tiny board node bound");
         assert!(prefix.len() <= 8, "one Treasure, one filter, one spell");
-        let driver = ClonePlusUndoDriver::default();
         let complete = if let Some(spell) = expected.spell {
             game.state.zones.zone_of(spell) == Some(ZoneType::Stack)
         } else {
@@ -324,18 +305,9 @@ fn nested_mana_every_offer_completes_replays_and_rolls_back() {
             if expected.spell.is_none() {
                 assert!(prism_tapped);
             }
-            let mut replay = driver.fork_exact(root);
+            let mut replay = root.clone();
             for action_index in prefix.iter().copied() {
-                driver
-                    .apply(
-                        &mut replay,
-                        BenchCommand {
-                            action_index,
-                            expected_action_hash: None,
-                            expected_state_hash: None,
-                        },
-                    )
-                    .unwrap();
+                replay.step(action_index).unwrap();
             }
             assert_eq!(
                 witness(&replay),
@@ -351,21 +323,12 @@ fn nested_mana_every_offer_completes_replays_and_rolls_back() {
             "an offered transition must have a continuation"
         );
         for action_index in 0..actions.len() {
-            let mark = driver.mark(game);
-            driver
-                .apply(
-                    game,
-                    BenchCommand {
-                        action_index,
-                        expected_action_hash: None,
-                        expected_state_hash: None,
-                    },
-                )
-                .unwrap();
+            let mark = game.clone();
+            game.step(action_index).unwrap();
             prefix.push(action_index);
             explore(game, root, expected, prefix, nodes);
             prefix.pop();
-            driver.rollback(game, mark);
+            *game = mark;
             assert_eq!(
                 witness(game),
                 before,

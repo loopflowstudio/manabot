@@ -183,16 +183,15 @@ fn library_search_is_private_enters_tapped_and_continues_to_learn() {
 
 #[test]
 fn search_selection_or_decline_and_shuffle_restore_exactly_under_undo() {
-    use managym::search_state::{BenchCommand, BranchDriver, ClonePlusUndoDriver};
+    use managym::search_state::witness;
     let mut s = five_color_setup(&["Field Trip"]);
     cast(&mut s, "Field Trip");
     s.pass_priority();
     s.pass_priority();
     for select in [false, true] {
-        let driver = ClonePlusUndoDriver::default();
-        let root = driver.witness(s.game());
-        let mut branch = driver.fork_exact(s.game());
-        let mark = driver.mark(&mut branch);
+        let root = witness(s.game());
+        let mut branch = s.game().clone();
+        let mark = branch.clone();
         let index = branch
             .action_space()
             .unwrap()
@@ -206,20 +205,11 @@ fn search_selection_or_decline_and_shuffle_restore_exactly_under_undo() {
                 }
             })
             .unwrap();
-        driver
-            .apply(
-                &mut branch,
-                BenchCommand {
-                    action_index: index,
-                    expected_action_hash: None,
-                    expected_state_hash: None,
-                },
-            )
-            .unwrap();
-        assert_ne!(driver.witness(&branch), root);
-        driver.rollback(&mut branch, mark);
-        assert_eq!(driver.witness(&branch), root);
-        assert_eq!(driver.witness(s.game()), root);
+        branch.step(index).unwrap();
+        assert_ne!(witness(&branch), root);
+        branch = mark;
+        assert_eq!(witness(&branch), root);
+        assert_eq!(witness(s.game()), root);
     }
 }
 

@@ -171,7 +171,6 @@ impl Game {
         }
 
         // CR 305.2 — Track one normal land play per turn.
-        self.journal_turn();
         self.state.turn.lands_played += 1;
         self.move_card(card, ZoneType::Battlefield);
 
@@ -712,7 +711,6 @@ impl Game {
         target_req_indices: Vec<usize>,
         cast: CastChoices,
     ) -> Result<(), AgentError> {
-        self.journal_turn();
         self.state.turn.spells_cast[player.0].push(card);
         // CR 601.2i — A cast spell is put onto the stack.
         self.push_spell_to_stack(card, player, targets.clone(), target_req_indices, cast);
@@ -861,7 +859,6 @@ impl Game {
         if !ability.exhaust && !ability.once_each_turn {
             return;
         }
-        self.journal_permanent(permanent);
         if let Some(permanent) = self.state.permanents[permanent].as_mut() {
             permanent.record_activation(ability_index, ability);
         }

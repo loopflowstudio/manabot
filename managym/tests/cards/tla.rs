@@ -2724,7 +2724,7 @@ fn combustion_invalid_target_does_not_damage_or_mark_new_incarnation() {
 
 #[test]
 fn combustion_replacement_is_hashed_visible_and_rolls_back_with_its_damage() {
-    use managym::search_state::{BenchCommand, BranchDriver, ClonePlusUndoDriver};
+    use managym::search_state::witness;
     let mut s = ur_lessons_setup();
     put_onto_battlefield(&mut s, 0, "Mountain");
     put_onto_battlefield(&mut s, 0, "Mountain");
@@ -2736,10 +2736,9 @@ fn combustion_replacement_is_hashed_visible_and_rolls_back_with_its_damage() {
     cast_owned(&mut s, "Combustion Technique");
     assert!(s.choose_target(Target::Permanent(gran)));
     s.pass_priority();
-    let driver = ClonePlusUndoDriver::default();
-    let root = driver.witness(s.game());
-    let mut branch = driver.fork_exact(s.game());
-    let mark = driver.mark(&mut branch);
+    let root = witness(s.game());
+    let mut branch = s.game().clone();
+    let mark = branch.clone();
     let index = branch
         .action_space()
         .unwrap()
@@ -2747,26 +2746,17 @@ fn combustion_replacement_is_hashed_visible_and_rolls_back_with_its_damage() {
         .iter()
         .position(|a| matches!(a, Action::PassPriority { .. }))
         .unwrap();
-    driver
-        .apply(
-            &mut branch,
-            BenchCommand {
-                action_index: index,
-                expected_action_hash: None,
-                expected_state_hash: None,
-            },
-        )
-        .unwrap();
+    branch.step(index).unwrap();
     assert!(
         branch.state.permanents[gran]
             .as_ref()
             .unwrap()
             .exile_if_dies_this_turn
     );
-    assert_ne!(driver.witness(&branch), root);
-    driver.rollback(&mut branch, mark);
-    assert_eq!(driver.witness(&branch), root);
-    assert_eq!(driver.witness(s.game()), root);
+    assert_ne!(witness(&branch), root);
+    branch = mark;
+    assert_eq!(witness(&branch), root);
+    assert_eq!(witness(s.game()), root);
 }
 
 #[test]
@@ -3062,8 +3052,8 @@ fn disciple_targets_another_small_creature_pays_tap_and_survives_source_departur
     let source = s.game().state.permanents[disciple].as_ref().unwrap().card;
     assert!(s.game().state.permanents[disciple].as_ref().unwrap().tapped);
     s.game_mut().move_card(source, ZoneType::Graveyard);
-    // Resolve through the branch driver as well: the independent target
-    // mutation must disappear when the search branch rolls back.
+    // Resolve on exact forks as well: the independent target mutation stays
+    // in the source while each fork resolves.
     assert_choice_contract(&s);
     settle(&mut s);
     assert!(
@@ -3468,11 +3458,10 @@ fn avatar_state_grants_a_visible_incarnation_local_subtype_and_cleans_up() {
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert_choice_contract(&s);
     s.choose_target(Target::Permanent(target));
-    use managym::search_state::{witness, BenchCommand, BranchDriver, ClonePlusUndoDriver};
-    let driver = ClonePlusUndoDriver::default();
-    let mut branch = driver.fork_exact(s.game());
+    use managym::search_state::witness;
+    let mut branch = s.game().clone();
     let root = witness(&branch);
-    let mark = driver.mark(&mut branch);
+    let mark = branch.clone();
     for _ in 0..8 {
         if !branch.state.permanents[target]
             .as_ref()
@@ -3489,16 +3478,7 @@ fn avatar_state_grants_a_visible_incarnation_local_subtype_and_cleans_up() {
             .iter()
             .position(|action| matches!(action, Action::PassPriority { .. }))
             .unwrap();
-        driver
-            .apply(
-                &mut branch,
-                BenchCommand {
-                    action_index: index,
-                    expected_action_hash: None,
-                    expected_state_hash: None,
-                },
-            )
-            .unwrap();
+        branch.step(index).unwrap();
     }
     assert_eq!(
         branch.state.permanents[target]
@@ -3507,7 +3487,7 @@ fn avatar_state_grants_a_visible_incarnation_local_subtype_and_cleans_up() {
             .temp_subtypes,
         vec!["Avatar"]
     );
-    driver.rollback(&mut branch, mark);
+    branch = mark;
     assert_eq!(witness(&branch), root);
     settle(&mut s);
     let permanent = s.game().state.permanents[target].as_ref().unwrap();

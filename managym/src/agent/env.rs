@@ -17,7 +17,7 @@ use crate::{
     flow::{game::Game, search::mix_seed},
     infra::profiler::{empty_info_dict, insert_info, InfoDict, InfoValue, Profiler},
     possible_worlds::{MaterializeMode, PossibleWorldSpace, PossibleWorldSpaceProjection},
-    search_state::{BranchDriver, FullCloneDriver, SearchStateWitness},
+    search_state::{witness, SearchStateWitness},
     state::{game_object::PlayerId, player::PlayerConfig},
 };
 use rand::Rng;
@@ -877,13 +877,13 @@ impl Env {
         })
     }
 
-    /// Production search fork bound to the RUL-1 retained driver.
+    /// Production search fork: an exact full clone of the match.
     pub fn selected_fork(&self) -> Result<Env, AgentError> {
         let source = self
             .game
             .as_ref()
             .ok_or_else(|| AgentError("env.selected_fork called before reset".to_string()))?;
-        let game = FullCloneDriver.fork_exact(source);
+        let game = source.clone();
         Ok(Env {
             game: Some(game),
             action_trace: self.action_trace.clone(),
@@ -911,7 +911,7 @@ impl Env {
         let game = self.game.as_mut().ok_or_else(|| {
             AgentError("env.selected_determinize called before reset".to_string())
         })?;
-        FullCloneDriver.determinize(game, PlayerId(perspective), seed);
+        game.determinize(PlayerId(perspective), seed);
         Ok(())
     }
 
@@ -919,7 +919,7 @@ impl Env {
         let game = self.game.as_mut().ok_or_else(|| {
             AgentError("env.selected_reseed_rollout called before reset".to_string())
         })?;
-        FullCloneDriver.reseed_rollout(game, seed);
+        game.reseed(seed);
         Ok(())
     }
 
@@ -928,7 +928,7 @@ impl Env {
             .game
             .as_ref()
             .ok_or_else(|| AgentError("env.selected_witness called before reset".to_string()))?;
-        Ok(FullCloneDriver.witness(game))
+        Ok(witness(game))
     }
 
     pub fn selected_revision(&self) -> Result<u64, AgentError> {

@@ -324,7 +324,6 @@ impl Game {
         let mut next = self.state.cast_permissions.clone();
         edit(&mut next);
         if next != self.state.cast_permissions {
-            self.journal_cast_permissions();
             self.state.cast_permissions = next;
         }
     }

@@ -7,8 +7,8 @@ mod benchmark_allocations;
 use managym::benchmark_allocations;
 
 use managym::{
-    benchmark::build_fixture,
     cards::content_pack::{default_content_pack, ContentPack},
+    match_fixtures::build_fixture,
     state::card::CardDefinition,
     Game,
 };
