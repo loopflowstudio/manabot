@@ -1,9 +1,10 @@
 ---
-pm:
-  linear_initiative: 21966203-a6bb-4e2c-a902-f43cbe813053
+id: d97e0563-141d-4053-a174-953642dcfe0e
+linear:
+  initiative: 21966203-a6bb-4e2c-a902-f43cbe813053
 ---
 
-# Game
+# Academy
 
 ## Objective
 
@@ -35,19 +36,19 @@ decisions, and see why it chose what it did, without writing glue code.
 
 ## Ownership
 
-Game owns Academy as a research instrument: loading checkpoints, the table,
-replay, decision inspection, and forks. Intelligence owns training, the arena
-and strength claims; Game displays their checkpoints and games without
-re-deriving them. Rules owns legality, hidden information and replay. Academy
+Academy owns itself as a research instrument: loading checkpoints, the table,
+replay, decision inspection, and forks. Training owns training and Eval the arena
+and strength claims; Academy displays their checkpoints and games without
+re-deriving them. Engine owns legality, hidden information and replay. Academy
 is a client of manabot, and manabot never imports Academy.
 
 Start from what already exists: the trained-checkpoint opponent selector,
-replay, Study forks, and advice. Widen each toward the measures above before adding new surfaces.
+replay, Study forks, and fixture advice. Widen each toward the measures above before adding new surfaces.
 
 ## Limits
 
 Academy is a local tool for inspecting bots, not a way to play Magic. It is not
 a general Magic client, deck builder or collection manager, and hosted play is
-not a goal. The selected matchup ([UR Lessons versus GW Allies](../../content/DECKS.md))
+not a goal. The selected matchup ([UR Lessons versus GW Allies](../../../content/DECKS.md))
 is the content boundary. Historical charters and decisions remain in
 [memory](MEMORY.md) and the chapter archive.

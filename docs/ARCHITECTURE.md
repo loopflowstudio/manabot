@@ -556,7 +556,7 @@ The current learned history encoder pools typed public commitments and is
 order-invariant. Arbitrary mid-game history attachment and a shared visible-card
 identity vocabulary remain gaps. The precise implementation limits and
 continuation proof are recorded in
-[Intelligence memory](../wave/intelligence/MEMORY.md).
+[Training memory](../.lf/wave/training/MEMORY.md).
 
 Checkpoints are immutable, content-addressed artifacts. Loading validates the
 world, Observation/action and world-hypothesis schemas, history/memory strategy,
@@ -673,7 +673,7 @@ separate claims to measure.
 ## Roadmaps and detailed contracts
 
 The immediate provider work is prioritized in the [Rules
-goal](../wave/rules/GOAL.md) and the [results-first
+goal](../.lf/wave/engine/GOAL.md) and the [results-first
 roadmap](plans/results-first-roadmap.md). Rules owns changes to managym
 authority; Intelligence owns manabot beliefs, planning, learning, opponents,
 and evaluation. Cross-wave work is integrated through runnable consumer slices,

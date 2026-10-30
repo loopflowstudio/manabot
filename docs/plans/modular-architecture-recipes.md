@@ -10,7 +10,7 @@ No scientific campaign or paid compute is authorized.
 [HTML technical review](modular-architecture-recipes.html) ·
 [System authority](../ARCHITECTURE.md) ·
 [Training regimes](../training-regimes.md) ·
-[Current chapter](../../wave/intelligence/GOAL.md)
+[Current chapter](../../.lf/wave/training/GOAL.md)
 
 ## 1. Recommendation and the observable win
 

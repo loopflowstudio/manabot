@@ -1,9 +1,10 @@
 ---
+id: 74d9efbc-444b-4e88-b4a4-c67983448649
 linear:
   initiative: 2b6f3d99-9176-4b77-af42-710f0f30fde9
 ---
 
-# Rules
+# Engine
 
 ## Objective
 
@@ -11,7 +12,7 @@ Give human play and training one faithful, reproducible Allies versus Lessons wo
 
 ## Current Project and measures
 
-One current Project: **Faithful Play and Training** (`35bbc647-c7e4-450b-9ef7-108628b39335`). The User approved this chapter on 2026-09-24; review it on **2026-10-08**. Exact accepted scope, baseline evidence and dispositions live in the [chapter record](../../.lf/chapters/20260924T233419Z-042de726/start.md). The date is a review point, not a promised success deadline.
+One current Project: **Faithful Play and Training** (`35bbc647-c7e4-450b-9ef7-108628b39335`). The User approved this chapter on 2026-09-24; review it on **2026-10-08**. Exact accepted scope, baseline evidence and dispositions live in the [chapter record](../../chapters/20260924T233419Z-042de726/start.md). The date is a review point, not a promised success deadline.
 
 1. **Play the intended rules.** Establish the selected format and eligible Lesson-pool setup and implement the full Learn choice, including the outside-game Lesson path where available, optional discard/draw, and decline. Exercise it through the real human and agent paths with correct visibility and deterministic replay. Reproduce and fix further selected-matchup discrepancies; a deliberately reduced mechanic is not faithful to the agreed world.
 

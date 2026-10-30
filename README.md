@@ -197,7 +197,7 @@ not comparable with today's checkpoints:
 | `paper/` | A working paper draft |
 | `ops/`, `deploy/` | Remote training hardware and deployment |
 | `academy/`, `academy/ui/`, `protocol/` | Local browser UI for testing a bot by hand and reviewing replays |
-| `wave/`, `.lf/` | Loopflow Waves, Flows, and skills that organize agent work |
+| `.lf/` | Loopflow Waves (`.lf/wave/`), chapters and prompts that organize agent work |
 
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) has the full system design. In
 short, managym owns the rules and legality, manabot owns inference and

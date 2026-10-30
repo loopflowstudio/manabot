@@ -1,4 +1,6 @@
-# Game memory
+# Academy memory
+
+Carried from the legacy `game` wave (renamed Academy).
 
 ## North star
 
@@ -40,7 +42,7 @@
 ## Evidence
 
 - `docs/architecture/experience-protocol-v1.md`
-- [Local challenger and shared-history evidence, 2026-09-25](../../docs/evidence/trained-challenger-2026-09-25.md)
+- [Local challenger and shared-history evidence, 2026-09-25](../../../docs/evidence/trained-challenger-2026-09-25.md)
 - Legacy implementation notes in `01-play-interface.md` and `05-polish.md`
 - Previous charter in `legacy-gui-charter.md`
 
@@ -52,46 +54,21 @@
 - Treat visual authorship as a product requirement without creating a generic
   content platform.
 
-## Live advice carry-forward (2026-09-24)
+## Live advice (retired 2026-10-30)
 
-The unfinished live-advice design (retired from docs; in git history)
-preserves ETU-14's pending work and release gates. The current checkout has
-`ed2` pre-command decision addresses, immutable pending roots promoted to Study,
-the Rules conditioning-index binding, and a selected tracked-posterior resolver.
-Its focused tests cover address promotion, Counterspell support partitions, and
-unsupported-world failure. The production `/api/advice` route still serves the
-fixture; these seams do not close live advice or fresh live/Study byte parity.
-
-Keep the decision address and viewer projection prefix independent of the
-chosen Command. Authored Has/Lacks conditions and the tracked posterior have
-separate provenance; probabilities remain server-private. Tracking must consume
-all semantic transitions in order, including auto-passes. Snapshot loss makes
-advice unavailable, never stalls Commands. Clone inputs under the table lock,
-then perform likelihood/search in bounded background lanes. Validate participant
-lease, viewer/audience, decision, advisor, compute, and source identities;
-unavailable replies and late-response handling must clear old evidence.
-
-Reuse DecisionAdvice and ActionPanel. The release proof requires fresh isolated
-live/Study computations with identical canonical bytes, belief-only strategy
-deltas, unchanged search roots, and responsive pilot/watcher Commands during
-recomputation. The retained design budgets remain command P95 <=100 ms over 20
-Commands, broadcast lag <=1 update, fresh advice P95 <=2 s / RSS <=512 MiB, and
-cache hit <=50 ms on its declared profile; they were not remeasured here.
-
-The old INT-7 checkpoint pin and quoted serving costs need revalidation under
-the new loader ABI. Never repair drift by changing frozen evidence or substituting
-a compatible prior. The earlier offline snapshot reported ETU-14 and ETU-21 open;
-that is historical evidence, not the current queue. The 2026-09-25 Game status
-describes ETU-14 as retired by the User. The retained advice design does not
-authorize restarting it. Five checkpoint-advice checks still fail in the latest
-affected-suite review; do not claim a passing ship gate.
+Academy's live belief runtime (a tracked posterior updated on every
+interactive-mirror Command, with no response reading it) and the unused live
+advisor resolvers were removed by Task 558daa at Jack Heart's direction; he is
+not confident the belief code works. `/api/advice` still serves fixture advice.
+The retired design and its release gates are in git history (`wave/game/MEMORY.md`
+before 558daa).
 
 ## Trained opponent and shared history
 
 [Challenge an identified trained bot through complete games · ETU-79](https://linear.app/loopflow/issue/ETU-79/challenge-an-identified-trained-bot-through-complete-games)
 answers the User's practical question: “if right now were like alright lets
 train our best sofar ...what do we do”. It also owns the training/export proof
-formerly assigned to ETU-78. Use the [local operator workflow](../../docs/local-trained-challenger.md)
+formerly assigned to ETU-78. Use the [local operator workflow](../../../docs/local-trained-challenger.md)
 and its existing receipts; ETU-80 consumes those measurements. A small search-64
 behavior-cloning run proves the workflow, not current strategic superiority.
 Final proof requires repeated corrected-world executions after ETU-75 with exact
@@ -135,7 +112,7 @@ The existing live/replay presentation consumer now retains a bounded readable
 semantic-event list after playback and skip, supports pause, and preserves
 reading time under reduced motion. Current prompt actor/instruction is separate
 from past-event narration. The board always shows the committed current frame.
-See [presentation runtime](../../docs/architecture/presentation-runtime.md) for
+See [presentation runtime](../../../docs/architecture/presentation-runtime.md) for
 fixture positions and scope. The original reported position is still unknown;
 Bolt-only spell projection remains a known coverage gap. Fixture regressions and
 automated checks do not close human-play or full-game recurrence acceptance.
@@ -157,7 +134,7 @@ more offers, retaining original IDs, duplicates, keyboard focus and ordinary
 Commands. Updates/recovery clear local filtering. Exact native prefixes and
 viewer frames cover nine targets, eight cleanup discards, ten Learn offers,
 six block choices and an optional cost; see the
-[coverage ledger and local walkthrough](../../docs/choice-navigation.md).
+[coverage ledger and local walkthrough](../../../docs/choice-navigation.md).
 These new fixtures do not identify the original reported awkward position.
 Search versus grouping, the threshold and duplicate-copy clarity still require
 Jack Heart's play judgment; automated checks do not close ETU-77 or chapter KR2.

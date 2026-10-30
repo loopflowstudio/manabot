@@ -1,4 +1,6 @@
-# Rules memory
+# Engine memory
+
+Carried from the legacy `rules` wave (renamed Engine).
 
 ## Operating principle
 
@@ -33,7 +35,7 @@ ambiguity or safety-critical invariants, not substitute products.
   and retain historical gate failures and missing human-play evidence.
 
 [Complete Learn/Lesson in the selected matchup · ETU-75](https://linear.app/loopflow/issue/ETU-75/complete-learnlesson-in-the-selected-matchup)
-remains unfinished. The [durable Learn record](../../docs/rules/learn-lesson.md)
+remains unfinished. The [durable Learn record](../../../docs/rules/learn-lesson.md)
 preserves accepted decisions, dated proof limits and source history.
 
 - The September reviewer (name unresolved) approved open-decklist sideboards on 2026-09-24: UR gets
