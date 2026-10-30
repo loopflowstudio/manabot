@@ -280,22 +280,23 @@ impl Game {
         }
     }
 
-    /// CR 514.2: "until end of turn" effects end in the cleanup step.
-    pub(crate) fn clear_temporary_modifiers(&mut self) {
-        for player in [PlayerId(0), PlayerId(1)] {
-            if self.state.players[player.0].keeps_red_mana {
-                self.journal_player(player);
-                self.state.players[player.0].keeps_red_mana = false;
-            }
-        }
+    /// The cleanup step (CR 514.2): "until end of turn" effects end and
+    /// "once each turn" limits and "dealt damage this turn" reset.
+    pub(crate) fn end_turn_modifiers(&mut self) {
+        self.end_turn_effects();
         for index in 0..self.state.permanents.len() {
             let permanent_id = PermanentId(index);
-            if self.state.permanents[permanent_id].is_some() {
+            if self.state.permanents[permanent_id]
+                .as_ref()
+                .is_some_and(|permanent| {
+                    !permanent.activated_this_turn.is_empty() || permanent.dealt_damage_this_turn
+                })
+            {
                 self.journal_permanent(permanent_id);
                 self.state.permanents[permanent_id]
                     .as_mut()
                     .expect("checked permanent")
-                    .clear_temporary_modifiers();
+                    .clear_turn_history();
             }
         }
     }

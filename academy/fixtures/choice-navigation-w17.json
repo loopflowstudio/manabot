@@ -259,12 +259,12 @@
           "label": "Pay the cost (Firebending Lesson)"
         }
       ],
-      "digest": "88a175a5148c1323181e29300e528e6aac22d6cc5d1e11fd06ba54c3e51b84fc",
+      "digest": "b3cfbe975e822c08d255e199373a0afc1677c05c9cd090ac69e6678b0271a7d6",
       "frame": {
         "protocol": 1,
-        "match_id": "M6evJ_5bBbptxFXNHcoobA",
+        "match_id": "U2p4u7MOI2Yyb9BG6O6FPA",
         "revision": 109,
-        "frame_hash": "a35322b37ff334a276be692783eadd5410c72d764a6350577b9e822336fb49cb",
+        "frame_hash": "15cb8016cb272bf6462de3a1c383c7567bdf343f2d2853aeb33b920bff47e419",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -684,7 +684,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {U}.)",
-                "id": 104,
+                "id": 106,
                 "name": "Island",
                 "controller_id": 0,
                 "tapped": false,
@@ -708,7 +708,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {U}.)",
-                "id": 109,
+                "id": 112,
                 "name": "Island",
                 "controller_id": 0,
                 "tapped": false,
@@ -732,7 +732,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {U}.)",
-                "id": 113,
+                "id": 116,
                 "name": "Island",
                 "controller_id": 0,
                 "tapped": false,
@@ -756,7 +756,7 @@
                 },
                 "is_token": false,
                 "text_box": "Flying\nThis creature gets +1/+1 as long as there's a Lesson card in your graveyard.",
-                "id": 127,
+                "id": 131,
                 "name": "First-Time Flyer",
                 "controller_id": 0,
                 "tapped": false,
@@ -780,7 +780,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {U}.)",
-                "id": 128,
+                "id": 132,
                 "name": "Island",
                 "controller_id": 0,
                 "tapped": false,
@@ -804,7 +804,7 @@
                 },
                 "is_token": false,
                 "text_box": "This creature has firebending 2 as long as there's a Lesson card in your graveyard. (Whenever this creature attacks, add {R}{R}. This mana lasts until end of combat.)\n{2}: This creature gets +1/+0 until end of turn.",
-                "id": 135,
+                "id": 139,
                 "name": "Fire Nation Cadets",
                 "controller_id": 0,
                 "tapped": false,
@@ -814,7 +814,17 @@
                 "toughness": 2,
                 "base_power": 1,
                 "base_toughness": 2,
-                "plus1_counters": 0
+                "plus1_counters": 0,
+                "effects": [
+                  {
+                    "modification": "ModifyPt",
+                    "power": 1,
+                    "toughness": 0,
+                    "duration": "EndOfTurn",
+                    "source": "Fire Nation Cadets",
+                    "timestamp": 165
+                  }
+                ]
               },
               {
                 "types": {
@@ -828,7 +838,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {U}.)",
-                "id": 139,
+                "id": 146,
                 "name": "Island",
                 "controller_id": 0,
                 "tapped": false,
@@ -1098,7 +1108,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {W}.)",
-                "id": 110,
+                "id": 113,
                 "name": "Plains",
                 "controller_id": 1,
                 "tapped": false,
@@ -1122,7 +1132,7 @@
                 },
                 "is_token": false,
                 "text_box": "Suki's power is equal to the number of creatures you control.\nWhenever Suki attacks, create a 1/1 white Ally creature token that's tapped and attacking.",
-                "id": 112,
+                "id": 115,
                 "name": "Suki, Kyoshi Warrior",
                 "controller_id": 1,
                 "tapped": false,
@@ -1145,7 +1155,7 @@
                   "is_battle": false
                 },
                 "is_token": true,
-                "id": 122,
+                "id": 126,
                 "name": "Ally",
                 "controller_id": 1,
                 "tapped": false,
@@ -1169,7 +1179,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {G}.)",
-                "id": 123,
+                "id": 127,
                 "name": "Forest",
                 "controller_id": 1,
                 "tapped": false,
@@ -1193,7 +1203,7 @@
                 },
                 "is_token": false,
                 "text_box": "When this creature enters, create a 1/1 white Ally creature token.",
-                "id": 130,
+                "id": 134,
                 "name": "Kyoshi Warriors",
                 "controller_id": 1,
                 "tapped": false,
@@ -1216,7 +1226,7 @@
                   "is_battle": false
                 },
                 "is_token": true,
-                "id": 133,
+                "id": 137,
                 "name": "Ally",
                 "controller_id": 1,
                 "tapped": false,
@@ -1240,7 +1250,7 @@
                 },
                 "is_token": false,
                 "text_box": "When this creature enters, exile up to one target artifact, creature, or enchantment an opponent controls with mana value 3 or greater until this creature leaves the battlefield.",
-                "id": 141,
+                "id": 148,
                 "name": "Earth Kingdom Jailer",
                 "controller_id": 1,
                 "tapped": false,
@@ -1264,7 +1274,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {W}.)",
-                "id": 143,
+                "id": 150,
                 "name": "Plains",
                 "controller_id": 1,
                 "tapped": false,
@@ -1288,7 +1298,7 @@
                 },
                 "is_token": false,
                 "text_box": "When this creature enters, create a 1/1 white Ally creature token.",
-                "id": 149,
+                "id": 160,
                 "name": "Kyoshi Warriors",
                 "controller_id": 1,
                 "tapped": false,
@@ -1311,7 +1321,7 @@
                   "is_battle": false
                 },
                 "is_token": true,
-                "id": 152,
+                "id": 163,
                 "name": "Ally",
                 "controller_id": 1,
                 "tapped": false,
@@ -1336,11 +1346,11 @@
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 127,
+                      "entity": 131,
                       "incarnation": 2
                     }
                   },
-                  "display_id": 127,
+                  "display_id": 131,
                   "label": "First-Time Flyer"
                 }
               }
@@ -1355,7 +1365,7 @@
             "confirm_label": "Target First-Time Flyer",
             "action_type": "CHOOSE_TARGET",
             "focus": [
-              127
+              131
             ]
           },
           {
@@ -1367,11 +1377,11 @@
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 135,
+                      "entity": 139,
                       "incarnation": 3
                     }
                   },
-                  "display_id": 135,
+                  "display_id": 139,
                   "label": "Fire Nation Cadets"
                 }
               }
@@ -1386,7 +1396,7 @@
             "confirm_label": "Target Fire Nation Cadets",
             "action_type": "CHOOSE_TARGET",
             "focus": [
-              135
+              139
             ]
           },
           {
@@ -1398,11 +1408,11 @@
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 112,
+                      "entity": 115,
                       "incarnation": 3
                     }
                   },
-                  "display_id": 112,
+                  "display_id": 115,
                   "label": "Suki, Kyoshi Warrior"
                 }
               }
@@ -1417,7 +1427,7 @@
             "confirm_label": "Target Suki, Kyoshi Warrior",
             "action_type": "CHOOSE_TARGET",
             "focus": [
-              112
+              115
             ]
           },
           {
@@ -1429,11 +1439,11 @@
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 122,
+                      "entity": 126,
                       "incarnation": 0
                     }
                   },
-                  "display_id": 122,
+                  "display_id": 126,
                   "label": "Ally"
                 }
               }
@@ -1448,7 +1458,7 @@
             "confirm_label": "Target Ally",
             "action_type": "CHOOSE_TARGET",
             "focus": [
-              122
+              126
             ]
           },
           {
@@ -1460,11 +1470,11 @@
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 130,
+                      "entity": 134,
                       "incarnation": 3
                     }
                   },
-                  "display_id": 130,
+                  "display_id": 134,
                   "label": "Kyoshi Warriors"
                 }
               }
@@ -1479,7 +1489,7 @@
             "confirm_label": "Target Kyoshi Warriors",
             "action_type": "CHOOSE_TARGET",
             "focus": [
-              130
+              134
             ]
           },
           {
@@ -1491,11 +1501,11 @@
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 133,
+                      "entity": 137,
                       "incarnation": 0
                     }
                   },
-                  "display_id": 133,
+                  "display_id": 137,
                   "label": "Ally"
                 }
               }
@@ -1510,7 +1520,7 @@
             "confirm_label": "Target Ally",
             "action_type": "CHOOSE_TARGET",
             "focus": [
-              133
+              137
             ]
           },
           {
@@ -1522,11 +1532,11 @@
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 141,
+                      "entity": 148,
                       "incarnation": 5
                     }
                   },
-                  "display_id": 141,
+                  "display_id": 148,
                   "label": "Earth Kingdom Jailer"
                 }
               }
@@ -1541,7 +1551,7 @@
             "confirm_label": "Target Earth Kingdom Jailer",
             "action_type": "CHOOSE_TARGET",
             "focus": [
-              141
+              148
             ]
           },
           {
@@ -1553,11 +1563,11 @@
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 149,
+                      "entity": 160,
                       "incarnation": 3
                     }
                   },
-                  "display_id": 149,
+                  "display_id": 160,
                   "label": "Kyoshi Warriors"
                 }
               }
@@ -1572,7 +1582,7 @@
             "confirm_label": "Target Kyoshi Warriors",
             "action_type": "CHOOSE_TARGET",
             "focus": [
-              149
+              160
             ]
           },
           {
@@ -1584,11 +1594,11 @@
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 152,
+                      "entity": 163,
                       "incarnation": 0
                     }
                   },
-                  "display_id": 152,
+                  "display_id": 163,
                   "label": "Ally"
                 }
               }
@@ -1603,7 +1613,7 @@
             "confirm_label": "Target Ally",
             "action_type": "CHOOSE_TARGET",
             "focus": [
-              152
+              163
             ]
           }
         ],
@@ -1749,12 +1759,12 @@
           "label": "Cast Pop Quiz"
         }
       ],
-      "digest": "9f976b35e1ab5235f32fd8ab2c8d38ca444b455dd75a0e83ee9edc98624e5716",
+      "digest": "99449d8882c59164b5e5955635481dc14d75e041c24f52ce4396cc58d8f9c549",
       "frame": {
         "protocol": 1,
-        "match_id": "JpvNHC7WvVoFmyw_yWbWdA",
+        "match_id": "sMptjU-IiS66TA2AsXLXAw",
         "revision": 64,
-        "frame_hash": "135243cf33965f397a53846c6cadd80e50652b0f4316b18e81befed053fe4308",
+        "frame_hash": "0dd0d1d3d8f8cf3f96cfc3789282edcf12c440b7bfa87a1be182783dc92f34be",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -1768,7 +1778,7 @@
         "projection": {
           "stack_objects": [
             {
-              "id": 130,
+              "id": 135,
               "kind": "spell",
               "controller": 0,
               "label": "Pop Quiz"
@@ -2202,7 +2212,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {R}.)",
-                "id": 114,
+                "id": 116,
                 "name": "Mountain",
                 "controller_id": 0,
                 "tapped": true,
@@ -2408,7 +2418,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {G}.)",
-                "id": 101,
+                "id": 102,
                 "name": "Forest",
                 "controller_id": 1,
                 "tapped": true,
@@ -2432,7 +2442,7 @@
                 },
                 "is_token": false,
                 "text_box": "Trample\nWhen this creature enters, put a +1/+1 counter on each other Ally creature you control.\nWhenever another Ally you control enters, put a +1/+1 counter on this creature.",
-                "id": 104,
+                "id": 106,
                 "name": "Earth King's Lieutenant",
                 "controller_id": 1,
                 "tapped": false,
@@ -2456,7 +2466,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {W}.)",
-                "id": 107,
+                "id": 109,
                 "name": "Plains",
                 "controller_id": 1,
                 "tapped": true,
@@ -2480,7 +2490,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {G}.)",
-                "id": 116,
+                "id": 118,
                 "name": "Forest",
                 "controller_id": 1,
                 "tapped": false,
@@ -2504,7 +2514,7 @@
                 },
                 "is_token": false,
                 "text_box": "Whenever this creature becomes tapped, you gain 1 life and scry 1. (Look at the top card of your library. You may put it on the bottom.)",
-                "id": 118,
+                "id": 120,
                 "name": "Compassionate Healer",
                 "controller_id": 1,
                 "tapped": true,
@@ -2528,7 +2538,7 @@
                 },
                 "is_token": false,
                 "text_box": "When this creature enters, exile up to one target artifact, creature, or enchantment an opponent controls with mana value 3 or greater until this creature leaves the battlefield.",
-                "id": 125,
+                "id": 130,
                 "name": "Earth Kingdom Jailer",
                 "controller_id": 1,
                 "tapped": false,
@@ -2552,7 +2562,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {W}.)",
-                "id": 129,
+                "id": 134,
                 "name": "Plains",
                 "controller_id": 1,
                 "tapped": false,
@@ -2966,12 +2976,12 @@
           "label": "Pass priority"
         }
       ],
-      "digest": "d7d935264e243c7f02ee60ea6c10b1cb7c4a596b33a3ddf316f50e6247219698",
+      "digest": "3b1a45ee534e4122b5aeeaa30f854a5c026ba2242e4755638740ac12cf96f55a",
       "frame": {
         "protocol": 1,
-        "match_id": "75U-ih8KT1rCyDA9uGGW1Q",
+        "match_id": "uo8sMOILOfeF1KTNcY9FIQ",
         "revision": 90,
-        "frame_hash": "0adb3eb4011c6b425607373d79118a361387e3cc1aa76de8d40b45747077f1b2",
+        "frame_hash": "98fd6bd8f079198fd63f0883edb3eda804114782bb5246e46ab48d961b4ce26f",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -3461,7 +3471,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {R}.)",
-                "id": 108,
+                "id": 109,
                 "name": "Mountain",
                 "controller_id": 0,
                 "tapped": false,
@@ -3632,7 +3642,7 @@
                 },
                 "is_token": false,
                 "text_box": "Vigilance\nOther Allies you control get +1/+1.",
-                "id": 110,
+                "id": 111,
                 "name": "White Lotus Reinforcements",
                 "controller_id": 1,
                 "tapped": false,
@@ -3656,7 +3666,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {W}.)",
-                "id": 111,
+                "id": 112,
                 "name": "Plains",
                 "controller_id": 1,
                 "tapped": true,
@@ -3680,7 +3690,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {G}.)",
-                "id": 113,
+                "id": 114,
                 "name": "Forest",
                 "controller_id": 1,
                 "tapped": true,
@@ -3704,7 +3714,7 @@
                 },
                 "is_token": false,
                 "text_box": "Whenever this creature becomes tapped, you gain 1 life and scry 1. (Look at the top card of your library. You may put it on the bottom.)",
-                "id": 115,
+                "id": 116,
                 "name": "Compassionate Healer",
                 "controller_id": 1,
                 "tapped": true,
@@ -3728,7 +3738,7 @@
                 },
                 "is_token": false,
                 "text_box": "Waterbend {5}: Look at the top four cards of your library. You may reveal a creature card with power 3 or less from among them and put it into your hand. Put the rest on the bottom of your library in a random order. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
-                "id": 117,
+                "id": 118,
                 "name": "Water Tribe Rallier",
                 "controller_id": 1,
                 "tapped": true,
@@ -3752,7 +3762,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {W}.)",
-                "id": 121,
+                "id": 122,
                 "name": "Plains",
                 "controller_id": 1,
                 "tapped": true,
@@ -3776,7 +3786,7 @@
                 },
                 "is_token": false,
                 "text_box": "When this creature enters, earthbend 1. (Target land you control becomes a 0/0 creature with haste that's still a land. Put a +1/+1 counter on it. When it dies or is exiled, return it to the battlefield tapped.)\nWhenever you tap a creature for mana, add an additional {G}.",
-                "id": 123,
+                "id": 124,
                 "name": "Badgermole Cub",
                 "controller_id": 1,
                 "tapped": true,
@@ -3800,7 +3810,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {G}.)",
-                "id": 128,
+                "id": 129,
                 "name": "Forest",
                 "controller_id": 1,
                 "tapped": true,
@@ -3824,7 +3834,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {W}.)",
-                "id": 134,
+                "id": 135,
                 "name": "Plains",
                 "controller_id": 1,
                 "tapped": false,
@@ -3848,7 +3858,7 @@
                 },
                 "is_token": false,
                 "text_box": "When this creature enters, earthbend 1. (Target land you control becomes a 0/0 creature with haste that's still a land. Put a +1/+1 counter on it. When it dies or is exiled, return it to the battlefield tapped.)\nWhenever you tap a creature for mana, add an additional {G}.",
-                "id": 136,
+                "id": 137,
                 "name": "Badgermole Cub",
                 "controller_id": 1,
                 "tapped": false,
@@ -4199,12 +4209,12 @@
           "label": "Cast Otter-Penguin"
         }
       ],
-      "digest": "1235c2472de4c3e238bc663d04eb4c7688c770a41749496088847b9f179f2f1a",
+      "digest": "7ca8878e076dab79aa0c07b8e26ecbe9fe23492fd6119d70873ae82ecd4b12e9",
       "frame": {
         "protocol": 1,
-        "match_id": "H0ehhuHBsK-KjE5HLhzvbw",
+        "match_id": "TMm1GnzQvLE1lJZ3f_yvug",
         "revision": 36,
-        "frame_hash": "aecba27355d1580c84973dc57a07dd9370ddccf596a313502d687bf72b6f427d",
+        "frame_hash": "dba9d6652e567852cc9980b170b27fdcf60bc75be46c89698becea3140510556",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -4574,7 +4584,7 @@
                 },
                 "is_token": false,
                 "text_box": "Whenever you draw your second card each turn, this creature gets +1/+2 until end of turn and can't be blocked this turn.",
-                "id": 109,
+                "id": 110,
                 "name": "Otter-Penguin",
                 "controller_id": 0,
                 "tapped": false,
@@ -4705,7 +4715,8 @@
                 "toughness": 3,
                 "base_power": 2,
                 "base_toughness": 2,
-                "plus1_counters": 1
+                "plus1_counters": 1,
+                "attacking": true
               },
               {
                 "types": {
@@ -4719,7 +4730,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {W}.)",
-                "id": 102,
+                "id": 103,
                 "name": "Plains",
                 "controller_id": 1,
                 "tapped": true,
@@ -4743,7 +4754,7 @@
                 },
                 "is_token": false,
                 "text_box": "Trample\nWhen this creature enters, put a +1/+1 counter on each other Ally creature you control.\nWhenever another Ally you control enters, put a +1/+1 counter on this creature.",
-                "id": 104,
+                "id": 105,
                 "name": "Earth King's Lieutenant",
                 "controller_id": 1,
                 "tapped": true,
@@ -4753,7 +4764,8 @@
                 "toughness": 2,
                 "base_power": 1,
                 "base_toughness": 1,
-                "plus1_counters": 1
+                "plus1_counters": 1,
+                "attacking": true
               },
               {
                 "types": {
@@ -4767,7 +4779,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {W}.)",
-                "id": 110,
+                "id": 111,
                 "name": "Plains",
                 "controller_id": 1,
                 "tapped": false,
@@ -4791,7 +4803,7 @@
                 },
                 "is_token": false,
                 "text_box": "When this creature enters, exile up to one target artifact, creature, or enchantment an opponent controls with mana value 3 or greater until this creature leaves the battlefield.",
-                "id": 112,
+                "id": 113,
                 "name": "Earth Kingdom Jailer",
                 "controller_id": 1,
                 "tapped": false,
@@ -4816,11 +4828,11 @@
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 109,
+                      "entity": 110,
                       "incarnation": 2
                     }
                   },
-                  "display_id": 109,
+                  "display_id": 110,
                   "label": "Otter-Penguin"
                 }
               },
@@ -4831,11 +4843,11 @@
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 104,
+                      "entity": 105,
                       "incarnation": 3
                     }
                   },
-                  "display_id": 104,
+                  "display_id": 105,
                   "label": "Earth King's Lieutenant"
                 }
               }
@@ -4850,8 +4862,8 @@
             "confirm_label": "Block Earth King's Lieutenant with Otter-Penguin",
             "action_type": "DECLARE_BLOCKER",
             "focus": [
-              109,
-              104
+              110,
+              105
             ]
           },
           {
@@ -4863,11 +4875,11 @@
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 109,
+                      "entity": 110,
                       "incarnation": 2
                     }
                   },
-                  "display_id": 109,
+                  "display_id": 110,
                   "label": "Otter-Penguin"
                 }
               },
@@ -4897,7 +4909,7 @@
             "confirm_label": "Block South Pole Voyager with Otter-Penguin",
             "action_type": "DECLARE_BLOCKER",
             "focus": [
-              109,
+              110,
               97
             ]
           },
@@ -4910,11 +4922,11 @@
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 109,
+                      "entity": 110,
                       "incarnation": 2
                     }
                   },
-                  "display_id": 109,
+                  "display_id": 110,
                   "label": "Otter-Penguin"
                 }
               }
@@ -4929,7 +4941,7 @@
             "confirm_label": "Otter-Penguin: do not block",
             "action_type": "DECLARE_BLOCKER",
             "focus": [
-              109
+              110
             ]
           }
         ],
@@ -5055,12 +5067,12 @@
           "label": "Cast It'll Quench Ya!"
         }
       ],
-      "digest": "a4941ead4dfd649884c3cac592052e6bb7610c8a247e0c1545e8bcad733ef136",
+      "digest": "25cb0a1825dbcef227ba89e7cda2cca3007482017fbdce779f33eb6a601edda7",
       "frame": {
         "protocol": 1,
-        "match_id": "rR_nN1N-gkN0-0fQf4Ua0Q",
+        "match_id": "-H0JDP54ZR0EKl9wX3LelQ",
         "revision": 56,
-        "frame_hash": "24224fe2bb2d2423cc3fa099eb9376ebb11671913fee11cbc13ba73ad8fd8005",
+        "frame_hash": "7706db779ac707a561a7b82812933b8522e07c10345ea040de2c2f0061579a79",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -5074,13 +5086,13 @@
         "projection": {
           "stack_objects": [
             {
-              "id": 127,
+              "id": 130,
               "kind": "spell",
               "controller": 0,
               "label": "It'll Quench Ya!"
             },
             {
-              "id": 126,
+              "id": 129,
               "kind": "spell",
               "controller": 0,
               "label": "Tiger-Seal"
@@ -5512,7 +5524,7 @@
                 },
                 "is_token": false,
                 "text_box": "Whenever you draw your second card each turn, this creature gets +1/+2 until end of turn and can't be blocked this turn.",
-                "id": 109,
+                "id": 110,
                 "name": "Otter-Penguin",
                 "controller_id": 0,
                 "tapped": false,
@@ -5536,7 +5548,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {R}.)",
-                "id": 116,
+                "id": 117,
                 "name": "Mountain",
                 "controller_id": 0,
                 "tapped": true,
@@ -5560,7 +5572,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {U}.)",
-                "id": 125,
+                "id": 128,
                 "name": "Island",
                 "controller_id": 0,
                 "tapped": true,
@@ -5726,7 +5738,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {W}.)",
-                "id": 102,
+                "id": 103,
                 "name": "Plains",
                 "controller_id": 1,
                 "tapped": true,
@@ -5750,7 +5762,7 @@
                 },
                 "is_token": false,
                 "text_box": "Trample\nWhen this creature enters, put a +1/+1 counter on each other Ally creature you control.\nWhenever another Ally you control enters, put a +1/+1 counter on this creature.",
-                "id": 104,
+                "id": 105,
                 "name": "Earth King's Lieutenant",
                 "controller_id": 1,
                 "tapped": false,
@@ -5774,7 +5786,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {W}.)",
-                "id": 110,
+                "id": 111,
                 "name": "Plains",
                 "controller_id": 1,
                 "tapped": true,
@@ -5798,7 +5810,7 @@
                 },
                 "is_token": false,
                 "text_box": "When this creature enters, exile up to one target artifact, creature, or enchantment an opponent controls with mana value 3 or greater until this creature leaves the battlefield.",
-                "id": 112,
+                "id": 113,
                 "name": "Earth Kingdom Jailer",
                 "controller_id": 1,
                 "tapped": false,
@@ -5822,7 +5834,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {G}.)",
-                "id": 120,
+                "id": 123,
                 "name": "Forest",
                 "controller_id": 1,
                 "tapped": false,
@@ -5846,7 +5858,7 @@
                 },
                 "is_token": false,
                 "text_box": "Whenever this creature becomes tapped, you gain 1 life and scry 1. (Look at the top card of your library. You may put it on the bottom.)",
-                "id": 122,
+                "id": 125,
                 "name": "Compassionate Healer",
                 "controller_id": 1,
                 "tapped": false,
@@ -5951,6 +5963,6 @@
     }
   },
   "world": "w11",
-  "source_base_commit": "01e8f99753313e8a6c99d0ca19bbcc5c66aa9b81",
+  "source_base_commit": "eecbc465fa50deb01120cda6ea6103b05841ac1d",
   "world_version": "w17"
 }

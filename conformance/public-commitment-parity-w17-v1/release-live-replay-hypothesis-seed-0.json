@@ -37,7 +37,7 @@
     }
   },
   "identity": {
-    "authority_receipt_sha256": "d4dc54c1376a563868f294bb7e9345aaced0da0321d7961b844404aaaadb1dda",
+    "authority_receipt_sha256": "977dfc4a950d661bb9e7125cb32b3018d7d2c2156c0374bcdf06ec7655425221",
     "command_tape_sha256": "95db76dc71150abd75bd4a771729e0928a59c19232ba442db4eb036cae5a1294",
     "matchup": "ur-lessons-vs-gw-allies",
     "relevant_source": {
@@ -45,11 +45,11 @@
       "files": [
         {
           "path": "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
-          "sha256": "d4dc54c1376a563868f294bb7e9345aaced0da0321d7961b844404aaaadb1dda"
+          "sha256": "977dfc4a950d661bb9e7125cb32b3018d7d2c2156c0374bcdf06ec7655425221"
         },
         {
           "path": "academy/public_commitment_parity.py",
-          "sha256": "9973c098f58077708240931c8b05d4781415189bf42d91836dd47f1ca4baf4e1"
+          "sha256": "a11656a7269f2f08344c933d0cea5156cc01cb99681d66b810ef3ecafef51ac1"
         },
         {
           "path": "academy/server.py",
@@ -57,7 +57,7 @@
         },
         {
           "path": "manabot/managym/experience_projection.py",
-          "sha256": "e32dbba8542ae5b7b9ac0cdd3aef7bc4be9f94f413e86eebe13e0606f915a40f"
+          "sha256": "fd616d034fe78925678070b488f41ab871126b28b7eab37bbb00852fcbf46819"
         },
         {
           "path": "experiments/contracts/int-9-exact-range-v1.json",
@@ -69,11 +69,11 @@
         },
         {
           "path": "manabot/belief/tracker.py",
-          "sha256": "eebbca036b2848449537f4990f356046775e39ba8c39139cbd9e13b24ec67552"
+          "sha256": "fe7079e161c2f65c715a53552864dbe888a144c4432402f42c033b7d31580c5d"
         },
         {
           "path": "manabot/managym/__init__.pyi",
-          "sha256": "0d405d9f1b29bbd96113c8e48a218e9f78e96926c1c582e4f0122c7c7ac361a9"
+          "sha256": "c219bceb8a0eb4e4ae628e425fe34d607c0d5dd17997c18ee65973527f2baadb"
         },
         {
           "path": "manabot/managym/decision.py",
@@ -81,7 +81,7 @@
         },
         {
           "path": "manabot/managym/possible_worlds.py",
-          "sha256": "ca1f8872a04c64bbf06995058cb9bceaa3d5286e6c8e00a0f18f5e8c5f166b09"
+          "sha256": "a4575b3e2afed8cc9dc3913a1d05d551bc787ca18a815132153f47c9570a7543"
         },
         {
           "path": "managym/src/agent/env.rs",
@@ -89,7 +89,7 @@
         },
         {
           "path": "managym/src/agent/structured_offer.rs",
-          "sha256": "99635e95410b07e64d979287ce8777b52a6542eddabd1e99a6c3439ee311bc70"
+          "sha256": "79a64716ecd0436624c2a446ed7649fbc2845d3e5d6aed0011e6ecf4ee637852"
         },
         {
           "path": "managym/src/decision.rs",
@@ -97,15 +97,15 @@
         },
         {
           "path": "managym/src/possible_worlds.rs",
-          "sha256": "5a248a173f41d8ea5e14d40854a6934c9bd13e0170215f55ddeb8d0e593c123e"
+          "sha256": "ae072935f0976bc428c02ddb8c70f6f9a0128926e86cdecb571cf80f133cccf2"
         },
         {
           "path": "managym/src/python/bindings.rs",
-          "sha256": "6041ceed3608ab5355fdf7d99906ef96476e985f6e11ed9632126a68ed684f46"
+          "sha256": "c98e078514396e640fbc6bccac92dac496978d10c4f067fefe4b7db0cc44469f"
         },
         {
           "path": "managym/tests/cards/stx.rs",
-          "sha256": "20e2972b82a987911bde910a19dd2eb61b989be48a513a3534853006c75447a2"
+          "sha256": "79d2a60d970d1d0d6e879edf235b714ea1d8482dd3ad1131ef1d4d2e899723dc"
         },
         {
           "path": "scripts/verify-public-commitment-parity",
@@ -117,18 +117,18 @@
         },
         {
           "path": "tests/belief/test_tracker.py",
-          "sha256": "7d8b2b629a499c3adc932757dcc9498e610184c937a8920f24a74a092a9c8e2d"
+          "sha256": "585d2af0495dbb3adab431a3599dc1c1421de43b24611b38edbbb03347357ddf"
         },
         {
           "path": "tests/academy/test_public_commitment_parity.py",
-          "sha256": "b377511da2f81e723ed7cee496d491c6b0e335d373b67e4b7b0d713af801e6b6"
+          "sha256": "981f2ad6e2b579e6599d13f9acb25b863afd441f07f204e2e3ee7cb2e1039ee2"
         },
         {
           "path": "tests/sim/test_conditional_search.py",
           "sha256": "d51e57bbacc7fe50716af576be6d4979664501d6d4a48e0f33921a9ad23bb171"
         }
       ],
-      "sha256": "750e8b70b9f7a86ba56945e3936a671f04dee802a59e4d8e9cb33774d733f1d7"
+      "sha256": "e881d84adf807c4776fc035ae3a8f6afc204c219268a81ad85d9cb64d1e76044"
     },
     "seed": 0,
     "semantic_decision_version": 7
@@ -1488,16 +1488,16 @@
       "tracker_receipts": {
         "0": {
           "consumed_commitments": 21,
-          "history_digest": "9e02b8e1f1a5e413ba59fb8cf380a7483fc54f96a10e5126391b9fa9cee07f0b",
-          "posterior_digest": "6e190b50be6c6bb75acd843d39920258d31f3e9b75bcaa840b2a155777a4eed3",
-          "prior_digest": "347dd4b38ceba912850e8fc1328f7604ad23c804a885c0decd5045f2e6685204",
+          "history_digest": "4fbba5e8fab66f78d9e5a1100ecb68153ed89879eeb174d8011c41e6bfaaf40e",
+          "posterior_digest": "328281810234788ed375e828684635fb1c0da380cc6299400b27a9429645cb54",
+          "prior_digest": "478e2fdbaff531d2d75572ad85e359c2101a606e8bd5e0c91edb69227bdc8436",
           "records": 68
         },
         "1": {
           "consumed_commitments": 34,
-          "history_digest": "77dda981658962dbb8c6605cf79de6edb82a6e710345b24d6a9ada315184eb61",
-          "posterior_digest": "b537dd660814344c2927346eea1eb0436fd6dcf6bf7d29dfab2dcf09f4af6e4a",
-          "prior_digest": "b81a605875049054e3d5f7322929473019d85798293f970c651b8d113b1877a5",
+          "history_digest": "2dd224a72208a784c3994920540bbd5e5929d3a02976695c58705e89ef8e89c2",
+          "posterior_digest": "9e09b22ce96d3bfb46a4beadd02e4837eb4b10256d304c7e6167e62162fc4b5d",
+          "prior_digest": "226039832e99bd44cf4369526fe3471243cc3642255f5053c7178bf6be53e4f5",
           "records": 142
         }
       }
@@ -1520,16 +1520,16 @@
   "trackers": {
     "0": {
       "consumed_commitments": 21,
-      "history_digest": "9e02b8e1f1a5e413ba59fb8cf380a7483fc54f96a10e5126391b9fa9cee07f0b",
-      "posterior_digest": "6e190b50be6c6bb75acd843d39920258d31f3e9b75bcaa840b2a155777a4eed3",
-      "prior_digest": "347dd4b38ceba912850e8fc1328f7604ad23c804a885c0decd5045f2e6685204",
+      "history_digest": "4fbba5e8fab66f78d9e5a1100ecb68153ed89879eeb174d8011c41e6bfaaf40e",
+      "posterior_digest": "328281810234788ed375e828684635fb1c0da380cc6299400b27a9429645cb54",
+      "prior_digest": "478e2fdbaff531d2d75572ad85e359c2101a606e8bd5e0c91edb69227bdc8436",
       "records": 68
     },
     "1": {
       "consumed_commitments": 34,
-      "history_digest": "77dda981658962dbb8c6605cf79de6edb82a6e710345b24d6a9ada315184eb61",
-      "posterior_digest": "b537dd660814344c2927346eea1eb0436fd6dcf6bf7d29dfab2dcf09f4af6e4a",
-      "prior_digest": "b81a605875049054e3d5f7322929473019d85798293f970c651b8d113b1877a5",
+      "history_digest": "2dd224a72208a784c3994920540bbd5e5929d3a02976695c58705e89ef8e89c2",
+      "posterior_digest": "9e09b22ce96d3bfb46a4beadd02e4837eb4b10256d304c7e6167e62162fc4b5d",
+      "prior_digest": "226039832e99bd44cf4369526fe3471243cc3642255f5053c7178bf6be53e4f5",
       "records": 142
     }
   },

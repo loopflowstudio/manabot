@@ -137,6 +137,30 @@ pub struct Keywords {
 }
 
 impl Keywords {
+    /// The names of the keywords present (field names, as the learning
+    /// tokens name them), in declaration order.
+    pub fn names(&self) -> Vec<&'static str> {
+        [
+            ("flying", self.flying),
+            ("reach", self.reach),
+            ("haste", self.haste),
+            ("flash", self.flash),
+            ("vigilance", self.vigilance),
+            ("trample", self.trample),
+            ("first_strike", self.first_strike),
+            ("double_strike", self.double_strike),
+            ("deathtouch", self.deathtouch),
+            ("lifelink", self.lifelink),
+            ("defender", self.defender),
+            ("menace", self.menace),
+            ("hexproof", self.hexproof),
+            ("indestructible", self.indestructible),
+        ]
+        .into_iter()
+        .filter_map(|(name, present)| present.then_some(name))
+        .collect()
+    }
+
     /// Keyword-set union (printed keywords plus until-EOT grants).
     pub fn union(&self, other: &Keywords) -> Keywords {
         Keywords {

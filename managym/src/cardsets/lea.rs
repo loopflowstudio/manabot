@@ -1,4 +1,6 @@
 //! Limited Edition Alpha.
+use crate::state::ability::AffectedSpec;
+use crate::state::effect::Modification;
 use crate::state::{
     ability::{Effect, EffectValue, TargetRequirement, TargetSpec},
     card::{
@@ -311,10 +313,10 @@ fn shivan_dragon() -> CardDefinition {
         },
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{R}"),
-            effects: vec![Effect::ModifyUntilEot {
-                power_delta: 1,
-                toughness_delta: 0,
-            }],
+            effects: vec![Effect::until_end_of_turn(
+                AffectedSpec::Source,
+                Modification::pump(1, 0),
+            )],
             ..Default::default()
         }],
         text_box: text_box.into(),

@@ -8,13 +8,14 @@ use crate::support::{
         clear_hand, clear_summoning_sickness, deck, enter_battlefield,
         enters_battlefield_with_triggers, five_color_setup, five_color_unfunded_setup, force_lands,
         force_new_card_in_hand, move_from_library, move_to_hand, pin_top, plant_in_graveyard,
-        put_onto_battlefield, ready, ur_lessons_deck, ur_lessons_setup, Scenario,
+        put_onto_battlefield, ready, set_counters, until_end_of_turn, ur_lessons_deck,
+        ur_lessons_setup, Scenario,
     },
     inspect::{
         assert_choice_contract, can_activate, can_activate_card, can_cast, card_of, counters,
         counters_of, find_owned_card, hand, has_action, keywords, library, library_card,
-        library_top, offered_cards, offered_targets, permanent, permanent_named, stack_spell_card,
-        tapped, zone_of,
+        library_top, offered_cards, offered_targets, permanent, permanent_named, pt_modifications,
+        stack_spell_card, tapped, zone_of,
     },
     play::{
         activate, activate_card, activate_first, activate_named, attack_with, cast,
@@ -36,6 +37,7 @@ use managym::{
     possible_worlds::{viewer_observation, PossibleWorldSpace},
     state::{
         card::Keywords,
+        effect::{EffectDuration, Modification},
         game_object::{CardId, PermanentId, PlayerId, Target},
         mana::{Color, Mana, ManaCost, ManaUse},
         permanent::CounterKind,
@@ -555,11 +557,14 @@ fn allies_at_last_respects_source_and_victim_legality_and_lifelink() {
         assert!(s.choose_target(Target::Permanent(victim)));
         assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
         if protect_victim {
-            s.game_mut().state.permanents[victim]
-                .as_mut()
-                .unwrap()
-                .temp_keywords
-                .hexproof = true;
+            until_end_of_turn(
+                &mut s,
+                victim,
+                Modification::AddKeywords(Keywords {
+                    hexproof: true,
+                    ..Default::default()
+                }),
+            );
         }
         if remove_hawk {
             let card = s.game().state.permanents[hawk].as_ref().unwrap().card;
@@ -595,10 +600,7 @@ fn allies_at_last_can_choose_one_source_and_uses_its_current_power() {
     choose(&mut s, |action| matches!(action, Action::Decline { .. }));
     assert!(s.choose_target(Target::Permanent(victim)));
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
-    s.game_mut().state.permanents[hawk]
-        .as_mut()
-        .unwrap()
-        .plus1_counters = 2;
+    set_counters(&mut s, hawk, CounterKind::PlusOnePlusOne, 2);
     settle(&mut s);
     assert_eq!(
         s.game().state.permanents[victim].as_ref().unwrap().damage,
@@ -1250,10 +1252,7 @@ fn foggy_swamp_vinebender_grows_on_own_turn_and_evades_small_blockers() {
     let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let pumped = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let giant = s.force_permanent_on_battlefield(1, "Hill Giant");
-    s.game_mut().state.permanents[pumped]
-        .as_mut()
-        .unwrap()
-        .plus1_counters = 1;
+    set_counters(&mut s, pumped, CounterKind::PlusOnePlusOne, 1);
 
     s.set_player_mana_pool(0, "5");
     activate(&mut s, vinebender, 0);
@@ -1356,12 +1355,7 @@ fn giant_koi_waterbends_to_become_unblockable() {
     assert!(s.take_action_by_type(ActionType::PayCost));
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
     settle(&mut s);
-    assert!(
-        s.game().state.permanents[koi]
-            .as_ref()
-            .unwrap()
-            .cant_be_blocked_this_turn
-    );
+    assert!(s.game().cant_be_blocked(koi));
 }
 
 /// Pass priority, targeting the opponent when a trigger asks, until the
@@ -1520,7 +1514,7 @@ fn haru_earthbends_per_other_ally_and_a_doubly_bent_land_returns_once() {
     assert_eq!(forests.len(), 1);
     let returned = s.game().state.permanents[forests[0]].as_ref().unwrap();
     assert!(returned.tapped && !returned.animated);
-    assert_eq!(returned.plus1_counters, 0);
+    assert_eq!(returned.counter_count(CounterKind::PlusOnePlusOne), 0);
     assert!(s.game().state.delayed_triggers.is_empty());
 }
 
@@ -1587,10 +1581,7 @@ fn hog_monkey_gives_menace_to_a_creature_with_a_counter_at_combat() {
     let countered = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let opposing = s.force_permanent_on_battlefield(1, "Gray Ogre");
     for id in [countered, opposing] {
-        s.game_mut().state.permanents[id]
-            .as_mut()
-            .unwrap()
-            .plus1_counters = 1;
+        set_counters(&mut s, id, CounterKind::PlusOnePlusOne, 1);
     }
     s.advance_to_active_step(0, StepKind::BeginningOfCombat);
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
@@ -1958,10 +1949,7 @@ fn sandbenders_storm_destroys_large_creatures_or_earthbends_three() {
     assert!(s.game().state.permanents[small].is_some());
 
     // A pumped Ogre has power 4 and becomes a legal destroy target.
-    s.game_mut().state.permanents[small]
-        .as_mut()
-        .unwrap()
-        .plus1_counters = 2;
+    set_counters(&mut s, small, CounterKind::PlusOnePlusOne, 2);
     cast(&mut s, "Sandbenders' Storm");
     choose_mode(&mut s, 0);
     assert!(offered_targets(&s).contains(&Target::Permanent(small)));
@@ -2275,7 +2263,7 @@ fn earthbend_animates_land_with_counter() {
     let land = earthbend_a_land(&mut s);
     let perm = permanent(&s, land);
     assert!(perm.animated, "land should be animated");
-    assert_eq!(perm.plus1_counters, 1);
+    assert_eq!(perm.counter_count(CounterKind::PlusOnePlusOne), 1);
     // 0/0 creature with one +1/+1 counter — a 1/1 that's still a land.
     assert_eq!(s.game().effective_power(land), 1);
     assert_eq!(s.game().effective_toughness(land), 1);
@@ -2389,7 +2377,11 @@ fn animated_land_dies_and_returns_tapped_as_plain_land() {
     let new_perm = permanent(&s, new_perm_id);
     assert!(new_perm.tapped, "returns tapped");
     assert!(!new_perm.animated, "returns as a plain land");
-    assert_eq!(new_perm.plus1_counters, 0, "counters do not persist");
+    assert_eq!(
+        new_perm.counter_count(CounterKind::PlusOnePlusOne),
+        0,
+        "counters do not persist"
+    );
     assert!(
         s.game().state.delayed_triggers.is_empty(),
         "delayed trigger is one-shot"
@@ -2453,10 +2445,7 @@ fn zero_toughness_animated_land_dies_by_sba_and_returns() {
 
     // Strip its counter: a 0/0 creature dies as a state-based action
     // (CR 704.5f) — and the earthbend delayed trigger returns it tapped.
-    s.game_mut().state.permanents[land]
-        .as_mut()
-        .expect("permanent")
-        .plus1_counters = 0;
+    set_counters(&mut s, land, CounterKind::PlusOnePlusOne, 0);
     s.pass_priority(); // any action: SBAs run, the 0/0 dies
     resolve_everything(&mut s); // return trigger resolves
 
@@ -2601,10 +2590,7 @@ fn combustion(lessons: usize) -> (Scenario, CardId, PermanentId) {
     put_onto_battlefield(&mut s, 0, "Mountain");
     put_onto_battlefield(&mut s, 0, "Mountain");
     let victim = put_onto_battlefield(&mut s, 1, "Water Tribe Rallier"); // 3/2
-    s.game_mut().state.permanents[victim]
-        .as_mut()
-        .unwrap()
-        .plus1_counters = 5;
+    set_counters(&mut s, victim, CounterKind::PlusOnePlusOne, 5);
     let spell = cast_owned(&mut s, "Combustion Technique");
     assert!(s.choose_target(Target::Permanent(victim)));
     resolve_top(&mut s);
@@ -2618,7 +2604,7 @@ fn combustion_damage_counts_own_lessons_excludes_resolving_spell_and_exiles_late
         let permanent = s.game().state.permanents[victim].as_ref().unwrap();
         let card = permanent.card;
         assert_eq!(permanent.damage, 2 + lessons as i32);
-        assert!(permanent.exile_if_dies_this_turn);
+        assert!(s.game().exiled_if_it_would_die(victim));
         assert_eq!(
             s.game().state.zones.zone_of(spell),
             Some(ZoneType::Graveyard)
@@ -2659,12 +2645,7 @@ fn combustion_replacement_expires_at_cleanup_and_does_not_follow_reentry() {
             s.advance_to_active_step(1, StepKind::Upkeep);
         }
         let current = s.game().state.card_to_permanent[card].unwrap();
-        assert!(
-            !s.game().state.permanents[current]
-                .as_ref()
-                .unwrap()
-                .exile_if_dies_this_turn
-        );
+        assert!(!s.game().exiled_if_it_would_die(current));
         s.game_mut().move_card(card, ZoneType::Graveyard);
         assert_eq!(
             s.game().state.zones.zone_of(card),
@@ -2723,7 +2704,7 @@ fn combustion_invalid_target_does_not_damage_or_mark_new_incarnation() {
     );
     let permanent = s.game().state.permanents[new].as_ref().unwrap();
     assert_eq!(permanent.damage, 0);
-    assert!(!permanent.exile_if_dies_this_turn);
+    assert!(!s.game().exiled_if_it_would_die(new));
 }
 
 #[test]
@@ -2733,10 +2714,7 @@ fn combustion_replacement_is_hashed_visible_and_rolls_back_with_its_damage() {
     put_onto_battlefield(&mut s, 0, "Mountain");
     put_onto_battlefield(&mut s, 0, "Mountain");
     let gran = put_onto_battlefield(&mut s, 1, "Gran-Gran");
-    s.game_mut().state.permanents[gran]
-        .as_mut()
-        .unwrap()
-        .plus1_counters = 3;
+    set_counters(&mut s, gran, CounterKind::PlusOnePlusOne, 3);
     cast_owned(&mut s, "Combustion Technique");
     assert!(s.choose_target(Target::Permanent(gran)));
     s.pass_priority();
@@ -2761,12 +2739,7 @@ fn combustion_replacement_is_hashed_visible_and_rolls_back_with_its_damage() {
             },
         )
         .unwrap();
-    assert!(
-        branch.state.permanents[gran]
-            .as_ref()
-            .unwrap()
-            .exile_if_dies_this_turn
-    );
+    assert!(branch.exiled_if_it_would_die(gran));
     assert_ne!(driver.witness(&branch), root);
     driver.rollback(&mut branch, mark);
     assert_eq!(driver.witness(&branch), root);
@@ -3070,12 +3043,7 @@ fn disciple_targets_another_small_creature_pays_tap_and_survives_source_departur
     // mutation must disappear when the search branch rolls back.
     assert_choice_contract(&s);
     settle(&mut s);
-    assert!(
-        s.game().state.permanents[small]
-            .as_ref()
-            .unwrap()
-            .cant_be_blocked_this_turn
-    );
+    assert!(s.game().cant_be_blocked(small));
 }
 
 #[test]
@@ -3092,32 +3060,18 @@ fn disciple_rechecks_power_and_its_effect_expires() {
         assert!(!s.choose_target(Target::Permanent(disciple)));
         assert!(s.choose_target(Target::Permanent(target)));
         if increased_before_resolution {
-            s.game_mut().state.permanents[target]
-                .as_mut()
-                .unwrap()
-                .plus1_counters = 1;
+            set_counters(&mut s, target, CounterKind::PlusOnePlusOne, 1);
         }
         settle(&mut s);
         if !increased_before_resolution {
-            s.game_mut().state.permanents[target]
-                .as_mut()
-                .unwrap()
-                .plus1_counters = 1;
+            set_counters(&mut s, target, CounterKind::PlusOnePlusOne, 1);
         }
         assert_eq!(
-            s.game().state.permanents[target]
-                .as_ref()
-                .unwrap()
-                .cant_be_blocked_this_turn,
+            s.game().cant_be_blocked(target),
             !increased_before_resolution
         );
         s.advance_to_active_step(1, StepKind::Main);
-        assert!(
-            !s.game().state.permanents[target]
-                .as_ref()
-                .unwrap()
-                .cant_be_blocked_this_turn
-        );
+        assert!(!s.game().cant_be_blocked(target));
     }
 }
 
@@ -3445,22 +3399,29 @@ fn lieutenant_counters_each_other_ally_and_grows() {
 
     let lieutenant = s.battlefield_permanents_named(0, "Earth King's Lieutenant")[0];
     assert_eq!(
-        permanent(&s, kyoshi).plus1_counters,
+        permanent(&s, kyoshi).counter_count(CounterKind::PlusOnePlusOne),
         1,
         "other Ally gets a counter"
     );
     assert_eq!(
-        permanent(&s, penguin).plus1_counters,
+        permanent(&s, penguin).counter_count(CounterKind::PlusOnePlusOne),
         0,
         "non-Ally does not"
     );
-    assert_eq!(permanent(&s, lieutenant).plus1_counters, 0, "not itself");
+    assert_eq!(
+        permanent(&s, lieutenant).counter_count(CounterKind::PlusOnePlusOne),
+        0,
+        "not itself"
+    );
 
     // Another Ally enters: the Lieutenant grows — twice, because the
     // Reinforcements' Ally token is itself another entering Ally.
     cast_and_resolve(&mut s);
     resolve_everything(&mut s); // Lieutenant + Reinforcements triggers
-    assert_eq!(permanent(&s, lieutenant).plus1_counters, 2);
+    assert_eq!(
+        permanent(&s, lieutenant).counter_count(CounterKind::PlusOnePlusOne),
+        2
+    );
 }
 
 #[test]
@@ -3478,12 +3439,7 @@ fn avatar_state_grants_a_visible_incarnation_local_subtype_and_cleans_up() {
     let root = witness(&branch);
     let mark = driver.mark(&mut branch);
     for _ in 0..8 {
-        if !branch.state.permanents[target]
-            .as_ref()
-            .unwrap()
-            .temp_subtypes
-            .is_empty()
-        {
+        if !branch.added_subtypes(target).is_empty() {
             break;
         }
         let index = branch
@@ -3504,19 +3460,13 @@ fn avatar_state_grants_a_visible_incarnation_local_subtype_and_cleans_up() {
             )
             .unwrap();
     }
-    assert_eq!(
-        branch.state.permanents[target]
-            .as_ref()
-            .unwrap()
-            .temp_subtypes,
-        vec!["Avatar"]
-    );
+    assert_eq!(branch.added_subtypes(target), vec!["Avatar"]);
     driver.rollback(&mut branch, mark);
     assert_eq!(witness(&branch), root);
     settle(&mut s);
     let permanent = s.game().state.permanents[target].as_ref().unwrap();
-    assert_eq!(permanent.temp_subtypes, vec!["Avatar"]);
-    let keywords = permanent.effective_keywords(&s.game().state.cards[permanent.card]);
+    assert_eq!(s.game().added_subtypes(target), vec!["Avatar"]);
+    let keywords = s.game().effective_keywords(target);
     assert!(keywords.flying && keywords.first_strike && keywords.lifelink && keywords.hexproof);
     let obs = Observation::for_player(s.game(), PlayerId(0));
     assert_eq!(
@@ -3532,24 +3482,10 @@ fn avatar_state_grants_a_visible_incarnation_local_subtype_and_cleans_up() {
     branch.move_card(card_id, ZoneType::Hand);
     branch.move_card(card_id, ZoneType::Battlefield);
     let reentered = branch.state.card_to_permanent[card_id].unwrap();
-    assert!(branch.state.permanents[reentered]
-        .as_ref()
-        .unwrap()
-        .temp_subtypes
-        .is_empty());
-    assert_eq!(
-        s.game().state.permanents[target]
-            .as_ref()
-            .unwrap()
-            .temp_subtypes,
-        vec!["Avatar"]
-    );
+    assert!(branch.added_subtypes(reentered).is_empty());
+    assert_eq!(s.game().added_subtypes(target), vec!["Avatar"]);
     s.advance_to_active_step(1, StepKind::Main);
-    assert!(s.game().state.permanents[target]
-        .as_ref()
-        .unwrap()
-        .temp_subtypes
-        .is_empty());
+    assert!(s.game().added_subtypes(target).is_empty());
 }
 
 #[test]
@@ -3577,8 +3513,8 @@ fn avatar_state_grants_keywords_and_hexproof_blocks_opponent_targeting() {
     s.pass_priority();
     s.pass_priority();
 
-    let keywords = permanent(&s, kyoshi).temp_keywords;
-    assert!(keywords.flying && keywords.first_strike && keywords.lifelink && keywords.hexproof);
+    let granted = keywords(&s, kyoshi);
+    assert!(granted.flying && granted.first_strike && granted.lifelink && granted.hexproof);
 
     // All four grants are agent-visible on the permanent entry.
     let obs = Observation::new(s.game(), &[]);
@@ -3613,7 +3549,7 @@ fn avatar_state_grants_keywords_and_hexproof_blocks_opponent_targeting() {
 
     // Wears off at cleanup.
     s.advance_to_active_step(1, StepKind::Upkeep);
-    assert!(!permanent(&s, kyoshi).temp_keywords.hexproof);
+    assert!(!keywords(&s, kyoshi).hexproof);
 }
 
 #[test]
@@ -4622,12 +4558,7 @@ fn fire_nation_palace_grants_firebending_four_to_one_creature() {
     assert!(s.choose_target(Target::Permanent(chosen)));
     settle(&mut s);
     assert!(tapped(&s, palace));
-    let firebending = |s: &Scenario, id: PermanentId| {
-        s.game().state.permanents[id]
-            .as_ref()
-            .unwrap()
-            .firebending_this_turn
-    };
+    let firebending = |s: &Scenario, id: PermanentId| s.game().granted_firebending(id);
     assert_eq!(firebending(&s, chosen), 4);
     assert_eq!(firebending(&s, other), 0);
     assert_eq!(
@@ -4730,11 +4661,14 @@ fn air_nomad_legacy_makes_a_clue_and_pumps_your_fliers() {
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let granted = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let theirs = s.force_permanent_on_battlefield(1, "Wind Drake");
-    s.game_mut().state.permanents[granted]
-        .as_mut()
-        .unwrap()
-        .temp_keywords
-        .flying = true;
+    until_end_of_turn(
+        &mut s,
+        granted,
+        Modification::AddKeywords(Keywords {
+            flying: true,
+            ..Default::default()
+        }),
+    );
     s.set_player_mana_pool(0, "WU");
     cast(&mut s, "Air Nomad Legacy");
     settle(&mut s);
@@ -4754,10 +4688,7 @@ fn badgermole_earthbends_and_grants_trample_to_countered_creatures() {
     let stunned = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
     for id in [countered, theirs] {
-        s.game_mut().state.permanents[id]
-            .as_mut()
-            .unwrap()
-            .plus1_counters = 1;
+        set_counters(&mut s, id, CounterKind::PlusOnePlusOne, 1);
     }
     add_counters(&mut s, stunned, CounterKind::Stun, 1);
     s.set_player_mana_pool(0, "4G");
@@ -4790,15 +4721,16 @@ fn diligent_zookeeper_counts_creature_types_of_non_humans() {
     let many = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let land = s.force_permanent_on_battlefield(0, "Forest");
     let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
-    s.game_mut().state.permanents[many]
+    until_end_of_turn(
+        &mut s,
+        many,
+        Modification::AddSubtypes((0..12).map(|i| format!("Type{i}")).collect()),
+    );
+    s.game_mut().state.permanents[land]
         .as_mut()
         .unwrap()
-        .temp_subtypes = (0..12).map(|i| format!("Type{i}")).collect();
-    {
-        let land = s.game_mut().state.permanents[land].as_mut().unwrap();
-        land.animated = true;
-        land.plus1_counters = 1;
-    }
+        .animated = true;
+    set_counters(&mut s, land, CounterKind::PlusOnePlusOne, 1);
     assert_eq!(s.game().effective_pt(keeper), (4, 4));
     assert_eq!(s.game().effective_pt(ogre), (3, 3));
     assert_eq!(s.game().effective_pt(momo), (4, 4), "Lemur, Bat and Ally");
@@ -4810,10 +4742,11 @@ fn diligent_zookeeper_counts_creature_types_of_non_humans() {
     );
     assert_eq!(s.game().effective_pt(theirs), (2, 2));
 
-    s.game_mut().state.permanents[ogre]
-        .as_mut()
-        .unwrap()
-        .temp_subtypes = vec!["Ally".into(), "Ogre".into()];
+    until_end_of_turn(
+        &mut s,
+        ogre,
+        Modification::AddSubtypes(vec!["Ally".into(), "Ogre".into()]),
+    );
     assert_eq!(
         s.game().effective_pt(ogre),
         (4, 4),
@@ -4850,7 +4783,7 @@ fn rowdy_snowballers_stun_replaces_the_next_untap() {
     settle(&mut s);
     assert!(tapped(&s, ogre));
     assert_eq!(counters_of(&s, ogre, CounterKind::Stun), 1);
-    assert_eq!(observed(&s, ogre).stun_counters, 1);
+    assert_eq!(observed(&s, ogre).counters.get("stun"), Some(&1));
 
     s.advance_to_active_step(1, StepKind::Upkeep);
     assert!(
@@ -4858,7 +4791,7 @@ fn rowdy_snowballers_stun_replaces_the_next_untap() {
         "the untap step removes the stun counter instead"
     );
     assert_eq!(counters_of(&s, ogre, CounterKind::Stun), 0);
-    assert_eq!(observed(&s, ogre).stun_counters, 0);
+    assert_eq!(observed(&s, ogre).counters.get("stun"), None);
 
     s.advance_to_active_step(1, StepKind::Main);
     s.advance_to_active_step(1, StepKind::Upkeep);
@@ -5319,7 +5252,10 @@ fn swampsnare_trap_costs_less_onto_a_flier_and_shrinks_its_creature() {
 
 fn is_creature(s: &Scenario, id: PermanentId) -> bool {
     let permanent = s.game().state.permanents[id].as_ref().unwrap();
-    permanent.is_creature(&s.game().state.cards[permanent.card])
+    let card = &s.game().state.cards[permanent.card];
+    card.types.is_creature()
+        || permanent.animated_creature(card)
+        || s.game().becomes_artifact_creature(id)
 }
 
 fn crew_with(s: &mut Scenario, creature: PermanentId) {
@@ -5577,10 +5513,11 @@ fn white_lotus_tile_adds_one_color_for_the_largest_shared_type() {
     choose_mode(&mut s, 1);
     assert_eq!(*pool(&s), Mana::parse("UU"));
 
-    s.game_mut().state.permanents[elves]
-        .as_mut()
-        .unwrap()
-        .temp_subtypes = vec!["Ogre".into()];
+    until_end_of_turn(
+        &mut s,
+        elves,
+        Modification::AddSubtypes(vec!["Ogre".into()]),
+    );
     s.set_player_mana_pool(0, "0");
     untap(&mut s, tile);
     activate(&mut s, tile, 0);
@@ -6008,11 +5945,14 @@ fn day_of_black_sun_strips_and_destroys_creatures_with_mana_value_x_or_less() {
     let animals = s.force_permanent_on_battlefield(1, "Curious Farm Animals");
     let poxbearers = s.force_permanent_on_battlefield(0, "Pretending Poxbearers");
     let drake = s.force_permanent_on_battlefield(1, "Wind Drake");
-    s.game_mut().state.permanents[poxbearers]
-        .as_mut()
-        .unwrap()
-        .temp_keywords
-        .indestructible = true;
+    until_end_of_turn(
+        &mut s,
+        poxbearers,
+        Modification::AddKeywords(Keywords {
+            indestructible: true,
+            ..Default::default()
+        }),
+    );
 
     s.set_player_mana_pool(0, "BB22");
     cast(&mut s, "Day of Black Sun");
@@ -6027,12 +5967,7 @@ fn day_of_black_sun_strips_and_destroys_creatures_with_mana_value_x_or_less() {
     assert!(s.game().state.permanents[drake].is_some(), "mana value 3");
     assert_eq!(s.game().state.players[1].life, 20, "no dies trigger");
     assert!(s.battlefield_permanents_named(0, "Ally").is_empty());
-    assert!(
-        !s.game().state.permanents[drake]
-            .as_ref()
-            .unwrap()
-            .abilities_lost
-    );
+    assert!(!s.game().has_lost_abilities(drake));
 }
 
 #[test]
@@ -6393,7 +6328,7 @@ fn honest_work_turns_the_creature_into_a_humble_merchant() {
     permanent.change_counters(CounterKind::Stun, 1);
     assert_eq!(s.game().effective_pt(drake), (4, 4));
     assert!(observed_keywords(&s, drake).flying);
-    assert_eq!(observed(&s, drake).stun_counters, 1);
+    assert_eq!(observed(&s, drake).counters.get("stun"), Some(&1));
     assert_eq!(observed(&s, drake).name, None, "the printed name applies");
 
     let work = enchant(&mut s, "Honest Work", "U", drake);
@@ -6407,7 +6342,7 @@ fn honest_work_turns_the_creature_into_a_humble_merchant() {
     assert!(s.game().permanent_has_subtype(drake, "Citizen"));
     assert!(!s.game().permanent_has_subtype(drake, "Drake"));
     let seen = observed(&s, drake);
-    assert_eq!(seen.stun_counters, 0);
+    assert_eq!(seen.counters.get("stun"), None);
     assert_eq!(seen.name.as_deref(), Some("Humble Merchant"));
     assert_eq!(seen.creature_types, Some(vec!["Citizen".into()]));
     assert_eq!(observed(&s, work).attached_to, Some(seen.id));
@@ -6477,6 +6412,44 @@ fn honest_work_takes_haste_from_a_summoning_sick_merchant() {
     assert!(offers_ability(&mut s, goblin, 0));
 }
 
+/// CR 613.7: Honest Work's characteristics apply at the Aura's timestamp, so
+/// a grant from before it entered is lost and later records still apply.
+#[test]
+fn honest_work_applies_at_its_timestamp_and_later_records_still_apply() {
+    let mut s = five_color_unfunded_setup(&["Honest Work", "Gray Ogre"]);
+    let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let lifelink = Modification::AddKeywords(Keywords {
+        lifelink: true,
+        ..Default::default()
+    });
+    until_end_of_turn(&mut s, ogre, lifelink);
+    enchant(&mut s, "Honest Work", "U", ogre);
+    assert!(s.game().has_lost_abilities(ogre));
+    assert!(!keywords(&s, ogre).lifelink, "an earlier grant is lost");
+    assert_eq!(s.game().effective_pt(ogre), (1, 1));
+
+    until_end_of_turn(
+        &mut s,
+        ogre,
+        Modification::ModifyPt {
+            power: 2,
+            toughness: 0,
+        },
+    );
+    until_end_of_turn(
+        &mut s,
+        ogre,
+        Modification::AddKeywords(Keywords {
+            flying: true,
+            ..Default::default()
+        }),
+    );
+    assert_eq!(s.game().effective_pt(ogre), (3, 1), "a later pump applies");
+    assert!(keywords(&s, ogre).flying, "a later grant applies");
+    assert!(!keywords(&s, ogre).lifelink);
+    assert_eq!(s.game().permanent_name(ogre), "Humble Merchant");
+}
+
 #[test]
 fn a_static_haste_grant_lets_a_creature_tap_the_turn_it_enters() {
     let mut s = five_color_unfunded_setup(&["Badgermole", "Llanowar Elves"]);
@@ -6498,10 +6471,7 @@ fn a_static_haste_grant_lets_a_creature_tap_the_turn_it_enters() {
 }
 
 fn unblockable(s: &Scenario, id: PermanentId) -> bool {
-    s.game().state.permanents[id]
-        .as_ref()
-        .unwrap()
-        .cant_be_blocked_this_turn
+    s.game().cant_be_blocked(id)
 }
 
 fn offers_target(s: &Scenario, id: PermanentId) -> bool {
@@ -6715,7 +6685,7 @@ fn spirit_water_revival_waterbends_its_additional_cost() {
     settle(&mut s);
     assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 2);
     assert_eq!(s.game().state.zones.zone_of(first), Some(ZoneType::Exile));
-    assert!(!s.game().state.players[0].no_maximum_hand_size);
+    assert!(!s.game().has_no_maximum_hand_size_effect(PlayerId(0)));
 
     // Kicked: five creatures and {1} more mana pay the {6}.
     for ogre in &ogres[..5] {
@@ -6747,7 +6717,7 @@ fn spirit_water_revival_waterbends_its_additional_cost() {
         Some(ZoneType::Graveyard)
     );
     assert_eq!(s.game().state.zones.zone_of(second), Some(ZoneType::Exile));
-    assert!(s.game().state.players[0].no_maximum_hand_size);
+    assert!(s.game().has_no_maximum_hand_size_effect(PlayerId(0)));
 }
 
 #[test]
@@ -7826,33 +7796,33 @@ fn otter_penguin_buffs_on_second_draw_only_and_resets() {
 
     // Draw-step draw was the first card this turn — no buff yet.
     assert_eq!(s.game().state.turn.history[0].cards_drawn, 1);
-    assert_eq!(permanent(&s, otter).temp_power, 0);
+    assert_eq!(pt_modifications(&s, otter).0, 0);
 
     // Second draw: +1/+2 and can't be blocked this turn.
     s.game_mut().draw_cards(PlayerId(0), 1);
     resolve_until_priority(&mut s);
-    assert_eq!(permanent(&s, otter).temp_power, 1);
-    assert_eq!(permanent(&s, otter).temp_toughness, 2);
-    assert!(permanent(&s, otter).cant_be_blocked_this_turn);
+    assert_eq!(pt_modifications(&s, otter).0, 1);
+    assert_eq!(pt_modifications(&s, otter).1, 2);
+    assert!(s.game().cant_be_blocked(otter));
 
     // Third draw: no further trigger.
     s.game_mut().draw_cards(PlayerId(0), 1);
     resolve_until_priority(&mut s);
-    assert_eq!(permanent(&s, otter).temp_power, 1);
+    assert_eq!(pt_modifications(&s, otter).0, 1);
 
     // Cleanup clears the until-EOT buff and the unblockable flag; the
     // per-turn draw count resets.
     s.advance_to_active_step(1, StepKind::Main);
-    assert_eq!(permanent(&s, otter).temp_power, 0);
-    assert_eq!(permanent(&s, otter).temp_toughness, 0);
-    assert!(!permanent(&s, otter).cant_be_blocked_this_turn);
+    assert_eq!(pt_modifications(&s, otter).0, 0);
+    assert_eq!(pt_modifications(&s, otter).1, 0);
+    assert!(!s.game().cant_be_blocked(otter));
     assert_eq!(s.game().state.turn.history[0].cards_drawn, 0);
 
     // Next turn the "second card each turn" trigger works again.
     s.advance_to_active_step(0, StepKind::Main);
     s.game_mut().draw_cards(PlayerId(0), 1);
     resolve_until_priority(&mut s);
-    assert_eq!(permanent(&s, otter).temp_power, 1);
+    assert_eq!(pt_modifications(&s, otter).0, 1);
 }
 
 /// The opponent drawing their second card must not trigger player 0's
@@ -7870,7 +7840,7 @@ fn otter_penguin_ignores_opponent_draws() {
     s.game_mut().draw_cards(PlayerId(1), 1);
     resolve_until_priority(&mut s);
     assert_eq!(s.game().state.turn.history[1].cards_drawn, 2);
-    assert_eq!(permanent(&s, otter).temp_power, 0);
+    assert_eq!(pt_modifications(&s, otter).0, 0);
 }
 
 #[test]
@@ -7987,10 +7957,7 @@ fn ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution() {
             }
             if mode == 2 {
                 let source = permanent_named(&s, "Ran and Shaw");
-                s.game_mut().state.permanents[source]
-                    .as_mut()
-                    .unwrap()
-                    .plus1_counters = 3;
+                set_counters(&mut s, source, CounterKind::PlusOnePlusOne, 3);
                 let source_card = s.game().state.permanents[source].as_ref().unwrap().card;
                 s.game_mut().move_card(source_card, ZoneType::Graveyard);
             }
@@ -9520,10 +9487,7 @@ fn layers_compose_counters_anthem_and_until_eot() {
     );
     let _anthem = s.force_permanent_on_battlefield(0, "White Lotus Reinforcements");
     let kyoshi = s.force_permanent_on_battlefield(0, "Kyoshi Warriors");
-    s.game_mut().state.permanents[kyoshi]
-        .as_mut()
-        .expect("permanent")
-        .plus1_counters = 1;
+    set_counters(&mut s, kyoshi, CounterKind::PlusOnePlusOne, 1);
     force_lands(&mut s, 0, "Plains", 1);
     clear_hand(&mut s, 0);
     s.force_card_in_hand(0, "Yip Yip!");
@@ -9567,7 +9531,7 @@ fn yip_yip_buffs_and_grants_flying_to_allies_only() {
     s.pass_priority();
     s.pass_priority();
     assert_eq!(s.game().effective_pt(kyoshi), (5, 5));
-    assert!(permanent(&s, kyoshi).temp_keywords.flying);
+    assert!(keywords(&s, kyoshi).flying);
 
     // The granted keyword is agent-visible: the permanent entry carries
     // effective keywords (flying), while the card entry keeps the printed
@@ -9602,12 +9566,12 @@ fn yip_yip_buffs_and_grants_flying_to_allies_only() {
     s.pass_priority();
     s.pass_priority();
     assert_eq!(s.game().effective_pt(penguin), (4, 3));
-    assert!(!permanent(&s, penguin).temp_keywords.flying);
+    assert!(!keywords(&s, penguin).flying);
 
     // Both wear off at cleanup.
     s.advance_to_active_step(1, StepKind::Upkeep);
     assert_eq!(s.game().effective_pt(kyoshi), (3, 3));
-    assert!(!permanent(&s, kyoshi).temp_keywords.flying);
+    assert!(!keywords(&s, kyoshi).flying);
 }
 
 /// Yue's ability offers only noncreature spells from hand; the chosen spell
@@ -9939,10 +9903,7 @@ fn printed_trample_first_strike_lifelink_and_menace_affect_combat() {
             .unwrap()
             .summoning_sick = false;
         if name == "Earth King's Lieutenant" {
-            s.game_mut().state.permanents[attacker]
-                .as_mut()
-                .unwrap()
-                .plus1_counters = 3;
+            set_counters(&mut s, attacker, CounterKind::PlusOnePlusOne, 3);
         }
         s.advance_to_active_step(0, StepKind::DeclareAttackers);
         s.declare_attack();
@@ -10024,9 +9985,18 @@ fn cleanup_sba_grants_priority_and_then_repeats_mandatory_discard() {
     let land = put_onto_battlefield(&mut s, 0, "Island");
     let card = card_of(&s, land);
     // A 0/0 animated land survives only while its until-end-of-turn buff lasts.
-    let permanent = s.game_mut().state.permanents[land].as_mut().unwrap();
-    permanent.animated = true;
-    permanent.temp_toughness = 1;
+    s.game_mut().state.permanents[land]
+        .as_mut()
+        .unwrap()
+        .animated = true;
+    until_end_of_turn(
+        &mut s,
+        land,
+        Modification::ModifyPt {
+            power: 0,
+            toughness: 1,
+        },
+    );
     s.game_mut().draw_cards(PlayerId(0), 4);
     s.advance_to_active_step(0, StepKind::End);
     resolve_top(&mut s);
@@ -10204,10 +10174,17 @@ fn vindictive_warden_pings_each_opponent_and_firebends_one() {
 fn firebending_student_adds_red_equal_to_its_current_power() {
     let mut s = five_color_setup(&["Firebending Student"]);
     let student = s.force_permanent_on_battlefield(0, "Firebending Student");
-    s.game_mut().state.permanents[student]
-        .as_mut()
-        .unwrap()
-        .temp_power += 2;
+    let affected = s.game().affected_permanent(student).unwrap();
+    s.game_mut().apply_continuous(
+        None,
+        PlayerId(0),
+        [affected],
+        Modification::ModifyPt {
+            power: 2,
+            toughness: 0,
+        },
+        EffectDuration::EndOfTurn,
+    );
     attack_and_settle(&mut s, &[student], None);
     assert_eq!(combat_red(&s), 3);
 }

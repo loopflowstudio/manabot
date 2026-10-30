@@ -463,7 +463,9 @@ fn fixture_with_summary(
             .permanents
             .iter()
             .flatten()
-            .map(|permanent| permanent.plus1_counters)
+            .map(|permanent| {
+                permanent.counter_count(crate::state::permanent::CounterKind::PlusOnePlusOne)
+            })
             .sum(),
         stack_count: game.state.stack_objects.len(),
         committed_event_count: game.state.events.len(),

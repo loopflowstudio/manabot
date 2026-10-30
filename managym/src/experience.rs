@@ -361,6 +361,33 @@ pub struct LegacyRestrictedManaView {
     pub mana: [i32; 6],
 }
 
+/// One continuous-effect record on a permanent or player (CR 611, 613).
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ContinuousEffectView {
+    /// The engine's `Modification` variant.
+    pub modification: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub toughness: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub amount: Option<i32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keywords: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subtypes: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    /// `EndOfTurn` or `Indefinite`.
+    pub duration: String,
+    /// The source's printed name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// Timestamp order (CR 613.7).
+    pub timestamp: u32,
+}
+
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyPermanentView {
@@ -426,6 +453,9 @@ pub struct LegacyPermanentView {
     /// It was dealt damage this turn.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub dealt_damage_this_turn: bool,
+    /// Continuous effects on it, in timestamp order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effects: Vec<ContinuousEffectView>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
@@ -481,6 +511,9 @@ pub struct LegacyPlayerView {
     /// What this player has done this turn.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub turn_history: crate::flow::turn::PlayerTurnHistory,
+    /// Continuous effects on this player, in timestamp order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effects: Vec<ContinuousEffectView>,
     pub hand: Vec<LegacyCardView>,
     pub graveyard: Vec<LegacyCardView>,
     pub exile: Vec<LegacyCardView>,

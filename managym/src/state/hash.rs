@@ -20,7 +20,7 @@ use crate::{
 ///
 /// Increment this before changing field inclusion, field order, ordering rules,
 /// serialization, digest algorithm, or the meaning of an encoded identity.
-pub const MATCH_STATE_HASH_VERSION: u32 = 10;
+pub const MATCH_STATE_HASH_VERSION: u32 = 11;
 
 /// A versioned BLAKE3 digest of canonical mutable match state.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -149,6 +149,7 @@ struct CanonicalMatchState<'a> {
     trigger_placement: &'a Option<crate::flow::trigger::TriggerPlacement>,
     delayed_triggers: &'a [crate::flow::trigger::DelayedTrigger],
     exile_links: &'a [crate::flow::trigger::ExileLink],
+    effects: &'a [crate::state::effect::ContinuousEffect],
     /// Omitted when empty, keeping hashes of states without grants unchanged.
     #[serde(skip_serializing_if = "no_cast_permissions")]
     cast_permissions: &'a crate::flow::cast_permission::CastPermissions,
@@ -186,6 +187,7 @@ impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
             trigger_placement,
             delayed_triggers,
             exile_links,
+            effects,
             cast_permissions,
             suspended_decision,
             trigger_enqueue_counter,
@@ -236,6 +238,7 @@ impl<'a> From<&'a GameState> for CanonicalMatchState<'a> {
             trigger_placement,
             delayed_triggers,
             exile_links,
+            effects,
             cast_permissions,
             suspended_decision,
             trigger_enqueue_counter: *trigger_enqueue_counter,

@@ -6,9 +6,10 @@ use crate::{
         turn::{PhaseKind, PlayerTurnHistory, StepKind},
     },
     state::{
+        effect::{Affected, ContinuousEffect, Modification},
         game_object::{CardId, ObjectId, PlayerId, Target},
         mana::{ManaCost, ManaUse, SPEND_SUBTYPES},
-        permanent::Permanent,
+        permanent::{CounterKind, Permanent},
         stack_object::StackObject,
         zone::ZoneType,
     },
@@ -67,6 +68,9 @@ pub struct PlayerData {
     /// What this player has done this turn (public: every event in it was).
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub turn_history: PlayerTurnHistory,
+    /// Continuous effects on this player, in timestamp order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effects: Vec<ContinuousEffectData>,
 }
 
 /// Mana that may be spent only on the named purposes (CR 106.6): spells with
@@ -345,6 +349,111 @@ pub struct StackObjectData {
     pub granted_keywords: Option<KeywordData>,
 }
 
+/// One continuous-effect record (`state::effect`) affecting a player or
+/// permanent, as its holder's `effects` list shows it. Every record from a
+/// resolved spell or ability is public.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct ContinuousEffectData {
+    /// The `Modification` variant (`ModifyPt`, `AddKeywords`, ...).
+    pub modification: String,
+    /// P/T amounts: the change for `ModifyPt`, the base for `SetBasePt`
+    /// (absent when that base is left alone).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub toughness: Option<i32>,
+    /// Firebending N.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub amount: Option<i32>,
+    /// Keywords gained (field names, `first_strike`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keywords: Vec<String>,
+    /// Subtypes gained.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subtypes: Vec<String>,
+    /// The mana color kept (`Red`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    /// The `EffectDuration` variant (`EndOfTurn`, `Indefinite`).
+    pub duration: String,
+    /// Definition of the spell or ability's source.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_registry_key: Option<i32>,
+    /// The source's printed name: public, since the spell or ability resolved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_name: Option<String>,
+    /// Timestamp order (CR 613.7); larger is later, comparable across
+    /// records and permanents in one observation.
+    pub timestamp: i32,
+}
+
+impl PermanentData {
+    /// Its timestamp: renewed by an attachment, otherwise its id.
+    pub fn timestamp(&self) -> i32 {
+        self.timestamp.unwrap_or(self.id)
+    }
+}
+
+impl ContinuousEffectData {
+    fn new(game: &Game, effect: &ContinuousEffect) -> Self {
+        let mut data = Self {
+            modification: String::new(),
+            duration: format!("{:?}", effect.duration),
+            source_registry_key: effect.source.map(|id| id.0 as i32),
+            source_name: effect
+                .source
+                .and_then(|id| game.state.content.definition(id))
+                .map(|definition| definition.name.clone()),
+            timestamp: effect.timestamp.0 as i32,
+            ..Default::default()
+        };
+        data.modification = match &effect.modification {
+            Modification::AddSubtypes(subtypes) => {
+                data.subtypes = subtypes.clone();
+                "AddSubtypes"
+            }
+            Modification::BecomeArtifactCreature => "BecomeArtifactCreature",
+            Modification::AddKeywords(keywords) => {
+                data.keywords = keywords.names().into_iter().map(str::to_owned).collect();
+                "AddKeywords"
+            }
+            Modification::LoseAllAbilities => "LoseAllAbilities",
+            Modification::Firebending(amount) => {
+                data.amount = Some(i32::from(*amount));
+                "Firebending"
+            }
+            Modification::SetBasePt { power, toughness } => {
+                (data.power, data.toughness) = (*power, *toughness);
+                "SetBasePt"
+            }
+            Modification::ModifyPt { power, toughness } => {
+                (data.power, data.toughness) = (Some(*power), Some(*toughness));
+                "ModifyPt"
+            }
+            Modification::CantBeBlocked => "CantBeBlocked",
+            Modification::ExileIfWouldDie => "ExileIfWouldDie",
+            Modification::KeepUnspentMana(color) => {
+                data.color = Some(format!("{color:?}"));
+                "KeepUnspentMana"
+            }
+            Modification::NoMaximumHandSize => "NoMaximumHandSize",
+        }
+        .to_string();
+        data
+    }
+
+    /// The records affecting `affected`, in timestamp order.
+    fn list(game: &Game, affected: Option<Affected>) -> Vec<Self> {
+        game.state
+            .effects
+            .iter()
+            .filter(|effect| Some(effect.affected) == affected)
+            .map(|effect| Self::new(game, effect))
+            .collect()
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PermanentData {
@@ -386,13 +495,10 @@ pub struct PermanentData {
     /// (Yip Yip! flying, Enter the Avatar State, ...). The card entry keeps
     /// printed keywords; this is what the permanent can actually do now.
     pub keywords: KeywordData,
-    /// Counters other than +1/+1 (CR 122.1); each omitted when zero.
-    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
-    pub stun_counters: i32,
-    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
-    pub fire_counters: i32,
-    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
-    pub double_strike_counters: i32,
+    /// Counters other than +1/+1 by kind (CR 122.1; `CounterKind` names in
+    /// snake case), only the kinds present.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub counters: BTreeMap<String, i32>,
     /// The permanent this Aura or Equipment is attached to (CR 301.5, 303.4).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub attached_to: Option<i32>,
@@ -420,6 +526,15 @@ pub struct PermanentData {
     /// marked.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub dealt_damage_this_turn: bool,
+    /// Continuous effects on this permanent, in timestamp order; the
+    /// effective values above already apply them.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effects: Vec<ContinuousEffectData>,
+    /// Its timestamp (CR 613.7d/e), the order its static abilities apply in
+    /// among the records; absent while it is `id`, the timestamp it entered
+    /// with (an attachment renews it).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timestamp: Option<i32>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -700,14 +815,15 @@ impl Observation {
             hand_only_until: game
                 .hand_only_until(player)
                 .map(|until| game.state.players[until.0].id.0 as i32),
-            no_maximum_hand_size: p.no_maximum_hand_size,
+            no_maximum_hand_size: game.has_no_maximum_hand_size_effect(player),
             known_hand: p
                 .known_hand
                 .iter()
                 .map(|(definition, count)| (definition.0, *count))
                 .collect(),
-            keeps_red_mana: p.keeps_red_mana,
+            keeps_red_mana: game.keeps_unspent_mana(player, crate::state::mana::Color::Red),
             turn_history: game.state.turn.history[player.0],
+            effects: ContinuousEffectData::list(game, Some(Affected::Player(player))),
         }
     }
 
@@ -857,17 +973,21 @@ impl Observation {
             tapped: permanent.tapped,
             damage: permanent.damage,
             is_summoning_sick: permanent.summoning_sick,
-            plus1_counters: permanent.plus1_counters,
-            exile_if_dies_this_turn: permanent.exile_if_dies_this_turn,
+            plus1_counters: permanent.counter_count(CounterKind::PlusOnePlusOne),
+            exile_if_dies_this_turn: game.exiled_if_it_would_die(perm_id),
             attacking: permanent.attacking,
             exhausted_abilities: permanent.exhausted.len() as i32,
             once_each_turn_used: permanent.activated_this_turn.len() as i32,
-            granted_firebending: i32::from(permanent.firebending_this_turn),
-            temp_subtypes: permanent.temp_subtypes.clone(),
-            cant_be_blocked_this_turn: permanent.cant_be_blocked_this_turn,
+            granted_firebending: i32::from(game.granted_firebending(perm_id)),
+            temp_subtypes: game
+                .added_subtypes(perm_id)
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+            cant_be_blocked_this_turn: game.cant_be_blocked(perm_id),
             power,
             toughness,
-            is_animated: permanent.animated_creature(&game.state.cards[permanent.card]),
+            is_animated: game.permanent_is_animated(perm_id),
             has_exile_link: game
                 .permanent_object_ref(perm_id)
                 .is_some_and(|object_ref| {
@@ -877,9 +997,12 @@ impl Observation {
                         .any(|link| link.source == object_ref)
                 }),
             keywords: KeywordData::from_keywords(&game.effective_keywords(perm_id)),
-            stun_counters: permanent.counters.stun,
-            fire_counters: permanent.counters.fire,
-            double_strike_counters: permanent.counters.double_strike,
+            counters: permanent
+                .counters
+                .iter()
+                .filter(|(kind, _)| *kind != CounterKind::PlusOnePlusOne)
+                .map(|(kind, count)| (kind.name().to_string(), count))
+                .collect(),
             attached_to: permanent
                 .attached_to
                 .and_then(|object| game.object_event_ref(object))
@@ -910,6 +1033,9 @@ impl Observation {
                 .filter(|(index, ability)| permanent.activation_used(*index, ability))
                 .map(|(index, _)| index)
                 .collect(),
+            effects: ContinuousEffectData::list(game, game.affected_permanent(perm_id)),
+            timestamp: (permanent.timestamp != permanent.id)
+                .then_some(permanent.timestamp.0 as i32),
         };
 
         if permanent.controller.0 == self.agent.player_index as usize {

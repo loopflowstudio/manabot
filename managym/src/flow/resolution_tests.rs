@@ -7,8 +7,9 @@ use crate::{
     agent::action::Action,
     flow::{game::Game, undo::JournalStats},
     state::{
-        ability::{Effect, EffectValue, TargetRequirement, TargetSpec},
+        ability::{AffectedSpec, Effect, EffectValue, TargetRequirement, TargetSpec},
         card::{ActivatedAbilityDefinition, CardType, Keywords},
+        effect::{EffectDuration, Modification},
         game_object::{CardId, PermanentId, PlayerId, Target},
         permanent::CounterKind,
         player::PlayerConfig,
@@ -135,12 +136,30 @@ fn damage() -> Effect {
     }
 }
 
+fn hexproof_keywords() -> Keywords {
+    Keywords {
+        hexproof: true,
+        ..Default::default()
+    }
+}
+
+/// Grant (or remove the grant of) hexproof until end of turn.
 fn hexproof(game: &mut Game, id: PermanentId, value: bool) {
-    game.state.permanents[id]
-        .as_mut()
-        .unwrap()
-        .temp_keywords
-        .hexproof = value;
+    let grant = Modification::AddKeywords(hexproof_keywords());
+    let affected = game.affected_permanent(id).unwrap();
+    if value {
+        game.apply_continuous(
+            None,
+            PlayerId(0),
+            [affected],
+            grant,
+            EffectDuration::EndOfTurn,
+        );
+    } else {
+        game.state
+            .effects
+            .retain(|effect| effect.affected != affected || effect.modification != grant);
+    }
 }
 
 fn pause() -> Effect {
@@ -161,13 +180,10 @@ fn resolution_keeps_eligibility_after_hexproof_and_across_choice_clone_and_undo(
                 vec![clause(
                     TargetSpec::Creature,
                     vec![
-                        Effect::GrantKeywordsToTarget {
-                            keywords: Keywords {
-                                hexproof: true,
-                                ..Default::default()
-                            },
-                            target: TargetSpec::Creature,
-                        },
+                        Effect::until_end_of_turn(
+                            AffectedSpec::Target(TargetSpec::Creature),
+                            Modification::AddKeywords(hexproof_keywords()),
+                        ),
                         pause(),
                         damage(),
                     ],
@@ -176,13 +192,7 @@ fn resolution_keeps_eligibility_after_hexproof_and_across_choice_clone_and_undo(
                 vec![0],
             );
             game.resolve_top_of_stack();
-            assert!(
-                game.state.permanents[victim]
-                    .as_ref()
-                    .unwrap()
-                    .temp_keywords
-                    .hexproof
-            );
+            assert!(game.effective_keywords(victim).hexproof);
             assert_eq!(game.state.permanents[victim].as_ref().unwrap().damage, 0);
             let space = game.suspended_decision_action_space().unwrap();
             let choice = space
@@ -314,7 +324,7 @@ fn resolution_same_object_can_be_illegal_for_only_one_clause() {
             game.resolve_top_of_stack();
             let permanent = game.state.permanents[victim].as_ref().unwrap();
             assert_eq!(permanent.damage, 0);
-            assert_eq!(permanent.plus1_counters, 2);
+            assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 2);
             assert_eq!(game.state.cards[permanent.card].owner, owner);
         }
     }
@@ -358,7 +368,7 @@ fn resolution_characteristics_changed_by_earlier_instruction_do_not_retarget() {
             game.resolve_top_of_stack();
             let permanent = game.state.permanents[land].as_ref().unwrap();
             assert!(permanent.animated);
-            assert_eq!(permanent.plus1_counters, 3);
+            assert_eq!(permanent.counter_count(CounterKind::PlusOnePlusOne), 3);
         }
     }
 }
@@ -542,7 +552,6 @@ fn resolution_eligibility_distinguishes_identical_present_observations() {
         let mut encodings = Vec::new();
         for legal in [true, false] {
             let (mut game, first, second) = fixture(controller);
-            hexproof(&mut game, first, !legal);
             stack(
                 &mut game,
                 Entry::Spell,
@@ -550,19 +559,33 @@ fn resolution_eligibility_distinguishes_identical_present_observations() {
                 vec![
                     clause(
                         TargetSpec::Creature,
-                        vec![Effect::GrantKeywordsToTarget {
-                            keywords: Keywords {
-                                hexproof: true,
-                                ..Default::default()
-                            },
-                            target: TargetSpec::Creature,
-                        }],
+                        vec![Effect::until_end_of_turn(
+                            AffectedSpec::Target(TargetSpec::Creature),
+                            Modification::AddKeywords(hexproof_keywords()),
+                        )],
                     ),
                     clause(TargetSpec::Creature, vec![pause(), damage()]),
                 ],
                 vec![Target::Permanent(first), Target::Permanent(second)],
                 vec![0, 1],
             );
+            if !legal {
+                // The first target gains the same hexproof record in response,
+                // so the present state matches the legal case's after its
+                // grant resolves.
+                let Some(StackObject::Spell(spell)) = game.state.stack_objects.last() else {
+                    unreachable!()
+                };
+                let bolt = spell.card;
+                let affected = game.affected_permanent(first).unwrap();
+                game.apply_continuous(
+                    Some(bolt),
+                    controller,
+                    [affected],
+                    Modification::AddKeywords(hexproof_keywords()),
+                    EffectDuration::EndOfTurn,
+                );
+            }
             // Public stack targets have not been evaluated yet.
             assert!(game
                 .continuation_frames(controller)

@@ -1,6 +1,6 @@
 # Conformance fixtures
 
-These retained fixtures have current executable consumers. The w18 semantic
+These retained fixtures have current executable consumers. The w17 semantic
 kernel corpus drives Rust replay/property checks and CI. Academy still consumes
 the authored-match and public-commitment receipts; the Learn wrapper names its
 w4-v3 cohort.

@@ -245,6 +245,34 @@ def _mana(cost: ManaCost | managym.ManaCost | None) -> str:
     )
 
 
+def effect_phrase(effect: managym.ContinuousEffect) -> str:
+    """What one continuous-effect record does, in the words Academy shows."""
+    modification = effect.modification
+    if modification == "ModifyPt":
+        return f"{effect.power:+d}/{effect.toughness:+d}"
+    if modification == "SetBasePt":
+        power = "unchanged" if effect.power is None else effect.power
+        toughness = "unchanged" if effect.toughness is None else effect.toughness
+        return f"base power/toughness {power}/{toughness}"
+    if modification == "AddKeywords":
+        return ", ".join(keyword.replace("_", " ") for keyword in effect.keywords)
+    if modification == "AddSubtypes":
+        return "is also " + ", ".join(effect.subtypes)
+    phrases = {
+        "BecomeArtifactCreature": "is an artifact creature",
+        "LoseAllAbilities": "loses all abilities",
+        "Firebending": f"firebending {effect.amount}",
+        "CantBeBlocked": "can't be blocked",
+        "ExileIfWouldDie": "exiled instead if it would die",
+        "KeepUnspentMana": f"keeps unspent {(effect.color or '').lower()} mana",
+        "NoMaximumHandSize": "no maximum hand size",
+    }
+    try:
+        return phrases[modification]
+    except KeyError as error:
+        raise TextEncodingError(f"unknown modification {modification}") from error
+
+
 class _Renderer:
     def __init__(self, capture: DecisionInput) -> None:
         self.capture = capture
@@ -535,6 +563,8 @@ class _Renderer:
                 lines.append("Keeps unspent red mana until end of turn.")
             if history := _turn_history(player.turn_history):
                 lines.append(f"This turn: {history}.")
+            for effect in player.effects:
+                lines.append(f"Effect: {self._effect(effect)}.")
             for label, quantities in (
                 ("Publicly known hand minima", player.known_hand),
                 ("Initial sideboard", player.sideboard_counts),
@@ -654,12 +684,8 @@ class _Renderer:
     def _characteristics(self, permanent: managym.Permanent) -> str:
         """Effect-derived state, rendered only when present so other text is unchanged."""
         parts = [
-            f"{kind} counters {count}"
-            for kind, count in (
-                ("stun", permanent.stun_counters),
-                ("fire", permanent.fire_counters),
-                ("double strike", permanent.double_strike_counters),
-            )
+            f"{kind.replace('_', ' ')} counters {count}"
+            for kind, count in sorted(permanent.counters.items())
             if count
         ]
         if permanent.attached_to is not None:
@@ -680,7 +706,18 @@ class _Renderer:
             parts.append(f"used-up abilities {used}")
         if permanent.dealt_damage_this_turn:
             parts.append("dealt damage this turn")
+        parts.extend(f"effect {self._effect(effect)}" for effect in permanent.effects)
         return "".join(f"; {part}" for part in parts)
+
+    def _effect(self, effect: managym.ContinuousEffect) -> str:
+        """One continuous-effect record: how long, what, and its source."""
+        until = "until end of turn: " if effect.duration == "EndOfTurn" else ""
+        source = (
+            f" (from {self.definition(effect.source_registry_key)})"
+            if effect.source_registry_key is not None
+            else ""
+        )
+        return f"{until}{effect_phrase(effect)}{source}"
 
     def _definitions_lines(self) -> list[str]:
         capture = self.capture

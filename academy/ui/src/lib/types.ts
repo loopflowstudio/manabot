@@ -58,6 +58,24 @@ export interface RestrictedMana {
   mana: number[];
 }
 
+/** One continuous-effect record on a permanent or player (CR 611, 613). */
+export interface ContinuousEffect {
+  /** The engine's `Modification` variant (`ModifyPt`, `AddKeywords`, ...). */
+  modification: string;
+  power?: number;
+  toughness?: number;
+  amount?: number;
+  keywords?: string[];
+  subtypes?: string[];
+  color?: string;
+  /** `EndOfTurn` or `Indefinite`. */
+  duration: string;
+  /** The source's printed name. */
+  source?: string;
+  /** Timestamp order (CR 613.7); larger is later. */
+  timestamp: number;
+}
+
 export interface PermanentState {
   types?: CardTypes;
   is_token?: boolean;
@@ -99,6 +117,8 @@ export interface PermanentState {
   used_abilities?: number[];
   /** It was dealt damage this turn. */
   dealt_damage_this_turn?: boolean;
+  /** Continuous effects on it, in timestamp order. */
+  effects?: ContinuousEffect[];
 }
 
 export interface SideboardCard {
@@ -142,6 +162,8 @@ export interface PlayerState {
   keeps_red_mana?: boolean;
   /** What this player has done this turn. */
   turn_history?: PlayerTurnHistory;
+  /** Continuous effects on this player, in timestamp order. */
+  effects?: ContinuousEffect[];
   hand: CardState[];
   graveyard: CardState[];
   exile: CardState[];

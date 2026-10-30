@@ -20,13 +20,9 @@ and pool-membership choices that were here (history: `be2b7586b:scratch/question
 - Not rewritten (dated evidence): the Academy curated pack `local_identity` values
   keep pre-rename keys.
 - Full TLA completion remains the eight-PR plan; no merge or new Task authorized.
-- 2026-10-29 (merge of T2 `d218e1dc2`): **assumption for Jack Heart to
-  overrule at review.** T3 extends T2's unfrozen v5 and w18 in place rather
-  than taking v6/w19; no checkpoint exists for either, so this is reversible.
-  T2's rows are the base (v1–v4 keep 40 / 41 / 29, `attacking` stays v4
-  column 27) and T3's columns follow T2's before validity: player 63, card 55,
-  permanent 52. T3 keeps its relation columns (frame X, granted spell
-  keywords; width 48), so the relation width alone tells v5 again.
+- Settled (Jack Heart, 2026-10-30, "1a, 2a"): T3 extends the open w17 and
+  policy input v5 in place; never w19/v6. Widths: player 63, card 55,
+  permanent 37 plus the facts block, relation 48 (v1–v4 keep 40 / 41 / 29).
 - Same merge: T2's `granted_firebending` replaces T3's `firebending`
   observation field; T2's foretold column stands for `face_down` (T3's card
   column is gone). T2's exhausted / once-each-turn counts and T3's
@@ -187,11 +183,40 @@ T2's operator choices are at `a5587df5a:scratch/questions.md`. New since
 `d218e1dc2`: possible worlds v3 resample foretold cards (ordered slots,
 `P(m, F)` fill factor); belief priors are not yet foretold-aware.
 
+- 2026-10-30 (continuous effects as records), implement-time refinements of the
+  accepted model, reversible:
+  - A set fixed at resolution (CR 611.2c) is one record per object sharing a
+    timestamp, rather than a `Locked(Vec<ObjectRef>)` record, so every read
+    indexes by affected object.
+  - Durations are `EndOfTurn` and `Indefinite` only; `EndOfCombat`,
+    `UntilYourNextTurn` and `WhileSourceOnBattlefield` join when a card needs
+    one (no T3 card does). "Grant ability" stays the Equipment/Aura static.
+  - The timestamp clock is the object-id generator (a permanent's `id` is its
+    entering timestamp; attaching renews `Permanent.timestamp`).
+  - Rules effects (can't be blocked, exile if it would die, kept mana, hand
+    size) are not abilities, so losing all abilities does not end them.
+  - The Observation keeps `plus1_counters` (pre-T3 consumers) and `counters`
+    holds the other kinds, so they partition rather than duplicate.
+  - The model hashes fact ids into 4096 embedding buckets (collisions
+    possible); reusing the semantic-card token table for fact ids is a
+    follow-up if it matters.
+  - Ability descriptions of continuous effects are generated uniformly
+    (`continuous_description`), so some offer texts change wording
+    ("can't be blocked until end of turn").
 ## T4 (488a40) assumptions — 2026-10-30
 
-- T4 extends the open w18 in place, like T3 (no checkpoint uses it); the
-  alternative is w19. New cards change the content digest, so w18 evidence is
-  re-recorded once at gate (the set T3 re-recorded in `a8a40323d`).
+- T4 extends the open world in place, like T3 (no checkpoint uses it). T3's
+  sync with main renamed that world w17 (one open world on main), so T4's
+  w18 evidence became w17 at the T3 sync of 2026-10-30. New cards change the
+  content digest, so w17 evidence is re-recorded once at gate.
+- T3 sync (2026-10-30): T4's temporary-modifier effects became continuous-
+  effect records. `ModifyTargetPlayerCreatures` is
+  `ApplyContinuous { affected: AffectedSpec::EachTargetPlayerControls(..) }`
+  (the affected set fixed as it resolves, CR 611.2c); its target spec is
+  `TargetSpec::Player`, so the variant holds only its predicate (clippy's
+  enum-size bound). `dealt_damage_this_turn` is permanent v5 column 36, after
+  T3's timestamp rank (rows 38 wide); T4's used-ability flag columns are gone
+  because T3 made used abilities fact rows.
 - `EffectValue::SourcePower` reads the source's current power and is 0 once
   it has left the battlefield (LKI power is not captured); firebending X
   resolves while its attacker is normally still present.

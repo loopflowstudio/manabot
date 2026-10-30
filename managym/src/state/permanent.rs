@@ -3,8 +3,8 @@ use super::{
     game_object::{CardId, ObjectId, ObjectRef, PlayerId},
 };
 
-/// Counter kinds the engine knows (CR 122).
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+/// Counter kinds the engine knows (CR 122). A new kind is one variant here.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, serde::Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CounterKind {
     PlusOnePlusOne,
@@ -17,6 +17,16 @@ pub enum CounterKind {
 }
 
 impl CounterKind {
+    /// The serialized name (`stun`, `double_strike`, ...).
+    pub fn name(self) -> &'static str {
+        match self {
+            CounterKind::PlusOnePlusOne => "plus_one_plus_one",
+            CounterKind::Stun => "stun",
+            CounterKind::Fire => "fire",
+            CounterKind::DoubleStrike => "double_strike",
+        }
+    }
+
     pub const ALL: [CounterKind; 4] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
@@ -25,47 +35,43 @@ impl CounterKind {
     ];
 }
 
-/// Non-+1/+1 counters on one permanent. Serialized only when present so
-/// state hashes of games without them are unchanged.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
-pub struct Counters {
-    #[serde(skip_serializing_if = "crate::state::is_zero")]
-    pub stun: i32,
-    #[serde(skip_serializing_if = "crate::state::is_zero")]
-    pub fire: i32,
-    #[serde(skip_serializing_if = "crate::state::is_zero")]
-    pub double_strike: i32,
-}
+/// Counters on one object by kind (CR 122.1), +1/+1 included. Serialized as
+/// a map of the kinds present, in `CounterKind` order, so hashes do not see
+/// absent kinds.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Counters([i32; CounterKind::ALL.len()]);
 
 impl Counters {
     pub fn is_empty(&self) -> bool {
         *self == Self::default()
     }
 
-    /// Add `delta` counters of a kind other than +1/+1, clamped at zero.
-    pub fn add(&mut self, kind: CounterKind, delta: i32) {
-        let count = match kind {
-            CounterKind::PlusOnePlusOne => {
-                debug_assert!(false, "+1/+1 counters live in Permanent::plus1_counters");
-                return;
-            }
-            CounterKind::Stun => &mut self.stun,
-            CounterKind::Fire => &mut self.fire,
-            CounterKind::DoubleStrike => &mut self.double_strike,
-        };
-        *count = count.saturating_add(delta).max(0);
+    pub fn get(&self, kind: CounterKind) -> i32 {
+        self.0[kind as usize]
+    }
+
+    /// Add `delta` counters of `kind`, clamped at zero. Returns whether the
+    /// count changed.
+    pub fn change(&mut self, kind: CounterKind, delta: i32) -> bool {
+        let count = &mut self.0[kind as usize];
+        let old = *count;
+        *count = old.saturating_add(delta).max(0);
+        *count != old
+    }
+
+    /// The kinds present, with their counts, in `CounterKind` order.
+    pub fn iter(&self) -> impl Iterator<Item = (CounterKind, i32)> + '_ {
+        CounterKind::ALL
+            .into_iter()
+            .map(|kind| (kind, self.get(kind)))
+            .filter(|(_, count)| *count > 0)
     }
 }
 
-/// How long a type-changing effect makes a noncreature permanent an artifact
-/// creature (CR 613.1d). Ordered so the longer duration wins.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum BecomesCreature {
-    /// Crew (CR 702.122a); cleared during cleanup.
-    EndOfTurn,
-    /// No duration: lasts as long as this incarnation does.
-    Incarnation,
+impl serde::Serialize for Counters {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.collect_map(self.iter())
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -81,42 +87,19 @@ pub struct Permanent {
     /// or not that damage is still marked; cleared during cleanup.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub dealt_damage_this_turn: bool,
-    pub temp_power: i32,
-    pub temp_toughness: i32,
-    /// Until-EOT effects that set base power or toughness (CR 613.4b), cleared
-    /// during cleanup. The latest effect wins, so a setter overwrites.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub temp_base_power: Option<i32>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub temp_base_toughness: Option<i32>,
-    /// +1/+1 counters (CR 122). Any permanent can carry them, including
-    /// lands — they contribute to P/T only via effective_power/toughness.
-    /// Other kinds live in `counters`; `counter_count` reads either.
-    pub plus1_counters: i32,
-    /// Counters of every kind other than +1/+1 (CR 122.1).
+    /// Counters of every kind (CR 122.1). Any permanent can carry them,
+    /// including lands; +1/+1 counters change P/T only through
+    /// `Game::effective_pt`.
     #[serde(skip_serializing_if = "Counters::is_empty")]
     pub counters: Counters,
-    /// "Can't be blocked this turn" — cleared during cleanup.
-    pub cant_be_blocked_this_turn: bool,
-    /// Firebending granted until end of turn ("gains firebending 5"): red
-    /// mana added when it attacks, summed over grants. Cleared at cleanup.
-    #[serde(skip_serializing_if = "crate::state::is_zero")]
-    pub firebending_this_turn: u8,
+    /// Its timestamp (CR 613.7d/e): when it entered, renewed when an Aura or
+    /// Equipment becomes attached. Static abilities apply in this order among
+    /// continuous-effect records.
+    pub timestamp: ObjectId,
     /// Earthbend animation: this permanent is a 0/0 creature with haste in
     /// addition to its printed types (still a land). No duration — it lasts
     /// as long as the permanent does.
     pub animated: bool,
-    /// Keywords granted until end of turn — cleared during cleanup.
-    pub temp_keywords: Keywords,
-    /// Additive subtype grants tied to this incarnation, removed at cleanup.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
-    pub temp_subtypes: Vec<String>,
-    /// Object-local replacement, removed at cleanup or when this incarnation leaves.
-    pub exile_if_dies_this_turn: bool,
-    /// "Loses all abilities until end of turn" (CR 613.1f): no keywords,
-    /// triggered, activated, static or replacement abilities; cleared at cleanup.
-    #[serde(skip_serializing_if = "std::ops::Not::not")]
-    pub abilities_lost: bool,
     pub attacking: bool,
     /// True only for this incarnation entering as a resolving cast spell.
     pub was_cast: bool,
@@ -124,10 +107,6 @@ pub struct Permanent {
     /// actions clear it once that object is gone or no longer a creature.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub attached_to: Option<ObjectRef>,
-    /// An effect has made this permanent an artifact creature; its printed
-    /// power and toughness apply (CR 301.7b).
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub becomes_creature: Option<BecomesCreature>,
     /// Exhaust abilities (indices into the card's activated abilities) this
     /// object has activated; a new object starts fresh (CR 400.7).
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -169,100 +148,66 @@ impl Permanent {
             damage: 0,
             deathtouch_damage: false,
             dealt_damage_this_turn: false,
-            temp_power: 0,
-            temp_toughness: 0,
-            temp_base_power: None,
-            temp_base_toughness: None,
-            plus1_counters: 0,
+            timestamp: id,
             counters: Counters::default(),
-            cant_be_blocked_this_turn: false,
-            firebending_this_turn: 0,
             animated: false,
-            temp_keywords: Keywords::default(),
-            temp_subtypes: Vec::new(),
-            exile_if_dies_this_turn: false,
-            abilities_lost: false,
             attacking: false,
             was_cast: false,
             attached_to: None,
-            becomes_creature: None,
             exhausted: Vec::new(),
             activated_this_turn: Vec::new(),
         }
     }
 
-    /// Whether this permanent is a creature — printed type or animation.
-    pub fn is_creature(&self, card: &Card) -> bool {
-        card.types.is_creature() || self.animated_creature(card)
-    }
-
-    /// Whether an effect makes this permanent a creature: earthbend (a land
-    /// that's also a 0/0 creature), a type-changing effect, or its own
-    /// counter-threshold static (War Balloon).
+    /// Whether the permanent itself makes it a creature: earthbend (a land
+    /// that's also a 0/0 creature) or its own counter-threshold static (War
+    /// Balloon). `Game::permanent_is_creature` adds type-changing effects.
     pub fn animated_creature(&self, card: &Card) -> bool {
         self.animated
-            || self.becomes_creature.is_some()
             || card
                 .creature_with_counters
                 .is_some_and(|threshold| self.counter_count(threshold.kind) >= threshold.count)
     }
 
-    /// Printed keywords plus until-EOT grants plus animation (earthbent
-    /// lands have haste). An input to `Game::effective_keywords`, which
-    /// applies ability loss and static grants.
-    pub fn effective_keywords(&self, card: &Card) -> Keywords {
-        let mut keywords = card.keywords.union(&self.temp_keywords);
+    /// Printed keywords plus animation (earthbent lands have haste) and
+    /// keyword counters. An input to `Game::effective_keywords`, which
+    /// applies continuous effects and static grants in layer 6.
+    pub fn intrinsic_keywords(&self, card: &Card) -> Keywords {
+        let mut keywords = card.keywords;
         if self.animated {
             keywords.haste = true;
         }
         // CR 122.1b: a keyword counter grants its keyword while it remains.
-        if self.counters.double_strike > 0 {
+        if self.counters.get(CounterKind::DoubleStrike) > 0 {
             keywords.double_strike = true;
         }
         keywords
-    }
-
-    pub fn can_block(&self, card: &Card) -> bool {
-        self.is_creature(card) && !self.tapped
     }
 
     /// CR 122.1d: a tapped permanent with a stun counter that would become
     /// untapped stays tapped and loses one stun counter instead. Every untap
     /// path (untap step, effects, costs) goes through here.
     pub fn untap(&mut self) {
-        if self.tapped && self.counters.stun > 0 {
-            self.counters.stun -= 1;
+        if self.tapped && self.counters.get(CounterKind::Stun) > 0 {
+            self.counters.change(CounterKind::Stun, -1);
         } else {
             self.tapped = false;
         }
     }
 
     pub fn counter_count(&self, kind: CounterKind) -> i32 {
-        match kind {
-            CounterKind::PlusOnePlusOne => self.plus1_counters,
-            CounterKind::Stun => self.counters.stun,
-            CounterKind::Fire => self.counters.fire,
-            CounterKind::DoubleStrike => self.counters.double_strike,
-        }
+        self.counters.get(kind)
     }
 
     /// Add `delta` counters of `kind`, clamped at zero. Returns whether the
     /// count changed.
     pub fn change_counters(&mut self, kind: CounterKind, delta: i32) -> bool {
-        let count = match kind {
-            CounterKind::PlusOnePlusOne => &mut self.plus1_counters,
-            CounterKind::Stun => &mut self.counters.stun,
-            CounterKind::Fire => &mut self.counters.fire,
-            CounterKind::DoubleStrike => &mut self.counters.double_strike,
-        };
-        let old = *count;
-        *count = old.saturating_add(delta).max(0);
-        *count != old
+        self.counters.change(kind, delta)
     }
 
     /// "With a counter on it" / "with no counters on it" read every kind.
     pub fn has_counters(&self) -> bool {
-        self.plus1_counters > 0 || !self.counters.is_empty()
+        !self.counters.is_empty()
     }
 
     pub fn tap(&mut self) {
@@ -281,21 +226,10 @@ impl Permanent {
         }
     }
 
-    pub fn clear_temporary_modifiers(&mut self) {
+    /// "Once each turn" limits and "dealt damage this turn" reset in the
+    /// cleanup step.
+    pub fn clear_turn_history(&mut self) {
         self.dealt_damage_this_turn = false;
-        self.exile_if_dies_this_turn = false;
-        self.abilities_lost = false;
-        self.temp_power = 0;
-        self.temp_toughness = 0;
-        self.temp_base_power = None;
-        self.temp_base_toughness = None;
-        self.cant_be_blocked_this_turn = false;
-        self.firebending_this_turn = 0;
-        self.temp_keywords = Keywords::default();
-        self.temp_subtypes.clear();
-        if self.becomes_creature == Some(BecomesCreature::EndOfTurn) {
-            self.becomes_creature = None;
-        }
         self.activated_this_turn.clear();
     }
 }

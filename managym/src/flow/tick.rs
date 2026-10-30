@@ -363,7 +363,7 @@ impl Game {
             }
             StepKind::Cleanup => {
                 let player = self.active_player();
-                let unlimited = self.state.players[player.0].no_maximum_hand_size
+                let unlimited = self.has_no_maximum_hand_size_effect(player)
                     || self.battlefield_permanents(player).iter().any(|id| {
                         let permanent = self.state.permanents[*id].as_ref().expect("battlefield");
                         self.state.cards[permanent.card].no_maximum_hand_size
@@ -383,7 +383,7 @@ impl Game {
                 }
                 // CR 514.2 — Damage marked on permanents is removed during cleanup.
                 self.clear_damage();
-                self.clear_temporary_modifiers();
+                self.end_turn_modifiers();
                 None
             }
             _ => None,

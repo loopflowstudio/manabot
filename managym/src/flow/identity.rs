@@ -81,7 +81,7 @@ impl Game {
                 .map(String::from)
                 .collect(),
             permanent: permanent_id,
-            animated_creature: permanent.animated_creature(definition),
+            animated_creature: self.permanent_is_animated(permanent_id),
             abilities_lost: self.has_lost_abilities(permanent_id),
             dealt_damage_this_turn: permanent.dealt_damage_this_turn,
             object_ref,

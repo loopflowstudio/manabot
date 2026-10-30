@@ -307,7 +307,7 @@ def test_effect_derived_characteristics_appear_only_when_present() -> None:
     assert render_decision(_redigest(json.loads(decision.capture_json))).text == (
         decision.text
     )
-    ogre |= {"stun_counters": 2}
+    ogre |= {"counters": {"stun": 2}}
     mountain |= {
         "attached_to": ogre["id"],
         "name": "Citizen",
@@ -473,9 +473,10 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "exile_if_dies_this_turn": "exile if dies this turn",
         "temp_subtypes": "temporary subtypes",
         "keywords": "effective keywords",
-        "stun_counters": "stun counters",
-        "fire_counters": "fire counters",
-        "double_strike_counters": "double strike counters",
+        "counters": "<kind> counters",
+        "effects": "effect",
+        "timestamp": "effects are listed in timestamp order; a permanent's "
+        "static abilities apply in its battlefield order",
         "attached_to": "attached to",
         "name": "name set to",
         "creature_types": "creature types set to",
@@ -549,6 +550,20 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "turn_history": "This turn:",
         "restricted_mana": "Restricted mana for",
         "hand_only_until": "Can cast spells only from hand",
+        "effects": "Effect:",
+    },
+    managym.ContinuousEffect: {
+        "modification": "the effect phrase",
+        "power": "+P/+T or base power/toughness",
+        "toughness": "+P/+T or base power/toughness",
+        "amount": "firebending N",
+        "keywords": "the keywords gained",
+        "subtypes": "is also",
+        "color": "keeps unspent <color> mana",
+        "duration": "until end of turn:",
+        "source_registry_key": "(from D<n>)",
+        "source_name": "the definition line of (from D<n>)",
+        "timestamp": "listed in timestamp order",
     },
     managym.Turn: {
         "turn_number": "Turn",
@@ -602,6 +617,51 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
         "This turn: attacked; sacrificed 2 permanents; had a land enter under "
         "their control; drew 1 cards." in text
     )
+
+
+def test_continuous_effect_records_are_stated_in_order_with_duration() -> None:
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    decision = capture_text_decision(env)
+    payload = json.loads(decision.capture_json)
+    state = payload["observation"]["viewer_state"]
+    _, ogre = state["agent_permanents"]
+    ogre["effects"] = [
+        {"modification": "LoseAllAbilities", "duration": "EndOfTurn", "timestamp": 90},
+        {
+            "modification": "ModifyPt",
+            "power": 2,
+            "toughness": 0,
+            "duration": "EndOfTurn",
+            "timestamp": 91,
+        },
+        {
+            "modification": "AddKeywords",
+            "keywords": ["flying", "first_strike"],
+            "duration": "EndOfTurn",
+            "timestamp": 92,
+        },
+        {
+            "modification": "BecomeArtifactCreature",
+            "duration": "Indefinite",
+            "timestamp": 93,
+        },
+    ]
+    state["agent"]["effects"] = [
+        {
+            "modification": "KeepUnspentMana",
+            "color": "Red",
+            "duration": "EndOfTurn",
+            "timestamp": 94,
+        }
+    ]
+    text = render_decision(_redigest(payload)).text
+    assert (
+        "; effect until end of turn: loses all abilities"
+        "; effect until end of turn: +2/+0"
+        "; effect until end of turn: flying, first strike"
+        "; effect is an artifact creature;" in text
+    )
+    assert "Effect: until end of turn: keeps unspent red mana." in text
     for absent in (
         "attacking",
         "blocking",

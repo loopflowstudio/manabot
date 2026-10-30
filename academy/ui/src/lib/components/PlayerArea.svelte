@@ -1,5 +1,6 @@
 <script lang="ts">
   import { copyLabel } from '$lib/decision-labels';
+  import { effectNote } from '$lib/permanent-notes';
 
   import type {
     CardPreview,
@@ -149,6 +150,9 @@
       {label} can cast spells only from hand until the other player's next turn.
     </p>
   {/if}
+  {#each player.effects ?? [] as effect}
+    <p class="type-caption py-1" data-testid="player-effect">{label}: {effectNote(effect)}.</p>
+  {/each}
   {#if player.no_maximum_hand_size}
     <p class="type-caption py-1" data-testid="no-maximum-hand-size">
       {label} has no maximum hand size.

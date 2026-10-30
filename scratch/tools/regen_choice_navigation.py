@@ -1,4 +1,4 @@
-"""Re-record the w17 choice-navigation positions for the current world by offer label."""
+"""Re-record the w17 choice-navigation positions in place by offer label."""
 
 import json
 import subprocess
@@ -9,7 +9,7 @@ from academy.server import GameSession
 import managym
 
 SOURCE = Path("academy/fixtures/choice-navigation-w17.json")
-TARGET = Path("academy/fixtures/choice-navigation-w18.json")
+TARGET = Path("academy/fixtures/choice-navigation-w17.json")
 
 fixture = json.loads(SOURCE.read_text())
 for family, position in fixture["positions"].items():

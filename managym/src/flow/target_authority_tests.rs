@@ -6,12 +6,29 @@ use crate::{
     flow::{game::Game, trigger::PendingTrigger},
     state::{
         ability::{Effect, EffectValue, PlayerSelector, TargetRequirement, TargetSpec},
-        game_object::{CardId, PlayerId, Target},
+        card::Keywords,
+        effect::{EffectDuration, Modification},
+        game_object::{CardId, PermanentId, PlayerId, Target},
         player::PlayerConfig,
         predicate::CardPredicate,
         zone::ZoneType,
     },
 };
+
+/// Hexproof until end of turn, as a resolved spell would grant it.
+fn grant_hexproof(game: &mut Game, id: PermanentId) {
+    let affected = game.affected_permanent(id).unwrap();
+    game.apply_continuous(
+        None,
+        PlayerId(0),
+        [affected],
+        Modification::AddKeywords(Keywords {
+            hexproof: true,
+            ..Default::default()
+        }),
+        EffectDuration::EndOfTurn,
+    );
+}
 
 fn fixture() -> (Game, CardId, CardId, Target, Target) {
     let deck = BTreeMap::from([
@@ -352,11 +369,7 @@ fn audit_spell_or_permanent_must_respect_opponents_hexproof() {
     let Target::Permanent(id) = permanent else {
         unreachable!()
     };
-    game.state.permanents[id]
-        .as_mut()
-        .unwrap()
-        .temp_keywords
-        .hexproof = true;
+    grant_hexproof(&mut game, id);
     // CR 702.11b applies regardless of the wording used to target the object.
     // A creature-only restriction and a spell-or-permanent restriction must
     // both exclude this opposing Ogre; changing spec cannot bypass hexproof.
@@ -376,11 +389,7 @@ fn hexproof_target_wordings_preserve_controller_and_predicate_restrictions() {
             .scenario_force_battlefield(owner, "Gray Ogre", true)
             .unwrap();
         let target = Target::Permanent(id);
-        game.state.permanents[id]
-            .as_mut()
-            .unwrap()
-            .temp_keywords
-            .hexproof = true;
+        grant_hexproof(&mut game, id);
         for controller in [PlayerId(0), PlayerId(1)] {
             let own = controller == owner;
             let cases = [
@@ -432,11 +441,7 @@ fn hexproof_target_wordings_preserve_controller_and_predicate_restrictions() {
         let land = game
             .scenario_force_battlefield(owner, "Mountain", true)
             .unwrap();
-        game.state.permanents[land]
-            .as_mut()
-            .unwrap()
-            .temp_keywords
-            .hexproof = true;
+        grant_hexproof(&mut game, land);
         assert!(game.target_is_legal(Target::Permanent(land), &TargetSpec::LandYouControl, owner));
         assert!(!game.target_is_legal(
             Target::Permanent(land),
@@ -487,17 +492,9 @@ fn response_hexproof_rechecks_selected_targets_and_all_invalid_stops_ability() {
             let second_card = game.state.permanents[second].as_ref().unwrap().card;
             // CR 608.2b: gaining hexproof after selection invalidates an opposing
             // target; remaining legal targets and untargeted instructions survive.
-            game.state.permanents[first]
-                .as_mut()
-                .unwrap()
-                .temp_keywords
-                .hexproof = true;
+            grant_hexproof(&mut game, first);
             if !mixed {
-                game.state.permanents[second]
-                    .as_mut()
-                    .unwrap()
-                    .temp_keywords
-                    .hexproof = true;
+                grant_hexproof(&mut game, second);
             }
             game.resolve_top_of_stack();
             assert!(game.state.permanents[first].is_some());

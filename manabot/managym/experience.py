@@ -338,6 +338,27 @@ class LegacyCardView(ProtocolModel):
     x: Int32 | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
+class ContinuousEffectView(ProtocolModel):
+    """One continuous-effect record on a permanent or player (CR 611, 613)."""
+
+    modification: str
+    power: Int32 | None = Field(default=None, exclude_if=lambda value: value is None)
+    toughness: Int32 | None = Field(
+        default=None, exclude_if=lambda value: value is None
+    )
+    amount: Int32 | None = Field(default=None, exclude_if=lambda value: value is None)
+    keywords: list[str] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    subtypes: list[str] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+    color: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    duration: str
+    source: str | None = Field(default=None, exclude_if=lambda value: value is None)
+    timestamp: UInt32
+
+
 class LegacyPermanentView(ProtocolModel):
     types: LegacyCardTypesView | None = Field(
         default=None, exclude_if=lambda value: value is None
@@ -384,6 +405,9 @@ class LegacyPermanentView(ProtocolModel):
     )
     dealt_damage_this_turn: bool = Field(
         default=False, exclude_if=lambda value: not value
+    )
+    effects: list[ContinuousEffectView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
     )
 
 
@@ -447,6 +471,9 @@ class LegacyPlayerView(ProtocolModel):
     )
     no_maximum_hand_size: bool = Field(
         default=False, exclude_if=lambda value: not value
+    )
+    effects: list[ContinuousEffectView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
     )
     hand: list[LegacyCardView]
     graveyard: list[LegacyCardView]

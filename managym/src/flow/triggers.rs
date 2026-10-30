@@ -456,8 +456,11 @@ impl Game {
                 .any(|effect| {
                     matches!(
                         effect,
-                        crate::state::ability::Effect::ModifyTriggeringPermanent { .. }
-                            | crate::state::ability::Effect::BuffTriggeringPermanentValue { .. }
+                        crate::state::ability::Effect::PutCountersOnTriggeringPermanent { .. }
+                            | crate::state::ability::Effect::ApplyContinuous {
+                                affected: crate::state::ability::AffectedSpec::TriggeringPermanent,
+                                ..
+                            }
                     )
                 }) {
                 match event {
@@ -509,14 +512,11 @@ impl Game {
             return;
         };
         for attacker in attackers.clone() {
+            let amount = self.granted_firebending(attacker);
             let Some(permanent) = self.state.permanents[attacker].as_ref() else {
                 continue;
             };
-            let (amount, controller, card) = (
-                permanent.firebending_this_turn,
-                permanent.controller,
-                permanent.card,
-            );
+            let (controller, card) = (permanent.controller, permanent.card);
             if amount == 0 {
                 continue;
             }
@@ -866,8 +866,8 @@ impl Game {
         moved_controller: PlayerId,
     ) -> bool {
         let animated = self.state.card_to_permanent[moved_card]
-            .and_then(|id| self.state.permanents[id].as_ref())
-            .map(|p| p.animated_creature(&self.state.cards[moved_card]))
+            .filter(|id| self.state.permanents[*id].is_some())
+            .map(|id| self.permanent_is_animated(id))
             .unwrap_or_else(|| {
                 self.state
                     .object_lki

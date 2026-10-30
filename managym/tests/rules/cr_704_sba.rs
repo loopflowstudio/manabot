@@ -9,6 +9,8 @@ use managym::{
     },
     state::{
         ability::{Ability, Effect, TriggerCondition, TriggerSubject},
+        card::Keywords,
+        effect::Modification,
         game_object::{CardId, ObjectRef, PlayerId},
         predicate::CardPredicate,
         stack_object::StackObject,
@@ -385,11 +387,27 @@ fn audit_sba_toughness_damage_indestructible_boundary_matrix() {
                         let id = s.force_permanent_on_battlefield(controller, "Gray Ogre");
                         let perm = s.game_mut().state.permanents[id].as_mut().unwrap();
                         let card = perm.card;
-                        perm.temp_toughness = toughness - 2;
                         perm.damage = damage;
                         // A deathtouch flag describes positive damage, never zero.
                         perm.deathtouch_damage = deathtouch && damage > 0;
-                        perm.temp_keywords.indestructible = indestructible;
+                        until_end_of_turn(
+                            &mut s,
+                            id,
+                            Modification::ModifyPt {
+                                power: 0,
+                                toughness: toughness - 2,
+                            },
+                        );
+                        if indestructible {
+                            until_end_of_turn(
+                                &mut s,
+                                id,
+                                Modification::AddKeywords(Keywords {
+                                    indestructible: true,
+                                    ..Default::default()
+                                }),
+                            );
+                        }
                         s.pass_priority();
                         let dies = toughness <= 0
                             || (!indestructible

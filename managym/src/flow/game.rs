@@ -57,6 +57,9 @@ pub struct GameState {
     pub delayed_triggers: Vec<DelayedTrigger>,
     /// "Exiled until [source] leaves the battlefield" linkages (Jailer).
     pub exile_links: Vec<ExileLink>,
+    /// Continuous effects from resolved spells and abilities, in timestamp
+    /// order (`state::effect`).
+    pub effects: Vec<crate::state::effect::ContinuousEffect>,
     /// Exact-object casting grants (airbend) and hand-only restrictions.
     pub cast_permissions: CastPermissions,
     /// A resolution paused on a mid-resolution player decision.
@@ -293,6 +296,7 @@ impl Game {
             trigger_placement,
             delayed_triggers,
             exile_links,
+            effects,
             cast_permissions,
             suspended_decision,
             trigger_enqueue_counter,
@@ -321,6 +325,7 @@ impl Game {
                 trigger_placement: trigger_placement.clone(),
                 delayed_triggers: delayed_triggers.clone(),
                 exile_links: exile_links.clone(),
+                effects: effects.clone(),
                 cast_permissions: cast_permissions.clone(),
                 suspended_decision: suspended_decision.clone(),
                 trigger_enqueue_counter: *trigger_enqueue_counter,

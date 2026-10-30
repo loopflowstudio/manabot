@@ -39,3 +39,21 @@ it('states turn history only for the player it belongs to', () => {
   delete observation.agent.turn_history;
   expect(render(GameBoard, { props: { observation } }).body).not.toContain('turn-history');
 });
+
+it('lists a player\'s continuous-effect records with their source', () => {
+  const observation = structuredClone(fixture.recovery.frame.projection) as Observation;
+  observation.agent.effects = [
+    {
+      modification: 'KeepUnspentMana',
+      color: 'Red',
+      duration: 'EndOfTurn',
+      source: 'The Last Agni Kai',
+      timestamp: 9,
+    },
+  ];
+  const body = render(GameBoard, { props: { observation } }).body;
+  expect(body.match(/data-testid="player-effect"/g)).toHaveLength(1);
+  expect(body).toContain('until end of turn: keeps unspent red mana (The Last Agni Kai)');
+  delete observation.agent.effects;
+  expect(render(GameBoard, { props: { observation } }).body).not.toContain('player-effect');
+});

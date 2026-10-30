@@ -19,10 +19,11 @@ first. Each slice: variants (with token/observability guard entries), cards,
 one directed test per obligation. Cards outside finished slices stay
 undefined (so unsupported), never half-defined.
 
-World: T4 extends the open w18 in place, like T3 (assumption in
-`scratch/questions.md`). Adding definitions changes the content digest, so
-w18 digest-bound evidence is re-recorded at gate with T2's
-`scratch/tools/regen_*_w18.py` and `semantic_conformance record`.
+World: T4 extends the open world in place, like T3 (assumption in
+`scratch/questions.md`). T3's main sync renamed it w17, so T4's evidence is
+w17 too. Adding definitions changes the content digest, so w17 digest-bound
+evidence is re-recorded at gate with `scratch/tools/regen_*.py` and
+`semantic_conformance record`.
 
 ## Slices
 
@@ -91,10 +92,10 @@ Done in slice 4 (no parallel path remains): `DrawCardsValue`, `DrainLifeValue`,
   Ascension's ETB, Earth Kingdom General's ETB, Invasion Tactics' ETB and
   Raven Eagle's draw clause are expressible today but wait for their other
   clauses (no half-defined cards). New turn facts go in `PlayerTurnHistory`.
-- Gate: Python suites bound to the w18 content digest (authored-match receipt
+- Gate: Python suites bound to the w17 content digest (authored-match receipt
   and parity, public-commitment parity, choice navigation, decision surface,
   learn evidence/setup, trigger order, belief canonical receipt; T3's tools
-  `scratch/tools/regen_*_w18.py`); Academy vitest for `GameBoard` turn history
+  `scratch/tools/regen_*.py`); Academy vitest for `GameBoard` turn history
   (node_modules absent in this checkout).
 
 Check (2026-10-30, after slice 4): debug `cargo test` all targets pass
@@ -108,3 +109,40 @@ pass.
 Compress (2026-10-30): turn-history writes go through `Game::update_turn_history`
 (journals only on change); one `attack_and_settle` card-test helper. Debug
 `cargo test`, clippy and `test_text_observation.py` pass.
+
+## Concept review (2026-10-30, proposed — awaiting Jack Heart)
+
+Card author's action: transcribe "if …" from Oracle text. Today it has six
+spellings: `StaticCondition` (statics, `IfCondition`), `IfKicked`,
+`IfGraveyardAtLeast` (duplicates `StaticCondition::GraveyardAtLeast`),
+`IfTargetMatches`, `IfTargetDealtDamageThisTurn`, and an intervening-if
+(CR 603.4) written twice by hand: `TriggerCondition::ActiveIf` for the fire
+check plus a matching `If*` effect for the resolution re-check (TLA examples
+at `cardsets/tla.rs` ~5663 and ~7792; the two copies can silently disagree).
+
+Proposal:
+1. One `Condition` vocabulary (rename `StaticCondition`), asked of "you",
+   plus resolution-only questions (`Kicked`, `TargetMatches(predicate)`,
+   `TargetDealtDamageThisTurn`) that are invalid in a static context.
+2. One `Effect::If { condition, then, otherwise }`; delete `IfKicked`,
+   `IfGraveyardAtLeast`, `IfTargetMatches`, `IfTargetDealtDamageThisTurn`.
+3. Intervening-if becomes `Ability::Triggered { intervening_if:
+   Option<Condition>, .. }`; the engine checks it when the trigger would be
+   put on the stack and again on resolution (CR 603.4). `ActiveIf` stays only
+   for conditionally granted triggers ("has X as long as Y").
+Consequences: tokens/observability guard entries collapse to one If and one
+Condition match; `Condition::evaluate(ctx)` takes a context that has a frame
+only at resolution; a resolution-only question in a static is rejected by a
+definition check test. Counterexample to test: "if you do" (reflexive,
+slice 6) is not a game-state condition — it stays the existing optional
+payment/reflexive shape, not `Condition`.
+Open: 1 (do it), 2 (scope: now in T4 vs. separate Task), 3 (where
+resolution-only conditions live: one enum + check vs. a separate type).
+
+T3 sync (2026-10-30, onto T3 `636f90bf8`): T3 replaced temporary permanent
+modifiers with continuous-effect records and renamed the world w17. T4's
+pump, keyword and target-player effects are `ApplyContinuous` records (new
+`AffectedSpec::EachTargetPlayerControls`); `ModifyTargetPlayerCreatures`,
+`ModifyUntilEot` and `GrantKeywordsToTarget` are gone. v5 widths 67 / 55 / 38
+plus T3's fact rows; `semantic-kernel-w17-v1` re-recorded (14 cases / 3396
+commands) and protocol schemas regenerated.

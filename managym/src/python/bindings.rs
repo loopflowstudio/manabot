@@ -29,10 +29,10 @@ use crate::{
         action::{ActionSpaceKind, ActionType, AgentError},
         env::{Env, PreparedPossibleWorldMaterializer},
         observation::{
-            ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData, EventData,
-            EventEntityKind, EventType, KeywordData, Observation, PermanentData, PlayerData,
-            RestrictedManaData, SideboardCardData, StackObjectData, StackObjectKindData,
-            StackTargetData, StackTargetKindData, TurnData,
+            ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
+            ContinuousEffectData, EventData, EventEntityKind, EventType, KeywordData, Observation,
+            PermanentData, PlayerData, RestrictedManaData, SideboardCardData, StackObjectData,
+            StackObjectKindData, StackTargetData, StackTargetKindData, TurnData,
         },
         observation_encoder::{ObservationEncoderConfig, ACTION_DIM},
         structured_offer::{OfferId as StructuredOfferId, OfferSubmission, StructuredOfferSet},
@@ -96,6 +96,20 @@ fn encoded_to_dict<'py>(
 ) -> PyResult<Bound<'py, PyDict>> {
     let np = PyModule::import_bound(py, "numpy")?;
     let dict = PyDict::new_bound(py);
+    if config.policy_input_version >= 5 {
+        dict.set_item(
+            "facts",
+            to_numpy_array_f32(
+                py,
+                &np,
+                &encoded.facts,
+                &[
+                    crate::agent::observation_encoder::FACT_ROWS,
+                    crate::agent::observation_encoder::FACT_DIM,
+                ],
+            )?,
+        )?;
+    }
     if config.policy_input_version >= 2 {
         dict.set_item(
             "relations",
@@ -1023,6 +1037,85 @@ pub struct PyPlayer {
     /// Player id whose next turn ends this player's hand-only casting.
     #[pyo3(get)]
     pub hand_only_until: Option<i32>,
+    /// Continuous effects on this player, in timestamp order.
+    #[pyo3(get, set)]
+    pub effects: Vec<PyContinuousEffect>,
+}
+
+/// One continuous-effect record on a player or permanent.
+#[cfg(feature = "python")]
+#[pyclass(name = "ContinuousEffect")]
+#[derive(Clone, Default)]
+pub struct PyContinuousEffect {
+    #[pyo3(get, set)]
+    pub modification: String,
+    #[pyo3(get, set)]
+    pub power: Option<i32>,
+    #[pyo3(get, set)]
+    pub toughness: Option<i32>,
+    #[pyo3(get, set)]
+    pub amount: Option<i32>,
+    #[pyo3(get, set)]
+    pub keywords: Vec<String>,
+    #[pyo3(get, set)]
+    pub subtypes: Vec<String>,
+    #[pyo3(get, set)]
+    pub color: Option<String>,
+    #[pyo3(get, set)]
+    pub duration: String,
+    #[pyo3(get, set)]
+    pub source_registry_key: Option<i32>,
+    #[pyo3(get, set)]
+    pub source_name: Option<String>,
+    #[pyo3(get, set)]
+    pub timestamp: i32,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyContinuousEffect {
+    #[new]
+    fn py_new() -> Self {
+        Self::default()
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<ContinuousEffectData> for PyContinuousEffect {
+    fn from(value: ContinuousEffectData) -> Self {
+        Self {
+            modification: value.modification,
+            power: value.power,
+            toughness: value.toughness,
+            amount: value.amount,
+            keywords: value.keywords,
+            subtypes: value.subtypes,
+            color: value.color,
+            duration: value.duration,
+            source_registry_key: value.source_registry_key,
+            source_name: value.source_name,
+            timestamp: value.timestamp,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PyContinuousEffect> for ContinuousEffectData {
+    fn from(value: PyContinuousEffect) -> Self {
+        Self {
+            modification: value.modification,
+            power: value.power,
+            toughness: value.toughness,
+            amount: value.amount,
+            keywords: value.keywords,
+            subtypes: value.subtypes,
+            color: value.color,
+            duration: value.duration,
+            source_registry_key: value.source_registry_key,
+            source_name: value.source_name,
+            timestamp: value.timestamp,
+        }
+    }
 }
 
 /// What a player has done this turn.
@@ -1121,6 +1214,7 @@ impl From<PlayerData> for PyPlayer {
             lesson_mana: value.lesson_mana,
             restricted_mana: value.restricted_mana.into_iter().map(Into::into).collect(),
             hand_only_until: value.hand_only_until,
+            effects: value.effects.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -1152,6 +1246,7 @@ impl From<PyPlayer> for PlayerData {
             lesson_mana: value.lesson_mana,
             restricted_mana: value.restricted_mana.into_iter().map(Into::into).collect(),
             hand_only_until: value.hand_only_until,
+            effects: value.effects.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -1617,12 +1712,9 @@ pub struct PyPermanent {
     /// Effective keywords (printed + until-EOT grants).
     #[pyo3(get, set)]
     pub keywords: PyKeywords,
+    /// Counters other than +1/+1 by kind (`stun`, `fire`, `double_strike`).
     #[pyo3(get, set)]
-    pub stun_counters: i32,
-    #[pyo3(get, set)]
-    pub fire_counters: i32,
-    #[pyo3(get, set)]
-    pub double_strike_counters: i32,
+    pub counters: BTreeMap<String, i32>,
     /// Permanent id this Aura or Equipment is attached to.
     #[pyo3(get, set)]
     pub attached_to: Option<i32>,
@@ -1644,6 +1736,13 @@ pub struct PyPermanent {
     pub used_abilities: Vec<usize>,
     #[pyo3(get, set)]
     pub dealt_damage_this_turn: bool,
+    /// Continuous effects on this permanent, in timestamp order.
+    #[pyo3(get, set)]
+    pub effects: Vec<PyContinuousEffect>,
+    /// Its timestamp (CR 613.7) when an attachment renewed it; None while
+    /// it is `id`.
+    #[pyo3(get, set)]
+    pub timestamp: Option<i32>,
 }
 
 #[cfg(feature = "python")]
@@ -1669,9 +1768,7 @@ impl From<PermanentData> for PyPermanent {
             granted_firebending: value.granted_firebending,
             temp_subtypes: value.temp_subtypes,
             keywords: value.keywords.into(),
-            stun_counters: value.stun_counters,
-            fire_counters: value.fire_counters,
-            double_strike_counters: value.double_strike_counters,
+            counters: value.counters,
             attached_to: value.attached_to,
             name: value.name,
             creature_types: value.creature_types,
@@ -1680,6 +1777,8 @@ impl From<PermanentData> for PyPermanent {
             abilities_lost: value.abilities_lost,
             used_abilities: value.used_abilities,
             dealt_damage_this_turn: value.dealt_damage_this_turn,
+            effects: value.effects.into_iter().map(Into::into).collect(),
+            timestamp: value.timestamp,
         }
     }
 }
@@ -1707,9 +1806,7 @@ impl From<PyPermanent> for PermanentData {
             granted_firebending: value.granted_firebending,
             temp_subtypes: value.temp_subtypes,
             keywords: value.keywords.into(),
-            stun_counters: value.stun_counters,
-            fire_counters: value.fire_counters,
-            double_strike_counters: value.double_strike_counters,
+            counters: value.counters,
             attached_to: value.attached_to,
             name: value.name,
             creature_types: value.creature_types,
@@ -1718,6 +1815,8 @@ impl From<PyPermanent> for PermanentData {
             abilities_lost: value.abilities_lost,
             used_abilities: value.used_abilities,
             dealt_damage_this_turn: value.dealt_damage_this_turn,
+            effects: value.effects.into_iter().map(Into::into).collect(),
+            timestamp: value.timestamp,
         }
     }
 }
@@ -4062,6 +4161,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyKeywords>()?;
     m.add_class::<PyManaCost>()?;
     m.add_class::<PyPermanent>()?;
+    m.add_class::<PyContinuousEffect>()?;
     m.add_class::<PyAction>()?;
     m.add_class::<PyActionSpace>()?;
     m.add_class::<PyStackTarget>()?;

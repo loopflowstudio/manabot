@@ -3,96 +3,103 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>T3 Concept Review</title>
+<title>T4 concept review</title>
 <style>
-:root{--bg:#fbfaf7;--fg:#22201c;--mute:#6b665d;--rule:#e2ddd3;--code:#f1ede5;--prop:#9a5b13;--propbg:#fbf0e1;--have:#2f6b3a;--gap:#a3322a}
-@media (prefers-color-scheme:dark){:root{--bg:#1a1916;--fg:#e9e5dc;--mute:#a19b90;--rule:#36332d;--code:#26241f;--prop:#e6a65a;--propbg:#2e2416;--have:#7fc28b;--gap:#ef8a80}}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 ui-serif,Georgia,serif}
-main{max-width:46rem;margin:0 auto;padding:2.5rem 16px 4rem}
-h1{font-size:1.6rem;line-height:1.25;margin:0 0 .4rem}
-h2{font-size:1.15rem;margin:2.6rem 0 .6rem}
-header p{margin:.15rem 0;color:var(--mute);font-size:.9rem}
-code{font:.86em ui-monospace,Menlo,monospace;background:var(--code);padding:.05em .3em;border-radius:3px;overflow-wrap:anywhere}
-.lead{font-size:1.1rem;border-left:3px solid var(--prop);padding:.2rem 0 .2rem 1rem;margin:1.8rem 0}
-table{width:100%;border-collapse:collapse;font-size:.92rem;margin:.6rem 0}
-th,td{text-align:left;vertical-align:top;padding:.45rem .5rem;border-bottom:1px solid var(--rule)}
-th{font-weight:600;color:var(--mute);font-size:.82rem}
-.wrap{overflow-x:auto}
-.y{color:var(--have)}.n{color:var(--gap);font-weight:600}.e{color:var(--mute)}
-.proposed{background:var(--propbg);border:1px dashed var(--prop);border-radius:6px;padding:.8rem 1rem;margin:1rem 0}
-.proposed::before{content:"PROPOSED · not written";display:block;font:600 .72rem ui-sans-serif,system-ui,sans-serif;letter-spacing:.06em;color:var(--prop);margin-bottom:.3rem}
-.flow{font:.82rem ui-monospace,Menlo,monospace;white-space:pre;overflow-x:auto;background:var(--code);padding:.8rem 1rem;border-radius:6px;line-height:1.5}
-ol.q>li{margin:.9rem 0}
-ol.q ol{list-style:lower-alpha;margin:.3rem 0}
-.rec{color:var(--prop);font-weight:600}
+:root{--bg:#fbfaf7;--fg:#1d1b18;--mute:#6b665e;--rule:#e2ddd3;--code:#f1ede5;--new:#2f6b3a;--newbg:#e8f2e6;--old:#8a3b2a;--oldbg:#f6e9e4}
+@media (prefers-color-scheme:dark){:root{--bg:#171614;--fg:#e9e5dc;--mute:#9a948a;--rule:#33302b;--code:#24221e;--new:#8fcf99;--newbg:#1d2a1f;--old:#e39a86;--oldbg:#2d1f1b}}
+body{background:var(--bg);color:var(--fg);font:16px/1.6 Georgia,serif;margin:0}
+main{max-width:720px;margin:0 auto;padding:32px 16px 80px}
+header{color:var(--mute);font-size:14px;border-bottom:1px solid var(--rule);padding-bottom:12px;margin-bottom:28px}
+h1{font-size:26px;margin:0 0 6px;color:var(--fg)}
+h2{font-size:19px;margin:40px 0 8px}
+pre{background:var(--code);padding:12px 14px;border-radius:6px;overflow-x:auto;font:13px/1.5 ui-monospace,Menlo,monospace}
+code{font:0.88em ui-monospace,Menlo,monospace}
+.lead{font-size:18px}
+.tag{font:12px ui-monospace,monospace;padding:1px 6px;border-radius:4px}
+.old{color:var(--old);background:var(--oldbg)}.new{color:var(--new);background:var(--newbg)}
+table{border-collapse:collapse;width:100%;font-size:14px}
+td,th{border-bottom:1px solid var(--rule);padding:6px 8px;text-align:left;vertical-align:top}
+ol li{margin-bottom:10px}
 </style>
 </head>
-<body>
-<main>
+<body><main>
 <header>
-<h1>Who sees a stun counter?</h1>
-<p>Task 6875f0 · TLA T3: characteristics, counters, replacements, attachments</p>
-<p>Concept review with Jack Heart · Task standing at <code>demo</code> · 2026-10-29</p>
-<p>Built from <code>scratch/6875f0-tla-t3-characteristics.md</code>, <code>scratch/questions.md</code>, <code>manabot/env/observation.py</code>, <code>managym/src/agent/observation.rs</code>, <code>managym/src/agent/observation_encoder.rs</code>, <code>manabot/infra/config.py</code></p>
+<h1>One way to say “if”</h1>
+Task 488a40 · TLA T4 · concept review · 2026-10-30<br>
+Built from <code>managym/src/state/ability.rs</code>, <code>managym/src/cardsets/tla.rs</code>, <code>scratch/488a40-tla-t4-triggers.md</code>
 </header>
 
-<p class="lead">Decision needed: is a policy input that cannot see T3's new state acceptable, and if so, where is that written down? Today the omission is silent. Humans and LLM bots see stun counters and attachments, but the bot we train does not.</p>
+<p class="lead"><b>Decision needed:</b> should every “if” in Oracle text become one <code>Condition</code>, with one <code>Effect::If</code> and an intervening-if field on triggered abilities, before slices 5–6 add more conditional cards?</p>
 
-<h2>One interaction</h2>
-<p>The opponent casts Crashing Wave. Three stun counters go on your tapped creatures. On your turn they stay tapped and lose a counter each. Separately, you have Trusty Boomerang on creature A rather than creature B.</p>
-<div class="flow">Engine state        Permanent.counters.stun = 1, attached_to = A
-   │
-Observation         PermanentData.stun_counters = 1, attached_to = A   (item 19)
-   ├─► Academy       chip "1 stun", "Trusty Boomerang attached"     (item 20)
-   ├─► LLM text      "stun counters: 1; attached to A"              (item 20)
-   └─► policy v4     tapped = 1, P/T and keywords as modified
-                     · no stun column, no attachment edge · unchanged</div>
-<p>The trained policy sees the creature tapped but cannot tell whether it will untap. It sees A's raised P/T but not that removing A strands the Equipment. Under item 19 the omission was a deliberate choice: keep frozen widths and leave encoding for your PR review. Nothing in the code or docs states that choice.</p>
+<h2>The action</h2>
+<p>An author (usually an agent) reads Oracle text and writes the card as engine values. “If” is the most common clause it has to transcribe, and the remaining slices are full of it: raid, “if it was dealt damage”, intervening-if triggers, reflexive triggers.</p>
 
-<h2>What each consumer sees (verified)</h2>
-<div class="wrap"><table>
-<tr><th>T3 state</th><th>Observation / Academy / LLM</th><th>Policy v4</th></tr>
-<tr><td>Stun, fire, other counters by kind</td><td class="y">yes</td><td class="n">no (only +1/+1, col 4)</td></tr>
-<tr><td>Equipment / Aura attached to which creature</td><td class="y">yes</td><td class="n">no edge; P/T and keywords show the effect</td></tr>
-<tr><td>Announced X on the stack</td><td class="y">yes</td><td class="n">no</td></tr>
-<tr><td>Granted land type (Toph)</td><td class="y">yes</td><td class="n">no</td></tr>
-<tr><td>Set name / creature types (Honest Work)</td><td class="y">yes</td><td class="e">only indirectly: lost keywords, base P/T</td></tr>
-<tr><td>Granted firebending</td><td class="y">yes</td><td class="n">no</td></tr>
-</table></div>
-<p>No decklist or world uses a T3 card yet, so no current training run is affected. The gap matters once a world puts these cards into a training pool. Then card evaluations, which feed cube design, would measure a bot playing blind, the same pilot confound seen in exp-08b.</p>
+<h2>Today <span class="tag old">existing</span></h2>
+<table>
+<tr><th>Oracle says</th><th>Author writes</th></tr>
+<tr><td>“as long as you attacked this turn” (static)</td><td><code>StaticCondition::AttackedThisTurn</code></td></tr>
+<tr><td>“if you attacked this turn, …” (in an effect)</td><td><code>Effect::IfCondition { condition: StaticCondition, .. }</code></td></tr>
+<tr><td>“if this spell was kicked”</td><td><code>Effect::IfKicked</code></td></tr>
+<tr><td>“if there are 3+ Lessons in your graveyard”</td><td><code>Effect::IfGraveyardAtLeast</code>, which duplicates <code>StaticCondition::GraveyardAtLeast</code></td></tr>
+<tr><td>“if it's a creature”</td><td><code>Effect::IfTargetMatches</code></td></tr>
+<tr><td>“if it was dealt damage this turn”</td><td><code>Effect::IfTargetDealtDamageThisTurn</code></td></tr>
+<tr><td>“When …, if …, do …” (intervening-if, CR 603.4)</td><td>The condition written twice by hand: <code>TriggerCondition::ActiveIf</code> and a matching <code>If*</code> effect</td></tr>
+</table>
 
-<h2>Actions → concepts → APIs</h2>
-<div class="wrap"><table>
-<tr><th></th><th>Before (as built)</th><th>After (proposed)</th></tr>
-<tr><td>Concept</td><td>"Observations stay complete" — stated for <code>Observation</code>, assumed for everything</td><td><code>Observation</code> is the complete shared decision surface; each policy input version is a frozen, <em>documented</em> projection of it</td></tr>
-<tr><td>Config</td><td><code>policy_input_version: Literal[1,2,3,4]</code>, default 4</td><td>same, with its omissions written beside it; (a) or (b) adds 5</td></tr>
-<tr><td>Encoders</td><td><code>_encode_permanent_features</code> = <code>observation_encoder.rs</code>, 28 columns</td><td>v5: counters by kind, granted land, firebending columns; attachment relation row; stack X. v1–v4 byte-frozen</td></tr>
-<tr><td>Failure</td><td>none: a v4 policy plays T3 cards without warning</td><td>the omission is on record; under (b), v5 lands before T3 cards enter a training pool</td></tr>
-</table></div>
+<p>Here is the intervening-if as it's written today, in an existing TLA card (<code>tla.rs</code> ~5663):</p>
+<pre>Ability::Triggered {
+    condition: TriggerCondition::ActiveIf {
+        active_if: StaticCondition::GraveyardAtLeast {
+            count: 3, predicate: /* Dragon or Lesson */ },
+        condition: Box::new(TriggerCondition::WasCast { /* enters */ }),
+    },
+    effects: vec![Effect::IfGraveyardAtLeast {
+        count: 3, predicate: /* Dragon or Lesson, again */
+        then: vec![Effect::CreateNonlegendaryCopy],
+        otherwise: vec![],
+    }],
+}</pre>
+<p>The two copies can disagree, and no test would catch it. An author who leaves out the second copy gets a trigger that skips the resolution re-check, and it silently plays wrong.</p>
 
-<div class="proposed">
-<p style="margin:0">Docstring on <code>ObservationConfig.policy_input_version</code>:</p>
-<p style="margin:.4rem 0 0"><em>Policy input versions are frozen projections of the complete <code>Observation</code>. v4 omits counters other than +1/+1, attachment edges, stack X, granted land types, set names and creature types, and granted firebending. A policy trained on v4 sees only their effects on P/T and keywords.</em></p>
-</div>
+<h2>Proposed <span class="tag new">proposed</span></h2>
+<pre>pub enum Condition {
+    // asked of "you", valid anywhere (today's StaticCondition)
+    YourTurn, AttackedThisTurn, GraveyardAtLeast { .. }, ControlsMatching { .. }, ..
+    AnyOf(Vec&lt;Condition&gt;),
+    // resolution-only: need the resolving spell or ability
+    Kicked,
+    TargetMatches(CardPredicate),
+    TargetDealtDamageThisTurn,
+}
 
-<h2>Counterexample checked</h2>
-<p>"The policy can infer attachment from P/T." It can't, reliably. Two creatures with equal raised P/T, one equipped and one pumped until end of turn, encode identically. Under v4 a stunned tapped creature and an unstunned tapped one also encode identically. These two pairs become the v5 proof: v4 rows are equal and v5 rows differ, with native and Python encoders in parity.</p>
+Effect::If { condition: Condition, then: Vec&lt;Effect&gt;, otherwise: Vec&lt;Effect&gt; }
+
+Ability::Triggered {
+    condition: TriggerCondition::WasCast { /* enters */ },
+    intervening_if: Some(Condition::GraveyardAtLeast { count: 3, .. }),
+    effects: vec![Effect::CreateNonlegendaryCopy],
+}</pre>
+<p>The engine checks <code>intervening_if</code> when the trigger would go on the stack and again as it resolves. That's CR 603.4, enforced in one place instead of being trusted to each card. <code>ActiveIf</code> stays, but only for abilities granted conditionally (“has firebending 2 as long as …”), which is a different rule.</p>
+
+<h2>Through the layers</h2>
+<table>
+<tr><th>Layer</th><th>Change</th></tr>
+<tr><td>Rules types</td><td>4 <code>If*</code> effects → 1. <code>StaticCondition</code> → <code>Condition</code>. Triggered abilities gain <code>intervening_if</code>.</td></tr>
+<tr><td>Evaluation</td><td><code>Condition::evaluate</code> takes a context. Only a resolving frame can answer the resolution-only questions.</td></tr>
+<tr><td>Learning tokens / observability guard</td><td>One <code>If</code> token plus condition tokens, instead of one token per <code>If*</code> variant. The exhaustive guard shrinks.</td></tr>
+<tr><td>Definition check</td><td>New test: no resolution-only question inside a static or <code>intervening_if</code>.</td></tr>
+<tr><td>Cards</td><td>About 13 existing uses are rewritten mechanically. Behavior is unchanged, so the card tests prove it.</td></tr>
+</table>
+
+<h2>Challenges</h2>
+<p><b>Normal path:</b> Raven Eagle and Waterbender Ascension in slice 5 are each written with one trigger, one <code>intervening_if</code> and no duplicated clause.</p>
+<p><b>Failure:</b> if the condition stops holding by resolution, the trigger does nothing (603.4). The engine does this check today only when the author remembered the effect branch. With the proposal it's always done.</p>
+<p><b>Counterexample:</b> “if you do” (reflexive, slice 6) depends on a choice made during resolution, not on game state. It stays with the existing optional-payment and reflexive shape, not with <code>Condition</code>. If more such cases turn up, the boundary is wrong.</p>
 
 <h2>Questions</h2>
-<ol class="q">
-<li>Where does policy encoding of T3 state happen?
-  <ol>
-  <li>In T3: add policy input v5 now, in both encoders, with v1–v4 frozen.</li>
-  <li><span class="rec">Recommended:</span> write v4's omissions down now, and give v5 its own Task, which must land before any world puts T3 cards into a training pool.</li>
-  <li>Write the omissions down only, and decide on v5 when a world wants these cards.</li>
-  </ol></li>
-<li>Is the contract right: the <code>Observation</code> is complete, and policy versions are documented projections that may omit things?
-  <ol>
-  <li>Yes.</li>
-  <li>No. New engine state must reach the policy in the same change, so a frozen version is never silently behind.</li>
-  </ol></li>
+<ol>
+<li>Adopt one <code>Condition</code>, <code>Effect::If</code> and <code>intervening_if</code>? <b>a</b> yes · <b>b</b> only the intervening-if field · <b>c</b> no</li>
+<li>When? <b>a</b> now in T4, before slices 5–6 (recommended: they add the most conditionals) · <b>b</b> a separate Task after T4</li>
+<li>Resolution-only questions: <b>a</b> one enum plus a definition-check test (recommended: simpler for authors) · <b>b</b> a separate <code>ResolutionCondition</code> type, so the compiler rules out misuse</li>
 </ol>
-</main>
-</body>
-</html>
+</main></body></html>

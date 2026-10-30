@@ -116,7 +116,8 @@ checkpoints or experiment evidence.
 - Native scalar/vector observation buffers bind continuation input semantics by
   relation width: v2/v3 have 32 columns, v4 has 33, v5 has 48; validity
   remains column 31. V5 widens player rows to 67, card rows to 55 and
-  permanent rows to 53 (v1–v4: 40 / 41 / 29), validity last.
+  permanent rows to 38 (v1–v4: 40 / 41 / 29), validity last, and adds
+  128 × 12 fact rows.
   Preserve the frozen widths and derive buffers from `ObservationSpace`.
 - New observation state reaches the policy input (native and Python encoders
   in parity), the LLM text observation and the learning tokens in the change
