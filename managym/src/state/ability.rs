@@ -179,26 +179,40 @@ pub enum Condition {
     /// turn, read from its last known information once it has left ("Exile
     /// target creature. If it was dealt damage this turn, ...").
     TargetDealtDamageThisTurn,
-    /// Resolution only: the resolving ability's source permanent has `count`
-    /// or more `kind` counters ("Then if it has four or more quest counters
-    /// on it").
+    /// Source question: the ability's source permanent has `count` or more
+    /// `kind` counters ("Then if it has four or more quest counters on it").
     SourceCountersAtLeast {
         kind: CounterKind,
         count: i32,
     },
+    /// Source question: the ability's source permanent is tapped ("if Katara
+    /// is tapped").
+    SourceTapped,
 }
 
 impl Condition {
+    /// Whether answering reads the asking ability's source permanent, so the
+    /// condition is meaningful only in `Effect::If` and intervening-if
+    /// clauses.
+    pub fn reads_source(&self) -> bool {
+        match self {
+            Condition::SourceCountersAtLeast { .. } | Condition::SourceTapped => true,
+            Condition::AnyOf(conditions) => conditions.iter().any(Condition::reads_source),
+            _ => false,
+        }
+    }
+
     /// Whether answering needs a resolving spell or ability, so the
     /// condition is meaningful only inside `Effect::If`.
     pub fn is_resolution_only(&self) -> bool {
         match self {
             Condition::Kicked
             | Condition::TargetMatches(_)
-            | Condition::TargetDealtDamageThisTurn
-            | Condition::SourceCountersAtLeast { .. } => true,
+            | Condition::TargetDealtDamageThisTurn => true,
             Condition::AnyOf(conditions) => conditions.iter().any(Condition::is_resolution_only),
-            Condition::YourTurn
+            Condition::SourceCountersAtLeast { .. }
+            | Condition::SourceTapped
+            | Condition::YourTurn
             | Condition::Always
             | Condition::CardsDrawnAtLeast { .. }
             | Condition::GraveyardAtLeast { .. }

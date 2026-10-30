@@ -39,7 +39,7 @@ use crate::{
             StaticScope,
         },
         effect::Modification,
-        game_object::{CardId, ObjectId, PermanentId, PlayerId, Target},
+        game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
         permanent::CounterKind,
         predicate::CardPredicate,
         zone::ZoneType,
@@ -572,20 +572,35 @@ impl Game {
                 .is_some_and(|condition| self.check_static_condition(condition, player))
     }
 
-    /// Answer a game-state condition for `controller` ("you"): statics,
-    /// `ActiveIf` and intervening-if clauses. Resolution-only questions have
-    /// no resolving frame here and answer false; definition checks keep them
-    /// out of these contexts.
+    /// Answer a game-state condition for `controller` ("you"): statics and
+    /// `ActiveIf`. Resolution-only and source questions have no frame or
+    /// source here and answer false; definition checks keep them out of
+    /// these contexts.
     pub(crate) fn check_static_condition(
         &self,
         condition: &Condition,
         controller: PlayerId,
     ) -> bool {
         debug_assert!(
+            !condition.is_resolution_only() && !condition.reads_source(),
+            "resolution-only or source condition outside Effect::If: {condition:?}"
+        );
+        self.condition_holds(condition, controller, None, None)
+    }
+
+    /// Answer an intervening "if" (CR 603.4) of the ability of the exact
+    /// battlefield object `source`, as its event occurs and as it resolves.
+    pub(crate) fn check_intervening_if(
+        &self,
+        condition: &Condition,
+        controller: PlayerId,
+        source: Option<ObjectRef>,
+    ) -> bool {
+        debug_assert!(
             !condition.is_resolution_only(),
             "resolution-only condition outside Effect::If: {condition:?}"
         );
-        self.check_condition(condition, controller, None)
+        self.condition_holds(condition, controller, None, source)
     }
 
     /// Answer `condition` for `controller`, reading `frame` for the
@@ -596,6 +611,28 @@ impl Game {
         controller: PlayerId,
         frame: Option<&EffectFrame>,
     ) -> bool {
+        self.condition_holds(
+            condition,
+            controller,
+            frame,
+            frame.and_then(|frame| frame.source_ref),
+        )
+    }
+
+    /// The source questions read `source`, the ability's exact object, which
+    /// answers nothing once it has left the battlefield.
+    fn condition_holds(
+        &self,
+        condition: &Condition,
+        controller: PlayerId,
+        frame: Option<&EffectFrame>,
+        source: Option<ObjectRef>,
+    ) -> bool {
+        let source_permanent = || {
+            source
+                .and_then(|source| self.lookup_current_permanent(source).ok())
+                .and_then(|id| self.state.permanents[id].as_ref())
+        };
         match condition {
             Condition::Always => true,
             Condition::YourTurn => self.active_player() == controller,
@@ -619,7 +656,7 @@ impl Game {
             }
             Condition::AnyOf(conditions) => conditions
                 .iter()
-                .any(|condition| self.check_condition(condition, controller, frame)),
+                .any(|condition| self.condition_holds(condition, controller, frame, source)),
             Condition::Kicked => frame.is_some_and(|frame| frame.kicked),
             Condition::TargetMatches(predicate) => frame
                 .and_then(|frame| self.present_primary_target(frame))
@@ -627,10 +664,10 @@ impl Game {
                     matches!(target, Target::Permanent(id)
                         if self.permanent_matches_predicate(id, predicate))
                 }),
-            Condition::SourceCountersAtLeast { kind, count } => frame
-                .and_then(|frame| self.source_permanent_id(frame))
-                .and_then(|id| self.state.permanents[id].as_ref())
-                .is_some_and(|permanent| permanent.counter_count(*kind) >= *count),
+            Condition::SourceCountersAtLeast { kind, count } => {
+                source_permanent().is_some_and(|permanent| permanent.counter_count(*kind) >= *count)
+            }
+            Condition::SourceTapped => source_permanent().is_some_and(|permanent| permanent.tapped),
             Condition::TargetDealtDamageThisTurn => {
                 let Some(Target::Permanent(permanent_id)) =
                     frame.and_then(EffectFrame::primary_target)

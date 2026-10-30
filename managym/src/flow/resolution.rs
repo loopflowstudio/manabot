@@ -256,10 +256,9 @@ impl Game {
             } = ability;
             // CR 603.4: an intervening "if" that no longer holds removes the
             // ability from the stack doing nothing.
-            if intervening_if
-                .as_ref()
-                .is_some_and(|condition| !self.check_static_condition(condition, source_controller))
-            {
+            if intervening_if.as_ref().is_some_and(|condition| {
+                !self.check_intervening_if(condition, source_controller, triggered.source_ref)
+            }) {
                 return;
             }
             (effects, triggered.ability_index)

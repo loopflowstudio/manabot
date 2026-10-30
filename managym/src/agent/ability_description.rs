@@ -189,6 +189,7 @@ fn condition_text(condition: &Condition) -> String {
             predicate_description(predicate, "permanent")
         ),
         Condition::TargetDealtDamageThisTurn => "that target was dealt damage this turn".into(),
+        Condition::SourceTapped => "this is tapped".into(),
         Condition::SourceCountersAtLeast { kind, count } => format!(
             "this has {count} or more {} counters",
             kind.name().replace('_', " ")

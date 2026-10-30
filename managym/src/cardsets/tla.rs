@@ -121,6 +121,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         glider_staff(),
         gran_gran(),
         great_divide_guide(),
+        guru_pathik(),
         hakoda_selfless_commander(),
         hama_the_bloodbender(),
         haru_hidden_talent(),
@@ -140,6 +141,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         jeong_jeongs_deserters(),
         jet_freedom_fighter(),
         june_bounty_hunter(),
+        katara_bending_prodigy(),
         katara_water_tribe_s_hope(),
         knowledge_seeker(),
         kyoshi_battle_fan(),
@@ -147,6 +149,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         kyoshi_village(),
         kyoshi_warriors(),
         lo_and_li_twin_tutors(),
+        long_feng_grand_secretariat(),
         lost_days(),
         mai_jaded_edge(),
         mai_scornful_striker(),
@@ -3493,6 +3496,60 @@ fn great_divide_guide() -> CardDefinition {
     }
 }
 
+fn guru_pathik() -> CardDefinition {
+    let text_box = "When Guru Pathik enters, look at the top five cards of your library. You may reveal a Lesson, Saga, or Shrine card from among them and put it into your hand. Put the rest on the bottom of your library in a random order.\nWhenever you cast a Lesson, Saga, or Shrine spell, put a +1/+1 counter on another target creature you control.";
+    let lesson_saga_or_shrine = CardPredicate {
+        subtypes_any: vec!["Lesson".into(), "Saga".into(), "Shrine".into()],
+        ..Default::default()
+    };
+
+    CardDefinition {
+        key: "tla.guru_pathik",
+        scryfall_id: "224a2241-0dce-4008-8d9c-86db40ec5f8b",
+        name: "Guru Pathik".into(),
+        mana_cost: Some(ManaCost::parse("{2}{G/U}{G/U}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Monk".into(), "Ally".into()],
+        power: Some(2),
+        toughness: Some(4),
+        abilities: vec![
+            Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::LookAndSelect {
+                    reveal: true,
+                    look: EffectValue::Fixed(5),
+                    min_select: 0,
+                    max_select: 1,
+                    predicate: lesson_saga_or_shrine.clone(),
+                }],
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::YouCastSpell {
+                    predicate: lesson_saga_or_shrine,
+                },
+                intervening_if: None,
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement {
+                        another: true,
+                        ..TargetRequirement::one(TargetSpec::CreatureYouControl)
+                    },
+                    effects: vec![Effect::PutCounters {
+                        count: 1,
+                        kind: CounterKind::PlusOnePlusOne,
+                        target: TargetSpec::CreatureYouControl,
+                    }],
+                }],
+            },
+        ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
 fn hakoda_selfless_commander() -> CardDefinition {
     let text_box = "Vigilance\nYou may look at the top card of your library any time.\nYou may cast Ally spells from the top of your library.\nSacrifice Hakoda: Creatures you control get +0/+5 and gain indestructible until end of turn.";
 
@@ -4237,6 +4294,40 @@ fn june_bounty_hunter() -> CardDefinition {
     }
 }
 
+fn katara_bending_prodigy() -> CardDefinition {
+    let text_box = "At the beginning of your end step, if Katara is tapped, put a +1/+1 counter on her.\nWaterbend {6}: Draw a card. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)";
+
+    CardDefinition {
+        key: "tla.katara_bending_prodigy",
+        scryfall_id: "e8372167-383f-4302-a8ea-b6bf495c870c",
+        name: "Katara, Bending Prodigy".into(),
+        mana_cost: Some(ManaCost::parse("{2}{U}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Warrior".into(), "Ally".into()],
+        power: Some(2),
+        toughness: Some(3),
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::BeginningOfYourEndStep,
+            intervening_if: Some(Condition::SourceTapped),
+            effects: vec![Effect::PutCountersOnSource {
+                count: EffectValue::Fixed(1),
+                kind: CounterKind::PlusOnePlusOne,
+            }],
+        }],
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            mana_cost: ManaCost::parse("{6}"),
+            waterbend: true,
+            effects: vec![Effect::DrawCards {
+                count: EffectValue::Fixed(1),
+            }],
+            ..Default::default()
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
 fn katara_water_tribe_s_hope() -> CardDefinition {
     let text_box = "Vigilance\nWhen Katara enters, create a 1/1 white Ally creature token.\nWaterbend {X}: Creatures you control have base power and toughness X/X until end of turn. X can't be 0. Activate only during your turn. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)";
 
@@ -4548,6 +4639,40 @@ fn lo_and_li_twin_tutors() -> CardDefinition {
                 },
             }),
         ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn long_feng_grand_secretariat() -> CardDefinition {
+    let text_box = "Whenever another creature you control or a land you control is put into a graveyard from the battlefield, put a +1/+1 counter on target creature you control.";
+
+    CardDefinition {
+        key: "tla.long_feng_grand_secretariat",
+        scryfall_id: "a3eb92fe-bc59-4472-9028-f368bd015609",
+        name: "Long Feng, Grand Secretariat".into(),
+        mana_cost: Some(ManaCost::parse("{1}{B/G}{B/G}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Advisor".into()],
+        power: Some(2),
+        toughness: Some(3),
+        abilities: vec![Ability::Triggered {
+            // Long Feng is no land, so "another" only ever excludes it as a
+            // creature; a land creature matches once.
+            condition: TriggerCondition::Dies {
+                subject: TriggerSubject::AnotherYouControl(CardPredicate {
+                    card_types_any: vec![CardType::Creature, CardType::Land],
+                    ..Default::default()
+                }),
+            },
+            intervening_if: None,
+            effects: vec![Effect::PutCounters {
+                count: 1,
+                kind: CounterKind::PlusOnePlusOne,
+                target: TargetSpec::CreatureYouControl,
+            }],
+        }],
         text_box: text_box.into(),
         ..Default::default()
     }

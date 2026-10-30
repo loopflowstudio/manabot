@@ -892,6 +892,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::TargetMatches(_) => "Condition::TargetMatches",
         Condition::TargetDealtDamageThisTurn => "Condition::TargetDealtDamageThisTurn",
         Condition::SourceCountersAtLeast { .. } => "Condition::SourceCountersAtLeast",
+        Condition::SourceTapped => "Condition::SourceTapped",
     }
 }
 
@@ -920,6 +921,7 @@ fn condition_witnesses() -> Vec<Condition> {
             kind: CounterKind::Quest,
             count: 4,
         },
+        Condition::SourceTapped,
     ]
 }
 

@@ -11022,3 +11022,151 @@ fn vengeful_villagers_tap_the_target_and_stun_it_after_a_sacrifice() {
         );
     }
 }
+
+/// The end-step counter needs Katara tapped as the step begins (the
+/// intervening "if" keeps the ability off the stack otherwise) and still
+/// tapped as it resolves.
+#[test]
+fn katara_bending_prodigy_grows_at_end_step_only_while_tapped() {
+    let mut s = five_color_setup(&["Katara, Bending Prodigy"]);
+    let katara = s.force_permanent_on_battlefield(0, "Katara, Bending Prodigy");
+    s.advance_to_active_step(0, StepKind::End);
+    assert!(
+        s.game().state.stack_objects.is_empty(),
+        "untapped: no trigger"
+    );
+    assert_eq!(counters(&s, katara), 0);
+
+    let mut s = five_color_setup(&["Katara, Bending Prodigy"]);
+    let katara = s.force_permanent_on_battlefield(0, "Katara, Bending Prodigy");
+    s.game_mut().state.permanents[katara]
+        .as_mut()
+        .unwrap()
+        .tapped = true;
+    s.advance_to_active_step(0, StepKind::End);
+    assert_eq!(s.game().state.stack_objects.len(), 1);
+    s.game_mut().state.permanents[katara]
+        .as_mut()
+        .unwrap()
+        .tapped = false;
+    settle(&mut s);
+    assert_eq!(counters(&s, katara), 0, "untapped before resolution");
+
+    let mut s = five_color_setup(&["Katara, Bending Prodigy"]);
+    let katara = s.force_permanent_on_battlefield(0, "Katara, Bending Prodigy");
+    s.game_mut().state.permanents[katara]
+        .as_mut()
+        .unwrap()
+        .tapped = true;
+    s.advance_to_active_step(0, StepKind::End);
+    settle(&mut s);
+    assert_eq!(counters(&s, katara), 1);
+}
+
+#[test]
+fn katara_bending_prodigy_waterbends_six_to_draw() {
+    let mut s = five_color_setup(&["Katara, Bending Prodigy", "Gray Ogre"]);
+    let katara = s.force_permanent_on_battlefield(0, "Katara, Bending Prodigy");
+    let helpers: Vec<_> = (0..2)
+        .map(|_| s.force_permanent_on_battlefield(0, "Gray Ogre"))
+        .collect();
+    s.set_player_mana_pool(0, "4");
+    let hand = s.zone_size(0, ZoneType::Hand);
+    activate(&mut s, katara, 0);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Waterbend);
+    for helper in helpers {
+        assert!(s.choose_waterbend_tap(helper));
+    }
+    assert!(s.take_action_by_type(ActionType::PayCost));
+    settle(&mut s);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 1);
+}
+
+/// Entry offers only Lessons, Sagas and Shrines among the top five; casting
+/// one counters another creature you control, never Guru Pathik.
+#[test]
+fn guru_pathik_finds_a_lesson_or_shrine_and_grows_another_creature_on_casting_one() {
+    let mut s = five_color_setup(&[
+        "Guru Pathik",
+        "Gray Ogre",
+        "Northern Air Temple",
+        "Seismic Sense",
+    ]);
+    let top = pin_top(
+        &mut s,
+        &[
+            "Gray Ogre",
+            "Northern Air Temple",
+            "Gray Ogre",
+            "Seismic Sense",
+            "Gray Ogre",
+        ],
+    );
+    enter_battlefield(&mut s, "Guru Pathik");
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let mut offered = offered_cards(&s);
+    offered.sort();
+    let mut expected = vec![top[1], top[3]];
+    expected.sort();
+    assert_eq!(offered, expected);
+    select_card(&mut s, top[1]);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, top[1]), Some(ZoneType::Hand));
+
+    let mut s = five_color_setup(&["Guru Pathik", "Gray Ogre", "Seismic Sense"]);
+    let guru = s.force_permanent_on_battlefield(0, "Guru Pathik");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    s.set_player_mana_pool(0, "G");
+    cast(&mut s, "Seismic Sense");
+    assert_eq!(offered_targets(&s), vec![Target::Permanent(ogre)]);
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    settle(&mut s);
+    assert_eq!(counters(&s, ogre), 1);
+    assert_eq!(counters(&s, guru), 0);
+}
+
+/// Another creature or a land dying counters a creature you control; a land
+/// creature triggers once, and an opponent's creature not at all.
+#[test]
+fn long_feng_counters_a_creature_when_another_creature_or_a_land_dies() {
+    let mut s = five_color_setup(&["Long Feng, Grand Secretariat", "Gray Ogre"]);
+    let long_feng = s.force_permanent_on_battlefield(0, "Long Feng, Grand Secretariat");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let swamp = s.force_permanent_on_battlefield(0, "Swamp");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+
+    let theirs_card = card_of(&s, theirs);
+    s.game_mut().move_card(theirs_card, ZoneType::Graveyard);
+    assert!(s.game().state.pending_triggers.is_empty(), "not yours");
+
+    let swamp_card = card_of(&s, swamp);
+    s.game_mut().state.permanents[swamp]
+        .as_mut()
+        .unwrap()
+        .animated = true;
+    s.game_mut().move_card(swamp_card, ZoneType::Graveyard);
+    assert_eq!(
+        s.game().state.pending_triggers.len(),
+        1,
+        "a land creature once"
+    );
+    resolve_until_target(&mut s);
+    assert!(s.choose_target(Target::Permanent(long_feng)));
+    settle(&mut s);
+    assert_eq!(counters(&s, long_feng), 1);
+
+    let ogre_card = card_of(&s, ogre);
+    s.game_mut().move_card(ogre_card, ZoneType::Graveyard);
+    resolve_until_target(&mut s);
+    assert_eq!(offered_targets(&s), vec![Target::Permanent(long_feng)]);
+    assert!(s.choose_target(Target::Permanent(long_feng)));
+    settle(&mut s);
+    assert_eq!(counters(&s, long_feng), 2);
+}
+
+/// Refresh priority after a forced zone move and stop at the trigger's
+/// target choice.
+fn resolve_until_target(s: &mut Scenario) {
+    s.game_mut().scenario_refresh_priority().unwrap();
+    pass_until(s, ActionSpaceKind::ChooseTarget);
+}
