@@ -1,12 +1,14 @@
 # 558daa — cull what the codebase no longer needs
 
-Directive: Jack Heart, 2026-10-30 (Task 558daa). Stacked on afbd6a (#403).
-Status: implemented; awaiting gate/demo. Stop at review/demo; no merge.
+Directive: Jack Heart, 2026-10-30 (Task 558daa). Was stacked on afbd6a; #403
+merged into main (10eeb1f55) and this branch merged it (8db3b2fe8), so the PR
+targets main and its diff is the cull alone.
+Status: first cull pass implemented; awaiting gate/demo. Stop at review/demo; no merge.
 
 ## Approach
 
-1. Protected set: every file touched by open PRs #383 #395 #399 #402 #403
-   (`gh api pulls/N/files`). Do not delete or restructure those files; list
+1. Protected set: every file touched by open PRs #383 #395 #399 #402
+   (`gh api pulls/N/files`; #403 merged 2026-10-30, so its files are free). Do not delete or restructure those files; list
    held-back candidates below.
 2. Area audits (read-only) produce candidates with evidence of no current
    reader: managym; manabot + tests; academy; scripts/docs/CI/conformance/
@@ -67,24 +69,56 @@ Receipt change (7e61a050b): `conformance/authored-match-parity-w17-v1` receipt r
 - `PassivePolicy` (reached via `build_opponent_policy("passive")`); `PriorityState.pass_count` (hashed into the match-state hash).
 - `scripts/generate_advice_fixture.py`, `generate_conditional_strategy_fixture.py`: sole generators of live fixtures.
 
-## Wanted to delete, held back
+## Remaining cull
 
-Held because an open PR edits the file (#383 #395 #399 #402 #403):
-- Rejected search-branching drivers: `flow/undo.rs` (766 lines), ~100 `journal_*` calls in 17 `flow/*.rs`, `Game` COW helpers, `flow/event_log.rs` paged log, `search_state.rs` `ClonePlusUndoDriver`/`DensePageCowUndoDriver`, `benchmark.rs` (1,276), `bin/branching_bench.rs`, `scripts/bench_branching.py` + test, and their search_state_contract tests. Decision record: `docs/benchmarks/search-branching-decision-v1.md` (keep full clone). Largest remaining cut; needs `game.rs`/`benchmark.rs`/`flow/*` free of #399.
-- `scripts/bench_study_branch.py` + test (RUL-6 finished; no CI).
-- PyO3 surface with no Python caller: `export_profile_baseline`, `compare_profile` (+ profiler baseline code), `structured_search_offers`, `unsupported_cards`, `RolloutPool.active_count` (`python/bindings.rs`).
-- Small Rust items: `basic_land`, `local_power/local_toughness`, `players_starting_with_*`, `PlayerConfig::deck_list`, `ZoneManager::total_size`, `Env::encode_observation_into`.
-- `manabot/semantic/policy.py` (556, test-only), belief demo cluster (`belief/demo.py`, `recipes/belief.py`, `belief/population.py`, ~1,460, reached only by `belief-demo` CLI commands), retired `train --preset/--set` rejection in `cli.py`, `EvaluationContract` family in `eval/models.py`, `flat_mc.aggregate_records`, `provenance.validate_runtime_fingerprints`, `match.parse_deck`, `action_cases.identity_removed`, `belief/__init__.py` re-export map.
-- `eval/duel.py` + `tests/training/test_head_to_head.py`: `manabot-integration.yml` names the test.
-- `academy/semantic_boundary.py` (test-only; listed in `authored_match_parity._source_manifest`), `server.py` `DEFAULT_DECK`/`hero_view` aliases and `resolve_live_advisor_decision`, `advice.py` `int13_result_to_surface_deltas`/`policy_mass_is_non_uniform` (tests in protected `test_advice.py`).
-- `protocol/advice-v1.schema.json` (nothing validates it), `scripts/verify_elemental_world.py` (cited by protected `docs/rules/elemental/world.md`; its output dir is archived).
-- Top-level `wave/` (legacy copy of `.lf/wave/`; `wave/README.md` is in #402).
-- CI: `semantic-conformance` job repeats the Rust job's test and `check`; only `fuzz` is unique (`ci.yml` held).
-- Stale citations in protected docs to fix after their PRs land: `manabot/README.md` (`PairedLearners`, `sim/action/targeting.py`, `manabot/training/builders.py`), `docs/repository-archive.md` (targeting), `WORLDS.md`, `docs/rules/{optional-payments,learn-lesson}.md`, `docs/ARCHITECTURE.md`.
+Freed by the #403 merge (no open PR edits these files; not yet done):
+- `manabot/semantic/policy.py` (556, test-only); belief demo cluster
+  (`belief/demo.py`, `recipes/belief.py`, `belief/population.py`, ~1,460) —
+  the `belief-demo` CLI commands that reach it are in `cli.py` (#395), so delete
+  the modules only with that CLI entry, or wait.
+- `EvaluationContract` family in `eval/models.py`, `flat_mc.aggregate_records`,
+  `match.parse_deck`, `action_cases.identity_removed`, `belief/__init__.py`
+  re-export map.
+- `academy/semantic_boundary.py` (test-only; remove it from
+  `authored_match_parity._source_manifest`, which re-hashes the receipt), and
+  `advice.py` `int13_result_to_surface_deltas`/`policy_mass_is_non_uniform`
+  (their tests are in `tests/academy/test_advice.py`, #395).
+- `scripts/bench_study_branch.py` + test; `scripts/verify_elemental_world.py`
+  with its citation in `docs/rules/elemental/world.md`.
+- CI: drop the `semantic-conformance` job's duplicated test and `check`, keeping
+  `fuzz` (`ci.yml`).
+- Stale citations in `docs/rules/{optional-payments,learn-lesson}.md`.
+- `ZoneManager::total_size` (`state/zone.rs`).
 
-Needs Jack's decision (not deleted):
+Still held by an open PR:
+- #399: search-branching drivers — `flow/undo.rs` (766), `journal_*` calls in
+  `flow/*.rs`, `benchmark.rs` (1,276), plus the free `game.rs` COW helpers,
+  `flow/event_log.rs` paged log, `search_state.rs` undo drivers,
+  `bin/branching_bench.rs`, `scripts/bench_branching.py` + test, which go with
+  them. Decision record: `docs/benchmarks/search-branching-decision-v1.md`
+  (keep full clone). Largest remaining cut. Also `protocol/advice-v1.schema.json`,
+  `WORLDS.md`, `local_power/local_toughness`, `basic_land`.
+- #395/#399: unused PyO3 surface in `python/bindings.rs` (`export_profile_baseline`,
+  `compare_profile` + profiler baseline, `structured_search_offers`,
+  `unsupported_cards`, `RolloutPool.active_count`); `players_starting_with_*`,
+  `PlayerConfig::deck_list`.
+- #395: retired `train --preset/--set` rejection in `cli.py`;
+  `provenance.validate_runtime_fingerprints`; `server.py` `DEFAULT_DECK`/
+  `hero_view` aliases and `resolve_live_advisor_decision`;
+  `Env::encode_observation_into`; `manabot/README.md` stale citations
+  (`PairedLearners`, `sim/action/targeting.py`, `training/builders.py`).
+- #383/#395: `eval/duel.py` + `tests/training/test_head_to_head.py`
+  (`manabot-integration.yml` names the test).
+- #402: top-level `wave/` (legacy copy of `.lf/wave/`); stale citations in
+  `docs/repository-archive.md` and `docs/ARCHITECTURE.md`.
+
+## Needs Jack's decision (not deleted)
+
 - Seeds + checkpoint-hash form for `semantic-kernel-w17-v1`: feasible (tapes are a pure function of `manifest.json`; `action_space_digest` already pins ordering), ~100–150 lines in `conformance.rs` + contract v2; failures stay actionable by writing the regenerated case to `target/semantic-conformance/` on mismatch. Not done: every w17 corpus file is in #395/#399.
 - Docs consolidation into ~6 current-system files (architecture, development, training, evaluation, search/beliefs, LLM): cross-links run through held `docs/ARCHITECTURE.md`, `README.md`, `WORLDS.md`, `managym/README.md`.
 - Live belief runtime in Academy (`academy/live_advice.py` + `server.py` hooks): computes posteriors on every interactive-mirror command that no response reads.
 - Website landing-page assets (`/` redirects to the blog), `experiments/planning/`, MTG-186 drivers (an Etude migration test imports them), `seat_comparison.py` (sample file in `test_experiment_files.py`), `experiment/artifacts.py` (old S3 publisher; CLAUDE.md names its test), `verify/decision_profile.py` (only `wilson_interval` used), `recipes/ataraxos.py` (test fixture), `training/presets/ataraxos-mtg-v1.json`.
-- Unrelated pre-existing failures seen at base: `tests/sim/test_conditional_search.py` (INT-13 root digest), `tests/sim/test_search_runtime.py::test_seed_197_checkpoint_model_abis_match_the_registry` (w17 world binding), `tests/verify/test_observation_parity.py::test_elemental_indestructible_encoding_preserves_outside_and_definition_columns` (55 == 41; file untouched by this branch).
+## Checks
+
+- Pre-existing failures seen at base, unrelated to the cull: `tests/sim/test_conditional_search.py` (INT-13 root digest), `tests/sim/test_search_runtime.py::test_seed_197_checkpoint_model_abis_match_the_registry` (w17 world binding), `tests/verify/test_observation_parity.py::test_elemental_indestructible_encoding_preserves_outside_and_definition_columns` (55 == 41; file untouched by this branch).
+- Realign 2026-10-30: protected-set membership recomputed from `gh api pulls/{383,395,399,402}/files` after #403 merged; no tests rerun (no code changed).

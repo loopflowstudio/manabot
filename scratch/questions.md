@@ -153,7 +153,7 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
 
 ## 558daa (cull), 2026-10-30 — headless choices
 
-- Files touched by open PRs #383 #395 #399 #402 #403 were not edited; their
+- Files touched by open PRs #383 #395 #399 #402 #403 were not edited (#403 has since merged; its files are listed as remaining work); their
   candidates are listed as held in the plan. The authored-match parity receipt
   (in #395/#399) was regenerated anyway because it hashes every Rust source.
 - Pre-existing: `academy.advice.ADVISOR_SOURCE_PATHS` names the missing
