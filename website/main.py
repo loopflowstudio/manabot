@@ -26,6 +26,7 @@ REDIRECT_HOSTS = {
     "www.etudefantasia.gg",
 }
 
+
 class CanonicalHostMiddleware(BaseHTTPMiddleware):
     """301 the alternate domains onto the canonical host."""
 
@@ -42,9 +43,11 @@ class CanonicalHostMiddleware(BaseHTTPMiddleware):
                 else quote(request.url.path, safe="/")
             )
             return RedirectResponse(
-                str(request.url.replace(
-                    scheme="https", netloc=CANONICAL_HOST, path=path
-                )),
+                str(
+                    request.url.replace(
+                        scheme="https", netloc=CANONICAL_HOST, path=path
+                    )
+                ),
                 status_code=301,
             )
         return await call_next(request)

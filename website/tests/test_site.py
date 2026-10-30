@@ -1,8 +1,8 @@
 """Smoke tests: the page serves, the domains converge, the attribution shows."""
 
+from pathlib import Path
 import sys
 import tomllib
-from pathlib import Path
 from xml.etree import ElementTree
 
 import pytest
@@ -30,7 +30,9 @@ def test_blog_post_serves(client):
     assert "Rotisserie Drafting" in r.text
 
 
-@pytest.mark.parametrize("host", ["manabot.gg", "fantasia-website.fly.dev", "localhost:5002"])
+@pytest.mark.parametrize(
+    "host", ["manabot.gg", "fantasia-website.fly.dev", "localhost:5002"]
+)
 def test_healthz_plain_response(client: TestClient, host: str) -> None:
     r = client.get("/healthz", headers={"host": host}, follow_redirects=False)
     assert r.status_code == 200
@@ -82,16 +84,19 @@ def test_alternate_hosts_redirect(client: TestClient, host: str) -> None:
 
 def test_fly_host_serves_directly(client: TestClient) -> None:
     r = client.get(
-        "/", headers={"host": "fantasia-website.fly.dev"},
-        follow_redirects=False)
+        "/", headers={"host": "fantasia-website.fly.dev"}, follow_redirects=False
+    )
     assert r.status_code == 302
 
 
 @pytest.mark.parametrize("host", ["etude.gg", "www.manabot.gg", "etudefantasia.com"])
-@pytest.mark.parametrize("path", [
-    "/blog/lol-cube-kickoff?from=old&tag=a&tag=b",
-    "/a%2Fb/space%20here?q=a%2Bb&next=https%3A%2F%2Fexample.com",
-])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/blog/lol-cube-kickoff?from=old&tag=a&tag=b",
+        "/a%2Fb/space%20here?q=a%2Bb&next=https%3A%2F%2Fexample.com",
+    ],
+)
 def test_redirect_preserves_encoded_path_and_query(
     client: TestClient, host: str, path: str
 ) -> None:
