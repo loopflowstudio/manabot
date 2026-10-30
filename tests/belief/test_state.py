@@ -231,7 +231,7 @@ def test_native_projection_preserves_canonical_receipt_bytes() -> None:
         "95c66ac66e1f977466c8e4df1d4f06acdbda29499de1be2bde73490897940fe4",
     )
     # Possible-world space v3 (foretold slots) changes the schema identity hash;
-    # the schema also binds the w18 content digest (re-recorded when continuous
+    # the schema also binds the w17 content digest (re-recorded when continuous
     # effects became records).
     current_v3_receipts = (
         "eb033677d7a7057288299543f853d42553ad6d8c1c044c3ec5a415c99127a8c4",

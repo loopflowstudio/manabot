@@ -31,7 +31,7 @@ from .replay_index import (
 ROOT = Path(__file__).parents[1]
 RECEIPT_PATH = (
     ROOT
-    / "conformance/authored-match-parity-w18-v1/release-live-headless-replay-seed-0.json"
+    / "conformance/authored-match-parity-w17-v1/release-live-headless-replay-seed-0.json"
 )
 AUTHORITY_SHA256 = "daa97f1553b89b19996edbdb14bec597e5042f6aa775fd04b104f7baa9f18b34"
 TERMINAL_STATE = "cc5c37301babc820f6de6f3dc625b78a16ef2ece0605f67e14582aa07bbc8b24"
@@ -615,7 +615,7 @@ def _run_live(
 
 def _source_manifest() -> dict[str, Any]:
     paths = {
-        "conformance/authored-match-w18-v1/release-stack-ur-vs-gw-seed-0.json",
+        "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
         "content/semantic/current/setups.json",
         "academy/curated_pack.py",
         "academy/authored_match_parity.py",

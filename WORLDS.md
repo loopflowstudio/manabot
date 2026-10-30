@@ -1,11 +1,11 @@
 # Worlds
 
-A change to rules meaning or observation/action shape requires a **world version**. Checkpoints,
-shards, and reports are only comparable within a world; cross-world numbers
-never share a table untagged. New worlds are frozen deliberately (batch the
-shape changes), and on each freeze the headline baselines are re-run before
-new claims are made. (Cost of ignoring this, measured: every exp-07 artifact
-was dead on arrival in exp-10.)
+A world number names a frozen world. Main carries at most one open world, and
+merged rules or shape changes extend it in place, updating its receipts.
+Freezing is deliberate: re-run the headline baselines, record the receipts, mark
+the row frozen, and open the next number. Checkpoints are protected by their
+world binding, which rejects any content or shape difference, not by the
+number. A run on an open world makes no comparability claim.
 
 | world | frozen at | shape (player / card / permanent / action-types) | live artifacts | headline baselines |
 |---|---|---|---|---|
@@ -26,18 +26,18 @@ was dead on arrival in exp-10.)
 | **w14** | in development, MTG-195, 2026-10-26 | 40 / 41 / 28 / 17; controller-selected trigger placement and policy-input v3 occurrence joins | unchanged authored packs; fresh w14 conformance and play fixtures | no strength baseline |
 | **w15** | in development, MTG-177, 2026-10-27 | 40 / 41 / 28 / 17; retained resolution eligibility, policy-input v4 relations 64 × 33 | unchanged authored packs; fresh integrated conformance and play fixtures | no strength baseline |
 | **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
-| **w17** | in development, Task 892c47, 2026-10-29 | 40 / 41 / 29 / 17; cards in engine rules types, learning schema 9 tokens derived from them, attacking permanent column | `world` (the default pack); `semantic-kernel-w17-v1`, `authored-match-w17-v1` and `authored-match-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
-| **w18** | in development, Tasks 87e012 and 6875f0, 2026-10-29 | 63 / 55 / 37 / 17 plus 128 × 12 fact rows (policy input v5; v1–v4 keep 40 / 41 / 29); TLA casting, costs, zone permissions and private zones; exile cast permissions, hand-only lock, restricted mana by class, foretell, control; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew | `world` (the default pack): every defined card; `semantic-kernel-w18-v1`, `authored-match-w18-v1`, `authored-match-parity-w18-v1` and `public-commitment-parity-w18-v1` receipts; Academy w18 demo, navigation and trigger-order fixtures | no strength baseline |
+| **w17** | open (Tasks 892c47, 87e012, 6875f0), 2026-10-29 | 63 / 55 / 37 / 17 plus 128 × 12 fact rows (policy input v5; v1–v4 keep 40 / 41 / 29); cards in engine rules types, learning schema 9 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones; counters by kind, Equipment and Auras, Vehicles, continuous effects as timestamped records, layered type/keyword/P/T grants, ability loss, activation X and crew | `world` (the default pack): every defined card (SUPPORTED supported); `semantic-kernel-w17-v1`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
 
-**Current development world: w18.** `managym.WORLD_VERSION` identifies live runs. Earlier
-checkpoints (including w17) are **not comparable** to w18; do not reuse their
+**Open world: w17.** `managym.WORLD_VERSION` identifies live runs. Checkpoints
+from earlier worlds are **not comparable** to w17; do not reuse their
 win rates or load them as current-world policies. Shape alone is insufficient
 identity. Exp-11 historically ported opponent components with
 `port_legacy_state_dict` and behavioral validation; that utility is now retired.
 Current loaders require current-ABI checkpoints. Cross-world *measurements*
 are regenerated, never ported (exp-10's precedent).
 
-Update this table in the same PR as any rules-meaning or shape change.
+Update the open world's row, section and receipts in the same PR as any
+rules-meaning or shape change.
 
 ## Running an older world
 
@@ -46,73 +46,7 @@ revision that recorded it and build that engine; current code carries no rules
 compatibility shims. Frozen evidence (IR, receipts, checkpoints) stays readable
 in place and is never rewritten.
 
-## w18: TLA casting and characteristics (not yet frozen)
-
-The cards of TLA batches T2 (Task 87e012) and T3 (Task 6875f0) are defined in
-`cardsets/tla.rs`. T2's rules meaning: casting from exile under exact-object
-grants (airbend, impulse exile, linked exile, foretell face down), a hand-only
-lock that overrides those grants until its controller's next untap, printed
-and granted flashback, announced X and kicker as one cast announcement, free
-casts during resolution, restricted mana keyed by spending class (Lesson,
-Shrine, Ally spells and ability sources), affinity and activation cost
-reduction, exhaust and once-each-turn activation limits, hand- and
-graveyard-zone activated abilities (landcycling), private library searches and
-choices, and control (a permanent spell enters under its controller).
-
-T3 adds characteristics, counters, replacements and attachments. Its cards and
-rules are `CardDefinition`, `Ability` and named `Effect` variants like every
-other card, and learning tokens follow from them. A permanent's
-characteristics are what `Game` derives from its card and permanent state,
-never those inputs read alone: static type, keyword and P/T grants apply in
-layer order (`ScopeView`); `Game::has_lost_abilities`, `permanent_name`,
-`permanent_has_subtype`, `activated_abilities_for` and `permanent_can_tap` are
-the single readers. Continuous effects from resolved spells and abilities are
-records on `GameState::effects` (`state::effect`: a `Modification` grouped by
-layer, whom it affects, how long), applied with static abilities by layer and
-then timestamp (CR 613.7); permanents carry their own timestamps, so a later
-grant survives an earlier loss of all abilities. Records end at cleanup
-(`EndOfTurn`) or when their object changes zones. Counters are one
-`CounterKind` → count map, +1/+1 included. Equipment and Auras attach to an exact object and grant abilities or
-set characteristics; Vehicles crew by tapping creatures. Activated abilities
-may announce X and choose several targets that share a creature type; a
-permanent may let its controller cast the top card of their library.
-
-Observations add, omitted at their defaults: cast permissions, a stack spell's
-announced X, a player's restricted mana, hand-only lock, no maximum hand size
-and kept red mana; a permanent's used exhaust and once-each-turn counts,
-granted firebending, counters by kind, attachment, set name and creature types
-(`is_ally` reads them), granted land type, `blocking`, `abilities_lost`,
-`used_abilities` and timestamp; the continuous-effect records on each player
-and permanent (`effects`); a stack object's X and a spell's granted keywords.
-
-Policy input **v5** is the default; v1–v4 keep their widths. In every widened
-row the new terms start at the old validity column and validity stays last.
-Player rows add restricted mana by spending subtype × color (18), the
-hand-only lock, no maximum hand size, turn number, seat and kept red mana
-(40 → 63). Card rows add 12 cast-permission terms and a stack spell's
-announced X (41 → 55); a face-down card is foretold, so the foretold term marks
-it. Permanent rows add used exhaust and once-each-turn counts, granted
-firebending, an attachment join, granted land, a blocking join, lost abilities
-and a timestamp rank (29 → 37). Open-ended vocabularies are a `facts` block of
-128 rows × 12 (object join, `FactKind`, vocabulary id and effect detail as
-learning-token values in 16-bit halves, two amounts, duration, timestamp rank,
-source definition, validity): counter kinds, effect-added subtypes, a set name
-and creature types, spent abilities and continuous-effect records. Relation rows add a
-frame's X and a spell's granted keywords (33 → 48), so the relation width alone
-tells v5. Learning schema 9 is unchanged: tokens derive from the definitions.
-Viewers see an opponent's foretold card only as an exile count, in JSON, text
-and tensor alike. `managym/tests/cards/observability.rs` names each field's
-columns and tokens. Action shapes are unchanged.
-
-Fresh `conformance/semantic-kernel-w18-v1` replays (same cases as w17), the
-authored-match receipt and its live/headless parity (`authored-match-w18-v1`,
-`authored-match-parity-w18-v1`: the same 142-Command tape as w17, new digests)
-and `public-commitment-parity-w18-v1` bind this world. Academy `*-w18.json`
-demo, choice-navigation and trigger-order fixtures reach the same decision
-revisions as their w17 predecessors. Belief encoding receipts move with
-possible-world space v3.
-
-## w17: one card representation (superseded by w18)
+## w17: one card representation and TLA casting (open)
 
 Each card is a function returning the engine's own `CardDefinition`, written in
 its rules types, in the set file of its first printing; the authoring language
@@ -141,13 +75,67 @@ visible only through the event window. `tests/cards/observability.rs` guards
 that every keyword, permanent and player status and `Effect`/`TriggerCondition`
 /`Ability` variant names its tensor column or token.
 
-Fresh `conformance/semantic-kernel-w17-v1` replays (same cases as w15),
-`authored-match-parity-w17-v1` (the 142-Command w17 authored tape) and Academy
-`*-w17.json` demo, choice-navigation and trigger-order fixtures bind this world;
-each w17 demo reaches the same decision revision as its w15 predecessor. The
-public-commitment parity proof now replays the w17 authored tape, but has no w17
-receipt yet: belief transport rejects Command 68, where a card revealed from the
-library enters the villain's hand.
+Task 87e012 extends w17 with the 51 cards of TLA batch T2, defined in
+`cardsets/tla.rs` and supported (166 supported in `world`). Rules meaning grows with them: casting from
+exile under exact-object grants (airbend, impulse exile, linked exile, foretell
+face down), a hand-only lock that overrides those grants until its controller's
+next untap, printed and granted flashback, announced X and kicker as one cast
+announcement, free casts during resolution, restricted mana keyed by spending
+class (Lesson, Shrine, Ally spells and ability sources), affinity and
+activation cost reduction, exhaust and once-each-turn activation limits,
+hand- and graveyard-zone activated abilities (landcycling), private library
+searches and choices, and control (a permanent spell enters under its
+controller).
+
+Task 6875f0 extends w17 with the 49 cards of TLA batch T3: characteristics,
+counters, replacements and attachments. A permanent's characteristics are what
+`Game` derives from its card and permanent state, never those inputs read
+alone: static type, keyword and P/T grants apply in layer order (`ScopeView`);
+`Game::has_lost_abilities`, `permanent_name`, `permanent_has_subtype`,
+`activated_abilities_for` and `permanent_can_tap` are the single readers.
+Continuous effects from resolved spells and abilities are records on
+`GameState::effects` (`state::effect`: a `Modification` grouped by layer, whom
+it affects, how long), applied with static abilities by layer and then
+timestamp (CR 613.7); permanents carry their own timestamps, so a later grant
+survives an earlier loss of all abilities. Records end at cleanup (`EndOfTurn`)
+or when their object changes zones. Counters are one `CounterKind` → count map,
++1/+1 included. Equipment and Auras attach to an exact object and grant
+abilities or set characteristics; Vehicles crew by tapping creatures.
+Activated abilities may announce X and choose several targets that share a
+creature type; a permanent may let its controller cast the top card of their
+library. Observations add, omitted at their defaults: kept red mana, a
+permanent's counters by kind, attachment, set name and creature types, granted
+land type, `blocking`, `abilities_lost`, `used_abilities`, a renewed timestamp
+and the continuous-effect records on each player and permanent (`effects`); a
+stack object's X and a spell's granted keywords.
+
+Policy input **v5** is the default; v1–v4 keep their widths. In every widened
+row the new terms start at the old validity column and validity stays last.
+Player rows add restricted mana by spending subtype × color (18), the
+hand-only lock, no maximum hand size, turn number, seat and kept red mana
+(40 → 63). Card rows add 12 cast-permission terms and a stack spell's
+announced X (41 → 55); a face-down card is foretold, so the foretold term marks
+it. Permanent rows add used exhaust and once-each-turn counts, granted
+firebending, an attachment join, granted land, a blocking join, lost abilities
+and a timestamp rank (29 → 37). Open-ended vocabularies are a `facts` block of
+128 rows × 12 (object join, `FactKind`, vocabulary id and effect detail as
+learning-token values in 16-bit halves, two amounts, duration, timestamp rank,
+source definition, validity): counter kinds, effect-added subtypes, a set name
+and creature types, spent abilities and continuous-effect records. Relation
+rows add a frame's X and a spell's granted keywords (33 → 48), so the relation
+width alone tells v5. Native buffers bind v5 by player width. Learning schema 9
+is unchanged: tokens derive from the definitions, so new `Effect` variants and
+card fields appear in them without a schema change. Viewers see an opponent's
+foretold card only as an exile count, in JSON, text and tensor alike.
+`managym/tests/cards/observability.rs` names each field's columns and tokens.
+Action shapes are unchanged.
+
+`conformance/semantic-kernel-w17-v1` replays, the authored-match receipt and
+its live/headless parity (`authored-match-w17-v1`, `authored-match-parity-w17-v1`:
+the 142-Command authored tape) and `public-commitment-parity-w17-v1` bind this
+world, re-recorded in place as it grows. Academy `*-w17.json` demo,
+choice-navigation and trigger-order fixtures reach the same decision revisions
+as their w15 predecessors. Belief encoding receipts use possible-world space v3.
 
 ## w16: one card authority (superseded by w17)
 

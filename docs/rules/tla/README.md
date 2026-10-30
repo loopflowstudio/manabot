@@ -7,7 +7,7 @@ fixed tokens TLA cards make. Basic lands are Alpha cards (`lea.plains` …
 the set that first printed them (Corrupt Court Official in `ptk.rs`, Epic
 Downfall in `eld.rs`, Lightning Strike in `ths.rs`). Setup manifests only choose
 definition keys and counts. The engine runs those definitions directly and
-derives learning tokens from them. Current execution uses world **w18** and
+derives learning tokens from them. Current execution uses world **w17** and
 learning schema **9**.
 
 `managym.content_pool("world")` is the world pool: every card any set file
