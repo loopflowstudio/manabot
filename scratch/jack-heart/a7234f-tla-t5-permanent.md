@@ -1,8 +1,10 @@
 # T5 (a7234f): permanent copying — plan and status
 
-Status (2026-10-30): implemented and stacked on T3 #399 (merged T3 head
-`08bf54de2`, which contains main `10eeb1f55`). All three cards are defined and
-supported. Stop at demo. T4 488a40 still has no PR; sync onto it when it
+Status (2026-10-30): implemented and stacked on T3 #399 (merged T3
+`08bf54de2`, which contains main `10eeb1f55`; main `6f48f5ca0` merged since).
+T3's PR head `4c4dd0217` adds only that main merge and a scratch note, so there
+is nothing to sync from T3. All three cards are defined and supported. Stop at
+demo. T4 488a40 is still implementing with no PR; sync onto it when it
 publishes.
 
 T3's plan, inherited through the stack, is at
@@ -107,17 +109,8 @@ vocabularies as v5 fact rows (`FactKind`).
 
 ## Checks
 
-- 2026-10-30 at the T3 `08bf54de2` merge:
-  - Debug `cargo test` passes in every binary (cards 408, rules 137 + 2
-    ignored, lib 122) except `semantic_conformance_tests`, which fails on
-    digest drift (gate).
-  - `cargo clippy --all-targets -D warnings` is clean.
-  - Extension rebuilt. Python observation parity, text observation and
-    experience protocol pass (55). `tests/model` passes except the 4
-    pre-existing failures.
-  - Academy: vitest notes and protocol pass (13); svelte-check is clean.
-  - ruff is clean on the changed files.
-- 2026-10-30 compress: Python fact `push` takes native `Fact.effect`'s
-  provenance tuple (the copy row uses it); hash uses `state::is_zero`;
-  restored `continuous_description`'s doc. Parity + text observation (44),
-  debug `cargo test --test cards tla` (307) and clippy pass.
+- 2026-10-30 (realign, HEAD `b7ddfc29c`): debug `cargo test --test
+  semantic_conformance_tests` passes 4 and fails 2 on "ur-vs-gw-5eed content
+  digest drift", as expected before gate re-records. Earlier passes: debug
+  `cargo test` (cards 408, rules 137, lib 122), clippy, Python parity/text/
+  protocol (55), Academy vitest (13) and svelte-check — see `af0c01977`.
