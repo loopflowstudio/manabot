@@ -471,7 +471,7 @@ class ContinuousEffect:
 
     # Modification variant: ModifyPt, SetBasePt, AddKeywords, AddSubtypes,
     # BecomeArtifactCreature, LoseAllAbilities, Firebending, CantBeBlocked,
-    # ExileIfWouldDie, KeepUnspentMana or NoMaximumHandSize.
+    # CantBlock, ExileIfWouldDie, KeepUnspentMana or NoMaximumHandSize.
     modification: str
     power: int | None
     toughness: int | None

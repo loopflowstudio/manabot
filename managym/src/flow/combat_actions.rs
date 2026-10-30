@@ -303,6 +303,7 @@ impl Game {
         if blocker.tapped
             || !self.permanent_is_creature(blocker_id)
             || !self.combat_condition_met(blocker_id)
+            || self.cant_block(blocker_id)
         {
             return false;
         }

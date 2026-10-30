@@ -533,6 +533,12 @@ pub enum Effect {
     MayOnceEachTurn {
         effects: Vec<Effect>,
     },
+    /// A reflexive trigger (CR 603.12): "When you do, [effects]." It
+    /// triggers where it appears, so it only runs if the instruction before
+    /// it happened; its targets are chosen as it is put on the stack.
+    WhenYouDo {
+        effects: Vec<Effect>,
+    },
     /// "If [condition], [then]; otherwise, [otherwise]", asked as this
     /// instruction resolves (CR 608.2c), of the resolving player and frame.
     If {
@@ -1034,6 +1040,7 @@ impl Effect {
             | Effect::ExileUntilNonlandCastFree { .. }
             | Effect::CastFromHandFree { .. }
             | Effect::CastLibraryTopFree
+            | Effect::WhenYouDo { .. }
             | Effect::ShuffleGraveyardIntoLibrary
             | Effect::PlaceTargetInLibrary { .. }
             | Effect::SearchLandsOpponentSplits { .. }

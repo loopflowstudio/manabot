@@ -263,6 +263,7 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         "LoseAllAbilities": "loses all abilities",
         "Firebending": f"firebending {effect.amount}",
         "CantBeBlocked": "can't be blocked",
+        "CantBlock": "can't block",
         "ExileIfWouldDie": "exiled instead if it would die",
         "KeepUnspentMana": f"keeps unspent {(effect.color or '').lower()} mana",
         "NoMaximumHandSize": "no maximum hand size",

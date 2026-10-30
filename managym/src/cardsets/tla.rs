@@ -233,6 +233,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         tundra_tank(),
         turtle_duck(),
         twin_blades(),
+        ty_lee_artful_acrobat(),
         uncle_iroh(),
         united_front(),
         unlucky_cabbage_merchant(),
@@ -7945,6 +7946,55 @@ fn twin_blades() -> CardDefinition {
             per_creature_type_max: None,
             per_color_among: None,
         })],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn ty_lee_artful_acrobat() -> CardDefinition {
+    let text_box = "Prowess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)\nWhenever Ty Lee attacks, you may pay {1}. When you do, target creature can't block this turn.";
+
+    CardDefinition {
+        key: "tla.ty_lee_artful_acrobat",
+        scryfall_id: "dcd9df24-272b-4aa1-b05f-6ee6b3d3dfe7",
+        name: "Ty Lee, Artful Acrobat".into(),
+        mana_cost: Some(ManaCost::parse("{2}{R}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Performer".into()],
+        power: Some(3),
+        toughness: Some(2),
+        abilities: vec![
+            Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::YouCastSpell {
+                    predicate: CardPredicate {
+                        not_card_types: vec![CardType::Creature],
+                        ..Default::default()
+                    },
+                },
+                effects: vec![Effect::until_end_of_turn(
+                    AffectedSpec::Source,
+                    Modification::pump(1, 1),
+                )],
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::Attacks {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::OptionalPayment {
+                    cost: PaymentCost::Mana(ManaCost::parse("{1}")),
+                    if_paid: vec![Effect::WhenYouDo {
+                        effects: vec![Effect::until_end_of_turn(
+                            AffectedSpec::Target(TargetSpec::Creature),
+                            Modification::CantBlock,
+                        )],
+                    }],
+                    if_declined: vec![],
+                }],
+            },
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }

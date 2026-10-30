@@ -24,6 +24,8 @@ export function effectNote(effect: ContinuousEffect): string {
         return `firebending ${effect.amount}`;
       case 'CantBeBlocked':
         return "can't be blocked";
+      case 'CantBlock':
+        return "can't block";
       case 'ExileIfWouldDie':
         return 'exiled instead if it would die';
       case 'KeepUnspentMana':

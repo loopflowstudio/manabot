@@ -935,8 +935,7 @@ fn landcyclers_discard_for_two_and_find_their_basic_type() {
     ] {
         let mut s = five_color_setup(&[name]);
         let card = move_from_library(&mut s, 0, name, ZoneType::Hand);
-        s.set_player_mana_pool(0, "1");
-        s.game_mut().scenario_refresh_priority().unwrap();
+
         assert!(!can_activate_card(&s, card), "{name} costs {{2}}");
         s.set_player_mana_pool(0, "2");
         // Programs compile in key order; cycling is the card's only hand ability.
@@ -7098,8 +7097,7 @@ fn iroh_casts_lessons_for_one_and_exiles_on_resolution_or_bounce() {
         enter_and_settle(&mut s, "Iroh, Grand Lotus");
         let lesson = library_card(&s, 0, "Waterbending Lesson");
         s.game_mut().move_card(lesson, ZoneType::Graveyard);
-        s.set_player_mana_pool(0, "1");
-        s.game_mut().scenario_refresh_priority().unwrap();
+
         assert!(can_cast(&s, lesson));
         assert_choice_contract(&s);
         choose(
@@ -11350,4 +11348,34 @@ fn planetarium_casts_the_top_card_free_after_a_scry_once_each_turn() {
     assert_eq!(library_top(&s, 0), top[0], "a land is not cast");
     let used = &s.game().state.turn.ability_triggers_this_turn;
     assert!(used.is_empty(), "nothing spent");
+}
+
+/// Paying {1} as Ty Lee attacks triggers a reflexive ability whose target is
+/// chosen then; that creature can't block. Declining triggers nothing.
+#[test]
+fn ty_lee_artful_acrobat_pays_one_so_a_creature_cant_block() {
+    for pay in [true, false] {
+        let mut s = five_color_setup(&["Ty Lee, Artful Acrobat", "Gray Ogre"]);
+        let ty_lee = s.force_permanent_on_battlefield(0, "Ty Lee, Artful Acrobat");
+        let blocker = s.force_permanent_on_battlefield(1, "Gray Ogre");
+        s.force_permanent_on_battlefield(0, "Mountain");
+        attack_until_decision(&mut s, &[ty_lee]);
+        assert_eq!(s.action_space().kind, ActionSpaceKind::PayOrNot);
+
+        if !pay {
+            choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+            settle(&mut s);
+            assert!(!s.game().cant_block(blocker));
+            continue;
+        }
+        assert!(s.take_action_by_type(ActionType::PayCost));
+        pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+        assert!(offered_targets(&s).contains(&Target::Permanent(ty_lee)));
+        assert!(s.choose_target(Target::Permanent(blocker)));
+        settle(&mut s);
+        assert!(s.game().cant_block(blocker));
+        s.advance_to_active_step(0, StepKind::DeclareBlockers);
+        assert!(!has_action(&s, |a| matches!(a,
+            Action::DeclareBlocker { blocker: b, attacker: Some(_), .. } if *b == blocker)));
+    }
 }

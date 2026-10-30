@@ -432,6 +432,7 @@ impl ContinuousEffectData {
                 "ModifyPt"
             }
             Modification::CantBeBlocked => "CantBeBlocked",
+            Modification::CantBlock => "CantBlock",
             Modification::ExileIfWouldDie => "ExileIfWouldDie",
             Modification::KeepUnspentMana(color) => {
                 data.color = Some(format!("{color:?}"));

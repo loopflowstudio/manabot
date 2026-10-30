@@ -102,6 +102,11 @@ impl Game {
         self.permanent_has_modification(permanent_id, &Modification::CantBeBlocked)
     }
 
+    /// "Can't block this turn."
+    pub fn cant_block(&self, permanent_id: PermanentId) -> bool {
+        self.permanent_has_modification(permanent_id, &Modification::CantBlock)
+    }
+
     /// "If it would die this turn, exile it instead."
     pub fn exiled_if_it_would_die(&self, permanent_id: PermanentId) -> bool {
         self.permanent_has_modification(permanent_id, &Modification::ExileIfWouldDie)

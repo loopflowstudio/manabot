@@ -253,6 +253,10 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
         Modification::SetBasePt { .. } => ("Modification::SetBasePt", Seen::Permanent(6)),
         Modification::ModifyPt { .. } => ("Modification::ModifyPt", Seen::Permanent(6)),
         Modification::CantBeBlocked => ("Modification::CantBeBlocked", Seen::Permanent(5)),
+        Modification::CantBlock => (
+            "Modification::CantBlock",
+            Seen::Via("the action tensor omits its blocks"),
+        ),
         Modification::ExileIfWouldDie => ("Modification::ExileIfWouldDie", Seen::Permanent(23)),
         Modification::KeepUnspentMana(_) => (
             "Modification::KeepUnspentMana",
@@ -292,13 +296,14 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
         permanent(Modification::base_pt(Some(4), None)),
         permanent(Modification::pump(2, 1)),
         permanent(Modification::CantBeBlocked),
+        permanent(Modification::CantBlock),
         permanent(Modification::ExileIfWouldDie),
         (true, Modification::KeepUnspentMana(Color::Red)),
         (true, Modification::NoMaximumHandSize),
     ]
 }
 
-const MODIFICATION_VARIANTS: usize = 11;
+const MODIFICATION_VARIANTS: usize = 12;
 
 /// The fact-row duration code of each `EffectDuration`; no wildcard.
 fn duration_code(duration: EffectDuration) -> f32 {
@@ -479,6 +484,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::MaySacrifice { .. } => "Effect::MaySacrifice",
         Effect::MayOnceEachTurn { .. } => "Effect::MayOnceEachTurn",
         Effect::CastLibraryTopFree => "Effect::CastLibraryTopFree",
+        Effect::WhenYouDo { .. } => "Effect::WhenYouDo",
         Effect::ExileSourceSpell => "Effect::ExileSourceSpell",
         Effect::DestroyCreaturesLosingAbilities { .. } => "Effect::DestroyCreaturesLosingAbilities",
         Effect::AttachSourceTo { .. } => "Effect::AttachSourceTo",
@@ -502,7 +508,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 85;
+const EFFECT_VARIANTS: usize = 86;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -737,6 +743,7 @@ fn effect_witnesses() -> Vec<Effect> {
         },
         Effect::MayOnceEachTurn { effects: draw() },
         Effect::CastLibraryTopFree,
+        Effect::WhenYouDo { effects: draw() },
         Effect::ExileSourceSpell,
         Effect::DestroyCreaturesLosingAbilities {
             max_mana_value: EffectValue::X,

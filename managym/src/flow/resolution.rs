@@ -1082,6 +1082,15 @@ impl Game {
                 remaining: 1,
             }),
             Effect::CastLibraryTopFree => self.library_top_free_cast(frame.controller, None),
+            Effect::WhenYouDo { effects } => {
+                let source = frame.source_ref?;
+                let lki = match self.object_lki(source) {
+                    Some(lki) => lki.clone(),
+                    None => self.snapshot_current_permanent(frame.source?)?,
+                };
+                self.enqueue_delayed_trigger(source, lki, frame.controller, effects.clone());
+                None
+            }
             Effect::MayOnceEachTurn { effects } => {
                 let key = (frame.source_ref?, frame.ability?);
                 if self

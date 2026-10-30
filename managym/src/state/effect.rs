@@ -46,6 +46,8 @@ pub enum Modification<N = i32> {
     ModifyPt { power: N, toughness: N },
     /// Rules effect: can't be blocked.
     CantBeBlocked,
+    /// Rules effect: can't block (CR 509.1b).
+    CantBlock,
     /// Replacement: if it would die, exile it instead.
     ExileIfWouldDie,
     /// Rules effect on a player: unspent mana of this color stays as steps
@@ -73,6 +75,7 @@ impl<N> Modification<N> {
                 toughness: amount(toughness),
             },
             Self::CantBeBlocked => Modification::CantBeBlocked,
+            Self::CantBlock => Modification::CantBlock,
             Self::ExileIfWouldDie => Modification::ExileIfWouldDie,
             Self::KeepUnspentMana(color) => Modification::KeepUnspentMana(*color),
             Self::NoMaximumHandSize => Modification::NoMaximumHandSize,
