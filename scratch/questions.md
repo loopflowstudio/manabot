@@ -52,9 +52,8 @@ Main's notes at the syncs live at `6d069d6e5:scratch/questions.md` and `origin/m
   (IR/source hashes) is gone; manifests carry `pack_key`; rows add
   `scryfall_id`; `IrError` is `ContentError`. `content_pool`/`pool_content`/
   `Eligibility` otherwise unchanged.
-- 2026-10-29: the Python offline compiler (`manabot/semantic/compiler.py`) and its
-  frozen-source tests stay as the reader/reproducer of frozen v1–w11 IR; nothing
-  current reads it.
+- Superseded by main `10eeb1f55` (2026-10-30): the Python compiler is deleted
+  and pre-w17 corpora are archived under `experiments/data/archive/`.
 - 2026-10-29 (support reorg): tests that exercise several cards stay where
   they were (Corrupt Court Official with Ozai's Cruelty in `cards/tla.rs`, Epic
   Downfall with Power Word Kill in `cards/afr.rs`); Lightning Strike has no test
@@ -64,10 +63,6 @@ Main's notes at the syncs live at `6d069d6e5:scratch/questions.md` and `origin/m
   Coordinate with f871a8 in one comment. The v1 coverage gate is left for a later
   Task rather than PR394.
 
-- 2026-10-29 (assumption): superseded corpora now without consumers
-  (`semantic-kernel-w15-v1`, `authored-match-w11-v1`, `authored-match-parity-w11-v1`,
-  `public-commitment-parity-v1`) stay in the tree like w12–w14; archiving them
-  to S3 is a separate publish step, not done here.
 - 2026-10-29 (public-commitment parity, decision): bound to w17 by prefix. Only
   viewer 0's tracker fails (Command 68, South Pole Voyager revealed from library
   into hand); viewer 1 consumes the hero's Island discard (30) and
@@ -86,47 +81,8 @@ Main's notes at the syncs live at `6d069d6e5:scratch/questions.md` and `origin/m
   put onto the battlefield uncast goes to the graveyard (303.4g not modeled).
 - Swampsnare Trap castability assumes the reduction if any legal target earns it;
   targets that would leave the cost unpayable are not offered.
-- Slice 7 (Vehicles): crew offers other untapped positive-power creatures one at
-  a time until covered (extra or 0-power taps omitted), then the ordinary {0}
-  payment. Observed `is_animated` means "a creature only through an effect".
-- Slice 8 (mana): state-dependent outputs are read when offered (no current
-  cost changes them); one fixed output is still a one-option `ChooseMode`.
-  White Lotus Tile with X = 0 taps for nothing.
-- Slice 9: Toph's granted land type is read by predicates, targets and CDAs,
-  not by observed `is_land` or LKI. Only creatures and Vehicles enter summoning
-  sick (hash stability), so a Clue The Mechanist animates can attack at once.
-  Flopsie's limit refuses a second blocker during declaration.
-- Slice 10: gained basic land types add one mana ability choosing among their
-  colors (same outputs as CR 305.6, different indices). Energybending's set is
-  fixed at resolution. Ozai's replacement applies directly as pools empty while
-  Ozai is on the battlefield, outside the proposed-event pipeline.
-- Slice 11 (X): the X choice reuses the Modal space (`ChooseMode`, mode =
-  X, labelled "X = n"). Offered X stops at the first unpayable value (no cap since the T2-sync compress; spell and activation X share `payable_x_values`). Fated
-  Firepower's increase applies after prevention and doubling (the affected
-  player's best order; no ordering choice is offered). Ability loss ignores
-  timestamps (all keywords go, counters' included); CDAs still apply. Crashing
-  Wave is deferred (spell waterbend and stun distribution).
-- Slice 12: excess is measured from damage marked after replacements. Lesson
-  lifelink applies to stack spells. The
-  tutor offers every match plus failing to find. Hakoda's top card is shown only
-  to its controller; CR 401.2's no-peeking-mid-cast limit is not modeled.
-- Slice 13: granted abilities follow the grantee's own in its ability list,
-  so their `ability_index` depends on what is attached; stale offers are
-  rejected by the existing index checks. Activated-ability targets still
-  exclude their source (pre-existing), so a Boomerang creature cannot target
-  itself. Glider Staff waits for T2's airbend rather than a second one here.
-- Slice 14 (Honest Work): no timestamps, so it also removes later grants and
-  its "{T}: Add {C}" survives an until-EOT loss; until-EOT subtypes still add.
-- Tap authority: a static haste grant changes mana output only through moves
-  that already invalidate the mana cache; a grant whose condition flips without
-  a move leaves the cache stale until the next invalidation, as other
-  condition-dependent statics already do.
-- Secret Tunnel (item 16): a departed target's LKI is found by the battlefield
-  slot it occupied (`ObjectLki.permanent`) instead of capturing target
-  `ObjectRef`s on the stack, as the concept review suggested; slots are never
-  reused, so both name the same object and the stack shape stays unchanged.
-  With more than two targets, "share a creature type" means one type common to
-  all, and the first-pick partner check is pairwise (exact for two).
+- T3 slices 7–14 and item 16 card-level choices (Vehicles, mana, X, Lessons,
+  grants, Honest Work, tap authority, Secret Tunnel LKI): `636f90bf8:scratch/questions.md`.
 
 ## T3 sync onto T2 (PR #398 head `16dfd3dbb`) — 2026-10-29
 
@@ -220,9 +176,8 @@ T2's operator choices are at `a5587df5a:scratch/questions.md`. New since
 - `EffectValue::SourcePower` reads the source's current power and is 0 once
   it has left the battlefield (LKI power is not captured); firebending X
   resolves while its attacker is normally still present.
-- Count fields of `MillCards`, `SearchBasicLand` and `PutCountersOnEachMatching`
-  became `EffectValue` instead of adding `*Value` siblings; `DrawCards` keeps
-  its fixed count beside `DrawCardsValue` because engine decisions build it.
+- Count fields of `MillCards`, `SearchBasicLand`, `PutCountersOnEachMatching`
+  and (design review) `DrawCards` are `EffectValue`; no `*Value` siblings.
 - T4 card tests are appended at the end of `tests/cards/tla.rs`, after the
   cross-card section, rather than interleaved in `cards()` order.
 - Slice 4: raid's intervening-if is not rechecked at resolution: attacking

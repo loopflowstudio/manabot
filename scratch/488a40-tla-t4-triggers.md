@@ -31,10 +31,9 @@ evidence is re-recorded at gate with `scratch/tools/regen_*.py` and
    Vindictive Warden; Firebending Student; Sun Warriors; The Spirit Oasis;
    Northern Air Temple; Southern Air Temple; Crescent Island Temple; Kyoshi
    Island Plaza; Master Pakku; Rocky Rebuke; Pirate Peddlers; Zhao, Ruthless
-   Admiral. New: `Effect::LoseLife`, `Effect::DealDamageToEachOpponent`,
-   `Effect::DrawCardsValue`, valued counts for counters-on-each, mill and
-   basic search, `AddManaValue.until_end_of_combat`, `EffectValue::SourcePower`,
-   `TriggerCondition::Sacrificed.another`.
+   Admiral. New (names as consolidated in slice 4): `EffectValue` counts for
+   counters-on-each, mill and basic search, `AddManaValue.until_end_of_combat`,
+   `EffectValue::SourcePower`, `TriggerCondition::Sacrificed.another`.
 2. **Ward against abilities** (done 2026-10-30): Dragonfly Swarm (out of
    `INCOMPLETE`), Benevolent River Spirit. `Target::StackAbility(ObjectId)`;
    `GameEvent::PermanentTargeted { by, by_controller }` emitted for spells,
@@ -43,9 +42,8 @@ evidence is re-recorded at gate with `scratch/tools/regen_*.py` and
 3. **Cast and attack triggers without new state** (done 2026-10-30): Mai,
    Scornful Striker; Sokka, Lateral Strategist; The Earth King; Bitter Work;
    How to Start a Riot; Bumi Bash. New: `TriggerCondition::PlayerCastsSpell`
-   (caster as context, only for abilities that read it),
-   `TriggerCondition::AttacksWithAnother`, `Effect::TriggeringPlayerLosesLife`,
-   `Effect::ModifyTargetPlayerCreatures`, `EffectValue::AttackingMatching`,
+   (caster as the trigger's player), `TriggerCondition::AttacksWithAnother`,
+   `AffectedSpec::EachTargetPlayerControls`, `EffectValue::AttackingMatching`,
    `CardPredicate::nonbasic`.
 4. **Turn history** (done 2026-10-30): Fire Nation Raider, Fire Nation
    Engineer, Cruel Administrator, Sold Out, Obsessive Pursuit, Earth Rumble
@@ -66,18 +64,9 @@ evidence is re-recorded at gate with `scratch/tools/regen_*.py` and
 
 ## Design review (Jack Heart, 2026-10-30, accepted)
 
-1. Effect vocabulary: `DrawCards.count` is an `EffectValue`; life loss and
-   player damage take a player selector (You / EachOpponent /
-   TriggeringPlayer / Target(spec)); `PlayerCastsSpell` supplies the caster as
-   the trigger's player, separate from the context object.
-2. "Dealt damage this turn" is `Permanent.dealt_damage_this_turn`, set where
-   damage is applied, reset with the turn, carried in LKI and observed as its
-   own permanent column; never derived from marked damage.
-3. Turn history is one `PlayerTurnHistory` per player (attacked, permanents
-   sacrificed, land entered, cards drawn) for reset, hash, `PlayerData` and
-   encoder columns.
-Tidy: `EntersWithPlusOneCounters { count, condition: Option<StaticCondition> }`.
-CLAUDE.md/WORLDS.md carry the v5 widths.
+Applied in slice 4 (full text: the Task's 2026-10-30 design-review comment):
+one effect vocabulary with `PlayerSelector`, `Permanent.dealt_damage_this_turn`,
+one `PlayerTurnHistory`, `EntersWithPlusOneCounters { count, condition }`.
 
 ## Delete — do not maintain
 
@@ -86,29 +75,36 @@ Done in slice 4 (no parallel path remains): `DrawCardsValue`, `DrainLifeValue`,
 `DealDamageToEachOpponent`, the trigger effect scan for the caster,
 `TurnState::cards_drawn_this_turn`.
 
+## Upstream (observed 2026-10-30)
+
+T3 (#399) has not merged. Main `10eeb1f55` (Task afbd6a, Jack Heart) reshaped
+w17's `CardDefinition`: one-off fields became `StaticAbility` variants in
+`statics` and `AdditionalCost::{Sacrifice, Kicker, Waterbend}`; tokens moved to
+`cardsets/tokens.rs`; the Python compiler and pre-w17 corpora were deleted or
+archived; `TOKENS_AWAITING_PRODUCER` was added to `tests/cards/observability.rs`.
+The T3/T4 sync onto it must: express T4's `ward` (Dragonfly Swarm, Benevolent
+River Spirit) and additional waterbend as those variants; move T4's tokens
+(Ally, Bear, Clue, Monk, Soldier, …) to `tokens.rs`; take Bear (The Earth King)
+and Monk (Crescent Island Temple) off `TOKENS_AWAITING_PRODUCER`; extend the new
+`static_seen`/`cost_seen` guards; re-record w17 evidence after it.
+
 ## Remaining
 
 - Slices 5–6 (48 more cards): see the slice list above; Firebender
   Ascension's ETB, Earth Kingdom General's ETB, Invasion Tactics' ETB and
   Raven Eagle's draw clause are expressible today but wait for their other
   clauses (no half-defined cards). New turn facts go in `PlayerTurnHistory`.
-- Gate: Python suites bound to the w17 content digest (authored-match receipt
-  and parity, public-commitment parity, choice navigation, decision surface,
+- Sync onto main `10eeb1f55` (above), after or with T3's.
+- Gate: Python suites bound to the w17 content digest (`authored-match-w17-v1`,
+  `authored-match-parity-w17-v1`, `public-commitment-parity-w17-v1`, choice navigation, decision surface,
   learn evidence/setup, trigger order, belief canonical receipt; T3's tools
   `scratch/tools/regen_*.py`); Academy vitest for `GameBoard` turn history
   (node_modules absent in this checkout).
 
-Check (2026-10-30, after slice 4): debug `cargo test` all targets pass
-(`semantic-kernel-w18-v1` re-recorded: 14 cases / 3396 commands, hashes only);
-fmt and clippy `-D warnings` clean; protocol schemas regenerated; extension
-rebuilt; `tests/verify/test_observation_parity.py`,
-`tests/semantic/test_text_observation.py`,
-`tests/academy/test_experience_protocol.py`,
-`tests/semantic/test_current_content.py`, `tests/model/test_attachment_join.py`
-pass.
 Compress (2026-10-30): turn-history writes go through `Game::update_turn_history`
-(journals only on change); one `attack_and_settle` card-test helper. Debug
-`cargo test`, clippy and `test_text_observation.py` pass.
+(journals only on change); one `attack_and_settle` card-test helper.
+
+Check (2026-10-30, after compress `3bbf7dce2`): debug `cargo test` all targets, fmt, clippy `-D warnings`, observation parity, text observation, experience protocol, current content and attachment join pass; schemas regenerated, extension rebuilt.
 
 ## Concept review (2026-10-30, proposed — awaiting Jack Heart)
 
