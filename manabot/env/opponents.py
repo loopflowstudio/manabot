@@ -30,7 +30,7 @@ class RandomPolicy:
         return int(np.random.choice(valid_indices))
 
 
-def build_opponent_policy(name: str):
+def build_opponent_policy(name: str) -> PassivePolicy | RandomPolicy | None:
     if name == "none":
         return None
     if name == "passive":

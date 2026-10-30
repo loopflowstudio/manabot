@@ -11,9 +11,9 @@ orders. A sampled world replaces the opponent's hand with a uniform draw of
 |hand| cards from their unseen pool (hand + library) and reshuffles both
 libraries; all public state is preserved.
 
-The matchup loop mirrors manabot.verify.util's seat balancing (hero alternates
-between seat 0, on the play, and seat 1, on the draw) and its Wilson CI math,
-but takes two arbitrary players instead of one agent + named opponent policy.
+The matchup loop balances seats (the hero alternates between seat 0, on the
+play, and seat 1, on the draw) and reports a Wilson CI over two arbitrary
+players.
 """
 
 from __future__ import annotations
@@ -461,7 +461,7 @@ def play_games(
 
     Game ``i`` (globally indexed ``game_offset + i``) puts the hero in seat
     ``(game_offset + i) % 2``; seat 0 is on the play. The env is reseeded per
-    game as in manabot.verify.util.
+    game.
     """
 
     hero_player, hero_obs_space = make_player(hero_spec, seed=seed * 2 + 1)

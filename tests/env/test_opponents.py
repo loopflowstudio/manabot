@@ -1,12 +1,8 @@
-"""
-test_single_agent_env.py
-Tests for single-agent wrapper and fixed-opponent policies.
-"""
+"""Tests for fixed opponent policies."""
 
 import numpy as np
 
-# Local imports
-from manabot.env.single_agent_env import (
+from manabot.env.opponents import (
     PassivePolicy,
     RandomPolicy,
     build_opponent_policy,

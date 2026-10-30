@@ -50,7 +50,8 @@ manabot (8ab966b4a; ~3,300 code/test/doc lines + 26k lines of unread fixture JSO
 - `sim/action/targeting.py` + test, `training/learning/paired.py` → never used outside tests.
 - `verify/util.py` first-light evaluation harness (612 lines) → only frozen reports and its own tests named it.
 - `env/single_agent_env.py` `SingleAgentEnv` and truncation helpers; `conditional.py` belief variant; `runtime.py` INT-7 evidence snapshot; `rating.payoff_matrix`; `value.spearman`, unused name sets; `store.py` first-light field lists; `sampling_fit` exact-reference cohort; `UniformRangePlayer`; `BeliefState.draw_unknown/remove_known/add_known`; `OBSERVATION_BUFFER_DTYPES` → test-only or unreferenced; surviving tests now exercise the live paths with the same expected values.
-- Duplicate `file_sha256` / `canonical_sha256` → import from `manabot.infra.identity`.
+- Duplicate `file_sha256` / `canonical_sha256` (incl. `sim/search/runtime.py`) → import from `manabot.infra.identity`.
+- `env/single_agent_env.py` → renamed `env/opponents.py` (only `PassivePolicy`/`RandomPolicy`/`build_opponent_policy` remain); `flat_mc` docstrings no longer cite the deleted `verify.util` harness.
 - `configs/llm/openrouter-haiku.json`, `manabot/model/training_monitoring.md`, `tests/fixtures/resolution-eligibility-captures{,-v4}.json` → unreferenced.
 
 Receipt change (7e61a050b): `conformance/authored-match-parity-w17-v1` receipt regenerated; only its `relevant_source` file hashes changed (it hashes every `managym/src/**/*.rs`). Parity result unchanged (142 commands, no divergence).
@@ -86,4 +87,4 @@ Needs Jack's decision (not deleted):
 - Docs consolidation into ~6 current-system files (architecture, development, training, evaluation, search/beliefs, LLM): cross-links run through held `docs/ARCHITECTURE.md`, `README.md`, `WORLDS.md`, `managym/README.md`.
 - Live belief runtime in Academy (`academy/live_advice.py` + `server.py` hooks): computes posteriors on every interactive-mirror command that no response reads.
 - Website landing-page assets (`/` redirects to the blog), `experiments/planning/`, MTG-186 drivers (an Etude migration test imports them), `seat_comparison.py` (sample file in `test_experiment_files.py`), `experiment/artifacts.py` (old S3 publisher; CLAUDE.md names its test), `verify/decision_profile.py` (only `wilson_interval` used), `recipes/ataraxos.py` (test fixture), `training/presets/ataraxos-mtg-v1.json`.
-- Unrelated pre-existing failures seen at base: `tests/sim/test_conditional_search.py` (INT-13 root digest), `tests/sim/test_search_runtime.py` (w17 world binding).
+- Unrelated pre-existing failures seen at base: `tests/sim/test_conditional_search.py` (INT-13 root digest), `tests/sim/test_search_runtime.py::test_seed_197_checkpoint_model_abis_match_the_registry` (w17 world binding), `tests/verify/test_observation_parity.py::test_elemental_indestructible_encoding_preserves_outside_and_definition_columns` (55 == 41; file untouched by this branch).

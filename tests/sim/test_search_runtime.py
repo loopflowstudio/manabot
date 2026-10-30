@@ -104,7 +104,7 @@ def test_retained_registry_recomputes_manifest_identity_before_checkpoint_load(
     def checkpoint_bytes_must_not_be_read(_path) -> str:
         raise AssertionError("checkpoint bytes read before manifest authentication")
 
-    monkeypatch.setattr(runtime, "_sha256_file", checkpoint_bytes_must_not_be_read)
+    monkeypatch.setattr(runtime, "file_sha256", checkpoint_bytes_must_not_be_read)
     with pytest.raises(RetainedCheckpointMismatchError, match="identity drifted"):
         retained_int7_policy_only_checkpoint(197)
 

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-import hashlib
 import json
 from pathlib import Path
 from typing import Any
+
+from manabot.infra.identity import canonical_sha256, file_sha256
 
 DEFAULT_MAX_PLAYOUT_STEPS = 2000
 
@@ -62,25 +63,12 @@ class RetainedCheckpointRegistration:
     max_steps: int
 
 
-def _sha256_file(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        for chunk in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(chunk)
-    return digest.hexdigest()
-
-
-def _canonical_sha256(value: Any) -> str:
-    encoded = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
-    return hashlib.sha256(encoded).hexdigest()
-
-
 def retained_int7_manifest_digest(manifest: dict[str, Any]) -> str:
     """Hash canonical INT-7 manifest contents without its self-declared digest."""
 
     unsigned = dict(manifest)
     unsigned.pop("manifest_sha256", None)
-    return _canonical_sha256(unsigned)
+    return canonical_sha256(unsigned)
 
 
 def _load_int7_manifest() -> dict[str, Any]:
@@ -193,7 +181,7 @@ def retained_int7_policy_only_checkpoint(
         raise RetainedCheckpointMismatchError(
             "retained INT-7 policy-only checkpoint byte length drifted"
         )
-    if _sha256_file(checkpoint_path) != expected_sha256:
+    if file_sha256(checkpoint_path) != expected_sha256:
         raise RetainedCheckpointMismatchError(
             "retained INT-7 policy-only checkpoint SHA-256 drifted"
         )
