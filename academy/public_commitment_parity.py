@@ -48,6 +48,10 @@ COMMITMENT_COUNT = 69
 # The hero discards an Island to Learn here; viewer 1 then admits 484 hands.
 DISCARD_REVISION = 30
 DECLINE_REVISION = 102
+# Commands each viewer's tracker follows. Range transport has no fact for a card
+# revealed from library into a hidden hand, so viewer 0 stops before Command 68
+# (the villain reveals South Pole Voyager); Task 3be183 owns that transport.
+TRACKED_COMMANDS = {0: 68, 1: COMMAND_COUNT}
 RUL9_MEASUREMENT_ARTIFACT_SHA256 = (
     "498df1eda031f1d6ea68f72f792dfd68195bb10eab884b006aa7772b586564da"
 )
@@ -287,7 +291,9 @@ def _run_engine(
         transition = apply_semantic_command(env, _semantic_command(row, frame))
         stream.append(_identity_row(ordinal, int(row["actor"]), transition))
         _require("state after", row["state"]["after"], env.state_digest())
-        for tracker in trackers.values():
+        for viewer, tracker in trackers.items():
+            if ordinal >= TRACKED_COMMANDS[viewer]:
+                continue
             tracker.observe(
                 env,
                 acting=int(row["actor"]),
@@ -585,20 +591,21 @@ def build_receipt() -> dict[str, Any]:
         {"kind": "decline_learn"},
         headless["identity_stream"][DECLINE_REVISION]["public_commitment"],
     )
-    for viewer in ("0", "1"):
-        _require(
-            f"viewer {viewer} tracker records",
-            COMMAND_COUNT,
-            headless["tracker_receipts"][viewer]["records"],
+    # A tracker consumes the opponent's commitments within its tracked prefix.
+    consumed = 0
+    for viewer, tracked in TRACKED_COMMANDS.items():
+        tracker = headless["tracker_receipts"][str(viewer)]
+        _require(f"viewer {viewer} tracker records", tracked, tracker["records"])
+        expected = sum(
+            row["public_commitment"] is not None and row["actor"] != viewer
+            for row in headless["identity_stream"][:tracked]
         )
-    _require(
-        "consumed commitment identities",
-        COMMITMENT_COUNT,
-        sum(
-            tracker["consumed_commitments"]
-            for tracker in headless["tracker_receipts"].values()
-        ),
-    )
+        _require(
+            f"viewer {viewer} consumed commitments",
+            expected,
+            tracker["consumed_commitments"],
+        )
+        consumed += expected
     if discard_root is None:
         raise RuntimeError("discard root was not retained")
     materialized = _materialized_discard_proof(discard_root)
@@ -621,8 +628,10 @@ def build_receipt() -> dict[str, Any]:
             "commands": COMMAND_COUNT,
             "commitments": COMMITMENT_COUNT,
             "unadmitted_commands": COMMAND_COUNT - COMMITMENT_COUNT,
-            "tracker_records_per_viewer": COMMAND_COUNT,
-            "consumed_commitments": COMMITMENT_COUNT,
+            "tracker_records_per_viewer": {
+                str(viewer): tracked for viewer, tracked in TRACKED_COMMANDS.items()
+            },
+            "consumed_commitments": consumed,
             "rules_provider_gaps": 0,
             "identity_stream_mismatches": 0,
             "negative_proof_mutations": 0,

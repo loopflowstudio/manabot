@@ -118,8 +118,10 @@ pipeline: `544ae312c:scratch/892c47-author-tla-cards.md`.
    with no key ("A rules fixture, not a printed card"), tokens stay unsupported.
    Pool rows' `semantic_key` is `key` (Rust, PyO3 dict, `.pyi`, Python readers,
    Academy receipt programs). `semantic/{pool,setups,tokens}.rs` moved to
-   `cards/`; `ContentError` lives in `cards/mod.rs`; the `semantic` Rust module
-   is gone. Kept deliberately: authored setup packs; v1 Python coverage gate
+   `cards/`; `ContentError` (a message newtype) lives in `cards/mod.rs`; the
+   `semantic` Rust module is gone. Pool rows' `card_def_id` is now required
+   (`CardDefId`, Python `int`), since every row describes a runtime definition.
+   Renames were posted to f871a8 (2026-10-29, at 67b1fad34). Kept deliberately: authored setup packs; v1 Python coverage gate
    (its evidence identifiers were updated for the flattened card tests).
 9. **World-bound evidence for w17.** New `conformance/semantic-kernel-w17-v1`
    (w15 cases re-recorded; test + CI root). `authored-match-parity-w17-v1`
@@ -131,19 +133,23 @@ pipeline: `544ae312c:scratch/892c47-author-tla-cards.md`.
 
 ## Remaining
 
-1. **Public-commitment parity (blocked on belief).** Rebound to the w17 tape
-   with curated (sideboard) configs, Island discard at revision 30 (484 worlds),
-   `decline_learn` at 102; forged "unsupported" receipt bypasses construction
-   validation. `BeliefTracker` raises "probability transport left canonical
-   support" at Command 68 (villain reveals South Pole Voyager from library into
-   hand): range transport has no "revealed card enters hand" fact. Needs a
-   belief-layer change (separate Task); no w17 receipt written. The v1 tape
-   also no longer replayed on main (live command rejected).
-2. Demo; PR394 stays draft for Jack Heart's review.
+1. **Public-commitment parity bound by prefix (2026-10-29).** Rebound to the
+   w17 tape (curated sideboard configs; Island discard at 30 with 484 worlds,
+   `decline_learn` at 102). Viewer 0's tracker stops before Command 68 (South
+   Pole Voyager revealed from library into hand: no transport fact); viewer 1
+   tracks all 142. `TRACKED_COMMANDS` in `academy/public_commitment_parity.py`;
+   Task 3be183 owns the transport. Receipt
+   `conformance/public-commitment-parity-w17-v1`.
+2. CI fixes: rules-audit evidence paths follow the moved card tests
+   (`tests/cards/<set>.rs`, `cardsets/tla.rs`); the choice-navigation
+   Playwright spec reads `choice-navigation-w17.json`.
+3. f871a8 told `card_def_id` is required (2026-10-29). Demo; PR394 stays draft.
 
 Check (2026-10-29, after concept-review pass): debug `cargo test --no-fail-fast`
 0 failures; clippy `-D warnings` (with and without `python`) and fmt clean.
 pytest: semantic + model 334 pass/1 skip; current-world arena/monitor/choice
 66 pass; academy 257 pass, 2 fail (public-commitment pair, above); CI
 coverage/compile `--check` steps pass. `rg 'tla-pool-v1|semantic_key'` hits only
-frozen v1/w11 evidence and readers and WORLDS.md history.
+frozen v1/w11 evidence and readers and WORLDS.md history. After 93a542677:
+clippy `-D warnings` clean, `cargo test --test cards` 235 pass,
+`tests/semantic/test_current_content.py` 17 pass.

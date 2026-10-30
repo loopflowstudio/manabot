@@ -53,3 +53,9 @@ Main's notes at the syncs live at `6d069d6e5:scratch/questions.md` and `origin/m
   (`semantic-kernel-w15-v1`, `authored-match-w11-v1`, `authored-match-parity-w11-v1`,
   `public-commitment-parity-v1`) stay in the tree like w12–w14; archiving them
   to S3 is a separate publish step, not done here.
+- 2026-10-29 (public-commitment parity, decision): bound to w17 by prefix. Only
+  viewer 0's tracker fails (Command 68, South Pole Voyager revealed from library
+  into hand); viewer 1 consumes the hero's Island discard (30) and
+  `decline_learn` (102) over all 142 Commands. `TRACKED_COMMANDS = {0: 68,
+  1: 142}`; identity-stream parity still covers the whole tape. Task 3be183
+  (engine wave) owns the transport and removing the bound. No xfail.
