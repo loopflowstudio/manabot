@@ -150,14 +150,36 @@ caller `ruleset`, `GameConfig.imported_decks`, `manabot/decklist.py`,
 `catalog.DeckSetup`, `deck_collection.py`, checkpoint deck bindings (list at
 c1dd6c71c).
 
+## Concept review (2026-10-30, headless): next implement direction
+
+Settled by "the world is the only concept" (names only, no behavior change):
+- **World identity has a world-named accessor.** Branch code reads the world's
+  identity as `managym.content_pool(managym.WORLD_SETUP)["content_digest"]`
+  (`academy/server.py:3656`, `manabot/model/world.py:162`). Add one native
+  accessor (e.g. `managym.world_identity()` → version and card digest, typed in
+  `__init__.pyi`) and use it at both sites. `content_pool` stays for authored
+  packs' vocabulary (`policy_catalog`, `authored_match_receipt`).
+
 ## Open for Jack Heart's review (not decided)
 
-Two remaining "content" names touch deck surfaces against the no-content
-direction; both are main's names, so renaming is left as a choice:
-- **a)** keep main's `PlayerConfig.content_pack` selector; deck matches carry
-  `"world"` (`managym.WORLD_SETUP`), so `MatchConfig.content_pack` still shows;
-- **b)** add a non-"content" selector for deck matches (or infer world from the
-  absence of an authored key) and rename main's field.
+A deck run must still write two main-owned "pack" selectors with the value
+`"world"`: `MatchConfig.content_pack` (native `PlayerConfig.content_pack`; set
+by `from_import` and checked in `collection.py:231`, `model/world.py:102`) and
+`ModelConfig.semantic_pack` (required by `execution.py:182`). Question: does
+"pack leaves the deck/training surfaces" extend to these existing selectors?
+- **a)** keep both; "world" is a value of main's setup/vocabulary selectors and
+  deck surfaces add no new pack names (current branch);
+- **b)** replace them for deck runs (new non-"pack" selector, or absence means
+  world).
+Evidence: frozen regimes, contracts and protocols serialize `content_pack`
+(`experiments/regimes/elemental-*-v1.json`,
+`experiments/contracts/int-9-exact-range-v1.json`,
+`experiments/protocols/{mtg186,elemental-174}-identity.json`), and architecture
+receipts hash `semantic_pack`, so a rename changes how frozen evidence reads and
+hashes. "Absence means world" changes main's rule that a config without a key
+whose decks equal an authored setup runs on that pack (the reason deck matches
+carry `"world"`: an imported pair equal to an authored setup must not silently
+switch vocabulary). Recommendation: a.
 Authored packs keep `content_pool` descriptors because main's policy vocabulary
 reads them; admission never does. Removing them changes vocabulary binding.
 

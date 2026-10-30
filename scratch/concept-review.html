@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>One World Decks</title>
+<title>Deck runs and the world</title>
 <style>
 :root{--bg:#fbfaf7;--fg:#1d1c1a;--mut:#6b675f;--rule:#e4e0d7;--code:#f3f1ec;--now:#fbe5e1;--nowf:#8a2a1c;--prop:#e3f3e1;--propf:#1f5d24;--hl:#fff6db;--link:#2a5d8f}
 @media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#171614;--fg:#e9e6df;--mut:#a29d92;--rule:#34312c;--code:#201f1c;--now:#3a1f1b;--nowf:#f0b2a6;--prop:#1c3220;--propf:#a9dfae;--hl:#2e2a1c;--link:#8cb8e6}}
@@ -32,84 +32,43 @@ ol.q ul li{margin:4px 0}
 @media (max-width:640px){table,thead,tbody,tr,th,td{display:block}thead{display:none}td{border:0;padding:2px 0}tr{border-bottom:1px solid var(--rule);padding:10px 0}td:first-child{width:auto;font-weight:600}td:nth-child(2)::before{content:"Today: ";color:var(--nowf);font-size:13px;font-weight:600}td:nth-child(3)::before{content:"Proposed: ";color:var(--propf);font-size:13px;font-weight:600}}
 </style>
 </head>
-<body>
-<main>
-<h1>Decks should only need a world</h1>
-<p class="meta">Task f871a8 · concept review with Jack Heart · 2026-10-30 · built from <code>db6478111</code>:
-<code>managym/src/world.rs</code>, <code>managym/src/cards/pool.rs</code>, <code>managym/src/cards/decklist.rs</code>,
-<code>manabot/training/decks.py</code>, <code>manabot/cli.py</code>, <code>academy/deck_import.py</code>,
-<code>academy/ui/src/lib/components/DeckImport.svelte</code>, <code>manabot/model/world.py</code>;
-working design <code>scratch/f871a8-import-decklist-files.md</code></p>
+<body><main>
+<h1>Deck runs and the world</h1>
+<p class="meta">Task f871a8 (PR #395) · concept-review, headless · 2026-10-30 · built from <code>scratch/f871a8-import-decklist-files.md</code>, <code>manabot/infra/config.py</code>, <code>manabot/training/execution.py</code>, <code>manabot/model/world.py</code>, <code>academy/server.py</code>, <code>managym/src/cards/setups.rs</code>, <code>experiments/regimes/*.json</code></p>
 
 <div class="ask">
-<p><strong>Decided by Jack Heart, 2026-10-30: 1a, 2a, 3a.</strong> Decks are checked against the installed world; authored packs are fixed setups only; set restrictions belong to deck making. Implementation in progress.</p>
-<p>Since #394 the engine has one world: w17, whose cards are every supported definition in <code>cardsets/</code>.
-This branch still makes every deck caller name a pool. For imported and training decks, the only meaningful value
-is <code>"world"</code>.</p>
+<p><strong>Decision needed:</strong> a deck run still writes two of main's “pack” selectors with the value <code>"world"</code>. Does Jack's “the world is the only concept” extend to them?</p>
 </div>
-
-<h2>One interaction: import two decks and play</h2>
-<p><span class="label now">Today</span>Academy’s import panel shows a free-text box beside the two files:</p>
-<pre>Content pool [ world            ]
-Hero deck    [ forest-mountain.txt ]   Villain deck [ islands.txt ]
-                                                   [ Check decklists ]</pre>
-<p class="mut">Type anything other than <code>world</code> and the check fails with <code>unknown content pool</code>, or quietly
-validates against an authored pack such as <code>elemental-world-v2</code>. Nothing on the screen explains the difference.</p>
-<p><span class="label prop">Proposed</span>The box is gone. Both files are checked against the installed world. An
-unsupported card fails on its line exactly as it does today; fix the file and check again.</p>
 
 <h2>Actions → concepts → APIs</h2>
 <table>
-<thead><tr><th>Action</th><th><span class="label now">Today</span></th><th><span class="label prop">Proposed</span></th></tr></thead>
-<tbody>
-<tr><td>Check one deck</td><td><code>admit_deck(pack, &amp;Deck)</code></td><td><code>admit_deck(&amp;Deck)</code>, against the installed world</td></tr>
-<tr><td>Import decklist files</td><td><code>admit_decklists(labelled, pack_key)</code></td><td><code>admit_decklists(labelled)</code></td></tr>
-<tr><td>Reload a saved import</td><td><code>Decklist::validate_deck(pack, deck)</code></td><td><code>validate_deck(deck)</code></td></tr>
-<tr><td>Give a run its decks</td><td><code>decks: {pool: world, files: […]}</code>; <code>TrainingDecks.pool</code></td><td><code>decks: {files: […]}</code></td></tr>
-<tr><td>Simulate from files</td><td><code>manabot sim --hero-deck-file … --content-pool world</code></td><td>no <code>--content-pool</code></td></tr>
-<tr><td>Academy import</td><td><code>pack_key</code> field and text box</td><td>neither</td></tr>
-<tr><td>Export a deck-run model</td><td>binding <code>content_pool: {pack_key, world_version, content_digest, …}</code></td><td>binding <code>world: {version, content_digest, rules, I/O}</code>; no pack key</td></tr>
-</tbody>
+<tr><th>Action</th><th>Concept</th><th>API today</th></tr>
+<tr><td>Import a decklist file</td><td>Decklist → Deck</td><td><code>managym.read_decklist</code>, <code>DeckImport</code></td></tr>
+<tr><td>Check decks are playable</td><td>World</td><td><code>managym.check_decks(decks)</code></td></tr>
+<tr><td>Play two imported decks</td><td>World</td><td><code>MatchConfig.from_import(hero, villain)</code> → <code>content_pack="world"</code></td></tr>
+<tr><td>Train over decks</td><td>Deck source</td><td>regime <code>deck_source: UniformDecks</code> + <code>agent.semantic_pack="world"</code></td></tr>
+<tr><td>Save a deck-run checkpoint</td><td>World binding</td><td><code>deck_world</code>: world, <code>world_digest</code>, rules, I/O</td></tr>
 </table>
-<p class="mut">The concepts become <strong>world</strong> (rules + cards), <strong>deck</strong> and <strong>decklist</strong>. The
-words “pool” and “pack” no longer appear in any deck interaction.</p>
 
-<h2>What doesn’t fit yet: authored packs</h2>
-<p>Elemental, <code>ur-lessons-vs-gw-allies</code> and <code>mtg122-complexity-v1</code> are fixed setups with their own
-content, and their policy vocabulary is the pack’s. Some include definitions the world marks incomplete. Today
-<code>pool.rs:111</code> also registers each one as a deck pool, which is the only reason the pool parameter can take a
-second value.</p>
-<p><span class="label prop">Proposed</span>Authored packs stay fixed setups. Their checkpoints keep setup bindings, because
-their inputs are a different vocabulary, not because of their training regime. They stop being targets for importing or
-admitting decks. Frozen Elemental bindings and evidence are unchanged.</p>
-<p class="mut"><strong>Counterexample that would break this:</strong> someone who needs to import a custom deck built from an
-authored pack’s cards (an Elemental variant, say). I found no caller that does this today. If you want it, answer 2b.</p>
+<h2>Settled here (names only)</h2>
+<p><span class="label now">now</span>World identity is read through the pool API:</p>
+<pre>managym.content_pool(managym.WORLD_SETUP)["content_digest"]   # academy/server.py, model/world.py</pre>
+<p><span class="label prop">proposed</span>One world-named accessor used at both sites:</p>
+<pre>managym.world_identity()   # version + card digest, typed in __init__.pyi</pre>
+<p class="mut"><code>content_pool</code> stays for authored packs' policy vocabulary.</p>
 
-<h2>Failure and recovery</h2>
-<ul class="mut">
-<li><strong>A card the world doesn’t support:</strong> unchanged. It's rejected on its line, the whole input is rejected,
-and the source text is kept.</li>
-<li><strong>A world change makes a saved import invalid:</strong> unchanged. Reloading re-checks against the installed world
-and reports the failing line.</li>
-<li><strong>An old checkpoint with a <code>content_pool: world</code> binding:</strong> no deck-run checkpoints from this
-branch have been released yet, so the binding can be renamed without a reader for the old form. Checkpoints that already
-exist on main use setup bindings, which this proposal doesn't change.</li>
-</ul>
+<h2>The open mismatch</h2>
+<p><span class="label now">now</span> A deck run sets main's selectors:</p>
+<pre>MatchConfig(content_pack="world", ...)        # PlayerConfig.content_pack
+ModelConfig(semantic_pack="world")            # required by execution.py:182</pre>
+<p>Why the explicit value: without a key, main runs any pair equal to an authored setup on that pack, so an imported copy of an authored pair would silently switch vocabulary.</p>
+<p>Why renaming is not cosmetic: frozen regimes, contracts and protocols serialize <code>content_pack</code> (<code>experiments/regimes/elemental-*-v1.json</code>, <code>experiments/contracts/int-9-exact-range-v1.json</code>), and architecture receipts hash <code>semantic_pack</code>.</p>
 
 <h2>Questions</h2>
 <ol class="q">
-<li>Should deck checking stop asking for a pool?
-<ul><li><strong>1a (recommended)</strong>: yes, everywhere in the table above; decks are checked against the installed world.</li>
-<li><strong>1b</strong>: keep an optional pool argument that defaults to the world, for advanced callers.</li></ul></li>
-<li>Authored packs (Elemental, MTG-122, ur-lessons):
-<ul><li><strong>2a (recommended)</strong>: fixed setups only; no deck import or admission against them; their checkpoints keep setup bindings.</li>
-<li><strong>2b</strong>: also deck targets, so a custom deck can be built from an authored pack’s cards.</li></ul></li>
-<li>Restricting decks to a set, such as TLA-only:
-<ul><li><strong>3a (recommended)</strong>: part of how decks are chosen or generated (<code>world::set_cards</code>); admission only asks whether the world supports the cards.</li>
-<li><strong>3b</strong>: a run declares its allowed sets, and admission enforces them.</li></ul></li>
+<li>Main's <code>content_pack</code> / <code>semantic_pack</code> on deck runs
+<ul><li><strong>a)</strong> Keep them; <code>"world"</code> is a value of existing selectors (recommended; current branch).</li>
+<li><strong>b)</strong> Replace them for deck runs with a non-“pack” selector, accepting a compatibility reader for frozen evidence.</li>
+<li><strong>c)</strong> Let absence mean world, and require authored setups to name their pack explicitly.</li></ul></li>
 </ol>
-<p class="mut">Accepted, not yet implemented. Recorded under “Accepted 2026-10-30” in the
-working design.</p>
-</main>
-</body>
-</html>
+</main></body></html>
