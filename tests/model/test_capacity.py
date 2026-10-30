@@ -138,3 +138,16 @@ def test_deep_feedforward_identity_and_weights() -> None:
 def test_invalid_expansion(fields: dict[str, object]) -> None:
     with pytest.raises(ValueError):
         ModelConfig.model_validate(fields)
+
+
+def test_world_selector_reads_and_hashes_its_frozen_key() -> None:
+    space = ObservationSpace()
+    current = ModelConfig(world="elemental-world-v2", policy_film=True)
+    frozen = ModelConfig.model_validate(
+        {"semantic_pack": "elemental-world-v2", "policy_film": True}
+    )
+    assert frozen == current
+    # Receipts written before the selector was named `world`.
+    assert architecture_identity(current, space) == (
+        "8ebdcf30559998e753b3afe514b1bcf975f45b745c97bd2304c12034baafe0d6"
+    )

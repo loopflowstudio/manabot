@@ -228,7 +228,7 @@ class SeatRoutedCollector:
         if deck_source is not None:
             if matchup_curriculum != "fixed":
                 raise ValueError("a deck source cannot be combined with a curriculum")
-            if match.config.content_pack != WORLD_SETUP:
+            if match.config.world != WORLD_SETUP:
                 raise ValueError("deck-source games play in the world")
             self._uniform_roster = deck_source.players()
         elif matchup_curriculum == "elemental-uniform":

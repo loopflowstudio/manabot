@@ -46,11 +46,11 @@ def stream_matches(match: Match, streams: int, curriculum: Curriculum) -> list[M
             "mirror curriculum requires the exact selected authored roster"
         )
     first = match.config.model_copy(deep=True)
-    first.content_pack = "ur-lessons-vs-gw-allies"
+    first.world = "ur-lessons-vs-gw-allies"
     first.villain_deck = dict(first.hero_deck)
     first.villain_sideboard = dict(first.hero_sideboard)
     second = reverse.config.model_copy(deep=True)
-    second.content_pack = "ur-lessons-vs-gw-allies"
+    second.world = "ur-lessons-vs-gw-allies"
     second.villain_deck = dict(second.hero_deck)
     second.villain_sideboard = dict(second.hero_sideboard)
     return ([Match(first)] * 4 + [Match(second)] * 4 + cross) * (streams // width)
@@ -67,7 +67,7 @@ def elemental_roster(match: Match) -> list[managym.PlayerConfig]:
         not any(
             actual.decklist == setup.decklist
             and actual.sideboard == setup.sideboard
-            and actual.content_pack == setup.content_pack
+            and actual.world == setup.world
             for setup in roster
         )
         for actual in match.to_rust()

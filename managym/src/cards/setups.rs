@@ -249,7 +249,7 @@ pub(crate) fn created_tokens(definition: &CardDefinition) -> BTreeSet<String> {
 
 /// The pack a match runs on, or `None` for the default pack.
 ///
-/// An explicit `content_pack` must be shared by both configs. The world
+/// An explicit `world` selection must be shared by both configs. The world
 /// ([`crate::world::WORLD_POOL`]) runs any decks that pass development
 /// admission, on the default pack. An authored pack key runs only that pack's
 /// own setups: authored packs are fixed setups, never deck-admission targets,
@@ -259,11 +259,8 @@ pub(crate) fn content_pack_for_match(
     player_configs: &[PlayerConfig],
 ) -> Result<Option<Arc<ContentPack>>, ContentError> {
     let packs = authored_packs()?;
-    if let Some(key) = player_configs.iter().find_map(|p| p.content_pack.as_ref()) {
-        if player_configs.len() != 2
-            || player_configs
-                .iter()
-                .any(|p| p.content_pack.as_ref() != Some(key))
+    if let Some(key) = player_configs.iter().find_map(|p| p.world.as_ref()) {
+        if player_configs.len() != 2 || player_configs.iter().any(|p| p.world.as_ref() != Some(key))
         {
             return Err(ContentError(
                 "explicit pack requires two players with the same pack key".into(),
@@ -357,9 +354,9 @@ mod tests {
             "first",
             BTreeMap::from([("Forest".into(), 10), ("Mountain".into(), 10)]),
         );
-        first.content_pack = Some(crate::world::WORLD_POOL.into());
+        first.world = Some(crate::world::WORLD_POOL.into());
         let mut second = PlayerConfig::new("second", BTreeMap::from([("Island".into(), 20)]));
-        second.content_pack = first.content_pack.clone();
+        second.world = first.world.clone();
         let content = content_pack_for_match(&[first.clone(), second.clone()])
             .unwrap()
             .unwrap();
@@ -368,8 +365,8 @@ mod tests {
         assert!(content_pack_for_match(&[first, second.clone()]).is_err());
         // An authored pack key never admits decks outside its own setups.
         let mut novel = PlayerConfig::new("novel", BTreeMap::from([("Forest".into(), 20)]));
-        novel.content_pack = Some("ur-lessons-vs-gw-allies".into());
-        second.content_pack = novel.content_pack.clone();
+        novel.world = Some("ur-lessons-vs-gw-allies".into());
+        second.world = novel.world.clone();
         assert!(content_pack_for_match(&[novel, second]).is_err());
     }
 
@@ -378,17 +375,17 @@ mod tests {
         let pack = authored_pack_for_key("ur-lessons-vs-gw-allies").unwrap();
         for deck in &pack.decks {
             let mut config = pack.player_config(&deck.key, &deck.key).unwrap();
-            config.content_pack = Some(pack.pack_key.clone());
+            config.world = Some(pack.pack_key.clone());
             let pair = vec![config.clone(), config.clone()];
             assert_eq!(pack_key(&pair), pack.pack_key);
             let mut wrong = pair.clone();
-            wrong[0].content_pack = None;
+            wrong[0].world = None;
             assert!(content_pack_for_match(&wrong).is_err());
             wrong = pair.clone();
             wrong[0].deck.main.clear();
             assert!(content_pack_for_match(&wrong).is_err());
             wrong = pair.clone();
-            wrong[0].content_pack = Some("missing-pack".into());
+            wrong[0].world = Some("missing-pack".into());
             assert!(content_pack_for_match(&wrong).is_err());
         }
     }
@@ -406,7 +403,7 @@ mod tests {
         }
         for deck in &pack.decks {
             let mut config = pack.player_config(&deck.key, &deck.key).unwrap();
-            config.content_pack = Some(pack.pack_key.clone());
+            config.world = Some(pack.pack_key.clone());
             assert_eq!(pack_key(&[config.clone(), config]), "mtg122-complexity-v1");
         }
         // An ordinary product pair still chooses the original product pack.

@@ -137,7 +137,7 @@ The optional [policy-history v1 projection](../docs/recent-events.md) is a bound
 derived suffix updated at the native event append. Observation reads share it;
 clone/undo and diagnostic injection must preserve its documented lifecycle.
 
-`PlayerConfig.content_pack` explicitly selects what a match runs on. Both seats
+`PlayerConfig.world` explicitly selects what a match runs on. Both seats
 must name the same value. An authored pack key runs only that pack's own
 setups. `"world"` (`managym.WORLD_SETUP`, set by `Deck.player()`) submits the
 decks to the installed world: each must pass `development-v1` admission against

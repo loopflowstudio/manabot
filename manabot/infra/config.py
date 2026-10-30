@@ -6,7 +6,14 @@ import os
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import (
+    AliasChoices,
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_validator,
+)
 
 from managym import WORLD_SETUP, Deck, DeckImport, Decklist
 
@@ -58,9 +65,12 @@ class MatchConfig(BaseConfig):
     """Parameters passed to the match builder."""
 
     # An authored pack key runs that pack's fixed setups; `WORLD_SETUP` submits
-    # the decks to the installed world's admission.
-    content_pack: str | None = Field(
-        default=None, exclude_if=lambda value: value is None
+    # the decks to the installed world's admission. Frozen regimes name this
+    # selector `content_pack`.
+    world: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("world", "content_pack"),
+        exclude_if=lambda value: value is None,
     )
     # Private import provenance: each seat's admitted decklist, retained beside
     # (never instead of) that seat's deck. Viewer frames never carry it.
@@ -86,7 +96,7 @@ class MatchConfig(BaseConfig):
         ):
             if source is None:
                 continue
-            if self.content_pack != WORLD_SETUP:
+            if self.world != WORLD_SETUP:
                 raise ValueError("an imported decklist plays in the world")
             source.validate_deck(Deck(main, sideboard))
         return self
@@ -95,7 +105,7 @@ class MatchConfig(BaseConfig):
     def from_import(cls, hero: DeckImport, villain: DeckImport) -> "MatchConfig":
         """The playable setup of two admitted decklists, in the world."""
         return cls(
-            content_pack=WORLD_SETUP,
+            world=WORLD_SETUP,
             hero_source=hero.decklist,
             villain_source=villain.decklist,
             hero_deck=hero.deck.main,
@@ -133,7 +143,7 @@ class MatchConfig(BaseConfig):
         first = managym.authored_deck_setup(pack_key, hero_deck)
         second = managym.authored_deck_setup(pack_key, villain_deck)
         return cls(
-            content_pack=(
+            world=(
                 pack_key
                 if hero_deck == villain_deck
                 or len(managym.authored_deck_keys(pack_key)) > 2
@@ -169,7 +179,11 @@ class ModelConfig(BaseConfig):
     compound_decisions: bool = Field(default=False, exclude_if=lambda value: not value)
     # Public identity/history v1; false preserves historical receipt bytes.
     recent_events: bool = Field(default=False, exclude_if=lambda value: not value)
-    semantic_pack: str | None = None
+    # The world or authored pack whose vocabulary the model reads. Frozen
+    # checkpoints and recipes name it `semantic_pack`.
+    world: str | None = Field(
+        default=None, validation_alias=AliasChoices("world", "semantic_pack")
+    )
     # Serialized architecture choice; categorical logits are loss/draw/win.
     value_kind: Literal["scalar", "categorical_wdl"] = "scalar"
     value_aggregation: Literal["historical_mean", "masked_mean", "value_token"] = (

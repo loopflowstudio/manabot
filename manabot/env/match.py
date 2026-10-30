@@ -39,7 +39,7 @@ class Match:
 
     def to_rust_hero(self) -> "managym.PlayerConfig":
         return managym.PlayerConfig(
-            self.hero, self.hero_deck, self.hero_sideboard, self.config.content_pack
+            self.hero, self.hero_deck, self.hero_sideboard, self.config.world
         )
 
     def to_rust_villain(self) -> "managym.PlayerConfig":
@@ -47,7 +47,7 @@ class Match:
             self.villain,
             self.villain_deck,
             self.villain_sideboard,
-            self.config.content_pack,
+            self.config.world,
         )
 
     def to_rust(self) -> "list[managym.PlayerConfig]":
@@ -63,7 +63,7 @@ class Match:
         """
         return Match(
             MatchConfig(
-                content_pack=self.config.content_pack,
+                world=self.config.world,
                 hero_source=self.config.villain_source,
                 villain_source=self.config.hero_source,
                 hero=self.villain,

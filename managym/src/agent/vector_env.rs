@@ -110,7 +110,7 @@ impl VectorEnv {
                 roster
                     .iter()
                     .filter(|r| {
-                        r.deck == e.deck && r.content_pack.as_deref() == Some("elemental-world-v2")
+                        r.deck == e.deck && r.world.as_deref() == Some("elemental-world-v2")
                     })
                     .count()
                     != 1
@@ -147,7 +147,7 @@ impl VectorEnv {
         }
         let mut distinct = std::collections::BTreeSet::new();
         for player in &decks {
-            if player.content_pack.as_deref() != Some(crate::world::WORLD_POOL) {
+            if player.world.as_deref() != Some(crate::world::WORLD_POOL) {
                 return Err(AgentError(
                     "training decks must be submitted to the world".into(),
                 ));
@@ -770,7 +770,7 @@ mod tests {
     fn training_decks_are_admitted_distinct_replayable_and_replaceable() {
         let deck = |name: &str| {
             let mut player = PlayerConfig::new(name, BTreeMap::from([(name.into(), 12)]));
-            player.content_pack = Some("world".into());
+            player.world = Some("world".into());
             player
         };
         let decks: Vec<_> = ["Plains", "Mountain", "Forest"].map(deck).into();
@@ -853,7 +853,7 @@ mod tests {
             .iter()
             .map(|d| {
                 let mut p = pack.player_config(&d.key, &d.key).unwrap();
-                p.content_pack = Some(pack.pack_key.clone());
+                p.world = Some(pack.pack_key.clone());
                 p
             })
             .collect()

@@ -173,14 +173,14 @@ def validate_regime(
         for stage in regime.stages
     ):
         elemental_roster(Match(regime.root_match))
-        if regime.agent.semantic_pack != "elemental-world-v2":
+        if regime.agent.world != "elemental-world-v2":
             raise ValueError(
                 "elemental-uniform requires complete Elemental policy input"
             )
     if regime.deck_source is not None:
         if require_current_world:
             regime.deck_source.check()
-        if regime.agent.semantic_pack != managym.WORLD_SETUP:
+        if regime.agent.world != managym.WORLD_SETUP:
             raise ValueError(
                 "a deck source requires the complete world policy vocabulary"
             )

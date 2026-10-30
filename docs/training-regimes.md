@@ -106,7 +106,7 @@ named evaluation output with its iteration clock, never a hidden behavior swap.
 an export of committed state. Files are atomically published before their
 SHA-256 identities enter stage records. Each checkpoint uses the ordinary
 writer and reload path, including ETU-75's mandatory world/setup binding.
-Selected-match recipes explicitly select `semantic_pack="ur-lessons-vs-gw-allies"`;
+Selected-match recipes explicitly select `world="ur-lessons-vs-gw-allies"`;
 complete `semantic_cards` and `known_hand` tensors survive collection and training.
 EMA uses ETU-90's complete-state helper once per iteration, including filtered
 skips, and preserves its clock across continuation.

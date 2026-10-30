@@ -23,7 +23,7 @@ from typing import Any, Literal
 from uuid import uuid4
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 import managym
 
@@ -32,7 +32,8 @@ class PlayerSetup(BaseModel):
     name: str
     decklist: dict[str, int]
     sideboard: dict[str, int]
-    content_pack: str | None
+    # Earlier evidence names the selector `content_pack`.
+    world: str | None = Field(validation_alias=AliasChoices("world", "content_pack"))
 
     @classmethod
     def retain(cls, player: managym.PlayerConfig) -> "PlayerSetup":
@@ -40,7 +41,7 @@ class PlayerSetup(BaseModel):
             name=player.name,
             decklist=player.decklist,
             sideboard=player.sideboard,
-            content_pack=player.content_pack,
+            world=player.world,
         )
 
     def native(self) -> managym.PlayerConfig:

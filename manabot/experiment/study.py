@@ -576,9 +576,9 @@ def run_study(
     if len({recipe.id.replace("_", "-") for recipe in recipes}) != len(recipes):
         raise ValueError("recipe IDs collide after arena normalization")
     # Arenas register players against one authored matchup; reject a deck
-    # supply before training rather than after it.
-    if any(recipe.decks is not None for recipe in recipes):
-        raise ValueError("study arena requires authored matchups, not training decks")
+    # source before training rather than after it.
+    if any(recipe.deck_source is not None for recipe in recipes):
+        raise ValueError("study arena requires authored matchups, not a deck source")
     if resume or (plan is not None and plan.protocol.purpose == "scientific"):
         current = runtime_fingerprints(
             protocol.training_seeds[0],

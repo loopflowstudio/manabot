@@ -13,7 +13,7 @@ pub struct PlayerConfig {
     #[serde(flatten)]
     pub deck: Deck,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub content_pack: Option<String>,
+    pub world: Option<String>,
 }
 
 impl PlayerConfig {
@@ -21,7 +21,7 @@ impl PlayerConfig {
         Self {
             name: name.into(),
             deck: Deck::new(decklist, BTreeMap::new()),
-            content_pack: None,
+            world: None,
         }
     }
 

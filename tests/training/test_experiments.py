@@ -56,9 +56,7 @@ def test_provenance_covers_complete_configuration_and_explicit_equal_values() ->
             base,
             overrides=(
                 ModelOverride(
-                    ModelConfig(
-                        hidden_dim=64, semantic_pack=None, compound_decisions=False
-                    )
+                    ModelConfig(hidden_dim=64, world=None, compound_decisions=False)
                 ),
                 Resources(execution=Execution(threads=2), wall_seconds=200),
                 LearningRule(
@@ -83,7 +81,7 @@ def test_provenance_covers_complete_configuration_and_explicit_equal_values() ->
     assert len(settings) == len(resolved.provenance)
     assert settings[("agent", "hidden_dim")].origin == "override"
     assert settings[("agent", "hidden_dim")].value == 64
-    assert settings[("agent", "semantic_pack")].value is None
+    assert settings[("agent", "world")].value is None
     assert settings[("agent", "compound_decisions")].origin == "override"
     assert settings[("agent", "value_kind")].origin == "baseline"
     assert (
@@ -103,7 +101,7 @@ def test_provenance_covers_complete_configuration_and_explicit_equal_values() ->
         "pipeline",
         "identity",
     }
-    assert base.regime().agent.semantic_pack == "ur-lessons-vs-gw-allies"
+    assert base.regime().agent.world == "ur-lessons-vs-gw-allies"
 
 
 def test_baseline_and_resolved_artifacts_are_isolated() -> None:

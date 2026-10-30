@@ -74,14 +74,12 @@ def validate_agent_setup(
     if len(actual) != 2 or any(setup not in binding["setups"] for setup in actual):
         raise ValueError("execution deck is outside checkpoint's exact setup roster")
     if roster_world:
-        if any(p.content_pack != pack_key for p in player_configs):
+        if any(p.world != pack_key for p in player_configs):
             raise ValueError("Elemental execution requires its explicit content pack")
         return
-    if any(p.content_pack not in (None, pack_key) for p in player_configs):
+    if any(p.world not in (None, pack_key) for p in player_configs):
         raise ValueError("execution content pack differs from the checkpoint")
-    if actual != binding["setups"] and any(
-        p.content_pack != pack_key for p in player_configs
-    ):
+    if actual != binding["setups"] and any(p.world != pack_key for p in player_configs):
         raise ValueError(
             "repeated decks require the checkpoint's explicit content pack"
         )
@@ -99,7 +97,7 @@ def validate_agent_decks(
     if binding is None:
         return
     if _binds_world(binding):
-        if any(p.content_pack != managym.WORLD_SETUP for p in player_configs):
+        if any(p.world != managym.WORLD_SETUP for p in player_configs):
             raise ValueError("execution deck is not submitted to the world")
         admit_world_decks(player_configs)
         return
@@ -124,7 +122,7 @@ def validate_policy_input(agent: Any, binding: dict) -> None:
         if _binds_world(binding)
         else binding["content_manifest"].get("pack_key")
     )
-    if pack_key is not None and agent.config.semantic_pack != pack_key:
+    if pack_key is not None and agent.config.world != pack_key:
         raise ValueError(
             "authored matchup checkpoint requires its complete semantic program input"
         )

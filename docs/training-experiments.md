@@ -68,7 +68,7 @@ no last-write-wins order or hidden conflict priority.
 Pydantic models retain which fields were explicitly supplied. Thus
 `ModelOverride(ModelConfig(hidden_dim=64))` changes only width, while supplying a fully
 populated ModelConfig explicitly replaces all its populated fields. An explicit
-default or `semantic_pack=None` remains an override in provenance. Whole-rule
+default or `world=None` remains an override in provenance. Whole-rule
 LearningRule and whole-pipeline Pipeline replacements deliberately include their
 defaults. Reuse existing model validation; typed patches must themselves be valid
 models, and every complete cell is revalidated after composition.

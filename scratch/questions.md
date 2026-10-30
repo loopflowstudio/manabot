@@ -415,3 +415,10 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   spare-mana and pump abilities. T2's nine new targeted spells are pinned in
   `test_heuristic.py`; the seven it cannot rate (airbend, linked exile, …) get
   polarity `None`, the documented neutral fallback.
+
+## Selector rename assumption (2026-10-30, headless)
+
+New regimes/checkpoints serialize `world`; a run started before the rename
+cannot resume exactly because `regime_digest` hashes the dump (frozen evidence
+still loads and receipts verify). Chose not to hash under old keys there —
+reversible if mid-flight resumes matter.

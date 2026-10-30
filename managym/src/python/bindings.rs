@@ -947,24 +947,24 @@ pub struct PyPlayerConfig {
     #[pyo3(get)]
     pub deck: Deck,
     #[pyo3(get, set)]
-    pub content_pack: Option<String>,
+    pub world: Option<String>,
 }
 
 #[cfg(feature = "python")]
 #[pymethods]
 impl PyPlayerConfig {
     #[new]
-    #[pyo3(signature = (name, decklist, sideboard=None, content_pack=None))]
+    #[pyo3(signature = (name, decklist, sideboard=None, world=None))]
     fn new(
         name: String,
         decklist: BTreeMap<String, usize>,
         sideboard: Option<BTreeMap<String, usize>>,
-        content_pack: Option<String>,
+        world: Option<String>,
     ) -> Self {
         Self {
             name,
             deck: Deck::new(decklist, sideboard.unwrap_or_default()),
-            content_pack,
+            world,
         }
     }
 
@@ -985,7 +985,7 @@ impl From<PyPlayerConfig> for PlayerConfig {
         PlayerConfig {
             name: value.name,
             deck: value.deck,
-            content_pack: value.content_pack,
+            world: value.world,
         }
     }
 }
@@ -996,7 +996,7 @@ impl From<PlayerConfig> for PyPlayerConfig {
         PyPlayerConfig {
             name: value.name,
             deck: value.deck,
-            content_pack: value.content_pack,
+            world: value.world,
         }
     }
 }
@@ -3940,7 +3940,7 @@ fn authored_deck_setup(pack_key: &str, deck_key: &str) -> PyResult<PyPlayerConfi
         .player_config(deck_key, deck_key)
         .map_err(|error| PyValueError::new_err(error.to_string()))?;
     Ok(PyPlayerConfig {
-        content_pack: Some(pack_key.to_string()),
+        world: Some(pack_key.to_string()),
         ..config.into()
     })
 }

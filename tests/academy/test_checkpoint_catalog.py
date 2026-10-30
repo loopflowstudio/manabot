@@ -164,7 +164,7 @@ def test_imported_decks_play_world_checkpoints_and_refuse_setup_bindings(
     from manabot.model.checkpoint import save_checkpoint
 
     space = ObservationSpace()
-    agent = ActorCritic(space, ModelConfig(semantic_pack="world"))
+    agent = ActorCritic(space, ModelConfig(world="world"))
     world = runs / "world" / "step_0.pt"
     save_checkpoint(agent, space, world, player_configs=None)
     rng = random.Random(0)

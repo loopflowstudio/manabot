@@ -32,7 +32,7 @@ def test_authored_matrix_has_four_roles_and_exact_native_selection() -> None:
         (matrix.role_b, matrix.role_b),
     ]
     for leg in range(8):
-        assert matrix.match(leg).content_pack == matrix.pack_key
+        assert matrix.match(leg).world == matrix.pack_key
     with pytest.raises(ValueError, match="distinct"):
         AuthoredMatchup(pack_key="anything", role_a="same", role_b="same")
     with pytest.raises(ValueError, match="between"):
@@ -80,7 +80,7 @@ def test_explicit_matrix_replays_all_cells_without_selected_world_alias(
         assert row["seat_decks"] == list(matrix.decks(row["leg"]))
         assert row["player_a_seat"] == row["leg"] % 2
     for game in read_trace(Path(trace["path"])):
-        assert game["match_hypers"]["content_pack"] == matrix.pack_key
+        assert game["match_hypers"]["world"] == matrix.pack_key
     with pytest.raises(ValueError, match="suite differs"):
         play_cell(
             key=contract.key,

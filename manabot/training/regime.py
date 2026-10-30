@@ -703,7 +703,7 @@ class TrainingRegime(Strict):
             raise ValueError(
                 "learning-state continuation requires one step-target stage without process recovery"
             )
-        if self.agent.recent_events and self.agent.semantic_pack is None:
+        if self.agent.recent_events and self.agent.world is None:
             raise ValueError(
                 "recent events require a semantic pack for public identities"
             )

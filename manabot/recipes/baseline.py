@@ -113,7 +113,7 @@ def baseline(
                 hidden_dim=64,
                 attention_layers=2,
                 num_attention_heads=4,
-                semantic_pack=PACK,
+                world=PACK,
                 value_kind="scalar",
                 value_aggregation="masked_mean",
                 policy_film=True,

@@ -179,32 +179,22 @@ content/pool/pack except the two selectors below; Rust admission reading
 `content_pool(WORLD_POOL)` is main's internal descriptor plumbing, not a
 surface. Still blocked on the selector question.
 
-## Open for Jack Heart's review (not decided)
+## Selector rename — done (2026-10-30 evening)
 
-A deck run must still write two main-owned "pack" selectors with the value
-`"world"`: `MatchConfig.content_pack` (native `PlayerConfig.content_pack`; set
-by `from_import` and checked in `collection.py:231`, `model/world.py:102`) and
-`ModelConfig.semantic_pack` (required by `execution.py:182`). Question: does
-"pack leaves the deck/training surfaces" extend to these existing selectors?
-- **a)** keep both; "world" is a value of main's setup/vocabulary selectors and
-  deck surfaces add no new pack names (current branch);
-- **b)** replace them for deck runs (new non-"pack" selector, or absence means
-  world).
-Evidence: frozen regimes, contracts and protocols serialize `content_pack`
-(`experiments/regimes/elemental-*-v1.json`,
-`experiments/contracts/int-9-exact-range-v1.json`,
-`experiments/protocols/{mtg186,elemental-174}-identity.json`), and architecture
-receipts hash `semantic_pack`, so a rename changes how frozen evidence reads and
-hashes. "Absence means world" changes main's rule that a config without a key
-whose decks equal an authored setup runs on that pack (the reason deck matches
-carry `"world"`: an imported pair equal to an authored setup must not silently
-switch vocabulary). Recommendation: a.
-Authored packs keep `content_pool` descriptors because main's policy vocabulary
-reads them; admission never does. Removing them changes vocabulary binding.
+`MatchConfig.world` (native `PlayerConfig.world`, Rust field and serde key
+`world`) and `ModelConfig.world` replace `content_pack`/`semantic_pack`.
+Pydantic `AliasChoices` reads the old keys (frozen regimes, protocols,
+checkpoint `agent_hypers`, failure evidence `PlayerSetup`); new dumps write
+`world`. `architecture_identity` hashes the selector under `semantic_pack`, so
+frozen receipts verify (pinned in `test_capacity`). Unrenamed, separate
+concepts: Study/advice `content_pack` identity, `semantic_pack_hash`,
+`semantic_pack_key`, Rust `ContentPack`. `study.py` reads `deck_source`.
+Check: debug cargo lib setups/vector_env/deck 27 + elemental/authored 7 passed,
+clippy/fmt clean; 166 focused Python passed; parity receipt rewritten.
 
 ## Remaining
 
-- PR #395 head is 69e245a31 (world_identity done); gate owns CI and the
+- Gate owns CI and the
   affected-area suites (`docs/development/validation.md`) before publish.
 - Deferred by decision: curriculum, mirrors, 17Lands source, random deck
   generation (a second source would bring a Python per-stream queue), Academy 1a.

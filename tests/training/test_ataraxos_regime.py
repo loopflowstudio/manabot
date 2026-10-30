@@ -75,7 +75,7 @@ def test_real_collection_update_export_reload(
         for variant in ("raw", "ema"):
             loaded, _ = load_checkpoint(stage.artifacts[variant]["path"])
             assert loaded.config.value_kind == recipe.agent.value_kind
-            assert loaded.config.semantic_pack == "ur-lessons-vs-gw-allies"
+            assert loaded.config.world == "ur-lessons-vs-gw-allies"
             assert all(
                 torch.isfinite(parameter).all() for parameter in loaded.parameters()
             )

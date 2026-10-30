@@ -157,7 +157,7 @@ json_record!(Deck {
         PyPlayerConfig {
             name: self.identity(),
             deck: self.clone(),
-            content_pack: Some(crate::world::WORLD_POOL.into()),
+            world: Some(crate::world::WORLD_POOL.into()),
         }
     }
 });
@@ -327,7 +327,7 @@ pub fn register(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<Decklist>()?;
     m.add_class::<DeckImport>()?;
     m.add("DEVELOPMENT_RULESET", DEVELOPMENT_RULESET)?;
-    // `PlayerConfig.content_pack` selection of decks submitted to the world.
+    // `PlayerConfig.world` selection of decks submitted to the world.
     m.add("WORLD_SETUP", crate::world::WORLD_POOL)?;
     m.add_function(wrap_pyfunction!(check_decks, m)?)?;
     m.add_function(wrap_pyfunction!(admit_decklists, m)?)?;

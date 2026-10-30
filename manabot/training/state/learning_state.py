@@ -158,12 +158,12 @@ def validate_adam(optimizer: torch.optim.Adam) -> None:
 
 def _admit_setup_transfer(source: MatchConfig, regime: TrainingRegime) -> None:
     """A deck switch stays inside the agent's semantic pack and changes decks."""
-    pack = regime.agent.semantic_pack
+    pack = regime.agent.world
     if regime.match is None:
         raise ValueError("setup transfer requires an authored match, not a deck source")
     if source == regime.match:
         raise ValueError("setup transfer must change the match")
-    if source.content_pack != pack or regime.match.content_pack != pack:
+    if source.world != pack or regime.match.world != pack:
         raise ValueError("setup transfer must stay inside the agent's semantic pack")
 
 

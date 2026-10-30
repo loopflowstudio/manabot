@@ -18,7 +18,7 @@ def ataraxos_mini() -> TrainingRegime:
         world=managym.WORLD_VERSION,
         match=selected_match(),
         agent=ModelConfig(
-            semantic_pack=PACK, value_aggregation="masked_mean", attention_layers=2
+            world=PACK, value_aggregation="masked_mean", attention_layers=2
         ),
         stages=[
             move_stage("self-play", updates=1500, seconds=10800, memory_bytes=15 * GIB)

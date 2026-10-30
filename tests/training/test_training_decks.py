@@ -62,7 +62,7 @@ def _agent() -> ActorCritic:
     torch.set_num_threads(1)
     return ActorCritic(
         ObservationSpace(),
-        ModelConfig(hidden_dim=8, num_attention_heads=2, semantic_pack=WORLD),
+        ModelConfig(hidden_dim=8, num_attention_heads=2, world=WORLD),
     )
 
 
@@ -88,7 +88,7 @@ def _regime(decks: object) -> TrainingRegime:
         id="decks-proof",
         world=managym.WORLD_VERSION,
         deck_source=decks,
-        agent=ModelConfig(hidden_dim=8, num_attention_heads=2, semantic_pack=WORLD),
+        agent=ModelConfig(hidden_dim=8, num_attention_heads=2, world=WORLD),
         stages=[
             TrainSelfPlay(
                 id="self",
@@ -146,7 +146,7 @@ def test_regime_records_its_source_and_rejects_bad_decks_before_training(
     assert canonical_sha256(
         TrainingRegime.model_validate(record).model_dump(mode="json")
     ) == canonical_sha256(record)
-    assert regime.root_match.content_pack == managym.WORLD_SETUP
+    assert regime.root_match.world == managym.WORLD_SETUP
     authored = MatchConfig(
         hero="forest",
         villain="swamp",
@@ -156,7 +156,7 @@ def test_regime_records_its_source_and_rejects_bad_decks_before_training(
     with pytest.raises(ValueError, match="remove the authored match"):
         TrainingRegime.model_validate({**record, "match": authored.model_dump()})
     wrong = regime.model_copy(deep=True)
-    wrong.agent.semantic_pack = "elemental-world-v2"
+    wrong.agent.world = "elemental-world-v2"
     with pytest.raises(ValueError, match="complete world"):
         validate_regime(wrong)
     bad = _regime(

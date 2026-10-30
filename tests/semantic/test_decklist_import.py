@@ -139,7 +139,7 @@ def test_retained_sources_reject_tampering_and_follow_seat_swaps() -> None:
     with pytest.raises(ValueError, match="retained source"):
         MatchConfig.model_validate(edited)
     authored = config.model_dump()
-    authored["content_pack"] = "ur-lessons-vs-gw-allies"
+    authored["world"] = "ur-lessons-vs-gw-allies"
     with pytest.raises(ValueError, match="plays in the world"):
         MatchConfig.model_validate(authored)
     swapped = Match(config).swapped().config
@@ -152,7 +152,7 @@ def _untrained(path: Path, pack: str = PACK, **binding: object) -> None:
     torch.set_num_threads(1)
     space = ObservationSpace()
     agent = ActorCritic(
-        space, ModelConfig(hidden_dim=8, num_attention_heads=2, semantic_pack=pack)
+        space, ModelConfig(hidden_dim=8, num_attention_heads=2, world=pack)
     )
     save_checkpoint(agent, space, path, **binding)
 

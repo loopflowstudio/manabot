@@ -14,7 +14,7 @@ def gpu_training_profile() -> TrainingRegime:
         world=managym.WORLD_VERSION,
         match=selected_match(),
         agent=ModelConfig(
-            semantic_pack=PACK,
+            world=PACK,
             value_aggregation="value_token",
             attention_layers=8,
             attention_feedforward_dim=1536,

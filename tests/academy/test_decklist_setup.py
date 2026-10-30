@@ -40,7 +40,7 @@ def test_imported_setup_matches_manabot_reconnect_and_rebuilt_root(
     config = session.trace.config
     assert config.hero_source is not None and config.villain_source is not None
     match_config = MatchConfig(
-        content_pack=managym.WORLD_SETUP,
+        world=managym.WORLD_SETUP,
         hero_source=managym.Decklist.from_dict(config.hero_source),
         villain_source=managym.Decklist.from_dict(config.villain_source),
         hero="Hero",

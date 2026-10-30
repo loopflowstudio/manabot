@@ -63,5 +63,5 @@ def pair_match(
         villain_deck=second.decklist,
         hero_sideboard=first.sideboard,
         villain_sideboard=second.sideboard,
-        content_pack=first.content_pack,
+        world=first.world,
     )

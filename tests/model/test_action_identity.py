@@ -57,7 +57,7 @@ def test_policy_choice_can_learn_either_preference(
         ModelConfig(
             hidden_dim=16,
             num_attention_heads=2,
-            semantic_pack="ur-lessons-vs-gw-allies" if semantic else None,
+            world="ur-lessons-vs-gw-allies" if semantic else None,
         ),
     )
     # Erasing precisely the repaired information reproduces the forced tie.

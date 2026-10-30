@@ -96,7 +96,7 @@ need no checkpoint, and no training is required to use the importer.
 A training run has a deck source: a way to get the decks for each new game,
 not a list of files. Experiments are Python, so the experiment builds the
 source however it likes and places it in the regime as `deck_source`, with
-`agent.semantic_pack` set to `"world"` and no `match`: the source is the
+`agent.world` set to `"world"` and no `match`: the source is the
 regime's only record of its setups, and a regime that also authors a `match` is
 rejected. Producer policies are admitted against the world, by checking every
 deck the source lists, rather than against one pair. Deck stages require
@@ -114,7 +114,7 @@ imports = managym.admit_decklists(
 values = recipe.model_dump(mode="json")
 values.pop("match")
 values["deck_source"] = UniformDecks(decks=tuple(i.deck for i in imports))
-values["agent"]["semantic_pack"] = "world"
+values["agent"]["world"] = "world"
 regime = TrainingRegime.model_validate(values)
 ```
 

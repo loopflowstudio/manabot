@@ -124,7 +124,7 @@
         },
         {
           "path": "managym/src/agent/vector_env.rs",
-          "sha256": "8a5beccaa7617309392bc206d34f5e7cf63e66cc6677186e1cb286512ac2a34f"
+          "sha256": "e5cafc9774748ac93400ff2a64aac70a908bd612c7c3649d5624fa773d490452"
         },
         {
           "path": "managym/src/benchmark.rs",
@@ -176,7 +176,7 @@
         },
         {
           "path": "managym/src/cards/setups.rs",
-          "sha256": "0ddcb0cf9a288ee9a5358729a5b0cee79dcd25bdfddc64a4b4556d9e6bb1f8e8"
+          "sha256": "24860e7b27d9ca6895a2ef13b5e3b1e10f402c93e9154c9b25df394434ad15c1"
         },
         {
           "path": "managym/src/cards/tokens.rs",
@@ -472,7 +472,7 @@
         },
         {
           "path": "managym/src/python/bindings.rs",
-          "sha256": "3ceb396f8595d6b47f0c2504c6d704c45d9550a26b6c4ff0831356a2610cb81e"
+          "sha256": "f0cfd14f61e7cb8e5107ec8743af6726fc06d67e317a4a1735495a84539dee3d"
         },
         {
           "path": "managym/src/python/convert.rs",
@@ -480,7 +480,7 @@
         },
         {
           "path": "managym/src/python/deck_bindings.rs",
-          "sha256": "285ba6350682821cc267783e67d813d6d17d5f673ce803e8879cdbac2f5eb419"
+          "sha256": "ff3e8e238b6452ebc3fba2868aa30c9bdd68a96b1447efb9cb97c5da4ef83e3e"
         },
         {
           "path": "managym/src/python/mod.rs",
@@ -528,7 +528,7 @@
         },
         {
           "path": "managym/src/state/player.rs",
-          "sha256": "e558c8954f8efebc386ed766dd85600f79e3b2a9b9ef821e67e30da0aef61cbd"
+          "sha256": "2ce9493de3c2251e3fb196ed6d0d69a3363d4e52d381f402b52897026fead1cd"
         },
         {
           "path": "managym/src/state/predicate.rs",
@@ -567,7 +567,7 @@
           "sha256": "23ac765196d97fb350c0e3e2337bacc5d8e42bd6c47edb7999fb0907d32bfa8d"
         }
       ],
-      "sha256": "c81e570786d919852ef69b8c3d8ac78712fa9994257a7ca85596ecf23b4e025e"
+      "sha256": "ea0762056f25aac6f27298e99412c447bcc1847699ea6865fdfa7a52d2ea38f7"
     },
     "seed": 0
   },

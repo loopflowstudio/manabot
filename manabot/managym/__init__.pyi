@@ -264,10 +264,10 @@ class PlayerConfig:
         name: str,
         decklist: Dict[str, int],
         sideboard: Optional[Dict[str, int]] = None,
-        content_pack: str | None = None,
+        world: str | None = None,
     ) -> None: ...
     name: str
-    content_pack: str | None
+    world: str | None
     @property
     def deck(self) -> Deck: ...
     @property
@@ -364,7 +364,7 @@ class DeckImportError(ValueError):
 
 MAX_DECKLIST_BYTES: int
 DEVELOPMENT_RULESET: str
-# `PlayerConfig.content_pack` selection of decks submitted to the installed world.
+# `PlayerConfig.world` selection of decks submitted to the installed world.
 WORLD_SETUP: str
 
 def admit_decklists(decklists: list[tuple[str, Decklist]]) -> list[DeckImport]:
