@@ -34,6 +34,7 @@ fn queue_effects(s: &mut Scenario, source: CardId, effects: Vec<Effect>) {
         context: None,
         player: None,
         inline_effects: Some(effects),
+        x: 0,
     });
 }
 

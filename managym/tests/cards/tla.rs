@@ -10904,3 +10904,48 @@ fn fire_lord_zuko_counters_the_team_for_exile_casts_and_entries() {
     attack_and_settle(&mut s, &[zuko], None);
     assert_eq!(combat_red(&s), 3, "firebending X = power 3");
 }
+
+/// The entry trigger reads the X Wan Shi Tong was cast with: X counters and
+/// half X cards rounded down; put onto the battlefield uncast, X is 0.
+#[test]
+fn wan_shi_tong_enters_with_x_counters_and_draws_half_x() {
+    let mut s = five_color_unfunded_setup(&["Wan Shi Tong, Librarian"]);
+    s.set_player_mana_pool(0, "UU3");
+    let card = cast(&mut s, "Wan Shi Tong, Librarian");
+    choose_mode(&mut s, 3);
+    let hand = s.zone_size(0, ZoneType::Hand);
+    settle(&mut s);
+    let wan = s.game().state.card_to_permanent[card].unwrap();
+    assert_eq!(counters(&s, wan), 3);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 1, "half of 3");
+    assert!(keywords(&s, wan).vigilance && keywords(&s, wan).flying);
+
+    let mut s = five_color_unfunded_setup(&["Wan Shi Tong, Librarian"]);
+    let hand = s.zone_size(0, ZoneType::Hand);
+    enter_and_settle(&mut s, "Wan Shi Tong, Librarian");
+    let wan = permanent_named(&s, "Wan Shi Tong, Librarian");
+    assert_eq!(counters(&s, wan), 0);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand);
+}
+
+/// An opponent's search, even landcycling, grows Wan Shi Tong and draws;
+/// your own search does not.
+#[test]
+fn wan_shi_tong_grows_and_draws_when_an_opponent_searches() {
+    let mut s = five_color_setup(&["Wan Shi Tong, Librarian", "Saber-Tooth Moose-Lion"]);
+    let wan = s.force_permanent_on_battlefield(0, "Wan Shi Tong, Librarian");
+    let own = move_from_library(&mut s, 0, "Saber-Tooth Moose-Lion", ZoneType::Hand);
+    s.set_player_mana_pool(0, "2");
+    activate_card(&mut s, own, 0);
+    settle(&mut s);
+    assert_eq!(counters(&s, wan), 0, "your own search");
+
+    let theirs = move_from_library(&mut s, 1, "Saber-Tooth Moose-Lion", ZoneType::Hand);
+    s.advance_to_active_step(1, StepKind::Main);
+    let hand = s.zone_size(0, ZoneType::Hand);
+    s.set_player_mana_pool(1, "2");
+    activate_card(&mut s, theirs, 0);
+    settle(&mut s);
+    assert_eq!(counters(&s, wan), 1);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 1);
+}

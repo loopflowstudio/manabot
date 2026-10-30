@@ -105,6 +105,9 @@ fn condition_description(condition: &TriggerCondition) -> String {
         TriggerCondition::AttacksAlone { subject } => {
             format!("When {} attacks alone", subject_description(subject))
         }
+        TriggerCondition::OpponentSearchesLibrary => {
+            "When an opponent searches their library".into()
+        }
         TriggerCondition::FromZone { zone, condition } => format!(
             "{} (from {})",
             condition_description(condition),
@@ -356,6 +359,7 @@ fn value_description(value: &EffectValue) -> String {
     match value {
         EffectValue::Fixed(value) => value.to_string(),
         EffectValue::X => "the announced value of X".into(),
+        EffectValue::Half(value) => format!("half of {}, rounded down", value_description(value)),
         EffectValue::CreaturesWithCounters => {
             "the number of creatures you control with +1/+1 counters".into()
         }
@@ -543,7 +547,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         CreateTokensValue { token_name, count } => format!("Create X {token_name} tokens, where X is {}",value_description(count)),
         ExileWithControllerToken { target, token_name } => format!("Exile {}. Its controller creates a {token_name} token",target_description(target)),
         CreateToken { token_name, count, tapped_and_attacking, attach_source } => format!("Create {count} {token_name} token{}{}{}",if *count == 1 { "" } else { "s" },if *tapped_and_attacking { " tapped and attacking" } else { "" },if *attach_source { ", then attach this to it" } else { "" }),
-        PutCountersOnSource { count, kind } => format!("Put {count} {} counters on this",counter_description(*kind)),
+        PutCountersOnSource { count, kind } => format!("Put {} {} counters on this",value_description(count),counter_description(*kind)),
         PutCounters { count, kind, target } => format!("Put {count} {} counters on {}",counter_description(*kind),target_description(target)),
         TapSource => "Tap this".into(), UntapSource => "Untap this".into(),
         ReturnSourceToHand => "Return this card from your graveyard to your hand".into(),

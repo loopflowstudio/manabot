@@ -303,6 +303,7 @@ impl Game {
             target_req_indices: trigger.target_req_indices,
             context: trigger.context,
             player: trigger.player,
+            x: trigger.x,
             inline_effects: trigger.inline_effects,
         }));
         self.emit(GameEvent::AbilityTriggered {
@@ -491,7 +492,19 @@ impl Game {
             };
             let player = match event {
                 GameEvent::SpellCast { card, .. } => Some(self.spell_caster(*card)),
+                GameEvent::LibrarySearched { player } => Some(*player),
                 _ => None,
+            };
+            // CR 107.3m: an entering permanent's own trigger sees its spell's X.
+            let x = match event {
+                GameEvent::CardMoved {
+                    card,
+                    to: ZoneType::Battlefield,
+                    ..
+                } if *card == source_card => self.state.card_to_permanent[*card]
+                    .and_then(|id| self.state.permanents[id].as_ref())
+                    .map_or(0, |permanent| permanent.cast_x),
+                _ => 0,
             };
             self.state.pending_triggers.push(PendingTrigger {
                 targets: Vec::new(),
@@ -506,6 +519,7 @@ impl Game {
                 ordering_class: TriggerOrderingClass::Ordinary,
                 context,
                 player,
+                x,
                 inline_effects: None,
             });
             self.state.trigger_enqueue_counter = self
@@ -570,6 +584,7 @@ impl Game {
             ordering_class: TriggerOrderingClass::Ordinary,
             context: None,
             player: None,
+            x: 0,
             inline_effects: Some(effects),
         });
         self.state.trigger_enqueue_counter = self
@@ -653,6 +668,9 @@ impl Game {
                         source_was_on_battlefield,
                         event,
                     )
+            }
+            (TriggerCondition::OpponentSearchesLibrary, GameEvent::LibrarySearched { player }) => {
+                *player != source_controller
             }
             (TriggerCondition::FromZone { zone, condition }, _) => {
                 self.event_origin(event) == Some(*zone)

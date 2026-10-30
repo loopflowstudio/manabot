@@ -67,6 +67,9 @@ pub struct TriggeredAbilityOnStack {
     /// The trigger's player ("they": the caster of the triggering spell).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub player: Option<PlayerId>,
+    /// The ability's X (`PendingTrigger::x`).
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub x: u8,
     /// Delayed triggers resolve these effects instead of looking up
     /// `Card::abilities[ability_index]`.
     pub inline_effects: Option<Vec<Effect>>,

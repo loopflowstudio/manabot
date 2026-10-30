@@ -116,6 +116,7 @@ fn stack(
             context: None,
             player: None,
             inline_effects: Some(effects),
+            x: 0,
         }),
         Entry::Spell => unreachable!(),
     };

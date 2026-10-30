@@ -506,8 +506,14 @@ impl Game {
         if let Some(lki) = departing_lki {
             self.record_object_lki(lki);
         }
-        let was_cast =
-            old_zone == Some(ZoneType::Stack) && self.find_spell_on_stack_index(card).is_some();
+        let cast_spell = (old_zone == Some(ZoneType::Stack))
+            .then(|| self.find_spell_on_stack_index(card))
+            .flatten();
+        let was_cast = cast_spell.is_some();
+        let cast_x = cast_spell.map_or(0, |index| match &self.state.stack_objects[index] {
+            StackObject::Spell(spell) => spell.x,
+            _ => 0,
+        });
         if old_zone == Some(ZoneType::Stack) {
             if let Some(index) = self.find_spell_on_stack_index(card) {
                 self.journal_stack();
@@ -528,6 +534,7 @@ impl Game {
                 Permanent::new(self.state.id_gen.next_id(), card, &self.state.cards[card]);
             permanent.controller = holder;
             permanent.was_cast = was_cast;
+            permanent.cast_x = cast_x;
             permanent.tapped = entry.tapped;
             permanent.counters = entry.counters;
             event_controller = permanent.controller;

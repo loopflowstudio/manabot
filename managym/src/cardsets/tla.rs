@@ -231,6 +231,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         unlucky_cabbage_merchant(),
         vindictive_warden(),
         walltop_sentries(),
+        wan_shi_tong_librarian(),
         wandering_musicians(),
         war_balloon(),
         wartime_protestors(),
@@ -807,7 +808,7 @@ fn avatar_enthusiasts() -> CardDefinition {
                 }),
             },
             effects: vec![Effect::PutCountersOnSource {
-                count: 1,
+                count: EffectValue::Fixed(1),
                 kind: CounterKind::PlusOnePlusOne,
             }],
         }],
@@ -1271,7 +1272,7 @@ fn boar_q_pine() -> CardDefinition {
                 },
             },
             effects: vec![Effect::PutCountersOnSource {
-                count: 1,
+                count: EffectValue::Fixed(1),
                 kind: CounterKind::PlusOnePlusOne,
             }],
         }],
@@ -2223,7 +2224,7 @@ fn earth_kings_lieutenant() -> CardDefinition {
                     }),
                 },
                 effects: vec![Effect::PutCountersOnSource {
-                    count: 1,
+                    count: EffectValue::Fixed(1),
                     kind: CounterKind::PlusOnePlusOne,
                 }],
             },
@@ -2833,7 +2834,7 @@ fn fire_sages() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{1}{R}{R}"),
             effects: vec![Effect::PutCountersOnSource {
-                count: 1,
+                count: EffectValue::Fixed(1),
                 kind: CounterKind::PlusOnePlusOne,
             }],
             ..Default::default()
@@ -3146,7 +3147,7 @@ fn foggy_swamp_vinebender() -> CardDefinition {
             mana_cost: ManaCost::parse("{5}"),
             waterbend: true,
             effects: vec![Effect::PutCountersOnSource {
-                count: 1,
+                count: EffectValue::Fixed(1),
                 kind: CounterKind::PlusOnePlusOne,
             }],
             ..Default::default()
@@ -3695,7 +3696,7 @@ fn hog_monkey() -> CardDefinition {
             exhaust: true,
             mana_cost: ManaCost::parse("{5}"),
             effects: vec![Effect::PutCountersOnSource {
-                count: 2,
+                count: EffectValue::Fixed(2),
                 kind: CounterKind::PlusOnePlusOne,
             }],
             ..Default::default()
@@ -3904,7 +3905,7 @@ fn invasion_submersible() -> CardDefinition {
             effects: vec![
                 Effect::indefinitely(AffectedSpec::Source, Modification::BecomeArtifactCreature),
                 Effect::PutCountersOnSource {
-                    count: 3,
+                    count: EffectValue::Fixed(3),
                     kind: CounterKind::PlusOnePlusOne,
                 },
             ],
@@ -4267,7 +4268,7 @@ fn knowledge_seeker() -> CardDefinition {
                 intervening_if: None,
                 condition: TriggerCondition::YouDrawNthCardThisTurn { n: 2 },
                 effects: vec![Effect::PutCountersOnSource {
-                    count: 1,
+                    count: EffectValue::Fixed(1),
                     kind: CounterKind::PlusOnePlusOne,
                 }],
             },
@@ -4585,7 +4586,7 @@ fn mai_jaded_edge() -> CardDefinition {
             exhaust: true,
             mana_cost: ManaCost::parse("{3}"),
             effects: vec![Effect::PutCountersOnSource {
-                count: 1,
+                count: EffectValue::Fixed(1),
                 kind: CounterKind::DoubleStrike,
             }],
             ..Default::default()
@@ -5331,7 +5332,7 @@ fn ostrich_horse() -> CardDefinition {
                     ..Default::default()
                 },
                 if_declined: vec![Effect::PutCountersOnSource {
-                    count: 1,
+                    count: EffectValue::Fixed(1),
                     kind: CounterKind::PlusOnePlusOne,
                 }],
                 if_milled: None,
@@ -5544,7 +5545,7 @@ fn pirate_peddlers() -> CardDefinition {
                 another: true,
             },
             effects: vec![Effect::PutCountersOnSource {
-                count: 1,
+                count: EffectValue::Fixed(1),
                 kind: CounterKind::PlusOnePlusOne,
             }],
         }],
@@ -5909,7 +5910,7 @@ fn rebellious_captives() -> CardDefinition {
             mana_cost: ManaCost::parse("{6}"),
             effects: vec![
                 Effect::PutCountersOnSource {
-                    count: 2,
+                    count: EffectValue::Fixed(2),
                     kind: CounterKind::PlusOnePlusOne,
                 },
                 Effect::Earthbend {
@@ -5995,7 +5996,7 @@ fn rough_rhino_cavalry() -> CardDefinition {
             mana_cost: ManaCost::parse("{8}"),
             effects: vec![
                 Effect::PutCountersOnSource {
-                    count: 2,
+                    count: EffectValue::Fixed(2),
                     kind: CounterKind::PlusOnePlusOne,
                 },
                 Effect::until_end_of_turn(
@@ -6376,7 +6377,7 @@ fn sokka_bold_boomeranger() -> CardDefinition {
                     },
                 },
                 effects: vec![Effect::PutCountersOnSource {
-                    count: 1,
+                    count: EffectValue::Fixed(1),
                     kind: CounterKind::PlusOnePlusOne,
                 }],
             },
@@ -7874,6 +7875,60 @@ fn walltop_sentries() -> CardDefinition {
     }
 }
 
+fn wan_shi_tong_librarian() -> CardDefinition {
+    let text_box = "Flash\nFlying, vigilance\nWhen Wan Shi Tong enters, put X +1/+1 counters on him. Then draw half X cards, rounded down.\nWhenever an opponent searches their library, put a +1/+1 counter on Wan Shi Tong and draw a card.";
+
+    CardDefinition {
+        key: "tla.wan_shi_tong_librarian",
+        scryfall_id: "e20da6b5-1057-4a28-9e85-07de714e262f",
+        name: "Wan Shi Tong, Librarian".into(),
+        mana_cost: Some(ManaCost::parse("{X}{U}{U}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Bird".into(), "Spirit".into()],
+        power: Some(1),
+        toughness: Some(1),
+        keywords: Keywords {
+            flash: true,
+            flying: true,
+            vigilance: true,
+            ..Default::default()
+        },
+        abilities: vec![
+            Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![
+                    Effect::PutCountersOnSource {
+                        count: EffectValue::X,
+                        kind: CounterKind::PlusOnePlusOne,
+                    },
+                    Effect::DrawCards {
+                        count: EffectValue::Half(Box::new(EffectValue::X)),
+                    },
+                ],
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::OpponentSearchesLibrary,
+                intervening_if: None,
+                effects: vec![
+                    Effect::PutCountersOnSource {
+                        count: EffectValue::Fixed(1),
+                        kind: CounterKind::PlusOnePlusOne,
+                    },
+                    Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    },
+                ],
+            },
+        ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
 fn wandering_musicians() -> CardDefinition {
     let text_box =
         "Whenever this creature attacks, creatures you control get +1/+0 until end of turn.";
@@ -7933,7 +7988,7 @@ fn war_balloon() -> CardDefinition {
             ActivatedAbilityDefinition {
                 mana_cost: ManaCost::parse("{1}"),
                 effects: vec![Effect::PutCountersOnSource {
-                    count: 1,
+                    count: EffectValue::Fixed(1),
                     kind: CounterKind::Fire,
                 }],
                 ..Default::default()
@@ -8065,7 +8120,7 @@ fn waterbender_ascension() -> CardDefinition {
             intervening_if: None,
             effects: vec![
                 Effect::PutCountersOnSource {
-                    count: 1,
+                    count: EffectValue::Fixed(1),
                     kind: CounterKind::Quest,
                 },
                 Effect::If {

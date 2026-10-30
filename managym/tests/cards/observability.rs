@@ -141,7 +141,7 @@ fn keyword_columns(keywords: Keywords) -> [(&'static str, bool, usize, usize); 1
     ]
 }
 
-fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 16] {
+fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 17] {
     let Permanent {
         id: _,
         card: _,
@@ -156,6 +156,7 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 16] {
         animated: _,
         attacking: _,
         was_cast: _,
+        cast_x: _,
         attached_to: _,
         exhausted: _,
         activated_this_turn: _,
@@ -182,6 +183,10 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 16] {
         (
             "was_cast",
             Seen::Transient("read only by entering-the-battlefield triggers as it enters"),
+        ),
+        (
+            "cast_x",
+            Seen::Transient("copied into its own entering trigger's X as it fires"),
         ),
         ("attached_to", Seen::Permanent(PERMANENT_ATTACHED_INDEX)),
         ("exhausted", Seen::Fact(FactKind::UsedAbility)),
@@ -604,7 +609,7 @@ fn effect_witnesses() -> Vec<Effect> {
             attach_source: false,
         },
         Effect::PutCountersOnSource {
-            count: 1,
+            count: EffectValue::Fixed(1),
             kind: CounterKind::PlusOnePlusOne,
         },
         Effect::PutCounters {
@@ -778,6 +783,7 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::PlayerCastsSpell { .. } => "TriggerCondition::PlayerCastsSpell",
         TriggerCondition::AttacksWithAnother => "TriggerCondition::AttacksWithAnother",
         TriggerCondition::FromZone { .. } => "TriggerCondition::FromZone",
+        TriggerCondition::OpponentSearchesLibrary => "TriggerCondition::OpponentSearchesLibrary",
         TriggerCondition::CreatureDealsCombatDamageToPlayer { .. } => {
             "TriggerCondition::CreatureDealsCombatDamageToPlayer"
         }
@@ -843,6 +849,7 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
             predicate: CardPredicate::creature(),
         },
         TriggerCondition::AttacksWithAnother,
+        TriggerCondition::OpponentSearchesLibrary,
         TriggerCondition::FromZone {
             zone: ZoneType::Exile,
             condition: enters(),

@@ -1409,6 +1409,7 @@ impl Observation {
             | GameEvent::PermanentTapped { .. }
             | GameEvent::PermanentTargeted { .. }
             | GameEvent::CombatDamageToPlayers { .. }
+            | GameEvent::LibrarySearched { .. }
             | GameEvent::AttackersDeclared { .. }
             | GameEvent::StepStarted { .. } => Vec::new(),
         }

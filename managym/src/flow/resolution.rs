@@ -49,6 +49,7 @@ impl Game {
                         && self.permanent_matches_predicate(*id, predicate)
                 })
                 .count() as i32,
+            EffectValue::Half(inner) => self.effect_value(inner, frame).div_euclid(2),
             _ => self.controller_value(value, frame.controller),
         }
     }
@@ -88,6 +89,7 @@ impl Game {
             EffectValue::PermanentsSacrificedThisTurn => {
                 self.state.turn.history[controller.0].permanents_sacrificed as i32
             }
+            EffectValue::Half(inner) => self.controller_value(inner, controller).div_euclid(2),
         }
     }
 
@@ -291,7 +293,7 @@ impl Game {
             controller: source_controller,
             resolutions_this_turn,
             kicked: false,
-            x: 0,
+            x: triggered.x,
             excess_damage: 0,
             targets,
             active_requirement: 0,
@@ -632,16 +634,21 @@ impl Game {
                 untap_if_lands,
                 bottom_source,
                 to_hand,
-            } => Some(Decision::SearchBasicLand {
-                player: frame.controller,
-                subtype: subtype.clone(),
-                remaining: self.effect_value(count, frame).max(0) as usize,
-                tapped: *tapped,
-                untap_if_lands: *untap_if_lands,
-                bottom_source: *bottom_source,
-                to_hand: *to_hand,
-                selected: Vec::new(),
-            }),
+            } => {
+                self.emit(GameEvent::LibrarySearched {
+                    player: frame.controller,
+                });
+                Some(Decision::SearchBasicLand {
+                    player: frame.controller,
+                    subtype: subtype.clone(),
+                    remaining: self.effect_value(count, frame).max(0) as usize,
+                    tapped: *tapped,
+                    untap_if_lands: *untap_if_lands,
+                    bottom_source: *bottom_source,
+                    to_hand: *to_hand,
+                    selected: Vec::new(),
+                })
+            }
             Effect::OptionalDiscardDraw { count, up_to } => {
                 (*up_to > 0).then_some(Decision::OptionalDiscardDraw {
                     player: frame.controller,
@@ -784,12 +791,17 @@ impl Game {
             Effect::SearchLandsOpponentSplits {
                 count,
                 opponent_picks,
-            } => Some(Decision::SearchDistinctLands {
-                player: frame.controller,
-                remaining: *count,
-                selected: Vec::new(),
-                opponent_picks: *opponent_picks,
-            }),
+            } => {
+                self.emit(GameEvent::LibrarySearched {
+                    player: frame.controller,
+                });
+                Some(Decision::SearchDistinctLands {
+                    player: frame.controller,
+                    remaining: *count,
+                    selected: Vec::new(),
+                    opponent_picks: *opponent_picks,
+                })
+            }
             Effect::OwnerPutsIntoLibrary { .. } => {
                 let Some(Target::Permanent(id)) = self.present_primary_target(frame) else {
                     return None;
@@ -981,6 +993,9 @@ impl Game {
                 None
             }
             Effect::SearchLibraryToHand { predicate } => {
+                self.emit(GameEvent::LibrarySearched {
+                    player: frame.controller,
+                });
                 // With nothing to find, the search still shuffles.
                 if self
                     .library_search_candidates(frame.controller, predicate)
@@ -1197,8 +1212,9 @@ impl Game {
                 None
             }
             Effect::PutCountersOnSource { count, kind } => {
+                let count = self.effect_value(count, frame);
                 if let Some(permanent_id) = self.source_permanent_id(frame) {
-                    self.change_counters(permanent_id, *kind, *count);
+                    self.change_counters(permanent_id, *kind, count);
                 }
                 None
             }

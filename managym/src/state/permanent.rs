@@ -107,6 +107,10 @@ pub struct Permanent {
     pub attacking: bool,
     /// True only for this incarnation entering as a resolving cast spell.
     pub was_cast: bool,
+    /// The X announced for that spell (CR 107.3m), read by its own
+    /// entering-the-battlefield triggers; 0 otherwise.
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub cast_x: u8,
     /// The exact object this Equipment is attached to (CR 301.5). State-based
     /// actions clear it once that object is gone or no longer a creature.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -157,6 +161,7 @@ impl Permanent {
             animated: false,
             attacking: false,
             was_cast: false,
+            cast_x: 0,
             attached_to: None,
             exhausted: Vec::new(),
             activated_this_turn: Vec::new(),

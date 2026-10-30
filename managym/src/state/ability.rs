@@ -83,6 +83,9 @@ pub enum TriggerCondition {
         zone: ZoneType,
         condition: Box<TriggerCondition>,
     },
+    /// "Whenever an opponent searches their library" (CR 701.23), even when
+    /// the search finds nothing.
+    OpponentSearchesLibrary,
     /// "Whenever [subject] deals combat damage to a player": once for each
     /// creature that does (`AnyYouControl`: "a creature you control").
     CreatureDealsCombatDamageToPlayer {
@@ -275,6 +278,8 @@ pub enum EffectValue {
     },
     /// Permanents `controller` has sacrificed this turn.
     PermanentsSacrificedThisTurn,
+    /// Half the inner value, rounded down ("half X cards, rounded down").
+    Half(Box<EffectValue>),
 }
 
 /// A resolving obligation, distinct from the effects chosen by its outcome.
@@ -567,9 +572,10 @@ pub enum Effect {
     /// The owner of the object the source is attached to shuffles it into
     /// their library.
     ShuffleAttachedIntoLibrary,
-    /// Put `count` counters of `kind` on the source permanent.
+    /// Put `count` counters of `kind` on the source permanent, `count` read
+    /// at resolution.
     PutCountersOnSource {
-        count: i32,
+        count: EffectValue,
         kind: CounterKind,
     },
     /// Put `count` counters of `kind` on the target.
