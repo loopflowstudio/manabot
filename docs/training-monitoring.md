@@ -203,47 +203,15 @@ Jack Heart selected `s3://etudefantasia/manabot/` for retained bytes and
 `loopflow-studio/etude` for W&B metrics on 2026-10-06. The bucket was created in
 `us-west-2` with bucket-owner-enforced ownership, all public-access blocks,
 AES256 default encryption and versioning enabled. No bucket creation, lifecycle
-deletion, or public access is performed by the publication commands below.
+deletion, or public access is performed by these commands.
 
 Use the standard AWS credential chain (`AWS_PROFILE` or `--profile`); never put
-keys in recipes or manifests. Publish a completed or stopped TrainingRun:
+keys in recipes or manifests. Training policy exports are retained as Etude
+checkpoints, and experiment results under `experiments/data/` are published with
+`uv run --extra artifacts python -m manabot.data publish <path>`. Earlier
+TrainingRun storage manifests remain readable as `StoredArtifact` references.
 
-```bash
-uv run --extra artifacts python -m manabot.experiment.artifacts publish \
-  --run /path/to/run.json --destination s3://etudefantasia/manabot/ \
-  --out .runs/storage/run-artifacts.json
-```
-
-The publisher validates all retained stage exports, including rejected artifacts,
-monitoring checkpoints and recovery snapshots. Role names retain
-that distinction. Equal digests share a content-addressed S3 key. Exact `run.json`
-bytes and the storage manifest are also stored in S3; the adjacent `.receipt.json`
-pins the manifest's URI, digest, size and version when available. Original receipts
-and absolute paths remain unchanged. This archives the named exports, not every
-file under a run directory or a portable process-recovery environment. Referenced
-external datasets and ancestor runs need their own publication.
-
-Publication is a separate explicit operation: it does not delay an optimizer or
-retrofit live campaigns. Interrupted uploads can leave unreferenced blobs; retry
-verifies existing bytes instead of replacing objects. Local files are retained.
-The implementation uses conditional single PUT with SHA-256 and full readback;
-artifacts over 5 GiB fail explicitly. Transfer costs are separate from historical
-training costs. Bucket encryption and access policies are managed outside this CLI.
-
-Training policy exports also use Etude checkpoint retention. The artifact
-manifest remains a separate archive of exact historical producer bytes; no old
-result is rewritten.
-
-Fetch a named role from the manifest (use its exact `artifacts` key):
-
-```bash
-uv run --extra artifacts python -m manabot.experiment.artifacts fetch \
-  --manifest .runs/storage/run-artifacts.json \
-  --artifact stages/policy-0/artifacts/raw --cache .runs/artifact-cache
-```
-
-This prints a verified local path for ordinary checkpoint consumers. Python callers
-can pass a manifest's `StoredArtifact` directly to `load_checkpoint`; it uses
+Python callers can pass a manifest's `StoredArtifact` directly to `load_checkpoint`; it uses
 `MANABOT_ARTIFACT_CACHE` (default `.runs/artifact-cache`) and the default AWS credential
 chain. Downloads install atomically, and cache hits are rehashed before loading.
 Corruption fails closed. S3 locations do not relax world, architecture, setup or

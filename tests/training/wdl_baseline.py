@@ -1,4 +1,4 @@
-"""Small current-world Ataraxos-inspired experiment, not a historical replay."""
+"""A small current-world categorical-WDL baseline shared by training and model tests."""
 
 from manabot.experiment.config import Baseline
 from manabot.infra.config import ModelConfig, ObservationConfig
@@ -7,8 +7,7 @@ from manabot.sim.matchup import selected_match
 import managym
 
 
-def ataraxos() -> Baseline:
-    """Capture a fresh categorical-WDL recipe; historical w4 inputs need pinned source."""
+def wdl_baseline() -> Baseline:
     return Baseline.capture(
         "ataraxos",
         ataraxos_baseline(

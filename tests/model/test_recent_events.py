@@ -20,10 +20,10 @@ from manabot.infra.config import (
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.architecture import architecture_receipt
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
-from manabot.recipes.ataraxos import ataraxos
 from manabot.recipes.builders import with_recent_events
 from manabot.sim.search.flat_mc import AgentMatchupPlayer, make_player
 from manabot.training.rollout.collection import SeatRoutedCollector
+from tests.training.wdl_baseline import wdl_baseline
 
 PACK = "ur-lessons-vs-gw-allies"
 
@@ -239,7 +239,7 @@ def test_history_off_and_declarative_identity() -> None:
     tensors.pop("events_valid")
     for left, right in zip(expected, explicit(tensors), strict=True):
         torch.testing.assert_close(left, right, rtol=0, atol=0)
-    base = ataraxos()
+    base = wdl_baseline()
     comparison = Experiment(
         "history-unexecuted",
         base,
@@ -277,7 +277,7 @@ def test_short_window_native_collector_and_bad_contracts() -> None:
     with pytest.raises(ValueError, match="history input is selected by ModelOverride"):
         Experiment(
             "bad",
-            ataraxos(),
+            wdl_baseline(),
             overrides=(
                 Environment(observation=ObservationConfig(policy_history_version=1)),
             ),

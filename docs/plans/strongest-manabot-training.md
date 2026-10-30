@@ -67,7 +67,7 @@ comparisons by deployed compute.
 
 ## Why these recipes
 
-The [primary-source research](../../experiments/planning/training-evidence.md) remains the
+The [primary-source research](https://github.com/loopflowstudio/manabot/blob/a74f31828/experiments/planning/training-evidence.md) remains the
 supporting record. The grid is the decision surface; the literature is not
 another deliverable to expand indefinitely.
 
@@ -152,10 +152,10 @@ Each cell reports only the information needed to act:
 
 The [calculator](../../scripts/budget_plan.py) and
 [reproducer](../../scripts/reproduce_plans.py) implement the eight-cell grid.
-[Usage and evidence inputs](../../experiments/planning/README.md) describe
+[Usage and evidence inputs](https://github.com/loopflowstudio/manabot/blob/a74f31828/experiments/planning/README.md) describe
 explicit phase schedules, startup assumptions and local/cloud comparisons.
-The [generated grid](../../experiments/planning/grid.md) and
-[machine-readable output](../../experiments/planning/grid.json) retain null
+The [generated grid](https://github.com/loopflowstudio/manabot/blob/a74f31828/experiments/planning/grid.md) and
+[machine-readable output](https://github.com/loopflowstudio/manabot/blob/a74f31828/experiments/planning/grid.json) retain null
 volumes until accepted profiles exist. Schedules are bounded work allowances,
 not promises that a complete training or evaluation cohort will finish.
 
@@ -175,7 +175,7 @@ separately from occupied host-hours and elapsed time. The selected CPU profile
 uses hourly billing and IPv6 access; the GPU profile uses minute billing.
 Terminate each rental after its phase; powered-off servers can still be billed.
 
-Use the retained [price snapshot](../../experiments/planning/prices.json) as dated reference,
+Use the retained [price snapshot](https://github.com/loopflowstudio/manabot/blob/a74f31828/experiments/planning/prices.json) as dated reference,
 not guaranteed quotes or reserved capacity. Its CPU/GPU comparison profiles
 are CCX33 and A6000; L4/4090 remain alternatives when current quotes and the
 same workload profile justify them. Requote before paid execution. Hardware
@@ -236,8 +236,7 @@ windows consumed by startup, local electricity/availability limits, mismatched
 world/hardware evidence, and no benefit from extra spending. Every recipe maps
 to existing consumers with its remaining binding gaps named.
 
-The accepted plan lives in `docs/plans/`, research/planning records in
-`experiments/planning/`, and the calculator in `scripts/`. Obsolete generated
-tier outputs and duplicate scratch planners are removed.
+The accepted plan lives in `docs/plans/`; its research/planning records and the
+calculator remain at the pinned revisions linked above.
 Training execution remains separate. This review establishes the grid;
 implementation must not claim the old twelve-scenario check proves it works.

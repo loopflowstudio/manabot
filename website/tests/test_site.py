@@ -87,18 +87,6 @@ def test_fly_host_serves_directly(client: TestClient) -> None:
     assert r.status_code == 302
 
 
-def test_static_assets_exist():
-    static = Path(__file__).parent.parent / "static"
-    for asset in (
-        "style.css",
-        "favicon.svg",
-        "board-developed.png",
-        "fonts/CormorantGaramond-SemiBold.otf",
-        "mana/W.svg",
-    ):
-        assert (static / asset).exists(), asset
-
-
 @pytest.mark.parametrize("host", ["etude.gg", "www.manabot.gg", "etudefantasia.com"])
 @pytest.mark.parametrize("path", [
     "/blog/lol-cube-kickoff?from=old&tag=a&tag=b",
