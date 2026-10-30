@@ -4,8 +4,8 @@
 use std::path::Path;
 
 use managym::conformance::{
-    check_root, replay_receipt, validate_phase_matrix, verify_metamorphic, verify_properties,
-    CaseSpec, Orientation, PhaseMatrix, CONTRACT_ID, PHASE_REVISION,
+    check_root, generate_case, replay_receipt, validate_phase_matrix, verify_metamorphic,
+    verify_properties, CaseSpec, Orientation, PhaseMatrix, CONTRACT_ID, PHASE_REVISION,
 };
 
 const ROOT: &str = concat!(
@@ -22,9 +22,22 @@ fn checked_semantic_conformance_evidence_reproduces() {
 }
 
 #[test]
-fn checked_receipt_replays_through_the_public_handoff() {
-    let message = replay_receipt(&Path::new(ROOT).join("replays").join("ur-vs-gw-5eed.json"))
-        .expect("checked replay receipt");
+fn regenerated_case_replays_through_the_public_handoff() {
+    let spec = CaseSpec {
+        id: "ur-vs-gw-5eed".to_string(),
+        orientation: Orientation::UrLessonsVsGwAllies,
+        game_seed: 24301,
+        choice_seed: 49374,
+        max_commands: 2000,
+    };
+    let case = generate_case(&spec).expect("generated case");
+    let path = std::env::temp_dir().join(format!(
+        "semantic-conformance-handoff-{}.json",
+        std::process::id()
+    ));
+    std::fs::write(&path, serde_json::to_vec(&case).expect("case JSON")).expect("write case");
+    let message = replay_receipt(&path).expect("regenerated replay receipt");
+    std::fs::remove_file(&path).expect("remove case");
     assert!(message.contains("ur-vs-gw-5eed"));
 }
 

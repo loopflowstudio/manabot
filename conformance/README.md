@@ -2,8 +2,13 @@
 
 Only current-world (w17) corpora with executable consumers stay in source:
 
-- `semantic-kernel-w17-v1/` — Rust replay, property and Phase-matrix checks
-  (`managym/tests/semantic_conformance_tests.rs`) and the CI conformance gate.
+- `semantic-kernel-w17-v1/` — seeded cases (`manifest.json`) whose regenerated
+  traces must match `evidence.json`'s per-case `trace_sha256`, plus property and
+  Phase-matrix checks (`managym/tests/semantic_conformance_tests.rs`, CI fuzzing).
+  A drifted case is written to `target/semantic-conformance/semantic-kernel-w17-v1/`;
+  inspect it with `cargo run --manifest-path managym/Cargo.toml --bin
+  semantic_conformance -- replay <file>`, and re-record an accepted change with
+  `... -- record --root conformance/semantic-kernel-w17-v1`.
 - `authored-match-w17-v1/` — the authored-match authority receipt
   (`academy.authored_match_receipt`, `scripts/generate_authored_match_receipt.py`).
 - `authored-match-parity-w17-v1/` — Academy live/headless replay parity

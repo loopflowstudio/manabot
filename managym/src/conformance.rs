@@ -5,6 +5,12 @@
 //! share the low-level rules implementation; this module checks the scheduling
 //! optimization, deterministic replay, and checked evidence boundary rather
 //! than claiming to be a second Comprehensive Rules engine.
+//!
+//! A case is a pure function of its manifest seeds. `evidence.json` records each
+//! case's `trace_sha256` over the whole generated case (every chosen action and
+//! checkpoint), so `check` regenerates instead of replaying stored tapes. On a
+//! mismatch it writes the regenerated case beside the build output, where
+//! `semantic_conformance replay <file>` and an ordinary diff can inspect it.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -29,7 +35,9 @@ use crate::{
 };
 
 pub const CONTRACT_ID: &str = "manabot.semantic-kernel-conformance.v1";
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
+/// The pinned Phase overlap matrix keeps its original schema.
+pub const PHASE_SCHEMA_VERSION: u32 = 1;
 pub const REFERENCE_ID: &str = "reference/explicit-step-v1";
 pub const OPTIMIZED_ID: &str = "optimized/skip-trivial-v1";
 pub const PHASE_REVISION: &str = "553b97bd5c9f1a28bf7a6ebe80f6cb3a0e296c0d";
@@ -207,6 +215,8 @@ pub struct ReplaySummary {
     pub commands: usize,
     pub outcome: ReplayOutcome,
     pub final_state_hash: String,
+    /// BLAKE3 over the canonical JSON of the complete generated case.
+    pub trace_sha256: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -616,7 +626,7 @@ fn phase_counts(matrix: &PhaseMatrix) -> BTreeMap<String, usize> {
 }
 
 pub fn validate_phase_matrix(matrix: &PhaseMatrix) -> Result<(), String> {
-    if matrix.schema_version != SCHEMA_VERSION {
+    if matrix.schema_version != PHASE_SCHEMA_VERSION {
         return Err("unsupported Phase matrix schema".to_string());
     }
     if matrix.phase_repository != "https://github.com/phase-rs/phase"
@@ -710,6 +720,7 @@ fn build_evidence(manifest: &Manifest, cases: &[ReplayCase], matrix: &PhaseMatri
                 commands: case.commands.len(),
                 outcome: case.outcome.clone(),
                 final_state_hash: case.final_checkpoint.state_hash.clone(),
+                trace_sha256: digest_serialized(case).expect("replay cases serialize"),
             })
             .collect(),
         exercised_prompt_kinds: prompt_kinds.into_iter().collect(),
@@ -733,21 +744,6 @@ fn build_evidence(manifest: &Manifest, cases: &[ReplayCase], matrix: &PhaseMatri
     }
 }
 
-fn replay_paths(root: &Path) -> Result<Vec<PathBuf>, String> {
-    let directory = root.join("replays");
-    let mut paths: Vec<_> = fs::read_dir(&directory)
-        .map_err(|error| format!("{}: {error}", directory.display()))?
-        .filter_map(Result::ok)
-        .map(|entry| entry.path())
-        .filter(|path| {
-            path.extension()
-                .is_some_and(|extension| extension == "json")
-        })
-        .collect();
-    paths.sort();
-    Ok(paths)
-}
-
 fn regression_paths(root: &Path) -> Result<Vec<PathBuf>, String> {
     let directory = root.join("regressions");
     if !directory.exists() {
@@ -766,22 +762,27 @@ fn regression_paths(root: &Path) -> Result<Vec<PathBuf>, String> {
     Ok(paths)
 }
 
+/// Where `check` writes regenerated cases that disagree with the evidence:
+/// `<repository>/target/semantic-conformance/<corpus>/` for `conformance/<corpus>`.
+pub fn mismatch_directory(root: &Path) -> PathBuf {
+    let corpus = root.file_name().unwrap_or_default();
+    root.parent()
+        .and_then(Path::parent)
+        .unwrap_or(Path::new("."))
+        .join("target")
+        .join("semantic-conformance")
+        .join(corpus)
+}
+
+fn generate_cases(manifest: &Manifest) -> Result<Vec<ReplayCase>, String> {
+    manifest.cases.iter().map(generate_case).collect()
+}
+
 pub fn record_root(root: &Path) -> Result<CheckSummary, String> {
     let manifest = load_manifest(root)?;
     let matrix: PhaseMatrix = load_json(&root.join("phase-overlap.json"))?;
     validate_phase_matrix(&matrix)?;
-    let replay_directory = root.join("replays");
-    fs::create_dir_all(&replay_directory)
-        .map_err(|error| format!("{}: {error}", replay_directory.display()))?;
-    for stale in replay_paths(root)? {
-        fs::remove_file(&stale).map_err(|error| format!("{}: {error}", stale.display()))?;
-    }
-    let mut cases = Vec::new();
-    for spec in &manifest.cases {
-        let case = generate_case(spec)?;
-        atomic_write_json(&replay_directory.join(format!("{}.json", spec.id)), &case)?;
-        cases.push(case);
-    }
+    let cases = generate_cases(&manifest)?;
     let evidence = build_evidence(&manifest, &cases, &matrix);
     atomic_write_json(&root.join("evidence.json"), &evidence)?;
     Ok(CheckSummary {
@@ -795,37 +796,35 @@ pub fn check_root(root: &Path) -> Result<CheckSummary, String> {
     let manifest = load_manifest(root)?;
     let matrix: PhaseMatrix = load_json(&root.join("phase-overlap.json"))?;
     validate_phase_matrix(&matrix)?;
-    let paths = replay_paths(root)?;
-    if paths.len() != manifest.cases.len() {
-        return Err(format!(
-            "expected {} replay files, found {}",
-            manifest.cases.len(),
-            paths.len()
-        ));
-    }
-    let mut cases = Vec::new();
-    for spec in &manifest.cases {
-        let path = root.join("replays").join(format!("{}.json", spec.id));
-        let case: ReplayCase = load_json(&path)?;
-        if case.case_id != spec.id
-            || case.orientation != spec.orientation
-            || case.game_seed != spec.game_seed
-            || case.choice_seed != spec.choice_seed
-            || case.max_commands != spec.max_commands
-        {
-            return Err(format!(
-                "{} does not match its manifest spec",
-                path.display()
-            ));
-        }
-        replay_case(&case)?;
-        cases.push(case);
+    let recorded: Evidence = load_json(&root.join("evidence.json"))?;
+    let cases = generate_cases(&manifest)?;
+    for case in &cases {
+        replay_case(case)?;
     }
     for path in regression_paths(root)? {
         let regression: ReplayCase = load_json(&path)?;
         replay_case(&regression)?;
     }
     let derived = build_evidence(&manifest, &cases, &matrix);
+    let mut drifted = Vec::new();
+    for (case, summary) in cases.iter().zip(&derived.replays) {
+        if recorded.replays.iter().any(|expected| expected == summary) {
+            continue;
+        }
+        let path = mismatch_directory(root).join(format!("{}.json", case.case_id));
+        atomic_write_json(&path, case)?;
+        drifted.push(format!(
+            "{} (regenerated: {})",
+            case.case_id,
+            path.display()
+        ));
+    }
+    if !drifted.is_empty() {
+        return Err(format!(
+            "conformance traces drifted from evidence.json: {}",
+            drifted.join(", ")
+        ));
+    }
     let expected_bytes =
         fs::read(root.join("evidence.json")).map_err(|error| format!("evidence.json: {error}"))?;
     if expected_bytes != pretty_json(&derived)? {
