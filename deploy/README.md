@@ -3,7 +3,7 @@
 Manabot's public surfaces run on Fly.io behind Cloudflare DNS,
 following the kata/loopflow deployment pattern:
 
-- **fantasia-website** — the landing site (`website/`), a FastHTML app.
+- **fantasia-website** — the manabot.gg site (`website/`), a FastHTML app serving the blog.
   Serves `manabot.gg` (canonical); `etude.gg`, `etudefantasia.com`,
   `etudefantasia.gg`, and all `www.` variants 301 onto it.
 - **academy-play** — hosted play at `play.manabot.gg` and `academy.manabot.gg`:
@@ -12,7 +12,7 @@ following the kata/loopflow deployment pattern:
   game state lives in process memory.
 
 ```bash
-deploy/academy-fly.sh deploy                        # landing site
+deploy/academy-fly.sh deploy                        # manabot.gg site
 ACADEMY_FLY_APP=academy-play deploy/academy-fly.sh deploy   # hosted play
 deploy/academy-fly.sh dns                           # sync Cloudflare records
 deploy/academy-fly.sh health                        # check every domain
@@ -20,7 +20,7 @@ deploy/academy-fly.sh health                        # check every domain
 
 Both Fly apps belong to the `loopflow-studio` organization. Jack Heart approved
 the live service rename on 2026-10-14: `academy-play` serves the web app and
-`fantasia-website` serves the project's landing site. Jack Heart subsequently
+`fantasia-website` serves the project site (manabot.gg). Jack Heart subsequently
 selected Manabot and `manabot.gg` on the same day. Existing Fly app identifiers remain operational names; the Doppler project
 was renamed to `manabot` at Jack Heart's request on 2026-10-14. Legacy website hosts redirect to
 `manabot.gg`; `play.etude.gg` redirects HTTP to `play.manabot.gg` with status 308

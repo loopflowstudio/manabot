@@ -57,11 +57,9 @@ class ActorCritic(nn.Module):
         # Extract dimensions from the observation encoder.
         enc = observation_space.encoder
         if config.recent_events and (
-            config.semantic_pack is None or enc.config.policy_history_version != 1
+            config.world is None or enc.config.policy_history_version != 1
         ):
-            raise ValueError(
-                "recent events require semantic_pack and policy_history_version=1"
-            )
+            raise ValueError("recent events require world and policy_history_version=1")
         if not config.recent_events and enc.config.policy_history_version != 0:
             raise ValueError(
                 "history observation contract requires recent_events ActorCritic"
@@ -79,11 +77,11 @@ class ActorCritic(nn.Module):
 
         self.semantic_cards = None
         self.card_definitions: nn.Embedding | None = None
-        if config.semantic_pack is not None:
+        if config.world is not None:
             from .semantic_cards import SemanticCardEncoder
 
             self.semantic_cards = SemanticCardEncoder(
-                config.semantic_pack,
+                config.world,
                 embed_dim,
                 decklists=enc.config.policy_input_version >= 5,
             )

@@ -1,0 +1,148 @@
+# Academy memory
+
+Carried from the legacy `game` wave (renamed Academy).
+
+## North star
+
+- Academy grows toward Avatar Cube Team Sealed: two teams build three
+  decks from shared pools, play the full three-by-three deck matchup matrix to
+  five wins, and can study every recorded game afterward.
+- Study is a named Game mode, not an independent product wave. Construction,
+  play, replay, Retry, and comparison are one player loop.
+- The Avatar starting values—540 cube cards, 135 cards per team, three
+  40-card-minimum decks, unlimited basics, deck-specific sideboards, and five
+  wins—are versioned format parameters rather than engine constants.
+- The first robot team may use fixed authored decks. Manabots initially pilot
+  without sideboarding; sealed-pool deck construction is an important later
+  Intelligence capability, while drafting is separate.
+- Discord is the assumed human communication layer. Do not build chat.
+- This destination guides interfaces and sequencing but does not justify a
+  speculative Team Sealed backlog before one polished play-to-Study loop works.
+
+## Decisions
+
+- Renamed from `gui` to `game` on 2026-07-15 because the wave owns the full
+  playing experience, not a rendering technology.
+- The experience target is Phase-level or better smoothness, performance,
+  polish, reliability, and portability for creator-selected decks.
+- Preserve Academy's differentiators: visible AI identity, decision inspection,
+  research-grade traces, replay, and a deliberately tiny curated product.
+- The authority seam is `ExperienceFrame`, `InteractionOffer`/`Command`,
+  `PresentationEvent`, and `RecoveryEnvelope`.
+- Commands bind to revision + prompt + offer and carry a stable command ID.
+- Presentation consumes semantic events; it does not infer meaning by diffing
+  arbitrary snapshots.
+- Canonical replay exposes a stable address for every historical player
+  decision. Study may rank highlights, but it does not define or reconstruct
+  the replay timeline.
+- Offline command queues must not replay gameplay decisions into a newer state.
+- Curated assets are versioned content, not opportunistic runtime fetches.
+- WASM is deferred until adapter benchmarks show a product benefit.
+
+## Evidence
+
+- `docs/architecture/experience-protocol-v1.md`
+- [Local challenger and shared-history evidence, 2026-09-25](../../../docs/evidence/trained-challenger-2026-09-25.md)
+- Legacy implementation notes in `01-play-interface.md` and `05-polish.md`
+- Previous charter in `legacy-gui-charter.md`
+
+## Open tensions
+
+- Keep protocol design ambitious without blocking a thin vertical slice.
+- Preserve the useful existing Svelte/FastAPI table while replacing its
+  snapshot/action seam incrementally.
+- Treat visual authorship as a product requirement without creating a generic
+  content platform.
+
+## Live advice (retired 2026-10-30)
+
+Academy's live belief runtime (a tracked posterior updated on every
+interactive-mirror Command, with no response reading it) and the unused live
+advisor resolvers were removed by Task 558daa at Jack Heart's direction; Jack Heart
+is not confident the belief code works. `/api/advice` still serves fixture advice.
+The retired design and its release gates are in git history (`wave/game/MEMORY.md`
+before 558daa).
+
+## Trained opponent and shared history
+
+[Challenge an identified trained bot through complete games · ETU-79](https://linear.app/loopflow/issue/ETU-79/challenge-an-identified-trained-bot-through-complete-games)
+answers the User's practical question: “if right now were like alright lets
+train our best sofar ...what do we do”. It also owns the training/export proof
+formerly assigned to ETU-78. Use the [local operator workflow](../../../docs/academy.md#playing-a-trained-challenger)
+and its existing receipts; ETU-80 consumes those measurements. A small search-64
+behavior-cloning run proves the workflow, not current strategic superiority.
+Final proof requires repeated corrected-world executions after ETU-75 with exact
+source capture, both deck assignments and legality/replay witnesses. Nearly zero
+new spend remains the bound; no paid compute or public deployment is implied.
+
+The User explicitly requested a global game log “across everyone,” both players
+identified as Human/Bot, and easy filtering. My games is a filter on shared
+history. Preserve two symmetric seat snapshots with stable public player IDs,
+recorded names/decks and exact bot versions. Names, producer and loading path
+are not identity; group bot versions only with declared lineage. Future graphs
+and training datasets consume these structured records, not scraped UI text.
+
+GameSession writes the existing Trace, attempt metadata and seats in one SQLite
+transaction. Legacy JSON is read-only. Retain incomplete attempts and real ending
+reasons; restart interruption does not invent a winner or human abandonment.
+Resolve a generated deal seed before both policy and environment construction.
+Validate replacements before closing the playable match and pin rematch identity.
+Recorder failures must reach the player even if cleanup also fails.
+
+New attempts have shared listings; completed shared replays use the established
+seat-0 projection. Unfinished prefixes and feedback remain participant-only,
+and historical private SQLite games remain private. Listing never grants Retry,
+feedback or hidden live-state access. Keep public IDs separate from credentials,
+filter permissions in SQL before pagination, and label automated validation by
+origin rather than inferring human play from a Human seat.
+
+The 2026-09-25 review proves built-browser integration, both trained-opponent
+assignments, history/replay permissions and exact replay reconstruction. Human
+feedback says the demo plays fine but Lesson selection and transitions need
+work. Completion, saved in-product human feedback, replay visit and voluntary
+return remain unconfirmed. ETU-75 owns the missing Lesson-pool world; ETU-77 owns
+its usable interaction and ETU-76 transition clarity. Preserve exact reported
+positions; automated play and an Ask session's existence do not prove those
+outcomes. All three chapter KRs remain false in the current status.
+
+
+## Consequence readability (ETU-76, 2026-10-04)
+
+The existing live/replay presentation consumer now retains a bounded readable
+semantic-event list after playback and skip, supports pause, and preserves
+reading time under reduced motion. Current prompt actor/instruction is separate
+from past-event narration. The board always shows the committed current frame.
+See [presentation runtime](../../../docs/academy.md#presentation-runtime) for
+fixture positions and scope. The original reported position is still unknown;
+Bolt-only spell projection remains a known coverage gap. Fixture regressions and
+automated checks do not close human-play or full-game recurrence acceptance.
+Keep ETU-76 open for those outcomes.
+
+Terminal visual captures must settle semantic narration explicitly: reduced
+motion preserves reading time, and CSS animation suppression leaves JavaScript
+beat timers running. PR #199's terminal failure was capture readiness, confirmed
+by narration-only artifact diffs and a clock-controlled browser regression.
+Keep the reference corpus and tolerances unchanged; focused macOS readiness
+checks do not certify the full Linux release matrix.
+
+## Large legal-choice navigation (ETU-77, 2026-10-05)
+
+The current Learn surface already has the approved mode selector, previews and
+Back; full native w4 Lesson retrieval is present. Preserve that interaction.
+The bounded ETU-77 candidate adds optional label filtering to lists of eight or
+more offers, retaining original IDs, duplicates, keyboard focus and ordinary
+Commands. Updates/recovery clear local filtering. Exact native prefixes and
+viewer frames cover nine targets, eight cleanup discards, ten Learn offers,
+six block choices and an optional cost; see the
+[coverage ledger and local walkthrough](../../../docs/academy.md#choice-navigation).
+These new fixtures do not identify the original reported awkward position.
+Search versus grouping, the threshold and duplicate-copy clarity still require
+Jack Heart's play judgment; automated checks do not close ETU-77 or chapter KR2.
+Model-facing decision contracts remain ETU-107's separate responsibility.
+
+PR #231's Linux failure was the intended filter missing from the visual corpus:
+the eight-discard panel grew by 90 pixels while preserving every choice. Version
+appearance changes with the pinned Linux generation/comparison workflow; local
+runs with screenshots ignored cannot certify references. Preserve historical
+corpora and strict tolerances. The v6 reference provenance records the inspected
+diff; this is software evidence, not acceptance of filtering by Jack Heart.

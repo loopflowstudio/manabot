@@ -79,14 +79,14 @@ main engine. The loop is declared as data and executed by one runner:
 - **Remote execution.** Etude launches regimes on rented GPUs, ships their
   metrics and checkpoints while they run, and enforces hours and dollars. The
   machine is chosen at launch, never in the experiment. See
-  [remote training](remote-training.md) and
-  [training regimes](training-regimes.md).
+  [remote training](training.md#remote-training) and
+  [training regimes](training.md#regimes-and-stages).
 - **Beliefs.** Belief samplers over the opponent's hidden cards are fit from a
   frozen policy's own complete games. They never feed hidden truth to the
-  acting policy ([belief sampler](belief-sampler.md)).
+  acting policy ([belief sampler](search-and-beliefs.md#belief-sampler)).
 - **Search as an improvement step.** Local search uses the frozen policy for
   continuations and sampled hands for hidden state at play time
-  ([local policy search](local-policy-search.md)).
+  ([local policy search](search-and-beliefs.md#local-policy-search)).
 - **Encoding is identity.** An observation/action shape change is a new world
   ([WORLDS.md](../WORLDS.md)). Checkpoints load only in their world, and a
   nightly baseline check guards against inputs that make distinct choices
@@ -406,9 +406,10 @@ traversals or playouts, realized latency, inference work, and perspective.
 
 ### 10. Concurrency and performance
 
-Full clone is the correctness reference for branches. Undo, copy-on-write, and
-other backends are admissible only when representation-neutral witnesses,
-legal surfaces, viewer Observations, and transitions remain equivalent.
+Full clone is the branch strategy (Jack Heart, 2026-10-30): search forks a
+`Game` by cloning it and applies Commands to the copy. The [search branching
+decision](benchmarks/search-branching-decision-v1.md) and its benchmark receipts
+record why undo and copy-on-write backends were rejected.
 
 Root state is immutable during concurrent planning. Each worker owns an
 isolated branch and RNG stream. Reductions have a deterministic order.
@@ -556,7 +557,7 @@ The current learned history encoder pools typed public commitments and is
 order-invariant. Arbitrary mid-game history attachment and a shared visible-card
 identity vocabulary remain gaps. The precise implementation limits and
 continuation proof are recorded in
-[Intelligence memory](../wave/intelligence/MEMORY.md).
+[Training memory](../.lf/wave/training/MEMORY.md).
 
 Checkpoints are immutable, content-addressed artifacts. Loading validates the
 world, Observation/action and world-hypothesis schemas, history/memory strategy,
@@ -673,7 +674,7 @@ separate claims to measure.
 ## Roadmaps and detailed contracts
 
 The immediate provider work is prioritized in the [Rules
-goal](../wave/rules/GOAL.md) and the [results-first
+goal](../.lf/wave/engine/GOAL.md) and the [results-first
 roadmap](plans/results-first-roadmap.md). Rules owns changes to managym
 authority; Intelligence owns manabot beliefs, planning, learning, opponents,
 and evaluation. Cross-wave work is integrated through runnable consumer slices,
@@ -685,11 +686,11 @@ Detailed existing contracts remain authoritative within their narrower scope:
   the current and transitional Academy wire path;
 - [match-state hash v1](architecture/match-state-hash-v1.md) defines one
   deterministic state-hash domain;
-- [presentation runtime](architecture/presentation-runtime.md) describes the
+- [presentation runtime](academy.md#presentation-runtime) describes the
   product projection seam;
-- [search branching contract](benchmarks/search-branching-contract-v1.md) and
+- [search branching decision](benchmarks/search-branching-decision-v1.md) and
   [selected branch driver](benchmarks/selected-branchdriver-teacher-v1.md)
-  constrain branch implementations;
+  record the evidence for full-clone branching;
 - [WORLDS.md](../WORLDS.md) governs current Observation/action world freezes;
 - [manabot research](../manabot/RESEARCH.md) records the broader research and
   evidence program.

@@ -208,13 +208,11 @@ impl Game {
                 .current_object_ref(new)
                 .expect("an unseen card is hidden");
             self.state.zones.replace_face_down_exile(player, old, new);
-            self.edit_cast_permissions(|permissions| {
-                for grant in &mut permissions.exile_grants {
-                    if grant.object == from {
-                        grant.object = to;
-                    }
+            for grant in &mut self.state.cast_permissions.exile_grants {
+                if grant.object == from {
+                    grant.object = to;
                 }
-            });
+            }
         }
         true
     }
@@ -287,46 +285,33 @@ impl Game {
         }
         if let Some(object) = self.current_object_ref(card) {
             let grant = grant(object);
-            self.edit_cast_permissions(|permissions| permissions.exile_grants.push(grant));
+            self.state.cast_permissions.exile_grants.push(grant);
         }
     }
 
     /// "This turn" grants end in the cleanup step (CR 514.2).
     pub(crate) fn expire_turn_cast_grants(&mut self) {
-        self.edit_cast_permissions(|permissions| {
-            permissions.exile_grants.retain(|grant| !grant.this_turn)
-        });
+        self.state
+            .cast_permissions
+            .exile_grants
+            .retain(|grant| !grant.this_turn);
     }
 
     /// "Until your next turn, your opponents can't cast spells from anywhere
     /// other than their hands."
     pub(crate) fn restrict_opponent_to_hand(&mut self, controller: PlayerId) {
-        self.edit_cast_permissions(|permissions| {
-            permissions.hand_only.push(HandOnly {
-                player: PlayerId(1 - controller.0),
-                until_turn_of: controller,
-            })
+        self.state.cast_permissions.hand_only.push(HandOnly {
+            player: PlayerId(1 - controller.0),
+            until_turn_of: controller,
         });
     }
 
     /// Restrictions lasting "until your next turn" end as that turn begins.
     pub(crate) fn expire_cast_restrictions(&mut self, active: PlayerId) {
-        self.edit_cast_permissions(|permissions| {
-            permissions
-                .hand_only
-                .retain(|restriction| restriction.until_turn_of != active)
-        });
-    }
-
-    /// Apply `edit`, journaling the previous permissions only when it
-    /// changed them (expiry runs every turn and is usually a no-op).
-    fn edit_cast_permissions(&mut self, edit: impl FnOnce(&mut CastPermissions)) {
-        let mut next = self.state.cast_permissions.clone();
-        edit(&mut next);
-        if next != self.state.cast_permissions {
-            self.journal_cast_permissions();
-            self.state.cast_permissions = next;
-        }
+        self.state
+            .cast_permissions
+            .hand_only
+            .retain(|restriction| restriction.until_turn_of != active);
     }
 
     /// The grants naming this exact card while it is in exile. Producers

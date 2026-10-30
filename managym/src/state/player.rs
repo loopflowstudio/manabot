@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use super::{
     card::CardDefId,
+    deck::Deck,
     game_object::{CardId, ObjectId},
     mana::Mana,
 };
@@ -29,10 +30,10 @@ impl DecklistDisclosure {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct PlayerConfig {
     pub name: String,
-    pub decklist: BTreeMap<String, usize>,
-    pub sideboard: BTreeMap<String, usize>,
+    #[serde(flatten)]
+    pub deck: Deck,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub content_pack: Option<String>,
+    pub world: Option<String>,
     /// Serialized only when closed, so default-mode digests are unchanged.
     #[serde(skip_serializing_if = "DecklistDisclosure::is_open")]
     pub disclosure: DecklistDisclosure,
@@ -42,15 +43,14 @@ impl PlayerConfig {
     pub fn new(name: impl Into<String>, decklist: BTreeMap<String, usize>) -> Self {
         Self {
             name: name.into(),
-            decklist,
-            sideboard: BTreeMap::new(),
-            content_pack: None,
+            deck: Deck::new(decklist, BTreeMap::new()),
+            world: None,
             disclosure: DecklistDisclosure::Open,
         }
     }
 
     pub fn with_sideboard(mut self, sideboard: BTreeMap<String, usize>) -> Self {
-        self.sideboard = sideboard;
+        self.deck.sideboard = sideboard;
         self
     }
 
@@ -60,7 +60,8 @@ impl PlayerConfig {
     }
 
     pub fn deck_list(&self) -> String {
-        self.decklist
+        self.deck
+            .main
             .iter()
             .map(|(name, qty)| format!("{} x{}", name, qty))
             .collect::<Vec<_>>()

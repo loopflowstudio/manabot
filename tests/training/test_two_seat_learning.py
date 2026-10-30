@@ -1,6 +1,5 @@
 """Both-seat terminal credit, behavior ownership and independent optimizer updates."""
 
-from copy import deepcopy
 from pathlib import Path
 from typing import Literal
 
@@ -16,16 +15,14 @@ from manabot.infra.config import (
     RewardConfig,
 )
 from manabot.model.actor_critic import ActorCritic
-from manabot.model.checkpoint import load_checkpoint, save_checkpoint
+from manabot.model.checkpoint import load_checkpoint
 from manabot.training.execution import execute_regime
 from manabot.training.learning.learner import Learner, observation_tensors
 from manabot.training.learning.objectives import update_iteration
-from manabot.training.learning.paired import LearningPlayer, PairedLearners
 from manabot.training.learning.returns import transition_gae
 from manabot.training.regime import (
     DampedPolicyLearning,
     Learning,
-    Schedule,
     TrainingRegime,
     TrainSelfPlay,
 )
@@ -181,7 +178,7 @@ def test_matched_games_control_keeps_only_designated_seats() -> None:
     assert both.stats.opponent_decisions == 0
 
 
-def test_pair_routes_own_behavior_and_updates_both_models(tmp_path: Path) -> None:
+def test_pair_routes_own_behavior() -> None:
     first, second = _agent(), _agent()
     with torch.no_grad():
         first.value_head[-1].bias.fill_(0.3)
@@ -192,50 +189,6 @@ def test_pair_routes_own_behavior_and_updates_both_models(tmp_path: Path) -> Non
     _behavior_matches(b, second)
     np.testing.assert_array_equal(a.obs["agent_player"][:, 0, 0, 0], [0, 1, 3, 10, 12])
     np.testing.assert_array_equal(b.obs["agent_player"][:, 0, 0, 0], [2, 4, 11])
-    learning = Learning(
-        epochs=1,
-        minibatches=1,
-        retained_fraction=1,
-        learning_rate=Schedule(initial=0.01),
-        tau=Schedule(initial=0),
-    )
-    learners = PairedLearners(
-        collector,
-        LearningPlayer(
-            Learner(first, "cpu", minibatch_rows=collector.num_envs),
-            learning,
-            np.random.default_rng(1),
-        ),
-        LearningPlayer(
-            Learner(second, "cpu", minibatch_rows=collector.num_envs),
-            learning,
-            np.random.default_rng(2),
-        ),
-    )
-    before = [deepcopy(agent.state_dict()) for agent in (first, second)]
-    result = learners.step(1, progress=0)
-    assert result.first["rows"] == 5 and result.second["rows"] == 3
-    assert result.first["optimizer_exposures"] == 5
-    assert result.second["optimizer_exposures"] == 3
-    assert result.environment_decisions == 8 and result.games == 2
-    for player, old in zip((learners.first, learners.second), before):
-        assert any(
-            not torch.equal(old[k], v)
-            for k, v in player.learner.agent.state_dict().items()
-        )
-        assert player.learner.optimizer.state
-        path = tmp_path / f"player-{player.transitions}.pt"
-        save_checkpoint(
-            player.learner.agent,
-            collector.observation_space,
-            path,
-            player_configs=collector.match.to_rust(),
-        )
-        loaded, _ = load_checkpoint(str(path))
-        for name, value in loaded.state_dict().items():
-            torch.testing.assert_close(value, player.learner.agent.state_dict()[name])
-    assert learners.first.learner.optimizer is not learners.second.learner.optimizer
-    assert not any(collector._streams) and not any(collector._pending)
 
 
 def test_two_seat_real_native_games_and_recovery() -> None:

@@ -32,11 +32,11 @@
         },
         {
           "path": "academy/server.py",
-          "sha256": "fb9f2526f7adb3de6194c66c0be9872016195cb77c3304dca06ef06bc203531e"
+          "sha256": "ef302ecfeb32ec389b0dfbbc44468f6bf11b99c2a4750e504de57b2bc5507da2"
         },
         {
           "path": "academy/trace.py",
-          "sha256": "b3e8280dd81decb0c22e92004c60b61aa33e023d56a68561d01142face920b69"
+          "sha256": "6394167e32d7b170c2b374f15a47a2178074d9b34d740530544c066df13aaf8b"
         },
         {
           "path": "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
@@ -64,11 +64,11 @@
         },
         {
           "path": "managym/Cargo.lock",
-          "sha256": "c9a975dd9528af85d702f14f54067f7c4430eddc2aab49216a220446cab32d31"
+          "sha256": "9ba67463ca953cce7e2bcbb6ed6636bf998cefa4584faa612684625b6529a2e7"
         },
         {
           "path": "managym/Cargo.toml",
-          "sha256": "b665dd2514cef835b664522b6eabd829c3dbf3fa1dd52c585d72806738762c73"
+          "sha256": "16f5a64e034f39d355fe484443ecfb2ff46838bb9d1dfc8f70e1685ff8f1b1c4"
         },
         {
           "path": "managym/src/agent/ability_description.rs",
@@ -88,7 +88,7 @@
         },
         {
           "path": "managym/src/agent/env.rs",
-          "sha256": "3055275fc32798b351ec69efd8eaafd955885b58cbe4b93f1a7818eaad92257a"
+          "sha256": "5c5e882ceaa475946bd73a972003aa793cd1f98eb7e9aefd332a95d9369a6bac"
         },
         {
           "path": "managym/src/agent/mod.rs",
@@ -96,7 +96,7 @@
         },
         {
           "path": "managym/src/agent/observation.rs",
-          "sha256": "26288c58a4cdae47524bcb951c2151ff89c0d5d6ae5d35fde2fa49b20646e7ca"
+          "sha256": "38d465291c5bb26e2a98961862a07b9aaea637275a4fef4e50a4a125b0eb213f"
         },
         {
           "path": "managym/src/agent/observation_encoder.rs",
@@ -112,11 +112,11 @@
         },
         {
           "path": "managym/src/agent/policy_history.rs",
-          "sha256": "743693ecf6a7994d2b1b448a5559fa42566798f165fb59efe7baf4dd1fc9fbe7"
+          "sha256": "46c268f815882a4a66d88a40fef6b095c9ad36da9ecf1713241a6505edf69dad"
         },
         {
           "path": "managym/src/agent/rollout_pool.rs",
-          "sha256": "c0ceced4bbbbd8adb36f6b0ae710a73b7ad9699443c48637b600ea9790123b5e"
+          "sha256": "9367d548fd7447225ab7fa1c44e5337a6a790a22e1b071f2aa8e91cb2595151b"
         },
         {
           "path": "managym/src/agent/structured_offer.rs",
@@ -124,27 +124,15 @@
         },
         {
           "path": "managym/src/agent/vector_env.rs",
-          "sha256": "2a429fbf7208be2aa209d88a1d93c55d3f9ecf5f7046d6307d04bbba57b81bc6"
-        },
-        {
-          "path": "managym/src/benchmark.rs",
-          "sha256": "db781751c547f4762f7be8a63f8a5bca9d8354507a3ba31623603b07412d5db6"
+          "sha256": "e5cafc9774748ac93400ff2a64aac70a908bd612c7c3649d5624fa773d490452"
         },
         {
           "path": "managym/src/benchmark_allocations.rs",
           "sha256": "6b003d1ea436383b3b497f16bf161da1d269436c7f89db31bf92958e912b1d4c"
         },
         {
-          "path": "managym/src/bin/branching_bench.rs",
-          "sha256": "46f05c44c60946ab79b31ce1638f68d963c17faba23dce093f6dfdb655297d82"
-        },
-        {
           "path": "managym/src/bin/semantic_conformance.rs",
           "sha256": "7c396316ba3d6fc80be9394d42a8b3dfef39fa319532d8403f072cbee12cdc4f"
-        },
-        {
-          "path": "managym/src/bin/validate_study_artifact.rs",
-          "sha256": "aae42c38a0f8bd4b697e3491fc0a5bb138a5a0e704c9dffd6dab82ad2af9e879"
         },
         {
           "path": "managym/src/canonical_replay.rs",
@@ -155,20 +143,28 @@
           "sha256": "1e8181936ad500a9b49a2b0cb647cd53fa0c98ac22692ba683d606b59da244cc"
         },
         {
+          "path": "managym/src/cards/deck_admission.rs",
+          "sha256": "c95f85560c4c32dbb48d7173c4f9979bdd5b531b222b599573cb9d752ec5da20"
+        },
+        {
+          "path": "managym/src/cards/decklist.rs",
+          "sha256": "e9cf1b1610810b8c0c1544b8ca42fc7de3a64ac7f5be90563d977124a774676e"
+        },
+        {
           "path": "managym/src/cards/fixtures.rs",
           "sha256": "86586c3cdad639ef293cb060e65928870d101349669a8ab0afb8af178bccf86b"
         },
         {
           "path": "managym/src/cards/mod.rs",
-          "sha256": "c3cb459ca82698dca350e9eb9adad3b3a758d8cd655007b143c5fc9f610ecc64"
+          "sha256": "d1b620d7df8a03566500051c08edc7162605cb93b7da76b44a8bfd51a0b4e90b"
         },
         {
           "path": "managym/src/cards/pool.rs",
-          "sha256": "4ba2f22451ecac355af44387a638dcadd120e2c53f823b4996ef1f7dac30104e"
+          "sha256": "9f351523c7a10daa6fa43fef6ca2ef68ad693aca1ec174e42e5979e3677d6f49"
         },
         {
           "path": "managym/src/cards/setups.rs",
-          "sha256": "ff0d315f48bbe3295c62a94aeaad34f9706ce7135734fcd42cd88e6d319d9417"
+          "sha256": "24860e7b27d9ca6895a2ef13b5e3b1e10f402c93e9154c9b25df394434ad15c1"
         },
         {
           "path": "managym/src/cards/tokens.rs",
@@ -300,11 +296,11 @@
         },
         {
           "path": "managym/src/conformance.rs",
-          "sha256": "1bd6d2569663ca1c88787c7051ca6c077632fdd541de5ef3d58f65ea019cd85c"
+          "sha256": "05148a8f031565699151793987bc65d45f135df776c6c127ceced5c5df2b5fa4"
         },
         {
           "path": "managym/src/decision.rs",
-          "sha256": "d44ba38eb1d1605038761c9bf4c84e8122f17ed93ceb7852d66831227f7ce0aa"
+          "sha256": "fd583191a5ffafcda376e79d1194b0770b15a2833afb827f744c50ac052b3a1a"
         },
         {
           "path": "managym/src/decision_capture.rs",
@@ -320,7 +316,7 @@
         },
         {
           "path": "managym/src/flow/action.rs",
-          "sha256": "cc59a841d11a632c34a4b9a68da8fa42637945608c3be4bb8fd22ec9ccac7284"
+          "sha256": "383f5330404314b85305a1a23233ba15192201b3b0d05dc6347008bf0a2cf990"
         },
         {
           "path": "managym/src/flow/card_capture.rs",
@@ -328,7 +324,7 @@
         },
         {
           "path": "managym/src/flow/cast_permission.rs",
-          "sha256": "51e362a4a6d38afddedd46567fa8b40a1c0617ead7d8a5981c5813b007efe05f"
+          "sha256": "86907911fb964644a9dc1e64d73c5e251caca88cc4450163cb08b0637f17f260"
         },
         {
           "path": "managym/src/flow/combat.rs",
@@ -336,63 +332,59 @@
         },
         {
           "path": "managym/src/flow/combat_actions.rs",
-          "sha256": "8f538e3efaccd434cb6b7143a5455d94ed58b5c299970aa4f44a561bad08d58a"
+          "sha256": "995667bce8ecc19f4cc674ee3110e47b73405efe1c5571ce6822484d305f0c0a"
         },
         {
           "path": "managym/src/flow/damage.rs",
-          "sha256": "12f75bd60235b1817cdbcffb90e79c9772cf042adf5627a189582cda693bcbe8"
+          "sha256": "29d7d468dda7d77454aba92c65fd28cfeb193724101537d0267920328fa1a66b"
         },
         {
           "path": "managym/src/flow/decision.rs",
-          "sha256": "958a0918f1cd99fa457e34ca3b44061467836755a0fac572ea7321784c116028"
+          "sha256": "ebc97564cef17a765b3b9d35a43da16b0a090d87aa1ff3aa391839eee4a287c4"
         },
         {
           "path": "managym/src/flow/event.rs",
           "sha256": "b7a38f5f677ce884494bec377fa8603077fc2d7796ab7de1793892a3ade600ad"
         },
         {
-          "path": "managym/src/flow/event_log.rs",
-          "sha256": "8e7b2f06bc5e76718fe4f3e5d8d6f830362d46ac7e0989b1e0ae49c76382e86b"
-        },
-        {
           "path": "managym/src/flow/game.rs",
-          "sha256": "dce21a3780fc407d6bf8c57bbce28c11f4195dc14d48294c27fa5d37cc11d121"
+          "sha256": "5dc0dfb450aecbf367295cd3782f62122f3b515ac62b40f9cc3dba2973c39c75"
         },
         {
           "path": "managym/src/flow/identity.rs",
-          "sha256": "bfd9f782ae331fdee6189733a862aa6e443328aaf0fc49e1d8c15fbd3d291bb2"
+          "sha256": "e405c3fbbd0b2f9fe110e34be825a89b44eeceb0b8556f5259e26017623c3e6d"
         },
         {
           "path": "managym/src/flow/mana.rs",
-          "sha256": "675cb38c5226575485eed5321fe7ee0cea37709cc79e0f18a49c557f7fe4c037"
+          "sha256": "49fd1882badce9fd095069161bf08b8cfbc66d64905132e779bf0f83718ff138"
         },
         {
           "path": "managym/src/flow/mod.rs",
-          "sha256": "e2dc30f2d9a51422375ca3eb7f844f9e330c2ed17e3bbb0c592f9d537ba8bcc2"
+          "sha256": "5927721e9fdccc3ca3da728587fef7483c08df4adccda1c08cac5e5d5376fc07"
         },
         {
           "path": "managym/src/flow/play.rs",
-          "sha256": "b76229049b2ff5c8c2a1962c2bd00963fc34962dc74b974223ffb871498d1409"
+          "sha256": "4d80469bd584c22a7ff0f277a984f846fb826193c83e0f661a7b98b3562cd71f"
         },
         {
           "path": "managym/src/flow/priority.rs",
-          "sha256": "5844755eedbe4bdf705a98a2f9431fc6a24d2b28c584d1074d4013b2cb5daff6"
+          "sha256": "ec710e7853161007c31ef48ab44efaf49d5e3a997419a3447056a1b6d67e1231"
         },
         {
           "path": "managym/src/flow/proposed_event.rs",
-          "sha256": "11096c5d5efbd8b4287d645ad473e8a462c28e1fe1289bbb503835d7f4ae5d2c"
+          "sha256": "d7d003940b7e50aeb79fdf53fe69ef7a2666b182e981f30c5f78584dddce358e"
         },
         {
           "path": "managym/src/flow/resolution.rs",
-          "sha256": "3e76c11d99bdf2fc4f7476616d43f122c7875f86bb5002fe26d2606aecb5c28c"
+          "sha256": "4f1c9ad533bd6c456ea20c1dc04ee48659456eefaea861cff765959d2b6a2a1d"
         },
         {
           "path": "managym/src/flow/resolution_tests.rs",
-          "sha256": "f591d01e6e85bf61dc3af9ae3c21bdd490e2e0d3ae27eb30bb296cf9f31acb8b"
+          "sha256": "c76ba315cad43eafaeef73315ee512760da45ea6d27f9222a90b5dcbcd34c141"
         },
         {
           "path": "managym/src/flow/sba.rs",
-          "sha256": "f65912a9503a10873dbcb56671204562f4ce1d719523287238e767835837762a"
+          "sha256": "ee65c3f0a1adbf3cf3515f518f53c6c9b870470c214a3968a3e4a88d2c87ad1d"
         },
         {
           "path": "managym/src/flow/scenario.rs",
@@ -400,15 +392,15 @@
         },
         {
           "path": "managym/src/flow/search.rs",
-          "sha256": "4eb9d84c8d9a2d243b7eb0494c2c7e998aaae356975acbdd0e249c387c4e97e2"
+          "sha256": "b11c51abdf7735a8a42f382485ea26112b7f68b1b349b2abe649602055585aa7"
         },
         {
           "path": "managym/src/flow/setup.rs",
-          "sha256": "8503b8f661a24a3f810bffef884cb795d441aa29ee3c2c073e0f689a8e659a0e"
+          "sha256": "7bde978bb7293993a41264933deb902c62fe408b06f975f54126ec9290817ff5"
         },
         {
           "path": "managym/src/flow/stabilization.rs",
-          "sha256": "9167a5f2b89b80ba8e0acdc0ddc0da21b6f34c6736faa4196c56b5f78a52e864"
+          "sha256": "4cba388fc9fcd7010928eb30bfcde33da6ff7c22e8d52d7cfd6bdfc9e93f349e"
         },
         {
           "path": "managym/src/flow/statics.rs",
@@ -416,11 +408,11 @@
         },
         {
           "path": "managym/src/flow/target_authority_tests.rs",
-          "sha256": "8714e9c99e9ab8889318b684c564e8f50fb19db8766c70ff61b31301ec5dddf7"
+          "sha256": "d676c0fb0cc2b310ab098d0be911b2659ae26c3c6086dd82a29dd29f52ff3313"
         },
         {
           "path": "managym/src/flow/tick.rs",
-          "sha256": "f3e80c768e3c73e3b49e85025e9787d6c3d1d89f5c6e406b297e813186d69bb6"
+          "sha256": "4628dfbb79029442b9f55dad6c8e04b11769b18e7d0a97fbc3abfb3c2bf6c097"
         },
         {
           "path": "managym/src/flow/trigger.rs",
@@ -428,27 +420,19 @@
         },
         {
           "path": "managym/src/flow/triggers.rs",
-          "sha256": "d0161db89c429c77712ca2cf6c481d0b71edc69ed94d29c05e6faed723bcdd01"
+          "sha256": "c5ea08687132321f93ac735d55b861e13be34515318bbc501134127e3007bced"
         },
         {
           "path": "managym/src/flow/turn.rs",
           "sha256": "6f7fa159ff503f183c0970e983c58351aab08b0ee486f628a42b4cea541c55a0"
         },
         {
-          "path": "managym/src/flow/undo.rs",
-          "sha256": "b02fbee54f62555359afedd779517a04a28ca2224f5aef495cafb2e54cd7a69c"
-        },
-        {
           "path": "managym/src/flow/zones.rs",
-          "sha256": "cabc1c2ef1664b8df902450239b814ca4fe07af5869ea610effccf0bfbd709f7"
-        },
-        {
-          "path": "managym/src/infra/log.rs",
-          "sha256": "751e591198dc0da18daacf4756579cb75e972e47b07378271a496d5ad36c111a"
+          "sha256": "a5af62fa6b499276c3c70f38d7ec8e7a4ba1baa16ff00eb6235cee777326a726"
         },
         {
           "path": "managym/src/infra/mod.rs",
-          "sha256": "e7c35c6640f054ae5c71402be41efa9d6e0145fcd8916d3cc35b7a9b9265a93b"
+          "sha256": "3486a76db96f362274e0d003ff1ca0fb520b5d886f8f189785cb759991063844"
         },
         {
           "path": "managym/src/infra/profiler.rs",
@@ -456,31 +440,39 @@
         },
         {
           "path": "managym/src/lib.rs",
-          "sha256": "21ec69116fe8f934c7c4d3ad4d6a76be7e56bf5db87c0f951c88515b693b27f8"
+          "sha256": "160fa1b0555e941239ffc414301df44a4a68f8e14a490d69a0187d43619b154c"
+        },
+        {
+          "path": "managym/src/match_fixtures.rs",
+          "sha256": "bff85241596386f35181a36d3ca32707a85d8871f4f3e4dd6b7155201282e3f9"
         },
         {
           "path": "managym/src/possible_worlds.rs",
-          "sha256": "8507cf72dc3446264e5da3ad87bb57aefed96ba1214731cb2c531327711c2adc"
+          "sha256": "e1afcdfbd16dd0ed26dc77614b17a5529650602bfbb96c0b7706b9ded81a6195"
         },
         {
           "path": "managym/src/python/bindings.rs",
-          "sha256": "e6912c30610cd8322710a6ceab7f86db248b99429ae63484d4043c78823bf51e"
+          "sha256": "6c33537b163a49c851d389da367480f954627e0c109cf2a9d6be1b87a37027d3"
         },
         {
           "path": "managym/src/python/convert.rs",
           "sha256": "fabd640626cad6df6b299beb36d9d59ada38a53c046bee87f7d688639cdcaa03"
         },
         {
+          "path": "managym/src/python/deck_bindings.rs",
+          "sha256": "9109a2efbeefda0e5fefcdae62132c977b6e18559cb8ff5ea7750aa8ee67dc39"
+        },
+        {
           "path": "managym/src/python/mod.rs",
-          "sha256": "ce70dfea8c40b92c8e9d23e3a98a831d5b5de29e9b8d0e7cf5feb6950f932de3"
+          "sha256": "f4668cb7092d3f2865781e6921fa0850b83ae6bf87d62b952d2188a5fd891ee9"
         },
         {
           "path": "managym/src/python/vector_env_bindings.rs",
-          "sha256": "a3da9b0a17266795003bdd9dce9d7d384ce917fa2d562ce3e10e01cdf5ef3140"
+          "sha256": "382ac3277e54282c4e56e196eee7475de98bec476b18919f1f7b8cd0a675c87a"
         },
         {
           "path": "managym/src/search_state.rs",
-          "sha256": "4e594d4f77f8cbee62e286c97c7384c0b4507ef908f2d7bc0925c704f94dd6b0"
+          "sha256": "ab9b5b91f420a6090a6556dadb06e30f9604347705b16cfa0be7d113f198eeba"
         },
         {
           "path": "managym/src/state/ability.rs",
@@ -491,20 +483,24 @@
           "sha256": "17cb7a64bb5d74684216047f6a26cf097e7dca369d177a07a513081c179f7e03"
         },
         {
+          "path": "managym/src/state/deck.rs",
+          "sha256": "836f2c6c4de97c7952e7adb468ee7bcbf8f1d901fe73e3f8fe56a2672eed644f"
+        },
+        {
           "path": "managym/src/state/game_object.rs",
-          "sha256": "7bcff2e858579c54769b1b6d4e2e9dff18e03ab299a4a8bca6a99d445c501d89"
+          "sha256": "0a41adbbcb1d431e563143e187b712d4f53f8ae28d7c430b96dc92dc609b8ff7"
         },
         {
           "path": "managym/src/state/hash.rs",
-          "sha256": "d4aafb66725050c4f76ccdce4be27ebcb61a3d365a1d72db537db53833fcafda"
+          "sha256": "3489446b2c5864805b749d4efade0582e8a40c65d0e2ca9ceb9e78a992aae242"
         },
         {
           "path": "managym/src/state/mana.rs",
-          "sha256": "28557ebb194a916531d7ea1b660e7873f16c141170f22e400bd27b11947b5560"
+          "sha256": "1ae08f9996ab17c4bf6326474a67f48163e90df42142c7dd9ed2ee6bedeb72ab"
         },
         {
           "path": "managym/src/state/mod.rs",
-          "sha256": "41ecf3b2a56de79e16182629c4c343515f11600b56eabdf59903eb9affe4666b"
+          "sha256": "d5605348aa2f94c6c4592115b55dbb91ae695fba22970d24f8385964c8fe6c0e"
         },
         {
           "path": "managym/src/state/permanent.rs",
@@ -512,7 +508,7 @@
         },
         {
           "path": "managym/src/state/player.rs",
-          "sha256": "5ee00a0c9469d2b1a6fbc67c91e949c984e9bd0e1090c98a7dfac16b892f2908"
+          "sha256": "a9fdf6f1de6d7dec0f4383878619acabd7581505ec59a1ff2f2f686ef54f4e7e"
         },
         {
           "path": "managym/src/state/predicate.rs",
@@ -528,7 +524,7 @@
         },
         {
           "path": "managym/src/state/zone.rs",
-          "sha256": "774a40a82698a87dc1955014f0160c55c45e78bbffc878249e40ebdd77f254ca"
+          "sha256": "ae9dbc55660287e4cf1ebf4e30c44cb6c5be8cb7402bef9a27034bc97abe89d2"
         },
         {
           "path": "managym/src/study.rs",
@@ -536,7 +532,7 @@
         },
         {
           "path": "managym/src/world.rs",
-          "sha256": "c73d43e5012f514c419e254ad5e0154cb8f8995867c2b91f3e36b3954fead894"
+          "sha256": "33faeefb46f0a2e1eeeffc825830ac719a4c4b54f443fff60100610653d65e83"
         },
         {
           "path": "managym/tests/rules/structured_offers.rs",
@@ -551,7 +547,7 @@
           "sha256": "23ac765196d97fb350c0e3e2337bacc5d8e42bd6c47edb7999fb0907d32bfa8d"
         }
       ],
-      "sha256": "ecaaa9db51e8ec3456a16083312d0c8b1729f21b513086aaae3c6c9c2e86df9d"
+      "sha256": "68f62085fabfc5f2a5cefab3fa25d231768e9c811708e110d793e251900608c0"
     },
     "seed": 0
   },

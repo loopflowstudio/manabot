@@ -17,7 +17,7 @@ use crate::{
     flow::{game::Game, search::mix_seed},
     infra::profiler::{empty_info_dict, insert_info, InfoDict, InfoValue, Profiler},
     possible_worlds::{MaterializeMode, PossibleWorldSpace, PossibleWorldSpaceProjection},
-    search_state::{BranchDriver, FullCloneDriver, SearchStateWitness},
+    search_state::{witness, SearchStateWitness},
     state::{game_object::PlayerId, player::PlayerConfig},
 };
 use rand::Rng;
@@ -229,9 +229,9 @@ impl Env {
         &mut self,
         player_configs: Vec<PlayerConfig>,
     ) -> Result<(Observation, InfoDict), AgentError> {
-        // Validate explicit authored setup bindings at the fallible environment
+        // Validate explicit content and setup bindings at the fallible environment
         // boundary, before Game construction can panic on invalid content.
-        crate::cards::content_pack_for_authored_match(&player_configs)
+        crate::cards::content_pack_for_match(&player_configs)
             .map_err(|error| AgentError(error.to_string()))?;
         let _scope = self.profiler.track("env_reset");
         self.action_trace = Some(NativeActionTrace {
@@ -285,6 +285,13 @@ impl Env {
     /// Seed of the current game, for private collector recovery.
     pub fn seed(&self) -> u64 {
         self.seed
+    }
+
+    /// Setups this game was reset with; empty before the first reset.
+    pub fn player_configs(&self) -> &[PlayerConfig] {
+        self.action_trace
+            .as_ref()
+            .map_or(&[], |trace| trace.player_configs.as_slice())
     }
 
     /// Number of trivial decision points auto-collapsed by `skip_trivial`
@@ -883,13 +890,13 @@ impl Env {
         })
     }
 
-    /// Production search fork bound to the RUL-1 retained driver.
+    /// Production search fork: an exact full clone of the match.
     pub fn selected_fork(&self) -> Result<Env, AgentError> {
         let source = self
             .game
             .as_ref()
             .ok_or_else(|| AgentError("env.selected_fork called before reset".to_string()))?;
-        let game = FullCloneDriver.fork_exact(source);
+        let game = source.clone();
         Ok(Env {
             game: Some(game),
             action_trace: self.action_trace.clone(),
@@ -918,7 +925,7 @@ impl Env {
             AgentError("env.selected_determinize called before reset".to_string())
         })?;
         game.require_open_decklist(PlayerId(perspective))?;
-        FullCloneDriver.determinize(game, PlayerId(perspective), seed);
+        game.determinize(PlayerId(perspective), seed);
         Ok(())
     }
 
@@ -926,7 +933,7 @@ impl Env {
         let game = self.game.as_mut().ok_or_else(|| {
             AgentError("env.selected_reseed_rollout called before reset".to_string())
         })?;
-        FullCloneDriver.reseed_rollout(game, seed);
+        game.reseed(seed);
         Ok(())
     }
 
@@ -935,7 +942,7 @@ impl Env {
             .game
             .as_ref()
             .ok_or_else(|| AgentError("env.selected_witness called before reset".to_string()))?;
-        Ok(FullCloneDriver.witness(game))
+        Ok(witness(game))
     }
 
     pub fn selected_revision(&self) -> Result<u64, AgentError> {

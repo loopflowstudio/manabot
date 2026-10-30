@@ -273,7 +273,7 @@ pub struct Mana {
     /// Mana that keeps a spending restriction until spent or lost (CR 106.6),
     /// by restriction and color. Canonical: sorted by use, no all-zero entry,
     /// `None` when empty. Boxed so ordinary pools stay small and
-    /// allocation-free in the undo journal.
+    /// allocation-free when cloned.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[allow(clippy::box_collection)] // a thin pointer; `Vec` would widen every pool
     pub(crate) restricted: Option<Box<Vec<RestrictedClass>>>,

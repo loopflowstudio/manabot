@@ -320,12 +320,10 @@ pub fn zone_of(s: &Scenario, card: CardId) -> Option<ZoneType> {
 }
 
 /// Exercise every offered atomic continuation through the real Command
-/// authority, with an independent replay and a nested exact-fork rollback.
+/// authority, with an independent replay; every legal action and a follow-up
+/// step run on exact forks that leave the source untouched.
 pub fn assert_choice_contract(s: &Scenario) {
-    use managym::{
-        decision::Command,
-        search_state::{witness, BenchCommand, BranchDriver, ClonePlusUndoDriver},
-    };
+    use managym::{decision::Command, search_state::witness};
     let root = witness(s.game());
     let frame = s.game().semantic_decision_frame().unwrap();
     assert_eq!(frame.offers.len(), s.action_space().actions.len());
@@ -347,36 +345,12 @@ pub fn assert_choice_contract(s: &Scenario) {
         assert!(branch.execute_semantic_command(&command).is_err());
         assert_eq!(witness(&branch), after);
     }
-    let driver = ClonePlusUndoDriver::default();
     for index in 0..s.action_space().actions.len() {
-        let mut branch = driver.fork_exact(s.game());
-        let mark = driver.mark(&mut branch);
-        driver
-            .apply(
-                &mut branch,
-                BenchCommand {
-                    action_index: index,
-                    expected_action_hash: None,
-                    expected_state_hash: None,
-                },
-            )
-            .unwrap();
-        let inner = driver.mark(&mut branch);
+        let mut branch = s.game().clone();
+        branch.step(index).unwrap();
         if !branch.action_space().unwrap().actions.is_empty() {
-            driver
-                .apply(
-                    &mut branch,
-                    BenchCommand {
-                        action_index: 0,
-                        expected_action_hash: None,
-                        expected_state_hash: None,
-                    },
-                )
-                .unwrap();
+            branch.step(0).unwrap();
         }
-        driver.rollback(&mut branch, inner);
-        driver.rollback(&mut branch, mark);
-        assert_eq!(driver.witness(&branch), root);
     }
     assert_eq!(witness(s.game()), root);
 }

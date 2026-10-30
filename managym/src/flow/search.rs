@@ -58,7 +58,6 @@ impl Game {
             self.decklist_known(opponent, perspective),
             "determinize requires the opponent's open decklist"
         );
-        self.journal_zones();
         let (mut known, mut residual) = self.hidden_hand_partition(opponent);
         residual.extend(self.foretold_cards(opponent));
         residual.sort_unstable_by_key(|card| card.0);

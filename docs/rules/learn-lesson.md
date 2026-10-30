@@ -16,7 +16,7 @@ identities: **w4 remains the native rules world**. ETU-89 owns training regimes
 and reuses the ordinary checkpoint contract; no second training loader was added.
 The dated September observations below describe the earlier state.
 
-Ordinary policies configured with `semantic_pack="ur-lessons-vs-gw-allies"` now
+Ordinary policies configured with `world="ur-lessons-vs-gw-allies"` now
 join complete checked semantic programs to visible cards and owned outside
 candidates. Definition references are expanded without prefix truncation.
 Public known-hand definition minima enter separate player features; hidden
@@ -40,12 +40,12 @@ Configured Search executes Learn in both deck assignments without changing the
 source root. The existing GameSession/live tape and canonical replay owners
 feed `academy.learn_lesson_evidence`; no second replay engine was introduced.
 The prospective cohort, exact source closure and 10,000-Command cap are recorded
-in `conformance/learn-lesson-w4-v3`. v2 passed all 16 games (3,843 Commands,
+in `experiments/data/archive/conformance/learn-lesson-w4-v3`. v2 passed all 16 games (3,843 Commands,
 19 retrievals, 25 discard/draws and 14 declines) at source `57ac36a5`. Final
 gate repairs to import isolation and diagnostic traceback handling changed the
 source binding, so v3 repeats the same fixed seeds. The earlier unscored v1
 registration and complete v2 receipts are archived (see the
-[repository archive](../repository-archive.md)). At the registered source,
+[repository archive](../development.md#retained-evidence-and-archived-corpora)). At the registered source,
 `./scripts/verify-learn-lesson` rebuilds the extension, checks the consumer
 contracts and verifies all tapes; it rejects source or binary drift instead of
 rewriting receipts. The script and the w4 cohorts now exist only at revisions
@@ -60,7 +60,7 @@ interaction approval remains accepted with its original proof limits.
 
 A confirmed gate blocker is the frozen checkpoint-advice fixture: it records
 action ABI 3 and possible-world ABI 1, whereas the current request uses 6 and 2,
-with different content, replay and observation identities. `docs/development/validation.md`
+with different content, replay and observation identities. `docs/development.md#validation-by-change-area`
 explicitly requires preserving failures in frozen advice as blockers. Neither
 historical fixtures nor checkpoint validation were rewritten to conceal that
 mismatch. The broad Python gate returned 813 passed and 30 failed. Ten failures
@@ -204,16 +204,15 @@ target, expensive training or strength claim is implied.
 
 ## Source history
 
-The source documents below are retained in local checkpoint
-`d1326f249609daa781e786f5ee103aaeea3e1651`; that checkpoint is not published as
-of this update. The paths remain available in the working tree. Keep them while
-implementation continues; this curated record does not replace the full design
-or its detailed verification matrix.
+The source documents below were retained in local checkpoint
+`d1326f249609daa781e786f5ee103aaeea3e1651`, which was not published; they are
+no longer in the working tree. This curated record does not replace the full
+design or its detailed verification matrix.
 
-- [Approved design and slice ledger](../../scratch/complete-learn-lesson-in-the.md)
-- [Human session and exact approval scope](../../scratch/demo-human-learn.md)
-- [Playable-controls review and failure inventory](../../scratch/review-slice3-controls.md)
-- [Outstanding assumptions and evidence](../../scratch/questions.md)
+- Approved design and slice ledger: `scratch/complete-learn-lesson-in-the.md`
+- Human session and exact approval scope: `scratch/demo-human-learn.md`
+- Playable-controls review and failure inventory: `scratch/review-slice3-controls.md`
+- Outstanding assumptions and evidence: `scratch/questions.md`
 
 `lf status rules --json` confirms ETU-75's ownership and this worktree, with an
 unfinished working PR and no publication. Its current chapter is

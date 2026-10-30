@@ -30,7 +30,7 @@ fixtures in `managym/src/cards/fixtures.rs` (Crossroads of Destiny), in name
 order. Each authored setup is a pack of exactly its decks'
 cards and the tokens they create, in key order
 ([`cards/setups.rs`](../../managym/src/cards/setups.rs)); exact authored
-decklists, or an explicit `content_pack`, select it. A pack's identity is its
+decklists, or an explicit `world`, select it. A pack's identity is its
 `content_digest`; its manifest also names its `pack_key` (absent for the default
 pack). `managym.content_pool(pack_key)` exposes native IDs, keys and eligibility
 without starting a game; `managym.set_cards(["tla", "lea"])` narrows the world

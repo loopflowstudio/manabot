@@ -75,7 +75,7 @@ from .curated_pack import (
     JEONG_INCREMENT_PACK,
     curated_pack_for_matchup,
 )
-from .live_advice import LiveBeliefRuntime, LiveBeliefUnavailable
+from .deck_import import DeckImportInput
 from .opponent import (
     Opponent,
     catalog_opponent,
@@ -180,6 +180,7 @@ DECK_DISPLAY_NAMES = {
     CURATED_PACK.villain_deck_id: CURATED_PACK.villain_display_name,
     JEONG_INCREMENT_PACK.hero_deck_id: JEONG_INCREMENT_PACK.hero_display_name,
     "custom": "Custom",
+    "imported": "Imported deck",
     **{
         row["deck_id"]: row["display_name"]
         for row in ELEMENTAL_WORLD_PACK.manifest["roster"]
@@ -325,17 +326,6 @@ class PendingCanonicalDecision:
     root: managym.Env
     source_sha256: str
     rules_revision: int
-
-
-@dataclass(frozen=True)
-class ResolvedLiveTrackedPosterior:
-    """Game-owned input capability for the Intelligence live provider."""
-
-    address: DecisionAddressV2
-    frame: ExperienceFrame
-    root: managym.Env
-    source_sha256: str
-    posterior: Any
 
 
 # Transitional name retained for type references in downstream tests.
@@ -734,44 +724,68 @@ def _parse_game_config(config: Any) -> GameConfig:
                 f"villain_sims must be between 1 and {villain_module.MAX_SEARCH_SIMS}."
             )
 
-    hero_deck, hero_deck_name = _normalize_deck(
-        data.get("hero_deck"), DEFAULT_HERO_DECK_NAME
-    )
-    villain_deck, villain_deck_name = _normalize_deck(
-        data.get("villain_deck"), DEFAULT_VILLAIN_DECK_NAME
-    )
-
-    selected_pack = curated_pack_for_matchup(hero_deck_name, villain_deck_name)
-    if selected_pack is None and any(
-        name in ELEMENTAL_WORLD_PACK.deck_ids
-        for name in (hero_deck_name, villain_deck_name)
-    ):
-        raise ValueError("Elemental decks require two setups from the Elemental roster")
-
-    sideboards = {}
-    for seat, deck_name in (("hero", hero_deck_name), ("villain", villain_deck_name)):
-        pack = selected_pack
-        if pack is None:
-            pack = next(
-                (
-                    candidate
-                    for candidate in CURATED_PACK_CATALOG
-                    if deck_name in candidate.deck_ids
-                ),
-                None,
-            )
-        sideboard = (
-            {} if pack is None else dict(pack.player_config(deck_name, seat).sideboard)
+    # Private import provenance (see `GameConfig.hero_source`); empty for named decks.
+    provenance: dict[str, Any] = {}
+    if "deck_import" in data:
+        deck_import = DeckImportInput.model_validate(data["deck_import"])
+        hero_import, villain_import = deck_import.admit()
+        provenance = {
+            "hero_source": hero_import.decklist.to_dict(),
+            "villain_source": villain_import.decklist.to_dict(),
+        }
+        hero_deck, villain_deck = hero_import.deck.main, villain_import.deck.main
+        hero_deck_name = villain_deck_name = "imported"
+        selected_pack = None
+        sideboards = {
+            "hero": hero_import.deck.sideboard,
+            "villain": villain_import.deck.sideboard,
+        }
+    else:
+        hero_deck, hero_deck_name = _normalize_deck(
+            data.get("hero_deck"), DEFAULT_HERO_DECK_NAME
         )
-        # Named setup cannot silently change when a persisted config is reused.
-        supplied = data.get(f"{seat}_sideboard", sideboard)
-        if (
-            not isinstance(supplied, dict)
-            or supplied != sideboard
-            or any(type(count) is not int for count in supplied.values())
+        villain_deck, villain_deck_name = _normalize_deck(
+            data.get("villain_deck"), DEFAULT_VILLAIN_DECK_NAME
+        )
+
+        selected_pack = curated_pack_for_matchup(hero_deck_name, villain_deck_name)
+        if selected_pack is None and any(
+            name in ELEMENTAL_WORLD_PACK.deck_ids
+            for name in (hero_deck_name, villain_deck_name)
         ):
-            raise ValueError(f"{seat}_sideboard must match the named deck setup")
-        sideboards[seat] = sideboard
+            raise ValueError(
+                "Elemental decks require two setups from the Elemental roster"
+            )
+
+        sideboards = {}
+        for seat, deck_name in (
+            ("hero", hero_deck_name),
+            ("villain", villain_deck_name),
+        ):
+            pack = selected_pack
+            if pack is None:
+                pack = next(
+                    (
+                        candidate
+                        for candidate in CURATED_PACK_CATALOG
+                        if deck_name in candidate.deck_ids
+                    ),
+                    None,
+                )
+            sideboard = (
+                {}
+                if pack is None
+                else dict(pack.player_config(deck_name, seat).sideboard)
+            )
+            # Named setup cannot silently change when a persisted config is reused.
+            supplied = data.get(f"{seat}_sideboard", sideboard)
+            if (
+                not isinstance(supplied, dict)
+                or supplied != sideboard
+                or any(type(count) is not int for count in supplied.values())
+            ):
+                raise ValueError(f"{seat}_sideboard must match the named deck setup")
+            sideboards[seat] = sideboard
 
     villain_checkpoint: str | None = None
     villain_deterministic = False
@@ -789,6 +803,7 @@ def _parse_game_config(config: Any) -> GameConfig:
         villain_deterministic = opponent.deterministic
 
     return GameConfig(
+        **provenance,
         hero_deck=hero_deck,
         villain_deck=villain_deck,
         hero_sideboard=sideboards["hero"],
@@ -890,8 +905,6 @@ class GameSession:
         self._pending_decision: PendingCanonicalDecision | None = None
         self._decision_source_sha256: dict[str, str] = {}
         self._decision_rules_revision: dict[str, int] = {}
-        self._live_beliefs: LiveBeliefRuntime | None = None
-        self._live_advice_supported = False
         self._study_provider: StudyForkProvider | None = None
         self.authority_transitions: list[AuthorityTransition] = []
         self.authority_fallback_counters = {
@@ -1029,11 +1042,6 @@ class GameSession:
         self._pending_decision = None
         self._decision_source_sha256 = {}
         self._decision_rules_revision = {}
-        self._live_beliefs = None
-        self._live_advice_supported = (
-            config.hero_deck_name == "interactive"
-            and config.villain_deck_name == "interactive"
-        )
         self._study_provider = None
         self.authority_transitions = []
         self.authority_fallback_counters = {
@@ -1411,12 +1419,6 @@ class GameSession:
         action_description = actions[action_index]["description"]
         self.presentation.note_action(InteractionOffer.model_validate(selected_offer))
         from_revision = self.revision
-        track_beliefs = (
-            self._live_beliefs is not None
-            and self._live_beliefs.started
-            and self._live_beliefs.valid
-        )
-        likelihood_root = self.env.clone_env() if track_beliefs else None
         semantic_frame = json.loads(self.env.semantic_decision_frame_json())
         if (
             int(semantic_frame["actor"]) != actor_index
@@ -1436,16 +1438,6 @@ class GameSession:
         semantic_transition = SemanticTransition.from_json(transition_json)
         if semantic_transition.receipt.command_id != str(command["command_id"]):
             raise RuntimeError("Semantic receipt command identity drifted.")
-        if track_beliefs:
-            assert self._live_beliefs is not None and likelihood_root is not None
-            self._live_beliefs.observe(
-                self.env.clone_env(),
-                acting=actor_index,
-                transition=semantic_transition,
-                likelihood_root=likelihood_root,
-            )
-        elif self._live_beliefs is not None:
-            self._live_beliefs.invalidate()
         state_after: str | None = None
         semantic_events: list[dict[str, Any]] = []
         encountered_definition_ids: list[int] = []
@@ -1761,14 +1753,6 @@ class GameSession:
                 ]["revision"]
             ),
         )
-        if self._live_advice_supported and (
-            self._live_beliefs is None or not self._live_beliefs.valid
-        ):
-            if self._live_beliefs is not None:
-                self._live_beliefs.close()
-            self._live_beliefs = LiveBeliefRuntime(
-                self._pending_decision.root.clone_env()
-            )
         return self.published_prompt
 
     def _build_decision_context(
@@ -2102,65 +2086,6 @@ class GameSession:
             return self._study_provider
         return StudyForkProvider(self.canonical_replay(), self._study_roots)
 
-    def resolve_live_advisor_decision(
-        self,
-        raw_address: str,
-        authorized_viewer: int,
-    ) -> Any:
-        """Resolve a committed live-session decision through Game authority."""
-
-        return self.study_fork_provider().resolve_advisor_decision(
-            raw_address, authorized_viewer
-        )
-
-    def resolve_live_tracked_posterior(
-        self,
-        raw_address: str,
-        authorized_viewer: int,
-    ) -> ResolvedLiveTrackedPosterior:
-        """Resolve one ed2 root and its off-lock tracked posterior snapshot."""
-
-        address = parse_decision_address(raw_address)
-        if not isinstance(address, DecisionAddressV2):
-            raise DecisionNotFoundError("decision not found")
-        if address.viewer != authorized_viewer or authorized_viewer != 0:
-            raise DecisionNotFoundError("decision not found")
-        runtime = self._live_beliefs
-        if runtime is None:
-            raise LiveBeliefUnavailable("tracked posterior is unavailable")
-
-        pending = self._pending_decision
-        if pending is not None and pending.address == address:
-            frame = pending.frame
-            retained_root = pending.root
-            source_sha256 = pending.source_sha256
-            rules_revision = pending.rules_revision
-        else:
-            if address.ordinal >= len(self.canonical_decisions):
-                raise DecisionNotFoundError("decision not found")
-            row = self.canonical_decisions[address.ordinal]
-            expected = DecisionAddressV2.from_decision(self.canonical_replay(), row)
-            source_sha256 = self._decision_source_sha256.get(address.serialize(), "")
-            rules_revision = self._decision_rules_revision.get(address.serialize(), -1)
-            retained_root = self._study_roots.get(int(address.ordinal))
-            if (
-                address != expected
-                or not source_sha256
-                or rules_revision < 0
-                or retained_root is None
-            ):
-                raise DecisionNotFoundError("decision not found")
-            frame = row.frame
-
-        snapshot = runtime.snapshot(rules_revision)
-        return ResolvedLiveTrackedPosterior(
-            address=address,
-            frame=frame.model_copy(deep=True),
-            root=retained_root.clone_env(),
-            source_sha256=source_sha256,
-            posterior=snapshot,
-        )
-
     def fork_study(self, raw_address: str) -> StudyBranch:
         """Fork an authorized acting-player decision for ephemeral Study."""
         viewer = (
@@ -2413,9 +2338,6 @@ class GameSession:
         self.obs = None
         self.villain_policy = None
         self.watch_policies = None
-        if self._live_beliefs is not None:
-            self._live_beliefs.close()
-            self._live_beliefs = None
 
 
 def _error_message(message: str) -> dict[str, str]:
@@ -2869,6 +2791,15 @@ def _dispatch_table_request(
                 **({"seed": previous.seed} if previous.seed_was_requested else {}),
                 **config,
             }
+            if previous.hero_source is not None and previous.villain_source is not None:
+                # New game re-admits the retained sources against the installed world.
+                config["deck_import"] = {
+                    seat: {"source": source["source"], "filename": source["filename"]}
+                    for seat, source in (
+                        ("hero", previous.hero_source),
+                        ("villain", previous.villain_source),
+                    )
+                }
             if previous.opponent is not None:
                 config["opponent_sha256"] = previous.opponent["sha256"]
         record.game.attempt_owner = participant_id(participant.resume_token)
@@ -3612,3 +3543,25 @@ def import_arena_watch(payload: dict[str, Any]) -> dict[str, Any]:
         return import_arena(payload)
     except (ValueError, KeyError, TypeError) as exc:
         raise HTTPException(400, "arena_import_invalid") from exc
+
+
+@app.post("/api/decklists/validate")
+def validate_decklists(payload: DeckImportInput) -> dict[str, Any]:
+    try:
+        payload.admit()
+    except managym.DeckImportError as error:
+        return {
+            "admitted": False,
+            "documents": {
+                seat: decklist.to_dict() for seat, decklist in error.decklists.items()
+            },
+        }
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
+    world = managym.world_identity()
+    return {
+        "admitted": True,
+        "ruleset": managym.DEVELOPMENT_RULESET,
+        "world_version": world["world_version"],
+        "card_digest": world["card_digest"],
+    }

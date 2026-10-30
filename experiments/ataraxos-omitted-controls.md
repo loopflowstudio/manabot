@@ -58,7 +58,7 @@ were checked directly on 2026-10-04. Move learning uses policy/value lambda
 .5/.8, inclusive .75/.01 filtering, clipped action ratios, both reverse KLs,
 and evaluation EMA .999. EMA behavior is an additional hypothesis, not a
 paper-fidelity claim. The complete move recipe and explicit adaptation table
-remain in [docs/ataraxos.md](../docs/ataraxos.md). Auxiliary predictions and
+remain in [docs/training.md#ataraxos](../docs/training.md#ataraxos). Auxiliary predictions and
 setup heads are unsupported architecture hypotheses, never bundled into a
 control. The historical five-arm document remains evidence of that campaign.
 

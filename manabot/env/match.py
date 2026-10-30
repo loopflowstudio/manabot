@@ -5,7 +5,6 @@ Defines configuration for a Magic: The Gathering match between two players.
 
 from copy import deepcopy
 from dataclasses import dataclass
-import json
 from typing import Dict
 
 # Local imports
@@ -43,7 +42,7 @@ class Match:
             self.hero,
             self.hero_deck,
             self.hero_sideboard,
-            self.config.content_pack,
+            self.config.world,
             self.config.decklists,
         )
 
@@ -52,7 +51,7 @@ class Match:
             self.villain,
             self.villain_deck,
             self.villain_sideboard,
-            self.config.content_pack,
+            self.config.world,
             self.config.decklists,
         )
 
@@ -69,7 +68,9 @@ class Match:
         """
         return Match(
             MatchConfig(
-                content_pack=self.config.content_pack,
+                world=self.config.world,
+                hero_source=self.config.villain_source,
+                villain_source=self.config.hero_source,
                 hero=self.villain,
                 villain=self.hero,
                 hero_deck=self.villain_deck,
@@ -83,27 +84,6 @@ class Match:
     def __str__(self) -> str:
         """Return a human-readable string representation of the match."""
         return f"Match({self.hero} vs {self.villain})"
-
-
-def parse_deck(deck_str: str) -> Dict[str, int]:
-    """Parse a deck string into a dictionary of card counts.
-
-    Accepts either:
-    1. JSON string: '{"Mountain": 12, "Forest": 12}'
-    2. Simple format: 'Mountain:12,Forest:12'
-    """
-    try:
-        # First try JSON format
-        return json.loads(deck_str)
-    except json.JSONDecodeError:
-        # Fall back to simple format
-        deck = {}
-        for pair in deck_str.split(","):
-            if ":" not in pair:
-                raise ValueError(f"Invalid deck format: {deck_str}")
-            card, count = pair.split(":")
-            deck[card.strip()] = int(count)
-        return deck
 
 
 class Reward:

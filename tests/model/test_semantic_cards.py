@@ -28,7 +28,7 @@ def test_programs_and_known_definitions_reach_actual_policy(learn_root):  # noqa
     agent = ActorCritic(
         space,
         ModelConfig(
-            hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
+            hidden_dim=8, num_attention_heads=2, world="ur-lessons-vs-gw-allies"
         ),
     )
     obs = tensors(space, before)
@@ -76,7 +76,7 @@ def test_semantic_policy_rejects_unadmitted_definition(learn_root):  # noqa: F81
     agent = ActorCritic(
         space,
         ModelConfig(
-            hidden_dim=8, num_attention_heads=2, semantic_pack="ur-lessons-vs-gw-allies"
+            hidden_dim=8, num_attention_heads=2, world="ur-lessons-vs-gw-allies"
         ),
     )
     actor = SemanticDecisionContract.from_env(learn_root).frame.actor

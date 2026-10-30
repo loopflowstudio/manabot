@@ -9,8 +9,8 @@ No scientific campaign or paid compute is authorized.
 
 [HTML technical review](modular-architecture-recipes.html) ·
 [System authority](../ARCHITECTURE.md) ·
-[Training regimes](../training-regimes.md) ·
-[Current chapter](../../wave/intelligence/GOAL.md)
+[Training regimes](../training.md#regimes-and-stages) ·
+[Current chapter](../../.lf/wave/training/GOAL.md)
 
 ## 1. Recommendation and the observable win
 
@@ -149,7 +149,7 @@ pre-layernorm networks, and a Stratego move model with depth 8, width 384 and
 8 heads. These are paper-reported architecture choices, not evidence of an
 internal registry, config language, or MTG benefit. The move and belief networks
 must not be conflated. ETU-106 owns focused paper-inspired MTG contrasts;
-[the existing fidelity table](../ataraxos.md) owns learning-rule departures.
+[the existing fidelity table](../training.md#ataraxos) owns learning-rule departures.
 
 ### Comparison across the requested boundaries
 

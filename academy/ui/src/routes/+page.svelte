@@ -7,6 +7,7 @@
   import DecisionAdvice from '$lib/components/DecisionAdvice.svelte';
   import DeckIdentity from '$lib/components/DeckIdentity.svelte';
   import DeckSelector from '$lib/components/DeckSelector.svelte';
+  import DeckImport from '$lib/components/DeckImport.svelte';
   import GameBoard from '$lib/components/GameBoard.svelte';
   import Feedback from '$lib/components/Feedback.svelte';
   import GameLog from '$lib/components/GameLog.svelte';
@@ -386,6 +387,7 @@
         <option value="closed">Closed — neither player sees the other's lists</option>
       </select>
     </label>
+    <DeckImport />
   {/if}
   {#if gameStore.observation && boardObservation}
     <div class="grid grid-cols-1 items-start">

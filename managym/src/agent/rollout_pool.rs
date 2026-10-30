@@ -7,7 +7,7 @@
 // root action is applied to `rollouts` clones. The pool then exposes the set
 // of still-running simulations so a caller can advance *all* of them one
 // decision at a time with externally chosen actions — e.g. a policy network
-// evaluated in a single batched forward pass per step (wave/search goal 1).
+// evaluated in a single batched forward pass per step.
 //
 // Scoring matches Env::flat_mc_scores exactly: win 1.0 / loss 0.0 /
 // draw-or-step-cap 0.5 from the deciding player's perspective, averaged over

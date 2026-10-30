@@ -14,9 +14,8 @@ priors, random leaf playouts. This is NOT information-set Monte Carlo tree
 search (ISMCTS), NOT public-belief search, and NOT equilibrium solving.
 No belief inference or information-set-consistency claim is made.
 
-The canonical path consumes managym's viewer-relative ``PossibleWorldSpace``
-through INT-9 ``BeliefState`` values. The older scenario-world adapter remains
-only for the frozen INT-13 regression fixture.
+Worlds come from the scenario-world adapter that configures opponent hands
+for the frozen INT-13 regression and advice fixtures.
 
 Sampled worlds and hidden truth are audit-private. The ConditionalStrategyResult
 exposes action distributions, Q-values, uncertainty, and comparison deltas —
@@ -32,13 +31,11 @@ import math
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Protocol, Sequence
 
-from managym.possible_worlds import PossibleWorldSpace as CanonicalPossibleWorldSpace
 import numpy as np
 
-from manabot.belief.range import BeliefState
+from manabot.infra.identity import canonical_sha256
 from manabot.sim.search.branch import (
     REFERENCE_BRANCH_DRIVER_ID,
-    SELECTED_BRANCH_DRIVER_ID,
     SearchBranchBackend,
     branch_backend as resolve_branch_backend,
 )
@@ -54,11 +51,6 @@ from manabot.sim.search.runtime import DEFAULT_MAX_PLAYOUT_STEPS
 PLANNER_NAME = "determinized_puct"
 CONDITION_TRUE = "true"
 REPO_ROOT = Path(__file__).resolve().parents[3]
-
-
-def canonical_sha256(payload: Any) -> str:
-    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
-    return hashlib.sha256(encoded).hexdigest()
 
 
 def source_bundle_sha256(paths: Iterable[Path]) -> str:
@@ -307,8 +299,7 @@ class ScenarioWorldSpace:
 
     Uses the engine scenario API (scenario_clear_hand +
     scenario_force_card_in_hand + scenario_refresh) to configure a forked
-    env to a specific opponent hand. Canonical production advice uses
-    ``CanonicalBeliefWorldSpace`` instead.
+    env to a specific opponent hand.
 
     The forked env must be an unguarded managym.Env (from clone_env, not
     from SelectedBranchRuntime.fork_exact). The scenario methods do not
@@ -345,49 +336,6 @@ class ScenarioWorldSpace:
         del seed
         world = branch_session.fork_exact(root_env, "world")
         self.configure(world, world_index=world_index)
-        return world
-
-
-@dataclass(frozen=True)
-class CanonicalBeliefWorldSpace:
-    """INT-9 adapter over one authoritative managym world space.
-
-    The adapter adds only the materialization shape needed by the existing
-    conditional PUCT implementation.  Row ordering, compatible-deal meaning,
-    identities, and hidden-state construction remain owned by managym.
-    """
-
-    space: CanonicalPossibleWorldSpace
-
-    @property
-    def space_id(self) -> str:
-        return self.space.identity
-
-    @property
-    def viewer(self) -> int:
-        return self.space.viewer
-
-    @property
-    def worlds(self) -> tuple[Any, ...]:
-        return self.space.worlds
-
-    def materialize_for_search(
-        self,
-        root_env: Any,
-        *,
-        world_index: int,
-        seed: int,
-        branch_session: Any,
-    ) -> Any:
-        del branch_session
-        world = self.space.materialize(world_index, seed=seed)
-        if (
-            world.observation_for_player(self.viewer).toJSON()
-            != root_env.observation_for_player(self.viewer).toJSON()
-        ):
-            raise ConditionalSearchError(
-                f"canonical world {world_index} changed the viewer observation"
-            )
         return world
 
 
@@ -436,17 +384,6 @@ def make_prior(
     )
 
 
-def make_prior_from_belief(belief: BeliefState) -> ConditionalWorldPrior:
-    """Adapt one normalized INT-9 belief to the existing search prior seam."""
-
-    return ConditionalWorldPrior(
-        world_space=CanonicalBeliefWorldSpace(belief.space),
-        weights=belief.probabilities,
-        viewer=belief.space.viewer,
-        prior_sha256=belief.digest,
-    )
-
-
 def make_query_plan(
     has: WorldQuery,
     q: WorldQuery,
@@ -455,23 +392,6 @@ def make_query_plan(
 
     plan_sha256 = canonical_sha256({"has": has.query_id, "q": q.query_id})
     return ConditionalQueryPlan(has=has, q=q, plan_sha256=plan_sha256)
-
-
-def _paired_belief_indexes(
-    belief: BeliefState,
-    *,
-    count: int,
-    seed: int,
-) -> list[int]:
-    """Inverse-CDF sample with uniforms shared by every compared belief."""
-
-    if count < 1:
-        raise ConditionalSearchError("paired belief sample count must be positive")
-    probabilities = belief.probabilities
-    cumulative = np.cumsum(probabilities, dtype=np.float64)
-    cumulative[-1] = 1.0
-    draws = np.random.default_rng(seed).random(count)
-    return [int(index) for index in np.searchsorted(cumulative, draws, side="right")]
 
 
 def _runtime_identities(root_env: Any) -> dict[str, Any]:
@@ -576,27 +496,11 @@ def _search_one_condition(
     hero: int,
     branch_session: Any,
     condition_id: str,
-    selected_world_indices: Sequence[int] | None = None,
-    condition_mass: float | None = None,
-    condition_support: int | None = None,
 ) -> ConditionResult:
     """Run determinized PUCT over the conditioned subset of worlds."""
 
-    if selected_world_indices is None:
-        all_indices, normalized_weights, mass, support = _filter_worlds(prior, query)
-        selected = _select_world_indices(
-            all_indices, normalized_weights, max_worlds, seed
-        )
-    else:
-        selected = [int(index) for index in selected_world_indices]
-        if not selected:
-            raise ConditionalSearchError(
-                f"condition '{condition_id}' selected no canonical worlds"
-            )
-        mass = 1.0 if condition_mass is None else float(condition_mass)
-        support = (
-            len(set(selected)) if condition_support is None else int(condition_support)
-        )
+    all_indices, normalized_weights, mass, support = _filter_worlds(prior, query)
+    selected = _select_world_indices(all_indices, normalized_weights, max_worlds, seed)
     actual_worlds = len(selected)
     per_world = [simulations // actual_worlds] * actual_worlds
     for i in range(simulations % actual_worlds):
@@ -869,193 +773,6 @@ def conditional_determinized_puct(
         plan_sha256=query_plan.plan_sha256,
         identities=identities,
         realized_compute=realized_compute,
-        comparison_deltas=comparison_deltas,
-    )
-
-
-def conditional_determinized_puct_beliefs(
-    root_env: Any,
-    *,
-    beliefs: Mapping[str, BeliefState],
-    simulations: int,
-    worlds: int,
-    seed: int,
-    c_puct: float = 1.5,
-    max_steps: int = DEFAULT_MAX_PLAYOUT_STEPS,
-    evaluator: LeafEvaluator | None = None,
-    root_observation: Any | None = None,
-    branch_driver_id: str = SELECTED_BRANCH_DRIVER_ID,
-    branch_backend: SearchBranchBackend | None = None,
-    branch_audit: bool = True,
-    branch_match_id: str | None = None,
-) -> ConditionalStrategyResult:
-    """Search aligned explicit beliefs through INT-13's result seam.
-
-    Every belief is already normalized over the same canonical INT-9
-    ``PossibleWorldSpace``.  Paired inverse-CDF draws hold random source,
-    planner, evaluator, compute, and seed identities fixed while allowing each
-    belief to select worlds according to its own weights.
-    """
-
-    if len(beliefs) < 1:
-        raise ConditionalSearchError("at least one belief is required")
-    if simulations < 1:
-        raise ConditionalSearchError("simulations must be >= 1")
-    if worlds < 1:
-        raise ConditionalSearchError("worlds must be >= 1")
-    if c_puct <= 0:
-        raise ConditionalSearchError("c_puct must be positive")
-    if max_steps < 1:
-        raise ConditionalSearchError("max_steps must be >= 1")
-    if root_env.is_game_over():
-        raise ConditionalSearchError("cannot search a terminal environment")
-
-    ordered = tuple(beliefs.items())
-    first_belief = ordered[0][1]
-    space_identity = first_belief.space.identity
-    viewer = first_belief.space.viewer
-    for condition_id, belief in ordered:
-        if not condition_id:
-            raise ConditionalSearchError("belief condition id must be non-empty")
-        if belief.space.identity != space_identity or belief.space.viewer != viewer:
-            raise ConditionalSearchError(
-                "compared beliefs must share one canonical world space and viewer"
-            )
-
-    root_space = CanonicalPossibleWorldSpace.from_engine(root_env, viewer)
-    if root_space.identity != space_identity:
-        raise ConditionalSearchError("belief world space is stale for the root")
-    hero = root_env.current_agent_index()
-    if hero is None or int(hero) != viewer:
-        raise ConditionalSearchError("belief viewer is not the root actor")
-    hero = int(hero)
-    action_count = int(root_env.action_count())
-    if action_count < 1:
-        raise ConditionalSearchError("root has no legal actions")
-
-    backend = branch_backend or resolve_branch_backend(branch_driver_id)
-    if backend.driver_id != branch_driver_id:
-        raise ConditionalSearchError(
-            f"branch backend {backend.driver_id!r} does not match requested "
-            f"driver {branch_driver_id!r}"
-        )
-    branch_session = backend.open_session(
-        match_id=branch_match_id or f"belief-cond-puct-{seed}", audit=branch_audit
-    )
-    ev = evaluator or UniformRandomLeafEvaluator()
-    root_priors = ev.root_priors(root_observation, action_count=action_count)
-    root_digest = root_env.state_digest()
-    action_labels = _action_labels(root_env, action_count)
-    sampled_count = min(worlds, simulations)
-
-    conditions: list[ConditionResult] = []
-    belief_digests: dict[str, str] = {}
-    for condition_id, belief in ordered:
-        prior = make_prior_from_belief(belief)
-        selected = _paired_belief_indexes(
-            belief,
-            count=sampled_count,
-            seed=seed,
-        )
-        cr = _search_one_condition(
-            root_env,
-            prior=prior,
-            query=TrueQuery(),
-            simulations=simulations,
-            max_worlds=worlds,
-            seed=seed,
-            c_puct=c_puct,
-            max_steps=max_steps,
-            evaluator=ev,
-            root_priors=root_priors,
-            action_count=action_count,
-            hero=hero,
-            branch_session=branch_session,
-            condition_id=condition_id,
-            selected_world_indices=selected,
-            condition_mass=1.0,
-            condition_support=belief.positive_support_size,
-        )
-        conditions.append(cr)
-        belief_digests[condition_id] = belief.digest
-
-    if root_env.state_digest() != root_digest:
-        raise ConditionalSearchError(
-            "belief-conditioned search mutated the authoritative root"
-        )
-
-    baseline = conditions[0]
-    comparison_deltas: dict[str, dict[str, float]] = {}
-    for cr in conditions[1:]:
-        baseline_dist = baseline.visit_counts.astype(np.float64) / float(
-            baseline.visit_counts.sum()
-        )
-        condition_dist = cr.visit_counts.astype(np.float64) / float(
-            cr.visit_counts.sum()
-        )
-        both_visited = (baseline.visit_counts > 0) & (cr.visit_counts > 0)
-        delta: dict[str, float] = {
-            "root_value_delta": float(cr.root_value - baseline.root_value),
-            "visit_dist_l1": float(np.sum(np.abs(condition_dist - baseline_dist))),
-            "top_action_changed": float(
-                int(np.argmax(cr.visit_counts)) != int(np.argmax(baseline.visit_counts))
-            ),
-        }
-        if np.any(both_visited):
-            delta["q_max_abs_delta"] = float(
-                np.max(
-                    np.abs(
-                        cr.q_values[both_visited].astype(np.float64)
-                        - baseline.q_values[both_visited].astype(np.float64)
-                    )
-                )
-            )
-        comparison_deltas[cr.condition_id] = delta
-
-    identities = _runtime_identities(root_env)
-    identities.update(
-        {
-            "possible_world_space_identity": space_identity,
-            "belief_digests": belief_digests,
-        }
-    )
-    plan_sha256 = canonical_sha256(
-        {
-            "conditions": list(belief_digests),
-            "paired_seed": seed,
-            "sampled_worlds": sampled_count,
-        }
-    )
-    prior_sha256 = canonical_sha256(belief_digests)
-    return ConditionalStrategyResult(
-        conditions=tuple(conditions),
-        action_count=action_count,
-        action_labels=action_labels,
-        root_state_digest=root_digest,
-        planner=PLANNER_NAME,
-        search_params={
-            "simulations": simulations,
-            "worlds": worlds,
-            "c_puct": c_puct,
-            "max_steps": max_steps,
-            "seed": seed,
-            "branch_driver_id": branch_driver_id,
-            "sampling": "paired_inverse_cdf/v1",
-        },
-        prior_sha256=prior_sha256,
-        plan_sha256=plan_sha256,
-        identities=identities,
-        realized_compute={
-            "total_simulations": sum(c.simulations for c in conditions),
-            "total_tree_nodes": sum(c.tree_nodes for c in conditions),
-            "conditions_searched": len(conditions),
-            "materialized_worlds": sum(c.sampled_worlds for c in conditions),
-            "unique_materialized_worlds": sum(
-                len(set(_paired_belief_indexes(b, count=sampled_count, seed=seed)))
-                for _, b in ordered
-            ),
-            "cap_hits": sum(c.cap_hits for c in conditions),
-        },
         comparison_deltas=comparison_deltas,
     )
 

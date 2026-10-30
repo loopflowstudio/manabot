@@ -1,7 +1,7 @@
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 
-import { LIGHTNING_BOLT_PRESENTATION } from '$lib/presentation';
+import { LIGHTNING_BOLT_PRESENTATION } from '$lib/presentation-fixtures';
 import { createPresentationPlayer } from '$lib/presentation.svelte';
 
 import PresentationStage from './PresentationStage.svelte';

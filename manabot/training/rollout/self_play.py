@@ -6,10 +6,7 @@ update's Etude metrics; missing rows are not zero-game observations. No gradient
 policy sampling depend on this accounting.
 """
 
-from collections.abc import Mapping
 from dataclasses import dataclass, field
-import hashlib
-import json
 from typing import Literal, TypedDict
 
 
@@ -20,12 +17,6 @@ class SelfPlayOutcome(TypedDict):
     wins: int
     losses: int
     draws: int
-
-
-def deck_identity(deck: Mapping[str, int], sideboard: Mapping[str, int]) -> str:
-    """Content identity includes sideboard; player names never identify decks."""
-    payload = json.dumps([dict(deck), dict(sideboard)], sort_keys=True).encode()
-    return hashlib.sha256(payload).hexdigest()
 
 
 @dataclass

@@ -77,7 +77,7 @@ def test_both_seats_and_mirrors_preserve_complete_academy_setups(left: str) -> N
             expected = managym.authored_deck_setup(PACK, key)
             assert actual.decklist == expected.decklist
             assert actual.sideboard == expected.sideboard
-            assert actual.content_pack == PACK
+            assert actual.world == PACK
         engine = managym.Env(seed=164)
         engine.reset(configs)
         assert engine.content_pack_manifest()["pack_key"] == PACK
@@ -128,9 +128,7 @@ def test_ordinary_policy_has_complete_programs_and_trains_on_a_real_offer(
         seed=164,
     )
     observation, _ = env.reset(seed=164)
-    agent = ActorCritic(
-        space, ModelConfig(hidden_dim=16, semantic_pack=PACK, policy_film=True)
-    )
+    agent = ActorCritic(space, ModelConfig(hidden_dim=16, world=PACK, policy_film=True))
     native = managym.Env(seed=164)
     native.reset(
         Match(MatchConfig.authored(PACK, "elemental_ug", "elemental_bg")).to_rust()
@@ -185,7 +183,7 @@ def test_selected_world_runs_ordinary_ppo_and_reloads_its_roster(
         id="elemental-ppo-smoke",
         world=managym.WORLD_VERSION,
         match=MatchConfig.authored(PACK, "elemental_ug", "elemental_bg"),
-        agent=ModelConfig(hidden_dim=16, semantic_pack=PACK, policy_film=True),
+        agent=ModelConfig(hidden_dim=16, world=PACK, policy_film=True),
         stages=[
             TrainSelfPlay(
                 id="self-play",

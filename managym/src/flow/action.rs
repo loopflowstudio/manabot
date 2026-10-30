@@ -599,7 +599,6 @@ impl Game {
     }
 
     pub(crate) fn execute_action(&mut self, action: &Action) -> Result<(), AgentError> {
-        self.journal_priority();
         match action {
             Action::ChooseTrigger { player, trigger_id } => {
                 self.choose_trigger(*player, *trigger_id)
