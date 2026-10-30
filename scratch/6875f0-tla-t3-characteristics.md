@@ -205,6 +205,13 @@ Docs only; no code, receipt or world change. Done 2026-10-30: widths checked
 against `ObservationSpace` (player 63, card 55, permanent 37, relation 48,
 facts 128 × 12); grep finds no stale wording.
 
+Concept review after the AGENTS.md pass (2026-10-30, HEAD `09e6babe5`, main
+`6f48f5ca0` merged and pushed): nothing to change. The removed per-object
+fields survive only as derived observation views (`agent/observation.rs`,
+`experience.rs` `Legacy*View`, PyO3) computed from `Game` queries such as
+`exiled_if_it_would_die`, which the accepted model keeps; no open product
+choice.
+
 ## Remaining
 
 - Browser proof (Playwright e2e) is CI's.
