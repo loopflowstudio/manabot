@@ -283,7 +283,12 @@ impl Game {
             // CR 603.4: an intervening "if" that no longer holds removes the
             // ability from the stack doing nothing.
             if intervening_if.as_ref().is_some_and(|condition| {
-                !self.check_intervening_if(condition, source_controller, triggered.source_ref)
+                !self.check_intervening_if(
+                    condition,
+                    source_controller,
+                    triggered.source_ref,
+                    triggered.context,
+                )
             }) {
                 return;
             }
@@ -447,6 +452,17 @@ impl Game {
             PlayerSelector::TriggeringPlayer => frame.triggering_player.into_iter().collect(),
             PlayerSelector::Target(_) => match self.present_primary_target(frame) {
                 Some(Target::Player(player)) => vec![player],
+                _ => Vec::new(),
+            },
+            PlayerSelector::TargetController => match frame.primary_target() {
+                Some(Target::Permanent(id)) => match self.state.permanents[id].as_ref() {
+                    Some(permanent) => vec![permanent.controller],
+                    None => self
+                        .departed_permanent_lki(id)
+                        .map(|lki| lki.controller)
+                        .into_iter()
+                        .collect(),
+                },
                 _ => Vec::new(),
             },
         }
@@ -1334,6 +1350,38 @@ impl Game {
                     self.put_counters(permanent_id, *kind, count, frame.controller);
                 }
                 None
+            }
+            Effect::PutTriggeringCountersOnSource => {
+                let Some(Target::Permanent(triggering)) = frame.context_target else {
+                    return None;
+                };
+                let source = self.source_permanent_id(frame)?;
+                let counters = match self.state.permanents[triggering].as_ref() {
+                    Some(permanent) => permanent.counters,
+                    None => self.departed_permanent_lki(triggering)?.counters,
+                };
+                for (kind, count) in counters.iter() {
+                    self.put_counters(source, kind, count, frame.controller);
+                }
+                None
+            }
+            Effect::ForPlayer { player, effects } => {
+                let [player] = self.selected_players(player, frame)[..] else {
+                    return None;
+                };
+                frame
+                    .queue
+                    .push_front(Effect::RestoreController(frame.controller));
+                frame.prepend_effects(effects.iter().cloned());
+                frame.controller = player;
+                None
+            }
+            Effect::RestoreController(player) => {
+                frame.controller = *player;
+                None
+            }
+            Effect::EachPlayerKeepsCreatures { max_total_power } => {
+                self.keep_creatures(self.active_player(), *max_total_power, Vec::new())
             }
             Effect::PutSourceCountersOnTarget { .. } => {
                 let Some(Target::Permanent(permanent_id)) = self.present_primary_target(frame)

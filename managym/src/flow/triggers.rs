@@ -536,6 +536,7 @@ impl Game {
                         condition,
                         source.controller,
                         Some(source.lki.object_ref),
+                        self.triggering_permanent(event),
                     )
                 }) && (!matches!(condition, TriggerCondition::OnceEachTurn { .. })
                     || !self
@@ -618,30 +619,7 @@ impl Game {
                     .any(Effect::reads_triggering_permanent),
             };
             let context = if reads_triggering_permanent {
-                match event {
-                    GameEvent::CardMoved {
-                        card,
-                        to: ZoneType::Battlefield,
-                        ..
-                    } => self.state.card_to_permanent[*card].map(Target::Permanent),
-                    // A departed permanent is read from its last known
-                    // information, found by the slot it occupied.
-                    GameEvent::CardMoved {
-                        card,
-                        from: Some(ZoneType::Battlefield),
-                        ..
-                    } => self
-                        .state
-                        .object_lki
-                        .values()
-                        .filter(|lki| lki.card == *card)
-                        .max_by_key(|lki| lki.object_ref)
-                        .map(|lki| Target::Permanent(lki.permanent)),
-                    GameEvent::AttackersDeclared { attackers, .. } if attackers.len() == 1 => {
-                        Some(Target::Permanent(attackers[0]))
-                    }
-                    _ => None,
-                }
+                self.triggering_permanent(event)
             } else {
                 self.trigger_context_for_event(event)
             };
@@ -684,6 +662,34 @@ impl Game {
                 .trigger_enqueue_counter
                 .checked_add(1)
                 .expect("trigger occurrence identity exhausted");
+        }
+    }
+
+    /// The permanent whose event fired a trigger: an entering one, a
+    /// departed one (by the slot it occupied, read from its last known
+    /// information) or a lone attacker.
+    fn triggering_permanent(&self, event: &GameEvent) -> Option<Target> {
+        match event {
+            GameEvent::CardMoved {
+                card,
+                to: ZoneType::Battlefield,
+                ..
+            } => self.state.card_to_permanent[*card].map(Target::Permanent),
+            GameEvent::CardMoved {
+                card,
+                from: Some(ZoneType::Battlefield),
+                ..
+            } => self
+                .state
+                .object_lki
+                .values()
+                .filter(|lki| lki.card == *card)
+                .max_by_key(|lki| lki.object_ref)
+                .map(|lki| Target::Permanent(lki.permanent)),
+            GameEvent::AttackersDeclared { attackers, .. } if attackers.len() == 1 => {
+                Some(Target::Permanent(attackers[0]))
+            }
+            _ => None,
         }
     }
 

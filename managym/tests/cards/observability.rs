@@ -505,6 +505,10 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ReturnSourceToBattlefield { .. } => "Effect::ReturnSourceToBattlefield",
         Effect::CreateDelayedTrigger { .. } => "Effect::CreateDelayedTrigger",
         Effect::SacrificeTriggeringPermanent => "Effect::SacrificeTriggeringPermanent",
+        Effect::PutTriggeringCountersOnSource => "Effect::PutTriggeringCountersOnSource",
+        Effect::ForPlayer { .. } => "Effect::ForPlayer",
+        Effect::RestoreController(_) => "Effect::RestoreController",
+        Effect::EachPlayerKeepsCreatures { .. } => "Effect::EachPlayerKeepsCreatures",
         Effect::GainLifeValue { .. } => "Effect::GainLifeValue",
         Effect::AddOneColorManaValue { .. } => "Effect::AddOneColorManaValue",
         Effect::AddManaValue { .. } => "Effect::AddManaValue",
@@ -516,7 +520,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 92;
+const EFFECT_VARIANTS: usize = 96;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -786,6 +790,13 @@ fn effect_witnesses() -> Vec<Effect> {
             effects: vec![Effect::GainLife { amount: 1 }],
         },
         Effect::SacrificeTriggeringPermanent,
+        Effect::PutTriggeringCountersOnSource,
+        Effect::ForPlayer {
+            player: PlayerSelector::TargetController,
+            effects: vec![Effect::Discard],
+        },
+        Effect::RestoreController(PlayerId(0)),
+        Effect::EachPlayerKeepsCreatures { max_total_power: 4 },
         Effect::GainLifeValue {
             amount: EffectValue::ExcessDamage,
         },
@@ -950,6 +961,7 @@ fn condition_token(condition: &Condition) -> &'static str {
         Condition::SourceCountersAtLeast { .. } => "Condition::SourceCountersAtLeast",
         Condition::SourceTapped => "Condition::SourceTapped",
         Condition::TargetCardExiled(_) => "Condition::TargetCardExiled",
+        Condition::TriggeringHadCounters => "Condition::TriggeringHadCounters",
     }
 }
 
@@ -980,6 +992,7 @@ fn condition_witnesses() -> Vec<Condition> {
         },
         Condition::SourceTapped,
         Condition::TargetCardExiled(CardPredicate::creature()),
+        Condition::TriggeringHadCounters,
     ]
 }
 

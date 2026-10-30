@@ -109,6 +109,7 @@ _STAGES = frozenset(
         "free_cast",
         "linked_exile",
         "distribute_counters",
+        "keep_creatures",
     )
 )
 

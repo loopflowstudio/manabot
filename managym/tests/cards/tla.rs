@@ -11880,3 +11880,142 @@ fn ruinous_waterbending_shrinks_everything_and_kicked_gains_life_per_death() {
     settle(&mut s);
     assert_eq!(s.life(0), life + 3, "the Wurm too");
 }
+
+/// Its controller chooses: take damage equal to Combustion Man's power, or
+/// lose the permanent.
+#[test]
+fn combustion_man_destroys_unless_the_controller_takes_damage_equal_to_his_power() {
+    for take_damage in [true, false] {
+        let mut s = five_color_setup(&["Combustion Man", "Gray Ogre"]);
+        let man = s.force_permanent_on_battlefield(0, "Combustion Man");
+        let ogre = s.force_permanent_on_battlefield(1, "Gray Ogre");
+        clear_summoning_sickness(&mut s, man);
+        s.advance_to_active_step(0, StepKind::DeclareAttackers);
+        choose(
+            &mut s,
+            |a| matches!(a, Action::DeclareAttacker { permanent, attack: true, .. } if *permanent == man),
+        );
+        while s.action_space().kind == ActionSpaceKind::DeclareAttacker {
+            s.decline_attack();
+        }
+        pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+        assert!(s.choose_target(Target::Permanent(ogre)));
+        pass_until(&mut s, ActionSpaceKind::PayOrNot);
+        assert_eq!(s.action_space().player, Some(PlayerId(1)), "its controller");
+        let life = s.life(1);
+        if take_damage {
+            assert!(s.take_action_by_type(ActionType::PayCost));
+        } else {
+            choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+        }
+        resolve_until_priority(&mut s);
+        if take_damage {
+            assert_eq!(s.life(1), life - 4);
+            assert!(permanent(&s, ogre).card == card_of(&s, ogre));
+        } else {
+            assert_eq!(s.life(1), life);
+            assert!(s.battlefield_permanents_named(1, "Gray Ogre").is_empty());
+        }
+    }
+}
+
+/// The land's controller may search for a tapped basic; you draw either way.
+#[test]
+fn price_of_freedom_destroys_a_land_its_controller_may_replace_and_you_draw() {
+    for search in [true, false] {
+        let mut s = five_color_setup(&["Price of Freedom"]);
+        let mountain = s.force_permanent_on_battlefield(1, "Mountain");
+        let lands = s.battlefield_permanents_named(1, "Plains").len();
+        let hand = s.zone_size(0, ZoneType::Hand);
+        cast(&mut s, "Price of Freedom");
+        assert!(s.choose_target(Target::Permanent(mountain)));
+        pass_until(&mut s, ActionSpaceKind::PayOrNot);
+        assert_eq!(s.action_space().player, Some(PlayerId(1)));
+        if search {
+            assert!(s.take_action_by_type(ActionType::PayCost));
+            assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
+            assert_eq!(s.action_space().player, Some(PlayerId(1)), "their library");
+            let plains = offered_cards(&s)
+                .into_iter()
+                .find(|card| s.game().state.cards[*card].name == "Plains")
+                .unwrap();
+            select_card(&mut s, plains);
+        } else {
+            choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+        }
+        settle(&mut s);
+        assert!(s.battlefield_permanents_named(1, "Mountain").is_empty());
+        let plains = s.battlefield_permanents_named(1, "Plains");
+        assert_eq!(plains.len(), lands + usize::from(search));
+        if search {
+            assert!(plains.iter().any(|id| tapped(&s, *id)));
+        }
+        assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 1, "you draw");
+    }
+}
+
+/// Entering may sacrifice for a card; another creature of yours dying with
+/// counters passes them on, one without counters does not trigger.
+#[test]
+fn buzzard_wasp_colony_sacrifices_for_a_card_and_inherits_counters() {
+    let mut s = five_color_setup(&["Buzzard-Wasp Colony", "Gray Ogre", "Lightning Strike"]);
+    let fodder = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let fodder_card = card_of(&s, fodder);
+    let hand = s.zone_size(0, ZoneType::Hand);
+    enter_battlefield(&mut s, "Buzzard-Wasp Colony");
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    select_card(&mut s, fodder_card);
+    settle(&mut s);
+    assert_eq!(s.zone_size(0, ZoneType::Hand), hand + 1);
+    let colony = permanent_named(&s, "Buzzard-Wasp Colony");
+
+    let plain = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    cast(&mut s, "Lightning Strike");
+    assert!(s.choose_target(Target::Permanent(plain)));
+    settle(&mut s);
+    assert!(s.game().state.stack_objects.is_empty());
+    assert_eq!(counters(&s, colony), 0, "no counters, no trigger");
+
+    let marked = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    set_counters(&mut s, marked, CounterKind::PlusOnePlusOne, 1);
+    set_counters(&mut s, marked, CounterKind::Stun, 2);
+    cast(&mut s, "Lightning Strike");
+    assert!(s.choose_target(Target::Permanent(marked)));
+    settle(&mut s);
+    assert_eq!(counters(&s, colony), 1);
+    assert_eq!(counters_of(&s, colony, CounterKind::Stun), 2);
+}
+
+/// The active player keeps power 4 or less, then the other; everything
+/// else is sacrificed.
+#[test]
+fn destined_confrontation_each_player_keeps_total_power_four() {
+    let mut s = five_color_setup(&["Destined Confrontation", "Gray Ogre", "Craw Wurm"]);
+    let mine = [
+        s.force_permanent_on_battlefield(0, "Gray Ogre"),
+        s.force_permanent_on_battlefield(0, "Gray Ogre"),
+        s.force_permanent_on_battlefield(0, "Gray Ogre"),
+    ];
+    let wurm = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    cast(&mut s, "Destined Confrontation");
+    resolve_top(&mut s);
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    let card = card_of(&s, mine[0]);
+    select_card(&mut s, card);
+    let card = card_of(&s, mine[1]);
+    select_card(&mut s, card);
+    assert_eq!(
+        s.action_space().player,
+        Some(PlayerId(1)),
+        "a third Ogre would exceed 4"
+    );
+    let offered = offered_cards(&s);
+    assert!(!offered.contains(&card_of(&s, wurm)), "power 6");
+    let card = card_of(&s, theirs);
+    select_card(&mut s, card);
+    settle(&mut s);
+    assert_eq!(s.battlefield_permanents_named(0, "Gray Ogre").len(), 2);
+    assert_eq!(s.battlefield_permanents_named(1, "Gray Ogre"), vec![theirs]);
+    assert!(s.battlefield_permanents_named(1, "Craw Wurm").is_empty());
+}

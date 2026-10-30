@@ -67,10 +67,12 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         boiling_rock_prison(),
         boomerang_basics(),
         bumi_bash(),
+        buzzard_wasp_colony(),
         callous_inspector(),
         canyon_crawler(),
         cat_gator(),
         cat_owl(),
+        combustion_man(),
         combustion_technique(),
         compassionate_healer(),
         crashing_wave(),
@@ -84,6 +86,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         day_of_black_sun(),
         deadly_precision(),
         deserter_s_disciple(),
+        destined_confrontation(),
         diligent_zookeeper(),
         dragonfly_swarm(),
         earth_kingdom_general(),
@@ -189,6 +192,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         planetarium_of_wan_shi_tong(),
         platypus_bear(),
         pretending_poxbearers(),
+        price_of_freedom(),
         professor_zei_anthropologist(),
         rabaroo_troop(),
         ran_and_shaw(),
@@ -1604,6 +1608,52 @@ fn bumi_bash() -> CardDefinition {
     }
 }
 
+fn buzzard_wasp_colony() -> CardDefinition {
+    let text_box = "Flying\nWhen this creature enters, you may sacrifice an artifact or creature. If you do, draw a card.\nWhenever another creature you control dies, if it had counters on it, put its counters on this creature.";
+
+    CardDefinition {
+        key: "tla.buzzard_wasp_colony",
+        scryfall_id: "42d83229-0555-4361-8964-4b525c825843",
+        name: "Buzzard-Wasp Colony".into(),
+        mana_cost: Some(ManaCost::parse("{3}{B}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Bird".into(), "Insect".into()],
+        power: Some(2),
+        toughness: Some(2),
+        keywords: Keywords {
+            flying: true,
+            ..Default::default()
+        },
+        abilities: vec![
+            Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::MaySacrifice {
+                    predicate: CardPredicate {
+                        card_types_any: vec![CardType::Artifact, CardType::Creature],
+                        ..Default::default()
+                    },
+                    another: false,
+                    then: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
+                }],
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::Dies {
+                    subject: TriggerSubject::AnotherYouControl(CardPredicate::creature()),
+                },
+                intervening_if: Some(Condition::TriggeringHadCounters),
+                effects: vec![Effect::PutTriggeringCountersOnSource],
+            },
+        ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
 fn callous_inspector() -> CardDefinition {
     let text_box = "Menace (This creature can't be blocked except by two or more creatures.)\nWhen this creature dies, it deals 1 damage to you. Create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")";
 
@@ -1754,6 +1804,49 @@ fn cat_owl() -> CardDefinition {
                         ..Default::default()
                     },
                 },
+            }],
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn combustion_man() -> CardDefinition {
+    let text_box = "Whenever Combustion Man attacks, destroy target permanent unless its controller has Combustion Man deal damage to them equal to his power.";
+    let permanent = || TargetSpec::Permanent {
+        predicate: CardPredicate::default(),
+    };
+
+    CardDefinition {
+        key: "tla.combustion_man",
+        scryfall_id: "86f7399d-6876-4e85-ba34-ff1f97dc144a",
+        name: "Combustion Man".into(),
+        mana_cost: Some(ManaCost::parse("{3}{R}{R}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Assassin".into()],
+        power: Some(4),
+        toughness: Some(6),
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::Attacks {
+                subject: TriggerSubject::This,
+            },
+            intervening_if: None,
+            effects: vec![Effect::TargetClause {
+                requirement: TargetRequirement::one(permanent()),
+                effects: vec![Effect::ForPlayer {
+                    player: PlayerSelector::TargetController,
+                    effects: vec![Effect::OptionalPayment {
+                        cost: PaymentCost::Mana(ManaCost::default()),
+                        if_paid: vec![Effect::DealDamageToPlayer {
+                            player: PlayerSelector::You,
+                            amount: EffectValue::SourcePower,
+                        }],
+                        if_declined: vec![Effect::Destroy {
+                            target: permanent(),
+                        }],
+                    }],
+                }],
             }],
         }],
         text_box: text_box.into(),
@@ -2219,6 +2312,21 @@ fn deserter_s_disciple() -> CardDefinition {
             )],
             ..Default::default()
         }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn destined_confrontation() -> CardDefinition {
+    let text_box = "Each player chooses any number of creatures they control with total power 4 or less, then sacrifices all other creatures they control.";
+
+    CardDefinition {
+        key: "tla.destined_confrontation",
+        scryfall_id: "d4605cf7-03bc-4a7f-b50a-49b83b09b54d",
+        name: "Destined Confrontation".into(),
+        mana_cost: Some(ManaCost::parse("{2}{W}{W}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        spell_effects: vec![Effect::EachPlayerKeepsCreatures { max_total_power: 4 }],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -6281,6 +6389,50 @@ fn pretending_poxbearers() -> CardDefinition {
                 attach_source: false,
             }],
         }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn price_of_freedom() -> CardDefinition {
+    let text_box = "Destroy target artifact or land an opponent controls. Its controller may search their library for a basic land card, put it onto the battlefield tapped, then shuffle.\nDraw a card.";
+    let artifact_or_land = || TargetSpec::PermanentOpponentControls {
+        predicate: CardPredicate {
+            card_types_any: vec![CardType::Artifact, CardType::Land],
+            ..Default::default()
+        },
+    };
+
+    CardDefinition {
+        key: "tla.price_of_freedom",
+        scryfall_id: "9fbe94e9-a71d-4a31-9210-c599abe08e3f",
+        name: "Price of Freedom".into(),
+        mana_cost: Some(ManaCost::parse("{1}{R}")),
+        types: CardTypes::new([CardType::Sorcery]),
+        subtypes: vec!["Lesson".into()],
+        spell_effects: vec![
+            Effect::Destroy {
+                target: artifact_or_land(),
+            },
+            Effect::ForPlayer {
+                player: PlayerSelector::TargetController,
+                effects: vec![Effect::OptionalPayment {
+                    cost: PaymentCost::Mana(ManaCost::default()),
+                    if_paid: vec![Effect::SearchBasicLand {
+                        subtype: None,
+                        count: EffectValue::Fixed(1),
+                        tapped: true,
+                        untap_if_lands: None,
+                        bottom_source: false,
+                        to_hand: false,
+                    }],
+                    if_declined: vec![],
+                }],
+            },
+            Effect::DrawCards {
+                count: EffectValue::Fixed(1),
+            },
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }

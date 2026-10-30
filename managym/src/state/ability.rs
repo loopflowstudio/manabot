@@ -1,4 +1,5 @@
 use super::effect::{EffectDuration, Modification};
+use super::game_object::PlayerId;
 use super::mana::{Mana, ManaCost};
 use super::permanent::CounterKind;
 use super::predicate::CardPredicate;
@@ -212,6 +213,10 @@ pub enum Condition {
     /// Source question: the ability's source permanent is tapped ("if Katara
     /// is tapped").
     SourceTapped,
+    /// Triggering question: the permanent whose event fired the trigger has
+    /// (or, once it has left, had) counters on it ("if it had counters on
+    /// it").
+    TriggeringHadCounters,
     /// Resolution only: the frame's primary target was a card in a
     /// graveyard that this resolution exiled, and it matches [predicate]
     /// ("If a creature card is exiled this way").
@@ -219,12 +224,14 @@ pub enum Condition {
 }
 
 impl Condition {
-    /// Whether answering reads the asking ability's source permanent, so the
-    /// condition is meaningful only in `Effect::If` and intervening-if
-    /// clauses.
+    /// Whether answering reads the asking ability's source permanent or the
+    /// permanent that triggered it, so the condition is meaningful only in
+    /// `Effect::If` and intervening-if clauses.
     pub fn reads_source(&self) -> bool {
         match self {
-            Condition::SourceCountersAtLeast { .. } | Condition::SourceTapped => true,
+            Condition::SourceCountersAtLeast { .. }
+            | Condition::SourceTapped
+            | Condition::TriggeringHadCounters => true,
             Condition::AnyOf(conditions) => conditions.iter().any(Condition::reads_source),
             _ => false,
         }
@@ -241,6 +248,7 @@ impl Condition {
             Condition::AnyOf(conditions) => conditions.iter().any(Condition::is_resolution_only),
             Condition::SourceCountersAtLeast { .. }
             | Condition::SourceTapped
+            | Condition::TriggeringHadCounters
             | Condition::YourTurn
             | Condition::Always
             | Condition::CardsDrawnAtLeast { .. }
@@ -276,13 +284,18 @@ pub enum PlayerSelector {
     TriggeringPlayer,
     /// A chosen target player (boxed: a spec is far larger than the rest).
     Target(Box<TargetSpec>),
+    /// The controller of the frame's primary target permanent, as it is or
+    /// last existed ("its controller").
+    TargetController,
 }
 
 impl PlayerSelector {
     pub fn target_spec(&self) -> Option<&TargetSpec> {
         match self {
             Self::Target(spec) => Some(spec),
-            Self::You | Self::EachOpponent | Self::TriggeringPlayer => None,
+            Self::You | Self::EachOpponent | Self::TriggeringPlayer | Self::TargetController => {
+                None
+            }
         }
     }
 }
@@ -656,6 +669,25 @@ pub enum Effect {
         count: EffectValue,
         kind: CounterKind,
     },
+    /// "Put its counters on this creature": every counter the triggering
+    /// permanent had as it last existed, kind by kind, on the source.
+    PutTriggeringCountersOnSource,
+    /// "[player] [effects]": the effects resolve with that player as "you"
+    /// ("Its controller may search their library"), then the controller
+    /// returns to the resolving one.
+    ForPlayer {
+        player: PlayerSelector,
+        effects: Vec<Effect>,
+    },
+    /// Internal cursor emitted by `ForPlayer`: the resolving player again.
+    RestoreController(PlayerId),
+    /// "Each player chooses any number of creatures they control with total
+    /// power `max_total_power` or less, then sacrifices all other creatures
+    /// they control": the active player chooses first (CR 101.4), and the
+    /// sacrifices are one event.
+    EachPlayerKeepsCreatures {
+        max_total_power: i32,
+    },
     /// "Put its counters on [target]": every counter the source had as it
     /// last existed, kind by kind, on the target (a leaves-the-battlefield
     /// ability, CR 603.10a).
@@ -1011,6 +1043,7 @@ impl Effect {
     pub fn reads_triggering_permanent(&self) -> bool {
         match self {
             Effect::PutCountersOnTriggeringPermanent { .. }
+            | Effect::PutTriggeringCountersOnSource
             | Effect::ApplyContinuous {
                 affected: AffectedSpec::TriggeringPermanent,
                 ..
@@ -1127,6 +1160,7 @@ impl Effect {
                 .chain(otherwise.iter())
                 .find_map(|effect| effect.target_spec()),
             Effect::SacrificeSource { then }
+            | Effect::ForPlayer { effects: then, .. }
             | Effect::MaySacrifice { then, .. }
             | Effect::MayOnceEachTurn { effects: then } => {
                 then.iter().find_map(|effect| effect.target_spec())
@@ -1153,6 +1187,9 @@ impl Effect {
             | Effect::PutCountersOnSource { .. }
             | Effect::TapSource
             | Effect::CreateDelayedTrigger { .. }
+            | Effect::PutTriggeringCountersOnSource
+            | Effect::RestoreController(_)
+            | Effect::EachPlayerKeepsCreatures { .. }
             | Effect::SacrificeTriggeringPermanent
             | Effect::UntapSource
             | Effect::ExileAttached

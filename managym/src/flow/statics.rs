@@ -587,22 +587,24 @@ impl Game {
             !condition.is_resolution_only() && !condition.reads_source(),
             "resolution-only or source condition outside Effect::If: {condition:?}"
         );
-        self.condition_holds(condition, controller, None, None)
+        self.condition_holds(condition, controller, None, None, None)
     }
 
     /// Answer an intervening "if" (CR 603.4) of the ability of the exact
     /// battlefield object `source`, as its event occurs and as it resolves.
+    /// `triggering` is the permanent whose event fired it.
     pub(crate) fn check_intervening_if(
         &self,
         condition: &Condition,
         controller: PlayerId,
         source: Option<ObjectRef>,
+        triggering: Option<Target>,
     ) -> bool {
         debug_assert!(
             !condition.is_resolution_only(),
             "resolution-only condition outside Effect::If: {condition:?}"
         );
-        self.condition_holds(condition, controller, None, source)
+        self.condition_holds(condition, controller, None, source, triggering)
     }
 
     /// Answer `condition` for `controller`, reading `frame` for the
@@ -618,17 +620,20 @@ impl Game {
             controller,
             frame,
             frame.and_then(|frame| frame.source_ref),
+            frame.and_then(|frame| frame.context_target),
         )
     }
 
     /// The source questions read `source`, the ability's exact object, which
-    /// answers nothing once it has left the battlefield.
+    /// answers nothing once it has left the battlefield; the triggering
+    /// questions read `triggering`, as it is or last existed.
     fn condition_holds(
         &self,
         condition: &Condition,
         controller: PlayerId,
         frame: Option<&EffectFrame>,
         source: Option<ObjectRef>,
+        triggering: Option<Target>,
     ) -> bool {
         let source_permanent = || {
             source
@@ -656,9 +661,9 @@ impl Game {
             Condition::SacrificedThisTurnAtLeast { count } => {
                 self.state.turn.history[controller.0].permanents_sacrificed >= *count
             }
-            Condition::AnyOf(conditions) => conditions
-                .iter()
-                .any(|condition| self.condition_holds(condition, controller, frame, source)),
+            Condition::AnyOf(conditions) => conditions.iter().any(|condition| {
+                self.condition_holds(condition, controller, frame, source, triggering)
+            }),
             Condition::Kicked => frame.is_some_and(|frame| frame.kicked),
             Condition::TargetMatches(predicate) => frame
                 .and_then(|frame| self.present_primary_target(frame))
@@ -670,6 +675,15 @@ impl Game {
                 source_permanent().is_some_and(|permanent| permanent.counter_count(*kind) >= *count)
             }
             Condition::SourceTapped => source_permanent().is_some_and(|permanent| permanent.tapped),
+            Condition::TriggeringHadCounters => match triggering {
+                Some(Target::Permanent(id)) => match self.state.permanents[id].as_ref() {
+                    Some(permanent) => permanent.has_counters(),
+                    None => self
+                        .departed_permanent_lki(id)
+                        .is_some_and(|lki| !lki.counters.is_empty()),
+                },
+                _ => false,
+            },
             Condition::TargetCardExiled(predicate) => {
                 let Some(Target::GraveyardCard(object)) =
                     frame.and_then(EffectFrame::primary_target)

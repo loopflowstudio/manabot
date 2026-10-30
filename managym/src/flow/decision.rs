@@ -347,6 +347,15 @@ pub enum Decision {
         player: PlayerId,
         remaining: usize,
     },
+    /// `player` chooses another creature they control to keep, within
+    /// `max_total_power` with those already `kept` (by both players), or
+    /// stops; once the nonactive player stops, every other creature is
+    /// sacrificed.
+    KeepCreatures {
+        player: PlayerId,
+        max_total_power: i32,
+        kept: Vec<crate::state::game_object::PermanentId>,
+    },
     /// All legend selections precede the simultaneous SBA batch (CR 704.5j).
     LegendRule {
         player: PlayerId,
@@ -370,6 +379,7 @@ impl Decision {
             Decision::ManaUpfront { player, .. }
             | Decision::ManaChoice { player, .. }
             | Decision::Sacrifice { player, .. }
+            | Decision::KeepCreatures { player, .. }
             | Decision::DistributeCounters { player, .. } => *player,
             Decision::SelectMilled { player, .. }
             | Decision::SearchBasicLand { player, .. }
@@ -398,6 +408,7 @@ impl Decision {
             | Decision::Payment(_)
             | Decision::ManaChoice { .. }
             | Decision::Sacrifice { .. }
+            | Decision::KeepCreatures { .. }
             | Decision::DistributeCounters { .. } => &[],
             Decision::Scry { looked, .. } => looked,
             Decision::LookAndSelect { looked, .. } => looked,
@@ -452,6 +463,78 @@ impl Game {
             .ability_triggers_this_turn
             .entry(key)
             .or_default() += 1;
+    }
+
+    /// The creatures a pending `Decision::KeepCreatures` may add: its
+    /// player's, not yet kept, within the power bound with that player's
+    /// kept creatures.
+    pub(crate) fn keep_candidates(
+        &self,
+        decision: &Decision,
+    ) -> Vec<crate::state::game_object::PermanentId> {
+        let Decision::KeepCreatures {
+            player,
+            max_total_power,
+            kept,
+        } = decision
+        else {
+            return Vec::new();
+        };
+        let total: i32 = kept
+            .iter()
+            .filter(|id| {
+                self.state.permanents[**id]
+                    .as_ref()
+                    .is_some_and(|permanent| permanent.controller == *player)
+            })
+            .map(|id| self.effective_power(*id))
+            .sum();
+        self.battlefield_permanents(*player)
+            .into_iter()
+            .filter(|id| {
+                self.permanent_is_creature(*id)
+                    && !kept.contains(id)
+                    && total + self.effective_power(*id) <= *max_total_power
+            })
+            .collect()
+    }
+
+    /// Ask `player` to keep a creature, moving on to the nonactive player
+    /// (and finally sacrificing the rest) when `player` has no candidate.
+    pub(crate) fn keep_creatures(
+        &mut self,
+        player: PlayerId,
+        max_total_power: i32,
+        kept: Vec<crate::state::game_object::PermanentId>,
+    ) -> Option<Decision> {
+        let decision = Decision::KeepCreatures {
+            player,
+            max_total_power,
+            kept,
+        };
+        if !self.keep_candidates(&decision).is_empty() {
+            return Some(decision);
+        }
+        let Decision::KeepCreatures { kept, .. } = decision else {
+            unreachable!()
+        };
+        if player == self.active_player() {
+            return self.keep_creatures(PlayerId(1 - player.0), max_total_power, kept);
+        }
+        self.sacrifice_unkept_creatures(&kept);
+        None
+    }
+
+    /// Sacrifice every creature not in `kept`, as one event.
+    fn sacrifice_unkept_creatures(&mut self, kept: &[crate::state::game_object::PermanentId]) {
+        let doomed: Vec<_> = [self.active_player(), PlayerId(1 - self.active_player().0)]
+            .into_iter()
+            .flat_map(|player| self.battlefield_permanents(player))
+            .filter(|id| self.permanent_is_creature(*id) && !kept.contains(id))
+            .collect();
+        for id in doomed {
+            self.sacrifice_permanent(id);
+        }
     }
 
     /// The permanents a pending `Decision::Sacrifice` may select.
@@ -629,6 +712,18 @@ impl Game {
                         .into_iter()
                         .map(|id| self.state.permanents[id].as_ref().unwrap().card),
                     optional.is_some(),
+                ),
+                focus: source_focus,
+            },
+            Decision::KeepCreatures { player, .. } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: select_cards(
+                    *player,
+                    self.keep_candidates(&suspended.decision)
+                        .into_iter()
+                        .map(|id| self.state.permanents[id].as_ref().unwrap().card),
+                    true,
                 ),
                 focus: source_focus,
             },
@@ -972,6 +1067,64 @@ impl Game {
                     suspended.frame.prepend_effects(then.into_iter());
                 }
                 self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (
+                Decision::KeepCreatures {
+                    player,
+                    max_total_power,
+                    kept,
+                },
+                Action::SelectCard { card, .. },
+            ) => {
+                let (player, max_total_power) = (*player, *max_total_power);
+                let mut kept = std::mem::take(kept);
+                let candidates = self.keep_candidates(&Decision::KeepCreatures {
+                    player,
+                    max_total_power,
+                    kept: kept.clone(),
+                });
+                let selected =
+                    self.state.card_to_permanent[*card].filter(|id| candidates.contains(id));
+                let Some(selected) = selected else {
+                    if let Decision::KeepCreatures { kept: slot, .. } = &mut suspended.decision {
+                        *slot = kept;
+                    }
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("illegal creature to keep".into()));
+                };
+                kept.push(selected);
+                match self.keep_creatures(player, max_total_power, kept) {
+                    Some(next) => {
+                        suspended.decision = next;
+                        self.state.suspended_decision = Some(suspended);
+                    }
+                    None => self.run_frame(suspended.frame),
+                }
+                Ok(())
+            }
+            (
+                Decision::KeepCreatures {
+                    player,
+                    max_total_power,
+                    kept,
+                },
+                Action::Decline { .. },
+            ) => {
+                let kept = std::mem::take(kept);
+                let next = if *player == self.active_player() {
+                    self.keep_creatures(PlayerId(1 - player.0), *max_total_power, kept)
+                } else {
+                    self.sacrifice_unkept_creatures(&kept);
+                    None
+                };
+                match next {
+                    Some(next) => {
+                        suspended.decision = next;
+                        self.state.suspended_decision = Some(suspended);
+                    }
+                    None => self.run_frame(suspended.frame),
+                }
                 Ok(())
             }
             (

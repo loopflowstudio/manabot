@@ -210,6 +210,7 @@ fn condition_text(condition: &Condition) -> String {
         ),
         Condition::TargetDealtDamageThisTurn => "that target was dealt damage this turn".into(),
         Condition::SourceTapped => "this is tapped".into(),
+        Condition::TriggeringHadCounters => "it had counters on it".into(),
         Condition::TargetCardExiled(predicate) => format!(
             "a {} was exiled this way",
             predicate_description(predicate, "card")
@@ -382,6 +383,7 @@ fn player_description(player: &PlayerSelector) -> String {
         PlayerSelector::You => "you".into(),
         PlayerSelector::EachOpponent => "each opponent".into(),
         PlayerSelector::TriggeringPlayer => "that player".into(),
+        PlayerSelector::TargetController => "its controller".into(),
         PlayerSelector::Target(target) => target_description(target),
     }
 }
@@ -582,6 +584,14 @@ fn effect_description(effect: &Effect) -> Option<String> {
             effects_description(effects)
         ),
         SacrificeTriggeringPermanent => "Sacrifice that token".into(),
+        PutTriggeringCountersOnSource => "Put its counters on this creature".into(),
+        ForPlayer { player, effects } => format!(
+            "{} does this: {}",
+            player_description(player),
+            effects_description(effects)
+        ),
+        RestoreController(_) => return None,
+        EachPlayerKeepsCreatures { max_total_power } => format!("Each player chooses any number of creatures they control with total power {max_total_power} or less, then sacrifices all other creatures they control"),
         CastLibraryTopFree => "Look at the top card of your library. You may cast it without paying its mana cost".into(),
         CastFromHandFree { predicate } => format!("You may cast a {} from your hand without paying its mana cost", predicate_description(predicate, "spell")),
         ShuffleGraveyardIntoLibrary => "Shuffle your graveyard into your library".to_string(),
