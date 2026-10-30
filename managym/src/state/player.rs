@@ -18,13 +18,9 @@ pub struct PlayerConfig {
 
 impl PlayerConfig {
     pub fn new(name: impl Into<String>, decklist: BTreeMap<String, usize>) -> Self {
-        Self::with_deck(name, Deck::new(decklist, BTreeMap::new()))
-    }
-
-    pub fn with_deck(name: impl Into<String>, deck: Deck) -> Self {
         Self {
             name: name.into(),
-            deck,
+            deck: Deck::new(decklist, BTreeMap::new()),
             content_pack: None,
         }
     }

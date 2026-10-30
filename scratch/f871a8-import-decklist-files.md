@@ -61,7 +61,7 @@ w16 (#394's evidence, not regenerated here).
 ## Delete — do not maintain
 
 Done: `manabot/decklist.py` and its Python parser/face/ambiguity tests (now in
-`decklist.rs`); `catalog.DeckSetup`; earlier `deck_collection.py`, checkpoint
+`decklist.rs`); `catalog.DeckSetup`; unused `Decklist.source_sha256`; earlier `deck_collection.py`, checkpoint
 deck bindings, `env.match.parse_deck`, `validate_imported_players` (list at
 c1dd6c71c).
 

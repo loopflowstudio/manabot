@@ -59,12 +59,6 @@ pub struct Decklist {
     pub issues: Vec<DeckIssue>,
 }
 
-impl Decklist {
-    pub fn source_sha256(&self) -> String {
-        format!("{:x}", Sha256::digest(self.source.as_bytes()))
-    }
-}
-
 /// One document's admission: its resolved source record and the admitted deck.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(

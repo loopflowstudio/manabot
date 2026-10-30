@@ -263,11 +263,6 @@ json_record!(Decklist {
     fn issues(&self) -> Vec<DeckIssue> {
         self.issues.clone()
     }
-
-    #[getter(source_sha256)]
-    fn py_source_sha256(&self) -> String {
-        self.source_sha256()
-    }
 });
 
 json_record!(DeckImport {

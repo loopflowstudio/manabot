@@ -7,7 +7,7 @@ import managym
 
 class DeckFileInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    source: str = Field(max_length=65_536)
+    source: str = Field(max_length=managym.MAX_DECKLIST_BYTES)
     filename: str = Field(default="deck.txt", max_length=255)
 
     def decklist(self) -> managym.Decklist:

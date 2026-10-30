@@ -1,8 +1,6 @@
 //! Construction admission for submitted development decks. Content eligibility
 //! belongs to the pool descriptor; this module never infers rules from names.
 
-use std::collections::BTreeMap;
-
 use serde::{Deserialize, Serialize};
 
 use super::{content_pool, pool_content, ContentPool, Eligibility, IrError};
@@ -59,18 +57,14 @@ impl DeckIssue {
     }
 }
 
-fn construction_issues(
-    main: &BTreeMap<String, usize>,
-    sideboard: &BTreeMap<String, usize>,
-    ruleset: &str,
-) -> Vec<DeckIssue> {
+fn construction_issues(deck: &Deck, ruleset: &str) -> Vec<DeckIssue> {
     let mut issues = Vec::new();
     if ruleset != DEVELOPMENT_RULESET {
         issues.push(DeckIssue::format(format!(
             "unknown construction ruleset {ruleset:?}; choose {DEVELOPMENT_RULESET}"
         )));
     }
-    if main.is_empty() {
+    if deck.main.is_empty() {
         issues.push(DeckIssue {
             section: Some(DeckSection::Main),
             ..DeckIssue::format("development-v1 requires a nonempty main deck")
@@ -78,8 +72,8 @@ fn construction_issues(
     }
     let mut total = 0usize;
     for (section, cards) in [
-        (DeckSection::Main, main),
-        (DeckSection::Sideboard, sideboard),
+        (DeckSection::Main, &deck.main),
+        (DeckSection::Sideboard, &deck.sideboard),
     ] {
         for (name, count) in cards {
             if *count == 0 {
@@ -120,7 +114,7 @@ pub(crate) fn admit_in_pool(
     deck: &Deck,
     ruleset: &str,
 ) -> Vec<DeckIssue> {
-    let mut issues = construction_issues(&deck.main, &deck.sideboard, ruleset);
+    let mut issues = construction_issues(deck, ruleset);
     for (section, cards) in [
         (DeckSection::Main, &deck.main),
         (DeckSection::Sideboard, &deck.sideboard),
@@ -184,6 +178,8 @@ pub fn development_rejection(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+
     use super::*;
 
     #[test]
@@ -204,23 +200,24 @@ mod tests {
 
     #[test]
     fn development_construction_is_not_tournament_legality() {
-        let main = BTreeMap::from([("Forest".into(), 8)]);
-        let sideboard = BTreeMap::from([("Island".into(), 20)]);
-        assert!(construction_issues(&main, &sideboard, DEVELOPMENT_RULESET).is_empty());
-        assert!(construction_issues(&main, &sideboard, "standard")
+        let deck = Deck::new(
+            BTreeMap::from([("Forest".into(), 8)]),
+            BTreeMap::from([("Island".into(), 20)]),
+        );
+        assert!(construction_issues(&deck, DEVELOPMENT_RULESET).is_empty());
+        assert!(construction_issues(&deck, "standard")
             .iter()
             .any(|issue| issue.code == "format"));
     }
 
     #[test]
     fn empty_zero_and_overflowing_allocations_reject() {
-        assert!(
-            !construction_issues(&BTreeMap::new(), &BTreeMap::new(), DEVELOPMENT_RULESET)
-                .is_empty()
+        assert!(!construction_issues(&Deck::default(), DEVELOPMENT_RULESET).is_empty());
+        let deck = Deck::new(
+            BTreeMap::from([("Forest".into(), 0)]),
+            BTreeMap::from([("Island".into(), usize::MAX), ("Mountain".into(), 2)]),
         );
-        let main = BTreeMap::from([("Forest".into(), 0)]);
-        let sideboard = BTreeMap::from([("Island".into(), usize::MAX), ("Mountain".into(), 2)]);
-        let issues = construction_issues(&main, &sideboard, DEVELOPMENT_RULESET);
+        let issues = construction_issues(&deck, DEVELOPMENT_RULESET);
         assert!(issues.iter().any(|issue| issue.code == "count"));
         assert!(issues
             .iter()
