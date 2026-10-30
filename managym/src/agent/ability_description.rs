@@ -365,7 +365,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
     use Effect::*;
     Some(match effect {
         SelectTargetRequirement { .. } => return None,
-        CreateNonlegendaryCopy => "Create a nonlegendary token copy of this".into(),
+        CreateTokenCopy { nonlegendary: false } => "Create a token that's a copy of this".into(),
+        CreateTokenCopy { nonlegendary: true } => "Create a token that's a copy of this, except it's not legendary".into(),
         ModifyControlled { predicate, power, toughness } => format!("{} you control get {power:+}/{toughness:+} until end of turn", predicate_description(predicate,"permanents")),
         OptionalPayment { cost, if_paid, if_declined } => {
             let cost = match cost { PaymentCost::Mana(m) => cost_description(m), PaymentCost::Waterbend { generic } => format!("waterbend {generic}") };
@@ -451,6 +452,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         GainLife { amount } => format!("You gain {amount} life"),
         OnNthResolutionThisTurn { n, effect } => format!("If this is resolution {n} of this ability this turn: {}",effects_description(std::slice::from_ref(effect))),
         Scry { count } => format!("Scry {count}"),
+        Surveil { count } => format!("Surveil {count}"),
         LookAndSelect { reveal, look, min_select, max_select, predicate } => format!("{} the top {} cards of your library. Put {min_select}–{max_select} {} from among them into your hand and the rest on the bottom in a random order",if *reveal { "Reveal" } else { "Look at" },value_description(look),predicate_description(predicate,"cards")),
         PutTopCardsInHand { count } => format!("Put the top {count} cards of your library into your hand"),
         Learn => "Learn: you may reveal a Lesson you own from outside the game and put it into your hand, or discard a card to draw a card, or decline".into(),

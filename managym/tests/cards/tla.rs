@@ -5129,6 +5129,146 @@ fn jet_entry_damage_and_death_choose_up_to_two_distinct_creatures() {
     assert_eq!(counters(&s, other), 1);
 }
 
+/// Player 0's Joo Dee on the battlefield, ready to tap.
+fn joo_dee_setup() -> (Scenario, PermanentId) {
+    let mut s = five_color_setup(&["Joo Dee, One of Many"]);
+    let joo_dee = enter_battlefield(&mut s, "Joo Dee, One of Many");
+    clear_summoning_sickness(&mut s, joo_dee);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    (s, joo_dee)
+}
+
+fn joo_dees(s: &Scenario) -> Vec<PermanentId> {
+    s.battlefield_permanents_named(0, "Joo Dee, One of Many")
+}
+
+#[test]
+fn joo_dee_surveils_copies_its_copiable_values_then_sacrifices_a_chosen_creature() {
+    let (mut s, joo_dee) = joo_dee_setup();
+    {
+        let original = s.game_mut().state.permanents[joo_dee].as_mut().unwrap();
+        original.plus1_counters = 2;
+        original.temp_power = 3;
+    }
+    let top = library_top(&s, 0);
+    activate(&mut s, joo_dee, 0);
+    assert!(tapped(&s, joo_dee));
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    assert_eq!(offered_cards(&s), [top]);
+    let top_id = s.game().state.cards[top].id.0 as i32;
+    let seen = |viewer: usize| {
+        let observation = Observation::for_player(s.game(), PlayerId(viewer));
+        observation
+            .agent_cards
+            .iter()
+            .chain(&observation.opponent_cards)
+            .any(|card| card.id == top_id)
+    };
+    assert!(seen(0), "the surveilling player sees the card");
+    assert!(!seen(1), "the opponent does not");
+    assert!(s
+        .action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::Decline { .. })));
+    select_card(&mut s, top);
+    assert_eq!(zone_of(&s, top), Some(ZoneType::Graveyard));
+
+    // The copy enters before the sacrifice, and both are offered.
+    assert_eq!(s.action_space().kind, ActionSpaceKind::LookAndSelect);
+    let both = joo_dees(&s);
+    assert_eq!(both.len(), 2);
+    let token = *both.iter().find(|id| **id != joo_dee).unwrap();
+    let offered = offered_cards(&s);
+    assert_eq!(offered.len(), 2);
+    assert!(offered.contains(&card_of(&s, token)));
+    let original = card_of(&s, joo_dee);
+    select_card(&mut s, original);
+    settle(&mut s);
+
+    assert_eq!(joo_dees(&s), [token]);
+    let copy = permanent(&s, token);
+    assert!(s.game().state.cards[copy.card].is_token);
+    assert!(!copy.tapped);
+    assert_eq!(copy.plus1_counters, 0);
+    assert_eq!(s.game().effective_pt(token), (2, 2));
+    assert_eq!(
+        s.game().state.cards[copy.card].activated_abilities.len(),
+        1,
+        "the token has Joo Dee's ability"
+    );
+}
+
+#[test]
+fn joo_dee_declined_surveil_keeps_the_card_and_a_token_copies_itself() {
+    let (mut s, joo_dee) = joo_dee_setup();
+    s.game_mut().create_token("Clue", PlayerId(0), false);
+    let top = library_top(&s, 0);
+    activate(&mut s, joo_dee, 0);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    assert_eq!(library_top(&s, 0), top);
+    let clue = card_of(&s, permanent_named(&s, "Clue"));
+    assert!(
+        offered_cards(&s).contains(&clue),
+        "an artifact may be sacrificed"
+    );
+    select_card(&mut s, clue);
+    settle(&mut s);
+    assert_eq!(joo_dees(&s).len(), 2);
+
+    // A copy of the token copies the token's copiable values.
+    let token = *joo_dees(&s).iter().find(|id| **id != joo_dee).unwrap();
+    clear_summoning_sickness(&mut s, token);
+    activate(&mut s, token, 0);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+    assert_eq!(offered_cards(&s).len(), 3);
+    let sacrificed = card_of(&s, token);
+    select_card(&mut s, sacrificed);
+    settle(&mut s);
+    let remaining = joo_dees(&s);
+    assert_eq!(remaining.len(), 2);
+    let newest = *remaining.iter().find(|id| **id != joo_dee).unwrap();
+    let card = &s.game().state.cards[card_of(&s, newest)];
+    assert!(card.is_token);
+    assert_eq!(card.name, "Joo Dee, One of Many");
+    assert_eq!(card.mana_cost.as_ref().unwrap().mana_value, 2);
+}
+
+#[test]
+fn joo_dee_activates_only_as_a_sorcery() {
+    let two_ready = || {
+        let (mut s, joo_dee) = joo_dee_setup();
+        let second = enter_battlefield(&mut s, "Joo Dee, One of Many");
+        clear_summoning_sickness(&mut s, second);
+        s.game_mut().scenario_refresh_priority().unwrap();
+        (s, joo_dee, second)
+    };
+    let (mut s, joo_dee, second) = two_ready();
+    assert!(can_activate(&s, joo_dee));
+    activate(&mut s, joo_dee, 0);
+    assert!(!s.game().state.stack_objects.is_empty());
+    assert_eq!(s.action_space().player, Some(PlayerId(0)));
+    assert!(!can_activate(&s, second), "not with a nonempty stack");
+
+    for (player, step) in [
+        (0, StepKind::BeginningOfCombat),
+        (0, StepKind::End),
+        (1, StepKind::Main),
+    ] {
+        let (mut s, joo_dee, _) = two_ready();
+        s.advance_to_active_step(player, step);
+        s.set_player_mana_pool(0, "BBBB");
+        if s.action_space().player != Some(PlayerId(0)) {
+            s.pass_priority();
+        }
+        s.game_mut().scenario_refresh_priority().unwrap();
+        assert_eq!(s.action_space().player, Some(PlayerId(0)), "{step:?}");
+        assert!(!can_activate(&s, joo_dee), "{player} {step:?}");
+    }
+}
+
 #[test]
 fn june_sacrifices_another_creature_only_on_its_controllers_turn() {
     let mut s = five_color_setup(&["June, Bounty Hunter", "Callous Inspector"]);
@@ -5762,6 +5902,71 @@ fn ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution() {
         assert_eq!(s.game().state.cards[dragon.card].is_token, mode == 2);
         assert_eq!(s.game().effective_power(dragons[0]), 4);
     }
+}
+
+#[test]
+fn ran_and_shaw_copy_ignores_the_sources_status_counters_and_effects() {
+    let mut s = five_color_setup(&["Ran and Shaw", "Waterbending Lesson"]);
+    for _ in 0..3 {
+        let lesson = library_card(&s, 0, "Waterbending Lesson");
+        s.game_mut().move_card(lesson, ZoneType::Graveyard);
+    }
+    cast(&mut s, "Ran and Shaw");
+    for _ in 0..10 {
+        if s.battlefield_permanents_named(0, "Ran and Shaw").len() == 1 {
+            break;
+        }
+        s.pass_priority();
+    }
+    let source = permanent_named(&s, "Ran and Shaw");
+    {
+        let original = s.game_mut().state.permanents[source].as_mut().unwrap();
+        original.tapped = true;
+        original.plus1_counters = 2;
+        original.temp_power = 3;
+        original.temp_keywords.trample = true;
+    }
+    settle(&mut s);
+    let dragons = s.battlefield_permanents_named(0, "Ran and Shaw");
+    assert_eq!(
+        dragons.len(),
+        2,
+        "the original is legendary, the copy is not"
+    );
+    let token = *dragons.iter().find(|id| **id != source).unwrap();
+    assert!(!tapped(&s, token));
+    assert_eq!(counters(&s, token), 0);
+    assert_eq!(s.game().effective_pt(token), (4, 4));
+    assert!(keywords(&s, token).flying);
+    assert!(!keywords(&s, token).trample);
+}
+
+#[test]
+fn ran_and_shaw_firebend_and_pump_only_the_dragons_present_until_end_of_turn() {
+    let mut s = five_color_setup(&["Ran and Shaw", "Gray Ogre"]);
+    let dragon = s.force_permanent_on_battlefield(0, "Ran and Shaw");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    clear_summoning_sickness(&mut s, dragon);
+    s.advance_to_active_step(0, StepKind::DeclareAttackers);
+    attack_with(&mut s, dragon);
+    pass_until(&mut s, ActionSpaceKind::Priority);
+    while !s.game().state.stack_objects.is_empty() {
+        s.pass_priority();
+    }
+    assert_eq!(
+        s.game().state.players[0].combat_mana_pool,
+        Mana::parse("RR"),
+        "firebending 2"
+    );
+
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    s.set_player_mana_pool(0, "RRRR");
+    activate(&mut s, dragon, 0);
+    settle(&mut s);
+    assert_eq!(s.game().effective_pt(dragon), (6, 4));
+    assert_eq!(s.game().effective_pt(ogre), (2, 2), "not a Dragon");
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().effective_pt(dragon), (4, 4));
 }
 
 #[test]

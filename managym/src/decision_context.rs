@@ -332,6 +332,7 @@ impl Game {
                 Decision::Learn { .. } => ("learn", "Take a Lesson, discard and draw, or decline Learn. Navigation does not commit a choice."),
                 Decision::LookAndSelect { .. } => ("private_inspection", "Choose from the inspected cards using the complete legal offers."),
                 Decision::Scry { .. } => ("scry", "Choose the placement of the inspected cards."),
+                Decision::Surveil { .. } => ("surveil", "Choose inspected cards to put into your graveyard; declining keeps the rest on top."),
                 Decision::Payment(_) => ("resolution_payment", "Choose a legal payment for the resolving effect, or decline when offered. Submitted costs remain committed."),
                 Decision::Modal { .. } => ("resolution_mode", "Choose a mode for the resolving effect."),
                 Decision::Discard { .. } | Decision::OptionalDiscardDraw { .. } => ("discard", "Choose a card to discard, or decline when offered."),

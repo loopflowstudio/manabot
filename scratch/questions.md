@@ -113,3 +113,17 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   failed 2 of 9 full `rules_tests` runs (Debug output of the root changed
   after a rejected stale submission); passes alone and in 7 later runs. It
   touches no possible-world code; likely order/timing-dependent shared state.
+
+## T5 (a7234f) — 2026-10-30 operator choices
+
+- Started from main per Jack Heart's steer. Crew, Vehicles and conditional type
+  grants already exist on T3 (and T4, which contains T3), so Phoenix Fleet
+  Airship is left undefined here rather than building a second vehicle
+  authority on main; it lands after syncing onto T3/T4.
+- Surveil reuses the LookAndSelect surface (select = graveyard, decline =
+  keep) instead of a new action type, which would change `ACTION_TYPE_DIM`.
+  Kept cards stay in order: exact for surveil 1, the only printed amount.
+- Joo Dee's fixture entry was added from Scryfall's card API with the refresh
+  script's fields, not a full bulk refresh (which reorders the file).
+- WORLDS.md count 166 → 168 is a relative +2 (Joo Dee new, Ran and Shaw out of
+  `INCOMPLETE`); the Python pool reports 189 eligible rows by its own counting.

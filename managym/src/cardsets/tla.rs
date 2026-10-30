@@ -24,7 +24,6 @@ pub(super) const INCOMPLETE: &[super::Incomplete] = &[
     ("tla.dragonfly_swarm", "Unreviewed until T4: Flying; spell-and-ability ward; graveyard CDA power; conditional death draw."),
     ("tla.great_divide_guide", "Unreviewed until T3: Continuous any-color mana grant to lands and Allies; source removal and creature sickness."),
     ("ths.lightning_strike", "Any target must include planeswalkers and battles (CR 115.4)"),
-    ("tla.ran_and_shaw", "Unreviewed until T5: Flying/firebending; cast-only conditional ETB nonlegendary self copy; Dragon anthem activation."),
     ("tla.suki_kyoshi_warrior", "CDA power must apply outside the battlefield (CR 604.3)"),
     ("tla.water_tribe_rallier", "Library power filter must evaluate CDAs, such as Suki's (CR 604.3)"),
 ];
@@ -105,6 +104,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         jasmine_dragon_tea_shop(),
         jeong_jeongs_deserters(),
         jet_freedom_fighter(),
+        joo_dee_one_of_many(),
         june_bounty_hunter(),
         knowledge_seeker(),
         kyoshi_village(),
@@ -2662,6 +2662,41 @@ fn jet_freedom_fighter() -> CardDefinition {
     }
 }
 
+fn joo_dee_one_of_many() -> CardDefinition {
+    let text_box = "{B}, {T}: Surveil 1. Create a token that's a copy of this creature, then sacrifice an artifact or creature. Activate only as a sorcery. (To surveil 1, look at the top card of your library. You may put it into your graveyard.)";
+
+    CardDefinition {
+        key: "tla.joo_dee_one_of_many",
+        scryfall_id: "7ae1439f-a0c4-42c2-a4f3-8851defa981e",
+        name: "Joo Dee, One of Many".into(),
+        mana_cost: Some(ManaCost::parse("{1}{B}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Human".into(), "Advisor".into()],
+        power: Some(2),
+        toughness: Some(2),
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            mana_cost: ManaCost::parse("{B}"),
+            tap_source: true,
+            sorcery_timing: true,
+            effects: vec![
+                Effect::Surveil { count: 1 },
+                Effect::CreateTokenCopy {
+                    nonlegendary: false,
+                },
+                Effect::Sacrifice {
+                    predicate: CardPredicate {
+                        card_types_any: vec![CardType::Artifact, CardType::Creature],
+                        ..Default::default()
+                    },
+                },
+            ],
+            ..Default::default()
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
 fn june_bounty_hunter() -> CardDefinition {
     let text_box = "June can't be blocked as long as you've drawn two or more cards this turn.\n{1}, Sacrifice another creature: Create a Clue token. Activate only during your turn. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")";
 
@@ -3611,7 +3646,7 @@ fn ran_and_shaw() -> CardDefinition {
                         subtypes_any: vec!["Dragon".into(), "Lesson".into()],
                         ..Default::default()
                     },
-                    then: vec![Effect::CreateNonlegendaryCopy],
+                    then: vec![Effect::CreateTokenCopy { nonlegendary: true }],
                     otherwise: vec![],
                 }],
             },

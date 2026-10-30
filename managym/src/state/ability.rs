@@ -176,8 +176,16 @@ pub enum LinkedGrant {
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum Effect {
-    /// Copy the source's copiable characteristics, removing legendary.
-    CreateNonlegendaryCopy,
+    /// Create a token that's a copy of the source (CR 707.2, 111.1). The
+    /// token copies the source's copiable values: its definition, including
+    /// any copy effect already applied to it, and never its counters, damage,
+    /// tapped state or non-copy effects. A source that has left the
+    /// battlefield is copied as it last existed there. `nonlegendary` is the
+    /// "except it's not legendary" exception, which becomes part of the
+    /// token's own copiable values (CR 707.9b).
+    CreateTokenCopy {
+        nonlegendary: bool,
+    },
     ModifyControlled {
         predicate: CardPredicate,
         power: i32,
@@ -449,6 +457,13 @@ pub enum Effect {
     },
     /// Scry `count` (CR 701.26), with arbitrary top and bottom ordering.
     Scry {
+        count: usize,
+    },
+    /// Surveil `count` (CR 701.25): look at the top cards and put any
+    /// number of them into the graveyard. Kept cards stay on top in their
+    /// existing order, which is the whole choice for surveil 1, the only
+    /// amount the pool prints.
+    Surveil {
         count: usize,
     },
     /// "Look at the top `look` cards of your library. Put up to
@@ -731,7 +746,7 @@ impl Effect {
             Effect::IfTargetMatches { then, .. } | Effect::SacrificeSource { then } => {
                 then.iter().find_map(|effect| effect.target_spec())
             }
-            Effect::CreateNonlegendaryCopy
+            Effect::CreateTokenCopy { .. }
             | Effect::AirbendAll { .. }
             | Effect::OpponentsCastOnlyFromHand
             | Effect::ExileSourceSpell
@@ -758,6 +773,7 @@ impl Effect {
             | Effect::ReturnSourceToHand
             | Effect::GainLife { .. }
             | Effect::Scry { .. }
+            | Effect::Surveil { .. }
             | Effect::LookAndSelect { .. }
             | Effect::PutTopCardsInHand { .. }
             | Effect::Learn

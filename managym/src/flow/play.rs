@@ -813,6 +813,9 @@ impl Game {
         if self.state.players[player.0].life < ability.life_cost as i32 {
             return Err(AgentError("cannot pay life cost".into()));
         }
+        if ability.sorcery_timing && !self.can_cast_sorceries(player) {
+            return Err(AgentError("activation requires sorcery timing".into()));
+        }
         Ok(())
     }
 

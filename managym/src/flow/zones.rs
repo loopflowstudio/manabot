@@ -8,6 +8,7 @@ use crate::{
         proposed_event::{ProposedEvent, ZoneEntry},
     },
     state::{
+        card::Card,
         game_object::{CardId, Incarnation, ObjectRef, PermanentId, PlayerId, Target},
         permanent::Permanent,
         predicate::CardPredicate,
@@ -236,10 +237,7 @@ impl Game {
         };
         debug_assert!(card.is_token, "created token must be a token definition");
 
-        let card_id = CardId(self.state.cards.len());
-        self.state.cards.push(card);
-        self.state.card_to_permanent.push(None);
-        self.state.object_incarnations.push(Incarnation::INITIAL);
+        let card_id = self.add_card(card);
         self.move_card_with_entry(
             card_id,
             ZoneType::Battlefield,
@@ -265,6 +263,46 @@ impl Game {
             }
         }
         self.invalidate_mana_cache(controller);
+    }
+
+    /// Create a token that's a copy of `source` under `controller` (CR 707.2,
+    /// 111.1). A card's definition is its copiable values: play never
+    /// mutates it, counters, damage, tapped state and non-copy effects live
+    /// on the `Permanent`, and a copy token's definition already carries the
+    /// copy effect it was made with. The source card keeps its definition
+    /// after leaving the battlefield, so a departed source is copied as it
+    /// last existed there. `nonlegendary` applies "except it's not
+    /// legendary" as part of the token's copiable values (CR 707.9b).
+    pub(crate) fn create_token_copy(
+        &mut self,
+        source: CardId,
+        controller: PlayerId,
+        nonlegendary: bool,
+    ) {
+        let mut copy = self.state.cards[source].clone();
+        copy.id = self.state.id_gen.next_id();
+        copy.owner = controller;
+        // Any write detaches the shared definition (`DerefMut`), so a copy
+        // of a token keeps sharing its source's.
+        if !copy.is_token {
+            copy.is_token = true;
+        }
+        if nonlegendary {
+            copy.supertypes
+                .retain(|supertype| !supertype.eq_ignore_ascii_case("legendary"));
+        }
+        let card_id = self.add_card(copy);
+        self.move_card(card_id, ZoneType::Battlefield);
+        self.invalidate_mana_cache(controller);
+    }
+
+    /// Add a card created during play to the game, outside every zone.
+    fn add_card(&mut self, card: Card) -> CardId {
+        let card_id = CardId(self.state.cards.len());
+        self.state.cards.push(card);
+        self.state.card_to_permanent.push(None);
+        self.state.object_incarnations.push(Incarnation::INITIAL);
+        card_id
     }
 
     /// Count permanents a player controls matching a predicate (e.g.

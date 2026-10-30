@@ -26,7 +26,7 @@ number. A run on an open world makes no comparability claim.
 | **w14** | in development, MTG-195, 2026-10-26 | 40 / 41 / 28 / 17; controller-selected trigger placement and policy-input v3 occurrence joins | unchanged authored packs; fresh w14 conformance and play fixtures | no strength baseline |
 | **w15** | in development, MTG-177, 2026-10-27 | 40 / 41 / 28 / 17; retained resolution eligibility, policy-input v4 relations 64 × 33 | unchanged authored packs; fresh integrated conformance and play fixtures | no strength baseline |
 | **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
-| **w17** | open (Tasks 892c47, 87e012), 2026-10-29 | 60 / 55 / 32 / 17 (policy input v5; v1–v4 keep 40 / 41 / 29); cards in engine rules types, learning schema 9 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones | `world` (the default pack): every defined card (166 supported); `semantic-kernel-w17-v1`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
+| **w17** | open (Tasks 892c47, 87e012, a7234f), 2026-10-29 | 60 / 55 / 32 / 17 (policy input v5; v1–v4 keep 40 / 41 / 29); cards in engine rules types, learning schema 9 tokens derived from them, attacking permanent column; TLA casting, costs, zone permissions and private zones | `world` (the default pack): every defined card (168 supported); `semantic-kernel-w17-v1`, `authored-match-w17-v1`, `authored-match-parity-w17-v1` and `public-commitment-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
 
 **Open world: w17.** `managym.WORLD_VERSION` identifies live runs. Checkpoints
 from earlier worlds are **not comparable** to w17; do not reuse their
@@ -86,6 +86,15 @@ activation cost reduction, exhaust and once-each-turn activation limits,
 hand- and graveyard-zone activated abilities (landcycling), private library
 searches and choices, and control (a permanent spell enters under its
 controller).
+
+Task a7234f (TLA batch T5) extends w17 with token copies: a token that's a
+copy of a permanent takes its copiable values (its definition, including any
+copy effect already applied, CR 707.2), never its status, counters or non-copy
+effects, and a departed source is copied as it last existed; "except it's not
+legendary" is part of the copy (CR 707.9b). It adds surveil (CR 701.25) as a
+select-into-graveyard choice and "activate only as a sorcery" (CR 602.5d).
+Joo Dee, One of Many and Ran and Shaw are supported (168 supported in `world`);
+Phoenix Fleet Airship waits for crew and type-changing statics from T3/T4.
 
 Policy input **v5** is the default; v1–v4 keep their widths. Player rows add
 restricted mana by spending subtype × color (18), the hand-only lock and no

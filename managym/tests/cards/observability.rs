@@ -44,7 +44,7 @@ use managym::{
             Ability, Effect, EffectValue, LinkedChooser, LinkedGrant, PaymentCost, StaticCondition,
             TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
         },
-        card::{CardDefinition, Keywords},
+        card::{ActivatedAbilityDefinition, CardDefinition, Keywords},
         game_object::{CardId, PermanentId, PlayerId, Target},
         mana::{Mana, ManaCost},
         permanent::Permanent,
@@ -213,7 +213,7 @@ fn player_fields(player: &Player) -> [(&'static str, Seen); 12] {
 /// must be named here (and given a witness below).
 fn effect_token(effect: &Effect) -> &'static str {
     match effect {
-        Effect::CreateNonlegendaryCopy => "Effect::CreateNonlegendaryCopy",
+        Effect::CreateTokenCopy { .. } => "Effect::CreateTokenCopy",
         Effect::Airbend { .. } => "Effect::Airbend",
         Effect::AirbendAll { .. } => "Effect::AirbendAll",
         Effect::OpponentsCastOnlyFromHand => "Effect::OpponentsCastOnlyFromHand",
@@ -278,6 +278,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::GainLife { .. } => "Effect::GainLife",
         Effect::OnNthResolutionThisTurn { .. } => "Effect::OnNthResolutionThisTurn",
         Effect::Scry { .. } => "Effect::Scry",
+        Effect::Surveil { .. } => "Effect::Surveil",
         Effect::LookAndSelect { .. } => "Effect::LookAndSelect",
         Effect::PutTopCardsInHand { .. } => "Effect::PutTopCardsInHand",
         Effect::Learn => "Effect::Learn",
@@ -302,7 +303,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 83;
+const EFFECT_VARIANTS: usize = 84;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -311,7 +312,7 @@ fn effect_witnesses() -> Vec<Effect> {
     let value = || EffectValue::CreaturesWithCounters;
     let draw = || vec![Effect::DrawCards { count: 1 }];
     vec![
-        Effect::CreateNonlegendaryCopy,
+        Effect::CreateTokenCopy { nonlegendary: true },
         Effect::Airbend { target: target() },
         Effect::AirbendAll {
             predicate: creature(),
@@ -482,6 +483,7 @@ fn effect_witnesses() -> Vec<Effect> {
             effect: Box::new(Effect::DrawCards { count: 1 }),
         },
         Effect::Scry { count: 1 },
+        Effect::Surveil { count: 1 },
         Effect::LookAndSelect {
             reveal: false,
             look: EffectValue::Fixed(3),
@@ -804,6 +806,25 @@ fn set_keyword(keywords: &mut Keywords, name: &str) {
         other => panic!("unknown keyword {other}"),
     };
     *flag = true;
+}
+
+#[test]
+fn sorcery_timing_reaches_the_activated_ability_tokens() {
+    let definition = CardDefinition {
+        name: "Witness".into(),
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            sorcery_timing: true,
+            effects: vec![Effect::Surveil { count: 1 }],
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let tokens = tokens_of(&definition);
+    let at = tokens
+        .iter()
+        .position(|token| *token == (TokenKind::Field, name_value("sorcery_timing")))
+        .expect("sorcery_timing token");
+    assert_eq!(tokens[at + 1], (TokenKind::Boolean, 1));
 }
 
 #[test]

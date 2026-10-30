@@ -107,6 +107,7 @@ _STAGES = frozenset(
         "split_revealed",
         "free_cast",
         "linked_exile",
+        "surveil",
     )
 )
 

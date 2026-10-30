@@ -318,6 +318,9 @@ pub struct ActivatedAbilityDefinition {
     pub sacrifice: Option<SacrificeCost>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub own_turn_only: bool,
+    /// "Activate only as a sorcery" (CR 602.5d).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub sorcery_timing: bool,
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub life_cost: u32,
     #[serde(skip_serializing_if = "std::ops::Not::not")]

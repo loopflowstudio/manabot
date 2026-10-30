@@ -1438,6 +1438,20 @@
     "oracle_text": "{T}, Sacrifice this land: Search your library for a basic land card, put it onto the battlefield tapped, then shuffle. Then if you control four or more lands, untap that land.",
     "colors": []
   },
+  "Joo Dee, One of Many": {
+    "name": "Joo Dee, One of Many",
+    "mana_cost": "{1}{B}",
+    "type_line": "Creature — Human Advisor",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Surveil"
+    ],
+    "oracle_text": "{B}, {T}: Surveil 1. Create a token that's a copy of this creature, then sacrifice an artifact or creature. Activate only as a sorcery. (To surveil 1, look at the top card of your library. You may put it into your graveyard.)",
+    "colors": [
+      "B"
+    ]
+  },
   "June, Bounty Hunter": {
     "name": "June, Bounty Hunter",
     "mana_cost": "{1}{B}",
