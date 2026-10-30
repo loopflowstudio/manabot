@@ -1,0 +1,22 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>afbd6a demo</title><style>
+:root{color-scheme:light dark;--fg:#222;--bg:#fbfaf7;--mut:#666}
+@media(prefers-color-scheme:dark){:root{--fg:#e6e2da;--bg:#1b1a18;--mut:#a39d92}}
+body{font:16px/1.6 system-ui,sans-serif;color:var(--fg);background:var(--bg);max-width:44rem;margin:2rem auto;padding:0 1rem}
+code,pre{font:14px ui-monospace,monospace}pre{overflow-x:auto;padding:.75rem;border:1px solid var(--mut);border-radius:4px}
+.m{color:var(--mut)}td,th{text-align:left;padding:.3rem .6rem;vertical-align:top}table{border-collapse:collapse}
+</style></head><body>
+<p class="m">Task afbd6a (delete old-world card machinery) · step: demo · 2026-10-30 · built from
+<code>scratch/afbd6a-delete-old-world.md</code>, <code>scratch/tools/demo_afbd6a.py</code>, PR #403</p>
+<h1>Decision: does the w17 world hold after deleting the old worlds?</h1>
+<p>Run headless; result: <strong>advance</strong>. Merge still waits for Jack Heart's review.</p>
+<h2>Runbook</h2>
+<table><tr><th>Action</th><th>Expected</th><th>Observed</th></tr>
+<tr><td><code>uv run python scratch/tools/demo_afbd6a.py</code></td><td>11 tokens, all <code>token.*</code></td><td>Ally, Ballistic Boulder, Bear, Clue, Dragon, Food, Human Soldier, Monk, Soldier, Spirit, Treasure</td></tr>
+<tr><td>same</td><td>statics/costs are variants on real cards</td><td>16 StaticAbility variants, 3 AdditionalCost (Kicker, Sacrifice, Waterbend)</td></tr>
+<tr><td>same</td><td>w17 games finish with skip_trivial on</td><td>seeds 0–3: 435, 395, 199, 137 decisions, all terminal</td></tr>
+<tr><td><code>ls content/semantic conformance</code></td><td>only current / w17</td><td><code>current</code>; four w17 corpora, 3.1 MB</td></tr>
+<tr><td><code>gh pr view 403</code></td><td>CI green at HEAD</td><td>all checks success at 525adc80f; mergeable</td></tr></table>
+<h2>Questions</h2>
+<ol><li>Approve PR #403 for merge? (a) yes (b) changes wanted</li></ol>
+</body></html>
