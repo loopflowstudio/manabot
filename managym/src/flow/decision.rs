@@ -87,6 +87,10 @@ pub struct EffectFrame {
     /// it leaves the battlefield, references to it find nothing).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grantor: Option<ObjectRef>,
+    /// The printed index of the resolving triggered ability on its source,
+    /// which keys its "do this only once each turn" use.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ability: Option<usize>,
     /// Effects still to execute.
     pub queue: VecDeque<Effect>,
     pub finalize: FrameFinalize,
@@ -128,6 +132,10 @@ pub struct PaymentProgress {
     pub waterbend_paid: Vec<ObjectRef>,
     pub if_paid: Vec<Effect>,
     pub if_declined: Vec<Effect>,
+    /// The once-each-turn option (exact source, ability index) paying
+    /// spends ("Do this only once each turn").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spends: Option<(ObjectRef, usize)>,
 }
 
 impl PaymentProgress {
@@ -143,6 +151,7 @@ impl PaymentProgress {
             waterbend_paid: Vec::new(),
             if_paid,
             if_declined,
+            spends: None,
         }
     }
 
@@ -456,6 +465,7 @@ impl Game {
                 context_target: None,
                 triggering_player: None,
                 grantor: None,
+                ability: None,
                 queue: VecDeque::new(),
                 finalize: FrameFinalize::None,
             },
@@ -853,6 +863,15 @@ impl Game {
                     self.state.suspended_decision = Some(suspended);
                     return Err(error);
                 }
+                if let Some(key) = payment.spends {
+                    self.journal_turn();
+                    *self
+                        .state
+                        .turn
+                        .ability_triggers_this_turn
+                        .entry(key)
+                        .or_default() += 1;
+                }
                 let effects = std::mem::take(&mut payment.if_paid);
                 suspended.frame.prepend_effects(effects.into_iter());
                 self.run_frame(suspended.frame);
@@ -934,7 +953,7 @@ impl Game {
                     self.state.suspended_decision = Some(suspended);
                     return Err(AgentError("illegal counter recipient".into()));
                 };
-                self.change_counters(selected, *kind, 1);
+                self.put_counters(selected, *kind, 1, *player);
                 if let Some(next) = self.distribute_counters(*player, *kind, *remaining - 1) {
                     suspended.decision = next;
                     self.state.suspended_decision = Some(suspended);
@@ -1676,6 +1695,7 @@ mod learn_tests {
             context_target: None,
             triggering_player: None,
             grantor: None,
+            ability: None,
             queue: VecDeque::from([Effect::Learn]),
             finalize: FrameFinalize::None,
         });
@@ -2432,6 +2452,7 @@ mod payment_tests {
             context_target: None,
             triggering_player: None,
             grantor: None,
+            ability: None,
             queue: VecDeque::from([
                 Effect::OptionalPayment {
                     cost,

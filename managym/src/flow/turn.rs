@@ -86,7 +86,9 @@ pub struct TurnState {
     pub spells_cast: [Vec<crate::state::game_object::CardId>; 2],
     /// Each player's history this turn, by player index. Resets every turn.
     pub history: [PlayerTurnHistory; 2],
-    /// Once-per-turn limits are recorded at collection, by exact source object.
+    /// Once-each-turn uses by exact source object and ability index: a
+    /// `TriggerCondition::OnceEachTurn` is recorded as it fires, an
+    /// `Effect::MayOnceEachTurn` option as it is taken.
     #[serde(skip_serializing_if = "BTreeMap::is_empty")]
     pub ability_triggers_this_turn: BTreeMap<(crate::state::game_object::ObjectRef, usize), u32>,
     /// Times each triggered ability `(card index, ability index)` has

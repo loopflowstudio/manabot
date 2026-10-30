@@ -137,6 +137,10 @@ fn condition_description(condition: &TriggerCondition) -> String {
         TriggerCondition::YouDrawNthCardThisTurn { n } => {
             format!("When you draw card {n} this turn")
         }
+        TriggerCondition::YouPutCountersOnCreature { kind } => format!(
+            "When you put one or more {} counters on a creature",
+            counter_description(*kind)
+        ),
         TriggerCondition::OpponentDrawsNthCardThisTurn { n } => {
             format!("When an opponent draws card {n} this turn")
         }
@@ -540,6 +544,10 @@ fn effect_description(effect: &Effect) -> Option<String> {
         PlaceTargetInLibrary { second_from_top: true } => "Put it into its owner's library second from the top".into(),
         PlaceTargetInLibrary { second_from_top: false } => "Put it on the bottom of its owner's library".into(),
         SacrificeSource { then } => format!("Sacrifice this. If you do: {}", effects_description(then)),
+        MayOnceEachTurn { effects } => format!(
+            "You may: {}. Do this only once each turn",
+            effects_description(effects)
+        ),
         MaySacrifice { predicate, another, then } => format!(
             "You may sacrifice {}{}. If you do: {}",
             if *another { "another " } else { "a " },

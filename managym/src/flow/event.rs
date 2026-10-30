@@ -3,6 +3,7 @@ use crate::{
     state::{
         card::CardDefId,
         game_object::{CardId, Incarnation, ObjectId, PermanentId, PlayerId, Target},
+        permanent::CounterKind,
         zone::ZoneType,
     },
 };
@@ -114,6 +115,13 @@ pub enum GameEvent {
         source: ObjectEventRef,
         target: EventSubject,
         amount: u32,
+    },
+    /// `by` put `count` (> 0) `kind` counters on a permanent (CR 122.6).
+    CountersPut {
+        permanent: PermanentId,
+        kind: CounterKind,
+        count: i32,
+        by: PlayerId,
     },
     /// A player searched their library (CR 701.23), whatever it found.
     LibrarySearched {

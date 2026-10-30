@@ -477,6 +477,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::PlaceTargetInLibrary { .. } => "Effect::PlaceTargetInLibrary",
         Effect::SacrificeSource { .. } => "Effect::SacrificeSource",
         Effect::MaySacrifice { .. } => "Effect::MaySacrifice",
+        Effect::MayOnceEachTurn { .. } => "Effect::MayOnceEachTurn",
         Effect::ExileSourceSpell => "Effect::ExileSourceSpell",
         Effect::DestroyCreaturesLosingAbilities { .. } => "Effect::DestroyCreaturesLosingAbilities",
         Effect::AttachSourceTo { .. } => "Effect::AttachSourceTo",
@@ -500,7 +501,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 83;
+const EFFECT_VARIANTS: usize = 84;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -733,6 +734,7 @@ fn effect_witnesses() -> Vec<Effect> {
             another: true,
             then: draw(),
         },
+        Effect::MayOnceEachTurn { effects: draw() },
         Effect::ExileSourceSpell,
         Effect::DestroyCreaturesLosingAbilities {
             max_mana_value: EffectValue::X,
@@ -810,6 +812,9 @@ fn trigger_token(condition: &TriggerCondition) -> &'static str {
         TriggerCondition::OpponentDrawsNthCardThisTurn { .. } => {
             "TriggerCondition::OpponentDrawsNthCardThisTurn"
         }
+        TriggerCondition::YouPutCountersOnCreature { .. } => {
+            "TriggerCondition::YouPutCountersOnCreature"
+        }
         TriggerCondition::ActiveIf { .. } => "TriggerCondition::ActiveIf",
         TriggerCondition::AttacksAlone { .. } => "TriggerCondition::AttacksAlone",
         TriggerCondition::BeginningOfYourEndStep => "TriggerCondition::BeginningOfYourEndStep",
@@ -844,6 +849,9 @@ fn trigger_witnesses() -> Vec<TriggerCondition> {
         TriggerCondition::BeginningOfYourCombat,
         TriggerCondition::YouDrawNthCardThisTurn { n: 2 },
         TriggerCondition::OpponentDrawsNthCardThisTurn { n: 2 },
+        TriggerCondition::YouPutCountersOnCreature {
+            kind: CounterKind::PlusOnePlusOne,
+        },
         TriggerCondition::ActiveIf {
             active_if: Condition::YourTurn,
             condition: enters(),

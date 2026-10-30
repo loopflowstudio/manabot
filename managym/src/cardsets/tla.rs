@@ -83,6 +83,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         deserter_s_disciple(),
         diligent_zookeeper(),
         dragonfly_swarm(),
+        earth_kingdom_general(),
         earth_kingdom_jailer(),
         earth_kingdom_protectors(),
         earth_kingdom_soldier(),
@@ -2122,6 +2123,46 @@ fn dragonfly_swarm() -> CardDefinition {
                 not_card_types: vec![CardType::Creature, CardType::Land],
                 ..Default::default()
             })),
+        ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn earth_kingdom_general() -> CardDefinition {
+    let text_box = "When this creature enters, earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)\nWhenever you put one or more +1/+1 counters on a creature, you may gain that much life. Do this only once each turn.";
+
+    CardDefinition {
+        key: "tla.earth_kingdom_general",
+        scryfall_id: "8688fce5-74b1-41e1-a59a-05a3878a75cb",
+        name: "Earth Kingdom General".into(),
+        mana_cost: Some(ManaCost::parse("{3}{G}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Human".into(), "Soldier".into(), "Ally".into()],
+        power: Some(2),
+        toughness: Some(2),
+        abilities: vec![
+            Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                intervening_if: None,
+                effects: vec![Effect::Earthbend {
+                    count: EffectValue::Fixed(2),
+                    target: TargetSpec::LandYouControl,
+                }],
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::YouPutCountersOnCreature {
+                    kind: CounterKind::PlusOnePlusOne,
+                },
+                intervening_if: None,
+                effects: vec![Effect::MayOnceEachTurn {
+                    effects: vec![Effect::GainLifeValue {
+                        amount: EffectValue::X,
+                    }],
+                }],
+            },
         ],
         text_box: text_box.into(),
         ..Default::default()

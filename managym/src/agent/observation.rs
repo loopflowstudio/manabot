@@ -484,7 +484,9 @@ pub struct PermanentData {
     /// activated again by this object (CR 702.177a).
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub exhausted_abilities: i32,
-    /// "Once each turn" abilities this object has activated this turn.
+    /// "Once each turn" abilities this object has used this turn: activated
+    /// abilities, once-each-turn triggers that fired and "do this only once
+    /// each turn" options taken.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub once_each_turn_used: i32,
     /// Firebending granted until end of turn, summed over grants.
@@ -977,7 +979,14 @@ impl Observation {
             exile_if_dies_this_turn: game.exiled_if_it_would_die(perm_id),
             attacking: permanent.attacking,
             exhausted_abilities: permanent.exhausted.len() as i32,
-            once_each_turn_used: permanent.activated_this_turn.len() as i32,
+            once_each_turn_used: (permanent.activated_this_turn.len()
+                + game.permanent_object_ref(perm_id).map_or(0, |object| {
+                    game.state
+                        .turn
+                        .ability_triggers_this_turn
+                        .range((object, 0)..=(object, usize::MAX))
+                        .count()
+                })) as i32,
             granted_firebending: i32::from(game.granted_firebending(perm_id)),
             temp_subtypes: game
                 .added_subtypes(perm_id)
@@ -1410,6 +1419,7 @@ impl Observation {
             | GameEvent::PermanentTargeted { .. }
             | GameEvent::CombatDamageToPlayers { .. }
             | GameEvent::LibrarySearched { .. }
+            | GameEvent::CountersPut { .. }
             | GameEvent::AttackersDeclared { .. }
             | GameEvent::StepStarted { .. } => Vec::new(),
         }

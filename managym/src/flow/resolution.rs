@@ -16,7 +16,7 @@ use crate::{
     },
     state::{
         ability::{
-            Ability, AffectedSpec, Effect, EffectValue, LinkedChooser, PlayerSelector,
+            Ability, AffectedSpec, Effect, EffectValue, LinkedChooser, PaymentCost, PlayerSelector,
             TargetRequirement, TargetSpec,
         },
         effect::{Affected, EffectDuration, Modification},
@@ -146,6 +146,7 @@ impl Game {
             context_target: None,
             triggering_player: None,
             grantor: None,
+            ability: None,
             queue: VecDeque::from(effects),
             finalize: FrameFinalize::Spell {
                 card,
@@ -218,6 +219,7 @@ impl Game {
             context_target: attached,
             triggering_player: None,
             grantor: ability.granted_by.map(|grant| grant.grantor),
+            ability: None,
             queue: VecDeque::from(crate::state::ability::bind_effect_clauses(effects)),
             finalize: FrameFinalize::None,
         };
@@ -300,6 +302,7 @@ impl Game {
             context_target: triggered.context,
             triggering_player: triggered.player,
             grantor: None,
+            ability: (ability_key != usize::MAX).then_some(ability_key),
             queue: VecDeque::from(crate::state::ability::bind_effect_clauses(effects)),
             finalize: FrameFinalize::None,
         };
@@ -500,7 +503,12 @@ impl Game {
             Effect::PutCountersOnTriggeringPermanent { count } => {
                 if let Some(Target::Permanent(id)) = frame.context_target {
                     if self.permanent_object_ref(id).is_some() {
-                        self.change_counters(id, CounterKind::PlusOnePlusOne, *count);
+                        self.put_counters(
+                            id,
+                            CounterKind::PlusOnePlusOne,
+                            *count,
+                            frame.controller,
+                        );
                     }
                 }
                 None
@@ -1071,6 +1079,25 @@ impl Game {
                 player: frame.controller,
                 remaining: 1,
             }),
+            Effect::MayOnceEachTurn { effects } => {
+                let key = (frame.source_ref?, frame.ability?);
+                if self
+                    .state
+                    .turn
+                    .ability_triggers_this_turn
+                    .contains_key(&key)
+                {
+                    return None;
+                }
+                let mut payment = PaymentProgress::new(
+                    frame.controller,
+                    PaymentCost::Mana(Default::default()),
+                    effects.clone(),
+                    Vec::new(),
+                );
+                payment.spends = Some(key);
+                Some(Decision::Payment(payment))
+            }
             Effect::If {
                 condition,
                 then,
@@ -1231,14 +1258,14 @@ impl Game {
             Effect::PutCountersOnSource { count, kind } => {
                 let count = self.effect_value(count, frame);
                 if let Some(permanent_id) = self.source_permanent_id(frame) {
-                    self.change_counters(permanent_id, *kind, count);
+                    self.put_counters(permanent_id, *kind, count, frame.controller);
                 }
                 None
             }
             Effect::PutCounters { count, kind, .. } => {
                 let chosen = self.present_primary_target(frame)?;
                 if let Target::Permanent(permanent_id) = chosen {
-                    self.change_counters(permanent_id, *kind, *count);
+                    self.put_counters(permanent_id, *kind, *count, frame.controller);
                 }
                 None
             }
@@ -1392,7 +1419,12 @@ impl Game {
                     permanent.animated = true;
                     permanent.controller
                 };
-                if !self.change_plus_one_counters_on_object(watched, count) {
+                if !self.put_counters(
+                    permanent_id,
+                    CounterKind::PlusOnePlusOne,
+                    count,
+                    frame.controller,
+                ) {
                     return None;
                 }
                 // Delayed trigger: when it dies or is exiled, return it to
@@ -1534,6 +1566,7 @@ impl Game {
                         context_target: None,
                         triggering_player: frame.triggering_player,
                         grantor: frame.grantor,
+                        ability: frame.ability,
                         queue: VecDeque::from(effects.clone()),
                         finalize: FrameFinalize::None,
                     };
@@ -1561,7 +1594,12 @@ impl Game {
                     if !self.permanent_matches_predicate(permanent_id, predicate) {
                         continue;
                     }
-                    self.change_counters(permanent_id, CounterKind::PlusOnePlusOne, count);
+                    self.put_counters(
+                        permanent_id,
+                        CounterKind::PlusOnePlusOne,
+                        count,
+                        frame.controller,
+                    );
                 }
                 None
             }

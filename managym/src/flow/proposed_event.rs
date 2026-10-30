@@ -6,7 +6,7 @@
 //! replacements, transform deterministically, then commit.
 
 use crate::{
-    flow::game::Game,
+    flow::{event::GameEvent, game::Game},
     state::{
         card::ReplacementEffect,
         game_object::{CardId, EntityId, ObjectRef, PermanentId, PlayerId},
@@ -441,17 +441,27 @@ impl Game {
         })
     }
 
-    /// Exact-object counter mutation for rules continuations.
-    pub(crate) fn change_plus_one_counters_on_object(
+    /// `by` puts `count` (> 0) `kind` counters on a permanent, announcing it
+    /// for "whenever you put counters" triggers.
+    pub(crate) fn put_counters(
         &mut self,
-        target: ObjectRef,
-        delta: i32,
+        permanent_id: PermanentId,
+        kind: CounterKind,
+        count: i32,
+        by: PlayerId,
     ) -> bool {
-        self.apply_proposed_event(ProposedEvent::CounterChange {
-            target,
-            kind: CounterKind::PlusOnePlusOne,
-            delta,
-        })
+        if !self.change_counters(permanent_id, kind, count) {
+            return false;
+        }
+        if count > 0 {
+            self.emit(GameEvent::CountersPut {
+                permanent: permanent_id,
+                kind,
+                count,
+                by,
+            });
+        }
+        true
     }
 
     /// Exact-object destruction for rules continuations and SBA batches.

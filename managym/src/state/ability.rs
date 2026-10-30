@@ -119,6 +119,12 @@ pub enum TriggerCondition {
     YouDrawNthCardThisTurn {
         n: u32,
     },
+    /// "Whenever you put one or more [kind] counters on a creature": once
+    /// per creature an instruction you control puts them on. The trigger's
+    /// X is how many were put ("that much").
+    YouPutCountersOnCreature {
+        kind: CounterKind,
+    },
     /// "Whenever an opponent draws their Nth card each turn."
     OpponentDrawsNthCardThisTurn {
         n: u32,
@@ -513,6 +519,12 @@ pub enum Effect {
     PutCountersValue {
         count: EffectValue,
         target: TargetSpec,
+    },
+    /// "You may [effects]. Do this only once each turn." Offered only while
+    /// the exact source has not taken this ability's option this turn; only
+    /// accepting spends it (the ability itself triggers every time).
+    MayOnceEachTurn {
+        effects: Vec<Effect>,
     },
     /// "If [condition], [then]; otherwise, [otherwise]", asked as this
     /// instruction resolves (CR 608.2c), of the resolving player and frame.
@@ -1002,7 +1014,9 @@ impl Effect {
                 .iter()
                 .chain(otherwise.iter())
                 .find_map(|effect| effect.target_spec()),
-            Effect::SacrificeSource { then } | Effect::MaySacrifice { then, .. } => {
+            Effect::SacrificeSource { then }
+            | Effect::MaySacrifice { then, .. }
+            | Effect::MayOnceEachTurn { effects: then } => {
                 then.iter().find_map(|effect| effect.target_spec())
             }
             Effect::CreateNonlegendaryCopy

@@ -11233,3 +11233,64 @@ fn the_unagi_draws_two_when_an_opponent_draws_their_second_card() {
         "two of yours, then two"
     );
 }
+
+/// Its own earthbend puts two counters: gain 2 the first time. A later
+/// placement the same turn triggers but offers nothing; declining keeps the
+/// option for the next placement.
+#[test]
+fn earth_kingdom_general_gains_that_much_life_once_each_turn() {
+    let mut s = five_color_setup(&["Earth Kingdom General", "Guru Pathik", "Seismic Sense"]);
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    let life = s.game().state.players[0].life;
+    enter_battlefield(&mut s, "Earth Kingdom General");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(forest)));
+    pass_until(&mut s, ActionSpaceKind::PayOrNot);
+    assert!(s.take_action_by_type(ActionType::PayCost));
+    settle(&mut s);
+    assert_eq!(counters(&s, forest), 2);
+    assert_eq!(s.game().state.players[0].life, life + 2);
+    let general = s.battlefield_permanents_named(0, "Earth Kingdom General")[0];
+    assert_eq!(
+        observed(&s, general).once_each_turn_used,
+        1,
+        "observed spent"
+    );
+
+    let guru = s.force_permanent_on_battlefield(0, "Guru Pathik");
+    s.set_player_mana_pool(0, "G");
+    cast(&mut s, "Seismic Sense");
+    assert!(s.choose_target(Target::Permanent(forest)));
+    settle(&mut s);
+    assert_eq!(counters(&s, forest), 3);
+    assert_eq!(s.game().state.players[0].life, life + 2, "used this turn");
+    assert_eq!(counters(&s, guru), 0);
+
+    let mut s = five_color_setup(&[
+        "Earth Kingdom General",
+        "Guru Pathik",
+        "Seismic Sense",
+        "Gray Ogre",
+    ]);
+    s.force_permanent_on_battlefield(0, "Earth Kingdom General");
+    s.force_permanent_on_battlefield(0, "Guru Pathik");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let life = s.game().state.players[0].life;
+    for gain in [false, true] {
+        s.set_player_mana_pool(0, "G");
+        cast(&mut s, "Seismic Sense");
+        assert!(s.choose_target(Target::Permanent(ogre)));
+        pass_until(&mut s, ActionSpaceKind::PayOrNot);
+        if gain {
+            assert!(s.take_action_by_type(ActionType::PayCost));
+        } else {
+            choose(&mut s, |a| matches!(a, Action::Decline { .. }));
+        }
+        settle(&mut s);
+    }
+    assert_eq!(
+        s.game().state.players[0].life,
+        life + 1,
+        "declining kept it"
+    );
+}

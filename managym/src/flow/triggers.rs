@@ -499,8 +499,10 @@ impl Game {
                 GameEvent::LibrarySearched { player } => Some(*player),
                 _ => None,
             };
-            // CR 107.3m: an entering permanent's own trigger sees its spell's X.
+            // CR 107.3m: an entering permanent's own trigger sees its spell's
+            // X; a counters trigger's X is how many were put ("that much").
             let x = match event {
+                GameEvent::CountersPut { count, .. } => u8::try_from(*count).unwrap_or(u8::MAX),
                 GameEvent::CardMoved {
                     card,
                     to: ZoneType::Battlefield,
@@ -909,6 +911,19 @@ impl Game {
                     nth_this_turn,
                 },
             ) => *player == source_controller && nth_this_turn == n,
+            (
+                TriggerCondition::YouPutCountersOnCreature { kind },
+                GameEvent::CountersPut {
+                    permanent,
+                    kind: put,
+                    by,
+                    ..
+                },
+            ) => {
+                put == kind
+                    && *by == source_controller
+                    && self.permanent_is_battlefield_creature(*permanent)
+            }
             (
                 TriggerCondition::OpponentDrawsNthCardThisTurn { n },
                 GameEvent::CardDrawn {
