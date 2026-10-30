@@ -56,3 +56,9 @@ is pre-existing and order-dependent; training suite left to CI/gate.
 
 Compress 2026-10-30: column test iterates the variant witnesses instead of a duplicate
 mutation table; `cargo test --test cards observability`, clippy, test_heuristic pass.
+
+Sync onto T2 (c7979d310), 2026-10-30: T2's new definition fields became
+`StaticAbility`/`AdditionalCost` variants (see `questions.md`); w17 corpora,
+parity pins and Academy fixtures re-recorded. Debug `cargo test` for the cards,
+conformance and semantic-conformance suites passes, as do the post-world suite,
+the heuristic and the Academy fixture consumers.
