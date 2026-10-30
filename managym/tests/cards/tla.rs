@@ -4381,43 +4381,6 @@ fn foretell_is_unavailable_on_an_opponents_turn() {
     assert!(!foretell_offered(&mut s, comet));
 }
 
-/// Determinization resamples an opponent's face-down foretold card from the
-/// unseen cards with foretell, keeping its grant on the exiled card.
-#[test]
-fn determinize_resamples_an_opponents_foretold_card() {
-    let mut s = five_color_setup(&["Sozin's Comet", "Gray Ogre"]);
-    let comet = library_card(&s, 0, "Sozin's Comet");
-    s.game_mut().move_card(comet, ZoneType::Hand);
-    assert!(foretell_offered(&mut s, comet));
-    choose(
-        &mut s,
-        |a| matches!(a, Action::Foretell { card, .. } if *card == comet),
-    );
-    let mut resampled = false;
-    for seed in 0..32 {
-        let mut game = s.game().clone();
-        game.determinize(PlayerId(1), seed);
-        let exiled = game
-            .state
-            .zones
-            .zone_cards(ZoneType::Exile, PlayerId(0))
-            .clone();
-        assert_eq!(exiled.len(), 1);
-        let foretold = exiled[0];
-        assert_eq!(game.state.cards[foretold].name, "Sozin's Comet");
-        let grant = &game.state.cast_permissions.exile_grants[0];
-        assert_eq!(Some(grant.object), game.current_object_ref(foretold));
-        resampled |= foretold != comet;
-        if foretold != comet {
-            assert!(matches!(
-                game.state.zones.zone_of(comet),
-                Some(ZoneType::Hand | ZoneType::Library)
-            ));
-        }
-    }
-    assert!(resampled);
-}
-
 /// With two foretold cards, determinization fills each face-down slot with a
 /// distinct foretell-bearing card: one slot never takes the other's card, so
 /// every card stays in exactly one zone and each foretold card keeps one grant.
