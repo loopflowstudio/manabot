@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 import hashlib
 import json
 from pathlib import Path
@@ -62,76 +62,6 @@ class RetainedCheckpointRegistration:
     max_steps: int
 
 
-@dataclass(frozen=True)
-class RetainedFileSnapshot:
-    """Content identity for one retained evidence file."""
-
-    relative_path: str
-    bytes: int
-    sha256: str
-
-
-@dataclass(frozen=True)
-class RetainedCheckpointSnapshot:
-    """One selected checkpoint registration and its current file identity."""
-
-    checkpoint_id: str
-    training_seed: int
-    checkpoint_sha256: str
-    checkpoint_bytes: int
-    manifest_sha256: str
-    world_id: str
-    observation_abi_sha256: str
-    action_abi_sha256: str
-    parameter_count: int
-    value_mode: str
-    branch_driver_id: str
-    simulations: int
-    sampled_worlds: int
-    c_puct: float
-    max_steps: int
-    file: RetainedFileSnapshot
-
-
-@dataclass(frozen=True)
-class RetainedInt7EvidenceSnapshot:
-    """Closed before/after receipt for the retained INT-7 evidence root."""
-
-    manifest_digest: str
-    files: tuple[RetainedFileSnapshot, ...]
-    selected_checkpoints: tuple[RetainedCheckpointSnapshot, ...]
-
-    @property
-    def manifest_file(self) -> RetainedFileSnapshot:
-        return next(
-            file for file in self.files if file.relative_path == "manifest.json"
-        )
-
-    @property
-    def retention_tree_files(self) -> int:
-        return len(self.files)
-
-    @property
-    def retention_tree_bytes(self) -> int:
-        return sum(file.bytes for file in self.files)
-
-    @property
-    def retention_tree_content_sha256(self) -> str:
-        return _canonical_sha256([asdict(file) for file in self.files])
-
-    @property
-    def receipt_sha256(self) -> str:
-        return _canonical_sha256(
-            {
-                "manifest_digest": self.manifest_digest,
-                "files": [asdict(file) for file in self.files],
-                "selected_checkpoints": [
-                    asdict(checkpoint) for checkpoint in self.selected_checkpoints
-                ],
-            }
-        )
-
-
 def _sha256_file(path: Path) -> str:
     digest = hashlib.sha256()
     with path.open("rb") as source:
@@ -151,31 +81,6 @@ def retained_int7_manifest_digest(manifest: dict[str, Any]) -> str:
     unsigned = dict(manifest)
     unsigned.pop("manifest_sha256", None)
     return _canonical_sha256(unsigned)
-
-
-def model_observation_abi_sha256(observation_space: Any) -> str:
-    """Hash the exact tensor names, shapes, and dtypes consumed by a manabot."""
-
-    schema = {
-        name: {"shape": list(shape), "dtype": "float32"}
-        for name, shape in sorted(observation_space.shapes.items())
-    }
-    return _canonical_sha256(schema)
-
-
-def model_action_abi_sha256(observation_space: Any) -> str:
-    """Hash the model action enum and encoded action tensor limits."""
-
-    from manabot.env.observation import ActionEnum
-
-    action_abi = {
-        "enum": {member.name: int(member.value) for member in ActionEnum},
-        "max_actions": observation_space.encoder.max_actions,
-        "actions_shape": list(observation_space.shapes["actions"]),
-        "action_focus_shape": list(observation_space.shapes["action_focus"]),
-        "actions_valid_shape": list(observation_space.shapes["actions_valid"]),
-    }
-    return _canonical_sha256(action_abi)
 
 
 def _load_int7_manifest() -> dict[str, Any]:
@@ -310,88 +215,6 @@ def retained_int7_policy_only_checkpoint(
         sampled_worlds=int(player_spec["worlds"]),
         c_puct=float(player_spec["c_puct"]),
         max_steps=int(player_spec["max_steps"]),
-    )
-
-
-def _retained_file_snapshot(path: Path) -> RetainedFileSnapshot:
-    try:
-        digest = _sha256_file(path)
-        byte_length = path.stat().st_size
-    except FileNotFoundError as exc:
-        raise RetainedCheckpointUnavailableError(
-            "retained INT-7 evidence file is unavailable"
-        ) from exc
-    try:
-        relative_path = path.relative_to(INT7_VALUE_TARGET_RESULT).as_posix()
-    except ValueError as exc:
-        raise RetainedCheckpointMismatchError(
-            "retained INT-7 evidence escaped its frozen root"
-        ) from exc
-    return RetainedFileSnapshot(
-        relative_path=relative_path,
-        bytes=byte_length,
-        sha256=digest,
-    )
-
-
-def retained_int7_evidence_snapshot(
-    training_seeds: tuple[int, ...],
-) -> RetainedInt7EvidenceSnapshot:
-    """Snapshot the closed retained root and exact selected registrations."""
-
-    selected_seeds = tuple(sorted({int(seed) for seed in training_seeds}))
-    if not selected_seeds:
-        raise RetainedCheckpointMismatchError(
-            "retained INT-7 evidence snapshot requires a selected checkpoint"
-        )
-    manifest = _load_int7_manifest()
-    registrations = tuple(
-        retained_int7_policy_only_checkpoint(seed) for seed in selected_seeds
-    )
-    if not INT7_VALUE_TARGET_RESULT.is_dir():
-        raise RetainedCheckpointUnavailableError(
-            "retained INT-7 evidence root is unavailable"
-        )
-    files = tuple(
-        _retained_file_snapshot(path)
-        for path in sorted(INT7_VALUE_TARGET_RESULT.rglob("*"))
-        if path.is_file()
-    )
-    by_relative_path = {file.relative_path: file for file in files}
-    manifest_file = by_relative_path.get("manifest.json")
-    if manifest_file is None:
-        raise RetainedCheckpointUnavailableError(
-            "retained INT-7 checkpoint manifest is unavailable"
-        )
-    selected = tuple(
-        RetainedCheckpointSnapshot(
-            checkpoint_id=registration.checkpoint_id,
-            training_seed=registration.training_seed,
-            checkpoint_sha256=registration.checkpoint_sha256,
-            checkpoint_bytes=registration.checkpoint_bytes,
-            manifest_sha256=registration.manifest_sha256,
-            world_id=registration.world_id,
-            observation_abi_sha256=registration.observation_abi_sha256,
-            action_abi_sha256=registration.action_abi_sha256,
-            parameter_count=registration.parameter_count,
-            value_mode=registration.value_mode,
-            branch_driver_id=registration.branch_driver_id,
-            simulations=registration.simulations,
-            sampled_worlds=registration.sampled_worlds,
-            c_puct=registration.c_puct,
-            max_steps=registration.max_steps,
-            file=by_relative_path[
-                registration.checkpoint_path.relative_to(
-                    INT7_VALUE_TARGET_RESULT
-                ).as_posix()
-            ],
-        )
-        for registration in registrations
-    )
-    return RetainedInt7EvidenceSnapshot(
-        manifest_digest=retained_int7_manifest_digest(manifest),
-        files=files,
-        selected_checkpoints=selected,
     )
 
 

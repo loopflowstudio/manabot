@@ -10,7 +10,6 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.belief.likelihood import file_sha256
 from manabot.belief.sampling_data import collect_frozen_policy
 from manabot.belief.sampling_fit import fit_belief_sampler, save_belief_sampler
 from manabot.belief.state import ViewerHistory
@@ -19,7 +18,7 @@ from manabot.env.env import Env
 from manabot.env.match import Match, Reward
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import MatchConfig, ModelConfig, RewardConfig
-from manabot.infra.identity import canonical_sha256
+from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
 from manabot.sim.native_game import execute_game

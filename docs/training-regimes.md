@@ -443,17 +443,7 @@ run for this change; the default was selected by Jack Heart on 2026-10-20 and
 does not establish a strength or cost gain. Existing
 schedule clocks retain their meanings; no decisions-clock ladder is implied.
 
-Two distinct live models use `manabot.training.learning.paired.PairedLearners`. Construct
-one `SeatRoutedCollector` with `opponent_mode="learning"`,
-`learning_seats="both"` and `opponent_agent=second_agent`; build two
-`Learner`s with independent agents/optimizers and `minibatch_rows=collector.num_envs`.
-Pass the collector explicitly to `PairedLearners(collector, first, second)`.
-Wrap each learner with `LearningPlayer(learner, learning, rng)`. `step(transitions, progress=...)` freezes both behavior policies,
-collects complete games, and updates **both** models with only their own rows.
+For two distinct live models, construct one `SeatRoutedCollector` with
+`opponent_mode="learning"`, `learning_seats="both"` and
+`opponent_agent=second_agent`; `collect_pair` returns each model's own rows.
 The first model occupies `stream % 2`; the second occupies the other seat.
-Returned `PairedUpdate.first` and `.second` report each model's trained rows and
-optimizer exposures; `.environment_decisions` and `.games` count shared work once.
-The API supports raw behavior with PPO or Ataraxos learning and rejects shared
-model parameters, shared optimizers and implicit EMA. The caller owns bounded
-iteration schedules, checkpoint exports and cost receipts for both models; this
-API does not launch jobs or introduce a second remote regime executor.

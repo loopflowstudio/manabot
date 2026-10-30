@@ -6,18 +6,42 @@ import json
 
 import pytest
 
+from manabot.env.observation import ActionEnum, ObservationSpace
+from manabot.infra.identity import canonical_sha256
 from manabot.model.checkpoint import load_checkpoint
 from manabot.sim.search.runtime import (
     INT7_VALUE_TARGET_MANIFEST_SHA256,
-    INT7_VALUE_TARGET_RESULT,
     RetainedCheckpointMismatchError,
     RetainedCheckpointUnavailableError,
-    model_action_abi_sha256,
-    model_observation_abi_sha256,
-    retained_int7_evidence_snapshot,
     retained_int7_manifest_digest,
     retained_int7_policy_only_checkpoint,
 )
+
+
+def _observation_abi_sha256(observation_space: ObservationSpace) -> str:
+    """Hash the tensor names, shapes and dtypes the checkpoint consumes."""
+
+    return canonical_sha256(
+        {
+            name: {"shape": list(shape), "dtype": "float32"}
+            for name, shape in sorted(observation_space.shapes.items())
+        }
+    )
+
+
+def _action_abi_sha256(observation_space: ObservationSpace) -> str:
+    """Hash the action enum and encoded action tensor limits."""
+
+    return canonical_sha256(
+        {
+            "enum": {member.name: int(member.value) for member in ActionEnum},
+            "max_actions": observation_space.encoder.max_actions,
+            "actions_shape": list(observation_space.shapes["actions"]),
+            "action_focus_shape": list(observation_space.shapes["action_focus"]),
+            "actions_valid_shape": list(observation_space.shapes["actions_valid"]),
+        }
+    )
+
 
 EXPECTED = {
     197: "1673a237ef2460d0e699667987c29fe6b42c28711bdb2041989f37692edbd1e6",
@@ -86,48 +110,13 @@ def test_retained_registry_recomputes_manifest_identity_before_checkpoint_load(
 
 
 @pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
-def test_retained_evidence_snapshot_closes_the_full_root() -> None:
-    before = retained_int7_evidence_snapshot((197,))
-    after = retained_int7_evidence_snapshot((197,))
-
-    assert before == after
-    assert before.receipt_sha256 == after.receipt_sha256
-    assert before.manifest_digest == INT7_VALUE_TARGET_MANIFEST_SHA256
-    assert before.manifest_file.relative_path == "manifest.json"
-    assert before.manifest_file.bytes > 0
-    assert before.manifest_file.sha256
-    assert before.retention_tree_files > 1
-    assert before.retention_tree_bytes > before.manifest_file.bytes
-    assert before.retention_tree_content_sha256
-    assert len(before.files) == before.retention_tree_files
-    assert [file.relative_path for file in before.files] == [
-        path.relative_to(INT7_VALUE_TARGET_RESULT).as_posix()
-        for path in sorted(INT7_VALUE_TARGET_RESULT.rglob("*"))
-        if path.is_file()
-    ]
-    assert [row.training_seed for row in before.selected_checkpoints] == [197]
-    selected = before.selected_checkpoints[0]
-    assert selected.file.sha256 == EXPECTED[197]
-    assert selected.world_id == "w2"
-    assert selected.observation_abi_sha256
-    assert selected.action_abi_sha256
-    assert selected.parameter_count == 102_722
-    assert selected.value_mode == "neutral"
-    assert selected.branch_driver_id == "full_clone/current_game_v1"
-    assert selected.simulations == 32
-    assert selected.sampled_worlds == 4
-    assert selected.c_puct == 1.5
-    assert selected.max_steps == 2000
-
-
-@pytest.mark.experiment_data("experiments/data/int-7-value-target-comparison-v1")
 def test_seed_197_checkpoint_model_abis_match_the_registry() -> None:
     registration = retained_int7_policy_only_checkpoint(197)
     agent, observation_space = load_checkpoint(str(registration.checkpoint_path))
 
     assert sum(parameter.numel() for parameter in agent.parameters()) == 102_722
     assert (
-        model_observation_abi_sha256(observation_space)
+        _observation_abi_sha256(observation_space)
         == registration.observation_abi_sha256
     )
-    assert model_action_abi_sha256(observation_space) == registration.action_abi_sha256
+    assert _action_abi_sha256(observation_space) == registration.action_abi_sha256

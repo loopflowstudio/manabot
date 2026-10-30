@@ -24,7 +24,6 @@ from manabot.sim.search.flat_mc import (
     wilson_interval,
 )
 from manabot.verify.games import INTERACTIVE_DECK
-from manabot.verify.util import wilson_lower_bound
 import managym
 
 SEARCH_4 = {"kind": "search", "sims": 4}
@@ -184,7 +183,8 @@ def test_aggregate_records_per_seat_and_ci():
     assert 0.0 <= metrics["win_ci_lower"] < 0.5 < metrics["win_ci_upper"] <= 1.0
 
 
-def test_wilson_interval_matches_verify_lower_bound():
+def test_wilson_interval_matches_score_bounds():
     lo, hi = wilson_interval(30, 100)
-    assert lo == pytest.approx(wilson_lower_bound(30, 100))
+    assert lo == pytest.approx(0.21894753866228117)
+    assert hi == pytest.approx(0.3958503843281196)
     assert lo < 0.3 < hi

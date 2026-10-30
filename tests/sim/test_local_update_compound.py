@@ -10,12 +10,12 @@ import numpy as np
 import pytest
 import torch
 
-from manabot.belief.likelihood import file_sha256
 from manabot.belief.state import ViewerHistory
 from manabot.env.env import Env
 from manabot.env.match import Match
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig
+from manabot.infra.identity import file_sha256
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.checkpoint import save_checkpoint
 from manabot.sim.search.compound import advance_compound, project_compound

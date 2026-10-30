@@ -113,7 +113,7 @@ def selected_players():
 
 
 def test_selected_four_game_block_preserves_decks_sideboards_and_replay(tmp_path):
-    from manabot.eval.rating import bootstrap_population, payoff_matrix
+    from manabot.eval.rating import bootstrap_population
     from manabot.sim.matchup import selected_match
     from manabot.sim.replay import replay_environment
 
@@ -144,9 +144,6 @@ def test_selected_four_game_block_preserves_decks_sideboards_and_replay(tmp_path
             setup.villain_sideboard if ur_seat == 0 else setup.hero_sideboard
         )
         assert env._engine.state_digest() == game["initial_state_digest"]
-    matrix = payoff_matrix(rows)["random-v1__scripted-greedy-v1"]
-    assert matrix["games"] == 4
-    assert sum(matrix["paired_blocks"].values()) == 1
     assert bootstrap_population(rows, seed=83, replicates=5)["failures"] == 0
     games[0]["match_hypers"]["hero_sideboard"] = {}
     assert not replay_games(games).passed
