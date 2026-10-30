@@ -613,6 +613,7 @@ class Observation:
 class AgentError(RuntimeError): ...
 
 WORLD_VERSION: str
+MAX_DECISION_CODE: int
 CARD_DEFINITION_COUNT: int
 
 class VisibleReference:

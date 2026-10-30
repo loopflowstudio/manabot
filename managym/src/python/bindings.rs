@@ -4180,6 +4180,10 @@ fn authored_deck_keys(pack_key: &str) -> PyResult<Vec<String>> {
 pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("WORLD_VERSION", crate::WORLD_VERSION)?;
     m.add(
+        "MAX_DECISION_CODE",
+        crate::agent::continuation::MAX_DECISION_CODE,
+    )?;
+    m.add(
         "CARD_DEFINITION_COUNT",
         crate::cards::content_pack::CardRegistry::default().len(),
     )?;

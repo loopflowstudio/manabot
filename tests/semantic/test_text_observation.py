@@ -16,6 +16,7 @@ from manabot.env.observation import (
 )
 from manabot.infra.config import ObservationConfig
 from manabot.semantic.text_observation import (
+    _OBLIGATIONS,
     RepresentationOverflow,
     TextDecision,
     TextEncodingError,
@@ -26,6 +27,10 @@ from manabot.semantic.text_observation import (
 )
 from manabot.verify.text_observation import collision_branches, priority_root, run_demo
 import managym
+
+
+def test_every_native_decision_code_has_a_label() -> None:
+    assert len(_OBLIGATIONS) == managym.MAX_DECISION_CODE + 1
 
 
 def test_native_decision_demo_retains_all_alternatives_and_collision(

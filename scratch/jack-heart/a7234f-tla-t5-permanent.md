@@ -90,21 +90,14 @@ Heart's design review (comment 10a31948). No product choice is open. The
 condition.
 
 The decision-code fix (`2963f8f87`) gives Rust one owner, `decision_code`,
-bounded by `MAX_DECISION_CODE`. Python still has a second copy:
-`_OBLIGATIONS` in `manabot/semantic/text_observation.py` maps codes to
-labels, and nothing ties its length to the native bound. The demo defect was
-this kind of drift: the validator stopped at 13, and the old text table
-labelled code 14 "order triggers". An unlisted code now fails loudly
-(`_enum` raises), but only when a game reaches it.
-
-**Next implement direction:**
-
-- Export `MAX_DECISION_CODE` from the native module beside `WORLD_VERSION`,
-  and add it to `__init__.pyi`.
-- Add a Python test asserting `len(_OBLIGATIONS) == MAX_DECISION_CODE + 1`,
-  so a new code fails in CI rather than mid-game.
-- Do not move the labels into Rust. They are text-rendering vocabulary; the
-  bound is the shared fact.
+bounded by `MAX_DECISION_CODE`. Python keeps the labels (`_OBLIGATIONS` in
+`manabot/semantic/text_observation.py`; text-rendering vocabulary). The bound
+is the shared fact: the native module exports `MAX_DECISION_CODE` beside
+`WORLD_VERSION`, and `test_every_native_decision_code_has_a_label` asserts
+`len(_OBLIGATIONS) == MAX_DECISION_CODE + 1`, so a new code fails in CI
+rather than mid-game. Done 2026-10-30; extension rebuilt; that test,
+`tests/semantic/test_text_observation.py` (38 passed) and debug
+`cargo test --lib agent::continuation` (5 passed) are green.
 
 ## Remaining
 
