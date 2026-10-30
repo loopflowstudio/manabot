@@ -970,7 +970,7 @@
         "managym/src/flow/target_authority_tests.rs::recast_spell_resolves_before_the_old_targeted_ability",
         "managym/tests/rules/cr_608_resolution.rs::audit_target_gaining_hexproof_during_resolution_is_still_affected",
         "managym/src/flow/resolution.rs::fn resolution_targets(",
-        "managym/src/flow/resolution_tests.rs::resolution_keeps_eligibility_after_hexproof_and_across_choice_clone_and_undo"
+        "managym/src/flow/resolution_tests.rs::resolution_keeps_eligibility_after_hexproof_and_across_choice_clones"
       ]
     },
     "115.1c": {

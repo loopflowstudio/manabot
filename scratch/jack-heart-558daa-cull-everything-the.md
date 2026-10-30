@@ -3,7 +3,7 @@
 Directive: Jack Heart, 2026-10-30 (Task 558daa). Was stacked on afbd6a; #403
 merged into main (10eeb1f55) and this branch merged it (8db3b2fe8), so the PR
 targets main and its diff is the cull alone.
-Status: second cull pass implemented (remaining unprotected candidates cut); awaiting gate/demo. Stop at review/demo; no merge.
+Status: third pass implements Jack Heart's 2026-10-30 decisions on the held list (all in this one PR; open PRs rebase); awaiting gate/demo. Stop at review/demo; no merge.
 
 ## Approach
 
@@ -77,6 +77,16 @@ Second pass (protected set re-read from `gh api pulls/{383,395,399,402}/files`, 
 - managym (05d5e2ac4): `ZoneManager::total_size`; parity receipt `relevant_source` re-hashed (result unchanged: 142 commands, no divergence).
 - manabot (cd8778588): `semantic/policy.py` + test (test-only; no CLI path; boundary probe keeps the sim entry points).
 
+Third pass — Jack Heart's decisions on the held list (2026-10-30, comment f57280ee; "do not wait on open PRs; they will rebase"):
+- website/repository/manabot (350ed3370): website landing components, `content.yaml`, `static/` (blog uses none), `pyyaml`; `experiments/planning/` (plan doc links pinned at a74f31828); `manabot/experiment/artifacts.py` + its test (other artifact-store tests stay; training-monitoring doc rewritten); `recipes/ataraxos.py` → `tests/training/wdl_baseline.py`; `training/presets/ataraxos-mtg-v1.json`.
+- Academy (9075fab0a): `academy/live_advice.py`, its server hooks and test, `resolve_live_tracked_posterior`, `resolve_live_advisor_decision` + `StudyForkProvider.resolve_advisor_decision`, `scripts/play.py` runtime import.
+- Waves (465be9dcb): top-level `wave/` deleted; `.lf/wave/` adopts #402's layout (engine, training, eval) plus `academy` (legacy game charter/memory, live-advice section replaced by its retirement) and `engine/MEMORY.md` (legacy rules memory). Code/doc citations repointed; frozen experiment reports keep historical `wave/` text.
+- managym (7c4036867): undo cut — not near-perfect: structured Command path (Academy's) unjournaled (`structured_offer.rs` takes the action space and clears attackers with no entries), `lose_game` and semantic object bindings unrestored, broad check only on ten Alpha-era cards; no product reader. Removed `flow/undo.rs`, ~100 journal calls, `Game.undo`, COW fork/paged event log (`EventLog` now a dense Vec wrapper), clone-plus-undo/page-COW drivers, `BranchDriver`/`BenchCommand`, `benchmark.rs` harness → `match_fixtures.rs` (fixtures only), `bin/branching_bench.rs`, `scripts/bench_branching.py` + test, zone/id-generator undo helpers. Undo-generic tests now assert fork isolation. Follow-up Task for Academy undo is Jack's to file (fit it on fork snapshots as an explicit shared action).
+- conformance (d1cd00be4): `semantic-kernel-w17-v1` is seeds + per-case `trace_sha256` (schema 2; Phase matrix keeps schema 1); 14 tapes (2.3 MB) deleted; drift writes `target/semantic-conformance/<corpus>/<case>.json` (uploaded by Rust Tests); final state hashes unchanged.
+- receipt (07865749b): authored-match parity `relevant_source` regenerated (deleted sources); result unchanged.
+- CI: duplicate conformance steps already cut (ae9c5c2a5); fuzz kept.
+- docs (7cad8dae5): 29 top-level/architecture/development docs → `development.md`, `training.md`, `evaluation.md`, `search-and-beliefs.md`, `llm.md`, `academy.md` (+ unchanged `ARCHITECTURE.md`; `experiment-metrics.md` kept, reports parse it); written by parallel agents against code, superseded detail linked at a74f31828; inbound links/anchors repointed repo-wide (frozen `docs/rules/audit-2026-10`, `.lf/chapters`, `experiments/data` untouched) and every anchor checked. Unverified claims were dropped, not guessed; `experiments/ataraxos-transfer.md` already imported a missing `learned_belief_local_search` (pre-existing).
+
 ## Kept on purpose
 
 - All four w17 conformance corpora: each has a current reader (Rust conformance tests/CI; Academy parity scripts and tests).
@@ -90,38 +100,16 @@ Second pass (protected set re-read from `gh api pulls/{383,395,399,402}/files`, 
 
 ## Held
 
-Still held by an open PR:
-- #395: belief demo cluster (`belief/demo.py`, `recipes/belief.py`, `belief/population.py`) — reached by `belief-demo`/`belief-learn-demo` in `cli.py`; `tests/belief/test_state.py` imports the demo too. `match.parse_deck` (`env/match.py`). Remaining `belief/__init__.py` map (read by `tests/belief/{support,test_state}.py`).
-- #399: `action_cases.identity_removed` (`verify/action_cases.py`); `flat_mc.aggregate_records` (imported by `tests/sim/test_rollout.py`); `academy/semantic_boundary.py` (removing it edits `authored_match_parity._source_manifest`).
-- #395: `advice.py` `int13_result_to_surface_deltas`/`policy_mass_is_non_uniform` (tests in `tests/academy/test_advice.py`).
-- #399: search-branching drivers — `flow/undo.rs` (766), `journal_*` calls in
-  `flow/*.rs`, `benchmark.rs` (1,276), plus the free `game.rs` COW helpers,
-  `flow/event_log.rs` paged log, `search_state.rs` undo drivers,
-  `bin/branching_bench.rs`, `scripts/bench_branching.py` + test, which go with
-  them. Decision record: `docs/benchmarks/search-branching-decision-v1.md`
-  (keep full clone). Largest remaining cut. Also `protocol/advice-v1.schema.json`,
-  `WORLDS.md`, `local_power/local_toughness`, `basic_land`.
-- #395/#399: unused PyO3 surface in `python/bindings.rs` (`export_profile_baseline`,
-  `compare_profile` + profiler baseline, `structured_search_offers`,
-  `unsupported_cards`, `RolloutPool.active_count`); `players_starting_with_*`,
-  `PlayerConfig::deck_list`.
-- #395: retired `train --preset/--set` rejection in `cli.py`;
-  `provenance.validate_runtime_fingerprints`; `server.py` `DEFAULT_DECK`/
-  `hero_view` aliases and `resolve_live_advisor_decision`;
-  `Env::encode_observation_into`; `manabot/README.md` stale citations
-  (`PairedLearners`, `sim/action/targeting.py`, `training/builders.py`).
-- #383/#395: `eval/duel.py` + `tests/training/test_head_to_head.py`
-  (`manabot-integration.yml` names the test).
-- #402: top-level `wave/` (legacy copy of `.lf/wave/`); stale citations in
-  `docs/repository-archive.md` and `docs/ARCHITECTURE.md`.
+Still held (outside Jack's 2026-10-30 decisions; files in open PRs):
+- #395: belief demo cluster (`belief/demo.py`, `recipes/belief.py`, `belief/population.py`) — reached by `belief-demo`/`belief-learn-demo` in `cli.py`; `tests/belief/test_state.py` imports the demo. `match.parse_deck`. Remaining `belief/__init__.py` map (read by `tests/belief/{support,test_state}.py`). `advice.py` `int13_result_to_surface_deltas`/`policy_mass_is_non_uniform`. Retired `train --preset/--set` rejection in `cli.py`; `provenance.validate_runtime_fingerprints`; `server.py` `DEFAULT_DECK`/`hero_view` aliases; `Env::encode_observation_into`; `manabot/README.md` stale citations.
+- #399: `action_cases.identity_removed`; `flat_mc.aggregate_records` (imported by `tests/sim/test_rollout.py`); `academy/semantic_boundary.py` (edits `authored_match_parity._source_manifest`); `protocol/advice-v1.schema.json`, `local_power/local_toughness`, `basic_land`.
+- #395/#399: unused PyO3 surface in `python/bindings.rs` (`export_profile_baseline`, `compare_profile` + profiler baseline, `structured_search_offers`, `unsupported_cards`, `RolloutPool.active_count`); `players_starting_with_*`, `PlayerConfig::deck_list`.
+- #383/#395: `eval/duel.py` + `tests/training/test_head_to_head.py`.
+- Not decided: MTG-186 drivers (an Etude migration test imports them), `seat_comparison.py`, `verify/decision_profile.py` (only `wilson_interval` used).
 
-## Needs Jack's decision (not deleted)
-
-- Seeds + checkpoint-hash form for `semantic-kernel-w17-v1`: feasible (tapes are a pure function of `manifest.json`; `action_space_digest` already pins ordering), ~100–150 lines in `conformance.rs` + contract v2; failures stay actionable by writing the regenerated case to `target/semantic-conformance/` on mismatch. Not done: every w17 corpus file is in #395/#399.
-- Docs consolidation into ~6 current-system files (architecture, development, training, evaluation, search/beliefs, LLM): cross-links run through held `docs/ARCHITECTURE.md`, `README.md`, `WORLDS.md`, `managym/README.md`.
-- Live belief runtime in Academy (`academy/live_advice.py` + `server.py` hooks): computes posteriors on every interactive-mirror command that no response reads.
-- Website landing-page assets (`/` redirects to the blog), `experiments/planning/`, MTG-186 drivers (an Etude migration test imports them), `seat_comparison.py` (sample file in `test_experiment_files.py`), `experiment/artifacts.py` (old S3 publisher; CLAUDE.md names its test), `verify/decision_profile.py` (only `wilson_interval` used), `recipes/ataraxos.py` (test fixture), `training/presets/ataraxos-mtg-v1.json`.
 ## Checks
 
 - Pre-existing at base (fail identically with this branch's changes stashed): `tests/belief/test_belief_agent.py::test_keystone_demo_changes_belief_tokens_and_hides_actual_truth` (zero deltas), `tests/belief/test_state.py::test_native_projection_preserves_canonical_receipt_bytes` (receipt digest), `tests/semantic/test_temur.py::test_temur_finishes_through_the_production_training_observation_path` (60 == 40, v5 player width); earlier: `tests/sim/test_conditional_search.py`, `tests/sim/test_search_runtime.py::test_seed_197_checkpoint_model_abis_match_the_registry`, `tests/verify/test_observation_parity.py::test_elemental_indestructible_encoding_preserves_outside_and_definition_columns`.
 - Second pass (cd8778588): debug `cargo test` (opt-level 1, as CI) 665 passed / 0 failed; `cargo fmt --check`, clippy `--all-targets` clean; CLAUDE.md world-change suite 65 passed; focused pytest over touched tests + `tests/belief tests/semantic` 363 passed / 3 failed (the three above) / 1 skipped; Academy `npm run check` 0 errors.
+- Third pass (after 7cad8dae5 + inventory anchors): debug `cargo test` (opt-level 1) 650 passed / 0 failed; `cargo fmt --check`; clippy `--all-targets` with and without `python,benchmark` clean; `semantic_conformance check` 14 cases / 3,401 commands; authored-match parity 142 commands, no divergence; website 21 passed. Focused pytest (world-change suite + `tests/academy tests/env tests/sim tests/infra`, touched training/model tests) 700 passed / 10 failed / 1 skipped → after repointing renamed-test anchors in `docs/rules/audit-2026-10/{index.jsonl,reviews.json}` the inventory passes; the other 9 are pre-existing: the two known (`test_conditional_search`, `test_search_runtime` seed 197) plus 7 that fail identically at a74f31828 with its own rebuilt extension (`test_public_commitment_parity` ×2: missing local `experiments/data/rul-9-played-workloads-v1.measurement.json`; `test_ur_lessons_increment` ×4: permanent width 32 == 29; `test_rollout::test_selects_valid_actions_only`: unadmitted card definition). Academy UI unchanged since the 0-error check.
+
