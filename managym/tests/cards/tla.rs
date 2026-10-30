@@ -5237,6 +5237,32 @@ fn joo_dee_declined_surveil_keeps_the_card_and_a_token_copies_itself() {
 }
 
 #[test]
+fn joo_dee_surveil_choices_name_what_they_do() {
+    let (mut s, joo_dee) = joo_dee_setup();
+    let top = library_top(&s, 0);
+    let name = s.game().state.cards[top].name.clone();
+    activate(&mut s, joo_dee, 0);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let labels: Vec<_> = observation
+        .action_space
+        .actions
+        .iter()
+        .map(|action| (action.action_type, action.description.as_deref()))
+        .collect();
+    assert_eq!(
+        labels,
+        [
+            (
+                ActionType::SelectCard,
+                Some(format!("Put {name} into your graveyard").as_str())
+            ),
+            (ActionType::DeclineChoice, Some("Keep on top")),
+        ]
+    );
+}
+
+#[test]
 fn joo_dee_activates_only_as_a_sorcery() {
     let two_ready = || {
         let (mut s, joo_dee) = joo_dee_setup();
@@ -5857,6 +5883,48 @@ fn ran_and_shaw_copy_is_nonlegendary_uncast_and_has_printed_abilities() {
     for id in dragons {
         assert_eq!(s.game().effective_power(id), 6);
     }
+}
+
+#[test]
+fn ran_and_shaw_copy_shares_its_definition_and_its_rows_show_what_differs() {
+    let mut s = five_color_setup(&["Ran and Shaw", "Waterbending Lesson"]);
+    for _ in 0..3 {
+        let lesson = library_card(&s, 0, "Waterbending Lesson");
+        s.game_mut().move_card(lesson, ZoneType::Graveyard);
+    }
+    cast(&mut s, "Ran and Shaw");
+    settle(&mut s);
+    let dragons = s.battlefield_permanents_named(0, "Ran and Shaw");
+    assert_eq!(dragons.len(), 2);
+    let cards = &s.game().state.cards;
+    let pair: [CardId; 2] = [card_of(&s, dragons[0]), card_of(&s, dragons[1])];
+    let (copy, source) = match pair {
+        [a, b] if cards[a].is_token => (a, b),
+        [a, b] => (b, a),
+    };
+    assert!(!cards[source].is_token);
+    assert_eq!(cards[copy].definition_id, cards[source].definition_id);
+    assert_eq!(cards[copy].registry_key, cards[source].registry_key);
+
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let row = |card: CardId| {
+        let id = cards[card].id.0 as i32;
+        observation
+            .agent_cards
+            .iter()
+            .find(|row| row.id == id)
+            .unwrap()
+    };
+    let (copy_row, source_row) = (row(copy), row(source));
+    assert_eq!(copy_row.registry_key, source_row.registry_key);
+    assert!(copy_row.is_token && !copy_row.is_legendary);
+    assert!(!source_row.is_token && source_row.is_legendary);
+    let dragon_permanents = observation
+        .agent_permanents
+        .iter()
+        .filter(|row| row.registry_key == source_row.registry_key)
+        .count();
+    assert_eq!(dragon_permanents, 2, "both permanents carry the shared key");
 }
 
 #[test]

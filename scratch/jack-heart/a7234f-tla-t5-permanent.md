@@ -1,8 +1,14 @@
 # T5 (a7234f): permanent copying — plan and status
 
-Status: first slice implemented from main (c7979d310), 2026-10-30, per Jack
-Heart's steer (start from main; sync onto T4 488a40 and T3 #399 once they
-publish). Stop at demo.
+Status: first slice implemented on main (synced to 10eeb1f55, afbd6a's
+delete-old-world), 2026-10-30, per Jack Heart's steer (start from main; sync
+onto T4 488a40 and T3 #399 once they publish). Stop at demo.
+
+Blocked on publication (checked 2026-10-30): T4 488a40 is still implementing
+with no PR; T3 #399 is open, unmerged. Phoenix Fleet Airship, and therefore
+the Task's acceptance, waits for that sync. #399's title names world w18;
+Jack Heart's 2026-10-30 direction keeps one open world (w17), so the sync
+extends w17 unless that direction changes.
 
 ## Cards
 
@@ -28,6 +34,30 @@ publish). Stop at demo.
 - `ActivatedAbilityDefinition.sorcery_timing` (same name/semantics as T3/T4),
   enforced in `check_activation_terms`, so offers and submissions agree.
 
+## Concept review (headless, 2026-10-30)
+
+Settled by accepted direction; implemented 2026-10-30 (labels in
+`Game::action_description`, `flow/action.rs`; witnesses
+`joo_dee_surveil_choices_name_what_they_do`,
+`ran_and_shaw_copy_shares_its_definition_and_its_rows_show_what_differs`):
+
+- **Copy identity.** A token copy keeps its source's `definition_id` /
+  `registry_key`: learning tokens and the text definition line describe the
+  copied printed definition; the object's row carries what differs
+  (`is_token`, `is_legendary`, later the Airship's granted creature type).
+  No per-copy definition ids or catalog entries.
+- **Surveil choices name what they do, at the shared authority** (Jack
+  Heart's 2026-10-21 shared-decision-surface direction): under
+  `Decision::Surveil`, `SelectCard` reads "Put <card> into your graveyard"
+  and `Decline` "Keep on top". No new `ActionType`, so `ACTION_TYPE_DIM` and
+  checkpoints are unchanged.
+- `Effect::Surveil { count }` keeps kept cards in order, exact only for
+  count 1 (the only printed amount). Leave as documented; a count > 1 card
+  must add reordering in its own change.
+
+No open product choice. Acceptance still waits on T3/T4 publication
+(Phoenix Fleet Airship); that is a dependency, not a decision.
+
 ## Remaining (after syncing onto T3/T4)
 
 Phoenix Fleet Airship needs, all owned by T3/T4 constructs:
@@ -51,5 +81,4 @@ Phoenix Fleet Airship needs, all owned by T3/T4 constructs:
 
 ## Checks
 
-- Debug: `cargo test --test cards` 310/310 pass; `conformance_tests`, `content_pack_tests`,
-  `semantic_conformance_tests`, `authored_match_tests` pass; clippy clean.
+- Debug `cargo test --test cards` after the concept-review refinements: 318/318 pass; extension rebuilt and imports.

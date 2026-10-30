@@ -125,12 +125,20 @@ impl Game {
                             self.state.cards[*card].name,
                             if *tapped { " tapped" } else { "" }
                         )),
+                        Decision::Surveil { .. } => Some(format!(
+                            "Put {} into your graveyard",
+                            self.state.cards[*card].name
+                        )),
                         _ => None,
                     }
                 } else {
                     None
                 }
             }
+            Action::Decline { .. } => match &self.state.suspended_decision.as_ref()?.decision {
+                Decision::Surveil { .. } => Some("Keep on top".into()),
+                _ => None,
+            },
             _ => None,
         }
     }
