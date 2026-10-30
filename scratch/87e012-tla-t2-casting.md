@@ -67,6 +67,6 @@ exhaust, used once-each-turn, granted firebending) in text-5 wording
 
 2026-10-29 concept review 7 and realign after T1 `2c50c8793`: plan matches code, nothing to change (`lesson_mana` stays the frozen total; per-class split is `restricted_mana`); cards 304 after `912a5d0e9`. Earlier implement/compress/realign results: `git log -p -- scratch/87e012-tla-t2-casting.md` (before `d130bbc90`).
 
-2026-10-29 implement (headless): T1 head still `2c50c8793`; no new steers; no code change.
+2026-10-29 implement and compress (headless): T1 head still `2c50c8793`; no code change (w17 fixtures stay, as w15's did).
 
 2026-10-29 demo (headless, decision pass 1): 60 random T2-deck games through `managym.Env` with no errors; flashback, Zuko impulse and foretell casts offered and taken; the opponent never sees the foretold card. Advance to gate. Record: `scratch/t2-demo.md`.
