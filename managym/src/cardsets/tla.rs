@@ -1,4 +1,4 @@
-//! Avatar: The Last Airbender cards and the tokens they make.
+//! Current TLA cards.
 //! Each card is one function returning its engine `CardDefinition`.
 use crate::state::{
     ability::{
@@ -6,11 +6,12 @@ use crate::state::{
         StaticCondition, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{
-        ActivatedAbilityDefinition, ActivationZone, CardDefinition, CardType, CardTypes, Keywords,
-        ManaAbility, PowerCda, ReplacementEffect, SacrificeCost, SpellCostReduction, StaticPtBuff,
-        StaticScope, TriggeredManaAbility,
+        ActivatedAbilityDefinition, ActivationZone, AdditionalCost, BlockRestriction,
+        CardDefinition, CardType, CardTypes, Keywords, ManaAbility, PowerCda, ReplacementEffect,
+        SacrificeCost, SpellCostReduction, StaticAbility, StaticPtBuff, StaticScope,
+        TriggeredManaAbility,
     },
-    mana::{Color, Colors, Mana, ManaCost, ManaUse},
+    mana::{Mana, ManaCost, ManaUse},
     predicate::CardPredicate,
     zone::ZoneType,
 };
@@ -40,15 +41,12 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         airbending_lesson(),
         airship_engine_room(),
         allies_at_last(),
-        ally(),
         avatar_enthusiasts(),
         avatar_s_wrath(),
         azula_always_lies(),
         azula_cunning_usurper(),
         badgermole_cub(),
-        ballistic_boulder(),
         barrels_of_blasting_jelly(),
-        bear(),
         boar_q_pine(),
         boiling_rock_prison(),
         boomerang_basics(),
@@ -56,7 +54,6 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         canyon_crawler(),
         cat_gator(),
         cat_owl(),
-        clue(),
         combustion_technique(),
         compassionate_healer(),
         cunning_maneuver(),
@@ -66,7 +63,6 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         dai_li_indoctrination(),
         deadly_precision(),
         deserter_s_disciple(),
-        dragon(),
         dragonfly_swarm(),
         earth_kingdom_jailer(),
         earth_kingdom_protectors(),
@@ -85,7 +81,6 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         foggy_bottom_swamp(),
         foggy_swamp_spirit_keeper(),
         foggy_swamp_vinebender(),
-        food(),
         forecasting_fortune_teller(),
         gather_the_white_lotus(),
         geyser_leaper(),
@@ -117,7 +112,6 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         misty_palms_oasis(),
         momo_friendly_flier(),
         mongoose_lizard(),
-        monk(),
         north_pole_gates(),
         north_pole_patrol(),
         octopus_form(),
@@ -143,12 +137,10 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         shared_roots(),
         sokka_bold_boomeranger(),
         sokka_s_haiku(),
-        soldier(),
         solstice_revelations(),
         south_pole_voyager(),
         sozins_comet(),
         sparring_dummy(),
-        spirit(),
         spirit_water_revival(),
         suki_kyoshi_warrior(),
         sun_blessed_peak(),
@@ -273,7 +265,7 @@ fn aang_s_journey() -> CardDefinition {
             },
             Effect::GainLife { amount: 2 },
         ],
-        kicker: Some(ManaCost::parse("{2}")),
+        additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{2}"))],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -509,28 +501,10 @@ fn allies_at_last() -> CardDefinition {
                 another: false,
             },
         ],
-        cost_reduction_per: Some(CardPredicate {
+        statics: vec![StaticAbility::CostsLessPerPermanent(CardPredicate {
             subtype: Some("Ally".into()),
             ..Default::default()
-        }),
-        text_box: text_box.into(),
-        ..Default::default()
-    }
-}
-
-fn ally() -> CardDefinition {
-    let text_box = "";
-
-    CardDefinition {
-        key: "token.ally",
-        scryfall_id: "f842c52a-04b6-4625-ba58-45b043ada340",
-        name: "Ally".into(),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Ally".into()],
-        power: Some(1),
-        toughness: Some(1),
-        is_token: true,
-        color_override: Some(Colors::from([Color::White])),
+        })],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -763,28 +737,6 @@ fn badgermole_cub() -> CardDefinition {
     }
 }
 
-fn ballistic_boulder() -> CardDefinition {
-    let text_box = "Flying";
-
-    CardDefinition {
-        key: "token.ballistic_boulder",
-        scryfall_id: "0b1b8ff0-0b1e-4a55-a937-fde7ec15c41a",
-        name: "Ballistic Boulder".into(),
-        types: CardTypes::new([CardType::Creature, CardType::Artifact]),
-        subtypes: vec!["Construct".into()],
-        power: Some(2),
-        toughness: Some(1),
-        keywords: Keywords {
-            flying: true,
-            ..Default::default()
-        },
-        is_token: true,
-        color_override: Some(Colors::from([])),
-        text_box: text_box.into(),
-        ..Default::default()
-    }
-}
-
 fn barrels_of_blasting_jelly() -> CardDefinition {
     let text_box = "{1}: Add one mana of any color. Activate only once each turn.\n{5}, {T}, Sacrifice this artifact: It deals 5 damage to target creature.";
 
@@ -812,24 +764,6 @@ fn barrels_of_blasting_jelly() -> CardDefinition {
                 ..Default::default()
             },
         ],
-        text_box: text_box.into(),
-        ..Default::default()
-    }
-}
-
-fn bear() -> CardDefinition {
-    let text_box = "";
-
-    CardDefinition {
-        key: "token.bear",
-        scryfall_id: "1dbbdb0f-57a4-4b85-ba5c-1383f0efb3af",
-        name: "Bear".into(),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Bear".into()],
-        power: Some(4),
-        toughness: Some(4),
-        is_token: true,
-        color_override: Some(Colors::from([Color::Green])),
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -1065,27 +999,6 @@ fn cat_owl() -> CardDefinition {
                     },
                 },
             }],
-        }],
-        text_box: text_box.into(),
-        ..Default::default()
-    }
-}
-
-fn clue() -> CardDefinition {
-    let text_box = "{2}, Sacrifice this token: Draw a card.";
-
-    CardDefinition {
-        key: "token.clue",
-        scryfall_id: "82016bc3-8905-454a-b4aa-b9eac69d42c4",
-        name: "Clue".into(),
-        types: CardTypes::new([CardType::Artifact]),
-        subtypes: vec!["Clue".into()],
-        is_token: true,
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            mana_cost: ManaCost::parse("{2}"),
-            sacrifice_source: true,
-            effects: vec![Effect::DrawCards { count: 1 }],
-            ..Default::default()
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -1360,14 +1273,14 @@ fn deadly_precision() -> CardDefinition {
         name: "Deadly Precision".into(),
         mana_cost: Some(ManaCost::parse("{B}")),
         types: CardTypes::new([CardType::Sorcery]),
-        sacrifice_cost: Some(SacrificeCost {
+        additional_costs: vec![AdditionalCost::Sacrifice(SacrificeCost {
             predicate: CardPredicate {
                 card_types_any: vec![CardType::Artifact, CardType::Creature],
                 ..Default::default()
             },
             another: false,
             or_mana: Some(ManaCost::parse("{4}")),
-        }),
+        })],
         spell_effects: vec![Effect::Destroy {
             target: TargetSpec::Creature,
         }],
@@ -1401,37 +1314,6 @@ fn deserter_s_disciple() -> CardDefinition {
                 },
             }],
             ..Default::default()
-        }],
-        text_box: text_box.into(),
-        ..Default::default()
-    }
-}
-
-fn dragon() -> CardDefinition {
-    let text_box = "Flying, firebending 4 (Whenever this token attacks, add {R}{R}{R}{R} to your mana pool. This mana lasts until end of combat.)";
-
-    CardDefinition {
-        key: "token.dragon",
-        scryfall_id: "cddc0746-6d3e-441f-866f-28587bf54801",
-        name: "Dragon".into(),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Dragon".into()],
-        power: Some(4),
-        toughness: Some(4),
-        keywords: Keywords {
-            flying: true,
-            ..Default::default()
-        },
-        is_token: true,
-        color_override: Some(Colors::from([Color::Red])),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::AddMana {
-                mana: Mana::parse("RRRR"),
-                until_end_of_combat: true,
-            }],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -1476,11 +1358,13 @@ fn dragonfly_swarm() -> CardDefinition {
                 otherwise: vec![],
             }],
         }],
-        ward: Some(ManaCost::parse("{1}")),
-        power_cda: Some(PowerCda::GraveyardMatching(CardPredicate {
-            not_card_types: vec![CardType::Creature, CardType::Land],
-            ..Default::default()
-        })),
+        statics: vec![
+            StaticAbility::Ward(ManaCost::parse("{1}")),
+            StaticAbility::CharacteristicPower(PowerCda::GraveyardMatching(CardPredicate {
+                not_card_types: vec![CardType::Creature, CardType::Land],
+                ..Default::default()
+            })),
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -1792,7 +1676,7 @@ fn fire_nation_attacks() -> CardDefinition {
             count: 2,
             tapped_and_attacking: false,
         }],
-        flashback: Some(ManaCost::parse("{8}{R}")),
+        statics: vec![StaticAbility::Flashback(ManaCost::parse("{8}{R}"))],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -1898,7 +1782,7 @@ fn firebending_lesson() -> CardDefinition {
             max: 1,
             another: false,
         }],
-        kicker: Some(ManaCost::parse("{4}")),
+        additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{4}"))],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -1921,7 +1805,7 @@ fn first_time_flyer() -> CardDefinition {
             flying: true,
             ..Default::default()
         },
-        static_pt_buffs: vec![StaticPtBuff {
+        statics: vec![StaticAbility::PtBuff(StaticPtBuff {
             scope: StaticScope::This,
             condition: Some(StaticCondition::GraveyardAtLeast {
                 count: 1,
@@ -1932,7 +1816,7 @@ fn first_time_flyer() -> CardDefinition {
             }),
             power: 1,
             toughness: 1,
-        }],
+        })],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -2025,32 +1909,12 @@ fn foggy_swamp_vinebender() -> CardDefinition {
             effects: vec![Effect::PutCountersOnSource { count: 1 }],
             ..Default::default()
         }],
-        block_restriction: Some(CardPredicate {
-            max_power: Some(2),
-            ..Default::default()
-        }),
-        text_box: text_box.into(),
-        ..Default::default()
-    }
-}
-
-fn food() -> CardDefinition {
-    let text_box = "{2}, {T}, Sacrifice this token: You gain 3 life.";
-
-    CardDefinition {
-        key: "token.food",
-        scryfall_id: "db202f04-61e7-4e12-848e-6c1761956a58",
-        name: "Food".into(),
-        types: CardTypes::new([CardType::Artifact]),
-        subtypes: vec!["Food".into()],
-        is_token: true,
-        activated_abilities: vec![ActivatedAbilityDefinition {
-            tap_source: true,
-            mana_cost: ManaCost::parse("{2}"),
-            sacrifice_source: true,
-            effects: vec![Effect::GainLife { amount: 3 }],
-            ..Default::default()
-        }],
+        statics: vec![StaticAbility::BlockRestriction(
+            BlockRestriction::CantBeBlockedBy(CardPredicate {
+                max_power: Some(2),
+                ..Default::default()
+            }),
+        )],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -2215,7 +2079,7 @@ fn gran_gran() -> CardDefinition {
         subtypes: vec!["Human".into(), "Peasant".into(), "Ally".into()],
         power: Some(1),
         toughness: Some(2),
-        spell_cost_reductions: vec![SpellCostReduction {
+        statics: vec![StaticAbility::SpellsCostLess(SpellCostReduction {
             first_on_own_turn: false,
             predicate: CardPredicate {
                 not_card_types: vec![CardType::Creature],
@@ -2229,7 +2093,7 @@ fn gran_gran() -> CardDefinition {
                 },
             },
             generic: 1,
-        }],
+        })],
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::BecomesTapped {
                 subject: TriggerSubject::This,
@@ -2253,15 +2117,15 @@ fn great_divide_guide() -> CardDefinition {
         subtypes: vec!["Human".into(), "Scout".into(), "Ally".into()],
         power: Some(2),
         toughness: Some(3),
-        mana_grant: vec![
-            CardPredicate {
+        statics: vec![
+            StaticAbility::GrantsAnyColorManaAbility(CardPredicate {
                 card_type: Some(CardType::Land),
                 ..Default::default()
-            },
-            CardPredicate {
+            }),
+            StaticAbility::GrantsAnyColorManaAbility(CardPredicate {
                 subtype: Some("Ally".into()),
                 ..Default::default()
-            },
+            }),
         ],
         text_box: text_box.into(),
         ..Default::default()
@@ -2484,7 +2348,7 @@ fn iroh_grand_lotus() -> CardDefinition {
         subtypes: vec!["Human".into(), "Noble".into(), "Ally".into()],
         power: Some(5),
         toughness: Some(5),
-        grants_flashback: true,
+        statics: vec![StaticAbility::GraveyardSpellsHaveFlashback],
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
@@ -2675,7 +2539,9 @@ fn june_bounty_hunter() -> CardDefinition {
         subtypes: vec!["Human".into(), "Mercenary".into()],
         power: Some(2),
         toughness: Some(2),
-        unblockable_if: Some(StaticCondition::CardsDrawnAtLeast { count: 2 }),
+        statics: vec![StaticAbility::CantBeBlockedIf(
+            StaticCondition::CardsDrawnAtLeast { count: 2 },
+        )],
         activated_abilities: vec![ActivatedAbilityDefinition {
             sacrifice: Some(SacrificeCost {
                 predicate: CardPredicate {
@@ -2968,12 +2834,12 @@ fn messenger_hawk() -> CardDefinition {
                 tapped_and_attacking: false,
             }],
         }],
-        static_pt_buffs: vec![StaticPtBuff {
+        statics: vec![StaticAbility::PtBuff(StaticPtBuff {
             scope: StaticScope::This,
             condition: Some(StaticCondition::CardsDrawnAtLeast { count: 2 }),
             power: 2,
             toughness: 0,
-        }],
+        })],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -3035,7 +2901,7 @@ fn momo_friendly_flier() -> CardDefinition {
             flying: true,
             ..Default::default()
         },
-        spell_cost_reductions: vec![SpellCostReduction {
+        statics: vec![StaticAbility::SpellsCostLess(SpellCostReduction {
             first_on_own_turn: true,
             predicate: CardPredicate {
                 flying: true,
@@ -3045,7 +2911,7 @@ fn momo_friendly_flier() -> CardDefinition {
             },
             condition: StaticCondition::Always,
             generic: 1,
-        }],
+        })],
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::AnotherYouControl(CardPredicate {
@@ -3102,36 +2968,6 @@ fn mongoose_lizard() -> CardDefinition {
                 to_hand: true,
             }],
             ..Default::default()
-        }],
-        text_box: text_box.into(),
-        ..Default::default()
-    }
-}
-
-fn monk() -> CardDefinition {
-    let text_box = "Prowess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)";
-
-    CardDefinition {
-        key: "token.monk",
-        scryfall_id: "e49c80ac-5c90-4fd2-ad40-cc77af160f64",
-        name: "Monk".into(),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Monk".into()],
-        power: Some(1),
-        toughness: Some(1),
-        is_token: true,
-        color_override: Some(Colors::from([Color::Red])),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::YouCastSpell {
-                predicate: CardPredicate {
-                    not_card_types: vec![CardType::Creature],
-                    ..Default::default()
-                },
-            },
-            effects: vec![Effect::ModifyUntilEot {
-                power_delta: 1,
-                toughness_delta: 1,
-            }],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -3681,7 +3517,7 @@ fn rockalanche() -> CardDefinition {
             },
             target: TargetSpec::LandYouControl,
         }],
-        flashback: Some(ManaCost::parse("{5}{G}")),
+        statics: vec![StaticAbility::Flashback(ManaCost::parse("{5}{G}"))],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -3867,18 +3703,19 @@ fn serpent_of_the_pass() -> CardDefinition {
         subtypes: vec!["Serpent".into()],
         power: Some(6),
         toughness: Some(5),
-        flash_if: Some(StaticCondition::GraveyardAtLeast {
-            count: 3,
-            predicate: CardPredicate {
-                subtype: Some("Lesson".into()),
+        statics: vec![
+            StaticAbility::FlashIf(StaticCondition::GraveyardAtLeast {
+                count: 3,
+                predicate: CardPredicate {
+                    subtype: Some("Lesson".into()),
+                    ..Default::default()
+                },
+            }),
+            StaticAbility::CostsLessPerGraveyardCard(CardPredicate {
+                not_card_types: vec![CardType::Creature, CardType::Land],
                 ..Default::default()
-            },
-        }),
-        cost_reduction_in_graveyard: true,
-        cost_reduction_per: Some(CardPredicate {
-            not_card_types: vec![CardType::Creature, CardType::Land],
-            ..Default::default()
-        }),
+            }),
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -4044,33 +3881,6 @@ fn sokka_s_haiku() -> CardDefinition {
     }
 }
 
-fn soldier() -> CardDefinition {
-    let text_box = "Firebending 1 (Whenever this token attacks, add {R}. This mana lasts until end of combat.)";
-
-    CardDefinition {
-        key: "token.soldier",
-        scryfall_id: "2de43b03-9ac5-4292-ab29-2dc6210ef3d9",
-        name: "Soldier".into(),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Soldier".into()],
-        power: Some(2),
-        toughness: Some(2),
-        is_token: true,
-        color_override: Some(Colors::from([Color::Red])),
-        abilities: vec![Ability::Triggered {
-            condition: TriggerCondition::Attacks {
-                subject: TriggerSubject::This,
-            },
-            effects: vec![Effect::AddMana {
-                mana: Mana::parse("R"),
-                until_end_of_combat: true,
-            }],
-        }],
-        text_box: text_box.into(),
-        ..Default::default()
-    }
-}
-
 fn solstice_revelations() -> CardDefinition {
     let text_box = "Exile cards from the top of your library until you exile a nonland card. You may cast that card without paying its mana cost if the spell's mana value is less than the number of Mountains you control. If you don't cast that card this way, put it into your hand.\nFlashback {6}{R} (You may cast this card from your graveyard for its flashback cost. Then exile it.)";
 
@@ -4089,7 +3899,7 @@ fn solstice_revelations() -> CardDefinition {
                 },
             },
         }],
-        flashback: Some(ManaCost::parse("{6}{R}")),
+        statics: vec![StaticAbility::Flashback(ManaCost::parse("{6}{R}"))],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -4137,7 +3947,7 @@ fn sozins_comet() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{3}{R}{R}")),
         types: CardTypes::new([CardType::Sorcery]),
         spell_effects: vec![Effect::GrantFirebendingUntilEot { amount: 5 }],
-        foretell: Some(ManaCost::parse("{2}{R}")),
+        statics: vec![StaticAbility::Foretell(ManaCost::parse("{2}{R}"))],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -4183,32 +3993,6 @@ fn sparring_dummy() -> CardDefinition {
     }
 }
 
-fn spirit() -> CardDefinition {
-    let text_box = "This token can't block or be blocked by non-Spirit creatures.";
-
-    CardDefinition {
-        key: "token.spirit",
-        scryfall_id: "f59eba51-458a-40e0-b754-999f91d5d839",
-        name: "Spirit".into(),
-        types: CardTypes::new([CardType::Creature]),
-        subtypes: vec!["Spirit".into()],
-        power: Some(1),
-        toughness: Some(1),
-        is_token: true,
-        color_override: Some(Colors::from([])),
-        blocking_restriction: Some(CardPredicate {
-            not_subtypes: vec!["Spirit".into()],
-            ..Default::default()
-        }),
-        block_restriction: Some(CardPredicate {
-            not_subtypes: vec!["Spirit".into()],
-            ..Default::default()
-        }),
-        text_box: text_box.into(),
-        ..Default::default()
-    }
-}
-
 fn spirit_water_revival() -> CardDefinition {
     let text_box = "As an additional cost to cast this spell, you may waterbend {6}. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)\nDraw two cards. If this spell's additional cost was paid, instead shuffle your graveyard into your library, draw seven cards, and you have no maximum hand size for the rest of the game.\nExile Spirit Water Revival.";
 
@@ -4229,8 +4013,7 @@ fn spirit_water_revival() -> CardDefinition {
             },
             Effect::ExileSourceSpell,
         ],
-        kicker: Some(ManaCost::parse("{6}")),
-        kicker_waterbend: true,
+        additional_costs: vec![AdditionalCost::Waterbend(ManaCost::parse("{6}"))],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -4258,7 +4041,9 @@ fn suki_kyoshi_warrior() -> CardDefinition {
                 tapped_and_attacking: true,
             }],
         }],
-        power_cda: Some(PowerCda::CreaturesYouControl),
+        statics: vec![StaticAbility::CharacteristicPower(
+            PowerCda::CreaturesYouControl,
+        )],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -4366,11 +4151,13 @@ fn tiger_dillo() -> CardDefinition {
         subtypes: vec!["Cat".into(), "Armadillo".into()],
         power: Some(4),
         toughness: Some(3),
-        combat_requires_other: Some(CardPredicate {
-            min_power: Some(4),
-            card_type: Some(CardType::Creature),
-            ..Default::default()
-        }),
+        statics: vec![StaticAbility::CantAttackOrBlockUnlessYouControlAnother(
+            CardPredicate {
+                min_power: Some(4),
+                card_type: Some(CardType::Creature),
+                ..Default::default()
+            },
+        )],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -4471,7 +4258,9 @@ fn toph_the_blind_bandit() -> CardDefinition {
                 target: TargetSpec::LandYouControl,
             }],
         }],
-        power_cda: Some(PowerCda::CountersOnLandsYouControl),
+        statics: vec![StaticAbility::CharacteristicPower(
+            PowerCda::CountersOnLandsYouControl,
+        )],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -4579,7 +4368,7 @@ fn uncle_iroh() -> CardDefinition {
         subtypes: vec!["Human".into(), "Noble".into(), "Ally".into()],
         power: Some(4),
         toughness: Some(2),
-        spell_cost_reductions: vec![SpellCostReduction {
+        statics: vec![StaticAbility::SpellsCostLess(SpellCostReduction {
             first_on_own_turn: false,
             predicate: CardPredicate {
                 subtype: Some("Lesson".into()),
@@ -4587,7 +4376,7 @@ fn uncle_iroh() -> CardDefinition {
             },
             condition: StaticCondition::Always,
             generic: 1,
-        }],
+        })],
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::Attacks {
                 subject: TriggerSubject::This,
@@ -4949,7 +4738,7 @@ fn white_lotus_reinforcements() -> CardDefinition {
             vigilance: true,
             ..Default::default()
         },
-        static_pt_buffs: vec![StaticPtBuff {
+        statics: vec![StaticAbility::PtBuff(StaticPtBuff {
             scope: StaticScope::OtherYouControl(CardPredicate {
                 subtype: Some("Ally".into()),
                 ..Default::default()
@@ -4957,7 +4746,7 @@ fn white_lotus_reinforcements() -> CardDefinition {
             condition: None,
             power: 1,
             toughness: 1,
-        }],
+        })],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -5139,7 +4928,7 @@ fn zuko_s_conviction() -> CardDefinition {
             max: 1,
             another: false,
         }],
-        kicker: Some(ManaCost::parse("{4}")),
+        additional_costs: vec![AdditionalCost::Kicker(ManaCost::parse("{4}"))],
         text_box: text_box.into(),
         ..Default::default()
     }

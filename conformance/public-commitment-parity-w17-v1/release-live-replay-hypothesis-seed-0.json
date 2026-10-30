@@ -37,7 +37,7 @@
     }
   },
   "identity": {
-    "authority_receipt_sha256": "0f15e3bbbf9d77b2b14aebfb0bd370ab5a315ffeb1420b5df6f60d06afc6a5c5",
+    "authority_receipt_sha256": "e492cad4f895f2bf088b34e7df1a45212b665cede06506e90d322febd6b78a37",
     "command_tape_sha256": "95db76dc71150abd75bd4a771729e0928a59c19232ba442db4eb036cae5a1294",
     "matchup": "ur-lessons-vs-gw-allies",
     "relevant_source": {
@@ -45,11 +45,11 @@
       "files": [
         {
           "path": "conformance/authored-match-w17-v1/release-stack-ur-vs-gw-seed-0.json",
-          "sha256": "0f15e3bbbf9d77b2b14aebfb0bd370ab5a315ffeb1420b5df6f60d06afc6a5c5"
+          "sha256": "e492cad4f895f2bf088b34e7df1a45212b665cede06506e90d322febd6b78a37"
         },
         {
           "path": "academy/public_commitment_parity.py",
-          "sha256": "e14f524e7712f361aa4f9418c2c25b59c989fd8f71dab96a13d645c351885c2b"
+          "sha256": "50eccc5cf06294409f21beacc49479a9c8101fd2b12442c4105599e3b7c5111f"
         },
         {
           "path": "academy/server.py",
@@ -69,11 +69,11 @@
         },
         {
           "path": "manabot/belief/tracker.py",
-          "sha256": "b42ca46c31f69e0eaa3d7c384b2e285d2b0686629e051e480484511a64dc1136"
+          "sha256": "fe7079e161c2f65c715a53552864dbe888a144c4432402f42c033b7d31580c5d"
         },
         {
           "path": "manabot/managym/__init__.pyi",
-          "sha256": "df1861ea02cd5dcbc63b9bc4afad222de983e617ea808d245b68f2d458b64cb1"
+          "sha256": "9c0b44940b5cdb3e888ab3e29126b94c88a3dbd3542cd9eaee43f843a50de698"
         },
         {
           "path": "manabot/managym/decision.py",
@@ -89,7 +89,7 @@
         },
         {
           "path": "managym/src/agent/structured_offer.rs",
-          "sha256": "5b9bc2b1ec18e1e8d4f11ef7f735db1e8c9515369d938b2fadf24e1af982a1e5"
+          "sha256": "84a861a8ecb2dbb616a66df8bc65d79b831fd68171cf4812b989fb37f4fe7642"
         },
         {
           "path": "managym/src/decision.rs",
@@ -97,11 +97,11 @@
         },
         {
           "path": "managym/src/possible_worlds.rs",
-          "sha256": "ae072935f0976bc428c02ddb8c70f6f9a0128926e86cdecb571cf80f133cccf2"
+          "sha256": "c72903ee44ece9005c997e99f925a682e3315c36e0bb4bbb14e4871787ccd75f"
         },
         {
           "path": "managym/src/python/bindings.rs",
-          "sha256": "d259088f2b81e6125c37b8f0e8cb4fad528f8e393b38e7e7d3e5c612c3e4585a"
+          "sha256": "fb10626adacdad241a4d18d71a9917b6dae80bee25b7330594738144c1571eca"
         },
         {
           "path": "managym/tests/cards/stx.rs",
@@ -128,7 +128,7 @@
           "sha256": "d51e57bbacc7fe50716af576be6d4979664501d6d4a48e0f33921a9ad23bb171"
         }
       ],
-      "sha256": "3ef2c00349cab992c127769865daa340f2fd7095d97b1ab171a967cfb01efe31"
+      "sha256": "141c9838c418a4c92a17d3ab01ea5e9ce5feaf3cffd36a924e59b7588e18e7ec"
     },
     "seed": 0,
     "semantic_decision_version": 7

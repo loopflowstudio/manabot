@@ -44,9 +44,12 @@ in `conformance/learn-lesson-w4-v3`. v2 passed all 16 games (3,843 Commands,
 19 retrievals, 25 discard/draws and 14 declines) at source `57ac36a5`. Final
 gate repairs to import isolation and diagnostic traceback handling changed the
 source binding, so v3 repeats the same fixed seeds. The earlier unscored v1
-registration and complete v2 receipts remain retained. Run `./scripts/verify-learn-lesson` against the registered
-source to rebuild the extension, check the consumer contracts and verify all
-tapes. It rejects source or binary drift instead of rewriting receipts.
+registration and complete v2 receipts are archived (see the
+[repository archive](../repository-archive.md)). At the registered source,
+`./scripts/verify-learn-lesson` rebuilds the extension, checks the consumer
+contracts and verifies all tapes; it rejects source or binary drift instead of
+rewriting receipts. The script and the w4 cohorts now exist only at revisions
+before Task afbd6a.
 
 Checks so far: all 377 debug Rust tests, fmt/clippy, compiler/generated checks,
 57 focused Python checks, frontend type checking and 96 unit tests, plus all
@@ -82,7 +85,7 @@ The retained v3 source binding predates this edit; v4 was registered
 prospectively for the same 16 cases and passed all 3,843 Commands with zero
 state/consequence/viewer mismatches. Every tape is byte-identical to v3.
 The final registration matched provider source `aba61859` and its native binary
-before parent integration. At that historical source, verify this cohort with `./scripts/verify-learn-lesson verify conformance/learn-lesson-w4-v4`.
+before parent integration. At that historical source, verify this cohort with `./scripts/verify-learn-lesson verify conformance/learn-lesson-w4-v4` (the script is archived).
 Existing receipts remain unchanged.
 
 Jack Heart directed on 2026-10-04 that this verified provider slice may land

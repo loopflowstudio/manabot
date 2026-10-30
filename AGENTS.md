@@ -192,11 +192,15 @@ checks required by the affected package and workflow.
 ### Card definitions
 
 Each card is one function in the set file of its first printing under
-`managym/src/cardsets/` (keys `<set>.<card>`; basics are `lea.*`, tokens
-`token.*`), returning the engine's own `CardDefinition` written in its rules
-types (`Effect`, `Ability`, `TargetSpec`, `TriggerCondition`, …). That value is
-the only card representation: there is no authoring language, compiler, IR or
-card JSON. Add the function to its set file's `cards()`. New behavior is a new
+`managym/src/cardsets/` (keys `<set>.<card>`; basics are `lea.*`), returning
+the engine's own `CardDefinition` written in its rules types (`Effect`,
+`Ability`, `StaticAbility`, `AdditionalCost`, `TargetSpec`, `TriggerCondition`,
+…). That value is the only card representation: there is no authoring language,
+compiler, IR or card JSON. `CardDefinition` holds identity, characteristics and
+ability/cost lists; a static ability or additional cost is a variant of
+`StaticAbility` or `AdditionalCost`, never a new field. Every token is a
+`CardDefinition` with `is_token: true` in `cardsets/tokens.rs` (keys `token.*`,
+Scryfall id of its first token printing). Add the function to its set file's `cards()`. New behavior is a new
 rules-type variant (with a directed test in `tests/cards/<set>.rs`), never
 card-specific logic. Every definition carries `scryfall_id`, the Scryfall card
 id of the printing in its set file (`tests/cards/scryfall.rs` checks shape and
@@ -208,7 +212,9 @@ Learning tokens derive from the same definitions (`cards/tokens.rs`,
 vocabulary edit. Every mechanic must be observable in both the observation
 tensor and the tokens: extend the exhaustive guards in
 `tests/cards/observability.rs` (keywords, permanent and player status, `Effect`,
-`TriggerCondition`, `Ability`) and give the mechanic a directed test there.
+`TriggerCondition`, `Ability`, `StaticAbility`, `AdditionalCost`) and give the
+mechanic a directed test there. Static and cost rows name a real card and its
+behavior test in `tests/cards/<set>.rs`, which the guard checks.
 
 Support is definition: the world pool is every defined card from every set, and
 a card is supported unless its set file marks it incomplete (`tla::INCOMPLETE`,
@@ -218,11 +224,10 @@ or gate a card. A test about one card goes in `managym/tests/cards/<set>.rs`, th
 set file of that card; engine rules stay in `tests/rules/`, and shared scenario
 helpers live in `tests/support/`. Keep decklists separate from behavior. Keep long printed text in
 a local `text_box` binding so rustfmt can format the definition.
-Default-pack `CardDefId` order lives in `cards/content_pack.rs` (`LEGACY_ORDER`).
-Activated abilities that function from hand or graveyard set `Cost.zone`
-(landcycling uses `Program::landcycling`); they are offered as
-`Action::ActivateCardAbility`. Programs compile in key order, so an ability's
-index follows its program key, not its printed position.
+The default pack registers every definition in name order (`cards/content_pack.rs`).
+Activated abilities that function from hand or graveyard set
+`ActivatedAbilityDefinition.zone` (`ActivationZone`); they are offered as
+`Action::ActivateCardAbility`.
 
 Native fixed mana abilities on a card are additive: multiple fixed productions
 produce all listed colors together. A land that produces one chosen color uses

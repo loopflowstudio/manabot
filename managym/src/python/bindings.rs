@@ -3766,6 +3766,22 @@ fn learning_catalog(py: Python<'_>, pack_key: Option<&str>) -> PyResult<PyObject
     Ok(out.into())
 }
 
+/// Every definition of a pack (`None`: the default pack) as the JSON its
+/// learning tokens serialize, in `CardDefId` order. A read-only view of the
+/// engine's card definitions for Python consumers such as the heuristic player.
+#[cfg(feature = "python")]
+#[pyfunction]
+#[pyo3(signature = (pack_key=None))]
+fn card_definitions_json(pack_key: Option<&str>) -> PyResult<String> {
+    let content = match pack_key {
+        Some(key) => crate::cards::pool_content(key)
+            .map_err(|error| PyValueError::new_err(error.to_string()))?,
+        None => crate::cards::content_pack::default_content_pack(),
+    };
+    let definitions = content.definitions().collect::<Vec<_>>();
+    serde_json::to_string(&definitions).map_err(|error| PyValueError::new_err(error.to_string()))
+}
+
 /// The stable token value the learning catalog uses for a Rust name
 /// (`"Effect::DealDamage"`, a field, or a printed category such as `"Ally"`).
 #[cfg(feature = "python")]
@@ -3936,6 +3952,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(content_pool, m)?)?;
     m.add_function(wrap_pyfunction!(set_cards, m)?)?;
     m.add_function(wrap_pyfunction!(learning_catalog, m)?)?;
+    m.add_function(wrap_pyfunction!(card_definitions_json, m)?)?;
     m.add_function(wrap_pyfunction!(learning_token_value, m)?)?;
     m.add_function(wrap_pyfunction!(unsupported_cards, m)?)?;
     m.add_function(wrap_pyfunction!(validate_observation_json, m)?)?;

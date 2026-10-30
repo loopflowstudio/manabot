@@ -100,35 +100,6 @@ def test_set_filter_narrows_the_world_pool_by_key_prefix() -> None:
     )
 
 
-def test_current_projections_preserve_every_historical_setup_count() -> None:
-    for preset, setup in SETUPS.items():
-        if preset == "baseline":
-            continue
-        directory, filename = (
-            ("w11", "elemental_world")
-            if preset == "optional_payments"
-            else ("v1", preset)
-        )
-        historical = json.loads(
-            (CONTENT_ROOT / directory / "generated" / f"{filename}.ir.json").read_text()
-        )
-        pack_key = setup["pack_key"]
-        for old in historical["decks"]:
-            current = managym.authored_deck_setup(pack_key, old["key"])
-            for field, actual in (
-                ("cards", current.decklist),
-                ("sideboard", current.sideboard),
-            ):
-                expected = {
-                    historical["definitions"][entry["definition_index"]][
-                        "content_pack_binding"
-                    ]["value"]: entry["count"]
-                    for entry in old.get(field, [])
-                }
-                assert dict(actual) == expected, (preset, old["key"], field)
-        assert len(managym.authored_deck_keys(pack_key)) == len(historical["decks"])
-
-
 def test_baseline_card_executes_shared_commands_and_forks_with_learning_and_academy_views() -> (
     None
 ):
