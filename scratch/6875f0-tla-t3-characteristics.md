@@ -145,4 +145,4 @@ Check (2026-10-30, at the third sync): debug `cargo test` all binaries pass
 (lib 122, cards 384, rules 131 + 2 ignored, semantic_conformance 6, …); fmt,
 clippy `--all-targets -D warnings`, conformance check and fuzz (seed 24301, 32
 cases) clean; `tests/academy` 261 pass; world/observation-shape set plus
-`tests/belief`, `tests/env`, text observation 301 pass; ruff clean.
+`tests/belief`, `tests/env`, text observation 301 pass; ruff clean. Realign (2026-10-30): PR #398 `a5587df5a` and #394 `2c50c8793` heads unchanged and contained; Academy shared-table/study/experience protocol and CI-selection tests 74 pass (`tests/eval/test_arena_log_conformance.py` needs undeclared `duckdb`, unchanged from main).
