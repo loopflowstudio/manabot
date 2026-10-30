@@ -50,13 +50,14 @@ fn prismatic_vista() -> CardDefinition {
             life_cost: 1,
             tap_source: true,
             sacrifice_source: true,
-            effect: Effect::SearchBasicLand {
+            effects: vec![Effect::SearchBasicLand {
                 subtype: None,
                 count: 1,
                 tapped: false,
                 untap_if_lands: None,
                 bottom_source: false,
-            },
+                to_hand: false,
+            }],
             ..Default::default()
         }],
         text_box: text_box.into(),

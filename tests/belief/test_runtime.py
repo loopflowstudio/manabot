@@ -94,6 +94,7 @@ class NativeContractEngine:
                 },
                 "hand_size": 2,
                 "known_hand": {},
+                "foretold": 0,
                 "pool": {
                     "Counterspell": 2,
                     "Lightning Bolt": 2,

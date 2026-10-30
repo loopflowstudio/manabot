@@ -130,6 +130,8 @@ For a local gate, match CI's `CARGO_PROFILE_DEV_OPT_LEVEL=1` when running
 `cargo test` and clippy, and use `-j 2` on shared hosts. This retains debug
 assertions and overflow checks while avoiding the much slower unoptimized
 search/rollback tests. Keep one Cargo operation per build directory at a time.
+`--all-features` builds the PyO3 bindings; if the default `python3` is newer
+than PyO3 supports, set `PYO3_PYTHON=../.venv/bin/python` (the pinned 3.12).
 
 Notes:
 - `cargo test --all-features` can fail in environments without Python dev/link symbols; treat that as environment setup, not core engine correctness.

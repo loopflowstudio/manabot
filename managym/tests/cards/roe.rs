@@ -9,7 +9,7 @@ use managym::{
     agent::action::Action,
     state::{
         game_object::{CardId, PlayerId},
-        mana::Mana,
+        mana::{Mana, ManaUse},
         zone::ZoneType,
     },
 };
@@ -494,7 +494,9 @@ fn filtering_cannot_launder_restricted_mana_from_a_mixed_pool() {
         let mut s = five_color_setup(&["Prophetic Prism"]);
         enter_and_settle(&mut s, "Prophetic Prism");
         s.set_player_mana_pool(0, if unrestricted { "U" } else { "0" });
-        s.game_mut().state.players[0].mana_pool.lesson[1] = 1;
+        let lesson = ManaUse::spell(["Lesson"]);
+        let restricted = Mana::restricted_to(lesson, [0, 1, 0, 0, 0, 0]);
+        s.game_mut().state.players[0].mana_pool.add(&restricted);
         s.game_mut().scenario_refresh_priority().unwrap();
         let prism = permanent_named(&s, "Prophetic Prism");
         assert_eq!(s.action_space().actions.iter().any(|action|
@@ -503,10 +505,16 @@ fn filtering_cannot_launder_restricted_mana_from_a_mixed_pool() {
         if unrestricted {
             activate_named(&mut s, "Prophetic Prism", 0);
             assert_eq!(s.game().state.players[0].mana_pool.mana[1], 0);
-            assert_eq!(s.game().state.players[0].mana_pool.lesson[1], 1);
+            assert_eq!(
+                s.game().state.players[0].mana_pool.restricted(),
+                restricted.restricted()
+            );
             choose(&mut s, |a| matches!(a, Action::ChooseMode { mode: 4, .. }));
             assert_eq!(s.game().state.players[0].mana_pool.mana[4], 1);
-            assert_eq!(s.game().state.players[0].mana_pool.lesson[1], 1);
+            assert_eq!(
+                s.game().state.players[0].mana_pool.restricted(),
+                restricted.restricted()
+            );
         }
     }
 }

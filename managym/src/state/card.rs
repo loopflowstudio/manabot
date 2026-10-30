@@ -1,10 +1,13 @@
 use std::{collections::BTreeSet, sync::Arc};
 
 use super::{
-    ability::{Ability, Effect, StaticCondition, TargetRequirement},
+    ability::{
+        effect_target_requirements, Ability, Effect, StaticCondition, TargetRequirement, TargetSpec,
+    },
     game_object::{ObjectId, PlayerId},
     mana::{Color, Colors, Mana, ManaCost},
     predicate::CardPredicate,
+    zone::ZoneType,
 };
 
 /// Stable index of an immutable card definition in a [`ContentPack`](crate::cards::content_pack::ContentPack).
@@ -212,7 +215,10 @@ pub enum ReplacementEffect {
 
 impl ActivatedAbilityDefinition {
     pub fn mana_choices(&self) -> Option<Vec<Mana>> {
-        match &self.effect {
+        let [effect] = self.effects.as_slice() else {
+            return None;
+        };
+        match effect {
             Effect::AddMana {
                 mana,
                 until_end_of_combat: false,
@@ -230,10 +236,54 @@ impl ActivatedAbilityDefinition {
             _ => None,
         }
     }
+
+    /// Whether the first target chosen on activation (CR 602.2b, 601.2c) is
+    /// required (`Some(true)`) or "up to one" (`Some(false)`); `None` when the
+    /// ability has no targets.
+    fn first_target_required(&self) -> Option<bool> {
+        effect_target_requirements(&self.effects)
+            .first()
+            .map(|requirement| requirement.min > 0)
+    }
+
+    /// The activation cannot proceed without choosing a target.
+    pub fn requires_target(&self) -> bool {
+        self.first_target_required() == Some(true)
+    }
+
+    /// The activation may decline its target ("up to one").
+    pub fn target_is_optional(&self) -> bool {
+        self.first_target_required() == Some(false)
+    }
+
+    pub fn target_spec(&self) -> Option<&TargetSpec> {
+        self.effects.iter().find_map(Effect::target_spec)
+    }
 }
 
-fn is_zero(value: &u32) -> bool {
-    *value == 0
+fn is_battlefield(zone: &ActivationZone) -> bool {
+    *zone == ActivationZone::Battlefield
+}
+
+/// Where an activated ability can be activated from (CR 113.6, 602.1).
+/// Abilities of cards outside the battlefield function only from the zone
+/// their text names, or where their cost (discarding this card) requires.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize)]
+pub enum ActivationZone {
+    #[default]
+    Battlefield,
+    Hand,
+    Graveyard,
+}
+
+impl ActivationZone {
+    pub fn zone(self) -> ZoneType {
+        match self {
+            Self::Battlefield => ZoneType::Battlefield,
+            Self::Hand => ZoneType::Hand,
+            Self::Graveyard => ZoneType::Graveyard,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -245,11 +295,30 @@ pub struct SacrificeCost {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct ActivatedAbilityDefinition {
+    /// Omitted for battlefield abilities so existing definition digests hold.
+    #[serde(skip_serializing_if = "is_battlefield")]
+    pub zone: ActivationZone,
+    /// Discard this card as an activation cost (cycling, CR 702.29); only
+    /// hand abilities carry it.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub discard_source: bool,
+    /// Discard a chosen card from hand as an activation cost.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub discard_card: bool,
+    /// Exhaust: each object may activate this ability only once (CR 702.177a).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub exhaust: bool,
+    /// "Activate only once each turn" (CR 602.5b); counted per object.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub once_each_turn: bool,
+    /// "Costs {1} less to activate for each [predicate] you control."
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cost_reduction_per: Option<CardPredicate>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sacrifice: Option<SacrificeCost>,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub own_turn_only: bool,
-    #[serde(skip_serializing_if = "is_zero")]
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub life_cost: u32,
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub tap_source: bool,
@@ -262,7 +331,8 @@ pub struct ActivatedAbilityDefinition {
     /// activating player controls, {1} per permanent tapped. Taps count as
     /// cost payment rather than a mana ability (CR 702.177).
     pub waterbend: bool,
-    pub effect: Effect,
+    /// Resolution effects in printed order ("draw a card, then discard a card").
+    pub effects: Vec<Effect>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -299,6 +369,18 @@ pub enum StaticAbility {
     /// "This spell costs {1} less to cast for each [predicate] you control"
     /// (CR 601.2f); functions while casting, generic floor 0.
     CostsLessPerPermanent(CardPredicate),
+    /// "This spell costs {1} less to cast for each [predicate] card in your
+    /// graveyard"; functions while casting, generic floor 0.
+    CostsLessPerGraveyardCard(CardPredicate),
+    /// "If [condition], you may cast this spell as though it had flash";
+    /// functions from hand (see `Game::has_instant_timing`).
+    FlashIf(StaticCondition),
+    /// Printed flashback (CR 702.34): castable from its owner's graveyard for
+    /// this cost, then exiled instead of going anywhere else.
+    Flashback(ManaCost),
+    /// Printed foretell (CR 702.143): during its owner's turn it may be exiled
+    /// face down from hand for {2}, then cast on a later turn for this cost.
+    Foretell(ManaCost),
     /// "You have no maximum hand size."
     NoMaximumHandSize,
     /// A continuous P/T effect (layer 7c).
@@ -327,6 +409,10 @@ pub enum AdditionalCost {
     Sacrifice(SacrificeCost),
     /// Kicker (CR 702.33): an optional cost chosen while casting.
     Kicker(ManaCost),
+    /// "As an additional cost, you may waterbend [cost]": an optional cost
+    /// chosen like kicker whose generic mana may be paid by tapping artifacts
+    /// and creatures.
+    Waterbend(ManaCost),
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
@@ -375,17 +461,47 @@ pub struct CardDefinition {
 }
 
 impl CardDefinition {
+    /// The optional additional cost a cast may choose to pay: kicker or an
+    /// optional waterbend, which both mark the spell kicked.
     pub fn kicker(&self) -> Option<&ManaCost> {
         self.additional_costs.iter().find_map(|cost| match cost {
-            AdditionalCost::Kicker(kicker) => Some(kicker),
+            AdditionalCost::Kicker(kicker) | AdditionalCost::Waterbend(kicker) => Some(kicker),
             AdditionalCost::Sacrifice(_) => None,
         })
+    }
+
+    /// The optional additional cost is "waterbend [cost]".
+    pub fn kicker_waterbend(&self) -> bool {
+        self.additional_costs
+            .iter()
+            .any(|cost| matches!(cost, AdditionalCost::Waterbend(_)))
     }
 
     pub fn sacrifice_cost(&self) -> Option<&SacrificeCost> {
         self.additional_costs.iter().find_map(|cost| match cost {
             AdditionalCost::Sacrifice(sacrifice) => Some(sacrifice),
-            AdditionalCost::Kicker(_) => None,
+            AdditionalCost::Kicker(_) | AdditionalCost::Waterbend(_) => None,
+        })
+    }
+
+    pub fn flashback(&self) -> Option<&ManaCost> {
+        self.statics.iter().find_map(|ability| match ability {
+            StaticAbility::Flashback(cost) => Some(cost),
+            _ => None,
+        })
+    }
+
+    pub fn foretell(&self) -> Option<&ManaCost> {
+        self.statics.iter().find_map(|ability| match ability {
+            StaticAbility::Foretell(cost) => Some(cost),
+            _ => None,
+        })
+    }
+
+    pub fn flash_if(&self) -> Option<&StaticCondition> {
+        self.statics.iter().find_map(|ability| match ability {
+            StaticAbility::FlashIf(condition) => Some(condition),
+            _ => None,
         })
     }
 
@@ -454,6 +570,8 @@ impl Card {
     }
 
     /// CR 117.1a, 702.8 — Instants and cards with flash use instant timing.
+    /// Printed instant timing; a conditional `StaticAbility::FlashIf` is checked by
+    /// [`crate::flow::game::Game::has_instant_timing`].
     pub fn is_instant_speed(&self) -> bool {
         self.types.is_instant() || self.keywords.flash
     }

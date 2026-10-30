@@ -29,13 +29,12 @@ use crate::{
         action::{ActionSpaceKind, ActionType, AgentError},
         env::{Env, PreparedPossibleWorldMaterializer},
         observation::{
-            ActionOption, ActionSpaceData, CardData, CardTypeData, EventData, EventEntityKind,
-            EventType, KeywordData, Observation, PermanentData, PlayerData, SideboardCardData,
-            StackObjectData, StackObjectKindData, StackTargetData, StackTargetKindData, TurnData,
+            ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData, EventData,
+            EventEntityKind, EventType, KeywordData, Observation, PermanentData, PlayerData,
+            RestrictedManaData, SideboardCardData, StackObjectData, StackObjectKindData,
+            StackTargetData, StackTargetKindData, TurnData,
         },
-        observation_encoder::{
-            ObservationEncoderConfig, ACTION_DIM, CARD_DIM, PERMANENT_DIM, PLAYER_DIM,
-        },
+        observation_encoder::{ObservationEncoderConfig, ACTION_DIM},
         structured_offer::{OfferId as StructuredOfferId, OfferSubmission, StructuredOfferSet},
     },
     decision::Command as SemanticCommand,
@@ -114,11 +113,11 @@ fn encoded_to_dict<'py>(
 
     dict.set_item(
         "agent_player",
-        to_numpy_array_f32(py, &np, &encoded.agent_player, &[1, PLAYER_DIM])?,
+        to_numpy_array_f32(py, &np, &encoded.agent_player, &[1, config.player_dim()])?,
     )?;
     dict.set_item(
         "opponent_player",
-        to_numpy_array_f32(py, &np, &encoded.opponent_player, &[1, PLAYER_DIM])?,
+        to_numpy_array_f32(py, &np, &encoded.opponent_player, &[1, config.player_dim()])?,
     )?;
     dict.set_item(
         "agent_cards",
@@ -126,7 +125,7 @@ fn encoded_to_dict<'py>(
             py,
             &np,
             &encoded.agent_cards,
-            &[config.max_cards_per_player, CARD_DIM],
+            &[config.max_cards_per_player, config.card_dim()],
         )?,
     )?;
     dict.set_item(
@@ -135,7 +134,7 @@ fn encoded_to_dict<'py>(
             py,
             &np,
             &encoded.opponent_cards,
-            &[config.max_cards_per_player, CARD_DIM],
+            &[config.max_cards_per_player, config.card_dim()],
         )?,
     )?;
     dict.set_item(
@@ -144,7 +143,7 @@ fn encoded_to_dict<'py>(
             py,
             &np,
             &encoded.agent_permanents,
-            &[config.max_permanents_per_player, PERMANENT_DIM],
+            &[config.max_permanents_per_player, config.permanent_dim()],
         )?,
     )?;
     dict.set_item(
@@ -153,7 +152,7 @@ fn encoded_to_dict<'py>(
             py,
             &np,
             &encoded.opponent_permanents,
-            &[config.max_permanents_per_player, PERMANENT_DIM],
+            &[config.max_permanents_per_player, config.permanent_dim()],
         )?,
     )?;
     dict.set_item(
@@ -1013,6 +1012,48 @@ pub struct PyPlayer {
     pub mana: [i32; 6],
     #[pyo3(get)]
     pub lesson_mana: [i32; 6],
+    #[pyo3(get)]
+    pub restricted_mana: Vec<PyRestrictedMana>,
+    /// Player id whose next turn ends this player's hand-only casting.
+    #[pyo3(get)]
+    pub hand_only_until: Option<i32>,
+    #[pyo3(get)]
+    pub no_maximum_hand_size: bool,
+}
+
+/// Mana spendable only on the named spell or ability-source subtypes.
+#[cfg(feature = "python")]
+#[pyclass(name = "RestrictedMana")]
+#[derive(Clone)]
+pub struct PyRestrictedMana {
+    #[pyo3(get)]
+    pub spells: Vec<String>,
+    #[pyo3(get)]
+    pub abilities: Vec<String>,
+    #[pyo3(get)]
+    pub mana: [i32; 6],
+}
+
+#[cfg(feature = "python")]
+impl From<RestrictedManaData> for PyRestrictedMana {
+    fn from(value: RestrictedManaData) -> Self {
+        Self {
+            spells: value.spells,
+            abilities: value.abilities,
+            mana: value.mana,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PyRestrictedMana> for RestrictedManaData {
+    fn from(value: PyRestrictedMana) -> Self {
+        Self {
+            spells: value.spells,
+            abilities: value.abilities,
+            mana: value.mana,
+        }
+    }
 }
 
 #[cfg(feature = "python")]
@@ -1032,6 +1073,9 @@ impl From<PlayerData> for PyPlayer {
             combat_mana: value.combat_mana,
             mana: value.mana,
             lesson_mana: value.lesson_mana,
+            restricted_mana: value.restricted_mana.into_iter().map(Into::into).collect(),
+            hand_only_until: value.hand_only_until,
+            no_maximum_hand_size: value.no_maximum_hand_size,
         }
     }
 }
@@ -1058,6 +1102,9 @@ impl From<PyPlayer> for PlayerData {
             combat_mana: value.combat_mana,
             mana: value.mana,
             lesson_mana: value.lesson_mana,
+            restricted_mana: value.restricted_mana.into_iter().map(Into::into).collect(),
+            hand_only_until: value.hand_only_until,
+            no_maximum_hand_size: value.no_maximum_hand_size,
         }
     }
 }
@@ -1269,9 +1316,10 @@ impl From<PyManaCost> for ManaCost {
         let mana_value = value.mana_value.clamp(0, u8::MAX as i32) as u8;
 
         Self {
-            spend_on_lesson: false,
+            purpose: Default::default(),
             cost,
             mana_value,
+            x: 0,
             hybrid: value
                 .hybrid
                 .into_iter()
@@ -1328,6 +1376,77 @@ pub struct PyCard {
     pub keywords: PyKeywords,
     #[pyo3(get, set)]
     pub mana_cost: PyManaCost,
+    /// Foretold and face down in exile (listed only for its owner).
+    #[pyo3(get, set)]
+    pub face_down: bool,
+    #[pyo3(get)]
+    pub cast_permission: Option<PyCastPermission>,
+    /// Announced X of a spell on the stack whose cost has X.
+    #[pyo3(get)]
+    pub x: Option<i32>,
+}
+
+/// A public permission to play an exiled card; see `CastPermissionData`.
+#[cfg(feature = "python")]
+#[pyclass(name = "CastPermission")]
+#[derive(Clone)]
+pub struct PyCastPermission {
+    #[pyo3(get)]
+    pub player_id: i32,
+    #[pyo3(get)]
+    pub cost: Option<PyManaCost>,
+    #[pyo3(get)]
+    pub this_turn: bool,
+    #[pyo3(get)]
+    pub own_turn_only: bool,
+    #[pyo3(get)]
+    pub after_turn: Option<u32>,
+    #[pyo3(get)]
+    pub source_permanent_id: Option<i32>,
+    #[pyo3(get)]
+    pub flash: bool,
+    #[pyo3(get)]
+    pub any_mana: bool,
+    #[pyo3(get)]
+    pub waterbend: bool,
+    #[pyo3(get)]
+    pub foretold: bool,
+}
+
+#[cfg(feature = "python")]
+impl From<CastPermissionData> for PyCastPermission {
+    fn from(value: CastPermissionData) -> Self {
+        Self {
+            player_id: value.player_id,
+            cost: value.cost.map(Into::into),
+            this_turn: value.this_turn,
+            own_turn_only: value.own_turn_only,
+            after_turn: value.after_turn,
+            source_permanent_id: value.source_permanent_id,
+            flash: value.flash,
+            any_mana: value.any_mana,
+            waterbend: value.waterbend,
+            foretold: value.foretold,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PyCastPermission> for CastPermissionData {
+    fn from(value: PyCastPermission) -> Self {
+        Self {
+            player_id: value.player_id,
+            cost: value.cost.map(Into::into),
+            this_turn: value.this_turn,
+            own_turn_only: value.own_turn_only,
+            after_turn: value.after_turn,
+            source_permanent_id: value.source_permanent_id,
+            flash: value.flash,
+            any_mana: value.any_mana,
+            waterbend: value.waterbend,
+            foretold: value.foretold,
+        }
+    }
 }
 
 #[cfg(feature = "python")]
@@ -1351,6 +1470,9 @@ impl From<CardData> for PyCard {
             card_types: value.card_types.into(),
             keywords: value.keywords.into(),
             mana_cost: value.mana_cost.into(),
+            face_down: value.face_down,
+            cast_permission: value.cast_permission.map(Into::into),
+            x: value.x,
         }
     }
 }
@@ -1376,6 +1498,9 @@ impl From<PyCard> for CardData {
             card_types: value.card_types.into(),
             keywords: value.keywords.into(),
             mana_cost: value.mana_cost.into(),
+            face_down: value.face_down,
+            cast_permission: value.cast_permission.map(Into::into),
+            x: value.x,
         }
     }
 }
@@ -1435,6 +1560,12 @@ pub struct PyPermanent {
     #[pyo3(get, set)]
     pub attacking: bool,
     #[pyo3(get, set)]
+    pub exhausted_abilities: i32,
+    #[pyo3(get, set)]
+    pub once_each_turn_used: i32,
+    #[pyo3(get, set)]
+    pub granted_firebending: i32,
+    #[pyo3(get, set)]
     pub temp_subtypes: Vec<String>,
     /// Effective keywords (printed + until-EOT grants).
     #[pyo3(get, set)]
@@ -1459,6 +1590,9 @@ impl From<PermanentData> for PyPermanent {
             has_exile_link: value.has_exile_link,
             exile_if_dies_this_turn: value.exile_if_dies_this_turn,
             attacking: value.attacking,
+            exhausted_abilities: value.exhausted_abilities,
+            once_each_turn_used: value.once_each_turn_used,
+            granted_firebending: value.granted_firebending,
             temp_subtypes: value.temp_subtypes,
             keywords: value.keywords.into(),
         }
@@ -1483,6 +1617,9 @@ impl From<PyPermanent> for PermanentData {
             has_exile_link: value.has_exile_link,
             exile_if_dies_this_turn: value.exile_if_dies_this_turn,
             attacking: value.attacking,
+            exhausted_abilities: value.exhausted_abilities,
+            once_each_turn_used: value.once_each_turn_used,
+            granted_firebending: value.granted_firebending,
             temp_subtypes: value.temp_subtypes,
             keywords: value.keywords.into(),
         }
@@ -3530,7 +3667,7 @@ impl PyEnv {
         })
     }
 
-    #[pyo3(signature = (obs, policy_input_version=4))]
+    #[pyo3(signature = (obs, policy_input_version=5))]
     fn encode_observation(
         &self,
         py: Python<'_>,
@@ -3538,7 +3675,7 @@ impl PyEnv {
         policy_input_version: u8,
     ) -> PyResult<PyObject> {
         let rust_obs = Observation::from(obs);
-        if !matches!(policy_input_version, 1..=4) {
+        if !matches!(policy_input_version, 1..=5) {
             return Err(PyValueError::new_err("unsupported policy input version"));
         }
         let config = ObservationEncoderConfig {
@@ -3828,6 +3965,8 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyPlayer>()?;
     m.add_class::<PyTurn>()?;
     m.add_class::<PyCard>()?;
+    m.add_class::<PyCastPermission>()?;
+    m.add_class::<PyRestrictedMana>()?;
     m.add_class::<PySideboardCard>()?;
     m.add_class::<PyCardTypes>()?;
     m.add_class::<PyKeywords>()?;

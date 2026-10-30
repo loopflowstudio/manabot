@@ -110,7 +110,7 @@ fn clue() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{2}"),
             sacrifice_source: true,
-            effect: Effect::DrawCards { count: 1 },
+            effects: vec![Effect::DrawCards { count: 1 }],
             ..Default::default()
         }],
         ..token(
@@ -158,7 +158,7 @@ fn food() -> CardDefinition {
             tap_source: true,
             mana_cost: ManaCost::parse("{2}"),
             sacrifice_source: true,
-            effect: Effect::GainLife { amount: 3 },
+            effects: vec![Effect::GainLife { amount: 3 }],
             ..Default::default()
         }],
         ..token(
@@ -269,9 +269,9 @@ fn treasure() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,
             sacrifice_source: true,
-            effect: Effect::Modal {
+            effects: vec![Effect::Modal {
                 modes: any_color.into(),
-            },
+            }],
             ..Default::default()
         }],
         ..token(

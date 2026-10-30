@@ -28,7 +28,7 @@ def test_native_continuations_separate_policy_inputs_and_model_outputs() -> None
         env.observation_for_player(env.current_agent_index()) for env in branches
     ]
     assert observations[0].toJSON() == observations[1].toJSON()
-    for version in (1, 2, 3, 4):
+    for version in (1, 2, 3, 4, 5):
         space = ObservationSpace(ObservationConfig(policy_input_version=version))
         encoded = [space.encode(obs) for obs in observations]
         for env, obs, expected in zip(branches, observations, encoded, strict=True):
@@ -101,7 +101,7 @@ def test_native_fixture_relation_parity_and_other_viewer_safety() -> None:
     )
 
 
-@pytest.mark.parametrize("version", (1, 2, 3, 4))
+@pytest.mark.parametrize("version", (1, 2, 3, 4, 5))
 def test_checkpoint_retains_its_policy_input_version(
     tmp_path: Path, version: int
 ) -> None:
@@ -259,7 +259,7 @@ def test_historical_capture_eligibility_is_unknown_and_invalid_facts_fail_closed
         DecisionInput.model_validate_json(json.dumps(fresh))
 
 
-@pytest.mark.parametrize("version", (1, 2, 3, 4))
+@pytest.mark.parametrize("version", (1, 2, 3, 4, 5))
 def test_scalar_and_vector_buffers_bind_policy_version_by_width(version: int) -> None:
     space = ObservationSpace(ObservationConfig(policy_input_version=version))
     players = [managym.PlayerConfig(name, {"Mountain": 40}) for name in ("a", "b")]

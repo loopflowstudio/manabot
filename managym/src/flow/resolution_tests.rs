@@ -7,7 +7,7 @@ use crate::{
     agent::action::Action,
     flow::{game::Game, undo::JournalStats},
     state::{
-        ability::{Effect, TargetRequirement, TargetSpec},
+        ability::{Effect, EffectValue, TargetRequirement, TargetSpec},
         card::{ActivatedAbilityDefinition, CardType, Keywords},
         game_object::{CardId, PermanentId, PlayerId, Target},
         player::PlayerConfig,
@@ -69,7 +69,7 @@ fn stack(
         // own requirements, so its printed targeting must not apply.
         game.state.cards[card].spell_effects = effects;
         game.state.cards[card].targeting = Vec::new();
-        game.push_spell_to_stack(card, controller, targets, indices, false);
+        game.push_spell_to_stack(card, controller, targets, indices, Default::default());
         return;
     }
     let source = game
@@ -85,7 +85,7 @@ fn stack(
             // cases below use the spell/trigger paths that can announce them.
             assert_eq!(effects.len(), 1);
             game.state.cards[source_card].activated_abilities = vec![ActivatedAbilityDefinition {
-                effect: effects.remove(0),
+                effects: vec![effects.remove(0)],
                 ..Default::default()
             }];
             StackObject::ActivatedAbility(ActivatedAbilityOnStack {
@@ -336,7 +336,7 @@ fn resolution_characteristics_changed_by_earlier_instruction_do_not_retarget() {
                     spec.clone(),
                     vec![
                         Effect::Earthbend {
-                            count: 1,
+                            count: EffectValue::Fixed(1),
                             target: spec.clone(),
                         },
                         Effect::PutCounters {
@@ -447,9 +447,13 @@ fn resolution_does_not_follow_departed_permanent_or_graveyard_incarnation() {
                     vec![
                         Effect::ReturnGraveyardTarget {
                             target: spec.clone(),
+                            tapped_onto_battlefield: false,
                         },
                         pause(),
-                        Effect::ReturnGraveyardTarget { target: spec },
+                        Effect::ReturnGraveyardTarget {
+                            target: spec,
+                            tapped_onto_battlefield: false,
+                        },
                     ],
                 )],
                 vec![Target::GraveyardCard(original)],
