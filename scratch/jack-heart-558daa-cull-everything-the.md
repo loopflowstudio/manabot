@@ -172,3 +172,10 @@ commands in `docs/training.md` resolve to `experiments/ataraxos_move.py`.
 - Concept-review pass (guidance/test renames): debug `cargo test` 650 passed / 0 failed; `cargo fmt --check`; clippy `--all-targets -D warnings` clean; `tests/infra/test_rules_inventory.py` 6 passed; no `fn …undo|rollback` test names remain.
 - Compress after concept review: test assertion messages in `flow/decision.rs` now say restore, not rollback; `cargo test --lib flow::decision` 17 passed, fmt clean. Frozen `full_clone/current_game_v1` driver id kept.
 - Realign after concept review: all four concept-review items confirmed in cf7457bb4/8a00d4578; last "nested rollbacks" comment in `flow/decision.rs` now says restores; `cargo test --lib flow::decision` 17 passed, fmt clean.
+
+## Gate, 2026-10-30
+
+Since the concept-review check pass only comments/docs changed (04b1f529d, c34254536); unchanged suites keep their results above. origin/main has no new commits.
+- `cargo fmt --check` (managym) clean.
+- Changed/added Python: `ruff check`/`ruff format --check` clean except `website/` (CI does not lint it; main had 69 findings there). Formatted `website/main.py` and `website/tests/test_site.py`; the fasthtml star import (F403/F405) stays as the framework idiom. `cd website && uv run pytest -q` 21 passed.
+- No debug prints or TODOs in added lines. CI owns the full matrix; pre-existing failures are listed under Checks.
