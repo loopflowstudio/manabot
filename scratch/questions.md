@@ -5,9 +5,6 @@ noted in the PR. Jack Heart's 2026-10-29 direction superseded the qualification
 and pool-membership choices that were here (history: `be2b7586b:scratch/questions.md`).
 
 - Old worlds run from their recorded git revision; no in-process rules shims.
-- Superseded 2026-10-29 by Jack Heart's one-representation decision (w17, no
-  JSON, tokens from `Effect`): the earlier choices to stay in w16, keep the IR's
-  JSON shape and build tokens in `learning.py`.
 - 2026-10-29: the 14 setup-used incomplete TLA cards keep their definitions and
   are listed in one `tla::INCOMPLETE` const (key, missing behavior) beside
   `cards()`, rather than a field on every definition. Since the one-representation
@@ -17,7 +14,6 @@ and pool-membership choices that were here (history: `be2b7586b:scratch/question
   Undefined TLA cards are no longer listed as unsupported pool rows.
 - Not rewritten (dated evidence): the Academy curated pack `local_identity` values
   keep pre-rename keys.
-- Full TLA completion remains the eight-PR plan; no merge or new Task authorized.
 
 Main's notes at the syncs live at `6d069d6e5:scratch/questions.md` and `origin/main@633dca159:scratch/questions.md`.
 
@@ -109,9 +105,7 @@ Main's MTG-193 notes at the sync live at `6d069d6e5:scratch/questions.md`.
   for belief owners): `PhysicalHandSampler`'s hypergeometric prior and
   `BeliefState.draw_unknown`/hidden-draw convolution in `belief/range.py`
   still treat every pool card as hand-or-library, as does the library
-  count row in `belief/encoding.py` (pool − hand). Concept review 6's F ≥ 2
-  `Game::determinize` slot collision is fixed: it now shares
-  `fill_foretold_slots` with materialization.
+  count row in `belief/encoding.py` (pool − hand).
 - `rules_tests::structured_offer_rejects_fabricated_and_stale_ids_without_mutation`
   failed 2 of 9 full `rules_tests` runs (Debug output of the root changed
   after a rejected stale submission); passes alone and in 7 later runs. It

@@ -1,0 +1,60 @@
+262 ActionEnum.ChooseMode Add {B}
+118 ActionEnum.ChooseMode Add {B} (Ally spells or abilities of Ally sources only)
+76 ActionEnum.ChooseMode Add {B} (Lesson or Shrine spells only)
+42 ActionEnum.ChooseMode Add {B}{B} (Lesson spells only)
+42 ActionEnum.ChooseMode Add {B}{G} (Lesson spells only)
+48 ActionEnum.ChooseMode Add {B}{R} (Lesson spells only)
+262 ActionEnum.ChooseMode Add {G}
+118 ActionEnum.ChooseMode Add {G} (Ally spells or abilities of Ally sources only)
+76 ActionEnum.ChooseMode Add {G} (Lesson or Shrine spells only)
+42 ActionEnum.ChooseMode Add {G}{G} (Lesson spells only)
+262 ActionEnum.ChooseMode Add {R}
+118 ActionEnum.ChooseMode Add {R} (Ally spells or abilities of Ally sources only)
+76 ActionEnum.ChooseMode Add {R} (Lesson or Shrine spells only)
+48 ActionEnum.ChooseMode Add {R}{G} (Lesson spells only)
+48 ActionEnum.ChooseMode Add {R}{R} (Lesson spells only)
+262 ActionEnum.ChooseMode Add {U}
+118 ActionEnum.ChooseMode Add {U} (Ally spells or abilities of Ally sources only)
+76 ActionEnum.ChooseMode Add {U} (Lesson or Shrine spells only)
+42 ActionEnum.ChooseMode Add {U}{B} (Lesson spells only)
+42 ActionEnum.ChooseMode Add {U}{G} (Lesson spells only)
+48 ActionEnum.ChooseMode Add {U}{R} (Lesson spells only)
+42 ActionEnum.ChooseMode Add {U}{U} (Lesson spells only)
+262 ActionEnum.ChooseMode Add {W}
+118 ActionEnum.ChooseMode Add {W} (Ally spells or abilities of Ally sources only)
+76 ActionEnum.ChooseMode Add {W} (Lesson or Shrine spells only)
+42 ActionEnum.ChooseMode Add {W}{B} (Lesson spells only)
+42 ActionEnum.ChooseMode Add {W}{G} (Lesson spells only)
+48 ActionEnum.ChooseMode Add {W}{R} (Lesson spells only)
+42 ActionEnum.ChooseMode Add {W}{U} (Lesson spells only)
+42 ActionEnum.ChooseMode Add {W}{W} (Lesson spells only)
+1315 ActionEnum.ChooseTarget None
+3 ActionEnum.ChooseTrigger Put on stack next — Azula, Cunning Usurper — When this attacks: Add {R}{R}. This mana lasts until end of combat
+4 ActionEnum.ChooseTrigger Put on stack next — Forest — delayed ability: Return this card to the battlefield tapped
+4 ActionEnum.ChooseTrigger Put on stack next — Hama, the Bloodbender — delayed ability: Add {R}{R}{R}{R}{R}. This mana lasts until end of combat
+4 ActionEnum.ChooseTrigger Put on stack next — Iroh, Grand Lotus — When this attacks: Add {R}{R}. This mana lasts until end of combat
+7 ActionEnum.ChooseTrigger Put on stack next — Island — delayed ability: Return this card to the battlefield tapped
+10 ActionEnum.ChooseTrigger Put on stack next — Rough Rhino Cavalry — When this attacks: Add {R}{R}. This mana lasts until end of combat
+1 ActionEnum.ChooseTrigger Put on stack next — Rough Rhino Cavalry — delayed ability: Add {R}{R}{R}{R}{R}. This mana lasts until end of combat
+206 ActionEnum.ChooseTrigger Put on stack next — Soldier — When this attacks: Add {R}. This mana lasts until end of combat
+41 ActionEnum.ChooseTrigger Put on stack next — Soldier — delayed ability: Add {R}{R}{R}{R}{R}. This mana lasts until end of combat
+16 ActionEnum.ChooseTrigger Put on stack next — Zuko, Exiled Prince — When this attacks: Add {R}{R}{R}. This mana lasts until end of combat
+1544 ActionEnum.DeclareAttacker None
+772 ActionEnum.DeclareBlocker None
+140 ActionEnum.DeclineChoice None
+168 ActionEnum.PayCost None
+3385 ActionEnum.PriorityActivateAbility None
+85 ActionEnum.PriorityActivateAbility Foretell Sozin's Comet
+1827 ActionEnum.PriorityCastSpell None
+3029 ActionEnum.PriorityPassPriority None
+2705 ActionEnum.PriorityPlayLand None
+463 ActionEnum.SelectCard None
+196 ActionEnum.SelectCard Reveal Forest and put it into your hand
+109 ActionEnum.SelectCard Reveal Island and put it into your hand
+183 ActionEnum.SelectCard Reveal Mountain and put it into your hand
+88 ActionEnum.SelectCard Reveal Swamp and put it into your hand
+194 ActionEnum.TapForCost None
+FORETELL VIEWS
+{'owner_exile': [], 'opponent_view_exile_cards': [], 'opponent_view_zone_counts': [22, 2, 9, 7, 0, 1, 0]}
+{'owner_exile': [], 'opponent_view_exile_cards': [], 'opponent_view_zone_counts': [24, 6, 5, 4, 0, 1, 0]}
+{'owner_exile': [], 'opponent_view_exile_cards': [], 'opponent_view_zone_counts': [20, 4, 8, 6, 0, 2, 0]}

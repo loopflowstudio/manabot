@@ -1,0 +1,6 @@
+seed 0 turn 13 choose: Foretell Sozin's Comet
+owner sees: Sozin's Comet zone ZoneEnum.Exile face_down True foretold grant True after_turn 13
+opponent sees exile cards: [] opponent zone_counts [23, 3, 10, 5, 0, 1, 0]
+'Sozin' in opponent JSON: False
+v5 buffers: {'relations': (64, 33), 'agent_player': (1, 60), 'opponent_player': (1, 60), 'agent_cards': (60, 55), 'opponent_cards': (60, 55), 'agent_permanents': (40, 32), 'opponent_permanents': (40, 32), 'actions': (64, 22), 'events': (32, 7), 'action_focus': (64, 2), 'agent_player_valid': (1,), 'opponent_player_valid': (1,), 'agent_cards_valid': (60,), 'opponent_cards_valid': (60,), 'agent_permanents_valid': (40,), 'opponent_permanents_valid': (40,), 'actions_valid': (64,), 'events_valid': (32,), 'semantic_cards': (2, 60), 'known_hand': (2, 60, 2)}
+cast from foretell offered/taken at (turn, focus): (15, [35])
