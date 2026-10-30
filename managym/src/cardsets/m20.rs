@@ -28,7 +28,7 @@ fn spectral_sailor() -> CardDefinition {
         },
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{3}{U}"),
-            effect: Effect::DrawCards { count: 1 },
+            effects: vec![Effect::DrawCards { count: 1 }],
             ..Default::default()
         }],
         text_box: text_box.into(),

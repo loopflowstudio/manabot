@@ -187,6 +187,7 @@ fn lightning_bolt() -> CardDefinition {
             spec: TargetSpec::CreatureOrPlayer,
             min: 1,
             max: 1,
+            another: false,
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -306,10 +307,10 @@ fn shivan_dragon() -> CardDefinition {
         },
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{R}"),
-            effect: Effect::ModifyUntilEot {
+            effects: vec![Effect::ModifyUntilEot {
                 power_delta: 1,
                 toughness_delta: 0,
-            },
+            }],
             ..Default::default()
         }],
         text_box: text_box.into(),

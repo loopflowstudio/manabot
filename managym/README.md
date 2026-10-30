@@ -196,8 +196,10 @@ current-digest validation plus ordinary semantic execution. Portable capture JSO
 is evidence, not execution authority; clones need their own live capture.
 
 
-Fresh policy input v4 includes trigger-placement action joins and adds retained
-resolution-start eligibility to native current stack/continuation relations. Its
+Fresh policy input v5 keeps v4's trigger-placement action joins and retained
+resolution-start eligibility in native current stack/continuation relations, and
+widens player and card rows for cast permissions, the hand-only lock, restricted
+mana by spending subtype and announced X. Its
 layout, legacy checkpoint admission and measurement commands are documented in
 [the observation input contract](../docs/recent-events.md#current-continuation-input).
 The presentation context and text capture derive from the same typed frames;

@@ -17,6 +17,9 @@
     damage?: number;
     counters?: number;
     temporarySubtypes?: string[];
+    exhaustedAbilities?: number;
+    onceEachTurnUsed?: number;
+    grantedFirebending?: number;
     spent?: boolean;
     size?: 'small' | 'normal';
     onSelect?: () => void;
@@ -36,6 +39,9 @@
     damage = 0,
     counters = 0,
     temporarySubtypes = [],
+    exhaustedAbilities = 0,
+    onceEachTurnUsed = 0,
+    grantedFirebending = 0,
     spent = false,
     size = 'small',
     onSelect = undefined,
@@ -55,11 +61,24 @@
         : 'w-[var(--card-width,5rem)] aspect-[5/7]',
   );
 
+  // Ability-use and granted-ability statuses, worded as the text observation
+  // words them; they are printed on the card as well as named.
+  const abilityNotes = $derived(
+    [
+      exhaustedAbilities > 0 ? `exhaust abilities used ${exhaustedAbilities}` : null,
+      onceEachTurnUsed > 0
+        ? `once-each-turn abilities used this turn ${onceEachTurnUsed}`
+        : null,
+      grantedFirebending > 0 ? `firebending ${grantedFirebending} until end of turn` : null,
+    ].filter((note): note is string => note !== null),
+  );
+
   // Visual states are also stated in the accessible name.
   const stateNotes = $derived(
     [
       copyDescription || null,
       ...temporarySubtypes.map((subtype) => `${subtype} until end of turn`),
+      ...abilityNotes,
       tapped ? 'tapped' : null,
       dimmed ? 'summoning sick' : null,
       damage > 0 ? `${damage} damage` : null,
@@ -123,10 +142,15 @@
     </div>
   {/if}
 
-  {#if temporarySubtypes.length > 0}
-    <span class="pointer-events-none absolute bottom-6 left-1 rounded bg-paper px-1 text-[9px] text-ink">
-      {temporarySubtypes.join(', ')}
-    </span>
+  {#if temporarySubtypes.length > 0 || abilityNotes.length > 0}
+    <div class="pointer-events-none absolute bottom-6 left-1 right-1 flex flex-col items-start gap-px" aria-hidden="true">
+      {#each abilityNotes as note}
+        <span class="rounded bg-paper px-1 text-[9px] leading-tight text-ink" data-testid="card-ability-status">{note}</span>
+      {/each}
+      {#if temporarySubtypes.length > 0}
+        <span class="rounded bg-paper px-1 text-[9px] text-ink">{temporarySubtypes.join(', ')}</span>
+      {/if}
+    </div>
   {/if}
 
   {#if tallies > 0}

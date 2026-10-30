@@ -144,7 +144,7 @@ fn an_announced_tap_cannot_be_used_to_fund_itself() {
                 mana_cost: ManaCost::parse("1"),
                 tap_source,
                 sacrifice_source: true,
-                effect: Effect::DrawCards { count: 1 },
+                effects: vec![Effect::DrawCards { count: 1 }],
                 ..Default::default()
             });
         s.set_player_mana_pool(0, "0");

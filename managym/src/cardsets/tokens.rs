@@ -40,7 +40,7 @@ fn treasure() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,
             sacrifice_source: true,
-            effect: Effect::Modal {
+            effects: vec![Effect::Modal {
                 modes: vec![
                     vec![Effect::AddMana {
                         mana: Mana::parse("W"),
@@ -63,7 +63,7 @@ fn treasure() -> CardDefinition {
                         until_end_of_combat: false,
                     }],
                 ],
-            },
+            }],
             ..Default::default()
         }],
         text_box: text_box.into(),

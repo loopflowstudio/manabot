@@ -44,13 +44,14 @@ fn fabled_passage() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,
             sacrifice_source: true,
-            effect: Effect::SearchBasicLand {
+            effects: vec![Effect::SearchBasicLand {
                 subtype: None,
                 count: 1,
                 tapped: true,
                 untap_if_lands: Some(4),
                 bottom_source: false,
-            },
+                to_hand: false,
+            }],
             ..Default::default()
         }],
         text_box: text_box.into(),

@@ -214,9 +214,15 @@ pub(crate) fn created_tokens(definition: &CardDefinition) -> BTreeSet<String> {
             | Effect::IfGraveyardAtLeast {
                 then, otherwise, ..
             } => then.iter().chain(otherwise).for_each(|e| visit(e, out)),
-            Effect::MillAndSelect { if_declined, .. } => {
-                if_declined.iter().for_each(|e| visit(e, out))
-            }
+            Effect::MillAndSelect {
+                if_declined,
+                if_milled,
+                ..
+            } => if_declined
+                .iter()
+                .chain(if_milled.iter().flat_map(|bonus| &bonus.effects))
+                .for_each(|e| visit(e, out)),
+            Effect::SacrificeSource { then } => then.iter().for_each(|e| visit(e, out)),
             Effect::TargetClause { effects, .. }
             | Effect::IfCondition { effects, .. }
             | Effect::ForEachTarget { effects } => effects.iter().for_each(|e| visit(e, out)),
@@ -231,7 +237,12 @@ pub(crate) fn created_tokens(definition: &CardDefinition) -> BTreeSet<String> {
         .spell_effects
         .iter()
         .chain(definition.abilities.iter().flat_map(|a| a.effects()))
-        .chain(definition.activated_abilities.iter().map(|a| &a.effect))
+        .chain(
+            definition
+                .activated_abilities
+                .iter()
+                .flat_map(|a| &a.effects),
+        )
         .for_each(|effect| visit(effect, &mut out));
     out
 }

@@ -12,6 +12,7 @@ use rand_chacha::ChaCha8Rng;
 use crate::{
     agent::{action::ActionSpace, behavior_tracker::BehaviorTracker},
     flow::{
+        cast_permission::CastPermissions,
         combat::CombatState,
         decision::SuspendedResolution,
         event_log::EventLog,
@@ -108,11 +109,12 @@ enum EventQueue {
 /// The scalar mutable facts of a [`Player`]. Known-hand facts are journaled separately. `deck`, `sideboard`, and `name` are fixed at setup and
 /// never change during a match, so journaling them would copy a 60-entry vector
 /// and a string on every life, mana, and damage change. Recording only the
-/// mutable scalars keeps the entry allocation-free.
+/// mutable scalars keeps the entry allocation-free unless restricted mana is pooled.
 #[derive(Clone, Debug)]
 struct PlayerVitals {
     life: i32,
     drew_when_empty: bool,
+    no_maximum_hand_size: bool,
     alive: bool,
     mana_pool: Mana,
     combat_mana_pool: Mana,
@@ -123,6 +125,7 @@ impl PlayerVitals {
         Self {
             life: player.life,
             drew_when_empty: player.drew_when_empty,
+            no_maximum_hand_size: player.no_maximum_hand_size,
             alive: player.alive,
             mana_pool: player.mana_pool.clone(),
             combat_mana_pool: player.combat_mana_pool.clone(),
@@ -132,6 +135,7 @@ impl PlayerVitals {
     fn restore(self, player: &mut Player) {
         player.life = self.life;
         player.drew_when_empty = self.drew_when_empty;
+        player.no_maximum_hand_size = self.no_maximum_hand_size;
         player.alive = self.alive;
         player.mana_pool = self.mana_pool;
         player.combat_mana_pool = self.combat_mana_pool;
@@ -147,8 +151,7 @@ enum UndoEntry {
     /// vectors for every card that moves.
     ZoneMove {
         card: CardId,
-        owner: PlayerId,
-        from: Option<(ZoneType, usize)>,
+        from: Option<(PlayerId, ZoneType, usize)>,
         card_zones_len: usize,
     },
     Permanent(PermanentId, Box<Option<crate::state::permanent::Permanent>>),
@@ -170,6 +173,7 @@ enum UndoEntry {
     TriggerPlacement(Box<Option<TriggerPlacement>>),
     DelayedTriggers(Vec<DelayedTrigger>),
     ExileLinks(Vec<ExileLink>),
+    CastPermissions(Box<CastPermissions>),
     SuspendedDecision(Box<Option<SuspendedResolution>>),
     TriggerEnqueueCounter(u64),
     ActionSpace(Box<Option<ActionSpace>>),
@@ -209,6 +213,11 @@ impl UndoEntry {
             Self::PendingTriggers(values) => vec_bytes(values),
             Self::DelayedTriggers(values) => vec_bytes(values),
             Self::ExileLinks(values) => vec_bytes(values),
+            Self::CastPermissions(values) => {
+                size_of::<CastPermissions>()
+                    + vec_bytes(&values.exile_grants)
+                    + vec_bytes(&values.hand_only)
+            }
             Self::ActionSpace(space) => (**space).as_ref().map_or(0, |space| {
                 size_of::<ActionSpace>() + vec_bytes(&space.actions) + vec_bytes(&space.focus)
             }),
@@ -264,13 +273,9 @@ impl UndoEntry {
             }
             Self::ZoneMove {
                 card,
-                owner,
                 from,
                 card_zones_len,
-            } => game
-                .state
-                .zones
-                .undo_move(card, owner, from, card_zones_len),
+            } => game.state.zones.undo_move(card, from, card_zones_len),
             Self::Permanent(permanent, old) => game.state.permanents[permanent] = *old,
             Self::CardToPermanent(card, old) => game.state.card_to_permanent[card] = old,
             Self::Incarnation(card, old) => game.state.object_incarnations[card] = old,
@@ -302,6 +307,7 @@ impl UndoEntry {
             Self::TriggerPlacement(old) => game.state.trigger_placement = *old,
             Self::DelayedTriggers(old) => game.state.delayed_triggers = old,
             Self::ExileLinks(old) => game.state.exile_links = old,
+            Self::CastPermissions(old) => game.state.cast_permissions = *old,
             Self::SuspendedDecision(old) => game.state.suspended_decision = *old,
             Self::TriggerEnqueueCounter(old) => game.state.trigger_enqueue_counter = old,
             Self::ActionSpace(old) => game.current_action_space = *old,
@@ -538,15 +544,14 @@ impl Game {
 
     /// Journal one card's zone change. Must be called before the move, while
     /// the card still sits at the index this records.
-    pub(crate) fn journal_zone_move(&mut self, card: CardId, owner: PlayerId) {
+    pub(crate) fn journal_zone_move(&mut self, card: CardId) {
         if !self.journal_active() {
             return;
         }
-        let from = self.state.zones.locate(card, owner);
+        let from = self.state.zones.locate(card);
         let card_zones_len = self.state.zones.card_zones_len();
         self.record_undo(UndoEntry::ZoneMove {
             card,
-            owner,
             from,
             card_zones_len,
         });
@@ -690,6 +695,12 @@ impl Game {
         self.record_undo(UndoEntry::ExileLinks(self.state.exile_links.clone()));
     }
 
+    pub(crate) fn journal_cast_permissions(&mut self) {
+        self.record_undo(UndoEntry::CastPermissions(Box::new(
+            self.state.cast_permissions.clone(),
+        )));
+    }
+
     pub(crate) fn journal_suspended_decision(&mut self) {
         self.record_undo(UndoEntry::SuspendedDecision(Box::new(
             self.state.suspended_decision.clone(),
@@ -746,9 +757,10 @@ mod tests {
             "UndoEntry grew to {} bytes; box the variant that widened it",
             size_of::<UndoEntry>()
         );
-        // Two pools each retain six ordinary and six Lesson-restricted colors,
-        // alongside life and flags. These scalars remain allocation-free and
-        // fit within the unchanged UndoEntry budget above.
-        assert!(size_of::<PlayerVitals>() <= 32);
+        // Two pools each retain six ordinary colors and a boxed list of
+        // restricted classes, alongside life and flags. They allocate only
+        // while restricted mana is pooled and fit within the unchanged
+        // UndoEntry budget above.
+        assert!(size_of::<PlayerVitals>() <= 40);
     }
 }

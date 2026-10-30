@@ -134,7 +134,9 @@ impl Game {
                         let role = match action {
                             Action::PlayLand { .. }
                             | Action::CastSpell { .. }
-                            | Action::ActivateAbility { .. } => "source",
+                            | Action::ActivateAbility { .. }
+                            | Action::ActivateCardAbility { .. }
+                            | Action::Foretell { .. } => "source",
                             Action::DeclareBlocker { .. } if index > 0 => "target",
                             Action::ChooseTarget { .. } => "target",
                             _ => "choice",
@@ -304,12 +306,15 @@ impl Game {
         let (stage, instruction) = match &self.pending_choice {
             Some(PendingChoice::ManaPayment { .. } | PendingChoice::Waterbend { .. }) =>
                 ("payment", "Produce mana or finish the announced payment. Reserved sacrifices are not paid yet; activated mana abilities commit their own costs immediately."),
+            Some(PendingChoice::DiscardPayment { .. }) =>
+                ("additional_cost", "Choose a card to discard as an activation cost."),
             Some(PendingChoice::SacrificePayment { .. }) =>
                 ("additional_cost", "Choose an additional cost. A sacrifice selection is reserved until the announced payment completes."),
             Some(PendingChoice::ChooseTargets { .. } | PendingChoice::ActivatedTarget { .. }) =>
                 ("targets", "Choose a target for the current clause. Previously selected targets remain bound to their clauses."),
             Some(PendingChoice::SpellMode { .. }) => ("mode", "Choose a spell mode."),
             Some(PendingChoice::KickerChoice { .. }) => ("additional_cost", "Choose whether to include the kicker cost."),
+            Some(PendingChoice::AnnounceX { .. }) => ("mode", "Announce the value of X; each offer's mode index is that value."),
             None => match space.kind {
                 crate::agent::action::ActionSpaceKind::DeclareAttacker => ("declare_attackers", "Choose each attack declaration, including the legal nonparticipation offers. Submitted declarations are committed."),
                 crate::agent::action::ActionSpaceKind::DeclareBlocker => ("declare_blockers", "Choose each block declaration, including the legal nonparticipation offers. Submitted declarations are committed."),
@@ -332,6 +337,11 @@ impl Game {
                 Decision::Discard { .. } | Decision::OptionalDiscardDraw { .. } => ("discard", "Choose a card to discard, or decline when offered."),
                 Decision::SelectMilled { .. } => ("select_milled", "Choose from the milled cards, or decline when offered."),
                 Decision::LegendRule { .. } => ("legend_rule", "Choose which legendary permanent to keep."),
+                Decision::SearchDistinctLands { .. } => ("private_search", "Inspect the permitted library candidates. Choose a land with a new name, or stop searching; chosen cards are revealed."),
+                Decision::DiscardFromRevealedHand { .. } => ("revealed_hand", "Choose a card from the revealed hand for its owner to discard."),
+                Decision::CastWithoutPaying { .. } => ("free_cast", "Choose a spell to cast without paying its mana cost, or decline."),
+                Decision::ExileLinked { .. } => ("linked_exile", "Choose a card to exile; the resolving ability's controller may later cast it as that ability allows."),
+                Decision::OpponentSplitsRevealed { .. } => ("split_revealed", "Choose revealed cards for their owner's graveyard; the rest enter the battlefield tapped."),
             };
             view.stage = stage.into();
             view.instruction = instruction.into();

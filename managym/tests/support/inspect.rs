@@ -11,6 +11,7 @@ use managym::{
         game_object::{CardId, PermanentId, PlayerId},
         permanent::Permanent,
         stack_object::StackObject,
+        target::Target,
         zone::ZoneType,
     },
 };
@@ -274,6 +275,48 @@ pub fn can_cast(s: &Scenario, id: CardId) -> bool {
         .actions
         .iter()
         .any(|a| matches!(a, Action::CastSpell { card, .. } if *card == id))
+}
+
+pub fn can_activate(s: &Scenario, source: PermanentId) -> bool {
+    s.action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::ActivateAbility { permanent, .. } if *permanent == source))
+}
+
+/// Whether an ability of `source` that functions from its hand or graveyard
+/// is offered.
+pub fn can_activate_card(s: &Scenario, source: CardId) -> bool {
+    s.action_space()
+        .actions
+        .iter()
+        .any(|a| matches!(a, Action::ActivateCardAbility { card, .. } if *card == source))
+}
+
+pub fn offered_targets(s: &Scenario) -> Vec<Target> {
+    s.action_space()
+        .actions
+        .iter()
+        .filter_map(|a| match a {
+            Action::ChooseTarget { target, .. } => Some(*target),
+            _ => None,
+        })
+        .collect()
+}
+
+pub fn offered_cards(s: &Scenario) -> Vec<CardId> {
+    s.action_space()
+        .actions
+        .iter()
+        .filter_map(|a| match a {
+            Action::SelectCard { card, .. } => Some(*card),
+            _ => None,
+        })
+        .collect()
+}
+
+pub fn zone_of(s: &Scenario, card: CardId) -> Option<ZoneType> {
+    s.game().state.zones.zone_of(card)
 }
 
 /// Exercise every offered atomic continuation through the real Command
