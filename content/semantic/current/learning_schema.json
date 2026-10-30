@@ -1,0 +1,40 @@
+{
+  "array_layout_version": 1,
+  "dtypes": {
+    "boolean_mask": "bool",
+    "index": "int32",
+    "token_kind": "uint16",
+    "token_value": "int32"
+  },
+  "identity_modes": {
+    "identity": 1,
+    "semantic_only": 2
+  },
+  "object_roles": {
+    "agent_card": 1,
+    "agent_sideboard": 4,
+    "opponent_card": 2,
+    "stack_ability": 3
+  },
+  "program_kinds": {
+    "activated": 4,
+    "mana": 2,
+    "spell": 5,
+    "triggered": 1,
+    "triggered_mana": 3
+  },
+  "schema_version": 9,
+  "token_kinds": {
+    "boolean": 5,
+    "definition_ref": 7,
+    "field": 2,
+    "integer": 4,
+    "null": 8,
+    "padding": 0,
+    "program_kind": 9,
+    "structure": 1,
+    "text": 6,
+    "variant": 3
+  },
+  "token_values": "Integers and booleans carry their value; every other token value is the engine's stable hash of a Rust or printed name (managym.learning_token_value)."
+}

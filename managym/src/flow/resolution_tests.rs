@@ -65,7 +65,10 @@ fn stack(
                 .position(|card| card.owner == controller && card.name == "Lightning Bolt")
                 .unwrap(),
         );
+        // Lightning Bolt is only a vessel: the synthetic clauses carry their
+        // own requirements, so its printed targeting must not apply.
         game.state.cards[card].spell_effects = effects;
+        game.state.cards[card].targeting = Vec::new();
         game.push_spell_to_stack(card, controller, targets, indices, false);
         return;
     }

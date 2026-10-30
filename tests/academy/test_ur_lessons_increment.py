@@ -48,11 +48,10 @@ def test_match_config_candidate_finishes_with_complete_native_and_python_encodin
     if reverse:
         match = match.swapped()
     space = ObservationSpace()
-    assert space.encoder.permanent_dim == 28
-    assert managym.WORLD_VERSION == "w13"
+    assert space.encoder.permanent_dim == 29
     env = Env(match, space, Reward(RewardConfig()), seed=seed)
     obs, _ = env.reset(seed=seed)
-    assert env.content_pack_manifest()["world_version"] == "w13"
+    assert env.content_pack_manifest()["world_version"] == managym.WORLD_VERSION
     rng = random.Random(seed)
     for _ in range(5000):
         actions = np.flatnonzero(obs["actions_valid"])

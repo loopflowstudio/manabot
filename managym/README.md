@@ -16,9 +16,18 @@ and convergence status are in [docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md).
 1. **`src/agent/`**: RL-facing API (`Env`, action spaces, observations)
 2. **`src/flow/`**: Game progression (turns, priority, combat)
 3. **`src/state/`**: Core game state (cards, players, zones, mana)
-4. **`src/cardsets/`**: Card implementations
+4. **`src/cardsets/`**: Card set files (one per printed set); **`src/cards/`**: `ContentPack`, rules fixtures, authored setups, pool support and learning tokens
 5. **`src/infra/`**: Logging and profiler infrastructure
 6. **`src/python/`**: PyO3 bindings and Rust→Python conversions
+
+Each card is a function in the file of its first printing's set under
+`src/cardsets/`, returning the engine's own `CardDefinition` in its rules types
+(`Effect`, `Ability`, `TargetSpec`, …). The engine runs that value directly, and
+the learning catalog (`src/cards/tokens.rs`, `managym.learning_catalog`)
+derives policy tokens from it. `src/world.rs` owns `WORLD_VERSION`, the card/deck
+support check (defined and not marked incomplete) and the set filter. Keep
+decklist data separate from card behavior; see
+[the content contract](../content/semantic/README.md).
 
 Dependencies flow: python → agent → flow → state/infra.
 
@@ -27,7 +36,7 @@ structured offers, proposed events, fork/rollback — is documented in
 [docs/research/semantic-kernel.md](../docs/research/semantic-kernel.md), with
 conformance fixtures under [conformance/](../conformance/).
 
-Authored setups come from `SemanticPack::player_config` (Python:
+Authored setups come from `AuthoredPack::player_config` (Python:
 `managym.authored_deck_setup(pack_key, deck_key)`). Carry that complete config
 when swapping seats or rebuilding roots: deck and sideboard together identify
 an authored setup. `PlayerConfig::new` intentionally gives custom setups an
@@ -77,7 +86,7 @@ New registered real cards also need their Scryfall shell and Oracle text in
 checks every registration against that snapshot. For an accepted rules-world
 change, record a new versioned conformance corpus and update the CI/test root
 without rewriting earlier receipts. The current corpus is
-[semantic-kernel-w15-v1](../conformance/semantic-kernel-w15-v1/).
+[semantic-kernel-w17-v1](../conformance/semantic-kernel-w17-v1/).
 
 After changing Rust, rebuild the Python extension into the uv-managed venv:
 

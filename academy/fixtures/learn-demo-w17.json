@@ -1,0 +1,194 @@
+{
+  "config": {
+    "seed": 0,
+    "villain_type": "random",
+    "auto_pass": false
+  },
+  "manifest": {
+    "world_version": "w17",
+    "schema_version": 1,
+    "content_digest": "647033e84800611d268017294d23e64f4011fd790b0220a43166cf7ec15ce6c1",
+    "pack_key": "ur-lessons-vs-gw-allies",
+    "definitions": [
+      {
+        "card_def_id": 0,
+        "registry_name": "Forest"
+      },
+      {
+        "card_def_id": 1,
+        "registry_name": "Island"
+      },
+      {
+        "card_def_id": 2,
+        "registry_name": "Mountain"
+      },
+      {
+        "card_def_id": 3,
+        "registry_name": "Plains"
+      },
+      {
+        "card_def_id": 4,
+        "registry_name": "Divide by Zero"
+      },
+      {
+        "card_def_id": 5,
+        "registry_name": "Igneous Inspiration"
+      },
+      {
+        "card_def_id": 6,
+        "registry_name": "Pop Quiz"
+      },
+      {
+        "card_def_id": 7,
+        "registry_name": "Accumulate Wisdom"
+      },
+      {
+        "card_def_id": 8,
+        "registry_name": "Allies at Last"
+      },
+      {
+        "card_def_id": 9,
+        "registry_name": "Badgermole Cub"
+      },
+      {
+        "card_def_id": 10,
+        "registry_name": "Compassionate Healer"
+      },
+      {
+        "card_def_id": 11,
+        "registry_name": "Dragonfly Swarm"
+      },
+      {
+        "card_def_id": 12,
+        "registry_name": "Earth Kingdom Jailer"
+      },
+      {
+        "card_def_id": 13,
+        "registry_name": "Earth King's Lieutenant"
+      },
+      {
+        "card_def_id": 14,
+        "registry_name": "Fancy Footwork"
+      },
+      {
+        "card_def_id": 15,
+        "registry_name": "Fire Nation Cadets"
+      },
+      {
+        "card_def_id": 16,
+        "registry_name": "Firebending Lesson"
+      },
+      {
+        "card_def_id": 17,
+        "registry_name": "First-Time Flyer"
+      },
+      {
+        "card_def_id": 18,
+        "registry_name": "Forecasting Fortune Teller"
+      },
+      {
+        "card_def_id": 19,
+        "registry_name": "Invasion Reinforcements"
+      },
+      {
+        "card_def_id": 20,
+        "registry_name": "It'll Quench Ya!"
+      },
+      {
+        "card_def_id": 21,
+        "registry_name": "Kyoshi Warriors"
+      },
+      {
+        "card_def_id": 22,
+        "registry_name": "Otter-Penguin"
+      },
+      {
+        "card_def_id": 23,
+        "registry_name": "South Pole Voyager"
+      },
+      {
+        "card_def_id": 24,
+        "registry_name": "Suki, Kyoshi Warrior"
+      },
+      {
+        "card_def_id": 25,
+        "registry_name": "Tiger-Seal"
+      },
+      {
+        "card_def_id": 26,
+        "registry_name": "Water Tribe Rallier"
+      },
+      {
+        "card_def_id": 27,
+        "registry_name": "White Lotus Reinforcements"
+      },
+      {
+        "card_def_id": 28,
+        "registry_name": "Yip Yip!"
+      },
+      {
+        "card_def_id": 29,
+        "registry_name": "Ally"
+      },
+      {
+        "card_def_id": 30,
+        "registry_name": "Clue"
+      }
+    ]
+  },
+  "prefix": [
+    {
+      "before_digest": "0a5add12561a939975e9ea6e0fb96e2db16fec0ea38e0279e332e40e0d12828a",
+      "offer_id": 0,
+      "label": "Play Mountain"
+    },
+    {
+      "before_digest": "f46ffdc9be285dbab20c7a918f67d5090ec7cba2dfa74f0c01bba555d5951e7e",
+      "offer_id": 0,
+      "label": "Play Island"
+    },
+    {
+      "before_digest": "6b802b055057129d038d62ee91272a549c8ae2f90329c2ad33c2aacf33f15ad2",
+      "offer_id": 0,
+      "label": "Cast Tiger-Seal"
+    },
+    {
+      "before_digest": "39f67af820d64aa6e47d96be88014cb377a4bd067aff5d0b22b16e956669a426",
+      "offer_id": 1,
+      "label": "Pass priority"
+    },
+    {
+      "before_digest": "78d78e642d9be69a25acf087c696f90e76c59f0c495167c16d76b7c859f400bb",
+      "offer_id": 1,
+      "label": "Pass priority"
+    },
+    {
+      "before_digest": "55184a29fac404da4a2c5aaeb0d39ec19401f89328b1e267600692cb5ec207b8",
+      "offer_id": 1,
+      "label": "Pass priority"
+    },
+    {
+      "before_digest": "3d797a40276cc8012d225eaf04e84fea98793bd7dd38fdbf69ee1163dc6edd89",
+      "offer_id": 1,
+      "label": "Pass priority"
+    },
+    {
+      "before_digest": "00fac7025d711c6ee32163e23d411af34b5b9aa55453a267bc5d120a02202a1a",
+      "offer_id": 0,
+      "label": "Play Island"
+    },
+    {
+      "before_digest": "8fef85fb6202da4fefc0cc438d849c74ff905f94bbc070f5e88ac29be8c4ac83",
+      "offer_id": 0,
+      "label": "Cast Divide by Zero"
+    },
+    {
+      "before_digest": "455219ff38a977c112c588d55485c8670489f96bb1c71c1d0c76aaebff1e762f",
+      "offer_id": 0,
+      "label": "Target Tiger-Seal"
+    }
+  ],
+  "decision_digest": "789567c336b069fcbc02ec460fa53b173d88184c02e9e51daf8b84207c8d339e",
+  "decision_revision": 14,
+  "decision_kind": "LEARN"
+}

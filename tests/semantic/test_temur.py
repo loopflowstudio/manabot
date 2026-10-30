@@ -31,13 +31,9 @@ def test_temur_artifacts_and_learning_catalog_close_the_registered_cards() -> No
         ]
     )
     binding = BoundSemanticPack.bind(env.content_pack_manifest())
-    assert binding.schema.raw["schema_version"] == 5
+    assert binding.schema.raw == LearningSchema.load().raw
     assert binding.pad_catalog()
     assert len(binding.definition_row_by_card_def_id) == 9
-    assert (
-        len(LearningSchema.load("content/semantic/w8/learning_schema.json").opcodes)
-        == 55
-    )
 
 
 def test_temur_finishes_through_the_production_training_observation_path() -> None:

@@ -4,7 +4,7 @@ use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha8Rng;
 
 use managym::{
-    cardsets::alpha::ContentPack,
+    cards::content_pack::ContentPack,
     state::{
         card::{CardDefId, CardDefinition},
         game_object::{CardId, ObjectId, PlayerId},

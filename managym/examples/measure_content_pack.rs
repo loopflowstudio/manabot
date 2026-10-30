@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, hint::black_box, mem::size_of, time::Instant};
 
 use managym::{
     agent::env::Env,
-    cardsets::alpha::CardRegistry,
+    cards::content_pack::CardRegistry,
     flow::game::GameState,
     state::{card::Card, player::PlayerConfig},
     Game,

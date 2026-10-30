@@ -14,7 +14,7 @@ use managym::{
     },
 };
 
-use super::helpers::*;
+use crate::support::game::*;
 
 fn queue_effects(s: &mut Scenario, source: CardId, effects: Vec<Effect>) {
     let source_ref = s.game().current_object_ref(source);
@@ -38,7 +38,11 @@ fn queue_effects(s: &mut Scenario, source: CardId, effects: Vec<Effect>) {
 /// even while the resolving frame waits for the controller's choice.
 #[test]
 fn cr_704_4_sba_waits_for_suspended_resolution_to_finish() {
-    let mut s = Scenario::new(ogre_deck(), mountain_deck(), 608_704);
+    let mut s = Scenario::new(
+        deck_of("Mountain", "Gray Ogre"),
+        deck(&[("Mountain", 40)]),
+        608_704,
+    );
     s.advance_to_active_step(0, StepKind::Main);
     let source = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let card = s.game().state.permanents[source].as_ref().unwrap().card;
@@ -79,7 +83,11 @@ fn cr_704_4_sba_waits_for_suspended_resolution_to_finish() {
 /// or a reason to discard the trigger before the response window.
 #[test]
 fn cr_603_5_optional_draw_is_chosen_at_resolution() {
-    let mut s = Scenario::new(ogre_deck(), mountain_deck(), 608_603);
+    let mut s = Scenario::new(
+        deck_of("Mountain", "Gray Ogre"),
+        deck(&[("Mountain", 40)]),
+        608_603,
+    );
     s.advance_to_active_step(0, StepKind::Main);
     let source = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let card = s.game().state.permanents[source].as_ref().unwrap().card;
@@ -107,7 +115,11 @@ fn cr_603_5_optional_draw_is_chosen_at_resolution() {
 #[test]
 #[ignore = "audit proposal: earthbend return must retain destination incarnation"]
 fn audit_earthbend_return_does_not_follow_a_second_zone_change() {
-    let mut s = Scenario::new(ogre_deck(), mountain_deck(), 608_400);
+    let mut s = Scenario::new(
+        deck_of("Mountain", "Gray Ogre"),
+        deck(&[("Mountain", 40)]),
+        608_400,
+    );
     s.advance_to_active_step(0, StepKind::Main);
     let land = s.force_permanent_on_battlefield(0, "Mountain");
     let card = s.game().state.permanents[land].as_ref().unwrap().card;
@@ -137,7 +149,11 @@ fn audit_earthbend_return_does_not_follow_a_second_zone_change() {
 #[test]
 #[ignore = "audit proposal: clear deathtouch history after an SBA check"]
 fn audit_deathtouch_does_not_reapply_after_surviving_an_sba_check() {
-    let mut s = Scenario::new(ogre_deck(), mountain_deck(), 608_705);
+    let mut s = Scenario::new(
+        deck_of("Mountain", "Gray Ogre"),
+        deck(&[("Mountain", 40)]),
+        608_705,
+    );
     s.advance_to_active_step(0, StepKind::Main);
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let permanent = s.game_mut().state.permanents[ogre].as_mut().unwrap();
@@ -166,7 +182,11 @@ fn audit_deathtouch_does_not_reapply_after_surviving_an_sba_check() {
 /// after each instruction changes the target's characteristics.
 #[test]
 fn audit_target_gaining_hexproof_during_resolution_is_still_affected() {
-    let mut s = Scenario::new(ogre_deck(), ogre_deck(), 608_115);
+    let mut s = Scenario::new(
+        deck_of("Mountain", "Gray Ogre"),
+        deck_of("Mountain", "Gray Ogre"),
+        608_115,
+    );
     s.advance_to_active_step(0, StepKind::Main);
     let source = s.force_permanent_on_battlefield(0, "Gray Ogre");
     let victim = s.force_permanent_on_battlefield(1, "Gray Ogre");

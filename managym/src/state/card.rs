@@ -7,7 +7,7 @@ use super::{
     predicate::CardPredicate,
 };
 
-/// Stable index of an immutable card definition in a [`ContentPack`](crate::cardsets::alpha::ContentPack).
+/// Stable index of an immutable card definition in a [`ContentPack`](crate::cards::content_pack::ContentPack).
 ///
 /// The numeric value deliberately matches the legacy `registry_key` exposed
 /// through observations so the Python and fixed-action ABIs do not change.
@@ -275,6 +275,14 @@ pub struct SpellCostReduction {
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize)]
 pub struct CardDefinition {
+    /// `<set>.<card>`: the set file of the card's first printing and its slug.
+    /// Identity metadata, not rules: excluded from content digests and tokens.
+    #[serde(skip)]
+    pub key: &'static str,
+    /// Scryfall card-object id of the printing in `key`'s set; Oracle text,
+    /// rulings and images are reachable from it. Play never reads it.
+    #[serde(skip)]
+    pub scryfall_id: &'static str,
     /// During your turn, grant graveyard flashback (Lessons cost {1}).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub grants_flashback: bool,

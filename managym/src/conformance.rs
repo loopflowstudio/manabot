@@ -20,7 +20,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
 
 use crate::{
-    cardsets::alpha::default_content_pack,
+    cards::content_pack::default_content_pack,
     flow::{game::Game, search::mix_seed},
     state::player::PlayerConfig,
 };
@@ -110,27 +110,27 @@ impl Orientation {
     fn source_digest(self) -> String {
         blake3::hash(self.source_bytes()).to_hex().to_string()
     }
-    fn content(self) -> Result<Arc<crate::cardsets::alpha::ContentPack>, String> {
+    fn content(self) -> Result<Arc<crate::cards::content_pack::ContentPack>, String> {
         match self {
-            Self::ElementalWorldGrVsUg | Self::ElementalWorldUgVsGr => Ok(Arc::new(
-                crate::semantic::SemanticPack::optional_payments()
-                    .and_then(|pack| pack.compile_content_pack())
-                    .map_err(|error| error.to_string())?,
+            Self::ElementalWorldGrVsUg | Self::ElementalWorldUgVsGr => Ok(Arc::clone(
+                &crate::cards::setups::authored_pack("optional_payments")
+                    .map_err(|error| error.to_string())?
+                    .content,
             )),
-            Self::TemurLeftVsRight | Self::TemurRightVsLeft => Ok(Arc::new(
-                crate::semantic::SemanticPack::temur()
-                    .and_then(|pack| pack.compile_content_pack())
-                    .map_err(|error| error.to_string())?,
+            Self::TemurLeftVsRight | Self::TemurRightVsLeft => Ok(Arc::clone(
+                &crate::cards::setups::authored_pack("temur")
+                    .map_err(|error| error.to_string())?
+                    .content,
             )),
-            Self::SacrificeLeftVsRight | Self::SacrificeRightVsLeft => Ok(Arc::new(
-                crate::semantic::SemanticPack::sacrifice()
-                    .and_then(|pack| pack.compile_content_pack())
-                    .map_err(|error| error.to_string())?,
+            Self::SacrificeLeftVsRight | Self::SacrificeRightVsLeft => Ok(Arc::clone(
+                &crate::cards::setups::authored_pack("sacrifice")
+                    .map_err(|error| error.to_string())?
+                    .content,
             )),
-            Self::ElementalLeftVsRight | Self::ElementalRightVsLeft => Ok(Arc::new(
-                crate::semantic::SemanticPack::elemental()
-                    .and_then(|pack| pack.compile_content_pack())
-                    .map_err(|error| error.to_string())?,
+            Self::ElementalLeftVsRight | Self::ElementalRightVsLeft => Ok(Arc::clone(
+                &crate::cards::setups::authored_pack("elemental")
+                    .map_err(|error| error.to_string())?
+                    .content,
             )),
             _ => Ok(default_content_pack()),
         }

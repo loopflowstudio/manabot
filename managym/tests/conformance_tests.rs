@@ -26,14 +26,13 @@
 
 use std::collections::{BTreeSet, HashMap};
 
-use managym::cardsets::alpha::CardRegistry;
-use managym::semantic::SemanticPack;
+use managym::cards::content_pack::CardRegistry;
+use managym::cards::setups::authored_pack;
 use managym::state::card::{CardDefinition, CardType};
 use managym::state::mana::{Color, ManaCost};
 
-/// Registered names that are deliberately not real Magic cards (marked
-/// `// not a real card` at the registration). Tokens are excluded via
-/// `is_token` instead.
+/// Registered rules fixtures that are not real Magic cards
+/// (`managym/src/cards/fixtures.rs`). Tokens are excluded via `is_token`.
 const NOT_REAL_CARDS: &[&str] = &["Crossroads of Destiny"];
 
 /// name -> engine mana-cost rendering accepted in place of the Scryfall
@@ -190,9 +189,7 @@ fn engine_pt(printed: Option<i32>, cda: bool) -> Option<String> {
 #[test]
 fn every_registered_real_card_matches_scryfall() {
     let registry = CardRegistry::default();
-    let research = SemanticPack::complexity()
-        .and_then(|pack| pack.compile_content_pack())
-        .expect("complexity catalog compiles");
+    let research = std::sync::Arc::clone(&authored_pack("complexity").unwrap().content);
     let fixture = fixture();
     let cost_exceptions = sanctioned_cost_deviations();
     let mut failures: Vec<String> = Vec::new();

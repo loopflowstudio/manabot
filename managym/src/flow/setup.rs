@@ -6,13 +6,13 @@ use rand_chacha::ChaCha8Rng;
 
 use crate::{
     agent::behavior_tracker::BehaviorTracker,
-    cardsets::alpha::{default_content_pack, ContentPack},
+    cards::content_pack::{default_content_pack, ContentPack},
+    cards::content_pack_for_authored_match,
     flow::{
         game::{Game, GameState},
         priority::PriorityState,
         turn::TurnState,
     },
-    semantic::content_pack_for_authored_match,
     state::{
         game_object::{CardId, CardVec, IdGenerator, Incarnation, PermanentVec, PlayerId},
         player::{Player, PlayerConfig},

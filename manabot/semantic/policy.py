@@ -24,7 +24,6 @@ if TYPE_CHECKING:
     from managym.experience import Command, ExperienceFrame
 
 from .learning import (
-    DEFAULT_IR_PATH,
     DEFAULT_SCHEMA_PATH,
     BoundSemanticPack,
     SemanticProjectionError,
@@ -213,15 +212,8 @@ class SemanticDecisionAdapter:
         env: Any,
         *,
         schema_path: str = str(DEFAULT_SCHEMA_PATH),
-        ir_path: str = str(DEFAULT_IR_PATH),
     ) -> "SemanticDecisionAdapter":
-        return cls(
-            BoundSemanticPack.from_env(
-                env,
-                schema_path=schema_path,
-                ir_path=ir_path,
-            )
-        )
+        return cls(BoundSemanticPack.from_env(env, schema_path=schema_path))
 
     def bind(
         self,

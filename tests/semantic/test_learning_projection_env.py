@@ -40,16 +40,14 @@ def test_exact_environment_manifest_binds_the_selected_matchup():
 
     assert manifest["schema_version"] == pack.content_pack_schema_version
     assert manifest["content_digest"] == pack.content_pack_hash
-    assert manifest["compiled_semantics"] == {
-        "pack_key": pack.ir.raw["pack_key"],
-        "ir_hash": pack.ir.raw["ir_hash"],
-        "source_hash": pack.ir.raw["source_hash"],
-    }
-    assert len(manifest["definitions"]) == len(pack.ir.definitions)
-    assert len(pack.definition_row_by_card_def_id) == len(pack.ir.definitions)
+    assert manifest["pack_key"] == pack.pack_key == "ur-lessons-vs-gw-allies"
+    assert len(manifest["definitions"]) == pack.definition_count
+    assert len(pack.definition_row_by_card_def_id) == pack.definition_count
 
 
-def test_actual_viewer_projection_hides_determinized_private_cards_and_binds_references():
+def test_actual_viewer_projection_hides_determinized_private_cards_and_binds_references() -> (
+    None
+):
     engine = _engine()
     engine.scenario_clear_hand(0)
     engine.scenario_force_card_in_hand(0, "Invasion Reinforcements")
@@ -64,16 +62,12 @@ def test_actual_viewer_projection_hides_determinized_private_cards_and_binds_ref
         card.name != "Invasion Reinforcements" for card in visible.opponent_cards
     )
 
-    program_row = next(
-        row
-        for row, program in enumerate(pack.ir.programs)
-        if program["semantic_key"] == "tla.invasion_reinforcements.create_ally"
-    )
-    ally_row = next(
-        row
-        for row, definition in enumerate(pack.ir.definitions)
-        if definition["semantic_key"] == "token.ally"
-    )
+    rows = {
+        row["registry_name"]: row["card_def_id"]
+        for row in managym.content_pool("ur-lessons-vs-gw-allies")["definitions"]
+    }
+    (program_row,) = pack.program_rows(rows["Invasion Reinforcements"])
+    ally_row = pack.definition_row(rows["Ally"])
     padded_catalog = pack.pad_catalog()
     targets = padded_catalog["definition_ref_target_rows"][program_row]
     mask = padded_catalog["definition_ref_mask"][program_row]

@@ -91,8 +91,8 @@ class ObservationEncoder:
         # can't-be-blocked-this-turn, effective power/toughness, animated
         # (earthbent land), exile-linkage (Jailer), 13 effective-keyword flags
         # (printed + until-EOT grants), death-to-exile replacement, definition,
-        # temporary Avatar subtype, validity.
-        self.permanent_dim = 28
+        # temporary Avatar subtype, attacking, validity.
+        self.permanent_dim = 29
         self.event_dim = 12 if config.policy_history_version == 1 else 7
 
         # Preserve attack/decline independently of action family and focus.
@@ -519,6 +519,7 @@ class ObservationEncoder:
         arr[23] = float(perm.exile_if_dies_this_turn)
         arr[25] = float(perm.keywords.indestructible)
         arr[26] = float("Avatar" in perm.temp_subtypes)
+        arr[27] = float(perm.attacking)
         arr[PERMANENT_DEFINITION_INDEX] = perm.registry_key + 1
         # Set validity flag (permanent exists)
         arr[-1] = 1.0

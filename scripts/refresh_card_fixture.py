@@ -3,14 +3,13 @@
 
 Usage: uv run scripts/refresh_card_fixture.py
 
-Parses managym/src/cardsets/*.rs for every registered card name, resolves
-each real card against Scryfall's Oracle-Cards bulk data (one download, no
-per-card API calls — https://scryfall.com/docs/api/bulk-data), and rewrites
-managym/tests/fixtures/scryfall_cards.json. Cards registered as tokens
-(`is_token: true`) or explicitly marked `// not a real card` are excluded
-from the fixture; the cargo conformance test
-(managym/tests/conformance_tests.rs) enforces that every other registration
-has a fixture entry.
+Reads every card name from the native world pool (`managym.content_pool`),
+resolves each real card against Scryfall's Oracle-Cards bulk data (one
+download, no per-card API calls — https://scryfall.com/docs/api/bulk-data), and
+rewrites managym/tests/fixtures/scryfall_cards.json. Token definitions are
+excluded; the cargo conformance test (managym/tests/conformance_tests.rs)
+enforces that every other definition has a fixture entry. Rebuild the
+extension after card changes so the pool is current.
 """
 
 from __future__ import annotations
@@ -19,12 +18,13 @@ import gzip
 import io
 import json
 from pathlib import Path
-import re
 import sys
 import urllib.request
 
+from managym import content_pool
+
 REPO = Path(__file__).resolve().parent.parent
-CARDSETS = REPO / "managym" / "src" / "cardsets"
+WORLD_POOL = "world"
 FIXTURE = REPO / "managym" / "tests" / "fixtures" / "scryfall_cards.json"
 
 USER_AGENT = "manabot-research/0.1 (jackstah@gmail.com)"
@@ -45,48 +45,19 @@ FIELDS = [
 
 
 def registered_names() -> list[str]:
-    """Every card name registered in the cardsets, minus tokens and cards
-    explicitly marked `// not a real card`."""
-    names: list[str] = []
-    skipped: list[str] = []
-    for path in sorted(CARDSETS.glob("*.rs")):
-        text = path.read_text()
-        # basic_land("Plains", ...)
-        names.extend(re.findall(r'basic_land\("([^"]+)"', text))
-        # register_creature("Name", ...)
-        names.extend(re.findall(r'register_creature\(\s*"([^"]+)"', text))
-        # register_card(CardDefinition { name: "Name".to_string(), ... })
-        # Split into per-registration chunks so we can see is_token / markers.
-        for chunk in re.split(r"self\.register_card\(CardDefinition \{", text)[1:]:
-            m = re.search(r'^\s*name: "([^"]+)"', chunk, re.M)
-            if not m:
-                continue
-            name = m.group(1)
-            body = chunk.split("\n        });", 1)[0]
-            if "is_token: true" in body:
-                skipped.append(f"{name} (token)")
-                continue
-            names.append(name)
-        # `// not a real card` marker: the comment goes on the line(s) above
-        # the registration; drop any collected name whose registration block
-        # carries the marker.
-        for marked in re.findall(
-            r"// not a real card[^\n]*\n(?:\s*//[^\n]*\n)*?\s*self\.register_card\(CardDefinition \{\s*\n\s*name: \"([^\"]+)\"",
-            text,
-        ):
-            if marked in names:
-                names.remove(marked)
-                skipped.append(f"{marked} (not a real card)")
-    if skipped:
-        print(f"skipping (no fixture entry): {', '.join(sorted(skipped))}")
-    # de-dup, keep stable order
-    seen: set[str] = set()
-    out = []
-    for n in names:
-        if n not in seen:
-            seen.add(n)
-            out.append(n)
-    return out
+    """Every real card name in the world pool, sorted.
+
+    The pool lists every card a set file defines. Token definitions
+    (`token.*` keys) are not real cards, and rules fixtures such as Crossroads
+    of Destiny have no key.
+    """
+    rows = [row for row in content_pool(WORLD_POOL)["definitions"] if row["key"]]
+    tokens = sorted(
+        row["registry_name"] for row in rows if row["key"].startswith("token.")
+    )
+    if tokens:
+        print(f"skipping tokens (no fixture entry): {', '.join(tokens)}")
+    return sorted({row["registry_name"] for row in rows} - set(tokens))
 
 
 def http_get(url: str) -> bytes:
@@ -156,7 +127,9 @@ def main() -> int:
     )
     print(f"wrote {FIXTURE} ({len(cards)} cards)")
     if missing:
-        print("\nNOT on Scryfall (mark `// not a real card` or register as token):")
+        print(
+            "\nNOT on Scryfall (define tokens under `token.*`; keep invented fixtures out of the pool):"
+        )
         for name in missing:
             print(f"  - {name}")
         return 1
