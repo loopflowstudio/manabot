@@ -40,7 +40,7 @@ Configured Search executes Learn in both deck assignments without changing the
 source root. The existing GameSession/live tape and canonical replay owners
 feed `academy.learn_lesson_evidence`; no second replay engine was introduced.
 The prospective cohort, exact source closure and 10,000-Command cap are recorded
-in `conformance/learn-lesson-w4-v3`. v2 passed all 16 games (3,843 Commands,
+in `experiments/data/archive/conformance/learn-lesson-w4-v3`. v2 passed all 16 games (3,843 Commands,
 19 retrievals, 25 discard/draws and 14 declines) at source `57ac36a5`. Final
 gate repairs to import isolation and diagnostic traceback handling changed the
 source binding, so v3 repeats the same fixed seeds. The earlier unscored v1
@@ -200,16 +200,15 @@ target, expensive training or strength claim is implied.
 
 ## Source history
 
-The source documents below are retained in local checkpoint
-`d1326f249609daa781e786f5ee103aaeea3e1651`; that checkpoint is not published as
-of this update. The paths remain available in the working tree. Keep them while
-implementation continues; this curated record does not replace the full design
-or its detailed verification matrix.
+The source documents below were retained in local checkpoint
+`d1326f249609daa781e786f5ee103aaeea3e1651`, which was not published; they are
+no longer in the working tree. This curated record does not replace the full
+design or its detailed verification matrix.
 
-- [Approved design and slice ledger](../../scratch/complete-learn-lesson-in-the.md)
-- [Human session and exact approval scope](../../scratch/demo-human-learn.md)
-- [Playable-controls review and failure inventory](../../scratch/review-slice3-controls.md)
-- [Outstanding assumptions and evidence](../../scratch/questions.md)
+- Approved design and slice ledger: `scratch/complete-learn-lesson-in-the.md`
+- Human session and exact approval scope: `scratch/demo-human-learn.md`
+- Playable-controls review and failure inventory: `scratch/review-slice3-controls.md`
+- Outstanding assumptions and evidence: `scratch/questions.md`
 
 `lf status rules --json` confirms ETU-75's ownership and this worktree, with an
 unfinished working PR and no publication. Its current chapter is
