@@ -32,6 +32,19 @@ ending at 63,000, then another ending at 100,000. Each segment consumes the
 previous segment's exported TrainingRun/raw/EMA/optimizer files, including a
 valid paused export if its allocation ended before its target.
 
+An interrupted producer has no final exports, so it continues only by
+declaration: `LearningStateImport(..., raw=..., monitoring_update=N)` with no
+`ema` or `optimizer`. `raw` must be the bytes of the producer's monitoring
+export at absolute update `N` (its record's receipt), the origin takes that
+receipt's coordinates, the EMA starts as a copy of the raw weights and Adam
+starts with no moments. The origin's `reset` lists `ema` and `optimizer`, so
+the discontinuity stays visible in every successor record.
+
+`execute_regime(..., stop_reserve_seconds=R)` avoids leaving such a producer:
+a single step-target self-play stage stops at the first update boundary where
+the slowest update so far plus `R` no longer fits in its watchdog, exports
+raw/EMA/Adam and ends `paused`. Etude training jobs always run this way.
+
 Ataraxos rates keep their absolute iteration formulas. The first resumed update
 is 26,001, with LR `6.957944302072213e-6` and tau
 `0.0023684978179155515` for the default recipe. A 100,000 endpoint introduces no
