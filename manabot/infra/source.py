@@ -57,6 +57,20 @@ def bundle_at(repo: Path, revision: str) -> SourceBundle:
     return SourceBundle(commit=commit, files=files)
 
 
+def _verify(root: Path, bundle: SourceBundle, label: str) -> None:
+    """Require every bundled file under `root` to hold its recorded bytes."""
+    if not bundle.files:
+        raise ValueError(f"{label} is empty")
+    for name, digest in bundle.files.items():
+        relative = Path(name)
+        if (
+            relative.is_absolute()
+            or ".." in relative.parts
+            or file_sha256(root / relative) != digest
+        ):
+            raise ValueError(f"{label} differs: {name}")
+
+
 @cache
 def source_commit() -> str:
     root = Path(__file__).resolve().parents[2]
@@ -66,16 +80,7 @@ def source_commit() -> str:
             ["git", "-C", str(root), "rev-parse", "HEAD"], text=True
         ).strip()
     bundle = SourceBundle.model_validate_json(path.read_text())
-    if not bundle.files:
-        raise ValueError("source bundle is empty")
-    for name, digest in bundle.files.items():
-        relative = Path(name)
-        if (
-            relative.is_absolute()
-            or ".." in relative.parts
-            or file_sha256(root / relative) != digest
-        ):
-            raise ValueError(f"source bundle differs: {name}")
+    _verify(root, bundle, "source bundle")
     return bundle.commit
 
 
@@ -104,22 +109,9 @@ def bind_etude_source() -> None:
     root = Path(__file__).resolve().parents[2]
     config = json.loads(Path(os.environ["ETUDE_CONFIG"]).read_text())
     bundle = SourceBundle.model_validate(config["source_bundle"])
-    if not bundle.files:
-        raise ValueError("Etude source bundle is empty")
-    for name, digest in bundle.files.items():
-        relative = Path(name)
-        if (
-            relative.is_absolute()
-            or ".." in relative.parts
-            or file_sha256(root / relative) != digest
-        ):
-            raise ValueError(f"Etude archive differs from submitted source: {name}")
-    native = (
-        root
-        / "manabot"
-        / "managym"
-        / ("_managym" + sysconfig.get_config_var("EXT_SUFFIX"))
-    )
+    _verify(root, bundle, "Etude archive")
+    suffix = sysconfig.get_config_var("EXT_SUFFIX")
+    native = root / "manabot" / "managym" / f"_managym{suffix}"
     files = dict(bundle.files)
     files[str(native.relative_to(root))] = file_sha256(native)
     target = root / ".manabot-source.json"
