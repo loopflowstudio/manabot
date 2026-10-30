@@ -29,6 +29,31 @@ below this Task's entries; they are main's, not this Task's.
   reset seed); curriculum, mirrors, 17Lands and the Academy 1a draft redesign
   are deferred (1a detail at c1dd6c71c).
 
+## Accepted 2026-10-30 later (Jack Heart): a run has a way to get its next decks
+
+Supersedes the run-owns-a-deck-list parts of the decisions below.
+
+- **No content concept.** Beyond 1a: "content", "pool" and "pack" leave the
+  deck, training and checkpoint surfaces. The world is the only concept. A
+  checkpoint binds the world; the world's identity must still change when its
+  cards change, but under the name world.
+- **A run does not have a list of decks or files.** It has a deck source: a way
+  to get the next decks for each new game. Decks may be sampled from many lists,
+  generated at random on the fly, or (initially) drawn uniformly from a small
+  list built however the experiment likes. Experiments are Python
+  (`experiments/*.py` recipes), so the source is a Python object in the regime.
+  Remove `TrainingDecks`-as-file-list and regime `decks: {files}`.
+- **Cheap batch check.** One function answers "are all these decks valid in this
+  world?" (e.g. `managym.check_decks(decks) -> per-deck issues`). Callers use it
+  upfront when they want; game creation still admits every deck natively.
+- **Recovery.** Exact resume must reproduce the same decks for the same games:
+  a source is deterministic from its seed/state, or the run records each game's
+  actual decks (it already does) and replays them. Checkpoints never know the source.
+
+Implementation choices (not product decisions): the source protocol's exact
+shape; how native autoreset obtains each next pair (e.g. Python fills a per-
+stream queue, or the native uniform sampler remains one source implementation).
+
 ## Accepted 2026-10-30 (Jack Heart: 1a, 2a, 3a): decks need only a world
 
 Since #394 the engine has one world (`world.rs`: w17; its cards are every
