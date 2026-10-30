@@ -19,7 +19,9 @@ fn fists_of_flame() -> CardDefinition {
         mana_cost: Some(ManaCost::parse("{1}{R}")),
         types: CardTypes::new([CardType::Instant]),
         spell_effects: vec![
-            Effect::DrawCards { count: 1 },
+            Effect::DrawCards {
+                count: EffectValue::Fixed(1),
+            },
             Effect::BuffTargetValue {
                 power: EffectValue::CardsDrawnMinus { subtract: 0 },
                 toughness: 0,

@@ -3,7 +3,7 @@ use crate::{
     flow::{
         event::{EventEntity, EventSubject, GameEvent, ObjectEventRef},
         game::Game,
-        turn::{PhaseKind, StepKind},
+        turn::{PhaseKind, PlayerTurnHistory, StepKind},
     },
     state::{
         game_object::{CardId, ObjectId, PlayerId, Target},
@@ -64,6 +64,9 @@ pub struct PlayerData {
     /// Unspent red mana stays until end of turn (The Last Agni Kai).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub keeps_red_mana: bool,
+    /// What this player has done this turn (public: every event in it was).
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub turn_history: PlayerTurnHistory,
 }
 
 /// Mana that may be spent only on the named purposes (CR 106.6): spells with
@@ -413,6 +416,10 @@ pub struct PermanentData {
     /// spent: exhaust (CR 702.177a) or once each turn (CR 602.5b).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub used_abilities: Vec<usize>,
+    /// It was dealt damage this turn, whether or not that damage is still
+    /// marked.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dealt_damage_this_turn: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -700,6 +707,7 @@ impl Observation {
                 .map(|(definition, count)| (definition.0, *count))
                 .collect(),
             keeps_red_mana: p.keeps_red_mana,
+            turn_history: game.state.turn.history[player.0],
         }
     }
 
@@ -894,6 +902,7 @@ impl Observation {
                     .map(|attacker| attacker.id.0 as i32)
             }),
             abilities_lost: game.has_lost_abilities(perm_id),
+            dealt_damage_this_turn: permanent.dealt_damage_this_turn,
             used_abilities: game
                 .activated_abilities_for(perm_id)
                 .iter()

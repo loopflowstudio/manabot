@@ -259,8 +259,14 @@ impl Game {
                     .filter_map(|(definition_index, effect)| {
                         let effect = match effect {
                             ReplacementEffect::EntersTapped
-                            | ReplacementEffect::EntersWithPlusOneCounters { .. }
                             | ReplacementEffect::EntersWithXCounters { .. } => effect.clone(),
+                            ReplacementEffect::EntersWithPlusOneCounters { condition, .. }
+                                if condition.as_ref().is_none_or(|condition| {
+                                    self.check_static_condition(condition, entering_controller)
+                                }) =>
+                            {
+                                effect.clone()
+                            }
                             ReplacementEffect::EntersTappedUnlessControls { predicate }
                                 if !self
                                     .battlefield_permanents(entering_controller)
@@ -341,7 +347,7 @@ impl Game {
             }
             (
                 ProposedEvent::ZoneMove { entry, .. },
-                ReplacementEffect::EntersWithPlusOneCounters { count },
+                ReplacementEffect::EntersWithPlusOneCounters { count, .. },
             ) => {
                 debug_assert!(*count >= 0, "entry counter count must be nonnegative");
                 entry.plus_one_counters = entry.plus_one_counters.saturating_add((*count).max(0));

@@ -412,9 +412,14 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     mine.temp_subtypes = ["Island", "Construct", "Citizen"]
     mine.attacking, mine.blocking, mine.abilities_lost = True, theirs.id, True
     mine.used_abilities = [1, 5]
+    mine.dealt_damage_this_turn = True
     obs.agent_permanents = [mine]
     agent = obs.agent
     agent.keeps_red_mana = agent.no_maximum_hand_size = True
+    history = agent.turn_history
+    history.attacked = history.land_entered = True
+    history.permanents_sacrificed, history.cards_drawn = 3, 2
+    agent.turn_history = history
     obs.agent = agent
 
     encoder = ObservationEncoder(ObservationConfig(policy_input_version=5))
@@ -427,15 +432,15 @@ def test_v5_encodes_every_observed_permanent_and_card_field_in_parity() -> None:
     # Attacking (v4 column 27), then v5: exhausted, once each turn, granted
     # firebending, counters, attachment join, set characteristics, granted
     # land, temporary subtypes and a count, blocking join, lost abilities,
-    # used-ability flags and a count, validity.
+    # used-ability flags and a count, dealt damage this turn, validity.
     np.testing.assert_allclose(
         row[27:PERMANENT_DIM],
         [1, 0, 0, 0.4, 0.1, 0.2, 0.3, host + 1, 1, 1, 0, 1, 0, 0, 0, 1, 1]
-        + [host + 1, 1, 0, 1, 0, 0, 1, 1],
+        + [host + 1, 1, 0, 1, 0, 0, 1, 1, 1],
     )
     np.testing.assert_allclose(
         actual["agent_player"][0, PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX:],
-        [1, obs.turn.turn_number / 20, 0, 1],
+        [1, obs.turn.turn_number / 20, 0, 1, 1, 0.3, 1, 0.2],
     )
     assert actual["agent_cards"][0, CARD_DIM - 1] == 1
     v4 = env.encode_observation(obs, 4)

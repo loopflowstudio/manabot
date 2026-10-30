@@ -1314,6 +1314,10 @@
           "type": "integer",
           "format": "int32"
         },
+        "dealt_damage_this_turn": {
+          "description": "It was dealt damage this turn.",
+          "type": "boolean"
+        },
         "exhausted_abilities": {
           "description": "Exhaust abilities this object has used (CR 702.177a).",
           "type": "integer",
@@ -1571,6 +1575,10 @@
             "$ref": "#/$defs/LegacyCardView"
           }
         },
+        "turn_history": {
+          "description": "What this player has done this turn.",
+          "$ref": "#/$defs/PlayerTurnHistory"
+        },
         "zone_counts": {
           "type": "object",
           "additionalProperties": {
@@ -1726,6 +1734,33 @@
         "pay",
         "special"
       ]
+    },
+    "PlayerTurnHistory": {
+      "description": "What one player has done this turn, for conditions that read turn history\n(\"if you attacked this turn\", \"your second card each turn\"). The owner of\nevery such fact: the turn reset, the state hash and the policy's player\nrow all read this struct.",
+      "type": "object",
+      "properties": {
+        "attacked": {
+          "description": "Declared one or more attackers (raid; CR 508.1). Creatures put onto\nthe battlefield attacking were never declared and do not count.",
+          "type": "boolean"
+        },
+        "cards_drawn": {
+          "description": "Cards this player drew (\"your Nth card each turn\").",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "land_entered": {
+          "description": "A land entered the battlefield under this player's control.",
+          "type": "boolean"
+        },
+        "permanents_sacrificed": {
+          "description": "Permanents this player sacrificed (CR 701.21).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
     },
     "PolicyMass": {
       "type": "object",

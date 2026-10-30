@@ -304,8 +304,14 @@ pub enum ReplacementEffect {
     /// This object enters tapped unless its entering controller already
     /// controls a permanent matching `predicate` (CR 614.1c, 614.12).
     EntersTappedUnlessControls { predicate: CardPredicate },
-    /// This object enters with +1/+1 counters already present (CR 614.1c).
-    EntersWithPlusOneCounters { count: i32 },
+    /// This object enters with +1/+1 counters already present (CR 614.1c),
+    /// if `condition` holds for its entering controller as it enters
+    /// ("enters with a +1/+1 counter on it if you attacked this turn").
+    EntersWithPlusOneCounters {
+        count: i32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        condition: Option<StaticCondition>,
+    },
     /// This object enters with X counters of `kind`, X being the value
     /// announced as it was cast, otherwise 0 (CR 107.3m, 614.1c).
     EntersWithXCounters { kind: CounterKind },

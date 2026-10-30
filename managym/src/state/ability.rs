@@ -90,7 +90,7 @@ pub enum TriggerCondition {
     BeginningOfYourCombat,
     BeginningOfYourEndStep,
     /// "Whenever you draw your Nth card each turn." The per-player draw
-    /// count resets every turn (see `TurnState::cards_drawn_this_turn`).
+    /// count resets every turn (see `PlayerTurnHistory::cards_drawn`).
     YouDrawNthCardThisTurn {
         n: u32,
     },
@@ -128,6 +128,19 @@ pub enum StaticCondition {
     UnspentManaAtLeast {
         count: u32,
     },
+    /// "if you attacked this turn" (raid): you declared one or more
+    /// attackers this turn.
+    AttackedThisTurn,
+    /// "if a land entered the battlefield under your control this turn".
+    LandEnteredThisTurn,
+    /// "if you've sacrificed `count` or more permanents this turn".
+    SacrificedThisTurnAtLeast {
+        count: u32,
+    },
+    /// At least one alternative holds ("as long as you control a land
+    /// creature or a land entered the battlefield under your control this
+    /// turn").
+    AnyOf(Vec<StaticCondition>),
 }
 
 /// Which game objects an event-based trigger condition watches.
@@ -139,6 +152,28 @@ pub enum TriggerSubject {
     AnotherYouControl(CardPredicate),
     /// "this or another [predicate] you control"
     AnyYouControl(CardPredicate),
+}
+
+/// The players an effect affects, relative to its controller.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum PlayerSelector {
+    /// The effect's controller ("you").
+    You,
+    /// Each opponent of the controller.
+    EachOpponent,
+    /// The trigger's player ("they": the caster of the triggering spell).
+    TriggeringPlayer,
+    /// A chosen target player (boxed: a spec is far larger than the rest).
+    Target(Box<TargetSpec>),
+}
+
+impl PlayerSelector {
+    pub fn target_spec(&self) -> Option<&TargetSpec> {
+        match self {
+            Self::Target(spec) => Some(spec),
+            Self::You | Self::EachOpponent | Self::TriggeringPlayer => None,
+        }
+    }
 }
 
 /// A resolution-time quantity relative to the effect controller.
@@ -173,6 +208,8 @@ pub enum EffectValue {
     AttackingMatching {
         predicate: CardPredicate,
     },
+    /// Permanents `controller` has sacrificed this turn.
+    PermanentsSacrificedThisTurn,
 }
 
 /// A resolving obligation, distinct from the effects chosen by its outcome.
@@ -242,11 +279,9 @@ pub enum Effect {
     Sacrifice {
         predicate: CardPredicate,
     },
-    DealDamageToController {
-        amount: i32,
-    },
+    /// Each opponent loses `amount` life and you gain that much.
     DrainLife {
-        amount: i32,
+        amount: EffectValue,
     },
     CantBeBlockedTarget {
         target: TargetSpec,
@@ -268,9 +303,6 @@ pub enum Effect {
         if_declined: Vec<Effect>,
         #[serde(skip_serializing_if = "Option::is_none")]
         if_milled: Option<MilledBonus>,
-    },
-    DrainLifeValue {
-        amount: EffectValue,
     },
     /// A distinct targeting clause. Effects within it refer to the same
     /// chosen objects; different clauses may choose the same object.
@@ -447,22 +479,19 @@ pub enum Effect {
         power_delta: i32,
         toughness_delta: i32,
     },
-    /// Resolving player draws `count` cards. No target.
+    /// Resolving player draws `count` cards, read at resolution. No target.
     DrawCards {
-        count: usize,
-    },
-    /// Resolving player draws a number of cards read at resolution.
-    DrawCardsValue {
         count: EffectValue,
     },
-    /// Resolving player loses `amount` life (not damage, CR 119.3).
+    /// The selected players lose `amount` life (not damage, CR 119.3).
     LoseLife {
-        amount: i32,
+        player: PlayerSelector,
+        amount: EffectValue,
     },
-    /// The player in the trigger context ("they", the caster of the
-    /// triggering spell) loses `amount` life.
-    TriggeringPlayerLosesLife {
-        amount: i32,
+    /// The source deals `amount` damage to the selected players.
+    DealDamageToPlayer {
+        player: PlayerSelector,
+        amount: EffectValue,
     },
     /// Creatures the target player controls get +power/+toughness until end
     /// of turn; the affected set is fixed as it resolves (CR 611.2c).
@@ -470,11 +499,6 @@ pub enum Effect {
         power: i32,
         toughness: i32,
         target: TargetSpec,
-    },
-    /// The source deals `amount` damage to each opponent of the resolving
-    /// player. No target.
-    DealDamageToEachOpponent {
-        amount: i32,
     },
     /// Deal `amount` damage to each creature on the battlefield. No target.
     /// Each creature with mana value at most `max_mana_value` loses all
@@ -731,6 +755,12 @@ pub enum Effect {
         predicate: CardPredicate,
         then: Vec<Effect>,
     },
+    /// Run `then` only if the frame's primary target was dealt damage this
+    /// turn, read from its last known information once it has left ("Exile
+    /// target creature. If it was dealt damage this turn, ...").
+    IfTargetDealtDamageThisTurn {
+        then: Vec<Effect>,
+    },
     /// Run the inner effects once per chosen target, with that target as
     /// the primary target (Fancy Footwork: "untap one or two target
     /// creatures; they each get +2/+2"). Inner effects must not suspend.
@@ -849,7 +879,9 @@ fn is_true(value: &bool) -> bool {
 
 impl Default for Effect {
     fn default() -> Self {
-        Self::DrawCards { count: 0 }
+        Self::DrawCards {
+            count: EffectValue::Fixed(0),
+        }
     }
 }
 
@@ -875,19 +907,14 @@ impl Effect {
 
     pub fn target_spec(&self) -> Option<&TargetSpec> {
         match self {
-            Effect::Sacrifice { .. }
-            | Effect::DealDamageToController { .. }
-            | Effect::DealDamageToEachOpponent { .. }
-            | Effect::LoseLife { .. }
-            | Effect::TriggeringPlayerLosesLife { .. }
-            | Effect::DrawCardsValue { .. }
-            | Effect::DrainLife { .. } => None,
+            Effect::Sacrifice { .. } | Effect::DrainLife { .. } => None,
+            Effect::LoseLife { player, .. } | Effect::DealDamageToPlayer { player, .. } => {
+                player.target_spec()
+            }
             Effect::TargetClause { requirement, .. } => Some(&requirement.spec),
             Effect::MillCards { target, .. } => target.as_ref(),
             Effect::ExileLinked { target, .. } => Some(target),
-            Effect::SelectTargetRequirement { .. }
-            | Effect::MillAndSelect { .. }
-            | Effect::DrainLifeValue { .. } => None,
+            Effect::SelectTargetRequirement { .. } | Effect::MillAndSelect { .. } => None,
             Effect::CantBeBlockedTarget { target }
             | Effect::ReturnGraveyardTarget { target, .. }
             | Effect::ExileWithControllerToken { target, .. }
@@ -943,7 +970,9 @@ impl Effect {
                 .iter()
                 .chain(otherwise.iter())
                 .find_map(|effect| effect.target_spec()),
-            Effect::IfTargetMatches { then, .. } | Effect::SacrificeSource { then } => {
+            Effect::IfTargetMatches { then, .. }
+            | Effect::IfTargetDealtDamageThisTurn { then }
+            | Effect::SacrificeSource { then } => {
                 then.iter().find_map(|effect| effect.target_spec())
             }
             Effect::CreateNonlegendaryCopy

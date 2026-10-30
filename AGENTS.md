@@ -115,8 +115,8 @@ checkpoints or experiment evidence.
   weaken types merely to silence one.
 - Native scalar/vector observation buffers bind continuation input semantics by
   relation width: v2/v3 have 32 columns, v4 has 33, v5 has 48; validity
-  remains column 31. V5 widens player rows to 63, card rows to 55 and
-  permanent rows to 52 (v1–v4: 40 / 41 / 29), validity last.
+  remains column 31. V5 widens player rows to 67, card rows to 55 and
+  permanent rows to 53 (v1–v4: 40 / 41 / 29), validity last.
   Preserve the frozen widths and derive buffers from `ObservationSpace`.
 - New observation state reaches the policy input (native and Python encoders
   in parity), the LLM text observation and the learning tokens in the change
@@ -230,7 +230,11 @@ set under the single `tests/cards.rs` target. Both test targets mount
 `tests/support/` (`game.rs` builds, `play.rs` acts, `inspect.rs` reads), each
 primitive defined once. `five_color_setup` decks hold four copies of each listed
 name; a fifth `force_permanent_on_battlefield` of that name returns an existing
-copy, so list another card when a test needs more.
+copy, so list another card when a test needs more. `inspect::keywords` reads
+printed and until-end-of-turn keywords only; assert static grants through the
+observation. `force_permanent_on_battlefield` places a permanent without an
+entry event (no triggers or turn history); `enter_and_settle` and
+`play_and_settle` enter through the zone move.
 
 A permanent's activated abilities are `Game::activated_abilities_for` (printed,
 then granted, e.g. an Equipment's `AbilityGrant`); activation, payment

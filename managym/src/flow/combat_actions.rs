@@ -53,8 +53,14 @@ impl Game {
             self.effective_keywords(permanent_id).vigilance
         };
         self.journal_permanent(permanent_id);
+        let mut attacker = None;
         if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
             permanent.attacking = true;
+            attacker = Some(permanent.controller);
+        }
+        if let Some(player) = attacker.filter(|p| !self.state.turn.history[p.0].attacked) {
+            self.journal_turn();
+            self.state.turn.history[player.0].attacked = true;
         }
         if !has_vigilance {
             // CR 508.1f — Attackers without vigilance become tapped, which

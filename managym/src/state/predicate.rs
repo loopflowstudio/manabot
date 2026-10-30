@@ -72,6 +72,13 @@ impl CardPredicate {
         }
     }
 
+    /// Whether matching compares power, here or in an alternative.
+    pub fn reads_power(&self) -> bool {
+        self.min_power.is_some()
+            || self.max_power.is_some()
+            || self.any_of.iter().any(CardPredicate::reads_power)
+    }
+
     /// Match against a card's printed characteristics.
     pub fn matches_card(&self, card: &Card) -> bool {
         self.matches_card_with_power(card, card.power.unwrap_or(0))

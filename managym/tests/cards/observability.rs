@@ -31,18 +31,19 @@ use managym::{
         observation_encoder::{
             encode, EncodedObservation, ObservationEncoderConfig, CARD_DIM, CARD_PERMISSION_INDEX,
             CARD_X_INDEX, PERMANENT_ABILITIES_LOST_INDEX, PERMANENT_ATTACHED_INDEX,
-            PERMANENT_BLOCKING_INDEX, PERMANENT_CHARACTERISTICS_SET_INDEX, PERMANENT_DIM,
-            PERMANENT_DOUBLE_STRIKE_COUNTERS_INDEX, PERMANENT_EXHAUSTED_INDEX,
-            PERMANENT_FIREBENDING_INDEX, PERMANENT_FIRE_INDEX, PERMANENT_GRANTED_LAND_INDEX,
-            PERMANENT_ONCE_EACH_TURN_INDEX, PERMANENT_OTHER_TEMP_SUBTYPES_INDEX,
-            PERMANENT_OTHER_USED_ABILITIES_INDEX, PERMANENT_STUN_INDEX,
-            PERMANENT_TEMP_SUBTYPES_INDEX, PERMANENT_USED_ABILITIES_INDEX, PLAYER_DIM,
-            PLAYER_HAND_ONLY_INDEX, PLAYER_KEEPS_RED_MANA_INDEX, PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX,
-            PLAYER_RESTRICTED_INDEX, PLAYER_SEAT_INDEX, PLAYER_TURN_INDEX, TEMP_SUBTYPES,
-            USED_ABILITY_FLAGS,
+            PERMANENT_BLOCKING_INDEX, PERMANENT_CHARACTERISTICS_SET_INDEX,
+            PERMANENT_DEALT_DAMAGE_INDEX, PERMANENT_DIM, PERMANENT_DOUBLE_STRIKE_COUNTERS_INDEX,
+            PERMANENT_EXHAUSTED_INDEX, PERMANENT_FIREBENDING_INDEX, PERMANENT_FIRE_INDEX,
+            PERMANENT_GRANTED_LAND_INDEX, PERMANENT_ONCE_EACH_TURN_INDEX,
+            PERMANENT_OTHER_TEMP_SUBTYPES_INDEX, PERMANENT_OTHER_USED_ABILITIES_INDEX,
+            PERMANENT_STUN_INDEX, PERMANENT_TEMP_SUBTYPES_INDEX, PERMANENT_USED_ABILITIES_INDEX,
+            PLAYER_ATTACKED_INDEX, PLAYER_CARDS_DRAWN_INDEX, PLAYER_DIM, PLAYER_HAND_ONLY_INDEX,
+            PLAYER_KEEPS_RED_MANA_INDEX, PLAYER_LAND_ENTERED_INDEX,
+            PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX, PLAYER_RESTRICTED_INDEX, PLAYER_SACRIFICED_INDEX,
+            PLAYER_SEAT_INDEX, PLAYER_TURN_INDEX, TEMP_SUBTYPES, USED_ABILITY_FLAGS,
         },
     },
-    flow::turn::StepKind,
+    flow::turn::{PlayerTurnHistory, StepKind, TurnState},
     state::{
         game_object::{CardId, PermanentId, PlayerId, Target},
         permanent::CounterKind,
@@ -54,8 +55,8 @@ use managym::{
     cards::tokens::{definition_tokens, name_value, TokenKind},
     state::{
         ability::{
-            Ability, Effect, EffectValue, LinkedChooser, LinkedGrant, PaymentCost, StaticCondition,
-            TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+            Ability, Effect, EffectValue, LinkedChooser, LinkedGrant, PaymentCost, PlayerSelector,
+            StaticCondition, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
         },
         card::{CardDefinition, CardType, Keywords},
         mana::{Mana, ManaCost},
@@ -122,7 +123,7 @@ fn keyword_columns(keywords: Keywords) -> [(&'static str, bool, usize, usize); 1
     ]
 }
 
-fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 26] {
+fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 27] {
     let Permanent {
         id: _,
         card: _,
@@ -131,6 +132,7 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 26] {
         summoning_sick: _,
         damage: _,
         deathtouch_damage: _,
+        dealt_damage_this_turn: _,
         temp_power: _,
         temp_toughness: _,
         plus1_counters: _,
@@ -161,6 +163,10 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 26] {
         (
             "deathtouch_damage",
             Seen::Transient("state-based actions destroy the creature before priority"),
+        ),
+        (
+            "dealt_damage_this_turn",
+            Seen::Permanent(PERMANENT_DEALT_DAMAGE_INDEX),
         ),
         ("temp_power", Seen::Permanent(6)),
         ("temp_toughness", Seen::Permanent(7)),
@@ -247,6 +253,78 @@ fn player_fields(player: &Player) -> [(&'static str, Seen); 13] {
     ]
 }
 
+/// Turn-scoped state. Per-player turn history reaches each player's row.
+fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 16] {
+    let TurnState {
+        active_player: _,
+        turn_number: _,
+        lands_played: _,
+        spells_cast: _,
+        history,
+        ability_triggers_this_turn: _,
+        ability_resolutions_this_turn: _,
+        current_phase: _,
+        current_step: _,
+        step_initialized: _,
+        turn_based_actions_complete: _,
+        cleanup_priority: _,
+    } = turn;
+    let PlayerTurnHistory {
+        attacked: _,
+        permanents_sacrificed: _,
+        land_entered: _,
+        cards_drawn: _,
+    } = history[0];
+    [
+        ("active_player", Seen::Player(1, 2)),
+        (
+            "turn_number",
+            Seen::Player(PLAYER_TURN_INDEX, PLAYER_TURN_INDEX + 1),
+        ),
+        (
+            "lands_played",
+            Seen::Via("the land-play action is offered only while one remains"),
+        ),
+        (
+            "spells_cast",
+            Seen::Via("spell-cast events in the history rows"),
+        ),
+        (
+            "history",
+            Seen::Via("each player's history columns, listed next"),
+        ),
+        (
+            "history.cards_drawn",
+            Seen::Player(PLAYER_CARDS_DRAWN_INDEX, PLAYER_CARDS_DRAWN_INDEX + 1),
+        ),
+        (
+            "history.attacked",
+            Seen::Player(PLAYER_ATTACKED_INDEX, PLAYER_ATTACKED_INDEX + 1),
+        ),
+        (
+            "history.permanents_sacrificed",
+            Seen::Player(PLAYER_SACRIFICED_INDEX, PLAYER_SACRIFICED_INDEX + 1),
+        ),
+        (
+            "history.land_entered",
+            Seen::Player(PLAYER_LAND_ENTERED_INDEX, PLAYER_LAND_ENTERED_INDEX + 1),
+        ),
+        (
+            "ability_triggers_this_turn",
+            Seen::Via("used once-each-turn limits on permanent rows"),
+        ),
+        (
+            "ability_resolutions_this_turn",
+            Seen::Transient("read only by the resolving ability's own Nth-resolution check"),
+        ),
+        ("current_phase", Seen::Player(9, 14)),
+        ("current_step", Seen::Player(14, 26)),
+        ("step_initialized", Seen::Identity),
+        ("turn_based_actions_complete", Seen::Identity),
+        ("cleanup_priority", Seen::Identity),
+    ]
+}
+
 /// The token every `Effect` variant contributes. No wildcard: a new variant
 /// must be named here (and given a witness below).
 fn effect_token(effect: &Effect) -> &'static str {
@@ -255,13 +333,12 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::ModifyControlled { .. } => "Effect::ModifyControlled",
         Effect::OptionalPayment { .. } => "Effect::OptionalPayment",
         Effect::Sacrifice { .. } => "Effect::Sacrifice",
-        Effect::DealDamageToController { .. } => "Effect::DealDamageToController",
+        Effect::DealDamageToPlayer { .. } => "Effect::DealDamageToPlayer",
         Effect::DrainLife { .. } => "Effect::DrainLife",
         Effect::CantBeBlockedTarget { .. } => "Effect::CantBeBlockedTarget",
         Effect::ReturnGraveyardTarget { .. } => "Effect::ReturnGraveyardTarget",
         Effect::MillCards { .. } => "Effect::MillCards",
         Effect::MillAndSelect { .. } => "Effect::MillAndSelect",
-        Effect::DrainLifeValue { .. } => "Effect::DrainLifeValue",
         Effect::TargetClause { .. } => "Effect::TargetClause",
         Effect::SelectTargetRequirement { .. } => "Effect::SelectTargetRequirement",
         Effect::SearchBasicLand { .. } => "Effect::SearchBasicLand",
@@ -283,11 +360,8 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::CounterSpell { .. } => "Effect::CounterSpell",
         Effect::ModifyUntilEot { .. } => "Effect::ModifyUntilEot",
         Effect::DrawCards { .. } => "Effect::DrawCards",
-        Effect::DrawCardsValue { .. } => "Effect::DrawCardsValue",
         Effect::LoseLife { .. } => "Effect::LoseLife",
-        Effect::TriggeringPlayerLosesLife { .. } => "Effect::TriggeringPlayerLosesLife",
         Effect::ModifyTargetPlayerCreatures { .. } => "Effect::ModifyTargetPlayerCreatures",
-        Effect::DealDamageToEachOpponent { .. } => "Effect::DealDamageToEachOpponent",
         Effect::MassDamage { .. } => "Effect::MassDamage",
         Effect::DamageOpponentCreatures { .. } => "Effect::DamageOpponentCreatures",
         Effect::CreateTokensValue { .. } => "Effect::CreateTokensValue",
@@ -319,6 +393,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::UntapTarget { .. } => "Effect::UntapTarget",
         Effect::GrantKeywordsToTarget { .. } => "Effect::GrantKeywordsToTarget",
         Effect::IfTargetMatches { .. } => "Effect::IfTargetMatches",
+        Effect::IfTargetDealtDamageThisTurn { .. } => "Effect::IfTargetDealtDamageThisTurn",
         Effect::ForEachTarget { .. } => "Effect::ForEachTarget",
         Effect::PutCountersOnEachMatching { .. } => "Effect::PutCountersOnEachMatching",
         Effect::SetBasePtControlled { .. } => "Effect::SetBasePtControlled",
@@ -370,14 +445,18 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 111;
+const EFFECT_VARIANTS: usize = 108;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
     let creature = CardPredicate::creature;
     let target = || TargetSpec::Creature;
     let value = || EffectValue::CreaturesWithCounters;
-    let draw = || vec![Effect::DrawCards { count: 1 }];
+    let draw = || {
+        vec![Effect::DrawCards {
+            count: EffectValue::Fixed(1),
+        }]
+    };
     vec![
         Effect::CreateNonlegendaryCopy,
         Effect::ModifyControlled {
@@ -393,8 +472,10 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::Sacrifice {
             predicate: creature(),
         },
-        Effect::DealDamageToController { amount: 1 },
-        Effect::DrainLife { amount: 1 },
+        Effect::DealDamageToPlayer {
+            player: PlayerSelector::You,
+            amount: EffectValue::Fixed(1),
+        },
         Effect::CantBeBlockedTarget { target: target() },
         Effect::ReturnGraveyardTarget {
             target: TargetSpec::GraveyardCardYouOwn {
@@ -412,7 +493,7 @@ fn effect_witnesses() -> Vec<Effect> {
             if_declined: draw(),
             if_milled: None,
         },
-        Effect::DrainLifeValue { amount: value() },
+        Effect::DrainLife { amount: value() },
         Effect::TargetClause {
             requirement: TargetRequirement::one(target()),
             effects: draw(),
@@ -474,16 +555,16 @@ fn effect_witnesses() -> Vec<Effect> {
             power_delta: 1,
             toughness_delta: 1,
         },
-        Effect::DrawCards { count: 1 },
-        Effect::DrawCardsValue { count: value() },
-        Effect::LoseLife { amount: 1 },
-        Effect::TriggeringPlayerLosesLife { amount: 2 },
+        Effect::DrawCards { count: value() },
+        Effect::LoseLife {
+            player: PlayerSelector::TriggeringPlayer,
+            amount: EffectValue::Fixed(2),
+        },
         Effect::ModifyTargetPlayerCreatures {
             power: 2,
             toughness: 0,
             target: TargetSpec::Player,
         },
-        Effect::DealDamageToEachOpponent { amount: 1 },
         Effect::MassDamage { amount: 1 },
         Effect::DamageOpponentCreatures { amount: 1 },
         Effect::CreateTokensValue {
@@ -515,7 +596,9 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::GainLife { amount: 1 },
         Effect::OnNthResolutionThisTurn {
             n: 2,
-            effect: Box::new(Effect::DrawCards { count: 1 }),
+            effect: Box::new(Effect::DrawCards {
+                count: EffectValue::Fixed(1),
+            }),
         },
         Effect::Scry { count: 1 },
         Effect::LookAndSelect {
@@ -571,6 +654,7 @@ fn effect_witnesses() -> Vec<Effect> {
             predicate: creature(),
             then: draw(),
         },
+        Effect::IfTargetDealtDamageThisTurn { then: draw() },
         Effect::ForEachTarget { effects: draw() },
         Effect::PutCountersOnEachMatching {
             count: EffectValue::SourcePower,
@@ -939,7 +1023,9 @@ fn every_trigger_condition_and_ability_reaches_the_learning_tokens() {
     for condition in trigger_witnesses() {
         let ability = Ability::Triggered {
             condition: condition.clone(),
-            effects: vec![Effect::DrawCards { count: 1 }],
+            effects: vec![Effect::DrawCards {
+                count: EffectValue::Fixed(1),
+            }],
         };
         let definition = CardDefinition {
             name: "Witness".into(),
@@ -967,6 +1053,7 @@ fn every_permanent_and_player_field_names_where_it_is_seen() {
         .chain(
             player_fields(player)
                 .into_iter()
+                .chain(turn_fields(&game.state.turn))
                 .map(|(field, seen)| (field, seen, PLAYER_DIM)),
         );
     for (field, seen, width) in fields {
@@ -1061,6 +1148,7 @@ fn each_permanent_status_moves_its_named_column() {
         "tapped" => permanent.tapped = !permanent.tapped,
         "summoning_sick" => permanent.summoning_sick = !permanent.summoning_sick,
         "damage" => permanent.damage = 1,
+        "dealt_damage_this_turn" => permanent.dealt_damage_this_turn = true,
         "temp_power" => permanent.temp_power = 2,
         "temp_toughness" => permanent.temp_toughness = 2,
         "plus1_counters" => permanent.plus1_counters = 1,
@@ -1125,6 +1213,44 @@ fn player_life_and_mana_move_their_named_columns() {
             moved.iter().any(|column| (start..end).contains(column)),
             "{field} moved {moved:?}, expected {start}..{end}"
         );
+    }
+}
+
+#[test]
+fn turn_history_moves_each_players_named_column() {
+    let (base_game, _) = ogre_game();
+    let (_, base) = observe(&base_game, 0);
+    for (field, seen) in turn_fields(&base_game.state.turn) {
+        let Seen::Player(start, end) = seen else {
+            continue;
+        };
+        if start < PLAYER_KEEPS_RED_MANA_INDEX && field != "turn_number" {
+            continue; // Phase, step and the active player: the turn structure itself.
+        }
+        let mut game = base_game.clone();
+        let turn = &mut game.state.turn;
+        let history = &mut turn.history[0];
+        match field {
+            "turn_number" => turn.turn_number += 1,
+            "history.cards_drawn" => history.cards_drawn += 1,
+            "history.attacked" => history.attacked = true,
+            "history.permanents_sacrificed" => history.permanents_sacrificed = 2,
+            "history.land_entered" => history.land_entered = true,
+            other => panic!("no directed mutation for {other}"),
+        }
+        let (_, after) = observe(&game, 0);
+        let moved = changed(&base.agent_player, &after.agent_player);
+        assert!(
+            moved.iter().any(|column| (start..end).contains(column)),
+            "{field} moved {moved:?}, expected {start}..{end}"
+        );
+        if field != "turn_number" {
+            // Player 0's history is not the opponent's.
+            assert!(
+                changed(&base.opponent_player, &after.opponent_player).is_empty(),
+                "{field}"
+            );
+        }
     }
 }
 
@@ -1312,6 +1438,13 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         remaining_sideboard_counts => [Excluded(HIDDEN_SIDEBOARD)],
         keeps_red_mana => [column(Player, PLAYER_KEEPS_RED_MANA_INDEX)],
         no_maximum_hand_size => [column(Player, PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX)],
+        turn_history => [Rows("turn history below")],
+    }));
+    fields.extend(encoding!(PlayerTurnHistory {
+        attacked => [column(Player, PLAYER_ATTACKED_INDEX)],
+        permanents_sacrificed => [column(Player, PLAYER_SACRIFICED_INDEX)],
+        land_entered => [column(Player, PLAYER_LAND_ENTERED_INDEX)],
+        cards_drawn => [column(Player, PLAYER_CARDS_DRAWN_INDEX)],
     }));
     fields.extend(encoding!(CardData {
         zone => [Columns(Card, 0, 7)],
@@ -1407,6 +1540,7 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         is_granted_land => [column(Permanent, PERMANENT_GRANTED_LAND_INDEX)],
         blocking => [Join(Permanent, PERMANENT_BLOCKING_INDEX)],
         abilities_lost => [column(Permanent, PERMANENT_ABILITIES_LOST_INDEX)],
+        dealt_damage_this_turn => [column(Permanent, PERMANENT_DEALT_DAMAGE_INDEX)],
         used_abilities => [
             Columns(Permanent, PERMANENT_USED_ABILITIES_INDEX, USED_ABILITY_FLAGS),
             column(Permanent, PERMANENT_OTHER_USED_ABILITIES_INDEX),

@@ -200,4 +200,13 @@ T2's operator choices are at `a5587df5a:scratch/questions.md`. New since
   its fixed count beside `DrawCardsValue` because engine decisions build it.
 - T4 card tests are appended at the end of `tests/cards/tla.rs`, after the
   cross-card section, rather than interleaved in `cards()` order.
+- Slice 4: raid's intervening-if is not rechecked at resolution: attacking
+  this turn cannot be undone within the turn, and both raid triggers resolve
+  in the turn they fire.
+- Slice 4: `cards_drawn` joined the observed turn history beside the three
+  new facts (it was unobserved before); its column is v5 player 66.
+- Slice 4: `PlayerSelector::Target` holds a boxed spec (clippy's enum-size
+  bound); no card uses it yet. Amounts of `LoseLife`/`DealDamageToPlayer` are
+  `EffectValue`, like `DrawCards.count`.
+- Slice 4: a land entering is read from its printed card type as it enters.
 - Slice 3: The Earth King counts attacking power-4+ creatures as its search resolves ("that many"), not as declared; one removed in response lowers the count.

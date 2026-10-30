@@ -15,7 +15,7 @@ use crate::{
         game::{CastChoices, Game},
     },
     state::{
-        ability::{Effect, LinkedGrant, PaymentCost},
+        ability::{Effect, EffectValue, LinkedGrant, PaymentCost},
         game_object::{CardId, ObjectId, ObjectRef, PlayerId, Target},
         permanent::CounterKind,
         predicate::CardPredicate,
@@ -80,6 +80,9 @@ pub struct EffectFrame {
     /// permanent) — used as the primary target when none was chosen. For an
     /// activated ability of an Aura or Equipment, the object it was attached to.
     pub context_target: Option<Target>,
+    /// The trigger's player ("they": the caster of the triggering spell).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub triggering_player: Option<PlayerId>,
     /// The exact object that granted the resolving ability (CR 400.7: once
     /// it leaves the battlefield, references to it find nothing).
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -417,6 +420,7 @@ impl Game {
                 targets: Vec::new(),
                 active_requirement: 0,
                 context_target: None,
+                triggering_player: None,
                 grantor: None,
                 queue: VecDeque::new(),
                 finalize: FrameFinalize::None,
@@ -1010,11 +1014,10 @@ impl Game {
                     }
                 }
                 if *discarded > 0 {
-                    let count = *count * *discarded;
-                    suspended
-                        .frame
-                        .queue
-                        .push_front(Effect::DrawCards { count });
+                    let count = (*count * *discarded) as i32;
+                    suspended.frame.queue.push_front(Effect::DrawCards {
+                        count: EffectValue::Fixed(count),
+                    });
                 }
                 self.run_frame(suspended.frame);
                 Ok(())
@@ -1618,6 +1621,7 @@ mod learn_tests {
             targets: vec![],
             active_requirement: 0,
             context_target: None,
+            triggering_player: None,
             grantor: None,
             queue: VecDeque::from([Effect::Learn]),
             finalize: FrameFinalize::None,
@@ -2373,14 +2377,21 @@ mod payment_tests {
             targets: vec![],
             active_requirement: 0,
             context_target: None,
+            triggering_player: None,
             grantor: None,
             queue: VecDeque::from([
                 Effect::OptionalPayment {
                     cost,
-                    if_paid: vec![Effect::DrawCards { count: 2 }],
-                    if_declined: vec![Effect::DrawCards { count: 1 }],
+                    if_paid: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(2),
+                    }],
+                    if_declined: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
                 },
-                Effect::DrawCards { count: 3 },
+                Effect::DrawCards {
+                    count: EffectValue::Fixed(3),
+                },
             ]),
             finalize: FrameFinalize::None,
         });

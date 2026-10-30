@@ -27,7 +27,7 @@ was dead on arrival in exp-10.)
 | **w15** | in development, MTG-177, 2026-10-27 | 40 / 41 / 28 / 17; retained resolution eligibility, policy-input v4 relations 64 × 33 | unchanged authored packs; fresh integrated conformance and play fixtures | no strength baseline |
 | **w16** | in development, Task 892c47, 2026-10-28 | 40 / 41 / 28 / 17; typed Rust cards compiled in process, first-printing set keys, one default pack | `tla-pool-v1`: every defined card (115 supported); conformance receipts not yet regenerated | no strength baseline |
 | **w17** | in development, Task 892c47, 2026-10-29 | 40 / 41 / 29 / 17; cards in engine rules types, learning schema 9 tokens derived from them, attacking permanent column | `world` (the default pack); `semantic-kernel-w17-v1`, `authored-match-w17-v1` and `authored-match-parity-w17-v1` receipts; Academy w17 demo, navigation and trigger-order fixtures | no strength baseline |
-| **w18** | in development, Tasks 87e012, 6875f0 and 488a40, 2026-10-29 | 63 / 55 / 52 / 17 (policy input v5; v1–v4 keep 40 / 41 / 29); TLA casting, costs, zone permissions and private zones; exile cast permissions, hand-only lock, restricted mana by class, foretell, control; counters by kind, Equipment and Auras, Vehicles, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers | `world` (the default pack): every defined card; `semantic-kernel-w18-v1`, `authored-match-w18-v1`, `authored-match-parity-w18-v1` and `public-commitment-parity-w18-v1` receipts; Academy w18 demo, navigation and trigger-order fixtures | no strength baseline |
+| **w18** | in development, Tasks 87e012, 6875f0 and 488a40, 2026-10-29 | 67 / 55 / 53 / 17 (policy input v5; v1–v4 keep 40 / 41 / 29); TLA casting, costs, zone permissions and private zones; exile cast permissions, hand-only lock, restricted mana by class, foretell, control; counters by kind, Equipment and Auras, Vehicles, layered type/keyword/P/T grants, ability loss, activation X and crew; ward against abilities, T4 triggers and turn history | `world` (the default pack): every defined card; `semantic-kernel-w18-v1`, `authored-match-w18-v1`, `authored-match-parity-w18-v1` and `public-commitment-parity-w18-v1` receipts; Academy w18 demo, navigation and trigger-order fixtures | no strength baseline |
 
 **Current development world: w18.** `managym.WORLD_VERSION` identifies live runs. Earlier
 checkpoints (including w17) are **not comparable** to w18; do not reuse their
@@ -78,25 +78,36 @@ ability on the stack is a `Target::StackAbility`, and countering it removes it
 (CR 701.6b). Life loss is distinct from damage; firebending may add a
 resolution-time amount; "another permanent" sacrifice triggers exclude their
 own source. Triggers may watch any player's casts (with the caster as the
-ability's "they") and a creature attacking alongside another.
+trigger's player, "they") and a creature attacking alongside another. Draws
+take a resolution-time count, and life loss and player damage name their
+players (you, each opponent, the trigger's player or a target). Each player's
+turn history (`PlayerTurnHistory`: declared attackers, permanents sacrificed,
+a land entering under their control, cards drawn) resets as a turn begins and
+feeds raid and similar conditions; a creature put onto the battlefield
+attacking was never declared and does not count. A permanent records that it
+was dealt damage this turn (`dealt_damage_this_turn`, cleared at cleanup and
+kept in last known information) apart from its marked damage. An entering
+counter replacement may be conditional.
 
 Observations add, omitted at their defaults: cast permissions, a stack spell's
 announced X, a player's restricted mana, hand-only lock, no maximum hand size
-and kept red mana; a permanent's used exhaust and once-each-turn counts,
+and kept red mana, turn history; a permanent's used exhaust and once-each-turn counts,
 granted firebending, counters by kind, attachment, set name and creature types
 (`is_ally` reads them), granted land type, `blocking`, `abilities_lost` and
-`used_abilities`; a stack object's X and a spell's granted keywords.
+`used_abilities`, `dealt_damage_this_turn`; a stack object's X and a spell's granted keywords.
 
 Policy input **v5** is the default; v1–v4 keep their widths. In every widened
 row the new terms start at the old validity column and validity stays last.
 Player rows add restricted mana by spending subtype × color (18), the
-hand-only lock, no maximum hand size, turn number, seat and kept red mana
-(40 → 63). Card rows add 12 cast-permission terms and a stack spell's
+hand-only lock, no maximum hand size, turn number, seat, kept red mana and
+turn history (attacked, permanents sacrificed, land entered, cards drawn)
+(40 → 67). Card rows add 12 cast-permission terms and a stack spell's
 announced X (41 → 55); a face-down card is foretold, so the foretold term marks
 it. Permanent rows add used exhaust abilities, used once-each-turn abilities,
 granted firebending, counters by kind, an attachment join, effect-set
 characteristics, granted land, temporary subtypes, a blocking join, lost
-abilities and spent activation limits by ability (29 → 52). Relation rows add a
+abilities, spent activation limits by ability and dealt damage this turn
+(29 → 53). Relation rows add a
 frame's X and a spell's granted keywords (33 → 48), so the relation width alone
 tells v5. Learning schema 9 is unchanged: tokens derive from the definitions.
 Viewers see an opponent's foretold card only as an exile count, in JSON, text

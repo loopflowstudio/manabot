@@ -404,11 +404,18 @@ class Player:
     remaining_sideboard_counts: Dict[int, int]
     keeps_red_mana: bool
     no_maximum_hand_size: bool
+    turn_history: PlayerTurnHistory
     combat_mana: int
     mana: tuple[int, int, int, int, int, int]
     lesson_mana: tuple[int, int, int, int, int, int]
     restricted_mana: List[RestrictedMana]
     hand_only_until: Optional[int]
+
+class PlayerTurnHistory:
+    attacked: bool
+    permanents_sacrificed: int
+    land_entered: bool
+    cards_drawn: int
 
 class RestrictedMana:
     spells: List[str]
@@ -487,6 +494,7 @@ class Permanent:
     blocking: int | None
     abilities_lost: bool
     used_abilities: list[int]
+    dealt_damage_this_turn: bool
 
 class Turn:
     turn_number: int

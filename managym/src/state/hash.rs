@@ -64,7 +64,7 @@ struct CanonicalTurn {
     turn_number: u32,
     lands_played: u32,
     spells_cast: [Vec<crate::state::game_object::CardId>; 2],
-    cards_drawn_this_turn: [u32; 2],
+    history: [crate::flow::turn::PlayerTurnHistory; 2],
     #[serde(skip_serializing_if = "Vec::is_empty")]
     ability_triggers_this_turn: Vec<(crate::state::game_object::ObjectRef, usize, u32)>,
     ability_resolutions_this_turn: Vec<(usize, usize, u32)>,
@@ -82,7 +82,7 @@ impl From<&TurnState> for CanonicalTurn {
             turn_number: turn.turn_number,
             lands_played: turn.lands_played,
             spells_cast: turn.spells_cast.clone(),
-            cards_drawn_this_turn: turn.cards_drawn_this_turn,
+            history: turn.history,
             ability_triggers_this_turn: turn
                 .ability_triggers_this_turn
                 .iter()

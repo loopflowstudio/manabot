@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use crate::{
     flow::{game::Game, trigger::PendingTrigger},
     state::{
-        ability::{Effect, TargetRequirement, TargetSpec},
+        ability::{Effect, EffectValue, PlayerSelector, TargetRequirement, TargetSpec},
         game_object::{CardId, PlayerId, Target},
         player::PlayerConfig,
         predicate::CardPredicate,
@@ -68,6 +68,7 @@ fn trigger(source: CardId, effects: Vec<Effect>, order: u64) -> PendingTrigger {
         id: crate::flow::trigger::TriggerId(order),
         ordering_class: crate::flow::trigger::TriggerOrderingClass::Ordinary,
         context: None,
+        player: None,
         inline_effects: Some(effects),
     }
 }
@@ -290,7 +291,14 @@ fn audit_same_controller_triggers_require_an_order_choice() {
     let (mut game, bolt, _, _, _) = fixture();
     game.state.pending_triggers = vec![
         trigger(bolt, vec![Effect::GainLife { amount: 2 }], 0),
-        trigger(bolt, vec![Effect::DealDamageToController { amount: 2 }], 1),
+        trigger(
+            bolt,
+            vec![Effect::DealDamageToPlayer {
+                player: PlayerSelector::You,
+                amount: EffectValue::Fixed(2),
+            }],
+            1,
+        ),
     ];
     // At 2 life, the controller may stack damage below gain (survive at 2),
     // or gain below damage (lose at 0 before gain resolves): CR 603.3b,
@@ -312,7 +320,10 @@ fn simultaneous_trigger_orders_have_distinct_rules_outcomes() {
         let (mut game, source, _, _, _) = fixture();
         game.state.players[0].life = 2;
         let gain = vec![Effect::GainLife { amount: 2 }];
-        let damage = vec![Effect::DealDamageToController { amount: 2 }];
+        let damage = vec![Effect::DealDamageToPlayer {
+            player: PlayerSelector::You,
+            amount: EffectValue::Fixed(2),
+        }];
         game.state.pending_triggers = vec![trigger(source, gain, 0), trigger(source, damage, 1)];
         let choice = game.flush_triggers().unwrap();
         assert_eq!(choice.actions.len(), 2);
@@ -814,7 +825,9 @@ fn trigger_order_descriptions_use_exact_ability_and_delayed_payload() {
             condition: TriggerCondition::Dies {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::DrawCards { count: 2 }],
+            effects: vec![Effect::DrawCards {
+                count: EffectValue::Fixed(2),
+            }],
         },
         Ability::Triggered {
             condition: TriggerCondition::EntersTheBattlefield {

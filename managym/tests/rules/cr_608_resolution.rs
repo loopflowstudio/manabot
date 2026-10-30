@@ -8,7 +8,7 @@ use managym::{
         turn::StepKind,
     },
     state::{
-        ability::{Effect, EffectValue, TargetSpec},
+        ability::{Effect, EffectValue, PlayerSelector, TargetSpec},
         game_object::{CardId, PlayerId},
         zone::ZoneType,
     },
@@ -30,6 +30,7 @@ fn queue_effects(s: &mut Scenario, source: CardId, effects: Vec<Effect>) {
         id: TriggerId(0),
         ordering_class: TriggerOrderingClass::Ordinary,
         context: None,
+        player: None,
         inline_effects: Some(effects),
     });
 }
@@ -51,7 +52,10 @@ fn cr_704_4_sba_waits_for_suspended_resolution_to_finish() {
         &mut s,
         card,
         vec![
-            Effect::DealDamageToController { amount: 1 },
+            Effect::DealDamageToPlayer {
+                player: PlayerSelector::You,
+                amount: EffectValue::Fixed(1),
+            },
             Effect::Modal {
                 modes: vec![
                     vec![Effect::GainLife { amount: 2 }],

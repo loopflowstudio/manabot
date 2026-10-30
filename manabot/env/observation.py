@@ -63,7 +63,12 @@ PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX = PLAYER_HAND_ONLY_INDEX + 1
 PLAYER_TURN_INDEX = PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX + 1
 PLAYER_SEAT_INDEX = PLAYER_TURN_INDEX + 1
 PLAYER_KEEPS_RED_MANA_INDEX = PLAYER_SEAT_INDEX + 1
-PLAYER_DIM = PLAYER_KEEPS_RED_MANA_INDEX + 1
+# Turn history: attacked, permanents sacrificed, a land entered, cards drawn.
+PLAYER_ATTACKED_INDEX = PLAYER_KEEPS_RED_MANA_INDEX + 1
+PLAYER_SACRIFICED_INDEX = PLAYER_ATTACKED_INDEX + 1
+PLAYER_LAND_ENTERED_INDEX = PLAYER_SACRIFICED_INDEX + 1
+PLAYER_CARDS_DRAWN_INDEX = PLAYER_LAND_ENTERED_INDEX + 1
+PLAYER_DIM = PLAYER_CARDS_DRAWN_INDEX + 1
 LEGACY_CARD_DIM = 41
 # V5 card terms start where v4's validity flag was; validity stays last.
 CARD_PERMISSION_INDEX = LEGACY_CARD_DIM - 1
@@ -92,7 +97,8 @@ USED_ABILITY_FLAGS = 4
 PERMANENT_OTHER_USED_ABILITIES_INDEX = (
     PERMANENT_USED_ABILITIES_INDEX + USED_ABILITY_FLAGS
 )
-PERMANENT_DIM = PERMANENT_OTHER_USED_ABILITIES_INDEX + 2
+PERMANENT_DEALT_DAMAGE_INDEX = PERMANENT_OTHER_USED_ABILITIES_INDEX + 1
+PERMANENT_DIM = PERMANENT_DEALT_DAMAGE_INDEX + 2
 # Permanent columns that hold object links (joins), in model parameter order.
 PERMANENT_LINK_INDEXES = (PERMANENT_ATTACHED_INDEX, PERMANENT_BLOCKING_INDEX)
 
@@ -133,7 +139,7 @@ class ObservationEncoder:
         # Player: life + is_active + zones + phase/step one-hots + gy
         # lessons + until-end-of-combat mana + pooled and spend-restricted colors;
         # v5 adds restricted mana by spending subtype, the hand-only lock, no
-        # maximum hand size, turn number, seat and kept red mana.
+        # maximum hand size, turn number, seat, kept red mana and turn history.
         # Card: zone one-hot + is_mine + P/T + mana value + 6 type flags +
         # 12 keywords + is_token/is_ally/is_lesson tags + ward flag/cost +
         # kicker flag/cost + hexproof + outside + indestructible + legendary;
@@ -148,8 +154,8 @@ class ObservationEncoder:
         # temporary Avatar subtype, attacking; v5 adds used exhaust and
         # once-each-turn abilities, granted firebending, stun/fire/double-strike
         # counters, attachment join, effect-set characteristics, granted land,
-        # temporary subtypes, blocking join, lost abilities and used
-        # activations by ability; validity is last.
+        # temporary subtypes, blocking join, lost abilities, used
+        # activations by ability and dealt damage this turn; validity is last.
         self.permanent_dim = PERMANENT_DIM if current else LEGACY_PERMANENT_DIM
         self.event_dim = 12 if config.policy_history_version == 1 else 7
 
@@ -478,6 +484,11 @@ class ObservationEncoder:
             # Seat 0 is on the play.
             arr[PLAYER_SEAT_INDEX] = float(player.player_index)
             arr[PLAYER_KEEPS_RED_MANA_INDEX] = float(player.keeps_red_mana)
+            history = player.turn_history
+            arr[PLAYER_ATTACKED_INDEX] = float(history.attacked)
+            arr[PLAYER_SACRIFICED_INDEX] = float(history.permanents_sacrificed) / 10.0
+            arr[PLAYER_LAND_ENTERED_INDEX] = float(history.land_entered)
+            arr[PLAYER_CARDS_DRAWN_INDEX] = float(history.cards_drawn) / 10.0
 
         self.object_to_index[player.id] = self.current_object_index
         self.current_object_index += 1
@@ -673,6 +684,7 @@ class ObservationEncoder:
                     arr[PERMANENT_USED_ABILITIES_INDEX + index] = 1.0
                 else:
                     arr[PERMANENT_OTHER_USED_ABILITIES_INDEX] += 1.0
+            arr[PERMANENT_DEALT_DAMAGE_INDEX] = float(perm.dealt_damage_this_turn)
         # Set validity flag (permanent exists)
         arr[-1] = 1.0
         return arr

@@ -97,6 +97,8 @@ export interface PermanentState {
   abilities_lost?: boolean;
   /** Activated abilities (indices in its ability list) whose limit is spent. */
   used_abilities?: number[];
+  /** It was dealt damage this turn. */
+  dealt_damage_this_turn?: boolean;
 }
 
 export interface SideboardCard {
@@ -105,6 +107,13 @@ export interface SideboardCard {
   owner_id: number;
   registry_key: number;
   name: string;
+}
+
+export interface PlayerTurnHistory {
+  attacked?: boolean;
+  permanents_sacrificed?: number;
+  land_entered?: boolean;
+  cards_drawn?: number;
 }
 
 export interface PlayerState {
@@ -131,6 +140,8 @@ export interface PlayerState {
   hand_hidden_count?: number;
   /** Unspent red mana stays until end of turn. */
   keeps_red_mana?: boolean;
+  /** What this player has done this turn. */
+  turn_history?: PlayerTurnHistory;
   hand: CardState[];
   graveyard: CardState[];
   exile: CardState[];

@@ -3418,5 +3418,83 @@
     "keywords": [],
     "oracle_text": "This land enters tapped unless you control a basic land.\n{T}: Add {R}.\n{1}{R}, {T}: Target creature you control gains firebending 4 until end of turn. (Whenever it attacks, add {R}{R}{R}{R}. This mana lasts until end of combat.)",
     "colors": []
+  },
+  "Fire Nation Raider": {
+    "name": "Fire Nation Raider",
+    "mana_cost": "{3}{R}",
+    "type_line": "Creature — Human Soldier",
+    "power": "4",
+    "toughness": "2",
+    "keywords": [
+      "Raid"
+    ],
+    "oracle_text": "Raid — When this creature enters, if you attacked this turn, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")",
+    "colors": [
+      "R"
+    ]
+  },
+  "Fire Nation Engineer": {
+    "name": "Fire Nation Engineer",
+    "mana_cost": "{2}{B}",
+    "type_line": "Creature — Human Artificer",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Raid"
+    ],
+    "oracle_text": "Raid — At the beginning of your end step, if you attacked this turn, put a +1/+1 counter on another target creature or Vehicle you control.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Cruel Administrator": {
+    "name": "Cruel Administrator",
+    "mana_cost": "{3}{B}{R}",
+    "type_line": "Creature — Human Soldier",
+    "power": "5",
+    "toughness": "4",
+    "keywords": [
+      "Raid"
+    ],
+    "oracle_text": "Raid — This creature enters with a +1/+1 counter on it if you attacked this turn.\nWhenever this creature attacks, create a 2/2 red Soldier creature token with firebending 1. (Whenever it attacks, add {R}. This mana lasts until end of combat.)",
+    "colors": [
+      "B",
+      "R"
+    ]
+  },
+  "Sold Out": {
+    "name": "Sold Out",
+    "mana_cost": "{3}{B}",
+    "type_line": "Instant",
+    "keywords": [],
+    "oracle_text": "Exile target creature. If it was dealt damage this turn, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")",
+    "colors": [
+      "B"
+    ]
+  },
+  "Obsessive Pursuit": {
+    "name": "Obsessive Pursuit",
+    "mana_cost": "{1}{B}",
+    "type_line": "Enchantment",
+    "keywords": [],
+    "oracle_text": "When this enchantment enters and at the beginning of your upkeep, you lose 1 life and create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")\nWhenever you attack, put X +1/+1 counters on target attacking creature, where X is the number of permanents you've sacrificed this turn. If X is three or more, that creature gains lifelink until end of turn.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Earth Rumble Wrestlers": {
+    "name": "Earth Rumble Wrestlers",
+    "mana_cost": "{3}{R/G}",
+    "type_line": "Creature — Human Warrior Performer",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [
+      "Reach"
+    ],
+    "oracle_text": "Reach\nThis creature gets +1/+0 and has trample as long as you control a land creature or a land entered the battlefield under your control this turn.",
+    "colors": [
+      "G",
+      "R"
+    ]
   }
 }

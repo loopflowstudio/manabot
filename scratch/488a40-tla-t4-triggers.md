@@ -46,9 +46,16 @@ w18 digest-bound evidence is re-recorded at gate with T2's
    `TriggerCondition::AttacksWithAnother`, `Effect::TriggeringPlayerLosesLife`,
    `Effect::ModifyTargetPlayerCreatures`, `EffectValue::AttackingMatching`,
    `CardPredicate::nonbasic`.
-4. Turn history: attacked this turn (raid: Fire Nation Raider/Engineer, Cruel
-   Administrator), sacrificed count, damage dealt this turn (Sold Out), land
-   entered this turn. Needs observed state (player row columns).
+4. **Turn history** (done 2026-10-30): Fire Nation Raider, Fire Nation
+   Engineer, Cruel Administrator, Sold Out, Obsessive Pursuit, Earth Rumble
+   Wrestlers. New: `PlayerTurnHistory` (observed in the player row),
+   `Permanent.dealt_damage_this_turn` (permanent column, LKI),
+   `StaticCondition::{AttackedThisTurn, LandEnteredThisTurn,
+   SacrificedThisTurnAtLeast, AnyOf}`, `EffectValue::PermanentsSacrificedThisTurn`,
+   `Effect::IfTargetDealtDamageThisTurn`, conditional
+   `EntersWithPlusOneCounters`; the design review's effect consolidation
+   (`DrawCards { count: EffectValue }`, `LoseLife`/`DealDamageToPlayer` with
+   `PlayerSelector`, `DrainLife { amount: EffectValue }`, trigger player).
 5. New event triggers: combat damage to player (Waterbender Ascension, Invasion Tactics),
    counters placed (Earth Kingdom General), opponent searches (Wan Shi Tong),
    cast from exile / enter from exile (Appa SG, Fire Lord Zuko), scry/surveil.
@@ -56,31 +63,45 @@ w18 digest-bound evidence is re-recorded at gate with T2's
    trigger multiplicity (Katara the Fearless), LKI counter transfer, control
    change, Destined Confrontation's simultaneous choice.
 
+## Design review (Jack Heart, 2026-10-30, accepted)
+
+1. Effect vocabulary: `DrawCards.count` is an `EffectValue`; life loss and
+   player damage take a player selector (You / EachOpponent /
+   TriggeringPlayer / Target(spec)); `PlayerCastsSpell` supplies the caster as
+   the trigger's player, separate from the context object.
+2. "Dealt damage this turn" is `Permanent.dealt_damage_this_turn`, set where
+   damage is applied, reset with the turn, carried in LKI and observed as its
+   own permanent column; never derived from marked damage.
+3. Turn history is one `PlayerTurnHistory` per player (attacked, permanents
+   sacrificed, land entered, cards drawn) for reset, hash, `PlayerData` and
+   encoder columns.
+Tidy: `EntersWithPlusOneCounters { count, condition: Option<StaticCondition> }`.
+CLAUDE.md/WORLDS.md carry the v5 widths.
+
 ## Delete — do not maintain
 
-Nothing replaced yet.
+Done in slice 4 (no parallel path remains): `DrawCardsValue`, `DrainLifeValue`,
+`TriggeringPlayerLosesLife`, `DealDamageToController`,
+`DealDamageToEachOpponent`, the trigger effect scan for the caster,
+`TurnState::cards_drawn_this_turn`.
 
 ## Remaining
 
-- Slice 4 (next): turn history as observed state — per player "attacked
-  this turn", permanents sacrificed this turn, a land entered this turn, and
-  per permanent "dealt damage this turn" — through `Observation`, native and
-  Python v5 encoders (widen v5 player/permanent rows in place, update
-  CLAUDE.md widths and WORLDS.md), learning tokens, LLM text and Academy notes.
-  Cards: Fire Nation Raider, Fire Nation Engineer, Cruel Administrator, Sold
-  Out, Obsessive Pursuit, Earth Rumble Wrestlers.
 - Slices 5–6 (48 more cards): see the slice list above; Firebender
   Ascension's ETB, Earth Kingdom General's ETB, Invasion Tactics' ETB and
   Raven Eagle's draw clause are expressible today but wait for their other
-  clauses (no half-defined cards).
-- Gate: re-record w18 evidence after the last card (`semantic-kernel-w18-v1`
-  is current). Python failures after slice 1 are all digest-bound:
-  authored-match receipt and parity, public-commitment parity, choice
-  navigation, decision surface, learn evidence/setup, trigger order, belief
-  canonical receipt (T3's tools: `scratch/tools/regen_*_w18.py`).
+  clauses (no half-defined cards). New turn facts go in `PlayerTurnHistory`.
+- Gate: Python suites bound to the w18 content digest (authored-match receipt
+  and parity, public-commitment parity, choice navigation, decision surface,
+  learn evidence/setup, trigger order, belief canonical receipt; T3's tools
+  `scratch/tools/regen_*_w18.py`); Academy vitest for `GameBoard` turn history
+  (node_modules absent in this checkout).
 
-Check (2026-10-30, after slice 3): debug `cargo test` all targets pass
-(cards 405; `semantic-kernel-w18-v1` re-recorded, 14 cases / 3396 commands —
-ward now answers abilities; heavy benchmark fixture 505 → 509 events), fmt and
-clippy `-D warnings` clean, extension rebuilt. `tests/academy tests/belief`
-(slice 1): 330 pass, 23 digest-bound fail (gate).
+Check (2026-10-30, after slice 4): debug `cargo test` all targets pass
+(`semantic-kernel-w18-v1` re-recorded: 14 cases / 3396 commands, hashes only);
+fmt and clippy `-D warnings` clean; protocol schemas regenerated; extension
+rebuilt; `tests/verify/test_observation_parity.py`,
+`tests/semantic/test_text_observation.py`,
+`tests/academy/test_experience_protocol.py`,
+`tests/semantic/test_current_content.py`, `tests/model/test_attachment_join.py`
+pass.

@@ -64,6 +64,9 @@ pub struct TriggeredAbilityOnStack {
     /// reference (e.g. the spell that targeted a warded permanent).
     pub target_req_indices: Vec<usize>,
     pub context: Option<Target>,
+    /// The trigger's player ("they": the caster of the triggering spell).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub player: Option<PlayerId>,
     /// Delayed triggers resolve these effects instead of looking up
     /// `Card::abilities[ability_index]`.
     pub inline_effects: Option<Vec<Effect>>,

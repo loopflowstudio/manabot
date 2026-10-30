@@ -196,7 +196,12 @@ fn pop_quiz() -> CardDefinition {
         name: "Pop Quiz".into(),
         mana_cost: Some(ManaCost::parse("{2}{U}")),
         types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![Effect::DrawCards { count: 1 }, Effect::Learn],
+        spell_effects: vec![
+            Effect::DrawCards {
+                count: EffectValue::Fixed(1),
+            },
+            Effect::Learn,
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }

@@ -77,6 +77,10 @@ pub struct Permanent {
     pub summoning_sick: bool,
     pub damage: i32,
     pub deathtouch_damage: bool,
+    /// Dealt damage this turn ("if it was dealt damage this turn"), whether
+    /// or not that damage is still marked; cleared during cleanup.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub dealt_damage_this_turn: bool,
     pub temp_power: i32,
     pub temp_toughness: i32,
     /// Until-EOT effects that set base power or toughness (CR 613.4b), cleared
@@ -164,6 +168,7 @@ impl Permanent {
                 && !card.keywords.haste,
             damage: 0,
             deathtouch_damage: false,
+            dealt_damage_this_turn: false,
             temp_power: 0,
             temp_toughness: 0,
             temp_base_power: None,
@@ -271,9 +276,13 @@ impl Permanent {
 
     pub fn take_damage(&mut self, amount: i32) {
         self.damage += amount;
+        if amount > 0 {
+            self.dealt_damage_this_turn = true;
+        }
     }
 
     pub fn clear_temporary_modifiers(&mut self) {
+        self.dealt_damage_this_turn = false;
         self.exile_if_dies_this_turn = false;
         self.abilities_lost = false;
         self.temp_power = 0;

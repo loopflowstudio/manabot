@@ -113,6 +113,7 @@ fn stack(
             targets,
             target_req_indices: indices,
             context: None,
+            player: None,
             inline_effects: Some(effects),
         }),
         Entry::Spell => unreachable!(),

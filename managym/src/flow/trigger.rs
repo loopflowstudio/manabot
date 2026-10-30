@@ -63,6 +63,10 @@ pub struct PendingTrigger {
     /// Object from the triggering event that the ability's effects
     /// reference (e.g. the spell that targeted a warded permanent).
     pub context: Option<Target>,
+    /// The player the triggering event names ("they": the caster of the
+    /// triggering spell), separate from its context object.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub player: Option<PlayerId>,
     /// Delayed triggers carry their effects inline instead of referencing
     /// `Card::abilities` (`ability_index` is unused when set).
     pub inline_effects: Option<Vec<Effect>>,

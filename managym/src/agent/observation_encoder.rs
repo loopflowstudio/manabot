@@ -11,15 +11,20 @@ use crate::{
 pub const LEGACY_PLAYER_DIM: usize = 40;
 /// v5 player columns: restricted mana each spending subtype may use
 /// (`SPEND_SUBTYPES` × W/U/B/R/G/C), then the hand-only casting lock, the
-/// hand-size freedom, the turn number, the seat (0 is on the play) and kept
-/// red mana.
+/// hand-size freedom, the turn number, the seat (0 is on the play), kept
+/// red mana, then turn history: attacked, permanents sacrificed, a land
+/// entered and cards drawn this turn.
 pub const PLAYER_RESTRICTED_INDEX: usize = LEGACY_PLAYER_DIM;
 pub const PLAYER_HAND_ONLY_INDEX: usize = PLAYER_RESTRICTED_INDEX + 3 * 6;
 pub const PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX: usize = PLAYER_HAND_ONLY_INDEX + 1;
 pub const PLAYER_TURN_INDEX: usize = PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX + 1;
 pub const PLAYER_SEAT_INDEX: usize = PLAYER_TURN_INDEX + 1;
 pub const PLAYER_KEEPS_RED_MANA_INDEX: usize = PLAYER_SEAT_INDEX + 1;
-pub const PLAYER_DIM: usize = PLAYER_KEEPS_RED_MANA_INDEX + 1;
+pub const PLAYER_ATTACKED_INDEX: usize = PLAYER_KEEPS_RED_MANA_INDEX + 1;
+pub const PLAYER_SACRIFICED_INDEX: usize = PLAYER_ATTACKED_INDEX + 1;
+pub const PLAYER_LAND_ENTERED_INDEX: usize = PLAYER_SACRIFICED_INDEX + 1;
+pub const PLAYER_CARDS_DRAWN_INDEX: usize = PLAYER_LAND_ENTERED_INDEX + 1;
+pub const PLAYER_DIM: usize = PLAYER_CARDS_DRAWN_INDEX + 1;
 pub const LEGACY_CARD_DIM: usize = 41;
 /// v5 card columns replace v4's trailing validity flag, which moves to the
 /// new last column: 12 cast-permission terms, then announced X. A face-down
@@ -66,7 +71,8 @@ pub const PERMANENT_USED_ABILITIES_INDEX: usize = PERMANENT_ABILITIES_LOST_INDEX
 pub const USED_ABILITY_FLAGS: usize = 4;
 pub const PERMANENT_OTHER_USED_ABILITIES_INDEX: usize =
     PERMANENT_USED_ABILITIES_INDEX + USED_ABILITY_FLAGS;
-pub const PERMANENT_DIM: usize = PERMANENT_OTHER_USED_ABILITIES_INDEX + 2;
+pub const PERMANENT_DEALT_DAMAGE_INDEX: usize = PERMANENT_OTHER_USED_ABILITIES_INDEX + 1;
+pub const PERMANENT_DIM: usize = PERMANENT_DEALT_DAMAGE_INDEX + 2;
 pub const ACTION_TYPE_DIM: usize = 17;
 /// Declaration choice is separate from its family: attack and decline must
 /// have distinct policy inputs even when they focus the same permanent.
@@ -719,6 +725,11 @@ fn encode_player_features(
         // Seat 0 is on the play.
         out[PLAYER_SEAT_INDEX] = player.player_index as f32;
         out[PLAYER_KEEPS_RED_MANA_INDEX] = bool_to_f32(player.keeps_red_mana);
+        let history = &player.turn_history;
+        out[PLAYER_ATTACKED_INDEX] = bool_to_f32(history.attacked);
+        out[PLAYER_SACRIFICED_INDEX] = history.permanents_sacrificed as f32 / 10.0;
+        out[PLAYER_LAND_ENTERED_INDEX] = bool_to_f32(history.land_entered);
+        out[PLAYER_CARDS_DRAWN_INDEX] = history.cards_drawn as f32 / 10.0;
     }
 
     object_to_index.insert(player.id, *current_object_index);
@@ -916,6 +927,7 @@ fn encode_permanent_features(permanent: &PermanentData, is_mine: f32, out: &mut 
                 out[PERMANENT_OTHER_USED_ABILITIES_INDEX] += 1.0;
             }
         }
+        out[PERMANENT_DEALT_DAMAGE_INDEX] = bool_to_f32(permanent.dealt_damage_this_turn);
     }
     out[out.len() - 1] = 1.0;
 }
@@ -1124,6 +1136,7 @@ mod tests {
                 sideboard_counts: Default::default(),
                 remaining_sideboard_counts: Default::default(),
                 keeps_red_mana: false,
+                turn_history: Default::default(),
                 combat_mana: 0,
                 mana: [0; 6],
                 lesson_mana: [0; 6],
@@ -1150,6 +1163,7 @@ mod tests {
                 sideboard_counts: Default::default(),
                 remaining_sideboard_counts: Default::default(),
                 keeps_red_mana: false,
+                turn_history: Default::default(),
                 combat_mana: 0,
                 mana: [0; 6],
                 lesson_mana: [0; 6],

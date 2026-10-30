@@ -302,6 +302,7 @@ impl Game {
             targets,
             target_req_indices: trigger.target_req_indices,
             context: trigger.context,
+            player: trigger.player,
             inline_effects: trigger.inline_effects,
         }));
         self.emit(GameEvent::AbilityTriggered {
@@ -470,21 +471,12 @@ impl Game {
                     }
                     _ => None,
                 }
-            } else if let (true, GameEvent::SpellCast { card, .. }) = (
-                self.state.cards[source_card].abilities[ability_index]
-                    .effects()
-                    .iter()
-                    .any(|effect| {
-                        matches!(
-                            effect,
-                            crate::state::ability::Effect::TriggeringPlayerLosesLife { .. }
-                        )
-                    }),
-                event,
-            ) {
-                Some(Target::Player(self.spell_caster(*card)))
             } else {
                 self.trigger_context_for_event(event)
+            };
+            let player = match event {
+                GameEvent::SpellCast { card, .. } => Some(self.spell_caster(*card)),
+                _ => None,
             };
             self.state.pending_triggers.push(PendingTrigger {
                 targets: Vec::new(),
@@ -498,6 +490,7 @@ impl Game {
                 id: TriggerId(self.state.trigger_enqueue_counter),
                 ordering_class: TriggerOrderingClass::Ordinary,
                 context,
+                player,
                 inline_effects: None,
             });
             self.state.trigger_enqueue_counter = self
@@ -564,6 +557,7 @@ impl Game {
             id: TriggerId(self.state.trigger_enqueue_counter),
             ordering_class: TriggerOrderingClass::Ordinary,
             context: None,
+            player: None,
             inline_effects: Some(effects),
         });
         self.state.trigger_enqueue_counter = self

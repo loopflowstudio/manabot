@@ -4825,14 +4825,14 @@ fn diligent_zookeeper_counts_creature_types_of_non_humans() {
 fn foggy_swamp_hunters_gain_lifelink_and_menace_after_two_draws() {
     let mut s = five_color_unfunded_setup(&["Foggy Swamp Hunters"]);
     let hunters = s.force_permanent_on_battlefield(0, "Foggy Swamp Hunters");
-    s.game_mut().state.turn.cards_drawn_this_turn[0] = 1;
+    s.game_mut().state.turn.history[0].cards_drawn = 1;
     let keywords = observed_keywords(&s, hunters);
     assert!(!keywords.lifelink && !keywords.menace);
-    s.game_mut().state.turn.cards_drawn_this_turn[0] = 2;
+    s.game_mut().state.turn.history[0].cards_drawn = 2;
     let keywords = observed_keywords(&s, hunters);
     assert!(keywords.lifelink && keywords.menace);
-    s.game_mut().state.turn.cards_drawn_this_turn[1] = 5;
-    s.game_mut().state.turn.cards_drawn_this_turn[0] = 0;
+    s.game_mut().state.turn.history[1].cards_drawn = 5;
+    s.game_mut().state.turn.history[0].cards_drawn = 0;
     assert!(
         !observed_keywords(&s, hunters).lifelink,
         "only its controller's draws count"
@@ -7825,7 +7825,7 @@ fn otter_penguin_buffs_on_second_draw_only_and_resets() {
     s.advance_to_active_step(0, StepKind::Main);
 
     // Draw-step draw was the first card this turn — no buff yet.
-    assert_eq!(s.game().state.turn.cards_drawn_this_turn[0], 1);
+    assert_eq!(s.game().state.turn.history[0].cards_drawn, 1);
     assert_eq!(permanent(&s, otter).temp_power, 0);
 
     // Second draw: +1/+2 and can't be blocked this turn.
@@ -7846,7 +7846,7 @@ fn otter_penguin_buffs_on_second_draw_only_and_resets() {
     assert_eq!(permanent(&s, otter).temp_power, 0);
     assert_eq!(permanent(&s, otter).temp_toughness, 0);
     assert!(!permanent(&s, otter).cant_be_blocked_this_turn);
-    assert_eq!(s.game().state.turn.cards_drawn_this_turn[0], 0);
+    assert_eq!(s.game().state.turn.history[0].cards_drawn, 0);
 
     // Next turn the "second card each turn" trigger works again.
     s.advance_to_active_step(0, StepKind::Main);
@@ -7869,7 +7869,7 @@ fn otter_penguin_ignores_opponent_draws() {
 
     s.game_mut().draw_cards(PlayerId(1), 1);
     resolve_until_priority(&mut s);
-    assert_eq!(s.game().state.turn.cards_drawn_this_turn[1], 2);
+    assert_eq!(s.game().state.turn.history[1].cards_drawn, 2);
     assert_eq!(permanent(&s, otter).temp_power, 0);
 }
 
@@ -8436,7 +8436,7 @@ fn tiger_seal_taps_at_upkeep_and_untaps_on_second_draw() {
     );
 
     // The draw-step draw was this turn's first card; the second draw untaps.
-    assert_eq!(s.game().state.turn.cards_drawn_this_turn[0], 1);
+    assert_eq!(s.game().state.turn.history[0].cards_drawn, 1);
     s.game_mut().draw_cards(PlayerId(0), 1);
     resolve_until_priority(&mut s);
     assert!(!permanent(&s, seal).tapped, "second draw should untap");
@@ -10608,4 +10608,176 @@ fn bumi_bash_deals_land_count_damage_or_destroys_a_land_creature_or_nonbasic_lan
     assert!(s.choose_target(Target::Permanent(gates)));
     settle(&mut s);
     assert!(s.game().state.permanents[gates].is_none());
+}
+
+/// Raid reads whether you declared attackers this turn as the creature enters.
+#[test]
+fn fire_nation_raider_makes_a_clue_only_after_you_attacked() {
+    let mut s = five_color_setup(&["Fire Nation Raider", "Gray Ogre"]);
+    enter_and_settle(&mut s, "Fire Nation Raider");
+    assert!(s.battlefield_permanents_named(0, "Clue").is_empty());
+
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    attack_and_settle(&mut s, ogre, None);
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    enter_and_settle(&mut s, "Fire Nation Raider");
+    assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
+}
+
+/// The end-step trigger exists only after a raid; it targets another
+/// creature or Vehicle you control.
+#[test]
+fn fire_nation_engineer_counters_another_creature_or_vehicle_after_you_attacked() {
+    let mut s = five_color_setup(&["Fire Nation Engineer", "Gray Ogre", "War Balloon"]);
+    let engineer = s.force_permanent_on_battlefield(0, "Fire Nation Engineer");
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let balloon = s.force_permanent_on_battlefield(0, "War Balloon");
+    let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    s.advance_to_active_step(0, StepKind::End);
+    assert!(s.game().state.stack_objects.is_empty());
+    assert_eq!(s.action_space().kind, ActionSpaceKind::Priority);
+
+    s.advance_to_active_step(0, StepKind::Main);
+    attack_and_settle(&mut s, ogre, None);
+    s.advance_to_active_step(0, StepKind::End);
+    assert_eq!(s.action_space().kind, ActionSpaceKind::ChooseTarget);
+    let targets = offered_targets(&s);
+    assert!(targets.contains(&Target::Permanent(ogre)));
+    assert!(
+        targets.contains(&Target::Permanent(balloon)),
+        "a noncreature Vehicle"
+    );
+    assert!(!targets.contains(&Target::Permanent(engineer)), "another");
+    assert!(!targets.contains(&Target::Permanent(theirs)), "you control");
+    assert!(s.choose_target(Target::Permanent(balloon)));
+    settle(&mut s);
+    assert_eq!(counters(&s, balloon), 1);
+}
+
+#[test]
+fn cruel_administrator_enters_with_a_counter_after_a_raid_and_makes_soldiers() {
+    let mut s = five_color_setup(&["Cruel Administrator", "Gray Ogre"]);
+    enter_and_settle(&mut s, "Cruel Administrator");
+    let first = permanent_named(&s, "Cruel Administrator");
+    assert_eq!(counters(&s, first), 0);
+
+    attack_and_settle(&mut s, first, None);
+    let soldiers = s.battlefield_permanents_named(0, "Soldier");
+    assert_eq!(soldiers.len(), 1);
+    assert!(
+        !permanent(&s, soldiers[0]).attacking,
+        "created, not attacking"
+    );
+    s.advance_to_active_step(0, StepKind::PostcombatMain);
+    enter_and_settle(&mut s, "Cruel Administrator");
+    let second = s
+        .battlefield_permanents_named(0, "Cruel Administrator")
+        .into_iter()
+        .find(|id| *id != first)
+        .unwrap();
+    assert_eq!(counters(&s, second), 1);
+    assert_eq!(s.game().effective_pt(second), (6, 5));
+}
+
+/// Damage marked this turn decides the Clue after the creature has left.
+#[test]
+fn sold_out_exiles_and_makes_a_clue_only_for_a_creature_dealt_damage_this_turn() {
+    let mut s = five_color_setup(&["Sold Out", "Gray Ogre", "Craw Wurm", "Rocky Rebuke"]);
+    let undamaged = s.force_permanent_on_battlefield(1, "Gray Ogre");
+    let undamaged_card = card_of(&s, undamaged);
+    cast(&mut s, "Sold Out");
+    assert!(s.choose_target(Target::Permanent(undamaged)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, undamaged_card), Some(ZoneType::Exile));
+    assert!(s.battlefield_permanents_named(0, "Clue").is_empty());
+
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let wurm = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    let wurm_card = card_of(&s, wurm);
+    cast(&mut s, "Rocky Rebuke");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    assert!(s.choose_target(Target::Permanent(wurm)));
+    settle(&mut s);
+    assert!(permanent(&s, wurm).dealt_damage_this_turn);
+    cast(&mut s, "Sold Out");
+    assert!(s.choose_target(Target::Permanent(wurm)));
+    settle(&mut s);
+    assert_eq!(zone_of(&s, wurm_card), Some(ZoneType::Exile));
+    assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
+}
+
+/// The flag is turn history, not marked damage: it lasts until cleanup.
+#[test]
+fn a_permanent_dealt_damage_this_turn_keeps_the_fact_until_cleanup() {
+    let mut s = five_color_setup(&["Gray Ogre", "Craw Wurm", "Rocky Rebuke"]);
+    let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
+    let wurm = s.force_permanent_on_battlefield(1, "Craw Wurm");
+    cast(&mut s, "Rocky Rebuke");
+    assert!(s.choose_target(Target::Permanent(ogre)));
+    assert!(s.choose_target(Target::Permanent(wurm)));
+    settle(&mut s);
+    assert!(permanent(&s, wurm).dealt_damage_this_turn);
+    assert!(!permanent(&s, ogre).dealt_damage_this_turn);
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    assert!(!permanent(&s, wurm).dealt_damage_this_turn);
+}
+
+#[test]
+fn obsessive_pursuit_drains_you_for_clues_on_entry_and_upkeep() {
+    let mut s = five_color_setup(&["Obsessive Pursuit"]);
+    enter_and_settle(&mut s, "Obsessive Pursuit");
+    assert_eq!(s.game().state.players[0].life, 19);
+    assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().state.players[0].life, 19, "your upkeep only");
+    s.advance_to_active_step(0, StepKind::Draw);
+    assert_eq!(s.game().state.players[0].life, 18);
+    assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 2);
+}
+
+/// X counts this turn's sacrifices as the attack trigger resolves; three or
+/// more also grant lifelink.
+#[test]
+fn obsessive_pursuit_counters_an_attacker_per_sacrifice_this_turn() {
+    for (sacrifices, lifelink) in [(1, false), (3, true)] {
+        let mut s = five_color_setup(&["Obsessive Pursuit", "Gray Ogre", "Weaponize the Monsters"]);
+        s.force_permanent_on_battlefield(0, "Obsessive Pursuit");
+        let attacker = s.force_permanent_on_battlefield(0, "Gray Ogre");
+        for _ in 0..sacrifices {
+            let victim = s.force_permanent_on_battlefield(0, "Gray Ogre");
+            sacrifice_to_weaponize(&mut s, victim);
+        }
+        assert_eq!(
+            s.game().state.turn.history[0].permanents_sacrificed,
+            sacrifices
+        );
+        attack_and_settle(&mut s, attacker, Some(Target::Permanent(attacker)));
+        assert_eq!(counters(&s, attacker), sacrifices as i32);
+        assert_eq!(keywords(&s, attacker).lifelink, lifelink, "{sacrifices}");
+    }
+}
+
+#[test]
+fn earth_rumble_wrestlers_grow_with_a_land_creature_or_a_land_entry_this_turn() {
+    let mut s = five_color_setup(&["Earth Rumble Wrestlers", "Earthbending Lesson", "Forest"]);
+    let wrestlers = s.force_permanent_on_battlefield(0, "Earth Rumble Wrestlers");
+    let forest = s.force_permanent_on_battlefield(0, "Forest");
+    assert!(keywords(&s, wrestlers).reach);
+    assert_eq!(s.game().effective_pt(wrestlers), (3, 4));
+    assert!(!observed_keywords(&s, wrestlers).trample);
+
+    cast(&mut s, "Earthbending Lesson");
+    assert!(s.choose_target(Target::Permanent(forest)));
+    settle(&mut s);
+    assert_eq!(s.game().effective_pt(wrestlers), (4, 4), "a land creature");
+    assert!(observed_keywords(&s, wrestlers).trample);
+
+    let mut s = five_color_setup(&["Earth Rumble Wrestlers", "Forest"]);
+    let wrestlers = s.force_permanent_on_battlefield(0, "Earth Rumble Wrestlers");
+    play_and_settle(&mut s, "Forest");
+    assert_eq!(s.game().effective_pt(wrestlers), (4, 4), "a land entered");
+    assert!(observed_keywords(&s, wrestlers).trample);
+    s.advance_to_active_step(1, StepKind::Main);
+    assert_eq!(s.game().effective_pt(wrestlers), (3, 4), "a new turn");
+    assert!(!observed_keywords(&s, wrestlers).trample);
 }

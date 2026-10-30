@@ -5,7 +5,7 @@
 //! world does not support them for deck entry.
 
 use crate::state::{
-    ability::Effect,
+    ability::{Effect, EffectValue},
     card::{CardDefinition, CardType, CardTypes},
     mana::ManaCost,
 };
@@ -19,7 +19,9 @@ pub(super) fn crossroads_of_destiny() -> CardDefinition {
         spell_effects: vec![Effect::Modal {
             modes: vec![
                 vec![Effect::GainLife { amount: 3 }],
-                vec![Effect::DrawCards { count: 1 }],
+                vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
             ],
         }],
         text_box: "Choose one —\n• You gain 3 life.\n• Draw a card.".to_string(),

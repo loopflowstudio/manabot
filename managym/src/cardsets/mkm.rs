@@ -27,7 +27,9 @@ fn proft_s_eidetic_memory() -> CardDefinition {
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::DrawCards { count: 1 }],
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
             },
             Ability::Triggered {
                 condition: TriggerCondition::ActiveIf {

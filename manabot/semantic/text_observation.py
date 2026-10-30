@@ -179,6 +179,21 @@ def _selectors(mode: int | None, ability: int | None) -> list[str]:
     ]
 
 
+def _turn_history(history: managym.PlayerTurnHistory) -> str:
+    """What a player has done this turn, or empty when nothing yet."""
+    parts = [
+        *(["attacked"] if history.attacked else []),
+        *(
+            [f"sacrificed {history.permanents_sacrificed} permanents"]
+            if history.permanents_sacrificed
+            else []
+        ),
+        *(["had a land enter under their control"] if history.land_entered else []),
+        *([f"drew {history.cards_drawn} cards"] if history.cards_drawn else []),
+    ]
+    return "; ".join(parts)
+
+
 def _spending(restricted: managym.RestrictedMana) -> str:
     """ "Lesson or Shrine spells", "Ally spells or abilities of Ally sources"."""
     parts = []
@@ -519,6 +534,8 @@ class _Renderer:
                 lines.append("Has no maximum hand size for the rest of the game.")
             if player.keeps_red_mana:
                 lines.append("Keeps unspent red mana until end of turn.")
+            if history := _turn_history(player.turn_history):
+                lines.append(f"This turn: {history}.")
             for label, quantities in (
                 ("Publicly known hand minima", player.known_hand),
                 ("Initial sideboard", player.sideboard_counts),
@@ -662,6 +679,8 @@ class _Renderer:
         if permanent.used_abilities:
             used = ", ".join(str(index + 1) for index in permanent.used_abilities)
             parts.append(f"used-up abilities {used}")
+        if permanent.dealt_damage_this_turn:
+            parts.append("dealt damage this turn")
         return "".join(f"; {part}" for part in parts)
 
     def _definitions_lines(self) -> list[str]:

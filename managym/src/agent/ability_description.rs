@@ -4,8 +4,8 @@
 
 use crate::state::{
     ability::{
-        Ability, Effect, EffectValue, LinkedChooser, LinkedGrant, PaymentCost, StaticCondition,
-        TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, Effect, EffectValue, LinkedChooser, LinkedGrant, PaymentCost, PlayerSelector,
+        StaticCondition, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{Card, CardType, Keywords},
     mana::{Mana, ManaCost},
@@ -146,6 +146,18 @@ fn static_description(condition: &StaticCondition) -> String {
         StaticCondition::UnspentManaAtLeast { count } => {
             format!("you have {count} or more unspent mana")
         }
+        StaticCondition::AttackedThisTurn => "you attacked this turn".into(),
+        StaticCondition::LandEnteredThisTurn => {
+            "a land entered the battlefield under your control this turn".into()
+        }
+        StaticCondition::SacrificedThisTurnAtLeast { count } => {
+            format!("you have sacrificed {count} or more permanents this turn")
+        }
+        StaticCondition::AnyOf(conditions) => conditions
+            .iter()
+            .map(static_description)
+            .collect::<Vec<_>>()
+            .join(" or "),
     }
 }
 
@@ -298,6 +310,15 @@ fn target_description(t: &TargetSpec) -> String {
     format!("target {noun}")
 }
 
+fn player_description(player: &PlayerSelector) -> String {
+    match player {
+        PlayerSelector::You => "you".into(),
+        PlayerSelector::EachOpponent => "each opponent".into(),
+        PlayerSelector::TriggeringPlayer => "that player".into(),
+        PlayerSelector::Target(target) => target_description(target),
+    }
+}
+
 fn value_description(value: &EffectValue) -> String {
     match value {
         EffectValue::Fixed(value) => value.to_string(),
@@ -325,6 +346,9 @@ fn value_description(value: &EffectValue) -> String {
             "the number of attacking {} you control",
             predicate_description(predicate, "creatures")
         ),
+        EffectValue::PermanentsSacrificedThisTurn => {
+            "the number of permanents you have sacrificed this turn".into()
+        }
     }
 }
 
@@ -437,9 +461,8 @@ fn effect_description(effect: &Effect) -> Option<String> {
             format!("You may pay {cost}. If paid: {}. Otherwise: {}", effects_description(if_paid), effects_description(if_declined))
         },
         Sacrifice { predicate } => format!("Sacrifice a {}", predicate_description(predicate,"permanent")),
-        DealDamageToController { amount } => format!("Deal {amount} damage to you"),
-        DrainLife { amount } => format!("Each opponent loses {amount} life and you gain {amount} life"),
-        DrainLifeValue { amount } => format!("Each opponent loses X life and you gain X life, where X is {}",value_description(amount)),
+        DealDamageToPlayer { player, amount } => format!("Deal {} damage to {}",value_description(amount),player_description(player)),
+        DrainLife { amount } => format!("Each opponent loses {0} life and you gain {0} life",value_description(amount)),
         CantBeBlockedTarget { target } => format!("{} can't be blocked this turn",target_description(target)),
         ReturnGraveyardTarget { target, tapped_onto_battlefield: false } => format!("Return {} to your hand",target_description(target)),
         ReturnGraveyardTarget { target, tapped_onto_battlefield: true } => format!("Put {} onto the battlefield tapped",target_description(target)),
@@ -504,12 +527,9 @@ fn effect_description(effect: &Effect) -> Option<String> {
         DealDamage { amount, target } => format!("Deal {amount} damage to {}",target_description(target)),
         CounterSpell { target } => format!("Counter {}",target_description(target)),
         ModifyUntilEot { power_delta, toughness_delta } => format!("This gets {power_delta:+}/{toughness_delta:+} until end of turn"),
-        DrawCards { count } => format!("Draw {count} cards"),
-        DrawCardsValue { count } => format!("Draw X cards, where X is {}", value_description(count)),
-        LoseLife { amount } => format!("You lose {amount} life"),
-        TriggeringPlayerLosesLife { amount } => format!("That player loses {amount} life"),
+        DrawCards { count } => format!("Draw {} cards", value_description(count)),
+        LoseLife { player, amount } => format!("{} loses {} life",player_description(player),value_description(amount)),
         ModifyTargetPlayerCreatures { power, toughness, target } => format!("Creatures {} controls get {power:+}/{toughness:+} until end of turn", target_description(target)),
-        DealDamageToEachOpponent { amount } => format!("Deal {amount} damage to each opponent"),
         MassDamage { amount } => format!("Deal {amount} damage to each creature"),
         DestroyCreaturesLosingAbilities { max_mana_value } => format!("Each creature with mana value {} or less loses all abilities until end of turn. Destroy those creatures", value_description(max_mana_value)),
         DamageOpponentCreatures { amount } => format!("Deal {amount} damage to each creature your opponents control"),
@@ -565,6 +585,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         RemoveCounters { chosen: Some(kind), target, .. } => format!("Remove a {} counter from {}",counter_description(*kind),target_description(target)),
         GrantKeywordsToTarget { keywords, target } => format!("{} gains {} until end of turn",target_description(target),keywords_description(keywords)),
         IfTargetMatches { predicate, then } => format!("If that target is a {}: {}",predicate_description(predicate,"permanent"),effects_description(then)),
+        IfTargetDealtDamageThisTurn { then } => format!("If that target was dealt damage this turn: {}",effects_description(then)),
         ForEachTarget { effects } => format!("For each chosen target: {}",effects_description(effects)),
         PutCountersOnEachMatching { count, predicate, other } => format!("Put {} +1/+1 counters on each {}{} you control",value_description(count),if *other { "other " } else { "" },predicate_description(predicate,"permanent")),
     })
@@ -588,8 +609,13 @@ mod tests {
             },
             Effect::OptionalPayment {
                 cost: PaymentCost::Mana(ManaCost::parse("1W")),
-                if_paid: vec![Effect::DrawCards { count: 2 }],
-                if_declined: vec![Effect::DealDamageToController { amount: 1 }],
+                if_paid: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(2),
+                }],
+                if_declined: vec![Effect::DealDamageToPlayer {
+                    player: PlayerSelector::You,
+                    amount: EffectValue::Fixed(1),
+                }],
             },
         ]);
         assert_eq!(description, "Choose 0–2 target creature you control for this clause: For each chosen target: Untap target creature you control. You may pay {1}{W}. If paid: Draw 2 cards. Otherwise: Deal 1 damage to you");

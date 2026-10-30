@@ -3,7 +3,8 @@
 use crate::state::{
     ability::{
         Ability, Effect, EffectValue, LinkedChooser, LinkedGrant, MilledBonus, PaymentCost,
-        StaticCondition, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject,
+        PlayerSelector, StaticCondition, TargetRequirement, TargetSpec, TriggerCondition,
+        TriggerSubject,
     },
     card::{
         ActivatedAbilityDefinition, ActivationZone, CardDefinition, CardType, CardTypes,
@@ -70,6 +71,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         compassionate_healer(),
         crashing_wave(),
         crescent_island_temple(),
+        cruel_administrator(),
         cunning_maneuver(),
         curious_farm_animals(),
         cycle_of_renewal(),
@@ -85,6 +87,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         earth_kingdom_protectors(),
         earth_kingdom_soldier(),
         earth_kings_lieutenant(),
+        earth_rumble_wrestlers(),
         earth_village_ruffians(),
         earthbending_lesson(),
         earthen_ally(),
@@ -95,6 +98,8 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         fated_firepower(),
         fire_nation_attacks(),
         fire_nation_cadets(),
+        fire_nation_engineer(),
+        fire_nation_raider(),
         fire_nation_palace(),
         fire_nation_warship(),
         fire_sages(),
@@ -157,6 +162,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         north_pole_gates(),
         north_pole_patrol(),
         northern_air_temple(),
+        obsessive_pursuit(),
         octopus_form(),
         omashu_city(),
         origin_of_metalbending(),
@@ -188,6 +194,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         serpent_of_the_pass(),
         serpents_pass(),
         shared_roots(),
+        sold_out(),
         sokka_bold_boomeranger(),
         sokka_lateral_strategist(),
         sokka_s_haiku(),
@@ -511,7 +518,12 @@ fn agna_qel_a() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             tap_source: true,
             mana_cost: ManaCost::parse("{2}{U}"),
-            effects: vec![Effect::DrawCards { count: 1 }, Effect::Discard],
+            effects: vec![
+                Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                },
+                Effect::Discard,
+            ],
             ..Default::default()
         }],
         replacement_effects: vec![ReplacementEffect::EntersTappedUnlessControls {
@@ -613,7 +625,9 @@ fn airbending_lesson() -> CardDefinition {
                     },
                 },
             },
-            Effect::DrawCards { count: 1 },
+            Effect::DrawCards {
+                count: EffectValue::Fixed(1),
+            },
         ],
         text_box: text_box.into(),
         ..Default::default()
@@ -633,7 +647,9 @@ fn airship_engine_room() -> CardDefinition {
                 tap_source: true,
                 mana_cost: ManaCost::parse("{4}"),
                 sacrifice_source: true,
-                effects: vec![Effect::DrawCards { count: 1 }],
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
                 ..Default::default()
             },
             ActivatedAbilityDefinition {
@@ -953,7 +969,10 @@ fn azula_on_the_hunt() -> CardDefinition {
                     subject: TriggerSubject::This,
                 },
                 effects: vec![
-                    Effect::LoseLife { amount: 1 },
+                    Effect::LoseLife {
+                        player: PlayerSelector::You,
+                        amount: EffectValue::Fixed(1),
+                    },
                     Effect::CreateToken {
                         token_name: "Clue".into(),
                         count: 1,
@@ -1190,7 +1209,9 @@ fn bitter_work() -> CardDefinition {
                     ..Default::default()
                 }),
             },
-            effects: vec![Effect::DrawCards { count: 1 }],
+            effects: vec![Effect::DrawCards {
+                count: EffectValue::Fixed(1),
+            }],
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             exhaust: true,
@@ -1249,7 +1270,9 @@ fn boiling_rock_prison() -> CardDefinition {
                 tap_source: true,
                 mana_cost: ManaCost::parse("{4}"),
                 sacrifice_source: true,
-                effects: vec![Effect::DrawCards { count: 1 }],
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
                 ..Default::default()
             },
             ActivatedAbilityDefinition {
@@ -1364,7 +1387,10 @@ fn callous_inspector() -> CardDefinition {
                 subject: TriggerSubject::This,
             },
             effects: vec![
-                Effect::DealDamageToController { amount: 1 },
+                Effect::DealDamageToPlayer {
+                    player: PlayerSelector::You,
+                    amount: EffectValue::Fixed(1),
+                },
                 Effect::CreateToken {
                     token_name: "Clue".into(),
                     count: 1,
@@ -1506,7 +1532,9 @@ fn clue() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{2}"),
             sacrifice_source: true,
-            effects: vec![Effect::DrawCards { count: 1 }],
+            effects: vec![Effect::DrawCards {
+                count: EffectValue::Fixed(1),
+            }],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -1650,6 +1678,38 @@ fn crescent_island_temple() -> CardDefinition {
                 }],
             },
         ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn cruel_administrator() -> CardDefinition {
+    let text_box = "Raid — This creature enters with a +1/+1 counter on it if you attacked this turn.\nWhenever this creature attacks, create a 2/2 red Soldier creature token with firebending 1. (Whenever it attacks, add {R}. This mana lasts until end of combat.)";
+
+    CardDefinition {
+        key: "tla.cruel_administrator",
+        scryfall_id: "9d70707b-2e25-40b1-80a8-9a5492bca7e2",
+        name: "Cruel Administrator".into(),
+        mana_cost: Some(ManaCost::parse("{3}{B}{R}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Human".into(), "Soldier".into()],
+        power: Some(5),
+        toughness: Some(4),
+        replacement_effects: vec![ReplacementEffect::EntersWithPlusOneCounters {
+            count: 1,
+            condition: Some(StaticCondition::AttackedThisTurn),
+        }],
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::Attacks {
+                subject: TriggerSubject::This,
+            },
+            effects: vec![Effect::CreateToken {
+                token_name: "Soldier".into(),
+                count: 1,
+                tapped_and_attacking: false,
+                attach_source: false,
+            }],
+        }],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -1824,7 +1884,7 @@ fn dai_li_agents() -> CardDefinition {
                 condition: TriggerCondition::Attacks {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::DrainLifeValue {
+                effects: vec![Effect::DrainLife {
                     amount: EffectValue::CreaturesWithCounters,
                 }],
             },
@@ -2031,7 +2091,9 @@ fn dragonfly_swarm() -> CardDefinition {
                     subtype: Some("Lesson".into()),
                     ..Default::default()
                 },
-                then: vec![Effect::DrawCards { count: 1 }],
+                then: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
                 otherwise: vec![],
             }],
         }],
@@ -2209,6 +2271,55 @@ fn earth_kings_lieutenant() -> CardDefinition {
     }
 }
 
+fn earth_rumble_wrestlers() -> CardDefinition {
+    let text_box = "Reach\nThis creature gets +1/+0 and has trample as long as you control a land creature or a land entered the battlefield under your control this turn.";
+    let condition = || {
+        Some(StaticCondition::AnyOf(vec![
+            StaticCondition::ControlsMatching {
+                predicate: CardPredicate {
+                    card_type: Some(CardType::Land),
+                    card_types_any: vec![CardType::Creature],
+                    ..Default::default()
+                },
+            },
+            StaticCondition::LandEnteredThisTurn,
+        ]))
+    };
+
+    CardDefinition {
+        key: "tla.earth_rumble_wrestlers",
+        scryfall_id: "74fca0b8-12e1-405f-b999-160d65fe0ade",
+        name: "Earth Rumble Wrestlers".into(),
+        mana_cost: Some(ManaCost::parse("{3}{R/G}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Human".into(), "Warrior".into(), "Performer".into()],
+        power: Some(3),
+        toughness: Some(4),
+        keywords: Keywords {
+            reach: true,
+            ..Default::default()
+        },
+        static_pt_buffs: vec![StaticPtBuff {
+            scope: StaticScope::This,
+            condition: condition(),
+            power: 1,
+            toughness: 0,
+            per_creature_type_max: None,
+            per_color_among: None,
+        }],
+        static_keyword_grants: vec![StaticKeywordGrant {
+            scope: StaticScope::This,
+            condition: condition(),
+            keywords: Keywords {
+                trample: true,
+                ..Default::default()
+            },
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
 fn earth_village_ruffians() -> CardDefinition {
     let text_box = "When this creature dies, earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)";
 
@@ -2333,7 +2444,9 @@ fn energybending() -> CardDefinition {
                     "Forest".into(),
                 ],
             },
-            Effect::DrawCards { count: 1 },
+            Effect::DrawCards {
+                count: EffectValue::Fixed(1),
+            },
         ],
         text_box: text_box.into(),
         ..Default::default()
@@ -2498,6 +2611,87 @@ fn fire_nation_cadets() -> CardDefinition {
                 toughness_delta: 0,
             }],
             ..Default::default()
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn fire_nation_engineer() -> CardDefinition {
+    let text_box = "Raid — At the beginning of your end step, if you attacked this turn, put a +1/+1 counter on another target creature or Vehicle you control.";
+    let creature_or_vehicle = CardPredicate {
+        any_of: vec![CardPredicate::creature(), CardPredicate::subtype("Vehicle")],
+        ..Default::default()
+    };
+
+    CardDefinition {
+        key: "tla.fire_nation_engineer",
+        scryfall_id: "5daba108-277d-46c8-ac35-7610f4786813",
+        name: "Fire Nation Engineer".into(),
+        mana_cost: Some(ManaCost::parse("{2}{B}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Human".into(), "Artificer".into()],
+        power: Some(2),
+        toughness: Some(3),
+        // Attacking this turn cannot be undone, so the intervening-if
+        // condition still holds as the ability resolves (CR 603.4).
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::ActiveIf {
+                active_if: StaticCondition::AttackedThisTurn,
+                condition: Box::new(TriggerCondition::BeginningOfYourEndStep),
+            },
+            effects: vec![Effect::TargetClause {
+                requirement: TargetRequirement {
+                    shares_creature_type: false,
+                    spec: TargetSpec::PermanentYouControl {
+                        predicate: creature_or_vehicle.clone(),
+                    },
+                    min: 1,
+                    max: 1,
+                    another: true,
+                    max_x: false,
+                },
+                effects: vec![Effect::PutCounters {
+                    count: 1,
+                    kind: CounterKind::PlusOnePlusOne,
+                    target: TargetSpec::PermanentYouControl {
+                        predicate: creature_or_vehicle,
+                    },
+                }],
+            }],
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn fire_nation_raider() -> CardDefinition {
+    let text_box = "Raid — When this creature enters, if you attacked this turn, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")";
+
+    CardDefinition {
+        key: "tla.fire_nation_raider",
+        scryfall_id: "ede1bbdb-c726-46e3-aaf1-b8cf2be2c341",
+        name: "Fire Nation Raider".into(),
+        mana_cost: Some(ManaCost::parse("{3}{R}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Human".into(), "Soldier".into()],
+        power: Some(4),
+        toughness: Some(2),
+        // Attacking this turn cannot be undone, so the intervening-if
+        // condition still holds as the ability resolves (CR 603.4).
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::ActiveIf {
+                active_if: StaticCondition::AttackedThisTurn,
+                condition: Box::new(TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                }),
+            },
+            effects: vec![Effect::CreateToken {
+                token_name: "Clue".into(),
+                count: 1,
+                tapped_and_attacking: false,
+                attach_source: false,
+            }],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -2803,7 +2997,9 @@ fn foggy_bottom_swamp() -> CardDefinition {
                 tap_source: true,
                 mana_cost: ManaCost::parse("{4}"),
                 sacrifice_source: true,
-                effects: vec![Effect::DrawCards { count: 1 }],
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
                 ..Default::default()
             },
             ActivatedAbilityDefinition {
@@ -3011,7 +3207,12 @@ fn geyser_leaper() -> CardDefinition {
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{4}"),
             waterbend: true,
-            effects: vec![Effect::DrawCards { count: 1 }, Effect::Discard],
+            effects: vec![
+                Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                },
+                Effect::Discard,
+            ],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -3174,7 +3375,12 @@ fn gran_gran() -> CardDefinition {
             condition: TriggerCondition::BecomesTapped {
                 subject: TriggerSubject::This,
             },
-            effects: vec![Effect::DrawCards { count: 1 }, Effect::Discard],
+            effects: vec![
+                Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                },
+                Effect::Discard,
+            ],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -4097,7 +4303,9 @@ fn kyoshi_village() -> CardDefinition {
                 tap_source: true,
                 mana_cost: ManaCost::parse("{4}"),
                 sacrifice_source: true,
-                effects: vec![Effect::DrawCards { count: 1 }],
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
                 ..Default::default()
             },
             ActivatedAbilityDefinition {
@@ -4312,7 +4520,10 @@ fn mai_scornful_striker() -> CardDefinition {
                     ..Default::default()
                 },
             },
-            effects: vec![Effect::TriggeringPlayerLosesLife { amount: 2 }],
+            effects: vec![Effect::LoseLife {
+                player: PlayerSelector::TriggeringPlayer,
+                amount: EffectValue::Fixed(2),
+            }],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -4416,7 +4627,9 @@ fn meditation_pools() -> CardDefinition {
                 tap_source: true,
                 mana_cost: ManaCost::parse("{4}"),
                 sacrifice_source: true,
-                effects: vec![Effect::DrawCards { count: 1 }],
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
                 ..Default::default()
             },
             ActivatedAbilityDefinition {
@@ -4559,7 +4772,9 @@ fn misty_palms_oasis() -> CardDefinition {
                 tap_source: true,
                 mana_cost: ManaCost::parse("{4}"),
                 sacrifice_source: true,
-                effects: vec![Effect::DrawCards { count: 1 }],
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
                 ..Default::default()
             },
             ActivatedAbilityDefinition {
@@ -4718,7 +4933,9 @@ fn north_pole_gates() -> CardDefinition {
                 tap_source: true,
                 mana_cost: ManaCost::parse("{4}"),
                 sacrifice_source: true,
-                effects: vec![Effect::DrawCards { count: 1 }],
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
                 ..Default::default()
             },
             ActivatedAbilityDefinition {
@@ -4797,7 +5014,7 @@ fn northern_air_temple() -> CardDefinition {
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::DrainLifeValue {
+                effects: vec![Effect::DrainLife {
                     amount: EffectValue::BattlefieldMatching {
                         predicate: CardPredicate {
                             subtype: Some("Shrine".into()),
@@ -4813,7 +5030,81 @@ fn northern_air_temple() -> CardDefinition {
                         ..Default::default()
                     }),
                 },
-                effects: vec![Effect::DrainLife { amount: 1 }],
+                effects: vec![Effect::DrainLife {
+                    amount: EffectValue::Fixed(1),
+                }],
+            },
+        ],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn obsessive_pursuit() -> CardDefinition {
+    let text_box = "When this enchantment enters and at the beginning of your upkeep, you lose 1 life and create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")\nWhenever you attack, put X +1/+1 counters on target attacking creature, where X is the number of permanents you've sacrificed this turn. If X is three or more, that creature gains lifelink until end of turn.";
+    let clue = || {
+        vec![
+            Effect::LoseLife {
+                player: PlayerSelector::You,
+                amount: EffectValue::Fixed(1),
+            },
+            Effect::CreateToken {
+                token_name: "Clue".into(),
+                count: 1,
+                tapped_and_attacking: false,
+                attach_source: false,
+            },
+        ]
+    };
+    let attacking_creature = || TargetSpec::Permanent {
+        predicate: CardPredicate {
+            attacking: true,
+            card_type: Some(CardType::Creature),
+            ..Default::default()
+        },
+    };
+
+    CardDefinition {
+        key: "tla.obsessive_pursuit",
+        scryfall_id: "e837e29c-d241-43c8-8f45-05056e082b60",
+        name: "Obsessive Pursuit".into(),
+        mana_cost: Some(ManaCost::parse("{1}{B}")),
+        types: CardTypes::new([CardType::Enchantment]),
+        abilities: vec![
+            Ability::Triggered {
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: clue(),
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::BeginningOfYourUpkeep,
+                effects: clue(),
+            },
+            Ability::Triggered {
+                condition: TriggerCondition::Attacks {
+                    subject: TriggerSubject::AnyYouControl(CardPredicate::creature()),
+                },
+                effects: vec![Effect::TargetClause {
+                    requirement: TargetRequirement::one(attacking_creature()),
+                    effects: vec![
+                        Effect::PutCountersValue {
+                            count: EffectValue::PermanentsSacrificedThisTurn,
+                            target: attacking_creature(),
+                        },
+                        Effect::IfCondition {
+                            condition: StaticCondition::SacrificedThisTurnAtLeast { count: 3 },
+                            effects: vec![Effect::GrantKeywordsToTarget {
+                                keywords: Keywords {
+                                    lifelink: true,
+                                    ..Default::default()
+                                },
+                                target: attacking_creature(),
+                            }],
+                            otherwise: vec![],
+                        },
+                    ],
+                }],
             },
         ],
         text_box: text_box.into(),
@@ -4866,7 +5157,9 @@ fn omashu_city() -> CardDefinition {
                 tap_source: true,
                 mana_cost: ManaCost::parse("{4}"),
                 sacrifice_source: true,
-                effects: vec![Effect::DrawCards { count: 1 }],
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
                 ..Default::default()
             },
             ActivatedAbilityDefinition {
@@ -5261,7 +5554,9 @@ fn professor_zei_anthropologist() -> CardDefinition {
             ActivatedAbilityDefinition {
                 discard_card: true,
                 tap_source: true,
-                effects: vec![Effect::DrawCards { count: 1 }],
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
                 ..Default::default()
             },
             ActivatedAbilityDefinition {
@@ -5879,7 +6174,9 @@ fn serpents_pass() -> CardDefinition {
                 tap_source: true,
                 mana_cost: ManaCost::parse("{4}"),
                 sacrifice_source: true,
-                effects: vec![Effect::DrawCards { count: 1 }],
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
                 ..Default::default()
             },
             ActivatedAbilityDefinition {
@@ -5923,6 +6220,33 @@ fn shared_roots() -> CardDefinition {
             bottom_source: false,
             to_hand: false,
         }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
+fn sold_out() -> CardDefinition {
+    let text_box = "Exile target creature. If it was dealt damage this turn, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")";
+
+    CardDefinition {
+        key: "tla.sold_out",
+        scryfall_id: "1affba6d-2cca-4cdf-8690-1e23ffbe8462",
+        name: "Sold Out".into(),
+        mana_cost: Some(ManaCost::parse("{3}{B}")),
+        types: CardTypes::new([CardType::Instant]),
+        spell_effects: vec![
+            Effect::Exile {
+                target: TargetSpec::Creature,
+            },
+            Effect::IfTargetDealtDamageThisTurn {
+                then: vec![Effect::CreateToken {
+                    token_name: "Clue".into(),
+                    count: 1,
+                    tapped_and_attacking: false,
+                    attach_source: false,
+                }],
+            },
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -5994,7 +6318,9 @@ fn sokka_lateral_strategist() -> CardDefinition {
         },
         abilities: vec![Ability::Triggered {
             condition: TriggerCondition::AttacksWithAnother,
-            effects: vec![Effect::DrawCards { count: 1 }],
+            effects: vec![Effect::DrawCards {
+                count: EffectValue::Fixed(1),
+            }],
         }],
         text_box: text_box.into(),
         ..Default::default()
@@ -6025,7 +6351,9 @@ fn sokka_s_haiku() -> CardDefinition {
                     target: TargetSpec::Spell,
                 }],
             },
-            Effect::DrawCards { count: 1 },
+            Effect::DrawCards {
+                count: EffectValue::Fixed(1),
+            },
             Effect::MillCards {
                 count: EffectValue::Fixed(3),
                 target: None,
@@ -6133,7 +6461,9 @@ fn south_pole_voyager() -> CardDefinition {
                 Effect::GainLife { amount: 1 },
                 Effect::OnNthResolutionThisTurn {
                     n: 2,
-                    effect: Box::new(Effect::DrawCards { count: 1 }),
+                    effect: Box::new(Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }),
                 },
             ],
         }],
@@ -6283,10 +6613,14 @@ fn spirit_water_revival() -> CardDefinition {
             Effect::IfKicked {
                 then: vec![
                     Effect::ShuffleGraveyardIntoLibrary,
-                    Effect::DrawCards { count: 7 },
+                    Effect::DrawCards {
+                        count: EffectValue::Fixed(7),
+                    },
                     Effect::NoMaximumHandSize,
                 ],
-                otherwise: vec![Effect::DrawCards { count: 2 }],
+                otherwise: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(2),
+                }],
             },
             Effect::ExileSourceSpell,
         ],
@@ -6339,7 +6673,9 @@ fn sun_blessed_peak() -> CardDefinition {
                 tap_source: true,
                 mana_cost: ManaCost::parse("{4}"),
                 sacrifice_source: true,
-                effects: vec![Effect::DrawCards { count: 1 }],
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
                 ..Default::default()
             },
             ActivatedAbilityDefinition {
@@ -6791,7 +7127,7 @@ fn the_spirit_oasis() -> CardDefinition {
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::DrawCardsValue {
+                effects: vec![Effect::DrawCards {
                     count: EffectValue::BattlefieldMatching {
                         predicate: CardPredicate {
                             subtype: Some("Shrine".into()),
@@ -6807,7 +7143,9 @@ fn the_spirit_oasis() -> CardDefinition {
                         ..Default::default()
                     }),
                 },
-                effects: vec![Effect::DrawCards { count: 1 }],
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
             },
         ],
         text_box: text_box.into(),
@@ -7407,7 +7745,10 @@ fn vindictive_warden() -> CardDefinition {
         }],
         activated_abilities: vec![ActivatedAbilityDefinition {
             mana_cost: ManaCost::parse("{3}"),
-            effects: vec![Effect::DealDamageToEachOpponent { amount: 1 }],
+            effects: vec![Effect::DealDamageToPlayer {
+                player: PlayerSelector::EachOpponent,
+                amount: EffectValue::Fixed(1),
+            }],
             ..Default::default()
         }],
         text_box: text_box.into(),
@@ -7642,7 +7983,9 @@ fn waterbending_lesson() -> CardDefinition {
         types: CardTypes::new([CardType::Sorcery]),
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![
-            Effect::DrawCards { count: 3 },
+            Effect::DrawCards {
+                count: EffectValue::Fixed(3),
+            },
             Effect::OptionalPayment {
                 cost: PaymentCost::Waterbend { generic: 2 },
                 if_paid: vec![],
@@ -7670,7 +8013,9 @@ fn waterbending_scroll() -> CardDefinition {
             }),
             tap_source: true,
             mana_cost: ManaCost::parse("{6}"),
-            effects: vec![Effect::DrawCards { count: 1 }],
+            effects: vec![Effect::DrawCards {
+                count: EffectValue::Fixed(1),
+            }],
             ..Default::default()
         }],
         text_box: text_box.into(),

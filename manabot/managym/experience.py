@@ -311,6 +311,15 @@ class LegacyRestrictedManaView(ProtocolModel):
     mana: tuple[Int32, Int32, Int32, Int32, Int32, Int32]
 
 
+class PlayerTurnHistoryView(ProtocolModel):
+    attacked: bool = Field(default=False, exclude_if=lambda value: not value)
+    permanents_sacrificed: UInt32 = Field(
+        default=0, exclude_if=lambda value: not value
+    )
+    land_entered: bool = Field(default=False, exclude_if=lambda value: not value)
+    cards_drawn: UInt32 = Field(default=0, exclude_if=lambda value: not value)
+
+
 class LegacyCardView(ProtocolModel):
     text_box: str = Field(default="", exclude_if=lambda value: not value)
     id: UInt32
@@ -373,6 +382,9 @@ class LegacyPermanentView(ProtocolModel):
     used_abilities: list[UInt32] = Field(
         default_factory=list, exclude_if=lambda value: not value
     )
+    dealt_damage_this_turn: bool = Field(
+        default=False, exclude_if=lambda value: not value
+    )
 
 
 class SideboardCardView(ProtocolModel):
@@ -429,6 +441,10 @@ class LegacyPlayerView(ProtocolModel):
         exclude_if=lambda value: value is None,
     )
     keeps_red_mana: bool = Field(default=False, exclude_if=lambda value: not value)
+    turn_history: PlayerTurnHistoryView = Field(
+        default_factory=PlayerTurnHistoryView,
+        exclude_if=lambda value: value == PlayerTurnHistoryView(),
+    )
     no_maximum_hand_size: bool = Field(
         default=False, exclude_if=lambda value: not value
     )

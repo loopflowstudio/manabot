@@ -131,6 +131,7 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
             id: managym::flow::trigger::TriggerId(0),
             ordering_class: managym::flow::trigger::TriggerOrderingClass::Ordinary,
             context: None,
+            player: None,
             inline_effects: None,
         },
         PendingTrigger {
@@ -145,6 +146,7 @@ fn cr_603_3b_pending_triggers_flush_in_apnap_order() {
             id: managym::flow::trigger::TriggerId(1),
             ordering_class: managym::flow::trigger::TriggerOrderingClass::Ordinary,
             context: None,
+            player: None,
             inline_effects: None,
         },
     ];
@@ -263,6 +265,7 @@ fn cr_603_trigger_flush_happens_after_sba_check() {
         id: managym::flow::trigger::TriggerId(0),
         ordering_class: managym::flow::trigger::TriggerOrderingClass::Ordinary,
         context: None,
+        player: None,
         inline_effects: None,
     });
 

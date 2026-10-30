@@ -500,7 +500,7 @@ impl Game {
             StaticCondition::Always => true,
             StaticCondition::YourTurn => self.active_player() == controller,
             StaticCondition::CardsDrawnAtLeast { count } => {
-                self.state.turn.cards_drawn_this_turn[controller.0] >= *count
+                self.state.turn.history[controller.0].cards_drawn >= *count
             }
             StaticCondition::GraveyardAtLeast { count, predicate } => {
                 self.count_graveyard_matching(controller, predicate) >= *count
@@ -512,6 +512,16 @@ impl Game {
             StaticCondition::UnspentManaAtLeast { count } => {
                 u32::from(self.pooled_mana(controller).total()) >= *count
             }
+            StaticCondition::AttackedThisTurn => self.state.turn.history[controller.0].attacked,
+            StaticCondition::LandEnteredThisTurn => {
+                self.state.turn.history[controller.0].land_entered
+            }
+            StaticCondition::SacrificedThisTurnAtLeast { count } => {
+                self.state.turn.history[controller.0].permanents_sacrificed >= *count
+            }
+            StaticCondition::AnyOf(conditions) => conditions
+                .iter()
+                .any(|condition| self.check_static_condition(condition, controller)),
         }
     }
 
@@ -641,8 +651,11 @@ impl Game {
             not_subtypes: Vec::new(),
             ..predicate.clone()
         };
+        // Read effective power only for power predicates: a power-free
+        // predicate in a static P/T condition ("as long as you control a land
+        // creature") must not recompute the P/T it contributes to.
         let power = match view {
-            ScopeView::Rules => self.effective_power(permanent_id),
+            ScopeView::Rules if predicate.reads_power() => self.effective_power(permanent_id),
             _ => card.power.unwrap_or(0),
         };
         let mut types = Vec::new();

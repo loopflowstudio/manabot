@@ -1,6 +1,6 @@
 //! Adventures in the Forgotten Realms.
 use crate::state::{
-    ability::{Effect, TargetSpec},
+    ability::{Effect, EffectValue, TargetSpec},
     card::{CardDefinition, CardType, CardTypes, SacrificeCost},
     mana::ManaCost,
     predicate::CardPredicate,
@@ -28,7 +28,9 @@ fn deadly_dispute() -> CardDefinition {
             or_mana: None,
         }),
         spell_effects: vec![
-            Effect::DrawCards { count: 2 },
+            Effect::DrawCards {
+                count: EffectValue::Fixed(2),
+            },
             Effect::CreateToken {
                 token_name: "Treasure".into(),
                 count: 1,

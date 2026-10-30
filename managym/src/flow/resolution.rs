@@ -15,7 +15,8 @@ use crate::{
     },
     state::{
         ability::{
-            Ability, Effect, EffectValue, LinkedChooser, PaymentCost, TargetRequirement, TargetSpec,
+            Ability, Effect, EffectValue, LinkedChooser, PaymentCost, PlayerSelector,
+            TargetRequirement, TargetSpec,
         },
         game_object::{CardId, ObjectId, PermanentId, PlayerId, Target},
         permanent::{CounterKind, Permanent},
@@ -76,11 +77,15 @@ impl Game {
             EffectValue::GraveyardMatching { base, predicate } => {
                 base.saturating_add(self.count_graveyard_matching(controller, predicate) as i32)
             }
-            EffectValue::CardsDrawnMinus { subtract } => {
-                self.state.turn.cards_drawn_this_turn[controller.0].saturating_sub(*subtract) as i32
-            }
+            EffectValue::CardsDrawnMinus { subtract } => self.state.turn.history[controller.0]
+                .cards_drawn
+                .saturating_sub(*subtract)
+                as i32,
             EffectValue::GreatestSharedCreatureType => {
                 self.greatest_shared_creature_type(controller) as i32
+            }
+            EffectValue::PermanentsSacrificedThisTurn => {
+                self.state.turn.history[controller.0].permanents_sacrificed as i32
             }
         }
     }
@@ -135,6 +140,7 @@ impl Game {
             targets,
             active_requirement: 0,
             context_target: None,
+            triggering_player: None,
             grantor: None,
             queue: VecDeque::from(effects),
             finalize: FrameFinalize::Spell {
@@ -206,6 +212,7 @@ impl Game {
             targets,
             active_requirement: 0,
             context_target: attached,
+            triggering_player: None,
             grantor: ability.granted_by.map(|grant| grant.grantor),
             queue: VecDeque::from(crate::state::ability::bind_effect_clauses(effects)),
             finalize: FrameFinalize::None,
@@ -276,6 +283,7 @@ impl Game {
             targets,
             active_requirement: 0,
             context_target: triggered.context,
+            triggering_player: triggered.player,
             grantor: None,
             queue: VecDeque::from(crate::state::ability::bind_effect_clauses(effects)),
             finalize: FrameFinalize::None,
@@ -385,6 +393,20 @@ impl Game {
         }
     }
 
+    /// The players a selector names as the effect resolves; a target player
+    /// that is no longer a legal target is skipped.
+    fn selected_players(&self, selector: &PlayerSelector, frame: &EffectFrame) -> Vec<PlayerId> {
+        match selector {
+            PlayerSelector::You => vec![frame.controller],
+            PlayerSelector::EachOpponent => vec![PlayerId(1 - frame.controller.0)],
+            PlayerSelector::TriggeringPlayer => frame.triggering_player.into_iter().collect(),
+            PlayerSelector::Target(_) => match self.present_primary_target(frame) {
+                Some(Target::Player(player)) => vec![player],
+                _ => Vec::new(),
+            },
+        }
+    }
+
     fn present_primary_target(&self, frame: &EffectFrame) -> Option<Target> {
         frame
             .primary_target()
@@ -419,13 +441,17 @@ impl Game {
             Effect::DistributeCountersToTappedOpponentCreatures { kind, count } => {
                 self.distribute_counters(frame.controller, *kind, *count)
             }
-            Effect::DealDamageToController { amount } => {
-                self.apply_player_damage(frame.source_ref, frame.controller, *amount);
+            Effect::DealDamageToPlayer { player, amount } => {
+                let amount = self.effect_value(amount, frame);
+                for player in self.selected_players(player, frame) {
+                    self.apply_player_damage(frame.source_ref, player, amount);
+                }
                 None
             }
             Effect::DrainLife { amount } => {
-                self.change_life(PlayerId(1 - frame.controller.0), -*amount);
-                self.gain_life(frame.controller, *amount);
+                let amount = self.effect_value(amount, frame).max(0);
+                self.change_life(PlayerId(1 - frame.controller.0), -amount);
+                self.gain_life(frame.controller, amount);
                 None
             }
             Effect::CantBeBlockedTarget { .. } => {
@@ -501,12 +527,6 @@ impl Game {
                         if_declined: if_declined.clone(),
                     })
                 }
-            }
-            Effect::DrainLifeValue { amount } => {
-                let amount = self.effect_value(amount, frame).max(0);
-                self.change_life(PlayerId(1 - frame.controller.0), -amount);
-                self.gain_life(frame.controller, amount);
-                None
             }
             Effect::SelectTargetRequirement { index } => {
                 frame.active_requirement = *index;
@@ -817,7 +837,9 @@ impl Game {
                     .is_some_and(|p| p.controller == frame.controller);
                 self.return_permanent_to_owner_hand(id);
                 if controlled {
-                    frame.queue.push_front(Effect::DrawCards { count: 1 });
+                    frame.queue.push_front(Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    });
                 }
                 None
             }
@@ -908,18 +930,10 @@ impl Game {
                 }
                 None
             }
-            Effect::DrawCardsValue { count } => {
-                let count = self.effect_value(count, frame).max(0) as usize;
-                self.draw_cards(frame.controller, count);
-                None
-            }
-            Effect::LoseLife { amount } => {
-                self.change_life(frame.controller, -*amount);
-                None
-            }
-            Effect::TriggeringPlayerLosesLife { amount } => {
-                if let Some(Target::Player(player)) = frame.context_target {
-                    self.change_life(player, -*amount);
+            Effect::LoseLife { player, amount } => {
+                let amount = self.effect_value(amount, frame);
+                for player in self.selected_players(player, frame) {
+                    self.change_life(player, -amount);
                 }
                 None
             }
@@ -933,14 +947,6 @@ impl Game {
                     permanent.temp_power += power;
                     permanent.temp_toughness += toughness;
                 });
-                None
-            }
-            Effect::DealDamageToEachOpponent { amount } => {
-                self.apply_player_damage(
-                    frame.source_ref,
-                    PlayerId(1 - frame.controller.0),
-                    *amount,
-                );
                 None
             }
             Effect::KeepUnspentRedMana => {
@@ -1182,7 +1188,8 @@ impl Game {
             Effect::DrawCards { count } => {
                 // Drawing from an empty library sets `drew_when_empty`; the player
                 // loses via state-based actions (CR 704.5c), same as the draw step.
-                self.draw_cards(frame.controller, *count);
+                let count = self.effect_value(count, frame).max(0) as usize;
+                self.draw_cards(frame.controller, count);
                 None
             }
             Effect::DestroyCreaturesLosingAbilities { max_mana_value } => {
@@ -1626,6 +1633,22 @@ impl Game {
                 }
                 None
             }
+            Effect::IfTargetDealtDamageThisTurn { then } => {
+                let Some(Target::Permanent(permanent_id)) = frame.primary_target() else {
+                    return None;
+                };
+                // A departed target answers from its last known information.
+                let dealt = match self.state.permanents[permanent_id].as_ref() {
+                    Some(permanent) => permanent.dealt_damage_this_turn,
+                    None => self
+                        .departed_permanent_lki(permanent_id)
+                        .is_some_and(|lki| lki.dealt_damage_this_turn),
+                };
+                if dealt {
+                    frame.prepend_effects(then.iter().cloned());
+                }
+                None
+            }
             Effect::IfTargetMatches { predicate, then } => {
                 let Some(Target::Permanent(permanent_id)) = self.present_primary_target(frame)
                 else {
@@ -1654,6 +1677,7 @@ impl Game {
                         }],
                         active_requirement: 0,
                         context_target: None,
+                        triggering_player: frame.triggering_player,
                         grantor: frame.grantor,
                         queue: VecDeque::from(effects.clone()),
                         finalize: FrameFinalize::None,
