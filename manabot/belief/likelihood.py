@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-import hashlib
 import json
 from pathlib import Path
 import time
@@ -15,6 +14,7 @@ from numpy.typing import NDArray
 import torch
 
 from manabot.belief.range import BeliefState
+from manabot.infra.identity import file_sha256
 
 
 class RulesProviderGap(RuntimeError):
@@ -40,14 +40,6 @@ class LikelihoodBatchProgress:
     total_rows: int
     evaluator_wall_seconds: float
     prepared_diagnostics: Mapping[str, int]
-
-
-def file_sha256(path: Path) -> str:
-    digest = hashlib.sha256()
-    with path.open("rb") as source:
-        for block in iter(lambda: source.read(1024 * 1024), b""):
-            digest.update(block)
-    return digest.hexdigest()
 
 
 def public_commitment_key(value: Mapping[str, Any]) -> str:
@@ -240,6 +232,5 @@ __all__ = [
     "LikelihoodResult",
     "RulesProviderGap",
     "_matching_offer_indexes",
-    "file_sha256",
     "public_commitment_key",
 ]

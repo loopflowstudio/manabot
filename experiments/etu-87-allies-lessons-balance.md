@@ -1,6 +1,6 @@
 # ETU-87 — Which cards decide Allies versus Lessons?
 
-> Historical implementation retired on 2026-10-23. See the [repository archive](../docs/repository-archive.md) for pinned source and retained inputs; the results below are unchanged.
+> Historical implementation retired on 2026-10-23. See the [repository archive](../docs/development.md#retained-evidence-and-archived-corpora) for pinned source and retained inputs; the results below are unchanged.
 
 **Status: exploratory.** No prediction was committed before these runs, so by
 the discipline in [README](README.md) the numbers below are a map for choosing

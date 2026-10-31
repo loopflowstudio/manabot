@@ -59,7 +59,6 @@ UV_RUNTIME = [
 # The checkpoint opponent's modules load lazily, only when a game selects it.
 RUNTIME_IMPORTS = (
     "academy.server",
-    "academy.live_advice",
     "manabot.model.world",
     "manabot.sim.action.compound",
     "manabot.sim.search.flat_mc",

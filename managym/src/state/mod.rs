@@ -1,5 +1,6 @@
 pub mod ability;
 pub mod card;
+pub mod deck;
 pub mod effect;
 pub mod game_object;
 pub mod hash;

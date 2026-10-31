@@ -7,8 +7,8 @@ mod benchmark_allocations;
 use managym::benchmark_allocations;
 
 use managym::{
-    benchmark::build_fixture,
     cards::content_pack::{default_content_pack, ContentPack},
+    match_fixtures::build_fixture,
     state::card::CardDefinition,
     Game,
 };
@@ -161,7 +161,7 @@ fn clone_receipt(baseline: AllocationCounts, expanded: AllocationCounts) -> Clon
 
 #[test]
 fn content_pack_clone_allocations_do_not_scale_with_definition_bytes() {
-    let (root, fixture) = build_fixture(FIXTURE_ID).expect("deterministic fixture");
+    let root = build_fixture(FIXTURE_ID).expect("deterministic fixture");
     let admitted = default_content_pack();
     assert!(Arc::ptr_eq(&root.state.content, &admitted));
 
@@ -232,9 +232,9 @@ fn content_pack_clone_allocations_do_not_scale_with_definition_bytes() {
             "release"
         },
         fixture: FIXTURE_ID,
-        fixture_cards: fixture.card_count,
-        fixture_permanent_slots: fixture.allocated_permanent_slots,
-        fixture_committed_events: fixture.committed_event_count,
+        fixture_cards: root.state.cards.len(),
+        fixture_permanent_slots: root.state.permanents.len(),
+        fixture_committed_events: root.state.events.len(),
         arc_reference_count: ARC_REFERENCE_COUNT,
         warmup_clone_count: WARMUP_CLONE_COUNT,
         measured_clone_count: MEASURED_CLONE_COUNT,

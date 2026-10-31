@@ -57,6 +57,10 @@ class GameConfig:
     hero_sideboard: dict[str, int] = field(default_factory=dict)
     villain_sideboard: dict[str, int] = field(default_factory=dict)
     watch_players: list[str] | None = None
+    # Private import provenance: each seat's decklist (``managym.Decklist``
+    # JSON form), admitted by the world. Viewer exports strip them.
+    hero_source: dict[str, Any] | None = None
+    villain_source: dict[str, Any] | None = None
 
     def to_rust(self) -> list[managym.PlayerConfig]:
         """Rebuild the recorded root with its explicit outside-game copies."""
@@ -71,6 +75,27 @@ class GameConfig:
                 for name, count in sideboard.items()
             ):
                 raise ValueError("Recorded sideboard requires positive integer counts")
+        if self.hero_source is not None or self.villain_source is not None:
+            # Imported: re-admit each retained source against the installed world.
+            if self.hero_source is None or self.villain_source is None:
+                raise ValueError("Imported trace requires both sources")
+            configs = []
+            for name, source, deck, sideboard in (
+                ("Hero", self.hero_source, self.hero_deck, self.hero_sideboard),
+                (
+                    "Villain",
+                    self.villain_source,
+                    self.villain_deck,
+                    self.villain_sideboard,
+                ),
+            ):
+                managym.Decklist.from_dict(source).validate_deck(
+                    managym.Deck(deck, sideboard)
+                )
+                configs.append(
+                    managym.PlayerConfig(name, deck, sideboard, managym.WORLD_SETUP)
+                )
+            return configs
         pack = curated_pack_for_matchup(self.hero_deck_name, self.villain_deck_name)
         configs: list[managym.PlayerConfig] = []
         if pack is not None:
@@ -254,6 +279,12 @@ def prepare_trace_payload(
     config = prepared.get("config", {})
     config.pop("villain_checkpoint", None)
     config.pop("seed", None)
+    sources = [config.pop(key, None) for key in ("hero_source", "villain_source")]
+    if any(source is not None for source in sources):
+        # Submitted lists are private setup provenance. Native viewer observations
+        # still expose exactly the public information in the shared contract.
+        for key in ("hero_deck", "villain_deck", "hero_sideboard", "villain_sideboard"):
+            config[key] = {}
     reveal_hidden = (
         reveal_hidden
         and payload.get("end_reason") == "game_over"

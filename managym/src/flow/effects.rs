@@ -51,7 +51,6 @@ impl Game {
         if records.is_empty() {
             return;
         }
-        self.journal_effects();
         self.state.effects.extend(records);
         // Characteristics can change which mana abilities exist.
         self.invalidate_mana_cache(PlayerId(0));
@@ -127,7 +126,6 @@ impl Game {
         if !self.state.effects.iter().any(&ends) {
             return;
         }
-        self.journal_effects();
         self.state.effects.retain(|effect| !ends(effect));
         self.invalidate_mana_cache(PlayerId(0));
         self.invalidate_mana_cache(PlayerId(1));

@@ -82,7 +82,7 @@ def test_self_play_records_costs_and_reloads_distinct_raw_ema(
         for index, variant in [(0, "raw"), (0, "ema"), (1, "raw"), (1, "ema")]
     ]
     for agent in (raw0, ema0, raw1, ema1):
-        assert agent.config.semantic_pack == "ur-lessons-vs-gw-allies"
+        assert agent.config.world == "ur-lessons-vs-gw-allies"
         assert {"semantic_cards", "known_hand"} <= agent.world_binding[
             "input_schema"
         ].keys()

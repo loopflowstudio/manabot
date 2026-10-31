@@ -144,7 +144,7 @@ foretold card only as an exile count, in JSON, text and tensor alike.
 `managym/tests/cards/observability.rs` names each field's columns and tokens.
 Action shapes are unchanged.
 
-`conformance/semantic-kernel-w17-v1` replays, the authored-match receipt and
+`conformance/semantic-kernel-w17-v1` trace evidence, the authored-match receipt and
 its live/headless parity (`authored-match-w17-v1`, `authored-match-parity-w17-v1`:
 the 142-Command authored tape) and `public-commitment-parity-w17-v1` bind this
 world, re-recorded in place as it grows. Academy `*-w17.json` demo,

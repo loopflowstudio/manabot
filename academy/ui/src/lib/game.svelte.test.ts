@@ -240,6 +240,21 @@ describe('GameStore', () => {
     expect(updated.villain_deck).toBe('interactive');
   });
 
+  it('retains editable imported source in the next setup and can return to presets', () => {
+    const store = createGameStore();
+    const source = '# retained comment\n10 Forest\nSideboard\n1 Island';
+    store.deckImport = {
+      hero: { source, filename: 'hero.txt' },
+      villain: { source: '20 Island', filename: 'villain.txt' },
+    };
+    expect(store.newGameConfig().deck_import).toEqual(store.deckImport);
+    store.deckImport.hero.source = source + '\n1 Mountain';
+    expect(store.newGameConfig().deck_import).toEqual(store.deckImport);
+    store.deckImport = null;
+    expect(store.newGameConfig()).not.toHaveProperty('deck_import');
+    expect(store.newGameConfig().hero_deck).toBe('ur_lessons');
+  });
+
   it('sanitizes stored deck selections and falls back to defaults', async () => {
     const { sanitizeDeckSelection, defaultDeckSelection } = await import('./decks');
 

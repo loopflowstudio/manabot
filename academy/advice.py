@@ -25,17 +25,11 @@ from typing import (
     Iterable,
     Literal,
     Mapping,
-    Protocol,
     Sequence,
     TypeAlias,
 )
 
-from managym.decision import DecisionFrame
 from managym.experience import ExperienceFrame, InteractionOffer, ProtocolModel
-from managym.possible_worlds import (
-    PossibleWorldError,
-    PossibleWorldSpace,
-)
 from pydantic import Field, TypeAdapter, model_validator
 
 from academy.advice_identity import (
@@ -47,15 +41,10 @@ from academy.advice_identity import (
     CodeSourceArtifact,
 )
 from academy.replay_index import (
-    DecisionNotFoundError,
     InvalidAddressError,
     ReplayDecisionAddress,
 )
 from academy.shared_table_protocol import BeliefScenario, ViewerIdentity
-from academy.study_branch import (
-    StudyBranchUnavailableError,
-    StudyForkProvider,
-)
 from academy.study_protocol import DecisionEvidence, StudyArtifact, StudyLandmark
 
 if TYPE_CHECKING:
@@ -808,116 +797,6 @@ class AdvisorUnavailable(RuntimeError):
     def __init__(self, reason: AdviceUnavailableReason) -> None:
         super().__init__(reason)
         self.reason = reason
-
-
-@dataclass(frozen=True)
-class ResolvedAdvisorDecision:
-    """Injected Game capability consumed by the Intelligence provider."""
-
-    address: ReplayDecisionAddress
-    frame: ExperienceFrame
-    semantic_frame: DecisionFrame
-    root: Any
-    world_space: PossibleWorldSpace
-    source_replay_sha256: str
-    content_sha256: str
-
-
-class LiveAdvisorRootProvider(Protocol):
-    def resolve_live_advisor_decision(
-        self,
-        raw_address: str,
-        authorized_viewer: int,
-    ) -> Any: ...
-
-
-def _resolved_advisor_decision(
-    resolved: Any,
-    address: ReplayDecisionAddress,
-    viewer: ViewerIdentity,
-    source_replay_sha256: str,
-) -> ResolvedAdvisorDecision:
-    try:
-        semantic = DecisionFrame.from_json(resolved.root.semantic_decision_frame_json())
-        world_space = PossibleWorldSpace.from_engine(resolved.root, viewer.rules_viewer)
-    except (PossibleWorldError, ValueError) as error:
-        raise AdvisorUnavailable("decision_root_unavailable") from error
-    restored = resolved.restored
-    if (
-        restored.address != address.serialize()
-        or restored.viewer != viewer.rules_viewer
-        or restored.revision != address.revision
-        or restored.frame.revision != address.revision
-        or semantic.actor != viewer.rules_viewer
-    ):
-        raise AdvisorUnavailable("decision_identity_mismatch")
-    replay_offer_ids = [int(offer.id) for offer in restored.frame.offers]
-    semantic_offer_ids = [int(offer["id"]) for offer in semantic.offers]
-    if replay_offer_ids != semantic_offer_ids:
-        raise AdvisorUnavailable("action_identity_mismatch")
-    try:
-        content_manifest = resolved.root.content_pack_manifest()
-    except Exception:
-        content_manifest = {}
-    return ResolvedAdvisorDecision(
-        address=address,
-        frame=restored.frame.model_copy(deep=True),
-        semantic_frame=semantic,
-        root=resolved.root,
-        world_space=world_space,
-        source_replay_sha256=source_replay_sha256,
-        content_sha256=canonical_sha256(content_manifest),
-    )
-
-
-@dataclass(frozen=True)
-class LiveAdvisorDecisionResolver:
-    """Adapter for a committed decision retained by a live Game session."""
-
-    provider: LiveAdvisorRootProvider
-    source_replay_sha256: str
-
-    def resolve(
-        self,
-        address: ReplayDecisionAddress,
-        viewer: ViewerIdentity,
-    ) -> ResolvedAdvisorDecision:
-        try:
-            resolved = self.provider.resolve_live_advisor_decision(
-                address.serialize(), viewer.rules_viewer
-            )
-        except DecisionNotFoundError as error:
-            raise AdvisorUnavailable("decision_not_found") from error
-        except StudyBranchUnavailableError as error:
-            raise AdvisorUnavailable("decision_root_unavailable") from error
-        return _resolved_advisor_decision(
-            resolved, address, viewer, self.source_replay_sha256
-        )
-
-
-@dataclass(frozen=True)
-class StudyAdvisorDecisionResolver:
-    """Narrow adapter over Game's existing replay/fork authority."""
-
-    provider: StudyForkProvider
-    source_replay_sha256: str
-
-    def resolve(
-        self,
-        address: ReplayDecisionAddress,
-        viewer: ViewerIdentity,
-    ) -> ResolvedAdvisorDecision:
-        try:
-            resolved = self.provider.resolve_advisor_decision(
-                address.serialize(), viewer.rules_viewer
-            )
-        except DecisionNotFoundError as error:
-            raise AdvisorUnavailable("decision_not_found") from error
-        except StudyBranchUnavailableError as error:
-            raise AdvisorUnavailable("decision_root_unavailable") from error
-        return _resolved_advisor_decision(
-            resolved, address, viewer, self.source_replay_sha256
-        )
 
 
 @dataclass(frozen=True)

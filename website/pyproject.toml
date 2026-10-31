@@ -1,11 +1,10 @@
 [project]
 name = "academy-website"
 version = "0.1.0"
-description = "Manabot landing site"
+description = "manabot.gg blog site"
 requires-python = ">=3.12"
 dependencies = [
     "python-fasthtml>=0.6.0",
-    "pyyaml>=6.0",
     "uvicorn[standard]>=0.32.0",
 ]
 

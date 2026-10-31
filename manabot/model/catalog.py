@@ -28,21 +28,14 @@ import torch
 
 from manabot.env.observation import ObservationSpace
 from manabot.infra.config import ModelConfig, ObservationConfig
-from manabot.model.world import WORLD, checkpoint_configs, checkpoint_world
+from manabot.model.world import WORLD, expected_world
+import managym
 
 CheckpointSource = Literal["path", "runs", "tournament"]
 
 # Run directories also hold datasets, optimizer state and recovery snapshots;
 # none of those are policies, and very large files are never policies here.
 MAX_CHECKPOINT_BYTES = 512 * 1024 * 1024
-
-
-@dataclass(frozen=True)
-class DeckSetup:
-    """One seat's deck and sideboard exactly as the checkpoint was bound."""
-
-    deck: dict[str, int]
-    sideboard: dict[str, int]
 
 
 @dataclass(frozen=True)
@@ -59,7 +52,8 @@ class CheckpointSummary:
     parameters: int
     # Trainer ``global_step`` (environment steps) when it records one.
     step: int | None
-    setups: tuple[DeckSetup, ...] = field(default=())
+    # Each bound seat's deck exactly as the checkpoint recorded it.
+    setups: tuple[managym.Deck, ...] = field(default=())
     # Why the running engine refuses this checkpoint; ``None`` means admissible.
     incompatibility: str | None = None
 
@@ -166,8 +160,7 @@ def checkpoint_incompatibility(checkpoint: Mapping[str, Any]) -> str | None:
         observation = ObservationConfig.from_checkpoint(
             checkpoint["hypers"]["observation_hypers"]
         )
-        configs = checkpoint_configs(binding)
-        expected = checkpoint_world(configs, ObservationSpace(observation))
+        expected = expected_world(binding, ObservationSpace(observation))
     except BaseException as error:  # PyO3 panics on invalid native setups
         if isinstance(error, (KeyboardInterrupt, SystemExit, GeneratorExit)):
             raise
@@ -205,6 +198,13 @@ _BINDING_FIELDS = (
     ),
     ("content_manifest", _content_mismatch),
     (
+        "world_digest",
+        lambda trained, engine: (
+            f"world cards differ: trained on {str(trained)[:12]}, "
+            f"engine has {str(engine)[:12]}"
+        ),
+    ),
+    (
         "input_schema",
         lambda trained, engine: "observation tensor shapes differ from this engine",
     ),
@@ -221,11 +221,11 @@ _BINDING_FIELDS = (
 )
 
 
-def _setups(binding: Any) -> tuple[DeckSetup, ...]:
+def _setups(binding: Any) -> tuple[managym.Deck, ...]:
     if not isinstance(binding, Mapping) or not isinstance(binding.get("setups"), list):
         return ()
     return tuple(
-        DeckSetup(dict(setup.get("deck", {})), dict(setup.get("sideboard", {})))
+        managym.Deck(dict(setup.get("deck", {})), dict(setup.get("sideboard", {})))
         for setup in binding["setups"]
         if isinstance(setup, Mapping)
     )

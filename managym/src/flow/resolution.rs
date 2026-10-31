@@ -230,7 +230,6 @@ impl Game {
 
         // Track per-turn resolutions for "the Nth time this ability has
         // resolved this turn" gating.
-        self.journal_turn();
         let key = (source_card.0, ability_key);
         let count = self
             .state
@@ -262,7 +261,7 @@ impl Game {
     /// CR 608.2b: check every chosen slot against its own clause once, before
     /// any instruction. Zero chosen optional targets still resolve; a nonempty
     /// all-illegal set suppresses the entire spell or ability, even untargeted
-    /// instructions. The retained slots also enter clone/undo and state hashes.
+    /// instructions. The retained slots also enter clones and state hashes.
     fn resolution_targets(
         &self,
         targets: &[Target],
@@ -738,7 +737,6 @@ impl Game {
                 self.move_card(card, ZoneType::Library);
                 if *second_from_top {
                     let owner = self.state.cards[card].owner;
-                    self.journal_zones();
                     let library = self.state.zones.zone_cards_mut(ZoneType::Library, owner);
                     if let Some(index) = library.iter().position(|c| *c == card) {
                         library.remove(index);
@@ -771,7 +769,6 @@ impl Game {
                 for card in graveyard {
                     self.move_card(card, ZoneType::Library);
                 }
-                self.journal_zones();
                 self.state
                     .zones
                     .shuffle(ZoneType::Library, player, &mut self.state.rng);
@@ -809,7 +806,6 @@ impl Game {
                         // Bounce a spell: its stack object ceases and the
                         // card returns to its owner's hand.
                         if let Some(index) = self.find_spell_on_stack_index(card) {
-                            self.journal_stack();
                             self.state.stack_objects.remove(index);
                             let owner = self.state.cards[card].owner;
                             self.move_card(card, ZoneType::Hand);
@@ -844,7 +840,6 @@ impl Game {
             }
             Effect::AddManaValue { mana, amount } => {
                 let count = self.effect_value(amount, frame).max(0);
-                self.journal_player(frame.controller);
                 self.invalidate_mana_cache(frame.controller);
                 for _ in 0..count {
                     self.state.players[frame.controller.0].mana_pool.add(mana);
@@ -1094,7 +1089,6 @@ impl Game {
                     self.move_card(card, ZoneType::Exile);
                 } else {
                     self.move_card(card, ZoneType::Library);
-                    self.journal_zones();
                     self.state
                         .zones
                         .shuffle(ZoneType::Library, owner, &mut self.state.rng);
@@ -1270,7 +1264,6 @@ impl Game {
                     return None;
                 };
                 let watched = self.permanent_object_ref(permanent_id)?;
-                self.journal_permanent(permanent_id);
                 let controller = {
                     let permanent = self.state.permanents[permanent_id].as_mut()?;
                     // The land becomes a 0/0 creature with haste that's
@@ -1338,7 +1331,6 @@ impl Game {
                 mana,
                 until_end_of_combat,
             } => {
-                self.journal_player(frame.controller);
                 self.invalidate_mana_cache(frame.controller);
                 let player = &mut self.state.players[frame.controller.0];
                 if *until_end_of_combat {
@@ -1351,7 +1343,6 @@ impl Game {
             Effect::UntapTarget { .. } => {
                 let chosen = self.present_primary_target(frame)?;
                 if let Target::Permanent(permanent_id) = chosen {
-                    self.journal_permanent(permanent_id);
                     if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                         permanent.untap();
                         let controller = permanent.controller;
@@ -1485,7 +1476,6 @@ impl Game {
 
     fn source_permanent_mut(&mut self, frame: &EffectFrame) -> Option<&mut Permanent> {
         let permanent_id = self.source_permanent_id(frame)?;
-        self.journal_permanent(permanent_id);
         self.state.permanents[permanent_id].as_mut()
     }
 

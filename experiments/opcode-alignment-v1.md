@@ -1,6 +1,6 @@
 # W2-214 preliminary typed-opcode alignment probe
 
-> Historical implementation retired on 2026-10-23. See the [repository archive](../docs/repository-archive.md) for pinned source and retained inputs; the results below are unchanged.
+> Historical implementation retired on 2026-10-23. See the [repository archive](../docs/development.md#retained-evidence-and-archived-corpora) for pinned source and retained inputs; the results below are unchanged.
 
 Status: **PASS**. Decision: **preliminary_opcode_alignment_signal**.
 

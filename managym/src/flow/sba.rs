@@ -166,7 +166,6 @@ impl Game {
             })
             .collect();
         for permanent_id in detached {
-            self.journal_permanent(permanent_id);
             if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                 permanent.attached_to = None;
             }
@@ -188,7 +187,6 @@ impl Game {
             }
         }
         for (card_id, owner) in tokens_to_remove {
-            self.journal_zone_move(card_id);
             let from = self.state.zones.zone_of(card_id);
             self.state.zones.remove_card(card_id);
             self.capture_card_move(card_id, from, None, owner);

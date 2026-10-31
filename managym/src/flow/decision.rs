@@ -457,7 +457,6 @@ impl Game {
                     );
                     if let Some(permanent_id) = self.state.card_to_permanent[card] {
                         if attach_to.is_some() {
-                            self.journal_permanent(permanent_id);
                             if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                                 permanent.attached_to = attach_to;
                             }
@@ -833,7 +832,6 @@ impl Game {
                 Action::ChooseMode { mode, .. },
             ) => {
                 let mana = &choices[*mode];
-                self.journal_player(*player);
                 self.state.players[player.0].mana_pool.add(mana);
                 if let Some(resume) = resume.take() {
                     suspended.decision = *resume;
@@ -952,7 +950,6 @@ impl Game {
                 }) {
                     for card in selected {
                         if let Some(id) = self.state.card_to_permanent[*card] {
-                            self.journal_permanent(id);
                             if let Some(permanent) = self.state.permanents[id].as_mut() {
                                 permanent.untap();
                             }
@@ -1063,7 +1060,6 @@ impl Game {
                     top.push(*card);
                 }
                 if remaining.is_empty() {
-                    self.journal_zones();
                     let library = self.state.zones.zone_cards_mut(ZoneType::Library, *player);
                     library.retain(|card| !looked.contains(card));
                     for card in bottom.iter().rev() {
@@ -1268,7 +1264,6 @@ impl Game {
                         },
                     );
                 }
-                self.journal_zones();
                 self.state
                     .zones
                     .shuffle(ZoneType::Library, owner, &mut self.state.rng);
@@ -1520,7 +1515,6 @@ impl Game {
         };
         let player = *player;
         if selected.is_empty() {
-            self.journal_zones();
             self.state
                 .zones
                 .shuffle(ZoneType::Library, player, &mut self.state.rng);
@@ -1541,7 +1535,6 @@ impl Game {
     pub(crate) fn put_on_bottom_of_library(&mut self, card: CardId) {
         let owner = self.state.cards[card].owner;
         // A reorder within one zone, so the zone-move inverse does not apply.
-        self.journal_zones();
         let library = self.state.zones.zone_cards_mut(ZoneType::Library, owner);
         if let Some(index) = library.iter().position(|c| *c == card) {
             library.remove(index);
@@ -1576,14 +1569,7 @@ fn action_player(action: &Action) -> Option<PlayerId> {
 #[cfg(test)]
 mod learn_tests {
     use super::*;
-    use crate::{
-        decision::Command,
-        search_state::{
-            witness, BenchCommand, BranchDriver, ClonePlusUndoDriver, DensePageCowUndoDriver,
-            FullCloneDriver,
-        },
-        state::player::PlayerConfig,
-    };
+    use crate::{decision::Command, search_state::witness, state::player::PlayerConfig};
     use std::collections::BTreeMap;
 
     fn counts(entries: &[(&str, usize)]) -> BTreeMap<String, usize> {
@@ -1932,13 +1918,14 @@ mod learn_tests {
         assert_eq!(witness(&source), before);
     }
 
-    fn rollback_retrieval<D: BranchDriver<State = Game>>(driver: D) {
+    #[test]
+    fn learn_retrieval_forks_and_rolls_back_outside_inventory() {
         let mut source = game(&[("Firebending Lesson", 2)]);
         learn(&mut source);
         let source_witness = witness(&source);
-        let mut branch = driver.fork_exact(&source);
-        let sibling = driver.fork_exact(&source);
-        let mark = driver.mark(&mut branch);
+        let mut branch = source.clone();
+        let sibling = source.clone();
+        let mark = branch.clone();
         let action_index = branch
             .action_space()
             .unwrap()
@@ -1946,42 +1933,18 @@ mod learn_tests {
             .iter()
             .position(|action| matches!(action, Action::LearnTakeLesson { .. }))
             .unwrap();
-        driver
-            .apply(
-                &mut branch,
-                BenchCommand {
-                    action_index,
-                    expected_state_hash: None,
-                    expected_action_hash: None,
-                },
-            )
-            .unwrap();
+        branch.step(action_index).unwrap();
         let retrieved = witness(&branch);
-        let nested = driver.mark(&mut branch);
-        driver
-            .apply(
-                &mut branch,
-                BenchCommand {
-                    action_index: 0,
-                    expected_state_hash: None,
-                    expected_action_hash: None,
-                },
-            )
-            .unwrap();
-        driver.rollback(&mut branch, nested);
+        let nested = branch.clone();
+        branch.step(0).unwrap();
+        branch = nested;
         assert_eq!(witness(&branch), retrieved);
-        driver.rollback(&mut branch, mark);
+        branch = mark;
         assert_eq!(witness(&branch), source_witness);
         assert_eq!(witness(&source), source_witness);
         assert_eq!(witness(&sibling), source_witness);
     }
 
-    #[test]
-    fn learn_retrieval_forks_and_rolls_back_outside_inventory() {
-        rollback_retrieval(FullCloneDriver);
-        rollback_retrieval(ClonePlusUndoDriver::default());
-        rollback_retrieval(DensePageCowUndoDriver::default());
-    }
     #[test]
     fn learn_reveal_is_ordered_public_definition_and_known_hand_is_not_a_hand_leak() {
         use crate::agent::observation::{EventEntityKind, EventType, Observation};
@@ -2260,7 +2223,8 @@ mod learn_tests {
         assert!(game.state.players[0].known_hand.is_empty());
     }
 
-    fn rollback_knowledge<D: BranchDriver<State = Game>>(driver: D) {
+    #[test]
+    fn learn_nested_knowledge_and_search_fork_preserve_retained_roots() {
         let mut source = small_known_hand_game();
         learn(&mut source);
         source
@@ -2272,25 +2236,16 @@ mod learn_tests {
             .queue
             .push_back(Effect::Learn);
         let before = witness(&source);
-        let mut branch = driver.fork_exact(&source);
-        let sibling = driver.fork_exact(&source);
-        let outer = driver.mark(&mut branch);
+        let mut branch = source.clone();
+        let sibling = source.clone();
+        let outer = branch.clone();
         let card = branch.state.players[0].sideboard[0];
         let index = branch.action_space().unwrap().actions.iter().position(|action|
             matches!(action, Action::LearnDiscard { card: chosen, .. } if *chosen == card)).unwrap();
-        driver
-            .apply(
-                &mut branch,
-                BenchCommand {
-                    action_index: index,
-                    expected_state_hash: None,
-                    expected_action_hash: None,
-                },
-            )
-            .unwrap();
+        branch.step(index).unwrap();
         assert!(branch.state.players[0].known_hand.is_empty());
         let departed = witness(&branch);
-        let inner = driver.mark(&mut branch);
+        let inner = branch.clone();
         let index = branch
             .action_space()
             .unwrap()
@@ -2298,39 +2253,15 @@ mod learn_tests {
             .iter()
             .position(|action| matches!(action, Action::LearnTakeLesson { .. }))
             .unwrap();
-        driver
-            .apply(
-                &mut branch,
-                BenchCommand {
-                    action_index: index,
-                    expected_state_hash: None,
-                    expected_action_hash: None,
-                },
-            )
-            .unwrap();
+        branch.step(index).unwrap();
         assert_eq!(branch.state.players[0].known_hand.values().sum::<u32>(), 1);
         branch.determinize(PlayerId(1), 22);
-        driver.rollback(&mut branch, inner);
-        assert!(
-            witness(&branch) == departed,
-            "nested rollback: {}",
-            std::any::type_name::<D>()
-        );
-        driver.rollback(&mut branch, outer);
-        assert!(
-            witness(&branch) == before,
-            "outer rollback: {}",
-            std::any::type_name::<D>()
-        );
+        branch = inner;
+        assert!(witness(&branch) == departed, "nested restore");
+        branch = outer;
+        assert!(witness(&branch) == before, "outer restore");
         assert!(witness(&source) == before);
         assert!(witness(&sibling) == before);
-    }
-
-    #[test]
-    fn learn_nested_knowledge_and_search_rollback_preserve_retained_roots() {
-        rollback_knowledge(FullCloneDriver);
-        rollback_knowledge(ClonePlusUndoDriver::default());
-        rollback_knowledge(DensePageCowUndoDriver::default());
     }
 }
 
@@ -2338,10 +2269,7 @@ mod learn_tests {
 mod payment_tests {
     use super::*;
     use crate::{
-        search_state::{
-            witness, BenchCommand, BranchDriver, ClonePlusUndoDriver, DensePageCowUndoDriver,
-            FullCloneDriver,
-        },
+        search_state::witness,
         state::{
             mana::{Mana, ManaCost},
             player::PlayerConfig,
@@ -2442,54 +2370,30 @@ mod payment_tests {
     }
 
     #[test]
-    fn shared_payment_and_both_continuations_restore_through_nested_command_rollback() {
+    fn shared_payment_and_both_continuations_restore_across_nested_command_forks() {
         for cost in [
             PaymentCost::Mana(ManaCost::parse("{0}")),
             PaymentCost::Waterbend { generic: 0 },
         ] {
             let game = payment_game(cost);
             let root = witness(&game);
-            let driver = ClonePlusUndoDriver::default();
             for index in 0..game.action_space().unwrap().actions.len() {
-                let mut branch = driver.fork_exact(&game);
-                let outer = driver.mark(&mut branch);
-                driver
-                    .apply(
-                        &mut branch,
-                        BenchCommand {
-                            action_index: index,
-                            expected_action_hash: None,
-                            expected_state_hash: None,
-                        },
-                    )
-                    .unwrap();
-                let after_payment = driver.witness(&branch);
-                let inner = driver.mark(&mut branch);
-                driver
-                    .apply(
-                        &mut branch,
-                        BenchCommand {
-                            action_index: 0,
-                            expected_action_hash: None,
-                            expected_state_hash: None,
-                        },
-                    )
-                    .unwrap();
-                driver.rollback(&mut branch, inner);
-                assert_eq!(driver.witness(&branch), after_payment);
-                driver.rollback(&mut branch, outer);
-                assert_eq!(driver.witness(&branch), root);
+                let mut branch = game.clone();
+                let outer = branch.clone();
+                branch.step(index).unwrap();
+                let after_payment = witness(&branch);
+                let inner = branch.clone();
+                branch.step(0).unwrap();
+                branch = inner;
+                assert_eq!(witness(&branch), after_payment);
+                branch = outer;
+                assert_eq!(witness(&branch), root);
                 assert_eq!(witness(&game), root);
             }
         }
     }
 
-    fn apply_payment_action<D: BranchDriver<State = Game>>(
-        driver: &D,
-        game: &mut Game,
-        predicate: impl Fn(&Action) -> bool,
-    ) {
-        let before = witness(game);
+    fn apply_payment_action(game: &mut Game, predicate: impl Fn(&Action) -> bool) {
         let action_index = game
             .action_space()
             .unwrap()
@@ -2497,19 +2401,11 @@ mod payment_tests {
             .iter()
             .position(predicate)
             .expect("payment action is legal");
-        driver
-            .apply(
-                game,
-                BenchCommand {
-                    action_index,
-                    expected_action_hash: Some(before.legal_surface.hash),
-                    expected_state_hash: Some(before.authority.hash),
-                },
-            )
-            .unwrap();
+        game.step(action_index).unwrap();
     }
 
-    fn rollback_suspended_waterbend<D: BranchDriver<State = Game>>(driver: D) {
+    #[test]
+    fn partial_waterbend_and_paid_mana_choice_restore_across_nested_command_forks() {
         let player = PlayerId(0);
         let mut game = payment_game_with_deck(
             PaymentCost::Waterbend { generic: 2 },
@@ -2538,21 +2434,18 @@ mod payment_tests {
         let root = witness(&game);
         let before_hand = game.state.zones.size(ZoneType::Hand, player);
 
-        // Keep a divergent sibling alive throughout all nested rollbacks.
-        let mut sibling = driver.fork_exact(&game);
-        apply_payment_action(&driver, &mut sibling, |a| {
-            matches!(a, Action::Decline { .. })
-        });
+        // Keep a divergent sibling alive throughout all nested restores.
+        let mut sibling = game.clone();
+        apply_payment_action(&mut sibling, |a| matches!(a, Action::Decline { .. }));
         let sibling_witness = witness(&sibling);
         assert_eq!(
             sibling.state.zones.size(ZoneType::Hand, player),
             before_hand + 4
         );
 
-        let mut branch = driver.fork_exact(&game);
-        let outer = driver.mark(&mut branch);
+        let mut branch = game.clone();
+        let outer = branch.clone();
         apply_payment_action(
-            &driver,
             &mut branch,
             |a| matches!(a, Action::WaterbendTap { permanent, .. } if *permanent == waterbend),
         );
@@ -2571,9 +2464,9 @@ mod payment_tests {
             .iter()
             .any(|a| matches!(a, Action::Decline { .. })));
 
-        let inner = driver.mark(&mut branch);
+        let inner = branch.clone();
         let activate_prism = |a: &Action| matches!(a, Action::ActivateAbility { permanent, ability_index: 0, .. } if *permanent == prism);
-        apply_payment_action(&driver, &mut branch, activate_prism);
+        apply_payment_action(&mut branch, activate_prism);
         assert_eq!(branch.state.players[0].mana_pool.total(), 0);
         assert!(branch.state.permanents[prism].as_ref().unwrap().tapped);
         let modal_resolution = branch.state.suspended_decision.clone().unwrap();
@@ -2589,9 +2482,9 @@ mod payment_tests {
         assert_eq!(branch.action_space().unwrap().kind, ActionSpaceKind::Modal);
         let modal = witness(&branch);
 
-        let color_mark = driver.mark(&mut branch);
+        let color_mark = branch.clone();
         let choose_blue = |a: &Action| matches!(a, Action::ChooseMode { mode: 1, .. });
-        apply_payment_action(&driver, &mut branch, choose_blue);
+        apply_payment_action(&mut branch, choose_blue);
         assert_eq!(
             branch.state.suspended_decision,
             Some(partial_resolution.clone())
@@ -2607,9 +2500,7 @@ mod payment_tests {
             .iter()
             .any(|a| matches!(a, Action::Decline { .. })));
         let resumed = witness(&branch);
-        apply_payment_action(&driver, &mut branch, |a| {
-            matches!(a, Action::PayCost { .. })
-        });
+        apply_payment_action(&mut branch, |a| matches!(a, Action::PayCost { .. }));
         assert!(branch.state.suspended_decision.is_none());
         assert_eq!(
             branch.state.zones.size(ZoneType::Hand, player),
@@ -2618,33 +2509,24 @@ mod payment_tests {
         assert_eq!(branch.state.players[0].mana_pool.total(), 0);
         let completed = witness(&branch);
 
-        driver.rollback(&mut branch, color_mark);
+        branch = color_mark;
         assert_eq!(witness(&branch), modal);
         assert_eq!(branch.state.suspended_decision, Some(modal_resolution));
-        apply_payment_action(&driver, &mut branch, choose_blue);
+        apply_payment_action(&mut branch, choose_blue);
         assert_eq!(witness(&branch), resumed);
-        apply_payment_action(&driver, &mut branch, |a| {
-            matches!(a, Action::PayCost { .. })
-        });
+        apply_payment_action(&mut branch, |a| matches!(a, Action::PayCost { .. }));
         assert_eq!(witness(&branch), completed);
 
-        driver.rollback(&mut branch, inner);
+        branch = inner;
         assert_eq!(witness(&branch), partial);
         assert_eq!(branch.state.suspended_decision, Some(partial_resolution));
         assert!(!branch.state.permanents[prism].as_ref().unwrap().tapped);
         assert_eq!(branch.state.players[0].mana_pool, Mana::parse("1"));
-        apply_payment_action(&driver, &mut branch, activate_prism);
+        apply_payment_action(&mut branch, activate_prism);
         assert_eq!(witness(&branch), modal);
-        driver.rollback(&mut branch, outer);
+        branch = outer;
         assert_eq!(witness(&branch), root);
         assert_eq!(witness(&game), root);
         assert_eq!(witness(&sibling), sibling_witness);
-    }
-
-    #[test]
-    fn partial_waterbend_and_paid_mana_choice_restore_through_nested_command_rollback() {
-        rollback_suspended_waterbend(FullCloneDriver);
-        rollback_suspended_waterbend(ClonePlusUndoDriver::default());
-        rollback_suspended_waterbend(DensePageCowUndoDriver::default());
     }
 }

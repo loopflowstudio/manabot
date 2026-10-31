@@ -2712,7 +2712,7 @@ fn combustion_invalid_target_does_not_damage_or_mark_new_incarnation() {
 
 #[test]
 fn combustion_replacement_is_hashed_visible_and_rolls_back_with_its_damage() {
-    use managym::search_state::{BenchCommand, BranchDriver, ClonePlusUndoDriver};
+    use managym::search_state::witness;
     let mut s = ur_lessons_setup();
     put_onto_battlefield(&mut s, 0, "Mountain");
     put_onto_battlefield(&mut s, 0, "Mountain");
@@ -2721,10 +2721,9 @@ fn combustion_replacement_is_hashed_visible_and_rolls_back_with_its_damage() {
     cast_owned(&mut s, "Combustion Technique");
     assert!(s.choose_target(Target::Permanent(gran)));
     s.pass_priority();
-    let driver = ClonePlusUndoDriver::default();
-    let root = driver.witness(s.game());
-    let mut branch = driver.fork_exact(s.game());
-    let mark = driver.mark(&mut branch);
+    let root = witness(s.game());
+    let mut branch = s.game().clone();
+    let mark = branch.clone();
     let index = branch
         .action_space()
         .unwrap()
@@ -2732,21 +2731,12 @@ fn combustion_replacement_is_hashed_visible_and_rolls_back_with_its_damage() {
         .iter()
         .position(|a| matches!(a, Action::PassPriority { .. }))
         .unwrap();
-    driver
-        .apply(
-            &mut branch,
-            BenchCommand {
-                action_index: index,
-                expected_action_hash: None,
-                expected_state_hash: None,
-            },
-        )
-        .unwrap();
+    branch.step(index).unwrap();
     assert!(branch.exiled_if_it_would_die(gran));
-    assert_ne!(driver.witness(&branch), root);
-    driver.rollback(&mut branch, mark);
-    assert_eq!(driver.witness(&branch), root);
-    assert_eq!(driver.witness(s.game()), root);
+    assert_ne!(witness(&branch), root);
+    branch = mark;
+    assert_eq!(witness(&branch), root);
+    assert_eq!(witness(s.game()), root);
 }
 
 #[test]
@@ -3042,8 +3032,8 @@ fn disciple_targets_another_small_creature_pays_tap_and_survives_source_departur
     let source = s.game().state.permanents[disciple].as_ref().unwrap().card;
     assert!(s.game().state.permanents[disciple].as_ref().unwrap().tapped);
     s.game_mut().move_card(source, ZoneType::Graveyard);
-    // Resolve through the branch driver as well: the independent target
-    // mutation must disappear when the search branch rolls back.
+    // Resolve on exact forks as well: the independent target mutation stays
+    // in the source while each fork resolves.
     assert_choice_contract(&s);
     settle(&mut s);
     assert!(s.game().cant_be_blocked(small));
@@ -3436,11 +3426,10 @@ fn avatar_state_grants_a_visible_incarnation_local_subtype_and_cleans_up() {
     pass_until(&mut s, ActionSpaceKind::ChooseTarget);
     assert_choice_contract(&s);
     s.choose_target(Target::Permanent(target));
-    use managym::search_state::{witness, BenchCommand, BranchDriver, ClonePlusUndoDriver};
-    let driver = ClonePlusUndoDriver::default();
-    let mut branch = driver.fork_exact(s.game());
+    use managym::search_state::witness;
+    let mut branch = s.game().clone();
     let root = witness(&branch);
-    let mark = driver.mark(&mut branch);
+    let mark = branch.clone();
     for _ in 0..8 {
         if !branch.characteristics(target).added_subtypes.is_empty() {
             break;
@@ -3452,22 +3441,13 @@ fn avatar_state_grants_a_visible_incarnation_local_subtype_and_cleans_up() {
             .iter()
             .position(|action| matches!(action, Action::PassPriority { .. }))
             .unwrap();
-        driver
-            .apply(
-                &mut branch,
-                BenchCommand {
-                    action_index: index,
-                    expected_action_hash: None,
-                    expected_state_hash: None,
-                },
-            )
-            .unwrap();
+        branch.step(index).unwrap();
     }
     assert_eq!(
         branch.characteristics(target).added_subtypes,
         vec!["Avatar"]
     );
-    driver.rollback(&mut branch, mark);
+    branch = mark;
     assert_eq!(witness(&branch), root);
     settle(&mut s);
     let permanent = s.game().state.permanents[target].as_ref().unwrap();
@@ -10078,18 +10058,18 @@ fn revised_forty_card_deck_completes_and_replays_every_command_exactly() {
         ("Pop Quiz", 1),
         ("Igneous Inspiration", 1),
     ] {
-        *ur.decklist.get_mut(name).unwrap() -= n;
+        *ur.deck.main.get_mut(name).unwrap() -= n;
     }
-    ur.decklist.retain(|_, n| *n > 0);
+    ur.deck.main.retain(|_, n| *n > 0);
     for (name, n) in [
         ("Combustion Technique", 2),
         ("Proft's Eidetic Memory", 1),
         ("Gran-Gran", 1),
         ("Accumulate Wisdom", 1),
     ] {
-        *ur.decklist.entry(name.into()).or_default() += n;
+        *ur.deck.main.entry(name.into()).or_default() += n;
     }
-    assert_eq!(ur.decklist.values().sum::<usize>(), 40);
+    assert_eq!(ur.deck.main.values().sum::<usize>(), 40);
     let gw = semantic.player_config("GW", "gw_allies").unwrap();
     for seed in 0..4 {
         for reverse in [false, true] {

@@ -1,11 +1,11 @@
 //! Bounded CR 608.2b witnesses. Synthetic programs isolate resolution semantics;
 //! they do not assert these combinations are reachable in an admitted deck.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 
 use crate::{
     agent::action::Action,
-    flow::{game::Game, undo::JournalStats},
+    flow::game::Game,
     state::{
         ability::{AffectedSpec, Effect, EffectValue, TargetRequirement, TargetSpec},
         card::{ActivatedAbilityDefinition, CardType, Keywords},
@@ -168,7 +168,7 @@ fn pause() -> Effect {
 }
 
 #[test]
-fn resolution_keeps_eligibility_after_hexproof_and_across_choice_clone_and_undo() {
+fn resolution_keeps_eligibility_after_hexproof_and_across_choice_clones() {
     for controller in [PlayerId(0), PlayerId(1)] {
         for entry in ENTRIES {
             let (mut game, victim, _) = fixture(controller);
@@ -218,8 +218,7 @@ fn resolution_keeps_eligibility_after_hexproof_and_across_choice_clone_and_undo(
                 captured.digest
             );
             let before = game.state.deterministic_hash();
-            game.enable_undo(Arc::new(JournalStats::default()), 608);
-            let mark = game.undo_mark();
+            let root = game.clone();
             game.step(choice).unwrap();
             assert_eq!(
                 game.state.permanents[victim].as_ref().unwrap().damage,
@@ -230,14 +229,11 @@ fn resolution_keeps_eligibility_after_hexproof_and_across_choice_clone_and_undo(
             let after = game.state.deterministic_hash();
             fork.step(choice).unwrap();
             assert_eq!(fork.state.deterministic_hash(), after);
-            game.undo_rollback(mark);
             assert_eq!(
-                game.capture_decision(controller, 0).unwrap().digest,
+                root.capture_decision(controller, 0).unwrap().digest,
                 captured.digest
             );
-            assert_eq!(game.state.deterministic_hash(), before);
-            game.step(choice).unwrap();
-            assert_eq!(game.state.deterministic_hash(), after);
+            assert_eq!(root.state.deterministic_hash(), before);
         }
     }
 }

@@ -31,10 +31,12 @@ decklist data separate from card behavior; see
 
 Dependencies flow: python → agent → flow → state/infra.
 
-The semantic kernel direction — typed card programs, exact object identity,
-structured offers, proposed events, fork/rollback — is documented in
-[docs/research/semantic-kernel.md](../docs/research/semantic-kernel.md), with
-conformance fixtures under [conformance/](../conformance/).
+[docs/research/semantic-kernel.md](../docs/research/semantic-kernel.md) is the
+dated 2026-07-15 research record on typed card programs, exact object identity,
+structured offers and proposed events; conformance fixtures live under
+[conformance/](../conformance/). Its undo, journal and page-COW sections were
+superseded by full-clone forking ([docs/ARCHITECTURE.md §10](../docs/ARCHITECTURE.md)
+and the w2-182/198/199 benchmark reports under `experiments/`).
 
 Authored setups come from `AuthoredPack::player_config` (Python:
 `managym.authored_deck_setup(pack_key, deck_key)`). Carry that complete config
@@ -60,14 +62,14 @@ presence checks separately prevent following departed objects (CR 400.7).
 Illegal slots remain positional, and zero optional targets still resolve.
 Graveyard targets
 carry an exact `ObjectRef`, so continuations cannot follow a physical card into
-a later incarnation. Journal permanent mutations at their event authority;
+a later incarnation. Mutate permanents at their event authority;
 source-relative effects require the original battlefield object.
 
 Public hand knowledge is a minimum multiset of `CardDefId` counts on `Player`,
-not a set of revealed physical cards. Its per-definition changes have dedicated
-undo entries; `journal_player` still captures only scalars. Exercise nested
-choice rollback through normal Commands/branch-driver `apply`: transition
-queues are journaled at that boundary, not by direct calls to resolution helpers.
+not a set of revealed physical cards. Search forks by full clone: clone the
+`Game` before a normal Command `apply` and compare `search_state::witness` to
+check that the source is unchanged. Exercise nested choices through Commands,
+not by direct calls to resolution helpers.
 
 ## Build and test
 
@@ -133,14 +135,17 @@ excesses raise encoding errors; they must not be treated as a random-policy
 fallback. Complete outside program bindings and public known-hand definition
 counts still require the semantic input path during the Learn migration.
 
-The optional [policy-history v1 projection](../docs/recent-events.md) is a bounded
+The optional [policy-history v1 projection](../docs/training.md#policy-inputs) is a bounded
 derived suffix updated at the native event append. Observation reads share it;
-clone/undo and diagnostic injection must preserve its documented lifecycle.
+clone and diagnostic injection must preserve its documented lifecycle.
 
-`PlayerConfig.content_pack` can explicitly select the compiled authored runtime
-for repeated-deck matches. Both seats must name the same pack and each complete
-deck/sideboard must be one of its authored setups; unknown packs or partial
-bindings fail reset. Omitting it preserves exact-pair automatic selection.
+`PlayerConfig.world` explicitly selects what a match runs on. Both seats
+must name the same value. An authored pack key runs only that pack's own
+setups. `"world"` (`managym.WORLD_SETUP`, set by `Deck.player()`) submits the
+decks to the installed world: each must pass `development-v1` admission against
+the world's supported cards (see [decklist import](../docs/decklist-import.md)).
+Unknown packs or partial bindings fail reset. Omitting it preserves exact-pair
+selection.
 Python `MatchHypers.authored` carries this binding for same-deck matches so replay
 cannot silently use generic card definitions.
 
@@ -200,6 +205,6 @@ resolution-start eligibility in native current stack/continuation relations, and
 widens player and card rows for cast permissions, the hand-only lock, restricted
 mana by spending subtype and announced X. Its
 layout, legacy checkpoint admission and measurement commands are documented in
-[the observation input contract](../docs/recent-events.md#current-continuation-input).
+[the observation input contract](../docs/training.md#policy-inputs).
 The presentation context and text capture derive from the same typed frames;
 portable schema-7 viewer JSON is validated by the native observation types.

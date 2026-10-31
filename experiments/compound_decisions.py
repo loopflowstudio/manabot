@@ -32,7 +32,7 @@ def _arm(
         id=f"compound-{grouping}-{short}",
         world=managym.WORLD_VERSION,
         match=selected_match(),
-        agent=ModelConfig(semantic_pack=PACK, compound_decisions=True),
+        agent=ModelConfig(world=PACK, compound_decisions=True),
         stages=[
             TrainCompound(
                 id=f"policy-{index}",

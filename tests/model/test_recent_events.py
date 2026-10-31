@@ -20,10 +20,10 @@ from manabot.infra.config import (
 from manabot.model.actor_critic import ActorCritic
 from manabot.model.architecture import architecture_receipt
 from manabot.model.checkpoint import load_checkpoint, save_checkpoint
-from manabot.recipes.ataraxos import ataraxos
 from manabot.recipes.builders import with_recent_events
 from manabot.sim.search.flat_mc import AgentMatchupPlayer, make_player
 from manabot.training.rollout.collection import SeatRoutedCollector
+from tests.training.wdl_baseline import wdl_baseline
 
 PACK = "ur-lessons-vs-gw-allies"
 
@@ -40,7 +40,7 @@ def _agent(space: ObservationSpace, **kwargs: object) -> ActorCritic:
     torch.set_num_threads(1)
     torch.manual_seed(111)
     settings = ModelConfig.model_validate(
-        {"hidden_dim": 16, "semantic_pack": PACK, "recent_events": True, **kwargs}
+        {"hidden_dim": 16, "world": PACK, "recent_events": True, **kwargs}
     )
     return ActorCritic(space, settings)
 
@@ -143,9 +143,7 @@ def test_semantics_order_padding_and_stateless_reset() -> None:
         torch.testing.assert_close(left, right, atol=1e-6, rtol=1e-5)
     empty = {**obs, "events": torch.empty(1, 0, 12), "events_valid": torch.empty(1, 0)}
     zero = {**obs, "events": padded, "events_valid": torch.zeros_like(validity)}
-    baseline = ActorCritic(
-        ObservationSpace(), ModelConfig(hidden_dim=16, semantic_pack=PACK)
-    )
+    baseline = ActorCritic(ObservationSpace(), ModelConfig(hidden_dim=16, world=PACK))
     baseline.load_state_dict(
         {
             key: value
@@ -239,7 +237,7 @@ def test_history_off_and_declarative_identity() -> None:
     tensors.pop("events_valid")
     for left, right in zip(expected, explicit(tensors), strict=True):
         torch.testing.assert_close(left, right, rtol=0, atol=0)
-    base = ataraxos()
+    base = wdl_baseline()
     comparison = Experiment(
         "history-unexecuted",
         base,
@@ -277,7 +275,7 @@ def test_short_window_native_collector_and_bad_contracts() -> None:
     with pytest.raises(ValueError, match="history input is selected by ModelOverride"):
         Experiment(
             "bad",
-            ataraxos(),
+            wdl_baseline(),
             overrides=(
                 Environment(observation=ObservationConfig(policy_history_version=1)),
             ),

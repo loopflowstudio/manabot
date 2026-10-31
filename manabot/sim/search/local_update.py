@@ -26,11 +26,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
 import torch
 
 from manabot.belief.checkpoint import load_belief_sampler
-from manabot.belief.likelihood import (
-    FrozenPolicyLikelihood,
-    RulesProviderGap,
-    file_sha256,
-)
+from manabot.belief.likelihood import FrozenPolicyLikelihood, RulesProviderGap
 from manabot.belief.player import ExactRangePlayer, RangeSampling
 from manabot.belief.range import BeliefState
 from manabot.belief.sampling import SamplerInput
@@ -42,6 +38,7 @@ from manabot.belief.state import (
     query_mass,
 )
 from manabot.env.env import Env
+from manabot.infra.identity import file_sha256
 from manabot.model.world import validate_agent_setup
 from manabot.sim.search.branch import SelectedFullCloneBackend
 from manabot.sim.search.compound import (

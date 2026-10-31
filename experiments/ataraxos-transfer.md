@@ -26,13 +26,13 @@ rescored or independently re-admitted in this contribution.
 | Question and scientific owner | Delivered instrument / evidence owner | What evidence permits; remaining gap |
 | --- | --- | --- |
 | Learning rule, KL/reference, horizon, filtering, schedules, EMA, compound credit: ETU-105 | [Technique screen](ataraxos-technique-screen.md), ETU-92/93/94 | Declarative contrasts and bounded workflow evidence; no technique retention decision. Do not duplicate here. |
-| Capacity: ETU-103; configuration/calibration: ETU-102 | [Capacity receipts](../docs/training-calibration.md), ETU-104/109 recipe APIs | Model accounting and bounded execution; no capacity winner. Fixed architecture in ETU-99. |
-| History, value/pooling/topology/action representation: ETU-106 | [Value models](value-models.md), [authoring API](../docs/training-experiments.md) | Workflow evidence; broader belief architecture coordinated there. ETU-99 tests the existing sampler, not a replacement encoder. |
-| Joint sampler quality, dropout and foreign-policy shift: ETU-99 B1 | [Sampler](../docs/belief-sampler.md), ETU-96 | Small frozen-policy workflow and synthetic wide-count coverage. No independent-seed calibration, adversarial robustness or wider-world strength. |
-| Physical/learned search at measured cost: ETU-99 B2 | [Local search](../docs/local-policy-search.md), ETU-95/100 | Direct materialization, retained support, replay and tiny complete-loop proof. No selected-matchup improvement; learned conditional queries remain unsupported. |
+| Capacity: ETU-103; configuration/calibration: ETU-102 | [Capacity receipts](../docs/training.md#freeze-step-targets), ETU-104/109 recipe APIs | Model accounting and bounded execution; no capacity winner. Fixed architecture in ETU-99. |
+| History, value/pooling/topology/action representation: ETU-106 | [Value models](value-models.md), [authoring API](../docs/training.md#experiments) | Workflow evidence; broader belief architecture coordinated there. ETU-99 tests the existing sampler, not a replacement encoder. |
+| Joint sampler quality, dropout and foreign-policy shift: ETU-99 B1 | [Sampler](../docs/search-and-beliefs.md#belief-sampler), ETU-96 | Small frozen-policy workflow and synthetic wide-count coverage. No independent-seed calibration, adversarial robustness or wider-world strength. |
+| Physical/learned search at measured cost: ETU-99 B2 | [Local search](../docs/search-and-beliefs.md#local-policy-search), ETU-95/100 | Direct materialization, retained support, replay and tiny complete-loop proof. No selected-matchup improvement; learned conditional queries remain unsupported. |
 | Soft/hard targets and subsequent rounds: ETU-99 D1 | Local teacher, shard readers, `TrainSupervised`, ETU-95 | Same-root target readers and cumulative fitting exist. Allocation counts are not PUCT visits. Archived-root relabeling and same-root visit comparison are not delivered by this pipeline. |
-| Frozen exploiters: ETU-99 R1 | `AttackPlan`, `execute_attack_plan`, [scenario runner](../docs/checkpoint-scenarios.md), ETU-97 | Continued attacker training and replayed arena reporting exist; toy pass-policy control is not selected-world sensitivity. S1–S5 custom setups cannot admit selected-match checkpoints. |
-| Full-loop cost: ETU-99 C0 | [Calibration](../docs/training-calibration.md), [recovery](../docs/training-recovery.md), ETU-98 | CPU instrumentation/recovery exists. Uncontended scaling, native peak memory and accelerator cost remain unmeasured. ETU-108 owns distributed prototype/placement. |
+| Frozen exploiters: ETU-99 R1 | `AttackPlan`, `execute_attack_plan`, [scenario runner](../docs/evaluation.md#checkpoint-scenarios), ETU-97 | Continued attacker training and replayed arena reporting exist; toy pass-policy control is not selected-world sensitivity. S1–S5 custom setups cannot admit selected-match checkpoints. |
+| Full-loop cost: ETU-99 C0 | [Calibration](../docs/training.md#freeze-step-targets), [recovery](../docs/training.md#recovery), ETU-98 | CPU instrumentation/recovery exists. Uncontended scaling, native peak memory and accelerator cost remain unmeasured. ETU-108 owns distributed prototype/placement. |
 | Frozen campaign / product admission | ETU-91 / ETU-85; ETU-101 W&B | Reuse published identities only. No campaign rerun, dashboard implementation or demo promotion here. |
 
 Historical motivation remains bounded by its world and controls: [exp-03](exp-03-distillation.md)
@@ -88,7 +88,7 @@ Code checks against that source:
   it is not a requirement to relabel every foreign history with a new posterior.
 
 Move-learning clipping and estimator fidelity remain with
-[ETU-92's source table](../docs/ataraxos.md) and ETU-105, not a second screen here.
+[ETU-92's source table](../docs/training.md#ataraxos) and ETU-105, not a second screen here.
 
 ## Common freeze, accounting and analysis
 
@@ -375,7 +375,7 @@ producer stage with that import, retaining the original policy stage ID and
 matching every consumer's weight selection. Both the export and checkpoint must
 be pinned to their published hash/size; regime/model/world admission remains
 mandatory. `TrainSupervised.initial_weights` selects imported EMA when intended.
-The [public contract](../docs/training-regimes.md#reuse-a-published-policy-without-training)
+The [public contract](../docs/training.md#regimes-and-stages)
 separates sunk producer cost from fresh import and downstream costs. Nested
 published-producer ancestry remains explicitly unsupported; do not insert a fake
 one-update producer or rewrite frozen evidence to bypass admission.

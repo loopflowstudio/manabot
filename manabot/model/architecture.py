@@ -43,6 +43,12 @@ def architecture_identity(spec: ModelConfig, space: ObservationSpace) -> str:
     """
     resolved = ModelConfig.model_validate(spec.model_dump())
     payload = resolved.model_dump(mode="json")
+    # The vocabulary selector hashes under its historical key so frozen
+    # receipts verify; the rename changed no meaning.
+    payload = {
+        ("semantic_pack" if key == "world" else key): value
+        for key, value in payload.items()
+    }
     if (
         resolved.attention_feedforward_dim
         == resolved.hidden_dim * resolved.num_attention_heads

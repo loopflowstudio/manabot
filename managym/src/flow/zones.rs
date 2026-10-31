@@ -9,6 +9,7 @@ use crate::{
         proposed_event::{ProposedEvent, ZoneEntry},
     },
     state::{
+        card::CardDefId,
         card::Restriction,
         game_object::{CardId, Incarnation, ObjectRef, PermanentId, PlayerId, Target},
         permanent::CounterKind,
@@ -20,6 +21,20 @@ use crate::{
 };
 
 impl Game {
+    pub(crate) fn set_known_hand_count(
+        &mut self,
+        player: PlayerId,
+        definition: CardDefId,
+        count: u32,
+    ) {
+        let known = &mut self.state.players[player.0].known_hand;
+        if count == 0 {
+            known.remove(&definition);
+        } else {
+            known.insert(definition, count);
+        }
+    }
+
     /// A sacrifice is a committed event distinct from destruction (CR 701.21
     /// and 701.8 in the September 25, 2026 rules). Indestructible does not
     /// prevent it; the departing object's controller pays this cost.
@@ -118,7 +133,6 @@ impl Game {
     }
 
     pub(crate) fn shuffle_library(&mut self, player: PlayerId) {
-        self.journal_zones();
         self.state
             .zones
             .shuffle(ZoneType::Library, player, &mut self.state.rng);
@@ -188,7 +202,6 @@ impl Game {
             if self.has_restriction(permanent_id, Restriction::DoesntUntap) {
                 continue;
             }
-            self.journal_permanent(permanent_id);
             if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                 permanent.untap();
             }
@@ -198,7 +211,6 @@ impl Game {
 
     pub(crate) fn mark_permanents_not_summoning_sick(&mut self, player: PlayerId) {
         for permanent_id in self.battlefield_permanents(player) {
-            self.journal_permanent(permanent_id);
             if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                 permanent.summoning_sick = false;
             }
@@ -208,7 +220,6 @@ impl Game {
     pub fn draw_cards(&mut self, player: PlayerId, amount: usize) {
         for _ in 0..amount {
             if self.state.zones.size(ZoneType::Library, player) == 0 {
-                self.journal_player(player);
                 self.state.players[player.0].drew_when_empty = true;
                 break;
             }
@@ -221,7 +232,6 @@ impl Game {
                 if let Some(capture) = &mut self.card_capture {
                     capture.drawing = None;
                 }
-                self.journal_turn();
                 self.state.turn.cards_drawn_this_turn[player.0] += 1;
                 self.emit(GameEvent::CardDrawn {
                     player,
@@ -235,7 +245,6 @@ impl Game {
     /// untapped-to-tapped transition (CR 603.10-style "becomes tapped").
     /// Returns whether the permanent transitioned.
     pub(crate) fn tap_permanent(&mut self, permanent_id: PermanentId, for_mana: bool) -> bool {
-        self.journal_permanent(permanent_id);
         let Some(permanent) = self.state.permanents[permanent_id].as_mut() else {
             return false;
         };
@@ -276,7 +285,6 @@ impl Game {
 
     fn fire_triggered_mana_abilities(&mut self, tapped: PermanentId, controller: PlayerId) {
         let produced = self.tap_mana_bonus(tapped, controller);
-        self.journal_player(controller);
         self.state.players[controller.0].mana_pool.add(&produced);
     }
 
@@ -312,13 +320,11 @@ impl Game {
 
         if tapped_and_attacking {
             if let Some(permanent_id) = self.state.card_to_permanent[card_id] {
-                self.journal_permanent(permanent_id);
                 if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
                     permanent.attacking = true;
                 }
                 // A token put onto the battlefield attacking joins combat but
                 // was never declared, so no attack triggers fire (CR 508.4a).
-                self.journal_combat();
                 if let Some(combat) = self.state.combat.as_mut() {
                     combat.attackers.push(permanent_id);
                     combat.attacker_to_blockers.entry(permanent_id).or_default();
@@ -359,9 +365,6 @@ impl Game {
 
     pub(crate) fn emit(&mut self, event: GameEvent) {
         crate::agent::policy_history::record(self, &event);
-        self.journal_pending_event_append();
-        self.journal_observation_event_append();
-        self.journal_event_append();
         self.state.pending_events.push(event.clone());
         self.state.observation_events.push(event.clone());
         self.state.events.push(event);
@@ -372,7 +375,6 @@ impl Game {
     /// Presentation projection consumes these facts; policy encoders filter
     /// their event types.
     pub(crate) fn emit_observation_event(&mut self, event: GameEvent) {
-        self.journal_observation_event_append();
         self.state.observation_events.push(event);
     }
 
@@ -387,7 +389,6 @@ impl Game {
         let cast_from = self.state.zones.zone_of(card).expect("cast source zone");
         let flashback = cast_from == ZoneType::Graveyard;
         self.move_card(card, ZoneType::Stack);
-        self.journal_stack();
         self.state
             .stack_objects
             .push(StackObject::Spell(SpellOnStack {
@@ -406,12 +407,10 @@ impl Game {
     }
 
     pub(crate) fn push_to_stack(&mut self, stack_object: StackObject) {
-        self.journal_stack();
         self.state.stack_objects.push(stack_object);
     }
 
     pub(crate) fn pop_stack(&mut self) -> Option<StackObject> {
-        self.journal_stack();
         self.state.stack_objects.pop()
     }
 
@@ -493,12 +492,10 @@ impl Game {
         }
 
         if old_zone == Some(ZoneType::Battlefield) {
-            self.journal_card_to_permanent(card);
             if let Some(permanent_id) = self.state.card_to_permanent[card].take() {
                 if let Some(permanent) = self.state.permanents[permanent_id].as_ref() {
                     event_controller = permanent.controller;
                 }
-                self.journal_permanent(permanent_id);
                 self.state.permanents[permanent_id] = None;
             }
         }
@@ -510,7 +507,6 @@ impl Game {
             old_zone == Some(ZoneType::Stack) && self.find_spell_on_stack_index(card).is_some();
         if old_zone == Some(ZoneType::Stack) {
             if let Some(index) = self.find_spell_on_stack_index(card) {
-                self.journal_stack();
                 self.state.stack_objects.remove(index);
             }
         }
@@ -519,7 +515,6 @@ impl Game {
             (ZoneType::Battlefield, Some(controller)) => controller,
             _ => owner,
         };
-        self.journal_zone_move(card);
         self.state.zones.move_card(card, holder, to_zone);
 
         if to_zone == ZoneType::Battlefield {
@@ -535,7 +530,6 @@ impl Game {
             if self.state.card_to_permanent.len() <= card.0 {
                 self.state.card_to_permanent.resize(card.0 + 1, None);
             }
-            self.journal_card_to_permanent(card);
             self.state.card_to_permanent[card] = Some(permanent_id);
         }
 
@@ -576,7 +570,6 @@ impl Game {
         // Delayed triggers watching this card fire on dies/exiled and are
         // dropped otherwise (they watched this battlefield stint only).
         let watching: Vec<_> = {
-            self.journal_delayed_triggers();
             let mut kept = Vec::new();
             let mut fired = Vec::new();
             for trigger in std::mem::take(&mut self.state.delayed_triggers) {
@@ -621,7 +614,6 @@ impl Game {
         // "Until this creature leaves the battlefield" durations end now:
         // linked exiled cards return under their owners' control.
         let ended: Vec<_> = {
-            self.journal_exile_links();
             let mut kept = Vec::new();
             let mut ended = Vec::new();
             for link in std::mem::take(&mut self.state.exile_links) {
