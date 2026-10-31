@@ -260,7 +260,7 @@ impl Game {
                 let static_tapped = [PlayerId(0), PlayerId(1)]
                     .into_iter()
                     .flat_map(|player| self.battlefield_permanents(player))
-                    .filter(|id| !self.has_lost_abilities(*id))
+                    .filter(|id| !self.characteristics(*id).abilities_lost)
                     .flat_map(|id| {
                         let permanent = self.state.permanents[id].as_ref().unwrap();
                         self.state.cards[permanent.card]

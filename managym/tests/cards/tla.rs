@@ -10296,9 +10296,9 @@ fn zhao_ruthless_admiral_pumps_your_team_when_you_sacrifice_another_permanent() 
     ];
     let theirs = s.force_permanent_on_battlefield(1, "Gray Ogre");
     sacrifice_to_weaponize(&mut s, ogres[0]);
-    assert_eq!(s.game().effective_power(zhao), 4);
-    assert_eq!(s.game().effective_power(ogres[1]), 3);
-    assert_eq!(s.game().effective_power(theirs), 2);
+    assert_eq!(s.game().characteristics(zhao).power, 4);
+    assert_eq!(s.game().characteristics(ogres[1]).power, 3);
+    assert_eq!(s.game().characteristics(theirs).power, 2);
     attack_and_settle(&mut s, &[zhao], None);
     assert_eq!(combat_red(&s), 2);
 
@@ -10311,7 +10311,7 @@ fn zhao_ruthless_admiral_pumps_your_team_when_you_sacrifice_another_permanent() 
     let zhao = s.force_permanent_on_battlefield(0, "Zhao, Ruthless Admiral");
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     sacrifice_to_weaponize(&mut s, zhao);
-    assert_eq!(s.game().effective_power(ogre), 2);
+    assert_eq!(s.game().characteristics(ogre).power, 2);
 }
 
 /// Shrines count themselves as they enter; "another Shrine" triggers for each
@@ -10512,7 +10512,7 @@ fn the_earth_king_makes_a_bear_and_ramps_once_per_large_attacker() {
     let mut s = five_color_setup(&["The Earth King", "Craw Wurm"]);
     play_and_settle(&mut s, "The Earth King");
     let bear = s.battlefield_permanents_named(0, "Bear")[0];
-    assert_eq!(s.game().effective_pt(bear), (4, 4));
+    assert_eq!(s.game().characteristics(bear).pt(), (4, 4));
     let king = permanent_named(&s, "The Earth King");
     let wurm = s.force_permanent_on_battlefield(0, "Craw Wurm");
     let lands = |s: &Scenario| {
@@ -10553,7 +10553,7 @@ fn bitter_work_draws_for_a_large_attacker_and_exhausts_into_earthbend_four() {
     activate(&mut s, work, 0);
     assert!(s.choose_target(Target::Permanent(forest)));
     settle(&mut s);
-    assert_eq!(s.game().effective_pt(forest), (4, 4));
+    assert_eq!(s.game().characteristics(forest).pt(), (4, 4));
     s.set_player_mana_pool(0, "4");
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(!can_activate(&s, work), "exhausted");
@@ -10580,9 +10580,9 @@ fn how_to_start_a_riot_grants_menace_and_pumps_the_target_players_creatures() {
     settle(&mut s);
     assert!(keywords(&s, theirs).menace);
     assert!(!keywords(&s, mine).menace);
-    assert_eq!(s.game().effective_pt(mine), (4, 2));
-    assert_eq!(s.game().effective_pt(other), (4, 2));
-    assert_eq!(s.game().effective_pt(theirs), (2, 2));
+    assert_eq!(s.game().characteristics(mine).pt(), (4, 2));
+    assert_eq!(s.game().characteristics(other).pt(), (4, 2));
+    assert_eq!(s.game().characteristics(theirs).pt(), (2, 2));
 }
 
 #[test]
@@ -10677,7 +10677,7 @@ fn cruel_administrator_enters_with_a_counter_after_a_raid_and_makes_soldiers() {
         .find(|id| *id != first)
         .unwrap();
     assert_eq!(counters(&s, second), 1);
-    assert_eq!(s.game().effective_pt(second), (6, 5));
+    assert_eq!(s.game().characteristics(second).pt(), (6, 5));
 }
 
 /// Damage marked this turn decides the Clue after the creature has left.
@@ -10764,22 +10764,22 @@ fn earth_rumble_wrestlers_grow_with_a_land_creature_or_a_land_entry_this_turn() 
     let wrestlers = s.force_permanent_on_battlefield(0, "Earth Rumble Wrestlers");
     let forest = s.force_permanent_on_battlefield(0, "Forest");
     assert!(keywords(&s, wrestlers).reach);
-    assert_eq!(s.game().effective_pt(wrestlers), (3, 4));
+    assert_eq!(s.game().characteristics(wrestlers).pt(), (3, 4));
     assert!(!observed_keywords(&s, wrestlers).trample);
 
     cast(&mut s, "Earthbending Lesson");
     assert!(s.choose_target(Target::Permanent(forest)));
     settle(&mut s);
-    assert_eq!(s.game().effective_pt(wrestlers), (4, 4), "a land creature");
+    assert_eq!(s.game().characteristics(wrestlers).pt(), (4, 4), "a land creature");
     assert!(observed_keywords(&s, wrestlers).trample);
 
     let mut s = five_color_setup(&["Earth Rumble Wrestlers", "Forest"]);
     let wrestlers = s.force_permanent_on_battlefield(0, "Earth Rumble Wrestlers");
     play_and_settle(&mut s, "Forest");
-    assert_eq!(s.game().effective_pt(wrestlers), (4, 4), "a land entered");
+    assert_eq!(s.game().characteristics(wrestlers).pt(), (4, 4), "a land entered");
     assert!(observed_keywords(&s, wrestlers).trample);
     s.advance_to_active_step(1, StepKind::Main);
-    assert_eq!(s.game().effective_pt(wrestlers), (3, 4), "a new turn");
+    assert_eq!(s.game().characteristics(wrestlers).pt(), (3, 4), "a new turn");
     assert!(!observed_keywords(&s, wrestlers).trample);
 }
 
@@ -10838,9 +10838,9 @@ fn invasion_tactics_pumps_on_entry_and_draws_once_for_connecting_allies() {
     let mut s = five_color_setup(&["Invasion Tactics", "Earth Kingdom Jailer", "Gray Ogre"]);
     let ogre = s.force_permanent_on_battlefield(0, "Gray Ogre");
     enter_and_settle(&mut s, "Invasion Tactics");
-    assert_eq!(s.game().effective_pt(ogre), (4, 4));
+    assert_eq!(s.game().characteristics(ogre).pt(), (4, 4));
     s.advance_to_active_step(1, StepKind::Main);
-    assert_eq!(s.game().effective_pt(ogre), (2, 2), "until end of turn");
+    assert_eq!(s.game().characteristics(ogre).pt(), (2, 2), "until end of turn");
 
     let mut s = five_color_setup(&["Invasion Tactics", "Earth Kingdom Jailer", "Gray Ogre"]);
     s.force_permanent_on_battlefield(0, "Invasion Tactics");
@@ -11425,8 +11425,8 @@ fn suki_courageous_rescuer_makes_an_ally_once_when_another_permanent_leaves_on_y
     let ogres: Vec<_> = (0..3)
         .map(|_| s.force_permanent_on_battlefield(0, "Gray Ogre"))
         .collect();
-    assert_eq!(s.game().effective_pt(ogres[0]), (3, 2));
-    assert_eq!(s.game().effective_pt(suki), (2, 4), "other creatures");
+    assert_eq!(s.game().characteristics(ogres[0]).pt(), (3, 2));
+    assert_eq!(s.game().characteristics(suki).pt(), (2, 4), "other creatures");
     s.advance_to_active_step(1, StepKind::Main);
     let ogre = card_of(&s, ogres[0]);
     s.game_mut().move_card(ogre, ZoneType::Graveyard);
@@ -11505,7 +11505,7 @@ fn appa_loyal_sky_bison_grants_flying_or_airbends_another_permanent() {
     choose_mode(&mut s, 0);
     assert!(s.choose_target(Target::Permanent(ogre)));
     settle(&mut s);
-    assert!(s.game().effective_keywords(ogre).flying);
+    assert!(s.game().characteristics(ogre).keywords.flying);
 
     let appa = s.battlefield_permanents_named(0, "Appa, Loyal Sky Bison")[0];
     let ogre_card = card_of(&s, ogre);
@@ -11655,7 +11655,7 @@ fn earthbender_ascension_earthbends_fetches_and_rewards_landfall_at_four() {
     settle(&mut s);
     assert_eq!(counters_of(&s, ascension, CounterKind::Quest), 4);
     assert_eq!(counters(&s, ogre), 1);
-    assert!(s.game().effective_keywords(ogre).trample);
+    assert!(s.game().characteristics(ogre).keywords.trample);
 }
 
 /// Ward countering an ability announces GameEvent::AbilityCountered with the
@@ -11705,15 +11705,15 @@ fn sokka_tenacious_tactician_gives_allies_menace_and_prowess_and_makes_allies() 
     s.game_mut().create_token("Ally", PlayerId(0), false);
     let ally = s.battlefield_permanents_named(0, "Ally")[0];
     assert!(keywords(&s, sokka).menace);
-    assert!(s.game().effective_keywords(ally).menace, "granted");
-    assert!(!s.game().effective_keywords(ogre).menace, "not an Ally");
+    assert!(s.game().characteristics(ally).keywords.menace, "granted");
+    assert!(!s.game().characteristics(ogre).keywords.menace, "not an Ally");
 
     cast(&mut s, "Yip Yip!");
     assert!(s.choose_target(Target::Permanent(ogre)));
     settle(&mut s);
-    assert_eq!(s.game().effective_pt(sokka), (4, 4));
-    assert_eq!(s.game().effective_pt(ally), (2, 2), "granted prowess");
-    assert_eq!(s.game().effective_pt(ogre), (4, 4), "Yip Yip! only");
+    assert_eq!(s.game().characteristics(sokka).pt(), (4, 4));
+    assert_eq!(s.game().characteristics(ally).pt(), (2, 2), "granted prowess");
+    assert_eq!(s.game().characteristics(ogre).pt(), (4, 4), "Yip Yip! only");
     assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 2);
 
     cast(&mut s, "Gray Ogre");
@@ -11741,14 +11741,14 @@ fn katara_the_fearless_makes_ally_triggers_trigger_an_additional_time() {
     cast(&mut s, "Yip Yip!");
     assert!(s.choose_target(Target::Permanent(katara)));
     settle(&mut s);
-    assert_eq!(s.game().effective_pt(sokka), (5, 5), "its prowess twice");
+    assert_eq!(s.game().characteristics(sokka).pt(), (5, 5), "its prowess twice");
     assert_eq!(
-        s.game().effective_pt(katara),
+        s.game().characteristics(katara).pt(),
         (7, 7),
         "Yip Yip! and granted prowess twice"
     );
     assert_eq!(s.battlefield_permanents_named(0, "Ally").len(), 2);
-    assert_eq!(s.game().effective_pt(monk), (2, 2), "not an Ally: once");
+    assert_eq!(s.game().characteristics(monk).pt(), (2, 2), "not an Ally: once");
 }
 
 /// Entering and attacking each exile up to one card from any graveyard; a
@@ -11825,7 +11825,7 @@ fn fatal_fissure_earthbends_four_when_that_creature_dies_this_turn() {
     assert!(s.choose_target(Target::Permanent(forest)));
     settle(&mut s);
     assert_eq!(counters(&s, forest), 4);
-    assert_eq!(s.game().effective_pt(forest), (4, 4));
+    assert_eq!(s.game().characteristics(forest).pt(), (4, 4));
 
     let mut s = five_color_setup(&["Fatal Fissure", "Lightning Strike", "Gray Ogre"]);
     let forest = s.force_permanent_on_battlefield(0, "Forest");
@@ -11886,7 +11886,7 @@ fn ruinous_waterbending_shrinks_everything_and_kicked_gains_life_per_death() {
     cast(&mut s, "Ruinous Waterbending");
     settle(&mut s);
     assert!(s.battlefield_permanents_named(1, "Gray Ogre").is_empty());
-    assert_eq!(s.game().effective_pt(wurm), (4, 2));
+    assert_eq!(s.game().characteristics(wurm).pt(), (4, 2));
     assert_eq!(s.life(0), life, "unpaid");
 
     let mut s = five_color_setup(&[
@@ -12112,7 +12112,7 @@ fn the_fire_nation_drill_taps_to_destroy_and_strips_protection() {
     );
     activate(&mut s, drill, 0);
     settle(&mut s);
-    let wurm_keywords = s.game().effective_keywords(wurm);
+    let wurm_keywords = s.game().characteristics(wurm).keywords;
     assert!(!wurm_keywords.hexproof && !wurm_keywords.indestructible);
 }
 
@@ -12269,7 +12269,7 @@ fn jet_s_brainwashing_stops_a_blocker_and_kicked_steals_it_for_the_turn() {
     assert_eq!(permanent(&s, ogre).controller, PlayerId(0));
     assert_eq!(s.battlefield_permanents_named(0, "Gray Ogre"), vec![ogre]);
     assert!(!tapped(&s, ogre));
-    assert!(s.game().effective_keywords(ogre).haste);
+    assert!(s.game().characteristics(ogre).keywords.haste);
     s.advance_to_active_step(1, StepKind::Upkeep);
     assert_eq!(
         permanent(&s, ogre).controller,
@@ -12297,7 +12297,7 @@ fn iroh_tea_master_gives_a_permanent_away_for_a_grown_ally() {
     assert_eq!(permanent(&s, food).controller, PlayerId(1));
     let ally = s.battlefield_permanents_named(0, "Ally")[0];
     assert_eq!(counters(&s, ally), 1);
-    assert_eq!(s.game().effective_pt(ally), (2, 2));
+    assert_eq!(s.game().characteristics(ally).pt(), (2, 2));
 }
 
 /// Each first main phase you lose 2 and take a mode not chosen before; the
@@ -12429,8 +12429,8 @@ fn jeong_jeong_copies_your_next_lesson_this_turn() {
         "the copy's new target"
     );
     settle(&mut s);
-    assert_eq!(s.game().effective_pt(jeong), (5, 6));
-    assert_eq!(s.game().effective_pt(ogre), (4, 4));
+    assert_eq!(s.game().characteristics(jeong).pt(), (5, 6));
+    assert_eq!(s.game().characteristics(ogre).pt(), (4, 4));
     assert_eq!(
         s.zone_size(0, ZoneType::Graveyard),
         graveyard + 1,
@@ -12485,8 +12485,8 @@ fn avatar_destiny_grows_with_your_graveyard_and_returns_when_its_creature_dies()
     let aura = cast(&mut s, "Avatar Destiny");
     assert!(s.choose_target(Target::Permanent(ogre)));
     settle(&mut s);
-    assert_eq!(s.game().effective_pt(ogre), (4, 4));
-    assert!(s.game().added_subtypes(ogre).contains(&"Avatar"));
+    assert_eq!(s.game().characteristics(ogre).pt(), (4, 4));
+    assert!(s.game().characteristics(ogre).added_subtypes.contains(&"Avatar"));
 
     let milled = pin_top(&mut s, &["Craw Wurm", "Forest", "Forest", "Forest"]);
     s.game_mut().state.permanents[ogre].as_mut().unwrap().damage = 1;
@@ -12535,8 +12535,8 @@ fn zhao_taps_nonbasic_lands_and_makes_them_mountains_once_he_conquers() {
     activate(&mut s, zhao, 0);
     settle(&mut s);
     assert_eq!(counters_of(&s, zhao, CounterKind::Conqueror), 1);
-    assert!(s.game().has_lost_abilities(temple));
-    assert!(s.game().added_subtypes(temple).contains(&"Mountain"));
+    assert!(s.game().characteristics(temple).abilities_lost);
+    assert!(s.game().characteristics(temple).added_subtypes.contains(&"Mountain"));
     assert!(can_cast(&s, red), "a Mountain taps for {{R}}");
     cast_card(&mut s, red);
     if s.action_space().kind == ActionSpaceKind::PayOrNot {
@@ -12555,7 +12555,7 @@ fn zhao_taps_nonbasic_lands_and_makes_them_mountains_once_he_conquers() {
     s.step_action(0);
     assert!(tapped(&s, temple), "paid with the Mountain");
     assert!(
-        !s.game().has_lost_abilities(forest),
+        !s.game().characteristics(forest).abilities_lost,
         "basic lands keep theirs"
     );
 }
