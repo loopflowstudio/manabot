@@ -378,3 +378,27 @@ the continuous-effects records.
   the learning tokens, so the tensor and the tokens share one vocabulary. The
   guard test claims each row kind exhaustively, and the directed tests assert on
   rows, not columns. Native/Python parity holds.
+
+## Demo decision pass 2 (headless, 2026-10-30, standing in for Jack Heart)
+
+Reviewed HEAD `7395d5065` (scratch-only on top of `277e61511`), synced with
+`origin/main` and pushed; PR #399 open and mergeable. The previous implement
+pass meant to land the characteristics consolidation and fix the two CI
+failures from run 41148854807. CI run 41152187378 (`b38f1e1cd`) passed Python
+Unit Tests, Clean-machine Play (search-64 within the reply window), Rust Tests,
+Academy UI/Integration and both conformance suites. Its Integration jobs, and
+all of run 41152754384, were cancelled because newer pushes superseded them,
+not because they failed. CI run 41153075147 on HEAD was still running at this
+pass. Decision: advance. Next proof: Integration (main and long) green on HEAD.
+
+## Gate (headless, 2026-10-30, HEAD `7395d5065`)
+
+Reviewed `b38f1e1cd`..HEAD (static sources once per view, `fixed_source_mana`
+preconditions at callers): no further polish needed. Checks on this tree:
+`cargo fmt --check` clean; `cargo clippy --all-targets` clean; `uv run --extra
+dev pytest tests/model/test_action_identity.py -q` 25 passed. Debug `cargo
+test`, the world-change suite and Playwright are CI's (run 41153075147: Python
+Unit Tests, Semantic Kernel Conformance and ubuntu packaging green; Rust Tests
+and both Integration jobs queued at this pass). Known limit: worst search-64
+reply is 7.0 s against main's 3.1 s (questions.md, "Search throughput"); an
+attachment/static-source index is a separate change.
