@@ -13,6 +13,7 @@
   import GameLog from '$lib/components/GameLog.svelte';
   import PresentationHistory from '$lib/components/PresentationHistory.svelte';
   import OpponentSelector from '$lib/components/OpponentSelector.svelte';
+  import DecklistsSelector from '$lib/components/DecklistsSelector.svelte';
   import StopsPanel from '$lib/components/StopsPanel.svelte';
   import SharedTablePanel from '$lib/components/SharedTablePanel.svelte';
   import { fetchAdviceMeta, postAdvice, type AdviceMeta, type AdviceResponse } from '$lib/advice';
@@ -318,6 +319,7 @@
           value={gameStore.opponentChoice}
           trained={trainedOpponents}
           {catalogError}
+          decklists={gameStore.decklists}
           onChange={(value) => gameStore.setOpponentChoice(value)}
         />
       {/if}
@@ -374,6 +376,12 @@
       disabled={gameStore.newGamePending}
       onHeroChange={(value) => gameStore.setHeroDeck(value)}
       onVillainChange={(value) => gameStore.setVillainDeck(value)}
+    />
+    <DecklistsSelector
+      value={gameStore.decklists}
+      opponent={gameStore.opponentChoice}
+      disabled={gameStore.newGamePending}
+      onChange={(value) => gameStore.setDecklists(value)}
     />
     <DeckImport />
   {/if}

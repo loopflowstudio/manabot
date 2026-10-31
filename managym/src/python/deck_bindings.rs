@@ -158,6 +158,7 @@ json_record!(Deck {
             name: self.identity(),
             deck: self.clone(),
             world: Some(crate::world::WORLD_POOL.into()),
+            disclosure: Default::default(),
         }
     }
 });

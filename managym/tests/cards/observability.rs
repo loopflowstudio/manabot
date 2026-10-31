@@ -182,12 +182,13 @@ fn permanent_fields(permanent: &Permanent) -> [(&'static str, Seen); 20] {
     ]
 }
 
-fn player_fields(player: &Player) -> [(&'static str, Seen); 12] {
+fn player_fields(player: &Player) -> [(&'static str, Seen); 13] {
     let Player {
         id: _,
         index: _,
         deck: _,
         sideboard: _,
+        disclosure: _,
         known_hand: _,
         name: _,
         life: _,
@@ -200,8 +201,18 @@ fn player_fields(player: &Player) -> [(&'static str, Seen); 12] {
     [
         ("id", Seen::Identity),
         ("index", Seen::Identity),
-        ("deck", Seen::Via("zone counts (library size)")),
-        ("sideboard", Seen::Via("sideboard cards and counts")),
+        (
+            "deck",
+            Seen::Via("decklists tensor (main and unseen counts)"),
+        ),
+        (
+            "sideboard",
+            Seen::Via("decklists tensor (sideboard counts)"),
+        ),
+        (
+            "disclosure",
+            Seen::Via("decklists tensor rows, all zero for a closed opponent"),
+        ),
         ("known_hand", Seen::Via("known_hand tensor")),
         ("name", Seen::Identity),
         ("life", Seen::Player(0, 1)),
@@ -1638,6 +1649,8 @@ fn player_columns(player: &PlayerData) -> Vec<(&'static str, Encoding)> {
         hand_only_until: _,
         no_maximum_hand_size: _,
         known_hand: _,
+        main_counts: _,
+        unseen_counts: _,
         sideboard_counts: _,
         remaining_sideboard_counts: _,
     } = player;
@@ -1672,8 +1685,8 @@ fn player_columns(player: &PlayerData) -> Vec<(&'static str, Encoding)> {
         ),
         ("known_hand", Elsewhere("known_hand tensor")),
         (
-            "sideboard_counts, remaining_sideboard_counts",
-            Elsewhere("agent sideboard rows in agent_cards"),
+            "main_counts, unseen_counts, sideboard_counts, remaining_sideboard_counts",
+            Elsewhere("decklists tensor"),
         ),
     ]
 }

@@ -138,6 +138,29 @@ def test_named_setup_cannot_silently_drop_sideboard():
     assert custom.asset_pack is None
 
 
+def test_closed_decklists_are_recorded_replayed_and_hidden_from_the_viewer(
+    tmp_path: Path,
+) -> None:
+    assert server._parse_game_config({"villain_type": "random"}).decklists == "open"
+    with pytest.raises(ValueError, match="decklists must be"):
+        server._parse_game_config({"decklists": "partial"})
+    with pytest.raises(ValueError, match="search opponent"):
+        server._parse_game_config({"decklists": "closed", "villain_type": "search"})
+    session = server.GameSession(trace_dir=tmp_path)
+    frame = session.new_game(
+        {"seed": 0, "villain_type": "random", "decklists": "closed"}
+    )["frame"]
+    assert session.trace.config.decklists == "closed"
+    assert "main_counts" in frame["projection"]["agent"]
+    assert "main_counts" not in frame["projection"]["opponent"]
+    assert "sideboard_counts" not in frame["projection"]["opponent"]
+    configs = GameConfig(**asdict(session.trace.config)).to_rust()
+    assert [config.disclosure for config in configs] == ["closed", "closed"]
+    legacy = asdict(session.trace.config)
+    del legacy["decklists"]
+    assert GameConfig(**legacy).decklists == "open"
+
+
 def test_recorded_named_root_rejects_missing_sideboards_and_old_asset_identity():
     config = server._parse_game_config({"seed": 0, "villain_type": "random"})
     missing = asdict(config)

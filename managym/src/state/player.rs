@@ -7,6 +7,26 @@ use super::{
     mana::Mana,
 };
 
+/// Whether a player's opponent knows that player's main deck and sideboard.
+/// An open decklist discloses both lists and a closed one neither; there is
+/// no partial disclosure. Open is the default, and records that predate the
+/// option read as open.
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize,
+)]
+#[serde(rename_all = "snake_case")]
+pub enum DecklistDisclosure {
+    #[default]
+    Open,
+    Closed,
+}
+
+impl DecklistDisclosure {
+    pub fn is_open(&self) -> bool {
+        *self == Self::Open
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct PlayerConfig {
     pub name: String,
@@ -14,6 +34,9 @@ pub struct PlayerConfig {
     pub deck: Deck,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub world: Option<String>,
+    /// Serialized only when closed, so default-mode digests are unchanged.
+    #[serde(skip_serializing_if = "DecklistDisclosure::is_open")]
+    pub disclosure: DecklistDisclosure,
 }
 
 impl PlayerConfig {
@@ -22,11 +45,17 @@ impl PlayerConfig {
             name: name.into(),
             deck: Deck::new(decklist, BTreeMap::new()),
             world: None,
+            disclosure: DecklistDisclosure::Open,
         }
     }
 
     pub fn with_sideboard(mut self, sideboard: BTreeMap<String, usize>) -> Self {
         self.deck.sideboard = sideboard;
+        self
+    }
+
+    pub fn with_disclosure(mut self, disclosure: DecklistDisclosure) -> Self {
+        self.disclosure = disclosure;
         self
     }
 
@@ -47,6 +76,9 @@ pub struct Player {
     pub deck: Vec<CardId>,
     /// Immutable owned outside-game roster; availability is derived from zones.
     pub sideboard: Vec<CardId>,
+    /// What the opponent knows of `deck` and `sideboard`; fixed for the game.
+    #[serde(skip_serializing_if = "DecklistDisclosure::is_open")]
+    pub disclosure: DecklistDisclosure,
     /// Public minimum counts in hand, without physical-copy or slot identity.
     pub known_hand: BTreeMap<CardDefId, u32>,
     pub name: String,
@@ -69,6 +101,7 @@ impl Player {
             index,
             deck: Vec::new(),
             sideboard: Vec::new(),
+            disclosure: DecklistDisclosure::Open,
             known_hand: BTreeMap::new(),
             name: name.into(),
             life: 20,

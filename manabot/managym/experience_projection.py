@@ -231,12 +231,15 @@ def _serialize_player(
         "known_hand": {
             str(key): int(count) for key, count in player.known_hand.items()
         },
-        "sideboard_counts": {
-            str(key): int(count) for key, count in player.sideboard_counts.items()
-        },
-        "remaining_sideboard_counts": {
-            str(key): int(count)
-            for key, count in player.remaining_sideboard_counts.items()
+        **{
+            name: {str(key): int(count) for key, count in counts.items()}
+            for name in (
+                "main_counts",
+                "unseen_counts",
+                "sideboard_counts",
+                "remaining_sideboard_counts",
+            )
+            if (counts := getattr(player, name)) is not None
         },
         "hand": grouped_cards["HAND"],
         "graveyard": grouped_cards["GRAVEYARD"],

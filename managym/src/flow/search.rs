@@ -37,8 +37,9 @@ impl Game {
     /// Sample one world consistent with `perspective`'s observation.
     ///
     /// Resample the opponent's residual unknown hand and both library orders.
-    /// Decklists are public; outside sideboard copies never enter this pool.
-    /// Accordingly:
+    /// The opponent's decklist must be open to `perspective` (callers check
+    /// [`Self::require_open_decklist`]); outside sideboard copies never enter
+    /// this pool. Accordingly:
     /// - public known-hand definition counts are reserved; unknown slots are
     ///   sampled uniformly from the residual hand ∪ library pool, with the
     ///   remainder becoming their shuffled library;
@@ -53,6 +54,10 @@ impl Game {
     pub fn determinize(&mut self, perspective: PlayerId, seed: u64) {
         let mut rng = ChaCha8Rng::seed_from_u64(seed);
         let opponent = PlayerId((perspective.0 + 1) % 2);
+        assert!(
+            self.decklist_known(opponent, perspective),
+            "determinize requires the opponent's open decklist"
+        );
         let (mut known, mut residual) = self.hidden_hand_partition(opponent);
         residual.extend(self.foretold_cards(opponent));
         residual.sort_unstable_by_key(|card| card.0);
@@ -94,6 +99,46 @@ impl Game {
                 self.publish_action_space(space);
             }
         }
+    }
+
+    /// Whether `viewer` knows `owner`'s main deck and sideboard: always its
+    /// own, and the opponent's when that decklist is open.
+    pub fn decklist_known(&self, owner: PlayerId, viewer: PlayerId) -> bool {
+        owner == viewer || self.state.players[owner.0].disclosure.is_open()
+    }
+
+    /// Refuse hidden-information sampling for `viewer` when the opponent's
+    /// decklist is closed: its unseen pool would be read from the true deck.
+    pub fn require_open_decklist(&self, viewer: PlayerId) -> Result<(), AgentError> {
+        let opponent = PlayerId((viewer.0 + 1) % 2);
+        if self.decklist_known(opponent, viewer) {
+            Ok(())
+        } else {
+            Err(AgentError(format!(
+                "decklist closed: player {} cannot sample the opponent's hidden cards",
+                viewer.0
+            )))
+        }
+    }
+
+    /// `owner`'s cards that `viewer` cannot see: the library, and for an
+    /// opponent also the hand and face-down foretold exile. For an opponent
+    /// this is exactly the possible-world pool, including any publicly known
+    /// hand cards.
+    pub fn unseen_cards(&self, owner: PlayerId, viewer: PlayerId) -> Vec<CardId> {
+        let zones: &[ZoneType] = if owner == viewer {
+            &[ZoneType::Library]
+        } else {
+            &[ZoneType::Hand, ZoneType::Library]
+        };
+        let mut cards: Vec<CardId> = zones
+            .iter()
+            .flat_map(|zone| self.state.zones.zone_cards(*zone, owner).iter().copied())
+            .collect();
+        if owner != viewer {
+            cards.extend(self.foretold_cards(owner));
+        }
+        cards
     }
 
     /// Canonical physical witnesses for public definition counts, plus the

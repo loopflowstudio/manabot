@@ -1324,6 +1324,18 @@
           "type": "integer",
           "format": "int32"
         },
+        "main_counts": {
+          "description": "Decklist counts by definition, present only when this frame's viewer\nknows the player's decklist (its own, or an open opponent's). Absent\nmeans hidden; an empty map means known and empty.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
+          }
+        },
         "mana": {
           "type": [
             "array",
@@ -1346,7 +1358,10 @@
           "minimum": 0
         },
         "remaining_sideboard_counts": {
-          "type": "object",
+          "type": [
+            "object",
+            "null"
+          ],
           "additionalProperties": {
             "type": "integer",
             "format": "uint32",
@@ -1367,7 +1382,10 @@
           }
         },
         "sideboard_counts": {
-          "type": "object",
+          "type": [
+            "object",
+            "null"
+          ],
           "additionalProperties": {
             "type": "integer",
             "format": "uint32",
@@ -1378,6 +1396,17 @@
           "type": "array",
           "items": {
             "$ref": "#/$defs/LegacyCardView"
+          }
+        },
+        "unseen_counts": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "type": "integer",
+            "format": "uint32",
+            "minimum": 0
           }
         },
         "zone_counts": {

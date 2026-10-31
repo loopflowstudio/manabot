@@ -118,6 +118,15 @@ world, re-recorded in place as it grows. Academy `*-w17.json` demo,
 choice-navigation and trigger-order fixtures reach the same decision revisions
 as their w15 predecessors. Belief encoding receipts use possible-world space v3.
 
+Task MTG-216 (2026-10-30, same world) makes decklist disclosure a match option:
+open (default; each player knows the other's main deck and sideboard) or
+closed (neither). Observations carry main, unseen, sideboard and
+remaining-sideboard counts by definition for every known decklist; v5 adds a
+`decklists` buffer `(2, 60, 5)` that is zero for a closed opponent, and the
+player width stays 60. Search and possible worlds refuse a closed opponent.
+The Academy navigation fixture and the authored-match and parity receipts
+were re-recorded with the same Commands; state digests are unchanged.
+
 ## w16: one card authority (superseded by w17)
 
 Cards are typed Rust functions in the file of the set that first printed them

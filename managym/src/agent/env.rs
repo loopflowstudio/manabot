@@ -194,10 +194,15 @@ impl Env {
         }
     }
 
-    fn construct_possible_world_space(&self, game: &Game, viewer: PlayerId) -> PossibleWorldSpace {
+    fn construct_possible_world_space(
+        &self,
+        game: &Game,
+        viewer: PlayerId,
+    ) -> Result<PossibleWorldSpace, AgentError> {
+        game.require_open_decklist(viewer)?;
         self.possible_world_space_constructions
             .fetch_add(1, Ordering::Relaxed);
-        PossibleWorldSpace::for_viewer(game, viewer)
+        Ok(PossibleWorldSpace::for_viewer(game, viewer))
     }
 
     fn branch_from_game(&self, game: Game) -> Env {
@@ -539,6 +544,7 @@ impl Env {
                 "hidden_hand_constraints: invalid viewer".to_string(),
             ));
         }
+        game.require_open_decklist(PlayerId(viewer))?;
         Ok(crate::possible_worlds::HiddenHandConstraints::for_viewer(
             game,
             PlayerId(viewer),
@@ -560,7 +566,7 @@ impl Env {
             )));
         }
         Ok(self
-            .construct_possible_world_space(game, PlayerId(viewer))
+            .construct_possible_world_space(game, PlayerId(viewer))?
             .projection())
     }
 
@@ -578,7 +584,7 @@ impl Env {
                 "possible_world_support: viewer {viewer} out of range"
             )));
         }
-        let space = self.construct_possible_world_space(game, PlayerId(viewer));
+        let space = self.construct_possible_world_space(game, PlayerId(viewer))?;
         if space.identity() != space_identity {
             return Err(AgentError(
                 "possible_world_support: space identity mismatch".to_string(),
@@ -601,7 +607,7 @@ impl Env {
                 "possible_world_condition: viewer {viewer} out of range"
             )));
         }
-        let space = self.construct_possible_world_space(game, PlayerId(viewer));
+        let space = self.construct_possible_world_space(game, PlayerId(viewer))?;
         if space.identity() != space_identity {
             return Err(AgentError(
                 "possible_world_condition: space identity mismatch".to_string(),
@@ -658,7 +664,7 @@ impl Env {
                 "materialize_possible_world: viewer {viewer} out of range"
             )));
         }
-        let space = self.construct_possible_world_space(game, PlayerId(viewer));
+        let space = self.construct_possible_world_space(game, PlayerId(viewer))?;
         if space.identity() != space_identity {
             return Err(AgentError(
                 "materialize_possible_world: space identity mismatch".to_string(),
@@ -703,7 +709,7 @@ impl Env {
             ));
         }
         let before = self.possible_world_space_construction_count();
-        let space = self.construct_possible_world_space(game, PlayerId(viewer));
+        let space = self.construct_possible_world_space(game, PlayerId(viewer))?;
         let space_identity = space.identity();
         if space_identity != expected_space_identity {
             return Err(AgentError(
@@ -918,6 +924,7 @@ impl Env {
         let game = self.game.as_mut().ok_or_else(|| {
             AgentError("env.selected_determinize called before reset".to_string())
         })?;
+        game.require_open_decklist(PlayerId(perspective))?;
         game.determinize(PlayerId(perspective), seed);
         Ok(())
     }
@@ -1079,6 +1086,7 @@ impl Env {
             .game
             .as_mut()
             .ok_or_else(|| AgentError("env.determinize called before reset".to_string()))?;
+        game.require_open_decklist(PlayerId(perspective))?;
         game.determinize(PlayerId(perspective), seed);
         Ok(())
     }
@@ -1159,6 +1167,7 @@ impl Env {
                 actor.0
             )));
         }
+        game.require_open_decklist(actor)?;
         let space = PossibleWorldSpace::for_viewer(game, actor);
         if space.identity() != space_identity {
             return Err(AgentError(
@@ -1211,6 +1220,7 @@ impl Env {
         let hero = action_space
             .player
             .ok_or_else(|| AgentError("no agent player in current action space".to_string()))?;
+        game.require_open_decklist(hero)?;
         let num_actions = action_space.actions.len();
         if num_actions == 0 {
             return Err(AgentError("no valid actions available".to_string()));

@@ -239,6 +239,7 @@ class TestObservationEncoder:
             "events_valid",
             "semantic_cards",
             "known_hand",
+            "decklists",
             "relations",
         }
 

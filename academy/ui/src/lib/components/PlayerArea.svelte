@@ -38,6 +38,9 @@
   const hiddenHandCount = $derived(
     player.hand_hidden_count ?? player.zone_counts.HAND ?? player.hand.length,
   );
+  function total(counts: Record<string, number> | undefined): number {
+    return Object.values(counts ?? {}).reduce((sum, count) => sum + count, 0);
+  }
   // Another player's face-down exiled cards are counted, never listed.
   const exileCount = $derived(Math.max(player.zone_counts.EXILE ?? 0, player.exile.length));
   const hiddenExileCount = $derived(exileCount - player.exile.length);
@@ -175,9 +178,19 @@
   {/if}
 
   <div class="staves">
+    {#if player.main_counts}
+      <details class="type-caption py-2" data-testid="decklist-summary">
+        <summary>Decklist ({total(player.main_counts)} cards, {total(player.unseen_counts)} unseen)</summary>
+        {#each Object.entries(player.main_counts) as [definition, initial]}
+          <div>{definitionNames[definition] ?? `Card ${definition}`}: {player.unseen_counts?.[definition] ?? 0} unseen of {initial}</div>
+        {/each}
+      </details>
+    {:else if opponent}
+      <div class="type-caption py-2 text-ink-2" data-testid="decklist-summary">Decklist closed</div>
+    {/if}
     {#if Object.keys(player.sideboard_counts ?? {}).length > 0}
       <details class="type-caption py-2" data-testid="sideboard-summary">
-        <summary>Sideboard ({Object.values(player.remaining_sideboard_counts ?? {}).reduce((a, b) => a + b, 0)} remaining)</summary>
+        <summary>Sideboard ({total(player.remaining_sideboard_counts)} remaining)</summary>
         {#each Object.entries(player.sideboard_counts ?? {}) as [definition, initial]}
           <div>{definitionNames[definition] ?? `Card ${definition}`}: {player.remaining_sideboard_counts?.[definition] ?? 0} of {initial}</div>
         {/each}

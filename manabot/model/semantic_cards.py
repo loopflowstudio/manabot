@@ -46,15 +46,19 @@ def admit_definition_ids(
 
 @dataclass(frozen=True)
 class CardReferences:
-    """Admitted catalog indexes for visible cards, permanents and public hands."""
+    """Admitted catalog indexes for visible cards, permanents, public hands and
+    known decklists."""
 
     cards: torch.Tensor
     permanents: torch.Tensor
     known: torch.Tensor | None
+    decklists: torch.Tensor | None = None
 
 
 class SemanticCardEncoder(nn.Module):
-    def __init__(self, pack_key: str, hidden_dim: int) -> None:
+    def __init__(self, pack_key: str, hidden_dim: int, decklists: bool = False) -> None:
+        """`decklists` (policy input v5) adds a projection of the pooled
+        decklist rows into each player's knowledge vector."""
         super().__init__()
         pack = bind_policy_catalog(pack_key)
         catalog = pack.catalog
@@ -119,6 +123,11 @@ class SemanticCardEncoder(nn.Module):
         for definition, row in pack.definition_row_by_card_def_id.items():
             lookup[definition + 1] = row + 1
         self.register_buffer("definition_rows", lookup)
+        # One count-weighted definition pool per decklist count column (main,
+        # unseen, sideboard, remaining sideboard), projected to one vector.
+        self.decklist_projection = (
+            nn.Linear(4 * hidden_dim, hidden_dim) if decklists else None
+        )
 
     def _rows(self, ids: torch.Tensor) -> torch.Tensor:
         return admit_definition_ids(
@@ -161,4 +170,17 @@ class SemanticCardEncoder(nn.Module):
         assert known_rows is not None
         known = definitions[known_rows]
         known = (known * knowledge[..., 1, None] / 60.0).sum(dim=2)
+        if self.decklist_projection is not None:
+            decklists = obs["decklists"]
+            deck_rows = (
+                self._rows(decklists[..., 0])
+                if references is None or references.decklists is None
+                else references.decklists
+            )
+            # [batch, seat, row, hidden] x [batch, seat, row, 4 counts]
+            # -> [batch, seat, 4 * hidden]; a closed decklist pools to zero.
+            pooled = torch.einsum(
+                "bsrh,bsrc->bsch", definitions[deck_rows], decklists[..., 1:] / 60.0
+            ).flatten(start_dim=2)
+            known = known + self.decklist_projection(pooled)
         return cards, known

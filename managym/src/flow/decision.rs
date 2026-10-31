@@ -1676,7 +1676,16 @@ mod learn_tests {
         let mut game = game(&[("Firebending Lesson", 40), ("Island", 1)]);
         let initial = Observation::for_player(&game, PlayerId(0));
         assert_eq!(initial.agent_sideboard.len(), 41);
-        assert_eq!(initial.agent.sideboard_counts.values().sum::<u32>(), 41);
+        assert_eq!(
+            initial
+                .agent
+                .sideboard_counts
+                .as_ref()
+                .unwrap()
+                .values()
+                .sum::<u32>(),
+            41
+        );
         assert_eq!(
             initial.agent.sideboard_counts,
             initial.agent.remaining_sideboard_counts
@@ -1750,7 +1759,13 @@ mod learn_tests {
             .any(|card| card.id == last && card.zone == ZoneType::Hand));
         assert_eq!(after.agent.sideboard_counts, initial.agent.sideboard_counts);
         assert_eq!(
-            after.agent.remaining_sideboard_counts.values().sum::<u32>(),
+            after
+                .agent
+                .remaining_sideboard_counts
+                .as_ref()
+                .unwrap()
+                .values()
+                .sum::<u32>(),
             40
         );
         let other_after = Observation::for_player(&branch, PlayerId(1));
