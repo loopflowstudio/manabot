@@ -473,7 +473,7 @@ impl Game {
             self.emit(GameEvent::SpellResolved { card });
         }
         // A resolution completed: restart the priority round (CR 117.3b).
-        self.state.priority.on_non_pass_action(self.active_player());
+        self.restart_priority_round();
     }
 
     /// The action space for the pending mid-resolution decision, if any.
@@ -840,7 +840,7 @@ impl Game {
                 } else {
                     // An activated mana ability retains its payer's priority;
                     // its empty rule frame is not a resolving stack object.
-                    self.state.priority.on_non_pass_action(*player);
+                    self.state.priority_mut().on_non_pass_action(*player);
                 }
                 Ok(())
             }
@@ -1264,9 +1264,7 @@ impl Game {
                         },
                     );
                 }
-                self.state
-                    .zones
-                    .shuffle(ZoneType::Library, owner, &mut self.state.rng);
+                self.shuffle_library(owner);
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -1515,9 +1513,7 @@ impl Game {
         };
         let player = *player;
         if selected.is_empty() {
-            self.state
-                .zones
-                .shuffle(ZoneType::Library, player, &mut self.state.rng);
+            self.shuffle_library(player);
             self.run_frame(suspended.frame);
             return;
         }
@@ -1545,7 +1541,7 @@ impl Game {
     /// Put the given library cards on the bottom of their owners' libraries
     /// in a random order.
     pub(crate) fn bottom_in_random_order(&mut self, mut cards: Vec<CardId>) {
-        cards.shuffle(&mut self.state.rng);
+        cards.shuffle(self.state.rng_mut());
         for card in cards {
             self.put_on_bottom_of_library(card);
         }

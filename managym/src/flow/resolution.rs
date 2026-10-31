@@ -316,12 +316,9 @@ impl Game {
     /// else as it last existed on the battlefield (CR 608.2h).
     fn last_known_creature_types(&self, target: Target) -> Vec<String> {
         match target {
-            Target::Permanent(id) if self.permanent_object_ref(id).is_some() => self
-                .characteristics(id)
-                .creature_types
-                .into_iter()
-                .map(String::from)
-                .collect(),
+            Target::Permanent(id) if self.permanent_object_ref(id).is_some() => {
+                self.characteristics(id).creature_types.clone()
+            }
             Target::Permanent(id) => self
                 .departed_permanent_lki(id)
                 .map(|lki| lki.creature_types.clone())
@@ -769,9 +766,7 @@ impl Game {
                 for card in graveyard {
                     self.move_card(card, ZoneType::Library);
                 }
-                self.state
-                    .zones
-                    .shuffle(ZoneType::Library, player, &mut self.state.rng);
+                self.shuffle_library(player);
                 None
             }
             Effect::ExileSourceSpell => {
@@ -1089,9 +1084,7 @@ impl Game {
                     self.move_card(card, ZoneType::Exile);
                 } else {
                     self.move_card(card, ZoneType::Library);
-                    self.state
-                        .zones
-                        .shuffle(ZoneType::Library, owner, &mut self.state.rng);
+                    self.shuffle_library(owner);
                 }
                 None
             }

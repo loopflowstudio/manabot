@@ -251,6 +251,11 @@ never `card.activated_abilities`. Its `abilities_lost` reads
 continuous-effect records and an Aura's `SetCharacteristics`. Code that the
 layer computation itself calls (static scopes, ability outputs) reads the
 private layer stages in `flow/statics.rs`, never the view.
+The view and its static-source index are computed once per state revision and
+shared as an `Arc<Characteristics>`. `Game::state` is a `TrackedState` whose
+every mutable access advances the revision; only fields no characteristic
+reads (priority, the RNG) have non-advancing accessors. Debug builds recompute
+every cached view and index on read and assert they match.
 A change that lasts until end of turn, or for any other duration, is an
 `Effect::ApplyContinuous` record (`state/effect.rs`; expiry in
 `flow/effects.rs`), never a new `Permanent` or `Player` field.

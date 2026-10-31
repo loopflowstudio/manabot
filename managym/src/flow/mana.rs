@@ -894,10 +894,7 @@ impl Game {
         if !self.can_activate_mana_ability(player, permanent, ability_index) {
             return Err(AgentError("illegal mana activation".into()));
         }
-        let ability = self
-            .characteristics(permanent)
-            .activated_abilities
-            .swap_remove(ability_index);
+        let ability = self.characteristics(permanent).activated_abilities[ability_index].clone();
         self.record_activation(permanent, ability_index, &ability);
         let old = self.state.suspended_decision.take();
         self.suspend_rule_decision(crate::flow::decision::Decision::ManaUpfront {

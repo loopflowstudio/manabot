@@ -1285,10 +1285,11 @@ impl Env {
         let action_space = game
             .action_space()
             .ok_or_else(|| AgentError("no active action space".to_string()))?;
-        if action_space.actions.is_empty() {
+        let count = action_space.actions.len();
+        if count == 0 {
             return Err(AgentError("no valid actions available".to_string()));
         }
-        Ok(game.state.rng.gen_range(0..action_space.actions.len()))
+        Ok(game.state.rng_mut().gen_range(0..count))
     }
 
     fn add_profiler_info(&self, info: &mut InfoDict) {
