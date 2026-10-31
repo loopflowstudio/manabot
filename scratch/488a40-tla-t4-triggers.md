@@ -123,16 +123,28 @@ ward's `CounterSpell` decline branch.
 
 ## Upstream (2026-10-30)
 
-Synced: origin/main `6f48f5ca0` is an ancestor (T3's merge `09e6babe5`,
-after T3's sync `98ec26e5b`), and T3's head `4c4dd0217` is merged
-(`a315216b2`); both rechecked at `2f73cd16f`. T4's ward is
+Merged: origin/main `6f48f5ca0` (via T3's sync) and T3's head `0cf535f0b`
+(`3d8717eab`), which adds the `Game::characteristics` view; T4's power,
+creature and ability-loss checks read it (`1f9d10aeb`). T4's ward is
 `StaticAbility::Ward`, required waterbend `AdditionalCost::RequiredWaterbend`,
 T4's tokens are in `tokens.rs`, Bear and Monk are off
-`TOKENS_AWAITING_PRODUCER`. T3 (#399) is still open; each T3 head is merged in
-before T4's own gate.
+`TOKENS_AWAITING_PRODUCER`. T3 (#399) is still open.
+
+Not yet synced: origin/main is now `b73a6b5db`. `2d2f45105` (decklist import,
+D1) and `b73a6b5db` (the cull: engine undo, `event_log.rs`, branching
+benchmarks, legacy `wave/` moved to `.lf/wave/`; it names #399 as needing a
+rebase) are not ancestors of T4. A trial `git merge-tree` against
+`b73a6b5db` conflicts in `flow/{damage,decision,game,mana,play,resolution,
+triggers,undo,zones}.rs`, `state/mod.rs`, `benchmark.rs`, `tests/cards/tla.rs`,
+the w17 conformance evidence (replays deleted on main), the 2026-10 audit
+index and `scratch/questions.md`. T3 syncs onto main first; T4 then merges
+T3's head, drops its undo/benchmark edits with the deleted code, and
+re-records the w17 evidence that main still keeps.
 
 ## Remaining
 
+- Sync onto main `b73a6b5db` after T3 does (see Upstream); the gate re-records below
+  follow it, since main deleted part of the w17 evidence.
 - All 75 cards defined (2026-10-30). The last ten: `379a4576d`..`b1d457756`
   (control change, copies and retargeting, delayed casts, Aura death LKI,
   nonbasic type overwrite) and `c0fae7ba6` Boiling Rock Rioter
@@ -176,7 +188,7 @@ One `Condition` (resolution-only `Kicked`, `TargetMatches`,
 Nation Cadets and Tolls of War. "If you do" stays the optional-payment shape.
 T3-sync details: `scratch/questions.md` (T4 and T3-sync sections).
 
-Check (2026-10-30, `2f73cd16f`): debug `cargo test --no-fail-fast` all targets, 820 passed, 0 failed; clippy `-D warnings` and fmt clean; `semantic-kernel-w17-v1` re-recorded at `888f5d359` (14 cases / 3396 commands), Scryfall fixture refreshed for the 16 new cards. Other w17 digest-bound Python evidence stays for gate.
+Check (2026-10-30, `c57d8bf5b`): debug `cargo test --test cards` 483 passed, 0 failed; full debug suite last run at `2f73cd16f` (820 passed), with the w17 digest/Scryfall drift left for gate.
 
 Approval (Jack Heart, 2026-10-30): T4 approved in full — all 75 cards with the
 review decisions above — publish and ship without another review. When the
