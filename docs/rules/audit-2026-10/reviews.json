@@ -1964,27 +1964,27 @@
     "603.7d": {
       "status": "partial",
       "scope": "Earthbend from spells creates a return watcher.",
-      "authority": "managym/src/flow/resolution.rs:Earthbend; managym/src/flow/triggers.rs:enqueue_delayed_trigger",
+      "authority": "managym/src/flow/resolution.rs:Earthbend; managym/src/flow/triggers.rs:add_delayed_trigger",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [],
       "gap": "Watcher stores the affected land and its controller, not the creating spell/source controller. Usually coincide, but general source/controller semantics are not retained.",
       "anchors": [
         "managym/src/flow/resolution.rs::Earthbend",
-        "managym/src/flow/triggers.rs::enqueue_delayed_trigger"
+        "managym/src/flow/triggers.rs::add_delayed_trigger"
       ]
     },
     "603.7e": {
       "status": "partial",
       "scope": "Earthbend from an ability creates a return watcher.",
-      "authority": "managym/src/flow/resolution.rs:Earthbend; managym/src/flow/triggers.rs:enqueue_delayed_trigger",
+      "authority": "managym/src/flow/resolution.rs:Earthbend; managym/src/flow/triggers.rs:add_delayed_trigger",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [],
       "gap": "Watcher retains the land as source, not the creating ability source; control-change distinctions remain unsupported.",
       "anchors": [
         "managym/src/flow/resolution.rs::Earthbend",
-        "managym/src/flow/triggers.rs::enqueue_delayed_trigger"
+        "managym/src/flow/triggers.rs::add_delayed_trigger"
       ]
     },
     "603.7f": {
@@ -2176,27 +2176,27 @@
     "603.12": {
       "status": "missing",
       "scope": "Reflexive triggers inspect events earlier in the resolving effect that created them.",
-      "authority": "managym/src/state/ability.rs:Effect; managym/src/flow/triggers.rs:enqueue_delayed_trigger",
+      "authority": "managym/src/state/ability.rs:Effect; managym/src/flow/triggers.rs:add_delayed_trigger",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [],
       "gap": "No reflexive-trigger creation/event-history mechanism. OptionalPayment executes branches inline; it does not create a new response window.",
       "anchors": [
         "managym/src/state/ability.rs::Effect",
-        "managym/src/flow/triggers.rs::enqueue_delayed_trigger"
+        "managym/src/flow/triggers.rs::add_delayed_trigger"
       ]
     },
     "603.12a": {
       "status": "missing",
       "scope": "Reflexive multiplicity differs for a repeated-payment choice.",
-      "authority": "managym/src/state/ability.rs:OptionalPayment; managym/src/flow/triggers.rs:enqueue_delayed_trigger",
+      "authority": "managym/src/state/ability.rs:OptionalPayment; managym/src/flow/triggers.rs:add_delayed_trigger",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [],
       "gap": "No reflexive trigger or repeated-payment grouping representation; an inline optional-cost branch is insufficient.",
       "anchors": [
         "managym/src/state/ability.rs::OptionalPayment",
-        "managym/src/flow/triggers.rs::enqueue_delayed_trigger"
+        "managym/src/flow/triggers.rs::add_delayed_trigger"
       ]
     },
     "608.1": {
