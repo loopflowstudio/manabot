@@ -56,9 +56,6 @@ fn assert_known(player: &PlayerData, config: &PlayerConfig, unseen: u32) {
     assert_eq!(player.remaining_sideboard_counts.as_ref(), Some(sideboard));
     let unseen_counts = player.unseen_counts.as_ref().expect("unseen known");
     assert_eq!(unseen_counts.values().sum::<u32>(), unseen);
-    for (definition, count) in &player.known_hand {
-        assert!(unseen_counts.get(definition).copied().unwrap_or(0) >= *count);
-    }
 }
 
 #[test]
@@ -79,12 +76,42 @@ fn open_decklists_show_both_lists_to_both_viewers() {
             &configs[opponent.0],
             (zones.size(ZoneType::Library, opponent) + zones.size(ZoneType::Hand, opponent)) as u32,
         );
-        // The opponent's unseen counts are exactly the possible-world pool.
+        // Before any reveal, the opponent's unseen counts are exactly the
+        // possible-world pool.
         assert_eq!(
             by_name(&game, obs.opponent.unseen_counts.as_ref().unwrap()),
             HiddenHandConstraints::for_viewer(&game, viewer).pool
         );
     }
+}
+
+#[test]
+fn a_revealed_hand_card_leaves_unseen_counts_but_stays_in_the_pool() {
+    let mut game = Game::new(configs(DecklistDisclosure::Open), 7, true);
+    let (viewer, opponent) = (PlayerId(0), PlayerId(1));
+    let revealed = &game.state.cards[game.state.zones.zone_cards(ZoneType::Hand, opponent)[0]];
+    let (definition, name) = (revealed.definition_id, revealed.name.clone());
+    game.state.players[opponent.0]
+        .known_hand
+        .insert(definition, 1);
+
+    // The unseen counts plus the revealed copy are the possible-world pool.
+    let obs = Observation::for_player(&game, viewer);
+    let mut unseen = by_name(&game, obs.opponent.unseen_counts.as_ref().unwrap());
+    *unseen.entry(name).or_default() += 1;
+    assert_eq!(
+        unseen,
+        HiddenHandConstraints::for_viewer(&game, viewer).pool
+    );
+    // A player's own unseen counts stay its library.
+    let own = Observation::for_player(&game, opponent)
+        .agent
+        .unseen_counts
+        .unwrap();
+    assert_eq!(
+        own.values().sum::<u32>(),
+        game.state.zones.size(ZoneType::Library, opponent) as u32
+    );
 }
 
 #[test]

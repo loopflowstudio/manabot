@@ -49,7 +49,9 @@ def test_opponent_lists_appear_exactly_when_open(decklists: Decklists) -> None:
     if decklists == "open":
         assert sum(opponent.main_counts.values()) == 40
         assert sum(opponent.unseen_counts.values()) == (
-            opponent.zone_counts[0] + opponent.zone_counts[1]
+            opponent.zone_counts[0]
+            + opponent.zone_counts[1]
+            - sum(opponent.known_hand.values())
         )
         assert sum(opponent.sideboard_counts.values()) == 2
     else:

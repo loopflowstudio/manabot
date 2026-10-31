@@ -18,6 +18,9 @@ kickoff's four-way assumption). Reversible choices made while implementing:
   before this change fail strict load (open world; none frozen).
 - Disclosure is not part of `world_binding` or deck identity: a checkpoint can
   play both modes, and in a closed game it sees zero opponent rows.
+- `Deck.player()` (training deck pools) seats an open decklist; it takes no
+  disclosure argument. Closed games come from `MatchConfig.decklists` or
+  Academy only.
 - `canonical_replay`/`study` privacy validators do not check decklist maps:
   frames carry no disclosure, and the engine projection is the authority.
 

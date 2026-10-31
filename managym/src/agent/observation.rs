@@ -67,8 +67,9 @@ pub struct PlayerData {
     /// The initial main deck.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub main_counts: Option<BTreeMap<u32, u32>>,
-    /// Owned cards the viewer cannot see (`Game::unseen_cards`): the
-    /// library, plus hand and face-down foretold exile for an opponent.
+    /// Owned cards whose identity the viewer does not know: the library,
+    /// plus for an opponent its hand less revealed `known_hand` copies and
+    /// face-down foretold exile.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unseen_counts: Option<BTreeMap<u32, u32>>,
     /// The initial sideboard.
@@ -597,6 +598,24 @@ impl Observation {
         counts
     }
 
+    /// `Game::unseen_cards` less the copies the viewer has seen revealed in
+    /// an opponent's hand. The possible-world pool keeps those copies, since
+    /// a sampled world must still place them in the hand.
+    fn unseen_counts(game: &Game, player: PlayerId, viewer: PlayerId) -> BTreeMap<u32, u32> {
+        let mut counts = Self::definition_counts(game, game.unseen_cards(player, viewer));
+        if player != viewer {
+            for (definition, known) in &game.state.players[player.0].known_hand {
+                if let Some(count) = counts.get_mut(&definition.0) {
+                    *count = count.saturating_sub(*known);
+                    if *count == 0 {
+                        counts.remove(&definition.0);
+                    }
+                }
+            }
+        }
+        counts
+    }
+
     fn player_data(game: &Game, player: PlayerId, viewer: PlayerId) -> PlayerData {
         let p = &game.state.players[player.0];
         let is_agent = player == viewer;
@@ -617,10 +636,7 @@ impl Observation {
                     .filter(|card| game.state.zones.zone_of(*card).is_none());
                 (
                     Some(Self::definition_counts(game, p.deck.iter().copied())),
-                    Some(Self::definition_counts(
-                        game,
-                        game.unseen_cards(player, viewer),
-                    )),
+                    Some(Self::unseen_counts(game, player, viewer)),
                     Some(Self::definition_counts(game, p.sideboard.iter().copied())),
                     Some(Self::definition_counts(game, outside)),
                 )

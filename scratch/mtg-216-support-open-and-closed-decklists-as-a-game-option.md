@@ -32,13 +32,13 @@ At main @ 10eeb1f, decklist visibility was fixed, and the surfaces disagreed:
 - **D3 Observation.** `PlayerData` gains `main_counts` and `unseen_counts`;
   `sideboard_counts` and `remaining_sideboard_counts` become `Option`. All four
   are `Some` for the viewer's own lists and for an open opponent, and `None`
-  for a closed opponent. `unseen_counts` counts the owner's cards in Hand ∪
-  Library ∪ face-down foretold exile, minus the viewer's own hand, so for the
-  opponent it is the possible-world pool. One owner: `Game::unseen_cards`
-  (moved from `possible_worlds`).
+  for a closed opponent. `unseen_counts` counts the owner's cards the viewer
+  has not seen: its own library; for an opponent, hand ∪ library ∪ face-down
+  foretold exile minus `known_hand` (concept review, below). The physical
+  pool has one owner, `Game::unseen_cards` (moved from `possible_worlds`);
+  the possible-world space keeps that pool and `known_hand` as its minimum.
 - **D4 `remaining_sideboard_counts`.** The derivation is correct: these are
-  sideboard copies in no zone, which Learn retrieval reduces and undo
-  restores. A retrieved copy becomes an ordinary card. The count includes
+  sideboard copies in no zone, which Learn retrieval reduces. A retrieved copy becomes an ordinary card. The count includes
   copies Learn cannot fetch ("outside the game", not "retrievable"). Fixes:
   the opponent's copies reach the tensor; the experience protocol keeps `{}`
   (known and empty) distinct from absent (hidden); the guard row is corrected.
@@ -73,37 +73,70 @@ At main @ 10eeb1f, decklist visibility was fixed, and the surfaces disagreed:
 
 Priors over unknown decks for search in closed games; asymmetric product
 setting; partial disclosure; Etude table columns; between-game sideboarding.
-f871a8 (PR #395) owns `Deck`. Disclosure is not part of deck identity; the
-second PR to land threads `disclosure` through `Deck.player()`.
+Disclosure is not part of deck identity. f871a8's `Deck` landed first on
+main (2d2f45105); the sync (1e2e817e7) seats `Deck.player()` open, so training
+deck pools are always open and closed games come from `MatchConfig.decklists`
+or Academy.
 
 ## Remaining work
 
-Compress (2026-10-30): `Observation::player_data` counts through one
-`definition_counts` helper; the Python reference row builder is private
-(`_decklist_rows`). Nothing left on the delete list. Check: `cargo test`
-(debug) `decklist_disclosure` 5 + `learn_tests` 13, clippy clean;
-`tests/env/test_decklist_disclosure.py` + `test_observation.py` 59 pass;
-PlayerArea vitest 2 pass. Gate owns the full suites.
-
-Implemented 2026-10-30: engine authority, encoding (native, Python, vector env,
-model, inference, text), surfaces (MatchConfig, registration, experience,
-Academy form/PlayerArea/trace) and records (choice-navigation w17 fixture,
+Implemented 2026-10-30 and synced onto main @ b73a6b5db (Deck import, engine
+undo removed): engine authority, encoding (native, Python, vector env, model,
+inference, text), surfaces (MatchConfig, registration, experience, Academy
+form/PlayerArea/trace) and records (choice-navigation w17 fixture,
 authored-match receipt and parity re-recorded; WORLDS.md, learn-lesson.md,
-READMEs, AGENTS.md). Left for gate/demo: browser walkthrough of the new-game
-select and opponent panel; `public-commitment-parity` and
-`test_ur_lessons_increment` (see check line).
+READMEs, AGENTS.md). The delete list is complete.
 
-Check result: `cargo test` (debug) all pass, including `rules_tests
-decklist_disclosure` (5); fmt/clippy clean. Python: decklist, Learn, model,
-observation, world/observation-shape suite and Academy re-recorded fixture
-tests pass; PlayerArea vitest (2) and `npm run check` pass.
-`tests/academy/test_public_commitment_parity.py` needs local
-`experiments/data/rul-9-played-workloads-v1.measurement.json` (not present);
-`test_ur_lessons_increment` asserts permanent width 29 against main's 32
-(fails without this change). Also failing before this change: stale width
-asserts in `test_temur.py::…production_training_observation_path` (60 vs 40)
-and `test_observation_parity.py::…indestructible…` (55 vs 41); belief
-`test_keystone_demo…` and `test_native_projection_preserves_canonical_receipt_bytes`
-fail identically on the afbd6a checkout (base content). tests/env, model,
-semantic, verify and belief: 584 pass otherwise. The full `tests/` run was
-stopped after 45 min; gate/CI owns it.
+Left for gate/demo: a browser walkthrough of the new-game select and the
+opponent panel; the full `cargo test`/`tests/` suites after the sync.
+Known outside this change: `tests/academy/test_public_commitment_parity.py`
+needs local `experiments/data/rul-9-played-workloads-v1.measurement.json`;
+pre-sync, `test_ur_lessons_increment`, `test_temur.py::…production_training_observation_path`,
+`test_observation_parity.py::…indestructible…`, belief `test_keystone_demo…`
+and `test_native_projection_preserves_canonical_receipt_bytes` failed on base
+content too.
+
+`unseen_counts` means unseen (concept review below) implemented 2026-10-30:
+the opponent's map drops revealed `known_hand` copies; the possible-world
+pool is unchanged. Re-recorded: choice-navigation w17 DISCARD projection and
+the authored-match parity receipt (projection hashes only); the
+authored-match receipt bytes did not change.
+
+Check (2026-10-30): `cargo test` (debug) `rules_tests decklist_disclosure` 6,
+`learn_setup_tests`/`possible_worlds_tests`/`cards` 321 pass; `uv run --extra dev pytest tests/env/test_decklist_disclosure.py tests/env/test_observation.py tests/training/test_training_decks.py tests/academy/test_learn_setup.py tests/academy/test_choice_navigation.py tests/academy/test_authored_match_parity.py tests/academy/test_authored_match_authority.py tests/academy/test_learn_evidence.py` 96 pass.
+
+## Concept review (2026-10-30, headless)
+
+Reviewed the implemented change against the accepted design (one
+open/closed option, default open; Jack Heart).
+
+- **Settled, implemented: `unseen_counts` means unseen.** Today the
+  opponent's map is `Game::unseen_cards` verbatim, which includes hand copies
+  already revealed (`known_hand`). Academy shows it as "N unseen of M" and
+  text as "Unseen cards", so a human is told a card they saw is unseen. The
+  observation should subtract `known_hand` from the opponent's map (one
+  derivation in `ObservationBuilder::player_data`; own map is library only and
+  unaffected), and the field comment ("the viewer cannot see") then holds for
+  tensor, text and Academy alike. `PossibleWorldSpace` is unchanged: it
+  already carries the full pool with `known_hand` as a minimum. Proof: a
+  directed test where an opponent's revealed hand card is absent from
+  `unseen_counts` and still present in the possible-world pool; re-record the
+  choice-navigation w17 fixture and authored-match receipts only if bytes
+  change (open world, nothing frozen).
+- **Kept: per-player native authority.** The product control is one game
+  option (`MatchConfig.decklists`, Academy `GameConfig.decklists`), stored as
+  `PlayerConfig.disclosure` on both players. The per-owner meaning ("what the
+  opponent knows of this player's lists") is exactly what
+  `decklist_known(owner, viewer)` reads, it rides on `PlayerConfig`/`Deck` and
+  failure receipts without a new game-level argument through every `Env`,
+  vector-env, rollout-pool and replay constructor, and an asymmetric native
+  config is still well defined. Asymmetry stays excluded as a product setting;
+  no validation is added for it.
+- **Kept: the two names.** `decklists: "open" | "closed"` names the game
+  option; `disclosure` names the per-player record. CLAUDE.md states the
+  mapping.
+- Lifecycle checked: new closed game → opponent maps `None`, tensor rows zero,
+  search players refused at build; reconnect/replay → trace and failure
+  receipts retain the setting; records without it → open.
+
+No open product choice.
