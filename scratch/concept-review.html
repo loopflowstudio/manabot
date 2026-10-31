@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MTG-216 concept review: decklists in the new-game form</title>
+<style>
+  :root { --bg:#fbfaf7; --ink:#1f1d1a; --ink2:#5d5850; --line:#ddd7cc; --prop:#2f6b4f; --propbg:#eaf3ee; --bad:#9a3b2a; --badbg:#f6e9e5; --code:#f1eee8; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#171614; --ink:#ece8e1; --ink2:#a8a197; --line:#3a3631; --prop:#8fd1ac; --propbg:#1d2b23; --bad:#e5957f; --badbg:#2e1f1b; --code:#24221f; }
+  }
+  body { margin:0; background:var(--bg); color:var(--ink); font:16px/1.6 Georgia, "Iowan Old Style", serif; }
+  main { max-width:44rem; margin:0 auto; padding:2.5rem 1.25rem 4rem; }
+  header p { color:var(--ink2); font-size:.9rem; margin:.2rem 0; }
+  h1 { font-size:1.6rem; line-height:1.25; margin:0 0 .75rem; }
+  h2 { font-size:1.15rem; margin:2.5rem 0 .75rem; }
+  code { font:.85em ui-monospace, Menlo, monospace; background:var(--code); padding:.05em .3em; border-radius:3px; }
+  .lead { font-size:1.08rem; }
+  .row { border-left:3px solid var(--line); padding:.4rem 0 .4rem 1rem; margin:1rem 0; }
+  .row.bad { border-color:var(--bad); background:var(--badbg); }
+  .row.prop { border-color:var(--prop); background:var(--propbg); }
+  .tag { font:600 .75rem/1 ui-sans-serif, system-ui, sans-serif; letter-spacing:.04em; text-transform:uppercase; }
+  .bad .tag { color:var(--bad); } .prop .tag { color:var(--prop); } .row:not(.bad):not(.prop) .tag { color:var(--ink2); }
+  .form { font:14px/1.4 ui-sans-serif, system-ui, sans-serif; border:1px solid var(--line); border-radius:6px; padding:.75rem 1rem; margin:.6rem 0; }
+  .form div { margin:.25rem 0; }
+  .off { color:var(--ink2); text-decoration:line-through; text-decoration-color:var(--line); }
+  .err { color:var(--bad); }
+  ol li { margin:.5rem 0; }
+  table { border-collapse:collapse; width:100%; font-size:.92rem; }
+  td, th { text-align:left; padding:.35rem .5rem; border-bottom:1px solid var(--line); vertical-align:top; }
+</style>
+</head>
+<body>
+<main>
+<header>
+  <p>Task MTG-216 · open and closed decklists · concept-review step (headless) · 2026-10-30</p>
+  <p>Built from <code>scratch/mtg-216-support-open-and-closed-decklists-as-a-game-option.md</code>,
+  <code>academy/ui/src/routes/+page.svelte</code>, <code>academy/ui/src/lib/components/OpponentSelector.svelte</code>,
+  <code>academy/server.py</code>, <code>manabot/sim/registration.py</code></p>
+</header>
+
+<h1>The form offers a game the server refuses</h1>
+<p class="lead">No product decision is needed. The accepted design (one open/closed option, open by default; Jack Heart) already implies the fix: search opponents need open decklists (D5), so the new-game form should show that before submission, not after.</p>
+
+<h2>Actions → concepts → APIs</h2>
+<table>
+  <tr><th>Person does</th><th>Concept</th><th>API / state</th></tr>
+  <tr><td>Picks Open or Closed for a new game</td><td>Decklists (game option)</td><td><code>GameConfig.decklists</code> → <code>PlayerConfig.disclosure</code> on both seats</td></tr>
+  <tr><td>Looks at the opponent's panel</td><td>Decklist, or "Decklist closed"</td><td><code>PlayerData</code> four <code>Option</code> maps</td></tr>
+  <tr><td>Picks an opponent</td><td>Search samples hidden cards from open lists</td><td><code>_parse_game_config</code> refuses closed + search; <code>require_open_decklists</code> for matches</td></tr>
+</table>
+
+<h2>Before (implemented)</h2>
+<div class="row bad">
+  <span class="tag">Existing behavior: the mismatch</span>
+  <div class="form">
+    <div>Opponent: <b>Search 64 (default)</b> ▾</div>
+    <div>Decklists: <b>Closed — neither player sees the other's lists</b> ▾</div>
+    <div>[ New game ]</div>
+    <div class="err">The search opponent samples hidden cards from open decklists; choose open decklists or another opponent.</div>
+  </div>
+  <p>The default opponent is a search opponent, so the first time anyone tries Closed it fails, and the constraint is learned only by failing.</p>
+</div>
+
+<h2>After (proposed)</h2>
+<div class="row prop">
+  <span class="tag">Proposed</span>
+  <div class="form">
+    <div>Opponent ▾</div>
+    <div class="off">&nbsp;&nbsp;Search 16 (fast) — needs open decklists</div>
+    <div class="off">&nbsp;&nbsp;Search 64 (default) — needs open decklists</div>
+    <div class="off">&nbsp;&nbsp;Search 256 (strong) — needs open decklists</div>
+    <div>&nbsp;&nbsp;Random · Passive · Trained checkpoints</div>
+    <div style="margin-top:.6rem">Decklists ▾ (while a search opponent is selected)</div>
+    <div>&nbsp;&nbsp;Open — both main decks and sideboards are known</div>
+    <div class="off">&nbsp;&nbsp;Closed — search opponents need open decklists</div>
+  </div>
+  <p>The form reuses <code>OpponentSelector</code>'s existing disabled-with-reason options. Neither select changes the other's value, so nothing is chosen silently. The server refusal remains the authority for other clients.</p>
+</div>
+
+<h2>Normal path, failure, recovery</h2>
+<p><b>Normal:</b> choose Random, then Closed, then New game. The opponent panel reads "Decklist closed", and the tensor rows for the opponent are zero.
+<b>Failure:</b> a client posts closed + search, and the server refuses it with the same message as today.
+<b>Recovery:</b> the person can see why each option is disabled, so they change one select. On reconnect and in replays, the trace still records <code>decklists</code>.</p>
+
+<h2>Unchanged and checked</h2>
+<p>Engine authority, the v5 <code>decklists</code> buffer, <code>unseen_counts</code> minus <code>known_hand</code> (review 1), and experience/trace records. Live advice serves static fixtures and makes no possible-world call that would need refusing.</p>
+
+<h2>Questions</h2>
+<ol>
+  <li>None open. The direction above follows from D5 and is recorded as the next implementation step. Objections can be raised as a Task comment.</li>
+</ol>
+</main>
+</body>
+</html>

@@ -13,6 +13,7 @@
   import GameLog from '$lib/components/GameLog.svelte';
   import PresentationHistory from '$lib/components/PresentationHistory.svelte';
   import OpponentSelector from '$lib/components/OpponentSelector.svelte';
+  import DecklistsSelector from '$lib/components/DecklistsSelector.svelte';
   import StopsPanel from '$lib/components/StopsPanel.svelte';
   import SharedTablePanel from '$lib/components/SharedTablePanel.svelte';
   import { fetchAdviceMeta, postAdvice, type AdviceMeta, type AdviceResponse } from '$lib/advice';
@@ -34,7 +35,7 @@
     sendShareBelief,
     sendTransferPilot,
   } from '$lib/socket.svelte';
-  import type { Decklists, InteractionOffer, OpponentCatalog, StopSide, TrainedOpponent } from '$lib/types';
+  import type { InteractionOffer, OpponentCatalog, StopSide, TrainedOpponent } from '$lib/types';
 
   let demoName = $state<string | null>(null);
   let learnDemo = $state(false);
@@ -318,6 +319,7 @@
           value={gameStore.opponentChoice}
           trained={trainedOpponents}
           {catalogError}
+          decklists={gameStore.decklists}
           onChange={(value) => gameStore.setOpponentChoice(value)}
         />
       {/if}
@@ -375,18 +377,12 @@
       onHeroChange={(value) => gameStore.setHeroDeck(value)}
       onVillainChange={(value) => gameStore.setVillainDeck(value)}
     />
-    <label class="type-caption flex items-center gap-2 text-ink-2" data-testid="decklists-choice">
-      Decklists
-      <select
-        class="rounded border border-line bg-panel px-2 py-1"
-        value={gameStore.decklists}
-        disabled={gameStore.newGamePending}
-        onchange={(event) => gameStore.setDecklists(event.currentTarget.value as Decklists)}
-      >
-        <option value="open">Open — both main decks and sideboards are known</option>
-        <option value="closed">Closed — neither player sees the other's lists</option>
-      </select>
-    </label>
+    <DecklistsSelector
+      value={gameStore.decklists}
+      opponent={gameStore.opponentChoice}
+      disabled={gameStore.newGamePending}
+      onChange={(value) => gameStore.setDecklists(value)}
+    />
     <DeckImport />
   {/if}
   {#if gameStore.observation && boardObservation}

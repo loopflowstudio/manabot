@@ -110,14 +110,13 @@ Check (2026-10-30): `cargo test` (debug) `rules_tests decklist_disclosure` 6,
 Reviewed the implemented change against the accepted design (one
 open/closed option, default open; Jack Heart).
 
-- **Settled, implemented: `unseen_counts` means unseen.** Today the
-  opponent's map is `Game::unseen_cards` verbatim, which includes hand copies
-  already revealed (`known_hand`). Academy shows it as "N unseen of M" and
-  text as "Unseen cards", so a human is told a card they saw is unseen. The
-  observation should subtract `known_hand` from the opponent's map (one
-  derivation in `ObservationBuilder::player_data`; own map is library only and
-  unaffected), and the field comment ("the viewer cannot see") then holds for
-  tensor, text and Academy alike. `PossibleWorldSpace` is unchanged: it
+- **Settled, implemented: `unseen_counts` means unseen.** The opponent's
+  map was `Game::unseen_cards` verbatim, including hand copies already
+  revealed (`known_hand`), so Academy ("N unseen of M") and text ("Unseen
+  cards") told a human a card they saw was unseen. The observation now
+  subtracts `known_hand` from the opponent's map (one derivation,
+  `ObservationBuilder::unseen_counts`; own map is library only and
+  unaffected), and the field comment holds for tensor, text and Academy. `PossibleWorldSpace` is unchanged: it
   already carries the full pool with `known_hand` as a minimum. Proof: a
   directed test where an opponent's revealed hand card is absent from
   `unseen_counts` and still present in the possible-world pool; re-record the
@@ -138,5 +137,41 @@ open/closed option, default open; Jack Heart).
 - Lifecycle checked: new closed game → opponent maps `None`, tensor rows zero,
   search players refused at build; reconnect/replay → trace and failure
   receipts retain the setting; records without it → open.
+
+## Concept review 2 (2026-10-30, headless): next implement direction
+
+The engine, encoding and records match the accepted design. One interaction
+does not: Academy's new-game form offers a combination the server refuses.
+
+- **Mismatch.** The opponent select defaults to `search-64`
+  (`OpponentSelector.svelte`), and the new Decklists select offers Closed
+  unconditionally (`routes/+page.svelte`). Choosing Closed with the default
+  opponent fails only after "New game", with the server's D5 refusal
+  (`academy/server.py` `_parse_game_config`). A person has to learn, by
+  failing, that search opponents sample hidden cards from open decklists.
+- **Direction (follows from D5; not a new product choice).** Show the
+  constraint in the form, using `OpponentSelector`'s existing pattern of
+  disabled options that carry their reason:
+  - Decklists Closed: the three Search options stay listed, disabled,
+    labelled "— needs open decklists".
+  - A search opponent selected: the Closed option stays listed, disabled,
+    labelled "— search opponents need open decklists".
+  Neither select changes the other's value; nothing is silently selected
+  (CLAUDE.md, Academy's shared decision surface). The server refusal stays as
+  the authority for other clients. `OpponentSelector` takes `decklists` as a
+  prop; the store needs no new state.
+- **Proof.** Vitest: Closed disables the three Search options with the
+  reason, and a search choice disables Closed; the server test for
+  closed + search refusal stays. Gate/demo browser walkthrough: pick a
+  non-search opponent, choose Closed, start a game, see "Decklist closed" in
+  the opponent's panel.
+- Checked and unchanged: live advice serves static fixtures (no live
+  possible-world call to refuse); the hero's own panel always shows its
+  lists; `unseen_counts` per concept review 1.
+- **Built (2026-10-30).** `OpponentSelector` takes `decklists`; the Decklists
+  select moved into `DecklistsSelector.svelte` (takes `opponent`); both read
+  `isSearchChoice` in `game.svelte.ts`. Check: `npx vitest run
+  src/lib/components/DecklistsSelector.svelte.test.ts` 4 passed; svelte-check
+  0 errors. Browser walkthrough and full suites left to gate/demo.
 
 No open product choice.

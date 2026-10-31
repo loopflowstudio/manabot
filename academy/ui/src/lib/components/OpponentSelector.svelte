@@ -1,6 +1,6 @@
 <script lang="ts">
   import { checkpointChoice, type OpponentChoice } from '$lib/game.svelte';
-  import type { TrainedOpponent } from '$lib/types';
+  import type { Decklists, TrainedOpponent } from '$lib/types';
 
   interface Props {
     value?: OpponentChoice;
@@ -8,6 +8,8 @@
     // listed, disabled, with the server's reason.
     trained?: TrainedOpponent[];
     catalogError?: string | null;
+    // Closed decklists keep the Search options listed, disabled, with why.
+    decklists?: Decklists;
     disabled?: boolean;
     onChange?: (value: OpponentChoice) => void;
   }
@@ -16,9 +18,17 @@
     value = 'search-64',
     trained = [],
     catalogError = null,
+    decklists = 'open',
     disabled = false,
     onChange = undefined,
   }: Props = $props();
+
+  const searchOptions: { value: OpponentChoice; label: string }[] = [
+    { value: 'search-16', label: 'Search 16 (fast)' },
+    { value: 'search-64', label: 'Search 64 (default)' },
+    { value: 'search-256', label: 'Search 256 (strong)' },
+  ];
+  const searchUnavailable = $derived(decklists === 'closed');
 
   function optionLabel(opponent: TrainedOpponent): string {
     const parts = [opponent.name];
@@ -59,9 +69,10 @@
       onchange={(event) =>
         onChange?.((event.currentTarget as HTMLSelectElement).value as OpponentChoice)}
     >
-      <option value="search-16">Search 16 (fast)</option>
-      <option value="search-64">Search 64 (default)</option>
-      <option value="search-256">Search 256 (strong)</option>
+      {#each searchOptions as option (option.value)}
+        <option value={option.value} disabled={searchUnavailable}
+          >{option.label}{searchUnavailable ? ' — needs open decklists' : ''}</option>
+      {/each}
       <option value="random">Random</option>
       <option value="passive">Passive</option>
       {#if trained.length || unlisted}

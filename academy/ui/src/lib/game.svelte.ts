@@ -40,6 +40,12 @@ export function checkpointChoice(sha256: string): OpponentChoice {
   return `checkpoint:${sha256}`;
 }
 
+// Search opponents sample hidden cards from the opponent's decklists, so the
+// server refuses them in closed-decklist games.
+export function isSearchChoice(choice: OpponentChoice): boolean {
+  return choice.startsWith('search-');
+}
+
 export function buildOpponentConfig(choice: OpponentChoice): OpponentConfig {
   if (choice.startsWith('checkpoint:')) {
     return {
