@@ -93,7 +93,7 @@ impl Game {
     fn active_permanent_cards(&self, player: PlayerId) -> impl Iterator<Item = &Card> {
         self.battlefield_permanents(player)
             .into_iter()
-            .filter(|&id| !self.has_lost_abilities(id))
+            .filter(|&id| !self.characteristics(id).abilities_lost)
             .filter_map(|id| self.state.permanents[id].as_ref())
             .map(|permanent| &self.state.cards[permanent.card])
     }
@@ -862,7 +862,8 @@ impl Game {
         }
 
         let Some(ability) = self
-            .activated_abilities_for(permanent_id)
+            .characteristics(permanent_id)
+            .activated_abilities
             .get(ability_index)
             .cloned()
         else {
@@ -927,7 +928,8 @@ impl Game {
         ability_index: usize,
     ) -> Vec<u8> {
         let Some(ability) = self
-            .activated_abilities_for(permanent)
+            .characteristics(permanent)
+            .activated_abilities
             .get(ability_index)
             .cloned()
         else {
@@ -1056,7 +1058,8 @@ impl Game {
     ) -> Option<ActivatedAbilityDefinition> {
         match source {
             ActivationSource::Permanent(permanent) => self
-                .activated_abilities_for(permanent)
+                .characteristics(permanent)
+                .activated_abilities
                 .get(ability_index)
                 .cloned(),
             ActivationSource::Card(card) => {
@@ -1153,7 +1156,7 @@ impl Game {
             let Target::Permanent(id) = target else {
                 return false;
             };
-            let types = self.creature_types(*id);
+            let types = self.characteristics(*id).creature_types;
             common = Some(match common {
                 None => types,
                 Some(common) => common.into_iter().filter(|t| types.contains(t)).collect(),
@@ -1538,8 +1541,10 @@ impl Game {
                     && self.state.permanents[id]
                         .as_ref()
                         .is_some_and(|permanent| !permanent.tapped)
-                    && self.permanent_is_creature(id)
-                    && self.effective_power(id) > 0
+                    && {
+                        let characteristics = self.characteristics(id);
+                        characteristics.is_creature && characteristics.power > 0
+                    }
             })
             .collect()
     }
@@ -1547,7 +1552,7 @@ impl Game {
     pub(crate) fn crew_power_available(&self, player: PlayerId, vehicle: PermanentId) -> i32 {
         self.crew_candidates(player, vehicle)
             .into_iter()
-            .map(|id| self.effective_power(id))
+            .map(|id| self.characteristics(id).power)
             .sum()
     }
 
@@ -1573,7 +1578,7 @@ impl Game {
         let crew = self.state.card_to_permanent[card]
             .filter(|id| self.crew_candidates(player, permanent).contains(id))
             .ok_or_else(|| AgentError("creature cannot crew".into()))?;
-        let remaining_power = remaining_power - self.effective_power(crew);
+        let remaining_power = remaining_power - self.characteristics(crew).power;
         self.tap_permanent(crew, false);
         if remaining_power > 0 {
             self.pending_choice = Some(PendingChoice::Crew {
@@ -1640,7 +1645,8 @@ impl Game {
         else {
             return None;
         };
-        self.activated_abilities_for(*source)
+        self.characteristics(*source)
+            .activated_abilities
             .get(*ability_index)
             .is_some_and(|ability| ability.tap_source)
             .then_some(*source)
@@ -1786,7 +1792,8 @@ impl Game {
         let attached = permanent.attached_to;
         let source_definition_id = self.state.cards[source_card].definition_id;
         let Some(ability) = self
-            .activated_abilities_for(permanent_id)
+            .characteristics(permanent_id)
+            .activated_abilities
             .get(ability_index)
             .cloned()
         else {

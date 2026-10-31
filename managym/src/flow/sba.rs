@@ -24,7 +24,7 @@ impl Game {
                     .any(|kind| kind.eq_ignore_ascii_case("legendary"))
                 {
                     names
-                        .entry(self.permanent_name(id))
+                        .entry(self.characteristics(id).name)
                         .or_default()
                         .push(permanent.card);
                 }
@@ -98,12 +98,12 @@ impl Game {
             // CR 704.5f — A creature with toughness 0 or less is put into
             // its owner's graveyard (an earthbent land losing its counters
             // is a 0/0 and dies).
-            let zero_toughness = self.permanent_is_creature(permanent_id)
-                && self.effective_toughness(permanent_id) <= 0;
+            let characteristics = self.characteristics(permanent_id);
+            let zero_toughness = characteristics.is_creature && characteristics.toughness <= 0;
             // CR 704.5g — Creatures with lethal damage are destroyed.
             let destroy = !zero_toughness
-                && self.has_lethal_damage(permanent_id)
-                && !self.effective_keywords(permanent_id).indestructible;
+                && self.has_lethal_damage(permanent_id, &characteristics)
+                && !characteristics.keywords.indestructible;
             let legend_loser = legend_losers.contains(&permanent.card);
             // CR 704.5m — An Aura attached to an illegal object or to
             // nothing is put into its owner's graveyard.

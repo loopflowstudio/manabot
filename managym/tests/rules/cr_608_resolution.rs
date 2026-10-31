@@ -221,7 +221,7 @@ fn audit_target_gaining_hexproof_during_resolution_is_still_affected() {
     assert!(s.choose_target(managym::state::game_object::Target::Permanent(victim)));
     s.pass_priority();
     s.pass_priority();
-    assert!(s.game().effective_keywords(victim).hexproof);
+    assert!(s.game().characteristics(victim).keywords.hexproof);
     assert_eq!(
         s.game().state.permanents[victim].as_ref().unwrap().damage,
         1

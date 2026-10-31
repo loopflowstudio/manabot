@@ -3,10 +3,11 @@
 // them as spells and abilities resolve, reading the rules effects they carry,
 // and ending them at each duration boundary.
 //
-// Characteristic effects (types, keywords, ability loss, P/T) are applied with
-// static abilities by layer and timestamp in `flow/statics.rs`; the rules
-// queries here (blockability, death replacement, kept mana, hand size,
-// firebending) read the same records. Records are journaled whole, like
+// Characteristic effects (types, keywords and firebending, ability loss, P/T)
+// are applied with static abilities by layer and timestamp in
+// `Game::characteristics` (`flow/statics.rs`); the rules queries here
+// (blockability, death replacement, kept mana, hand size) read the same
+// records. Records are journaled whole, like
 // delayed triggers, so undo and rollback restore them exactly.
 //
 // Expiry boundaries:
@@ -18,7 +19,7 @@ use crate::{
     state::{
         card::CardDefId,
         effect::{Affected, ContinuousEffect, EffectDuration, Modification},
-        game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId},
+        game_object::{CardId, ObjectRef, PermanentId, PlayerId},
         mana::Color,
     },
 };
@@ -81,20 +82,13 @@ impl Game {
             .filter(move |effect| effect.affects_player(player))
     }
 
-    fn permanent_has_modification(&self, permanent_id: PermanentId, wanted: &Modification) -> bool {
+    pub(super) fn permanent_has_modification(
+        &self,
+        permanent_id: PermanentId,
+        wanted: &Modification,
+    ) -> bool {
         self.effects_on(permanent_id)
             .any(|effect| effect.modification == *wanted)
-    }
-
-    /// The latest timestamp at which the permanent lost all abilities, if
-    /// it has (CR 613.1f); grants with later timestamps still apply.
-    pub fn ability_loss_timestamp(&self, permanent_id: PermanentId) -> Option<ObjectId> {
-        let recorded = self
-            .effects_on(permanent_id)
-            .filter(|effect| effect.modification == Modification::LoseAllAbilities)
-            .map(|effect| effect.timestamp)
-            .last();
-        recorded.max(self.set_characteristics_timestamp(permanent_id))
     }
 
     /// "Can't be blocked this turn."
@@ -105,23 +99,6 @@ impl Game {
     /// "If it would die this turn, exile it instead."
     pub fn exiled_if_it_would_die(&self, permanent_id: PermanentId) -> bool {
         self.permanent_has_modification(permanent_id, &Modification::ExileIfWouldDie)
-    }
-
-    /// Whether an effect makes the permanent an artifact creature.
-    pub fn becomes_artifact_creature(&self, permanent_id: PermanentId) -> bool {
-        self.permanent_has_modification(permanent_id, &Modification::BecomeArtifactCreature)
-    }
-
-    /// Firebending granted by effects later than any ability loss, summed.
-    pub fn granted_firebending(&self, permanent_id: PermanentId) -> u8 {
-        let lost = self.ability_loss_timestamp(permanent_id);
-        self.effects_on(permanent_id)
-            .filter(|effect| effect.follows(lost))
-            .filter_map(|effect| match effect.modification {
-                Modification::Firebending(amount) => Some(amount),
-                _ => None,
-            })
-            .fold(0, u8::saturating_add)
     }
 
     /// Whether `player` keeps unspent mana of `color` as steps and phases end.

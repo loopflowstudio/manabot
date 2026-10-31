@@ -214,6 +214,12 @@ choice.
 
 ## Remaining
 
+- Characteristics consolidation (Jack Heart, 2026-10-30, steer 9bf48ffa):
+  one `Game::characteristics(id)` view replaces the separate public readers;
+  done. Check: debug `cargo test --no-fail-fast` 755 passed, clippy
+  `-D warnings` clean, w17 fixtures unchanged; Python world-change set,
+  semantic, belief, env and Academy parity tests 444 passed. CI fix for
+  `test_action_identity` landed at `a18902e0e` (see questions.md).
 - Browser proof (Playwright e2e) is CI's.
 - Jack Heart's review of PR #399.
 - Outside T3 (Jack Heart's call): the opponent's sideboard counts in the

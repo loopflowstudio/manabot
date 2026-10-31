@@ -95,13 +95,13 @@ fn targeted_combat_tricks_apply_through_play() {
             .unwrap();
         if name == "Octopus Form" {
             assert!(p.keywords.hexproof);
-            assert_eq!(s.game().effective_power(target), 6);
+            assert_eq!(s.game().characteristics(target).power, 6);
         } else {
             assert!(p.keywords.trample);
-            assert!(s.game().effective_power(target) > 5);
+            assert!(s.game().characteristics(target).power > 5);
         }
         if name == "Enthusiastic Study" {
-            assert_eq!(s.game().effective_power(target), 8);
+            assert_eq!(s.game().characteristics(target).power, 8);
         }
     }
 }

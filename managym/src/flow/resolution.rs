@@ -318,7 +318,8 @@ impl Game {
     fn last_known_creature_types(&self, target: Target) -> Vec<String> {
         match target {
             Target::Permanent(id) if self.permanent_object_ref(id).is_some() => self
-                .creature_types(id)
+                .characteristics(id)
+                .creature_types
                 .into_iter()
                 .map(String::from)
                 .collect(),
@@ -871,8 +872,8 @@ impl Game {
                 let first_ref = self.permanent_object_ref(first)?;
                 let last_ref = self.permanent_object_ref(last)?;
                 // Each deals damage equal to its power at once (CR 701.14a).
-                let first_power = self.effective_power(first);
-                let last_power = self.effective_power(last);
+                let first_power = self.characteristics(first).power;
+                let last_power = self.characteristics(last).power;
                 if first_power > 0 {
                     frame.excess_damage = self.apply_creature_damage_measuring_excess(
                         Some(first_ref),
@@ -990,7 +991,7 @@ impl Game {
                     .into_iter()
                     .flat_map(|player| self.battlefield_permanents(player))
                     .filter(|id| {
-                        self.permanent_is_creature(*id)
+                        self.characteristics(*id).is_creature
                             && self.state.permanents[*id].as_ref().is_some_and(|p| {
                                 let card = &self.state.cards[p.card];
                                 card.mana_cost
@@ -1027,7 +1028,7 @@ impl Game {
             Effect::MassDamage { amount } => {
                 for player in [PlayerId(0), PlayerId(1)] {
                     for permanent_id in self.battlefield_permanents(player) {
-                        if self.permanent_is_creature(permanent_id) {
+                        if self.characteristics(permanent_id).is_creature {
                             self.apply_permanent_damage(frame.source_ref, permanent_id, *amount);
                         }
                     }
@@ -1255,7 +1256,7 @@ impl Game {
                     let Some(attacker_ref) = self.permanent_object_ref(attacker_id) else {
                         continue;
                     };
-                    let power = self.effective_power(attacker_id);
+                    let power = self.characteristics(attacker_id).power;
                     if power > 0 {
                         self.apply_permanent_damage(Some(attacker_ref), victim, power);
                     }
@@ -1462,19 +1463,6 @@ impl Game {
         }
     }
 
-    pub(crate) fn permanent_is_battlefield_creature(&self, permanent_id: PermanentId) -> bool {
-        let Some(permanent) = self
-            .state
-            .permanents
-            .get(permanent_id.0)
-            .and_then(|p| p.as_ref())
-        else {
-            return false;
-        };
-        self.state.zones.zone_of(permanent.card) == Some(ZoneType::Battlefield)
-            && self.permanent_is_creature(permanent_id)
-    }
-
     pub(crate) fn source_permanent_id(&self, frame: &EffectFrame) -> Option<PermanentId> {
         frame
             .source_ref
@@ -1526,7 +1514,8 @@ impl Game {
                 // CR 702.11b applies regardless of target wording. Recheck live
                 // presence and hexproof at selection and resolution (608.2b).
                 self.state.zones.zone_of(permanent.card) == Some(ZoneType::Battlefield)
-                    && (permanent.controller == controller || !self.effective_keywords(id).hexproof)
+                    && (permanent.controller == controller
+                        || !self.characteristics(id).keywords.hexproof)
                     && self.permanent_matches_spec(id, spec, controller)
             }
             Target::Player(player) => match spec {
@@ -1579,15 +1568,17 @@ impl Game {
                 permanent.controller != controller
                     && self.permanent_matches_predicate(id, predicate)
             }
-            TargetSpec::CreatureOrPlayer | TargetSpec::Creature => self.permanent_is_creature(id),
+            TargetSpec::CreatureOrPlayer | TargetSpec::Creature => {
+                self.characteristics(id).is_creature
+            }
             TargetSpec::CreatureYouControl => {
-                permanent.controller == controller && self.permanent_is_creature(id)
+                permanent.controller == controller && self.characteristics(id).is_creature
             }
             TargetSpec::CreatureOpponentControls => {
-                permanent.controller != controller && self.permanent_is_creature(id)
+                permanent.controller != controller && self.characteristics(id).is_creature
             }
             TargetSpec::LandYouControl => {
-                permanent.controller == controller && self.permanent_is_land(id)
+                permanent.controller == controller && self.characteristics(id).is_land
             }
             TargetSpec::SpellOrPermanent { min_mana_value } => {
                 self.card_mana_value(permanent.card) >= *min_mana_value

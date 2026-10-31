@@ -73,16 +73,17 @@ impl Game {
         let permanent_id = self.lookup_current_permanent(object_ref).ok()?;
         let permanent = self.state.permanents[permanent_id].as_ref()?;
         let definition = &self.state.cards[card];
+        let characteristics = self.characteristics(permanent_id);
         Some(ObjectLki {
-            keywords: self.effective_keywords(permanent_id),
-            creature_types: self
-                .creature_types(permanent_id)
+            keywords: characteristics.keywords,
+            creature_types: characteristics
+                .creature_types
                 .into_iter()
                 .map(String::from)
                 .collect(),
             permanent: permanent_id,
-            animated_creature: self.permanent_is_animated(permanent_id),
-            abilities_lost: self.has_lost_abilities(permanent_id),
+            animated_creature: characteristics.is_animated,
+            abilities_lost: characteristics.abilities_lost,
             object_ref,
             card,
             from_zone: ZoneType::Battlefield,

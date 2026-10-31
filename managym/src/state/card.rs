@@ -473,8 +473,8 @@ pub struct ActivatedAbilityDefinition {
     /// The least X the activation may announce ("X can't be 0", CR 107.3).
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub x_min: u8,
-    /// Set only on abilities `Game::activated_abilities_for` lists from a
-    /// grantor; printed abilities have none.
+    /// Set only on abilities `Characteristics::activated_abilities` lists
+    /// from a grantor; printed abilities have none.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub granted_by: Option<AbilityGrant>,
     /// Resolution effects in printed order ("draw a card, then discard a card").

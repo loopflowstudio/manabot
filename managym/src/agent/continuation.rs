@@ -505,7 +505,10 @@ impl Game {
                 } => {
                     frame.source = self.target_reference(Target::Permanent(*permanent), viewer);
                     frame.ability = Some(*ability_index);
-                    frame.cost(&self.activated_abilities_for(*permanent)[*ability_index].mana_cost);
+                    frame.cost(
+                        &self.characteristics(*permanent).activated_abilities[*ability_index]
+                            .mana_cost,
+                    );
                     (2, resume.as_deref())
                 }
                 Decision::ManaChoice {

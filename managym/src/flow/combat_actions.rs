@@ -21,7 +21,7 @@ impl Game {
         if self.has_restriction(id, Restriction::CantAttackOrBlock) {
             return false;
         }
-        if self.has_lost_abilities(id) {
+        if self.characteristics(id).abilities_lost {
             return true;
         }
         self.state.cards[permanent.card]
@@ -52,7 +52,7 @@ impl Game {
             if !self.permanent_can_attack(permanent_id) {
                 return Err(AgentError("permanent cannot attack".to_string()));
             }
-            self.effective_keywords(permanent_id).vigilance
+            self.characteristics(permanent_id).keywords.vigilance
         };
         self.journal_permanent(permanent_id);
         if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
@@ -119,7 +119,7 @@ impl Game {
             if self.state.permanents[*attacker_id].is_none() {
                 continue;
             }
-            let keywords = self.effective_keywords(*attacker_id);
+            let keywords = self.characteristics(*attacker_id).keywords;
             if keywords.first_strike || keywords.double_strike {
                 return true;
             }
@@ -129,7 +129,7 @@ impl Game {
                 if self.state.permanents[*blocker_id].is_none() {
                     continue;
                 }
-                let keywords = self.effective_keywords(*blocker_id);
+                let keywords = self.characteristics(*blocker_id).keywords;
                 if keywords.first_strike || keywords.double_strike {
                     return true;
                 }
@@ -150,8 +150,8 @@ impl Game {
                 continue;
             }
 
-            let attacker_power = self.effective_power(attacker_id).max(0);
-            let attacker_keywords = self.effective_keywords(attacker_id);
+            let attacker_power = self.characteristics(attacker_id).power.max(0);
+            let attacker_keywords = self.characteristics(attacker_id).keywords;
             let attacker_has_trample = attacker_keywords.trample;
             let attacker_has_deathtouch = attacker_keywords.deathtouch;
 
@@ -180,7 +180,7 @@ impl Game {
                 if !self.creature_deals_damage_in_pass(*blocker_id, pass) {
                     continue;
                 }
-                let blocker_power = self.effective_power(*blocker_id).max(0);
+                let blocker_power = self.characteristics(*blocker_id).power.max(0);
                 self.apply_combat_permanent_damage(blocker_ref, attacker_id, blocker_power);
             }
 
@@ -192,7 +192,7 @@ impl Game {
                 let Some(blocker) = self.state.permanents[blocker_id].as_ref() else {
                     continue;
                 };
-                let blocker_toughness = self.effective_toughness(blocker_id);
+                let blocker_toughness = self.characteristics(blocker_id).toughness;
                 let needed_damage = (blocker_toughness - blocker.damage).max(0);
                 let lethal = if needed_damage == 0 {
                     0
@@ -217,7 +217,7 @@ impl Game {
         permanent_id: PermanentId,
         pass: CombatDamagePass,
     ) -> bool {
-        let keywords = self.effective_keywords(permanent_id);
+        let keywords = self.characteristics(permanent_id).keywords;
         let has_first = keywords.first_strike;
         let has_double = keywords.double_strike;
         match pass {
@@ -245,11 +245,11 @@ impl Game {
             return false;
         };
         let card = &self.state.cards[permanent.card];
-        let defender_applies = self.effective_keywords(permanent_id).defender
+        let defender_applies = self.characteristics(permanent_id).keywords.defender
             && card.attacks_despite_defender().is_none_or(|condition| {
                 !self.check_static_condition(condition, permanent.controller)
             });
-        self.permanent_is_creature(permanent_id)
+        self.characteristics(permanent_id).is_creature
             && self.permanent_can_tap(permanent_id)
             && !defender_applies
             && self.combat_condition_met(permanent_id)
@@ -262,7 +262,7 @@ impl Game {
                 continue;
             };
             if !permanent.tapped
-                && self.permanent_is_creature(permanent_id)
+                && self.characteristics(permanent_id).is_creature
                 && self.combat_condition_met(permanent_id)
             {
                 out.push(permanent_id);
@@ -286,13 +286,13 @@ impl Game {
         let attacker_card = &self.state.cards[attacker.card];
 
         if blocker.tapped
-            || !self.permanent_is_creature(blocker_id)
+            || !self.characteristics(blocker_id).is_creature
             || !self.combat_condition_met(blocker_id)
         {
             return false;
         }
 
-        if !self.has_lost_abilities(blocker_id)
+        if !self.characteristics(blocker_id).abilities_lost
             && blocker_card.statics.iter().any(|ability| {
                 matches!(
                     ability,
@@ -303,7 +303,7 @@ impl Game {
         {
             return false;
         }
-        if !self.has_lost_abilities(attacker_id)
+        if !self.characteristics(attacker_id).abilities_lost
             && attacker_card.statics.iter().any(|ability| match ability {
                 StaticAbility::CantBeBlockedIf(condition) => {
                     self.check_static_condition(condition, attacker.controller)
@@ -331,8 +331,8 @@ impl Game {
             return false;
         }
 
-        let attacker_keywords = self.effective_keywords(attacker_id);
-        let blocker_keywords = self.effective_keywords(blocker_id);
+        let attacker_keywords = self.characteristics(attacker_id).keywords;
+        let blocker_keywords = self.characteristics(blocker_id).keywords;
         if attacker_keywords.flying && !(blocker_keywords.flying || blocker_keywords.reach) {
             return false;
         }
@@ -349,7 +349,7 @@ impl Game {
             if self.state.permanents[attacker_id].is_none() {
                 continue;
             }
-            if !self.effective_keywords(attacker_id).menace {
+            if !self.characteristics(attacker_id).keywords.menace {
                 continue;
             }
             self.journal_combat();

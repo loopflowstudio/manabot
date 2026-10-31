@@ -85,7 +85,7 @@ pub struct Permanent {
     pub deathtouch_damage: bool,
     /// Counters of every kind (CR 122.1). Any permanent can carry them,
     /// including lands; +1/+1 counters change P/T only through
-    /// `Game::effective_pt`.
+    /// `Game::characteristics`.
     #[serde(skip_serializing_if = "Counters::is_empty")]
     pub counters: Counters,
     /// Its timestamp (CR 613.7d/e): when it entered, renewed when an Aura or
@@ -156,7 +156,7 @@ impl Permanent {
 
     /// Whether the permanent itself makes it a creature: earthbend (a land
     /// that's also a 0/0 creature) or its own counter-threshold static (War
-    /// Balloon). `Game::permanent_is_creature` adds type-changing effects.
+    /// Balloon). `Game::characteristics` adds type-changing effects.
     pub fn animated_creature(&self, card: &Card) -> bool {
         self.animated
             || card
@@ -165,7 +165,7 @@ impl Permanent {
     }
 
     /// Printed keywords plus animation (earthbent lands have haste) and
-    /// keyword counters. An input to `Game::effective_keywords`, which
+    /// keyword counters. An input to `Game::characteristics`, which
     /// applies continuous effects and static grants in layer 6.
     pub fn intrinsic_keywords(&self, card: &Card) -> Keywords {
         let mut keywords = card.keywords;

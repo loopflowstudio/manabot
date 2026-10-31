@@ -753,7 +753,7 @@ impl Game {
             .as_ref()
             .ok_or(StructuredOfferError::WrongDecision)?;
         if combat.attackers.iter().any(|attacker| {
-            self.effective_keywords(*attacker).menace
+            self.characteristics(*attacker).keywords.menace
                 || self.has_restriction(*attacker, Restriction::CantBeBlockedByMoreThanOne)
         }) {
             return Ok(None);

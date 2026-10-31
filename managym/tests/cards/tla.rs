@@ -691,8 +691,8 @@ fn avatar_enthusiasts_counter_when_another_ally_enters() {
 
     assert_eq!(counters(&s, enthusiasts), 1);
     // Counters contribute to P/T: 2/2 base + 1 counter = 3/3.
-    assert_eq!(s.game().effective_power(enthusiasts), 3);
-    assert_eq!(s.game().effective_toughness(enthusiasts), 3);
+    assert_eq!(s.game().characteristics(enthusiasts).power, 3);
+    assert_eq!(s.game().characteristics(enthusiasts).toughness, 3);
 }
 
 /// ...but NOT when a non-Ally creature enters...
@@ -995,7 +995,7 @@ fn canyon_crawler_has_deathtouch_and_makes_food_on_entering() {
     settle(&mut s);
     let crawler = s.battlefield_permanents_named(0, "Canyon Crawler")[0];
     assert!(keywords(&s, crawler).deathtouch);
-    assert_eq!(s.game().effective_pt(crawler), (6, 6));
+    assert_eq!(s.game().characteristics(crawler).pt(), (6, 6));
     let food = s.battlefield_permanents_named(0, "Food");
     assert_eq!(food.len(), 1);
     let food_card = s.game().state.permanents[food[0]].as_ref().unwrap().card;
@@ -1108,7 +1108,7 @@ fn earthbending_lesson_animates_only_an_own_land_with_four_counters() {
     settle(&mut s);
     assert!(is_land_creature(&s, forest));
     assert_eq!(counters(&s, forest), 4);
-    assert_eq!(s.game().effective_pt(forest), (4, 4));
+    assert_eq!(s.game().characteristics(forest).pt(), (4, 4));
     let land = s.game().state.permanents[forest].as_ref().unwrap().card;
     assert_eq!(
         s.game().state.zones.zone_of(land),
@@ -1190,7 +1190,7 @@ fn fire_nation_attacks_makes_firebending_soldiers_and_flashes_back_once() {
     settle(&mut s);
     let soldiers = s.battlefield_permanents_named(0, "Soldier");
     assert_eq!(soldiers.len(), 2);
-    assert_eq!(s.game().effective_pt(soldiers[0]), (2, 2));
+    assert_eq!(s.game().characteristics(soldiers[0]).pt(), (2, 2));
     assert_eq!(
         s.game().state.zones.zone_of(spell),
         Some(ZoneType::Graveyard)
@@ -1559,7 +1559,7 @@ fn hog_monkey_exhausts_once_for_two_counters() {
     assert!(!can_activate(&s, monkey), "not even in response");
     settle(&mut s);
     assert_eq!(counters(&s, monkey), 2);
-    assert_eq!(s.game().effective_pt(monkey), (5, 4));
+    assert_eq!(s.game().characteristics(monkey).pt(), (5, 4));
     s.game_mut().scenario_refresh_priority().unwrap();
     assert!(!can_activate(&s, monkey));
 
@@ -1627,7 +1627,7 @@ fn jasmine_dragon_tea_shop_taps_for_colorless_or_an_ally_token() {
     settle(&mut s);
     let tokens = s.battlefield_permanents_named(0, "Ally");
     assert_eq!(tokens.len(), 1);
-    assert_eq!(s.game().effective_pt(tokens[0]), (1, 1));
+    assert_eq!(s.game().characteristics(tokens[0]).pt(), (1, 1));
     assert!(s.game().state.permanents[shop].as_ref().unwrap().tapped);
 }
 
@@ -1928,7 +1928,7 @@ fn saber_tooth_moose_lion_has_reach() {
     let mut s = five_color_setup(&["Saber-Tooth Moose-Lion"]);
     let lion = s.force_permanent_on_battlefield(0, "Saber-Tooth Moose-Lion");
     assert!(keywords(&s, lion).reach);
-    assert_eq!(s.game().effective_pt(lion), (7, 7));
+    assert_eq!(s.game().characteristics(lion).pt(), (7, 7));
 }
 
 /// Modes choose distinct targets; the destroy mode accepts only creatures with
@@ -2220,7 +2220,10 @@ fn azula_announces_both_modes_then_binds_independent_targets_including_same_obje
         assert!(s.choose_target(Target::Permanent(second)));
         settle(&mut s);
         assert_eq!(counters(&s, second), 1);
-        assert_eq!(s.game().effective_power(first), if same { 5 } else { 4 });
+        assert_eq!(
+            s.game().characteristics(first).power,
+            if same { 5 } else { 4 }
+        );
     }
 }
 
@@ -2265,8 +2268,8 @@ fn earthbend_animates_land_with_counter() {
     assert!(perm.animated, "land should be animated");
     assert_eq!(perm.counter_count(CounterKind::PlusOnePlusOne), 1);
     // 0/0 creature with one +1/+1 counter — a 1/1 that's still a land.
-    assert_eq!(s.game().effective_power(land), 1);
-    assert_eq!(s.game().effective_toughness(land), 1);
+    assert_eq!(s.game().characteristics(land).power, 1);
+    assert_eq!(s.game().characteristics(land).toughness, 1);
     let card = &s.game().state.cards[perm.card];
     assert!(card.types.is_land(), "still a land");
     assert!(!card.types.is_creature(), "printed types unchanged");
@@ -2812,9 +2815,9 @@ fn cunning_maneuver_buffs_and_investigates_but_all_invalid_targets_stop_it() {
             usize::from(!remove)
         );
         if !remove {
-            assert_eq!(s.game().effective_pt(creature), (5, 3));
+            assert_eq!(s.game().characteristics(creature).pt(), (5, 3));
             s.advance_to_active_step(1, StepKind::Main);
-            assert_eq!(s.game().effective_power(creature), 2);
+            assert_eq!(s.game().characteristics(creature).power, 2);
         }
     }
 }
@@ -3112,16 +3115,16 @@ fn dragonfly_swarm_power_counts_noncreature_nonland_graveyard_cards() {
         332,
     );
     let swarm = s.force_permanent_on_battlefield(0, "Dragonfly Swarm");
-    assert_eq!(s.game().effective_pt(swarm), (0, 3));
+    assert_eq!(s.game().characteristics(swarm).pt(), (0, 3));
 
     plant_in_graveyard(&mut s, 0, "Pop Quiz");
     plant_in_graveyard(&mut s, 0, "Pop Quiz");
-    assert_eq!(s.game().effective_pt(swarm), (2, 3));
+    assert_eq!(s.game().characteristics(swarm).pt(), (2, 3));
 
     // Creature and land cards in the graveyard do not count.
     plant_in_graveyard(&mut s, 0, "Otter-Penguin");
     plant_in_graveyard(&mut s, 0, "Island");
-    assert_eq!(s.game().effective_pt(swarm), (2, 3));
+    assert_eq!(s.game().characteristics(swarm).pt(), (2, 3));
 }
 
 #[test]
@@ -3439,7 +3442,7 @@ fn avatar_state_grants_a_visible_incarnation_local_subtype_and_cleans_up() {
     let root = witness(&branch);
     let mark = driver.mark(&mut branch);
     for _ in 0..8 {
-        if !branch.added_subtypes(target).is_empty() {
+        if !branch.characteristics(target).added_subtypes.is_empty() {
             break;
         }
         let index = branch
@@ -3460,13 +3463,19 @@ fn avatar_state_grants_a_visible_incarnation_local_subtype_and_cleans_up() {
             )
             .unwrap();
     }
-    assert_eq!(branch.added_subtypes(target), vec!["Avatar"]);
+    assert_eq!(
+        branch.characteristics(target).added_subtypes,
+        vec!["Avatar"]
+    );
     driver.rollback(&mut branch, mark);
     assert_eq!(witness(&branch), root);
     settle(&mut s);
     let permanent = s.game().state.permanents[target].as_ref().unwrap();
-    assert_eq!(s.game().added_subtypes(target), vec!["Avatar"]);
-    let keywords = s.game().effective_keywords(target);
+    assert_eq!(
+        s.game().characteristics(target).added_subtypes,
+        vec!["Avatar"]
+    );
+    let keywords = s.game().characteristics(target).keywords;
     assert!(keywords.flying && keywords.first_strike && keywords.lifelink && keywords.hexproof);
     let obs = Observation::for_player(s.game(), PlayerId(0));
     assert_eq!(
@@ -3482,10 +3491,13 @@ fn avatar_state_grants_a_visible_incarnation_local_subtype_and_cleans_up() {
     branch.move_card(card_id, ZoneType::Hand);
     branch.move_card(card_id, ZoneType::Battlefield);
     let reentered = branch.state.card_to_permanent[card_id].unwrap();
-    assert!(branch.added_subtypes(reentered).is_empty());
-    assert_eq!(s.game().added_subtypes(target), vec!["Avatar"]);
+    assert!(branch.characteristics(reentered).added_subtypes.is_empty());
+    assert_eq!(
+        s.game().characteristics(target).added_subtypes,
+        vec!["Avatar"]
+    );
     s.advance_to_active_step(1, StepKind::Main);
-    assert!(s.game().added_subtypes(target).is_empty());
+    assert!(s.game().characteristics(target).added_subtypes.is_empty());
 }
 
 #[test]
@@ -3587,8 +3599,8 @@ fn fancy_footwork_untaps_and_buffs_one_or_two_targets() {
 
     assert!(!permanent(&s, w1).tapped);
     assert!(!permanent(&s, w2).tapped);
-    assert_eq!(s.game().effective_pt(w1), (5, 5));
-    assert_eq!(s.game().effective_pt(w2), (5, 5));
+    assert_eq!(s.game().characteristics(w1).pt(), (5, 5));
+    assert_eq!(s.game().characteristics(w2).pt(), (5, 5));
 }
 
 #[test]
@@ -3618,9 +3630,9 @@ fn fancy_footwork_one_target_or_one_remaining_target_expires() {
         }
         settle(&mut s);
         assert!(!tapped(&s, other));
-        assert_eq!(s.game().effective_pt(other), (4, 4));
+        assert_eq!(s.game().characteristics(other).pt(), (4, 4));
         s.advance_to_active_step(1, StepKind::Main);
-        assert_eq!(s.game().effective_pt(other), (2, 2));
+        assert_eq!(s.game().characteristics(other).pt(), (2, 2));
     }
 }
 
@@ -3706,9 +3718,9 @@ fn cadets_pump_ability_buffs_until_end_of_turn() {
     assert!(s.take_action_by_type(ActionType::PriorityActivateAbility));
     s.pass_priority();
     s.pass_priority(); // ability resolves
-    assert_eq!(s.game().effective_pt(cadets), (2, 2));
+    assert_eq!(s.game().characteristics(cadets).pt(), (2, 2));
     s.advance_to_active_step(1, StepKind::Upkeep);
-    assert_eq!(s.game().effective_pt(cadets), (1, 2));
+    assert_eq!(s.game().characteristics(cadets).pt(), (1, 2));
 }
 
 #[test]
@@ -3852,18 +3864,18 @@ fn first_time_flyer_conditional_static_recomputes_on_read() {
         323,
     );
     let flyer = s.force_permanent_on_battlefield(0, "First-Time Flyer");
-    assert_eq!(s.game().effective_pt(flyer), (1, 2));
+    assert_eq!(s.game().characteristics(flyer).pt(), (1, 2));
 
     // A Lesson hits the graveyard: the buff switches on...
     let lesson = plant_in_graveyard(&mut s, 0, "It'll Quench Ya!");
-    assert_eq!(s.game().effective_pt(flyer), (2, 3));
+    assert_eq!(s.game().characteristics(flyer).pt(), (2, 3));
 
     // ...and off again when it leaves (recomputed on read, no state).
     s.game_mut()
         .state
         .zones
         .move_card(lesson, PlayerId(0), ZoneType::Library);
-    assert_eq!(s.game().effective_pt(flyer), (1, 2));
+    assert_eq!(s.game().characteristics(flyer).pt(), (1, 2));
 }
 
 #[test]
@@ -4558,7 +4570,7 @@ fn fire_nation_palace_grants_firebending_four_to_one_creature() {
     assert!(s.choose_target(Target::Permanent(chosen)));
     settle(&mut s);
     assert!(tapped(&s, palace));
-    let firebending = |s: &Scenario, id: PermanentId| s.game().granted_firebending(id);
+    let firebending = |s: &Scenario, id: PermanentId| s.game().characteristics(id).firebending;
     assert_eq!(firebending(&s, chosen), 4);
     assert_eq!(firebending(&s, other), 0);
     assert_eq!(
@@ -4673,10 +4685,10 @@ fn air_nomad_legacy_makes_a_clue_and_pumps_your_fliers() {
     cast(&mut s, "Air Nomad Legacy");
     settle(&mut s);
     assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
-    assert_eq!(s.game().effective_pt(drake), (3, 3));
-    assert_eq!(s.game().effective_pt(granted), (3, 3));
-    assert_eq!(s.game().effective_pt(ogre), (2, 2));
-    assert_eq!(s.game().effective_pt(theirs), (2, 2));
+    assert_eq!(s.game().characteristics(drake).pt(), (3, 3));
+    assert_eq!(s.game().characteristics(granted).pt(), (3, 3));
+    assert_eq!(s.game().characteristics(ogre).pt(), (2, 2));
+    assert_eq!(s.game().characteristics(theirs).pt(), (2, 2));
 }
 
 #[test]
@@ -4731,16 +4743,24 @@ fn diligent_zookeeper_counts_creature_types_of_non_humans() {
         .unwrap()
         .animated = true;
     set_counters(&mut s, land, CounterKind::PlusOnePlusOne, 1);
-    assert_eq!(s.game().effective_pt(keeper), (4, 4));
-    assert_eq!(s.game().effective_pt(ogre), (3, 3));
-    assert_eq!(s.game().effective_pt(momo), (4, 4), "Lemur, Bat and Ally");
-    assert_eq!(s.game().effective_pt(many), (12, 12), "capped at ten");
+    assert_eq!(s.game().characteristics(keeper).pt(), (4, 4));
+    assert_eq!(s.game().characteristics(ogre).pt(), (3, 3));
     assert_eq!(
-        s.game().effective_pt(land),
+        s.game().characteristics(momo).pt(),
+        (4, 4),
+        "Lemur, Bat and Ally"
+    );
+    assert_eq!(
+        s.game().characteristics(many).pt(),
+        (12, 12),
+        "capped at ten"
+    );
+    assert_eq!(
+        s.game().characteristics(land).pt(),
         (1, 1),
         "Forest is not a creature type"
     );
-    assert_eq!(s.game().effective_pt(theirs), (2, 2));
+    assert_eq!(s.game().characteristics(theirs).pt(), (2, 2));
 
     until_end_of_turn(
         &mut s,
@@ -4748,7 +4768,7 @@ fn diligent_zookeeper_counts_creature_types_of_non_humans() {
         Modification::AddSubtypes(vec!["Ally".into(), "Ogre".into()]),
     );
     assert_eq!(
-        s.game().effective_pt(ogre),
+        s.game().characteristics(ogre).pt(),
         (4, 4),
         "a granted type counts once"
     );
@@ -4898,7 +4918,7 @@ fn flexible_waterbender_sets_base_pt_under_counters_until_end_of_turn() {
         s.force_permanent_on_battlefield(0, "Gray Ogre"),
     ];
     add_counters(&mut s, bender, CounterKind::PlusOnePlusOne, 1);
-    assert_eq!(s.game().effective_pt(bender), (3, 6));
+    assert_eq!(s.game().characteristics(bender).pt(), (3, 6));
 
     s.set_player_mana_pool(0, "1");
     activate(&mut s, bender, 0);
@@ -4908,10 +4928,10 @@ fn flexible_waterbender_sets_base_pt_under_counters_until_end_of_turn() {
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     settle(&mut s);
     assert!(helpers.iter().all(|helper| tapped(&s, *helper)));
-    assert_eq!(s.game().effective_pt(bender), (6, 3));
+    assert_eq!(s.game().characteristics(bender).pt(), (6, 3));
 
     s.advance_to_active_step(1, StepKind::Main);
-    assert_eq!(s.game().effective_pt(bender), (3, 6));
+    assert_eq!(s.game().characteristics(bender).pt(), (3, 6));
 }
 
 #[test]
@@ -4924,11 +4944,11 @@ fn turtle_duck_sets_base_power_and_gains_trample_until_end_of_turn() {
     s.set_player_mana_pool(0, "3");
     activate(&mut s, duck, 0);
     settle(&mut s);
-    assert_eq!(s.game().effective_pt(duck), (5, 5));
+    assert_eq!(s.game().characteristics(duck).pt(), (5, 5));
     assert!(observed_keywords(&s, duck).trample);
 
     s.advance_to_active_step(1, StepKind::Main);
-    assert_eq!(s.game().effective_pt(duck), (1, 5));
+    assert_eq!(s.game().characteristics(duck).pt(), (1, 5));
     assert!(!observed_keywords(&s, duck).trample);
 }
 
@@ -4958,12 +4978,12 @@ fn kyoshi_battle_fan_attaches_to_its_ally_token_then_equips_at_sorcery_speed() {
     settle(&mut s);
     let fan = s.game().state.card_to_permanent[fan].expect("fan entered");
     let ally = battlefield_token(&s, 0);
-    assert_eq!(s.game().effective_pt(ally), (2, 1));
+    assert_eq!(s.game().characteristics(ally).pt(), (2, 1));
 
     s.set_player_mana_pool(0, "2");
     equip(&mut s, fan, ogre);
-    assert_eq!(s.game().effective_pt(ally), (1, 1));
-    assert_eq!(s.game().effective_pt(ogre), (3, 2));
+    assert_eq!(s.game().characteristics(ally).pt(), (1, 1));
+    assert_eq!(s.game().characteristics(ogre).pt(), (3, 2));
 
     s.advance_to_active_step(1, StepKind::Main);
     s.set_player_mana_pool(0, "2");
@@ -4988,7 +5008,7 @@ fn meteor_sword_destroys_a_permanent_and_stays_when_its_creature_dies() {
 
     s.set_player_mana_pool(0, "3");
     equip(&mut s, sword, ours);
-    assert_eq!(s.game().effective_pt(ours), (5, 5));
+    assert_eq!(s.game().characteristics(ours).pt(), (5, 5));
 
     mark_damage(&mut s, ours, 5);
     s.pass_priority();
@@ -5013,7 +5033,7 @@ fn twin_blades_attaches_on_entry_and_grants_double_strike_this_turn() {
     );
     assert!(s.choose_target(Target::Permanent(ours)));
     settle(&mut s);
-    assert_eq!(s.game().effective_pt(ours), (3, 3));
+    assert_eq!(s.game().characteristics(ours).pt(), (3, 3));
     assert!(observed_keywords(&s, ours).double_strike);
 
     s.game_mut().state.permanents[theirs]
@@ -5026,7 +5046,7 @@ fn twin_blades_attaches_on_entry_and_grants_double_strike_this_turn() {
     s.assert_life(1, 14);
 
     s.advance_to_active_step(1, StepKind::Main);
-    assert_eq!(s.game().effective_pt(ours), (3, 3));
+    assert_eq!(s.game().characteristics(ours).pt(), (3, 3));
     assert!(!observed_keywords(&s, ours).double_strike);
 }
 
@@ -5051,13 +5071,13 @@ fn glider_staff_airbends_a_creature_and_gives_its_bearer_flying() {
         Some(ZoneType::Exile)
     );
     let staff = s.game().state.card_to_permanent[staff].expect("staff entered");
-    assert_eq!(s.game().effective_pt(ours), (2, 2));
+    assert_eq!(s.game().characteristics(ours).pt(), (2, 2));
     assert!(!observed_keywords(&s, ours).flying);
 
     s.set_player_mana_pool(0, "2");
     assert_eq!(observed(&s, staff).attached_to, None);
     equip(&mut s, staff, ours);
-    assert_eq!(s.game().effective_pt(ours), (3, 3));
+    assert_eq!(s.game().characteristics(ours).pt(), (3, 3));
     assert!(observed_keywords(&s, ours).flying);
     assert_eq!(observed(&s, staff).attached_to, Some(observed(&s, ours).id));
 
@@ -5134,7 +5154,7 @@ fn path_to_redemption_pacifies_then_exiles_for_an_ally_on_your_turn() {
     assert_eq!(zones.zone_of(theirs_card), Some(ZoneType::Exile));
     assert_eq!(zones.zone_of(path_card), Some(ZoneType::Graveyard));
     let ally = battlefield_token(&s, 0);
-    assert_eq!(s.game().effective_pt(ally), (1, 1));
+    assert_eq!(s.game().characteristics(ally).pt(), (1, 1));
 }
 
 #[test]
@@ -5247,15 +5267,11 @@ fn swampsnare_trap_costs_less_onto_a_flier_and_shrinks_its_creature() {
     );
 
     enchant(&mut s, "Swampsnare Trap", "2B", wurm);
-    assert_eq!(s.game().effective_pt(wurm), (1, 1));
+    assert_eq!(s.game().characteristics(wurm).pt(), (1, 1));
 }
 
 fn is_creature(s: &Scenario, id: PermanentId) -> bool {
-    let permanent = s.game().state.permanents[id].as_ref().unwrap();
-    let card = &s.game().state.cards[permanent.card];
-    card.types.is_creature()
-        || permanent.animated_creature(card)
-        || s.game().becomes_artifact_creature(id)
+    s.game().characteristics(id).is_creature
 }
 
 fn crew_with(s: &mut Scenario, creature: PermanentId) {
@@ -5292,7 +5308,7 @@ fn fire_nation_warship_crews_until_end_of_turn_and_leaves_a_clue() {
         observed(&s, ship).is_animated,
         "the policy sees the crewed Vehicle"
     );
-    assert_eq!(s.game().effective_pt(ship), (4, 4));
+    assert_eq!(s.game().characteristics(ship).pt(), (4, 4));
     assert!(observed_keywords(&s, ship).reach);
 
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
@@ -5363,7 +5379,7 @@ fn war_balloon_flies_once_it_has_three_fire_counters() {
         assert_eq!(counters_of(&s, balloon, CounterKind::Fire), count);
     }
     assert!(is_creature(&s, balloon));
-    assert_eq!(s.game().effective_pt(balloon), (4, 3));
+    assert_eq!(s.game().characteristics(balloon).pt(), (4, 3));
     assert!(observed_keywords(&s, balloon).flying);
     s.advance_to_active_step(1, StepKind::Main);
     assert!(is_creature(&s, balloon), "not limited to this turn");
@@ -5399,7 +5415,7 @@ fn invasion_submersible_bounces_another_permanent_then_surfaces_once() {
     choose(&mut s, |a| matches!(a, Action::PayCost { .. }));
     settle(&mut s);
     assert!(is_creature(&s, sub));
-    assert_eq!(s.game().effective_pt(sub), (3, 3));
+    assert_eq!(s.game().characteristics(sub).pt(), (3, 3));
     s.advance_to_active_step(0, StepKind::Main);
     assert!(is_creature(&s, sub), "no duration");
     s.set_player_mana_pool(0, "3");
@@ -5586,12 +5602,16 @@ fn earthen_ally_grows_with_ally_colors_and_earthbends_five() {
     let mut s =
         five_color_unfunded_setup(&["Earthen Ally", "Toph, the First Metalbender", "Gray Ogre"]);
     let ally = s.force_permanent_on_battlefield(0, "Earthen Ally");
-    assert_eq!(s.game().effective_pt(ally), (1, 2));
+    assert_eq!(s.game().characteristics(ally).pt(), (1, 2));
     s.force_permanent_on_battlefield(0, "Gray Ogre");
     s.force_permanent_on_battlefield(1, "Toph, the First Metalbender");
-    assert_eq!(s.game().effective_pt(ally), (1, 2));
+    assert_eq!(s.game().characteristics(ally).pt(), (1, 2));
     s.force_permanent_on_battlefield(0, "Toph, the First Metalbender");
-    assert_eq!(s.game().effective_pt(ally), (3, 2), "green, red and white");
+    assert_eq!(
+        s.game().characteristics(ally).pt(),
+        (3, 2),
+        "green, red and white"
+    );
 
     let forest = s.force_permanent_on_battlefield(0, "Forest");
     s.set_player_mana_pool(0, "2WUBRG");
@@ -5599,7 +5619,7 @@ fn earthen_ally_grows_with_ally_colors_and_earthbends_five() {
     assert!(s.choose_target(Target::Permanent(forest)));
     settle(&mut s);
     assert_eq!(counters(&s, forest), 5);
-    assert_eq!(s.game().effective_pt(forest), (5, 5));
+    assert_eq!(s.game().characteristics(forest).pt(), (5, 5));
 }
 
 fn declare_attackers(s: &mut Scenario, attackers: &[PermanentId]) {
@@ -5743,7 +5763,7 @@ fn toph_makes_your_nontoken_artifacts_lands_and_earthbends_at_your_end_step() {
     assert!(s.choose_target(Target::Permanent(tile)));
     settle(&mut s);
     assert!(is_creature(&s, tile));
-    assert_eq!(s.game().effective_pt(tile), (2, 2));
+    assert_eq!(s.game().characteristics(tile).pt(), (2, 2));
 
     s.advance_to_active_step(1, StepKind::End);
     assert_ne!(
@@ -5780,7 +5800,7 @@ fn the_mechanist_makes_clues_and_flies_them_until_end_of_turn() {
     settle(&mut s);
     assert!(tapped(&s, mechanist));
     assert!(is_creature(&s, clue));
-    assert_eq!(s.game().effective_pt(clue), (3, 1));
+    assert_eq!(s.game().characteristics(clue).pt(), (3, 1));
     assert!(observed_keywords(&s, clue).flying);
     assert!(observed(&s, clue)
         .temp_subtypes
@@ -5967,7 +5987,7 @@ fn day_of_black_sun_strips_and_destroys_creatures_with_mana_value_x_or_less() {
     assert!(s.game().state.permanents[drake].is_some(), "mana value 3");
     assert_eq!(s.game().state.players[1].life, 20, "no dies trigger");
     assert!(s.battlefield_permanents_named(0, "Ally").is_empty());
-    assert!(!s.game().has_lost_abilities(drake));
+    assert!(!s.game().characteristics(drake).abilities_lost);
 }
 
 #[test]
@@ -6004,13 +6024,17 @@ fn katara_waterbends_x_to_set_your_creatures_base_pt() {
     assert!(s.choose_waterbend_tap(ogre));
     settle(&mut s);
     assert_eq!(*pool(&s), Mana::parse("1"), "two taps paid X = 2");
-    assert_eq!(s.game().effective_pt(katara), (2, 2));
-    assert_eq!(s.game().effective_pt(ally), (2, 2));
-    assert_eq!(s.game().effective_pt(ogre), (3, 3), "counter still applies");
-    assert_eq!(s.game().effective_pt(theirs), (2, 2));
+    assert_eq!(s.game().characteristics(katara).pt(), (2, 2));
+    assert_eq!(s.game().characteristics(ally).pt(), (2, 2));
+    assert_eq!(
+        s.game().characteristics(ogre).pt(),
+        (3, 3),
+        "counter still applies"
+    );
+    assert_eq!(s.game().characteristics(theirs).pt(), (2, 2));
 
     s.advance_to_active_step(1, StepKind::Main);
-    assert_eq!(s.game().effective_pt(ally), (1, 1));
+    assert_eq!(s.game().characteristics(ally).pt(), (1, 1));
     s.set_player_mana_pool(0, "5");
     assert!(!offers_ability(&mut s, katara, 0), "only during your turn");
 }
@@ -6232,13 +6256,13 @@ fn hakoda_sacrifices_to_fortify_your_creatures() {
     activate(&mut s, hakoda, 0);
     settle(&mut s);
     assert!(s.game().state.permanents[hakoda].is_none());
-    assert_eq!(s.game().effective_pt(ogre), (2, 7));
+    assert_eq!(s.game().characteristics(ogre).pt(), (2, 7));
     assert!(observed_keywords(&s, ogre).indestructible);
-    assert_eq!(s.game().effective_pt(theirs), (2, 2));
+    assert_eq!(s.game().characteristics(theirs).pt(), (2, 2));
     assert!(!observed_keywords(&s, theirs).indestructible);
 
     s.advance_to_active_step(1, StepKind::Upkeep);
-    assert_eq!(s.game().effective_pt(ogre), (2, 2));
+    assert_eq!(s.game().characteristics(ogre).pt(), (2, 2));
     assert!(!observed_keywords(&s, ogre).indestructible);
 }
 
@@ -6326,7 +6350,7 @@ fn honest_work_turns_the_creature_into_a_humble_merchant() {
     let permanent = game.state.permanents[drake].as_mut().unwrap();
     permanent.change_counters(CounterKind::PlusOnePlusOne, 2);
     permanent.change_counters(CounterKind::Stun, 1);
-    assert_eq!(s.game().effective_pt(drake), (4, 4));
+    assert_eq!(s.game().characteristics(drake).pt(), (4, 4));
     assert!(observed_keywords(&s, drake).flying);
     assert_eq!(observed(&s, drake).counters.get("stun"), Some(&1));
     assert_eq!(observed(&s, drake).name, None, "the printed name applies");
@@ -6336,11 +6360,11 @@ fn honest_work_turns_the_creature_into_a_humble_merchant() {
     for kind in CounterKind::ALL {
         assert_eq!(counters_of(&s, drake, kind), 0, "{kind:?} removed");
     }
-    assert_eq!(s.game().effective_pt(drake), (1, 1));
+    assert_eq!(s.game().characteristics(drake).pt(), (1, 1));
     assert!(!observed_keywords(&s, drake).flying);
-    assert_eq!(s.game().permanent_name(drake), "Humble Merchant");
-    assert!(s.game().permanent_has_subtype(drake, "Citizen"));
-    assert!(!s.game().permanent_has_subtype(drake, "Drake"));
+    assert_eq!(s.game().characteristics(drake).name, "Humble Merchant");
+    assert!(s.game().characteristics(drake).has_subtype("Citizen"));
+    assert!(!s.game().characteristics(drake).has_subtype("Drake"));
     let seen = observed(&s, drake);
     assert_eq!(seen.counters.get("stun"), None);
     assert_eq!(seen.name.as_deref(), Some("Humble Merchant"));
@@ -6384,13 +6408,13 @@ fn honest_work_replaces_a_printed_mana_ability_until_it_leaves() {
         .tapped = false;
     s.game_mut().invalidate_mana_cache(PlayerId(1));
     assert_eq!(green(&mut s), Mana::default(), "no fixed {{G}} remains");
-    assert!(!s.game().permanent_has_subtype(elves, "Elf"));
+    assert!(!s.game().characteristics(elves).has_subtype("Elf"));
 
     let aura = card_of(&s, aura);
     s.game_mut().move_card(aura, ZoneType::Graveyard);
     assert_eq!(green(&mut s), Mana::parse("G"));
-    assert_eq!(s.game().permanent_name(elves), "Llanowar Elves");
-    assert!(s.game().permanent_has_subtype(elves, "Elf"));
+    assert_eq!(s.game().characteristics(elves).name, "Llanowar Elves");
+    assert!(s.game().characteristics(elves).has_subtype("Elf"));
 }
 
 fn set_sick(s: &mut Scenario, id: PermanentId, sick: bool) {
@@ -6424,9 +6448,9 @@ fn honest_work_applies_at_its_timestamp_and_later_records_still_apply() {
     });
     until_end_of_turn(&mut s, ogre, lifelink);
     enchant(&mut s, "Honest Work", "U", ogre);
-    assert!(s.game().has_lost_abilities(ogre));
+    assert!(s.game().characteristics(ogre).abilities_lost);
     assert!(!keywords(&s, ogre).lifelink, "an earlier grant is lost");
-    assert_eq!(s.game().effective_pt(ogre), (1, 1));
+    assert_eq!(s.game().characteristics(ogre).pt(), (1, 1));
 
     until_end_of_turn(
         &mut s,
@@ -6444,10 +6468,14 @@ fn honest_work_applies_at_its_timestamp_and_later_records_still_apply() {
             ..Default::default()
         }),
     );
-    assert_eq!(s.game().effective_pt(ogre), (3, 1), "a later pump applies");
+    assert_eq!(
+        s.game().characteristics(ogre).pt(),
+        (3, 1),
+        "a later pump applies"
+    );
     assert!(keywords(&s, ogre).flying, "a later grant applies");
     assert!(!keywords(&s, ogre).lifelink);
-    assert_eq!(s.game().permanent_name(ogre), "Humble Merchant");
+    assert_eq!(s.game().characteristics(ogre).name, "Humble Merchant");
 }
 
 #[test]
@@ -6857,7 +6885,7 @@ fn team_avatar_buffs_a_creature_attacking_alone() {
         // creature changes.
         let buffed: Vec<_> = [first, second, third]
             .into_iter()
-            .map(|id| s.game().effective_pt(id))
+            .map(|id| s.game().characteristics(id).pt())
             .collect();
         let expected = usize::from(attackers == 1);
         assert_eq!(
@@ -7048,17 +7076,17 @@ fn iguana_and_boar_trigger_only_on_own_noncreature_casts() {
     cast(&mut s, "Gray Ogre");
     settle(&mut s);
     assert_eq!(counters(&s, boar), 0);
-    assert_eq!(s.game().effective_power(parrot), 2);
+    assert_eq!(s.game().characteristics(parrot).power, 2);
     cast(&mut s, "Abandon Attachments");
     settle(&mut s);
     assert_eq!(counters(&s, boar), 1);
     assert_eq!(counters(&s, opponent), 0);
-    assert_eq!(s.game().effective_pt(parrot), (3, 3));
+    assert_eq!(s.game().characteristics(parrot).pt(), (3, 3));
     let keywords = keywords(&s, parrot);
     assert!(keywords.flying && keywords.vigilance);
     s.advance_to_active_step(1, StepKind::Main);
-    assert_eq!(s.game().effective_power(parrot), 2);
-    assert_eq!(s.game().effective_power(boar), 3);
+    assert_eq!(s.game().characteristics(parrot).power, 2);
+    assert_eq!(s.game().characteristics(boar).power, 3);
 }
 
 /// Invasion Reinforcements has flash: castable during the opponent's turn,
@@ -7567,7 +7595,7 @@ fn hybrid_draw_payoffs_use_draw_count_and_trigger_on_the_second_draw_only() {
             if draw >= 2 { 1 } else { 0 }
         );
         assert_eq!(
-            s.game().effective_power(hawk),
+            s.game().characteristics(hawk).power,
             if draw >= 2 { 3 } else { 1 }
         );
     }
@@ -7583,7 +7611,8 @@ fn messenger_hawk_accepts_either_hybrid_color_and_investigates_on_entry() {
         assert_eq!(s.battlefield_permanents_named(0, "Clue").len(), 1);
         assert_eq!(
             s.game()
-                .effective_power(permanent_named(&s, "Messenger Hawk")),
+                .characteristics(permanent_named(&s, "Messenger Hawk"))
+                .power,
             1
         );
     }
@@ -7605,7 +7634,7 @@ fn momo_reduces_first_matching_spell_only_and_grows_when_another_flier_enters() 
         .unwrap();
     s.step_action(index);
     settle(&mut s);
-    assert_eq!(s.game().effective_power(momo), 2);
+    assert_eq!(s.game().characteristics(momo).power, 2);
     let next = library_card(&s, 0, "Messenger Hawk");
     s.game_mut().move_card(next, ZoneType::Hand);
     s.set_player_mana_pool(0, "1U");
@@ -7671,10 +7700,10 @@ fn momo_excludes_lemurs_and_opponents_turn_and_its_pump_expires() {
         |a| matches!(a, Action::CastSpell { card, .. } if *card == hawk),
     );
     settle(&mut s);
-    assert_eq!(s.game().effective_power(momo), 2);
-    assert_eq!(s.game().effective_power(other), 1);
+    assert_eq!(s.game().characteristics(momo).power, 2);
+    assert_eq!(s.game().characteristics(other).power, 1);
     s.advance_to_active_step(1, StepKind::Main);
-    assert_eq!(s.game().effective_power(momo), 1);
+    assert_eq!(s.game().characteristics(momo).power, 1);
     let next = library_card(&s, 0, "Messenger Hawk");
     s.game_mut().move_card(next, ZoneType::Hand);
     s.game_mut().state.cards[next].keywords.flash = true;
@@ -7698,10 +7727,10 @@ fn octopus_form_untaps_only_own_target_and_expires() {
     assert!(s.choose_target(Target::Permanent(own)));
     settle(&mut s);
     assert!(!tapped(&s, own));
-    assert_eq!(s.game().effective_pt(own), (3, 3));
+    assert_eq!(s.game().characteristics(own).pt(), (3, 3));
     assert!(keywords(&s, own).hexproof);
     s.advance_to_active_step(1, StepKind::Main);
-    assert_eq!(s.game().effective_pt(own), (2, 2));
+    assert_eq!(s.game().characteristics(own).pt(), (2, 2));
     assert!(!keywords(&s, own).hexproof);
 }
 
@@ -7897,10 +7926,10 @@ fn pillar_launch_untaps_and_grants_temporary_reach_and_stats() {
     assert!(s.choose_target(Target::Permanent(creature)));
     settle(&mut s);
     assert!(!tapped(&s, creature));
-    assert_eq!(s.game().effective_pt(creature), (4, 4));
+    assert_eq!(s.game().characteristics(creature).pt(), (4, 4));
     assert!(keywords(&s, creature).reach);
     s.advance_to_active_step(1, StepKind::Main);
-    assert_eq!(s.game().effective_power(creature), 2);
+    assert_eq!(s.game().characteristics(creature).power, 2);
     assert!(!keywords(&s, creature).reach);
 }
 
@@ -7932,7 +7961,7 @@ fn ran_and_shaw_copy_is_nonlegendary_uncast_and_has_printed_abilities() {
     activate_named(&mut s, "Ran and Shaw", 0);
     settle(&mut s);
     for id in dragons {
-        assert_eq!(s.game().effective_power(id), 6);
+        assert_eq!(s.game().characteristics(id).power, 6);
     }
 }
 
@@ -7974,7 +8003,7 @@ fn ran_and_shaw_requires_a_cast_and_rechecks_graveyard_at_resolution() {
         assert_eq!(dragons.len(), 1);
         let dragon = s.game().state.permanents[dragons[0]].as_ref().unwrap();
         assert_eq!(s.game().state.cards[dragon.card].is_token, mode == 2);
-        assert_eq!(s.game().effective_power(dragons[0]), 4);
+        assert_eq!(s.game().characteristics(dragons[0]).power, 4);
     }
 }
 
@@ -8248,9 +8277,9 @@ fn suki_power_tracks_creature_count_and_attack_makes_a_token() {
     );
     let suki = s.force_permanent_on_battlefield(0, "Suki, Kyoshi Warrior");
     // Alone: power = 1 (herself).
-    assert_eq!(s.game().effective_pt(suki), (1, 4));
+    assert_eq!(s.game().characteristics(suki).pt(), (1, 4));
     let _kyoshi = s.force_permanent_on_battlefield(0, "Kyoshi Warriors");
-    assert_eq!(s.game().effective_pt(suki), (2, 4));
+    assert_eq!(s.game().characteristics(suki).pt(), (2, 4));
 
     clear_summoning_sickness(&mut s, suki);
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
@@ -8279,7 +8308,7 @@ fn suki_power_tracks_creature_count_and_attack_makes_a_token() {
     assert!(permanent(&s, token).tapped);
     assert!(permanent(&s, token).attacking);
     // CDA recomputed mid-combat: 3 creatures now.
-    assert_eq!(s.game().effective_pt(suki), (3, 4));
+    assert_eq!(s.game().characteristics(suki).pt(), (3, 4));
 
     s.advance_to_active_step(0, StepKind::EndOfCombat);
     // Suki (3) + token (1) both attacked unblocked.
@@ -8477,7 +8506,8 @@ fn toph_enters_earthbends_and_counts_counters_on_lands() {
     assert_eq!(counters(&s, land), 2);
     assert_eq!(
         s.game()
-            .effective_power(permanent_named(&s, "Toph, the Blind Bandit")),
+            .characteristics(permanent_named(&s, "Toph, the Blind Bandit"))
+            .power,
         2
     );
 }
@@ -8490,7 +8520,7 @@ fn treetop_creates_one_white_ally_and_can_attack_immediately() {
     let fighter = permanent_named(&s, "Treetop Freedom Fighters");
     let allies = s.battlefield_permanents_named(0, "Ally");
     assert_eq!(allies.len(), 1);
-    assert_eq!(s.game().effective_pt(allies[0]), (1, 1));
+    assert_eq!(s.game().characteristics(allies[0]).pt(), (1, 1));
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     choose(
         &mut s,
@@ -8759,11 +8789,11 @@ fn wandering_musicians_pump_all_own_creatures_for_the_turn() {
     }
     pass_until(&mut s, ActionSpaceKind::Priority);
     settle(&mut s);
-    assert_eq!(s.game().effective_pt(band), (3, 5));
-    assert_eq!(s.game().effective_power(own), 3);
-    assert_eq!(s.game().effective_power(other), 2);
+    assert_eq!(s.game().characteristics(band).pt(), (3, 5));
+    assert_eq!(s.game().characteristics(own).power, 3);
+    assert_eq!(s.game().characteristics(other).power, 2);
     s.advance_to_active_step(1, StepKind::Main);
-    assert_eq!(s.game().effective_power(own), 2);
+    assert_eq!(s.game().characteristics(own).power, 2);
 }
 
 #[test]
@@ -8860,12 +8890,12 @@ fn water_tribe_captain_pays_five_and_buffs_only_own_creatures_until_cleanup() {
     activate(&mut s, captain, 0);
     assert_eq!(s.game().state.players[0].mana_pool.total(), 0);
     settle(&mut s);
-    assert_eq!(s.game().effective_pt(captain), (4, 4));
-    assert_eq!(s.game().effective_pt(own), (3, 3));
-    assert_eq!(s.game().effective_power(other), 2);
+    assert_eq!(s.game().characteristics(captain).pt(), (4, 4));
+    assert_eq!(s.game().characteristics(own).pt(), (3, 3));
+    assert_eq!(s.game().characteristics(other).power, 2);
     s.advance_to_active_step(1, StepKind::Main);
-    assert_eq!(s.game().effective_power(captain), 3);
-    assert_eq!(s.game().effective_power(own), 2);
+    assert_eq!(s.game().characteristics(captain).power, 3);
+    assert_eq!(s.game().characteristics(own).power, 2);
 }
 
 fn rallier_deck() -> BTreeMap<String, usize> {
@@ -9449,13 +9479,13 @@ fn anthem_buffs_other_allies_only() {
     let enemy_ally = s.force_permanent_on_battlefield(1, "Kyoshi Warriors");
 
     // Other Ally you control: 3/3 -> 4/4.
-    assert_eq!(s.game().effective_pt(kyoshi), (4, 4));
+    assert_eq!(s.game().characteristics(kyoshi).pt(), (4, 4));
     // Not itself ("other").
-    assert_eq!(s.game().effective_pt(anthem), (2, 3));
+    assert_eq!(s.game().characteristics(anthem).pt(), (2, 3));
     // Not a non-Ally.
-    assert_eq!(s.game().effective_pt(penguin), (2, 1));
+    assert_eq!(s.game().characteristics(penguin).pt(), (2, 1));
     // Not an opponent's Ally.
-    assert_eq!(s.game().effective_pt(enemy_ally), (3, 3));
+    assert_eq!(s.game().characteristics(enemy_ally).pt(), (3, 3));
 }
 
 #[test]
@@ -9474,10 +9504,10 @@ fn two_anthems_buff_each_other_and_stack() {
     let kyoshi = s.force_permanent_on_battlefield(0, "Kyoshi Warriors");
 
     // Each anthem is an "other Ally" for the other one.
-    assert_eq!(s.game().effective_pt(a1), (3, 4));
-    assert_eq!(s.game().effective_pt(a2), (3, 4));
+    assert_eq!(s.game().characteristics(a1).pt(), (3, 4));
+    assert_eq!(s.game().characteristics(a2).pt(), (3, 4));
     // The Kyoshi gets both anthems: 3/3 -> 5/5.
-    assert_eq!(s.game().effective_pt(kyoshi), (5, 5));
+    assert_eq!(s.game().characteristics(kyoshi).pt(), (5, 5));
 }
 
 #[test]
@@ -9506,10 +9536,10 @@ fn layers_compose_counters_anthem_and_until_eot() {
     s.pass_priority();
 
     // 3/3 base + anthem (+1/+1) + counter (+1/+1) + Yip Yip (+2/+2) = 7/7.
-    assert_eq!(s.game().effective_pt(kyoshi), (7, 7));
+    assert_eq!(s.game().characteristics(kyoshi).pt(), (7, 7));
     // Until-EOT part expires at cleanup; statics and counters persist.
     s.advance_to_active_step(1, StepKind::Upkeep);
-    assert_eq!(s.game().effective_pt(kyoshi), (5, 5));
+    assert_eq!(s.game().characteristics(kyoshi).pt(), (5, 5));
 }
 
 #[test]
@@ -9537,7 +9567,7 @@ fn yip_yip_buffs_and_grants_flying_to_allies_only() {
     assert!(s.choose_target(Target::Permanent(kyoshi)));
     s.pass_priority();
     s.pass_priority();
-    assert_eq!(s.game().effective_pt(kyoshi), (5, 5));
+    assert_eq!(s.game().characteristics(kyoshi).pt(), (5, 5));
     assert!(keywords(&s, kyoshi).flying);
 
     // The granted keyword is agent-visible: the permanent entry carries
@@ -9572,12 +9602,12 @@ fn yip_yip_buffs_and_grants_flying_to_allies_only() {
     assert!(s.choose_target(Target::Permanent(penguin)));
     s.pass_priority();
     s.pass_priority();
-    assert_eq!(s.game().effective_pt(penguin), (4, 3));
+    assert_eq!(s.game().characteristics(penguin).pt(), (4, 3));
     assert!(!keywords(&s, penguin).flying);
 
     // Both wear off at cleanup.
     s.advance_to_active_step(1, StepKind::Upkeep);
-    assert_eq!(s.game().effective_pt(kyoshi), (3, 3));
+    assert_eq!(s.game().characteristics(kyoshi).pt(), (3, 3));
     assert!(!keywords(&s, kyoshi).flying);
 }
 
@@ -9858,15 +9888,19 @@ fn required_fixed_token_templates_have_the_printed_sizes_and_keyword_effects() {
     ] {
         s.game_mut().create_token(name, PlayerId(0), false);
         let token = permanent_named(&s, name);
-        assert_eq!(s.game().effective_pt(token), (power, toughness), "{name}");
+        assert_eq!(
+            s.game().characteristics(token).pt(),
+            (power, toughness),
+            "{name}"
+        );
         assert_eq!(keywords(&s, token).flying, flying, "{name}");
     }
     let monk = permanent_named(&s, "Monk");
     cast(&mut s, "Abandon Attachments");
     settle(&mut s);
-    assert_eq!(s.game().effective_pt(monk), (2, 2));
+    assert_eq!(s.game().characteristics(monk).pt(), (2, 2));
     s.advance_to_active_step(1, StepKind::Main);
-    assert_eq!(s.game().effective_power(monk), 1);
+    assert_eq!(s.game().characteristics(monk).power, 1);
 }
 
 #[test]
