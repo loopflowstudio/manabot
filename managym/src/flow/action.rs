@@ -698,7 +698,7 @@ impl Game {
             }
             Action::PlayLand { player, card } => {
                 self.play_land(*player, *card)?;
-                self.state.priority.on_non_pass_action(self.active_player());
+                self.restart_priority_round();
                 Ok(())
             }
             Action::CastSpell { player, card } => self.cast_spell_action(*player, *card),
@@ -754,7 +754,7 @@ impl Game {
                     return Err(AgentError("player does not have priority".to_string()));
                 }
                 let next = self.next_player(*player);
-                self.state.priority.on_pass(next);
+                self.state.priority_mut().on_pass(next);
                 Ok(())
             }
             Action::DeclareAttacker {

@@ -12527,7 +12527,8 @@ fn avatar_destiny_grows_with_your_graveyard_and_returns_when_its_creature_dies()
         .game()
         .characteristics(ogre)
         .added_subtypes
-        .contains(&"Avatar"));
+        .iter()
+        .any(|subtype| subtype == "Avatar"));
 
     let milled = pin_top(&mut s, &["Craw Wurm", "Forest", "Forest", "Forest"]);
     s.game_mut().state.permanents[ogre].as_mut().unwrap().damage = 1;
@@ -12581,7 +12582,8 @@ fn zhao_taps_nonbasic_lands_and_makes_them_mountains_once_he_conquers() {
         .game()
         .characteristics(temple)
         .added_subtypes
-        .contains(&"Mountain"));
+        .iter()
+        .any(|subtype| subtype == "Mountain"));
     assert!(can_cast(&s, red), "a Mountain taps for {{R}}");
     cast_card(&mut s, red);
     if s.action_space().kind == ActionSpaceKind::PayOrNot {

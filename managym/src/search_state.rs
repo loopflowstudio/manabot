@@ -201,9 +201,10 @@ mod tests {
         assert_authority_change(&baseline, &rng, "RNG continuation");
 
         let mut events = game.clone();
+        let turn_number = events.state.turn.turn_number;
         events.state.events.push(GameEvent::TurnStarted {
             player: PlayerId(0),
-            turn_number: events.state.turn.turn_number,
+            turn_number,
         });
         assert_authority_change(&baseline, &events, "event ledger");
 

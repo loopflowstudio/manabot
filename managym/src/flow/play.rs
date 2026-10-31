@@ -1176,12 +1176,12 @@ impl Game {
     /// Whether the permanents among `targets` have a creature type in common
     /// ("that share a creature type").
     fn targets_share_creature_type<'a>(&self, targets: impl Iterator<Item = &'a Target>) -> bool {
-        let mut common: Option<Vec<&str>> = None;
+        let mut common: Option<Vec<String>> = None;
         for target in targets {
             let Target::Permanent(id) = target else {
                 return false;
             };
-            let types = self.characteristics(*id).creature_types;
+            let types = self.characteristics(*id).creature_types.clone();
             common = Some(match common {
                 None => types,
                 Some(common) => common.into_iter().filter(|t| types.contains(t)).collect(),
@@ -1598,7 +1598,7 @@ impl Game {
                 if let Some(StackObject::Spell(spell)) = self.state.stack_objects.last_mut() {
                     spell.mode = mode;
                 }
-                self.state.priority.on_non_pass_action(self.active_player());
+                self.restart_priority_round();
                 Ok(())
             }
             Payment::Activation {
@@ -1927,7 +1927,7 @@ impl Game {
             x,
             granted_by: ability.granted_by,
         }));
-        self.state.priority.on_non_pass_action(self.active_player());
+        self.restart_priority_round();
         Ok(())
     }
 
@@ -1966,7 +1966,7 @@ impl Game {
             x: 0,
             granted_by: None,
         }));
-        self.state.priority.on_non_pass_action(self.active_player());
+        self.restart_priority_round();
         Ok(())
     }
 

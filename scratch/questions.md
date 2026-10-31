@@ -442,3 +442,25 @@ from `layer_basis`. The remaining per-query cost of `Game::characteristics`
 (land-type overwrite and type-grant scans) is left to the characteristics
 lookup work (`mtg-234`). If Search 64 reply latency is itself a product
 requirement, it needs its own Task.
+
+- Clean-machine Play on `289bfbde3` timed out waiting for search-64's reply.
+  One UR Lessons vs GW Allies game (seed 0, hero plays land/cast/activate/pass
+  first): worst search-64 decision main `b73a6b5db` 3.1 s, `a18902e0e`
+  12.8 s, `289bfbde3` 16.7 s. Each view rebuilt static sources three times
+  and checked each source's ability loss through a full attachment scan, and
+  mana payment built three views per land. Static sources are now collected
+  once per view (including mana-ability grantors, which now also stop
+  granting when they lose their abilities), loss checks read records unless a
+  characteristic-setting Aura is attached, and card-property filters run before
+  views: 7.0 s. The rest of the gap to main is per-view scans
+  (`static_sources`, `attachments_on` in `layer_basis`) repeated for every
+  permanent each priority (SBA, payment model); MTG-234 closes it with a
+  per-revision static index and view cache.
+
+## MTG-234 — 2026-10-30
+
+- The static-source index is rebuilt lazily once per state revision rather
+  than maintained incrementally at each enter/leave/attach/detach site: every
+  state write already passes `TrackedState::deref_mut`, so a derived index
+  cannot drift, and the measured cost is small. Revisit only if profiles show
+  index rebuilds dominating.

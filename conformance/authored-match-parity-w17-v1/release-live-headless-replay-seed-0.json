@@ -52,7 +52,7 @@
         },
         {
           "path": "manabot/managym/experience.py",
-          "sha256": "f21237d7f1b8cbb125b377ca55407cfae4455483201e111f76728a5f78421345"
+          "sha256": "be9253184fe1b93b8bbdf19ac7ca23e9fcefb8896c0529c10ff11a7fc0788ab4"
         },
         {
           "path": "manabot/managym/experience_projection.py",
@@ -88,7 +88,7 @@
         },
         {
           "path": "managym/src/agent/env.rs",
-          "sha256": "7fae38a796c8fc657aa062d626b03762fb4edb2e71cd7fc8c3944b49270cb642"
+          "sha256": "27c487291d6e08a45b09c76f72f1836ff82c0c4668e38829735586334c882613"
         },
         {
           "path": "managym/src/agent/mod.rs",
@@ -316,7 +316,7 @@
         },
         {
           "path": "managym/src/flow/action.rs",
-          "sha256": "8e206e822544999831ba999eeed7269cff466b42bdef19aa8e75465abb33c3a4"
+          "sha256": "aeb8f5262a308ecc51edf8693e6b9bda32b60c53a15b8cf139e43124359294fb"
         },
         {
           "path": "managym/src/flow/card_capture.rs",
@@ -324,7 +324,7 @@
         },
         {
           "path": "managym/src/flow/cast_permission.rs",
-          "sha256": "86907911fb964644a9dc1e64d73c5e251caca88cc4450163cb08b0637f17f260"
+          "sha256": "14d704cd283850d68d02453ade51b624f347f03f986d03f8a207813088f7a33f"
         },
         {
           "path": "managym/src/flow/combat.rs",
@@ -340,7 +340,7 @@
         },
         {
           "path": "managym/src/flow/decision.rs",
-          "sha256": "57d5357714a14e4bf9d64053bd00d3818036c04368f30fc1ec6e7d6aacd1c86b"
+          "sha256": "adce8386e0045f18814642c8e6e5bef94d004443e1935bb8434be97fb281e52b"
         },
         {
           "path": "managym/src/flow/effects.rs",
@@ -352,15 +352,15 @@
         },
         {
           "path": "managym/src/flow/game.rs",
-          "sha256": "344616105ea2a9ef7843d5d9d487f3764edd49d302f8b1bf11424a8f715c0405"
+          "sha256": "c25cac88884826d1461249c73a21c66fc269a335b47530b2109d86f242082b95"
         },
         {
           "path": "managym/src/flow/identity.rs",
-          "sha256": "69dce49f0646650eb83b479273e5a566de9371523e0632ea3546ae5f95b1f33b"
+          "sha256": "18c6e0a0770b33006f6391eb6a8b3d2c61e3dbc5c5d90ac4b9712517884975f0"
         },
         {
           "path": "managym/src/flow/mana.rs",
-          "sha256": "3263756e0419ed310b29edf40f50c97bf359c8c70ff7fae92e327a91f5483a58"
+          "sha256": "e2e0251890edb4756b91bdc9d34901ed0ef4c74fb41bbf7b1b9822d67052406e"
         },
         {
           "path": "managym/src/flow/mod.rs",
@@ -368,7 +368,7 @@
         },
         {
           "path": "managym/src/flow/play.rs",
-          "sha256": "66f2a6fd082eb9ecf9f50e4edfdad10fb53a1285629481740b144366885de07e"
+          "sha256": "25fe3a857c9844f933dde84c04ab5f4bae4a5b36b67c331acd73b0a17cad21f5"
         },
         {
           "path": "managym/src/flow/priority.rs",
@@ -380,7 +380,7 @@
         },
         {
           "path": "managym/src/flow/resolution.rs",
-          "sha256": "b747eaba48b9a09fad0b6924725b80f46bd2d20dec69662619555f22105bacda"
+          "sha256": "adbcd0b1cb1464cbd413e1e7c942e1313e2ee8db24a5988853685b9b7edf3957"
         },
         {
           "path": "managym/src/flow/resolution_tests.rs",
@@ -392,7 +392,7 @@
         },
         {
           "path": "managym/src/flow/sba.rs",
-          "sha256": "32b207bd2a8d12e47e3694163f06e16126703072ac0f07b08e5599cb0da61f60"
+          "sha256": "c6725d80e20659ce8c47f703dfb2ad0845ddee6549e0ccdb7a08bd1f63a4de22"
         },
         {
           "path": "managym/src/flow/scenario.rs",
@@ -400,19 +400,19 @@
         },
         {
           "path": "managym/src/flow/search.rs",
-          "sha256": "f95420dcf1d60d4aacb3947d8e8773ff65e91dbd0c32a53465b86b8128e91f3c"
+          "sha256": "968389ab007b241796f4e33d596638c784770caeb44c2b746ee4d6b25433c719"
         },
         {
           "path": "managym/src/flow/setup.rs",
-          "sha256": "e81210d29fb95137a27a29081e74151ab6efa4a5bbe16709a4db232873ba9c19"
+          "sha256": "29c4573c2e47444ddda564dba2918be39c6d5c821bd98ff13ff7812311c7313b"
         },
         {
           "path": "managym/src/flow/stabilization.rs",
-          "sha256": "4cba388fc9fcd7010928eb30bfcde33da6ff7c22e8d52d7cfd6bdfc9e93f349e"
+          "sha256": "bd146dc0fa435815f02665403901234861a8504237dbb7561b98a1778ebb8fc1"
         },
         {
           "path": "managym/src/flow/statics.rs",
-          "sha256": "664d2e8e388862924d75e9d3f0ae3729eeef1176e046ba68b20b0e843b54b61b"
+          "sha256": "1ec8d63152b052f456685b99a340a1b7a9db27379ba7ec6ebe4558900fa13a1e"
         },
         {
           "path": "managym/src/flow/target_authority_tests.rs",
@@ -420,7 +420,7 @@
         },
         {
           "path": "managym/src/flow/tick.rs",
-          "sha256": "11a4dfd32375a3bbe6db6cce87a1513e87543589e5831903b9f01b95c7eca684"
+          "sha256": "607a4a980e045aed06879318f4adb8cea49195eb9c3a9c21a089a289771ffa9f"
         },
         {
           "path": "managym/src/flow/trigger.rs",
@@ -428,7 +428,7 @@
         },
         {
           "path": "managym/src/flow/triggers.rs",
-          "sha256": "766e0e7214f5f0fa0ec9da110e78e00831c5ef4039354bd28dc8a33369bf5277"
+          "sha256": "29d32fe61f032fe07c194a3fa94b607288a6533203110bc23d73632d7b6288c6"
         },
         {
           "path": "managym/src/flow/turn.rs",
@@ -436,7 +436,7 @@
         },
         {
           "path": "managym/src/flow/zones.rs",
-          "sha256": "18b783028df486d3a76e493f4b145d94093b032fc7ccdb204cd6e914f1c52a81"
+          "sha256": "5010218dc07f53cd90b35b22c34beb67ee8749784b6412c2ef75c509afd8c1e2"
         },
         {
           "path": "managym/src/infra/mod.rs",
@@ -480,7 +480,7 @@
         },
         {
           "path": "managym/src/search_state.rs",
-          "sha256": "ab9b5b91f420a6090a6556dadb06e30f9604347705b16cfa0be7d113f198eeba"
+          "sha256": "48b01b8500694d3a493c26aaf205dbe69ec34c96a412ed460d5135bdbe999d1f"
         },
         {
           "path": "managym/src/state/ability.rs",
@@ -559,7 +559,7 @@
           "sha256": "7253f4b013ddbb65f2f9509324d3c59739e9ca08f16ad7bb5d2c92e16a928d3c"
         }
       ],
-      "sha256": "0a2112ce0ba8056500eadf61a39ce2df120699531e185a92803e76886e98a03c"
+      "sha256": "6b9557b403ba2cebcf942e890caec4d0fa7e451a18fde93d05f89eea59d9b467"
     },
     "seed": 0
   },

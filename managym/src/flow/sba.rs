@@ -14,7 +14,7 @@ impl Game {
     fn legend_groups(&self) -> Vec<Vec<CardId>> {
         let mut groups = Vec::new();
         for player in [self.active_player(), self.non_active_player()] {
-            let mut names = std::collections::BTreeMap::<&str, Vec<CardId>>::new();
+            let mut names = std::collections::BTreeMap::<String, Vec<CardId>>::new();
             for id in self.battlefield_permanents(player) {
                 let permanent = self.state.permanents[id].as_ref().expect("battlefield");
                 let card = &self.state.cards[permanent.card];
@@ -24,7 +24,7 @@ impl Game {
                     .any(|kind| kind.eq_ignore_ascii_case("legendary"))
                 {
                     names
-                        .entry(self.characteristics(id).name)
+                        .entry(self.characteristics(id).name.clone())
                         .or_default()
                         .push(permanent.card);
                 }

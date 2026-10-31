@@ -76,11 +76,7 @@ impl Game {
         let characteristics = self.characteristics(permanent_id);
         Some(ObjectLki {
             keywords: characteristics.keywords,
-            creature_types: characteristics
-                .creature_types
-                .into_iter()
-                .map(String::from)
-                .collect(),
+            creature_types: characteristics.creature_types.clone(),
             permanent: permanent_id,
             animated_creature: characteristics.is_animated,
             abilities_lost: characteristics.abilities_lost,

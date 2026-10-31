@@ -555,7 +555,7 @@ impl Game {
             ability: id,
             attacker: trigger.attacker,
         });
-        self.state.priority.start_round(self.active_player());
+        self.restart_priority_round();
     }
 
     /// All currently legal targets for a spec, from `controller`'s
@@ -793,6 +793,7 @@ impl Game {
                     .find(|id| self.permanent_object_ref(*id) == Some(source_lki.object_ref)),
                 _ => None,
             };
+            let id = TriggerId(self.state.trigger_enqueue_counter);
             self.state.pending_triggers.push(PendingTrigger {
                 targets: Vec::new(),
                 target_req_indices: Vec::new(),
@@ -802,7 +803,7 @@ impl Game {
                 source_lki: Some(source_lki),
                 ability_index,
                 controller,
-                id: TriggerId(self.state.trigger_enqueue_counter),
+                id,
                 ordering_class: TriggerOrderingClass::Ordinary,
                 context,
                 player,
@@ -1030,6 +1031,7 @@ impl Game {
                     .flatten()
             })
         });
+        let id = TriggerId(self.state.trigger_enqueue_counter);
         self.state.pending_triggers.push(PendingTrigger {
             targets: Vec::new(),
             target_req_indices: Vec::new(),
@@ -1039,7 +1041,7 @@ impl Game {
             source_lki,
             ability_index: 0,
             controller,
-            id: TriggerId(self.state.trigger_enqueue_counter),
+            id,
             ordering_class: TriggerOrderingClass::Ordinary,
             context,
             player: None,
@@ -1077,16 +1079,18 @@ impl Game {
             }
         }
         for (card, ability_index, owner) in fired {
+            let source_ref = self.current_object_ref(card);
+            let id = TriggerId(self.state.trigger_enqueue_counter);
             self.state.pending_triggers.push(PendingTrigger {
                 targets: Vec::new(),
                 target_req_indices: Vec::new(),
                 requirement_index: 0,
                 source_card: card,
-                source_ref: self.current_object_ref(card),
+                source_ref,
                 source_lki: None,
                 ability_index,
                 controller: owner,
-                id: TriggerId(self.state.trigger_enqueue_counter),
+                id,
                 ordering_class: TriggerOrderingClass::Ordinary,
                 context: None,
                 player: None,

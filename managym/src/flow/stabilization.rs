@@ -14,7 +14,7 @@ impl Game {
     /// suspend stabilization. Completing that choice re-enters this routine
     /// through the ordinary action boundary before priority can be granted.
     pub(crate) fn stabilize_before_priority(&mut self) -> Option<ActionSpace> {
-        self.state.priority.sba_done = false;
+        self.state.priority_mut().sba_done = false;
 
         loop {
             // CR 603.3b: finish this placement round before another SBA or
@@ -60,7 +60,7 @@ impl Game {
                 }
                 continue;
             }
-            self.state.priority.sba_done = true;
+            self.state.priority_mut().sba_done = true;
             return None;
         }
     }

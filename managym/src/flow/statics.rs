@@ -33,8 +33,17 @@
 // read effective power. No computation can recurse: code the stages call
 // (static scopes, ability mana outputs) never reads the view. A view computes
 // the shared layer inputs (`LayerBasis`) once and hands them to each stage.
+//
+// Derived data is cached per state revision (`TrackedState`, `StaticsCache`):
+// the static-source index (`StaticIndex`: attached permanents and the
+// permanents whose statics can apply) is built once per revision, and each
+// permanent's view is computed once per revision and shared as an `Arc`.
+// Any mutable access to state starts a new revision, so neither can go stale.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    sync::Arc,
+};
 
 use crate::{
     flow::{decision::EffectFrame, game::Game},
@@ -47,7 +56,7 @@ use crate::{
         effect::Modification,
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
         mana::{Mana, ManaUse},
-        permanent::CounterKind,
+        permanent::{CounterKind, Permanent},
         predicate::CardPredicate,
         zone::ZoneType,
     },
@@ -94,20 +103,20 @@ pub(crate) enum ScopeView {
 /// continuous-effect record applied (CR 613). A permanent that has left the
 /// battlefield reads as the default: nameless, typeless, 0/0, no abilities.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct Characteristics<'a> {
+pub struct Characteristics {
     /// Set by a characteristic-setting Aura, or printed (CR 201.2).
-    pub name: &'a str,
+    pub name: String,
     /// Whether a characteristic-setting Aura replaced its name, creature
     /// types and base power/toughness.
     pub characteristics_set: bool,
     /// Every subtype it has: printed (creature types replaced by a
     /// characteristic-setting Aura's), then added by records.
-    pub subtypes: Vec<&'a str>,
+    pub subtypes: Vec<String>,
     /// Creature subtypes added by records after any characteristic-setting
     /// Aura (layer 4), in record order.
-    pub added_subtypes: Vec<&'a str>,
+    pub added_subtypes: Vec<String>,
     /// Distinct creature types (CR 205.3m), sorted.
-    pub creature_types: Vec<&'a str>,
+    pub creature_types: Vec<String>,
     pub is_creature: bool,
     /// Printed or granted land.
     pub is_land: bool,
@@ -134,19 +143,60 @@ pub struct Characteristics<'a> {
     pub activated_abilities: Vec<ActivatedAbilityDefinition>,
 }
 
-impl Characteristics<'_> {
+impl Characteristics {
     pub fn pt(&self) -> (i32, i32) {
         (self.power, self.toughness)
     }
 
     pub fn has_subtype(&self, subtype: &str) -> bool {
-        self.subtypes.contains(&subtype)
+        self.subtypes.iter().any(|s| s == subtype)
     }
 }
 
 /// A battlefield permanent whose card projects static P/T, keyword,
-/// restriction, type or mana-ability grants, with its controller.
-type StaticSource<'a> = (PermanentId, PlayerId, &'a Card);
+/// restriction, type, triggered-ability, additional-trigger or mana-ability
+/// grants, with its controller.
+type StaticSource = (PermanentId, PlayerId, CardId);
+
+/// A battlefield permanent attached to an object, with that exact object.
+type Attachment = (PermanentId, ObjectRef, CardId);
+
+/// The battlefield permanents static abilities can come from, at one state
+/// revision, each list in battlefield order.
+#[derive(Debug, PartialEq)]
+struct StaticIndex {
+    attachments: Vec<Attachment>,
+    /// Static sources that have not lost their abilities.
+    sources: Vec<StaticSource>,
+}
+
+/// State-derived statics data, valid for the state revision it was computed
+/// at; reading it at a later revision discards it first.
+#[derive(Default)]
+pub(crate) struct StaticsCache {
+    revision: u64,
+    index: Option<Arc<StaticIndex>>,
+    /// Indexed by `PermanentId`.
+    characteristics: Vec<Option<Arc<Characteristics>>>,
+}
+
+/// Opaque, so a game's `Debug` text does not depend on what was read.
+impl std::fmt::Debug for StaticsCache {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("StaticsCache")
+    }
+}
+
+impl StaticsCache {
+    fn at(&mut self, revision: u64) -> &mut Self {
+        if self.revision != revision {
+            self.revision = revision;
+            self.index = None;
+            self.characteristics.clear();
+        }
+        self
+    }
+}
 
 /// Layer inputs several stages read, computed once per view: the
 /// permanent's attachments, the characteristic-setting Aura (latest by
@@ -204,10 +254,42 @@ fn creature_types_with<'a>(card: &'a Card, basis: &LayerBasis<'a>) -> Vec<&'a st
     types
 }
 
+fn owned(strs: Vec<&str>) -> Vec<String> {
+    strs.into_iter().map(str::to_string).collect()
+}
+
 impl Game {
     /// The permanent's characteristics: static abilities and effect records
-    /// applied by layer and then timestamp (see the header).
-    pub fn characteristics(&self, permanent_id: PermanentId) -> Characteristics<'_> {
+    /// applied by layer and then timestamp (see the header). Computed once
+    /// per state revision.
+    pub fn characteristics(&self, permanent_id: PermanentId) -> Arc<Characteristics> {
+        let revision = self.state.revision();
+        let cached = self
+            .statics_cache
+            .borrow_mut()
+            .at(revision)
+            .characteristics
+            .get(permanent_id.0)
+            .and_then(Option::clone);
+        if let Some(characteristics) = cached {
+            debug_assert_eq!(
+                *characteristics,
+                self.compute_characteristics(permanent_id),
+                "stale cached characteristics for {permanent_id:?}"
+            );
+            return characteristics;
+        }
+        let characteristics = Arc::new(self.compute_characteristics(permanent_id));
+        let mut cache = self.statics_cache.borrow_mut();
+        let entries = &mut cache.at(revision).characteristics;
+        if entries.len() <= permanent_id.0 {
+            entries.resize(permanent_id.0 + 1, None);
+        }
+        entries[permanent_id.0] = Some(characteristics.clone());
+        characteristics
+    }
+
+    fn compute_characteristics(&self, permanent_id: PermanentId) -> Characteristics {
         let Some(permanent) = self
             .state
             .permanents
@@ -217,22 +299,23 @@ impl Game {
             return Characteristics::default();
         };
         let card = &self.state.cards[permanent.card];
-        // Every stage reads the same static sources; collect them once.
-        let sources = self.static_sources();
-        let basis = self.layer_basis(permanent_id, &sources);
-        let (power, toughness) = self.pt_with(permanent_id, &basis, &sources);
-        let is_land = self.is_land_with(permanent_id, &sources);
+        let index = self.static_index();
+        let sources = &index.sources;
+        let basis = self.layer_basis(permanent_id, sources);
+        let (power, toughness) = self.pt_with(permanent_id, &basis, sources);
+        let is_land = self.is_land_with(permanent_id, sources);
         Characteristics {
             name: basis
                 .set
-                .map_or(card.name.as_str(), |set| set.named.as_str()),
+                .map_or(card.name.as_str(), |set| set.named.as_str())
+                .to_string(),
             characteristics_set: basis.set.is_some(),
-            subtypes: subtypes_with(card, &basis),
-            creature_types: creature_types_with(card, &basis),
+            subtypes: owned(subtypes_with(card, &basis)),
+            creature_types: owned(creature_types_with(card, &basis)),
             is_creature: self.permanent_is_creature(permanent_id),
             is_land,
             is_animated: self.permanent_is_animated(permanent_id),
-            keywords: self.keywords_with(permanent_id, basis.lost, &sources),
+            keywords: self.keywords_with(permanent_id, basis.lost, sources),
             firebending: self.firebending_with(permanent_id, basis.lost),
             abilities_lost: basis.lost.is_some(),
             power,
@@ -241,26 +324,101 @@ impl Game {
                 permanent_id,
                 &basis,
                 is_land,
-                &sources,
+                sources,
             ),
-            added_subtypes: basis.added_subtypes,
+            added_subtypes: owned(basis.added_subtypes),
+        }
+    }
+
+    /// The static-source index at the current state revision, built once per
+    /// revision.
+    fn static_index(&self) -> Arc<StaticIndex> {
+        let revision = self.state.revision();
+        let cached = self.statics_cache.borrow_mut().at(revision).index.clone();
+        if let Some(index) = cached {
+            debug_assert_eq!(*index, self.build_static_index(), "stale static index");
+            return index;
+        }
+        let index = Arc::new(self.build_static_index());
+        self.statics_cache.borrow_mut().at(revision).index = Some(index.clone());
+        index
+    }
+
+    /// Scan both battlefields for attached permanents and for static sources
+    /// that have not lost their abilities. Reads attachments only through the
+    /// list it is building, never through `static_index`.
+    fn build_static_index(&self) -> StaticIndex {
+        let battlefield: Vec<(CardId, PermanentId, &Permanent)> = [PlayerId(0), PlayerId(1)]
+            .into_iter()
+            .flat_map(|player| self.state.zones.zone_cards(ZoneType::Battlefield, player))
+            .filter_map(|&card_id| {
+                let permanent_id = self.state.card_to_permanent[card_id]?;
+                let permanent = self.state.permanents[permanent_id].as_ref()?;
+                Some((card_id, permanent_id, permanent))
+            })
+            .collect();
+        let attachments: Vec<Attachment> = battlefield
+            .iter()
+            .filter_map(|&(card_id, permanent_id, permanent)| {
+                Some((permanent_id, permanent.attached_to?, card_id))
+            })
+            .collect();
+        // Only an attached characteristic-setting Aura or a land-type
+        // overwrite removes abilities without a record; without either,
+        // records alone decide.
+        let unrecorded_loss = attachments.iter().any(|&(_, _, card_id)| {
+            self.state.cards[card_id]
+                .attached_characteristics()
+                .is_some()
+        }) || battlefield.iter().any(|&(card_id, _, _)| {
+            self.state.cards[card_id]
+                .statics
+                .iter()
+                .any(|ability| matches!(ability, StaticAbility::SetsLandType(_)))
+        });
+        let sources = battlefield
+            .iter()
+            .filter(|&&(card_id, permanent_id, _)| {
+                let projects = self.state.cards[card_id].statics.iter().any(|ability| {
+                    matches!(
+                        ability,
+                        StaticAbility::PtBuff(_)
+                            | StaticAbility::KeywordGrant(_)
+                            | StaticAbility::Restriction(_)
+                            | StaticAbility::TypeGrant(_)
+                            | StaticAbility::TriggersAdditionalTime(_)
+                            | StaticAbility::TriggeredGrant(_)
+                            | StaticAbility::GrantsAnyColorManaAbility(_)
+                    )
+                });
+                projects
+                    && if unrecorded_loss {
+                        self.ability_loss_timestamp_in(&attachments, permanent_id)
+                    } else {
+                        self.recorded_loss(permanent_id)
+                    }
+                    .is_none()
+            })
+            .map(|&(card_id, permanent_id, permanent)| {
+                (permanent_id, permanent.controller, card_id)
+            })
+            .collect();
+        StaticIndex {
+            attachments,
+            sources,
         }
     }
 
     /// The layer inputs several stages share, computed once per view from
-    /// the view's `static_sources`.
-    fn layer_basis<'a>(
-        &'a self,
-        permanent_id: PermanentId,
-        sources: &[StaticSource<'a>],
-    ) -> LayerBasis<'a> {
-        let attachments: Vec<(PermanentId, &Card)> = self.attachments_on(permanent_id).collect();
+    /// the view's static sources.
+    fn layer_basis(&self, permanent_id: PermanentId, sources: &[StaticSource]) -> LayerBasis<'_> {
+        let attachments = self.attachments_on(permanent_id);
         let setter = self.latest_setter(attachments.iter().copied());
         let set_timestamp = setter.map(|(timestamp, _)| timestamp);
         let overwrite = self.land_type_overwrite(permanent_id);
         let mut added_subtypes: Vec<&str> = Vec::new();
-        for &(source_id, controller, card) in sources {
-            for grant in card
+        for &(source_id, controller, card_id) in sources {
+            for grant in self.state.cards[card_id]
                 .type_grants()
                 .filter(|grant| !grant.subtypes.is_empty())
             {
@@ -323,11 +481,11 @@ impl Game {
     /// Layer 7: power and toughness (CDA-aware or set base, plus static buffs,
     /// records and +1/+1 counters).
     fn effective_pt(&self, permanent_id: PermanentId) -> (i32, i32) {
-        let sources = self.static_sources();
+        let index = self.static_index();
         self.pt_with(
             permanent_id,
-            &self.layer_basis(permanent_id, &sources),
-            &sources,
+            &self.layer_basis(permanent_id, &index.sources),
+            &index.sources,
         )
     }
 
@@ -420,7 +578,7 @@ impl Game {
         let mut power = 0;
         let mut toughness = 0;
         for &(source_id, controller, card) in sources {
-            for buff in card.pt_buffs() {
+            for buff in self.state.cards[card].pt_buffs() {
                 if !self.static_scope_applies(
                     &buff.scope,
                     source_id,
@@ -465,7 +623,7 @@ impl Game {
             if !self.follows(source_id, after) {
                 continue;
             }
-            for grant in card.keyword_grants() {
+            for grant in self.state.cards[card].keyword_grants() {
                 if self.static_scope_applies(
                     &grant.scope,
                     source_id,
@@ -489,8 +647,8 @@ impl Game {
     pub(crate) fn spell_keywords(&self, card_id: CardId, controller: PlayerId) -> Keywords {
         let card = &self.state.cards[card_id];
         let mut keywords = card.keywords;
-        for (_, source_controller, source) in self.static_sources() {
-            for grant in source.keyword_grants() {
+        for &(_, source_controller, source) in &self.static_index().sources {
+            for grant in self.state.cards[source].keyword_grants() {
                 if let StaticScope::SpellsYouControl(predicate) = &grant.scope {
                     if source_controller == controller
                         && predicate.matches_card(card)
@@ -506,63 +664,14 @@ impl Game {
         keywords
     }
 
-    /// Every `StaticSource` that has not lost its abilities, in battlefield
-    /// order. A view collects them once and passes them to each stage.
-    pub(crate) fn static_sources(&self) -> Vec<StaticSource<'_>> {
-        // Only an attached characteristic-setting Aura or a land-type
-        // overwrite removes abilities without a record; without either,
-        // records alone decide.
-        let unrecorded_loss = [PlayerId(0), PlayerId(1)].into_iter().any(|player| {
-            self.state
-                .zones
-                .zone_cards(ZoneType::Battlefield, player)
-                .iter()
-                .any(|&card_id| {
-                    let card = &self.state.cards[card_id];
-                    card.statics
-                        .iter()
-                        .any(|ability| matches!(ability, StaticAbility::SetsLandType(_)))
-                        || card.attached_characteristics().is_some()
-                            && self.state.card_to_permanent[card_id]
-                                .and_then(|id| self.state.permanents[id].as_ref())
-                                .is_some_and(|permanent| permanent.attached_to.is_some())
-                })
-        });
-        [PlayerId(0), PlayerId(1)]
-            .into_iter()
-            .flat_map(move |player| {
-                self.state
-                    .zones
-                    .zone_cards(ZoneType::Battlefield, player)
-                    .iter()
-                    .filter_map(move |&card_id| {
-                        let card = &self.state.cards[card_id];
-                        if !card.statics.iter().any(|ability| {
-                            matches!(
-                                ability,
-                                StaticAbility::PtBuff(_)
-                                    | StaticAbility::KeywordGrant(_)
-                                    | StaticAbility::Restriction(_)
-                                    | StaticAbility::TypeGrant(_)
-                                    | StaticAbility::TriggersAdditionalTime(_)
-                                    | StaticAbility::TriggeredGrant(_)
-                                    | StaticAbility::GrantsAnyColorManaAbility(_)
-                            )
-                        }) {
-                            return None;
-                        }
-                        let permanent_id = self.state.card_to_permanent[card_id]?;
-                        let permanent = self.state.permanents[permanent_id].as_ref()?;
-                        let lost = if unrecorded_loss {
-                            self.ability_loss_timestamp(permanent_id)
-                        } else {
-                            self.recorded_loss(permanent_id)
-                        };
-                        if lost.is_some() {
-                            return None;
-                        }
-                        Some((permanent_id, permanent.controller, card))
-                    })
+    /// Every static source that has not lost its abilities, in battlefield
+    /// order, with its card.
+    pub(crate) fn static_sources(&self) -> Vec<(PermanentId, PlayerId, &Card)> {
+        self.static_index()
+            .sources
+            .iter()
+            .map(|&(permanent_id, controller, card_id)| {
+                (permanent_id, controller, &self.state.cards[card_id])
             })
             .collect()
     }
@@ -579,9 +688,18 @@ impl Game {
 
     /// The latest timestamp at which the permanent lost all abilities, if
     /// it has (CR 613.1f); grants with later timestamps still apply.
-    /// Reads no static scope, so `static_sources` can ask it of each source.
+    /// Reads no static scope, so `build_static_index` can ask it of each
+    /// source.
     fn ability_loss_timestamp(&self, permanent_id: PermanentId) -> Option<ObjectId> {
-        let set = self.latest_setter(self.attachments_on(permanent_id));
+        self.ability_loss_timestamp_in(&self.static_index().attachments, permanent_id)
+    }
+
+    fn ability_loss_timestamp_in(
+        &self,
+        attachments: &[Attachment],
+        permanent_id: PermanentId,
+    ) -> Option<ObjectId> {
+        let set = self.latest_setter(self.attachments_in(attachments, permanent_id).into_iter());
         self.loss_timestamp_with(
             permanent_id,
             set.map(|(timestamp, _)| timestamp),
@@ -624,7 +742,7 @@ impl Game {
             .is_some_and(|permanent| {
                 subtypes_with(
                     &self.state.cards[permanent.card],
-                    &self.layer_basis(permanent_id, &self.static_sources()),
+                    &self.layer_basis(permanent_id, &self.static_index().sources),
                 )
                 .contains(&subtype)
             })
@@ -677,7 +795,7 @@ impl Game {
     ) -> Vec<CardType> {
         let mut types = Vec::new();
         for &(source_id, controller, card) in sources {
-            for grant in card.type_grants() {
+            for grant in self.state.cards[card].type_grants() {
                 if self.static_scope_applies(
                     &grant.scope,
                     source_id,
@@ -694,7 +812,7 @@ impl Game {
 
     /// Whether a battlefield permanent is a land, printed or granted.
     fn permanent_is_land(&self, permanent_id: PermanentId) -> bool {
-        self.is_land_with(permanent_id, &self.static_sources())
+        self.is_land_with(permanent_id, &self.static_index().sources)
     }
 
     fn is_land_with(&self, permanent_id: PermanentId, sources: &[StaticSource]) -> bool {
@@ -772,37 +890,44 @@ impl Game {
 
     /// Auras and Equipment attached to the creature `target`, in battlefield
     /// order, less those that have lost their own abilities.
-    pub(crate) fn attachments_on(
+    pub(crate) fn attachments_on(&self, target: PermanentId) -> Vec<(PermanentId, &Card)> {
+        self.attachments_in(&self.static_index().attachments, target)
+    }
+
+    /// `attachments_on`, reading the attached permanents from `attachments`.
+    fn attachments_in(
         &self,
+        attachments: &[Attachment],
         target: PermanentId,
-    ) -> impl Iterator<Item = (PermanentId, &Card)> {
+    ) -> Vec<(PermanentId, &Card)> {
         // Most permanents carry nothing: compare exact refs before asking
         // whether the target is still a creature.
-        let target_ref = self.permanent_object_ref(target);
-        [PlayerId(0), PlayerId(1)]
-            .into_iter()
-            .flat_map(move |player| self.state.zones.zone_cards(ZoneType::Battlefield, player))
-            .filter_map(move |&card_id| {
-                let source = self.state.card_to_permanent[card_id]?;
-                let attached = self.state.permanents[source].as_ref()?.attached_to?;
+        let Some(target_ref) = self.permanent_object_ref(target) else {
+            return Vec::new();
+        };
+        attachments
+            .iter()
+            .filter(|&&(source, attached, _)| {
                 // Only records can remove an attachment's own abilities,
                 // so this never recurses.
-                (target_ref == Some(attached)
+                attached == target_ref
                     && self.permanent_is_creature(target)
                     && !self
                         .effects_on(source)
-                        .any(|effect| effect.modification == Modification::LoseAllAbilities))
-                .then(|| (source, &self.state.cards[card_id]))
+                        .any(|effect| effect.modification == Modification::LoseAllAbilities)
             })
+            .map(|&(source, _, card_id)| (source, &self.state.cards[card_id]))
+            .collect()
     }
 
     /// Whether a static restriction from a battlefield permanent applies to
     /// `target_id`.
     pub(crate) fn has_restriction(&self, target_id: PermanentId, kind: Restriction) -> bool {
-        self.static_sources()
-            .into_iter()
-            .any(|(source_id, controller, card)| {
-                card.restrictions().any(|restriction| {
+        self.static_index()
+            .sources
+            .iter()
+            .any(|&(source_id, controller, card)| {
+                self.state.cards[card].restrictions().any(|restriction| {
                     restriction.kind == kind
                         && restriction.unless.as_ref().is_none_or(|condition| {
                             !self.check_static_condition(condition, controller)
@@ -825,7 +950,7 @@ impl Game {
             .map_or_else(Vec::new, |permanent| {
                 creature_types_with(
                     &self.state.cards[permanent.card],
-                    &self.layer_basis(permanent_id, &self.static_sources()),
+                    &self.layer_basis(permanent_id, &self.static_index().sources),
                 )
             })
     }
@@ -1049,7 +1174,7 @@ impl Game {
         self.keywords_with(
             permanent_id,
             self.ability_loss_timestamp(permanent_id),
-            &self.static_sources(),
+            &self.static_index().sources,
         )
     }
 
@@ -1218,7 +1343,7 @@ impl Game {
             || !structural.card_types_any.is_empty()
             || !structural.not_card_types.is_empty();
         if view != ScopeView::Types && reads_types {
-            types.extend(self.granted_card_types(permanent_id, &self.static_sources()));
+            types.extend(self.granted_card_types(permanent_id, &self.static_index().sources));
         }
         structural.matches(card, power, &types)
     }
@@ -1306,7 +1431,7 @@ impl Game {
         }
         for &(_, controller, grantor) in sources {
             if controller == source.controller
-                && grantor.statics.iter().any(|ability| {
+                && self.state.cards[grantor].statics.iter().any(|ability| {
                     matches!(
                     ability,
                     StaticAbility::GrantsAnyColorManaAbility(predicate)

@@ -31,7 +31,7 @@ impl Game {
     /// Replace the game RNG with a fresh seeded stream (for reproducible
     /// playouts from cloned states).
     pub fn reseed(&mut self, seed: u64) {
-        self.state.rng = ChaCha8Rng::seed_from_u64(seed);
+        *self.state.rng_mut() = ChaCha8Rng::seed_from_u64(seed);
     }
 
     /// Sample one world consistent with `perspective`'s observation.
@@ -198,7 +198,7 @@ impl Game {
             if action_count == 0 {
                 return Err(AgentError("random_playout: empty action space".to_string()));
             }
-            let index = self.state.rng.gen_range(0..action_count);
+            let index = self.state.rng_mut().gen_range(0..action_count);
             self.step(index)?;
             steps += 1;
         }
