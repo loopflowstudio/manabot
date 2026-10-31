@@ -209,6 +209,21 @@
       "W"
     ]
   },
+  "Avatar Destiny": {
+    "name": "Avatar Destiny",
+    "mana_cost": "{2}{G}{G}",
+    "type_line": "Enchantment — Aura",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Enchant",
+      "Mill"
+    ],
+    "oracle_text": "Enchant creature you control\nEnchanted creature gets +1/+1 for each creature card in your graveyard and is an Avatar in addition to its other types.\nWhen enchanted creature dies, mill cards equal to its power. Return this card to its owner's hand and up to one creature card milled this way to the battlefield under your control.",
+    "colors": [
+      "G"
+    ]
+  },
   "Avatar Enthusiasts": {
     "name": "Avatar Enthusiasts",
     "mana_cost": "{2}{W}",
@@ -434,6 +449,20 @@
     "oracle_text": "This land enters tapped.\n{T}: Add {B} or {R}.\n{4}, {T}, Sacrifice this land: Draw a card.",
     "colors": []
   },
+  "Boiling Rock Rioter": {
+    "name": "Boiling Rock Rioter",
+    "mana_cost": "{2}{B}",
+    "type_line": "Creature — Human Rogue Ally",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Firebending"
+    ],
+    "oracle_text": "Firebending 1 (Whenever this creature attacks, add {R}. This mana lasts until end of combat.)\nTap an untapped Ally you control: Exile target card from a graveyard.\nWhenever this creature attacks, you may cast an Ally spell from among cards you own exiled with this creature.",
+    "colors": [
+      "B"
+    ]
+  },
   "Boomerang Basics": {
     "name": "Boomerang Basics",
     "mana_cost": "{U}",
@@ -456,6 +485,35 @@
     "oracle_text": "Choose one —\n• Bumi Bash deals damage equal to the number of lands you control to target creature.\n• Destroy target land creature or nonbasic land.",
     "colors": [
       "R"
+    ]
+  },
+  "Bumi, King of Three Trials": {
+    "name": "Bumi, King of Three Trials",
+    "mana_cost": "{5}{G}",
+    "type_line": "Legendary Creature — Human Noble Ally",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Earthbend",
+      "Scry"
+    ],
+    "oracle_text": "When Bumi enters, choose up to X, where X is the number of Lesson cards in your graveyard —\n• Put three +1/+1 counters on Bumi.\n• Target player scries 3.\n• Earthbend 3. (Target land you control becomes a 0/0 creature with haste that's still a land. Put three +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Buzzard-Wasp Colony": {
+    "name": "Buzzard-Wasp Colony",
+    "mana_cost": "{3}{B}",
+    "type_line": "Creature — Bird Insect",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhen this creature enters, you may sacrifice an artifact or creature. If you do, draw a card.\nWhenever another creature you control dies, if it had counters on it, put its counters on this creature.",
+    "colors": [
+      "B"
     ]
   },
   "Callous Inspector": {
@@ -518,6 +576,18 @@
     "colors": [
       "U",
       "W"
+    ]
+  },
+  "Combustion Man": {
+    "name": "Combustion Man",
+    "mana_cost": "{3}{R}{R}",
+    "type_line": "Legendary Creature — Human Assassin",
+    "power": "4",
+    "toughness": "6",
+    "keywords": [],
+    "oracle_text": "Whenever Combustion Man attacks, destroy target permanent unless its controller has Combustion Man deal damage to them equal to his power.",
+    "colors": [
+      "R"
     ]
   },
   "Combustion Technique": {
@@ -738,6 +808,18 @@
       "R"
     ]
   },
+  "Destined Confrontation": {
+    "name": "Destined Confrontation",
+    "mana_cost": "{2}{W}{W}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Each player chooses any number of creatures they control with total power 4 or less, then sacrifices all other creatures they control.",
+    "colors": [
+      "W"
+    ]
+  },
   "Diligent Zookeeper": {
     "name": "Diligent Zookeeper",
     "mana_cost": "{3}{G}",
@@ -848,6 +930,21 @@
     "colors": [
       "G",
       "W"
+    ]
+  },
+  "Earth Rumble": {
+    "name": "Earth Rumble",
+    "mana_cost": "{3}{G}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Fight",
+      "Earthbend"
+    ],
+    "oracle_text": "Earthbend 2. When you do, up to one target creature you control fights target creature an opponent controls. (To earthbend 2, target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped. Creatures that fight each deal damage equal to their power to the other.)",
+    "colors": [
+      "G"
     ]
   },
   "Earth Rumble Wrestlers": {
@@ -1020,6 +1117,20 @@
       "W"
     ]
   },
+  "Fatal Fissure": {
+    "name": "Fatal Fissure",
+    "mana_cost": "{1}{B}",
+    "type_line": "Instant",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "Choose target creature. When that creature dies this turn, you earthbend 4. (Target land you control becomes a 0/0 creature with haste that's still a land. Put four +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)",
+    "colors": [
+      "B"
+    ]
+  },
   "Fated Firepower": {
     "name": "Fated Firepower",
     "mana_cost": "{X}{R}{R}{R}",
@@ -1155,6 +1266,21 @@
     "oracle_text": "Reach\nWhen this Vehicle dies, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")\nCrew 2 (Tap any number of creatures you control with total power 2 or more: This Vehicle becomes an artifact creature until end of turn.)",
     "colors": []
   },
+  "Fire Navy Trebuchet": {
+    "name": "Fire Navy Trebuchet",
+    "mana_cost": "{2}{B}",
+    "type_line": "Artifact Creature — Wall",
+    "power": "0",
+    "toughness": "4",
+    "keywords": [
+      "Reach",
+      "Defender"
+    ],
+    "oracle_text": "Defender, reach\nWhenever you attack, create a 2/1 colorless Construct artifact creature token with flying named Ballistic Boulder that's tapped and attacking. Sacrifice that token at the beginning of the next end step.",
+    "colors": [
+      "B"
+    ]
+  },
   "Fire Sages": {
     "name": "Fire Sages",
     "mana_cost": "{1}{R}",
@@ -1165,6 +1291,18 @@
       "Firebending"
     ],
     "oracle_text": "Firebending 1 (Whenever this creature attacks, add {R}. This mana lasts until end of combat.)\n{1}{R}{R}: Put a +1/+1 counter on this creature.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Firebender Ascension": {
+    "name": "Firebender Ascension",
+    "mana_cost": "{1}{R}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "When this enchantment enters, create a 2/2 red Soldier creature token with firebending 1.\nWhenever a creature you control attacking causes a triggered ability of that creature to trigger, put a quest counter on this enchantment. Then if it has four or more quest counters on it, you may copy that ability. You may choose new targets for the copy.",
     "colors": [
       "R"
     ]
@@ -1753,6 +1891,21 @@
       "U"
     ]
   },
+  "Iroh, Tea Master": {
+    "name": "Iroh, Tea Master",
+    "mana_cost": "{1}{R}{W}",
+    "type_line": "Legendary Creature — Human Citizen Ally",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Food"
+    ],
+    "oracle_text": "When Iroh enters, create a Food token.\nAt the beginning of combat on your turn, you may have target opponent gain control of target permanent you control. When you do, create a 1/1 white Ally creature token. Put a +1/+1 counter on that token for each permanent you own that your opponents control.",
+    "colors": [
+      "R",
+      "W"
+    ]
+  },
   "Island": {
     "name": "Island",
     "mana_cost": "",
@@ -1795,6 +1948,35 @@
     "oracle_text": "When this creature enters, put a +1/+1 counter on target creature.",
     "colors": [
       "W"
+    ]
+  },
+  "Jeong Jeong, the Deserter": {
+    "name": "Jeong Jeong, the Deserter",
+    "mana_cost": "{2}{R}",
+    "type_line": "Legendary Creature — Human Rebel Ally",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Exhaust",
+      "Firebending"
+    ],
+    "oracle_text": "Firebending 1 (Whenever this creature attacks, add {R}. This mana lasts until end of combat.)\nExhaust — {3}: Put a +1/+1 counter on Jeong Jeong. When you next cast a Lesson spell this turn, copy it and you may choose new targets for the copy. (Activate each exhaust ability only once.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Jet's Brainwashing": {
+    "name": "Jet's Brainwashing",
+    "mana_cost": "{R}",
+    "type_line": "Sorcery",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Kicker"
+    ],
+    "oracle_text": "Kicker {3} (You may pay an additional {3} as you cast this spell.)\nTarget creature can't block this turn. If this spell was kicked, gain control of that creature until end of turn, untap it, and it gains haste until end of turn.\nCreate a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")",
+    "colors": [
+      "R"
     ]
   },
   "Jet, Freedom Fighter": {
@@ -1848,6 +2030,20 @@
     ],
     "oracle_text": "Vigilance\nWhen Katara enters, create a 1/1 white Ally creature token.\nWaterbend {X}: Creatures you control have base power and toughness X/X until end of turn. X can't be 0. Activate only during your turn. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
     "colors": [
+      "U",
+      "W"
+    ]
+  },
+  "Katara, the Fearless": {
+    "name": "Katara, the Fearless",
+    "mana_cost": "{G}{W}{U}",
+    "type_line": "Legendary Creature — Human Warrior Ally",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "If a triggered ability of an Ally you control triggers, that ability triggers an additional time.",
+    "colors": [
+      "G",
       "U",
       "W"
     ]
@@ -2469,6 +2665,18 @@
       "W"
     ]
   },
+  "Price of Freedom": {
+    "name": "Price of Freedom",
+    "mana_cost": "{1}{R}",
+    "type_line": "Sorcery — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "Destroy target artifact or land an opponent controls. Its controller may search their library for a basic land card, put it onto the battlefield tapped, then shuffle.\nDraw a card.",
+    "colors": [
+      "R"
+    ]
+  },
   "Prismatic Vista": {
     "name": "Prismatic Vista",
     "mana_cost": "",
@@ -2599,6 +2807,20 @@
       "G"
     ]
   },
+  "Raven Eagle": {
+    "name": "Raven Eagle",
+    "mana_cost": "{2}{B}",
+    "type_line": "Creature — Bird Assassin",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever this creature enters or attacks, exile up to one target card from a graveyard. If a creature card is exiled this way, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")\nWhenever you draw your second card each turn, each opponent loses 1 life and you gain 1 life.",
+    "colors": [
+      "B"
+    ]
+  },
   "Razor Rings": {
     "name": "Razor Rings",
     "mana_cost": "{1}{W}",
@@ -2634,6 +2856,18 @@
     "oracle_text": "Exhaust — {6}: Put two +1/+1 counters on this creature, then earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped. Activate each exhaust ability only once.)",
     "colors": [
       "G"
+    ]
+  },
+  "Redirect Lightning": {
+    "name": "Redirect Lightning",
+    "mana_cost": "{R}",
+    "type_line": "Instant — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "As an additional cost to cast this spell, pay 5 life or pay {2}.\nChange the target of target spell or ability with a single target.",
+    "colors": [
+      "R"
     ]
   },
   "Rockalanche": {
@@ -2690,6 +2924,20 @@
       "U"
     ]
   },
+  "Ruinous Waterbending": {
+    "name": "Ruinous Waterbending",
+    "mana_cost": "{1}{B}{B}",
+    "type_line": "Sorcery — Lesson",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Waterbend"
+    ],
+    "oracle_text": "As an additional cost to cast this spell, you may waterbend {4}. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)\nAll creatures get -2/-2 until end of turn. If this spell's additional cost was paid, whenever a creature dies this turn, you gain 1 life.",
+    "colors": [
+      "B"
+    ]
+  },
   "Rumble Arena": {
     "name": "Rumble Arena",
     "mana_cost": "",
@@ -2719,6 +2967,19 @@
     "oracle_text": "Reach\nForestcycling {2} ({2}, Discard this card: Search your library for a Forest card, reveal it, put it into your hand, then shuffle.)",
     "colors": [
       "G"
+    ]
+  },
+  "Sandbender Scavengers": {
+    "name": "Sandbender Scavengers",
+    "mana_cost": "{W}{B}",
+    "type_line": "Creature — Human Rogue",
+    "power": "1",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "Whenever you sacrifice another permanent, put a +1/+1 counter on this creature.\nWhen this creature dies, you may exile it. When you do, return target creature card with mana value less than or equal to this creature's power from your graveyard to the battlefield.",
+    "colors": [
+      "B",
+      "W"
     ]
   },
   "Sandbenders' Storm": {
@@ -2898,6 +3159,23 @@
     ],
     "oracle_text": "Vigilance\nWhenever Sokka and at least one other creature attack, draw a card.",
     "colors": [
+      "U",
+      "W"
+    ]
+  },
+  "Sokka, Tenacious Tactician": {
+    "name": "Sokka, Tenacious Tactician",
+    "mana_cost": "{1}{U}{R}{W}",
+    "type_line": "Legendary Creature — Human Warrior Ally",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Prowess",
+      "Menace"
+    ],
+    "oracle_text": "Menace, prowess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)\nOther Allies you control have menace and prowess.\nWhenever you cast a noncreature spell, create a 1/1 white Ally creature token.",
+    "colors": [
+      "R",
       "U",
       "W"
     ]
@@ -3096,6 +3374,20 @@
       "W"
     ]
   },
+  "Teo, Spirited Glider": {
+    "name": "Teo, Spirited Glider",
+    "mana_cost": "{3}{U}",
+    "type_line": "Legendary Creature — Human Pilot Ally",
+    "power": "1",
+    "toughness": "4",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever one or more creatures you control with flying attack, draw a card, then discard a card. When you discard a nonland card this way, put a +1/+1 counter on target creature you control.",
+    "colors": [
+      "U"
+    ]
+  },
   "The Boulder, Ready to Rumble": {
     "name": "The Boulder, Ready to Rumble",
     "mana_cost": "{3}{G}",
@@ -3120,6 +3412,21 @@
     "oracle_text": "When The Earth King enters, create a 4/4 green Bear creature token.\nWhenever one or more creatures you control with power 4 or greater attack, search your library for up to that many basic land cards, put them onto the battlefield tapped, then shuffle.",
     "colors": [
       "G"
+    ]
+  },
+  "The Fire Nation Drill": {
+    "name": "The Fire Nation Drill",
+    "mana_cost": "{2}{B}{B}",
+    "type_line": "Legendary Artifact — Vehicle",
+    "power": "6",
+    "toughness": "3",
+    "keywords": [
+      "Crew",
+      "Trample"
+    ],
+    "oracle_text": "Trample\nWhen The Fire Nation Drill enters, you may tap it. When you do, destroy target creature with power 4 or less.\n{1}: Permanents your opponents control lose hexproof and indestructible until end of turn.\nCrew 2",
+    "colors": [
+      "B"
     ]
   },
   "The Last Agni Kai": {
@@ -3274,6 +3581,21 @@
       "W"
     ]
   },
+  "Toph, Hardheaded Teacher": {
+    "name": "Toph, Hardheaded Teacher",
+    "mana_cost": "{2}{R}{G}",
+    "type_line": "Legendary Creature — Human Warrior Ally",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "When Toph enters, you may discard a card. If you do, return target instant or sorcery card from your graveyard to your hand.\nWhenever you cast a spell, earthbend 1. If that spell is a Lesson, put an additional +1/+1 counter on that land. (Target land you control becomes a 0/0 creature with haste that's still a land. Put a +1/+1 counter on it. When it dies or is exiled, return it to the battlefield tapped.)",
+    "colors": [
+      "G",
+      "R"
+    ]
+  },
   "Toph, the Blind Bandit": {
     "name": "Toph, the Blind Bandit",
     "mana_cost": "{2}{G}",
@@ -3396,6 +3718,21 @@
     "oracle_text": "Prowess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)\nWhenever Ty Lee attacks, you may pay {1}. When you do, target creature can't block this turn.",
     "colors": [
       "R"
+    ]
+  },
+  "Ty Lee, Chi Blocker": {
+    "name": "Ty Lee, Chi Blocker",
+    "mana_cost": "{2}{U}",
+    "type_line": "Legendary Creature — Human Performer Ally",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [
+      "Prowess",
+      "Flash"
+    ],
+    "oracle_text": "Flash\nProwess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)\nWhen Ty Lee enters, tap up to one target creature. It doesn't untap during its controller's untap step for as long as you control Ty Lee.",
+    "colors": [
+      "U"
     ]
   },
   "Typhoid Rats": {
@@ -3739,6 +4076,20 @@
       "U"
     ]
   },
+  "Wolfbat": {
+    "name": "Wolfbat",
+    "mana_cost": "{2}{B}",
+    "type_line": "Creature — Wolf Bat",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Flying"
+    ],
+    "oracle_text": "Flying\nWhenever you draw your second card each turn, you may pay {B}. If you do, return this card from your graveyard to the battlefield with a finality counter on it. (If a creature with a finality counter on it would die, exile it instead.)",
+    "colors": [
+      "B"
+    ]
+  },
   "Yip Yip!": {
     "name": "Yip Yip!",
     "mana_cost": "{W}",
@@ -3810,6 +4161,20 @@
       "R"
     ]
   },
+  "Zhao, the Moon Slayer": {
+    "name": "Zhao, the Moon Slayer",
+    "mana_cost": "{1}{R}",
+    "type_line": "Legendary Creature — Human Soldier",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [
+      "Menace"
+    ],
+    "oracle_text": "Menace\nNonbasic lands enter tapped.\n{7}: Put a conqueror counter on Zhao.\nAs long as Zhao has a conqueror counter on him, nonbasic lands are Mountains. (They lose all other land types and abilities and have \"{T}: Add {R}.\")",
+    "colors": [
+      "R"
+    ]
+  },
   "Zuko's Conviction": {
     "name": "Zuko's Conviction",
     "mana_cost": "{B}",
@@ -3833,6 +4198,19 @@
     "keywords": [],
     "oracle_text": "Exile target artifact, creature, or enchantment. Its controller creates a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")",
     "colors": []
+  },
+  "Zuko, Conflicted": {
+    "name": "Zuko, Conflicted",
+    "mana_cost": "{B}{R}",
+    "type_line": "Legendary Creature — Human Rogue",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "At the beginning of your first main phase, choose one that hasn't been chosen and you lose 2 life —\n• Draw a card.\n• Put a +1/+1 counter on Zuko.\n• Add {R}.\n• Exile Zuko, then return him to the battlefield under an opponent's control.",
+    "colors": [
+      "B",
+      "R"
+    ]
   },
   "Zuko, Exiled Prince": {
     "name": "Zuko, Exiled Prince",
