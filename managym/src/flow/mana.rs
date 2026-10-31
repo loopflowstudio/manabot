@@ -573,14 +573,13 @@ impl Game {
             .map(|permanent| {
                 let source = self.state.permanents[permanent].as_ref().unwrap();
                 let card = &self.state.cards[source.card];
+                let characteristics = self.characteristics(permanent);
                 // A source that lost its abilities offers no zero-mana tap.
                 let can_tap = self.permanent_can_tap(permanent);
-                let fixed = (can_tap
-                    && !card.mana_abilities.is_empty()
-                    && !self.characteristics(permanent).abilities_lost)
-                    .then(|| self.fixed_source_mana(permanent));
-                let abilities = self
-                    .characteristics(permanent)
+                let fixed =
+                    (can_tap && !card.mana_abilities.is_empty() && !characteristics.abilities_lost)
+                        .then(|| self.fixed_source_mana(permanent));
+                let abilities = characteristics
                     .activated_abilities
                     .iter()
                     .enumerate()
@@ -993,23 +992,17 @@ impl Game {
     }
 
     /// Fixed tap output plus immediate triggered bonuses; chosen outputs stay
-    /// in the payment search until the player selects a color.
+    /// in the payment search until the player selects a color. Callers check
+    /// that the source has mana abilities, can tap and has not lost its
+    /// abilities, reading its characteristics once.
     fn fixed_source_mana(&self, permanent: PermanentId) -> Mana {
         let source = self.state.permanents[permanent].as_ref().unwrap();
         let card = &self.state.cards[source.card];
-        if self.characteristics(permanent).abilities_lost {
-            return Mana::default();
-        }
         let mut output = Mana::default();
-        if !self.permanent_can_tap(permanent) {
-            return output;
-        }
         for ability in &card.mana_abilities {
             output.add(&ability.mana);
         }
-        if !card.mana_abilities.is_empty() {
-            output.add(&self.tap_mana_bonus(permanent, source.controller));
-        }
+        output.add(&self.tap_mana_bonus(permanent, source.controller));
         output
     }
 
@@ -1131,6 +1124,13 @@ impl Game {
     pub(crate) fn producible_mana(&self, player: PlayerId) -> Mana {
         let mut total = Mana::default();
         for permanent_id in self.battlefield_permanents(player) {
+            let source = self.state.permanents[permanent_id].as_ref().unwrap();
+            if self.state.cards[source.card].mana_abilities.is_empty()
+                || !self.permanent_can_tap(permanent_id)
+                || self.characteristics(permanent_id).abilities_lost
+            {
+                continue;
+            }
             total.add(&self.fixed_source_mana(permanent_id));
         }
         total
@@ -1173,12 +1173,11 @@ impl Game {
     /// Whether `player` controls a permanent replacing mana loss (CR 614.1a).
     fn unspent_mana_becomes_red(&self, player: PlayerId) -> bool {
         self.battlefield_permanents(player).into_iter().any(|id| {
-            !self.characteristics(id).abilities_lost
-                && self.state.permanents[id].as_ref().is_some_and(|permanent| {
-                    self.state.cards[permanent.card]
-                        .replacement_effects
-                        .contains(&ReplacementEffect::UnspentManaBecomesRed)
-                })
+            self.state.permanents[id].as_ref().is_some_and(|permanent| {
+                self.state.cards[permanent.card]
+                    .replacement_effects
+                    .contains(&ReplacementEffect::UnspentManaBecomesRed)
+            }) && !self.characteristics(id).abilities_lost
         })
     }
 }

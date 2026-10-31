@@ -5438,6 +5438,28 @@ fn great_divide_guide_grants_lands_and_allies_any_color() {
     assert!(!offers_ability(&mut s, theirs, 0), "only lands you control");
 }
 
+/// CR 613.1f: a Great Divide Guide that has lost its abilities grants none.
+#[test]
+fn great_divide_guide_grants_nothing_once_it_loses_its_abilities() {
+    let mut s = five_color_unfunded_setup(&["Honest Work", "Great Divide Guide"]);
+    let guide = s.force_permanent_on_battlefield(1, "Great Divide Guide");
+    let forest = s.force_permanent_on_battlefield(1, "Forest");
+    let granted = s.game().characteristics(forest).activated_abilities.len();
+    assert_eq!(
+        granted, 1,
+        "the Guide grants the Forest an any-color ability"
+    );
+
+    enchant(&mut s, "Honest Work", "U", guide);
+    s.advance_to_active_step(1, StepKind::Main);
+    assert!(s
+        .game()
+        .characteristics(forest)
+        .activated_abilities
+        .is_empty());
+    assert!(!offers_ability(&mut s, forest, 0));
+}
+
 #[test]
 fn raucous_audience_adds_more_with_a_four_power_creature() {
     let mut s = five_color_unfunded_setup(&["Raucous Audience", "Gray Ogre"]);

@@ -866,6 +866,7 @@ impl Game {
             return Vec::new();
         };
         self.static_sources()
+            .into_iter()
             .flat_map(|(grantor, controller, card)| {
                 card.triggered_grants()
                     .filter(move |grant| {
@@ -889,6 +890,7 @@ impl Game {
         let current = self.lookup_current_permanent(source.lki.object_ref).ok();
         let card = &self.state.cards[source.card];
         self.static_sources()
+            .into_iter()
             .filter(|(_, controller, _)| *controller == source.controller)
             .map(|(_, _, grantor)| {
                 grantor
@@ -1107,6 +1109,7 @@ impl Game {
     pub(crate) fn snapshot_trigger_sources(&self) -> Vec<TriggerSourceSnapshot> {
         let grants = self
             .static_sources()
+            .into_iter()
             .any(|(_, _, card)| card.triggered_grants().next().is_some());
         let mut sources: Vec<_> = self
             .state
