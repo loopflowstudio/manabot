@@ -3,7 +3,7 @@
 This record preserves accepted decisions and dated branch evidence for
 [Challenge an identified trained bot through complete games · ETU-79](https://linear.app/loopflow/issue/ETU-79/challenge-an-identified-trained-bot-through-complete-games).
 It is not Task completion, a strength result or deployment approval. The
-[operator guide](../local-trained-challenger.md) owns the repeatable commands.
+[operator guide](../academy.md#playing-a-trained-challenger) owns the repeatable commands.
 Detailed working notes remain in `scratch/`; local `.runs/` paths below locate
 original evidence but are not portable artifacts guaranteed by a repository clone.
 This curation did not rerun training, browser checks or the affected suite.

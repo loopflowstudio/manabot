@@ -61,20 +61,20 @@ require positive integer counts. `Match.swapped()` moves both lists together;
 `Env.reset(options={"match": match})` also replaces the setup used by auto-reset.
 
 
-Train on rented machines through Etude: see [remote training](../docs/remote-training.md).
+Train on rented machines through Etude: see [remote training](../docs/training.md#remote-training).
 New self-play jobs use exact absolute update checkpoints (`checkpoint_updates`,
 default 1,000); freeze targets and shared intervals before launch. Operational
-lease and spending limits remain in hours/dollars. See [cadence and continuation](../docs/training-monitoring.md#new-training-and-live-dashboards).
+lease and spending limits remain in hours/dollars. See [cadence and continuation](../docs/training.md#monitoring).
 
 New self-play training learns from both seats by default (`baseline-v3`).
 Use `TrainSelfPlay(learning_seats="one", ...)` for an explicit one-seat control;
 saved schema-1 recipes retain their historical one-seat behavior.
 Use `games_per_stream` on both arms to match complete-game budgets. Distinct
 learning models can use `PairedLearners` to update both independent optimizers
-from their own seat trajectories. See [both-seat learning](../docs/training-regimes.md#learning-from-both-seats)
+from their own seat trajectories. See [both-seat learning](../docs/training.md#regimes-and-stages)
 for collection boundaries, accounting and measurement limits.
 
-Single-stage self-play can opt into bounded [game crash recovery](../docs/game-crash-recovery.md).
+Single-stage self-play can opt into bounded [game crash recovery](../docs/training.md#game-failures).
 It retains private replay inputs, discards both seats' uncommitted experience from
 failed games and regathers under the same policy. A persisted rolling error rate
 strictly above the declared threshold stops training; evaluation remains strict.
@@ -89,13 +89,15 @@ linked capture audit for boundaries and supervision limits.
 Ordinary checkpoints require `world_binding` from
 `manabot.model.world.checkpoint_world(actual_player_configs, observation_space)`.
 This binds native `WORLD_VERSION`, rules schemas, full deck/sideboard pairs,
-content manifest and input schema. Missing or mismatched bindings fail before
+content manifest and input schema. Deck-source runs bind the world itself
+(`deck_world`: version, card digest, rules and input contract), so the model
+plays any deck the world admits. Missing or mismatched bindings fail before
 weights load. Seat reversal preserves each deck's sideboard. Policy checkpoint
 writers require explicit `player_configs`; never infer training setup from
 tensor dimensions or the default deck.
 
 For the compiled Allies/Lessons matchup, use
-`ModelConfig(semantic_pack="ur-lessons-vs-gw-allies")`. The ordinary model joins
+`ModelConfig(world="ur-lessons-vs-gw-allies")`. The ordinary model joins
 viewer-safe `semantic_cards` transport IDs to complete checked catalog programs,
 including characteristics and referenced definitions; `known_hand` contains
 public definition minima, not hidden hand slots. Selected compiled checkpoints
@@ -159,24 +161,24 @@ transfer. The generic PPO trainer does not yet produce the
 semantic belief inputs required to train a belief-enabled policy. Historical
 positional-condition checkpoints are rejected rather than reinterpreted.
 
-Training regimes can [import a published raw/EMA policy](../docs/training-regimes.md#reuse-a-published-policy-without-training)
+Training regimes can [import a published raw/EMA policy](../docs/training.md#regimes-and-stages)
 without retraining, preserving producer provenance and separate sunk costs.
 They can freeze a policy, collect private whole-game supervision,
 and fit a constrained autoregressive hand sampler without exact enumeration.
-See [frozen-policy belief sampling](../docs/belief-sampler.md). This separately
+See [frozen-policy belief sampling](../docs/search-and-beliefs.md#belief-sampler). This separately
 admitted belief artifact does not change the policy's input contract or establish
 foreign-opponent calibration or search strength.
 
-[Frozen-policy local search](../docs/local-policy-search.md) plays through the
+[Frozen-policy local search](../docs/search-and-beliefs.md#local-policy-search) plays through the
 `local_update` player kind; exact-history search rejects unsupported Rules
 likelihood events. Search receipts and simulation replay retain this distinction.
 
 The existing `agent_puct` player accepts current flat and compound checkpoints;
-see [PUCT policy/value compatibility](../docs/local-policy-search.md#puct-policyvalue-compatibility)
+see [PUCT policy/value compatibility](../docs/search-and-beliefs.md#local-policy-search)
 for critic units, retained prefixes and evaluation registration. This is a search
 compatibility path, not a calibrated strength preset.
 
-Declare training comparisons with [typed Python experiments](../docs/training-experiments.md).
+Declare training comparisons with [typed Python experiments](../docs/training.md#experiments).
 Versioned presets, named component overrides and variant matrices resolve to complete
 existing regimes with provenance; resolution never launches training.
 
@@ -187,7 +189,7 @@ the reusable instruments. The experiment discipline and ledger are in
 
 The retired behavioral-study and structural/opcode experiment tools are retained
 in Git history. Their archived inputs and receipts are indexed in
-[repository archive](../docs/repository-archive.md). Shared target inspection
+[repository archive](../docs/development.md#retained-evidence-and-archived-corpora). Shared target inspection
 now belongs to `sim/action/targeting.py`.
 
 `heuristic` (`manabot/sim/heuristic.py`) is a
@@ -202,12 +204,12 @@ GPU seed 12261 at 25k, 200 paired games per anchor) scored the checkpoint
 cell; it is not yet a frozen anchor comparison.
 
 For versioned S1–S5 tactical diagnostics through ordinary checkpoint players,
-see [checkpoint scenario scoring](../docs/checkpoint-scenarios.md). Each retained
+see [checkpoint scenario scoring](../docs/evaluation.md#checkpoint-scenarios). Each retained
 custom-deck root requires its exact checkpoint setup binding.
 
 For capacity configuration, component counts, versioned architecture receipts and
 bounded CPU calibration, see [capacity accounting](model/agent.md#capacity-identity-and-accounting)
-and [the calibration command](../docs/training-calibration.md#capacity-ladder-software-calibration).
+and [the calibration command](../docs/training.md#freeze-step-targets).
 
 ## Research program
 
@@ -242,17 +244,17 @@ from .sibling import Thing
 Compound checkpoints use an autoregressive legal-offer decoder and execute via
 ordinary checkpoint players. Their complete-game training stages, credit
 boundaries and separate comparison recipes are documented under
-[compound decisions](../docs/training-regimes.md#compound-decisions).
+[compound decisions](../docs/training.md#regimes-and-stages).
 
 Self-play update diagnostics live only in the run's Etude metrics;
-TrainingRun keeps counters and receipts. The [dashboard guide](../docs/training-monitoring.md)
+TrainingRun keeps counters and receipts. The [dashboard guide](../docs/training.md#monitoring)
 covers reading them offline and separate checkpoint monitoring.
 
-Optional [public recent-event input](../docs/recent-events.md) uses the existing
+Optional [public recent-event input](../docs/training.md#policy-inputs) uses the existing
 semantic catalog and a bounded native history suffix. Recipe history-on/off is
 independent of capacity and learning rules; comparison plans remain unexecuted.
 
-Self-play [numerical health](../docs/numerical-health.md) records policy support,
+Self-play [numerical health](../docs/training.md#numerical-health) records policy support,
 selection, gradients and actual optimizer effects, with bounded private failure
 artifacts. CPU correctness does not imply CUDA validation or improved play.
 
@@ -377,7 +379,7 @@ defaults. `TrainingRun` admits the current executable recipe; both share measure
 run fields through `RunRecord`. Reading or publishing a historical result does
 not admit its recipe for a new run or recovery.
 
-[GIH card evaluation](../docs/card-evaluation.md) uses simulation replay capture and Etude
+[GIH card evaluation](../docs/evaluation.md#card-data) uses simulation replay capture and Etude
 tables for copy-weighted card rankings, explicit cohorts and offline Arena-log export.
 
 Simulation imports no evaluation, training, experiment or report modules.
@@ -387,7 +389,7 @@ serialized `arena_key`, `arena_version`, seed identifiers and retained artifact
 paths preserve their original meaning; current source identities use the new paths.
 
 For a standalone, inspectable pretrained-model decision over supplied text and
-legal references, see the optional [LLM harness](../docs/llm-harness.md). It owns
+legal references, see the optional [LLM harness](../docs/llm.md). It owns
 protocol recovery and inference evidence; observation rendering and Command
 execution remain outside it.
 
@@ -396,12 +398,12 @@ execution remain outside it.
 Frozen arena policies can share a bounded, single-machine inference allocation
 through an explicit execution envelope. Monitoring, Etude benchmark and duel
 callers retain native isolation, Commands, replay and original training
-coordinates. See [shared evaluation inference](../docs/shared-evaluation.md) for
+coordinates. See [shared evaluation inference](../docs/evaluation.md) for
 admission, real Perf receipts and the predeclared local calibration command.
 
 A quick local checkpoint comparison needs no TrainingRun or cloud setup:
 `uv run python -m manabot.eval.local --checkpoint policy.pt --opponent heuristic --deal-seed 101 --out .runs/local-check --seconds 300`.
-The [local evaluation API and CLI](../docs/shared-evaluation.md#quick-local-evaluation)
+The [local evaluation API and CLI](../docs/evaluation.md)
 share arena admission, bounded inference, Commands, replay and Perf receipts with
 monitoring and managed comparisons. Pass another local checkpoint as `--opponent`
 for checkpoint-versus-checkpoint evaluation.
@@ -424,3 +426,6 @@ It retains native inputs, prompts, bindings, malformed/stale checks and executio
 receipts. This uses bounded public policy history v1; it loads no model and has
 no writable model memory. Tokenizer/model recovery belongs to the caller;
 `TextDecision.check_token_budget` checks the complete prompt without truncation.
+
+[Decklist file import](../docs/decklist-import.md) admits novel development decks
+against the installed world for simulation and Academy play.

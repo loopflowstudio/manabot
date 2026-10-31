@@ -25,7 +25,7 @@ PACK = "ur-lessons-vs-gw-allies"
 def _write_checkpoint(path: Path) -> None:
     agent = ActorCritic(
         ObservationSpace(),
-        ModelConfig(hidden_dim=8, num_attention_heads=2, semantic_pack=PACK),
+        ModelConfig(hidden_dim=8, num_attention_heads=2, world=PACK),
     )
     save_checkpoint(
         agent,

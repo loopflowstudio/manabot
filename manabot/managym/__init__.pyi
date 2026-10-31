@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from enum import IntEnum
+import os
 from typing import Any, Dict, List, Literal, Optional, Tuple, TypedDict
 
 import numpy as np
@@ -20,6 +21,14 @@ class ContentPool(TypedDict):
     definitions: list[PoolDefinition]
 
 def content_pool(pack_key: str) -> ContentPool: ...
+
+class WorldIdentity(TypedDict):
+    world_version: str
+    card_digest: str
+
+def world_identity() -> WorldIdentity:
+    """The installed world's version and the digest of its cards."""
+
 def set_cards(sets: list[str]) -> list[PoolDefinition]:
     """World pool rows for cards whose key prefix is in ``sets``."""
 
@@ -240,23 +249,131 @@ class VectorEnv:
         self, active: list[bool] | None = None
     ) -> list[str | None]: ...
     def current_game_seeds(self) -> list[int]: ...
+    def set_training_decks(self, decks: List[PlayerConfig]) -> None: ...
+    def current_player_configs(self) -> list[list[PlayerConfig]]: ...
     def current_agent_indices(self) -> list[int]: ...
     def reset_seeds_into_buffers(self, seeds: list[int]) -> None: ...
     def skip_trivial_counts(self) -> List[int]: ...
     def get_last_info(self) -> List[Dict[str, Any]]: ...
 
 class PlayerConfig:
+    """A seat's setup; ``decklist``/``sideboard`` read ``deck`` under receipt names."""
+
     def __init__(
         self,
         name: str,
         decklist: Dict[str, int],
         sideboard: Optional[Dict[str, int]] = None,
-        content_pack: str | None = None,
+        world: str | None = None,
     ) -> None: ...
     name: str
-    decklist: Dict[str, int]
-    sideboard: Dict[str, int]
-    content_pack: str | None
+    world: str | None
+    @property
+    def deck(self) -> Deck: ...
+    @property
+    def decklist(self) -> Dict[str, int]: ...
+    @property
+    def sideboard(self) -> Dict[str, int]: ...
+
+class Deck:
+    """Main-deck and sideboard counts; identity derives from this content alone.
+
+    Validates as a Pydantic field and serializes as ``{"decklist", "sideboard"}``.
+    """
+
+    def __init__(
+        self, main: dict[str, int], sideboard: dict[str, int] | None = None
+    ) -> None: ...
+    @property
+    def main(self) -> dict[str, int]: ...
+    @property
+    def sideboard(self) -> dict[str, int]: ...
+    @property
+    def identity(self) -> str: ...
+    def player(self) -> PlayerConfig:
+        """A seat named by the deck's identity, submitted to the world (``WORLD_SETUP``)."""
+    def to_dict(self) -> dict[str, Any]: ...
+    @staticmethod
+    def from_dict(value: Any) -> Deck: ...
+    def __hash__(self) -> int: ...
+
+class DeckIssue:
+    @property
+    def line(self) -> int | None: ...
+    @property
+    def section(self) -> Literal["main", "sideboard"] | None: ...
+    @property
+    def card_name(self) -> str | None: ...
+    @property
+    def code(self) -> str: ...
+    @property
+    def message(self) -> str: ...
+    def to_dict(self) -> dict[str, Any]: ...
+
+class DeckEntry:
+    @property
+    def line(self) -> int: ...
+    @property
+    def section(self) -> Literal["main", "sideboard"]: ...
+    @property
+    def count(self) -> int: ...
+    @property
+    def name(self) -> str: ...
+    @property
+    def card_def_id(self) -> int | None: ...
+    @property
+    def key(self) -> str | None: ...
+    def to_dict(self) -> dict[str, Any]: ...
+
+class Decklist:
+    """One counted-lines-v1 document: exact source, filename, entries and issues.
+
+    Construction parses; names resolve when the decklist is admitted.
+    """
+
+    def __init__(self, source: str, filename: str = "deck.txt") -> None: ...
+    @staticmethod
+    def read(path: str | os.PathLike[str], filename: str | None = None) -> Decklist:
+        """Bounded UTF-8 read keeping BOM/newline bytes; ``ValueError`` on bad files."""
+    @property
+    def dialect(self) -> str: ...
+    @property
+    def source(self) -> str: ...
+    @property
+    def filename(self) -> str: ...
+    @property
+    def entries(self) -> list[DeckEntry]: ...
+    @property
+    def issues(self) -> list[DeckIssue]: ...
+    def validate_deck(self, deck: Deck) -> None:
+        """Raise ``ValueError`` unless this source re-admits to exactly ``deck``
+        in the installed world."""
+    def to_dict(self) -> dict[str, Any]: ...
+    @staticmethod
+    def from_dict(value: Any) -> Decklist: ...
+
+class DeckImport:
+    @property
+    def decklist(self) -> Decklist: ...
+    @property
+    def deck(self) -> Deck: ...
+    def to_dict(self) -> dict[str, Any]: ...
+
+class DeckImportError(ValueError):
+    decklists: dict[str, Decklist]
+
+MAX_DECKLIST_BYTES: int
+DEVELOPMENT_RULESET: str
+# `PlayerConfig.world` selection of decks submitted to the installed world.
+WORLD_SETUP: str
+
+def admit_decklists(decklists: list[tuple[str, Decklist]]) -> list[DeckImport]:
+    """Admit every decklist against the installed world or raise
+    ``DeckImportError`` keyed by label."""
+
+def check_decks(decks: list[Deck]) -> list[list[DeckIssue]]:
+    """Each deck's construction and eligibility issues in the installed world, in
+    order; an empty list admits. Allocates no game; game creation admits again."""
 
 def authored_deck_setup(pack_key: str, deck_key: str) -> PlayerConfig: ...
 

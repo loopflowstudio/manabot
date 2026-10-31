@@ -14,8 +14,6 @@ export const STOP_STEPS = [
   { key: 'end_step', label: 'End step' },
 ] as const;
 
-export type StopStepKey = (typeof STOP_STEPS)[number]['key'];
-
 const STOP_STEP_KEYS = new Set<string>(STOP_STEPS.map((step) => step.key));
 
 export const STOPS_STORAGE_KEY = 'etude.gui.stops';

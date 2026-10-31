@@ -75,7 +75,7 @@ def test_research_checkpoint_binds_common_catalog(
     space = ObservationSpace()
     torch.manual_seed(12251)
     agent = ActorCritic(
-        space, ModelConfig(hidden_dim=8, num_attention_heads=2, semantic_pack=key)
+        space, ModelConfig(hidden_dim=8, num_attention_heads=2, world=key)
     )
     payload = {
         "model_state_dict": agent.state_dict(),

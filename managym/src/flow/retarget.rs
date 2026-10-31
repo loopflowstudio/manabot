@@ -147,7 +147,6 @@ impl Game {
         let Some(index) = self.stack_index_of(object) else {
             return;
         };
-        self.journal_stack();
         let controller = self.state.stack_objects[index].controller();
         match &mut self.state.stack_objects[index] {
             StackObject::Spell(spell) => spell.targets[slot] = target,
@@ -178,7 +177,6 @@ impl Game {
                 self.state
                     .object_incarnations
                     .push(crate::state::game_object::Incarnation::INITIAL);
-                self.journal_zone_move(copied);
                 self.state
                     .zones
                     .move_card(copied, controller, crate::state::zone::ZoneType::Stack);

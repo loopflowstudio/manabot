@@ -1,11 +1,10 @@
 //! CR 611 / 613: continuous effects from resolved spells and abilities are
 //! records on `GameState::effects`. Layer 6 applies them by timestamp
 //! (CR 613.7), each duration ends at its boundary (CR 514.2, CR 400.7), and
-//! the records are journaled and hashed like the rest of the match state.
+//! the records are hashed and forked like the rest of the match state.
 
 use managym::{
     flow::turn::StepKind,
-    search_state::{BranchDriver, ClonePlusUndoDriver},
     state::{
         card::Keywords,
         effect::{Affected, EffectDuration, Modification},
@@ -114,17 +113,16 @@ fn cr_400_7_an_indefinite_record_ends_when_its_object_changes_zones() {
     assert!(!s.game().characteristics(returned).keywords.flying);
 }
 
-/// Records are journaled: rolling back to a mark removes a record applied
-/// after it and restores records a zone change ended after it.
+/// Records are match state: restoring a fork snapshot removes a record
+/// applied after it and restores records a zone change ended after it.
 #[test]
-fn rollback_restores_continuous_effect_records_and_the_state_hash() {
+fn fork_restore_restores_continuous_effect_records_and_the_state_hash() {
     let (s, ogre) = ogre_scenario();
-    let driver = ClonePlusUndoDriver::default();
-    let mut branch = driver.fork_exact(s.game());
+    let mut branch = s.game().clone();
     let effects = branch.state.effects.clone();
     let hash = branch.state.deterministic_hash();
 
-    let mark = driver.mark(&mut branch);
+    let mark = branch.clone();
     let affected = branch.affected_permanent(ogre).unwrap();
     branch.apply_continuous(
         None,
@@ -135,7 +133,7 @@ fn rollback_restores_continuous_effect_records_and_the_state_hash() {
     );
     assert_ne!(branch.state.effects, effects);
     assert_ne!(branch.state.deterministic_hash(), hash);
-    driver.rollback(&mut branch, mark);
+    branch = mark;
     assert_eq!(branch.state.effects, effects);
     assert_eq!(branch.state.deterministic_hash(), hash);
     assert!(!branch.characteristics(ogre).keywords.flying);
@@ -149,11 +147,11 @@ fn rollback_restores_continuous_effect_records_and_the_state_hash() {
     );
     let effects = branch.state.effects.clone();
     let hash = branch.state.deterministic_hash();
-    let mark = driver.mark(&mut branch);
+    let mark = branch.clone();
     let card = branch.state.permanents[ogre].as_ref().unwrap().card;
     branch.move_card(card, ZoneType::Hand);
     assert!(branch.state.effects.is_empty());
-    driver.rollback(&mut branch, mark);
+    branch = mark;
     assert_eq!(branch.state.effects, effects);
     assert_eq!(branch.state.deterministic_hash(), hash);
     assert!(branch.characteristics(ogre).keywords.flying);

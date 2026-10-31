@@ -2,6 +2,538 @@
  "schema_version": 1,
  "store": "r2://manabot/",
  "files": {
+  "experiments/data/archive/academy/visual-references/README.md": {
+   "sha256": "ccc7b4479f7134539350e542d2d46fa3d6a4f588b71806eab3875cb94fa1318c",
+   "bytes": 231
+  },
+  "experiments/data/archive/academy/visual-references/v1/board-combat.png": {
+   "sha256": "7a1cd4fb4caafe4e3c2be5c965454e5e916d4a7a4dc7e5fd29c8a7c50da7229f",
+   "bytes": 293086
+  },
+  "experiments/data/archive/academy/visual-references/v1/board-developed.png": {
+   "sha256": "bfa0573349247d77ebc008a880f4dfccd097400c23e11e4c45e8620616358b07",
+   "bytes": 418829
+  },
+  "experiments/data/archive/academy/visual-references/v1/board-opening.png": {
+   "sha256": "04794e286f89bbd0f8cb6948e16ffa67a8c83723e478983510a6fdd5d655d0a8",
+   "bytes": 120975
+  },
+  "experiments/data/archive/academy/visual-references/v1/prompt-choose-target.png": {
+   "sha256": "3b5b226ea80dd84dec9f4ee369beeeff79f1f89ca1e4aa969cca02ac21b6b05a",
+   "bytes": 17495
+  },
+  "experiments/data/archive/academy/visual-references/v1/prompt-declare-attacker.png": {
+   "sha256": "6975d8c9ad62a44a89202eed5602119ee283124de3a46d0560ae98b3653772be",
+   "bytes": 20157
+  },
+  "experiments/data/archive/academy/visual-references/v1/prompt-declare-blocker.png": {
+   "sha256": "d3dafffa54475699ed9b2bd52c8a56817522ae7600d0f8f16a8d74e6da861097",
+   "bytes": 32205
+  },
+  "experiments/data/archive/academy/visual-references/v1/prompt-discard-then-draw.png": {
+   "sha256": "ac84d1dc82805bf0a8ac6359fe8910417171cd07f93d388f2929f789e0c3fc05",
+   "bytes": 30719
+  },
+  "experiments/data/archive/academy/visual-references/v1/prompt-look-and-select.png": {
+   "sha256": "3ffda78a9b9f8845f3d209af1042b6d8158fbf596e984c0ea566636fdcfda572",
+   "bytes": 24171
+  },
+  "experiments/data/archive/academy/visual-references/v1/prompt-pay-or-not.png": {
+   "sha256": "859717b5f828f8fa35552017477c634074e6f79139b53bd76646191b388b87b9",
+   "bytes": 16390
+  },
+  "experiments/data/archive/academy/visual-references/v1/prompt-priority.png": {
+   "sha256": "705beeb6d0df1dbc344a75d3b28c1871bdaa70d96cb44dcf8e34a99c619b3d9d",
+   "bytes": 19488
+  },
+  "experiments/data/archive/academy/visual-references/v1/prompt-scry.png": {
+   "sha256": "67358a65c532649734af65e78c1885877cd410e5c9dad9f0c5d8ec9ea549ce91",
+   "bytes": 19255
+  },
+  "experiments/data/archive/academy/visual-references/v1/prompt-waterbend.png": {
+   "sha256": "1ef480af9b1060552cbda628798577ad2c7fe091e3d9a75d8642a90c6b559610",
+   "bytes": 29757
+  },
+  "experiments/data/archive/academy/visual-references/v1/reconnect-connected.png": {
+   "sha256": "20b7ff0a41733a7f3e15671ab265c02558c2a4f7c4b8b1e80a98537076c52778",
+   "bytes": 4271
+  },
+  "experiments/data/archive/academy/visual-references/v1/reconnect-disconnected.png": {
+   "sha256": "18162692482075e70f87d01670d096d04d135333cab07b0767ad69174331b274",
+   "bytes": 4616
+  },
+  "experiments/data/archive/academy/visual-references/v1/reconnect-reconnecting.png": {
+   "sha256": "911ae05436a10e7c9febcfa3ce425eb3d4bd896f7b3b6e9c7c6260e8a8357a40",
+   "bytes": 4424
+  },
+  "experiments/data/archive/academy/visual-references/v1/terminal-gw-allies-win.png": {
+   "sha256": "c11c727f0dfc10ddb81a2b533e3e1d5f6439e5bc874dbff6e31b0248f97b11f7",
+   "bytes": 354456
+  },
+  "experiments/data/archive/academy/visual-references/v1/terminal-ur-lessons-loss.png": {
+   "sha256": "1031626fa8f5ab8f192508a15d22936f59d3a1a35924f577a58efe5ca9d8df2d",
+   "bytes": 183151
+  },
+  "experiments/data/archive/academy/visual-references/v2/board-combat.png": {
+   "sha256": "92fdd34d8ac6eb81b2b66786a4a54041a7f0778aaec7486328b4e30a9e164408",
+   "bytes": 290968
+  },
+  "experiments/data/archive/academy/visual-references/v2/board-developed.png": {
+   "sha256": "7d486ece4e731553baf4de4c4d63b49e487d168254c502985df9176033fb95ba",
+   "bytes": 418828
+  },
+  "experiments/data/archive/academy/visual-references/v2/board-opening.png": {
+   "sha256": "86322b3170764f215fab7c866a54dd597b09a73916032a970a872c12f64dffab",
+   "bytes": 118238
+  },
+  "experiments/data/archive/academy/visual-references/v2/prompt-choose-target.png": {
+   "sha256": "710fdce4a7d843155f1a570861b5208e51e7d98cdd3167028fc9cad13584fde3",
+   "bytes": 14918
+  },
+  "experiments/data/archive/academy/visual-references/v2/prompt-declare-attacker.png": {
+   "sha256": "2017e9856c931fe9bb038bb471e37444cd927fe5e80972cd6043ef1c79b37b9f",
+   "bytes": 17357
+  },
+  "experiments/data/archive/academy/visual-references/v2/prompt-declare-blocker.png": {
+   "sha256": "fffb4b60c0eeed90f5235841e1599de2b475ea83fa900d8f78860840614c53cc",
+   "bytes": 26408
+  },
+  "experiments/data/archive/academy/visual-references/v2/prompt-discard-then-draw.png": {
+   "sha256": "125e64ed6faae4e6c35770028634597c1a76c87ff835d812cc3e1ddbe977e6a3",
+   "bytes": 25184
+  },
+  "experiments/data/archive/academy/visual-references/v2/prompt-look-and-select.png": {
+   "sha256": "b0961267f35124620c1bd849965facf0998927427e28916026639426d37df22a",
+   "bytes": 20509
+  },
+  "experiments/data/archive/academy/visual-references/v2/prompt-pay-or-not.png": {
+   "sha256": "912a8ed962601120323d91c19e778098e77bc4f3e0127faebf4f3195c0fd5c40",
+   "bytes": 14093
+  },
+  "experiments/data/archive/academy/visual-references/v2/prompt-priority.png": {
+   "sha256": "be0399657a49ff436c163d0f6b4a3a2bf8b93f4a9868cc8c57986a42968608c5",
+   "bytes": 16585
+  },
+  "experiments/data/archive/academy/visual-references/v2/prompt-scry.png": {
+   "sha256": "331f243ae1bd8c60949fc868c85f3af28fa927854ac11ca4a9b7cc9ff059dc7f",
+   "bytes": 16337
+  },
+  "experiments/data/archive/academy/visual-references/v2/prompt-waterbend.png": {
+   "sha256": "1ccb990079ae089ce402e3ffc951e99c0a05dfa24bc53babe096f190b3cf559b",
+   "bytes": 24519
+  },
+  "experiments/data/archive/academy/visual-references/v2/reconnect-connected.png": {
+   "sha256": "482f9f6144593ec7d5012069beec53da3f5a8c8e8d5be5bb068854e5ebde048d",
+   "bytes": 3484
+  },
+  "experiments/data/archive/academy/visual-references/v2/reconnect-disconnected.png": {
+   "sha256": "1c35bcce45f288763bf5a1c2c30fc5ca3a416d138f2b08a4846d2ed46d9bf550",
+   "bytes": 3689
+  },
+  "experiments/data/archive/academy/visual-references/v2/reconnect-reconnecting.png": {
+   "sha256": "9616b1be33f08400feeb7d8bc845ed8c5725f16aca74e50b6ef65c3d07d5696b",
+   "bytes": 3658
+  },
+  "experiments/data/archive/academy/visual-references/v2/terminal-gw-allies-win.png": {
+   "sha256": "00a63bd6f9672c63294b46dde460d19f069f614bdfd8319bd975aabcf346ef26",
+   "bytes": 349464
+  },
+  "experiments/data/archive/academy/visual-references/v2/terminal-ur-lessons-loss.png": {
+   "sha256": "e161af99e90715d3f1903b676fbe30c99b9528212ed7733408198f4a6504c794",
+   "bytes": 179497
+  },
+  "experiments/data/archive/academy/visual-references/v3/README.md": {
+   "sha256": "e7d6db5017fd4e3b826898ccea2644d3ada86c77f9e663a0abbe951b88cc1851",
+   "bytes": 301
+  },
+  "experiments/data/archive/academy/visual-references/v3/board-combat.png": {
+   "sha256": "83072366294a3731bb8e451cad20637b03534f04d24b3e0f3ead867ab1b8f486",
+   "bytes": 338279
+  },
+  "experiments/data/archive/academy/visual-references/v3/board-developed.png": {
+   "sha256": "a796cfffdddc2b5e6419bd0ef5d67f8648fc582035efcac80ffd37e491c53652",
+   "bytes": 409698
+  },
+  "experiments/data/archive/academy/visual-references/v3/board-opening.png": {
+   "sha256": "05bdb8c6506c53e5be4f324c45811be825ab3f6cad7c08e75c4b05e908ec3747",
+   "bytes": 146871
+  },
+  "experiments/data/archive/academy/visual-references/v3/prompt-choose-target.png": {
+   "sha256": "e411c9404636c5a71d1d73169da756d6c05faa3b5bcf4ac5e9362275856331e3",
+   "bytes": 9113
+  },
+  "experiments/data/archive/academy/visual-references/v3/prompt-declare-attacker.png": {
+   "sha256": "0cd965f2d85a4eb45b12e04501dcfb0d0b7102eb1e9484b956346aa6714b2d7d",
+   "bytes": 12420
+  },
+  "experiments/data/archive/academy/visual-references/v3/prompt-declare-blocker.png": {
+   "sha256": "f630ef7d1944d2bf07238227f3e15aa0d047af0170b34f5b4b283e499c0af0c6",
+   "bytes": 18833
+  },
+  "experiments/data/archive/academy/visual-references/v3/prompt-discard-then-draw.png": {
+   "sha256": "7ed21e6d4545d9a6e004dadc56a8cf2f1609bdec8f97a4d180fe80c8f29b133c",
+   "bytes": 18263
+  },
+  "experiments/data/archive/academy/visual-references/v3/prompt-look-and-select.png": {
+   "sha256": "f5bc04fa8190815682e99fbd13a0e12e3d572a6ecafb705e85fa1df1a8504a59",
+   "bytes": 13761
+  },
+  "experiments/data/archive/academy/visual-references/v3/prompt-pay-or-not.png": {
+   "sha256": "5ef2dd962ccb576ed9c630ebc7269573f1fe5ce3a295ca5437e32055e59f95af",
+   "bytes": 9539
+  },
+  "experiments/data/archive/academy/visual-references/v3/prompt-priority.png": {
+   "sha256": "9a5407f191ebbbbbae93a5e38610f3ed304c8df2e10b216f3dc1540edf1d15e3",
+   "bytes": 9804
+  },
+  "experiments/data/archive/academy/visual-references/v3/prompt-scry.png": {
+   "sha256": "92207b6f4760f99b9729594f8e0c02f69cea18b6cad2ff3871c8f66d2482d3ba",
+   "bytes": 10834
+  },
+  "experiments/data/archive/academy/visual-references/v3/prompt-waterbend.png": {
+   "sha256": "e89485e530eee6c5c33fe6d845c48cc7c9663fb1616684ce22eb6729866c1ab0",
+   "bytes": 16756
+  },
+  "experiments/data/archive/academy/visual-references/v3/reconnect-connected.png": {
+   "sha256": "8d7e879691ef72bdc475ce8ade4d16dcf6f5e400a6c00499dd5368f27fbf2f8b",
+   "bytes": 884
+  },
+  "experiments/data/archive/academy/visual-references/v3/reconnect-disconnected.png": {
+   "sha256": "53f3d2e804e0598984ee7b88317ecaaa55d60e91475b25fd652397ed369dba63",
+   "bytes": 1095
+  },
+  "experiments/data/archive/academy/visual-references/v3/reconnect-reconnecting.png": {
+   "sha256": "c743368406cf2905d96cfaed88cfb2b8d6493c005b166187b0777b48a5baec52",
+   "bytes": 1089
+  },
+  "experiments/data/archive/academy/visual-references/v3/release-prompt-matrix.json": {
+   "sha256": "0bd41e9ba9ac78aa17716ad778c77eb9641bb8b581ae1b8821a2a9ef818909b4",
+   "bytes": 10133
+  },
+  "experiments/data/archive/academy/visual-references/v3/terminal-gw-allies-win.png": {
+   "sha256": "ec7596a22f6b0f1334f857fbb91f8876f2e3f65705bbc38fd0d2b0ec04c7efdc",
+   "bytes": 509900
+  },
+  "experiments/data/archive/academy/visual-references/v3/terminal-ur-lessons-loss.png": {
+   "sha256": "60024f81a797c7d4eed566a3229b3d7908ce742cc112f1bb77f056bca6167164",
+   "bytes": 293900
+  },
+  "experiments/data/archive/academy/visual-references/v4/README.md": {
+   "sha256": "4762fbdc27c1478fa6c58774fb5aad4433b4bab80a625459f05bc53b5bd470a7",
+   "bytes": 1593
+  },
+  "experiments/data/archive/academy/visual-references/v4/board-combat.png": {
+   "sha256": "1d07bb121e932f611acf0b2480ab27bb9c5e31ce4875c2b5a3d525a49904fd3d",
+   "bytes": 341790
+  },
+  "experiments/data/archive/academy/visual-references/v4/board-developed.png": {
+   "sha256": "84abcdf61a5524a2e1e57110bbb4c9a7bea2effb63d23e86e8446f072abb6bd0",
+   "bytes": 481414
+  },
+  "experiments/data/archive/academy/visual-references/v4/board-opening.png": {
+   "sha256": "19eb7eed17f89f5a56973e21837e1d4030d4b19a1c511bbaf4b294e40916314b",
+   "bytes": 152384
+  },
+  "experiments/data/archive/academy/visual-references/v4/prompt-choose-target.png": {
+   "sha256": "dfe492da6d5cd1276c3d56bf37e014720a0c548dc56991f8a38222789224bb52",
+   "bytes": 9039
+  },
+  "experiments/data/archive/academy/visual-references/v4/prompt-declare-attacker.png": {
+   "sha256": "363ed2b43024f50f4facb91064503723e431fe19985865dc870d750dd63e2d4f",
+   "bytes": 12431
+  },
+  "experiments/data/archive/academy/visual-references/v4/prompt-declare-blocker.png": {
+   "sha256": "bc2799b3db4ce233012cf9b7333dab49a3c9ac406a408930bcb0f4769915cefb",
+   "bytes": 18897
+  },
+  "experiments/data/archive/academy/visual-references/v4/prompt-learn-discard.png": {
+   "sha256": "c77e447ea4bdf3f3378f8b2f77aaeb4a2b347db8c912f5ea3b6c4f97b61bc565",
+   "bytes": 160515
+  },
+  "experiments/data/archive/academy/visual-references/v4/prompt-look-and-select.png": {
+   "sha256": "348ac7a8bd74a6375a288f95b96b972d0909a4e6ac5135f325d7bd580334f752",
+   "bytes": 13815
+  },
+  "experiments/data/archive/academy/visual-references/v4/prompt-pay-or-not.png": {
+   "sha256": "f19b23814df570cf1bc241fef134ed06cb4229dcddea806004471cd656b53a0a",
+   "bytes": 9425
+  },
+  "experiments/data/archive/academy/visual-references/v4/prompt-priority.png": {
+   "sha256": "9c6d196eba23aaee6ebc7bc088366b74ef03ce7c865b3e03f691f2eeb6fd7c8a",
+   "bytes": 9681
+  },
+  "experiments/data/archive/academy/visual-references/v4/prompt-scry.png": {
+   "sha256": "9f65d5a655b4e9c8e454faa90d3668287dc396d750de68edfcd8fa674553bb46",
+   "bytes": 9763
+  },
+  "experiments/data/archive/academy/visual-references/v4/prompt-waterbend.png": {
+   "sha256": "332dfb13af33d24b48630afd19f70b0677d2544fccb6c6896fe033dfcbdea919",
+   "bytes": 13883
+  },
+  "experiments/data/archive/academy/visual-references/v4/reconnect-connected.png": {
+   "sha256": "8d7e879691ef72bdc475ce8ade4d16dcf6f5e400a6c00499dd5368f27fbf2f8b",
+   "bytes": 884
+  },
+  "experiments/data/archive/academy/visual-references/v4/reconnect-disconnected.png": {
+   "sha256": "53f3d2e804e0598984ee7b88317ecaaa55d60e91475b25fd652397ed369dba63",
+   "bytes": 1095
+  },
+  "experiments/data/archive/academy/visual-references/v4/reconnect-reconnecting.png": {
+   "sha256": "c743368406cf2905d96cfaed88cfb2b8d6493c005b166187b0777b48a5baec52",
+   "bytes": 1089
+  },
+  "experiments/data/archive/academy/visual-references/v4/release-prompt-matrix.json": {
+   "sha256": "bd844fee6f0044804b9c1497b7da35cdd75b315eb8e81c947169ecf0297ce19d",
+   "bytes": 9820
+  },
+  "experiments/data/archive/academy/visual-references/v4/terminal-gw-allies-loss.png": {
+   "sha256": "06097d643626bbe9bbaad5459e1c9f1ce78905136e3bc337a79ed9f643db7bab",
+   "bytes": 481333
+  },
+  "experiments/data/archive/academy/visual-references/v4/terminal-ur-lessons-loss.png": {
+   "sha256": "a1d5db4f928eb899a9f6d59b4261ec1345f068e1e7b0b2203807bdfc01cb14a4",
+   "bytes": 298177
+  },
+  "experiments/data/archive/academy/visual-references/v5/README.md": {
+   "sha256": "0a4deafe3d0b256b8e9f1eed6007e148e353648b092188f34fb1b5ac7dd7f823",
+   "bytes": 1258
+  },
+  "experiments/data/archive/academy/visual-references/v5/board-combat.png": {
+   "sha256": "a45c2899dfa388f90c4ee423c76eda4c0cefd5f9eb18c0bd3582fbf7628b821e",
+   "bytes": 341789
+  },
+  "experiments/data/archive/academy/visual-references/v5/board-developed.png": {
+   "sha256": "a79c4f4fd32806d1a586f16d6cb2a1d9fc7d04c0851695f4d258aeab2fd265ca",
+   "bytes": 435017
+  },
+  "experiments/data/archive/academy/visual-references/v5/board-opening.png": {
+   "sha256": "19eb7eed17f89f5a56973e21837e1d4030d4b19a1c511bbaf4b294e40916314b",
+   "bytes": 152384
+  },
+  "experiments/data/archive/academy/visual-references/v5/prompt-choose-target.png": {
+   "sha256": "dfe492da6d5cd1276c3d56bf37e014720a0c548dc56991f8a38222789224bb52",
+   "bytes": 9039
+  },
+  "experiments/data/archive/academy/visual-references/v5/prompt-declare-attacker.png": {
+   "sha256": "363ed2b43024f50f4facb91064503723e431fe19985865dc870d750dd63e2d4f",
+   "bytes": 12431
+  },
+  "experiments/data/archive/academy/visual-references/v5/prompt-declare-blocker.png": {
+   "sha256": "bc2799b3db4ce233012cf9b7333dab49a3c9ac406a408930bcb0f4769915cefb",
+   "bytes": 18897
+  },
+  "experiments/data/archive/academy/visual-references/v5/prompt-discard.png": {
+   "sha256": "9c65db5043ce0436f0c67cabd7226ccdcea39e1b74ef3bdcecc01c26826ac9d9",
+   "bytes": 16141
+  },
+  "experiments/data/archive/academy/visual-references/v5/prompt-learn-discard.png": {
+   "sha256": "16890f29b1aff3fd4f912e82d55186bd3b89b22aab55518a0b426644bcf7d5d2",
+   "bytes": 160517
+  },
+  "experiments/data/archive/academy/visual-references/v5/prompt-look-and-select.png": {
+   "sha256": "348ac7a8bd74a6375a288f95b96b972d0909a4e6ac5135f325d7bd580334f752",
+   "bytes": 13815
+  },
+  "experiments/data/archive/academy/visual-references/v5/prompt-pay-or-not.png": {
+   "sha256": "f19b23814df570cf1bc241fef134ed06cb4229dcddea806004471cd656b53a0a",
+   "bytes": 9425
+  },
+  "experiments/data/archive/academy/visual-references/v5/prompt-priority.png": {
+   "sha256": "9c6d196eba23aaee6ebc7bc088366b74ef03ce7c865b3e03f691f2eeb6fd7c8a",
+   "bytes": 9681
+  },
+  "experiments/data/archive/academy/visual-references/v5/prompt-scry.png": {
+   "sha256": "9f65d5a655b4e9c8e454faa90d3668287dc396d750de68edfcd8fa674553bb46",
+   "bytes": 9763
+  },
+  "experiments/data/archive/academy/visual-references/v5/prompt-waterbend.png": {
+   "sha256": "724a3f5d24326e6c88ca120b5bd50ee070459930ea312ef097b82893fdc1b2b7",
+   "bytes": 15095
+  },
+  "experiments/data/archive/academy/visual-references/v5/reconnect-connected.png": {
+   "sha256": "8d7e879691ef72bdc475ce8ade4d16dcf6f5e400a6c00499dd5368f27fbf2f8b",
+   "bytes": 884
+  },
+  "experiments/data/archive/academy/visual-references/v5/reconnect-disconnected.png": {
+   "sha256": "53f3d2e804e0598984ee7b88317ecaaa55d60e91475b25fd652397ed369dba63",
+   "bytes": 1095
+  },
+  "experiments/data/archive/academy/visual-references/v5/reconnect-reconnecting.png": {
+   "sha256": "c743368406cf2905d96cfaed88cfb2b8d6493c005b166187b0777b48a5baec52",
+   "bytes": 1089
+  },
+  "experiments/data/archive/academy/visual-references/v5/release-prompt-matrix.json": {
+   "sha256": "58869db3df677d5f1b28ec418c97910996aec2f5db6f238cc05a2bf00ec9b928",
+   "bytes": 9683
+  },
+  "experiments/data/archive/academy/visual-references/v5/terminal-gw-allies-win.png": {
+   "sha256": "2f152642c07ee0623809f713561168a134454938a2f6488813dff6771ac0fa7b",
+   "bytes": 416341
+  },
+  "experiments/data/archive/academy/visual-references/v5/terminal-ur-lessons-loss.png": {
+   "sha256": "a1d5db4f928eb899a9f6d59b4261ec1345f068e1e7b0b2203807bdfc01cb14a4",
+   "bytes": 298177
+  },
+  "experiments/data/archive/academy/visual-references/v6/README.md": {
+   "sha256": "8cfb46dbb4a2ecc3d44a3782567465bd5de0042a8b2b371f4195294b7eb2840a",
+   "bytes": 1654
+  },
+  "experiments/data/archive/academy/visual-references/v6/board-combat.png": {
+   "sha256": "a45c2899dfa388f90c4ee423c76eda4c0cefd5f9eb18c0bd3582fbf7628b821e",
+   "bytes": 341789
+  },
+  "experiments/data/archive/academy/visual-references/v6/board-developed.png": {
+   "sha256": "a79c4f4fd32806d1a586f16d6cb2a1d9fc7d04c0851695f4d258aeab2fd265ca",
+   "bytes": 435017
+  },
+  "experiments/data/archive/academy/visual-references/v6/board-opening.png": {
+   "sha256": "19eb7eed17f89f5a56973e21837e1d4030d4b19a1c511bbaf4b294e40916314b",
+   "bytes": 152384
+  },
+  "experiments/data/archive/academy/visual-references/v6/matrix.json": {
+   "sha256": "2ad705140de6d8a2d47bb7e7267c01916db230e05bd849a92e72972d951c7d5a",
+   "bytes": 9683
+  },
+  "experiments/data/archive/academy/visual-references/v6/prompt-choose-target.png": {
+   "sha256": "dfe492da6d5cd1276c3d56bf37e014720a0c548dc56991f8a38222789224bb52",
+   "bytes": 9039
+  },
+  "experiments/data/archive/academy/visual-references/v6/prompt-declare-attacker.png": {
+   "sha256": "363ed2b43024f50f4facb91064503723e431fe19985865dc870d750dd63e2d4f",
+   "bytes": 12431
+  },
+  "experiments/data/archive/academy/visual-references/v6/prompt-declare-blocker.png": {
+   "sha256": "bc2799b3db4ce233012cf9b7333dab49a3c9ac406a408930bcb0f4769915cefb",
+   "bytes": 18897
+  },
+  "experiments/data/archive/academy/visual-references/v6/prompt-discard.png": {
+   "sha256": "d027b9c1dd5b8b4af463a4adf3b587f1c8a4eb6ec3e43183bf70afee73cd4913",
+   "bytes": 19717
+  },
+  "experiments/data/archive/academy/visual-references/v6/prompt-learn-discard.png": {
+   "sha256": "16890f29b1aff3fd4f912e82d55186bd3b89b22aab55518a0b426644bcf7d5d2",
+   "bytes": 160517
+  },
+  "experiments/data/archive/academy/visual-references/v6/prompt-look-and-select.png": {
+   "sha256": "348ac7a8bd74a6375a288f95b96b972d0909a4e6ac5135f325d7bd580334f752",
+   "bytes": 13815
+  },
+  "experiments/data/archive/academy/visual-references/v6/prompt-pay-or-not.png": {
+   "sha256": "f19b23814df570cf1bc241fef134ed06cb4229dcddea806004471cd656b53a0a",
+   "bytes": 9425
+  },
+  "experiments/data/archive/academy/visual-references/v6/prompt-priority.png": {
+   "sha256": "9c6d196eba23aaee6ebc7bc088366b74ef03ce7c865b3e03f691f2eeb6fd7c8a",
+   "bytes": 9681
+  },
+  "experiments/data/archive/academy/visual-references/v6/prompt-scry.png": {
+   "sha256": "9f65d5a655b4e9c8e454faa90d3668287dc396d750de68edfcd8fa674553bb46",
+   "bytes": 9763
+  },
+  "experiments/data/archive/academy/visual-references/v6/prompt-waterbend.png": {
+   "sha256": "724a3f5d24326e6c88ca120b5bd50ee070459930ea312ef097b82893fdc1b2b7",
+   "bytes": 15095
+  },
+  "experiments/data/archive/academy/visual-references/v6/reconnect-connected.png": {
+   "sha256": "8d7e879691ef72bdc475ce8ade4d16dcf6f5e400a6c00499dd5368f27fbf2f8b",
+   "bytes": 884
+  },
+  "experiments/data/archive/academy/visual-references/v6/reconnect-disconnected.png": {
+   "sha256": "53f3d2e804e0598984ee7b88317ecaaa55d60e91475b25fd652397ed369dba63",
+   "bytes": 1095
+  },
+  "experiments/data/archive/academy/visual-references/v6/reconnect-reconnecting.png": {
+   "sha256": "c743368406cf2905d96cfaed88cfb2b8d6493c005b166187b0777b48a5baec52",
+   "bytes": 1089
+  },
+  "experiments/data/archive/academy/visual-references/v6/terminal-gw-allies-win.png": {
+   "sha256": "2f152642c07ee0623809f713561168a134454938a2f6488813dff6771ac0fa7b",
+   "bytes": 416341
+  },
+  "experiments/data/archive/academy/visual-references/v6/terminal-ur-lessons-loss.png": {
+   "sha256": "a1d5db4f928eb899a9f6d59b4261ec1345f068e1e7b0b2203807bdfc01cb14a4",
+   "bytes": 298177
+  },
+  "experiments/data/archive/academy/visual-references/v7/README.md": {
+   "sha256": "6acd24a4299bfedaf2d6fa21cb4934cc2eeda7778d944f152301fa4ff913dca6",
+   "bytes": 2469
+  },
+  "experiments/data/archive/academy/visual-references/v7/board-combat.png": {
+   "sha256": "1d07bb121e932f611acf0b2480ab27bb9c5e31ce4875c2b5a3d525a49904fd3d",
+   "bytes": 341790
+  },
+  "experiments/data/archive/academy/visual-references/v7/board-developed.png": {
+   "sha256": "96e0cfc5c7a95806a260b8414cd57f95931350a9b5d1875f80444c6f44e889b4",
+   "bytes": 394863
+  },
+  "experiments/data/archive/academy/visual-references/v7/board-opening.png": {
+   "sha256": "19eb7eed17f89f5a56973e21837e1d4030d4b19a1c511bbaf4b294e40916314b",
+   "bytes": 152384
+  },
+  "experiments/data/archive/academy/visual-references/v7/prompt-choose-target.png": {
+   "sha256": "27547c0aec5528112d00f0ee8b746066ed985f0393209a19571e90f463a2d657",
+   "bytes": 8995
+  },
+  "experiments/data/archive/academy/visual-references/v7/prompt-declare-attacker.png": {
+   "sha256": "fe586795d1c815269dd8930b2073c8befb4204d5585ff8a343e939a17bf40662",
+   "bytes": 12426
+  },
+  "experiments/data/archive/academy/visual-references/v7/prompt-declare-blocker.png": {
+   "sha256": "5a468aadf001b76626812240fadc18fb72705e99f445190811dfdb6514e914d2",
+   "bytes": 18839
+  },
+  "experiments/data/archive/academy/visual-references/v7/prompt-discard.png": {
+   "sha256": "74131cb12380c903e0325ffab80a749f2fafcb89ee4209f9922a7bc81d65981b",
+   "bytes": 19498
+  },
+  "experiments/data/archive/academy/visual-references/v7/prompt-learn-discard.png": {
+   "sha256": "aa81fcf8fb0f7863874784361e6300ffd5bf09b8191a098792620a247cd7b259",
+   "bytes": 160356
+  },
+  "experiments/data/archive/academy/visual-references/v7/prompt-look-and-select.png": {
+   "sha256": "887cb7f7e415de28ea2d8eaec31827f798c02926bad5efd80fbd2a1aca0a4c92",
+   "bytes": 13767
+  },
+  "experiments/data/archive/academy/visual-references/v7/prompt-pay-or-not.png": {
+   "sha256": "a1d556a2dde695abbab7a54651151a4a22641ff2d69b62289ca101cdf63d7105",
+   "bytes": 9457
+  },
+  "experiments/data/archive/academy/visual-references/v7/prompt-priority.png": {
+   "sha256": "9c6d196eba23aaee6ebc7bc088366b74ef03ce7c865b3e03f691f2eeb6fd7c8a",
+   "bytes": 9681
+  },
+  "experiments/data/archive/academy/visual-references/v7/prompt-scry.png": {
+   "sha256": "9f65d5a655b4e9c8e454faa90d3668287dc396d750de68edfcd8fa674553bb46",
+   "bytes": 9763
+  },
+  "experiments/data/archive/academy/visual-references/v7/prompt-waterbend.png": {
+   "sha256": "2f43968fef508f8b99ea726ca764d2ee667aba667a0793ab242440885f4b2565",
+   "bytes": 12169
+  },
+  "experiments/data/archive/academy/visual-references/v7/reconnect-connected.png": {
+   "sha256": "8d7e879691ef72bdc475ce8ade4d16dcf6f5e400a6c00499dd5368f27fbf2f8b",
+   "bytes": 884
+  },
+  "experiments/data/archive/academy/visual-references/v7/reconnect-disconnected.png": {
+   "sha256": "53f3d2e804e0598984ee7b88317ecaaa55d60e91475b25fd652397ed369dba63",
+   "bytes": 1095
+  },
+  "experiments/data/archive/academy/visual-references/v7/reconnect-reconnecting.png": {
+   "sha256": "c743368406cf2905d96cfaed88cfb2b8d6493c005b166187b0777b48a5baec52",
+   "bytes": 1089
+  },
+  "experiments/data/archive/academy/visual-references/v7/release-prompt-matrix.json": {
+   "sha256": "d94d4e0d3e85051e8ac6477c8c53617fd89a87dac92dbbff904c7026174a8b65",
+   "bytes": 11036
+  },
+  "experiments/data/archive/academy/visual-references/v7/terminal-gw-allies-win.png": {
+   "sha256": "da1b4d72dc019d64c91c846bba5f5c7ca359c9c6cf7f66d2815cb4da56c95db0",
+   "bytes": 491556
+  },
+  "experiments/data/archive/academy/visual-references/v7/terminal-ur-lessons-loss.png": {
+   "sha256": "a1d5db4f928eb899a9f6d59b4261ec1345f068e1e7b0b2203807bdfc01cb14a4",
+   "bytes": 298177
+  },
   "experiments/data/archive/conformance/authored-match-parity-v1/README.md": {
    "sha256": "d9b13de2538f00924a645a3c92a7f8a33f326d252b90f75b0b94dc3112d87b87",
    "bytes": 1105

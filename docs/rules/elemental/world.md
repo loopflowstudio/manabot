@@ -49,7 +49,7 @@ from manabot.infra.config import ModelConfig, MatchConfig
 match = MatchConfig.authored(
     "elemental-world-v2", "elemental_ug", "elemental_bg"
 )
-agent = ModelConfig(semantic_pack="elemental-world-v2", policy_film=True)
+agent = ModelConfig(world="elemental-world-v2", policy_film=True)
 ```
 
 These values go into the existing environment/model/trainer configuration.
@@ -124,11 +124,9 @@ against its landmark separately.
 
 Before running, the cohort was fixed as all ten mirrors plus GR→UG, UG→GR,
 UR→GW and GW→UR. Each uses game seed 164, uniform legal-offer selection from
-`random.Random(164)`, and a cap of 30,000 Commands. The runner is:
-
-```bash
-uv run python -m scripts.verify_elemental_world --out conformance/elemental-world-w11-v1/command-cohort.json
-```
+`random.Random(164)`, and a cap of 30,000 Commands. The runner was
+[`scripts/verify_elemental_world.py`](https://github.com/loopflowstudio/manabot/blob/a74f31828/scripts/verify_elemental_world.py),
+retired once the retained result was archived.
 
 The [retained result](../../../experiments/data/archive/conformance/elemental-world-w10-v1/command-cohort.json)
 records **14 terminal games / 13,126 Commands**, with **268** isolated fork and

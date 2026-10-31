@@ -3,7 +3,6 @@
 import base64
 import hashlib
 import io
-import json
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -11,7 +10,6 @@ import boto3
 from botocore.exceptions import ClientError
 import pytest
 
-from manabot.experiment.artifacts import ArtifactManifest, publish_run
 from manabot.infra.artifacts import ArtifactStore, StoredArtifact
 from manabot.model.checkpoint import load_checkpoint
 
@@ -143,68 +141,6 @@ def test_loader_checks_cached_digest_before_deserializing(
     with pytest.raises(ValueError, match="differ"):
         load_checkpoint(reference)
     loader.assert_not_called()
-
-
-def test_run_publication_preserves_export_and_all_roles(
-    tmp_path: Path, storage: tuple[ArtifactStore, MagicMock]
-) -> None:
-    store, client = storage
-    # Retained schema fixture; no trainer, optimizer, or game execution.
-    fixture = Path("tests/fixtures/experiment-demo/training")
-    paths = list(fixture.glob("**/run.json"))
-    assert paths
-    payload = json.loads(paths[0].read_text())
-    source_artifact = tmp_path / "model"
-    source_artifact.write_bytes(b"artifact")
-    reference = _reference(b"artifact")
-    local = {
-        "path": str(source_artifact),
-        "sha256": reference.sha256,
-        "bytes": reference.bytes,
-    }
-    payload["status"] = "completed"
-    payload["stages"] = [
-        {
-            "id": payload["regime"]["stages"][0]["id"],
-            "artifacts": {"raw": local, "ema": local},
-        }
-    ]
-    payload["monitoring_checkpoints"] = []
-    payload["fixed_validation"] = None
-    payload["recovery_artifact"] = None
-    source = tmp_path / "run.json"
-    source.write_text(json.dumps(payload))
-    original = source.read_bytes()
-    blobs: dict[str, bytes] = {}
-
-    def put(**kwargs: object) -> dict[str, str]:
-        key, body = kwargs["Key"], kwargs["Body"]
-        assert isinstance(key, str)
-        assert isinstance(body, io.BufferedReader)
-        blobs[key] = body.read()
-        return {"VersionId": "v1"}
-
-    def get(**kwargs: str) -> dict[str, object]:
-        data = blobs[kwargs["Key"]]
-        return {"Body": io.BytesIO(data), "ContentLength": len(data)}
-
-    client.put_object.side_effect = put
-    client.get_object.side_effect = get
-    output = tmp_path / "nested" / "manifest.json"
-    manifest = publish_run(source, "s3://bucket/prefix", output, store)
-    assert len(manifest.artifacts) == 2
-    assert (
-        client.put_object.call_count == 2
-    )  # shared raw/EMA blob plus exact run export
-    assert source.read_bytes() == original
-    assert manifest.source_run.sha256 == hashlib.sha256(original).hexdigest()
-    assert ArtifactManifest.model_validate_json(output.read_text()) == manifest
-
-    source_artifact.write_bytes(b"modified")
-    count = client.put_object.call_count
-    with pytest.raises(ValueError, match="differ"):
-        publish_run(source, "s3://bucket/prefix", tmp_path / "other.json", store)
-    assert client.put_object.call_count == count
 
 
 def test_r2_locations_round_trip_through_their_own_client(

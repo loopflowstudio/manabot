@@ -7,8 +7,7 @@
 // are applied with static abilities by layer and timestamp in
 // `Game::characteristics` (`flow/statics.rs`); the rules queries here
 // (blockability, death replacement, kept mana, hand size) read the same
-// records. Records are journaled whole, like
-// delayed triggers, so undo and rollback restore them exactly.
+// records.
 //
 // Expiry boundaries:
 //   - cleanup ends `EndOfTurn` records (CR 514.2);
@@ -68,7 +67,6 @@ impl Game {
         if records.is_empty() {
             return;
         }
-        self.journal_effects();
         self.state.effects.extend(records);
         // Characteristics can change which mana abilities exist.
         self.invalidate_mana_cache(PlayerId(0));
@@ -190,7 +188,6 @@ impl Game {
         if !self.state.effects.iter().any(&ends) {
             return;
         }
-        self.journal_effects();
         // A control change that ends hands its object back (CR 613.1b).
         let returned: Vec<_> = self
             .state

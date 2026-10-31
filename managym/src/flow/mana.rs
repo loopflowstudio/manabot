@@ -987,7 +987,6 @@ impl Game {
             .map(|ability| ability.mana.clone())
             .collect::<Vec<_>>();
         self.tap_permanent(permanent, true);
-        self.journal_player(player);
         for mana in produced {
             self.state.players[player.0].mana_pool.add(&mana);
         }
@@ -1019,13 +1018,11 @@ impl Game {
             return cached.clone();
         }
         let mana = self.producible_mana(player);
-        self.journal_mana_cache(player);
         self.state.mana_cache[player.0] = Some(mana.clone());
         mana
     }
 
     pub fn invalidate_mana_cache(&mut self, player: PlayerId) {
-        self.journal_mana_cache(player);
         self.state.mana_cache[player.0] = None;
     }
 
@@ -1098,7 +1095,6 @@ impl Game {
     fn spend_mana_to_remainder(&mut self, player: PlayerId, remaining: Mana) {
         // Rebuild the pools by restriction class and color, consuming the
         // expiring combat pool before the regular pool within each class.
-        self.journal_player(player);
         let player_state = &mut self.state.players[player.0];
         let mut classes = player_state
             .mana_pool
@@ -1145,7 +1141,6 @@ impl Game {
     /// `clear_combat_mana_pools`.
     pub(crate) fn clear_mana_pools(&mut self) {
         for player in [PlayerId(0), PlayerId(1)] {
-            self.journal_player(player);
             let pool = std::mem::take(&mut self.state.players[player.0].mana_pool);
             self.state.players[player.0].mana_pool = self.unspent_mana_retained(player, pool);
         }
@@ -1155,7 +1150,6 @@ impl Game {
     /// `unspent_mana_retained` keeps joins the ordinary pool.
     pub(crate) fn clear_combat_mana_pools(&mut self) {
         for player in [PlayerId(0), PlayerId(1)] {
-            self.journal_player(player);
             let combat = std::mem::take(&mut self.state.players[player.0].combat_mana_pool);
             let kept = self.unspent_mana_retained(player, combat);
             self.state.players[player.0].mana_pool.add(&kept);

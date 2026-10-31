@@ -2,11 +2,8 @@ import { readFileSync } from 'node:fs';
 import { render } from 'svelte/server';
 import { describe, expect, it } from 'vitest';
 
-import {
-  adviceMeta,
-  computeDeltas,
-  type AdviceArtifact,
-} from '$lib/advice';
+import type { AdviceScenarioSummary } from '$lib/advice';
+import type { DecisionEvidence, StudyArtifact } from '$lib/study-protocol';
 import DecisionAdvice from './DecisionAdvice.svelte';
 
 const fixture = JSON.parse(
@@ -14,17 +11,50 @@ const fixture = JSON.parse(
     new URL('../../../../../protocol/fixtures/advice-curated-decision.json', import.meta.url),
     'utf8',
   ),
-) as AdviceArtifact;
+) as { artifact: StudyArtifact; scenarios: AdviceScenarioSummary[] };
 
-const meta = adviceMeta(fixture);
+const scenarios = fixture.scenarios.map(
+  ({ landmark_id, label, description, inferred_range, belief_kind }) => ({
+    landmark_id,
+    label,
+    description,
+    inferred_range,
+    belief_kind,
+  }),
+);
 const landmarkA = fixture.artifact.landmarks.find((lm) => lm.id === 'advice-scenario-a')!;
 const landmarkB = fixture.artifact.landmarks.find((lm) => lm.id === 'advice-scenario-b')!;
-const deltas = computeDeltas(landmarkA.evidence, landmarkB.evidence);
+const deltas = scenarioDeltas(landmarkA.evidence, landmarkB.evidence);
+
+function scenarioDeltas(
+  left: DecisionEvidence,
+  right: DecisionEvidence,
+): Record<string, Record<string, number>> {
+  const deltas: Record<string, Record<string, number>> = {};
+  for (const row of left.policy_mass) {
+    const alternative = row.alternative;
+    const value = (evidence: DecisionEvidence) => ({
+      policy_mass: evidence.policy_mass.find((r) => r.alternative === alternative)?.probability ?? 0,
+      search_value:
+        evidence.search_value.find((r) => r.alternative === alternative)?.expected_match_points ?? 0,
+      uncertainty:
+        evidence.uncertainty.find((r) => r.alternative === alternative)?.standard_error ?? 0,
+    });
+    const a = value(left);
+    const b = value(right);
+    deltas[alternative] = {
+      policy_mass: a.policy_mass - b.policy_mass,
+      search_value: a.search_value - b.search_value,
+      uncertainty: a.uncertainty - b.uncertainty,
+    };
+  }
+  return deltas;
+}
 
 function defaultProps() {
   return {
     mode: 'live' as const,
-    scenarios: meta.scenarios,
+    scenarios,
     selectedScenarioId: 'advice-scenario-a',
     frame: landmarkA.frame,
     offers: [...landmarkA.frame.offers],
@@ -32,8 +62,8 @@ function defaultProps() {
     deltas,
     status: 'ok' as const,
     reason: null,
-    advisorId: meta.identity.advisor_id,
-    computeId: meta.identity.compute_id,
+    advisorId: fixture.artifact.identity.model.id,
+    computeId: fixture.artifact.identity.analysis_budget.id,
     onSelectScenario: () => {},
   };
 }

@@ -123,28 +123,18 @@ ward's `CounterSpell` decline branch.
 
 ## Upstream (2026-10-30)
 
-Merged: origin/main `6f48f5ca0` (via T3's sync) and T3's head `0cf535f0b`
-(`3d8717eab`), which adds the `Game::characteristics` view; T4's power,
-creature and ability-loss checks read it (`1f9d10aeb`). T4's ward is
-`StaticAbility::Ward`, required waterbend `AdditionalCost::RequiredWaterbend`,
-T4's tokens are in `tokens.rs`, Bear and Monk are off
-`TOKENS_AWAITING_PRODUCER`. T3 (#399) is still open.
-
-Not yet synced: origin/main is now `b73a6b5db`. `2d2f45105` (decklist import,
-D1) and `b73a6b5db` (the cull: engine undo, `event_log.rs`, branching
-benchmarks, legacy `wave/` moved to `.lf/wave/`; it names #399 as needing a
-rebase) are not ancestors of T4. A trial `git merge-tree` against
-`b73a6b5db` conflicts in `flow/{damage,decision,game,mana,play,resolution,
-triggers,undo,zones}.rs`, `state/mod.rs`, `benchmark.rs`, `tests/cards/tla.rs`,
-the w17 conformance evidence (replays deleted on main), the 2026-10 audit
-index and `scratch/questions.md`. T3 syncs onto main first; T4 then merges
-T3's head, drops its undo/benchmark edits with the deleted code, and
-re-records the w17 evidence that main still keeps.
+Merged: T3's head `289bfbde3` (2026-10-30), which contains origin/main
+`b73a6b5db` (decklist import and the cull of engine undo, `event_log.rs`
+and branching benchmarks). T4's journal calls, `undo.rs` and `benchmark.rs`
+edits went with the deleted code; `update_turn_history` became direct writes to
+`turn.history`. The w17 replays main deleted stay deleted; `evidence.json`
+takes main's schema 2 (trace hashes), re-recorded at gate. Audit 608.2a keeps
+T4's intervening-if row, 608.2b main's anchor. Earlier: `6f48f5ca0` and T3's
+`0cf535f0b` (`3d8717eab`, `Game::characteristics`, read by `1f9d10aeb`).
+T3 (#399) is still open.
 
 ## Remaining
 
-- Sync onto main `b73a6b5db` after T3 does (see Upstream); the gate re-records below
-  follow it, since main deleted part of the w17 evidence.
 - All 75 cards defined (2026-10-30). The last ten: `379a4576d`..`b1d457756`
   (control change, copies and retargeting, delayed casts, Aura death LKI,
   nonbasic type overwrite) and `c0fae7ba6` Boiling Rock Rioter
@@ -166,8 +156,7 @@ re-records the w17 evidence that main still keeps.
   for `GameBoard` turn history, `permanent-notes` (`CantBlock`) and
   `decision-labels` (`trigger_mode`) (node_modules absent in this checkout).
 
-Compress (2026-10-30): turn-history writes go through
-`Game::update_turn_history`; `CombatDamageToPlayers { creatures }` (the
+Compress (2026-10-30): `CombatDamageToPlayers { creatures }` (the
 defender is the non-active player); `trigger_multiplicity` counts connecting
 creatures; the leaving spell is removed from the stack once. Second compress: `EffectFrame.ability` is set without
 the resolution counter's `usize::MAX` sentinel; `OnceEachTurnKey` names the
@@ -188,7 +177,7 @@ One `Condition` (resolution-only `Kicked`, `TargetMatches`,
 Nation Cadets and Tolls of War. "If you do" stays the optional-payment shape.
 T3-sync details: `scratch/questions.md` (T4 and T3-sync sections).
 
-Check (2026-10-30, `c57d8bf5b`): debug `cargo test --test cards` 483 passed, 0 failed; full debug suite last run at `2f73cd16f` (820 passed), with the w17 digest/Scryfall drift left for gate.
+Check (2026-10-30, T3 merge `289bfbde3`): full debug `cargo test --no-fail-fast` passes except `every_registered_real_card_matches_scryfall` (27 cards without fixture entries) and `checked_semantic_conformance_evidence_reproduces` (w17 traces), both re-recorded at gate. Main's tests needed T4 updates: heavy fixture 512 events, and `Cat-Gator` (incomplete) as the unadmitted deck card in place of the now-defined Rocky Rebuke. Extension rebuilt.
 
 Approval (Jack Heart, 2026-10-30): T4 approved in full — all 75 cards with the
 review decisions above — publish and ship without another review. When the

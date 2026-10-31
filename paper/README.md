@@ -53,7 +53,7 @@ passing the corresponding directory instead of `report.md`.
 | UR/GW specialist, direct matches and card associations | `experiments/data/mtg186/report.md`; [MTG-186 protocol](../experiments/protocols/mtg186.md) |
 | Failed first Elemental training attempt | [MTG-174 result](../experiments/elemental-uniform-baseline.md) |
 | Heuristic revision and expensive search gain | [Heuristic strength](../experiments/heuristic-strength.md) |
-| Qwen single-game L4 proof, timing and memory limits | [LLM harness](../docs/llm-harness.md#cached-full-game-gpu-proof) |
+| Qwen single-game L4 proof, timing and memory limits | [LLM harness](../docs/llm.md) |
 | Longer Elemental run: protocol, no final result claimed | [MTG-183 protocol](../experiments/protocols/elemental-183.md) |
 | Earlier batching comparison | [Longer learning 017](../experiments/longer-learning-017.md) |
 | Unresolved floor/pooling and critic-coverage screens | [Pooling follow-up](../experiments/pooling-filter-followup.md), [technique screen](../experiments/ataraxos-technique-screen.md) |
@@ -70,17 +70,15 @@ passing the corresponding directory instead of `report.md`.
 - [Ordinary baseline](../manabot/recipes/baseline.py) and
   [Elemental recipe](../experiments/regimes/elemental-two-seat-181-v1.json):
   current defaults versus the frozen experiment.
-- [Ataraxos fidelity](../docs/ataraxos.md),
-  [local search](../docs/local-policy-search.md) and
-  [LLM selection](../docs/llm-harness.md): influences, adaptations and limits.
+- [Ataraxos fidelity](../docs/training.md#ataraxos),
+  [local search](../docs/search-and-beliefs.md#local-policy-search) and
+  [LLM selection](../docs/llm.md): influences, adaptations and limits.
 
 ## Files and history
 
 - `main.tex` / `manabot.pdf`: active results-first paper and built output.
 - `refs.bib`: cited influences and older entries retained for the archives.
-- `drafts/02-platform-and-challenges.tex` / `.pdf`: July platform draft;
-  its extreme random-play seat claims were later retracted.
-- `drafts/01-refuted-ledger.tex`: historical negative-results draft.
 - `understanding.md`: historical findings and corrections, not a live queue.
 
 Frozen reports and archives retain their original claims and corrections.
+The July platform and refuted-ledger drafts are in git history (`drafts/`).

@@ -1,45 +1,26 @@
-"""Viewer-safe beliefs over canonical managym possible worlds."""
+"""Viewer-safe beliefs over canonical managym possible worlds.
+
+Import names from their defining modules. The lazy map below serves only the
+belief test helpers that still import from the package."""
 
 from importlib import import_module
 
 _EXPORTS = {
-    "AgentMemory": "manabot.belief.agent",
-    "AgentStep": "manabot.belief.agent",
-    "BehaviorPopulationProvenance": "manabot.belief.population",
     "BeliefEncodingSchema": "manabot.belief.encoding",
-    "BeliefCheckpointBinding": "manabot.belief.encoding",
     "BeliefError": "manabot.belief.range",
-    "BeliefModel": "manabot.belief.state",
-    "BeliefPopulationDataset": "manabot.belief.population",
-    "BeliefPopulationEpisode": "manabot.belief.population",
-    "BeliefPopulationEpisodeProvenance": "manabot.belief.population",
-    "BeliefPopulationSplit": "manabot.belief.population",
     "BeliefRow": "manabot.belief.encoding",
     "BeliefState": "manabot.belief.range",
-    "BeliefTensorView": "manabot.belief.encoding",
-    "BeliefTrainingExample": "manabot.belief.population",
-    "BeliefUpdate": "manabot.belief.state",
-    "BeliefUpdateReceipt": "manabot.belief.state",
     "CompatibleDealBeliefModel": "manabot.belief.state",
     "EmptyBeliefSupport": "manabot.belief.state",
-    "ExactWorldBeliefModel": "manabot.belief.population",
     "HAND_ZONE_ID": "manabot.belief.encoding",
     "LIBRARY_ZONE_ID": "manabot.belief.encoding",
     "Manabot": "manabot.belief.agent",
-    "ManabotPlayer": "manabot.belief.runtime",
     "OPPONENT_OWNER_ROLE_ID": "manabot.belief.encoding",
-    "PolicyValueResult": "manabot.belief.agent",
     "ViewerDecision": "manabot.belief.agent",
     "ViewerHistory": "manabot.belief.state",
-    "ViewerHistoryEvent": "manabot.belief.state",
-    "belief_schema_from_engine": "manabot.belief.encoding",
-    "capture_materialized_world_supervision": "manabot.belief.population",
-    "compare_population_to_p0": "manabot.belief.population",
     "condition_belief": "manabot.belief.state",
     "encode_belief": "manabot.belief.encoding",
     "query_mass": "manabot.belief.state",
-    "split_belief_population": "manabot.belief.population",
-    "viewer_decision_from_engine": "manabot.belief.runtime",
 }
 
 

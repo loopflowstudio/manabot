@@ -17,7 +17,7 @@
 //   lines dropped. Newlines between ability paragraphs are preserved.
 //
 // Sanctioned shell deviations (documented in
-// wave/rules/01-two-deck-slice.md) are allowlisted explicitly below.
+// experiments/milestone-1-two-deck-slice.md) are allowlisted explicitly below.
 //
 // Cards that are NOT real Magic cards are either registered with
 // `is_token: true` (token definitions) or listed in NOT_REAL_CARDS and

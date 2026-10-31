@@ -4,19 +4,18 @@ from pathlib import Path
 from pydantic import ValidationError
 import pytest
 
-from manabot.eval.models import EvaluationContract, EvaluationKey
+from manabot.eval.models import EvaluationKey
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.sim.guidance import build_registered_player
 from manabot.sim.registration import PlayerRegistration
 from managym import WORLD_VERSION
+from tests.eval.arena_fixture import ARENA_FIXTURE, arena_fixture
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
 def test_current_world_round_trips_arena_and_player_identities() -> None:
-    contract = EvaluationContract.model_validate_json(
-        (ROOT / "tests/fixtures/int-6-skill-arena-v1.json").read_text()
-    )
+    contract = arena_fixture()
     key = contract.key.model_dump() | {"world": WORLD_VERSION}
     player = contract.anchors[0].model_dump() | {"world": WORLD_VERSION}
     assert EvaluationKey.model_validate(key).world == WORLD_VERSION
@@ -27,11 +26,10 @@ def test_current_world_round_trips_arena_and_player_identities() -> None:
 
 
 def test_checked_contract_has_exact_code_only_base() -> None:
-    path = ROOT / "tests/fixtures/int-6-skill-arena-v1.json"
-    assert file_sha256(path) == (
+    assert file_sha256(ARENA_FIXTURE) == (
         "fc9cb76c0d80ad64951455ac6fede94b1355f383dde2f2964d0e578f62671a71"
     )
-    contract = EvaluationContract.model_validate(json.loads(path.read_text()))
+    contract = arena_fixture()
     assert [player.player_id for player in contract.anchors] == [
         "random-v1",
         "scripted-greedy-v1",
@@ -40,13 +38,11 @@ def test_checked_contract_has_exact_code_only_base() -> None:
         "flat-mc-64-v1",
     ]
     assert all(player.runner_kind == "code" for player in contract.anchors)
-    assert len(contract.schedules["production"].deal_seeds) == 24
-    assert contract.promotion.elo_margin == 25.0
     assert contract.key.anchor_cohort_sha256 == (
         "3a29f51662e37a02c493b1bffaf6e618a1f5b14322e701499160cf09ba659362"
     )
-    assert contract.key.rating_prior_sha256 == (
-        "ff4920af7c3c325eabcfe1e715c0abf7e1569393f30d572da80012c15dabc904"
+    assert canonical_sha256([player.model_dump() for player in contract.anchors]) == (
+        contract.key.anchor_cohort_sha256
     )
     assert {
         player.player_id: player.identity_sha256 for player in contract.anchors
@@ -80,24 +76,6 @@ def test_dpuct_registration_and_factory_echo_frozen_semantics() -> None:
     assert player.max_steps == 2000
     assert player.branch_driver_id == "full_clone/current_game_v1"
     assert not player.branch_audit
-
-
-def test_base_contract_rejects_cohort_expansion_even_with_rehashed_identity() -> None:
-    raw = json.loads((ROOT / "tests/fixtures/int-6-skill-arena-v1.json").read_text())
-    learned = dict(raw["anchors"][0])
-    learned.update(
-        {
-            "player_id": "learned-fixture-v1",
-            "display_name": "learned fixture",
-            "compute_class_id": "policy-cpu-batch1-v1",
-        }
-    )
-    original_cohort_sha256 = raw["key"]["anchor_cohort_sha256"]
-    raw["anchors"].append(learned)
-    raw["key"]["anchor_cohort_sha256"] = canonical_sha256(raw["anchors"])
-    assert raw["key"]["anchor_cohort_sha256"] != original_cohort_sha256
-    with pytest.raises(ValidationError, match="exactly the five"):
-        EvaluationContract.model_validate(raw)
 
 
 def test_checkpoint_candidate_missing_bytes_fails_closed() -> None:

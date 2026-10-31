@@ -169,7 +169,7 @@ benchmarks or demos, on local, CI or remote hosts. No CPU burners (`yes`),
 busy loops, stress tools or artificial resource pressure. Use controlled
 fixtures and injected measurements; see [TESTING.md](TESTING.md).
 
-Read [validation by change area](docs/development/validation.md) for the
+Read [validation by change area](docs/development.md#validation-by-change-area) for the
 checks required by the affected package and workflow.
 
 - Native isolated failure receipts name `AgentError` / `NativePanic`; PyO3

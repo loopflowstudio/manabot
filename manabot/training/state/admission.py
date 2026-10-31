@@ -17,7 +17,7 @@ import torch
 from manabot.env.match import Match
 from manabot.infra.identity import canonical_sha256, file_sha256
 from manabot.model.checkpoint import load_checkpoint
-from manabot.model.world import validate_agent_setup
+from manabot.model.world import validate_agent_decks, validate_agent_setup
 from manabot.training.records import TrainingRun
 from manabot.training.regime import (
     ArtifactReference,
@@ -50,6 +50,20 @@ def copy_verified_artifact(
     ):
         raise ValueError(f"published artifact hash/size mismatch: {source['path']}")
     return {"path": str(target), "sha256": source["sha256"], "bytes": source["bytes"]}
+
+
+def _admit_setups(agent: object, regime: TrainingRegime) -> None:
+    """Admit a policy for a regime's setups: its match, or its whole deck source.
+
+    A deck run admits a checkpoint only if its world may play every deck the
+    source lists, never a representative pair; the shared world rule decides.
+    """
+    if regime.deck_source is None:
+        validate_agent_setup(agent, Match(regime.root_match).to_rust())
+        return
+    if getattr(agent, "world_binding", None) is None:
+        raise ValueError("a deck source requires a checkpoint bound to a world")
+    validate_agent_decks(agent, regime.deck_source.players())
 
 
 def admit_policy(
@@ -134,8 +148,8 @@ def admit_policy(
         agent, space = load_checkpoint(admitted["path"])
     if agent.config != regime.agent or space.encoder.config != regime.observation:
         raise ValueError("published checkpoint model/observation differs from regime")
-    validate_agent_setup(agent, Match(source.regime.match).to_rust())
-    validate_agent_setup(agent, Match(regime.match).to_rust())
+    for setups in (source.regime, regime):
+        _admit_setups(agent, setups)
     payload = torch.load(admitted["path"], map_location="cpu", weights_only=False)
     metadata = payload.get("bc", {})
     for key, expected in {

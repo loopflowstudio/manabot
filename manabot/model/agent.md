@@ -172,7 +172,7 @@ attention is enabled. Unset feedforward expansion is head-count times width,
 so changing heads can change parameter counts as well as attention semantics.
 The default ladder fixes four heads and compares 64/1, 64/2 and 128/2.
 Explicit `include_ataraxos=True` adds 384/8 with feedforward width 1,536;
-[the scale probe](../../docs/training-calibration.md#ataraxos-scale-laptop-probe)
+[the scale probe](../../docs/training.md#freeze-step-targets)
 measures that model without changing the scientific cohort.
 
 `manabot.model.architecture.architecture_receipt(agent)` derives a versioned
@@ -190,4 +190,4 @@ PPO and BC/regime exports record the receipt. Reload validates present receipts,
 including same-shaped metadata discrepancies. Old checkpoints without receipts
 retain strict world/input/state-dict admission; no weight transfer or metadata
 reinterpretation is performed. Trainability records export-time flags and is
-not an optimizer-exposure counter. See [bounded calibration](../../docs/training-calibration.md#capacity-ladder-software-calibration).
+not an optimizer-exposure counter. See [bounded calibration](../../docs/training.md#freeze-step-targets).

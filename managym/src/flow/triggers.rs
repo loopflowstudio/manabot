@@ -936,7 +936,6 @@ impl Game {
 
     /// Wait for a delayed triggered ability's event (CR 603.7).
     pub(crate) fn add_delayed_trigger(&mut self, trigger: DelayedTrigger) {
-        self.journal_delayed_triggers();
         self.state.delayed_triggers.push(trigger);
     }
 
@@ -986,7 +985,6 @@ impl Game {
             fired.push((trigger.clone(), context));
         }
         if !spent.is_empty() {
-            self.journal_delayed_triggers();
             for index in spent.into_iter().rev() {
                 self.state.delayed_triggers.remove(index);
             }

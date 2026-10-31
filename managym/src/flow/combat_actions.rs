@@ -55,18 +55,16 @@ impl Game {
             }
             self.characteristics(permanent_id).keywords.vigilance
         };
-        self.journal_permanent(permanent_id);
         if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
             permanent.attacking = true;
             let attacker = permanent.controller;
-            self.update_turn_history(attacker, |history| history.attacked = true);
+            self.state.turn.history[attacker.0].attacked = true;
         }
         if !has_vigilance {
             // CR 508.1f — Attackers without vigilance become tapped, which
             // fires "becomes tapped" triggers.
             self.tap_permanent(permanent_id, false);
         }
-        self.journal_combat();
         if let Some(combat) = self.state.combat.as_mut() {
             combat.attackers.push(permanent_id);
             combat.attacker_to_blockers.entry(permanent_id).or_default();
@@ -85,7 +83,6 @@ impl Game {
                     "block declaration is illegal for this attacker/blocker pair".to_string(),
                 ));
             }
-            self.journal_combat();
             if let Some(combat) = self.state.combat.as_mut() {
                 combat
                     .attacker_to_blockers
@@ -98,7 +95,6 @@ impl Game {
     }
 
     pub(crate) fn resolve_combat_damage(&mut self) {
-        self.journal_combat();
         let Some(combat) = self.state.combat.take() else {
             return;
         };
@@ -368,7 +364,6 @@ impl Game {
             if !self.characteristics(attacker_id).keywords.menace {
                 continue;
             }
-            self.journal_combat();
             let Some(combat) = self.state.combat.as_mut() else {
                 return;
             };
