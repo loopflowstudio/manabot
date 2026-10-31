@@ -193,7 +193,7 @@ fn resolution_keeps_eligibility_after_hexproof_and_across_choice_clone_and_undo(
                 vec![0],
             );
             game.resolve_top_of_stack();
-            assert!(game.effective_keywords(victim).hexproof);
+            assert!(game.characteristics(victim).keywords.hexproof);
             assert_eq!(game.state.permanents[victim].as_ref().unwrap().damage, 0);
             let space = game.suspended_decision_action_space().unwrap();
             let choice = space

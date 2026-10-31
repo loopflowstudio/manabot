@@ -267,7 +267,7 @@ pub fn tapped(s: &Scenario, id: PermanentId) -> bool {
 }
 
 pub fn keywords(s: &Scenario, id: PermanentId) -> Keywords {
-    s.game().effective_keywords(id)
+    s.game().characteristics(id).keywords
 }
 
 /// The summed +power/+toughness of the permanent's `ModifyPt` records

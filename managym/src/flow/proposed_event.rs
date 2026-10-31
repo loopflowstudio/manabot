@@ -212,7 +212,7 @@ impl Game {
                             permanent.as_ref().map(|permanent| (index, permanent))
                         })
                 {
-                    if self.has_lost_abilities(PermanentId(index)) {
+                    if self.characteristics(PermanentId(index)).abilities_lost {
                         continue;
                     }
                     let Some(source) = self.permanent_object_ref(PermanentId(index)) else {
@@ -419,7 +419,7 @@ impl Game {
                 let Ok(permanent_id) = self.lookup_current_permanent(target) else {
                     return false;
                 };
-                if self.effective_keywords(permanent_id).indestructible {
+                if self.characteristics(permanent_id).keywords.indestructible {
                     return false;
                 }
                 let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {

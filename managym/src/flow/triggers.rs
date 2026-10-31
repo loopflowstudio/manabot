@@ -910,7 +910,7 @@ impl Game {
             return;
         };
         for attacker in attackers.clone() {
-            let amount = self.granted_firebending(attacker);
+            let amount = self.characteristics(attacker).firebending;
             let Some(permanent) = self.state.permanents[attacker].as_ref() else {
                 continue;
             };
@@ -1543,7 +1543,7 @@ impl Game {
     ) -> bool {
         let animated = self.state.card_to_permanent[moved_card]
             .filter(|id| self.state.permanents[*id].is_some())
-            .map(|id| self.permanent_is_animated(id))
+            .map(|id| self.characteristics(id).is_animated)
             .unwrap_or_else(|| {
                 self.state
                     .object_lki

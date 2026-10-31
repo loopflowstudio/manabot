@@ -103,9 +103,10 @@ controller).
 Task 6875f0 extends w17 with the 49 cards of TLA batch T3: characteristics,
 counters, replacements and attachments. A permanent's characteristics are what
 `Game` derives from its card and permanent state, never those inputs read
-alone: static type, keyword and P/T grants apply in layer order (`ScopeView`);
-`Game::has_lost_abilities`, `permanent_name`, `permanent_has_subtype`,
-`activated_abilities_for` and `permanent_can_tap` are the single readers.
+alone: `Game::characteristics` applies static type, keyword and P/T grants and
+effect records in layer order once and is the single reader of name, types,
+keywords, ability loss, activated abilities and power/toughness; rules
+questions such as `permanent_can_tap` read that view.
 Continuous effects from resolved spells and abilities are records on
 `GameState::effects` (`state::effect`: a `Modification` grouped by layer, whom
 it affects, how long), applied with static abilities by layer and then

@@ -64,11 +64,11 @@ impl Game {
         let Some(before) = marked(self) else {
             return 0;
         };
-        if !self.permanent_is_creature(permanent_id) {
+        if !self.characteristics(permanent_id).is_creature {
             self.apply_permanent_damage(source, permanent_id, amount);
             return 0;
         }
-        let remaining = (self.effective_toughness(permanent_id) - before).max(0);
+        let remaining = (self.characteristics(permanent_id).toughness - before).max(0);
         let deathtouch = source.is_some_and(|object_ref| {
             self.source_keywords(object_ref)
                 .is_some_and(|keywords| keywords.deathtouch)
@@ -253,7 +253,7 @@ impl Game {
     /// grants to a resolving spell (Lo and Li's Lesson spells).
     fn source_keywords(&self, source: ObjectRef) -> Option<crate::state::card::Keywords> {
         if let Ok(permanent_id) = self.lookup_current_permanent(source) {
-            return Some(self.effective_keywords(permanent_id));
+            return Some(self.characteristics(permanent_id).keywords);
         }
         if let Some(lki) = self.object_lki(source) {
             return Some(lki.keywords);

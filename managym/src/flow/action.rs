@@ -205,7 +205,8 @@ impl Game {
                 continue;
             };
             for (ability_index, ability) in self
-                .activated_abilities_for(permanent_id)
+                .characteristics(permanent_id)
+                .activated_abilities
                 .iter()
                 .enumerate()
             {

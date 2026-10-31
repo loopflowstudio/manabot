@@ -54,14 +54,14 @@ fn cr_613_7_a_grant_later_than_ability_loss_applies_and_an_earlier_one_does_not(
     let (mut later_grant, ogre) = ogre_scenario();
     until_end_of_turn(&mut later_grant, ogre, Modification::LoseAllAbilities);
     until_end_of_turn(&mut later_grant, ogre, flying());
-    assert!(later_grant.game().has_lost_abilities(ogre));
-    assert!(later_grant.game().effective_keywords(ogre).flying);
+    assert!(later_grant.game().characteristics(ogre).abilities_lost);
+    assert!(later_grant.game().characteristics(ogre).keywords.flying);
 
     let (mut earlier_grant, ogre) = ogre_scenario();
     until_end_of_turn(&mut earlier_grant, ogre, flying());
     until_end_of_turn(&mut earlier_grant, ogre, Modification::LoseAllAbilities);
-    assert!(earlier_grant.game().has_lost_abilities(ogre));
-    assert!(!earlier_grant.game().effective_keywords(ogre).flying);
+    assert!(earlier_grant.game().characteristics(ogre).abilities_lost);
+    assert!(!earlier_grant.game().characteristics(ogre).keywords.flying);
 }
 
 /// CR 514.2: "until end of turn" records end in the cleanup step; the
@@ -78,11 +78,11 @@ fn cr_514_2_an_end_of_turn_record_ends_at_cleanup() {
         },
     );
     indefinitely(&mut s, ogre, flying());
-    assert_eq!(s.game().effective_pt(ogre), (4, 3));
+    assert_eq!(s.game().characteristics(ogre).pt(), (4, 3));
     assert_eq!(s.game().effects_on(ogre).count(), 2);
 
     s.advance_to_active_step(1, StepKind::Upkeep);
-    assert_eq!(s.game().effective_pt(ogre), (2, 2));
+    assert_eq!(s.game().characteristics(ogre).pt(), (2, 2));
     let remaining: Vec<_> = s
         .game()
         .effects_on(ogre)
@@ -102,7 +102,7 @@ fn cr_400_7_an_indefinite_record_ends_when_its_object_changes_zones() {
     let (mut s, ogre) = ogre_scenario();
     indefinitely(&mut s, ogre, flying());
     let old = s.game().affected_permanent(ogre).unwrap();
-    assert!(s.game().effective_keywords(ogre).flying);
+    assert!(s.game().characteristics(ogre).keywords.flying);
 
     let card = card_of(&s, ogre);
     s.game_mut().move_card(card, ZoneType::Hand);
@@ -111,7 +111,7 @@ fn cr_400_7_an_indefinite_record_ends_when_its_object_changes_zones() {
     assert_ne!(s.game().affected_permanent(returned), Some(old));
     assert!(s.game().state.effects.is_empty());
     assert_eq!(s.game().effects_on(returned).count(), 0);
-    assert!(!s.game().effective_keywords(returned).flying);
+    assert!(!s.game().characteristics(returned).keywords.flying);
 }
 
 /// Records are journaled: rolling back to a mark removes a record applied
@@ -138,7 +138,7 @@ fn rollback_restores_continuous_effect_records_and_the_state_hash() {
     driver.rollback(&mut branch, mark);
     assert_eq!(branch.state.effects, effects);
     assert_eq!(branch.state.deterministic_hash(), hash);
-    assert!(!branch.effective_keywords(ogre).flying);
+    assert!(!branch.characteristics(ogre).keywords.flying);
 
     branch.apply_continuous(
         None,
@@ -156,7 +156,7 @@ fn rollback_restores_continuous_effect_records_and_the_state_hash() {
     driver.rollback(&mut branch, mark);
     assert_eq!(branch.state.effects, effects);
     assert_eq!(branch.state.deterministic_hash(), hash);
-    assert!(branch.effective_keywords(ogre).flying);
+    assert!(branch.characteristics(ogre).keywords.flying);
 }
 
 /// Equal games with equal records hash equally; the records are part of the

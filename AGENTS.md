@@ -247,11 +247,17 @@ observation. `force_permanent_on_battlefield` places a permanent without an
 entry event (no triggers or turn history); `enter_and_settle` and
 `play_and_settle` enter through the zone move.
 
-A permanent's activated abilities are `Game::activated_abilities_for` (printed,
-then granted, e.g. an Equipment's `AbilityGrant`); activation, payment
-and offer code indexes only that list, never `card.activated_abilities`.
-Whether a permanent has lost its abilities is `Game::has_lost_abilities`,
-which reads continuous-effect records and an Aura's `SetCharacteristics`.
+A permanent's characteristics after continuous effects (name, types, keywords,
+ability loss, activated abilities, power/toughness) are one view,
+`Game::characteristics(id)`, which applies static abilities and effect records
+in layer and timestamp order once; callers read its fields, and rules
+questions (`permanent_can_tap`, lethal damage) use it rather than re-deriving.
+Its `activated_abilities` are printed, then granted (e.g. an Equipment's
+`AbilityGrant`); activation, payment and offer code indexes only that list,
+never `card.activated_abilities`. Its `abilities_lost` reads
+continuous-effect records and an Aura's `SetCharacteristics`. Code that the
+layer computation itself calls (static scopes, ability outputs) reads the
+private layer stages in `flow/statics.rs`, never the view.
 A change that lasts until end of turn, or for any other duration, is an
 `Effect::ApplyContinuous` record (`state/effect.rs`; expiry in
 `flow/effects.rs`), never a new `Permanent` or `Player` field.

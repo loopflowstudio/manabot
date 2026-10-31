@@ -982,8 +982,7 @@ impl Observation {
         perm_id: crate::state::game_object::PermanentId,
         permanent: &Permanent,
     ) {
-        let (power, toughness) = game.effective_pt(perm_id);
-        let set_characteristics = game.set_characteristics(perm_id);
+        let characteristics = game.characteristics(perm_id);
         let pdat = PermanentData {
             id: permanent.id.0 as i32,
             registry_key: game.state.cards[permanent.card].registry_key.0 as i32,
@@ -1003,16 +1002,16 @@ impl Observation {
                         .range((object, 0)..=(object, usize::MAX))
                         .count()
                 })) as i32,
-            granted_firebending: i32::from(game.granted_firebending(perm_id)),
-            temp_subtypes: game
-                .added_subtypes(perm_id)
-                .into_iter()
-                .map(str::to_owned)
+            granted_firebending: i32::from(characteristics.firebending),
+            temp_subtypes: characteristics
+                .added_subtypes
+                .iter()
+                .map(|subtype| subtype.to_string())
                 .collect(),
             cant_be_blocked_this_turn: game.cant_be_blocked(perm_id),
-            power,
-            toughness,
-            is_animated: game.permanent_is_animated(perm_id),
+            power: characteristics.power,
+            toughness: characteristics.toughness,
+            is_animated: characteristics.is_animated,
             has_exile_link: game
                 .permanent_object_ref(perm_id)
                 .is_some_and(|object_ref| {
@@ -1021,7 +1020,7 @@ impl Observation {
                         .iter()
                         .any(|link| link.source == object_ref)
                 }),
-            keywords: KeywordData::from_keywords(&game.effective_keywords(perm_id)),
+            keywords: KeywordData::from_keywords(&characteristics.keywords),
             counters: permanent
                 .counters
                 .iter()
@@ -1032,14 +1031,17 @@ impl Observation {
                 .attached_to
                 .and_then(|object| game.object_event_ref(object))
                 .map(|object| object.entity.0 as i32),
-            name: set_characteristics.map(|set| set.named.clone()),
-            creature_types: set_characteristics.map(|_| {
-                game.creature_types(perm_id)
-                    .into_iter()
-                    .map(str::to_owned)
+            name: characteristics
+                .characteristics_set
+                .then(|| characteristics.name.to_string()),
+            creature_types: characteristics.characteristics_set.then(|| {
+                characteristics
+                    .creature_types
+                    .iter()
+                    .map(|creature_type| creature_type.to_string())
                     .collect()
             }),
-            is_granted_land: game.permanent_is_land(perm_id)
+            is_granted_land: characteristics.is_land
                 && !game.state.cards[permanent.card].types.is_land(),
             blocking: game.state.combat.as_ref().and_then(|combat| {
                 combat
@@ -1049,10 +1051,10 @@ impl Observation {
                     .and_then(|(attacker, _)| game.state.permanents[*attacker].as_ref())
                     .map(|attacker| attacker.id.0 as i32)
             }),
-            abilities_lost: game.has_lost_abilities(perm_id),
+            abilities_lost: characteristics.abilities_lost,
             dealt_damage_this_turn: permanent.dealt_damage_this_turn,
-            used_abilities: game
-                .activated_abilities_for(perm_id)
+            used_abilities: characteristics
+                .activated_abilities
                 .iter()
                 .enumerate()
                 .filter(|(index, ability)| permanent.activation_used(*index, ability))
@@ -1094,7 +1096,7 @@ impl Observation {
             // A characteristic-setting effect replaces a permanent's types.
             is_ally: match game.state.card_to_permanent[card_id] {
                 Some(permanent) if zone == ZoneType::Battlefield => {
-                    game.permanent_has_subtype(permanent, "Ally")
+                    game.characteristics(permanent).has_subtype("Ally")
                 }
                 _ => card.has_subtype("Ally"),
             },

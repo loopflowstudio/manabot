@@ -22,9 +22,7 @@ and pool-membership choices that were here (history: `be2b7586b:scratch/question
   in the default pack, because Rust integration tests and `manabot/verify` build
   games from it. `set_cards` is the set filter (pool key since renamed `"world"`).
   Undefined TLA cards are no longer listed as unsupported pool rows.
-- Not rewritten (dated evidence): the Academy curated pack `local_identity` values
-  keep pre-rename keys.
-- Full TLA completion remains the eight-PR plan; no merge or new Task authorized.
+- Academy curated pack `local_identity` values keep pre-rename keys (evidence).
 - Settled (Jack Heart, 2026-10-30, "1a, 2a"): T3 extends the open w17 and
   policy input v5 in place; never w19/v6. Widths: player 63, card 55,
   permanent 37 plus the facts block, relation 48 (v1–v4 keep 40 / 41 / 29).
@@ -68,6 +66,9 @@ Main's notes at the syncs live at `6d069d6e5:scratch/questions.md` and `origin/m
   Coordinate with f871a8 in one comment. (The v1 coverage gate was deleted by
   Task afbd6a.)
 
+- 2026-10-30: afbd6a archived the superseded corpora (w12–w15 kernels,
+  w11 authored match, v1, learn-lesson-w4-v3) to
+  `experiments/data/archive/conformance/` (Jack Heart's steer).
 - 2026-10-29 (public-commitment parity, decision): bound to w17 by prefix. Only
   viewer 0's tracker fails (Command 68, South Pole Voyager revealed from library
   into hand); viewer 1 consumes the hero's Island discard (30) and
@@ -247,17 +248,8 @@ T2's operator choices are at `a5587df5a:scratch/questions.md`. New since
 - Gaps: granted land plays of another
   player's card would enter under its owner (unreachable: no T2 grant lets a player play another player's land). (Academy's card face now prints
   and names exhausted / once-each-turn / granted firebending, text-5 wording.)
-- Possible worlds v3 (2026-10-29): foretold slots are ordered (each has its
-  own foretell turn), so the fill factor is `P(m, F)`, not `C(m, F)`; the
-  ratio is constant across worlds. Materialization picks the slot set
-  uniformly but keeps an already-foretold chosen card in place, so slot
-  assignment is not uniform over orderings. Not yet foretold-aware (follow-up
-  for belief owners): `PhysicalHandSampler`'s hypergeometric prior and
-  `BeliefState.draw_unknown`/hidden-draw convolution in `belief/range.py`
-  still treat every pool card as hand-or-library, as does the library
-  count row in `belief/encoding.py` (pool − hand).
-  2026-10-30 (concept review 4, 1b): the tracker's accounting now counts the
-  slot; which hand card was foretold is assumed uniform by count (MTG-215).
+- Possible worlds v3 and the foretold-aware belief follow-ups (MTG-215) are
+  T2's: `a5587df5a:scratch/questions.md` and `a18902e0e:scratch/questions.md`.
 
 ## afbd6a (delete old world), 2026-10-30 — headless choices
 
@@ -342,3 +334,33 @@ T2's operator choices are at `a5587df5a:scratch/questions.md`. New since
   version. The learning role `delayed_trigger` is projected in
   `BoundSemanticPack.project_observation`; `manabot/semantic/policy.py`'s
   runtime object rows (keyed by stack id) do not list delayed triggers yet.
+
+## Characteristics view and CI fix — 2026-10-30
+
+- The Integration failure in `test_action_identity` (target cases) was v5's
+  timestamp-rank column (35), not the definition id, which stays at column 24
+  in every version; `identity_removed` now also zeroes it on v5 rows, as
+  `test_choice_separability` does. `choice_corpus`'s `without_definition` mutation is left as is:
+  it feeds a separability report, no test asserts a tie on it, and changing it
+  would change what that analysis measures.
+- `Game::characteristics(id)` (Jack Heart's steer 9bf48ffa) composes the
+  private layer stages once per call; it does not memoize across calls. Code
+  the layer computation itself reaches (static scopes, ability mana outputs via
+  `controller_value`, `permanent_is_battlefield_creature`) reads the private
+  stages, so computing a view never recurses into another view. A view
+  computes its shared layer inputs (`LayerBasis`) once; `attachments_on`
+  checks `attached_to` before scanning records. Debug `engine_tests` went
+  from 157 s (a18902e0e) to 102 s; a first cut without these ran 311 s.
+- `Characteristics.characteristics_set` keeps the Observation's
+  `name`/`creature_types` reported only when an Aura sets them.
+- Can't-be-blocked and exile-if-dies stay record queries (`flow/effects.rs`).
+
+## Sync onto T3's characteristics view — 2026-10-30
+
+- T4's Zhao land-type overwrite and static subtype grants join `LayerBasis`:
+  the overwrite contributes to the loss timestamp and its subtype, with static
+  type-grant subtypes, to `added_subtypes`; its mana ability still follows the
+  Aura grants. `ability_loss_timestamp` computes the loss without
+  `layer_basis` (no static scope), because `layer_basis` now reads
+  `static_sources`, which asks each source's loss. T4 callers of the removed
+  accessors read `Game::characteristics`.
