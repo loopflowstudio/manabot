@@ -135,7 +135,7 @@ def test_ordinary_policy_has_complete_programs_and_trains_on_a_real_offer(
     )
     pack = BoundSemanticPack.from_env(native)
     assert pack.definition_count == 100
-    assert pack.schema.raw["schema_version"] == 9
+    assert pack.schema.raw["schema_version"] == 10
     pack.pad_catalog()
     tensors = {
         key: torch.as_tensor(value).unsqueeze(0) for key, value in observation.items()

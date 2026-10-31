@@ -313,9 +313,7 @@ class LegacyRestrictedManaView(ProtocolModel):
 
 class PlayerTurnHistoryView(ProtocolModel):
     attacked: bool = Field(default=False, exclude_if=lambda value: not value)
-    permanents_sacrificed: UInt32 = Field(
-        default=0, exclude_if=lambda value: not value
-    )
+    permanents_sacrificed: UInt32 = Field(default=0, exclude_if=lambda value: not value)
     land_entered: bool = Field(default=False, exclude_if=lambda value: not value)
     cards_drawn: UInt32 = Field(default=0, exclude_if=lambda value: not value)
 
