@@ -126,10 +126,10 @@ def test_experiment_builds_a_source_and_checks_its_decks_in_one_batch(
     with pytest.raises(ValueError, match="distinct decks"):
         UniformDecks(decks=(source.decks[0], source.decks[0]))
     # One cheap batch check gives each deck's issues; game creation admits again.
-    unsupported = Deck({"Swamp": 9, "Rocky Rebuke": 1})
+    unsupported = Deck({"Swamp": 9, "Accumulate Wisdom": 1})
     checked = managym.check_decks([*source.decks, unsupported])
     assert checked[:2] == [[], []]
-    assert any("Rocky Rebuke" in issue.message for issue in checked[2])
+    assert any("Accumulate Wisdom" in issue.message for issue in checked[2])
     stored = source.model_copy(update={"decks": (*source.decks, unsupported)})
     with pytest.raises(ValueError, match="not admitted"):
         stored.check()
@@ -160,9 +160,9 @@ def test_regime_records_its_source_and_rejects_bad_decks_before_training(
     with pytest.raises(ValueError, match="complete world"):
         validate_regime(wrong)
     bad = _regime(
-        decks.model_copy(update={"decks": (*decks.decks, Deck({"Rocky Rebuke": 1}))})
+        decks.model_copy(update={"decks": (*decks.decks, Deck({"Accumulate Wisdom": 1}))})
     )
-    with pytest.raises(ValueError, match="Rocky Rebuke"):
+    with pytest.raises(ValueError, match="Accumulate Wisdom"):
         validate_regime(bad)
 
 
@@ -228,7 +228,7 @@ def test_checkpoint_binds_world_and_plays_unseen_admitted_decks(
 
     unseen = Deck({"Swamp": 10, "Forest": 4}).player()
     validate_agent_setup(policy, [unseen, decks.players()[0]])
-    unsupported = Deck({"Swamp": 9, "Rocky Rebuke": 1}).player()
+    unsupported = Deck({"Swamp": 9, "Accumulate Wisdom": 1}).player()
     with pytest.raises(ValueError, match="not admitted by"):
         validate_agent_setup(policy, [unseen, unsupported])
     other_pack = managym.PlayerConfig("other", {"Swamp": 10}, {}, None)
@@ -285,9 +285,9 @@ def test_later_roots_take_new_decks_and_reject_invalid_ones_before_play(
     collector = _collector(decks)
     env = collector._env
     try:
-        generated = Deck({"Swamp": 10, "Rocky Rebuke": 1}).player()
+        generated = Deck({"Swamp": 10, "Accumulate Wisdom": 1}).player()
         before = env.current_player_configs()
-        with pytest.raises(managym.AgentError, match="Rocky Rebuke"):
+        with pytest.raises(managym.AgentError, match="Accumulate Wisdom"):
             env.set_training_decks([decks.players()[0], generated], "generated")
         env.reset_seeds_into_buffers(env.current_game_seeds())
         assert [

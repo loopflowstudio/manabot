@@ -230,7 +230,7 @@ def _damage(effects: list[Effect], kicked: bool) -> int:
     best = 0
     for effect in effects:
         name, body = _variant(effect)
-        if name == "IfKicked":
+        if name == "If" and body["condition"] == "Kicked":
             branch = body["then"] if kicked else body.get("otherwise", [])
             best = max(best, _damage(branch, kicked))
             continue
