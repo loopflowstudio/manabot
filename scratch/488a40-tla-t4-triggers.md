@@ -166,7 +166,8 @@ source_card, source_ref}`, `Game::latest_card_lki`, `Game::continue_resolution`
 (suspend on the next decision or resume the frame), `stop_keeping_creatures`
 as the one keep-creatures handoff, one graveyard-card legality check. Debug
 `cargo test`: all pass except the w17 content-digest and Scryfall-fixture
-drift that gate re-records.
+drift that gate re-records. Fourth compress (merge `54533b75a`): the
+resolution carries no undo or journal remnant; nothing further to cut.
 
 ## Concept review (Jack Heart, 2026-10-30, accepted 1a 2a 3a — done)
 

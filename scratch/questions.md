@@ -263,7 +263,7 @@ T2's operator choices are at `a5587df5a:scratch/questions.md`. New since
 - Card abilities use `ActivateCardAbility` (sharing `PriorityActivateAbility`);
   a discard-cost ability refers to its card's graveyard object after costs.
 - `lesson_mana` stays the total of any restriction; per-class detail is
-  `restricted_mana`. `PlayerVitals` ≤ 40 bytes, `UndoEntry` ≤ 72.
+  `restricted_mana`. `PlayerVitals` ≤ 40 bytes.
 - Avatar's Wrath's hand-only lock ends at its caster's next untap and blocks
   flashback too; mass airbend exiles one at a time.
 - Kicked Aang's Journey runs two searches (no TLA Shrine is defined yet).
