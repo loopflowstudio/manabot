@@ -578,7 +578,7 @@ impl Game {
                 let can_tap = self.permanent_can_tap(permanent);
                 let fixed =
                     (can_tap && !card.mana_abilities.is_empty() && !characteristics.abilities_lost)
-                        .then(|| self.fixed_source_mana(permanent, false, can_tap));
+                        .then(|| self.fixed_source_mana(permanent));
                 let abilities = characteristics
                     .activated_abilities
                     .iter()
@@ -992,26 +992,17 @@ impl Game {
     }
 
     /// Fixed tap output plus immediate triggered bonuses; chosen outputs stay
-    /// in the payment search until the player selects a color. Callers pass
-    /// the permanent's ability loss and tap state from its characteristics.
-    fn fixed_source_mana(
-        &self,
-        permanent: PermanentId,
-        abilities_lost: bool,
-        can_tap: bool,
-    ) -> Mana {
+    /// in the payment search until the player selects a color. Callers check
+    /// that the source has mana abilities, can tap and has not lost its
+    /// abilities, reading its characteristics once.
+    fn fixed_source_mana(&self, permanent: PermanentId) -> Mana {
         let source = self.state.permanents[permanent].as_ref().unwrap();
         let card = &self.state.cards[source.card];
         let mut output = Mana::default();
-        if abilities_lost || !can_tap {
-            return output;
-        }
         for ability in &card.mana_abilities {
             output.add(&ability.mana);
         }
-        if !card.mana_abilities.is_empty() {
-            output.add(&self.tap_mana_bonus(permanent, source.controller));
-        }
+        output.add(&self.tap_mana_bonus(permanent, source.controller));
         output
     }
 
@@ -1134,14 +1125,13 @@ impl Game {
         let mut total = Mana::default();
         for permanent_id in self.battlefield_permanents(player) {
             let source = self.state.permanents[permanent_id].as_ref().unwrap();
-            if self.state.cards[source.card].mana_abilities.is_empty() {
+            if self.state.cards[source.card].mana_abilities.is_empty()
+                || !self.permanent_can_tap(permanent_id)
+                || self.characteristics(permanent_id).abilities_lost
+            {
                 continue;
             }
-            total.add(&self.fixed_source_mana(
-                permanent_id,
-                self.characteristics(permanent_id).abilities_lost,
-                self.permanent_can_tap(permanent_id),
-            ));
+            total.add(&self.fixed_source_mana(permanent_id));
         }
         total
     }

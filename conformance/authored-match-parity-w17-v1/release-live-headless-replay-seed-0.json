@@ -360,7 +360,7 @@
         },
         {
           "path": "managym/src/flow/mana.rs",
-          "sha256": "9f2a349d8677da35085c8a2144aa74d120f6d605a36efcdc1338094270e4d1de"
+          "sha256": "4b167fc743b9049c385db1d82054c005909fe50682396a7a798ecddb2c70cc7c"
         },
         {
           "path": "managym/src/flow/mod.rs",
@@ -555,7 +555,7 @@
           "sha256": "7253f4b013ddbb65f2f9509324d3c59739e9ca08f16ad7bb5d2c92e16a928d3c"
         }
       ],
-      "sha256": "c93049492e2311f550ac3128b4628898fa483508c0d5bfe85c5252c9d5a77ee2"
+      "sha256": "8a22314823a7e1c8d697c5cc71a2be4987a9e12fde190da7078dad6e06f8cee5"
     },
     "seed": 0
   },

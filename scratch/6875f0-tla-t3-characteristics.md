@@ -226,6 +226,11 @@ choice.
   see questions.md). Integration (main) has been green since `a18902e0e`.
   Check: debug `cargo test` and clippy clean; action identity, world-change
   suite and rules inventory 96 passed. Clean-machine Play is CI's.
+- Compress after `b38f1e1cd`: no v5 definition-column bug (24 in both
+  encoders; the reported failure was the pre-`a18902e0e` run). Callers of
+  `fixed_source_mana` now own its preconditions. Check: debug `cargo test`
+  green; world-change suite and action identity 90 passed; parity receipt
+  re-recorded (source hash only).
 - Browser proof (Playwright e2e) is CI's.
 - Jack Heart's review of PR #399.
 - Outside T3 (Jack Heart's call): the opponent's sideboard counts in the
