@@ -258,8 +258,8 @@ T2's operator choices are at `a5587df5a:scratch/questions.md`. New since
   characteristic-setting Aura is attached, and card-property filters run before
   views: 7.0 s. The rest of the gap to main is per-view scans
   (`static_sources`, `attachments_on` in `layer_basis`) repeated for every
-  permanent each priority (SBA, payment model); closing it would need an
-  index of attachments and static sources, a separate change.
+  permanent each priority (SBA, payment model); MTG-234 closes it with a
+  per-revision static index and view cache.
 
 ## MTG-234 — 2026-10-30
 

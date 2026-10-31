@@ -45,7 +45,28 @@ legitimate mutations (taps). Not pursued: `Card` string interning.
   Debug `cargo test --no-fail-fast`, clippy, fmt, authored-match /
   public-commitment / skip-forced pytest pass; receipt hashes regenerated.
 
+## Departure from the Task text (draft, for review)
+
+- The Task asked for an index maintained at enter/leave/attach/detach. It is
+  instead rebuilt lazily once per state revision (see `questions.md`,
+  MTG-234): every write passes `TrackedState::deref_mut`, so it cannot drift.
+  Reviewer may still ask for incremental maintenance.
+- Target was "near pre-T3": worst reply 4.97 s vs 4.34 s (+15%), total
+  151.8 s vs 128.7 s (+18%).
+
 ## Remaining
 
-- Gate: other source-hash-bound receipts, full affected Python suites, PR
-  body with the table above.
+- Gate: full affected Python suites; PR body with the table above and the
+  departure. Only two receipts bind source hashes (authored-match, regenerated;
+  public-commitment, unchanged and passing).
+
+Check (2026-10-30 realign): no new commits on `origin/main`; code matches the
+design above; no checks rerun.
+
+Concept review (2026-10-30, headless): the model is one reader
+(`Game::characteristics`), one revision (`TrackedState`) and one derived cache
+keyed on it; no second index to keep consistent, no new public concept, and
+the CLAUDE.md rule already describes it. Lazy per-revision rebuild instead of
+incremental enter/leave/attach maintenance is an implementation choice that
+preserves the Task's outcome (identical behavior, speed near pre-T3), recorded
+in `questions.md`; not a product choice. Nothing to change; no open choice.
