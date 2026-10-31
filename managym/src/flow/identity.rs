@@ -109,6 +109,15 @@ impl Game {
             .find(|lki| lki.permanent == permanent_id)
     }
 
+    /// Last known information of `card`'s most recent battlefield object.
+    pub(crate) fn latest_card_lki(&self, card: CardId) -> Option<&ObjectLki> {
+        self.state
+            .object_lki
+            .values()
+            .filter(|lki| lki.card == card)
+            .max_by_key(|lki| lki.object_ref)
+    }
+
     /// Capture the stable viewer identity for a current or departed object.
     pub(crate) fn object_event_ref(&self, object_ref: ObjectRef) -> Option<ObjectEventRef> {
         let entity = if let Ok(permanent_id) = self.lookup_current_permanent(object_ref) {

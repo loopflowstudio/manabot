@@ -25,14 +25,6 @@ impl Game {
         }
     }
 
-    /// The stack object's identity as a target.
-    fn stack_target(&self, index: usize) -> Target {
-        match &self.state.stack_objects[index] {
-            StackObject::Spell(spell) => Target::StackSpell(spell.card),
-            object => Target::StackAbility(object.id()),
-        }
-    }
-
     /// The targeting requirement a stack object's target slot was chosen for.
     pub(crate) fn stack_target_requirement(
         &self,
@@ -102,17 +94,9 @@ impl Game {
             StackObject::ActivatedAbility(_) => vec![0; targets.len()],
         };
         let current = targets.get(*slot).copied();
-        let source = match stacked {
-            StackObject::Spell(_) => None,
-            StackObject::ActivatedAbility(ability) => Some(ability.source_ref),
-            StackObject::TriggeredAbility(triggered) => triggered.source_ref,
-        };
-        let source_card = match stacked {
-            StackObject::Spell(spell) => spell.card,
-            StackObject::ActivatedAbility(ability) => ability.source_card,
-            StackObject::TriggeredAbility(triggered) => triggered.source_card,
-        };
-        let self_target = self.stack_target(index);
+        let source = stacked.source_ref();
+        let source_card = stacked.source_card();
+        let self_target = stacked.as_target();
         self.legal_targets_for_spec(&requirement.spec, controller)
             .into_iter()
             .filter(|target| Some(*target) != current && *target != self_target)
@@ -214,10 +198,7 @@ impl Game {
                 StackObject::TriggeredAbility(triggered)
             }
         };
-        let target = match &copy {
-            StackObject::Spell(spell) => Target::StackSpell(spell.card),
-            _ => Target::StackAbility(id),
-        };
+        let target = copy.as_target();
         self.push_to_stack(copy);
         Some(target)
     }

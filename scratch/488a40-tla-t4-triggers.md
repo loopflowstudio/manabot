@@ -160,6 +160,12 @@ defender is the non-active player); `trigger_multiplicity` counts connecting
 creatures; the leaving spell is removed from the stack once. Second compress: `EffectFrame.ability` is set without
 the resolution counter's `usize::MAX` sentinel; `OnceEachTurnKey` names the
 once-each-turn key and `Game::spend_once_each_turn` is its only writer.
+Third compress (over the last ten cards): `StackObject::{as_target,
+source_card, source_ref}`, `Game::latest_card_lki`, `Game::continue_resolution`
+(suspend on the next decision or resume the frame), `stop_keeping_creatures`
+as the one keep-creatures handoff, one graveyard-card legality check. Debug
+`cargo test`: all pass except the w17 content-digest and Scryfall-fixture
+drift that gate re-records.
 
 ## Concept review (Jack Heart, 2026-10-30, accepted 1a 2a 3a — done)
 

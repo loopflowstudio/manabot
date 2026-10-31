@@ -2119,30 +2119,21 @@ impl Game {
                         _ => false,
                     })
             }
-            Target::GraveyardCard(object) => match spec {
-                TargetSpec::GraveyardCardYouOwn { predicate } => {
-                    let card = CardId::from(object.entity);
-                    self.current_object_ref(card) == Some(object)
-                        && self.state.zones.zone_of(card) == Some(ZoneType::Graveyard)
-                        && self.state.cards[card].owner == controller
-                        && predicate.matches_card(&self.state.cards[card])
-                }
-                TargetSpec::GraveyardCardYouOwnWithinSourcePower { predicate } => self
-                    .target_is_legal(
-                        target,
-                        &TargetSpec::GraveyardCardYouOwn {
-                            predicate: predicate.clone(),
-                        },
-                        controller,
-                    ),
-                TargetSpec::GraveyardCard { predicate } => {
-                    let card = CardId::from(object.entity);
-                    self.current_object_ref(card) == Some(object)
-                        && self.state.zones.zone_of(card) == Some(ZoneType::Graveyard)
-                        && predicate.matches_card(&self.state.cards[card])
-                }
-                _ => false,
-            },
+            Target::GraveyardCard(object) => {
+                let (predicate, you_own) = match spec {
+                    TargetSpec::GraveyardCardYouOwn { predicate }
+                    | TargetSpec::GraveyardCardYouOwnWithinSourcePower { predicate } => {
+                        (predicate, true)
+                    }
+                    TargetSpec::GraveyardCard { predicate } => (predicate, false),
+                    _ => return false,
+                };
+                let card = CardId::from(object.entity);
+                self.current_object_ref(card) == Some(object)
+                    && self.state.zones.zone_of(card) == Some(ZoneType::Graveyard)
+                    && (!you_own || self.state.cards[card].owner == controller)
+                    && predicate.matches_card(&self.state.cards[card])
+            }
         }
     }
 

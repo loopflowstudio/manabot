@@ -598,10 +598,7 @@ impl Game {
                 .stack_objects
                 .iter()
                 .rev()
-                .map(|object| match object {
-                    StackObject::Spell(spell) => Target::StackSpell(spell.card),
-                    object => Target::StackAbility(object.id()),
-                })
+                .map(StackObject::as_target)
                 .collect(),
             TargetSpec::Ability => self
                 .state
@@ -853,11 +850,7 @@ impl Game {
                 from: Some(ZoneType::Battlefield),
                 ..
             } => self
-                .state
-                .object_lki
-                .values()
-                .filter(|lki| lki.card == *card)
-                .max_by_key(|lki| lki.object_ref)
+                .latest_card_lki(*card)
                 .map(|lki| Target::Permanent(lki.permanent)),
             GameEvent::AttackersDeclared { attackers, .. } if attackers.len() == 1 => {
                 Some(Target::Permanent(attackers[0]))
@@ -960,11 +953,7 @@ impl Game {
             } => {
                 self.state.cards[*card].types.is_creature()
                     || self
-                        .state
-                        .object_lki
-                        .values()
-                        .filter(|lki| lki.card == *card)
-                        .max_by_key(|lki| lki.object_ref)
+                        .latest_card_lki(*card)
                         .is_some_and(|lki| lki.animated_creature)
             }
             _ => false,

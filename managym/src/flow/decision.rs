@@ -17,7 +17,7 @@ use crate::{
     },
     state::{
         ability::{Effect, EffectValue, LinkedGrant, PaymentCost},
-        game_object::{CardId, ObjectId, ObjectRef, PlayerId, Target},
+        game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
         permanent::CounterKind,
         predicate::CardPredicate,
         zone::ZoneType,
@@ -79,7 +79,7 @@ pub struct EffectFrame {
     pub this_way: Vec<CardId>,
     /// The token this resolution created last ("that token").
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub created: Option<crate::state::game_object::PermanentId>,
+    pub created: Option<PermanentId>,
     /// Chosen slots, with eligibility retained across instructions and choices.
     pub targets: Vec<ResolutionTarget>,
     pub active_requirement: usize,
@@ -178,7 +178,7 @@ impl PaymentProgress {
 pub struct OptionalSacrifice {
     /// The source permanent of an "another" sacrifice, never a candidate.
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub excluded: Option<crate::state::game_object::PermanentId>,
+    pub excluded: Option<PermanentId>,
     /// Runs only after a sacrifice.
     pub then: Vec<Effect>,
 }
@@ -212,7 +212,7 @@ pub enum Decision {
     /// A mana ability's printed upfront cost, before its output exists.
     ManaUpfront {
         player: PlayerId,
-        permanent: crate::state::game_object::PermanentId,
+        permanent: PermanentId,
         ability_index: usize,
         resume: Option<Box<Decision>>,
     },
@@ -376,7 +376,7 @@ pub enum Decision {
     KeepCreatures {
         player: PlayerId,
         max_total_power: i32,
-        kept: Vec<crate::state::game_object::PermanentId>,
+        kept: Vec<PermanentId>,
     },
     /// `player` chooses a new target for slot `slot` of the stack object
     /// (CR 115.7), or keeps the current one when `may_keep` ("you may
@@ -501,10 +501,7 @@ impl Game {
     /// The creatures a pending `Decision::KeepCreatures` may add: its
     /// player's, not yet kept, within the power bound with that player's
     /// kept creatures.
-    pub(crate) fn keep_candidates(
-        &self,
-        decision: &Decision,
-    ) -> Vec<crate::state::game_object::PermanentId> {
+    pub(crate) fn keep_candidates(&self, decision: &Decision) -> Vec<PermanentId> {
         let Decision::KeepCreatures {
             player,
             max_total_power,
@@ -538,7 +535,7 @@ impl Game {
         &mut self,
         player: PlayerId,
         max_total_power: i32,
-        kept: Vec<crate::state::game_object::PermanentId>,
+        kept: Vec<PermanentId>,
     ) -> Option<Decision> {
         let decision = Decision::KeepCreatures {
             player,
@@ -551,6 +548,17 @@ impl Game {
         let Decision::KeepCreatures { kept, .. } = decision else {
             unreachable!()
         };
+        self.stop_keeping_creatures(player, max_total_power, kept)
+    }
+
+    /// `player` has stopped keeping creatures: the nonactive player chooses
+    /// next, or every unkept creature is sacrificed.
+    fn stop_keeping_creatures(
+        &mut self,
+        player: PlayerId,
+        max_total_power: i32,
+        kept: Vec<PermanentId>,
+    ) -> Option<Decision> {
         if player == self.active_player() {
             return self.keep_creatures(PlayerId(1 - player.0), max_total_power, kept);
         }
@@ -559,7 +567,7 @@ impl Game {
     }
 
     /// Sacrifice every creature not in `kept`, as one event.
-    fn sacrifice_unkept_creatures(&mut self, kept: &[crate::state::game_object::PermanentId]) {
+    fn sacrifice_unkept_creatures(&mut self, kept: &[PermanentId]) {
         let doomed: Vec<_> = [self.active_player(), PlayerId(1 - self.active_player().0)]
             .into_iter()
             .flat_map(|player| self.battlefield_permanents(player))
@@ -571,10 +579,7 @@ impl Game {
     }
 
     /// The permanents a pending `Decision::Sacrifice` may select.
-    pub(crate) fn sacrifice_decision_candidates(
-        &self,
-        decision: &Decision,
-    ) -> Vec<crate::state::game_object::PermanentId> {
+    pub(crate) fn sacrifice_decision_candidates(&self, decision: &Decision) -> Vec<PermanentId> {
         let Decision::Sacrifice {
             player,
             predicate,
@@ -624,6 +629,18 @@ impl Game {
 
     /// Execute a frame's remaining effects. If an effect suspends for a
     /// decision, park the frame; otherwise finalize the resolution.
+    /// Suspend the resolution on `next`, or resume its frame when there is
+    /// no further decision.
+    fn continue_resolution(&mut self, mut suspended: SuspendedResolution, next: Option<Decision>) {
+        match next {
+            Some(decision) => {
+                suspended.decision = decision;
+                self.state.suspended_decision = Some(suspended);
+            }
+            None => self.run_frame(suspended.frame),
+        }
+    }
+
     pub(crate) fn run_frame(&mut self, mut frame: EffectFrame) {
         while let Some(effect) = frame.queue.pop_front() {
             if let Some(decision) = self.execute_frame_effect(&effect, &mut frame) {
@@ -1123,38 +1140,27 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (
-                Decision::KeepCreatures {
-                    player,
-                    max_total_power,
-                    kept,
-                },
-                Action::SelectCard { card, .. },
-            ) => {
-                let (player, max_total_power) = (*player, *max_total_power);
-                let mut kept = std::mem::take(kept);
-                let candidates = self.keep_candidates(&Decision::KeepCreatures {
-                    player,
-                    max_total_power,
-                    kept: kept.clone(),
-                });
+            (Decision::KeepCreatures { .. }, Action::SelectCard { card, .. }) => {
+                let candidates = self.keep_candidates(&suspended.decision);
                 let selected =
                     self.state.card_to_permanent[*card].filter(|id| candidates.contains(id));
                 let Some(selected) = selected else {
-                    if let Decision::KeepCreatures { kept: slot, .. } = &mut suspended.decision {
-                        *slot = kept;
-                    }
                     self.state.suspended_decision = Some(suspended);
                     return Err(AgentError("illegal creature to keep".into()));
                 };
+                let Decision::KeepCreatures {
+                    player,
+                    max_total_power,
+                    kept,
+                } = &mut suspended.decision
+                else {
+                    unreachable!()
+                };
                 kept.push(selected);
-                match self.keep_creatures(player, max_total_power, kept) {
-                    Some(next) => {
-                        suspended.decision = next;
-                        self.state.suspended_decision = Some(suspended);
-                    }
-                    None => self.run_frame(suspended.frame),
-                }
+                let (player, max_total_power, kept) =
+                    (*player, *max_total_power, std::mem::take(kept));
+                let next = self.keep_creatures(player, max_total_power, kept);
+                self.continue_resolution(suspended, next);
                 Ok(())
             }
             (
@@ -1175,16 +1181,10 @@ impl Game {
                     return Err(AgentError("illegal new target".into()));
                 }
                 self.change_stack_target(object, slot, *target);
-                match self
+                let next = self
                     .next_retarget(player, object, slot + 1, may_keep)
-                    .filter(|_| may_keep)
-                {
-                    Some(next) => {
-                        suspended.decision = next;
-                        self.state.suspended_decision = Some(suspended);
-                    }
-                    None => self.run_frame(suspended.frame),
-                }
+                    .filter(|_| may_keep);
+                self.continue_resolution(suspended, next);
                 Ok(())
             }
             (
@@ -1196,13 +1196,8 @@ impl Game {
                 },
                 Action::Decline { .. },
             ) => {
-                match self.next_retarget(*player, *object, *slot + 1, true) {
-                    Some(next) => {
-                        suspended.decision = next;
-                        self.state.suspended_decision = Some(suspended);
-                    }
-                    None => self.run_frame(suspended.frame),
-                }
+                let next = self.next_retarget(*player, *object, *slot + 1, true);
+                self.continue_resolution(suspended, next);
                 Ok(())
             }
             (
@@ -1214,19 +1209,8 @@ impl Game {
                 Action::Decline { .. },
             ) => {
                 let kept = std::mem::take(kept);
-                let next = if *player == self.active_player() {
-                    self.keep_creatures(PlayerId(1 - player.0), *max_total_power, kept)
-                } else {
-                    self.sacrifice_unkept_creatures(&kept);
-                    None
-                };
-                match next {
-                    Some(next) => {
-                        suspended.decision = next;
-                        self.state.suspended_decision = Some(suspended);
-                    }
-                    None => self.run_frame(suspended.frame),
-                }
+                let next = self.stop_keeping_creatures(*player, *max_total_power, kept);
+                self.continue_resolution(suspended, next);
                 Ok(())
             }
             (
@@ -1244,12 +1228,8 @@ impl Game {
                     return Err(AgentError("illegal counter recipient".into()));
                 };
                 self.put_counters(selected, *kind, 1, *player);
-                if let Some(next) = self.distribute_counters(*player, *kind, *remaining - 1) {
-                    suspended.decision = next;
-                    self.state.suspended_decision = Some(suspended);
-                } else {
-                    self.run_frame(suspended.frame);
-                }
+                let next = self.distribute_counters(*player, *kind, *remaining - 1);
+                self.continue_resolution(suspended, next);
                 Ok(())
             }
             (
