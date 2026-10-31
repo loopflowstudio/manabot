@@ -220,17 +220,13 @@ choice.
   `-D warnings` clean, w17 fixtures unchanged; Python world-change set,
   semantic, belief, env and Academy parity tests 444 passed. CI fix for
   `test_action_identity` landed at `a18902e0e` (see questions.md).
+- Sync onto main `b73a6b5db` (undo cut, decklist import): #399 conflicts in
+  engine flow files, `tests/cards/tla.rs` and w17 receipts; CI on `8ac5d811c`
+  waits on it (`a18902e0e` ran green).
 - Browser proof (Playwright e2e) is CI's.
 - Jack Heart's review of PR #399.
 - Outside T3 (Jack Heart's call): the opponent's sideboard counts in the
   `Observation` and LLM text predate T3 (`scratch/questions.md`, item 23).
-
-Check (2026-10-30, after the `10eeb1f55` merge and realign repairs): debug
-`cargo test` all binaries pass (lib 122, cards 394, rules 136 + 2 ignored; one
-run hit the now-fixed `Debug` flake); fmt and clippy `--all-targets -D warnings`
-clean; extension rebuilt; world/observation-shape set plus `tests/academy`,
-`tests/belief`, `tests/env`, `tests/verify`, `tests/semantic`,
-`tests/infra` pass after re-recording (746 + 61).
 
 ## Accepted: world numbers name freezes (Jack Heart, 2026-10-30)
 
