@@ -220,9 +220,12 @@ choice.
   `-D warnings` clean, w17 fixtures unchanged; Python world-change set,
   semantic, belief, env and Academy parity tests 444 passed. CI fix for
   `test_action_identity` landed at `a18902e0e` (see questions.md).
-- Sync onto main `b73a6b5db` (undo cut, decklist import): #399 conflicts in
-  engine flow files, `tests/cards/tla.rs` and w17 receipts; CI on `8ac5d811c`
-  waits on it (`a18902e0e` ran green).
+- Synced onto main `b73a6b5db` at `289bfbde3`. CI there (run 41148854807)
+  failed Python Unit Tests (stale `effective_pt` audit anchor, re-anchored to
+  `characteristics`) and Clean-machine Play (search-64 too slow; view cost cut,
+  see questions.md). Integration (main) has been green since `a18902e0e`.
+  Check: debug `cargo test` and clippy clean; action identity, world-change
+  suite and rules inventory 96 passed. Clean-machine Play is CI's.
 - Browser proof (Playwright e2e) is CI's.
 - Jack Heart's review of PR #399.
 - Outside T3 (Jack Heart's call): the opponent's sideboard counts in the

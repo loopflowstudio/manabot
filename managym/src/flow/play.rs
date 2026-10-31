@@ -89,19 +89,22 @@ impl Game {
         }
     }
 
-    /// Battlefield permanents `player` controls whose abilities are active.
-    fn active_permanent_cards(&self, player: PlayerId) -> impl Iterator<Item = &Card> {
-        self.battlefield_permanents(player)
-            .into_iter()
-            .filter(|&id| !self.characteristics(id).abilities_lost)
-            .filter_map(|id| self.state.permanents[id].as_ref())
-            .map(|permanent| &self.state.cards[permanent.card])
+    /// Whether a battlefield permanent `player` controls satisfies `has`
+    /// with its abilities active. Checks the card before its characteristics.
+    fn active_permanent_has(&self, player: PlayerId, has: impl Fn(&Card) -> bool) -> bool {
+        self.battlefield_permanents(player).into_iter().any(|id| {
+            self.state.permanents[id]
+                .as_ref()
+                .is_some_and(|permanent| has(&self.state.cards[permanent.card]))
+                && !self.characteristics(id).abilities_lost
+        })
     }
 
     /// Whether `player` may look at the top card of their library (CR 401.2).
     pub(crate) fn looks_at_library_top(&self, player: PlayerId) -> bool {
-        self.active_permanent_cards(player)
-            .any(|card| card.has_static(&StaticAbility::LookAtLibraryTop))
+        self.active_permanent_has(player, |card| {
+            card.has_static(&StaticAbility::LookAtLibraryTop)
+        })
     }
 
     /// The top card of `player`'s library, when a permanent they control
@@ -111,7 +114,7 @@ impl Game {
         let card = self.library_top_card(player)?;
         let definition = &self.state.cards[card];
         (!definition.types.is_land()
-            && self.active_permanent_cards(player).any(|source| {
+            && self.active_permanent_has(player, |source| {
                 source
                     .library_top_casting()
                     .is_some_and(|predicate| predicate.matches_card(definition))

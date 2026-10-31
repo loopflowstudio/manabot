@@ -276,7 +276,7 @@
     "statics": {
       "scope": "Authored additive P/T, CDAs, animation and keyword grants; partial layer model.",
       "inspected_owners": [
-        "managym/src/flow/statics.rs:Game::effective_pt",
+        "managym/src/flow/statics.rs:Game::characteristics",
         "managym/src/state/permanent.rs:Permanent::effective_keywords"
       ],
       "evidence": [
@@ -286,7 +286,7 @@
       "ownership": "dispersed",
       "comments": "Inspect individual entry before claiming comment adequacy.",
       "anchors": [
-        "managym/src/flow/statics.rs::pub fn effective_pt"
+        "managym/src/flow/statics.rs::pub fn characteristics"
       ]
     },
     "mana_abilities": {
@@ -780,7 +780,7 @@
     "613.4": {
       "status": "partial",
       "scope": "Only additive modifiers and +1/+1 counters; no general dependencies.",
-      "authority": "managym/src/flow/statics.rs:Game::effective_pt",
+      "authority": "managym/src/flow/statics.rs:Game::characteristics",
       "tests": [
         "managym/tests/cards/tla.rs"
       ],
@@ -792,7 +792,7 @@
     "613.4c": {
       "status": "partial",
       "scope": "Only additive modifiers and +1/+1 counters; no general dependencies.",
-      "authority": "managym/src/flow/statics.rs:Game::effective_pt",
+      "authority": "managym/src/flow/statics.rs:Game::characteristics",
       "tests": [
         "managym/tests/cards/tla.rs"
       ],
@@ -1842,13 +1842,13 @@
     "603.6b": {
       "status": "partial",
       "scope": "Battlefield P/T queries apply static modifiers immediately after entry.",
-      "authority": "managym/src/flow/statics.rs:effective_pt; managym/src/flow/triggers.rs:subject_matches_moved_card",
+      "authority": "managym/src/flow/statics.rs:Game::characteristics; managym/src/flow/triggers.rs:subject_matches_moved_card",
       "dispersion": "staged responsibilities; no competing authority established",
       "comments": "No individual-rule citation at this boundary; inspected behavior and limits are recorded here.",
       "tests": [],
       "gap": "Trigger subject matching uses printed power and subtype rather than all effective characteristics. Global type/ability-changing effects are outside the represented subset.",
       "anchors": [
-        "managym/src/flow/statics.rs::effective_pt",
+        "managym/src/flow/statics.rs::pub fn characteristics",
         "managym/src/flow/triggers.rs::subject_matches_moved_card"
       ]
     },
