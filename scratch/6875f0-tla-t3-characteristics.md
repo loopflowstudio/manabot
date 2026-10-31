@@ -225,12 +225,24 @@ choice.
   `characteristics`) and Clean-machine Play (search-64 too slow; view cost cut,
   see questions.md). Integration (main) has been green since `a18902e0e`.
   Check: debug `cargo test` and clippy clean; action identity, world-change
-  suite and rules inventory 96 passed. Clean-machine Play is CI's.
+  suite and rules inventory 96 passed. CI on `b38f1e1cd` (run 41152187378):
+  Python Unit Tests and Clean-machine Play green; both Integration jobs and
+  the `277e61511` run were still in progress at last reconciliation.
 - Compress after `b38f1e1cd`: no v5 definition-column bug (24 in both
   encoders; the reported failure was the pre-`a18902e0e` run). Callers of
   `fixed_source_mana` now own its preconditions. Check: debug `cargo test`
   green; world-change suite and action identity 90 passed; parity receipt
   re-recorded (source hash only).
+- Concept review after `277e61511` (2026-10-30): nothing to change. The only
+  public characteristic reader is `Game::characteristics`; the layer stages
+  are private, and the remaining `pub(crate)` readers in `statics.rs` are
+  rules questions (`permanent_can_tap`, `has_lethal_damage`, restrictions)
+  or spell/attachment lookups. Every permanent offer, activation and payment
+  indexes `Characteristics::activated_abilities`; direct
+  `card.activated_abilities` reads are hand/graveyard card abilities
+  (`card_ability_in_zone`) and resolution of a non-granted index, which
+  matches because static grants are mana abilities that never use the
+  stack. No open product choice.
 - Browser proof (Playwright e2e) is CI's.
 - Jack Heart's review of PR #399.
 - Outside T3 (Jack Heart's call): the opponent's sideboard counts in the
