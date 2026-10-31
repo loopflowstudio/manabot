@@ -1,7 +1,12 @@
 // game.rs
 // Core game structs: GameState and Game.
 
-use std::{cell::RefCell, collections::BTreeMap, sync::Arc};
+use std::{
+    cell::RefCell,
+    collections::BTreeMap,
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
 use rand_chacha::ChaCha8Rng;
 
@@ -15,6 +20,7 @@ use crate::{
         decision::SuspendedResolution,
         event::GameEvent,
         priority::PriorityState,
+        statics::StaticsCache,
         trigger::{DelayedTrigger, ExileLink, PendingTrigger, TriggerPlacement},
         turn::TurnState,
     },
@@ -209,6 +215,60 @@ pub enum PendingChoice {
     },
 }
 
+/// `GameState` with a revision that every mutable access advances. State
+/// can change only through `DerefMut` and the untracked accessors below, so a
+/// value derived from state at one revision is current while the revision is
+/// unchanged; `StaticsCache` keys on it. A mutable borrow that writes nothing
+/// still advances it.
+#[derive(Clone)]
+pub struct TrackedState {
+    state: GameState,
+    revision: u64,
+}
+
+impl TrackedState {
+    pub(crate) fn new(state: GameState) -> Self {
+        Self { state, revision: 0 }
+    }
+
+    pub(crate) fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    /// Priority, which no permanent's characteristics read; writing it keeps
+    /// the revision (debug builds check every cached view on read).
+    pub(crate) fn priority_mut(&mut self) -> &mut PriorityState {
+        &mut self.state.priority
+    }
+
+    /// The game RNG, which no permanent's characteristics read.
+    pub(crate) fn rng_mut(&mut self) -> &mut ChaCha8Rng {
+        &mut self.state.rng
+    }
+}
+
+/// Formats as the state alone: the revision is bookkeeping, not game state.
+impl std::fmt::Debug for TrackedState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.state.fmt(f)
+    }
+}
+
+impl Deref for TrackedState {
+    type Target = GameState;
+
+    fn deref(&self) -> &GameState {
+        &self.state
+    }
+}
+
+impl DerefMut for TrackedState {
+    fn deref_mut(&mut self) -> &mut GameState {
+        self.revision += 1;
+        &mut self.state
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum CombatDamagePass {
     FirstStrike,
@@ -220,7 +280,10 @@ pub(crate) enum CombatDamagePass {
 pub struct Game {
     /// Evaluation-only facts. Never cloned, hashed, or exposed to policies.
     pub(crate) card_capture: Option<crate::flow::card_capture::CardCapture>,
-    pub state: GameState,
+    pub state: TrackedState,
+    /// Characteristics and static sources derived from `state` at its current
+    /// revision. Never cloned or hashed.
+    pub(crate) statics_cache: RefCell<StaticsCache>,
     /// Derived public suffix, updated only by emit; excluded from rules-state
     /// hashing like other projections. Ordinary observation reads share it.
     pub(crate) policy_history: crate::agent::policy_history::HistoryWindow,
@@ -246,6 +309,7 @@ impl Clone for Game {
     fn clone(&self) -> Self {
         Self {
             state: self.state.clone(),
+            statics_cache: Default::default(),
             policy_history: self.policy_history.clone(),
             skip_trivial: self.skip_trivial,
             current_action_space: self.current_action_space.clone(),

@@ -133,9 +133,10 @@ impl Game {
     }
 
     pub(crate) fn shuffle_library(&mut self, player: PlayerId) {
-        self.state
+        let state = &mut *self.state;
+        state
             .zones
-            .shuffle(ZoneType::Library, player, &mut self.state.rng);
+            .shuffle(ZoneType::Library, player, &mut state.rng);
     }
 
     /// Reveal before moving; public hand knowledge retains definition counts,
@@ -389,15 +390,17 @@ impl Game {
         let cast_from = self.state.zones.zone_of(card).expect("cast source zone");
         let flashback = cast_from == ZoneType::Graveyard;
         self.move_card(card, ZoneType::Stack);
+        let id = self.state.id_gen.next_id();
+        let source_definition_id = self.state.cards[card].definition_id;
         self.state
             .stack_objects
             .push(StackObject::Spell(SpellOnStack {
-                id: self.state.id_gen.next_id(),
+                id,
                 card,
                 controller,
                 cast_from,
                 flashback,
-                source_definition_id: self.state.cards[card].definition_id,
+                source_definition_id,
                 targets,
                 target_req_indices,
                 kicked: cast.kicked,

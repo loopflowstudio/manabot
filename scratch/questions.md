@@ -260,3 +260,11 @@ T2's operator choices are at `a5587df5a:scratch/questions.md`. New since
   (`static_sources`, `attachments_on` in `layer_basis`) repeated for every
   permanent each priority (SBA, payment model); closing it would need an
   index of attachments and static sources, a separate change.
+
+## MTG-234 — 2026-10-30
+
+- The static-source index is rebuilt lazily once per state revision rather
+  than maintained incrementally at each enter/leave/attach/detach site: every
+  state write already passes `TrackedState::deref_mut`, so a derived index
+  cannot drift, and the measured cost is small. Revisit only if profiles show
+  index rebuilds dominating.

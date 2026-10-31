@@ -1,0 +1,51 @@
+# MTG-234: characteristics lookups fast again
+
+Status: implemented 2026-10-30; gate/PR pending.
+
+## Design (as built)
+
+- `Game::state` is `TrackedState` (`flow/game.rs`): `Deref` to `GameState`,
+  `DerefMut` advances a revision. `priority_mut()` / `rng_mut()` write fields
+  no characteristic reads without advancing it.
+- `StaticsCache` (`flow/statics.rs`, `Game::statics_cache`, a `RefCell`, empty on
+  clone) holds, per revision, the `StaticIndex` (attached permanents with their
+  exact attached object; static sources that have not lost abilities) and each
+  permanent's `Arc<Characteristics>`.
+- `Characteristics` owns its strings (no lifetime); `Game::characteristics`
+  returns `Arc<Characteristics>`.
+- Debug builds recompute on every cache hit and `debug_assert_eq!` (view and
+  index), so debug `cargo test` checks the cache everywhere.
+- `TrackedState` / `StaticsCache` Debug print state only / opaque.
+
+## Measurement (`managym/examples/bench_search.rs`, release, seeds 1–3 × 40
+decisions, Search-64 = 16 worlds × 4 rollouts, both seats, curated UR Lessons v
+GW Allies mains; same score digests in all three builds)
+
+| build | worst reply | total |
+| --- | --- | --- |
+| pre-T3 `b73a6b5db` | 4.34 s | 128.7 s |
+| T3 base `f122d515b` | 9.82 s | 305.5 s |
+| this branch | 4.97 s | 151.8 s |
+
+Profile after: characteristics ~32% of playout time (was >50%); remaining
+characteristic-side cost is owned-string allocation (~7%) and cache churn from
+legitimate mutations (taps). Not pursued: `Card` string interning.
+
+## Checks
+
+- Debug `cargo test --no-fail-fast` (all targets, incl. semantic conformance,
+  with the cache debug asserts) passed; clippy `--all-targets --all-features`
+  and fmt clean; extension rebuilt.
+- Python: elemental world, skip-forced, public-commitment and authored-match
+  parity pass. The authored-match w17 receipt differed only in
+  `identity.relevant_source` hashes (behavior fields equal) and was
+  regenerated.
+- Compress: `Game::restart_priority_round` replaces the repeated
+  active-player priority writes; inline shuffles use `shuffle_library`.
+  Debug `cargo test --no-fail-fast`, clippy, fmt, authored-match /
+  public-commitment / skip-forced pytest pass; receipt hashes regenerated.
+
+## Remaining
+
+- Gate: other source-hash-bound receipts, full affected Python suites, PR
+  body with the table above.
