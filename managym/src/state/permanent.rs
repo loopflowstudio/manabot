@@ -14,6 +14,12 @@ pub enum CounterKind {
     Fire,
     /// CR 122.1b keyword counter.
     DoubleStrike,
+    /// No rules meaning of its own; cards count it (the Ascensions).
+    Quest,
+    /// CR 122.1h: a permanent with one that would die is exiled instead.
+    Finality,
+    /// No rules meaning of its own; cards count it (Zhao, the Moon Slayer).
+    Conqueror,
 }
 
 impl CounterKind {
@@ -24,14 +30,20 @@ impl CounterKind {
             CounterKind::Stun => "stun",
             CounterKind::Fire => "fire",
             CounterKind::DoubleStrike => "double_strike",
+            CounterKind::Quest => "quest",
+            CounterKind::Finality => "finality",
+            CounterKind::Conqueror => "conqueror",
         }
     }
 
-    pub const ALL: [CounterKind; 4] = [
+    pub const ALL: [CounterKind; 7] = [
         CounterKind::PlusOnePlusOne,
         CounterKind::Stun,
         CounterKind::Fire,
         CounterKind::DoubleStrike,
+        CounterKind::Quest,
+        CounterKind::Finality,
+        CounterKind::Conqueror,
     ];
 }
 
@@ -83,6 +95,10 @@ pub struct Permanent {
     pub summoning_sick: bool,
     pub damage: i32,
     pub deathtouch_damage: bool,
+    /// Dealt damage this turn ("if it was dealt damage this turn"), whether
+    /// or not that damage is still marked; cleared during cleanup.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub dealt_damage_this_turn: bool,
     /// Counters of every kind (CR 122.1). Any permanent can carry them,
     /// including lands; +1/+1 counters change P/T only through
     /// `Game::characteristics`.
@@ -99,6 +115,10 @@ pub struct Permanent {
     pub attacking: bool,
     /// True only for this incarnation entering as a resolving cast spell.
     pub was_cast: bool,
+    /// The X announced for that spell (CR 107.3m), read by its own
+    /// entering-the-battlefield triggers; 0 otherwise.
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub cast_x: u8,
     /// The exact object this Equipment is attached to (CR 301.5). State-based
     /// actions clear it once that object is gone or no longer a creature.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -143,11 +163,13 @@ impl Permanent {
                 && !card.keywords.haste,
             damage: 0,
             deathtouch_damage: false,
+            dealt_damage_this_turn: false,
             timestamp: id,
             counters: Counters::default(),
             animated: false,
             attacking: false,
             was_cast: false,
+            cast_x: 0,
             attached_to: None,
             exhausted: Vec::new(),
             activated_this_turn: Vec::new(),
@@ -216,10 +238,15 @@ impl Permanent {
 
     pub fn take_damage(&mut self, amount: i32) {
         self.damage += amount;
+        if amount > 0 {
+            self.dealt_damage_this_turn = true;
+        }
     }
 
-    /// "Once each turn" limits reset in the cleanup step.
+    /// "Once each turn" limits and "dealt damage this turn" reset in the
+    /// cleanup step.
     pub fn clear_turn_history(&mut self) {
+        self.dealt_damage_this_turn = false;
         self.activated_this_turn.clear();
     }
 }

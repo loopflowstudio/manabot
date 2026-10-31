@@ -21,6 +21,7 @@ fn corrupt_court_official() -> CardDefinition {
         power: Some(1),
         toughness: Some(1),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },

@@ -13,10 +13,11 @@ use crate::{
     flow::{
         event::GameEvent,
         game::{CastChoices, Game},
+        turn::OnceEachTurnKey,
     },
     state::{
-        ability::{Effect, LinkedGrant, PaymentCost},
-        game_object::{CardId, ObjectId, ObjectRef, PlayerId, Target},
+        ability::{Effect, EffectValue, LinkedGrant, PaymentCost},
+        game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
         permanent::CounterKind,
         predicate::CardPredicate,
         zone::ZoneType,
@@ -73,6 +74,12 @@ pub struct EffectFrame {
     /// creature, read by a later "the excess damage dealt this way".
     #[serde(skip_serializing_if = "crate::state::is_zero")]
     pub excess_damage: i32,
+    /// The cards the resolution's latest discard moved ("this way").
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub this_way: Vec<CardId>,
+    /// The token this resolution created last ("that token").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub created: Option<PermanentId>,
     /// Chosen slots, with eligibility retained across instructions and choices.
     pub targets: Vec<ResolutionTarget>,
     pub active_requirement: usize,
@@ -80,10 +87,17 @@ pub struct EffectFrame {
     /// permanent) — used as the primary target when none was chosen. For an
     /// activated ability of an Aura or Equipment, the object it was attached to.
     pub context_target: Option<Target>,
+    /// The trigger's player ("they": the caster of the triggering spell).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub triggering_player: Option<PlayerId>,
     /// The exact object that granted the resolving ability (CR 400.7: once
     /// it leaves the battlefield, references to it find nothing).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub grantor: Option<ObjectRef>,
+    /// The printed index of the resolving triggered ability on its source,
+    /// which keys its "do this only once each turn" use.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ability: Option<usize>,
     /// Effects still to execute.
     pub queue: VecDeque<Effect>,
     pub finalize: FrameFinalize,
@@ -125,6 +139,14 @@ pub struct PaymentProgress {
     pub waterbend_paid: Vec<ObjectRef>,
     pub if_paid: Vec<Effect>,
     pub if_declined: Vec<Effect>,
+    /// The once-each-turn option (exact source, ability index) paying
+    /// spends ("Do this only once each turn").
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub spends: Option<OnceEachTurnKey>,
+    /// The spell or ability declining counters ("counter it unless that
+    /// player pays"): ward answers both.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub counters_on_decline: Option<Target>,
 }
 
 impl PaymentProgress {
@@ -140,6 +162,8 @@ impl PaymentProgress {
             waterbend_paid: Vec::new(),
             if_paid,
             if_declined,
+            spends: None,
+            counters_on_decline: None,
         }
     }
 
@@ -148,15 +172,35 @@ impl PaymentProgress {
     }
 }
 
-/// Where a `CastWithoutPaying` decision's candidates come from.
+/// The optional part of a `Decision::Sacrifice` ("you may sacrifice ... If
+/// you do, ...").
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum FreeCastOffer {
+pub struct OptionalSacrifice {
+    /// The source permanent of an "another" sacrifice, never a candidate.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub excluded: Option<PermanentId>,
+    /// Runs only after a sacrifice.
+    pub then: Vec<Effect>,
+}
+
+/// Where a `CastDuringResolution` decision's candidates come from.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub enum ResolutionCastOffer {
     /// Spells in the deciding player's hand matching `predicate`, read when
     /// offered (Yue, the Moon Spirit).
     Hand { predicate: CardPredicate },
     /// One exiled card, put into its owner's hand if not cast (Solstice
     /// Revelations).
     Exiled { card: CardId },
+    /// The top card of the deciding player's library, which they have looked
+    /// at and which stays there if not cast (Planetarium of Wan Shi Tong).
+    LibraryTop { card: CardId },
+    /// Cards matching `predicate` the deciding player owns that are exiled
+    /// with the exact `source` (Boiling Rock Rioter).
+    ExiledWith {
+        source: ObjectRef,
+        predicate: CardPredicate,
+    },
 }
 
 /// A pending mid-resolution decision, including its own bookkeeping so a
@@ -168,7 +212,7 @@ pub enum Decision {
     /// A mana ability's printed upfront cost, before its output exists.
     ManaUpfront {
         player: PlayerId,
-        permanent: crate::state::game_object::PermanentId,
+        permanent: PermanentId,
         ability_index: usize,
         resume: Option<Box<Decision>>,
     },
@@ -180,6 +224,9 @@ pub enum Decision {
     Sacrifice {
         player: PlayerId,
         predicate: CardPredicate,
+        /// Set for "you may sacrifice ... If you do": declining is allowed.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        optional: Option<OptionalSacrifice>,
     },
     /// Place one of `remaining` `kind` counters on a tapped creature an
     /// opponent of `player` controls; candidates are read at each placement.
@@ -192,6 +239,10 @@ pub enum Decision {
         player: PlayerId,
         cards: Vec<CardId>,
         if_declined: Vec<Effect>,
+        /// The chosen card goes to the battlefield under `player`'s control
+        /// rather than to their hand.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        to_battlefield: bool,
     },
     /// Candidates come from the current library, not stored or pinned cards.
     SearchBasicLand {
@@ -272,11 +323,20 @@ pub enum Decision {
         revealed: Vec<CardId>,
         remaining: usize,
     },
-    /// "You may cast [a spell] without paying its mana cost" while an effect
-    /// resolves (CR 608.2g): choose a candidate from `offer`, or decline.
-    CastWithoutPaying {
+    /// "You may cast [a spell] (without paying its mana cost)" while an
+    /// effect resolves (CR 608.2g): choose a candidate from `offer`, or
+    /// decline. Timing and zone permissions don't apply.
+    CastDuringResolution {
         player: PlayerId,
-        offer: FreeCastOffer,
+        offer: ResolutionCastOffer,
+        /// The caster pays the spell's costs ("you may cast"); otherwise it
+        /// is cast without paying its mana cost.
+        #[serde(skip_serializing_if = "std::ops::Not::not", default)]
+        paid: bool,
+        /// The once-each-turn option (exact source, ability index) casting
+        /// spends ("Do this only once each turn"); declining keeps it.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        spends: Option<OnceEachTurnKey>,
     },
     /// `player` exiles a matching card from `owner`'s graveyard or a
     /// nontoken permanent `owner` controls (or declines, when `up_to`);
@@ -304,6 +364,28 @@ pub enum Decision {
     Discard {
         player: PlayerId,
         remaining: usize,
+        /// Set for "you may discard a card. If you do, [then]": declining
+        /// is allowed, and `then` runs only after the discard.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        then: Option<Vec<Effect>>,
+    },
+    /// `player` chooses another creature they control to keep, within
+    /// `max_total_power` with those already `kept` (by both players), or
+    /// stops; once the nonactive player stops, every other creature is
+    /// sacrificed.
+    KeepCreatures {
+        player: PlayerId,
+        max_total_power: i32,
+        kept: Vec<PermanentId>,
+    },
+    /// `player` chooses a new target for slot `slot` of the stack object
+    /// (CR 115.7), or keeps the current one when `may_keep` ("you may
+    /// choose new targets for the copy"); later slots follow.
+    Retarget {
+        player: PlayerId,
+        object: Target,
+        slot: usize,
+        may_keep: bool,
     },
     /// All legend selections precede the simultaneous SBA batch (CR 704.5j).
     LegendRule {
@@ -328,13 +410,15 @@ impl Decision {
             Decision::ManaUpfront { player, .. }
             | Decision::ManaChoice { player, .. }
             | Decision::Sacrifice { player, .. }
+            | Decision::KeepCreatures { player, .. }
+            | Decision::Retarget { player, .. }
             | Decision::DistributeCounters { player, .. } => *player,
             Decision::SelectMilled { player, .. }
             | Decision::SearchBasicLand { player, .. }
             | Decision::SearchLibraryToHand { player, .. }
             | Decision::SearchDistinctLands { player, .. }
             | Decision::DiscardFromRevealedHand { player, .. }
-            | Decision::CastWithoutPaying { player, .. }
+            | Decision::CastDuringResolution { player, .. }
             | Decision::ExileLinked { player, .. }
             | Decision::OpponentSplitsRevealed { player, .. }
             | Decision::OptionalDiscardDraw { player, .. }
@@ -356,16 +440,22 @@ impl Decision {
             | Decision::Payment(_)
             | Decision::ManaChoice { .. }
             | Decision::Sacrifice { .. }
+            | Decision::KeepCreatures { .. }
+            | Decision::Retarget { .. }
             | Decision::DistributeCounters { .. } => &[],
             Decision::Scry { looked, .. } => looked,
             Decision::LookAndSelect { looked, .. } => looked,
             Decision::SearchDistinctLands { selected, .. } => selected,
             Decision::OpponentSplitsRevealed { revealed, .. } => revealed,
+            Decision::CastDuringResolution {
+                offer: ResolutionCastOffer::LibraryTop { card },
+                ..
+            } => std::slice::from_ref(card),
             Decision::SelectMilled { .. }
             | Decision::SearchBasicLand { .. }
             | Decision::SearchLibraryToHand { .. }
             | Decision::DiscardFromRevealedHand { .. }
-            | Decision::CastWithoutPaying { .. }
+            | Decision::CastDuringResolution { .. }
             | Decision::ExileLinked { .. }
             | Decision::OptionalDiscardDraw { .. }
             | Decision::Modal { .. }
@@ -397,6 +487,113 @@ pub struct SuspendedResolution {
 }
 
 impl Game {
+    /// Record that the exact source took its ability's once-each-turn option.
+    pub(crate) fn spend_once_each_turn(&mut self, key: OnceEachTurnKey) {
+        *self
+            .state
+            .turn
+            .ability_triggers_this_turn
+            .entry(key)
+            .or_default() += 1;
+    }
+
+    /// The creatures a pending `Decision::KeepCreatures` may add: its
+    /// player's, not yet kept, within the power bound with that player's
+    /// kept creatures.
+    pub(crate) fn keep_candidates(&self, decision: &Decision) -> Vec<PermanentId> {
+        let Decision::KeepCreatures {
+            player,
+            max_total_power,
+            kept,
+        } = decision
+        else {
+            return Vec::new();
+        };
+        let total: i32 = kept
+            .iter()
+            .filter(|id| {
+                self.state.permanents[**id]
+                    .as_ref()
+                    .is_some_and(|permanent| permanent.controller == *player)
+            })
+            .map(|id| self.characteristics(*id).power)
+            .sum();
+        self.battlefield_permanents(*player)
+            .into_iter()
+            .filter(|id| {
+                self.characteristics(*id).is_creature
+                    && !kept.contains(id)
+                    && total + self.characteristics(*id).power <= *max_total_power
+            })
+            .collect()
+    }
+
+    /// Ask `player` to keep a creature, moving on to the nonactive player
+    /// (and finally sacrificing the rest) when `player` has no candidate.
+    pub(crate) fn keep_creatures(
+        &mut self,
+        player: PlayerId,
+        max_total_power: i32,
+        kept: Vec<PermanentId>,
+    ) -> Option<Decision> {
+        let decision = Decision::KeepCreatures {
+            player,
+            max_total_power,
+            kept,
+        };
+        if !self.keep_candidates(&decision).is_empty() {
+            return Some(decision);
+        }
+        let Decision::KeepCreatures { kept, .. } = decision else {
+            unreachable!()
+        };
+        self.stop_keeping_creatures(player, max_total_power, kept)
+    }
+
+    /// `player` has stopped keeping creatures: the nonactive player chooses
+    /// next, or every unkept creature is sacrificed.
+    fn stop_keeping_creatures(
+        &mut self,
+        player: PlayerId,
+        max_total_power: i32,
+        kept: Vec<PermanentId>,
+    ) -> Option<Decision> {
+        if player == self.active_player() {
+            return self.keep_creatures(PlayerId(1 - player.0), max_total_power, kept);
+        }
+        self.sacrifice_unkept_creatures(&kept);
+        None
+    }
+
+    /// Sacrifice every creature not in `kept`, as one event.
+    fn sacrifice_unkept_creatures(&mut self, kept: &[PermanentId]) {
+        let doomed: Vec<_> = [self.active_player(), PlayerId(1 - self.active_player().0)]
+            .into_iter()
+            .flat_map(|player| self.battlefield_permanents(player))
+            .filter(|id| self.characteristics(*id).is_creature && !kept.contains(id))
+            .collect();
+        for id in doomed {
+            self.sacrifice_permanent(id);
+        }
+    }
+
+    /// The permanents a pending `Decision::Sacrifice` may select.
+    pub(crate) fn sacrifice_decision_candidates(&self, decision: &Decision) -> Vec<PermanentId> {
+        let Decision::Sacrifice {
+            player,
+            predicate,
+            optional,
+        } = decision
+        else {
+            return Vec::new();
+        };
+        let excluded = optional.as_ref().and_then(|optional| optional.excluded);
+        self.sacrifice_candidates(*player, predicate)
+            .into_iter()
+            .filter(|id| Some(*id) != excluded)
+            .collect()
+    }
+
     fn card_focus(&self, cards: &[CardId]) -> Vec<ObjectId> {
         cards
             .iter()
@@ -414,10 +611,14 @@ impl Game {
                 kicked: false,
                 x: 0,
                 excess_damage: 0,
+                created: None,
+                this_way: Vec::new(),
                 targets: Vec::new(),
                 active_requirement: 0,
                 context_target: None,
+                triggering_player: None,
                 grantor: None,
+                ability: None,
                 queue: VecDeque::new(),
                 finalize: FrameFinalize::None,
             },
@@ -427,6 +628,18 @@ impl Game {
 
     /// Execute a frame's remaining effects. If an effect suspends for a
     /// decision, park the frame; otherwise finalize the resolution.
+    /// Suspend the resolution on `next`, or resume its frame when there is
+    /// no further decision.
+    fn continue_resolution(&mut self, mut suspended: SuspendedResolution, next: Option<Decision>) {
+        match next {
+            Some(decision) => {
+                suspended.decision = decision;
+                self.state.suspended_decision = Some(suspended);
+            }
+            None => self.run_frame(suspended.frame),
+        }
+    }
+
     pub(crate) fn run_frame(&mut self, mut frame: EffectFrame) {
         while let Some(effect) = frame.queue.pop_front() {
             if let Some(decision) = self.execute_frame_effect(&effect, &mut frame) {
@@ -537,15 +750,45 @@ impl Game {
                     })
                     .collect(),
             },
-            Decision::Sacrifice { player, predicate } => ActionSpace {
+            Decision::Sacrifice {
+                player, optional, ..
+            } => ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::LookAndSelect,
                 actions: select_cards(
                     *player,
-                    self.sacrifice_candidates(*player, predicate)
+                    self.sacrifice_decision_candidates(&suspended.decision)
                         .into_iter()
                         .map(|id| self.state.permanents[id].as_ref().unwrap().card),
-                    false,
+                    optional.is_some(),
+                ),
+                focus: source_focus,
+            },
+            Decision::Retarget {
+                player, may_keep, ..
+            } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::ChooseTarget,
+                actions: self
+                    .retarget_candidates(&suspended.decision)
+                    .into_iter()
+                    .map(|target| Action::ChooseTarget {
+                        player: *player,
+                        target,
+                    })
+                    .chain(may_keep.then_some(Action::Decline { player: *player }))
+                    .collect(),
+                focus: source_focus,
+            },
+            Decision::KeepCreatures { player, .. } => ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: select_cards(
+                    *player,
+                    self.keep_candidates(&suspended.decision)
+                        .into_iter()
+                        .map(|id| self.state.permanents[id].as_ref().unwrap().card),
+                    true,
                 ),
                 focus: source_focus,
             },
@@ -616,8 +859,8 @@ impl Game {
                     actions: select_cards(*player, cards, *up_to),
                 }
             }
-            Decision::CastWithoutPaying { player, .. } => {
-                let cards = self.free_cast_candidates(&suspended.decision);
+            Decision::CastDuringResolution { player, .. } => {
+                let cards = self.resolution_cast_candidates(&suspended.decision);
                 ActionSpace {
                     player: Some(*player),
                     kind: ActionSpaceKind::LookAndSelect,
@@ -644,7 +887,11 @@ impl Game {
                             .zone_cards(ZoneType::Hand, *player)
                             .iter()
                             .copied(),
-                        matches!(suspended.decision, Decision::OptionalDiscardDraw { .. }),
+                        matches!(
+                            suspended.decision,
+                            Decision::OptionalDiscardDraw { .. }
+                                | Decision::Discard { then: Some(_), .. }
+                        ),
                     ),
                     focus: source_focus,
                 }
@@ -812,12 +1059,33 @@ impl Game {
                     self.state.suspended_decision = Some(suspended);
                     return Err(error);
                 }
+                if let Some(key) = payment.spends {
+                    self.spend_once_each_turn(key);
+                }
                 let effects = std::mem::take(&mut payment.if_paid);
                 suspended.frame.prepend_effects(effects.into_iter());
                 self.run_frame(suspended.frame);
                 Ok(())
             }
+            (
+                Decision::Sacrifice {
+                    optional: Some(_), ..
+                },
+                Action::Decline { .. },
+            ) => {
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
             (Decision::Payment(payment), Action::Decline { .. }) if payment.can_decline() => {
+                match payment.counters_on_decline {
+                    Some(Target::StackSpell(card)) => {
+                        self.counter_spell(card, suspended.frame.source)
+                    }
+                    Some(Target::StackAbility(id)) => {
+                        self.counter_ability(id, suspended.frame.source)
+                    }
+                    _ => {}
+                }
                 let effects = std::mem::take(&mut payment.if_declined);
                 suspended.frame.prepend_effects(effects.into_iter());
                 self.run_frame(suspended.frame);
@@ -844,9 +1112,9 @@ impl Game {
                 }
                 Ok(())
             }
-            (Decision::Sacrifice { player, predicate }, Action::SelectCard { card, .. }) => {
+            (Decision::Sacrifice { .. }, Action::SelectCard { card, .. }) => {
                 let selected = self
-                    .sacrifice_candidates(*player, predicate)
+                    .sacrifice_decision_candidates(&suspended.decision)
                     .into_iter()
                     .find(|id| {
                         self.state.permanents[*id]
@@ -858,7 +1126,88 @@ impl Game {
                     return Err(AgentError("illegal sacrifice selection".into()));
                 };
                 self.sacrifice_permanent(selected);
+                if let Decision::Sacrifice {
+                    optional: Some(optional),
+                    ..
+                } = &mut suspended.decision
+                {
+                    let then = std::mem::take(&mut optional.then);
+                    suspended.frame.prepend_effects(then.into_iter());
+                }
                 self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (Decision::KeepCreatures { .. }, Action::SelectCard { card, .. }) => {
+                let candidates = self.keep_candidates(&suspended.decision);
+                let selected =
+                    self.state.card_to_permanent[*card].filter(|id| candidates.contains(id));
+                let Some(selected) = selected else {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("illegal creature to keep".into()));
+                };
+                let Decision::KeepCreatures {
+                    player,
+                    max_total_power,
+                    kept,
+                } = &mut suspended.decision
+                else {
+                    unreachable!()
+                };
+                kept.push(selected);
+                let (player, max_total_power, kept) =
+                    (*player, *max_total_power, std::mem::take(kept));
+                let next = self.keep_creatures(player, max_total_power, kept);
+                self.continue_resolution(suspended, next);
+                Ok(())
+            }
+            (
+                Decision::Retarget {
+                    player,
+                    object,
+                    slot,
+                    may_keep,
+                },
+                Action::ChooseTarget { target, .. },
+            ) => {
+                let (player, object, slot, may_keep) = (*player, *object, *slot, *may_keep);
+                if !self
+                    .retarget_candidates(&suspended.decision)
+                    .contains(target)
+                {
+                    self.state.suspended_decision = Some(suspended);
+                    return Err(AgentError("illegal new target".into()));
+                }
+                self.change_stack_target(object, slot, *target);
+                let next = self
+                    .next_retarget(player, object, slot + 1, may_keep)
+                    .filter(|_| may_keep);
+                self.continue_resolution(suspended, next);
+                Ok(())
+            }
+            (
+                Decision::Retarget {
+                    player,
+                    object,
+                    slot,
+                    may_keep: true,
+                },
+                Action::Decline { .. },
+            ) => {
+                let next = self.next_retarget(*player, *object, *slot + 1, true);
+                self.continue_resolution(suspended, next);
+                Ok(())
+            }
+            (
+                Decision::KeepCreatures {
+                    player,
+                    max_total_power,
+                    kept,
+                },
+                Action::Decline { .. },
+            ) => {
+                let kept = std::mem::take(kept);
+                let next = self.stop_keeping_creatures(*player, *max_total_power, kept);
+                self.continue_resolution(suspended, next);
                 Ok(())
             }
             (
@@ -875,13 +1224,9 @@ impl Game {
                     self.state.suspended_decision = Some(suspended);
                     return Err(AgentError("illegal counter recipient".into()));
                 };
-                self.change_counters(selected, *kind, 1);
-                if let Some(next) = self.distribute_counters(*player, *kind, *remaining - 1) {
-                    suspended.decision = next;
-                    self.state.suspended_decision = Some(suspended);
-                } else {
-                    self.run_frame(suspended.frame);
-                }
+                self.put_counters(selected, *kind, 1, *player);
+                let next = self.distribute_counters(*player, *kind, *remaining - 1);
+                self.continue_resolution(suspended, next);
                 Ok(())
             }
             (
@@ -1007,21 +1352,35 @@ impl Game {
                     }
                 }
                 if *discarded > 0 {
-                    let count = *count * *discarded;
-                    suspended
-                        .frame
-                        .queue
-                        .push_front(Effect::DrawCards { count });
+                    let count = (*count * *discarded) as i32;
+                    suspended.frame.queue.push_front(Effect::DrawCards {
+                        count: EffectValue::Fixed(count),
+                    });
                 }
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::Discard { player, remaining }, Action::SelectCard { card, .. }) => {
+            (Decision::Discard { then: Some(_), .. }, Action::Decline { .. }) => {
+                self.run_frame(suspended.frame);
+                Ok(())
+            }
+            (
+                Decision::Discard {
+                    player,
+                    remaining,
+                    then,
+                },
+                Action::SelectCard { card, .. },
+            ) => {
                 if !self.state.zones.contains(*card, ZoneType::Hand, *player) {
                     self.state.suspended_decision = Some(suspended);
                     return Err(AgentError("discard must be from hand".into()));
                 }
                 self.move_card(*card, ZoneType::Graveyard);
+                suspended.frame.this_way.push(*card);
+                if let Some(then) = then.take() {
+                    suspended.frame.prepend_effects(then.into_iter());
+                }
                 *remaining -= 1;
                 if *remaining == 0
                     || self
@@ -1179,23 +1538,33 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::CastWithoutPaying { .. }, Action::SelectCard { card, .. }) => {
+            (Decision::CastDuringResolution { .. }, Action::SelectCard { card, .. }) => {
                 if !self
-                    .free_cast_candidates(&suspended.decision)
+                    .resolution_cast_candidates(&suspended.decision)
                     .contains(card)
                 {
                     self.state.suspended_decision = Some(suspended);
                     return Err(AgentError("not a castable offered card".into()));
                 }
+                if let Decision::CastDuringResolution {
+                    spends: Some(key), ..
+                } = suspended.decision
+                {
+                    self.spend_once_each_turn(key);
+                }
                 // The cast is the effect's last instruction: finish the
                 // resolution, then cast the chosen card onto the stack.
                 let (player, card) = (suspended.decision.player(), *card);
+                let paid = matches!(
+                    suspended.decision,
+                    Decision::CastDuringResolution { paid: true, .. }
+                );
                 self.run_frame(suspended.frame);
                 debug_assert!(
                     self.state.suspended_decision.is_none(),
-                    "a free cast ends its resolving effect"
+                    "a cast during resolution ends its resolving effect"
                 );
-                self.begin_free_cast(player, card)
+                self.begin_resolution_cast(player, card, paid)
             }
             (
                 Decision::ExileLinked {
@@ -1222,8 +1591,8 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::CastWithoutPaying { player, offer }, Action::Decline { .. }) => {
-                if let FreeCastOffer::Exiled { card } = offer {
+            (Decision::CastDuringResolution { player, offer, .. }, Action::Decline { .. }) => {
+                if let ResolutionCastOffer::Exiled { card } = offer {
                     self.reveal_card_to_hand(*card, *player);
                 }
                 self.run_frame(suspended.frame);
@@ -1268,10 +1637,27 @@ impl Game {
                 self.run_frame(suspended.frame);
                 Ok(())
             }
-            (Decision::SelectMilled { player, cards, .. }, Action::SelectCard { card, .. })
-                if cards.contains(card) =>
-            {
-                self.reveal_card_to_hand(*card, *player);
+            (
+                Decision::SelectMilled {
+                    player,
+                    cards,
+                    to_battlefield,
+                    ..
+                },
+                Action::SelectCard { card, .. },
+            ) if cards.contains(card) => {
+                if *to_battlefield {
+                    self.move_card_with_entry(
+                        *card,
+                        ZoneType::Battlefield,
+                        crate::flow::proposed_event::ZoneEntry {
+                            controller: Some(*player),
+                            ..Default::default()
+                        },
+                    );
+                } else {
+                    self.reveal_card_to_hand(*card, *player);
+                }
                 self.run_frame(suspended.frame);
                 Ok(())
             }
@@ -1414,19 +1800,26 @@ impl Game {
         }
     }
 
-    /// The cards a `CastWithoutPaying` decision offers: hand spells matching
+    /// The cards a `CastDuringResolution` decision offers: hand spells matching
     /// its predicate (one per definition, so resampled copies stay
     /// consistent) or the exiled card, each castable for free right now.
-    pub(crate) fn free_cast_candidates(&self, decision: &Decision) -> Vec<CardId> {
-        let Decision::CastWithoutPaying { player, offer } = decision else {
+    pub(crate) fn resolution_cast_candidates(&self, decision: &Decision) -> Vec<CardId> {
+        let Decision::CastDuringResolution {
+            player,
+            offer,
+            paid,
+            ..
+        } = decision
+        else {
             return Vec::new();
         };
         let free = CastChoices {
-            free: true,
+            free: !paid,
+            resolving: *paid,
             ..Default::default()
         };
         let mut candidates: Vec<CardId> = match offer {
-            FreeCastOffer::Hand { predicate } => self
+            ResolutionCastOffer::Hand { predicate } => self
                 .state
                 .zones
                 .zone_cards(ZoneType::Hand, *player)
@@ -1437,13 +1830,36 @@ impl Game {
                     card.types.is_castable() && predicate.matches_card(card)
                 })
                 .collect(),
-            FreeCastOffer::Exiled { card } => self
+            ResolutionCastOffer::Exiled { card } => self
                 .state
                 .zones
                 .contains(*card, ZoneType::Exile, *player)
                 .then_some(*card)
                 .into_iter()
                 .collect(),
+            ResolutionCastOffer::ExiledWith { source, predicate } => self
+                .state
+                .exile_links
+                .iter()
+                .filter(|link| link.source == *source)
+                .map(|link| link.exiled_card)
+                .filter(|card| {
+                    let definition = &self.state.cards[*card];
+                    self.state.zones.contains(*card, ZoneType::Exile, *player)
+                        && definition.types.is_castable()
+                        && predicate.matches_card(definition)
+                })
+                .collect(),
+            ResolutionCastOffer::LibraryTop { card } => (self
+                .state
+                .zones
+                .zone_cards(ZoneType::Library, *player)
+                .last()
+                == Some(card)
+                && self.state.cards[*card].types.is_castable())
+            .then_some(*card)
+            .into_iter()
+            .collect(),
         };
         candidates.retain(|card| self.can_cast_with(*player, *card, free));
         candidates.sort_unstable_by_key(|card| (self.state.cards[*card].definition_id, *card));
@@ -1597,10 +2013,14 @@ mod learn_tests {
             kicked: false,
             x: 0,
             excess_damage: 0,
+            created: None,
+            this_way: Vec::new(),
             targets: vec![],
             active_requirement: 0,
             context_target: None,
+            triggering_player: None,
             grantor: None,
+            ability: None,
             queue: VecDeque::from([Effect::Learn]),
             finalize: FrameFinalize::None,
         });
@@ -2294,17 +2714,27 @@ mod payment_tests {
             kicked: false,
             x: 0,
             excess_damage: 0,
+            created: None,
+            this_way: Vec::new(),
             targets: vec![],
             active_requirement: 0,
             context_target: None,
+            triggering_player: None,
             grantor: None,
+            ability: None,
             queue: VecDeque::from([
                 Effect::OptionalPayment {
                     cost,
-                    if_paid: vec![Effect::DrawCards { count: 2 }],
-                    if_declined: vec![Effect::DrawCards { count: 1 }],
+                    if_paid: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(2),
+                    }],
+                    if_declined: vec![Effect::DrawCards {
+                        count: EffectValue::Fixed(1),
+                    }],
                 },
-                Effect::DrawCards { count: 3 },
+                Effect::DrawCards {
+                    count: EffectValue::Fixed(3),
+                },
             ]),
             finalize: FrameFinalize::None,
         });

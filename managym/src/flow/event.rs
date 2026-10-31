@@ -3,6 +3,7 @@ use crate::{
     state::{
         card::CardDefId,
         game_object::{CardId, Incarnation, ObjectId, PermanentId, PlayerId, Target},
+        permanent::CounterKind,
         zone::ZoneType,
     },
 };
@@ -71,9 +72,23 @@ pub enum GameEvent {
         card: CardId,
         by: Option<CardId>,
     },
+    /// An activated or triggered ability was countered (CR 701.6b): its
+    /// stack id, the card it came from, its controller and the countering
+    /// source.
+    AbilityCountered {
+        ability: ObjectId,
+        source_card: CardId,
+        controller: PlayerId,
+        by: Option<CardId>,
+    },
+    /// A triggered ability was put on the stack as `ability`; `attacker` is
+    /// the attacking creature whose attack triggered its own ability.
     AbilityTriggered {
         source_card: CardId,
         controller: PlayerId,
+        ability: ObjectId,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        attacker: Option<PermanentId>,
     },
     /// A player drew a card; `nth_this_turn` counts that player's draws
     /// this turn (resets each turn).
@@ -86,11 +101,12 @@ pub enum GameEvent {
         permanent: PermanentId,
         for_mana: bool,
     },
-    /// A permanent became the target of a spell (ward, CR 702.21).
+    /// A permanent became the target of a spell or ability (ward, CR
+    /// 702.21): `by` is a `Target::StackSpell` or `Target::StackAbility`.
     PermanentTargeted {
         permanent: PermanentId,
-        spell: CardId,
-        spell_controller: PlayerId,
+        by: Target,
+        by_controller: PlayerId,
     },
     /// The declare-attackers turn-based action completed with one or more
     /// attackers (CR 508.1 — attack triggers fire on the whole batch).
@@ -113,6 +129,26 @@ pub enum GameEvent {
         source: ObjectEventRef,
         target: EventSubject,
         amount: u32,
+    },
+    /// `by` put `count` (> 0) `kind` counters on a permanent (CR 122.6).
+    CountersPut {
+        permanent: PermanentId,
+        kind: CounterKind,
+        count: i32,
+        by: PlayerId,
+    },
+    /// A player scried (CR 701.22).
+    Scried {
+        player: PlayerId,
+    },
+    /// A player searched their library (CR 701.23), whatever it found.
+    LibrarySearched {
+        player: PlayerId,
+    },
+    /// The creatures that dealt combat damage to a player in one combat
+    /// damage step (CR 510.2).
+    CombatDamageToPlayers {
+        creatures: Vec<PermanentId>,
     },
     /// One simultaneous state-based death batch in deterministic object order.
     PermanentsDied {

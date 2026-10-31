@@ -42,7 +42,7 @@ use crate::{
         Command as ExperienceCommand, CommandId, MatchId, OfferId as ExperienceOfferId, PromptId,
         Revision,
     },
-    flow::turn::{PhaseKind, StepKind},
+    flow::turn::{PhaseKind, PlayerTurnHistory, StepKind},
     python::convert::{info_dict_to_pydict, require_numpy_array, shape_to_vec},
     search_state::SearchStateWitness,
     state::{deck::Deck, mana::ManaCost, player::PlayerConfig, zone::ZoneType},
@@ -679,6 +679,7 @@ pub enum EventTypeEnum {
     PermanentsDied = EventType::PermanentsDied as i32,
     TurnStarted = EventType::TurnStarted as i32,
     CardRevealed = EventType::CardRevealed as i32,
+    AbilityCountered = EventType::AbilityCountered as i32,
 }
 
 #[cfg(feature = "python")]
@@ -710,6 +711,8 @@ impl EventTypeEnum {
     const TURN_STARTED: Self = Self::TurnStarted;
     #[classattr]
     const CARD_REVEALED: Self = Self::CardRevealed;
+    #[classattr]
+    const ABILITY_COUNTERED: Self = Self::AbilityCountered;
 
     fn __int__(&self) -> i32 {
         *self as i32
@@ -1044,6 +1047,8 @@ pub struct PyPlayer {
     #[pyo3(get, set)]
     pub no_maximum_hand_size: bool,
     #[pyo3(get, set)]
+    pub turn_history: PyPlayerTurnHistory,
+    #[pyo3(get, set)]
     pub combat_mana: i32,
     #[pyo3(get)]
     pub mana: [i32; 6],
@@ -1135,6 +1140,45 @@ impl From<PyContinuousEffect> for ContinuousEffectData {
     }
 }
 
+/// What a player has done this turn.
+#[cfg(feature = "python")]
+#[pyclass(name = "PlayerTurnHistory")]
+#[derive(Clone)]
+pub struct PyPlayerTurnHistory {
+    #[pyo3(get, set)]
+    pub attacked: bool,
+    #[pyo3(get, set)]
+    pub permanents_sacrificed: u32,
+    #[pyo3(get, set)]
+    pub land_entered: bool,
+    #[pyo3(get, set)]
+    pub cards_drawn: u32,
+}
+
+#[cfg(feature = "python")]
+impl From<PlayerTurnHistory> for PyPlayerTurnHistory {
+    fn from(value: PlayerTurnHistory) -> Self {
+        Self {
+            attacked: value.attacked,
+            permanents_sacrificed: value.permanents_sacrificed,
+            land_entered: value.land_entered,
+            cards_drawn: value.cards_drawn,
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PyPlayerTurnHistory> for PlayerTurnHistory {
+    fn from(value: PyPlayerTurnHistory) -> Self {
+        Self {
+            attacked: value.attacked,
+            permanents_sacrificed: value.permanents_sacrificed,
+            land_entered: value.land_entered,
+            cards_drawn: value.cards_drawn,
+        }
+    }
+}
+
 /// Mana spendable only on the named spell or ability-source subtypes.
 #[cfg(feature = "python")]
 #[pyclass(name = "RestrictedMana")]
@@ -1185,6 +1229,7 @@ impl From<PlayerData> for PyPlayer {
             sideboard_counts: value.sideboard_counts,
             remaining_sideboard_counts: value.remaining_sideboard_counts,
             keeps_red_mana: value.keeps_red_mana,
+            turn_history: value.turn_history.into(),
             no_maximum_hand_size: value.no_maximum_hand_size,
             combat_mana: value.combat_mana,
             mana: value.mana,
@@ -1216,6 +1261,7 @@ impl From<PyPlayer> for PlayerData {
             sideboard_counts: value.sideboard_counts,
             remaining_sideboard_counts: value.remaining_sideboard_counts,
             keeps_red_mana: value.keeps_red_mana,
+            turn_history: value.turn_history.into(),
             no_maximum_hand_size: value.no_maximum_hand_size,
             combat_mana: value.combat_mana,
             mana: value.mana,
@@ -1710,6 +1756,8 @@ pub struct PyPermanent {
     /// Activated abilities whose exhaust or once-each-turn limit is spent.
     #[pyo3(get, set)]
     pub used_abilities: Vec<usize>,
+    #[pyo3(get, set)]
+    pub dealt_damage_this_turn: bool,
     /// Continuous effects on this permanent, in timestamp order.
     #[pyo3(get, set)]
     pub effects: Vec<PyContinuousEffect>,
@@ -1750,6 +1798,7 @@ impl From<PermanentData> for PyPermanent {
             blocking: value.blocking,
             abilities_lost: value.abilities_lost,
             used_abilities: value.used_abilities,
+            dealt_damage_this_turn: value.dealt_damage_this_turn,
             effects: value.effects.into_iter().map(Into::into).collect(),
             timestamp: value.timestamp,
         }
@@ -1787,6 +1836,7 @@ impl From<PyPermanent> for PermanentData {
             blocking: value.blocking,
             abilities_lost: value.abilities_lost,
             used_abilities: value.used_abilities,
+            dealt_damage_this_turn: value.dealt_damage_this_turn,
             effects: value.effects.into_iter().map(Into::into).collect(),
             timestamp: value.timestamp,
         }
@@ -1860,6 +1910,7 @@ impl From<EventData> for PyEventData {
                 x if x == EventType::CombatDamageDealt as i32 => EventTypeEnum::CombatDamageDealt,
                 x if x == EventType::PermanentsDied as i32 => EventTypeEnum::PermanentsDied,
                 x if x == EventType::CardRevealed as i32 => EventTypeEnum::CardRevealed,
+                x if x == EventType::AbilityCountered as i32 => EventTypeEnum::AbilityCountered,
                 _ => EventTypeEnum::TurnStarted,
             },
             source_kind: match value.source_kind {
@@ -4051,7 +4102,9 @@ fn parse_continuation_frames_json(
     let frames: Vec<crate::agent::continuation::ContinuationFrame> =
         serde_json::from_value(value.clone()).map_err(|e| PyValueError::new_err(e.to_string()))?;
     if frames.iter().enumerate().any(|(index, frame)| {
-        !(1..=9).contains(&frame.kind)
+        !(1..=10).contains(&frame.kind)
+            || (frame.kind == 10 && (!(1..=5).contains(&frame.decision) || frame.parent.is_some()))
+            || (frame.kind != 10 && frame.this_turn)
             || (frame.kind != 5
                 && frame
                     .targets
@@ -4156,6 +4209,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyCard>()?;
     m.add_class::<PyCastPermission>()?;
     m.add_class::<PyRestrictedMana>()?;
+    m.add_class::<PyPlayerTurnHistory>()?;
     m.add_class::<PySideboardCard>()?;
     m.add_class::<PyCardTypes>()?;
     m.add_class::<PyKeywords>()?;

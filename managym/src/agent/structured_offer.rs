@@ -233,6 +233,7 @@ pub enum BoundTarget {
     Player(PlayerId),
     Permanent(ObjectRef),
     StackSpell(CardId),
+    StackAbility(ObjectId),
     GraveyardCard(ObjectRef),
 }
 
@@ -1798,6 +1799,7 @@ impl Game {
                 .map(BoundTarget::Permanent)
                 .ok_or(StructuredOfferError::InvalidCurrentTarget),
             Target::StackSpell(card) => Ok(BoundTarget::StackSpell(card)),
+            Target::StackAbility(id) => Ok(BoundTarget::StackAbility(id)),
             Target::GraveyardCard(object) => Ok(BoundTarget::GraveyardCard(object)),
         }
     }
@@ -1815,6 +1817,10 @@ impl Game {
                     ))
                 }),
             BoundTarget::StackSpell(card) => Ok(Target::StackSpell(card)),
+            BoundTarget::StackAbility(id) => self
+                .find_ability_on_stack_index(id)
+                .map(|_| Target::StackAbility(id))
+                .ok_or(StructuredOfferError::InvalidCurrentTarget),
             BoundTarget::GraveyardCard(object) => {
                 let card = CardId::from(object.entity);
                 if self.current_object_ref(card) == Some(object)
@@ -1868,7 +1874,9 @@ impl Game {
                     self.state.cards[card].name.clone(),
                 ))
             }
-            BoundTarget::StackSpell(_) => Err(StructuredOfferError::InvalidCurrentTarget),
+            BoundTarget::StackSpell(_) | BoundTarget::StackAbility(_) => {
+                Err(StructuredOfferError::InvalidCurrentTarget)
+            }
         }
     }
 }

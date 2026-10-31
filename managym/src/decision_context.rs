@@ -63,6 +63,7 @@ impl Game {
                 Some(view)
             }
             Target::StackSpell(card) => self.decision_card(*card),
+            Target::StackAbility(id) => self.decision_card(self.stack_ability_source(*id)?),
             Target::GraveyardCard(reference) => {
                 let mut view = self.decision_card(CardId::from(reference.entity))?;
                 // Keep the announced incarnation even if the card later moved.
@@ -212,6 +213,10 @@ impl Game {
                     GameEvent::SpellCountered { card, .. } => {
                         Some(format!("{} was countered.", self.state.cards[*card].name))
                     }
+                    GameEvent::AbilityCountered { source_card, .. } => Some(format!(
+                        "An ability of {} was countered.",
+                        self.state.cards[*source_card].name
+                    )),
                     _ => None,
                 }
             })
@@ -308,6 +313,8 @@ impl Game {
                 ("payment", "Produce mana or finish the announced payment. Reserved sacrifices are not paid yet; activated mana abilities commit their own costs immediately."),
             Some(PendingChoice::DiscardPayment { .. }) =>
                 ("additional_cost", "Choose a card to discard as an activation cost."),
+            Some(PendingChoice::TapPayment { .. }) =>
+                ("additional_cost", "Choose an untapped permanent to tap as an activation cost."),
             Some(PendingChoice::SacrificePayment { .. }) =>
                 ("additional_cost", "Choose an additional cost. A sacrifice selection is reserved until the announced payment completes."),
             Some(PendingChoice::ChooseTargets { .. } | PendingChoice::ActivatedTarget { .. }) =>
@@ -342,8 +349,11 @@ impl Game {
                 Decision::LegendRule { .. } => ("legend_rule", "Choose which legendary permanent to keep."),
                 Decision::SearchDistinctLands { .. } => ("private_search", "Inspect the permitted library candidates. Choose a land with a new name, or stop searching; chosen cards are revealed."),
                 Decision::DiscardFromRevealedHand { .. } => ("revealed_hand", "Choose a card from the revealed hand for its owner to discard."),
-                Decision::CastWithoutPaying { .. } => ("free_cast", "Choose a spell to cast without paying its mana cost, or decline."),
+                Decision::CastDuringResolution { paid: false, .. } => ("free_cast", "Choose a spell to cast without paying its mana cost, or decline."),
+                Decision::CastDuringResolution { paid: true, .. } => ("resolution_cast", "Choose a spell to cast now, paying its costs, or decline."),
                 Decision::DistributeCounters { .. } => ("distribute_counters", "Place the next counter on a tapped creature an opponent controls; each placement is one choice."),
+                Decision::Retarget { .. } => ("retarget", "Choose a new target for the spell or ability on the stack, or keep its target when offered."),
+                Decision::KeepCreatures { .. } => ("keep_creatures", "Choose another creature you control to keep within the total power, or stop; every creature not kept is then sacrificed."),
                 Decision::ExileLinked { .. } => ("linked_exile", "Choose a card to exile; the resolving ability's controller may later cast it as that ability allows."),
                 Decision::OpponentSplitsRevealed { .. } => ("split_revealed", "Choose revealed cards for their owner's graveyard; the rest enter the battlefield tapped."),
             };
@@ -351,7 +361,13 @@ impl Game {
             view.instruction = instruction.into();
         }
         if let Some(placement) = &self.state.trigger_placement {
-            view.stage = if placement.placing.is_some() {
+            let choosing_mode = placement
+                .placing
+                .as_ref()
+                .is_some_and(|trigger| self.unchosen_trigger_modes(trigger).is_some());
+            view.stage = if choosing_mode {
+                "trigger_mode"
+            } else if placement.placing.is_some() {
                 "trigger_targets"
             } else {
                 "order_triggers"
@@ -363,7 +379,11 @@ impl Game {
                     trigger.ability_index,
                     trigger.inline_effects.as_deref(),
                 );
-                format!("{description}. Choose targets for this ability before placing the next one. Earlier placements and paid costs remain committed.")
+                if choosing_mode {
+                    format!("{description}. Choose this ability's mode, then its targets, before placing the next one.")
+                } else {
+                    format!("{description}. Choose targets for this ability before placing the next one. Earlier placements and paid costs remain committed.")
+                }
             } else {
                 "Choose the next ability to put on the stack. Later placements resolve first. Each selection commits immediately.".into()
             };

@@ -114,9 +114,10 @@ checkpoints or experiment evidence.
   repository-wide type safety without a passing configured type check, or
   weaken types merely to silence one.
 - Native scalar/vector observation buffers bind continuation input semantics by
-  relation width: v2/v3 have 32 columns, v4 has 33, v5 has 48; validity
-  remains column 31. V5 widens player rows to 63, card rows to 55 and
-  permanent rows to 37 (v1–v4: 40 / 41 / 29), validity last, and adds a
+  relation width: v2/v3 have 32 columns, v4 has 33, v5 has 49; validity
+  remains column 31. Waiting delayed triggers are v5 relation frames (kind
+  10, after every other frame); v2–v4 encode none. V5 widens player rows to 67, card rows to 55 and
+  permanent rows to 38 (v1–v4: 40 / 41 / 29), validity last, and adds a
   `facts` block (128 × 12, one row per `FactKind` fact about a player or
   permanent). Open-ended vocabularies (counter kinds, added subtypes, set
   names, used abilities, continuous-effect records) are fact kinds, never
@@ -238,7 +239,13 @@ The default pack registers every definition in name order (`cards/content_pack.r
 Card tests mirror the set files: `managym/tests/cards/<set>.rs`, one module per
 set under the single `tests/cards.rs` target. Both test targets mount
 `tests/support/` (`game.rs` builds, `play.rs` acts, `inspect.rs` reads), each
-primitive defined once.
+primitive defined once. `five_color_setup` decks hold four copies of each listed
+name; a fifth `force_permanent_on_battlefield` of that name returns an existing
+copy, so list another card when a test needs more. `inspect::keywords` reads
+printed and until-end-of-turn keywords only; assert static grants through the
+observation. `force_permanent_on_battlefield` places a permanent without an
+entry event (no triggers or turn history); `enter_and_settle` and
+`play_and_settle` enter through the zone move.
 
 A permanent's characteristics after continuous effects (name, types, keywords,
 ability loss, activated abilities, power/toughness) are one view,

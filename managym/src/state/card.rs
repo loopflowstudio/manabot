@@ -2,7 +2,8 @@ use std::{collections::BTreeSet, sync::Arc};
 
 use super::{
     ability::{
-        effect_target_requirements, Ability, Effect, StaticCondition, TargetRequirement, TargetSpec,
+        effect_target_requirements, Ability, Condition, Effect, PaymentCost, TargetRequirement,
+        TargetSpec,
     },
     game_object::{ObjectId, ObjectRef, PlayerId},
     mana::{Color, Colors, Mana, ManaCost},
@@ -161,6 +162,26 @@ impl Keywords {
         .collect()
     }
 
+    /// These keywords less those in `removed`.
+    pub fn without(&self, removed: &Keywords) -> Keywords {
+        Keywords {
+            flying: self.flying && !removed.flying,
+            reach: self.reach && !removed.reach,
+            haste: self.haste && !removed.haste,
+            flash: self.flash && !removed.flash,
+            vigilance: self.vigilance && !removed.vigilance,
+            trample: self.trample && !removed.trample,
+            first_strike: self.first_strike && !removed.first_strike,
+            double_strike: self.double_strike && !removed.double_strike,
+            deathtouch: self.deathtouch && !removed.deathtouch,
+            lifelink: self.lifelink && !removed.lifelink,
+            defender: self.defender && !removed.defender,
+            menace: self.menace && !removed.menace,
+            hexproof: self.hexproof && !removed.hexproof,
+            indestructible: self.indestructible && !removed.indestructible,
+        }
+    }
+
     /// Keyword-set union (printed keywords plus until-EOT grants).
     pub fn union(&self, other: &Keywords) -> Keywords {
         Keywords {
@@ -222,7 +243,7 @@ pub enum StaticScope {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct StaticPtBuff {
     pub scope: StaticScope,
-    pub condition: Option<StaticCondition>,
+    pub condition: Option<Condition>,
     pub power: i32,
     pub toughness: i32,
     /// "+P/+T for each of its creature types, to a maximum of N" (Diligent
@@ -234,6 +255,10 @@ pub struct StaticPtBuff {
     /// (Earthen Ally): the bonus is multiplied by that color count.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub per_color_among: Option<CardPredicate>,
+    /// "+P/+T for each [predicate] card in your graveyard" (Avatar
+    /// Destiny): the bonus is multiplied by that count.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub per_graveyard_matching: Option<CardPredicate>,
 }
 
 /// A static type-adding effect (CR 613.1d layer 4): "[scope] are [types] in
@@ -244,6 +269,10 @@ pub struct StaticPtBuff {
 pub struct StaticTypeGrant {
     pub scope: StaticScope,
     pub types: Vec<CardType>,
+    /// Subtypes added with them ("is an Avatar in addition to its other
+    /// types").
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub subtypes: Vec<String>,
 }
 
 /// "Enchanted creature loses all abilities and is a [creature_types] with base
@@ -269,8 +298,25 @@ pub struct SetCharacteristics {
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct StaticKeywordGrant {
     pub scope: StaticScope,
-    pub condition: Option<StaticCondition>,
+    pub condition: Option<Condition>,
     pub keywords: Keywords,
+}
+
+/// [`StaticAbility::SetsLandType`]: matching lands become `subtype` while
+/// the source has its counters.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct StaticLandType {
+    pub predicate: CardPredicate,
+    pub subtype: String,
+    pub while_counters: CounterThreshold,
+}
+
+/// A static triggered-ability grant (CR 613.1f layer 6): "[scope] have
+/// [ability]". Each covered permanent is the source of its own occurrences.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+pub struct StaticTriggeredGrant {
+    pub scope: StaticScope,
+    pub ability: Box<Ability>,
 }
 
 /// "As long as this has N or more [kind] counters on it" (War Balloon).
@@ -295,7 +341,7 @@ pub struct StaticRestriction {
     pub kind: Restriction,
     /// "... unless [condition]" for the source's controller (The Lion-Turtle).
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub unless: Option<StaticCondition>,
+    pub unless: Option<Condition>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
@@ -328,8 +374,14 @@ pub enum ReplacementEffect {
     /// This object enters tapped unless its entering controller already
     /// controls a permanent matching `predicate` (CR 614.1c, 614.12).
     EntersTappedUnlessControls { predicate: CardPredicate },
-    /// This object enters with +1/+1 counters already present (CR 614.1c).
-    EntersWithPlusOneCounters { count: i32 },
+    /// This object enters with +1/+1 counters already present (CR 614.1c),
+    /// if `condition` holds for its entering controller as it enters
+    /// ("enters with a +1/+1 counter on it if you attacked this turn").
+    EntersWithPlusOneCounters {
+        count: i32,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        condition: Option<Condition>,
+    },
     /// This object enters with X counters of `kind`, X being the value
     /// announced as it was cast, otherwise 0 (CR 107.3m, 614.1c).
     EntersWithXCounters { kind: CounterKind },
@@ -437,6 +489,11 @@ pub struct ActivatedAbilityDefinition {
     /// Discard a chosen card from hand as an activation cost.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub discard_card: bool,
+    /// "Tap an untapped [predicate] you control" as an activation cost; the
+    /// source itself qualifies, and summoning sickness doesn't matter (not a
+    /// {T} cost, CR 302.6).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tap_cost: Option<CardPredicate>,
     /// Exhaust: each object may activate this ability only once (CR 702.177a).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub exhaust: bool,
@@ -485,7 +542,7 @@ pub struct ActivatedAbilityDefinition {
 pub struct SpellCostReduction {
     pub first_on_own_turn: bool,
     pub predicate: CardPredicate,
-    pub condition: StaticCondition,
+    pub condition: Condition,
     pub generic: u8,
 }
 
@@ -501,7 +558,7 @@ pub enum StaticAbility {
     /// color."
     GrantsAnyColorManaAbility(CardPredicate),
     /// "This creature can't be blocked as long as [condition]."
-    CantBeBlockedIf(StaticCondition),
+    CantBeBlockedIf(Condition),
     /// "Players can't gain life."
     PlayersCantGainLife,
     /// "This creature can't attack or block unless you control another
@@ -520,7 +577,7 @@ pub enum StaticAbility {
     CostsLessPerGraveyardCard(CardPredicate),
     /// "If [condition], you may cast this spell as though it had flash";
     /// functions from hand (see `Game::has_instant_timing`).
-    FlashIf(StaticCondition),
+    FlashIf(Condition),
     /// Printed flashback (CR 702.34): castable from its owner's graveyard for
     /// this cost, then exiled instead of going anywhere else.
     Flashback(ManaCost),
@@ -535,8 +592,9 @@ pub enum StaticAbility {
     /// ignored.
     CharacteristicPower(PowerCda),
     /// Ward (CR 702.21): registration expands it into its "becomes the
-    /// target" trigger, "counter it unless that player pays [cost]".
-    Ward(ManaCost),
+    /// target" trigger, "counter it unless that player pays [cost]". The
+    /// cost is mana or a waterbend ("Ward—Waterbend {4}").
+    Ward(PaymentCost),
     /// "You may look at the top card of your library any time" (CR 401.2).
     LookAtLibraryTop,
     /// "You may cast [predicate] spells from the top of your library."
@@ -561,7 +619,21 @@ pub enum StaticAbility {
     TypeGrant(StaticTypeGrant),
     /// "This creature can attack as though it didn't have defender" while
     /// the condition holds for its controller (Platypus-Bear).
-    AttacksDespiteDefender(StaticCondition),
+    AttacksDespiteDefender(Condition),
+    /// "[predicate] permanents enter tapped" (Zhao, the Moon Slayer's
+    /// nonbasic lands), for every player (CR 614.1c).
+    EntersTapped(CardPredicate),
+    /// "As long as this has [threshold], [predicate] lands are [subtype]"
+    /// (CR 305.7): they lose all other land types and abilities and have
+    /// that basic land type's mana ability.
+    SetsLandType(StaticLandType),
+    /// "If a triggered ability of a [predicate] you control triggers, that
+    /// ability triggers an additional time" (CR 603.2d). Each such permanent
+    /// adds one occurrence.
+    TriggersAdditionalTime(CardPredicate),
+    /// A triggered ability this card grants while on the battlefield
+    /// ("Other Allies you control have prowess").
+    TriggeredGrant(StaticTriggeredGrant),
 }
 
 /// Which blocks a creature's blocking restriction forbids (CR 509.1b).
@@ -579,14 +651,20 @@ pub enum BlockRestriction {
 #[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub enum AdditionalCost {
-    /// "As an additional cost, sacrifice [predicate]", or pay `or_mana`.
-    Sacrifice(SacrificeCost),
+    /// "As an additional cost, sacrifice [predicate]", or pay `or_mana`
+    /// (boxed: clippy's enum-size bound).
+    Sacrifice(Box<SacrificeCost>),
     /// Kicker (CR 702.33): an optional cost chosen while casting.
     Kicker(ManaCost),
     /// "As an additional cost, you may waterbend [cost]": an optional cost
     /// chosen like kicker whose generic mana may be paid by tapping artifacts
     /// and creatures.
     Waterbend(ManaCost),
+    /// "As an additional cost to cast this spell, pay [life] life or pay
+    /// [mana]": chosen like kicker, the mana marks the spell kicked;
+    /// otherwise the life is paid as it is cast (CR 119.4: only from a life
+    /// total of at least that much).
+    PayLifeOrMana { life: u32, mana: ManaCost },
     /// "As an additional cost to cast this spell, waterbend [cost]": required,
     /// and its {X} is announced with the spell's. It adds to the total cost,
     /// not the mana value (CR 202.3).
@@ -643,14 +721,24 @@ impl CardDefinition {
     /// optional waterbend, which both mark the spell kicked.
     pub fn optional_cost(&self) -> Option<&ManaCost> {
         self.additional_costs.iter().find_map(|cost| match cost {
-            AdditionalCost::Kicker(kicker) | AdditionalCost::Waterbend(kicker) => Some(kicker),
+            AdditionalCost::Kicker(kicker)
+            | AdditionalCost::Waterbend(kicker)
+            | AdditionalCost::PayLifeOrMana { mana: kicker, .. } => Some(kicker),
             AdditionalCost::Sacrifice(_) | AdditionalCost::RequiredWaterbend(_) => None,
+        })
+    }
+
+    /// The life an unkicked cast pays ("pay 5 life or pay {2}").
+    pub fn life_alternative(&self) -> Option<u32> {
+        self.additional_costs.iter().find_map(|cost| match cost {
+            AdditionalCost::PayLifeOrMana { life, .. } => Some(*life),
+            _ => None,
         })
     }
 
     pub fn sacrifice_cost(&self) -> Option<&SacrificeCost> {
         self.additional_costs.iter().find_map(|cost| match cost {
-            AdditionalCost::Sacrifice(sacrifice) => Some(sacrifice),
+            AdditionalCost::Sacrifice(sacrifice) => Some(sacrifice.as_ref()),
             _ => None,
         })
     }
@@ -677,14 +765,14 @@ impl CardDefinition {
         })
     }
 
-    pub fn flash_if(&self) -> Option<&StaticCondition> {
+    pub fn flash_if(&self) -> Option<&Condition> {
         self.statics.iter().find_map(|ability| match ability {
             StaticAbility::FlashIf(condition) => Some(condition),
             _ => None,
         })
     }
 
-    pub fn ward(&self) -> Option<&ManaCost> {
+    pub fn ward(&self) -> Option<&PaymentCost> {
         self.statics.iter().find_map(|ability| match ability {
             StaticAbility::Ward(cost) => Some(cost),
             _ => None,
@@ -735,7 +823,7 @@ impl CardDefinition {
         })
     }
 
-    pub fn attacks_despite_defender(&self) -> Option<&StaticCondition> {
+    pub fn attacks_despite_defender(&self) -> Option<&Condition> {
         self.statics.iter().find_map(|ability| match ability {
             StaticAbility::AttacksDespiteDefender(condition) => Some(condition),
             _ => None,
@@ -752,6 +840,21 @@ impl CardDefinition {
     pub fn keyword_grants(&self) -> impl Iterator<Item = &StaticKeywordGrant> {
         self.statics.iter().filter_map(|ability| match ability {
             StaticAbility::KeywordGrant(grant) => Some(grant),
+            _ => None,
+        })
+    }
+
+    pub fn triggered_grants(&self) -> impl Iterator<Item = &StaticTriggeredGrant> {
+        self.statics.iter().filter_map(|ability| match ability {
+            StaticAbility::TriggeredGrant(grant) => Some(grant),
+            _ => None,
+        })
+    }
+
+    /// The predicate of each "triggers an additional time" ability.
+    pub fn additional_trigger_predicates(&self) -> impl Iterator<Item = &CardPredicate> {
+        self.statics.iter().filter_map(|ability| match ability {
+            StaticAbility::TriggersAdditionalTime(predicate) => Some(predicate),
             _ => None,
         })
     }

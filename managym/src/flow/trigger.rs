@@ -5,6 +5,7 @@
 use crate::state::{
     ability::Effect,
     game_object::{CardId, ObjectLki, ObjectRef, PlayerId, Target},
+    predicate::CardPredicate,
 };
 
 /// Stable occurrence identity; never a strategic ordering preference.
@@ -63,34 +64,72 @@ pub struct PendingTrigger {
     /// Object from the triggering event that the ability's effects
     /// reference (e.g. the spell that targeted a warded permanent).
     pub context: Option<Target>,
+    /// The player the triggering event names ("they": the caster of the
+    /// triggering spell), separate from its context object.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub player: Option<PlayerId>,
+    /// The ability's X: for an entering permanent's own trigger, the X of
+    /// the spell that became it (CR 107.3m); otherwise 0.
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub x: u8,
+    /// The attacking creature whose attack triggered its own ability.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attacker: Option<crate::state::game_object::PermanentId>,
+    /// The modes of a "choose up to" ability chosen so far.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub chosen_modes: Vec<usize>,
     /// Delayed triggers carry their effects inline instead of referencing
     /// `Card::abilities` (`ability_index` is unused when set).
     pub inline_effects: Option<Vec<Effect>>,
 }
 
-/// A one-shot delayed triggered ability (CR 603.7) watching a specific
-/// card's next departure from the battlefield. Removed once it fires or
-/// once the watched permanent leaves in a non-matching way.
+/// A delayed triggered ability (CR 603.7) waiting for its event. It fires
+/// with `effects` inline, from `source_card` (the exact `source_ref`, when
+/// that is a battlefield object, supplies last known information).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct DelayedTrigger {
-    pub watched: ObjectRef,
+    pub event: DelayedTriggerEvent,
     pub controller: PlayerId,
-    pub kind: DelayedTriggerKind,
+    pub source_card: CardId,
+    pub source_ref: Option<ObjectRef>,
+    pub effects: Vec<Effect>,
+    /// "this turn": removed in the cleanup step if it has not fired.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub this_turn: bool,
 }
 
+/// What a waiting delayed trigger watches for. All but `CreatureDies` fire
+/// once (CR 603.7c).
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
-pub enum DelayedTriggerKind {
-    /// Earthbend: "When it dies or is exiled, return it to the battlefield
-    /// tapped."
-    ReturnToBattlefieldTapped,
+pub enum DelayedTriggerEvent {
+    /// The exact object dies (or, `or_exiled`, is exiled: earthbend's "when
+    /// it dies or is exiled"). Removed once it leaves the battlefield any
+    /// way; the departed permanent is the trigger's context.
+    Leaves { watched: ObjectRef, or_exiled: bool },
+    /// "Whenever a creature dies".
+    CreatureDies,
+    /// "At the beginning of the next end step"; `context` is the trigger's
+    /// context ("sacrifice that token").
+    NextEndStep { context: Option<Target> },
+    /// "When you next cast a [predicate] spell"; that spell is the context.
+    YouCastSpell(CardPredicate),
 }
 
-/// "Exile [card] until [source] leaves the battlefield" linkage (Earth
-/// Kingdom Jailer). When the exact `source` object leaves the battlefield the
-/// exiled card returns immediately — no trigger, no stack (CR 603.6e). A later
-/// incarnation of the same physical card is not the duration source.
+/// A card exiled with an exact `source` object (CR 607.2a). "Until [source]
+/// leaves the battlefield" (Earth Kingdom Jailer): when it leaves, the
+/// exiled card returns immediately — no trigger, no stack (CR 603.6e).
+/// Otherwise ("exiled with this creature", Boiling Rock Rioter) the card
+/// stays exiled and the link ends. A later incarnation of the same physical
+/// card is not the source.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
 pub struct ExileLink {
     pub source: ObjectRef,
     pub exiled_card: CardId,
+    /// The card returns as the source leaves the battlefield.
+    #[serde(skip_serializing_if = "is_true")]
+    pub returns: bool,
+}
+
+fn is_true(value: &bool) -> bool {
+    *value
 }

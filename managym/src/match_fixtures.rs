@@ -87,9 +87,9 @@ fn check_shape(id: &str, game: &Game) -> Result<(), String> {
         "interactive-midgame-48-w4-v1" if action_count != 2 => Err(format!(
             "midgame fixture drift: expected 2 root actions, got {action_count}"
         )),
-        "interactive-heavy-80-w4-v1" if cards != 120 || slots != 24 || events != 505 => {
+        "interactive-heavy-80-w4-v1" if cards != 120 || slots != 24 || events != 512 => {
             Err(format!(
-                "heavy fixture drift: expected cards/slots/events 120/24/505, got {cards}/{slots}/{events}"
+                "heavy fixture drift: expected cards/slots/events 120/24/512, got {cards}/{slots}/{events}"
             ))
         }
         _ => Ok(()),

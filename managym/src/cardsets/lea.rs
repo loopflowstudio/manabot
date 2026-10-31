@@ -2,7 +2,7 @@
 use crate::state::ability::AffectedSpec;
 use crate::state::effect::Modification;
 use crate::state::{
-    ability::{Effect, TargetRequirement, TargetSpec},
+    ability::{Effect, EffectValue, TargetRequirement, TargetSpec},
     card::{
         ActivatedAbilityDefinition, CardDefinition, CardType, CardTypes, Keywords, ManaAbility,
     },
@@ -41,7 +41,9 @@ fn ancestral_recall() -> CardDefinition {
         name: "Ancestral Recall".into(),
         mana_cost: Some(ManaCost::parse("{U}")),
         types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![Effect::DrawCards { count: 3 }],
+        spell_effects: vec![Effect::DrawCards {
+            count: EffectValue::Fixed(3),
+        }],
         text_box: text_box.into(),
         ..Default::default()
     }

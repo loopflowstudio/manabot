@@ -20,7 +20,7 @@ def test_sacrifice_live_manifest_binds_every_learning_program() -> None:
     )
     manifest = env.content_pack_manifest()
     binding = BoundSemanticPack.bind(manifest)
-    assert binding.schema.raw["schema_version"] == 9
+    assert binding.schema.raw["schema_version"] == 10
     assert len(binding.definition_row_by_card_def_id) == 27
     padded = binding.pad_catalog()
     assert padded

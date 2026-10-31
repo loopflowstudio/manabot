@@ -210,6 +210,18 @@ def test_polarity_is_derived_for_every_targeted_spell_in_the_pool() -> None:
         "Swampsnare Trap": None,
         "The Last Agni Kai": None,
         "Watery Grasp": None,
+        # TLA T4: kicked, delayed-trigger and copy effects, rated by the
+        # target effects the derivation finds.
+        "Earth Rumble": "beneficial",
+        "Fatal Fissure": "beneficial",
+        "How to Start a Riot": "beneficial",
+        "Jet's Brainwashing": "beneficial",
+        "Price of Freedom": "harmful",
+        "Rocky Rebuke": "harmful",
+        "Sold Out": "harmful",
+        "Avatar Destiny": None,
+        "Bumi Bash": None,
+        "Redirect Lightning": None,
     }
     combustion = spells["Combustion Technique"]
     assert (combustion.damage, combustion.lesson_damage) == (2, True)

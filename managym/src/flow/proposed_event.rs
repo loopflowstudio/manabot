@@ -6,7 +6,8 @@
 //! replacements, transform deterministically, then commit.
 
 use crate::{
-    flow::game::Game,
+    flow::{event::GameEvent, game::Game},
+    state::card::StaticAbility,
     state::{
         card::ReplacementEffect,
         game_object::{CardId, EntityId, ObjectRef, PermanentId, PlayerId},
@@ -112,7 +113,13 @@ impl Game {
                 && self
                     .lookup_current_permanent(*object)
                     .ok()
-                    .is_some_and(|id| self.exiled_if_it_would_die(id))
+                    .is_some_and(|id| {
+                        // A finality counter (CR 122.1h) or an effect.
+                        self.exiled_if_it_would_die(id)
+                            || self.state.permanents[id].as_ref().is_some_and(|permanent| {
+                                permanent.counter_count(CounterKind::Finality) > 0
+                            })
+                    })
             {
                 *to = ZoneType::Exile;
             }
@@ -249,15 +256,45 @@ impl Game {
                 // Entering objects come under their owner's control; the
                 // condition reads that player's battlefield before the move.
                 let entering_controller = self.state.cards[*card].owner;
-                self.state.cards[*card]
+                // "[predicate] permanents enter tapped" from the battlefield.
+                let static_tapped = [PlayerId(0), PlayerId(1)]
+                    .into_iter()
+                    .flat_map(|player| self.battlefield_permanents(player))
+                    .filter(|id| !self.characteristics(*id).abilities_lost)
+                    .flat_map(|id| {
+                        let permanent = self.state.permanents[id].as_ref().unwrap();
+                        self.state.cards[permanent.card]
+                            .statics
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, ability)| {
+                                matches!(ability, StaticAbility::EntersTapped(predicate)
+                                    if predicate.matches_card(&self.state.cards[*card]))
+                            })
+                            .filter_map(move |(index, _)| {
+                                Some(ReplacementCandidate {
+                                    source: self.permanent_object_ref(id)?,
+                                    definition_index: index,
+                                    effect: ReplacementEffect::EntersTapped,
+                                })
+                            })
+                    })
+                    .collect::<Vec<_>>();
+                let mut own: Vec<_> = self.state.cards[*card]
                     .replacement_effects
                     .iter()
                     .enumerate()
                     .filter_map(|(definition_index, effect)| {
                         let effect = match effect {
                             ReplacementEffect::EntersTapped
-                            | ReplacementEffect::EntersWithPlusOneCounters { .. }
                             | ReplacementEffect::EntersWithXCounters { .. } => effect.clone(),
+                            ReplacementEffect::EntersWithPlusOneCounters { condition, .. }
+                                if condition.as_ref().is_none_or(|condition| {
+                                    self.check_static_condition(condition, entering_controller)
+                                }) =>
+                            {
+                                effect.clone()
+                            }
                             ReplacementEffect::EntersTappedUnlessControls { predicate }
                                 if !self
                                     .battlefield_permanents(entering_controller)
@@ -274,7 +311,9 @@ impl Game {
                             effect,
                         })
                     })
-                    .collect()
+                    .collect();
+                own.extend(static_tapped);
+                own
             }
             _ => Vec::new(),
         };
@@ -338,7 +377,7 @@ impl Game {
             }
             (
                 ProposedEvent::ZoneMove { entry, .. },
-                ReplacementEffect::EntersWithPlusOneCounters { count },
+                ReplacementEffect::EntersWithPlusOneCounters { count, .. },
             ) => {
                 debug_assert!(*count >= 0, "entry counter count must be nonnegative");
                 entry
@@ -427,6 +466,15 @@ impl Game {
         let Some(target) = self.permanent_object_ref(permanent_id) else {
             return false;
         };
+        // A land-type overwrite's counters change other players' mana.
+        if self.state.cards[CardId::from(target.entity)]
+            .statics
+            .iter()
+            .any(|ability| matches!(ability, StaticAbility::SetsLandType(_)))
+        {
+            self.invalidate_mana_cache(PlayerId(0));
+            self.invalidate_mana_cache(PlayerId(1));
+        }
         self.apply_proposed_event(ProposedEvent::CounterChange {
             target,
             kind,
@@ -434,17 +482,27 @@ impl Game {
         })
     }
 
-    /// Exact-object counter mutation for rules continuations.
-    pub(crate) fn change_plus_one_counters_on_object(
+    /// `by` puts `count` (> 0) `kind` counters on a permanent, announcing it
+    /// for "whenever you put counters" triggers.
+    pub(crate) fn put_counters(
         &mut self,
-        target: ObjectRef,
-        delta: i32,
+        permanent_id: PermanentId,
+        kind: CounterKind,
+        count: i32,
+        by: PlayerId,
     ) -> bool {
-        self.apply_proposed_event(ProposedEvent::CounterChange {
-            target,
-            kind: CounterKind::PlusOnePlusOne,
-            delta,
-        })
+        if !self.change_counters(permanent_id, kind, count) {
+            return false;
+        }
+        if count > 0 {
+            self.emit(GameEvent::CountersPut {
+                permanent: permanent_id,
+                kind,
+                count,
+                by,
+            });
+        }
+        true
     }
 
     /// Exact-object destruction for rules continuations and SBA batches.

@@ -3,7 +3,7 @@ use crate::{
     flow::{
         event::{EventEntity, EventSubject, GameEvent, ObjectEventRef},
         game::Game,
-        turn::{PhaseKind, StepKind},
+        turn::{PhaseKind, PlayerTurnHistory, StepKind},
     },
     state::{
         effect::{Affected, ContinuousEffect, Modification},
@@ -65,6 +65,9 @@ pub struct PlayerData {
     /// Unspent red mana stays until end of turn (The Last Agni Kai).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub keeps_red_mana: bool,
+    /// What this player has done this turn (public: every event in it was).
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub turn_history: PlayerTurnHistory,
     /// Continuous effects on this player, in timestamp order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<ContinuousEffectData>,
@@ -372,7 +375,8 @@ pub struct ContinuousEffectData {
     /// The mana color kept (`Red`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub color: Option<String>,
-    /// The `EffectDuration` variant (`EndOfTurn`, `Indefinite`).
+    /// The `EffectDuration` variant (`EndOfTurn`, `Indefinite`,
+    /// `WhileYouControlSource`).
     pub duration: String,
     /// Definition of the spell or ability's source.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -429,12 +433,26 @@ impl ContinuousEffectData {
                 "ModifyPt"
             }
             Modification::CantBeBlocked => "CantBeBlocked",
+            Modification::CantBlock => "CantBlock",
+            Modification::DoesntUntap => "DoesntUntap",
+            Modification::LoseKeywords(keywords) => {
+                data.keywords = keywords.names().into_iter().map(str::to_owned).collect();
+                "LoseKeywords"
+            }
             Modification::ExileIfWouldDie => "ExileIfWouldDie",
             Modification::KeepUnspentMana(color) => {
                 data.color = Some(format!("{color:?}"));
                 "KeepUnspentMana"
             }
             Modification::NoMaximumHandSize => "NoMaximumHandSize",
+            Modification::ControlChanged { previous } => {
+                data.amount = Some(previous.0 as i32);
+                "ControlChanged"
+            }
+            Modification::ModeChosen { mode } => {
+                data.amount = Some(i32::from(*mode));
+                "ModeChosen"
+            }
         }
         .to_string();
         data
@@ -481,7 +499,9 @@ pub struct PermanentData {
     /// activated again by this object (CR 702.177a).
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub exhausted_abilities: i32,
-    /// "Once each turn" abilities this object has activated this turn.
+    /// "Once each turn" abilities this object has used this turn: activated
+    /// abilities, once-each-turn triggers that fired and "do this only once
+    /// each turn" options taken.
     #[serde(default, skip_serializing_if = "crate::state::is_zero")]
     pub once_each_turn_used: i32,
     /// Firebending granted until end of turn, summed over grants.
@@ -519,6 +539,10 @@ pub struct PermanentData {
     /// spent: exhaust (CR 702.177a) or once each turn (CR 602.5b).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub used_abilities: Vec<usize>,
+    /// It was dealt damage this turn, whether or not that damage is still
+    /// marked.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dealt_damage_this_turn: bool,
     /// Continuous effects on this permanent, in timestamp order; the
     /// effective values above already apply them.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -546,6 +570,7 @@ pub enum EventType {
     PermanentsDied = 10,
     TurnStarted = 11,
     CardRevealed = 12,
+    AbilityCountered = 13,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -815,6 +840,7 @@ impl Observation {
                 .map(|(definition, count)| (definition.0, *count))
                 .collect(),
             keeps_red_mana: game.keeps_unspent_mana(player, crate::state::mana::Color::Red),
+            turn_history: game.state.turn.history[player.0],
             effects: ContinuousEffectData::list(game, Some(Affected::Player(player))),
         }
     }
@@ -968,7 +994,14 @@ impl Observation {
             exile_if_dies_this_turn: game.exiled_if_it_would_die(perm_id),
             attacking: permanent.attacking,
             exhausted_abilities: permanent.exhausted.len() as i32,
-            once_each_turn_used: permanent.activated_this_turn.len() as i32,
+            once_each_turn_used: (permanent.activated_this_turn.len()
+                + game.permanent_object_ref(perm_id).map_or(0, |object| {
+                    game.state
+                        .turn
+                        .ability_triggers_this_turn
+                        .range((object, 0)..=(object, usize::MAX))
+                        .count()
+                })) as i32,
             granted_firebending: i32::from(characteristics.firebending),
             temp_subtypes: characteristics
                 .added_subtypes
@@ -1019,6 +1052,7 @@ impl Observation {
                     .map(|attacker| attacker.id.0 as i32)
             }),
             abilities_lost: characteristics.abilities_lost,
+            dealt_damage_this_turn: permanent.dealt_damage_this_turn,
             used_abilities: characteristics
                 .activated_abilities
                 .iter()
@@ -1069,7 +1103,7 @@ impl Observation {
             is_lesson: card.has_subtype("Lesson"),
             ward_cost: card
                 .ward()
-                .map(|cost| i32::from(cost.mana_value))
+                .map(|cost| i32::from(cost.mana_cost().mana_value))
                 .unwrap_or(0),
             kicker_cost: card
                 .optional_cost()
@@ -1202,6 +1236,16 @@ impl Observation {
                     card_id: None,
                 })
             }
+            Target::StackAbility(id) => {
+                game.find_ability_on_stack_index(id)?;
+                Some(StackTargetData {
+                    kind: StackTargetKindData::StackObject,
+                    player_id: None,
+                    permanent_id: None,
+                    stack_object_id: Some(id.0 as i32),
+                    card_id: None,
+                })
+            }
         }
     }
 
@@ -1296,9 +1340,19 @@ impl Observation {
                 *card,
                 PlayerId(0),
             )],
+            GameEvent::AbilityCountered {
+                source_card,
+                controller,
+                ..
+            } => vec![Self::card_event_data(
+                EventType::AbilityCountered,
+                *source_card,
+                *controller,
+            )],
             GameEvent::AbilityTriggered {
                 source_card,
                 controller,
+                ..
             } => vec![Self::card_event_data(
                 EventType::AbilityTriggered,
                 *source_card,
@@ -1391,6 +1445,10 @@ impl Observation {
             GameEvent::CardDrawn { .. }
             | GameEvent::PermanentTapped { .. }
             | GameEvent::PermanentTargeted { .. }
+            | GameEvent::CombatDamageToPlayers { .. }
+            | GameEvent::LibrarySearched { .. }
+            | GameEvent::CountersPut { .. }
+            | GameEvent::Scried { .. }
             | GameEvent::AttackersDeclared { .. }
             | GameEvent::StepStarted { .. } => Vec::new(),
         }
@@ -1518,6 +1576,7 @@ impl Observation {
                 crate::state::target::Target::StackSpell(card_id) => {
                     vec![game.state.cards[card_id].id]
                 }
+                crate::state::target::Target::StackAbility(id) => vec![*id],
             },
             Action::ScryCard { card, .. }
             | Action::SelectCard { card, .. }
@@ -1550,12 +1609,20 @@ impl Observation {
                         | Some(crate::flow::game::PendingChoice::DiscardPayment {
                             source: crate::flow::game::ActivationSource::Card(card),
                             ..
+                        })
+                        | Some(crate::flow::game::PendingChoice::TapPayment {
+                            source: crate::flow::game::ActivationSource::Card(card),
+                            ..
                         }) => Some(*card),
                         Some(crate::flow::game::PendingChoice::ActivatedTarget {
                             source: crate::flow::game::ActivationSource::Permanent(permanent),
                             ..
                         })
                         | Some(crate::flow::game::PendingChoice::DiscardPayment {
+                            source: crate::flow::game::ActivationSource::Permanent(permanent),
+                            ..
+                        })
+                        | Some(crate::flow::game::PendingChoice::TapPayment {
                             source: crate::flow::game::ActivationSource::Permanent(permanent),
                             ..
                         })

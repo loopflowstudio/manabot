@@ -450,6 +450,9 @@ pub struct LegacyPermanentView {
     /// Activated abilities (indices in its ability list) whose limit is spent.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub used_abilities: Vec<u32>,
+    /// It was dealt damage this turn.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub dealt_damage_this_turn: bool,
     /// Continuous effects on it, in timestamp order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<ContinuousEffectView>,
@@ -505,6 +508,9 @@ pub struct LegacyPlayerView {
     /// Unspent red mana stays until end of turn.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub keeps_red_mana: bool,
+    /// What this player has done this turn.
+    #[serde(default, skip_serializing_if = "crate::state::is_zero")]
+    pub turn_history: crate::flow::turn::PlayerTurnHistory,
     /// Continuous effects on this player, in timestamp order.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub effects: Vec<ContinuousEffectView>,

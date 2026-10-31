@@ -7,8 +7,7 @@
 // are applied with static abilities by layer and timestamp in
 // `Game::characteristics` (`flow/statics.rs`); the rules queries here
 // (blockability, death replacement, kept mana, hand size) read the same
-// records. Records are journaled whole, like
-// delayed triggers, so undo and rollback restore them exactly.
+// records.
 //
 // Expiry boundaries:
 //   - cleanup ends `EndOfTurn` records (CR 514.2);
@@ -17,7 +16,7 @@
 use crate::{
     flow::game::Game,
     state::{
-        card::CardDefId,
+        card::{CardDefId, Keywords},
         effect::{Affected, ContinuousEffect, EffectDuration, Modification},
         game_object::{CardId, ObjectRef, PermanentId, PlayerId},
         mana::Color,
@@ -35,6 +34,22 @@ impl Game {
         modification: Modification,
         duration: EffectDuration,
     ) {
+        self.record_continuous(source, None, controller, affected, modification, duration);
+    }
+
+    /// [`Game::apply_continuous`], naming the exact source object a
+    /// `WhileYouControlSource` duration follows.
+    pub(crate) fn record_continuous(
+        &mut self,
+        source: Option<CardId>,
+        source_object: Option<ObjectRef>,
+        controller: PlayerId,
+        affected: impl IntoIterator<Item = Affected>,
+        modification: Modification,
+        duration: EffectDuration,
+    ) {
+        let source_object =
+            source_object.filter(|_| duration == EffectDuration::WhileYouControlSource);
         let source: Option<CardDefId> = source.map(|card| self.state.cards[card].definition_id);
         let timestamp = self.state.id_gen.next_id();
         let records: Vec<ContinuousEffect> = affected
@@ -46,6 +61,7 @@ impl Game {
                 affected,
                 modification: modification.clone(),
                 duration,
+                source_object,
             })
             .collect();
         if records.is_empty() {
@@ -95,9 +111,40 @@ impl Game {
         self.permanent_has_modification(permanent_id, &Modification::CantBeBlocked)
     }
 
+    /// "Can't block this turn."
+    pub fn cant_block(&self, permanent_id: PermanentId) -> bool {
+        self.permanent_has_modification(permanent_id, &Modification::CantBlock)
+    }
+
+    /// "It doesn't untap during its controller's untap step."
+    pub fn doesnt_untap(&self, permanent_id: PermanentId) -> bool {
+        self.permanent_has_modification(permanent_id, &Modification::DoesntUntap)
+    }
+
+    /// Keywords records remove from the permanent, whatever grants them.
+    pub(crate) fn lost_keywords(&self, permanent_id: PermanentId) -> Keywords {
+        self.effects_on(permanent_id)
+            .filter_map(|effect| match effect.modification {
+                Modification::LoseKeywords(keywords) => Some(keywords),
+                _ => None,
+            })
+            .fold(Keywords::default(), |lost, keywords| lost.union(&keywords))
+    }
+
     /// "If it would die this turn, exile it instead."
     pub fn exiled_if_it_would_die(&self, permanent_id: PermanentId) -> bool {
         self.permanent_has_modification(permanent_id, &Modification::ExileIfWouldDie)
+    }
+
+    /// The modes the permanent's "choose one that hasn't been chosen"
+    /// ability has chosen.
+    pub(crate) fn chosen_modes(&self, permanent_id: PermanentId) -> Vec<usize> {
+        self.effects_on(permanent_id)
+            .filter_map(|effect| match effect.modification {
+                Modification::ModeChosen { mode } => Some(usize::from(mode)),
+                _ => None,
+            })
+            .collect()
     }
 
     /// Whether `player` keeps unspent mana of `color` as steps and phases end.
@@ -117,16 +164,54 @@ impl Game {
         self.end_effects(|effect| effect.duration == EffectDuration::EndOfTurn);
     }
 
-    /// CR 400.7: the object that left is a new object; effects on it end.
+    /// CR 400.7: the object that left is a new object; effects on it end,
+    /// as do effects lasting while their controller controls it.
     pub(crate) fn end_effects_on(&mut self, object: ObjectRef) {
-        self.end_effects(|effect| effect.affects_object(object));
+        self.end_effects(|effect| {
+            effect.affects_object(object) || effect.source_object == Some(object)
+        });
+    }
+
+    /// "For as long as you control [this]" ends when control of `object`
+    /// passes to another player.
+    pub(crate) fn end_effects_for_control_change(
+        &mut self,
+        object: ObjectRef,
+        controller: PlayerId,
+    ) {
+        self.end_effects(|effect| {
+            effect.source_object == Some(object) && effect.controller != controller
+        });
     }
 
     fn end_effects(&mut self, ends: impl Fn(&ContinuousEffect) -> bool) {
         if !self.state.effects.iter().any(&ends) {
             return;
         }
+        // A control change that ends hands its object back (CR 613.1b).
+        let returned: Vec<_> = self
+            .state
+            .effects
+            .iter()
+            .filter(|effect| ends(effect))
+            .filter_map(|effect| match (effect.affected, &effect.modification) {
+                (Affected::Object(object), Modification::ControlChanged { previous }) => {
+                    Some((object, effect.controller, *previous))
+                }
+                _ => None,
+            })
+            .collect();
         self.state.effects.retain(|effect| !ends(effect));
+        for (object, holder, previous) in returned {
+            if let Ok(id) = self.lookup_current_permanent(object) {
+                if self.state.permanents[id]
+                    .as_ref()
+                    .is_some_and(|permanent| permanent.controller == holder)
+                {
+                    self.change_control(id, previous);
+                }
+            }
+        }
         self.invalidate_mana_cache(PlayerId(0));
         self.invalidate_mana_cache(PlayerId(1));
     }

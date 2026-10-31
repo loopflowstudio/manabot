@@ -488,6 +488,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "blocking": "blocking",
         "abilities_lost": "has lost all abilities",
         "used_abilities": "used-up abilities",
+        "dealt_damage_this_turn": "dealt damage this turn",
     },
     managym.Card: {
         "id": "the card's alias",
@@ -524,6 +525,12 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "x": "X =",
         "granted_keywords": "granted keywords",
     },
+    managym.PlayerTurnHistory: {
+        "attacked": "This turn: attacked",
+        "permanents_sacrificed": "sacrificed",
+        "land_entered": "had a land enter",
+        "cards_drawn": "drew",
+    },
     managym.Player: {
         "id": "the player's alias",
         "player_index": "seat label",
@@ -540,6 +547,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "remaining_sideboard_counts": "Owned outside-game candidates",
         "keeps_red_mana": "Keeps unspent red mana",
         "no_maximum_hand_size": "Has no maximum hand size",
+        "turn_history": "This turn:",
         "restricted_mana": "Restricted mana for",
         "hand_only_until": "Can cast spells only from hand",
         "effects": "Effect:",
@@ -579,15 +587,35 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     payload = json.loads(decision.capture_json)
     state = payload["observation"]["viewer_state"]
     mountain, ogre = state["agent_permanents"]
-    ogre |= {"attacking": True, "abilities_lost": True, "used_abilities": [0]}
+    ogre |= {
+        "attacking": True,
+        "abilities_lost": True,
+        "used_abilities": [0],
+        "dealt_damage_this_turn": True,
+    }
     mountain |= {"blocking": ogre["id"]}
-    state["agent"] |= {"keeps_red_mana": True, "no_maximum_hand_size": True}
+    state["agent"] |= {
+        "keeps_red_mana": True,
+        "no_maximum_hand_size": True,
+        "turn_history": {
+            "attacked": True,
+            "permanents_sacrificed": 2,
+            "land_entered": True,
+            "cards_drawn": 1,
+        },
+    }
     text = render_decision(_redigest(payload)).text
     assert "; blocking C2 (Gray Ogre);" in text
     assert "; attacking;" in text
-    assert "; has lost all abilities; used-up abilities 1;" in text
+    assert (
+        "; has lost all abilities; used-up abilities 1; dealt damage this turn" in text
+    )
     assert "Keeps unspent red mana until end of turn." in text
     assert "Has no maximum hand size for the rest of the game." in text
+    assert (
+        "This turn: attacked; sacrificed 2 permanents; had a land enter under "
+        "their control; drew 1 cards." in text
+    )
 
 
 def test_continuous_effect_records_are_stated_in_order_with_duration() -> None:
@@ -640,5 +668,53 @@ def test_continuous_effect_records_are_stated_in_order_with_duration() -> None:
         "used-up",
         "Keeps",
         "hand size",
+        "This turn:",
+        "dealt damage",
     ):
         assert absent not in decision.text
+
+
+def test_waiting_delayed_trigger_relation_names_its_event_and_duration() -> None:
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    payload = json.loads(capture_text_decision(env).capture_json)
+    _, ogre = payload["observation"]["viewer_state"]["agent_permanents"]
+    viewer = payload["observation"]["viewer_state"]["agent"]["player_index"]
+    payload["frames"].append(
+        {
+            "kind": 10,
+            "decision": 1,
+            "parent": None,
+            "controller": viewer,
+            "source": {
+                "object": None,
+                "definition": ogre["registry_key"],
+                "player": None,
+            },
+            "mode": None,
+            "ability": None,
+            "kicked": False,
+            "active_clause": None,
+            "targets": [],
+            "context": {
+                "object": ogre["id"],
+                "definition": ogre["registry_key"],
+                "player": None,
+            },
+            "sacrifice": None,
+            "cost": None,
+            "hybrid": [],
+            "lesson": False,
+            "waterbend": False,
+            "can_decline": False,
+            "mana_outputs": [],
+            "resolutions_this_turn": 0,
+            "this_turn": True,
+        }
+    )
+    text = render_decision(_redigest(payload)).text
+    relation = next(
+        line for line in text.splitlines() if "waiting delayed trigger" in line
+    )
+    assert "waits for the watched object to die" in relation
+    assert "watching C" in relation and "(Gray Ogre)" in relation
+    assert "ends at this turn's cleanup if it has not triggered" in relation

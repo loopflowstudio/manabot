@@ -30,6 +30,16 @@ it('states kept red mana and hand-size freedom only for the player they apply to
   expect(plain).not.toContain('No maximum hand size');
 });
 
+it('states turn history only for the player it belongs to', () => {
+  const observation = structuredClone(fixture.recovery.frame.projection) as Observation;
+  observation.agent.turn_history = { attacked: true, permanents_sacrificed: 2 };
+  const body = render(GameBoard, { props: { observation } }).body;
+  expect(body.match(/data-testid="turn-history"/g)).toHaveLength(1);
+  expect(body).toContain('attacked · sacrificed 2 permanents');
+  delete observation.agent.turn_history;
+  expect(render(GameBoard, { props: { observation } }).body).not.toContain('turn-history');
+});
+
 it('lists a player\'s continuous-effect records with their source', () => {
   const observation = structuredClone(fixture.recovery.frame.projection) as Observation;
   observation.agent.effects = [

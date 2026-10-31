@@ -56,8 +56,8 @@ pub struct GameState {
     pub observation_events: Vec<GameEvent>,
     pub pending_triggers: Vec<PendingTrigger>,
     pub trigger_placement: Option<TriggerPlacement>,
-    /// One-shot delayed triggers (earthbend returns) watching specific
-    /// cards' next departure from the battlefield.
+    /// Delayed triggered abilities (CR 603.7) waiting for their events, in
+    /// creation order; public, and observed as continuation frames.
     pub delayed_triggers: Vec<DelayedTrigger>,
     /// "Exiled until [source] leaves the battlefield" linkages (Jailer).
     pub exile_links: Vec<ExileLink>,
@@ -98,6 +98,10 @@ pub struct CastChoices {
     /// timing and zone permissions don't apply (CR 608.2g).
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub free: bool,
+    /// Cast, paying its costs, as a resolving effect directs ("you may
+    /// cast"): timing and zone permissions don't apply (CR 608.2g).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub resolving: bool,
 }
 
 /// A fully announced spell or activation waiting for selected costs.
@@ -144,6 +148,14 @@ pub enum PendingChoice {
         source: ActivationSource,
         ability_index: usize,
         chosen: Vec<Target>,
+    },
+    /// Choosing the permanent to tap for a "Tap an untapped [predicate] you
+    /// control" activation cost.
+    TapPayment {
+        player: PlayerId,
+        source: ActivationSource,
+        ability_index: usize,
+        targets: Vec<Target>,
     },
     /// Choosing the card to discard for a "Discard a card" activation cost.
     DiscardPayment {

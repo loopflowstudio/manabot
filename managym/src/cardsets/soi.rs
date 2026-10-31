@@ -1,6 +1,6 @@
 //! Shadows over Innistrad.
 use crate::state::{
-    ability::{Ability, Effect, TriggerCondition, TriggerSubject},
+    ability::{Ability, Effect, EffectValue, TriggerCondition, TriggerSubject},
     card::{CardDefinition, CardType, CardTypes},
     mana::ManaCost,
     permanent::CounterKind,
@@ -25,6 +25,7 @@ fn tireless_tracker() -> CardDefinition {
         toughness: Some(2),
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::AnyYouControl(CardPredicate {
                         card_type: Some(CardType::Land),
@@ -39,15 +40,17 @@ fn tireless_tracker() -> CardDefinition {
                 }],
             },
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::Sacrificed {
                     predicate: CardPredicate {
                         subtype: Some("Clue".into()),
                         ..Default::default()
                     },
                     controller_only: true,
+                    another: false,
                 },
                 effects: vec![Effect::PutCountersOnSource {
-                    count: 1,
+                    count: EffectValue::Fixed(1),
                     kind: CounterKind::PlusOnePlusOne,
                 }],
             },

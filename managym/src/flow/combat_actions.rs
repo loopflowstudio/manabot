@@ -5,6 +5,7 @@ use crate::{
     agent::action::AgentError,
     flow::{
         combat::CombatState,
+        event::GameEvent,
         game::{CombatDamagePass, Game},
     },
     state::{
@@ -56,6 +57,8 @@ impl Game {
         };
         if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
             permanent.attacking = true;
+            let attacker = permanent.controller;
+            self.state.turn.history[attacker.0].attacked = true;
         }
         if !has_vigilance {
             // CR 508.1f — Attackers without vigilance become tapped, which
@@ -134,8 +137,12 @@ impl Game {
         false
     }
 
+    /// One combat damage step (CR 510.2): every assignment is dealt, then
+    /// the creatures that dealt damage to a player are announced together
+    /// for "deals combat damage to a player" triggers.
     fn resolve_combat_damage_pass(&mut self, combat: &CombatState, pass: CombatDamagePass) {
         let defender = self.non_active_player();
+        let mut hits = Vec::new();
 
         for attacker_id in combat.attackers.iter().copied() {
             if self.state.permanents[attacker_id].is_none() {
@@ -164,7 +171,9 @@ impl Game {
                 .collect();
 
             if !was_blocked {
-                self.apply_combat_player_damage(attacker_ref, defender, attacker_power);
+                if self.apply_combat_player_damage(attacker_ref, defender, attacker_power) {
+                    hits.push(attacker_id);
+                }
                 continue;
             }
 
@@ -202,9 +211,15 @@ impl Game {
                 remaining_damage -= assigned;
             }
 
-            if attacker_has_trample && remaining_damage > 0 {
-                self.apply_combat_player_damage(attacker_ref, defender, remaining_damage);
+            if attacker_has_trample
+                && remaining_damage > 0
+                && self.apply_combat_player_damage(attacker_ref, defender, remaining_damage)
+            {
+                hits.push(attacker_id);
             }
+        }
+        if !hits.is_empty() {
+            self.emit(GameEvent::CombatDamageToPlayers { creatures: hits });
         }
     }
 
@@ -284,6 +299,7 @@ impl Game {
         if blocker.tapped
             || !self.characteristics(blocker_id).is_creature
             || !self.combat_condition_met(blocker_id)
+            || self.cant_block(blocker_id)
         {
             return false;
         }

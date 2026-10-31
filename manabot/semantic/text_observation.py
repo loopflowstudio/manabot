@@ -103,11 +103,15 @@ _STAGES = frozenset(
         "legend_rule",
         "order_triggers",
         "trigger_targets",
+        "trigger_mode",
         "revealed_hand",
         "split_revealed",
         "free_cast",
         "linked_exile",
         "distribute_counters",
+        "keep_creatures",
+        "retarget",
+        "resolution_cast",
     )
 )
 
@@ -179,6 +183,20 @@ def _selectors(mode: int | None, ability: int | None) -> list[str]:
     ]
 
 
+def _turn_history(history: managym.PlayerTurnHistory) -> str:
+    """What a player has done this turn, or empty when nothing yet."""
+    parts = []
+    if history.attacked:
+        parts.append("attacked")
+    if history.permanents_sacrificed:
+        parts.append(f"sacrificed {history.permanents_sacrificed} permanents")
+    if history.land_entered:
+        parts.append("had a land enter under their control")
+    if history.cards_drawn:
+        parts.append(f"drew {history.cards_drawn} cards")
+    return "; ".join(parts)
+
+
 def _spending(restricted: managym.RestrictedMana) -> str:
     """ "Lesson or Shrine spells", "Ally spells or abilities of Ally sources"."""
     parts = []
@@ -242,6 +260,10 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         return f"base power/toughness {power}/{toughness}"
     if modification == "AddKeywords":
         return ", ".join(keyword.replace("_", " ") for keyword in effect.keywords)
+    if modification == "LoseKeywords":
+        return "loses " + ", ".join(
+            keyword.replace("_", " ") for keyword in effect.keywords
+        )
     if modification == "AddSubtypes":
         return "is also " + ", ".join(effect.subtypes)
     phrases = {
@@ -249,9 +271,13 @@ def effect_phrase(effect: managym.ContinuousEffect) -> str:
         "LoseAllAbilities": "loses all abilities",
         "Firebending": f"firebending {effect.amount}",
         "CantBeBlocked": "can't be blocked",
+        "CantBlock": "can't block",
+        "DoesntUntap": "doesn't untap during its controller's untap step",
         "ExileIfWouldDie": "exiled instead if it would die",
         "KeepUnspentMana": f"keeps unspent {(effect.color or '').lower()} mana",
         "NoMaximumHandSize": "no maximum hand size",
+        "ControlChanged": f"control changed from seat {(effect.amount or 0) + 1}",
+        "ModeChosen": f"mode {(effect.amount or 0) + 1} already chosen",
     }
     try:
         return phrases[modification]
@@ -417,7 +443,7 @@ class _Renderer:
     def relation(self, index: int, relation: managym.ContinuationFrame) -> str:
         source = self.fact_reference(relation.source)
         details = [
-            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision', 'waiting trigger', 'trigger being placed', 'trigger placement round'), relation.kind)}",
+            f"R{index + 1}: {_enum(('unused', 'stack spell', 'stack activated ability', 'stack triggered ability', 'announcement', 'resolution', 'suspended decision', 'waiting trigger', 'trigger being placed', 'trigger placement round', 'waiting delayed trigger'), relation.kind)}",
             f"controller {self.seats[relation.controller]}",
             f"source {source}",
         ]
@@ -428,7 +454,24 @@ class _Renderer:
             details.append("kicker included")
         if relation.active_clause is not None:
             details.append(f"active target clause {relation.active_clause + 1}")
-        if relation.decision:
+        if relation.kind == 10:
+            details.append(
+                "waits for "
+                + _enum(
+                    (
+                        "none",
+                        "the watched object to die",
+                        "the watched object to die or be exiled",
+                        "a creature to die",
+                        "the next end step",
+                        "its controller's next matching spell",
+                    ),
+                    relation.decision,
+                )
+            )
+            if relation.this_turn:
+                details.append("ends at this turn's cleanup if it has not triggered")
+        elif relation.decision:
             details.append(
                 _enum(
                     (
@@ -474,7 +517,8 @@ class _Renderer:
                 f"Legal when resolution began: {eligibility}"
             )
         if relation.context is not None:
-            details.append("trigger context " + self.fact_reference(relation.context))
+            label = "watching" if relation.kind == 10 else "trigger context"
+            details.append(f"{label} {self.fact_reference(relation.context)}")
         if relation.sacrifice is not None:
             details.append(
                 "reserved sacrifice " + self.fact_reference(relation.sacrifice)
@@ -547,6 +591,8 @@ class _Renderer:
                 lines.append("Has no maximum hand size for the rest of the game.")
             if player.keeps_red_mana:
                 lines.append("Keeps unspent red mana until end of turn.")
+            if history := _turn_history(player.turn_history):
+                lines.append(f"This turn: {history}.")
             for effect in player.effects:
                 lines.append(f"Effect: {self._effect(effect)}.")
             for label, quantities in (
@@ -688,12 +734,17 @@ class _Renderer:
         if permanent.used_abilities:
             used = ", ".join(str(index + 1) for index in permanent.used_abilities)
             parts.append(f"used-up abilities {used}")
+        if permanent.dealt_damage_this_turn:
+            parts.append("dealt damage this turn")
         parts.extend(f"effect {self._effect(effect)}" for effect in permanent.effects)
         return "".join(f"; {part}" for part in parts)
 
     def _effect(self, effect: managym.ContinuousEffect) -> str:
         """One continuous-effect record: how long, what, and its source."""
-        until = "until end of turn: " if effect.duration == "EndOfTurn" else ""
+        until = {
+            "EndOfTurn": "until end of turn: ",
+            "WhileYouControlSource": "while its source's controller controls it: ",
+        }.get(effect.duration, "")
         source = (
             f" (from {self.definition(effect.source_registry_key)})"
             if effect.source_registry_key is not None

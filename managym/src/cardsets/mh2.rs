@@ -22,6 +22,7 @@ fn tireless_provisioner() -> CardDefinition {
         power: Some(3),
         toughness: Some(2),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::AnyYouControl(CardPredicate {
                     card_type: Some(CardType::Land),

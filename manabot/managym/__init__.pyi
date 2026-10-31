@@ -467,6 +467,7 @@ class EventTypeEnum(IntEnum):
     PERMANENTS_DIED = 10
     TURN_STARTED = 11
     CARD_REVEALED = 12
+    ABILITY_COUNTERED = 13
 
 class EventEntityKindEnum(IntEnum):
     NONE = 0
@@ -524,6 +525,7 @@ class Player:
     remaining_sideboard_counts: Dict[int, int]
     keeps_red_mana: bool
     no_maximum_hand_size: bool
+    turn_history: PlayerTurnHistory
     combat_mana: int
     mana: tuple[int, int, int, int, int, int]
     lesson_mana: tuple[int, int, int, int, int, int]
@@ -531,6 +533,12 @@ class Player:
     hand_only_until: Optional[int]
     # Continuous effects on this player, in timestamp order.
     effects: list[ContinuousEffect]
+
+class PlayerTurnHistory:
+    attacked: bool
+    permanents_sacrificed: int
+    land_entered: bool
+    cards_drawn: int
 
 class RestrictedMana:
     spells: List[str]
@@ -581,7 +589,7 @@ class ContinuousEffect:
 
     # Modification variant: ModifyPt, SetBasePt, AddKeywords, AddSubtypes,
     # BecomeArtifactCreature, LoseAllAbilities, Firebending, CantBeBlocked,
-    # ExileIfWouldDie, KeepUnspentMana or NoMaximumHandSize.
+    # CantBlock, ExileIfWouldDie, KeepUnspentMana or NoMaximumHandSize.
     modification: str
     power: int | None
     toughness: int | None
@@ -617,7 +625,7 @@ class Permanent:
     temp_subtypes: List[str]
     # Effective keywords (printed + until-EOT grants).
     keywords: Keywords
-    # Counters other than +1/+1 by kind (stun, fire, double_strike).
+    # Counters other than +1/+1 by kind (stun, fire, double_strike, quest, finality, conqueror).
     counters: dict[str, int]
     # Permanent id this Aura or Equipment is attached to.
     attached_to: int | None
@@ -628,6 +636,7 @@ class Permanent:
     blocking: int | None
     abilities_lost: bool
     used_abilities: list[int]
+    dealt_damage_this_turn: bool
     # Continuous effects on this permanent, in timestamp order.
     effects: list[ContinuousEffect]
     # Its timestamp (CR 613.7d/e) when an attachment renewed it; None while
@@ -746,6 +755,7 @@ class ContinuationFrame:
     resolutions_this_turn: int
     x: int
     granted_keywords: list[bool]
+    this_turn: bool
 
 def validate_observation_json(text: str) -> None: ...
 def parse_continuation_frames_json(text: str) -> list[ContinuationFrame]: ...

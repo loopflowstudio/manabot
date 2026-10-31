@@ -2481,6 +2481,11 @@
           "title": "Damage",
           "type": "integer"
         },
+        "dealt_damage_this_turn": {
+          "default": false,
+          "title": "Dealt Damage This Turn",
+          "type": "boolean"
+        },
         "exhausted_abilities": {
           "default": 0,
           "maximum": 4294967295,
@@ -2891,6 +2896,9 @@
           },
           "title": "Stack",
           "type": "array"
+        },
+        "turn_history": {
+          "$ref": "#/$defs/PlayerTurnHistoryView"
         },
         "zone_counts": {
           "additionalProperties": {
@@ -3353,6 +3361,37 @@
         "id"
       ],
       "title": "PlayerSubject",
+      "type": "object"
+    },
+    "PlayerTurnHistoryView": {
+      "additionalProperties": false,
+      "properties": {
+        "attacked": {
+          "default": false,
+          "title": "Attacked",
+          "type": "boolean"
+        },
+        "cards_drawn": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Cards Drawn",
+          "type": "integer"
+        },
+        "land_entered": {
+          "default": false,
+          "title": "Land Entered",
+          "type": "boolean"
+        },
+        "permanents_sacrificed": {
+          "default": 0,
+          "maximum": 4294967295,
+          "minimum": 0,
+          "title": "Permanents Sacrificed",
+          "type": "integer"
+        }
+      },
+      "title": "PlayerTurnHistoryView",
       "type": "object"
     },
     "PolicyMass": {

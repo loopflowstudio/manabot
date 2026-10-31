@@ -2,7 +2,10 @@
 use crate::state::ability::AffectedSpec;
 use crate::state::effect::Modification;
 use crate::state::{
-    ability::{Ability, Effect, TargetRequirement, TargetSpec, TriggerCondition, TriggerSubject},
+    ability::{
+        Ability, Effect, EffectValue, PaymentCost, TargetRequirement, TargetSpec, TriggerCondition,
+        TriggerSubject,
+    },
     card::{CardDefinition, CardType, CardTypes, Keywords, StaticAbility},
     mana::ManaCost,
 };
@@ -94,6 +97,7 @@ fn eyetwitch() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::Dies {
                 subject: TriggerSubject::This,
             },
@@ -116,7 +120,7 @@ fn field_trip() -> CardDefinition {
         spell_effects: vec![
             Effect::SearchBasicLand {
                 subtype: Some("Forest".into()),
-                count: 1,
+                count: EffectValue::Fixed(1),
                 tapped: true,
                 untap_if_lands: None,
                 bottom_source: false,
@@ -146,6 +150,7 @@ fn gnarled_professor() -> CardDefinition {
             ..Default::default()
         },
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -194,7 +199,12 @@ fn pop_quiz() -> CardDefinition {
         name: "Pop Quiz".into(),
         mana_cost: Some(ManaCost::parse("{2}{U}")),
         types: CardTypes::new([CardType::Instant]),
-        spell_effects: vec![Effect::DrawCards { count: 1 }, Effect::Learn],
+        spell_effects: vec![
+            Effect::DrawCards {
+                count: EffectValue::Fixed(1),
+            },
+            Effect::Learn,
+        ],
         text_box: text_box.into(),
         ..Default::default()
     }
@@ -213,6 +223,7 @@ fn professor_of_symbology() -> CardDefinition {
         power: Some(2),
         toughness: Some(1),
         abilities: vec![Ability::Triggered {
+            intervening_if: None,
             condition: TriggerCondition::EntersTheBattlefield {
                 subject: TriggerSubject::This,
             },
@@ -239,7 +250,9 @@ fn waterfall_aerialist() -> CardDefinition {
             flying: true,
             ..Default::default()
         },
-        statics: vec![StaticAbility::Ward(ManaCost::parse("{2}"))],
+        statics: vec![StaticAbility::Ward(PaymentCost::Mana(ManaCost::parse(
+            "{2}",
+        )))],
         text_box: text_box.into(),
         ..Default::default()
     }

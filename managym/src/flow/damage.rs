@@ -83,18 +83,19 @@ impl Game {
         (dealt - lethal).max(0)
     }
 
+    /// Whether any damage was dealt (prevention may leave none).
     pub(crate) fn apply_combat_player_damage(
         &mut self,
         source: Option<ObjectRef>,
         player: PlayerId,
         amount: i32,
-    ) {
+    ) -> bool {
         self.apply_proposed_event(ProposedEvent::Damage {
             source,
             target: ProposedDamageTarget::Player(player),
             amount,
             combat: true,
-        });
+        })
     }
 
     pub(crate) fn apply_combat_permanent_damage(
@@ -280,14 +281,26 @@ impl Game {
     }
 
     /// The cleanup step (CR 514.2): "until end of turn" effects end and
-    /// "once each turn" limits reset.
+    /// "once each turn" limits and "dealt damage this turn" reset.
     pub(crate) fn end_turn_modifiers(&mut self) {
         self.end_turn_effects();
+        if self
+            .state
+            .delayed_triggers
+            .iter()
+            .any(|trigger| trigger.this_turn)
+        {
+            self.state
+                .delayed_triggers
+                .retain(|trigger| !trigger.this_turn);
+        }
         for index in 0..self.state.permanents.len() {
             let permanent_id = PermanentId(index);
             if self.state.permanents[permanent_id]
                 .as_ref()
-                .is_some_and(|permanent| !permanent.activated_this_turn.is_empty())
+                .is_some_and(|permanent| {
+                    !permanent.activated_this_turn.is_empty() || permanent.dealt_damage_this_turn
+                })
             {
                 self.state.permanents[permanent_id]
                     .as_mut()

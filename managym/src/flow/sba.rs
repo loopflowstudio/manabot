@@ -182,7 +182,8 @@ impl Game {
             }
             let card_id = CardId(index);
             match self.state.zones.zone_of(card_id) {
-                Some(ZoneType::Battlefield) | None => {}
+                // A spell copy is a token card while on the stack (CR 704.5e).
+                Some(ZoneType::Battlefield | ZoneType::Stack) | None => {}
                 Some(_) => tokens_to_remove.push((card_id, card.owner)),
             }
         }

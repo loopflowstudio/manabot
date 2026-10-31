@@ -66,6 +66,13 @@ impl Game {
             {
                 Some(format!("X = {mode}"))
             }
+            Action::ChooseMode { mode, .. } if self.state.suspended_decision.is_none() => {
+                let trigger = self.state.trigger_placement.as_ref()?.placing.as_ref()?;
+                let modes = self.unchosen_trigger_modes(trigger)?;
+                Some(crate::agent::ability_description::effects_description(
+                    modes.get(*mode)?,
+                ))
+            }
             Action::ChooseMode { mode, .. } => {
                 match &self.state.suspended_decision.as_ref()?.decision {
                     Decision::ManaChoice { choices, .. } => {
@@ -127,6 +134,8 @@ impl Game {
                     .is_some_and(|s| matches!(s.decision, Decision::Sacrifice { .. }));
                 if matches!(self.pending_choice, Some(PendingChoice::Crew { .. })) {
                     Some(format!("Tap {} to crew", self.state.cards[*card].name))
+                } else if matches!(self.pending_choice, Some(PendingChoice::TapPayment { .. })) {
+                    Some(format!("Tap {} to pay", self.state.cards[*card].name))
                 } else if sacrifice {
                     Some(format!("Sacrifice {}", self.state.cards[*card].name))
                 } else if let Some(suspended) = &self.state.suspended_decision {
@@ -267,6 +276,11 @@ impl Game {
                 if ability
                     .crew
                     .is_some_and(|power| self.crew_power_available(player, permanent_id) < power)
+                {
+                    continue;
+                }
+                if ability.tap_cost.is_some()
+                    && self.tap_cost_candidates(player, ability).is_empty()
                 {
                     continue;
                 }
@@ -470,6 +484,27 @@ impl Game {
                     focus: Vec::new(),
                 })
             }
+            PendingChoice::TapPayment {
+                player,
+                source,
+                ability_index,
+                ..
+            } => Some(ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: self
+                    .activation_ability(*source, *ability_index)
+                    .map(|ability| self.tap_cost_candidates(*player, &ability))
+                    .unwrap_or_default()
+                    .into_iter()
+                    .filter_map(|id| self.state.permanents[id].as_ref())
+                    .map(|permanent| Action::SelectCard {
+                        player: *player,
+                        card: permanent.card,
+                    })
+                    .collect(),
+                focus: Vec::new(),
+            }),
             PendingChoice::DiscardPayment { player, .. } => Some(ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::Discard,
@@ -708,6 +743,8 @@ impl Game {
                     .is_some_and(|p| p.placing.is_some())
                 {
                     self.choose_trigger_target(*player, target)
+                } else if self.state.suspended_decision.is_some() {
+                    self.execute_decision_action(action)
                 } else {
                     Err(AgentError("no pending target choice".to_string()))
                 }
@@ -726,6 +763,17 @@ impl Game {
             Action::DeclareBlocker {
                 blocker, attacker, ..
             } => self.declare_blocker(*blocker, *attacker),
+            Action::ChooseMode { player, mode }
+                if self.state.suspended_decision.is_none()
+                    && self.pending_choice.is_none()
+                    && self
+                        .state
+                        .trigger_placement
+                        .as_ref()
+                        .is_some_and(|p| p.placing.is_some()) =>
+            {
+                self.choose_trigger_mode(*player, *mode)
+            }
             Action::ChooseMode { player, mode }
                 if matches!(self.pending_choice, Some(PendingChoice::SpellMode { .. })) =>
             {
@@ -756,6 +804,11 @@ impl Game {
                 ) =>
             {
                 self.discard_payment_action(*player, *card)
+            }
+            Action::SelectCard { player, card }
+                if matches!(self.pending_choice, Some(PendingChoice::TapPayment { .. })) =>
+            {
+                self.tap_payment_action(*player, *card)
             }
             Action::SelectCard { player, card }
                 if matches!(self.pending_choice, Some(PendingChoice::Crew { .. })) =>

@@ -19,24 +19,12 @@
           "label": "Play Mountain"
         },
         {
-          "offer_id": 1,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 1,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 0,
-          "label": "Cast Firebending Lesson"
-        },
-        {
           "offer_id": 0,
           "label": "Play Mountain"
         },
         {
-          "offer_id": 1,
-          "label": "Pass priority"
+          "offer_id": 0,
+          "label": "Cast Firebending Lesson"
         },
         {
           "offer_id": 1,
@@ -55,52 +43,56 @@
           "label": "Cast Pop Quiz"
         },
         {
-          "offer_id": 8,
-          "label": "Decline Learn"
+          "offer_id": 7,
+          "label": "Take It'll Quench Ya!"
         },
         {
-          "offer_id": 1,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 1,
+          "offer_id": 0,
           "label": "Cast Firebending Lesson"
-        },
-        {
-          "offer_id": 2,
-          "label": "Pass priority"
         },
         {
           "offer_id": 0,
           "label": "Cast Divide by Zero"
         },
         {
-          "offer_id": 1,
-          "label": "Discard It'll Quench Ya!, then draw a card"
-        },
-        {
           "offer_id": 2,
-          "label": "Pass priority"
+          "label": "Discard First-Time Flyer, then draw a card"
         },
         {
           "offer_id": 0,
           "label": "Play Island"
-        },
-        {
-          "offer_id": 4,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 2,
-          "label": "Play Island"
-        },
-        {
-          "offer_id": 2,
-          "label": "Pass priority"
         },
         {
           "offer_id": 0,
           "label": "Cast Dragonfly Swarm"
+        },
+        {
+          "offer_id": 1,
+          "label": "Cast It'll Quench Ya!"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Island"
+        },
+        {
+          "offer_id": 1,
+          "label": "Cast Fire Nation Cadets"
+        },
+        {
+          "offer_id": 0,
+          "label": "Cast It'll Quench Ya!"
+        },
+        {
+          "offer_id": 1,
+          "label": "Decline"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Island"
+        },
+        {
+          "offer_id": 0,
+          "label": "Play Island"
         },
         {
           "offer_id": 0,
@@ -108,168 +100,28 @@
         },
         {
           "offer_id": 0,
-          "label": "Play Island"
-        },
-        {
-          "offer_id": 0,
-          "label": "Block Ally with First-Time Flyer"
-        },
-        {
-          "offer_id": 1,
-          "label": "Dragonfly Swarm: do not block"
-        },
-        {
-          "offer_id": 0,
-          "label": "Cast Fire Nation Cadets"
-        },
-        {
-          "offer_id": 1,
-          "label": "Activate ability: Fire Nation Cadets"
-        },
-        {
-          "offer_id": 1,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 2,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 1,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with First-Time Flyer"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Dragonfly Swarm"
-        },
-        {
-          "offer_id": 1,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 0,
-          "label": "Activate ability: Fire Nation Cadets"
-        },
-        {
-          "offer_id": 1,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 0,
-          "label": "Activate ability: Fire Nation Cadets"
-        },
-        {
-          "offer_id": 0,
-          "label": "Play Island"
-        },
-        {
-          "offer_id": 0,
-          "label": "Block Invasion Reinforcements with Fire Nation Cadets"
-        },
-        {
-          "offer_id": 1,
-          "label": "First-Time Flyer: do not block"
-        },
-        {
-          "offer_id": 0,
-          "label": "Block Invasion Reinforcements with Dragonfly Swarm"
-        },
-        {
-          "offer_id": 1,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 1,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 2,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 1,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with Fire Nation Cadets"
-        },
-        {
-          "offer_id": 1,
-          "label": "Do not attack with First-Time Flyer"
-        },
-        {
-          "offer_id": 1,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 1,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 0,
-          "label": "Activate ability: Fire Nation Cadets"
-        },
-        {
-          "offer_id": 1,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 0,
-          "label": "Activate ability: Fire Nation Cadets"
-        },
-        {
-          "offer_id": 1,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 0,
-          "label": "Activate ability: Fire Nation Cadets"
-        },
-        {
-          "offer_id": 1,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 0,
-          "label": "Activate ability: Fire Nation Cadets"
-        },
-        {
-          "offer_id": 0,
-          "label": "Activate ability: Fire Nation Cadets"
-        },
-        {
-          "offer_id": 1,
-          "label": "Pass priority"
-        },
-        {
-          "offer_id": 1,
-          "label": "Pass priority"
+          "label": "Block Invasion Reinforcements with First-Time Flyer"
         },
         {
           "offer_id": 0,
           "label": "Cast Firebending Lesson"
         },
         {
-          "offer_id": 0,
-          "label": "Pay the cost (Firebending Lesson)"
+          "offer_id": 1,
+          "label": "Decline"
         }
       ],
-      "digest": "eece76bd5e416743b37065d1d8552414385ca5df6c49d88fc0b51fe55e53f66b",
+      "digest": "8e64f1d38a247e3939da490305931fb15bfb67cdd36060fb81d2098808f92768",
       "frame": {
         "protocol": 1,
-        "match_id": "5gpT00SmzVS2yZGosZl5eQ",
-        "revision": 109,
-        "frame_hash": "88a75a38cc3360f787317b6b982aa029623a23d41aa652b324c1329316bc2b05",
+        "match_id": "Ycu_0AmkALDds1_eKQs3ng",
+        "revision": 75,
+        "frame_hash": "53b79dc0254dd1c49f70f773b030aba90a5917bf1d488ed2470931f6329c4d31",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
         "prompt": {
-          "id": 110,
+          "id": 76,
           "actor": 0,
           "kind": "choose_target",
           "title": "Targets",
@@ -279,8 +131,8 @@
           "stack_objects": [],
           "decision_context": {
             "recent_facts": [
-              "Earth Kingdom Jailer was cast; its announced costs are committed.",
-              "Earth Kingdom Jailer finished resolving.",
+              "First-Time Flyer was cast; its announced costs are committed.",
+              "First-Time Flyer finished resolving.",
               "Kyoshi Warriors was cast; its announced costs are committed.",
               "Kyoshi Warriors finished resolving."
             ],
@@ -368,14 +220,14 @@
             "id": 0,
             "is_active": true,
             "is_agent": true,
-            "life": 13,
+            "life": 3,
             "zone_counts": {
               "LIBRARY": 22,
-              "HAND": 2,
-              "BATTLEFIELD": 10,
-              "GRAVEYARD": 6,
+              "HAND": 1,
+              "BATTLEFIELD": 9,
+              "GRAVEYARD": 10,
               "STACK": 0,
-              "EXILE": 1,
+              "EXILE": 0,
               "COMMAND": 0
             },
             "library_count": 22,
@@ -386,8 +238,7 @@
             },
             "remaining_sideboard_counts": {
               "7": 1,
-              "16": 1,
-              "20": 1
+              "16": 1
             },
             "sideboard": [
               {
@@ -403,36 +254,12 @@
                 "owner_id": 0,
                 "registry_key": 16,
                 "name": "Firebending Lesson"
-              },
-              {
-                "text_box": "Counter target spell unless its controller pays {2}.",
-                "candidate_id": 85,
-                "owner_id": 0,
-                "registry_key": 20,
-                "name": "It'll Quench Ya!"
               }
             ],
+            "turn_history": {
+              "cards_drawn": 1
+            },
             "hand": [
-              {
-                "text_box": "Flying\nThis creature gets +1/+1 as long as there's a Lesson card in your graveyard.",
-                "id": 13,
-                "registry_key": 17,
-                "name": "First-Time Flyer",
-                "zone": "HAND",
-                "owner_id": 0,
-                "power": 1,
-                "toughness": 2,
-                "mana_value": 2,
-                "types": {
-                  "is_creature": true,
-                  "is_land": false,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                }
-              },
               {
                 "text_box": "Kicker {4} (You may pay an additional {4} as you cast this spell.)\nFirebending Lesson deals 2 damage to target creature. If this spell was kicked, it deals 5 damage to that creature instead.",
                 "id": 11,
@@ -536,19 +363,19 @@
                 }
               },
               {
-                "text_box": "Counter target spell unless its controller pays {2}.",
-                "id": 27,
-                "registry_key": 20,
-                "name": "It'll Quench Ya!",
+                "text_box": "Flying\nThis creature gets +1/+1 as long as there's a Lesson card in your graveyard.",
+                "id": 14,
+                "registry_key": 17,
+                "name": "First-Time Flyer",
                 "zone": "GRAVEYARD",
                 "owner_id": 0,
-                "power": 0,
-                "toughness": 0,
+                "power": 1,
+                "toughness": 2,
                 "mana_value": 2,
                 "types": {
-                  "is_creature": false,
+                  "is_creature": true,
                   "is_land": false,
-                  "is_spell": true,
+                  "is_spell": false,
                   "is_artifact": false,
                   "is_enchantment": false,
                   "is_planeswalker": false,
@@ -574,15 +401,13 @@
                   "is_planeswalker": false,
                   "is_battle": false
                 }
-              }
-            ],
-            "exile": [
+              },
               {
                 "text_box": "Flying, ward {1} (Whenever this creature becomes the target of a spell or ability an opponent controls, counter it unless that player pays {1}.)\nThis creature's power is equal to the number of noncreature, nonland cards in your graveyard.\nWhen this creature dies, if there's a Lesson card in your graveyard, draw a card.",
                 "id": 6,
                 "registry_key": 11,
                 "name": "Dragonfly Swarm",
-                "zone": "EXILE",
+                "zone": "GRAVEYARD",
                 "owner_id": 0,
                 "power": 0,
                 "toughness": 3,
@@ -596,8 +421,69 @@
                   "is_planeswalker": false,
                   "is_battle": false
                 }
+              },
+              {
+                "text_box": "Counter target spell unless its controller pays {2}.",
+                "id": 85,
+                "registry_key": 20,
+                "name": "It'll Quench Ya!",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "This creature has firebending 2 as long as there's a Lesson card in your graveyard. (Whenever this creature attacks, add {R}{R}. This mana lasts until end of combat.)\n{2}: This creature gets +1/+0 until end of turn.",
+                "id": 8,
+                "registry_key": 15,
+                "name": "Fire Nation Cadets",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 1,
+                "toughness": 2,
+                "mana_value": 1,
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
+              },
+              {
+                "text_box": "Counter target spell unless its controller pays {2}.",
+                "id": 27,
+                "registry_key": 20,
+                "name": "It'll Quench Ya!",
+                "zone": "GRAVEYARD",
+                "owner_id": 0,
+                "power": 0,
+                "toughness": 0,
+                "mana_value": 2,
+                "types": {
+                  "is_creature": false,
+                  "is_land": false,
+                  "is_spell": true,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                }
               }
             ],
+            "exile": [],
             "stack": [],
             "battlefield": [
               {
@@ -615,7 +501,7 @@
                 "id": 88,
                 "name": "Mountain",
                 "controller_id": 0,
-                "tapped": true,
+                "tapped": false,
                 "damage": 0,
                 "summoning_sick": false,
                 "power": 0,
@@ -639,7 +525,7 @@
                 "id": 90,
                 "name": "Mountain",
                 "controller_id": 0,
-                "tapped": true,
+                "tapped": false,
                 "damage": 0,
                 "summoning_sick": false,
                 "power": 0,
@@ -660,7 +546,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {R}.)",
-                "id": 97,
+                "id": 92,
                 "name": "Mountain",
                 "controller_id": 0,
                 "tapped": false,
@@ -732,7 +618,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {U}.)",
-                "id": 116,
+                "id": 118,
                 "name": "Island",
                 "controller_id": 0,
                 "tapped": false,
@@ -742,30 +628,6 @@
                 "toughness": 0,
                 "base_power": 0,
                 "base_toughness": 0,
-                "plus1_counters": 0
-              },
-              {
-                "types": {
-                  "is_creature": true,
-                  "is_land": false,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                },
-                "is_token": false,
-                "text_box": "Flying\nThis creature gets +1/+1 as long as there's a Lesson card in your graveyard.",
-                "id": 131,
-                "name": "First-Time Flyer",
-                "controller_id": 0,
-                "tapped": false,
-                "damage": 0,
-                "summoning_sick": false,
-                "power": 2,
-                "toughness": 3,
-                "base_power": 1,
-                "base_toughness": 2,
                 "plus1_counters": 0
               },
               {
@@ -794,40 +656,6 @@
               },
               {
                 "types": {
-                  "is_creature": true,
-                  "is_land": false,
-                  "is_spell": false,
-                  "is_artifact": false,
-                  "is_enchantment": false,
-                  "is_planeswalker": false,
-                  "is_battle": false
-                },
-                "is_token": false,
-                "text_box": "This creature has firebending 2 as long as there's a Lesson card in your graveyard. (Whenever this creature attacks, add {R}{R}. This mana lasts until end of combat.)\n{2}: This creature gets +1/+0 until end of turn.",
-                "id": 139,
-                "name": "Fire Nation Cadets",
-                "controller_id": 0,
-                "tapped": false,
-                "damage": 0,
-                "summoning_sick": false,
-                "power": 2,
-                "toughness": 2,
-                "base_power": 1,
-                "base_toughness": 2,
-                "plus1_counters": 0,
-                "effects": [
-                  {
-                    "modification": "ModifyPt",
-                    "power": 1,
-                    "toughness": 0,
-                    "duration": "EndOfTurn",
-                    "source": "Fire Nation Cadets",
-                    "timestamp": 165
-                  }
-                ]
-              },
-              {
-                "types": {
                   "is_creature": false,
                   "is_land": true,
                   "is_spell": false,
@@ -838,7 +666,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {U}.)",
-                "id": 146,
+                "id": 138,
                 "name": "Island",
                 "controller_id": 0,
                 "tapped": false,
@@ -848,6 +676,30 @@
                 "toughness": 0,
                 "base_power": 0,
                 "base_toughness": 0,
+                "plus1_counters": 0
+              },
+              {
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                },
+                "is_token": false,
+                "text_box": "Flying\nThis creature gets +1/+1 as long as there's a Lesson card in your graveyard.",
+                "id": 147,
+                "name": "First-Time Flyer",
+                "controller_id": 0,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 2,
+                "toughness": 3,
+                "base_power": 1,
+                "base_toughness": 2,
                 "plus1_counters": 0
               }
             ]
@@ -877,8 +729,8 @@
             "life": 20,
             "zone_counts": {
               "LIBRARY": 23,
-              "HAND": 1,
-              "BATTLEFIELD": 14,
+              "HAND": 0,
+              "BATTLEFIELD": 17,
               "GRAVEYARD": 5,
               "STACK": 0,
               "EXILE": 0,
@@ -893,7 +745,7 @@
               "14": 1,
               "28": 1
             },
-            "hand_hidden_count": 1,
+            "hand_hidden_count": 0,
             "hand": [],
             "graveyard": [
               {
@@ -1060,7 +912,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {W}.)",
-                "id": 92,
+                "id": 93,
                 "name": "Plains",
                 "controller_id": 1,
                 "tapped": true,
@@ -1138,7 +990,7 @@
                 "tapped": false,
                 "damage": 0,
                 "summoning_sick": false,
-                "power": 7,
+                "power": 9,
                 "toughness": 4,
                 "base_power": 0,
                 "base_toughness": 4,
@@ -1155,7 +1007,30 @@
                   "is_battle": false
                 },
                 "is_token": true,
-                "id": 126,
+                "id": 125,
+                "name": "Ally",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 1,
+                "toughness": 1,
+                "base_power": 1,
+                "base_toughness": 1,
+                "plus1_counters": 0
+              },
+              {
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                },
+                "is_token": true,
+                "id": 128,
                 "name": "Ally",
                 "controller_id": 1,
                 "tapped": false,
@@ -1179,7 +1054,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {G}.)",
-                "id": 127,
+                "id": 129,
                 "name": "Forest",
                 "controller_id": 1,
                 "tapped": false,
@@ -1248,9 +1123,32 @@
                   "is_planeswalker": false,
                   "is_battle": false
                 },
+                "is_token": true,
+                "id": 141,
+                "name": "Ally",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 1,
+                "toughness": 1,
+                "base_power": 1,
+                "base_toughness": 1,
+                "plus1_counters": 0
+              },
+              {
+                "types": {
+                  "is_creature": true,
+                  "is_land": false,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                },
                 "is_token": false,
                 "text_box": "When this creature enters, exile up to one target artifact, creature, or enchantment an opponent controls with mana value 3 or greater until this creature leaves the battlefield.",
-                "id": 148,
+                "id": 143,
                 "name": "Earth Kingdom Jailer",
                 "controller_id": 1,
                 "tapped": false,
@@ -1274,7 +1172,7 @@
                 },
                 "is_token": false,
                 "text_box": "({T}: Add {W}.)",
-                "id": 150,
+                "id": 145,
                 "name": "Plains",
                 "controller_id": 1,
                 "tapped": false,
@@ -1298,7 +1196,7 @@
                 },
                 "is_token": false,
                 "text_box": "When this creature enters, create a 1/1 white Ally creature token.",
-                "id": 160,
+                "id": 149,
                 "name": "Kyoshi Warriors",
                 "controller_id": 1,
                 "tapped": false,
@@ -1321,7 +1219,7 @@
                   "is_battle": false
                 },
                 "is_token": true,
-                "id": 163,
+                "id": 152,
                 "name": "Ally",
                 "controller_id": 1,
                 "tapped": false,
@@ -1331,6 +1229,30 @@
                 "toughness": 1,
                 "base_power": 1,
                 "base_toughness": 1,
+                "plus1_counters": 0
+              },
+              {
+                "types": {
+                  "is_creature": false,
+                  "is_land": true,
+                  "is_spell": false,
+                  "is_artifact": false,
+                  "is_enchantment": false,
+                  "is_planeswalker": false,
+                  "is_battle": false
+                },
+                "is_token": false,
+                "text_box": "({T}: Add {W}.)",
+                "id": 153,
+                "name": "Plains",
+                "controller_id": 1,
+                "tapped": false,
+                "damage": 0,
+                "summoning_sick": false,
+                "power": 0,
+                "toughness": 0,
+                "base_power": 0,
+                "base_toughness": 0,
                 "plus1_counters": 0
               }
             ]
@@ -1342,15 +1264,15 @@
               {
                 "role": "target",
                 "object": {
-                  "entity_id": 12,
+                  "entity_id": 11,
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 131,
-                      "incarnation": 2
+                      "entity": 147,
+                      "incarnation": 3
                     }
                   },
-                  "display_id": 131,
+                  "display_id": 147,
                   "label": "First-Time Flyer"
                 }
               }
@@ -1365,38 +1287,7 @@
             "confirm_label": "Target First-Time Flyer",
             "action_type": "CHOOSE_TARGET",
             "focus": [
-              131
-            ]
-          },
-          {
-            "subjects": [
-              {
-                "role": "target",
-                "object": {
-                  "entity_id": 6,
-                  "subject": {
-                    "kind": "object",
-                    "id": {
-                      "entity": 139,
-                      "incarnation": 3
-                    }
-                  },
-                  "display_id": 139,
-                  "label": "Fire Nation Cadets"
-                }
-              }
-            ],
-            "id": 1,
-            "actor": 0,
-            "verb": "choose",
-            "source": null,
-            "label": "Target Fire Nation Cadets",
-            "help": null,
-            "choices": [],
-            "confirm_label": "Target Fire Nation Cadets",
-            "action_type": "CHOOSE_TARGET",
-            "focus": [
-              139
+              147
             ]
           },
           {
@@ -1417,7 +1308,7 @@
                 }
               }
             ],
-            "id": 2,
+            "id": 1,
             "actor": 0,
             "verb": "choose",
             "source": null,
@@ -1435,15 +1326,46 @@
               {
                 "role": "target",
                 "object": {
+                  "entity_id": 86,
+                  "subject": {
+                    "kind": "object",
+                    "id": {
+                      "entity": 125,
+                      "incarnation": 0
+                    }
+                  },
+                  "display_id": 125,
+                  "label": "Ally"
+                }
+              }
+            ],
+            "id": 2,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Target Ally",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Target Ally",
+            "action_type": "CHOOSE_TARGET",
+            "focus": [
+              125
+            ]
+          },
+          {
+            "subjects": [
+              {
+                "role": "target",
+                "object": {
                   "entity_id": 87,
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 126,
+                      "entity": 128,
                       "incarnation": 0
                     }
                   },
-                  "display_id": 126,
+                  "display_id": 128,
                   "label": "Ally"
                 }
               }
@@ -1458,7 +1380,7 @@
             "confirm_label": "Target Ally",
             "action_type": "CHOOSE_TARGET",
             "focus": [
-              126
+              128
             ]
           },
           {
@@ -1528,20 +1450,51 @@
               {
                 "role": "target",
                 "object": {
-                  "entity_id": 49,
+                  "entity_id": 89,
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 148,
-                      "incarnation": 5
+                      "entity": 141,
+                      "incarnation": 0
                     }
                   },
-                  "display_id": 148,
-                  "label": "Earth Kingdom Jailer"
+                  "display_id": 141,
+                  "label": "Ally"
                 }
               }
             ],
             "id": 6,
+            "actor": 0,
+            "verb": "choose",
+            "source": null,
+            "label": "Target Ally",
+            "help": null,
+            "choices": [],
+            "confirm_label": "Target Ally",
+            "action_type": "CHOOSE_TARGET",
+            "focus": [
+              141
+            ]
+          },
+          {
+            "subjects": [
+              {
+                "role": "target",
+                "object": {
+                  "entity_id": 49,
+                  "subject": {
+                    "kind": "object",
+                    "id": {
+                      "entity": 143,
+                      "incarnation": 5
+                    }
+                  },
+                  "display_id": 143,
+                  "label": "Earth Kingdom Jailer"
+                }
+              }
+            ],
+            "id": 7,
             "actor": 0,
             "verb": "choose",
             "source": null,
@@ -1551,7 +1504,7 @@
             "confirm_label": "Target Earth Kingdom Jailer",
             "action_type": "CHOOSE_TARGET",
             "focus": [
-              148
+              143
             ]
           },
           {
@@ -1563,16 +1516,16 @@
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 160,
+                      "entity": 149,
                       "incarnation": 3
                     }
                   },
-                  "display_id": 160,
+                  "display_id": 149,
                   "label": "Kyoshi Warriors"
                 }
               }
             ],
-            "id": 7,
+            "id": 8,
             "actor": 0,
             "verb": "choose",
             "source": null,
@@ -1582,7 +1535,7 @@
             "confirm_label": "Target Kyoshi Warriors",
             "action_type": "CHOOSE_TARGET",
             "focus": [
-              160
+              149
             ]
           },
           {
@@ -1590,20 +1543,20 @@
               {
                 "role": "target",
                 "object": {
-                  "entity_id": 89,
+                  "entity_id": 90,
                   "subject": {
                     "kind": "object",
                     "id": {
-                      "entity": 163,
+                      "entity": 152,
                       "incarnation": 0
                     }
                   },
-                  "display_id": 163,
+                  "display_id": 152,
                   "label": "Ally"
                 }
               }
             ],
-            "id": 8,
+            "id": 9,
             "actor": 0,
             "verb": "choose",
             "source": null,
@@ -1613,7 +1566,7 @@
             "confirm_label": "Target Ally",
             "action_type": "CHOOSE_TARGET",
             "focus": [
-              163
+              152
             ]
           }
         ],
@@ -1759,12 +1712,12 @@
           "label": "Cast Pop Quiz"
         }
       ],
-      "digest": "41d7d1ece912574a5685db0d55929ece8f4bc0c41b53906c7ba17d85f2b3e36b",
+      "digest": "d2ae0e9145ae4e97f486613ce52ede3637cd96f705b0692574937beee1d4fca6",
       "frame": {
         "protocol": 1,
-        "match_id": "JeLPnlifayNeKsPUnoNoWg",
+        "match_id": "Nu5Bl-RJI7-mvJHkzLyv4Q",
         "revision": 64,
-        "frame_hash": "a4030872276e34f2240de00c5eb7350e47c68eb800b3c48de16b5de8fe980ea3",
+        "frame_hash": "2618b271397d00d5a15c66d3ab3461ec3d20dae52db213a2c958e677dc99b90c",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -1920,6 +1873,9 @@
                 "name": "It'll Quench Ya!"
               }
             ],
+            "turn_history": {
+              "cards_drawn": 1
+            },
             "hand": [
               {
                 "text_box": "Return target spell or permanent with mana value 1 or greater to its owner's hand.\nLearn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)",
@@ -2976,12 +2932,12 @@
           "label": "Pass priority"
         }
       ],
-      "digest": "cb2d319325a43f5a3fd83f821aae16142df346cf494ca76a50495bc089cb9bda",
+      "digest": "9ee4de4cffcf8139aea772b8d9074e97cc0716946b6440b89251a5c5bf16b90c",
       "frame": {
         "protocol": 1,
-        "match_id": "6xQ8aGFmaj4ZydYzSKmizg",
+        "match_id": "EI1bK8x4ty0Mlb_u67XoFQ",
         "revision": 90,
-        "frame_hash": "0d67af8065d095ba4b85d22fa924cbe28a4f9755d9c1870a9cfc892e96150008",
+        "frame_hash": "4d32204e524c29ac1fc099b208f78d21c31f27f1268cf7e41303dec8545f715d",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -3116,6 +3072,9 @@
                 "name": "It'll Quench Ya!"
               }
             ],
+            "turn_history": {
+              "cards_drawn": 1
+            },
             "hand": [
               {
                 "text_box": "Igneous Inspiration deals 3 damage to any target.\nLearn. (You may reveal a Lesson card you own from outside the game and put it into your hand, or discard a card to draw a card.)",
@@ -4209,12 +4168,12 @@
           "label": "Cast Otter-Penguin"
         }
       ],
-      "digest": "041e0b647031607b6e0f0f0f32f87bd92adecfa386796fbd285128c25e659994",
+      "digest": "5fba47de33986c30b7730795c95391cee9977a597ac6e2cf464e2aa2619a4ff5",
       "frame": {
         "protocol": 1,
-        "match_id": "24tlWPlz_WvmWoCUjBkKUQ",
+        "match_id": "zxg-4QdkRrvG8_hsePexZw",
         "revision": 36,
-        "frame_hash": "f05cc68a4c973e900343876e294eccc5a567ffd9aff28b4fd6f499687ee491ed",
+        "frame_hash": "db0df9285302a56621e5a8c2feb3d68275e69cc6f8926a6ecdcfee93c1ab1869",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -4640,6 +4599,11 @@
               "28": 1
             },
             "hand_hidden_count": 4,
+            "turn_history": {
+              "attacked": true,
+              "land_entered": true,
+              "cards_drawn": 1
+            },
             "hand": [],
             "graveyard": [],
             "exile": [],
@@ -5067,12 +5031,12 @@
           "label": "Cast It'll Quench Ya!"
         }
       ],
-      "digest": "c993a4436928de0a71833114653075dc46d6fd4a8dd136ffc875e8fb414d9621",
+      "digest": "98145c0467f4f407a6fe048ce3c2ba8aa8216be9c69f8e30fe4c06dba6dcdbd0",
       "frame": {
         "protocol": 1,
-        "match_id": "NCB_wF7qTccJlC8LHHdUlw",
+        "match_id": "Nx7jKF5K8KLYYF-UYpd4XA",
         "revision": 56,
-        "frame_hash": "1ebac8c97b5d32d82867a7f2ce092aea25776734cf5b6ec581780b23f0533bb9",
+        "frame_hash": "efa07321d97d0b71ec916fe9a5aa5d785607a9be9709f1999f76e8e0a0e094c6",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -5100,7 +5064,6 @@
           ],
           "decision_context": {
             "recent_facts": [
-              "Pop Quiz finished resolving.",
               "Allies at Last was cast; its announced costs are committed.",
               "Allies at Last finished resolving.",
               "Compassionate Healer was cast; its announced costs are committed.",
@@ -5252,6 +5215,10 @@
                 "name": "It'll Quench Ya!"
               }
             ],
+            "turn_history": {
+              "land_entered": true,
+              "cards_drawn": 1
+            },
             "hand": [
               {
                 "text_box": "Whenever you draw your second card each turn, this creature gets +1/+2 until end of turn and can't be blocked this turn.",
@@ -5963,6 +5930,6 @@
     }
   },
   "world": "w11",
-  "source_base_commit": "f9d242de46f5c71cf6a5be44bd4cf91b2755ed1a",
+  "source_base_commit": "072adf12627809df87625fb000b70521ebb0e1ff",
   "world_version": "w17"
 }

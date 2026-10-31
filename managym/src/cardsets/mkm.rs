@@ -1,7 +1,7 @@
 //! Murders at Karlov Manor.
 use crate::state::{
     ability::{
-        Ability, Effect, EffectValue, StaticCondition, TargetSpec, TriggerCondition, TriggerSubject,
+        Ability, Condition, Effect, EffectValue, TargetSpec, TriggerCondition, TriggerSubject,
     },
     card::{CardDefinition, CardType, CardTypes, StaticAbility},
     mana::ManaCost,
@@ -24,23 +24,20 @@ fn proft_s_eidetic_memory() -> CardDefinition {
         statics: vec![StaticAbility::NoMaximumHandSize],
         abilities: vec![
             Ability::Triggered {
+                intervening_if: None,
                 condition: TriggerCondition::EntersTheBattlefield {
                     subject: TriggerSubject::This,
                 },
-                effects: vec![Effect::DrawCards { count: 1 }],
+                effects: vec![Effect::DrawCards {
+                    count: EffectValue::Fixed(1),
+                }],
             },
             Ability::Triggered {
-                condition: TriggerCondition::ActiveIf {
-                    active_if: StaticCondition::CardsDrawnAtLeast { count: 2 },
-                    condition: Box::new(TriggerCondition::BeginningOfYourCombat),
-                },
-                effects: vec![Effect::IfCondition {
-                    condition: StaticCondition::CardsDrawnAtLeast { count: 2 },
-                    effects: vec![Effect::PutCountersValue {
-                        count: EffectValue::CardsDrawnMinus { subtract: 1 },
-                        target: TargetSpec::CreatureYouControl,
-                    }],
-                    otherwise: vec![],
+                condition: TriggerCondition::BeginningOfYourCombat,
+                intervening_if: Some(Condition::CardsDrawnAtLeast { count: 2 }),
+                effects: vec![Effect::PutCountersValue {
+                    count: EffectValue::CardsDrawnMinus { subtract: 1 },
+                    target: TargetSpec::CreatureYouControl,
                 }],
             },
         ],

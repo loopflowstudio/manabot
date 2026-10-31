@@ -52,9 +52,10 @@ RELATION_VALID_INDEX = 31
 # Policy input v5 encodes every Observation fact; managym's
 # observation_encoder.rs owns the layout and these mirror it exactly. V5 widens
 # the player, card and permanent rows; v1-v4 keep the legacy widths.
-RELATION_DIM_V5 = 48
+RELATION_DIM_V5 = 49
 RELATION_X_INDEX = 33
 RELATION_KEYWORDS_INDEX = 34  # 14 granted spell keywords, KeywordData order
+RELATION_THIS_TURN_INDEX = 48  # a waiting delayed trigger ends this turn
 SPEND_SUBTYPES = ("Lesson", "Shrine", "Ally")
 LEGACY_PLAYER_DIM = 40
 PLAYER_RESTRICTED_INDEX = LEGACY_PLAYER_DIM
@@ -63,7 +64,12 @@ PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX = PLAYER_HAND_ONLY_INDEX + 1
 PLAYER_TURN_INDEX = PLAYER_NO_MAXIMUM_HAND_SIZE_INDEX + 1
 PLAYER_SEAT_INDEX = PLAYER_TURN_INDEX + 1
 PLAYER_KEEPS_RED_MANA_INDEX = PLAYER_SEAT_INDEX + 1
-PLAYER_DIM = PLAYER_KEEPS_RED_MANA_INDEX + 1
+# Turn history: attacked, permanents sacrificed, a land entered, cards drawn.
+PLAYER_ATTACKED_INDEX = PLAYER_KEEPS_RED_MANA_INDEX + 1
+PLAYER_SACRIFICED_INDEX = PLAYER_ATTACKED_INDEX + 1
+PLAYER_LAND_ENTERED_INDEX = PLAYER_SACRIFICED_INDEX + 1
+PLAYER_CARDS_DRAWN_INDEX = PLAYER_LAND_ENTERED_INDEX + 1
+PLAYER_DIM = PLAYER_CARDS_DRAWN_INDEX + 1
 LEGACY_CARD_DIM = 41
 # V5 card terms start where v4's validity flag was; validity stays last.
 CARD_PERMISSION_INDEX = LEGACY_CARD_DIM - 1
@@ -83,7 +89,8 @@ PERMANENT_BLOCKING_INDEX = PERMANENT_GRANTED_LAND_INDEX + 1
 PERMANENT_ABILITIES_LOST_INDEX = PERMANENT_BLOCKING_INDEX + 1
 # Rank of its timestamp among the observation's timestamps.
 PERMANENT_TIMESTAMP_INDEX = PERMANENT_ABILITIES_LOST_INDEX + 1
-PERMANENT_DIM = PERMANENT_TIMESTAMP_INDEX + 2
+PERMANENT_DEALT_DAMAGE_INDEX = PERMANENT_TIMESTAMP_INDEX + 1
+PERMANENT_DIM = PERMANENT_DEALT_DAMAGE_INDEX + 2
 # V5 fact rows: one open-vocabulary fact about a player or permanent, joined to
 # it like relation references. Ids are learning-token values split into 16-bit
 # halves (exact in float32).
@@ -170,7 +177,7 @@ class ObservationEncoder:
         # Player: life + is_active + zones + phase/step one-hots + gy
         # lessons + until-end-of-combat mana + pooled and spend-restricted colors;
         # v5 adds restricted mana by spending subtype, the hand-only lock, no
-        # maximum hand size, turn number, seat and kept red mana.
+        # maximum hand size, turn number, seat, kept red mana and turn history.
         # Card: zone one-hot + is_mine + P/T + mana value + 6 type flags +
         # 12 keywords + is_token/is_ally/is_lesson tags + ward flag/cost +
         # kicker flag/cost + hexproof + outside + indestructible + legendary;
@@ -184,8 +191,8 @@ class ObservationEncoder:
         # (printed + until-EOT grants), death-to-exile replacement, definition,
         # temporary Avatar subtype, attacking; v5 adds used exhaust and
         # once-each-turn ability counts, granted firebending, attachment join,
-        # granted land, blocking join, lost abilities and timestamp rank;
-        # validity is last. Counter kinds, effect-set subtypes and
+        # granted land, blocking join, lost abilities, timestamp rank and
+        # dealt damage this turn; validity is last. Counter kinds, effect-set subtypes and
         # characteristics, used abilities and continuous-effect records are
         # v5 fact rows.
         self.permanent_dim = PERMANENT_DIM if current else LEGACY_PERMANENT_DIM
@@ -486,6 +493,9 @@ class ObservationEncoder:
     ) -> np.ndarray:
         """Reference implementation of native current-continuation relation rows."""
         rows: list[np.ndarray] = []
+        if not self.shows_everything:
+            # Waiting delayed triggers (kind 10, always last) are v5 facts.
+            frames = [frame for frame in frames if frame.kind != 10]
 
         def _reference(row: np.ndarray, value: managym.VisibleReference) -> None:
             row[23] = 0 if value.definition is None else value.definition + 1
@@ -521,8 +531,10 @@ class ObservationEncoder:
             row[RELATION_VALID_INDEX] = 1
             if self.shows_everything:
                 row[RELATION_X_INDEX] = frame.x
-                # Granted keywords fill the row's remaining columns.
-                row[RELATION_KEYWORDS_INDEX:] = frame.granted_keywords
+                row[RELATION_KEYWORDS_INDEX:RELATION_THIS_TURN_INDEX] = (
+                    frame.granted_keywords
+                )
+                row[RELATION_THIS_TURN_INDEX] = frame.this_turn
             rows.append(row)
             for ordinal, target in enumerate(frame.targets, 1):
                 target_row = row.copy()
@@ -607,6 +619,11 @@ class ObservationEncoder:
             # Seat 0 is on the play.
             arr[PLAYER_SEAT_INDEX] = float(player.player_index)
             arr[PLAYER_KEEPS_RED_MANA_INDEX] = float(player.keeps_red_mana)
+            history = player.turn_history
+            arr[PLAYER_ATTACKED_INDEX] = float(history.attacked)
+            arr[PLAYER_SACRIFICED_INDEX] = float(history.permanents_sacrificed) / 10.0
+            arr[PLAYER_LAND_ENTERED_INDEX] = float(history.land_entered)
+            arr[PLAYER_CARDS_DRAWN_INDEX] = float(history.cards_drawn) / 10.0
 
         self.object_to_index[player.id] = self.current_object_index
         self.current_object_index += 1
@@ -781,6 +798,7 @@ class ObservationEncoder:
             # PERMANENT_TIMESTAMP_INDEX are written once every object is indexed.
             arr[PERMANENT_GRANTED_LAND_INDEX] = float(perm.is_granted_land)
             arr[PERMANENT_ABILITIES_LOST_INDEX] = float(perm.abilities_lost)
+            arr[PERMANENT_DEALT_DAMAGE_INDEX] = float(perm.dealt_damage_this_turn)
         # Set validity flag (permanent exists)
         arr[-1] = 1.0
         return arr
