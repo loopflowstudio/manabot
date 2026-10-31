@@ -398,8 +398,8 @@ reversible if mid-flight resumes matter.
   triggers are v5-only relation frames: v2–v4 tensors drop kind-10 frames so
   frozen inputs keep their exact rows, while JSON/text show them for every
   version. The learning role `delayed_trigger` is projected in
-  `BoundSemanticPack.project_observation`; `manabot/semantic/policy.py`'s
-  runtime object rows (keyed by stack id) do not list delayed triggers yet.
+  `BoundSemanticPack.project_observation`, the only learning-object
+  projection (no separate runtime object rows exist; checked 2026-10-30).
 
 ## Characteristics view and CI fix — 2026-10-30
 

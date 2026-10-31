@@ -131,7 +131,11 @@ edits went with the deleted code; `update_turn_history` became direct writes to
 takes main's schema 2 (trace hashes), re-recorded at gate. Audit 608.2a keeps
 T4's intervening-if row, 608.2b main's anchor. Earlier: `6f48f5ca0` and T3's
 `0cf535f0b` (`3d8717eab`, `Game::characteristics`, read by `1f9d10aeb`).
-T3 (#399) is still open.
+T3 landed on main as squash `f122d515b`; gate merged it (`6667baac0`)
+by applying only main's changes since `289bfbde3`. Main's static-source
+collection (one `Vec<StaticSource>` per view) now also skips the record-only
+fast path while any `SetsLandType` source is on the battlefield, since
+Zhao, the Moon Slayer's overwrite removes abilities without a record.
 
 ## Remaining
 
@@ -188,3 +192,56 @@ PR review (Jack Heart, 2026-10-30, 1a 2b): waiting delayed triggers become
 observed state in T4 (tensor rows beside the stack, tokens, LLM text, guard
 over `DelayedTriggerEvent`, directed test); add `Effect::CounterAbility` now
 (own stack-ability `TargetSpec`, emits `AbilityCountered`). Ship approval holds.
+
+Concept review (Graph, 2026-10-30, after the last ten cards and PR review):
+nothing to change and no open choice. Checked against the accepted decisions:
+one `Condition`/`Effect::If`; `Effect::CounterAbility` and `CounterSpell`
+(spells only) both announce through `SpellCountered`/`AbilityCountered`;
+one `Decision::CastDuringResolution` whose `ResolutionCastOffer` names the
+candidate source (hand, exiled card, library top, exiled-with source) and
+whose `paid` flag replaces a second decision; waiting delayed triggers reach
+the v5 tensor, learning projection and LLM text with the
+`DelayedTriggerEvent` guard. `tap_cost` stays an activated-ability cost field
+beside `discard_card`/`exhaust` (not a `CardDefinition` field), as recorded
+for Rioter. Corrected a stale note claiming unlisted runtime object rows.
+
+## Demo (headless, 2026-10-30)
+
+Run without a person; the Graph stood in for Jack Heart. Proofs through
+the real paths:
+- `managym.unsupported_cards(<75 T4 names>)` → `[]`; all 75 are in
+  `managym.set_cards(["tla"])`.
+- 12 seeded random-legal games through `managym.Env`, each deck holding 10
+  sampled T4 cards ×2 plus basics: 12/12 reached a terminal state
+  (2067 steps), no panic or agent error (`/tmp/t4_smoke.py`, not kept).
+- Debug `cargo test --test cards`: 483 passed, including
+  `every_registered_real_card_matches_scryfall` with the refreshed fixture
+  (the uncommitted `refresh_card_fixture.py` skip of `front_card` layouts).
+- Full debug `cargo test --no-fail-fast`: every target passes, 0 failed (w17 semantic-conformance evidence and the Scryfall fixture as re-recorded in the working tree).
+Decision: advance to ship under Jack Heart's standing T4 approval; the
+uncommitted fixture and w17 evidence re-records are gate work.
+
+## Gate (2026-10-30)
+
+- Synced with main's T3 squash (`f122d515b`, see Upstream); one real conflict
+  in `flow/statics.rs`, resolved as recorded there.
+- Re-recorded for the T4 content digest `89134543…`: semantic kernel
+  evidence; authored-match receipt (`AUTHORITY_SHA256` `081bbbe7…`,
+  `TERMINAL_STATE` `3662a3c6…`) and its parity (142 commands, divergence
+  none); public commitment parity (142 commands, 69 commitments, 0 gaps);
+  choice navigation, learn and precision demos (same revisions); trigger-order
+  root/content digests (`scratch/tools/regen_trigger_order.py`); belief v3
+  receipt pins. Learning schema pins 9 → 10 (`delayed_trigger` role).
+- `test_programs_and_known_definitions_reach_actual_policy` backpropagates the
+  sum of the three take logits: T4's content moves the random walk to a
+  different Learn root, where the first take logit is a dead activation at
+  `hidden_dim=8`.
+- Checks: debug `cargo test --no-fail-fast` 851 passed / 0 failed (23 targets,
+  semantic evidence reproduces; before the receipt-only commits);
+  `cargo fmt --check`, `cargo clippy --all-targets --all-features -D warnings`
+  clean; pytest (env, model, agent, llm, semantic, academy protocol/learn/
+  choice/trigger-order/parity, belief, verify, arena-admission/monitoring
+  suite, infra release) all pass; `ruff check`/`format --check` on changed
+  files clean; Academy vitest (GameBoard, permanent-notes, decision-labels,
+  protocol conformance) 17 passed, `npm run check` 0 errors. Deferred to CI:
+  the Playwright release e2e and the full matrix.
