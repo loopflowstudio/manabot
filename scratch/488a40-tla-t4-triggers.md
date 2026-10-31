@@ -31,3 +31,10 @@ removed it, and it is restored here condensed.
 
 Check (2026-10-30, HEAD `e83d6c57c`): `cd managym && cargo test --no-fail-fast`
 (debug): all targets pass, 0 failed (cards 484).
+
+Concept review (Graph, 2026-10-30, HEAD `328a759f7`): nothing to change and no
+open choice. Since the last review the branch gained only main's T3 sync, w17
+re-records and the compress `e83d6c57c`, which is internal (`trigger_occurrences`,
+`source_in_graveyard`) and adds no concept. The accepted model stands: one
+`Condition`/`Effect::If`, `Effect::CounterAbility` with `AbilityCountered`, one
+`Decision::CastDuringResolution`, and delayed triggers as v5 frames kind 10.
