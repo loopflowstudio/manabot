@@ -1605,23 +1605,13 @@ impl Game {
                 None
             }
             Effect::ReturnSourceToHand => {
-                let card = frame.source?;
-                let owner = self.state.cards[card].owner;
-                if frame.source_ref.is_some()
-                    && self.current_object_ref(card) == frame.source_ref
-                    && self.state.zones.contains(card, ZoneType::Graveyard, owner)
-                {
-                    self.reveal_card_to_hand(card, owner);
+                if let Some(card) = self.source_in_graveyard(frame) {
+                    self.reveal_card_to_hand(card, self.state.cards[card].owner);
                 }
                 None
             }
             Effect::ReturnSourceToBattlefield { counter } => {
-                let card = frame.source?;
-                let owner = self.state.cards[card].owner;
-                if frame.source_ref.is_some()
-                    && self.current_object_ref(card) == frame.source_ref
-                    && self.state.zones.contains(card, ZoneType::Graveyard, owner)
-                {
+                if let Some(card) = self.source_in_graveyard(frame) {
                     let mut counters = crate::state::permanent::Counters::default();
                     counters.change(*counter, 1);
                     self.move_card_with_entry(
@@ -2016,6 +2006,17 @@ impl Game {
         frame
             .source_ref
             .and_then(|source| self.lookup_current_permanent(source).ok())
+    }
+
+    /// The source card while it is still the exact graveyard object the
+    /// ability came from (CR 400.7), in its owner's graveyard.
+    fn source_in_graveyard(&self, frame: &EffectFrame) -> Option<CardId> {
+        let card = frame.source?;
+        let owner = self.state.cards[card].owner;
+        (frame.source_ref.is_some()
+            && self.current_object_ref(card) == frame.source_ref
+            && self.state.zones.contains(card, ZoneType::Graveyard, owner))
+        .then_some(card)
     }
 
     /// Attach the source Equipment to a battlefield creature (CR 701.3). It

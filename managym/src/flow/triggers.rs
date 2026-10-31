@@ -26,6 +26,7 @@ use crate::{
 
 /// One occurrence of a matched triggered ability, before it waits to be
 /// placed: a printed ability by index, or a granted one's effects.
+#[derive(Clone)]
 struct FiredTrigger {
     source: TriggerSourceSnapshot,
     ability_index: usize,
@@ -703,48 +704,31 @@ impl Game {
                         .turn
                         .ability_triggers_this_turn
                         .contains_key(&(source.lki.object_ref, ability_index)))
-                    && self.trigger_condition_fires(
-                        condition,
-                        source.card,
-                        source.controller,
-                        true,
-                        event,
-                    )
                 {
-                    let times =
-                        self.trigger_multiplicity(condition, source.card, source.controller, event)
-                            + self.additional_trigger_times(source);
-                    for _ in 0..times {
-                        fired.push(FiredTrigger {
+                    let times = self.trigger_occurrences(condition, source, event);
+                    fired.extend(std::iter::repeat_n(
+                        FiredTrigger {
                             source: source.clone(),
                             ability_index,
                             granted: None,
-                        });
-                    }
+                        },
+                        times,
+                    ));
                 }
             }
             for ability in self.granted_triggered_abilities(source) {
                 let Ability::Triggered {
                     condition, effects, ..
-                } = &ability;
-                if self.trigger_condition_fires(
-                    condition,
-                    source.card,
-                    source.controller,
-                    true,
-                    event,
-                ) {
-                    let times =
-                        self.trigger_multiplicity(condition, source.card, source.controller, event)
-                            + self.additional_trigger_times(source);
-                    for _ in 0..times {
-                        fired.push(FiredTrigger {
-                            source: source.clone(),
-                            ability_index: 0,
-                            granted: Some(effects.clone()),
-                        });
-                    }
-                }
+                } = ability;
+                let times = self.trigger_occurrences(&condition, source, event);
+                fired.extend(std::iter::repeat_n(
+                    FiredTrigger {
+                        source: source.clone(),
+                        ability_index: 0,
+                        granted: Some(effects),
+                    },
+                    times,
+                ));
             }
         }
 
@@ -833,6 +817,22 @@ impl Game {
                 .checked_add(1)
                 .expect("trigger occurrence identity exhausted");
         }
+    }
+
+    /// How many times one of `source`'s triggered abilities triggers on
+    /// `event`: zero unless its condition fires, else its own multiplicity
+    /// plus the "triggers an additional time" statics that cover it.
+    fn trigger_occurrences(
+        &self,
+        condition: &TriggerCondition,
+        source: &TriggerSourceSnapshot,
+        event: &GameEvent,
+    ) -> usize {
+        if !self.trigger_condition_fires(condition, source.card, source.controller, true, event) {
+            return 0;
+        }
+        self.trigger_multiplicity(condition, source.card, source.controller, event)
+            + self.additional_trigger_times(source)
     }
 
     /// The permanent whose event fired a trigger: an entering one, a
