@@ -430,3 +430,15 @@ reversible if mid-flight resumes matter.
   `layer_basis` (no static scope), because `layer_basis` now reads
   `static_sources`, which asks each source's loss. T4 callers of the removed
   accessors read `Game::characteristics`.
+
+## CI fix 2026-10-30: Clean-machine Play timed out waiting on Search 64
+
+Assumption: the clean-machine proof's 30s wait for an action's update is a
+budget for the Search 64 opponent's reply, not a latency requirement. Local
+CPU-time measurements (seeds 1-3, first three hero moves) put some T4-branch
+replies at 25-40s versus 15-22s on main, on a loaded laptop; hosted runners are
+slower. Raised the wait to 120s and removed a duplicate `static_sources` pass
+from `layer_basis`. The remaining per-query cost of `Game::characteristics`
+(land-type overwrite and type-grant scans) is left to the characteristics
+lookup work (`mtg-234`). If Search 64 reply latency is itself a product
+requirement, it needs its own Task.

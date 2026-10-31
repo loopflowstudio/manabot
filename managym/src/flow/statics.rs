@@ -217,9 +217,9 @@ impl Game {
             return Characteristics::default();
         };
         let card = &self.state.cards[permanent.card];
-        let basis = self.layer_basis(permanent_id);
         // Every stage reads the same static sources; collect them once.
         let sources = self.static_sources();
+        let basis = self.layer_basis(permanent_id, &sources);
         let (power, toughness) = self.pt_with(permanent_id, &basis, &sources);
         let is_land = self.is_land_with(permanent_id, &sources);
         Characteristics {
@@ -247,14 +247,19 @@ impl Game {
         }
     }
 
-    /// The layer inputs several stages share, computed once per view.
-    fn layer_basis(&self, permanent_id: PermanentId) -> LayerBasis<'_> {
+    /// The layer inputs several stages share, computed once per view from
+    /// the view's `static_sources`.
+    fn layer_basis<'a>(
+        &'a self,
+        permanent_id: PermanentId,
+        sources: &[StaticSource<'a>],
+    ) -> LayerBasis<'a> {
         let attachments: Vec<(PermanentId, &Card)> = self.attachments_on(permanent_id).collect();
         let setter = self.latest_setter(attachments.iter().copied());
         let set_timestamp = setter.map(|(timestamp, _)| timestamp);
         let overwrite = self.land_type_overwrite(permanent_id);
         let mut added_subtypes: Vec<&str> = Vec::new();
-        for (source_id, controller, card) in self.static_sources() {
+        for &(source_id, controller, card) in sources {
             for grant in card
                 .type_grants()
                 .filter(|grant| !grant.subtypes.is_empty())
@@ -318,10 +323,11 @@ impl Game {
     /// Layer 7: power and toughness (CDA-aware or set base, plus static buffs,
     /// records and +1/+1 counters).
     fn effective_pt(&self, permanent_id: PermanentId) -> (i32, i32) {
+        let sources = self.static_sources();
         self.pt_with(
             permanent_id,
-            &self.layer_basis(permanent_id),
-            &self.static_sources(),
+            &self.layer_basis(permanent_id, &sources),
+            &sources,
         )
     }
 
@@ -618,7 +624,7 @@ impl Game {
             .is_some_and(|permanent| {
                 subtypes_with(
                     &self.state.cards[permanent.card],
-                    &self.layer_basis(permanent_id),
+                    &self.layer_basis(permanent_id, &self.static_sources()),
                 )
                 .contains(&subtype)
             })
@@ -819,7 +825,7 @@ impl Game {
             .map_or_else(Vec::new, |permanent| {
                 creature_types_with(
                     &self.state.cards[permanent.card],
-                    &self.layer_basis(permanent_id),
+                    &self.layer_basis(permanent_id, &self.static_sources()),
                 )
             })
     }
