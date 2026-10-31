@@ -33,14 +33,14 @@
 <body>
 <main>
 <header>
-  <p>Task MTG-216 · open and closed decklists · concept-review step (headless) · 2026-10-30</p>
+  <p>Task MTG-216 · open and closed decklists · concept-review step (headless, pass 3) · 2026-10-30</p>
   <p>Built from <code>scratch/mtg-216-support-open-and-closed-decklists-as-a-game-option.md</code>,
-  <code>academy/ui/src/routes/+page.svelte</code>, <code>academy/ui/src/lib/components/OpponentSelector.svelte</code>,
+  <code>academy/ui/src/lib/components/DecklistsSelector.svelte</code>, <code>academy/ui/src/lib/components/OpponentSelector.svelte</code>, <code>manabot/sim/native_game.py</code>,
   <code>academy/server.py</code>, <code>manabot/sim/registration.py</code></p>
 </header>
 
-<h1>The form offers a game the server refuses</h1>
-<p class="lead">No product decision is needed. The accepted design (one open/closed option, open by default; Jack Heart) already implies the fix: search opponents need open decklists (D5), so the new-game form should show that before submission, not after.</p>
+<h1>Nothing left to change: the form now shows the constraint the server enforces</h1>
+<p class="lead">No product decision is needed. Pass 2 found that the form offered closed + search, which the server refuses. That fix is now built: the form shows the constraint before submission, as D5 implies under the accepted design (one open/closed option, open by default; Jack Heart). Pass 3 found no further mismatch.</p>
 
 <h2>Actions → concepts → APIs</h2>
 <table>
@@ -50,7 +50,7 @@
   <tr><td>Picks an opponent</td><td>Search samples hidden cards from open lists</td><td><code>_parse_game_config</code> refuses closed + search; <code>require_open_decklists</code> for matches</td></tr>
 </table>
 
-<h2>Before (implemented)</h2>
+<h2>Before (pass 2 finding)</h2>
 <div class="row bad">
   <span class="tag">Existing behavior: the mismatch</span>
   <div class="form">
@@ -62,9 +62,9 @@
   <p>The default opponent is a search opponent, so the first time anyone tries Closed it fails, and the constraint is learned only by failing.</p>
 </div>
 
-<h2>After (proposed)</h2>
+<h2>After (built)</h2>
 <div class="row prop">
-  <span class="tag">Proposed</span>
+  <span class="tag">Built: <code>DecklistsSelector</code> + <code>OpponentSelector</code></span>
   <div class="form">
     <div>Opponent ▾</div>
     <div class="off">&nbsp;&nbsp;Search 16 (fast) — needs open decklists</div>
@@ -88,7 +88,7 @@
 
 <h2>Questions</h2>
 <ol>
-  <li>None open. The direction above follows from D5 and is recorded as the next implementation step. Objections can be raised as a Task comment.</li>
+  <li>None open. What remains is gate/demo evidence: a browser walkthrough of the form and the opponent panel, and the full debug <code>cargo test</code> and <code>tests/</code> suites.</li>
 </ol>
 </main>
 </body>

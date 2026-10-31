@@ -87,6 +87,9 @@ form/PlayerArea/trace) and records (choice-navigation w17 fixture,
 authored-match receipt and parity re-recorded; WORLDS.md, learn-lesson.md,
 READMEs, AGENTS.md). The delete list is complete.
 
+Built after concept review 2: the new-game form disables search opponents
+with closed decklists and the other way round (below).
+
 Left for gate/demo: a browser walkthrough of the new-game select and the
 opponent panel; the full `cargo test`/`tests/` suites after the sync.
 Known outside this change: `tests/academy/test_public_commitment_parity.py`
@@ -138,7 +141,7 @@ open/closed option, default open; Jack Heart).
   search players refused at build; reconnect/replay → trace and failure
   receipts retain the setting; records without it → open.
 
-## Concept review 2 (2026-10-30, headless): next implement direction
+## Concept review 2 (2026-10-30, headless): form constraint (built)
 
 The engine, encoding and records match the accepted design. One interaction
 does not: Academy's new-game form offers a combination the server refuses.
@@ -175,3 +178,17 @@ does not: Academy's new-game form offers a combination the server refuses.
   0 errors. Browser walkthrough and full suites left to gate/demo.
 
 No open product choice.
+
+## Concept review 3 (2026-10-30, headless): no change
+
+Rechecked after the form constraint was built. The product control is a single
+open/closed option on `MatchConfig.decklists` and Academy `GameConfig.decklists`,
+and it is written to both seats' `PlayerConfig.disclosure`. The Academy form
+lists each unavailable combination with its reason (`DecklistsSelector`,
+`OpponentSelector` via `isSearchChoice`). The server (`_parse_game_config`) and
+match building (`native_game.py` → `require_open_decklists`) still refuse
+closed + search for other clients. The opponent panel reads "Decklist closed",
+and traces and replays keep the setting. I found no concept users must learn
+without benefit and no open product choice. What remains is gate/demo
+evidence: the browser walkthrough and the full debug `cargo test` and `tests/`
+suites.
