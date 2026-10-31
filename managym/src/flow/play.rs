@@ -2,9 +2,11 @@
 // Spell casting, land plays, and activated abilities.
 //
 // Casting is a staged pipeline driven by `PendingChoice`:
-//   kicker choice (optional) -> spell mode (if any) -> targets per clause -> payment.
-// Waterbend activations run their own payment sub-decision before the
-// ability reaches the stack. Activations name an `ActivationSource`: a
+//   X (if any) -> kicker choice (optional) -> spell mode (if any) -> targets
+//   per clause -> payment.
+// Activations announce X (if any), choose targets, pay crew, then pay; a
+// waterbend cost runs its own payment sub-decision before the ability
+// reaches the stack. Activations name an `ActivationSource`: a
 // permanent, or a card whose ability functions from its owner's hand or
 // graveyard (cycling, "return this card from your graveyard").
 
@@ -16,13 +18,19 @@ use crate::{
     },
     state::{
         ability::TargetRequirement,
-        card::{ActivatedAbilityDefinition, ActivationZone, AdditionalCost, StaticAbility},
+        card::{ActivatedAbilityDefinition, ActivationZone, AdditionalCost, Card, StaticAbility},
         game_object::{CardId, PermanentId, PlayerId, Target},
         mana::{ManaCost, ManaUse},
         stack_object::{ActivatedAbilityOnStack, StackObject},
         zone::ZoneType,
     },
 };
+
+/// X values from `least` through the largest one `can_pay` accepts. Payability
+/// is monotone in X, so the scan stops at the first unpayable value.
+fn payable_x_values(least: u8, can_pay: impl Fn(u8) -> bool) -> Vec<u8> {
+    (least..=u8::MAX).take_while(|&x| can_pay(x)).collect()
+}
 
 #[derive(Default)]
 struct TargetSelection {
@@ -81,9 +89,43 @@ impl Game {
         }
     }
 
+    /// Whether a battlefield permanent `player` controls satisfies `has`
+    /// with its abilities active. Checks the card before its characteristics.
+    fn active_permanent_has(&self, player: PlayerId, has: impl Fn(&Card) -> bool) -> bool {
+        self.battlefield_permanents(player).into_iter().any(|id| {
+            self.state.permanents[id]
+                .as_ref()
+                .is_some_and(|permanent| has(&self.state.cards[permanent.card]))
+                && !self.characteristics(id).abilities_lost
+        })
+    }
+
+    /// Whether `player` may look at the top card of their library (CR 401.2).
+    pub(crate) fn looks_at_library_top(&self, player: PlayerId) -> bool {
+        self.active_permanent_has(player, |card| {
+            card.has_static(&StaticAbility::LookAtLibraryTop)
+        })
+    }
+
+    /// The top card of `player`'s library, when a permanent they control
+    /// lets them cast it as a spell (Hakoda's Ally spells). Lands are never
+    /// cast, so they are never offered.
+    pub(crate) fn library_top_castable(&self, player: PlayerId) -> Option<CardId> {
+        let card = self.library_top_card(player)?;
+        let definition = &self.state.cards[card];
+        (!definition.types.is_land()
+            && self.active_permanent_has(player, |source| {
+                source
+                    .library_top_casting()
+                    .is_some_and(|predicate| predicate.matches_card(definition))
+            }))
+        .then_some(card)
+    }
+
     /// The cost `player` may pay to cast `card` from outside their hand:
-    /// graveyard flashback or an exact-object exile grant. A hand-only
-    /// restriction overrides both.
+    /// graveyard flashback, an exact-object exile grant, or the top of their
+    /// library while a permanent permits it. A hand-only restriction overrides
+    /// all three.
     pub(crate) fn zone_cast_cost(&self, player: PlayerId, card: CardId) -> Option<ManaCost> {
         if self.hand_only_until(player).is_some() {
             return None;
@@ -91,18 +133,24 @@ impl Game {
         match self.state.zones.zone_of(card)? {
             ZoneType::Graveyard => self.flashback_cost(player, card),
             ZoneType::Exile => self.grant_cast_cost(self.exile_grant(player, card)?, card),
+            ZoneType::Library if self.library_top_castable(player) == Some(card) => {
+                self.state.cards[card].mana_cost.clone()
+            }
             _ => None,
         }
     }
 
     /// The total cost to cast `card` right now with the announced `cast`
     /// choices: its mana cost (none when cast free) with X fixed, plus the
-    /// kicker, less affinity-style reductions (CR 601.2f).
+    /// kicker, less affinity-style reductions (CR 601.2f). `targets` are the
+    /// chosen targets; before they are chosen (`None`), a target-dependent
+    /// reduction applies if some legal target would earn it.
     pub(crate) fn effective_spell_cost(
         &self,
         player: PlayerId,
         card: CardId,
         cast: CastChoices,
+        targets: Option<&[Target]>,
     ) -> Option<ManaCost> {
         let card_ref = &self.state.cards[card];
         let mut cost = if cast.free {
@@ -114,6 +162,9 @@ impl Game {
         };
         cost = cost.with_x(cast.x);
         cost.purpose = ManaUse::spell(card_ref.subtypes.iter().map(String::as_str));
+        if let Some(additional) = card_ref.required_waterbend() {
+            cost = cost.plus(&additional.with_x(cast.x));
+        }
         if cast.kicked {
             if let Some(kicker) = card_ref.optional_cost() {
                 cost = cost.plus(kicker);
@@ -130,6 +181,23 @@ impl Game {
                 _ => continue,
             };
             cost = cost.reduced_generic(u8::try_from(count).unwrap_or(u8::MAX));
+        }
+        if let Some(reduction) = card_ref.cost_reduction_if_targets() {
+            let earns = |target: &Target| {
+                matches!(target, Target::Permanent(id)
+                    if self.permanent_matches_predicate(*id, &reduction.predicate))
+            };
+            let applies = match targets {
+                Some(targets) => targets.iter().any(earns),
+                None => card_ref.target_requirements().iter().any(|requirement| {
+                    self.legal_targets_for_requirement(player, card, requirement)
+                        .iter()
+                        .any(earns)
+                }),
+            };
+            if applies {
+                cost = cost.reduced_generic(reduction.generic);
+            }
         }
         for permanent_id in self.battlefield_permanents(player) {
             let permanent = self.state.permanents[permanent_id].as_ref()?;
@@ -242,10 +310,12 @@ impl Game {
         card: CardId,
         cast: CastChoices,
     ) -> Result<(), AgentError> {
-        let has_x = self.state.cards[card]
+        let card_ref = &self.state.cards[card];
+        let has_x = card_ref
             .mana_cost
-            .as_ref()
-            .is_some_and(|cost| cost.x > 0);
+            .iter()
+            .chain(card_ref.required_waterbend())
+            .any(|cost| cost.x > 0);
         if has_x && !cast.free {
             self.pending_choice = Some(PendingChoice::AnnounceX { player, card, cast });
             return Ok(());
@@ -256,7 +326,18 @@ impl Game {
     /// Whether `player` can pay the total cost of `card` with `cast`'s
     /// choices, waterbending any part that allows it.
     pub(crate) fn can_pay_cast(&self, player: PlayerId, card: CardId, cast: CastChoices) -> bool {
-        let Some(cost) = self.effective_spell_cost(player, card, cast) else {
+        self.can_pay_cast_with_targets(player, card, cast, None)
+    }
+
+    /// [`Game::can_pay_cast`] once `targets` are chosen (`None` before).
+    fn can_pay_cast_with_targets(
+        &self,
+        player: PlayerId,
+        card: CardId,
+        cast: CastChoices,
+        targets: Option<&[Target]>,
+    ) -> bool {
+        let Some(cost) = self.effective_spell_cost(player, card, cast, targets) else {
             return false;
         };
         let waterbend = self
@@ -278,12 +359,9 @@ impl Game {
         cast: CastChoices,
     ) -> Vec<u8> {
         let mut values = vec![0];
-        for x in 1..=u8::MAX {
-            if !self.can_pay_cast(player, card, CastChoices { x, ..cast }) {
-                break;
-            }
-            values.push(x);
-        }
+        values.extend(payable_x_values(1, |x| {
+            self.can_pay_cast(player, card, CastChoices { x, ..cast })
+        }));
         values
     }
 
@@ -356,8 +434,9 @@ impl Game {
     }
 
     /// The generic part of `card`'s total cost that `cast` lets `player`
-    /// pay by waterbending: a waterbend additional cost once chosen, or all
-    /// of a cost granted as "waterbending {X}" (Hama).
+    /// pay by waterbending: a required waterbend additional cost, an
+    /// optional one once chosen, or all of a cost granted as
+    /// "waterbending {X}" (Hama).
     pub(crate) fn cast_waterbend_generic(
         &self,
         player: PlayerId,
@@ -368,11 +447,12 @@ impl Game {
         let waterbend = card_ref
             .additional_costs
             .iter()
-            .find_map(|cost| match cost {
-                AdditionalCost::Waterbend(waterbend) if cast.kicked => Some(waterbend.generic()),
-                _ => None,
+            .map(|cost| match cost {
+                AdditionalCost::Waterbend(waterbend) if cast.kicked => waterbend.generic(),
+                AdditionalCost::RequiredWaterbend(cost) => cost.with_x(cast.x).generic(),
+                _ => 0,
             })
-            .unwrap_or(0);
+            .fold(0u8, u8::saturating_add);
         let granted = !cast.free
             && self
                 .exile_grant(player, card)
@@ -459,15 +539,21 @@ impl Game {
             let Some(requirement) = requirements.get(requirement_index) else {
                 return self.finish_casting(player, card, cast, mode, chosen, chosen_req_indices);
             };
-            let legal = self.remaining_legal_targets(
-                player,
-                card,
-                requirement,
-                requirement_index,
-                &chosen,
-                &chosen_req_indices,
-            );
-            if legal.is_empty() {
+            let legal = self
+                .remaining_legal_targets(
+                    player,
+                    card,
+                    requirement,
+                    requirement_index,
+                    &chosen,
+                    &chosen_req_indices,
+                )
+                .into_iter()
+                .filter(|target| {
+                    self.target_leaves_cost_payable(player, card, cast, &chosen, *target)
+                })
+                .collect::<Vec<_>>();
+            if legal.is_empty() || requirement.max_for(cast.x) == 0 {
                 if requirement.min == 0 {
                     requirement_index += 1;
                     continue;
@@ -486,6 +572,23 @@ impl Game {
             });
             return Ok(());
         }
+    }
+
+    /// With a target-dependent reduction, a choice that would leave the
+    /// spell's total cost unpayable is not offered (CR 601.2f-h).
+    fn target_leaves_cost_payable(
+        &self,
+        player: PlayerId,
+        card: CardId,
+        cast: CastChoices,
+        chosen: &[Target],
+        target: Target,
+    ) -> bool {
+        if self.state.cards[card].cost_reduction_if_targets().is_none() {
+            return true;
+        }
+        let targets: Vec<Target> = chosen.iter().copied().chain([target]).collect();
+        self.can_pay_cast_with_targets(player, card, cast, Some(&targets))
     }
 
     fn remaining_legal_targets(
@@ -568,7 +671,7 @@ impl Game {
             .filter(|i| **i == requirement_index)
             .count();
 
-        if chosen_in_req >= requirement.max {
+        if chosen_in_req >= requirement.max_for(cast.x) {
             return self.advance_target_selection(
                 player,
                 card,
@@ -759,9 +862,9 @@ impl Game {
             ));
         }
 
-        let source_card = permanent.card;
         let Some(ability) = self
-            .activated_abilities_for(permanent_id)
+            .characteristics(permanent_id)
+            .activated_abilities
             .get(ability_index)
             .cloned()
         else {
@@ -780,15 +883,94 @@ impl Game {
         if permanent.activation_used(ability_index, &ability) {
             return Err(AgentError("ability was already activated".into()));
         }
-        if ability.tap_source && !permanent.can_tap(&self.state.cards[source_card]) {
+        if ability.tap_source && !self.permanent_can_tap(permanent_id) {
             return Err(AgentError("source cannot tap".into()));
+        }
+        if ability.mana_cost.x > 0 {
+            if self
+                .legal_activation_x_values(player, permanent_id, ability_index)
+                .is_empty()
+            {
+                return Err(AgentError("no payable value of X".into()));
+            }
+            self.pending_choice = Some(PendingChoice::ActivationX {
+                player,
+                permanent: permanent_id,
+                ability_index,
+            });
+            return Ok(());
         }
         let source = ActivationSource::Permanent(permanent_id);
         if ability.target_spec().is_some() {
             return self.begin_activated_targets(player, source, ability_index, &ability);
         }
+        if let Some(power) = ability.crew {
+            if self.crew_power_available(player, permanent_id) < power {
+                return Err(AgentError("not enough power to crew".into()));
+            }
+            self.pending_choice = Some(PendingChoice::Crew {
+                player,
+                permanent: permanent_id,
+                ability_index,
+                remaining_power: power,
+            });
+            return Ok(());
+        }
 
-        self.begin_activation_payment(player, source, ability_index, Vec::new())
+        self.begin_activation_payment(player, source, ability_index, Vec::new(), 0)
+    }
+
+    /// Values of X from the ability's least X that its waterbend cost can
+    /// pay (CR 602.2b, 601.2f).
+    pub(crate) fn legal_activation_x_values(
+        &self,
+        player: PlayerId,
+        permanent: PermanentId,
+        ability_index: usize,
+    ) -> Vec<u8> {
+        let Some(ability) = self
+            .characteristics(permanent)
+            .activated_abilities
+            .get(ability_index)
+            .cloned()
+        else {
+            return Vec::new();
+        };
+        payable_x_values(ability.x_min, |x| {
+            self.can_pay_with_waterbend(player, &ability.mana_cost.with_x(x))
+        })
+    }
+
+    /// Announce X for the pending activation, then pay its costs.
+    pub(crate) fn choose_activation_x_action(
+        &mut self,
+        player: PlayerId,
+        x: usize,
+    ) -> Result<(), AgentError> {
+        let Some(PendingChoice::ActivationX {
+            player: chooser,
+            permanent,
+            ability_index,
+        }) = self.pending_choice
+        else {
+            return Err(AgentError("no value of X is pending".into()));
+        };
+        let x = u8::try_from(x).map_err(|_| AgentError("illegal value of X".into()))?;
+        if chooser != player
+            || !self
+                .legal_activation_x_values(player, permanent, ability_index)
+                .contains(&x)
+        {
+            return Err(AgentError("illegal value of X".into()));
+        }
+        self.pending_choice = None;
+        self.begin_activation_payment(
+            player,
+            ActivationSource::Permanent(permanent),
+            ability_index,
+            Vec::new(),
+            x,
+        )
     }
 
     /// Activate an ability of a card in `player`'s hand or graveyard. Only
@@ -810,7 +992,7 @@ impl Game {
         if ability.target_spec().is_some() {
             return self.begin_activated_targets(player, source, ability_index, &ability);
         }
-        self.begin_activation_payment(player, source, ability_index, Vec::new())
+        self.begin_activation_payment(player, source, ability_index, Vec::new(), 0)
     }
 
     /// The turn and life terms every activation shares, whatever its source.
@@ -824,6 +1006,9 @@ impl Game {
         }
         if self.state.players[player.0].life < ability.life_cost as i32 {
             return Err(AgentError("cannot pay life cost".into()));
+        }
+        if ability.sorcery_timing && !self.can_cast_sorceries(player) {
+            return Err(AgentError("activation requires sorcery timing".into()));
         }
         Ok(())
     }
@@ -873,7 +1058,8 @@ impl Game {
     ) -> Option<ActivatedAbilityDefinition> {
         match source {
             ActivationSource::Permanent(permanent) => self
-                .activated_abilities_for(permanent)
+                .characteristics(permanent)
+                .activated_abilities
                 .get(ability_index)
                 .cloned(),
             ActivationSource::Card(card) => {
@@ -892,7 +1078,7 @@ impl Game {
     ) -> Result<(), AgentError> {
         if ability.requires_target()
             && self
-                .activated_ability_targets(player, source, ability_index)
+                .activated_ability_targets(player, source, ability_index, &[])
                 .is_empty()
         {
             return Err(AgentError("no legal ability targets".into()));
@@ -901,45 +1087,102 @@ impl Game {
             player,
             source,
             ability_index,
+            chosen: Vec::new(),
         });
         Ok(())
     }
 
+    /// The targeting clause of the activation in progress.
+    fn activation_target_requirement(
+        &self,
+        source: ActivationSource,
+        ability_index: usize,
+    ) -> Option<TargetRequirement> {
+        self.activation_ability(source, ability_index)?
+            .target_requirement()
+    }
+
+    /// Targets the activation can choose next, given those already `chosen`.
+    /// Under "that share a creature type", a target is offered only with
+    /// the chosen ones and, while the minimum is unmet, a remaining partner.
     pub(crate) fn activated_ability_targets(
         &self,
         player: PlayerId,
         source: ActivationSource,
         ability_index: usize,
+        chosen: &[Target],
     ) -> Vec<Target> {
-        let Some(ability) = self.activation_ability(source, ability_index) else {
+        let Some(requirement) = self.activation_target_requirement(source, ability_index) else {
             return Vec::new();
         };
-        ability.target_spec().map_or_else(Vec::new, |spec| {
-            self.legal_targets_for_spec(spec, player)
-                .into_iter()
-                .filter(|target| {
-                    !matches!((source, target), (ActivationSource::Permanent(own), Target::Permanent(id)) if own == *id)
-                })
-                .collect()
-        })
+        let candidates: Vec<Target> = self
+            .legal_targets_for_spec(&requirement.spec, player)
+            .into_iter()
+            .filter(|target| {
+                let is_source = match source {
+                    ActivationSource::Permanent(permanent) => {
+                        *target == Target::Permanent(permanent)
+                    }
+                    ActivationSource::Card(_) => false,
+                };
+                !is_source && !chosen.contains(target)
+            })
+            .collect();
+        if !requirement.shares_creature_type {
+            return candidates;
+        }
+        let needs_partner = chosen.len() + 1 < requirement.min;
+        candidates
+            .iter()
+            .copied()
+            .filter(|target| {
+                let with = |extra: &[Target]| {
+                    self.targets_share_creature_type(chosen.iter().chain([target]).chain(extra))
+                };
+                with(&[])
+                    && (!needs_partner
+                        || candidates.iter().any(|partner| {
+                            partner != target && with(std::slice::from_ref(partner))
+                        }))
+            })
+            .collect()
     }
 
+    /// Whether the permanents among `targets` have a creature type in common
+    /// ("that share a creature type").
+    fn targets_share_creature_type<'a>(&self, targets: impl Iterator<Item = &'a Target>) -> bool {
+        let mut common: Option<Vec<&str>> = None;
+        for target in targets {
+            let Target::Permanent(id) = target else {
+                return false;
+            };
+            let types = self.characteristics(*id).creature_types;
+            common = Some(match common {
+                None => types,
+                Some(common) => common.into_iter().filter(|t| types.contains(t)).collect(),
+            });
+        }
+        common.is_some_and(|common| !common.is_empty())
+    }
+
+    /// Finish choosing activation targets once the clause's minimum is met.
     pub(crate) fn decline_activated_target(&mut self, player: PlayerId) -> Result<(), AgentError> {
         let Some(PendingChoice::ActivatedTarget {
             player: chooser,
             source,
             ability_index,
-        }) = self.pending_choice
+            chosen,
+        }) = self.pending_choice.clone()
         else {
             return Err(AgentError("no activated target pending".into()));
         };
-        let ability = self
-            .activation_ability(source, ability_index)
+        let requirement = self
+            .activation_target_requirement(source, ability_index)
             .ok_or_else(|| AgentError("missing activation source".into()))?;
-        if chooser != player || !ability.target_is_optional() {
+        if chooser != player || chosen.len() < requirement.min {
             return Err(AgentError("target required".into()));
         }
-        self.begin_activation_payment(player, source, ability_index, Vec::new())
+        self.begin_activation_payment(player, source, ability_index, chosen, 0)
     }
 
     pub(crate) fn choose_activated_target(
@@ -951,18 +1194,36 @@ impl Game {
             player: chooser,
             source,
             ability_index,
-        }) = self.pending_choice
+            mut chosen,
+        }) = self.pending_choice.clone()
         else {
             return Err(AgentError("no activated target pending".into()));
         };
         if player != chooser
             || !self
-                .activated_ability_targets(player, source, ability_index)
+                .activated_ability_targets(player, source, ability_index, &chosen)
                 .contains(&target)
         {
             return Err(AgentError("illegal activated target".into()));
         }
-        self.begin_activation_payment(player, source, ability_index, vec![target])
+        let requirement = self
+            .activation_target_requirement(source, ability_index)
+            .ok_or_else(|| AgentError("missing activation source".into()))?;
+        chosen.push(target);
+        if chosen.len() >= requirement.max
+            || self
+                .activated_ability_targets(player, source, ability_index, &chosen)
+                .is_empty()
+        {
+            return self.begin_activation_payment(player, source, ability_index, chosen, 0);
+        }
+        self.pending_choice = Some(PendingChoice::ActivatedTarget {
+            player,
+            source,
+            ability_index,
+            chosen,
+        });
+        Ok(())
     }
 
     pub(crate) fn payment_candidates(
@@ -986,6 +1247,7 @@ impl Game {
         source: ActivationSource,
         ability_index: usize,
         targets: Vec<Target>,
+        x: u8,
     ) -> Result<(), AgentError> {
         let ability = self
             .activation_ability(source, ability_index)
@@ -1006,6 +1268,7 @@ impl Game {
                 source,
                 ability_index,
                 targets,
+                x,
             },
             cost,
         )
@@ -1057,6 +1320,7 @@ impl Game {
             source,
             ability_index,
             targets,
+            x: 0,
         };
         self.begin_payment(player, payment, sacrifice)
     }
@@ -1108,18 +1372,24 @@ impl Game {
         alternative: Option<&ManaCost>,
     ) -> ManaCost {
         let base = match payment {
-            Payment::Spell { card, cast, .. } => self
-                .effective_spell_cost(player, *card, *cast)
+            Payment::Spell {
+                card,
+                cast,
+                targets,
+                ..
+            } => self
+                .effective_spell_cost(player, *card, *cast, Some(targets))
                 .unwrap_or_default(),
             Payment::Activation {
                 source,
                 ability_index,
+                x,
                 ..
-            } => {
-                self.activation_ability(*source, *ability_index)
-                    .expect("pending activation source")
-                    .mana_cost
-            }
+            } => self
+                .activation_ability(*source, *ability_index)
+                .expect("pending activation source")
+                .mana_cost
+                .with_x(*x),
         };
         match alternative {
             Some(extra) => base.plus(extra),
@@ -1139,11 +1409,12 @@ impl Game {
             Payment::Activation {
                 source,
                 ability_index,
+                x,
                 ..
             } => self
                 .activation_ability(*source, *ability_index)
                 .filter(|ability| ability.waterbend)
-                .map_or(0, |ability| ability.mana_cost.generic()),
+                .map_or(0, |ability| ability.mana_cost.with_x(*x).generic()),
         }
     }
 
@@ -1234,6 +1505,7 @@ impl Game {
                 source,
                 ability_index,
                 targets,
+                x,
             } => {
                 let life = self
                     .activation_ability(source, ability_index)
@@ -1244,7 +1516,7 @@ impl Game {
                 self.change_life(player, -(life as i32));
                 match source {
                     ActivationSource::Permanent(permanent) => {
-                        self.push_activated_ability(player, permanent, ability_index, targets)
+                        self.push_activated_ability(player, permanent, ability_index, targets, x)
                     }
                     ActivationSource::Card(card) => {
                         self.push_card_activated_ability(player, card, ability_index, targets)
@@ -1252,6 +1524,79 @@ impl Game {
                 }
             }
         }
+    }
+
+    /// Other untapped creatures `player` controls that can help crew
+    /// `vehicle`. Summoning sickness doesn't matter (crew is not a {T}
+    /// cost); creatures without positive power add nothing and are omitted.
+    pub(crate) fn crew_candidates(
+        &self,
+        player: PlayerId,
+        vehicle: PermanentId,
+    ) -> Vec<PermanentId> {
+        self.battlefield_permanents(player)
+            .into_iter()
+            .filter(|&id| {
+                id != vehicle
+                    && self.state.permanents[id]
+                        .as_ref()
+                        .is_some_and(|permanent| !permanent.tapped)
+                    && {
+                        let characteristics = self.characteristics(id);
+                        characteristics.is_creature && characteristics.power > 0
+                    }
+            })
+            .collect()
+    }
+
+    pub(crate) fn crew_power_available(&self, player: PlayerId, vehicle: PermanentId) -> i32 {
+        self.crew_candidates(player, vehicle)
+            .into_iter()
+            .map(|id| self.characteristics(id).power)
+            .sum()
+    }
+
+    /// Tap one creature toward the pending crew cost; once the total power
+    /// reaches the crew number the ability's remaining costs are paid.
+    pub(crate) fn crew_tap_action(
+        &mut self,
+        player: PlayerId,
+        card: CardId,
+    ) -> Result<(), AgentError> {
+        let Some(PendingChoice::Crew {
+            player: payer,
+            permanent,
+            ability_index,
+            remaining_power,
+        }) = self.pending_choice
+        else {
+            return Err(AgentError("no crew payment is pending".into()));
+        };
+        if payer != player {
+            return Err(AgentError("wrong player for crew payment".into()));
+        }
+        let crew = self.state.card_to_permanent[card]
+            .filter(|id| self.crew_candidates(player, permanent).contains(id))
+            .ok_or_else(|| AgentError("creature cannot crew".into()))?;
+        let remaining_power = remaining_power - self.characteristics(crew).power;
+        self.tap_permanent(crew, false);
+        if remaining_power > 0 {
+            self.pending_choice = Some(PendingChoice::Crew {
+                player,
+                permanent,
+                ability_index,
+                remaining_power,
+            });
+            return Ok(());
+        }
+        self.pending_choice = None;
+        self.begin_activation_payment(
+            player,
+            ActivationSource::Permanent(permanent),
+            ability_index,
+            Vec::new(),
+            0,
+        )
     }
 
     /// Untapped artifacts/creatures `player` controls — the permanents that
@@ -1300,7 +1645,8 @@ impl Game {
         else {
             return None;
         };
-        self.activated_abilities_for(*source)
+        self.characteristics(*source)
+            .activated_abilities
             .get(*ability_index)
             .is_some_and(|ability| ability.tap_source)
             .then_some(*source)
@@ -1342,13 +1688,20 @@ impl Game {
         source: PermanentId,
         ability: &ActivatedAbilityDefinition,
     ) -> bool {
-        let cost = &ability.mana_cost;
+        // An X cost is payable when its least X is.
+        let cost = ability.mana_cost.with_x(ability.x_min);
         if !ability.tap_source {
-            return self.waterbend_payment_possible(player, cost, cost.generic());
+            return self.can_pay_with_waterbend(player, &cost);
         }
         let mut probe = self.clone();
         probe.tap_permanent(source, false);
-        probe.waterbend_payment_possible(player, cost, cost.generic())
+        probe.can_pay_with_waterbend(player, &cost)
+    }
+
+    /// Can `player` cover `cost` with untapped waterbend candidates
+    /// ({1} each, generic only) plus available mana?
+    pub(crate) fn can_pay_with_waterbend(&self, player: PlayerId, cost: &ManaCost) -> bool {
+        self.waterbend_payment_possible(player, cost, cost.generic())
     }
 
     /// Tap `permanent` to pay {1} of the pending waterbend cost.
@@ -1427,6 +1780,7 @@ impl Game {
         permanent_id: PermanentId,
         ability_index: usize,
         targets: Vec<Target>,
+        x: u8,
     ) -> Result<(), AgentError> {
         let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
             return Err(AgentError("source permanent does not exist".to_string()));
@@ -1435,9 +1789,11 @@ impl Game {
             .permanent_object_ref(permanent_id)
             .ok_or_else(|| AgentError("missing activation source identity".into()))?;
         let source_card = permanent.card;
+        let attached = permanent.attached_to;
         let source_definition_id = self.state.cards[source_card].definition_id;
         let Some(ability) = self
-            .activated_abilities_for(permanent_id)
+            .characteristics(permanent_id)
+            .activated_abilities
             .get(ability_index)
             .cloned()
         else {
@@ -1445,7 +1801,7 @@ impl Game {
         };
 
         if ability.tap_source {
-            if !permanent.can_tap(&self.state.cards[source_card]) {
+            if !self.permanent_can_tap(permanent_id) {
                 return Err(AgentError("source cannot pay tap cost".into()));
             }
             self.tap_permanent(permanent_id, false);
@@ -1466,6 +1822,9 @@ impl Game {
             source_ref,
             ability_index,
             targets,
+            attached,
+            x,
+            granted_by: ability.granted_by,
         }));
         self.state.priority.on_non_pass_action(self.active_player());
         Ok(())
@@ -1501,6 +1860,9 @@ impl Game {
             source_ref,
             ability_index,
             targets,
+            attached: None,
+            x: 0,
+            granted_by: None,
         }));
         self.state.priority.on_non_pass_action(self.active_player());
         Ok(())

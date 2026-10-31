@@ -1,7 +1,15 @@
 <script lang="ts">
   import { copyLabel } from '$lib/decision-labels';
-  import type { CardPreview, CardState, CastPermission, PlayerState, RestrictedMana } from '$lib/types';
+  import { effectNote } from '$lib/permanent-notes';
 
+  import type {
+    CardPreview,
+    CardState,
+    CastPermission,
+    PermanentState,
+    PlayerState,
+    RestrictedMana
+  } from '$lib/types';
   import Card from './Card.svelte';
   import CardBack from './CardBack.svelte';
   import Battlefield from './Battlefield.svelte';
@@ -12,6 +20,8 @@
   interface Props {
     label: string;
     player: PlayerState;
+    /** Every visible permanent at the table, for attachments across seats. */
+    tablePermanents: PermanentState[];
     deckName?: string | null;
     definitionNames?: Record<string, string>;
     opponent?: boolean;
@@ -25,6 +35,7 @@
   let {
     label,
     player,
+    tablePermanents,
     deckName = null,
     definitionNames = {},
     opponent = false,
@@ -131,6 +142,7 @@
         {/each}
       {:else if player.lesson_mana?.some(Boolean)} · Restricted mana: {manaText(player.lesson_mana)}{/if}
       {#if player.combat_mana} · {player.combat_mana} mana expires at end of combat{/if}
+      {#if player.keeps_red_mana} · Keeps unspent red mana until end of turn{/if}
     </p>
   {:else}<p class="type-caption text-ink-2">Mana details not recorded.</p>{/if}
   {#if player.hand_only_until !== undefined}
@@ -138,6 +150,9 @@
       {label} can cast spells only from hand until the other player's next turn.
     </p>
   {/if}
+  {#each player.effects ?? [] as effect}
+    <p class="type-caption py-1" data-testid="player-effect">{label}: {effectNote(effect)}.</p>
+  {/each}
   {#if player.no_maximum_hand_size}
     <p class="type-caption py-1" data-testid="no-maximum-hand-size">
       {label} has no maximum hand size.
@@ -209,6 +224,7 @@
         {@render rubric('Battlefield')}
         <Battlefield
           permanents={player.battlefield}
+          {tablePermanents}
           {focusedIds}
           {clickableTargets}
           {onSelectTarget}
@@ -221,6 +237,7 @@
         {@render rubric('Battlefield')}
         <Battlefield
           permanents={player.battlefield}
+          {tablePermanents}
           {focusedIds}
           {clickableTargets}
           {onSelectTarget}

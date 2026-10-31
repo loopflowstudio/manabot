@@ -18,6 +18,7 @@ use crate::{
     flow::game::{Game, PendingChoice},
     state::{
         ability::TargetSpec,
+        card::Restriction,
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
         zone::ZoneType,
     },
@@ -736,8 +737,9 @@ impl Game {
 
     /// Independent blocker assignments are a product of authoritative pair
     /// supports. Menace couples assignments and the current engine repairs an
-    /// illegal singleton after declaration; retain its sequential path until a
-    /// dependent joint support can exclude those aliases before sampling.
+    /// illegal singleton after declaration; a blocker limit refuses a second
+    /// blocker. Both retain the sequential path until a dependent joint
+    /// support can exclude those aliases before sampling.
     fn structured_blocker_offers(
         &self,
     ) -> Result<Option<StructuredOfferSet>, StructuredOfferError> {
@@ -750,11 +752,10 @@ impl Game {
             .combat
             .as_ref()
             .ok_or(StructuredOfferError::WrongDecision)?;
-        if combat
-            .attackers
-            .iter()
-            .any(|attacker| self.effective_keywords(*attacker).menace)
-        {
+        if combat.attackers.iter().any(|attacker| {
+            self.characteristics(*attacker).keywords.menace
+                || self.has_restriction(*attacker, Restriction::CantBeBlockedByMoreThanOne)
+        }) {
             return Ok(None);
         }
         let first = space

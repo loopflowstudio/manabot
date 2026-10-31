@@ -23,7 +23,10 @@ impl Game {
                     .iter()
                     .any(|kind| kind.eq_ignore_ascii_case("legendary"))
                 {
-                    names.entry(&card.name).or_default().push(permanent.card);
+                    names
+                        .entry(self.characteristics(id).name)
+                        .or_default()
+                        .push(permanent.card);
                 }
             }
             groups.extend(names.into_values().filter(|cards| cards.len() > 1));
@@ -95,14 +98,17 @@ impl Game {
             // CR 704.5f — A creature with toughness 0 or less is put into
             // its owner's graveyard (an earthbent land losing its counters
             // is a 0/0 and dies).
-            let zero_toughness = self.permanent_is_creature(permanent_id)
-                && self.effective_toughness(permanent_id) <= 0;
+            let characteristics = self.characteristics(permanent_id);
+            let zero_toughness = characteristics.is_creature && characteristics.toughness <= 0;
             // CR 704.5g — Creatures with lethal damage are destroyed.
             let destroy = !zero_toughness
-                && self.has_lethal_damage(permanent_id)
-                && !self.effective_keywords(permanent_id).indestructible;
+                && self.has_lethal_damage(permanent_id, &characteristics)
+                && !characteristics.keywords.indestructible;
             let legend_loser = legend_losers.contains(&permanent.card);
-            if !zero_toughness && !destroy && !legend_loser {
+            // CR 704.5m — An Aura attached to an illegal object or to
+            // nothing is put into its owner's graveyard.
+            let illegal_aura = self.aura_attachment_illegal(permanent_id);
+            if !zero_toughness && !destroy && !legend_loser && !illegal_aura {
                 continue;
             }
             let Some(object_ref) = self.permanent_object_ref(permanent_id) else {
@@ -115,7 +121,7 @@ impl Game {
                 object_ref,
                 event_ref,
                 permanent.controller,
-                destroy && !legend_loser,
+                destroy && !legend_loser && !illegal_aura,
             ));
         }
         candidates.sort_by_key(|(object_ref, _, _, _)| *object_ref);
@@ -148,6 +154,24 @@ impl Game {
             self.emit_observation_event(GameEvent::PermanentsDied { objects: died });
         }
 
+        // CR 704.5n — An Equipment attached to an object that is gone or is
+        // no longer a creature becomes unattached and stays on the battlefield.
+        let detached: Vec<PermanentId> = (0..self.state.permanents.len())
+            .map(PermanentId)
+            .filter(|&id| {
+                self.state.permanents[id].as_ref().is_some_and(|equipment| {
+                    equipment.attached_to.is_some()
+                        && self.state.cards[equipment.card].enchant().is_none()
+                }) && self.attached_creature(id).is_none()
+            })
+            .collect();
+        for permanent_id in detached {
+            if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
+                permanent.attached_to = None;
+            }
+            performed = true;
+        }
+
         // CR 704.5d — A token in a zone other than the battlefield ceases to
         // exist. This runs after the move to the graveyard, so death triggers
         // from tokens have already been enqueued.
@@ -174,6 +198,20 @@ impl Game {
         }
 
         performed
+    }
+
+    /// Whether an Aura is unattached, or attached to itself or an object its
+    /// enchant ability doesn't allow (CR 303.4d, 704.5m).
+    fn aura_attachment_illegal(&self, aura: PermanentId) -> bool {
+        let Some(permanent) = self.state.permanents[aura].as_ref() else {
+            return false;
+        };
+        let Some(enchant) = self.state.cards[permanent.card].enchant() else {
+            return false;
+        };
+        !self.attached_permanent(aura).is_some_and(|object| {
+            object != aura && self.permanent_matches_spec(object, enchant, permanent.controller)
+        })
     }
 
     pub(crate) fn lose_game(&mut self, player: PlayerId) -> bool {

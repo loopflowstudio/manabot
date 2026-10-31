@@ -9,6 +9,8 @@ use managym::{
     },
     state::{
         ability::{Ability, Effect, TriggerCondition, TriggerSubject},
+        card::Keywords,
+        effect::Modification,
         game_object::{CardId, ObjectRef, PlayerId},
         predicate::CardPredicate,
         stack_object::StackObject,
@@ -20,12 +22,12 @@ use crate::support::game::*;
 use crate::support::inspect::owned_card;
 
 fn dragonfly_sba_scenario(seed: u64) -> (Scenario, ObjectRef) {
-    let swarm_deck = BTreeMap::from([
-        ("Dragonfly Swarm".to_string(), 1),
-        ("Firebending Lesson".to_string(), 1),
-        ("Island".to_string(), 6),
+    let swarm = deck(&[
+        ("Dragonfly Swarm", 1),
+        ("Firebending Lesson", 1),
+        ("Island", 6),
     ]);
-    let mut s = Scenario::new(swarm_deck, deck(&[("Mountain", 40)]), seed);
+    let mut s = Scenario::new(swarm, deck(&[("Mountain", 40)]), seed);
     s.advance_to_active_step(0, StepKind::Main);
 
     let lesson = owned_card(&s, 0, "Firebending Lesson");
@@ -385,11 +387,27 @@ fn audit_sba_toughness_damage_indestructible_boundary_matrix() {
                         let id = s.force_permanent_on_battlefield(controller, "Gray Ogre");
                         let perm = s.game_mut().state.permanents[id].as_mut().unwrap();
                         let card = perm.card;
-                        perm.temp_toughness = toughness - 2;
                         perm.damage = damage;
                         // A deathtouch flag describes positive damage, never zero.
                         perm.deathtouch_damage = deathtouch && damage > 0;
-                        perm.temp_keywords.indestructible = indestructible;
+                        until_end_of_turn(
+                            &mut s,
+                            id,
+                            Modification::ModifyPt {
+                                power: 0,
+                                toughness: toughness - 2,
+                            },
+                        );
+                        if indestructible {
+                            until_end_of_turn(
+                                &mut s,
+                                id,
+                                Modification::AddKeywords(Keywords {
+                                    indestructible: true,
+                                    ..Default::default()
+                                }),
+                            );
+                        }
                         s.pass_priority();
                         let dies = toughness <= 0
                             || (!indestructible

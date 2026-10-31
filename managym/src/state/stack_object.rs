@@ -1,5 +1,5 @@
 use super::ability::Effect;
-use super::card::CardDefId;
+use super::card::{AbilityGrant, CardDefId};
 use super::game_object::{CardId, ObjectId, ObjectLki, ObjectRef, PlayerId, Target};
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
@@ -36,6 +36,17 @@ pub struct ActivatedAbilityOnStack {
     pub source_ref: ObjectRef,
     pub ability_index: usize,
     pub targets: Vec<Target>,
+    /// The exact object the source Aura or Equipment was attached to when
+    /// the ability was activated, before costs such as sacrificing it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub attached: Option<ObjectRef>,
+    /// The announced value of X (CR 602.2b, 601.2b).
+    #[serde(skip_serializing_if = "crate::state::is_zero")]
+    pub x: u8,
+    /// For an ability granted by an attached permanent: that exact object and
+    /// its grant, fixed at activation (`ability_index` names the grantee's list).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub granted_by: Option<AbilityGrant>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]

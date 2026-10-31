@@ -34,11 +34,13 @@ fn tireless_provisioner() -> CardDefinition {
                         token_name: "Food".into(),
                         count: 1,
                         tapped_and_attacking: false,
+                        attach_source: false,
                     }],
                     vec![Effect::CreateToken {
                         token_name: "Treasure".into(),
                         count: 1,
                         tapped_and_attacking: false,
+                        attach_source: false,
                     }],
                 ],
             }],

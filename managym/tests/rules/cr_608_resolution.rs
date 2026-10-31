@@ -8,7 +8,9 @@ use managym::{
         turn::StepKind,
     },
     state::{
-        ability::{Effect, EffectValue, TargetSpec},
+        ability::{AffectedSpec, Effect, EffectValue, TargetSpec},
+        card::Keywords,
+        effect::Modification,
         game_object::{CardId, PlayerId},
         zone::ZoneType,
     },
@@ -84,7 +86,7 @@ fn cr_704_4_sba_waits_for_suspended_resolution_to_finish() {
 #[test]
 fn cr_603_5_optional_draw_is_chosen_at_resolution() {
     let mut s = Scenario::new(
-        deck_of("Mountain", "Gray Ogre"),
+        deck(&[("Mountain", 24), ("Gray Ogre", 16)]),
         deck(&[("Mountain", 40)]),
         608_603,
     );
@@ -120,7 +122,7 @@ fn cr_603_5_optional_draw_is_chosen_at_resolution() {
 #[ignore = "audit proposal: earthbend return must retain destination incarnation"]
 fn audit_earthbend_return_does_not_follow_a_second_zone_change() {
     let mut s = Scenario::new(
-        deck_of("Mountain", "Gray Ogre"),
+        deck(&[("Mountain", 24), ("Gray Ogre", 16)]),
         deck(&[("Mountain", 40)]),
         608_400,
     );
@@ -164,17 +166,20 @@ fn audit_deathtouch_does_not_reapply_after_surviving_an_sba_check() {
     let card = permanent.card;
     permanent.damage = 1;
     permanent.deathtouch_damage = true;
-    permanent.temp_keywords.indestructible = true;
+    let indestructible = Modification::AddKeywords(Keywords {
+        indestructible: true,
+        ..Default::default()
+    });
+    until_end_of_turn(&mut s, ogre, indestructible.clone());
     s.pass_priority();
     assert_eq!(
         s.game().state.zones.zone_of(card),
         Some(ZoneType::Battlefield)
     );
-    s.game_mut().state.permanents[ogre]
-        .as_mut()
-        .unwrap()
-        .temp_keywords
-        .indestructible = false;
+    s.game_mut()
+        .state
+        .effects
+        .retain(|effect| effect.modification != indestructible);
     s.pass_priority();
     assert_eq!(
         s.game().state.zones.zone_of(card),
@@ -199,13 +204,13 @@ fn audit_target_gaining_hexproof_during_resolution_is_still_affected() {
         &mut s,
         card,
         vec![
-            Effect::GrantKeywordsToTarget {
-                keywords: managym::state::card::Keywords {
+            Effect::until_end_of_turn(
+                AffectedSpec::Target(TargetSpec::Creature),
+                Modification::AddKeywords(Keywords {
                     hexproof: true,
                     ..Default::default()
-                },
-                target: TargetSpec::Creature,
-            },
+                }),
+            ),
             Effect::DealDamage {
                 amount: 1,
                 target: TargetSpec::Creature,
@@ -216,7 +221,9 @@ fn audit_target_gaining_hexproof_during_resolution_is_still_affected() {
     assert!(s.choose_target(managym::state::game_object::Target::Permanent(victim)));
     s.pass_priority();
     s.pass_priority();
-    let permanent = s.game().state.permanents[victim].as_ref().unwrap();
-    assert!(permanent.temp_keywords.hexproof);
-    assert_eq!(permanent.damage, 1);
+    assert!(s.game().characteristics(victim).keywords.hexproof);
+    assert_eq!(
+        s.game().state.permanents[victim].as_ref().unwrap().damage,
+        1
+    );
 }

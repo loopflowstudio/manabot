@@ -2553,5 +2553,596 @@
     "colors": [
       "R"
     ]
+  },
+  "Abandoned Air Temple": {
+    "name": "Abandoned Air Temple",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped unless you control a basic land.\n{T}: Add {W}.\n{3}{W}, {T}: Put a +1/+1 counter on each creature you control.",
+    "colors": []
+  },
+  "Agna Qel'a": {
+    "name": "Agna Qel'a",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped unless you control a basic land.\n{T}: Add {U}.\n{2}{U}, {T}: Draw a card, then discard a card.",
+    "colors": []
+  },
+  "Air Nomad Legacy": {
+    "name": "Air Nomad Legacy",
+    "mana_cost": "{W}{U}",
+    "type_line": "Enchantment",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "When this enchantment enters, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")\nCreatures you control with flying get +1/+1.",
+    "colors": [
+      "U",
+      "W"
+    ]
+  },
+  "Ba Sing Se": {
+    "name": "Ba Sing Se",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "This land enters tapped unless you control a basic land.\n{T}: Add {G}.\n{2}{G}, {T}: Earthbend 2. Activate only as a sorcery. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)",
+    "colors": []
+  },
+  "Badgermole": {
+    "name": "Badgermole",
+    "mana_cost": "{4}{G}",
+    "type_line": "Creature — Badger Mole",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "When this creature enters, earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)\nCreatures you control with +1/+1 counters on them have trample.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Diligent Zookeeper": {
+    "name": "Diligent Zookeeper",
+    "mana_cost": "{3}{G}",
+    "type_line": "Creature — Human Citizen Ally",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "Each non-Human creature you control gets +1/+1 for each of its creature types, to a maximum of 10.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Foggy Swamp Hunters": {
+    "name": "Foggy Swamp Hunters",
+    "mana_cost": "{3}{B}",
+    "type_line": "Creature — Human Ranger Ally",
+    "power": "3",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "As long as you've drawn two or more cards this turn, this creature has lifelink and menace. (It can't be blocked except by two or more creatures.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "Realm of Koh": {
+    "name": "Realm of Koh",
+    "mana_cost": "",
+    "type_line": "Land",
+    "power": null,
+    "toughness": null,
+    "keywords": [],
+    "oracle_text": "This land enters tapped unless you control a basic land.\n{T}: Add {B}.\n{3}{B}, {T}: Create a 1/1 colorless Spirit creature token with \"This token can't block or be blocked by non-Spirit creatures.\"",
+    "colors": []
+  },
+  "The Walls of Ba Sing Se": {
+    "name": "The Walls of Ba Sing Se",
+    "mana_cost": "{8}",
+    "type_line": "Legendary Artifact Creature — Wall",
+    "power": "0",
+    "toughness": "30",
+    "keywords": [
+      "Defender"
+    ],
+    "oracle_text": "Defender\nOther permanents you control have indestructible.",
+    "colors": []
+  },
+  "Rowdy Snowballers": {
+    "name": "Rowdy Snowballers",
+    "mana_cost": "{2}{U}",
+    "type_line": "Creature — Human Peasant Ally",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "When this creature enters, tap target creature an opponent controls and put a stun counter on it. (If a permanent with a stun counter would become untapped, remove one from it instead.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Mai, Jaded Edge": {
+    "name": "Mai, Jaded Edge",
+    "mana_cost": "{1}{R}",
+    "type_line": "Legendary Creature — Human Noble",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [
+      "Prowess",
+      "Exhaust"
+    ],
+    "oracle_text": "Prowess (Whenever you cast a noncreature spell, this creature gets +1/+1 until end of turn.)\nExhaust — {3}: Put a double strike counter on Mai. (Activate each exhaust ability only once.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Heartless Act": {
+    "name": "Heartless Act",
+    "mana_cost": "{1}{B}",
+    "type_line": "Instant",
+    "keywords": [],
+    "oracle_text": "Choose one —\n• Destroy target creature with no counters on it.\n• Remove up to three counters from target creature.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Flexible Waterbender": {
+    "name": "Flexible Waterbender",
+    "mana_cost": "{3}{U}",
+    "type_line": "Creature — Human Warrior Ally",
+    "power": "2",
+    "toughness": "5",
+    "keywords": [
+      "Vigilance",
+      "Waterbend"
+    ],
+    "oracle_text": "Vigilance\nWaterbend {3}: This creature has base power and toughness 5/2 until end of turn. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Turtle-Duck": {
+    "name": "Turtle-Duck",
+    "mana_cost": "{G}",
+    "type_line": "Creature — Turtle Bird",
+    "power": "0",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "{3}: Until end of turn, this creature has base power 4 and gains trample.",
+    "colors": [
+      "G"
+    ]
+  },
+  "Kyoshi Battle Fan": {
+    "name": "Kyoshi Battle Fan",
+    "mana_cost": "{2}",
+    "type_line": "Artifact — Equipment",
+    "keywords": [
+      "Equip"
+    ],
+    "oracle_text": "When this Equipment enters, create a 1/1 white Ally creature token, then attach this Equipment to it.\nEquipped creature gets +1/+0.\nEquip {2} ({2}: Attach to target creature you control. Equip only as a sorcery.)",
+    "colors": []
+  },
+  "Meteor Sword": {
+    "name": "Meteor Sword",
+    "mana_cost": "{7}",
+    "type_line": "Artifact — Equipment",
+    "keywords": [
+      "Equip"
+    ],
+    "oracle_text": "When this Equipment enters, destroy target permanent.\nEquipped creature gets +3/+3.\nEquip {3} ({3}: Attach to target creature you control. Equip only as a sorcery.)",
+    "colors": []
+  },
+  "Twin Blades": {
+    "name": "Twin Blades",
+    "mana_cost": "{2}{R}",
+    "type_line": "Artifact — Equipment",
+    "keywords": [
+      "Equip",
+      "Flash"
+    ],
+    "oracle_text": "Flash\nWhen this Equipment enters, attach it to target creature you control. That creature gains double strike until end of turn.\nEquipped creature gets +1/+1.\nEquip {2} ({2}: Attach to target creature you control. Equip only as a sorcery.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Path to Redemption": {
+    "name": "Path to Redemption",
+    "mana_cost": "{1}{W}",
+    "type_line": "Enchantment — Aura",
+    "keywords": [
+      "Enchant"
+    ],
+    "oracle_text": "Enchant creature\nEnchanted creature can't attack or block.\n{5}, Sacrifice this Aura: Exile enchanted creature. Create a 1/1 white Ally creature token. Activate only during your turn.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Watery Grasp": {
+    "name": "Watery Grasp",
+    "mana_cost": "{U}",
+    "type_line": "Enchantment — Aura",
+    "keywords": [
+      "Enchant",
+      "Waterbend"
+    ],
+    "oracle_text": "Enchant creature\nEnchanted creature doesn't untap during its controller's untap step.\nWaterbend {5}: Enchanted creature's owner shuffles it into their library. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Swampsnare Trap": {
+    "name": "Swampsnare Trap",
+    "mana_cost": "{2}{B}",
+    "type_line": "Enchantment — Aura",
+    "keywords": [
+      "Enchant"
+    ],
+    "oracle_text": "This spell costs {1} less to cast if it targets a creature with flying.\nEnchant creature\nEnchanted creature gets -5/-3.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Fire Nation Warship": {
+    "name": "Fire Nation Warship",
+    "mana_cost": "{3}",
+    "type_line": "Artifact — Vehicle",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Reach",
+      "Crew"
+    ],
+    "oracle_text": "Reach\nWhen this Vehicle dies, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")\nCrew 2 (Tap any number of creatures you control with total power 2 or more: This Vehicle becomes an artifact creature until end of turn.)",
+    "colors": []
+  },
+  "Invasion Submersible": {
+    "name": "Invasion Submersible",
+    "mana_cost": "{2}{U}",
+    "type_line": "Artifact — Vehicle",
+    "power": "0",
+    "toughness": "0",
+    "keywords": [
+      "Exhaust",
+      "Waterbend"
+    ],
+    "oracle_text": "When this Vehicle enters, return up to one other target nonland permanent to its owner's hand.\nExhaust — Waterbend {3}: This Vehicle becomes an artifact creature. Put three +1/+1 counters on it. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}. Activate each exhaust ability only once.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Tundra Tank": {
+    "name": "Tundra Tank",
+    "mana_cost": "{2}{B}",
+    "type_line": "Artifact — Vehicle",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Crew",
+      "Firebending"
+    ],
+    "oracle_text": "Firebending 1 (Whenever this creature attacks, add {R}. This mana lasts until end of combat.)\nWhen this Vehicle enters, target creature you control gains indestructible until end of turn.\nCrew 1 (Tap any number of creatures you control with total power 1 or more: This Vehicle becomes an artifact creature until end of turn.)",
+    "colors": [
+      "B"
+    ]
+  },
+  "War Balloon": {
+    "name": "War Balloon",
+    "mana_cost": "{2}{R}",
+    "type_line": "Artifact — Vehicle",
+    "power": "4",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Crew"
+    ],
+    "oracle_text": "Flying\n{1}: Put a fire counter on this Vehicle.\nAs long as this Vehicle has three or more fire counters on it, it's an artifact creature.\nCrew 3 (Tap any number of creatures you control with total power 3 or more: This Vehicle becomes an artifact creature until end of turn.)",
+    "colors": [
+      "R"
+    ]
+  },
+  "Raucous Audience": {
+    "name": "Raucous Audience",
+    "mana_cost": "{1}{G}",
+    "type_line": "Creature — Human Citizen",
+    "power": "2",
+    "toughness": "1",
+    "keywords": [],
+    "oracle_text": "{T}: Add {G}. If you control a creature with power 4 or greater, add {G}{G} instead.",
+    "colors": [
+      "G"
+    ]
+  },
+  "White Lotus Tile": {
+    "name": "White Lotus Tile",
+    "mana_cost": "{4}",
+    "type_line": "Artifact",
+    "keywords": [],
+    "oracle_text": "This artifact enters tapped.\n{T}: Add X mana of any one color, where X is the greatest number of creatures you control that have a creature type in common.",
+    "colors": []
+  },
+  "The Lion-Turtle": {
+    "name": "The Lion-Turtle",
+    "mana_cost": "{1}{G}{U}",
+    "type_line": "Legendary Creature — Elder Cat Turtle",
+    "power": "3",
+    "toughness": "6",
+    "keywords": [
+      "Reach",
+      "Vigilance"
+    ],
+    "oracle_text": "Reach, vigilance\nWhen The Lion-Turtle enters, you gain 3 life.\nThe Lion-Turtle can't attack or block unless there are three or more Lesson cards in your graveyard.\n{T}: Add one mana of any color.",
+    "colors": [
+      "G",
+      "U"
+    ]
+  },
+  "Earthen Ally": {
+    "name": "Earthen Ally",
+    "mana_cost": "{G}",
+    "type_line": "Creature — Human Soldier Ally",
+    "power": "0",
+    "toughness": "2",
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "This creature gets +1/+0 for each color among Allies you control.\n{2}{W}{U}{B}{R}{G}: Earthbend 5. (Target land you control becomes a 0/0 creature with haste that's still a land. Put five +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Flopsie, Bumi's Buddy": {
+    "name": "Flopsie, Bumi's Buddy",
+    "mana_cost": "{4}{G}{G}",
+    "type_line": "Legendary Creature — Ape Goat",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [],
+    "oracle_text": "When Flopsie enters, put a +1/+1 counter on each creature you control.\nEach creature you control with power 4 or greater can't be blocked by more than one creature.",
+    "colors": [
+      "G"
+    ]
+  },
+  "The Boulder, Ready to Rumble": {
+    "name": "The Boulder, Ready to Rumble",
+    "mana_cost": "{3}{G}",
+    "type_line": "Legendary Creature — Human Warrior Performer",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "Whenever The Boulder attacks, earthbend X, where X is the number of creatures you control with power 4 or greater. (Target land you control becomes a 0/0 creature with haste that's still a land. Put X +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)",
+    "colors": [
+      "G"
+    ]
+  },
+  "Platypus-Bear": {
+    "name": "Platypus-Bear",
+    "mana_cost": "{1}{G/U}",
+    "type_line": "Creature — Platypus Bear",
+    "power": "2",
+    "toughness": "3",
+    "keywords": [
+      "Mill",
+      "Defender"
+    ],
+    "oracle_text": "Defender\nWhen this creature enters, mill two cards. (Put the top two cards of your library into your graveyard.)\nAs long as there is a Lesson card in your graveyard, this creature can attack as though it didn't have defender.",
+    "colors": [
+      "G",
+      "U"
+    ]
+  },
+  "Toph, the First Metalbender": {
+    "name": "Toph, the First Metalbender",
+    "mana_cost": "{1}{R}{G}{W}",
+    "type_line": "Legendary Creature — Human Warrior Ally",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Earthbend"
+    ],
+    "oracle_text": "Nontoken artifacts you control are lands in addition to their other types. (They don't gain the ability to {T} for mana.)\nAt the beginning of your end step, earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)",
+    "colors": [
+      "G",
+      "R",
+      "W"
+    ]
+  },
+  "The Mechanist, Aerial Artisan": {
+    "name": "The Mechanist, Aerial Artisan",
+    "mana_cost": "{2}{U}",
+    "type_line": "Legendary Creature — Human Artificer Ally",
+    "power": "1",
+    "toughness": "3",
+    "keywords": [],
+    "oracle_text": "Whenever you cast a noncreature spell, create a Clue token. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")\n{T}: Until end of turn, target artifact token you control becomes a 3/1 Construct artifact creature with flying.",
+    "colors": [
+      "U"
+    ]
+  },
+  "Energybending": {
+    "name": "Energybending",
+    "mana_cost": "{2}",
+    "type_line": "Instant — Lesson",
+    "keywords": [],
+    "oracle_text": "Lands you control gain all basic land types until end of turn.\nDraw a card.",
+    "colors": []
+  },
+  "Ozai, the Phoenix King": {
+    "name": "Ozai, the Phoenix King",
+    "mana_cost": "{2}{B}{B}{R}{R}",
+    "type_line": "Legendary Creature — Human Noble",
+    "power": "7",
+    "toughness": "7",
+    "keywords": [
+      "Haste",
+      "Trample",
+      "Firebending"
+    ],
+    "oracle_text": "Trample, firebending 4, haste\nIf you would lose unspent mana, that mana becomes red instead.\nOzai has flying and indestructible as long as you have six or more unspent mana.",
+    "colors": [
+      "B",
+      "R"
+    ]
+  },
+  "Fated Firepower": {
+    "name": "Fated Firepower",
+    "mana_cost": "{X}{R}{R}{R}",
+    "type_line": "Enchantment",
+    "keywords": [
+      "Flash"
+    ],
+    "oracle_text": "Flash\nThis enchantment enters with X fire counters on it.\nIf a source you control would deal damage to an opponent or a permanent an opponent controls, it deals that much damage plus an amount of damage equal to the number of fire counters on this enchantment instead.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Day of Black Sun": {
+    "name": "Day of Black Sun",
+    "mana_cost": "{X}{B}{B}",
+    "type_line": "Sorcery",
+    "keywords": [],
+    "oracle_text": "Each creature with mana value X or less loses all abilities until end of turn. Destroy those creatures.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Katara, Water Tribe's Hope": {
+    "name": "Katara, Water Tribe's Hope",
+    "mana_cost": "{2}{W}{U}{U}",
+    "type_line": "Legendary Creature — Human Warrior Ally",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Vigilance",
+      "Waterbend"
+    ],
+    "oracle_text": "Vigilance\nWhen Katara enters, create a 1/1 white Ally creature token.\nWaterbend {X}: Creatures you control have base power and toughness X/X until end of turn. X can't be 0. Activate only during your turn. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)",
+    "colors": [
+      "U",
+      "W"
+    ]
+  },
+  "Razor Rings": {
+    "name": "Razor Rings",
+    "mana_cost": "{1}{W}",
+    "type_line": "Instant",
+    "keywords": [],
+    "oracle_text": "Razor Rings deals 4 damage to target attacking or blocking creature. You gain life equal to the excess damage dealt this way.",
+    "colors": [
+      "W"
+    ]
+  },
+  "The Last Agni Kai": {
+    "name": "The Last Agni Kai",
+    "mana_cost": "{1}{R}",
+    "type_line": "Instant",
+    "keywords": [
+      "Fight"
+    ],
+    "oracle_text": "Target creature you control fights target creature an opponent controls. If the creature the opponent controls is dealt excess damage this way, add that much {R}.\nUntil end of turn, you don't lose unspent red mana as steps and phases end.",
+    "colors": [
+      "R"
+    ]
+  },
+  "Lo and Li, Twin Tutors": {
+    "name": "Lo and Li, Twin Tutors",
+    "mana_cost": "{4}{B}",
+    "type_line": "Legendary Creature — Human Advisor",
+    "power": "2",
+    "toughness": "2",
+    "keywords": [],
+    "oracle_text": "When Lo and Li enter, search your library for a Lesson or Noble card, reveal it, put it into your hand, then shuffle.\nNoble creatures you control and Lesson spells you control have lifelink.",
+    "colors": [
+      "B"
+    ]
+  },
+  "Hakoda, Selfless Commander": {
+    "name": "Hakoda, Selfless Commander",
+    "mana_cost": "{3}{W}",
+    "type_line": "Legendary Creature — Human Warrior Ally",
+    "power": "3",
+    "toughness": "5",
+    "keywords": [
+      "Vigilance"
+    ],
+    "oracle_text": "Vigilance\nYou may look at the top card of your library any time.\nYou may cast Ally spells from the top of your library.\nSacrifice Hakoda: Creatures you control get +0/+5 and gain indestructible until end of turn.",
+    "colors": [
+      "W"
+    ]
+  },
+  "Trusty Boomerang": {
+    "name": "Trusty Boomerang",
+    "mana_cost": "{1}",
+    "type_line": "Artifact — Equipment",
+    "keywords": [
+      "Equip"
+    ],
+    "oracle_text": "Equipped creature has \"{1}, {T}: Tap target creature. Return Trusty Boomerang to its owner's hand.\"\nEquip {1} ({1}: Attach to target creature you control. Equip only as a sorcery.)",
+    "colors": []
+  },
+  "Honest Work": {
+    "name": "Honest Work",
+    "mana_cost": "{U}",
+    "type_line": "Enchantment — Aura",
+    "keywords": [
+      "Enchant"
+    ],
+    "oracle_text": "Enchant creature an opponent controls\nWhen this Aura enters, tap enchanted creature and remove all counters from it.\nEnchanted creature loses all abilities and is a Citizen with base power and toughness 1/1 and \"{T}: Add {C}\" named Humble Merchant. (It loses all other creature types and names.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Secret Tunnel": {
+    "name": "Secret Tunnel",
+    "mana_cost": "",
+    "type_line": "Land — Cave",
+    "keywords": [],
+    "oracle_text": "This land can't be blocked.\n{T}: Add {C}.\n{4}, {T}: Two target creatures you control that share a creature type can't be blocked this turn.",
+    "colors": []
+  },
+  "Glider Staff": {
+    "name": "Glider Staff",
+    "mana_cost": "{2}{W}",
+    "type_line": "Artifact — Equipment",
+    "keywords": [
+      "Airbend",
+      "Equip"
+    ],
+    "oracle_text": "When this Equipment enters, airbend up to one target creature. (Exile it. While it's exiled, its owner may cast it for {2} rather than its mana cost.)\nEquipped creature gets +1/+1 and has flying.\nEquip {2}",
+    "colors": [
+      "W"
+    ]
+  },
+  "Crashing Wave": {
+    "name": "Crashing Wave",
+    "mana_cost": "{U}{U}",
+    "type_line": "Sorcery",
+    "keywords": [
+      "Waterbend"
+    ],
+    "oracle_text": "As an additional cost to cast this spell, waterbend {X}. (While paying a waterbend cost, you can tap your artifacts and creatures to help. Each one pays for {1}.)\nTap up to X target creatures, then distribute three stun counters among any number of tapped creatures your opponents control. (If a permanent with a stun counter would become untapped, remove one from it instead.)",
+    "colors": [
+      "U"
+    ]
+  },
+  "Fire Nation Palace": {
+    "name": "Fire Nation Palace",
+    "mana_cost": "",
+    "type_line": "Land",
+    "keywords": [],
+    "oracle_text": "This land enters tapped unless you control a basic land.\n{T}: Add {R}.\n{1}{R}, {T}: Target creature you control gains firebending 4 until end of turn. (Whenever it attacks, add {R}{R}{R}{R}. This mana lasts until end of combat.)",
+    "colors": []
   }
 }

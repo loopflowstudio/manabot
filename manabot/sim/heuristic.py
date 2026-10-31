@@ -124,11 +124,51 @@ class TargetedSpell:
 Effect = dict[str, Any] | str
 
 
+# A continuous effect on the target, by its modification, read as the
+# targeted effect it amounts to.
+_TARGET_MODIFICATIONS = {
+    "AddKeywords": "GrantKeywordsToTarget",
+    "CantBeBlocked": "CantBeBlockedTarget",
+    "AddSubtypes": "AddSubtypeToTarget",
+}
+
+
 def _variant(effect: Effect) -> tuple[str, Any]:
-    """An effect's variant name and body (unit variants serialize as strings)."""
+    """An effect's variant name and body (unit variants serialize as strings).
+
+    `ApplyContinuous` reads as what it does to whom: a fixed P/T change on the
+    target is `BuffTarget`, any other on the target `BuffTargetValue`, a
+    keyword, subtype or unblockability grant to the target its `*Target`
+    name, and a P/T change on the source `ModifyUntilEot`. Other continuous
+    effects keep their name and carry no polarity.
+    """
     if isinstance(effect, str):
         return effect, {}
     ((name, body),) = effect.items()
+    if name != "ApplyContinuous":
+        return name, body
+    affected = body["affected"]
+    modification, change = _variant(body["modification"])
+    if modification == "ModifyPt":
+        power, toughness = change["power"], change["toughness"]
+        fixed = "Fixed" in power and "Fixed" in toughness
+        if affected == "Source" and fixed:
+            return "ModifyUntilEot", {
+                "power_delta": power["Fixed"],
+                "toughness_delta": toughness["Fixed"],
+            }
+        if isinstance(affected, dict) and "Target" in affected:
+            if fixed:
+                return "BuffTarget", {
+                    "power": power["Fixed"],
+                    "toughness": toughness["Fixed"],
+                    "target": affected["Target"],
+                }
+            return "BuffTargetValue", {"target": affected["Target"]}
+    if isinstance(affected, dict) and "Target" in affected:
+        return _TARGET_MODIFICATIONS.get(modification, name), {
+            "target": affected["Target"]
+        }
     return name, body
 
 

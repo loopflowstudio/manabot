@@ -2381,6 +2381,30 @@
     "LegacyPermanentView": {
       "additionalProperties": false,
       "properties": {
+        "abilities_lost": {
+          "default": false,
+          "title": "Abilities Lost",
+          "type": "boolean"
+        },
+        "attached_to": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Attached To"
+        },
+        "attacking": {
+          "default": false,
+          "title": "Attacking",
+          "type": "boolean"
+        },
         "base_power": {
           "anyOf": [
             {
@@ -2407,11 +2431,49 @@
           ],
           "title": "Base Toughness"
         },
+        "blocking": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Blocking"
+        },
         "controller_id": {
           "maximum": 4294967295,
           "minimum": 0,
           "title": "Controller Id",
           "type": "integer"
+        },
+        "counters": {
+          "additionalProperties": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Counters",
+          "type": "object"
+        },
+        "creature_types": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Creature Types"
         },
         "damage": {
           "maximum": 2147483647,
@@ -2443,6 +2505,11 @@
           "minimum": 0,
           "title": "Id",
           "type": "integer"
+        },
+        "is_granted_land": {
+          "default": false,
+          "title": "Is Granted Land",
+          "type": "boolean"
         },
         "is_token": {
           "anyOf": [
@@ -2536,6 +2603,15 @@
             }
           ],
           "default": null
+        },
+        "used_abilities": {
+          "items": {
+            "maximum": 4294967295,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "title": "Used Abilities",
+          "type": "array"
         }
       },
       "required": [
@@ -2646,6 +2722,11 @@
         },
         "is_agent": {
           "title": "Is Agent",
+          "type": "boolean"
+        },
+        "keeps_red_mana": {
+          "default": false,
+          "title": "Keeps Red Mana",
           "type": "boolean"
         },
         "known_hand": {
@@ -3544,6 +3625,20 @@
           ],
           "default": null,
           "title": "Source Permanent"
+        },
+        "x": {
+          "anyOf": [
+            {
+              "maximum": 4294967295,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "X"
         }
       },
       "required": [

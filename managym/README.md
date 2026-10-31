@@ -153,7 +153,7 @@ Mana feasibility and production share typed costs and pools. `Mana.lesson`
 retains Herbalist's restriction; `effective_spell_cost` supplies the Lesson
 casting context, while resolving costs and activations remain unrestricted
 contexts. Chosen-color mana abilities pay their activation costs before their
-immediate output decision. `activated_abilities_for` derives battlefield grants;
+immediate output decision. `Game::characteristics` derives battlefield grants;
 those granted mana abilities never become activated stack objects. Waterbend
 taps are cost payment, not tapping for mana.
 

@@ -18,7 +18,7 @@ fn savor_makes_food_with_a_real_tap_cost_and_cindermaw_prevents_its_life_gain() 
         cast(&mut s, "Savor");
         assert!(s.choose_target(Target::Permanent(target)));
         settle(&mut s);
-        assert_eq!(s.game().effective_toughness(target), 2);
+        assert_eq!(s.game().characteristics(target).toughness, 2);
         let food = permanent_named(&s, "Food");
         s.game_mut().state.permanents[food].as_mut().unwrap().tapped = true;
         s.game_mut().scenario_refresh_priority().unwrap();

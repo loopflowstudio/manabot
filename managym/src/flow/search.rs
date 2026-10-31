@@ -65,9 +65,21 @@ impl Game {
         let library = residual.split_off(unknown_slots);
         known.extend(residual);
         self.state.zones.reassign_hidden(opponent, known, library);
+        // A top card the perspective may look at stays where it is.
+        let known_top = self
+            .library_top_card(perspective)
+            .filter(|_| self.looks_at_library_top(perspective));
         self.state
             .zones
             .shuffle_canonical(ZoneType::Library, perspective, &mut rng);
+        if let Some(card) = known_top {
+            let library = self
+                .state
+                .zones
+                .zone_cards_mut(ZoneType::Library, perspective);
+            library.retain(|other| *other != card);
+            library.push(card);
+        }
 
         self.repin_revealed_library_cards();
         // An opponent's hidden hand can change under resampling. Rebuild
@@ -85,6 +97,7 @@ impl Game {
                                 | Decision::Discard { .. }
                                 | Decision::OptionalDiscardDraw { .. }
                                 | Decision::SearchBasicLand { .. }
+                                | Decision::SearchLibraryToHand { .. }
                                 | Decision::SearchDistinctLands { .. }
                                 | Decision::CastWithoutPaying { .. }
                         )

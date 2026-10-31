@@ -361,6 +361,33 @@ pub struct LegacyRestrictedManaView {
     pub mana: [i32; 6],
 }
 
+/// One continuous-effect record on a permanent or player (CR 611, 613).
+#[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ContinuousEffectView {
+    /// The engine's `Modification` variant.
+    pub modification: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub power: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub toughness: Option<i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub amount: Option<i32>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub keywords: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subtypes: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    /// `EndOfTurn` or `Indefinite`.
+    pub duration: String,
+    /// The source's printed name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source: Option<String>,
+    /// Timestamp order (CR 613.7).
+    pub timestamp: u32,
+}
+
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct LegacyPermanentView {
@@ -399,6 +426,33 @@ pub struct LegacyPermanentView {
     #[serde(deserialize_with = "deserialize_required_nullable")]
     pub base_toughness: RequiredNullable<i32>,
     pub plus1_counters: u32,
+    /// Counters other than +1/+1, by kind (`stun`, `fire`, `double_strike`).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub counters: BTreeMap<String, u32>,
+    /// The permanent this Aura or Equipment is attached to.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub attached_to: Option<u32>,
+    /// Creature types set by an effect (Honest Work); `name` is then the set name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub creature_types: Option<Vec<String>>,
+    /// A land only through an effect.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub is_granted_land: bool,
+    /// Attacking in the current combat.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub attacking: bool,
+    /// The attacking permanent this one blocks.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocking: Option<u32>,
+    /// It has lost all abilities.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub abilities_lost: bool,
+    /// Activated abilities (indices in its ability list) whose limit is spent.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub used_abilities: Vec<u32>,
+    /// Continuous effects on it, in timestamp order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effects: Vec<ContinuousEffectView>,
 }
 
 #[derive(Clone, Debug, Deserialize, JsonSchema, Serialize)]
@@ -448,6 +502,12 @@ pub struct LegacyPlayerView {
     pub sideboard: Vec<SideboardCardView>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hand_hidden_count: Option<u32>,
+    /// Unspent red mana stays until end of turn.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub keeps_red_mana: bool,
+    /// Continuous effects on this player, in timestamp order.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub effects: Vec<ContinuousEffectView>,
     pub hand: Vec<LegacyCardView>,
     pub graveyard: Vec<LegacyCardView>,
     pub exile: Vec<LegacyCardView>,
@@ -492,6 +552,9 @@ pub struct StackEntryView {
     pub ability_index: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub chosen_mode: Option<u32>,
+    /// The announced value of X, when one was announced above zero.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub x: Option<u32>,
 }
 
 /// Read-only explanation of the current native continuation. This adds no

@@ -522,12 +522,15 @@ class Player:
     known_hand: Dict[int, int]
     sideboard_counts: Dict[int, int]
     remaining_sideboard_counts: Dict[int, int]
+    keeps_red_mana: bool
+    no_maximum_hand_size: bool
     combat_mana: int
     mana: tuple[int, int, int, int, int, int]
     lesson_mana: tuple[int, int, int, int, int, int]
     restricted_mana: List[RestrictedMana]
     hand_only_until: Optional[int]
-    no_maximum_hand_size: bool
+    # Continuous effects on this player, in timestamp order.
+    effects: list[ContinuousEffect]
 
 class RestrictedMana:
     spells: List[str]
@@ -573,6 +576,26 @@ class SideboardCard:
     registry_key: int
     name: str
 
+class ContinuousEffect:
+    """One continuous-effect record on a player or permanent (CR 611, 613)."""
+
+    # Modification variant: ModifyPt, SetBasePt, AddKeywords, AddSubtypes,
+    # BecomeArtifactCreature, LoseAllAbilities, Firebending, CantBeBlocked,
+    # ExileIfWouldDie, KeepUnspentMana or NoMaximumHandSize.
+    modification: str
+    power: int | None
+    toughness: int | None
+    amount: int | None
+    keywords: list[str]
+    subtypes: list[str]
+    color: str | None
+    # EndOfTurn or Indefinite.
+    duration: str
+    source_registry_key: int | None
+    # The source's printed name (public: the spell or ability resolved).
+    source_name: str | None
+    timestamp: int
+
 class Permanent:
     id: int
     registry_key: int
@@ -594,6 +617,22 @@ class Permanent:
     temp_subtypes: List[str]
     # Effective keywords (printed + until-EOT grants).
     keywords: Keywords
+    # Counters other than +1/+1 by kind (stun, fire, double_strike).
+    counters: dict[str, int]
+    # Permanent id this Aura or Equipment is attached to.
+    attached_to: int | None
+    # Name and creature types set by an effect; None while printed ones apply.
+    name: str | None
+    creature_types: List[str] | None
+    is_granted_land: bool
+    blocking: int | None
+    abilities_lost: bool
+    used_abilities: list[int]
+    # Continuous effects on this permanent, in timestamp order.
+    effects: list[ContinuousEffect]
+    # Its timestamp (CR 613.7d/e) when an attachment renewed it; None while
+    # it is `id`, its entering timestamp.
+    timestamp: int | None
 
 class Turn:
     turn_number: int
@@ -633,6 +672,10 @@ class StackObject:
     chosen_mode: int | None
     ability_index: int | None
     targets: List[StackTarget]
+    # The announced value of X (0 when none).
+    x: int
+    # Keywords a static grants this spell on the stack.
+    granted_keywords: Keywords | None
 
 class EventData:
     event_type: EventTypeEnum
@@ -701,6 +744,8 @@ class ContinuationFrame:
     can_decline: bool
     mana_outputs: list[ManaOutput]
     resolutions_this_turn: int
+    x: int
+    granted_keywords: list[bool]
 
 def validate_observation_json(text: str) -> None: ...
 def parse_continuation_frames_json(text: str) -> list[ContinuationFrame]: ...

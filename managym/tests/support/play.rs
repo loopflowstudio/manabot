@@ -19,8 +19,8 @@ use managym::{
 };
 
 use crate::support::{
-    game::Scenario,
-    inspect::{find_owned_card, library_card, permanent_named},
+    game::{move_to_hand, Scenario},
+    inspect::{can_cast, find_owned_card, has_action, library_card, permanent_named},
 };
 
 const MAX_SCENARIO_ACTIONS: usize = 20_000;
@@ -324,20 +324,12 @@ pub fn target_opponent(s: &mut Scenario) {
 /// Move player 0's library copy into the hand through the zone-change
 /// authority and cast that copy.
 pub fn cast(s: &mut Scenario, name: &str) -> CardId {
-    let id = library_card(s, 0, name);
-    s.game_mut().move_card(id, ZoneType::Hand);
-    s.game_mut().scenario_refresh_priority().unwrap();
-    let index = s
-        .action_space()
-        .actions
-        .iter()
-        .position(|a| matches!(a,Action::CastSpell { card, .. } if *card == id))
-        .unwrap_or_else(|| panic!("cannot cast {name}: {:?}", s.action_space()));
-    s.step_action(index);
+    let id = move_to_hand(s, name);
+    cast_card(s, id);
     id
 }
 
-/// Cast `id` from whichever zone currently permits it.
+/// Cast `id` from whichever zone currently permits it, refreshing priority.
 pub fn cast_card(s: &mut Scenario, id: CardId) {
     s.game_mut().scenario_refresh_priority().unwrap();
     choose(
@@ -346,18 +338,27 @@ pub fn cast_card(s: &mut Scenario, id: CardId) {
     );
 }
 
+/// Refresh priority, then whether `id` may be cast.
+pub fn castable(s: &mut Scenario, id: CardId) -> bool {
+    s.game_mut().scenario_refresh_priority().unwrap();
+    can_cast(s, id)
+}
+
+/// Play player 0's library copy of a land with the ordinary land action.
+pub fn play_land(s: &mut Scenario, name: &str) -> PermanentId {
+    let id = move_to_hand(s, name);
+    choose(
+        s,
+        |a| matches!(a, Action::PlayLand { card, .. } if *card == id),
+    );
+    s.game().state.card_to_permanent[id].expect("land entered")
+}
+
 /// Like `cast`, but the copy may already be in player 0's hand.
 pub fn cast_owned(s: &mut Scenario, name: &str) -> CardId {
     let card = find_owned_card(s, 0, name);
     s.game_mut().move_card(card, ZoneType::Hand);
-    s.game_mut().scenario_refresh_priority().unwrap();
-    let index = s
-        .action_space()
-        .actions
-        .iter()
-        .position(|a| matches!(a, Action::CastSpell { card: c, .. } if *c == card))
-        .unwrap_or_else(|| panic!("cannot cast {name}: {:?}", s.action_space()));
-    s.step_action(index);
+    cast_card(s, card);
     card
 }
 
@@ -375,9 +376,21 @@ pub fn cast_and_resolve(s: &mut Scenario) {
     resolve_top(s);
 }
 
-/// Activate ability `index` of a permanent, refreshing priority first.
-pub fn activate(s: &mut Scenario, source: PermanentId, index: usize) {
+/// Refresh priority, then whether ability `index` of `source` is offered.
+pub fn offers_ability(s: &mut Scenario, source: PermanentId, index: usize) -> bool {
     s.game_mut().scenario_refresh_priority().unwrap();
+    has_action(s, |a| {
+        matches!(a, Action::ActivateAbility { permanent, ability_index, .. }
+            if *permanent == source && *ability_index == index)
+    })
+}
+
+/// Activate ability `index` of a permanent, refreshing priority only at a
+/// priority decision.
+pub fn activate(s: &mut Scenario, source: PermanentId, index: usize) {
+    if s.action_space().kind == ActionSpaceKind::Priority {
+        s.game_mut().scenario_refresh_priority().unwrap();
+    }
     choose(s, |a| {
         matches!(a, Action::ActivateAbility { permanent, ability_index, .. }
         if *permanent == source && *ability_index == index)

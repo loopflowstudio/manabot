@@ -1,14 +1,16 @@
 // action.rs
 // Player action computation and action space construction.
 
-use crate::agent::ability_description::{mana_description, trigger_description};
+use crate::agent::ability_description::{
+    counter_description, mana_description, trigger_description,
+};
 
 use crate::{
     agent::action::{Action, ActionSpace, ActionSpaceKind, AgentError},
     flow::game::{ActivationSource, CastChoices, Game, Payment, PendingChoice},
     state::{
         card::ActivationZone,
-        game_object::{CardId, PlayerId},
+        game_object::{CardId, ObjectId, PlayerId},
         mana::Mana,
         zone::ZoneType,
     },
@@ -56,6 +58,14 @@ impl Game {
             Action::Foretell { card, .. } => {
                 Some(format!("Foretell {}", self.state.cards[*card].name))
             }
+            Action::ChooseMode { mode, .. }
+                if matches!(
+                    self.pending_choice,
+                    Some(PendingChoice::AnnounceX { .. } | PendingChoice::ActivationX { .. })
+                ) =>
+            {
+                Some(format!("X = {mode}"))
+            }
             Action::ChooseMode { mode, .. } => {
                 match &self.state.suspended_decision.as_ref()?.decision {
                     Decision::ManaChoice { choices, .. } => {
@@ -79,6 +89,9 @@ impl Game {
                         [Effect::SearchBasicLand { .. }] => {
                             Some("Search your library for a basic land".into())
                         }
+                        [Effect::RemoveCounters {
+                            chosen: Some(kind), ..
+                        }] => Some(format!("Remove a {} counter", counter_description(*kind))),
                         _ => None,
                     },
                     _ => None,
@@ -112,7 +125,9 @@ impl Game {
                     .suspended_decision
                     .as_ref()
                     .is_some_and(|s| matches!(s.decision, Decision::Sacrifice { .. }));
-                if sacrifice {
+                if matches!(self.pending_choice, Some(PendingChoice::Crew { .. })) {
+                    Some(format!("Tap {} to crew", self.state.cards[*card].name))
+                } else if sacrifice {
                     Some(format!("Sacrifice {}", self.state.cards[*card].name))
                 } else if let Some(suspended) = &self.state.suspended_decision {
                     match &suspended.decision {
@@ -125,6 +140,15 @@ impl Game {
                             self.state.cards[*card].name,
                             if *tapped { " tapped" } else { "" }
                         )),
+                        Decision::SearchLibraryToHand { .. } => Some(format!(
+                            "Put {} into your hand",
+                            self.state.cards[*card].name
+                        )),
+                        Decision::DistributeCounters { kind, .. } => Some(format!(
+                            "Put a {} counter on {}",
+                            counter_description(*kind),
+                            self.state.cards[*card].name
+                        )),
                         _ => None,
                     }
                 } else {
@@ -136,7 +160,8 @@ impl Game {
     }
 
     /// Cards `player` might play at priority: their hand and graveyard, and
-    /// exiled cards they hold grants for. `priority_action_for_card` decides.
+    /// exiled cards they hold grants for, and a library top a permanent lets
+    /// them cast. `priority_action_for_card` decides.
     fn priority_candidate_cards(&self, player: PlayerId) -> impl Iterator<Item = CardId> + '_ {
         let zones = &self.state.zones;
         zones
@@ -145,6 +170,7 @@ impl Game {
             .chain(zones.zone_cards(ZoneType::Graveyard, player))
             .copied()
             .chain(self.exile_granted_cards(player))
+            .chain(self.library_top_castable(player))
     }
 
     pub(crate) fn can_player_act(&self, player: PlayerId) -> bool {
@@ -169,9 +195,9 @@ impl Game {
             let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
                 continue;
             };
-            let card = &self.state.cards[permanent.card];
             for (ability_index, ability) in self
-                .activated_abilities_for(permanent_id)
+                .characteristics(permanent_id)
+                .activated_abilities
                 .iter()
                 .enumerate()
             {
@@ -179,7 +205,7 @@ impl Game {
                 if ability.zone != ActivationZone::Battlefield
                     || (ability.requires_target()
                         && self
-                            .activated_ability_targets(player, source, ability_index)
+                            .activated_ability_targets(player, source, ability_index, &[])
                             .is_empty())
                 {
                     continue;
@@ -209,6 +235,7 @@ impl Game {
                     source,
                     ability_index,
                     targets: Vec::new(),
+                    x: 0,
                 };
                 if let Some(cost) = &ability.sacrifice {
                     if !self
@@ -234,7 +261,13 @@ impl Game {
                         continue;
                     }
                 }
-                if ability.tap_source && !permanent.can_tap(card) {
+                if ability.tap_source && !self.permanent_can_tap(permanent_id) {
+                    continue;
+                }
+                if ability
+                    .crew
+                    .is_some_and(|power| self.crew_power_available(player, permanent_id) < power)
+                {
                     continue;
                 }
                 let affordable = if ability.waterbend {
@@ -278,7 +311,7 @@ impl Game {
                     if self.check_activation_terms(player, &ability).is_err()
                         || (ability.requires_target()
                             && self
-                                .activated_ability_targets(player, source, ability_index)
+                                .activated_ability_targets(player, source, ability_index, &[])
                                 .is_empty())
                     {
                         continue;
@@ -287,6 +320,7 @@ impl Game {
                         source,
                         ability_index,
                         targets: Vec::new(),
+                        x: 0,
                     };
                     if self.can_pay_announced_activation(player, &ability.mana_cost, &payment, None)
                     {
@@ -356,7 +390,7 @@ impl Game {
             }
         }
 
-        let Some(cost) = self.effective_spell_cost(player, card_id, cast) else {
+        let Some(cost) = self.effective_spell_cost(player, card_id, cast, None) else {
             return true;
         };
         // Castability gating sees pooled mana too — until-end-of-combat mana
@@ -451,21 +485,40 @@ impl Game {
                     .collect(),
                 focus: Vec::new(),
             }),
+            PendingChoice::Crew {
+                player, permanent, ..
+            } => Some(ActionSpace {
+                player: Some(*player),
+                kind: ActionSpaceKind::LookAndSelect,
+                actions: self
+                    .crew_candidates(*player, *permanent)
+                    .into_iter()
+                    .filter_map(|id| self.state.permanents[id].as_ref())
+                    .map(|crew| Action::SelectCard {
+                        player: *player,
+                        card: crew.card,
+                    })
+                    .collect(),
+                focus: Vec::new(),
+            }),
             PendingChoice::ActivatedTarget {
                 player,
                 source,
                 ability_index,
+                chosen,
             } => {
                 let mut actions: Vec<_> = self
-                    .activated_ability_targets(*player, *source, *ability_index)
+                    .activated_ability_targets(*player, *source, *ability_index, chosen)
                     .into_iter()
                     .map(|target| Action::ChooseTarget {
                         player: *player,
                         target,
                     })
                     .collect();
-                let ability = self.activation_ability(*source, *ability_index)?;
-                if ability.target_is_optional() {
+                let requirement = self
+                    .activation_ability(*source, *ability_index)?
+                    .target_requirement()?;
+                if chosen.len() >= requirement.min {
                     actions.push(Action::Decline { player: *player });
                 }
                 Some(ActionSpace {
@@ -488,19 +541,23 @@ impl Game {
                     .collect(),
                 focus: vec![self.state.cards[card].id],
             }),
-            PendingChoice::AnnounceX { player, card, cast } => Some(ActionSpace {
-                player: Some(*player),
-                kind: ActionSpaceKind::Modal,
-                actions: self
-                    .legal_x_values(*player, *card, *cast)
-                    .into_iter()
-                    .map(|x| Action::ChooseMode {
-                        player: *player,
-                        mode: usize::from(x),
-                    })
-                    .collect(),
-                focus: vec![self.state.cards[card].id],
-            }),
+            PendingChoice::AnnounceX { player, card, cast } => Some(x_action_space(
+                *player,
+                self.legal_x_values(*player, *card, *cast),
+                vec![self.state.cards[card].id],
+            )),
+            PendingChoice::ActivationX {
+                player,
+                permanent,
+                ability_index,
+            } => Some(x_action_space(
+                *player,
+                self.legal_activation_x_values(*player, *permanent, *ability_index),
+                self.state.permanents[*permanent]
+                    .as_ref()
+                    .map(|perm| vec![perm.id])
+                    .unwrap_or_default(),
+            )),
             PendingChoice::KickerChoice { player, card, .. } => Some(ActionSpace {
                 player: Some(*player),
                 kind: ActionSpaceKind::PayOrNot,
@@ -513,6 +570,7 @@ impl Game {
             PendingChoice::ChooseTargets {
                 player,
                 card,
+                cast,
                 requirement_index,
                 mode,
                 chosen_req_indices,
@@ -534,7 +592,7 @@ impl Game {
                     .count();
                 let min_met = requirements
                     .get(*requirement_index)
-                    .is_some_and(|req| chosen_in_req >= req.min && req.max > req.min);
+                    .is_some_and(|req| chosen_in_req >= req.min && req.max_for(cast.x) > req.min);
                 if min_met {
                     actions.push(Action::Decline { player: *player });
                 }
@@ -678,6 +736,11 @@ impl Game {
             {
                 self.announce_x_action(*player, *mode)
             }
+            Action::ChooseMode { player, mode }
+                if matches!(self.pending_choice, Some(PendingChoice::ActivationX { .. })) =>
+            {
+                self.choose_activation_x_action(*player, *mode)
+            }
             Action::SelectCard { player, card }
                 if matches!(
                     self.pending_choice,
@@ -693,6 +756,11 @@ impl Game {
                 ) =>
             {
                 self.discard_payment_action(*player, *card)
+            }
+            Action::SelectCard { player, card }
+                if matches!(self.pending_choice, Some(PendingChoice::Crew { .. })) =>
+            {
+                self.crew_tap_action(*player, *card)
             }
             Action::ScryCard { .. }
             | Action::SelectCard { .. }
@@ -751,5 +819,21 @@ impl Game {
                 self.waterbend_tap_action(*player, *permanent)
             }
         }
+    }
+}
+
+/// Announcing X offers each payable value as a `ChooseMode` whose mode is X.
+fn x_action_space(player: PlayerId, values: Vec<u8>, focus: Vec<ObjectId>) -> ActionSpace {
+    ActionSpace {
+        player: Some(player),
+        kind: ActionSpaceKind::Modal,
+        actions: values
+            .into_iter()
+            .map(|x| Action::ChooseMode {
+                player,
+                mode: usize::from(x),
+            })
+            .collect(),
+        focus,
     }
 }

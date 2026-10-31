@@ -4,7 +4,7 @@
 use crate::support::{
     game::{
         clear_hand, deck, deck_of, five_color_setup, force_from_library, force_lands,
-        inject_ability, Scenario,
+        inject_ability, set_counters, until_end_of_turn, Scenario,
     },
     inspect::{card_of, find_owned_card_off_battlefield, hand, permanent},
     play::{activate_first, cast_and_resolve, cast_only, choose, resolve_until_priority},
@@ -18,7 +18,9 @@ use managym::{
     state::{
         ability::{Ability, Effect, TriggerCondition, TriggerSubject},
         card::{BlockRestriction, CardType, StaticAbility},
+        effect::Modification,
         game_object::PlayerId,
+        permanent::CounterKind,
         predicate::CardPredicate,
         zone::ZoneType,
     },
@@ -122,6 +124,7 @@ fn attack_trigger_creates_tapped_and_attacking_token() {
                 token_name: "Ally".to_string(),
                 count: 1,
                 tapped_and_attacking: true,
+                attach_source: false,
             }],
         },
     );
@@ -239,7 +242,7 @@ fn becomes_tapped_fires_when_attacker_taps() {
 #[test]
 fn vigilance_attacker_does_not_become_tapped() {
     let mut s = Scenario::new(
-        deck_of("Plains", "Serra Angel"),
+        deck(&[("Plains", 24), ("Serra Angel", 16)]),
         deck(&[("Plains", 40)]),
         61,
     );
@@ -410,10 +413,7 @@ fn block_restriction_respects_effective_power() {
     let weak = s.force_permanent_on_battlefield(1, "Gray Ogre");
     let strong = s.force_permanent_on_battlefield(1, "Gray Ogre");
     // The "strong" ogre has a +1/+1 counter: effective power 3 > 2.
-    s.game_mut().state.permanents[strong]
-        .as_mut()
-        .unwrap()
-        .plus1_counters = 1;
+    set_counters(&mut s, strong, CounterKind::PlusOnePlusOne, 1);
 
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
     s.declare_attack();
@@ -461,10 +461,7 @@ fn cant_be_blocked_this_turn_blocks_all_blocks() {
         .as_mut()
         .unwrap()
         .summoning_sick = false;
-    s.game_mut().state.permanents[attacker]
-        .as_mut()
-        .unwrap()
-        .cant_be_blocked_this_turn = true;
+    until_end_of_turn(&mut s, attacker, Modification::CantBeBlocked);
     s.force_permanent_on_battlefield(1, "Gray Ogre");
 
     s.advance_to_active_step(0, StepKind::DeclareAttackers);
@@ -491,16 +488,13 @@ fn cant_be_blocked_this_turn_blocks_all_blocks() {
 fn counters_on_lands_are_inert_and_persistent() {
     let mut s = Scenario::new(deck(&[("Forest", 40)]), deck(&[("Forest", 40)]), 97);
     let forest = s.force_permanent_on_battlefield(0, "Forest");
-    s.game_mut().state.permanents[forest]
-        .as_mut()
-        .unwrap()
-        .plus1_counters = 1;
+    set_counters(&mut s, forest, CounterKind::PlusOnePlusOne, 1);
 
     s.pass_priority();
     s.pass_priority();
 
     let forest_perm = permanent(&s, forest);
-    assert_eq!(forest_perm.plus1_counters, 1);
+    assert_eq!(forest_perm.counter_count(CounterKind::PlusOnePlusOne), 1);
     assert!(s
         .game()
         .state
@@ -522,10 +516,7 @@ fn observation_encodes_counters_tokens_and_type_tags() {
     s.game_mut().create_token("Ally", PlayerId(0), false);
     resolve_until_priority(&mut s);
     let token = s.battlefield_permanents_named(0, "Ally")[0];
-    s.game_mut().state.permanents[token]
-        .as_mut()
-        .unwrap()
-        .plus1_counters = 3;
+    set_counters(&mut s, token, CounterKind::PlusOnePlusOne, 3);
 
     // A Lesson in the graveyard (subtype injected — no Lesson spell is
     // registered until Stage 2 machinery lands).

@@ -40,6 +40,7 @@ type PyStepResult = (PyObservation, f64, bool, bool, PyObject);
 #[cfg(feature = "python")]
 struct ObservationBuffers {
     relations: Option<Py<PyAny>>,
+    facts: Option<Py<PyAny>>,
     semantic_cards: Py<PyAny>,
     known_hand: Py<PyAny>,
     agent_player: Py<PyAny>,
@@ -328,21 +329,8 @@ pub(super) fn buffer_input_version(buffers: &Bound<'_, PyDict>) -> PyResult<u8> 
     let shape: Vec<usize> = relations.getattr("shape")?.extract()?;
     match shape.last() {
         Some(&crate::agent::continuation::LEGACY_RELATION_DIM) => Ok(3),
-        // v5 keeps v4's relations and widens the player rows.
-        Some(&crate::agent::continuation::RELATION_DIM) => {
-            let player: Vec<usize> = buffers
-                .get_item("agent_player")?
-                .ok_or_else(|| PyValueError::new_err("missing agent_player"))?
-                .getattr("shape")?
-                .extract()?;
-            Ok(
-                if player.last() == Some(&crate::agent::observation_encoder::PLAYER_DIM) {
-                    5
-                } else {
-                    4
-                },
-            )
-        }
+        Some(&crate::agent::continuation::RELATION_DIM) => Ok(4),
+        Some(&crate::agent::continuation::RELATION_DIM_V5) => Ok(5),
         _ => Err(PyValueError::new_err(
             "unsupported continuation relation width",
         )),
@@ -392,6 +380,23 @@ fn read_observation_buffers(
                         n,
                         crate::agent::continuation::RELATION_ROWS,
                         c.relation_dim(),
+                    ],
+                    "float32",
+                )?
+                .unbind(),
+            )
+        } else {
+            None
+        },
+        facts: if c.policy_input_version >= 5 {
+            Some(
+                require_numpy_array(
+                    buffers,
+                    "facts",
+                    &[
+                        n,
+                        crate::agent::observation_encoder::FACT_ROWS,
+                        crate::agent::observation_encoder::FACT_DIM,
                     ],
                     "float32",
                 )?
@@ -808,6 +813,7 @@ impl<T> SendSlice<T> {
 #[derive(Clone, Copy)]
 struct SendObservationFieldSlices {
     relations: Option<SendSlice<f32>>,
+    facts: Option<SendSlice<f32>>,
     semantic_cards: SendSlice<f32>,
     known_hand: SendSlice<f32>,
     agent_player: SendSlice<f32>,
@@ -882,6 +888,17 @@ impl SendObservationFieldSlices {
                     slice::from_raw_parts_mut(
                         buffer.row_ptr(env_index, config.relations_len())?,
                         config.relations_len(),
+                    )
+                }
+            } else {
+                &mut []
+            },
+            facts: if let Some(buffer) = self.facts {
+                // SAFETY: the registered buffer is partitioned into disjoint rows.
+                unsafe {
+                    slice::from_raw_parts_mut(
+                        buffer.row_ptr(env_index, config.facts_len())?,
+                        config.facts_len(),
                     )
                 }
             } else {
@@ -1023,6 +1040,11 @@ fn with_send_write_buffers<R>(
         .as_ref()
         .map(|array| typed_numpy_buffer::<f32>(py, array, "relations"))
         .transpose()?;
+    let facts_buffer = buffers
+        .facts
+        .as_ref()
+        .map(|array| typed_numpy_buffer::<f32>(py, array, "facts"))
+        .transpose()?;
     let semantic_cards_buffer =
         typed_numpy_buffer::<f32>(py, &buffers.semantic_cards, "semantic_cards")?;
     let known_hand_buffer = typed_numpy_buffer::<f32>(py, &buffers.known_hand, "known_hand")?;
@@ -1068,6 +1090,10 @@ fn with_send_write_buffers<R>(
         relations: relations_buffer
             .as_ref()
             .map(|buffer| send_slice_from_buffer(py, buffer, "relations"))
+            .transpose()?,
+        facts: facts_buffer
+            .as_ref()
+            .map(|buffer| send_slice_from_buffer(py, buffer, "facts"))
             .transpose()?,
         known_hand: send_slice_from_buffer(py, &known_hand_buffer, "known_hand")?,
         semantic_cards: send_slice_from_buffer(py, &semantic_cards_buffer, "semantic_cards")?,

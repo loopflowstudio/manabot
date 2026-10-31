@@ -13,6 +13,7 @@ import torch.nn as nn
 # Local imports
 from manabot.env.observation import (
     PERMANENT_DEFINITION_INDEX,
+    PERMANENT_LINK_INDEXES,
     RELATION_VALID_INDEX,
     ObservationSpace,
 )
@@ -20,6 +21,7 @@ from manabot.infra.config import ModelConfig
 from manabot.infra.log import getLogger
 from manabot.model.compound import CompoundDecoder, CompoundOutput
 from manabot.model.continuation import ContinuationEncoder
+from manabot.model.facts import FactEncoder
 from manabot.model.inference import PreparedObservation
 from manabot.model.recent_events import RecentEventEncoder
 from manabot.model.semantic_cards import admit_definition_ids
@@ -66,8 +68,14 @@ class ActorCritic(nn.Module):
             )
         player_dim = enc.player_dim
         card_dim = enc.card_dim
-        # Definition IDs are categorical joins, never numeric permanent features.
-        perm_dim = enc.permanent_dim - 1
+        # Definition IDs and v5 permanent links are categorical joins, never
+        # numeric permanent features.
+        self._link_columns = PERMANENT_LINK_INDEXES if enc.shows_everything else ()
+        join_columns = (PERMANENT_DEFINITION_INDEX, *self._link_columns)
+        self._numeric_permanent_columns = [
+            column for column in range(enc.permanent_dim) if column not in join_columns
+        ]
+        perm_dim = len(self._numeric_permanent_columns)
         action_dim = enc.action_dim
         self.max_focus_objects = enc.max_focus_objects
         embed_dim = config.hidden_dim
@@ -219,6 +227,27 @@ class ActorCritic(nn.Module):
             if enc.config.policy_input_version >= 2
             else None
         )
+
+        # Policy input v5 links permanents to other objects: an Aura or
+        # Equipment to its host, a blocker to the attacker it blocks. Each
+        # link exchanges pre-attention embeddings both ways: the linked
+        # permanent reads its target and the target reads (summed) linked
+        # permanents, so an Equipment's effect, an Honest Work host's set
+        # characteristics and a blocking assignment reach both objects. Zero
+        # weights start additive; skip_init draws no RNG.
+        self.link_from_target = nn.ModuleList()
+        self.link_to_target = nn.ModuleList()
+        self._permanents_start = 2 + 2 * enc.cards_per_player
+        for _ in self._link_columns:
+            for layers in (self.link_from_target, self.link_to_target):
+                layer = torch.nn.utils.skip_init(nn.Linear, embed_dim, embed_dim)
+                nn.init.zeros_(layer.weight)
+                nn.init.zeros_(layer.bias)
+                layers.append(layer)
+        # Policy input v5 fact rows (counter kinds, added subtypes, set
+        # characteristics, spent abilities, continuous-effect records) join
+        # their objects. Built last so earlier parameters keep their draws.
+        self.facts = FactEncoder(embed_dim) if enc.shows_everything else None
 
         # When True, forward() stashes raw pre-mask logits on
         # self.last_raw_logits for offline diagnosis. Off by default: the
@@ -507,13 +536,7 @@ class ActorCritic(nn.Module):
                 permanent_ids, None if references is None else references.permanents
             )
         permanent_features = [
-            torch.cat(
-                (
-                    obs[key][..., :PERMANENT_DEFINITION_INDEX],
-                    obs[key][..., PERMANENT_DEFINITION_INDEX + 1 :],
-                ),
-                dim=-1,
-            )
+            obs[key][..., self._numeric_permanent_columns]
             for key in ("agent_permanents", "opponent_permanents")
         ]
         enc_agent_perms = (
@@ -556,6 +579,10 @@ class ActorCritic(nn.Module):
             )
 
         objects = torch.cat(object_parts, dim=1)
+        if self._link_columns:
+            objects = self._join_permanent_links(obs, objects)
+        if self.facts is not None:
+            objects = self.facts(obs["facts"], objects)
         # History and current continuation both inform objects and focus-free actions.
         shared_context = None
         frame_context = None
@@ -603,6 +630,42 @@ class ActorCritic(nn.Module):
 
         validity = torch.cat(validity_parts, dim=1)
         return objects, is_agent, validity, shared_context, frame_context
+
+    def _join_permanent_links(
+        self, obs: Dict[str, torch.Tensor], objects: torch.Tensor
+    ) -> torch.Tensor:
+        """Add each link target's embedding to its linked permanents and theirs to it.
+
+        Links are object index + 1 (zero: none) into `objects` [B,N,D].
+        """
+        start = self._permanents_start
+        delta = torch.zeros_like(objects)
+        for column, from_target, to_target in zip(
+            self._link_columns, self.link_from_target, self.link_to_target
+        ):
+            links = torch.cat(
+                [
+                    obs[key][..., column]
+                    for key in ("agent_permanents", "opponent_permanents")
+                ],
+                dim=1,
+            )
+            if not (
+                (links == links.floor()) & (links >= 0) & (links <= objects.shape[1])
+            ).all():
+                raise ValueError("invalid permanent link object reference")
+            permanents = objects[:, start : start + links.shape[1]]
+            linked = (links > 0).unsqueeze(-1)
+            targets = (
+                (links.long() - 1).clamp_min(0).unsqueeze(-1).expand_as(permanents)
+            )
+            delta = delta.scatter_add(
+                1, targets, to_target(permanents).masked_fill(~linked, 0)
+            )
+            delta[:, start : start + links.shape[1]] += from_target(
+                objects.gather(1, targets)
+            ).masked_fill(~linked, 0)
+        return objects + delta
 
     def _generic_definitions(
         self, ids: torch.Tensor, admitted: torch.Tensor | None = None

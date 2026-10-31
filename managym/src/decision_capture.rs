@@ -136,6 +136,23 @@ impl Game {
                 "source": reference(&event.source), "target": reference(&event.target)})
             })
             .collect();
+        for effects in [&agent.agent.effects, &agent.opponent.effects]
+            .into_iter()
+            .chain(
+                agent
+                    .agent_permanents
+                    .iter()
+                    .chain(&agent.opponent_permanents)
+                    .map(|permanent| &permanent.effects),
+            )
+        {
+            ids.extend(
+                effects
+                    .iter()
+                    .filter_map(|effect| effect.source_registry_key)
+                    .map(|key| key as u32),
+            );
+        }
         for frame in &agent.continuation {
             ids.extend(frame.source.definition);
             for target in &frame.targets {
