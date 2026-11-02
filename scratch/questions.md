@@ -542,3 +542,11 @@ requirement, it needs its own Task.
   directories with the job's fixed file names instead of four file flags,
   with the job's own paths as defaults; the uploaded artifact therefore also
   contains the `reference/` run, which `record` ignores.
+- Second concept review (2026-11-02, headless, after compress): on
+  `pull_request` the job's candidate is the ephemeral `refs/pull/N/merge`
+  commit, so a baseline recorded from a PR's own run would name a SHA later
+  checkouts cannot rebuild. Read as implied by the accepted "every run is a
+  recording of its candidate": the candidate is the PR head (durable via
+  `refs/pull/N/head`), measured and named as such; recorded in the plan as
+  the next implement direction. Not a product choice; the design's reading
+  of "committed baseline" is unchanged.

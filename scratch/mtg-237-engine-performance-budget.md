@@ -84,6 +84,39 @@ counterexample to 10%; re-running the job is the recovery when digests match
 and the engine did not change. Open for later evidence, not this Task: the
 10% figure and whether a dedicated runner is worth buying.
 
+## Second concept review (2026-11-02, headless, after compress)
+
+Walked the adopt-your-own-run path end to end with the implemented workflow.
+It fails at the step nobody has run yet: on `pull_request`, CI checks out
+`refs/pull/N/merge` (Detect Changes diffs `HEAD^1 HEAD` against that merge
+commit), so the Engine Budget candidate is the merge commit and
+`measurement.json` names its SHA. GitHub regenerates that commit whenever the
+PR head or main moves; it is not a durable identity, so a baseline recorded
+from a PR run would name a commit the next run's "Check out the other
+commit" cannot fetch, and the comparison the design promises (the recording
+commit's own run passes against it; main's first run after merge rebuilds
+it) is not available. The `measure` dispatch and the push-to-main path are
+unaffected (they resolve a real commit), which is why the T4 recording and
+the validating dispatch run passed.
+
+Settled by the accepted decision "every run is a recording of its candidate":
+the candidate is a durable commit. Next implement direction, not done here:
+
+- The job builds and names the PR head on `pull_request`
+  (`github.event.pull_request.head.sha`), the pushed SHA on `push`, the
+  dispatched ref's SHA on `workflow_dispatch`: check out that commit as the
+  candidate tree, so the measured engine is exactly the recorded commit, and
+  write its SHA to `measurement.json`. `measure` keeps resolving the other
+  checkout's HEAD. The PR head stays fetchable after a squash merge
+  (`refs/pull/N/head`), which is what docs/development.md already relies on.
+- Docs: say in one line that the recorded commit is the PR head, and that
+  re-running the job is the recovery when the digests match and the engine
+  did not change (the plan states it; the section does not).
+
+No open product choice. The two read decisions (A/B against a committed
+reference commit; native `Env::step` random play) stand as recorded above,
+awaiting the PR review.
+
 ## Status (reconciled 2026-11-02, realign after compress)
 
 Exists: workflow, both benchmarks, comparator, tests, baseline file,
@@ -98,7 +131,8 @@ not CI: the branch has no PR and branch pushes do not trigger CI. Main moved
 to 29660d00c (docs/ARCHITECTURE.md and scratch only), merged at 49765237c;
 the reference 4c8324a59 still describes the engine (checked 2026-11-02).
 
-Remains (publication, owned by the caller): open the PR with the T4/T5/T6
+Remains: the candidate-identity change from the second concept review
+(above), then publication, owned by the caller: open the PR with the T4/T5/T6
 figures in its body; the PR run confirms path selection on `pull_request`,
 the flagless compare step and the artifact's `measurement.json`; the first
 main run after merge confirms the push path; the `measure` path wants one
