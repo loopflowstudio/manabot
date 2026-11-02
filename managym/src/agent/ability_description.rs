@@ -275,6 +275,7 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
         subtype,
         max_power,
         min_mana_value,
+        max_mana_value,
     } = p;
     let mut terms = Vec::new();
     if *tapped {
@@ -335,6 +336,9 @@ fn predicate_description(p: &CardPredicate, noun: &str) -> String {
     }
     if let Some(n) = max_power {
         terms.push(format!("with power at most {n}"));
+    }
+    if let Some(n) = max_mana_value {
+        terms.push(format!("with mana value {n} or less"));
     }
     if let Some(n) = min_mana_value {
         terms.push(format!("with mana value at least {n}"));
@@ -648,6 +652,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
                 DelayedEvent::CreatureDiesThisTurn => "Whenever a creature dies this turn".into(),
                 DelayedEvent::NextEndStepForCreatedToken =>
                     "At the beginning of the next end step".into(),
+                DelayedEvent::NextUpkeep => "At the beginning of the next upkeep".into(),
                 DelayedEvent::YouNextCastThisTurn(predicate) => format!(
                     "When you next cast a {} this turn",
                     predicate_description(predicate, "spell")
@@ -722,7 +727,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         OnNthResolutionThisTurn { n, effect } => format!("If this is resolution {n} of this ability this turn: {}",effects_description(std::slice::from_ref(effect))),
         Scry { count } => format!("Scry {count}"),
         Surveil { count } => format!("Surveil {count}"),
-        LookAndSelect { reveal, look, min_select, max_select, predicate } => format!("{} the top {} cards of your library. Put {min_select}–{max_select} {} from among them into your hand and the rest on the bottom in a random order",if *reveal { "Reveal" } else { "Look at" },value_description(look),predicate_description(predicate,"cards")),
+        LookAndSelect { reveal, to_battlefield, look, min_select, max_select, predicate } => format!("{} the top {} cards of your library. Put {min_select}–{max_select} {} from among them {} and the rest on the bottom in a random order",if *reveal { "Reveal" } else { "Look at" },value_description(look),predicate_description(predicate,"cards"),if *to_battlefield { "onto the battlefield" } else { "into your hand" }),
         PutTopCardsInHand { count } => format!("Put the top {count} cards of your library into your hand"),
         Learn => "Learn: you may reveal a Lesson you own from outside the game and put it into your hand, or discard a card to draw a card, or decline".into(),
         Modal { modes } => format!("Choose one — {}",modes.iter().enumerate().map(|(i,m)| format!("({}) {}",i+1,effects_description(m))).collect::<Vec<_>>().join("; ")),

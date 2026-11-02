@@ -1626,6 +1626,7 @@ impl Game {
                     DelayedEvent::YouNextCastThisTurn(predicate) => {
                         (DelayedTriggerEvent::YouCastSpell(predicate.clone()), true)
                     }
+                    DelayedEvent::NextUpkeep => (DelayedTriggerEvent::NextUpkeep, false),
                 };
                 self.add_delayed_trigger(DelayedTrigger {
                     event,
@@ -1720,6 +1721,7 @@ impl Game {
             }
             Effect::LookAndSelect {
                 reveal,
+                to_battlefield,
                 look,
                 min_select,
                 max_select,
@@ -1732,6 +1734,7 @@ impl Game {
                 }
                 Some(Decision::LookAndSelect {
                     reveal: *reveal,
+                    to_battlefield: *to_battlefield,
                     player: frame.controller,
                     looked,
                     predicate: predicate.clone(),

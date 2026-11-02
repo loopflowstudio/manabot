@@ -730,6 +730,7 @@ fn effect_witnesses() -> Vec<Effect> {
         Effect::Scry { count: 1 },
         Effect::Surveil { count: 1 },
         Effect::LookAndSelect {
+            to_battlefield: true,
             reveal: false,
             look: EffectValue::Fixed(3),
             min_select: 0,
@@ -3200,6 +3201,7 @@ fn delayed_event_seen(event: &DelayedTriggerEvent) -> (u8, bool) {
         DelayedTriggerEvent::CreatureDies => (3, false),
         DelayedTriggerEvent::NextEndStep { context } => (4, context.is_some()),
         DelayedTriggerEvent::YouCastSpell(_) => (5, false),
+        DelayedTriggerEvent::NextUpkeep => (6, false),
     }
 }
 
@@ -3221,6 +3223,7 @@ fn every_delayed_trigger_event_has_its_own_relation_code() {
         DelayedTriggerEvent::CreatureDies,
         DelayedTriggerEvent::NextEndStep { context: None },
         DelayedTriggerEvent::YouCastSpell(CardPredicate::subtype("Lesson")),
+        DelayedTriggerEvent::NextUpkeep,
     ];
     let codes: BTreeSet<u8> = events.iter().map(delayed_event_code).collect();
     assert_eq!(codes.len(), events.len());

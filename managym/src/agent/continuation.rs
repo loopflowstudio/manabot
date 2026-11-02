@@ -116,7 +116,7 @@ pub struct ContinuationFrame {
 
 /// A waiting delayed trigger's event as its frame's `decision`: 1 the watched
 /// object dies, 2 it dies or is exiled, 3 any creature dies, 4 the next end
-/// step, 5 its controller next casts a matching spell.
+/// step, 5 its controller next casts a matching spell, 6 the next upkeep.
 pub fn delayed_event_code(event: &DelayedTriggerEvent) -> u8 {
     match event {
         DelayedTriggerEvent::Leaves {
@@ -128,6 +128,7 @@ pub fn delayed_event_code(event: &DelayedTriggerEvent) -> u8 {
         DelayedTriggerEvent::CreatureDies => 3,
         DelayedTriggerEvent::NextEndStep { .. } => 4,
         DelayedTriggerEvent::YouCastSpell(_) => 5,
+        DelayedTriggerEvent::NextUpkeep => 6,
     }
 }
 
@@ -281,7 +282,9 @@ impl Game {
             DelayedTriggerEvent::NextEndStep { context } => {
                 context.map(|t| self.target_reference(t, viewer))
             }
-            DelayedTriggerEvent::CreatureDies | DelayedTriggerEvent::YouCastSpell(_) => None,
+            DelayedTriggerEvent::CreatureDies
+            | DelayedTriggerEvent::YouCastSpell(_)
+            | DelayedTriggerEvent::NextUpkeep => None,
         };
         ContinuationFrame {
             kind: 10,
@@ -990,6 +993,7 @@ mod tests {
                 looked: vec![],
             },
             Decision::LookAndSelect {
+                to_battlefield: false,
                 reveal: false,
                 player,
                 looked: vec![],

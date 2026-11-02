@@ -58,6 +58,9 @@ pub struct CardPredicate {
     /// Card's mana value must be `min_mana_value` or greater ("with mana
     /// value 3 or greater"). Cards without a mana cost have mana value 0.
     pub min_mana_value: Option<u8>,
+    /// "with mana value N or less".
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_mana_value: Option<u8>,
 }
 
 impl CardPredicate {
@@ -163,14 +166,14 @@ impl CardPredicate {
                 return false;
             }
         }
-        if let Some(min_mana_value) = self.min_mana_value {
-            let mana_value = card
-                .mana_value_cost()
-                .map(|cost| cost.mana_value)
-                .unwrap_or(0);
-            if mana_value < min_mana_value {
-                return false;
-            }
+        let mana_value = card
+            .mana_value_cost()
+            .map(|cost| cost.mana_value)
+            .unwrap_or(0);
+        if self.min_mana_value.is_some_and(|min| mana_value < min)
+            || self.max_mana_value.is_some_and(|max| mana_value > max)
+        {
+            return false;
         }
         true
     }

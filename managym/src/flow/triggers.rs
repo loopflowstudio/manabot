@@ -979,6 +979,15 @@ impl Game {
                     *context
                 }
                 (
+                    DelayedTriggerEvent::NextUpkeep,
+                    GameEvent::StepStarted {
+                        step: StepKind::Upkeep,
+                    },
+                ) => {
+                    spent.push(index);
+                    None
+                }
+                (
                     DelayedTriggerEvent::YouCastSpell(predicate),
                     GameEvent::SpellCast { card, .. },
                 ) if self.spell_caster(*card) == trigger.controller

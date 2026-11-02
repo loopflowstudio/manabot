@@ -13686,3 +13686,53 @@ fn bumi_unleashed_adds_a_land_creature_only_combat_phase() {
     s.advance_to_active_step(0, StepKind::PostcombatMain);
     assert!(s.game().state.turn.combat_attackers.is_none());
 }
+
+/// Aang, at the Crossroads may put a creature card with mana value 4 or less
+/// from the top five onto the battlefield; when another creature you control
+/// leaves, he transforms at the next upkeep into Aang, Destined Savior, whose
+/// land creatures have vigilance and who earthbends 2 at your combat.
+#[test]
+fn aang_at_the_crossroads_finds_a_creature_and_transforms_at_the_next_upkeep() {
+    let mut s = five_color_setup(&["Aang, at the Crossroads", "Gray Ogre", "Craw Wurm"]);
+    let land = s.force_permanent_on_battlefield(0, "Forest");
+    let top = pin_top(&mut s, &["Gray Ogre", "Craw Wurm"]);
+    let aang_card = cast(&mut s, "Aang, at the Crossroads");
+    resolve_top(&mut s);
+    pass_until(&mut s, ActionSpaceKind::LookAndSelect);
+    let offered = offered_cards(&s);
+    let (ogre, wurm) = if s.game().state.cards[top[0]].name == "Gray Ogre" {
+        (top[0], top[1])
+    } else {
+        (top[1], top[0])
+    };
+    assert!(
+        offered.contains(&ogre) && !offered.contains(&wurm),
+        "mana value 4 or less"
+    );
+    select_card(&mut s, ogre);
+    settle(&mut s);
+    assert_eq!(zone_of(&s, ogre), Some(ZoneType::Battlefield));
+    assert_eq!(zone_of(&s, wurm), Some(ZoneType::Library));
+
+    s.game_mut().move_card(ogre, ZoneType::Graveyard);
+    s.game_mut().scenario_refresh_priority().unwrap();
+    settle(&mut s);
+    assert!(
+        !s.game().state.cards[aang_card].is_transformed(),
+        "waits for the upkeep"
+    );
+    s.advance_to_active_step(1, StepKind::Upkeep);
+    settle(&mut s);
+    let aang = s.game().state.card_to_permanent[aang_card].unwrap();
+    assert_eq!(
+        s.game().state.cards[aang_card].name,
+        "Aang, Destined Savior"
+    );
+
+    s.advance_to_active_step(0, StepKind::BeginningOfCombat);
+    assert!(s.choose_target(Target::Permanent(land)));
+    settle(&mut s);
+    assert_eq!(counters_of(&s, land, CounterKind::PlusOnePlusOne), 2);
+    assert!(keywords(&s, land).vigilance, "a land creature you control");
+    assert!(!keywords(&s, aang).vigilance, "not a land");
+}

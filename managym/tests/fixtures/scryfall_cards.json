@@ -4422,5 +4422,34 @@
       "G",
       "R"
     ]
+  },
+  "Aang, at the Crossroads": {
+    "name": "Aang, at the Crossroads",
+    "mana_cost": "{2}{G}{W}{U}",
+    "type_line": "Legendary Creature — Human Avatar Ally",
+    "power": "3",
+    "toughness": "3",
+    "keywords": [
+      "Flying",
+      "Transform"
+    ],
+    "oracle_text": "Flying\nWhen Aang enters, look at the top five cards of your library. You may put a creature card with mana value 4 or less from among them onto the battlefield. Put the rest on the bottom of your library in a random order.\nWhen another creature you control leaves the battlefield, transform Aang at the beginning of the next upkeep.",
+    "colors": [
+      "G",
+      "U",
+      "W"
+    ]
+  },
+  "Aang, Destined Savior": {
+    "name": "Aang, Destined Savior",
+    "type_line": "Legendary Creature — Avatar Ally",
+    "power": "4",
+    "toughness": "4",
+    "keywords": [
+      "Flying",
+      "Earthbend"
+    ],
+    "oracle_text": "Flying\nLand creatures you control have vigilance.\nAt the beginning of combat on your turn, earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)",
+    "colors": []
   }
 }

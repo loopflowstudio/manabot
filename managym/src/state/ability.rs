@@ -872,6 +872,9 @@ pub enum Effect {
     LookAndSelect {
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         reveal: bool,
+        /// Selected cards go onto the battlefield instead of into the hand.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        to_battlefield: bool,
         look: EffectValue,
         min_select: usize,
         max_select: usize,
@@ -1042,6 +1045,9 @@ pub enum DelayedEvent {
     /// "When you next cast a [predicate] spell this turn"; that spell is
     /// the delayed ability's context.
     YouNextCastThisTurn(CardPredicate),
+    /// "At the beginning of the next upkeep", about the ability's source
+    /// ("transform Aang at the beginning of the next upkeep").
+    NextUpkeep,
 }
 
 /// Effects that run when any card milled by the same instruction matches.

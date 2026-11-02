@@ -50,6 +50,7 @@ pub(super) const INCOMPLETE: &[super::Incomplete] = &[
 
 pub(super) fn cards() -> Vec<CardDefinition> {
     vec![
+        aang_at_the_crossroads(),
         aang_s_iceberg(),
         aang_s_journey(),
         aang_swift_savior(),
@@ -322,6 +323,93 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         zuko_s_conviction(),
         zuko_s_exile(),
     ]
+}
+
+fn aang_at_the_crossroads() -> CardDefinition {
+    let text_box = "Flying\nWhen Aang enters, look at the top five cards of your library. You may put a creature card with mana value 4 or less from among them onto the battlefield. Put the rest on the bottom of your library in a random order.\nWhen another creature you control leaves the battlefield, transform Aang at the beginning of the next upkeep.";
+    let back_text = "Flying\nLand creatures you control have vigilance.\nAt the beginning of combat on your turn, earthbend 2. (Target land you control becomes a 0/0 creature with haste that's still a land. Put two +1/+1 counters on it. When it dies or is exiled, return it to the battlefield tapped.)";
+
+    CardDefinition {
+        key: "tla.aang_at_the_crossroads",
+        scryfall_id: "fea89ca0-8070-4f28-9851-994314f9d248",
+        name: "Aang, at the Crossroads".into(),
+        mana_cost: Some(ManaCost::parse("{2}{G}{W}{U}")),
+        types: CardTypes::new([CardType::Creature]),
+        supertypes: vec!["Legendary".into()],
+        subtypes: vec!["Human".into(), "Avatar".into(), "Ally".into()],
+        power: Some(3),
+        toughness: Some(3),
+        keywords: Keywords {
+            flying: true,
+            ..Default::default()
+        },
+        abilities: vec![
+            Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::EntersTheBattlefield {
+                    subject: TriggerSubject::This,
+                },
+                effects: vec![Effect::LookAndSelect {
+                    reveal: false,
+                    to_battlefield: true,
+                    look: EffectValue::Fixed(5),
+                    min_select: 0,
+                    max_select: 1,
+                    predicate: CardPredicate {
+                        card_type: Some(CardType::Creature),
+                        max_mana_value: Some(4),
+                        ..Default::default()
+                    },
+                }],
+            },
+            Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::LeavesTheBattlefield {
+                    subject: TriggerSubject::AnotherYouControl(CardPredicate::creature()),
+                },
+                effects: vec![Effect::CreateDelayedTrigger {
+                    event: DelayedEvent::NextUpkeep,
+                    effects: vec![Effect::TransformSource],
+                }],
+            },
+        ],
+        text_box: text_box.into(),
+        back_face: Some(Box::new(CardDefinition {
+            name: "Aang, Destined Savior".into(),
+            types: CardTypes::new([CardType::Creature]),
+            supertypes: vec!["Legendary".into()],
+            subtypes: vec!["Avatar".into(), "Ally".into()],
+            power: Some(4),
+            toughness: Some(4),
+            keywords: Keywords {
+                flying: true,
+                ..Default::default()
+            },
+            statics: vec![StaticAbility::KeywordGrant(StaticKeywordGrant {
+                scope: StaticScope::YouControl(CardPredicate {
+                    card_type: Some(CardType::Land),
+                    card_types_any: vec![CardType::Creature],
+                    ..Default::default()
+                }),
+                condition: None,
+                keywords: Keywords {
+                    vigilance: true,
+                    ..Default::default()
+                },
+            })],
+            abilities: vec![Ability::Triggered {
+                intervening_if: None,
+                condition: TriggerCondition::BeginningOfYourCombat,
+                effects: vec![Effect::Earthbend {
+                    count: EffectValue::Fixed(2),
+                    target: TargetSpec::LandYouControl,
+                }],
+            }],
+            text_box: back_text.into(),
+            ..Default::default()
+        })),
+        ..Default::default()
+    }
 }
 
 fn aang_s_iceberg() -> CardDefinition {
@@ -644,6 +732,7 @@ fn accumulate_wisdom() -> CardDefinition {
             },
             then: vec![Effect::PutTopCardsInHand { count: 3 }],
             otherwise: vec![Effect::LookAndSelect {
+                to_battlefield: false,
                 reveal: false,
                 look: EffectValue::Fixed(3),
                 min_select: 1,
@@ -4475,6 +4564,7 @@ fn guru_pathik() -> CardDefinition {
                 },
                 intervening_if: None,
                 effects: vec![Effect::LookAndSelect {
+                    to_battlefield: false,
                     reveal: true,
                     look: EffectValue::Fixed(5),
                     min_select: 0,
@@ -6170,6 +6260,7 @@ fn master_piandao() -> CardDefinition {
                 subject: TriggerSubject::This,
             },
             effects: vec![Effect::LookAndSelect {
+                to_battlefield: false,
                 reveal: true,
                 look: EffectValue::Fixed(4),
                 min_select: 0,
@@ -7997,6 +8088,7 @@ fn seismic_sense() -> CardDefinition {
         types: CardTypes::new([CardType::Sorcery]),
         subtypes: vec!["Lesson".into()],
         spell_effects: vec![Effect::LookAndSelect {
+            to_battlefield: false,
             reveal: true,
             look: EffectValue::BattlefieldMatching {
                 predicate: CardPredicate {
@@ -10585,6 +10677,7 @@ fn water_tribe_rallier() -> CardDefinition {
             mana_cost: ManaCost::parse("{5}"),
             waterbend: true,
             effects: vec![Effect::LookAndSelect {
+                to_battlefield: false,
                 reveal: true,
                 look: EffectValue::Fixed(4),
                 min_select: 0,

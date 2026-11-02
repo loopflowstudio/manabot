@@ -297,6 +297,9 @@ pub enum Decision {
     LookAndSelect {
         #[serde(skip_serializing_if = "std::ops::Not::not")]
         reveal: bool,
+        /// Selected cards go onto the battlefield, not into the hand.
+        #[serde(skip_serializing_if = "std::ops::Not::not")]
+        to_battlefield: bool,
         player: PlayerId,
         /// Looked-at cards still in the library, top first.
         looked: Vec<CardId>,
@@ -1452,6 +1455,7 @@ impl Game {
                     predicate,
                     selected,
                     reveal,
+                    to_battlefield,
                     max_select,
                     ..
                 },
@@ -1467,7 +1471,9 @@ impl Game {
                 let player = *player;
                 looked.retain(|c| c != card);
                 *selected += 1;
-                if *reveal {
+                if *to_battlefield {
+                    self.move_card(*card, ZoneType::Battlefield);
+                } else if *reveal {
                     self.reveal_card_to_hand(*card, player);
                 } else {
                     self.move_card(*card, ZoneType::Hand);

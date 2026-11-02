@@ -113,6 +113,8 @@ pub enum DelayedTriggerEvent {
     NextEndStep { context: Option<Target> },
     /// "When you next cast a [predicate] spell"; that spell is the context.
     YouCastSpell(CardPredicate),
+    /// "At the beginning of the next upkeep".
+    NextUpkeep,
 }
 
 /// A card exiled with an exact `source` object (CR 607.2a). "Until [source]

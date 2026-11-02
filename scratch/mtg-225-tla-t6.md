@@ -50,7 +50,7 @@ conflicts), so it is stacked on T5 with T5's copy effects available.
 | The Legend of Yangchen // Avatar Yangchen | |
 | The Rise of Sozin // Fire Lord Sozin | |
 | Aang, Swift Savior // Aang and La | supported; airbends spells, transforms in place |
-| Aang, at the Crossroads // Aang, Destined Savior | |
+| Aang, at the Crossroads // Aang, Destined Savior | supported; next-upkeep delayed transform |
 | Avatar Aang // Aang, Master of Elements | |
 | Bender's Waterskin | supported |
 | Bumi, Unleashed | supported; additional land-creature combat |

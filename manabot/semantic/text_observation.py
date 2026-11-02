@@ -209,6 +209,7 @@ _DELAYED_EVENTS = (
     "a creature to die",
     "the next end step",
     "its controller's next matching spell",
+    "the next upkeep",
 )
 
 
