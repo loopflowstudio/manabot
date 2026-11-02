@@ -1,14 +1,12 @@
 # T5 (a7234f): permanent copying — plan and status
 
-Status (2026-11-02, gated at the green synced head, PR #405 open, mergeable, no
-review yet): implemented, demoed through native Commands and the LLM/Academy text path,
-synced onto main at `4c8324a59` (T3's squash, the characteristics cache and T4)
-and re-recorded: the authored-match parity receipt's source hashes, the
-trigger-order root digests and the two Academy precision demos (digests only;
-the same revisions). All three cards are defined and supported. The post-sync
-concept review found nothing to change and no open product choice (below).
-Shipping is stopped per Jack Heart's steer 6eae1230: the PR waits for Jack
-Heart's review; no merge.
+Status (2026-11-02, PR #405 open, no review yet): implemented, demoed through
+native Commands and the LLM/Academy text path, synced onto main at `4c8324a59`
+(T3's squash, the characteristics cache and T4). All three cards are defined
+and supported. Jack Heart's concept-review decisions 1a and 2a (below) are
+implemented on top of the gated head; gate re-records whatever evidence the
+layered card rows move. Shipping is stopped per Jack Heart's steer 6eae1230:
+the PR waits for Jack Heart's review; no merge.
 
 Two accepted models from T3 (`08bf54de2:scratch/6875f0-tla-t3-characteristics.md`)
 are the base this builds on: continuous effects as records
@@ -151,10 +149,46 @@ compiles. Apply the rule to every current field, including subtypes such as
 Lesson and abilities such as ward. When a characteristic has no layered value
 yet, add it to `Characteristics` instead of reading the printed card.
 
-Next proof: a directed test that applies a non-copy `Nonlegendary` record and
-checks the legend rule, v5 column 39 and the LLM text line together. Add
-equivalents for any other flag the rule changes. Native and Python encoders
-stay at parity, widths don't change, and debug `cargo test` passes.
+**Implemented (2026-11-02, headless, after the decisions):**
+
+- `Characteristics` (`flow/statics.rs`) gains `is_legendary` (layer 4:
+  copiable supertypes unless a `Nonlegendary` record), `types: CardTypes`
+  (layer 4: printed, static type grants, Creature when animated, Artifact for
+  an artifact-creature record; `is_creature` / `is_land` now read it) and
+  `ward` (printed ward unless abilities are lost). `permanent_is_legendary`
+  is deleted; `legend_groups` reads the view.
+- `Observation::card_data` reads the view for every characteristic field of a
+  battlefield card: name, power/toughness, legendary, Ally, Lesson, ward,
+  card types and keywords. Printed by definition: identity (zone, owner, id,
+  registry key), token status, text box, mana cost, kicker, face-down,
+  cast permission and X. `CardTypeData::from_types` is the one builder.
+- `tests/cards/observability.rs`: `card_sources()` classifies every
+  `CardData` field as `Layered` or `Printed(reason)` through an exhaustive
+  destructure (a new field does not compile unclassified);
+  `layered_card_fields_read_characteristics_on_the_battlefield` applies
+  records (Nonlegendary, +1/+1, flying, Lesson, artifact creature, ability
+  loss, Ally) and Honest Work, then requires every Layered field to move
+  and no Printed field to;
+  `card_rows_off_the_battlefield_read_the_printed_card`;
+  `a_nonlegendary_record_clears_the_legend_rule_and_card_column_39_together`.
+  `Modification::Nonlegendary` is now `Seen::Card(39)`. The Toph granted-land
+  test no longer claims v4 is blind to the grant: card column 11 (land) shows
+  it in every version, v5 adds the granted-permanent column.
+- Python: the text's card line says "keywords" instead of "printed
+  keywords" (its battlefield flags are layered now);
+  `test_a_nonlegendary_record_reads_as_not_legendary_on_the_card_line` (a
+  renderer check: the engine-side proof is the Rust test above);
+  the `Card` stub, `managym/README.md` and `WORLDS.md` state the rule. No
+  column, width, token or protocol change; the Python encoder reads the same
+  rows, so parity holds without a change.
+- The Yip Yip! card test and `PermanentData.keywords`' doc had stated the
+  old contract (card entry keeps printed keywords); both now state the
+  layered one.
+- Consequence for evidence: a battlefield card row now equals its
+  permanent's layered values (P/T with counters and pumps, granted keywords
+  and types), so recorded observations with active effects change. Gate
+  re-records the affected receipts (semantic-kernel evidence, authored-match
+  parity, precision demos, trigger-order digests) as it did after the sync.
 
 ## Sync onto main — 2026-11-02 (steer 6eae1230)
 
@@ -174,7 +208,10 @@ stay at parity, widths don't change, and debug `cargo test` passes.
 
 ## Remaining
 
-- Jack Heart's review of PR #405. No merge. CI run 41511227714 on
+- Gate at the head with decisions 1a/2a: debug `cargo test`, clippy, the
+  rebuilt extension, the Python suites and the evidence re-records the
+  layered card rows require (above); then Jack Heart's review of PR #405.
+  No merge. CI run 41511227714 on
   `836042c07` passed every selected job (Rust, Python unit, both
   conformance, Clean-machine Play, Academy UI, Academy Integration,
   Integration main and long). The gate at that head (2026-11-02, below)
@@ -197,6 +234,16 @@ stay at parity, widths don't change, and debug `cargo test` passes.
 
 ## Checks
 
+- 2026-11-02 (implement 1a/2a, headless): debug `cargo test --test cards
+  observability` (51), `--test cards tla::` (390) and `stx::` (19),
+  `--test rules_tests` legend / engine_events / cr_613 (24),
+  `search_state_contract` and `possible_worlds_tests` passed; `cargo fmt
+  --check` clean. Extension rebuilt; `uv run --extra dev pytest
+  tests/semantic/test_text_observation.py tests/verify/test_observation_parity.py
+  tests/academy/test_recorded_attempts.py tests/semantic/test_current_content.py
+  tests/env/test_skip_forced_decisions.py -q`: 75 passed. Clippy, the full
+  debug `cargo test`, conformance receipts and the evidence re-records are
+  gate's.
 - 2026-11-02 (gate at the green head `836042c07`, headless): the diff
   against main carries no leftovers (no debug output, TODOs or transient
   comments). The sync had duplicated three lines, which this gate removed:

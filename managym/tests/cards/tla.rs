@@ -10062,9 +10062,9 @@ fn yip_yip_buffs_and_grants_flying_to_allies_only() {
     assert_eq!(s.game().characteristics(kyoshi).pt(), (5, 5));
     assert!(keywords(&s, kyoshi).flying);
 
-    // The granted keyword is agent-visible: the permanent entry carries
-    // effective keywords (flying), while the card entry keeps the printed
-    // keywords (no flying on Kyoshi Warriors).
+    // The granted keyword is agent-visible: the permanent entry and the
+    // battlefield card entry both carry the layered keywords (flying, which
+    // Kyoshi Warriors does not print).
     let obs = Observation::new(s.game(), &[]);
     let kyoshi_object_id = permanent(&s, kyoshi).id.0 as i32;
     let kyoshi_perm = obs
@@ -10085,8 +10085,8 @@ fn yip_yip_buffs_and_grants_flying_to_allies_only() {
         .find(|card| card.name == "Kyoshi Warriors")
         .expect("Kyoshi Warriors card should be observable");
     assert!(
-        !kyoshi_card.keywords.flying,
-        "card entry keeps printed keywords"
+        kyoshi_card.keywords.flying,
+        "battlefield card entry reads layered keywords"
     );
 
     // On the non-Ally: +2/+2 but no flying.

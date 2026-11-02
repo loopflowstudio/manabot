@@ -561,6 +561,11 @@ class CastPermission:
     foretold: bool
 
 class Card:
+    """A card in any zone. On the battlefield every characteristic field
+    (name, power/toughness, card types, legendary, Ally, Lesson, ward,
+    keywords) reads the engine's layered characteristics; elsewhere the
+    printed card. Identity, token status and casting costs are printed."""
+
     zone: ZoneEnum
     owner_id: int
     id: int

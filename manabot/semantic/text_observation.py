@@ -664,7 +664,7 @@ class _Renderer:
             )
             optional = f"; type flags {flags}" if flags else ""
             if keywords := _keywords(card.keywords):
-                optional += f"; printed keywords {keywords}"
+                optional += f"; keywords {keywords}"
             if card.face_down:
                 optional += "; foretold, face down (hidden from other players)"
             if card.x is not None:

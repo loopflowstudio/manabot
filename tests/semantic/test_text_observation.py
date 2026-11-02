@@ -507,7 +507,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "toughness": "card power/toughness",
         "mana_cost": "cost",
         "card_types": "type flags",
-        "keywords": "printed keywords",
+        "keywords": "keywords",
         "is_token": "token",
         "is_legendary": "legendary",
         "is_ally": "Ally",
@@ -754,6 +754,36 @@ def test_a_copy_and_sacrifices_this_turn_are_stated() -> None:
     assert "This turn: sacrificed 2 permanents." in text
     assert "copy of" not in decision.text
     assert "This turn:" not in decision.text
+
+
+def test_a_nonlegendary_record_reads_as_not_legendary_on_the_card_line() -> None:
+    """The card line states the legendary flag as the engine wrote it in the
+    card row (layered on the battlefield; `observability.rs` proves a
+    `Nonlegendary` record clears it), never re-derived from the printed card,
+    beside the permanent's effect line that explains it."""
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    decision = capture_text_decision(env)
+    payload = json.loads(decision.capture_json)
+    state = payload["observation"]["viewer_state"]
+    _, ogre = state["agent_permanents"]
+    ogre["effects"] = [
+        {"modification": "Nonlegendary", "duration": "EndOfTurn", "timestamp": 90}
+    ]
+    ogre_card = next(
+        card
+        for card in state["agent_cards"]
+        if card["registry_key"] == ogre["registry_key"] and card["zone"] == 2
+    )
+    assert "legendary no" in decision.text
+    ogre_card["is_legendary"] = True
+    text = render_decision(_redigest(payload)).text
+    card_line = next(
+        line
+        for line in text.splitlines()
+        if "[D" in line and "Gray Ogre" in line and "owner" in line
+    )
+    assert "legendary yes" in card_line
+    assert "; effect until end of turn: isn't legendary" in text
 
 
 def test_joo_dee_surveil_and_copy_play_through_the_text_decision() -> None:

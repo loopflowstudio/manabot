@@ -57,3 +57,26 @@ here; main carries their outcomes.
 - `/verify` was not run before the gate commit, as for earlier T5 commits:
   that Loopflow skill checks a merged change and finishes the Task, and
   shipping is stopped.
+
+## T5 concept-review decisions 1a/2a — 2026-11-02 (headless)
+
+- `PermanentData.power`, `keywords`, `is_animated` and the card row's
+  layered fields now agree for a battlefield card (both read
+  `Game::characteristics`). The permanent row keeps its columns: Python
+  readers, the text renderer and the policy input index them, and the
+  decision changed `CardData`, not `PermanentData`. `PermanentData.name` /
+  `creature_types` stay the "set by an Aura" markers (fact rows), while the
+  card row's `name` is the layered name.
+- `Characteristics.types` is the layer-4 owner; `is_creature` and `is_land`
+  are kept as flags derived from it so the many readers of one bool stay as
+  they are. A static grant of the Creature type (none exists) would now make
+  the permanent a creature through `types`, as `is_land` already did for
+  Land.
+- Ward in the view is the printed ward unless abilities are lost. Nothing
+  grants ward, so there is no granted-ward layer yet; the trigger that
+  enforces ward is already suppressed by ability loss.
+- Text wording: "printed keywords" became "keywords" on the card line, since
+  the flags are layered on the battlefield; "card power/toughness" keeps its
+  name as the card line's label.
+- Evidence that embeds card rows with active effects moves; implement left
+  the re-records to gate, which owns the receipts.

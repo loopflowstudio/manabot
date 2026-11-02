@@ -48,10 +48,10 @@ use std::{
 use crate::{
     flow::{decision::EffectFrame, game::Game},
     state::{
-        ability::{Condition, Effect},
+        ability::{Condition, Effect, PaymentCost},
         card::{
-            AbilityGrant, ActivatedAbilityDefinition, Card, CardType, Keywords, PowerCda,
-            Restriction, SetCharacteristics, StaticAbility, StaticScope,
+            AbilityGrant, ActivatedAbilityDefinition, Card, CardType, CardTypes, Keywords,
+            PowerCda, Restriction, SetCharacteristics, StaticAbility, StaticScope,
         },
         effect::Modification,
         game_object::{CardId, ObjectId, ObjectRef, PermanentId, PlayerId, Target},
@@ -117,9 +117,18 @@ pub struct Characteristics {
     pub added_subtypes: Vec<String>,
     /// Distinct creature types (CR 205.3m), sorted.
     pub creature_types: Vec<String>,
+    /// Layer 4 card types: printed, added by static type grants, and
+    /// Creature (with Artifact for an artifact-creature record) when
+    /// animated.
+    pub types: CardTypes,
+    /// `types.is_creature()`, kept for the many readers of one flag.
     pub is_creature: bool,
-    /// Printed or granted land.
+    /// `types.is_land()`: printed or granted land.
     pub is_land: bool,
+    /// Layer 4 supertype: its copiable values' legendary supertype, unless a
+    /// `Modification::Nonlegendary` record removes it. The legend rule and
+    /// the card row read this.
+    pub is_legendary: bool,
     /// A creature by something other than its printed type: earthbend, its
     /// own counter threshold, or an effect.
     pub is_animated: bool,
@@ -130,6 +139,8 @@ pub struct Characteristics {
     /// Whether it has lost all abilities (a record, or a characteristic-
     /// setting Aura); grants with later timestamps still apply.
     pub abilities_lost: bool,
+    /// Its printed ward cost (layer 6), unless it has lost its abilities.
+    pub ward: Option<PaymentCost>,
     pub power: i32,
     pub toughness: i32,
     /// Printed abilities, then currently granted abilities in source order,
@@ -303,7 +314,8 @@ impl Game {
         let sources = &index.sources;
         let basis = self.layer_basis(permanent_id, sources);
         let (power, toughness) = self.pt_with(permanent_id, &basis, sources);
-        let is_land = self.is_land_with(permanent_id, sources);
+        let types = self.types_with(permanent_id, sources);
+        let is_land = types.is_land();
         Characteristics {
             name: basis
                 .set
@@ -312,12 +324,15 @@ impl Game {
             characteristics_set: basis.set.is_some(),
             subtypes: owned(subtypes_with(card, &basis)),
             creature_types: owned(creature_types_with(card, &basis)),
-            is_creature: self.permanent_is_creature(permanent_id),
+            is_creature: types.is_creature(),
             is_land,
+            is_legendary: self.is_legendary(permanent_id),
+            types,
             is_animated: self.permanent_is_animated(permanent_id),
             keywords: self.keywords_with(permanent_id, basis.lost, sources),
             firebending: self.firebending_with(permanent_id, basis.lost),
             abilities_lost: basis.lost.is_some(),
+            ward: basis.lost.is_none().then(|| card.ward().cloned()).flatten(),
             power,
             toughness,
             activated_abilities: self.activated_abilities_with(
@@ -816,12 +831,41 @@ impl Game {
     }
 
     fn is_land_with(&self, permanent_id: PermanentId, sources: &[StaticSource]) -> bool {
-        self.state.permanents[permanent_id]
-            .as_ref()
-            .is_some_and(|p| self.state.cards[p.card].types.is_land())
-            || self
-                .granted_card_types(permanent_id, sources)
-                .contains(&CardType::Land)
+        self.types_with(permanent_id, sources).is_land()
+    }
+
+    /// Layer 4 card types: printed, plus static type grants, plus Creature
+    /// when animated (an artifact-creature record also adds Artifact).
+    fn types_with(&self, permanent_id: PermanentId, sources: &[StaticSource]) -> CardTypes {
+        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+            return CardTypes::default();
+        };
+        let mut types = self.state.cards[permanent.card].types.clone();
+        types
+            .types
+            .extend(self.granted_card_types(permanent_id, sources));
+        if self.permanent_is_animated(permanent_id) {
+            types.types.insert(CardType::Creature);
+        }
+        if self.becomes_artifact_creature(permanent_id) {
+            types.types.insert(CardType::Artifact);
+        }
+        types
+    }
+
+    /// Layer 4 supertype: the copiable legendary supertype (a copy exception
+    /// is already in the card) unless a `Nonlegendary` record removes it.
+    fn is_legendary(&self, permanent_id: PermanentId) -> bool {
+        let Some(permanent) = self.state.permanents[permanent_id].as_ref() else {
+            return false;
+        };
+        self.state.cards[permanent.card]
+            .supertypes
+            .iter()
+            .any(|kind| kind.eq_ignore_ascii_case("legendary"))
+            && !self
+                .effects_on(permanent_id)
+                .any(|effect| effect.modification == Modification::Nonlegendary)
     }
 
     /// Distinct colors among `controller`'s permanents matching `predicate`

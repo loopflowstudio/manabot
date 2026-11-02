@@ -4,38 +4,24 @@
 use crate::{
     flow::{event::GameEvent, game::Game},
     state::{
-        effect::Modification,
         game_object::{CardId, PermanentId, PlayerId},
         zone::ZoneType,
     },
 };
 
 impl Game {
-    /// Layer 4 supertype: its copiable values' legendary supertype, unless a
-    /// `Modification::Nonlegendary` record removes it.
-    pub(crate) fn permanent_is_legendary(&self, id: PermanentId) -> bool {
-        let Some(permanent) = self.state.permanents[id].as_ref() else {
-            return false;
-        };
-        self.state.cards[permanent.card]
-            .supertypes
-            .iter()
-            .any(|kind| kind.eq_ignore_ascii_case("legendary"))
-            && !self
-                .effects_on(id)
-                .any(|effect| effect.modification == Modification::Nonlegendary)
-    }
-
-    /// Duplicate legendary names, grouped by controller in APNAP order.
+    /// Duplicate legendary names (layered `is_legendary` and `name`),
+    /// grouped by controller in APNAP order.
     fn legend_groups(&self) -> Vec<Vec<CardId>> {
         let mut groups = Vec::new();
         for player in [self.active_player(), self.non_active_player()] {
             let mut names = std::collections::BTreeMap::<String, Vec<CardId>>::new();
             for id in self.battlefield_permanents(player) {
                 let permanent = self.state.permanents[id].as_ref().expect("battlefield");
-                if self.permanent_is_legendary(id) {
+                let characteristics = self.characteristics(id);
+                if characteristics.is_legendary {
                     names
-                        .entry(self.characteristics(id).name.clone())
+                        .entry(characteristics.name.clone())
                         .or_default()
                         .push(permanent.card);
                 }

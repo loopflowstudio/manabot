@@ -6,7 +6,8 @@ use crate::{
         turn::{PhaseKind, PlayerTurnHistory, StepKind},
     },
     state::{
-        card::CardDefId,
+        ability::PaymentCost,
+        card::{CardDefId, CardTypes},
         effect::{Affected, ContinuousEffect, CopyEffect, Modification},
         game_object::{CardId, ObjectId, PlayerId, Target},
         mana::{ManaCost, ManaUse, SPEND_SUBTYPES},
@@ -170,6 +171,31 @@ pub struct CardTypeData {
     pub is_battle: bool,
 }
 
+impl CardTypeData {
+    pub fn from_types(types: &CardTypes) -> Self {
+        Self {
+            is_castable: types.is_castable(),
+            is_permanent: types.is_permanent(),
+            is_non_land_permanent: types.is_non_land_permanent(),
+            is_non_creature_permanent: types.is_non_creature_permanent(),
+            is_spell: types.is_spell(),
+            is_creature: types.is_creature(),
+            is_land: types.is_land(),
+            is_planeswalker: types.is_planeswalker(),
+            is_enchantment: types.is_enchantment(),
+            is_artifact: types.is_artifact(),
+            is_kindred: types.is_kindred(),
+            is_battle: types.is_battle(),
+        }
+    }
+}
+
+/// A card in any zone. Every field that states a characteristic (name,
+/// power/toughness, types, supertypes, subtypes, keywords, ward) reads
+/// `Game::characteristics` while the card is on the battlefield and the
+/// printed card elsewhere; identity, token status and the costs paid when
+/// casting are printed by definition. `tests/cards/observability.rs`
+/// classifies each field as layered or printed.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CardData {
@@ -570,8 +596,8 @@ pub struct PermanentData {
     pub granted_firebending: i32,
     pub temp_subtypes: Vec<String>,
     /// Effective keywords — printed keywords unioned with until-EOT grants
-    /// (Yip Yip! flying, Enter the Avatar State, ...). The card entry keeps
-    /// printed keywords; this is what the permanent can actually do now.
+    /// (Yip Yip! flying, Enter the Avatar State, ...): what the permanent can
+    /// actually do now. The battlefield card entry reads the same layered view.
     pub keywords: KeywordData,
     /// Counters other than +1/+1 by kind (CR 122.1; `CounterKind` names in
     /// snake case), only the kinds present.
@@ -1145,53 +1171,64 @@ impl Observation {
         );
     }
 
+    /// A card's row. On the battlefield every characteristic reads the
+    /// layered view (`Game::characteristics`); elsewhere the printed card.
     fn card_data(game: &Game, card_id: CardId, zone: ZoneType) -> CardData {
         let card = &game.state.cards[card_id];
+        let layered = match game.state.card_to_permanent[card_id] {
+            Some(permanent) if zone == ZoneType::Battlefield => {
+                Some(game.characteristics(permanent))
+            }
+            _ => None,
+        };
+        let ward_value = |cost: &PaymentCost| i32::from(cost.mana_cost().mana_value);
         CardData {
             zone,
             owner_id: game.state.players[card.owner.0].id.0 as i32,
             id: card.id.0 as i32,
             registry_key: card.registry_key.0 as i32,
-            name: card.name.clone(),
+            name: layered
+                .as_ref()
+                .map_or_else(|| card.name.clone(), |view| view.name.clone()),
             text_box: card.text_box.clone(),
-            power: card.power.unwrap_or(0),
-            toughness: card.toughness.unwrap_or(0),
+            power: layered
+                .as_ref()
+                .map_or_else(|| card.power.unwrap_or(0), |view| view.power),
+            toughness: layered
+                .as_ref()
+                .map_or_else(|| card.toughness.unwrap_or(0), |view| view.toughness),
             is_token: card.is_token,
-            is_legendary: card
-                .supertypes
-                .iter()
-                .any(|s| s.eq_ignore_ascii_case("legendary")),
-            // A characteristic-setting effect replaces a permanent's types.
-            is_ally: match game.state.card_to_permanent[card_id] {
-                Some(permanent) if zone == ZoneType::Battlefield => {
-                    game.characteristics(permanent).has_subtype("Ally")
-                }
-                _ => card.has_subtype("Ally"),
-            },
-            is_lesson: card.has_subtype("Lesson"),
-            ward_cost: card
-                .ward()
-                .map(|cost| i32::from(cost.mana_cost().mana_value))
-                .unwrap_or(0),
+            is_legendary: layered.as_ref().map_or_else(
+                || {
+                    card.supertypes
+                        .iter()
+                        .any(|s| s.eq_ignore_ascii_case("legendary"))
+                },
+                |view| view.is_legendary,
+            ),
+            is_ally: layered
+                .as_ref()
+                .map_or_else(|| card.has_subtype("Ally"), |view| view.has_subtype("Ally")),
+            is_lesson: layered.as_ref().map_or_else(
+                || card.has_subtype("Lesson"),
+                |view| view.has_subtype("Lesson"),
+            ),
+            ward_cost: layered
+                .as_ref()
+                .map_or_else(|| card.ward(), |view| view.ward.as_ref())
+                .map_or(0, ward_value),
             kicker_cost: card
                 .optional_cost()
                 .map(|cost| i32::from(cost.mana_value))
                 .unwrap_or(0),
-            card_types: CardTypeData {
-                is_castable: card.types.is_castable(),
-                is_permanent: card.types.is_permanent(),
-                is_non_land_permanent: card.types.is_non_land_permanent(),
-                is_non_creature_permanent: card.types.is_non_creature_permanent(),
-                is_spell: card.types.is_spell(),
-                is_creature: card.types.is_creature(),
-                is_land: card.types.is_land(),
-                is_planeswalker: card.types.is_planeswalker(),
-                is_enchantment: card.types.is_enchantment(),
-                is_artifact: card.types.is_artifact(),
-                is_kindred: card.types.is_kindred(),
-                is_battle: card.types.is_battle(),
-            },
-            keywords: KeywordData::from_keywords(&card.keywords),
+            card_types: CardTypeData::from_types(
+                layered.as_ref().map_or(&card.types, |view| &view.types),
+            ),
+            keywords: KeywordData::from_keywords(
+                layered
+                    .as_ref()
+                    .map_or(&card.keywords, |view| &view.keywords),
+            ),
             mana_cost: card.mana_cost.clone().unwrap_or_default(),
             face_down: zone == ZoneType::Exile && game.is_foretold(card_id),
             cast_permission: game
