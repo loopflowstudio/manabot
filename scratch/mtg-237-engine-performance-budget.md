@@ -100,18 +100,17 @@ unaffected (they resolve a real commit), which is why the T4 recording and
 the validating dispatch run passed.
 
 Settled by the accepted decision "every run is a recording of its candidate":
-the candidate is a durable commit. Next implement direction, not done here:
-
-- The job builds and names the PR head on `pull_request`
-  (`github.event.pull_request.head.sha`), the pushed SHA on `push`, the
-  dispatched ref's SHA on `workflow_dispatch`: check out that commit as the
-  candidate tree, so the measured engine is exactly the recorded commit, and
-  write its SHA to `measurement.json`. `measure` keeps resolving the other
-  checkout's HEAD. The PR head stays fetchable after a squash merge
-  (`refs/pull/N/head`), which is what docs/development.md already relies on.
-- Docs: say in one line that the recorded commit is the PR head, and that
-  re-running the job is the recovery when the digests match and the engine
-  did not change (the plan states it; the section does not).
+the candidate is a durable commit. Implemented (2026-11-02, implement after
+the review): the job's first checkout takes
+`github.event.pull_request.head.sha || github.sha` (PR head on
+`pull_request`, pushed SHA on `push`, dispatched ref's SHA on
+`workflow_dispatch`), so the candidate tree, its benchmarks and
+`measurement.json`'s commit (still the checked-out tree's `rev-parse HEAD`,
+for `measure` the other checkout) are one durable commit. docs/development.md
+now says the recorded commit is the PR head and that re-running the job is
+the recovery when both digests match and the engine did not change. Detect
+Changes still diffs the merge commit; only the measured tree moved. Confirmed
+locally by actionlint; the `pull_request` path itself runs first on the PR.
 
 No open product choice. The two read decisions (A/B against a committed
 reference commit; native `Env::step` random play) stand as recorded above,
@@ -131,12 +130,12 @@ not CI: the branch has no PR and branch pushes do not trigger CI. Main moved
 to 29660d00c (docs/ARCHITECTURE.md and scratch only), merged at 49765237c;
 the reference 4c8324a59 still describes the engine (checked 2026-11-02).
 
-Remains: the candidate-identity change from the second concept review
-(above), then publication, owned by the caller: open the PR with the T4/T5/T6
+Remains: publication, owned by the caller: open the PR with the T4/T5/T6
 figures in its body; the PR run confirms path selection on `pull_request`,
-the flagless compare step and the artifact's `measurement.json`; the first
-main run after merge confirms the push path; the `measure` path wants one
-dispatch before the next historical measurement (gate/CI).
+the PR-head checkout, the flagless compare step and that the artifact's
+`measurement.json` names the PR head; the first main run after merge confirms
+the push path; the `measure` path wants one dispatch before the next
+historical measurement (gate/CI).
 
 Proposed Wave memory, not written (no step so far maintains Wave memory):
 engine speed now has a CI budget relative to a committed reference commit;
@@ -144,4 +143,4 @@ GitHub runner wall time is not comparable across runs; T4 main measured 6.8k
 steps/s and 13.8 s worst Search-64 reply on EPYC 7763. Write it to
 `.lf/wave/engine/MEMORY.md` from the step that does.
 
-Check: `uv run --extra dev pytest tests/infra/test_engine_budget.py tests/infra/test_ci_selection.py -q` and `actionlint .github/workflows/engine-budget.yml .github/workflows/ci.yml` → 56 passed, actionlint clean (2026-11-02, realign).
+Check: `uv run --extra dev pytest tests/infra/test_engine_budget.py tests/infra/test_ci_selection.py -q` and `actionlint .github/workflows/engine-budget.yml .github/workflows/ci.yml` → 56 passed, actionlint clean (2026-11-02, implement, after the candidate-ref change).

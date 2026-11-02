@@ -229,7 +229,10 @@ reaching these decks moved a digest; a measured cost is accepted; or a
 speedup is kept, so later slowdowns are budgeted against the faster engine
 rather than allowed back up to the old reference. The PR body cites the delta
 from the run it adopts; the recording commit's own run then compares the same
-engine with that reference and passes.
+engine with that reference and passes. On a pull request the job checks out
+and records the PR head, never GitHub's ephemeral merge commit, so the recorded
+commit is one a later run can fetch. When both digests match and the engine
+did not change, a failure is runner noise: re-run the job.
 
 ```bash
 gh run download <run-id> --name engine-budget --dir .cache/engine-budget

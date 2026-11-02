@@ -9,8 +9,11 @@ name: Engine Budget
 # the reference within the tolerance and both to the committed digests. Every
 # run is a recording of its candidate: the `engine-budget` artifact holds both
 # outputs and a measurement.json a PR adopts with `scripts/engine_budget.py
-# record --reason`. `measure` (CI's dispatch input, or this workflow's once it
-# is on main) records a commit that has no PR with this ref's benchmarks,
+# record --reason`. So the candidate is a durable commit: the PR head on
+# pull_request (the default checkout is GitHub's ephemeral merge commit, which
+# a later run cannot fetch), the pushed SHA on push, the dispatched ref's SHA
+# on workflow_dispatch. `measure` (CI's dispatch input, or this workflow's once
+# it is on main) records a commit that has no PR with this ref's benchmarks,
 # without comparing (docs/development.md, Engine performance budget).
 
 on:
@@ -32,8 +35,11 @@ jobs:
     timeout-minutes: 90
     env:
       MEASURE: ${{ inputs.measure || '' }}
+      CANDIDATE_REF: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.CANDIDATE_REF }}
 
       # One other commit is built with this ref's benchmarks: the measured
       # commit, which is then the candidate with no reference, or the
