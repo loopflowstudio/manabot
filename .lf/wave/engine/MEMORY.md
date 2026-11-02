@@ -81,8 +81,10 @@ preserves accepted decisions, dated proof limits and source history.
   copying card content.
 - Stable `CardDefId` values and deterministic state witnesses reproduce seeded
   traces without allocation-address or debug-format identity.
-- The selected two-deck content is compiled offline into checked-in typed IR and
-  executed without card-name dispatch in the admitted interpreter boundary.
+- Card content is the engine's own `CardDefinition` written in its rules
+  types in `managym/src/cardsets/<set>.rs`, one function per card; the
+  earlier checked-in typed IR and its compiler were deleted on 2026-10-30
+  (`10eeb1f55`). There is one card representation and no card-name dispatch.
 - Priority, targeting, and attacker declarations have uncapped typed offers and
   atomic revision-bound commands. The structured decoder preserved 6,435/6,435
   shared decisions and handled more than 32 legal choices.
@@ -133,7 +135,27 @@ preserves accepted decisions, dated proof limits and source history.
 - Steal Phase's invariants, not its shapes: incarnation and LKI, typed meaning,
   proposed-event replacement flow, explicit legal interaction, and viewer-safe
   projection.
-- Prefer offline compiled typed IR over runtime natural-language parsing.
+- Prefer typed rules data over runtime natural-language parsing. Since
+  2026-10-30 that data is the Rust `CardDefinition` itself, not a separate IR.
+- `Effect` is a verb over an `ObjectSelector` (Jack Heart's concept review,
+  2026-11-02, MTG-235). The object a verb acts on (`This`, `Target`,
+  `Triggering`, `Attached`, `CreatedThisWay`, `Grantor`, `Moved`, `Chosen`,
+  `Each`) is never written into the verb's name; one `Game::select` resolves
+  it, with last known information for a departed source. A verb whose rule
+  depends on which object it hit is an `If` composition ("if you do" is
+  `Condition::Moved`). Reason: each fused variant was its own resolution arm,
+  observability row and opaque learning token, so nothing transferred between
+  cards and the slope reached ~400 variants at Standard scale. Evidence: 33
+  fused variants removed with every directed card test unchanged; 17 remain,
+  each a distinct rule (listed in the MTG-235 plan). Apply the same test to
+  future mechanics: a new rules-type variant names a new rule, not a new
+  object for an existing verb.
+- Learning tokens and the content digest derive from definitions, so a
+  vocabulary change moves them without changing behavior; w17 evidence
+  (conformance, authored-match receipts, parity corpora, Academy fixtures,
+  belief receipt pins) is re-recorded in place with no world or policy-input
+  version bump (MTG-235, 2026-11-02; see WORLDS.md). A version number names a
+  frozen world, not a merge.
 - Unknown primitives and oversized programs fail admission; they never become
   a generic unknown token or a silently truncated sequence.
 - Structured offers are legal by construction. Flat enumerate-then-cap action
@@ -190,7 +212,9 @@ preserves accepted decisions, dated proof limits and source history.
   and Study fork/return before optimizing another benchmark-only
   representation.
 - Preserve dense-state speed as card semantics and event histories grow.
-- Let the next creator-selected content increment pressure the IR naturally
-  without turning each card into a one-off kernel exception.
+- Let the next content increment pressure the rules types naturally without
+  turning each card into a one-off variant; count the variants that serve one
+  card and compose rather than fuse (MTG-235 halved the fused set; remaining
+  one-card verbs are the next candidates).
 - Keep exactness non-negotiable without allowing proof infrastructure to become
   a substitute for playing the world.
