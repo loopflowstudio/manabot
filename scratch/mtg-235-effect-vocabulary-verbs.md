@@ -116,8 +116,55 @@ shrank by two thirds, past the directive's halving threshold.
   CI rebuilds it.
 - `TriggerCondition::Chapter` → `CountersReach { kind, at_least }` when
   MTG-225 (T6) publishes; T6 may write its new effects in this shape directly.
-- Not in scope here: the 17 remaining one-rule verbs are the next candidates
-  if a later card shares their shape.
+- Not in scope here (the directive names five families and stops at one
+  PR): the follow-on candidates under "Concept review" below belong to a
+  separate Task after Jack Heart's review.
+
+## Concept review (2026-11-02, headless, against the accepted design)
+
+Accepted experience: a card author writes the verb and names its object with
+one selector; the policy sees one verb token with selector and zone
+sub-tokens, so `Move { This, Exile }` and `Move { Target, Hand }` share a
+word; the Academy and LLM text read as the printed sentence (`Return this
+card to the battlefield tapped`, `Exile it`), never as the mechanical form.
+The implemented change delivers that for the five directed families; its
+departures from the sketch (`Grantor`, `Target(spec)`, `Move { under,
+with_counter, linked }`, `Chosen`, `Each`) each follow from a real card and
+are recorded in questions.md. The nested `if_you_do([If
+{TargetControlledByYou}])` on True Ancestry reads as the card; a
+`Condition::AllOf` would flatten it but no second card asks.
+
+What the accepted decision already implies, outside this Task's directive
+(record only; separate Task after Jack Heart's review):
+
+- Verbs that still bind their object as `target: TargetSpec` (`Destroy`,
+  `Airbend`, `GainControl`, `DealDamage`, `DealDamageValue`, `CounterSpell`,
+  `CounterAbility`, `Earthbend`, `DiscardTargetPlayer`) are the second way
+  to say `ObjectSelector::Target(spec)`. Four of the 17 "remaining" verbs are
+  those verbs over `Each`, not distinct rules: `MassDamage` and
+  `DamageOpponentCreatures` are `DealDamage` over `Each`, `AirbendAll` is
+  `Airbend` over `Each { another }` (excluding the clause's target rather than
+  the source, which `Each` would need to express), and
+  `DestroyCreaturesLosingAbilities` is `Destroy` over `Each` plus the
+  ability-loss rule. Converting them means those verbs take an
+  `ObjectSelector` first.
+- Value twins (`DealDamage`/`DealDamageValue`, `GainLife`/`GainLifeValue`,
+  `CreateToken`/`CreateTokensValue`, `AddMana`/`AddManaValue`) are the same
+  verb split by whether the amount is fixed; this PR merged
+  `PutCountersValue` into `PutCounters { amount: EffectValue }` and
+  `From<i32> for EffectValue` already exists, so the same merge applies.
+- `AffectedSpec` and `ObjectSelector` overlap (`Source`/`This`,
+  `Target`/`Target`, `TriggeringPermanent`/`Triggering`); the accepted sketch
+  wrote `Each(AffectedSpec)`, so one "which objects" vocabulary is a later
+  simplification, not a defect of this change.
+
+Partial selectors are deliberate and documented: `Chosen` is offered only by
+`Sacrifice`, `optional` only reads with `Chosen`, `PlayerSelector::Owner`
+only `Move` reads. A general resolution-time choice ("tap a creature you
+control") waits for a card; no product choice is open there.
+
+Open product choices: none. Next proof: the gate on this branch and Jack
+Heart's review of the PR.
 
 ## Check-result
 
