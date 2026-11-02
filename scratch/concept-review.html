@@ -3,204 +3,125 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Concept review: one object vocabulary</title>
+<title>MTG-235 · Effect concept review</title>
 <style>
-  :root {
-    --bg: #fbfaf7; --fg: #1f1d1a; --muted: #6b655c; --rule: #e2ddd3;
-    --code-bg: #f1eee7; --accent: #8a4b1e; --proposed: #1e5f8a; --proposed-bg: #e8f1f8;
-    --existing-bg: #efece5; --warn: #9a2f2f;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #17161a; --fg: #e8e4dc; --muted: #a39d92; --rule: #35323a;
-      --code-bg: #1f1e24; --accent: #e0a070; --proposed: #7fb6e0; --proposed-bg: #1b2a36;
-      --existing-bg: #232128; --warn: #e08787;
-    }
-  }
-  html { background: var(--bg); color: var(--fg); }
-  body {
-    margin: 0; padding: 2.5rem 16px 6rem;
-    font: 17px/1.55 Georgia, "Iowan Old Style", "Times New Roman", serif;
-    max-width: 46rem; margin-left: auto; margin-right: auto;
-  }
-  header { color: var(--muted); font-size: 0.9rem; border-bottom: 1px solid var(--rule); padding-bottom: 1rem; margin-bottom: 2.5rem; }
-  header b { color: var(--fg); font-weight: 600; }
-  header .files { margin-top: 0.4rem; }
-  h1 { font-size: 1.7rem; line-height: 1.2; font-weight: 600; margin: 0 0 1rem; }
-  h2 { font-size: 1.2rem; font-weight: 600; margin: 3rem 0 0.8rem; }
-  h3 { font-size: 1rem; font-weight: 600; margin: 1.8rem 0 0.4rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; font-size: 0.78rem; }
-  p { margin: 0 0 1rem; }
-  .lead { font-size: 1.15rem; border-left: 3px solid var(--accent); padding-left: 1rem; margin: 1.5rem 0 2rem; }
-  pre, code { font: 0.82rem/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
-  pre { background: var(--code-bg); padding: 0.9rem 1rem; overflow-x: auto; border-radius: 4px; margin: 0.6rem 0 1.2rem; white-space: pre; }
-  code { background: var(--code-bg); padding: 0.05em 0.3em; border-radius: 3px; }
-  pre code { background: none; padding: 0; }
-  .pair { display: grid; grid-template-columns: 1fr; gap: 0.8rem; margin: 0.8rem 0 1.4rem; }
-  @media (min-width: 760px) { .pair { grid-template-columns: 1fr 1fr; } }
-  .pair > div { min-width: 0; }
-  .label { font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-bottom: 0.3rem; }
-  .existing .label::before { content: "existing · "; }
-  .proposed .label::before { content: "proposed · "; color: var(--proposed); }
-  .proposed pre { background: var(--proposed-bg); border-left: 3px solid var(--proposed); }
-  .existing pre { background: var(--existing-bg); }
-  .tokens { font-family: ui-monospace, Menlo, monospace; font-size: 0.8rem; color: var(--muted); }
-  .tokens b { color: var(--fg); font-weight: 600; }
-  table { border-collapse: collapse; width: 100%; font-size: 0.92rem; margin: 0.6rem 0 1.4rem; }
-  th, td { text-align: left; vertical-align: top; padding: 0.5rem 0.6rem 0.5rem 0; border-top: 1px solid var(--rule); }
-  th { font-weight: 600; color: var(--muted); font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.04em; border-top: 0; }
-  td code { white-space: nowrap; }
-  .mismatch { border: 1px solid var(--accent); padding: 1rem 1.2rem; border-radius: 4px; margin: 1.5rem 0; }
-  .mismatch .label { color: var(--accent); }
-  .counter { color: var(--warn); }
-  ol.q { padding-left: 1.4rem; }
-  ol.q li { margin-bottom: 1rem; }
-  ol.q ol { list-style: lower-alpha; padding-left: 1.4rem; margin-top: 0.3rem; }
-  ol.q ol li { margin-bottom: 0.2rem; }
-  .small { font-size: 0.9rem; color: var(--muted); }
+:root { color-scheme: light dark; --bg:#fbfaf7; --fg:#25231f; --muted:#686157; --line:#d8d1c5; --code:#eeeae2; --accent:#865021; }
+@media (prefers-color-scheme:dark) { :root { --bg:#19181b; --fg:#eee8de; --muted:#b7aea1; --line:#49424b; --code:#28252b; --accent:#e8b681; } }
+* { box-sizing:border-box; }
+body { max-width:48rem; margin:auto; padding:2rem 1.2rem 4rem; background:var(--bg); color:var(--fg); font:17px/1.6 Georgia,serif; }
+header { color:var(--muted); font:14px/1.6 system-ui,sans-serif; border-bottom:1px solid var(--line); padding-bottom:1rem; overflow-wrap:anywhere; }
+h1 { font-size:2rem; line-height:1.2; margin-top:2rem; }
+h2 { font-size:1.25rem; margin-top:2.3rem; }
+code,pre { font:13px/1.6 ui-monospace,monospace; }
+code { overflow-wrap:anywhere; }
+pre { padding:1rem; background:var(--code); white-space:pre-wrap; overflow-wrap:anywhere; }
+.lead { border-left:3px solid var(--accent); padding-left:1rem; }
+small,.status { color:var(--muted); }
+ol { padding-left:1.4rem; } li { padding-bottom:.7rem; }
 </style>
 </head>
 <body>
-
 <header>
-  <div><b>Task</b> MTG-235 · Effect vocabulary: verbs over an ObjectSelector &nbsp;·&nbsp; <b>Step</b> concept-review, with Jack Heart &nbsp;·&nbsp; <b>Date</b> 2026-11-02</div>
-  <div class="files"><b>Built from</b> PR #412 at <code>3abf7bc55</code>: <code>managym/src/state/ability.rs</code>, <code>managym/src/cardsets/tla.rs</code>, <code>managym/src/cards/tokens.rs</code>, <code>managym/src/agent/ability_description.rs</code>, <code>scratch/mtg-235-effect-vocabulary-verbs.md</code>.</div>
+<b>MTG-235</b> · concept-review · headless · 2026-11-02<br>
+Source head: <code>efd4f6d26</code>, with the reconciled working design.<br>
+Built from <code>scratch/mtg-235-effect-vocabulary-verbs.md</code>,
+<code>AGENTS.md</code>, <code>WORLDS.md</code>,
+<code>managym/src/state/ability.rs</code>,
+<code>managym/src/flow/{resolution,decision,action}.rs</code>,
+<code>managym/src/cardsets/tla.rs</code>,
+<code>managym/src/cards/tokens.rs</code>,
+<code>managym/tests/rules/cr_608_resolution.rs</code> and
+<code>managym/tests/cards/observability.rs</code>.
 </header>
+<h1>No further product decision is needed</h1>
+<p class="lead">The amendment expresses Jack Heart's accepted <b>1a, 2a, 3a, 4b</b>
+decisions: object verbs share selectors, continuous effects use that vocabulary,
+amounts share <code>EffectValue</code>, and resolution choices apply across verbs.
+<b>No design change and no open product choice.</b></p>
+<p class="status">Implemented on this branch; full final-head acceptance and amended publication
+remain pending. This is a design review, not a new test-pass or delivery claim.</p>
 
-<h1>One object vocabulary, or three?</h1>
+<h2>Author one instruction</h2>
+<p>Before the amendment, an author learned a separate object shape for destruction,
+movement and continuous effects.</p>
+<pre><code>// Before amendment — historical
+Destroy { target: TargetSpec::Creature }
+Move { what: ObjectSelector::Target(TargetSpec::Creature), ... }
+ApplyContinuous { affected: AffectedSpec::Target(TargetSpec::Creature), ... }</code></pre>
+<p>The accepted and implemented shape names the action and its objects separately.
+<code>TargetSpec</code> describes targeting inside <code>ObjectSelector::Target</code>.
+Field names still explain each object's role.</p>
+<pre><code>// Current branch — illustrative Rust fragments
+Effect::destroy(ObjectSelector::Target(TargetSpec::Creature))
+Effect::exile(ObjectSelector::Target(TargetSpec::Creature))
+ApplyContinuous {
+    affected: ObjectSelector::Target(TargetSpec::Creature), ...
+}
+Effect::tap(ObjectSelector::chosen(CardPredicate::creature()))</code></pre>
+<p><b>The consequential mismatch is resolved:</b> a new object for an existing
+verb no longer requires its own verb or a second affected-object enum. Mass damage
+uses <code>DealDamage</code> over <code>Each</code>. Fixed and computed amounts use
+the same verb. Learning tokens derive directly from these definitions.</p>
 
-<p class="lead"><b>Decided 2026-11-02.</b> Jack Heart answered 1a, 2a, 3a, 4b and asked to ship once done: amend #412 so every object verb takes a selector, fold AffectedSpec into it, merge the value twins and make Chosen general. The questions below are kept for the record.</p>
-<p class="lead">PR #412 delivers what you accepted: the five directed families now write a verb over one <code>ObjectSelector</code>, and the fused set shrank by two thirds. The decision I need is what that acceptance already implies for the verbs it did not name. A card author still learns three ways to say <em>which objects</em>, and the policy sees three token shapes for one idea. Should the rest follow, and in this Task or the next?</p>
-
-<h2>The interaction: writing one card</h2>
-
-<p>A card author adds a TLA card whose text reads: <em>“Destroy target attacking creature”</em> on one mode and <em>“Exile target creature you control, then return it to the battlefield under its owner's control”</em> on another. The second sentence is exactly what this PR was for. The first sentence is what it stopped short of.</p>
-
-<div class="pair">
-  <div class="existing">
-    <div class="label">after #412 · both modes as written today</div>
-<pre><code>// mode 1: the verb binds its object itself
-Effect::Destroy {
-    target: TargetSpec::Permanent {
-        predicate: attacking_creature(),
-    },
-},
-
-// mode 2: the verb names its object with a selector
-Effect::exile(ObjectSelector::Target(
-    TargetSpec::CreatureYouControl,
-)),
-Effect::Move {
-    what: ObjectSelector::Moved,
-    to: ZoneType::Battlefield,
-    under: Some(PlayerSelector::Owner),
-    ..
-},</code></pre>
-  </div>
-  <div class="proposed">
-    <div class="label">one shape for both modes</div>
-<pre><code>// mode 1: same selector, same field name
-Effect::destroy(ObjectSelector::Target(
-    TargetSpec::Permanent {
-        predicate: attacking_creature(),
-    },
-)),
-
-// mode 2: unchanged
-Effect::exile(ObjectSelector::Target(
-    TargetSpec::CreatureYouControl,
-)),
-Effect::Move {
-    what: ObjectSelector::Moved,
-    to: ZoneType::Battlefield,
-    under: Some(PlayerSelector::Owner),
-    ..
-},</code></pre>
-  </div>
-</div>
-
-<p>What the author must learn today: <code>Move</code>, <code>Tap</code>, <code>Sacrifice</code>, <code>PutCounters</code> take <code>what</code>, <code>on</code> or <code>from</code> as a selector. <code>Destroy</code>, <code>DealDamage</code>, <code>Airbend</code>, <code>GainControl</code>, <code>CounterSpell</code>, <code>CounterAbility</code> take <code>target: TargetSpec</code> directly. <code>ApplyContinuous</code> takes <code>affected: AffectedSpec</code>, a third enum whose <code>Source</code>, <code>Target</code> and <code>TriggeringPermanent</code> duplicate the selector's <code>This</code>, <code>Target</code> and <code>Triggering</code>. In <code>cardsets/tla.rs</code> the three appear 106, 71 and 82 times.</p>
-
-<h2>What the policy and the reader see</h2>
-
-<p>Tokens are a serde walk of the definition, so field names and enum names are the vocabulary. The same printed phrase, “target creature”, reaches the policy three ways:</p>
-
-<table>
-  <tr><th>Card text</th><th>Rust</th><th>Token path the policy learns</th></tr>
-  <tr><td>Exile target creature</td><td><code>Move { what: Target(Creature), to: Exile }</code></td><td class="tokens">Effect::Move · <b>what</b> · <b>ObjectSelector::Target</b> · TargetSpec::Creature · to · Exile</td></tr>
-  <tr><td>Destroy target creature</td><td><code>Destroy { target: Creature }</code></td><td class="tokens">Effect::Destroy · <b>target</b> · TargetSpec::Creature</td></tr>
-  <tr><td>Target creature gets +1/+1</td><td><code>ApplyContinuous { affected: AffectedSpec::Target(Creature), .. }</code></td><td class="tokens">Effect::ApplyContinuous · <b>affected</b> · <b>AffectedSpec::Target</b> · TargetSpec::Creature</td></tr>
-  <tr><td>Deal 2 damage to each creature</td><td><code>MassDamage { amount: 2 }</code></td><td class="tokens">Effect::MassDamage · amount · 2 &nbsp;<span class="small">(no object at all; a one-rule verb)</span></td></tr>
-</table>
-
-<p>The Academy and LLM text already read as the printed sentence for every selector (<code>ability_description.rs</code> renders <code>This</code> as “this”, <code>Moved</code> as “it”, <code>Each</code> as “each creature you control”). That surface does not change with either answer below. Only the author and the policy are affected.</p>
-
-<div class="mismatch">
-  <div class="label">the consequential mismatch</div>
-  <p>The accepted rule says an <code>Effect</code> is a verb over an <code>ObjectSelector</code>, never a verb that carries its object in its own shape. Nine verbs still carry <code>target: TargetSpec</code>, and four of the 17 verbs the plan lists as “distinct rules” are those verbs over <code>Each</code>: <code>MassDamage</code> and <code>DamageOpponentCreatures</code> are <code>DealDamage</code> over <code>Each</code>; <code>DestroyCreaturesLosingAbilities</code> is <code>Destroy</code> over <code>Each</code> plus ability loss; <code>AirbendAll</code> is <code>Airbend</code> over <code>Each</code>. They cannot convert until the base verbs take a selector. The headless review recorded this as out of the directive; the question is whether it is out of the decision.</p>
-</div>
-
-<h2>Actions, concepts, APIs</h2>
-
-<table>
-  <tr><th></th><th>Existing (PR #412)</th><th>Proposed</th></tr>
-  <tr><td><b>Author writes</b> an object</td><td>Selector for 8 verbs; <code>TargetSpec</code> for 9; <code>AffectedSpec</code> for continuous effects</td><td>Selector for every verb that acts on objects; <code>TargetSpec</code> only inside <code>Target(..)</code>; <code>Each { of }</code> the one “all of them”</td></tr>
-  <tr><td><b>Author writes</b> a mass verb</td><td>A one-rule variant (<code>MassDamage</code>, <code>AirbendAll</code>)</td><td>The base verb over <code>Each</code>; 13 one-rule verbs remain</td></tr>
-  <tr><td><b>Author writes</b> an amount</td><td><code>DealDamage { amount: i32 }</code> or <code>DealDamageValue { amount: EffectValue }</code></td><td>One verb, <code>amount: EffectValue</code> (<code>From&lt;i32&gt;</code> exists; counters already merged this way)</td></tr>
-  <tr><td><b>Concepts</b></td><td><code>ObjectSelector</code>, <code>TargetSpec</code>, <code>AffectedSpec</code></td><td><code>ObjectSelector</code>, <code>TargetSpec</code> (how a target is chosen)</td></tr>
-  <tr><td><b>Resolution API</b></td><td><code>Game::select(what, ctx)</code> for 8 verbs; each target verb reads the frame's clause itself; <code>statics.rs</code> resolves <code>AffectedSpec</code></td><td><code>Game::select</code> for all; the layer computation keeps its own private resolution of <code>Each</code> over the static's scope</td></tr>
-  <tr><td><b>Policy reads</b></td><td>Three token paths for “target creature”</td><td>One: <code>what · ObjectSelector::Target · TargetSpec::…</code></td></tr>
-  <tr><td><b>Evidence</b></td><td>Tokens and digest changed; w17 re-recorded, no version bump</td><td>Same again: re-record in place, still w17</td></tr>
-</table>
-
-<h2>Normal path, failure, recovery</h2>
-
-<p><b>Normal.</b> The flicker above resolves as two <code>Move</code>s. The first fixes the target, the second reads <code>Moved</code>. Under the proposal <code>Destroy</code> resolves through the same <code>select</code> call and the same clause cursor; its arm shrinks to “for each object, destroy”.</p>
-
-<p><b>Failure.</b> The target is gone before resolution. Today <code>select</code> returns nothing for <code>Target</code>, so <code>Move</code> moves nothing, <code>Moved</code> is empty and <code>if_you_do</code> skips. <code>Destroy</code> today has its own “target illegal” path in its arm. Under the proposal that path is the shared one. The directed card tests for fizzles (<code>target_authority_tests.rs</code>) are the witness that nothing changes.</p>
-
-<p><b>Recovery.</b> The source leaves before its ability resolves. <code>This</code> already resolves to the card it became (CR 400.7) for the eight converted verbs. <code>DealDamage</code> from a departed source already uses last known information for the damage source, so the proposal unifies two LKI rules rather than adding one.</p>
-
-<p class="counter"><b>Counterexample kept.</b> <code>AirbendAll</code> airbends every matching permanent <em>other than the clause's chosen target</em>. <code>Each { another }</code> excludes the source, not the target. Folding it needs <code>Each { except: Target }</code> or it stays a one-rule verb. That is a real limit of the proposal, not a reason to stop it.</p>
-
-<p><b>What must survive.</b> Every directed card test unchanged in debug; content digest re-recorded in place; w17 stays the open world. <b>What deliberately changes.</b> Tokens for nine verbs, so a policy trained before and after sees different paths for the same card. That is already true of #412 and is the point.</p>
-
-<h2>What I recommend</h2>
-
-<p>Answer 1b. Let #412 land as the reviewed, bounded change it is. Then one more PR in this Task converts the nine target verbs and the four <code>Each</code> twins, merges the value twins, and folds <code>AffectedSpec</code> into the selector. It is the same mechanical rewrite with the same evidence re-recording, and splitting it into a separate Task buys nothing but a second brief. Leave <code>Chosen</code> partial until a card needs it.</p>
-
-<h2>Questions</h2>
-
-<ol class="q">
-  <li>The nine verbs still binding <code>target: TargetSpec</code> (<code>Destroy</code>, <code>Airbend</code>, <code>GainControl</code>, <code>DealDamage</code>, <code>CounterSpell</code>, <code>CounterAbility</code>, <code>DiscardTargetPlayer</code>, <code>Earthbend</code>, and the damage value twin): take <code>what: ObjectSelector</code>?
-    <ol>
-      <li>Amend #412 before review.</li>
-      <li>Second PR in this Task after #412 merges. <span class="small">(recommended)</span></li>
-      <li>Separate Task, filed after review.</li>
-      <li>Leave them; three vocabularies is acceptable.</li>
-    </ol>
-  </li>
-  <li><code>AffectedSpec</code>:
-    <ol>
-      <li>Fold into <code>ObjectSelector</code>: <code>ApplyContinuous.affected</code> becomes a selector and <code>Each { of }</code> loses its inner enum.</li>
-      <li>Keep it, only as the payload of <code>Each</code>.</li>
-    </ol>
-  </li>
-  <li>Value twins (<code>DealDamage</code>/<code>DealDamageValue</code>, <code>GainLife</code>/<code>GainLifeValue</code>, <code>CreateToken</code>/<code>CreateTokensValue</code>, <code>AddMana</code>/<code>AddManaValue</code>):
-    <ol>
-      <li>Merge on <code>EffectValue</code> in the same change as question 1.</li>
-      <li>Merge separately.</li>
-      <li>Keep the twins.</li>
-    </ol>
-  </li>
-  <li><code>Chosen</code> beyond <code>Sacrifice</code> (“tap a creature you control”):
-    <ol>
-      <li>Wait for a card that needs it. <span class="small">(current)</span></li>
-      <li>Generalize <code>select</code> now.</li>
-    </ol>
-  </li>
+<h2>Actions → concepts → APIs</h2>
+<ol>
+<li><b>Author says “tap a creature you control.”</b><br>
+<code>Effect::Tap</code> + <code>ObjectSelector::Chosen</code> →
+<code>execute_frame_effect</code> retains the instruction in <code>Decision::ChooseObject</code>.</li>
+<li><b>Player chooses a legal permanent during resolution.</b><br>
+The pending frame owns the choice → <code>Action::SelectCard</code> binds the exact
+object → <code>Game::select</code> supplies it to the verb.</li>
+<li><b>Academy, policy and LLM consume that same decision.</b><br>
+Native offers and descriptions → <code>resolution_choice</code> and learning tokens.
+Consumers introduce no separate rules or choice state.</li>
 </ol>
 
-<p class="small">Decisions are recorded in <code>scratch/mtg-235-effect-vocabulary-verbs.md</code> under “Concept review with Jack Heart”. Everything marked proposed on this page is unimplemented.</p>
+<h2>Normal path, failure and recovery</h2>
+<p><b>Normal:</b> choose one of two eligible creatures; only the chosen creature taps.
+Completing the instruction clears its binding before the next instruction.</p>
+<p><b>Failure:</b> an illegal selection restores the pending decision. An impossible
+chosen Move or Sacrifice moves nothing and clears its move result; a following
+<code>if_you_do</code> cannot reuse an earlier successful instruction.</p>
+<p><b>Recovery:</b> the suspended frame retains the instruction, target eligibility
+and chosen object across nested choices. Stopping counter removal ends that
+instruction's binding; the next chosen verb offers a fresh choice. Reconnect and
+replay must retain the actual native pending decision through their existing authority.</p>
 
+<h2>Distinctions the simpler vocabulary must preserve</h2>
+<p><b>“All other” is not always “another.”</b> Avatar's Wrath excludes the selected
+target with <code>Except::Target</code>; <code>Except::This</code> excludes the source.</p>
+<p><b>Two results have different lifetimes.</b> Avatar Destiny reads its milled
+cards after moving itself. <code>this_way</code> retains discard/mill results;
+<code>moved</code> retains the latest Move/Sacrifice result.</p>
+<p><b>Batch semantics remain rules.</b> Day of Black Sun loses abilities before
+simultaneous destruction, with the correct trigger sources. A vocabulary rewrite
+must preserve that sequence and the affected creatures.</p>
+<p><b>One vocabulary does not mean one runtime identity.</b> Players use
+<code>resolve_affected</code>; stack abilities use the retained clause target.
+Neither is a card <code>ObjectRef</code>. Static layers privately resolve selectors
+to avoid recursive characteristic evaluation.</p>
+
+<h2>Remaining proof and dependency</h2>
+<p>Run the existing final-head acceptance: unchanged directed card tests in debug,
+selector observability and tokens, native/Python observation parity, LLM rendering,
+and current-world admission and conformance. Refresh only current w17 evidence;
+historical receipts and frozen observation widths remain intact.</p>
+<p>MTG-225 integration remains pending: migrate its new effects and replace
+<code>Chapter</code> with <code>CountersReach</code> when T6 publishes. This review
+adds no new implementation scope.</p>
+
+<h2>Review questions — settled</h2>
+<ol>
+<li>Do the accepted object verbs share the selector? <b>Yes, in the current branch.</b></li>
+<li>Are affected objects and amounts still duplicate authoring concepts?
+<b>No: AffectedSpec and the accepted value twins are removed.</b></li>
+<li>Is resolution choice still sacrifice-specific? <b>No: supported object verbs
+share ChooseObject and instruction-local binding.</b></li>
+<li>Is another product choice needed? <b>No. Validation and the recorded integration
+dependency remain; neither supplies a new product decision.</b></li>
+</ol>
+<small>Decisions live in <code>scratch/mtg-235-effect-vocabulary-verbs.md</code>.
+The earlier interactive review is preserved in commit <code>d1bda6121</code>.
+No additional redesign is proposed.</small>
 </body>
 </html>

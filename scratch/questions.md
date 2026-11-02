@@ -66,12 +66,4 @@ and original MTG-235 notes remain at
 They are evidence, not new work. In particular: frozen advice failures remain
 blockers rather than fixtures to regenerate; source-sensitive parity receipts
 must be rebuilt after final Rust edits; current w17 evidence is refreshed in
-place, whereas earlier worlds remain frozen. Wave memory is read-only in this
-implementation step.
-
-## Proposed Wave memory correction
-
-The original-pass memory still says 79 Effect variants and 17 remaining fused
-verbs. The accepted amendment yields 70 and 14 respectively, folds AffectedSpec,
-merges value twins, and generalizes Chosen. Apply this correction only in a
-Graph step authorized to maintain Wave memory.
+place, whereas earlier worlds remain frozen.

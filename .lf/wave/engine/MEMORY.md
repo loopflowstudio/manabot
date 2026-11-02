@@ -139,17 +139,29 @@ preserves accepted decisions, dated proof limits and source history.
   2026-10-30 that data is the Rust `CardDefinition` itself, not a separate IR.
 - `Effect` is a verb over an `ObjectSelector` (Jack Heart's concept review,
   2026-11-02, MTG-235). The object a verb acts on (`This`, `Target`,
-  `Triggering`, `Attached`, `CreatedThisWay`, `Grantor`, `Moved`, `Chosen`,
+  `Triggering`, `Attached`, `CreatedThisWay`, `Grantor`, `Moved`, `You`, `Chosen`,
   `Each`) is never written into the verb's name; one `Game::select` resolves
   it, with last known information for a departed source. A verb whose rule
   depends on which object it hit is an `If` composition ("if you do" is
   `Condition::Moved`). Reason: each fused variant was its own resolution arm,
   observability row and opaque learning token, so nothing transferred between
-  cards and the slope reached ~400 variants at Standard scale. Evidence: 33
-  fused variants removed with every directed card test unchanged; 17 remain,
-  each a distinct rule (listed in the MTG-235 plan). Apply the same test to
+  cards and the slope reached ~400 variants at Standard scale. The accepted
+  amendment folds `AffectedSpec` into `ObjectSelector`, merges value twins on
+  `EffectValue`, and uses the base verb over `Each` for batch effects. There
+  are 70 Effect variants (previously 107) and 14 remaining object-in-name rules
+  in the plan's inventory. Directed card behavior tests are unchanged; the
+  interrupted run's 485-card debug pass predates recovery fixes, so it does
+  not establish final-amendment acceptance. Apply the same test to
   future mechanics: a new rules-type variant names a new rule, not a new
   object for an existing verb.
+- `Chosen` suspends a supported object verb before selection, binds its chosen
+  permanent for that instruction, then clears it even when a nested counter
+  choice stops. Player-affecting verbs resolve the same selector through
+  `resolve_affected`; stack abilities have no card `ObjectRef`, so
+  `CounterAbility` reads its retained clause target. `moved` records the latest
+  Move/Sacrifice independently of discard/mill's `this_way`; an impossible or
+  declined choice must clear it before a following "if you do". These are
+  recovery lessons from MTG-235 (2026-11-02), covered by focused selector tests.
 - Learning tokens and the content digest derive from definitions, so a
   vocabulary change moves them without changing behavior; w17 evidence
   (conformance, authored-match receipts, parity corpora, Academy fixtures,
