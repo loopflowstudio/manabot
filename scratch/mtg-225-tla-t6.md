@@ -1,6 +1,6 @@
 # T6 (MTG-225): Sagas, faces, face-aware copies and turn scheduling — plan
 
-Status (2026-11-02): implementing. Jack Heart's steer (2026-11-02, comment
+Status (2026-11-02): all 16 cards implemented; one-catalog refactor in progress on `jack/mtg-225-t6-one-catalog`. Jack Heart's steer (2026-11-02, comment
 b222da8f) adds the content-pack simplification to T6; see
 [t6-direction.md](t6-direction.md). Brief: Task MTG-225 (16 cards, allocation
 `planned_pr: T6`); direction in [t6-direction.md](t6-direction.md). One
@@ -68,6 +68,10 @@ conflicts), so it is stacked on T5 with T5's copy effects available.
 
 - 2026-11-02: debug `cargo test --tests` green except Scryfall fixture (fixed) and
   semantic-kernel w17 evidence (content digest moved; re-record at gate).
+- 2026-11-02 (all 16 cards, T5 gate head `2df025c20` merged): debug
+  `cargo test --tests --no-fail-fast` fails only
+  `checked_semantic_conformance_evidence_reproduces` (w17 content digest moved;
+  re-record at gate); Python text/parity/protocol 62 passed.
 - 2026-11-02 (after T5 merge, extension rebuilt): debug lib/cards/conformance/
   rules targets green; pytest tests/semantic tests/env + parity 276 passed;
   experience protocol 14 passed. Academy UI checks not run (no node_modules).
