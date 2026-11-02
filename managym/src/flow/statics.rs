@@ -36,9 +36,11 @@
 //
 // Derived data is cached per state revision (`TrackedState`, `StaticsCache`):
 // the static-source index (`StaticIndex`: attached permanents and the
-// permanents whose statics can apply) is built once per revision, and each
-// permanent's view is computed once per revision and shared as an `Arc`.
-// Any mutable access to state starts a new revision, so neither can go stale.
+// permanents whose statics can apply) is built once per `characteristics`
+// revision, and each permanent's view is computed once per revision and
+// shared as an `Arc`. Every write a layer may read advances that revision
+// (`Revisions`), so neither can go stale; a mana-pool write advances only
+// `mana_pools`, which the views follow while a static condition reads a pool.
 
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -46,7 +48,10 @@ use std::{
 };
 
 use crate::{
-    flow::{decision::EffectFrame, game::Game},
+    flow::{
+        decision::EffectFrame,
+        game::{Game, Revisions},
+    },
     state::{
         ability::{Condition, Effect},
         card::{
@@ -168,13 +173,18 @@ struct StaticIndex {
     attachments: Vec<Attachment>,
     /// Static sources that have not lost their abilities.
     sources: Vec<StaticSource>,
+    /// A source's buff or keyword-grant condition reads a mana pool, so the
+    /// views depend on the `mana_pools` revision as well.
+    reads_mana_pools: bool,
 }
 
-/// State-derived statics data, valid for the state revision it was computed
-/// at; reading it at a later revision discards it first.
-#[derive(Default)]
+/// State-derived statics data, valid for the revisions it was computed at;
+/// reading it at a later `characteristics` revision discards it first, and
+/// a later `mana_pools` revision discards the views while the index reads
+/// the pools. Cloned with the game: every entry is an immutable `Arc`.
+#[derive(Clone, Default)]
 pub(crate) struct StaticsCache {
-    revision: u64,
+    revisions: Revisions,
     index: Option<Arc<StaticIndex>>,
     /// Indexed by `PermanentId`.
     characteristics: Vec<Option<Arc<Characteristics>>>,
@@ -188,12 +198,19 @@ impl std::fmt::Debug for StaticsCache {
 }
 
 impl StaticsCache {
-    fn at(&mut self, revision: u64) -> &mut Self {
-        if self.revision != revision {
-            self.revision = revision;
+    fn at(&mut self, revisions: Revisions) -> &mut Self {
+        if self.revisions.characteristics != revisions.characteristics {
             self.index = None;
             self.characteristics.clear();
+        } else if self.revisions.mana_pools != revisions.mana_pools
+            && self
+                .index
+                .as_ref()
+                .is_none_or(|index| index.reads_mana_pools)
+        {
+            self.characteristics.clear();
         }
+        self.revisions = revisions;
         self
     }
 }
@@ -263,11 +280,11 @@ impl Game {
     /// applied by layer and then timestamp (see the header). Computed once
     /// per state revision.
     pub fn characteristics(&self, permanent_id: PermanentId) -> Arc<Characteristics> {
-        let revision = self.state.revision();
+        let revisions = self.state.revisions();
         let cached = self
             .statics_cache
             .borrow_mut()
-            .at(revision)
+            .at(revisions)
             .characteristics
             .get(permanent_id.0)
             .and_then(Option::clone);
@@ -281,7 +298,7 @@ impl Game {
         }
         let characteristics = Arc::new(self.compute_characteristics(permanent_id));
         let mut cache = self.statics_cache.borrow_mut();
-        let entries = &mut cache.at(revision).characteristics;
+        let entries = &mut cache.at(revisions).characteristics;
         if entries.len() <= permanent_id.0 {
             entries.resize(permanent_id.0 + 1, None);
         }
@@ -333,14 +350,14 @@ impl Game {
     /// The static-source index at the current state revision, built once per
     /// revision.
     fn static_index(&self) -> Arc<StaticIndex> {
-        let revision = self.state.revision();
-        let cached = self.statics_cache.borrow_mut().at(revision).index.clone();
+        let revisions = self.state.revisions();
+        let cached = self.statics_cache.borrow_mut().at(revisions).index.clone();
         if let Some(index) = cached {
             debug_assert_eq!(*index, self.build_static_index(), "stale static index");
             return index;
         }
         let index = Arc::new(self.build_static_index());
-        self.statics_cache.borrow_mut().at(revision).index = Some(index.clone());
+        self.statics_cache.borrow_mut().at(revisions).index = Some(index.clone());
         index
     }
 
@@ -376,7 +393,7 @@ impl Game {
                 .iter()
                 .any(|ability| matches!(ability, StaticAbility::SetsLandType(_)))
         });
-        let sources = battlefield
+        let sources: Vec<StaticSource> = battlefield
             .iter()
             .filter(|&&(card_id, permanent_id, _)| {
                 let projects = self.state.cards[card_id].statics.iter().any(|ability| {
@@ -403,9 +420,20 @@ impl Game {
                 (permanent_id, permanent.controller, card_id)
             })
             .collect();
+        let reads_mana_pools = sources.iter().any(|&(_, _, card_id): &StaticSource| {
+            let card = &self.state.cards[card_id];
+            card.pt_buffs()
+                .filter_map(|buff| buff.condition.as_ref())
+                .chain(
+                    card.keyword_grants()
+                        .filter_map(|grant| grant.condition.as_ref()),
+                )
+                .any(Condition::reads_mana_pools)
+        });
         StaticIndex {
             attachments,
             sources,
+            reads_mana_pools,
         }
     }
 

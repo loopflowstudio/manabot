@@ -186,7 +186,7 @@ impl Game {
         let Some(index) = self.find_ability_on_stack_index(id) else {
             return;
         };
-        let ability = self.state.stack_objects.remove(index);
+        let ability = self.state.stack_objects_mut().remove(index);
         let source_card = match &ability {
             StackObject::ActivatedAbility(ability) => ability.source_card,
             StackObject::TriggeredAbility(ability) => ability.source_card,
@@ -1123,7 +1123,7 @@ impl Game {
                         // Bounce a spell: its stack object ceases and the
                         // card returns to its owner's hand.
                         if let Some(index) = self.find_spell_on_stack_index(card) {
-                            self.state.stack_objects.remove(index);
+                            self.state.stack_objects_mut().remove(index);
                             let owner = self.state.cards[card].owner;
                             self.move_card(card, ZoneType::Hand);
                             self.invalidate_mana_cache(owner);
@@ -1249,7 +1249,7 @@ impl Game {
                 let source = frame.source?;
                 let original = &self.state.cards[source];
                 let mut copy = original.clone();
-                copy.id = self.state.id_gen.next_id();
+                copy.id = self.state.id_gen_mut().next_id();
                 copy.owner = frame.controller;
                 copy.is_token = true;
                 copy.supertypes
@@ -1590,9 +1590,12 @@ impl Game {
                 None
             }
             Effect::UntapSource => {
-                if let Some(permanent) = self.source_permanent_mut(frame) {
-                    permanent.untap();
-                    let controller = permanent.controller;
+                if let Some(permanent_id) = self.source_permanent_id(frame) {
+                    self.state.untap(permanent_id);
+                    let controller = self.state.permanents[permanent_id]
+                        .as_ref()
+                        .expect("source permanent")
+                        .controller;
                     self.invalidate_mana_cache(controller);
                 }
                 None
@@ -1853,20 +1856,21 @@ impl Game {
                 until_end_of_combat,
             } => {
                 self.invalidate_mana_cache(frame.controller);
-                let player = &mut self.state.players[frame.controller.0];
                 if *until_end_of_combat {
-                    player.combat_mana_pool.add(mana);
+                    self.state.combat_mana_pool_mut(frame.controller).add(mana);
                 } else {
-                    player.mana_pool.add(mana);
+                    self.state.mana_pool_mut(frame.controller).add(mana);
                 }
                 None
             }
             Effect::UntapTarget { .. } => {
                 let chosen = self.present_primary_target(frame)?;
                 if let Target::Permanent(permanent_id) = chosen {
-                    if let Some(permanent) = self.state.permanents[permanent_id].as_mut() {
-                        permanent.untap();
-                        let controller = permanent.controller;
+                    if let Some(controller) = self.state.permanents[permanent_id]
+                        .as_ref()
+                        .map(|permanent| permanent.controller)
+                    {
+                        self.state.untap(permanent_id);
                         self.invalidate_mana_cache(controller);
                     }
                 }
@@ -2018,7 +2022,7 @@ impl Game {
         let Some(object) = self.permanent_object_ref(permanent_id) else {
             return;
         };
-        let timestamp = self.state.id_gen.next_id();
+        let timestamp = self.state.id_gen_mut().next_id();
         if let Some(equipment) = self.source_permanent_mut(frame) {
             equipment.attached_to = Some(object);
             // CR 613.7e: an attachment receives a new timestamp.

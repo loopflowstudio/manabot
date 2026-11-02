@@ -14,6 +14,8 @@
 // applies both by layer, then by timestamp. Expiry is one function per
 // boundary in `flow/effects.rs`.
 
+use std::collections::HashMap;
+
 use super::{
     card::{CardDefId, Keywords},
     game_object::{ObjectId, ObjectRef, PlayerId},
@@ -156,5 +158,74 @@ impl ContinuousEffect {
     /// not remove it (CR 613.7).
     pub fn follows(&self, after: Option<ObjectId>) -> bool {
         after.is_none_or(|after| self.timestamp > after)
+    }
+}
+
+/// Every continuous-effect record in timestamp order, indexed by whom it
+/// affects so a permanent's layers read only its own records. The canonical
+/// state hash serializes the ordered records alone (`as_slice`); the index
+/// is derived and rebuilt when records end.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct EffectRecords {
+    records: Vec<ContinuousEffect>,
+    /// Indices into `records` by affected object, ascending.
+    by_object: HashMap<ObjectRef, Vec<usize>>,
+    /// Indices into `records` by affected player, ascending.
+    by_player: [Vec<usize>; 2],
+}
+
+impl EffectRecords {
+    pub fn push(&mut self, record: ContinuousEffect) {
+        let index = self.records.len();
+        match record.affected {
+            Affected::Object(object) => self.by_object.entry(object).or_default().push(index),
+            Affected::Player(player) => self.by_player[player.0].push(index),
+        }
+        self.records.push(record);
+    }
+
+    pub fn extend(&mut self, records: impl IntoIterator<Item = ContinuousEffect>) {
+        for record in records {
+            self.push(record);
+        }
+    }
+
+    /// Records affecting `object`, in timestamp order.
+    pub fn on(&self, object: ObjectRef) -> impl Iterator<Item = &ContinuousEffect> {
+        self.by_object
+            .get(&object)
+            .into_iter()
+            .flat_map(|indices| indices.iter().map(|&index| &self.records[index]))
+    }
+
+    /// Records affecting `player`, in timestamp order.
+    pub fn on_player(&self, player: PlayerId) -> impl Iterator<Item = &ContinuousEffect> {
+        self.by_player[player.0]
+            .iter()
+            .map(|&index| &self.records[index])
+    }
+
+    pub fn iter(&self) -> std::slice::Iter<'_, ContinuousEffect> {
+        self.records.iter()
+    }
+
+    pub fn as_slice(&self) -> &[ContinuousEffect] {
+        &self.records
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.records.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.records.len()
+    }
+
+    /// Keep the records `keep` accepts, in order, and rebuild the index.
+    pub fn retain(&mut self, mut keep: impl FnMut(&ContinuousEffect) -> bool) {
+        let records = std::mem::take(&mut self.records);
+        self.by_object.clear();
+        self.by_player = Default::default();
+        self.extend(records.into_iter().filter(|record| keep(record)));
     }
 }

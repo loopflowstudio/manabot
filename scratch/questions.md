@@ -464,3 +464,28 @@ requirement, it needs its own Task.
   state write already passes `TrackedState::deref_mut`, so a derived index
   cannot drift, and the measured cost is small. Revisit only if profiles show
   index rebuilds dominating.
+
+## MTG-236 (derived state revisions) — 2026-11-02, headless
+
+- `Revisions` has `characteristics`, `mana_pools` and `triggers`; the brief's
+  `offers` counter is omitted because no derivation caches offers today
+  (`current_action_space` is recomputed per decision), and a counter nothing
+  reads would be a setup nothing uses. Add it with its first consumer.
+- Mana pools get their own counter rather than joining `characteristics`:
+  one static condition reads them (`UnspentManaAtLeast`, The Lion-Turtle),
+  and pool writes happen on every mana tap and step boundary. `StaticIndex`
+  records whether a source reads the pools, and the views follow
+  `mana_pools` only then.
+- Only the write sites the probe showed hot in playouts moved to typed
+  accessors (events, taps, damage, life, pools, step flags, stack, trigger
+  queues, incarnations, zone moves). Every other write still advances all
+  counters through `DerefMut`; converting more is safe whenever a profile
+  asks for it, because debug builds recompute every cached value on read.
+- `TrackedState::move_card` advances `characteristics` for moves touching
+  the battlefield or a graveyard and `triggers` for the battlefield only;
+  hand, library, stack and exile moves advance nothing. Graveyard triggers
+  (`InGraveyard`) are matched by scanning graveyards, outside the index.
+- The bench machine carried load averages of 25–40 from other sessions
+  during every run, so absolute times here are not comparable to the
+  brief's (4.97 s / 151.8 s); deltas against the same-session baseline
+  and identical score digests are the evidence.
