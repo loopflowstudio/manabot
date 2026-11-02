@@ -681,6 +681,25 @@
         "timestamp"
       ]
     },
+    "CopyView": {
+      "description": "A copy effect: the printed card it copies and the exceptions that are\npart of its copiable values (CR 707.9b), in application order.",
+      "type": "object",
+      "properties": {
+        "exceptions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ContinuousEffectView"
+          }
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name"
+      ]
+    },
     "DecisionContextView": {
       "description": "Read-only explanation of the current native continuation. This adds no\nchoices, forecasts, or local transaction state to the experience contract.",
       "type": "object",
@@ -1233,6 +1252,17 @@
           "type": "integer",
           "format": "uint32",
           "minimum": 0
+        },
+        "copy_of": {
+          "description": "The copy effect that made it a copy (CR 707.2).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CopyView"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "counters": {
           "description": "Counters other than +1/+1, by kind (`stun`, `fire`, `double_strike`).",

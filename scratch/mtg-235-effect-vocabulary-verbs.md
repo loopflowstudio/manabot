@@ -190,3 +190,20 @@ code merged cleanly. The rebuilt extension and regenerated receipts retain the
 with zero parity gaps. Acceptance was rerun on this combined source as recorded
 above. Clippy initially failed to resolve the relative Python interpreter; the
 absolute repository interpreter passed. Publication remains separate from merge.
+
+## T5 publication sync — 2026-11-02
+
+The existing sync onto main `a8abf01b1` integrates T5 copy effects, surveil,
+layered card characteristics and centralized continuation codes. Retain the
+selector amendment: incoming Joo Dee sacrifices through `ObjectSelector::chosen`,
+Ran and Shaw uses `ObjectSelector::This`, and `ChooseObject` retains decision
+code 4 while Surveil adds code 22. `CreateTokenCopy` replaces the old specialized
+copy effect; Surveil raises the combined vocabulary from 70 to 71 variants.
+
+Current w17 fixtures and parity receipts are regenerated against the combined
+source. The authored 142-command tape and terminal state are identical; all
+navigation/demo prefix offer IDs and labels are retained. Main's layered P/T
+projection changes viewer hashes. Native extension rebuilt and replaced
+atomically; broader gate results above describe the pre-T5 head, not this sync.
+The sync caller owns final verification and publication; this resolver does
+not push or land.

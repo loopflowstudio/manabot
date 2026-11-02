@@ -16,7 +16,7 @@
   "manifest": {
     "world_version": "w17",
     "schema_version": 1,
-    "content_digest": "2d2ece022b70e328bce1a284b7e2230a54c25d04ff500aaa229484034228f2cc",
+    "content_digest": "17735e21aa9d59ebf17319f7ee43e16921189fde2f8886e38bfefc6dcca51e68",
     "pack_key": null,
     "definitions": [
       {
@@ -649,967 +649,975 @@
       },
       {
         "card_def_id": 157,
-        "registry_name": "June, Bounty Hunter"
+        "registry_name": "Joo Dee, One of Many"
       },
       {
         "card_def_id": 158,
-        "registry_name": "Katara, Bending Prodigy"
+        "registry_name": "June, Bounty Hunter"
       },
       {
         "card_def_id": 159,
-        "registry_name": "Katara, Water Tribe's Hope"
+        "registry_name": "Katara, Bending Prodigy"
       },
       {
         "card_def_id": 160,
-        "registry_name": "Katara, the Fearless"
+        "registry_name": "Katara, Water Tribe's Hope"
       },
       {
         "card_def_id": 161,
-        "registry_name": "Knowledge Seeker"
+        "registry_name": "Katara, the Fearless"
       },
       {
         "card_def_id": 162,
-        "registry_name": "Kyoshi Battle Fan"
+        "registry_name": "Knowledge Seeker"
       },
       {
         "card_def_id": 163,
-        "registry_name": "Kyoshi Island Plaza"
+        "registry_name": "Kyoshi Battle Fan"
       },
       {
         "card_def_id": 164,
-        "registry_name": "Kyoshi Village"
+        "registry_name": "Kyoshi Island Plaza"
       },
       {
         "card_def_id": 165,
-        "registry_name": "Kyoshi Warriors"
+        "registry_name": "Kyoshi Village"
       },
       {
         "card_def_id": 166,
-        "registry_name": "Lightning Bolt"
+        "registry_name": "Kyoshi Warriors"
       },
       {
         "card_def_id": 167,
-        "registry_name": "Lightning Strike"
+        "registry_name": "Lightning Bolt"
       },
       {
         "card_def_id": 168,
-        "registry_name": "Llanowar Elves"
+        "registry_name": "Lightning Strike"
       },
       {
         "card_def_id": 169,
-        "registry_name": "Lo and Li, Twin Tutors"
+        "registry_name": "Llanowar Elves"
       },
       {
         "card_def_id": 170,
-        "registry_name": "Long Feng, Grand Secretariat"
+        "registry_name": "Lo and Li, Twin Tutors"
       },
       {
         "card_def_id": 171,
-        "registry_name": "Lost Days"
+        "registry_name": "Long Feng, Grand Secretariat"
       },
       {
         "card_def_id": 172,
-        "registry_name": "Lotus Cobra"
+        "registry_name": "Lost Days"
       },
       {
         "card_def_id": 173,
-        "registry_name": "Mai, Jaded Edge"
+        "registry_name": "Lotus Cobra"
       },
       {
         "card_def_id": 174,
-        "registry_name": "Mai, Scornful Striker"
+        "registry_name": "Mai, Jaded Edge"
       },
       {
         "card_def_id": 175,
-        "registry_name": "Man-o'-War"
+        "registry_name": "Mai, Scornful Striker"
       },
       {
         "card_def_id": 176,
-        "registry_name": "Master Pakku"
+        "registry_name": "Man-o'-War"
       },
       {
         "card_def_id": 177,
-        "registry_name": "Master Piandao"
+        "registry_name": "Master Pakku"
       },
       {
         "card_def_id": 178,
-        "registry_name": "Mayhem Devil"
+        "registry_name": "Master Piandao"
       },
       {
         "card_def_id": 179,
-        "registry_name": "Meditation Pools"
+        "registry_name": "Mayhem Devil"
       },
       {
         "card_def_id": 180,
-        "registry_name": "Merchant of Many Hats"
+        "registry_name": "Meditation Pools"
       },
       {
         "card_def_id": 181,
-        "registry_name": "Messenger Hawk"
+        "registry_name": "Merchant of Many Hats"
       },
       {
         "card_def_id": 182,
-        "registry_name": "Meteor Sword"
+        "registry_name": "Messenger Hawk"
       },
       {
         "card_def_id": 183,
-        "registry_name": "Misty Palms Oasis"
+        "registry_name": "Meteor Sword"
       },
       {
         "card_def_id": 184,
-        "registry_name": "Momo, Friendly Flier"
+        "registry_name": "Misty Palms Oasis"
       },
       {
         "card_def_id": 185,
-        "registry_name": "Momo, Playful Pet"
+        "registry_name": "Momo, Friendly Flier"
       },
       {
         "card_def_id": 186,
-        "registry_name": "Monastery Swiftspear"
+        "registry_name": "Momo, Playful Pet"
       },
       {
         "card_def_id": 187,
-        "registry_name": "Mongoose Lizard"
+        "registry_name": "Monastery Swiftspear"
       },
       {
         "card_def_id": 188,
-        "registry_name": "Monk"
+        "registry_name": "Mongoose Lizard"
       },
       {
         "card_def_id": 189,
-        "registry_name": "Mountain"
+        "registry_name": "Monk"
       },
       {
         "card_def_id": 190,
-        "registry_name": "North Pole Gates"
+        "registry_name": "Mountain"
       },
       {
         "card_def_id": 191,
-        "registry_name": "North Pole Patrol"
+        "registry_name": "North Pole Gates"
       },
       {
         "card_def_id": 192,
-        "registry_name": "Northern Air Temple"
+        "registry_name": "North Pole Patrol"
       },
       {
         "card_def_id": 193,
-        "registry_name": "Obsessive Pursuit"
+        "registry_name": "Northern Air Temple"
       },
       {
         "card_def_id": 194,
-        "registry_name": "Octopus Form"
+        "registry_name": "Obsessive Pursuit"
       },
       {
         "card_def_id": 195,
-        "registry_name": "Omashu City"
+        "registry_name": "Octopus Form"
       },
       {
         "card_def_id": 196,
-        "registry_name": "Origin of Metalbending"
+        "registry_name": "Omashu City"
       },
       {
         "card_def_id": 197,
-        "registry_name": "Ostrich-Horse"
+        "registry_name": "Origin of Metalbending"
       },
       {
         "card_def_id": 198,
-        "registry_name": "Otter-Penguin"
+        "registry_name": "Ostrich-Horse"
       },
       {
         "card_def_id": 199,
-        "registry_name": "Ozai's Cruelty"
+        "registry_name": "Otter-Penguin"
       },
       {
         "card_def_id": 200,
-        "registry_name": "Ozai, the Phoenix King"
+        "registry_name": "Ozai's Cruelty"
       },
       {
         "card_def_id": 201,
-        "registry_name": "Path to Redemption"
+        "registry_name": "Ozai, the Phoenix King"
       },
       {
         "card_def_id": 202,
-        "registry_name": "Pillar Launch"
+        "registry_name": "Path to Redemption"
       },
       {
         "card_def_id": 203,
-        "registry_name": "Pirate Peddlers"
+        "registry_name": "Phoenix Fleet Airship"
       },
       {
         "card_def_id": 204,
-        "registry_name": "Plains"
+        "registry_name": "Pillar Launch"
       },
       {
         "card_def_id": 205,
-        "registry_name": "Planetarium of Wan Shi Tong"
+        "registry_name": "Pirate Peddlers"
       },
       {
         "card_def_id": 206,
-        "registry_name": "Platypus-Bear"
+        "registry_name": "Plains"
       },
       {
         "card_def_id": 207,
-        "registry_name": "Pop Quiz"
+        "registry_name": "Planetarium of Wan Shi Tong"
       },
       {
         "card_def_id": 208,
-        "registry_name": "Power Word Kill"
+        "registry_name": "Platypus-Bear"
       },
       {
         "card_def_id": 209,
-        "registry_name": "Pretending Poxbearers"
+        "registry_name": "Pop Quiz"
       },
       {
         "card_def_id": 210,
-        "registry_name": "Price of Freedom"
+        "registry_name": "Power Word Kill"
       },
       {
         "card_def_id": 211,
-        "registry_name": "Prismatic Vista"
+        "registry_name": "Pretending Poxbearers"
       },
       {
         "card_def_id": 212,
-        "registry_name": "Professor Zei, Anthropologist"
+        "registry_name": "Price of Freedom"
       },
       {
         "card_def_id": 213,
-        "registry_name": "Professor of Symbology"
+        "registry_name": "Prismatic Vista"
       },
       {
         "card_def_id": 214,
-        "registry_name": "Proft's Eidetic Memory"
+        "registry_name": "Professor Zei, Anthropologist"
       },
       {
         "card_def_id": 215,
-        "registry_name": "Prophetic Prism"
+        "registry_name": "Professor of Symbology"
       },
       {
         "card_def_id": 216,
-        "registry_name": "Pyroclasm"
+        "registry_name": "Proft's Eidetic Memory"
       },
       {
         "card_def_id": 217,
-        "registry_name": "Rabaroo Troop"
+        "registry_name": "Prophetic Prism"
       },
       {
         "card_def_id": 218,
-        "registry_name": "Raging Goblin"
+        "registry_name": "Pyroclasm"
       },
       {
         "card_def_id": 219,
-        "registry_name": "Ran and Shaw"
+        "registry_name": "Rabaroo Troop"
       },
       {
         "card_def_id": 220,
-        "registry_name": "Raucous Audience"
+        "registry_name": "Raging Goblin"
       },
       {
         "card_def_id": 221,
-        "registry_name": "Raven Eagle"
+        "registry_name": "Ran and Shaw"
       },
       {
         "card_def_id": 222,
-        "registry_name": "Razor Rings"
+        "registry_name": "Raucous Audience"
       },
       {
         "card_def_id": 223,
-        "registry_name": "Realm of Koh"
+        "registry_name": "Raven Eagle"
       },
       {
         "card_def_id": 224,
-        "registry_name": "Rebellious Captives"
+        "registry_name": "Razor Rings"
       },
       {
         "card_def_id": 225,
-        "registry_name": "Redirect Lightning"
+        "registry_name": "Realm of Koh"
       },
       {
         "card_def_id": 226,
-        "registry_name": "Rockalanche"
+        "registry_name": "Rebellious Captives"
       },
       {
         "card_def_id": 227,
-        "registry_name": "Rocky Rebuke"
+        "registry_name": "Redirect Lightning"
       },
       {
         "card_def_id": 228,
-        "registry_name": "Rough Rhino Cavalry"
+        "registry_name": "Rockalanche"
       },
       {
         "card_def_id": 229,
-        "registry_name": "Rowdy Snowballers"
+        "registry_name": "Rocky Rebuke"
       },
       {
         "card_def_id": 230,
-        "registry_name": "Ruinous Waterbending"
+        "registry_name": "Rough Rhino Cavalry"
       },
       {
         "card_def_id": 231,
-        "registry_name": "Rumble Arena"
+        "registry_name": "Rowdy Snowballers"
       },
       {
         "card_def_id": 232,
-        "registry_name": "Saber-Tooth Moose-Lion"
+        "registry_name": "Ruinous Waterbending"
       },
       {
         "card_def_id": 233,
-        "registry_name": "Sandbender Scavengers"
+        "registry_name": "Rumble Arena"
       },
       {
         "card_def_id": 234,
-        "registry_name": "Sandbenders' Storm"
+        "registry_name": "Saber-Tooth Moose-Lion"
       },
       {
         "card_def_id": 235,
-        "registry_name": "Savannah Lions"
+        "registry_name": "Sandbender Scavengers"
       },
       {
         "card_def_id": 236,
-        "registry_name": "Savor"
+        "registry_name": "Sandbenders' Storm"
       },
       {
         "card_def_id": 237,
-        "registry_name": "Sazh's Chocobo"
+        "registry_name": "Savannah Lions"
       },
       {
         "card_def_id": 238,
-        "registry_name": "Secret Tunnel"
+        "registry_name": "Savor"
       },
       {
         "card_def_id": 239,
-        "registry_name": "Seismic Sense"
+        "registry_name": "Sazh's Chocobo"
       },
       {
         "card_def_id": 240,
-        "registry_name": "Serpent of the Pass"
+        "registry_name": "Secret Tunnel"
       },
       {
         "card_def_id": 241,
-        "registry_name": "Serpent's Pass"
+        "registry_name": "Seismic Sense"
       },
       {
         "card_def_id": 242,
-        "registry_name": "Serra Angel"
+        "registry_name": "Serpent of the Pass"
       },
       {
         "card_def_id": 243,
-        "registry_name": "Shared Roots"
+        "registry_name": "Serpent's Pass"
       },
       {
         "card_def_id": 244,
-        "registry_name": "Shivan Dragon"
+        "registry_name": "Serra Angel"
       },
       {
         "card_def_id": 245,
-        "registry_name": "Sokka's Haiku"
+        "registry_name": "Shared Roots"
       },
       {
         "card_def_id": 246,
-        "registry_name": "Sokka, Bold Boomeranger"
+        "registry_name": "Shivan Dragon"
       },
       {
         "card_def_id": 247,
-        "registry_name": "Sokka, Lateral Strategist"
+        "registry_name": "Sokka's Haiku"
       },
       {
         "card_def_id": 248,
-        "registry_name": "Sokka, Tenacious Tactician"
+        "registry_name": "Sokka, Bold Boomeranger"
       },
       {
         "card_def_id": 249,
-        "registry_name": "Sold Out"
+        "registry_name": "Sokka, Lateral Strategist"
       },
       {
         "card_def_id": 250,
-        "registry_name": "Soldier"
+        "registry_name": "Sokka, Tenacious Tactician"
       },
       {
         "card_def_id": 251,
-        "registry_name": "Solstice Revelations"
+        "registry_name": "Sold Out"
       },
       {
         "card_def_id": 252,
-        "registry_name": "South Pole Voyager"
+        "registry_name": "Soldier"
       },
       {
         "card_def_id": 253,
-        "registry_name": "Southern Air Temple"
+        "registry_name": "Solstice Revelations"
       },
       {
         "card_def_id": 254,
-        "registry_name": "Sozin's Comet"
+        "registry_name": "South Pole Voyager"
       },
       {
         "card_def_id": 255,
-        "registry_name": "Sparring Dummy"
+        "registry_name": "Southern Air Temple"
       },
       {
         "card_def_id": 256,
-        "registry_name": "Spectral Sailor"
+        "registry_name": "Sozin's Comet"
       },
       {
         "card_def_id": 257,
-        "registry_name": "Spirit"
+        "registry_name": "Sparring Dummy"
       },
       {
         "card_def_id": 258,
-        "registry_name": "Spirit Water Revival"
+        "registry_name": "Spectral Sailor"
       },
       {
         "card_def_id": 259,
-        "registry_name": "Suki, Courageous Rescuer"
+        "registry_name": "Spirit"
       },
       {
         "card_def_id": 260,
-        "registry_name": "Suki, Kyoshi Warrior"
+        "registry_name": "Spirit Water Revival"
       },
       {
         "card_def_id": 261,
-        "registry_name": "Sun Warriors"
+        "registry_name": "Suki, Courageous Rescuer"
       },
       {
         "card_def_id": 262,
-        "registry_name": "Sun-Blessed Peak"
+        "registry_name": "Suki, Kyoshi Warrior"
       },
       {
         "card_def_id": 263,
-        "registry_name": "Swamp"
+        "registry_name": "Sun Warriors"
       },
       {
         "card_def_id": 264,
-        "registry_name": "Swampsnare Trap"
+        "registry_name": "Sun-Blessed Peak"
       },
       {
         "card_def_id": 265,
-        "registry_name": "Team Avatar"
+        "registry_name": "Swamp"
       },
       {
         "card_def_id": 266,
-        "registry_name": "Teo, Spirited Glider"
+        "registry_name": "Swampsnare Trap"
       },
       {
         "card_def_id": 267,
-        "registry_name": "The Boulder, Ready to Rumble"
+        "registry_name": "Team Avatar"
       },
       {
         "card_def_id": 268,
-        "registry_name": "The Earth King"
+        "registry_name": "Teo, Spirited Glider"
       },
       {
         "card_def_id": 269,
-        "registry_name": "The Fire Nation Drill"
+        "registry_name": "The Boulder, Ready to Rumble"
       },
       {
         "card_def_id": 270,
-        "registry_name": "The Last Agni Kai"
+        "registry_name": "The Earth King"
       },
       {
         "card_def_id": 271,
-        "registry_name": "The Lion-Turtle"
+        "registry_name": "The Fire Nation Drill"
       },
       {
         "card_def_id": 272,
-        "registry_name": "The Mechanist, Aerial Artisan"
+        "registry_name": "The Last Agni Kai"
       },
       {
         "card_def_id": 273,
-        "registry_name": "The Spirit Oasis"
+        "registry_name": "The Lion-Turtle"
       },
       {
         "card_def_id": 274,
-        "registry_name": "The Unagi of Kyoshi Island"
+        "registry_name": "The Mechanist, Aerial Artisan"
       },
       {
         "card_def_id": 275,
-        "registry_name": "The Walls of Ba Sing Se"
+        "registry_name": "The Spirit Oasis"
       },
       {
         "card_def_id": 276,
-        "registry_name": "Tiger-Dillo"
+        "registry_name": "The Unagi of Kyoshi Island"
       },
       {
         "card_def_id": 277,
-        "registry_name": "Tiger-Seal"
+        "registry_name": "The Walls of Ba Sing Se"
       },
       {
         "card_def_id": 278,
-        "registry_name": "Tireless Provisioner"
+        "registry_name": "Tiger-Dillo"
       },
       {
         "card_def_id": 279,
-        "registry_name": "Tireless Tracker"
+        "registry_name": "Tiger-Seal"
       },
       {
         "card_def_id": 280,
-        "registry_name": "Tolls of War"
+        "registry_name": "Tireless Provisioner"
       },
       {
         "card_def_id": 281,
-        "registry_name": "Toph, Hardheaded Teacher"
+        "registry_name": "Tireless Tracker"
       },
       {
         "card_def_id": 282,
-        "registry_name": "Toph, the Blind Bandit"
+        "registry_name": "Tolls of War"
       },
       {
         "card_def_id": 283,
-        "registry_name": "Toph, the First Metalbender"
+        "registry_name": "Toph, Hardheaded Teacher"
       },
       {
         "card_def_id": 284,
-        "registry_name": "Treasure"
+        "registry_name": "Toph, the Blind Bandit"
       },
       {
         "card_def_id": 285,
-        "registry_name": "Treetop Freedom Fighters"
+        "registry_name": "Toph, the First Metalbender"
       },
       {
         "card_def_id": 286,
-        "registry_name": "True Ancestry"
+        "registry_name": "Treasure"
       },
       {
         "card_def_id": 287,
-        "registry_name": "Trusty Boomerang"
+        "registry_name": "Treetop Freedom Fighters"
       },
       {
         "card_def_id": 288,
-        "registry_name": "Tundra Tank"
+        "registry_name": "True Ancestry"
       },
       {
         "card_def_id": 289,
-        "registry_name": "Turtle-Duck"
+        "registry_name": "Trusty Boomerang"
       },
       {
         "card_def_id": 290,
-        "registry_name": "Twin Blades"
+        "registry_name": "Tundra Tank"
       },
       {
         "card_def_id": 291,
-        "registry_name": "Ty Lee, Artful Acrobat"
+        "registry_name": "Turtle-Duck"
       },
       {
         "card_def_id": 292,
-        "registry_name": "Ty Lee, Chi Blocker"
+        "registry_name": "Twin Blades"
       },
       {
         "card_def_id": 293,
-        "registry_name": "Typhoid Rats"
+        "registry_name": "Ty Lee, Artful Acrobat"
       },
       {
         "card_def_id": 294,
-        "registry_name": "Uncle Iroh"
+        "registry_name": "Ty Lee, Chi Blocker"
       },
       {
         "card_def_id": 295,
-        "registry_name": "United Front"
+        "registry_name": "Typhoid Rats"
       },
       {
         "card_def_id": 296,
-        "registry_name": "Unlucky Cabbage Merchant"
+        "registry_name": "Uncle Iroh"
       },
       {
         "card_def_id": 297,
-        "registry_name": "Vengeful Villagers"
+        "registry_name": "United Front"
       },
       {
         "card_def_id": 298,
-        "registry_name": "Vindictive Warden"
+        "registry_name": "Unlucky Cabbage Merchant"
       },
       {
         "card_def_id": 299,
-        "registry_name": "Wall of Stone"
+        "registry_name": "Vengeful Villagers"
       },
       {
         "card_def_id": 300,
-        "registry_name": "Walltop Sentries"
+        "registry_name": "Vindictive Warden"
       },
       {
         "card_def_id": 301,
-        "registry_name": "Wan Shi Tong, Librarian"
+        "registry_name": "Wall of Stone"
       },
       {
         "card_def_id": 302,
-        "registry_name": "Wandering Musicians"
+        "registry_name": "Walltop Sentries"
       },
       {
         "card_def_id": 303,
-        "registry_name": "War Balloon"
+        "registry_name": "Wan Shi Tong, Librarian"
       },
       {
         "card_def_id": 304,
-        "registry_name": "War Mammoth"
+        "registry_name": "Wandering Musicians"
       },
       {
         "card_def_id": 305,
-        "registry_name": "Wartime Protestors"
+        "registry_name": "War Balloon"
       },
       {
         "card_def_id": 306,
-        "registry_name": "Water Tribe Captain"
+        "registry_name": "War Mammoth"
       },
       {
         "card_def_id": 307,
-        "registry_name": "Water Tribe Rallier"
+        "registry_name": "Wartime Protestors"
       },
       {
         "card_def_id": 308,
-        "registry_name": "Waterbender Ascension"
+        "registry_name": "Water Tribe Captain"
       },
       {
         "card_def_id": 309,
-        "registry_name": "Waterbending Lesson"
+        "registry_name": "Water Tribe Rallier"
       },
       {
         "card_def_id": 310,
-        "registry_name": "Waterbending Scroll"
+        "registry_name": "Waterbender Ascension"
       },
       {
         "card_def_id": 311,
-        "registry_name": "Waterfall Aerialist"
+        "registry_name": "Waterbending Lesson"
       },
       {
         "card_def_id": 312,
-        "registry_name": "Watery Grasp"
+        "registry_name": "Waterbending Scroll"
       },
       {
         "card_def_id": 313,
-        "registry_name": "Weaponize the Monsters"
+        "registry_name": "Waterfall Aerialist"
       },
       {
         "card_def_id": 314,
-        "registry_name": "White Lotus Hideout"
+        "registry_name": "Watery Grasp"
       },
       {
         "card_def_id": 315,
-        "registry_name": "White Lotus Reinforcements"
+        "registry_name": "Weaponize the Monsters"
       },
       {
         "card_def_id": 316,
-        "registry_name": "White Lotus Tile"
+        "registry_name": "White Lotus Hideout"
       },
       {
         "card_def_id": 317,
-        "registry_name": "Wind Drake"
+        "registry_name": "White Lotus Reinforcements"
       },
       {
         "card_def_id": 318,
-        "registry_name": "Wolfbat"
+        "registry_name": "White Lotus Tile"
       },
       {
         "card_def_id": 319,
-        "registry_name": "Yip Yip!"
+        "registry_name": "Wind Drake"
       },
       {
         "card_def_id": 320,
-        "registry_name": "Youthful Knight"
+        "registry_name": "Wolfbat"
       },
       {
         "card_def_id": 321,
-        "registry_name": "Yue, the Moon Spirit"
+        "registry_name": "Yip Yip!"
       },
       {
         "card_def_id": 322,
-        "registry_name": "Yuyan Archers"
+        "registry_name": "Youthful Knight"
       },
       {
         "card_def_id": 323,
-        "registry_name": "Zhao, Ruthless Admiral"
+        "registry_name": "Yue, the Moon Spirit"
       },
       {
         "card_def_id": 324,
-        "registry_name": "Zhao, the Moon Slayer"
+        "registry_name": "Yuyan Archers"
       },
       {
         "card_def_id": 325,
-        "registry_name": "Zuko's Conviction"
+        "registry_name": "Zhao, Ruthless Admiral"
       },
       {
         "card_def_id": 326,
-        "registry_name": "Zuko's Exile"
+        "registry_name": "Zhao, the Moon Slayer"
       },
       {
         "card_def_id": 327,
-        "registry_name": "Zuko, Conflicted"
+        "registry_name": "Zuko's Conviction"
       },
       {
         "card_def_id": 328,
+        "registry_name": "Zuko's Exile"
+      },
+      {
+        "card_def_id": 329,
+        "registry_name": "Zuko, Conflicted"
+      },
+      {
+        "card_def_id": 330,
         "registry_name": "Zuko, Exiled Prince"
       }
     ]
   },
   "prefix": [
     {
-      "before_digest": "ccda18a17dd2c5f15d56936dd08dfcf7ab1ca6282a06e7ff44ee6ad4e2b884e1",
+      "before_digest": "3f48f7f5c5316f9ef16fe411ef833e6469adfacf555461a22cbb115ccae73bd4",
       "offer_id": 0,
       "label": "Play Swamp"
     },
     {
-      "before_digest": "48e6d73e254d5aee893ed7c532fe3a694ad025fa34a6fdd17cc3bc20cd712341",
+      "before_digest": "7da8729763abbad8f323474fa852abc1d3a243dda04df1bc2f773a2bd77aa295",
       "offer_id": 0,
       "label": "Cast Callous Inspector"
     },
     {
-      "before_digest": "a60dc42a57244f2d462a3ba11f022d8af07594f1afd3ae7d8b955b950ff8e315",
+      "before_digest": "275f864439c8768499980d6ab214c69335592ea9054e4a57dfa7bbdf771f2d3b",
       "offer_id": 0,
       "label": "Play Swamp"
     },
     {
-      "before_digest": "7b1691f270701cb1a160696f8bb14359088d6b637d537015619d6d93c772ae65",
+      "before_digest": "661458dca1bf7e23f6d28ba652001a35fb7fba6becea45dd1b64d49afaae90f4",
       "offer_id": 0,
       "label": "Cast Callous Inspector"
     },
     {
-      "before_digest": "7b680be86c9e001ba6f28cc9de73e379d5eaa6cf8ad70a5bfcafd3a08565e437",
+      "before_digest": "bf93ae6cb4e6a8b4effc1c361a693626e845d198a49a69a066a3a2bae16d8359",
       "offer_id": 1,
       "label": "Do not attack with Callous Inspector"
     },
     {
-      "before_digest": "88bc9797d0b388131c9d7841a85eb755767c4ef6df5282a09f2026b8be9d3ec2",
+      "before_digest": "a968ea129100b3d7ab94fac01f2afc95e704f255f0d3d66e8a33fb24aa78125e",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "c21904b4308a6b9bd8b7df95c4d1bd8d90f1aab83ce5bbda319caaae716c3eb2",
+      "before_digest": "e46614287d0e7604ca32610b1116594ba97b776795698b83a44ebcbd34b86ea1",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "b71ff25cd62bb4e7195285819881e739bcb77bbca830b969ee66bd8eb453d9bc",
+      "before_digest": "bd557a2ecf9f7003f85eb989d25c58818aa885e782f6450b3ff7577713e21588",
       "offer_id": 0,
       "label": "Play Swamp"
     },
     {
-      "before_digest": "34d4f00b08bf3f0f0f338a51c459667c05ec0d5bea29de1619b453ea15f7ed40",
+      "before_digest": "393bb61925f6879f58990f880d35686e853a0b283639292637ffa2e473eae94e",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "ae038ab3398ea0d7b2b14e95164907d96da3a2a7c571b632031a949ca890b428",
+      "before_digest": "657342f5d4f38481ebb70afcae5699a30eef8c371cc4cc4d32e1106d828e922d",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "eb303344244c15a308bee518ce83e3260540ea9a40c4a59698b7f617138ac137",
+      "before_digest": "826d1f25c9abd5e365edf51c07c18f222c996dd5e3669c6f669a95b3ec09ee2d",
       "offer_id": 1,
       "label": "Do not attack with Callous Inspector"
     },
     {
-      "before_digest": "3fbe16eaf364a7a7474cd85e787476016825206f9980f53ca801091b445c81b4",
+      "before_digest": "4971976fc2ca940ce34fb4f59778ab9acbebf382b8f56814d0dd749d4dacbc7e",
       "offer_id": 1,
       "label": "Do not attack with Callous Inspector"
     },
     {
-      "before_digest": "35339fd974092900be14ac92f2e08f1f3067cec5085599789b6dad1982aab635",
+      "before_digest": "6d17bf1da213bdd92b3183e1da122cd9a4a7fcc149120b7b6348f7f0cfb32c02",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "7e46a8cc75b885ab1f25731faf1b271bb4e0f8bb7c3b472d3825289dbe9e2487",
+      "before_digest": "e971a2a5d6807eda98f7c9eb45e735521707bab1a86e96566d572a8556869cbd",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "62f7a9f9654fc427c83eaf9c8d3fbb4ffb478a50b5f2dbd0778f882c690862a6",
+      "before_digest": "6cac861aaab5818d41b48a5e86226bf638e1c8b807594a51e3f7a7d19a9df9a5",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "ca60b339083912f09ef221ac4984662a08e8ade73655e0adf0032e32c58eeebd",
+      "before_digest": "bdb304dab1adb0c1bfc996c465902d274a0f516c3356a6d01cfe2725f355cfb8",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "0ee34152da5736744d185df2edbeaf897d56bd27d3a974238838f3890a88452e",
+      "before_digest": "8dae53af78f2f28e0347df5acc2a1e65c3f0e5248494c85e03bcd384455338a5",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "0ad31675453b9043e4f415e72dcbc75fd54b2a53c571c9531aeba03a82970513",
+      "before_digest": "c8269ab16e7dbf1afde842821e178aae1d5f3124c399a4262a5d84e35efde590",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "692e3da61cdd425c6d70951b2138f75850a900c62c21b7ba9e93b19d4cd3d01a",
+      "before_digest": "a086866270487380f633fa46439a09d65adb2327623d66185ebc689f277145e1",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "079ff56a19877105755b9cf7a1b76ba0296880fbd68065df853ae4f3507a605e",
+      "before_digest": "da98dc74a50a4c355c863b1c8a50f3aeae9ea1c5dcc4b1492adfb4376984325f",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "af6ec83e7a191e3b24eab4adbc041f144ca1523c6cd831452602c02bf1ce0f40",
+      "before_digest": "173cadd0806f101793592b0d2f8ceab62586d33dceb97c77e65e36c25af6c0d4",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "4989d093032e797444024858220ef2e9427ef9bcc93c6ab007a475f763cfe9be",
+      "before_digest": "cbebacdb789f88edb72849c4ea7d24f952bbb03907fb5998c158ed84b78e70b4",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "ddb16537fbf0c4ea69cb9ad77bf4f6d8ac88e4df749661c191c7322fcb9ef3f3",
+      "before_digest": "34b0622691267bc78a97e7068b9971ea7e0909db532313c648b3b840e0b912e8",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "167e8e271af8784744904a62a767a310cdd6e143db5b6ebad63c9a70e01506e1",
+      "before_digest": "6b29a8cf45bcb39e24e18ebc7cb97f419951ae21e67ed80921239d4a066ab230",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "899710f11902e2a5bf1ee898b427448fa4e0a26673498973c4e7fa6a9a92296f",
+      "before_digest": "6565337897598100ec9e3ab3f163787afe5638f03d4e1fb6c530af12c1bc0c52",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "833e7ba76feb7d8c56458ff936cc2de8529250804bf3d43bc360b798091e276e",
+      "before_digest": "6747f64b08d08d6f83bcdf87f812ffcc60bb90a16e99d6fb18f14d04ff9d585d",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "ed0a131a3c81456f0a1a6387075dcbc37c153cba66054634fb8c81912656e1d9",
+      "before_digest": "a950be969f4b347b7212d4041642e529676a112c7e897f60c495b6c1edf6f679",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "9d744fff67103d6c328f53b26c819a3e7ee989b4358507e29ce4a051b35304c3",
+      "before_digest": "59a767eea43e0bfeb9966bf09e18960148a8faa88dca68f06522c23f9ac97485",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "ca5fc1392e0bc86ae023d38f16ef22b9d28e4483bd613110c262755e5d602fa8",
+      "before_digest": "f88d7f921e82e11bb5a7a63bc88d834e6a307cae3420a7f1a7c6a914c5ecacba",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "b3ed2f00a4bbf4457c354f196205b91e3e13aeb5cabbcc4891b5285fa5a7f4ce",
+      "before_digest": "faad366b7950f16287455d39324cd0e668cb3a9187910ae93188317bea9c4e86",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "04e25d456aa1c69d5f1da3daed8ebb5b9223bad1fa1a5f533da8c48b04619633",
+      "before_digest": "16024e8f7cc6ca08f8eb0f9e3f4fbe3db9acbf509f132db3e8c1937567c0f2ba",
       "offer_id": 1,
       "label": "Play Swamp"
     },
     {
-      "before_digest": "c44157fd1890ed37d0a5cd8f58992099f77af2c4975403b886c27687b874f1c5",
+      "before_digest": "d52af0375a83e3d8da7cff772e20045ec99ae8b46268633917be18183dcaf331",
       "offer_id": 2,
       "label": "Pass priority"
     },
     {
-      "before_digest": "86288e211d8531a70aa0515ce8b7780f9b49e5e7e8fe100a729f56023f7d6d59",
+      "before_digest": "ede5e44fa504a6315d54aef52206797ff25a577c037d9ac35d8c53405177191d",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "c57a2fae54ed81b0cf363e75a12c776db1118aaab579dae2de4812bde6bdffe3",
+      "before_digest": "066787654fa11062c2885fe3fe7f83a385ad7028978361f0d7a2b4952da173df",
       "offer_id": 1,
       "label": "Do not attack with Callous Inspector"
     },
     {
-      "before_digest": "24e7802a04eee2a8ec9530de52a4f34a16dc790b5e4e151ebc76cc54bdbce189",
+      "before_digest": "7e813a3be8b403097e737ba9da48cd147066ce0fe49213619f33bd688f4d3bcb",
       "offer_id": 1,
       "label": "Do not attack with Callous Inspector"
     },
     {
-      "before_digest": "af6bfbf3383b0c06607bd86ec9dac1c436ad7b488370d62a81c5de6168c0c498",
+      "before_digest": "a646b0daa37312f3879cb6fa7596c7b43404841376376734f9f2e58b1cce044e",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "1c4434d3610eef096bfbabce4b9cf931d64bae441c72d3fa69d0f76bf5a8a499",
+      "before_digest": "e099f7af995fae1f7167b83e4d49d51c8ed4b33d82b035fcde4cb3f0a135cb12",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "bed25373e39f06325327c71bf96b70ab5aebcb712c88897658f66ef5c9c78ff3",
+      "before_digest": "8b6e8acaba38879ac69e771e91d98646799cc597f06e0c219da63c73150bef90",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "4e2241602e686fc7a2a335c54774e63192c95ad3b134c4ff7e08f08fb36764d7",
+      "before_digest": "c0719a418e8fc8389a0940d5d3fd103ea91889e04e5ab102fa4b8b488a4966eb",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "547973e1e28802f62d7c351c06e9ca8fc3006c59e6a97481b0de1d6b4bc03e69",
+      "before_digest": "8b34ea6983d1c9a69a5d001ac4457b320f53d456db65efb9f8853eb33cceb8c5",
       "offer_id": 2,
       "label": "Pass priority"
     },
     {
-      "before_digest": "d7b956459a8d1d10119509bb2263c35c25fe24f38a458d2aa9ea6b53dde0e169",
+      "before_digest": "e48617ef86cacb815f7a30aadfc39d075eff02cf251d020edec41f8a0c188e9f",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "d823807945ccf3fd83633db5613fb6a813837e1e54a0f87dd9c95e9bea45fbeb",
+      "before_digest": "bdca486747d3b0cbc18d95bd610f88b273cd742b2b56746df9d6fa512084af97",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "6ef203d2d533830a61618595533e063141ca65e416131a03ff01ccbf6b790f45",
+      "before_digest": "606816c0bea16d5c3fe251bf9959b58a83d830612149570067d99ead647731e6",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "123370fbc9625ccb7b2663f58ec394da12b78ed4e9d8b2e9772e5fc2408734f9",
+      "before_digest": "ded21b20bd534dab8fbd4433fc7b31e9a385f666a0ab41197a07d3764e4c1d33",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "3846b07f428a1b00f6e984bafc778acd7b0924eb3ace859afd82997212cbeea0",
+      "before_digest": "66c3fb27912651457191f1ec1ce7c82c885264faaefd551a3af013cd5bb16586",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "055d9d2d6aef41188a1e0e3c6a761b170b573915164c603318c28acd6c9c263f",
+      "before_digest": "c0c32bff44c1e1cb25a5de801ee687877040996aed21f89fc7a0c0a9de00746a",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "26c8d35411e59be7d9b7527cd102fbff62a0258cb01a1daeb3c37e8d6c381403",
+      "before_digest": "0c3919f40f0c78ad8631226ef9ee8a4748ecd734508b87b73334987121aab866",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "2d3dcd054142d5d8e1b3832bbde8391704a0775bb2f4ad495b53c50c49a3ff88",
+      "before_digest": "f8a88a059066e1b48f18fbbbae9b52006f9dfd0c3d5df8af814af38ee89bf5e8",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "cbf18fc7f3116f71b61fd300b38c22843dd76f201888dd14bd58c308aa385cd5",
+      "before_digest": "89921d19d077645e0704a42e038ce679d351a1550c251248d7a5d2c05f5c489f",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "c6000d0872e0cd338484a377de1f24b4b0d6bb9aebe5b2b6349d420b4559f775",
+      "before_digest": "c1bbb5b7606adc6060d931fb84f5af79434bb226c0f0d7076c5cbf40cb311c56",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "85b7a45f5ccc8d804ff0c30529e65419b7d9fa355a247cf1e2776ac46e03c47f",
+      "before_digest": "958f06b9a7d21ca44078717518259c47db79fe315daf63323e5eda9992269591",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "e692134eea15d2fabd2d21b69f435f5deca432d824bcecd123d9fab23a1a9adb",
+      "before_digest": "bb34bbcc0442c56bee858358e5470567743c556df2bdcc801afb47722b0f2aed",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "2c6c5e63a1ab977ae740cbd725541db9be0961c7abb1b6b50be53efc262ce1b8",
+      "before_digest": "e8492d191a563b11ffb7ad90f85f9124530e7e7408e70d7d948ad0b8e139dc93",
       "offer_id": 1,
       "label": "Pass priority"
     },
     {
-      "before_digest": "ddf43d85b4f2338966df1d6455619cbed3811e1f1372578a2017a281099b8aaf",
+      "before_digest": "f9bd404111c46d4247e753c5bdd17681b90698d554b20288aab08356332493e9",
       "offer_id": 1,
       "label": "Play Swamp"
     }
   ],
-  "decision_digest": "2779eb770afece14de3ba92e8800fc50fd7f1c444daa2d3d87cc5e5d30965fe9",
+  "decision_digest": "82c3fc5ca671472766412a7bef4f212e9a0666608107da63403209db1c00706e",
   "decision_revision": 66,
   "decision_kind": "PRIORITY"
 }

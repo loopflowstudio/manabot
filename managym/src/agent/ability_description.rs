@@ -661,7 +661,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
     use Effect::*;
     Some(match effect {
         SelectTargetRequirement { .. } => return None,
-        CreateNonlegendaryCopy => "Create a nonlegendary token copy of this".into(),
+        CreateTokenCopy { exceptions } => copy_description(exceptions),
         PutCounters { on, kind, amount } => format!("Put {} {} counters on {}", value_description(amount), counter_description(*kind), selector_description(on)),
         PutCountersFrom { from, on } => format!("Put the counters of {} on {}", selector_description(from), selector_description(on)),
         Sacrifice { what, optional } => format!("{}acrifice {}", if *optional { "You may s" } else { "S" }, selector_description(what)),
@@ -775,6 +775,7 @@ fn effect_description(effect: &Effect) -> Option<String> {
         SearchLibraryToHand { predicate } => format!("Search your library for {}, reveal it, put it into your hand, then shuffle", predicate_description(predicate, "card")),
         OnNthResolutionThisTurn { n, effect } => format!("If this is resolution {n} of this ability this turn: {}",effects_description(std::slice::from_ref(effect))),
         Scry { count } => format!("Scry {count}"),
+        Surveil { count } => format!("Surveil {count}"),
         LookAndSelect { reveal, look, min_select, max_select, predicate } => format!("{} the top {} cards of your library. Put {min_select}–{max_select} {} from among them into your hand and the rest on the bottom in a random order",if *reveal { "Reveal" } else { "Look at" },value_description(look),predicate_description(predicate,"cards")),
         PutTopCardsInHand { count } => format!("Put the top {count} cards of your library into your hand"),
         Learn => "Learn: you may reveal a Lesson you own from outside the game and put it into your hand, or discard a card to draw a card, or decline".into(),
@@ -789,6 +790,23 @@ fn effect_description(effect: &Effect) -> Option<String> {
         DistributeCountersToTappedOpponentCreatures { kind, count } => format!("Distribute {count} {} counters among any number of tapped creatures your opponents control",counter_description(*kind)),
         ForEachTarget { effects } => format!("For each chosen target: {}",effects_description(effects)),
     })
+}
+
+/// "Create a token that's a copy of this[, except …]" (CR 707.9).
+fn copy_description(exceptions: &[Modification<EffectValue>]) -> String {
+    let mut text = "Create a token that's a copy of this".to_string();
+    for (index, exception) in exceptions.iter().enumerate() {
+        // "It …", lowercased after "except".
+        let phrase = continuous_description(
+            &ObjectSelector::Triggering,
+            exception,
+            EffectDuration::Indefinite,
+        );
+        text.push_str(if index == 0 { ", except " } else { " and " });
+        text.push_str(&phrase[..1].to_lowercase());
+        text.push_str(&phrase[1..]);
+    }
+    text
 }
 
 /// One sentence for a continuous effect: whom, what, how long.
@@ -821,6 +839,7 @@ fn continuous_description(
         Modification::BecomeArtifactCreature => {
             format!("{subject} becomes an artifact creature{until}")
         }
+        Modification::Nonlegendary => format!("{subject} isn't legendary{until}"),
         Modification::AddKeywords(keywords) => {
             format!("{subject} gains {}{until}", keywords_description(keywords))
         }

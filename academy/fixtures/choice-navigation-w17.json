@@ -116,7 +116,7 @@
         "protocol": 1,
         "match_id": "rIUnzBD4yaFqPXvtVfGxyQ",
         "revision": 75,
-        "frame_hash": "18943b96056f47d49cf204916736cd636cebd26ccf8c22ac41828cfd0cc4185c",
+        "frame_hash": "888f4484e43ab05bef69861f3a998abe7fcc6881ad00ba47d48df9362c12db15",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -727,8 +727,8 @@
                 "summoning_sick": false,
                 "power": 2,
                 "toughness": 3,
-                "base_power": 1,
-                "base_toughness": 2,
+                "base_power": 2,
+                "base_toughness": 3,
                 "plus1_counters": 0
               }
             ]
@@ -1051,7 +1051,7 @@
                 "summoning_sick": false,
                 "power": 9,
                 "toughness": 4,
-                "base_power": 0,
+                "base_power": 9,
                 "base_toughness": 4,
                 "plus1_counters": 0
               },
@@ -1776,7 +1776,7 @@
         "protocol": 1,
         "match_id": "IE0XGi4wr6pvVUmrmdRAlA",
         "revision": 64,
-        "frame_hash": "496707c17a641555b79171134bf1f511331353a509ca5783b9aaa72cdf953149",
+        "frame_hash": "9eb390ae3ff8d2ad436713bb699cd9b81e26d9aca459351261f7e911faeeadbd",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -2478,8 +2478,8 @@
                 "summoning_sick": false,
                 "power": 4,
                 "toughness": 4,
-                "base_power": 2,
-                "base_toughness": 2,
+                "base_power": 4,
+                "base_toughness": 4,
                 "plus1_counters": 2
               },
               {
@@ -2526,8 +2526,8 @@
                 "summoning_sick": false,
                 "power": 5,
                 "toughness": 5,
-                "base_power": 1,
-                "base_toughness": 1,
+                "base_power": 5,
+                "base_toughness": 5,
                 "plus1_counters": 4
               },
               {
@@ -3057,7 +3057,7 @@
         "protocol": 1,
         "match_id": "rkapqzIxK4P6lzudTYPFMQ",
         "revision": 90,
-        "frame_hash": "ece4847a45fe4f116a6ed6102be3e6fbeeb5653c6d1c7bea2981ced2bc7a629d",
+        "frame_hash": "d9297082fc4f8029b3570d88711dd6e8cb39cc582e456bfcc42af566ac244d8c",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -3740,8 +3740,8 @@
                 "summoning_sick": false,
                 "power": 2,
                 "toughness": 2,
-                "base_power": 0,
-                "base_toughness": 0,
+                "base_power": 2,
+                "base_toughness": 2,
                 "plus1_counters": 2
               },
               {
@@ -3836,8 +3836,8 @@
                 "summoning_sick": false,
                 "power": 1,
                 "toughness": 1,
-                "base_power": 0,
-                "base_toughness": 0,
+                "base_power": 1,
+                "base_toughness": 1,
                 "plus1_counters": 1
               },
               {
@@ -3860,8 +3860,8 @@
                 "summoning_sick": false,
                 "power": 3,
                 "toughness": 3,
-                "base_power": 2,
-                "base_toughness": 2,
+                "base_power": 3,
+                "base_toughness": 3,
                 "plus1_counters": 0
               },
               {
@@ -3884,8 +3884,8 @@
                 "summoning_sick": false,
                 "power": 3,
                 "toughness": 3,
-                "base_power": 2,
-                "base_toughness": 2,
+                "base_power": 3,
+                "base_toughness": 3,
                 "plus1_counters": 0
               },
               {
@@ -4352,7 +4352,7 @@
         "protocol": 1,
         "match_id": "QPEp4KpxWQR4tDYVer7XIA",
         "revision": 36,
-        "frame_hash": "fd21cb596ed6f744c3ed3c6cb6ca20e6d816aaed639ec47e943c876d57e580c1",
+        "frame_hash": "ba77886746fb1ee5adafc8709954c1ec4d84e02a83ab1f4b95e68091f1085f40",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -4920,8 +4920,8 @@
                 "summoning_sick": false,
                 "power": 3,
                 "toughness": 3,
-                "base_power": 2,
-                "base_toughness": 2,
+                "base_power": 3,
+                "base_toughness": 3,
                 "plus1_counters": 1,
                 "attacking": true
               },
@@ -4969,8 +4969,8 @@
                 "summoning_sick": false,
                 "power": 2,
                 "toughness": 2,
-                "base_power": 1,
-                "base_toughness": 1,
+                "base_power": 2,
+                "base_toughness": 2,
                 "plus1_counters": 1,
                 "attacking": true
               },
@@ -5279,7 +5279,7 @@
         "protocol": 1,
         "match_id": "5ALhUXX863ZgmiIdCCZU8A",
         "revision": 56,
-        "frame_hash": "c26f64cc80f5a0004f8af90988629402cc5fbe33ed571d7953daa38d22014424",
+        "frame_hash": "08e1700ec1f034d21c8c3041b64761f24b184e11fee01094c6fc16bd0462b975",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -5996,8 +5996,8 @@
                 "summoning_sick": false,
                 "power": 3,
                 "toughness": 3,
-                "base_power": 2,
-                "base_toughness": 2,
+                "base_power": 3,
+                "base_toughness": 3,
                 "plus1_counters": 1
               },
               {
@@ -6044,8 +6044,8 @@
                 "summoning_sick": false,
                 "power": 3,
                 "toughness": 3,
-                "base_power": 1,
-                "base_toughness": 1,
+                "base_power": 3,
+                "base_toughness": 3,
                 "plus1_counters": 2
               },
               {
@@ -6237,6 +6237,6 @@
     }
   },
   "world": "w11",
-  "source_base_commit": "072adf12627809df87625fb000b70521ebb0e1ff",
+  "source_base_commit": "e8fd88eedf184a23079fe708e4da2056186d0f74",
   "world_version": "w17"
 }

@@ -68,7 +68,54 @@ blockers rather than fixtures to regenerate; source-sensitive parity receipts
 must be rebuilt after final Rust edits; current w17 evidence is refreshed in
 place, whereas earlier worlds remain frozen.
 
-# MTG-216 (decklist disclosure) — 2026-10-30, implementation (headless)
+# T5 questions and assumptions
+
+Accepted decisions and pending checks live in
+[jack-heart/a7234f-tla-t5-permanent.md](jack-heart/a7234f-tla-t5-permanent.md).
+Historical parent notes (D1, T2–T4, archive/CI work and MTG-214's Wave rename)
+are evidence, not directions for T5. Complete pre-compression notes:
+`bbb5101eb:scratch/questions.md`; older stacked notes:
+`1e9fd2d7c:scratch/questions.md` (lines 5–472).
+
+## Current implementation assumptions
+
+- Surveil reuses LookAndSelect: select moves the inspected card to the
+  graveyard, decline keeps it. Kept cards retain order; exact for surveil 1,
+  the only amount authored. Supporting larger amounts needs ordering choices.
+- Copy exceptions share `Modification` with continuous records. The protocol
+  calls the field `copy_of` because Pydantic's `BaseModel.copy` occupies `copy`.
+- Airship uses self-relative `CreatureWithNamesakes` because
+  `check_static_condition` has no source. It reads private layer stages,
+  never recursively reads `characteristics()` during layer computation.
+- T4 owns `PlayerTurnHistory`, sacrifice bookkeeping and its column after
+  attacked. Text uses singular/plural correctly; no retained fixture holds
+  the old “1 permanents” / “1 cards” wording.
+- The engine measured 314 supported definitions (257 TLA eligible plus 57
+  others; four TLA and one ths unsupported). Earlier 239/266 notes were
+  pre-sync or based on stale main counts, not current measurements.
+- The permanent row's name/creature-types fields are Aura-set markers; the
+  card row states layered characteristics. Ward is printed unless abilities
+  are lost; no authored effect grants ward. Text and mana cost stay printed
+  until a modification changes them, then join `Characteristics`.
+
+## Reversible choice awaiting a separate product decision
+
+Since 1a/2a the projection's `base_power` / `base_toughness` contain layered
+card-row P/T on the battlefield. No UI component reads them for printed P/T,
+and no other Python-visible source exposes printed P/T. Keep and document
+that value for T5; a printed-P/T accessor or field removal requires a follow-up
+protocol decision by Jack Heart. This is not a T5 blocker.
+
+The choice-navigation re-record (`889948346`) preserves recorded offer ids
+when labels repeat, keeping original state digests and offer order. It is
+published; Academy UI passed at `bbb5101eb` (CI 41539137476). Gate subsequently
+confirmed all required CI at `1de85f7aa` (run 41541743395), plus local copy-fact
+parity coverage and its CI selection. The latter remain uncommitted; see the
+design's gate results for commands and evidence boundaries.
+Shipping remains stopped by steer f39fef34; `/verify` is not a pre-merge check
+because that skill finishes delivered Tasks.
+
+## MTG-216 (decklist disclosure) — 2026-10-30, implementation (headless)
 
 Jack Heart accepted one open/closed option, default open (supersedes the
 kickoff's four-way assumption). Reversible choices made while implementing:
@@ -102,3 +149,38 @@ The selector amendment and upstream decklist disclosure both remain. Current
 w17 parity receipts and choice-navigation frames are regenerated against their
 combined source; neither side’s stale digest is treated as merged evidence.
 The authored command tape and retained choice prefixes must remain unchanged.
+
+Inherited evaluation, MTG-17x/18x and card-evaluation notes (none select T4
+work) are at `ee42a8685:scratch/questions.md`, above "TLA direct-Rust decisions".
+
+
+## Sync onto main 230b2f563 — 2026-11-02
+
+The design link above is absent in this checkout (removed with added scratch
+files at 2c6cdae5f); the retained assumptions supply the resolution context.
+Preserve T5's CopyView and layered battlefield P/T alongside main's decklist
+disclosure fields. Navigation prefixes, offer IDs and state digests stay fixed;
+recompute derived frame hashes for the combined projections. Reconcile the
+current authored-match parity receipt's source manifest with the merged source,
+then verify the unchanged command tape and behavioral evidence.
+
+The first focused run passed all navigation cases but found stale parity viewer
+hashes. The producer confirms that only `viewer_observation_sha256` and
+`viewer_state_sha256` differ: combined layered P/T and decklist projections
+require new hashes. State witnesses, command tape, transitions, presentation,
+and stale-object proof remain identical. Refreshed those derived hashes from
+the producer; no behavioral assertion was relaxed.
+
+Focused verification: navigation plus authored-match parity initially reported
+9 passed / 1 stale receipt; after correcting only the derived viewer hashes,
+the failed parity test passed (1 passed). The advice schema equals its Pydantic
+producer. Native extension rebuilt and replaced atomically. No push or landing.
+
+## Sync onto main a8abf01b1 — 2026-11-02
+
+Preserve MTG-235 selectors and main's T5 token copies, surveil, layered
+characteristics and stable continuation codes. Migrate incoming old selector
+names to ObjectSelector; ChooseObject keeps code 4 and Surveil adds code 22.
+Current w17 evidence must be regenerated from the combined implementation,
+retaining authored commands and choice prefixes. Historical evidence stays fixed.
+The T5 shipping stop quoted above is historical context for its own delivery.

@@ -628,8 +628,16 @@ pub enum Effect {
     Untap { what: ObjectSelector },
     /// Remove every counter from each permanent `from` names.
     RemoveAllCounters { from: ObjectSelector },
-    /// Copy the source's copiable characteristics, removing legendary.
-    CreateNonlegendaryCopy,
+    /// Create a token that's a copy of the source (CR 707.2, 111.1). The
+    /// token copies the source's copiable values: its definition, including
+    /// any copy effect already applied to it, and never its counters, damage,
+    /// tapped state or non-copy effects. A source that has left the
+    /// battlefield is copied as it last existed there. `exceptions` ("except
+    /// it's not legendary") become part of the token's own copiable values
+    /// (CR 707.9b), so a copy of it inherits them.
+    CreateTokenCopy {
+        exceptions: Vec<Modification<EffectValue>>,
+    },
     OptionalPayment {
         cost: PaymentCost,
         if_paid: Vec<Effect>,
@@ -839,6 +847,11 @@ pub enum Effect {
     OnNthResolutionThisTurn { n: u32, effect: Box<Effect> },
     /// Scry `count` (CR 701.26), with arbitrary top and bottom ordering.
     Scry { count: usize },
+    /// Surveil `count` (CR 701.25): look at the top cards and put any
+    /// number of them into the graveyard. Kept cards stay on top in their
+    /// existing order, which is the whole choice for surveil 1, the only
+    /// amount the pool prints.
+    Surveil { count: usize },
     /// "Look at the top `look` cards of your library. Put up to
     /// `max_select` cards matching [predicate] from among them into your
     /// hand and the rest on the bottom of your library in a random order."
@@ -1280,7 +1293,7 @@ impl Effect {
             | Effect::ApplyContinuous { .. }
             | Effect::SearchBasicLand { .. }
             | Effect::OptionalDiscardDraw { .. }
-            | Effect::CreateNonlegendaryCopy
+            | Effect::CreateTokenCopy { .. }
             | Effect::OpponentsCastOnlyFromHand
             | Effect::ExileTopCardPlayThisTurn
             | Effect::ExileUntilNonlandCastFree { .. }
@@ -1304,6 +1317,7 @@ impl Effect {
             | Effect::FightLastTarget
             | Effect::SearchLibraryToHand { .. }
             | Effect::Scry { .. }
+            | Effect::Surveil { .. }
             | Effect::LookAndSelect { .. }
             | Effect::PutTopCardsInHand { .. }
             | Effect::Learn

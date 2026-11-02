@@ -14,8 +14,9 @@ ambiguity or safety-critical invariants, not substitute products.
 
 - On 2026-10-04 Jack Heart authorized autonomous implementation/publication/
   landing, with ETU-75 kept open for unmet empirical acceptance. Jack then
-  directed synchronization with main `3f297533`: w4 is the current rules world;
-  do not revive the older w3 plan. ETU-89 owns training regimes and consumes
+  directed synchronization with main `3f297533`: w4 was that delivery's rules
+  world, superseding its w3 plan. Current world identity is in `WORLDS.md`.
+  ETU-89 owns training regimes and consumes
   the ordinary checkpoint writer/loader contract owned here. Merge `b104fe94`
   preserves w4. Complete semantic-program and public known-hand inputs now
   reach the ordinary Agent; mandatory full-setup bindings protect ordinary
@@ -60,7 +61,7 @@ preserves accepted decisions, dated proof limits and source history.
   passed all 16 cases after import-isolation and diagnostic repairs; its tapes
   are byte-identical to v2, with zero state/consequence/viewer mismatches.
   All receipts and the earlier unscored v1 registration remain retained.
-- Full gates are not green: the broad Python run had 813 passes and 30
+- That Learn gate was not green: the broad Python run had 813 passes and 30
   failures; ten current-test/import failures were repaired with focused proof.
   Twenty historical authority/advice and experiment checks remain incompatible.
   In particular, frozen advice binds action ABI 3 / possible-world ABI 1,
@@ -207,6 +208,58 @@ preserves accepted decisions, dated proof limits and source history.
   events, viewer-safe projection, forks, and deterministic execution.
 - **Intelligence:** policy, search algorithms, teacher data, and evaluation.
 - **Study:** human-facing retry, reveal, comparison, and branch navigation.
+
+## TLA batches (T1–T5, 2026-10-28 to 2026-11-02)
+
+- Jack Heart (2026-10-28/29) accepted the TLA delivery as seven card batches
+  plus decklist import, authored as typed Rust `CardDefinition`s in their set
+  file with support by definition (no qualification gate). Each merge requires
+  Jack Heart's review; CI runs `cargo test` in debug, so release-only green is
+  not evidence. `AGENTS.md` carries the standing authoring and observation rules.
+- Jack Heart's T5 design review (2026-10-30, comment 10a31948): a permanent
+  copy is layer-1 data (`Card.copy: CopyEffect { of, exceptions }`) whose
+  exceptions share the continuous-effect `Modification` vocabulary, observed
+  generically as fact rows and tokens (`FactKind::Copy`, `CopyException`), never
+  as tensor-only identity bits. New open-ended state keeps following this shape.
+- `ContinuationFrame.decision` means an obligation code only for kind-6 frames
+  (trigger ordering class for 7/8, placement group for 9, delayed-trigger
+  event for 10). `continuation.rs`
+  owns `decision_code` and `MAX_DECISION_CODE`; the Python label table is
+  tested against that bound. A text-only consumer gap of this kind is invisible
+  to the tensor path and surfaced only in the headless LLM-path demo.
+- Syncing a branch that was stacked on a since-squashed parent: merge with the
+  parent's pre-squash head as the base so only the branch's own diff meets
+  main (T5 met ~60 hunks instead of ~1465). Open w17 content changes required
+  re-recording its mutable evidence in place; this is not permission to rewrite
+  frozen worlds, checkpoints or historical receipts. Affected w17 evidence
+  includes the semantic kernel, authored-match receipt and parity
+  pins, public-commitment parity, Academy demos, choice navigation and
+  trigger-order fixtures. A content-binding change can move hashes alone;
+  a projection change can also move observed fields, so inspect the exact
+  difference while retaining the intended Commands and state witnesses. A
+  re-record that resolves a prefix by offer label must keep the recorded
+  offer id when labels repeat (two copies of a card in hand), or the
+  position silently changes copy, state digest and permanent order
+  (`regen_choice_navigation.py`, fixed 2026-11-02). Until the
+  Academy demos are re-recorded, `play_demo.py` rejects their digest before
+  any decision is offered, so the Playwright decision-surface spec fails in
+  CI as a symptom of the stale demo, not a UI defect.
+- Jack Heart's T5 concept review (2026-11-02, decisions 1a/2a): legendary is
+  a layered characteristic (`Characteristics.is_legendary`, layer 4: copiable
+  supertypes unless a `Nonlegendary` record), read by the legend rule and the
+  card row alike; no separate reader. Every `CardData` field that states a
+  characteristic of a battlefield card reads `Game::characteristics()`, and
+  `tests/cards/observability.rs` classifies each field as layered or printed
+  by definition so an unclassified field does not compile. A characteristic
+  without a layered value is added to `Characteristics`, never read from the
+  printed card. The rule changed no column, token or protocol; the kernel,
+  authored-match, demo and trigger-order receipts stayed green, but any
+  recorded viewer projection whose card rows sit under active effects moves
+  (the choice-navigation fixture's earthbent lands and anthems), and the
+  projection's `base_power` stopped being a printed value: printed P/T has
+  no other Python-visible source (the pack manifest carries ids and names
+  only), so restoring it needs an engine accessor, a decision Jack Heart
+  has not made.
 
 ## Open tensions
 

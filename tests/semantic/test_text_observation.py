@@ -16,6 +16,7 @@ from manabot.env.observation import (
 )
 from manabot.infra.config import ObservationConfig
 from manabot.semantic.text_observation import (
+    _OBLIGATIONS,
     RepresentationOverflow,
     TextDecision,
     TextEncodingError,
@@ -26,6 +27,10 @@ from manabot.semantic.text_observation import (
 )
 from manabot.verify.text_observation import collision_branches, priority_root, run_demo
 import managym
+
+
+def test_every_native_decision_code_has_a_label() -> None:
+    assert len(_OBLIGATIONS) == managym.MAX_DECISION_CODE + 1
 
 
 def test_native_decision_demo_retains_all_alternatives_and_collision(
@@ -475,6 +480,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "keywords": "effective keywords",
         "counters": "<kind> counters",
         "effects": "effect",
+        "copy": "copy of D<n>, except ...",
         "timestamp": "effects are listed in timestamp order; a permanent's "
         "static abilities apply in its battlefield order",
         "attached_to": "attached to",
@@ -501,7 +507,7 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "toughness": "card power/toughness",
         "mana_cost": "cost",
         "card_types": "type flags",
-        "keywords": "printed keywords",
+        "keywords": "keywords",
         "is_token": "token",
         "is_legendary": "legendary",
         "is_ally": "Ally",
@@ -567,6 +573,11 @@ _TEXT_FIELDS: dict[type, dict[str, str]] = {
         "source_name": "the definition line of (from D<n>)",
         "timestamp": "listed in timestamp order",
     },
+    managym.CopyEffect: {
+        "registry_key": "copy of D<n>",
+        "name": "the definition line of D<n>",
+        "exceptions": "except <effect phrase>",
+    },
     managym.Turn: {
         "turn_number": "Turn",
         "phase": "Phase",
@@ -616,7 +627,7 @@ def test_combat_lost_abilities_used_activations_and_player_state_text() -> None:
     assert "Has no maximum hand size for the rest of the game." in text
     assert (
         "This turn: attacked; sacrificed 2 permanents; had a land enter under "
-        "their control; drew 1 cards." in text
+        "their control; drew 1 card." in text
     )
 
 
@@ -720,3 +731,94 @@ def test_waiting_delayed_trigger_relation_names_its_event_and_duration() -> None
     assert "waits for the watched object to die" in relation
     assert "watching C" in relation and "(Gray Ogre)" in relation
     assert "ends at this turn's cleanup if it has not triggered" in relation
+
+
+def test_a_copy_and_sacrifices_this_turn_are_stated() -> None:
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    decision = capture_text_decision(env)
+    payload = json.loads(decision.capture_json)
+    state = payload["observation"]["viewer_state"]
+    _, ogre = state["agent_permanents"]
+    ogre["copy"] = {
+        "registry_key": ogre["registry_key"],
+        "name": "Gray Ogre",
+        "exceptions": [
+            {
+                "modification": "Nonlegendary",
+                "duration": "Indefinite",
+                "timestamp": ogre["id"],
+            }
+        ],
+    }
+    state["agent"]["turn_history"] = {"permanents_sacrificed": 2}
+    text = render_decision(_redigest(payload)).text
+    assert "; copy of D" in text and ", except isn't legendary" in text
+    assert "This turn: sacrificed 2 permanents." in text
+    assert "copy of" not in decision.text
+    assert "This turn:" not in decision.text
+
+
+def test_card_line_uses_the_observed_flag_without_rederiving_it_from_effects() -> None:
+    """Conflicting injected data proves the renderer reads the engine's flag.
+
+    Rust observability tests prove real Nonlegendary effects clear that flag;
+    text rendering must not recalculate it from the permanent's effect list.
+    """
+    env = priority_root((), ("Mountain", "Gray Ogre"))
+    decision = capture_text_decision(env)
+    payload = json.loads(decision.capture_json)
+    state = payload["observation"]["viewer_state"]
+    _, ogre = state["agent_permanents"]
+    ogre["effects"] = [
+        {"modification": "Nonlegendary", "duration": "EndOfTurn", "timestamp": 90}
+    ]
+    ogre_card = next(
+        card
+        for card in state["agent_cards"]
+        if card["registry_key"] == ogre["registry_key"] and card["zone"] == 2
+    )
+    assert "legendary no" in decision.text
+    ogre_card["is_legendary"] = True
+    text = render_decision(_redigest(payload)).text
+    card_line = next(
+        line
+        for line in text.splitlines()
+        if "[D" in line and "Gray Ogre" in line and "owner" in line
+    )
+    assert "legendary yes" in card_line
+    assert "; effect until end of turn: isn't legendary" in text
+
+
+def test_joo_dee_surveil_and_copy_play_through_the_text_decision() -> None:
+    """A surveil obligation (code 22) captures as text; resolving Joo Dee
+    leaves a token stated as a copy and one sacrifice this turn."""
+    env = priority_root((), ("Swamp", "Joo Dee, One of Many"))
+    decision = capture_text_decision(env)
+    activate = next(
+        a
+        for a in decision.actions
+        if "Activate" in a.description and "Joo Dee" in a.description
+    )
+    submit_response(env, decision, activate.reference)
+    for _ in range(8):
+        decision = capture_text_decision(env)
+        if "Stage: surveil." in decision.text:
+            break
+        submit_response(env, decision, decision.actions[0].reference)
+    else:
+        raise AssertionError("surveil decision not reached")
+    assert "suspended decision" in decision.text and "; surveil" in decision.text
+    keep = next(a for a in decision.actions if "Keep on top" in a.description)
+    submit_response(env, decision, keep.reference)
+
+    decision = capture_text_decision(env)
+    source = decision.text.split("Source: ", 1)[1].split(" ", 1)[0]
+    original = next(
+        a
+        for a in decision.actions
+        if f"Select {source} " in a.description and "Sacrifice" in a.description
+    )
+    submit_response(env, decision, original.reference)
+    text = capture_text_decision(env).text
+    assert "; copy of D" in text
+    assert "This turn: sacrificed 1 permanent." in text

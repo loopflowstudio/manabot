@@ -357,6 +357,15 @@ class ContinuousEffectView(ProtocolModel):
     timestamp: UInt32
 
 
+class CopyView(ProtocolModel):
+    """A copy effect: the printed card it copies and its exceptions (CR 707.9b)."""
+
+    name: str
+    exceptions: list[ContinuousEffectView] = Field(
+        default_factory=list, exclude_if=lambda value: not value
+    )
+
+
 class LegacyPermanentView(ProtocolModel):
     types: LegacyCardTypesView | None = Field(
         default=None, exclude_if=lambda value: value is None
@@ -406,6 +415,9 @@ class LegacyPermanentView(ProtocolModel):
     )
     effects: list[ContinuousEffectView] = Field(
         default_factory=list, exclude_if=lambda value: not value
+    )
+    copy_of: CopyView | None = Field(
+        default=None, exclude_if=lambda value: value is None
     )
 
 

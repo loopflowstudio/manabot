@@ -1643,7 +1643,7 @@ impl Game {
                         .is_some_and(|permanent| !permanent.tapped)
                     && {
                         let characteristics = self.characteristics(id);
-                        characteristics.is_creature && characteristics.power > 0
+                        characteristics.is_creature() && characteristics.power > 0
                     }
             })
             .collect()

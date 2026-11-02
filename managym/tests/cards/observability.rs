@@ -15,7 +15,7 @@
 use crate::support::{
     game::{
         clear_summoning_sickness, deck, five_color_setup, five_color_unfunded_setup, move_to_hand,
-        put_onto_battlefield, ur_lessons_setup, Scenario,
+        put_onto_battlefield, until_end_of_turn, ur_lessons_setup, Scenario,
     },
     inspect::{card_of, library_card},
     play::{activate, cast, choose, choose_mode, pass_until, resolve_top, settle},
@@ -29,7 +29,7 @@ use managym::{
         },
         observation::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
-            ContinuousEffectData, EventData, Observation, PermanentData, PlayerData,
+            ContinuousEffectData, CopyData, EventData, Observation, PermanentData, PlayerData,
             RestrictedManaData, SideboardCardData, StackObjectData, StackTargetData, TurnData,
             KEYWORD_COUNT,
         },
@@ -253,6 +253,7 @@ fn modification_seen<N>(modification: &Modification<N>) -> (&'static str, Seen) 
         Modification::BecomeArtifactCreature => {
             ("Modification::BecomeArtifactCreature", Seen::Permanent(8))
         }
+        Modification::Nonlegendary => ("Modification::Nonlegendary", Seen::Card(39)),
         Modification::AddKeywords(_) => (
             "Modification::AddKeywords",
             Seen::Via("keyword_columns: effective keywords"),
@@ -318,6 +319,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
     vec![
         permanent(Modification::AddSubtypes(vec!["Ally".into()])),
         permanent(Modification::BecomeArtifactCreature),
+        permanent(Modification::Nonlegendary),
         permanent(Modification::AddKeywords(Keywords {
             flying: true,
             ..Default::default()
@@ -343,7 +345,7 @@ fn modification_witnesses() -> Vec<(bool, Modification<EffectValue>)> {
     ]
 }
 
-const MODIFICATION_VARIANTS: usize = 16;
+const MODIFICATION_VARIANTS: usize = 17;
 
 /// The fact-row duration code of each `EffectDuration`; no wildcard.
 fn duration_code(duration: EffectDuration) -> f32 {
@@ -507,7 +509,7 @@ fn turn_fields(turn: &TurnState) -> [(&'static str, Seen); 16] {
 /// must be named here (and given a witness below).
 fn effect_token(effect: &Effect) -> &'static str {
     match effect {
-        Effect::CreateNonlegendaryCopy => "Effect::CreateNonlegendaryCopy",
+        Effect::CreateTokenCopy { .. } => "Effect::CreateTokenCopy",
         Effect::ApplyContinuous { .. } => "Effect::ApplyContinuous",
         Effect::OptionalPayment { .. } => "Effect::OptionalPayment",
         Effect::Sacrifice { .. } => "Effect::Sacrifice",
@@ -536,6 +538,7 @@ fn effect_token(effect: &Effect) -> &'static str {
         Effect::GainLife { .. } => "Effect::GainLife",
         Effect::OnNthResolutionThisTurn { .. } => "Effect::OnNthResolutionThisTurn",
         Effect::Scry { .. } => "Effect::Scry",
+        Effect::Surveil { .. } => "Effect::Surveil",
         Effect::LookAndSelect { .. } => "Effect::LookAndSelect",
         Effect::PutTopCardsInHand { .. } => "Effect::PutTopCardsInHand",
         Effect::Learn => "Effect::Learn",
@@ -585,7 +588,7 @@ fn effect_token(effect: &Effect) -> &'static str {
 }
 
 /// Number of `Effect` variants named in [`effect_token`].
-const EFFECT_VARIANTS: usize = 70;
+const EFFECT_VARIANTS: usize = 71;
 
 /// One value of every `Effect` variant.
 fn effect_witnesses() -> Vec<Effect> {
@@ -598,7 +601,9 @@ fn effect_witnesses() -> Vec<Effect> {
         }]
     };
     vec![
-        Effect::CreateNonlegendaryCopy,
+        Effect::CreateTokenCopy {
+            exceptions: vec![Modification::Nonlegendary],
+        },
         Effect::until_end_of_turn(ObjectSelector::This, Modification::pump(1, 1)),
         Effect::put_counters(ObjectSelector::This, CounterKind::PlusOnePlusOne, 1),
         Effect::PutCountersFrom {
@@ -682,6 +687,7 @@ fn effect_witnesses() -> Vec<Effect> {
             }),
         },
         Effect::Scry { count: 1 },
+        Effect::Surveil { count: 1 },
         Effect::LookAndSelect {
             reveal: false,
             look: EffectValue::Fixed(3),
@@ -1211,6 +1217,13 @@ fn static_seen(ability: &StaticAbility) -> Witnessed {
             "tla",
             "war_balloon_flies_once_it_has_three_fire_counters",
         ),
+        StaticAbility::CreatureWithNamesakes(_) => witnessed(
+            "StaticAbility::CreatureWithNamesakes",
+            Seen::Via("the animated permanent column once the namesakes are controlled"),
+            "Phoenix Fleet Airship",
+            "tla",
+            "phoenix_fleet_airship_is_a_creature_while_you_control_eight",
+        ),
         StaticAbility::TypeGrant(_) => witnessed(
             "StaticAbility::TypeGrant",
             Seen::Via("the granted permanents' card type columns"),
@@ -1368,6 +1381,7 @@ fn static_witnesses() -> Vec<StaticAbility> {
             kind: CounterKind::Fire,
             count: 3,
         }),
+        StaticAbility::CreatureWithNamesakes(8),
         StaticAbility::TypeGrant(StaticTypeGrant {
             scope: StaticScope::This,
             types: vec![CardType::Land],
@@ -1771,6 +1785,25 @@ fn set_keyword(keywords: &mut Keywords, name: &str) {
         other => panic!("unknown keyword {other}"),
     };
     *flag = true;
+}
+
+#[test]
+fn sorcery_timing_reaches_the_activated_ability_tokens() {
+    let definition = CardDefinition {
+        name: "Witness".into(),
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            sorcery_timing: true,
+            effects: vec![Effect::Surveil { count: 1 }],
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    let tokens = tokens_of(&definition);
+    let at = tokens
+        .iter()
+        .position(|token| *token == (TokenKind::Field, name_value("sorcery_timing")))
+        .expect("sorcery_timing token");
+    assert_eq!(tokens[at + 1], (TokenKind::Boolean, 1));
 }
 
 #[test]
@@ -2271,6 +2304,8 @@ fn fact_field(kind: FactKind) -> &'static str {
         FactKind::SetCreatureType => "PermanentData.creature_types",
         FactKind::UsedAbility => "PermanentData.used_abilities",
         FactKind::Effect => "ContinuousEffectData.modification",
+        FactKind::Copy => "PermanentData.copy",
+        FactKind::CopyException => "CopyData.exceptions",
     }
 }
 
@@ -2451,6 +2486,12 @@ fn guard() -> Vec<(&'static str, Vec<Encoded>)> {
         used_abilities => [Fact(FactKind::UsedAbility)],
         effects => [Rows("Effect fact rows, ContinuousEffectData below")],
         timestamp => [column(Permanent, PERMANENT_TIMESTAMP_INDEX)],
+        copy => [Fact(FactKind::Copy)],
+    }));
+    fields.extend(encoding!(CopyData {
+        registry_key => [Join(Facts, FACT_SOURCE_INDEX)],
+        name => [Definition],
+        exceptions => [Fact(FactKind::CopyException)],
     }));
     fields.extend(encoding!(ContinuousEffectData {
         modification => [Fact(FactKind::Effect), Columns(Facts, FACT_ID_INDEX, 2)],
@@ -2627,6 +2668,191 @@ fn every_observed_field_names_its_v5_encoding_and_every_v5_column_is_claimed() {
                 "{buffer:?} column {index} encodes no listed field"
             );
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Where a card row's values come from on the battlefield.
+
+/// Where a `CardData` field reads while its card is on the battlefield (Jack
+/// Heart, 2026-11-02). A layered field reads `Game::characteristics` there
+/// and the printed card elsewhere; a printed field never states a
+/// characteristic continuous effects change. The pattern is exhaustive, so a
+/// new field does not compile until it is classified.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum CardSource {
+    Layered,
+    Printed(&'static str),
+}
+
+macro_rules! sources {
+    ($ty:ident { $($field:ident => $source:expr),* $(,)? }) => {{
+        #[allow(dead_code)]
+        fn exhaustive(value: &$ty) {
+            let $ty { $($field: _),* } = value;
+        }
+        vec![$((stringify!($field), $source)),*]
+    }};
+}
+
+fn card_sources() -> Vec<(&'static str, CardSource)> {
+    use CardSource::*;
+    sources!(CardData {
+        zone => Printed("where the card is"),
+        owner_id => Printed("identity"),
+        id => Printed("identity"),
+        registry_key => Printed("identity: the definition index"),
+        name => Layered,
+        text_box => Printed("the printed text names the definition; lost abilities are \
+            PermanentData.abilities_lost"),
+        power => Layered,
+        toughness => Layered,
+        is_token => Printed("token status is not a characteristic (CR 111.1)"),
+        is_legendary => Layered,
+        is_ally => Layered,
+        is_lesson => Layered,
+        ward_cost => Layered,
+        kicker_cost => Printed("a cost paid when casting"),
+        card_types => Layered,
+        keywords => Layered,
+        mana_cost => Printed("a cost paid when casting; a copy carries the copied cost"),
+        face_down => Printed("viewer state"),
+        cast_permission => Printed("a permission to play the card from exile"),
+        x => Printed("announced when cast"),
+    })
+}
+
+/// The card row of `permanent` as the viewer's JSON observation states it.
+fn card_json(s: &Scenario, viewer: usize, permanent: PermanentId) -> serde_json::Value {
+    let id = s.game().state.cards[card_of(s, permanent)].id.0 as i64;
+    let observation: serde_json::Value =
+        serde_json::from_str(&Observation::for_player(s.game(), PlayerId(viewer)).to_json())
+            .unwrap();
+    ["agent_cards", "opponent_cards"]
+        .into_iter()
+        .flat_map(|rows| observation[rows].as_array().unwrap().clone())
+        .find(|card| card["id"].as_i64() == Some(id))
+        .expect("card row")
+}
+
+/// Every layered card field moves under some continuous effect while its
+/// card is on the battlefield, and no printed field moves: records change
+/// Gran-Gran's supertype, P/T, keywords, subtypes and types, Dragonfly
+/// Swarm loses its ward, and Honest Work renames the Drake.
+#[test]
+fn layered_card_fields_read_characteristics_on_the_battlefield() {
+    let mut s = five_color_setup(&["Gran-Gran", "Dragonfly Swarm", "Honest Work", "Wind Drake"]);
+    let gran = s.force_permanent_on_battlefield(0, "Gran-Gran");
+    let swarm = s.force_permanent_on_battlefield(0, "Dragonfly Swarm");
+    let drake = s.force_permanent_on_battlefield(1, "Wind Drake");
+    let witnesses = [gran, swarm, drake];
+    let before = witnesses.map(|id| card_json(&s, 0, id));
+    for modification in [
+        Modification::Nonlegendary,
+        Modification::ModifyPt {
+            power: 1,
+            toughness: 1,
+        },
+        Modification::AddKeywords(Keywords {
+            flying: true,
+            ..Default::default()
+        }),
+        Modification::AddSubtypes(vec!["Lesson".into()]),
+        Modification::BecomeArtifactCreature,
+    ] {
+        until_end_of_turn(&mut s, gran, modification);
+    }
+    until_end_of_turn(&mut s, swarm, Modification::LoseAllAbilities);
+    until_end_of_turn(
+        &mut s,
+        swarm,
+        Modification::AddSubtypes(vec!["Ally".into()]),
+    );
+    cast(&mut s, "Honest Work");
+    pass_until(&mut s, ActionSpaceKind::ChooseTarget);
+    assert!(s.choose_target(Target::Permanent(drake)));
+    settle(&mut s);
+    let after = witnesses.map(|id| card_json(&s, 0, id));
+
+    let mut moved = BTreeSet::new();
+    for (before, after) in before.iter().zip(&after) {
+        for (field, value) in before.as_object().unwrap() {
+            if after[field] != *value {
+                moved.insert(field.as_str());
+            }
+        }
+    }
+    for (field, source) in card_sources() {
+        match source {
+            CardSource::Layered => assert!(
+                moved.contains(field),
+                "{field} is layered, so one of these effects must move it"
+            ),
+            CardSource::Printed(_) => {
+                assert!(!moved.contains(field), "{field} is printed by definition")
+            }
+        }
+    }
+    let swarm_row = &after[1];
+    assert_eq!(
+        swarm_row["ward_cost"], 0,
+        "ward is an ability the record removed"
+    );
+    assert_eq!(swarm_row["is_ally"], true);
+    let drake_row = &after[2];
+    assert_eq!(drake_row["name"], "Humble Merchant");
+    assert_eq!(
+        (drake_row["power"].clone(), drake_row["toughness"].clone()),
+        (1.into(), 1.into())
+    );
+}
+
+/// Off the battlefield the row is the printed card: the same records leave a
+/// card's row unchanged once it is in the graveyard.
+#[test]
+fn card_rows_off_the_battlefield_read_the_printed_card() {
+    let mut s = five_color_setup(&["Gran-Gran"]);
+    let gran = s.force_permanent_on_battlefield(0, "Gran-Gran");
+    let card = card_of(&s, gran);
+    assert!(s.game().state.cards[card].is_legendary());
+    until_end_of_turn(&mut s, gran, Modification::Nonlegendary);
+    assert_eq!(card_json(&s, 0, gran)["is_legendary"], false);
+    s.game_mut().move_card(card, ZoneType::Graveyard);
+    let id = s.game().state.cards[card].id.0 as i32;
+    let observation = Observation::for_player(s.game(), PlayerId(0));
+    let row = observation
+        .agent_cards
+        .iter()
+        .find(|row| row.id == id)
+        .unwrap();
+    assert_eq!(row.zone, ZoneType::Graveyard);
+    assert!(
+        row.is_legendary,
+        "printed again once it has left the battlefield"
+    );
+}
+
+/// A `Nonlegendary` record outside a copy (CR 205.4): the legend rule
+/// spares the permanent and card column 39 clears, both from
+/// `Characteristics::is_legendary`.
+#[test]
+fn a_nonlegendary_record_clears_the_legend_rule_and_card_column_39_together() {
+    let mut s = ur_lessons_setup();
+    let first = put_onto_battlefield(&mut s, 0, "Gran-Gran");
+    let (observation, encoded) = observe(s.game(), 0);
+    assert_eq!(card_row(s.game(), &observation, &encoded, first)[39], 1.0);
+    until_end_of_turn(&mut s, first, Modification::Nonlegendary);
+    assert!(!s.game().characteristics(first).is_legendary);
+    let (observation, encoded) = observe(s.game(), 0);
+    assert_eq!(card_row(s.game(), &observation, &encoded, first)[39], 0.0);
+    let second = put_onto_battlefield(&mut s, 0, "Gran-Gran");
+    s.pass_priority();
+    assert_ne!(s.action_space().kind, ActionSpaceKind::LegendRule);
+    for id in [first, second] {
+        assert_eq!(
+            s.game().state.zones.zone_of(card_of(&s, id)),
+            Some(ZoneType::Battlefield)
+        );
     }
 }
 
@@ -2928,16 +3154,25 @@ fn toph_and_tile(toph_has_abilities: bool) -> (Scenario, PermanentId) {
     (s, tile)
 }
 
+/// A granted land type reaches the card row's land column (layer 4 types)
+/// in every version; v5 also marks the permanent as granted rather than
+/// printed.
 #[test]
-fn a_toph_granted_land_differs_from_an_ungranted_one_in_v5() {
+fn a_toph_granted_land_shows_in_its_card_row_and_the_v5_granted_column() {
     let (granted, tile) = toph_and_tile(true);
     let (plain, _) = toph_and_tile(false);
+    let land = |s: &Scenario| {
+        let observation = Observation::for_player(s.game(), PlayerId(0));
+        card_row(s.game(), &observation, &encoded(s, 0, 5), tile)[11]
+    };
+    assert_eq!((land(&plain), land(&granted)), (0.0, 1.0));
     assert_eq!(
-        permanent_value(&granted, 0, tile, PERMANENT_GRANTED_LAND_INDEX),
-        1.0
+        (
+            permanent_value(&plain, 0, tile, PERMANENT_GRANTED_LAND_INDEX),
+            permanent_value(&granted, 0, tile, PERMANENT_GRANTED_LAND_INDEX),
+        ),
+        (0.0, 1.0)
     );
-    // Toph's own lost abilities are the other difference.
-    assert_v5_sees(&plain, &granted, 0, tile, PERMANENT_GRANTED_LAND_INDEX, 2);
 }
 
 #[test]
@@ -3391,6 +3626,28 @@ fn kept_red_mana_and_no_hand_size_reach_the_player_rows_only_in_v5() {
     }
 }
 
+#[test]
+fn sacrifices_this_turn_reach_the_player_row_only_in_v5() {
+    let (baseline, _) = ogre_state();
+    let (mut changed, _) = ogre_state();
+    // Sacrifice-count bookkeeping itself is covered by Phoenix Fleet
+    // Airship's tests; this checks only the encoding.
+    changed.game_mut().state.turn.history[1].permanents_sacrificed = 1;
+    let (before, after) = (encoded(&baseline, 0, 5), encoded(&changed, 0, 5));
+    assert_eq!(
+        (
+            before.opponent_player[PLAYER_SACRIFICED_INDEX],
+            after.opponent_player[PLAYER_SACRIFICED_INDEX]
+        ),
+        (0.0, 0.1)
+    );
+    assert_eq!(
+        flat(&encoded(&baseline, 0, 4)),
+        flat(&encoded(&changed, 0, 4)),
+        "v4 has no history column"
+    );
+}
+
 // ---------------------------------------------------------------------------
 // Cast permissions, restricted mana and announced X
 // ---------------------------------------------------------------------------
@@ -3615,6 +3872,48 @@ fn each_modification_reaches_an_effect_fact_row_with_its_duration_and_order() {
             &facts_about(&s, 1, opponent_index),
             FactKind::Effect,
             name_value(name),
+        );
+    }
+}
+
+#[test]
+fn a_token_copy_reaches_copy_and_exception_fact_rows_for_both_viewers() {
+    let mut s = five_color_setup(&["Ran and Shaw", "Waterbending Lesson"]);
+    for _ in 0..3 {
+        let lesson = library_card(&s, 0, "Waterbending Lesson");
+        s.game_mut().move_card(lesson, ZoneType::Graveyard);
+    }
+    cast(&mut s, "Ran and Shaw");
+    settle(&mut s);
+    let dragons = s.battlefield_permanents_named(0, "Ran and Shaw");
+    let is_token = |id: PermanentId| s.game().state.cards[card_of(&s, id)].is_token;
+    let token = *dragons.iter().find(|id| is_token(**id)).unwrap();
+    let source = *dragons.iter().find(|id| !is_token(**id)).unwrap();
+    let key = s.game().state.cards[card_of(&s, source)].registry_key.0 as f32;
+    for viewer in [0, 1] {
+        let rows = facts_about(&s, viewer, object_index(&s, viewer, token));
+        let copy = fact_row(&rows, FactKind::Copy, name_value("CopyEffect"));
+        assert_eq!(
+            copy[FACT_SOURCE_INDEX],
+            key + 1.0,
+            "joined to the copied definition"
+        );
+        assert!(
+            copy[FACT_ORDER_INDEX] > 0.0,
+            "ordered by the copy's timestamp"
+        );
+        let exception = fact_row(
+            &rows,
+            FactKind::CopyException,
+            name_value("Modification::Nonlegendary"),
+        );
+        assert_eq!(exception[FACT_SOURCE_INDEX], key + 1.0);
+        let original = facts_about(&s, viewer, object_index(&s, viewer, source));
+        assert!(
+            original
+                .iter()
+                .all(|row| row[FACT_KIND_INDEX] != FactKind::Copy as u8 as f32),
+            "the original is not a copy"
         );
     }
 }

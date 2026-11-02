@@ -25,12 +25,26 @@ use crate::state::{
 /// still run them; the world does not support them for deck entry until their
 /// batch completes the missing behavior.
 pub(super) const INCOMPLETE: &[super::Incomplete] = &[
-    ("tla.accumulate_wisdom", "Controller must order the library remainder (CR 401.4); it is randomized"),
-    ("tla.cat_gator", "Any target must include planeswalkers and battles (CR 115.4)"),
-    ("ths.lightning_strike", "Any target must include planeswalkers and battles (CR 115.4)"),
-    ("tla.ran_and_shaw", "Unreviewed until T5: Flying/firebending; cast-only conditional ETB nonlegendary self copy; Dragon anthem activation."),
-    ("tla.suki_kyoshi_warrior", "CDA power must apply outside the battlefield (CR 604.3)"),
-    ("tla.water_tribe_rallier", "Library power filter must evaluate CDAs, such as Suki's (CR 604.3)"),
+    (
+        "tla.accumulate_wisdom",
+        "Controller must order the library remainder (CR 401.4); it is randomized",
+    ),
+    (
+        "tla.cat_gator",
+        "Any target must include planeswalkers and battles (CR 115.4)",
+    ),
+    (
+        "ths.lightning_strike",
+        "Any target must include planeswalkers and battles (CR 115.4)",
+    ),
+    (
+        "tla.suki_kyoshi_warrior",
+        "CDA power must apply outside the battlefield (CR 604.3)",
+    ),
+    (
+        "tla.water_tribe_rallier",
+        "Library power filter must evaluate CDAs, such as Suki's (CR 604.3)",
+    ),
 ];
 
 pub(super) fn cards() -> Vec<CardDefinition> {
@@ -159,6 +173,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         jeong_jeongs_deserters(),
         jet_freedom_fighter(),
         jet_s_brainwashing(),
+        joo_dee_one_of_many(),
         june_bounty_hunter(),
         katara_bending_prodigy(),
         katara_the_fearless(),
@@ -195,6 +210,7 @@ pub(super) fn cards() -> Vec<CardDefinition> {
         ozai_s_cruelty(),
         ozai_the_phoenix_king(),
         path_to_redemption(),
+        phoenix_fleet_airship(),
         pillar_launch(),
         pirate_peddlers(),
         planetarium_of_wan_shi_tong(),
@@ -5102,6 +5118,40 @@ fn jet_s_brainwashing() -> CardDefinition {
     }
 }
 
+fn joo_dee_one_of_many() -> CardDefinition {
+    let text_box = "{B}, {T}: Surveil 1. Create a token that's a copy of this creature, then sacrifice an artifact or creature. Activate only as a sorcery. (To surveil 1, look at the top card of your library. You may put it into your graveyard.)";
+
+    CardDefinition {
+        key: "tla.joo_dee_one_of_many",
+        scryfall_id: "7ae1439f-a0c4-42c2-a4f3-8851defa981e",
+        name: "Joo Dee, One of Many".into(),
+        mana_cost: Some(ManaCost::parse("{1}{B}")),
+        types: CardTypes::new([CardType::Creature]),
+        subtypes: vec!["Human".into(), "Advisor".into()],
+        power: Some(2),
+        toughness: Some(2),
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            mana_cost: ManaCost::parse("{B}"),
+            tap_source: true,
+            sorcery_timing: true,
+            effects: vec![
+                Effect::Surveil { count: 1 },
+                Effect::CreateTokenCopy { exceptions: vec![] },
+                Effect::Sacrifice {
+                    what: ObjectSelector::chosen(CardPredicate {
+                        card_types_any: vec![CardType::Artifact, CardType::Creature],
+                        ..Default::default()
+                    }),
+                    optional: false,
+                },
+            ],
+            ..Default::default()
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
 fn june_bounty_hunter() -> CardDefinition {
     let text_box = "June can't be blocked as long as you've drawn two or more cards this turn.\n{1}, Sacrifice another creature: Create a Clue token. Activate only during your turn. (It's an artifact with \"{2}, Sacrifice this token: Draw a card.\")";
 
@@ -6469,6 +6519,41 @@ fn path_to_redemption() -> CardDefinition {
     }
 }
 
+fn phoenix_fleet_airship() -> CardDefinition {
+    let text_box = "Flying\nAt the beginning of your end step, if you sacrificed a permanent this turn, create a token that's a copy of this Vehicle.\nAs long as you control eight or more permanents named Phoenix Fleet Airship, this Vehicle is an artifact creature.\nCrew 1 (Tap any number of creatures you control with total power 1 or more: This Vehicle becomes an artifact creature until end of turn.)";
+
+    CardDefinition {
+        key: "tla.phoenix_fleet_airship",
+        scryfall_id: "b51d3259-c41c-4f64-9666-0a9e676c812f",
+        name: "Phoenix Fleet Airship".into(),
+        mana_cost: Some(ManaCost::parse("{2}{B}{B}")),
+        types: CardTypes::new([CardType::Artifact]),
+        subtypes: vec!["Vehicle".into()],
+        power: Some(4),
+        toughness: Some(4),
+        keywords: Keywords {
+            flying: true,
+            ..Default::default()
+        },
+        abilities: vec![Ability::Triggered {
+            condition: TriggerCondition::BeginningOfYourEndStep,
+            intervening_if: Some(Condition::SacrificedThisTurnAtLeast { count: 1 }),
+            effects: vec![Effect::CreateTokenCopy { exceptions: vec![] }],
+        }],
+        statics: vec![StaticAbility::CreatureWithNamesakes(8)],
+        activated_abilities: vec![ActivatedAbilityDefinition {
+            crew: Some(1),
+            effects: vec![Effect::until_end_of_turn(
+                ObjectSelector::This,
+                Modification::BecomeArtifactCreature,
+            )],
+            ..Default::default()
+        }],
+        text_box: text_box.into(),
+        ..Default::default()
+    }
+}
+
 fn pillar_launch() -> CardDefinition {
     let text_box = "Target creature gets +2/+2 and gains reach until end of turn. Untap it.";
 
@@ -6808,7 +6893,9 @@ fn ran_and_shaw() -> CardDefinition {
                         ..Default::default()
                     },
                 }),
-                effects: vec![Effect::CreateNonlegendaryCopy],
+                effects: vec![Effect::CreateTokenCopy {
+                    exceptions: vec![Modification::Nonlegendary],
+                }],
             },
         ],
         activated_abilities: vec![ActivatedAbilityDefinition {
