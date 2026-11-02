@@ -30,9 +30,9 @@ use crate::{
         env::{Env, PreparedPossibleWorldMaterializer},
         observation::{
             ActionOption, ActionSpaceData, CardData, CardTypeData, CastPermissionData,
-            ContinuousEffectData, EventData, EventEntityKind, EventType, KeywordData, Observation,
-            PermanentData, PlayerData, RestrictedManaData, SideboardCardData, StackObjectData,
-            StackObjectKindData, StackTargetData, StackTargetKindData, TurnData,
+            ContinuousEffectData, CopyData, EventData, EventEntityKind, EventType, KeywordData,
+            Observation, PermanentData, PlayerData, RestrictedManaData, SideboardCardData,
+            StackObjectData, StackObjectKindData, StackTargetData, StackTargetKindData, TurnData,
         },
         observation_encoder::{ObservationEncoderConfig, ACTION_DIM},
         structured_offer::{OfferId as StructuredOfferId, OfferSubmission, StructuredOfferSet},
@@ -1102,10 +1102,11 @@ pub struct PyPlayer {
     pub remaining_sideboard_counts: Option<BTreeMap<u32, u32>>,
     #[pyo3(get, set)]
     pub keeps_red_mana: bool,
-    #[pyo3(get, set)]
-    pub no_maximum_hand_size: bool,
+    /// What this player has done this turn.
     #[pyo3(get, set)]
     pub turn_history: PyPlayerTurnHistory,
+    #[pyo3(get, set)]
+    pub no_maximum_hand_size: bool,
     #[pyo3(get, set)]
     pub combat_mana: i32,
     #[pyo3(get)]
@@ -1201,7 +1202,7 @@ impl From<PyContinuousEffect> for ContinuousEffectData {
 /// What a player has done this turn.
 #[cfg(feature = "python")]
 #[pyclass(name = "PlayerTurnHistory")]
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct PyPlayerTurnHistory {
     #[pyo3(get, set)]
     pub attacked: bool,
@@ -1211,6 +1212,15 @@ pub struct PyPlayerTurnHistory {
     pub land_entered: bool,
     #[pyo3(get, set)]
     pub cards_drawn: u32,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyPlayerTurnHistory {
+    #[new]
+    fn py_new() -> Self {
+        Self::default()
+    }
 }
 
 #[cfg(feature = "python")]
@@ -1233,6 +1243,51 @@ impl From<PyPlayerTurnHistory> for PlayerTurnHistory {
             permanents_sacrificed: value.permanents_sacrificed,
             land_entered: value.land_entered,
             cards_drawn: value.cards_drawn,
+        }
+    }
+}
+
+/// The copy effect that made a permanent a copy: the printed definition at
+/// the root of the copy chain and the exceptions in its copiable values.
+#[cfg(feature = "python")]
+#[pyclass(name = "CopyEffect")]
+#[derive(Clone, Default)]
+pub struct PyCopyEffect {
+    #[pyo3(get, set)]
+    pub registry_key: i32,
+    #[pyo3(get, set)]
+    pub name: String,
+    #[pyo3(get, set)]
+    pub exceptions: Vec<PyContinuousEffect>,
+}
+
+#[cfg(feature = "python")]
+#[pymethods]
+impl PyCopyEffect {
+    #[new]
+    fn py_new() -> Self {
+        Self::default()
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<CopyData> for PyCopyEffect {
+    fn from(value: CopyData) -> Self {
+        Self {
+            registry_key: value.registry_key,
+            name: value.name,
+            exceptions: value.exceptions.into_iter().map(Into::into).collect(),
+        }
+    }
+}
+
+#[cfg(feature = "python")]
+impl From<PyCopyEffect> for CopyData {
+    fn from(value: PyCopyEffect) -> Self {
+        Self {
+            registry_key: value.registry_key,
+            name: value.name,
+            exceptions: value.exceptions.into_iter().map(Into::into).collect(),
         }
     }
 }
@@ -1827,6 +1882,9 @@ pub struct PyPermanent {
     /// it is `id`.
     #[pyo3(get, set)]
     pub timestamp: Option<i32>,
+    /// The copy effect that made it a copy (CR 707.2); None for an original.
+    #[pyo3(get, set)]
+    pub copy: Option<PyCopyEffect>,
 }
 
 #[cfg(feature = "python")]
@@ -1863,6 +1921,7 @@ impl From<PermanentData> for PyPermanent {
             dealt_damage_this_turn: value.dealt_damage_this_turn,
             effects: value.effects.into_iter().map(Into::into).collect(),
             timestamp: value.timestamp,
+            copy: value.copy.map(Into::into),
         }
     }
 }
@@ -1901,6 +1960,7 @@ impl From<PyPermanent> for PermanentData {
             dealt_damage_this_turn: value.dealt_damage_this_turn,
             effects: value.effects.into_iter().map(Into::into).collect(),
             timestamp: value.timestamp,
+            copy: value.copy.map(Into::into),
         }
     }
 }
@@ -4172,7 +4232,7 @@ fn parse_continuation_frames_json(
                     .targets
                     .iter()
                     .any(|t| t.legal_at_resolution_start.is_some()))
-            || frame.decision > 13
+            || frame.decision > crate::agent::continuation::MAX_DECISION_CODE
             || frame.parent.is_some_and(|parent| parent >= index)
     }) {
         return Err(PyValueError::new_err(
@@ -4233,6 +4293,10 @@ fn authored_deck_keys(pack_key: &str) -> PyResult<Vec<String>> {
 pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("WORLD_VERSION", crate::WORLD_VERSION)?;
     m.add(
+        "MAX_DECISION_CODE",
+        crate::agent::continuation::MAX_DECISION_CODE,
+    )?;
+    m.add(
         "CARD_DEFINITION_COUNT",
         crate::cards::content_pack::CardRegistry::default().len(),
     )?;
@@ -4278,6 +4342,7 @@ pub fn _managym(py: Python<'_>, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<PyManaCost>()?;
     m.add_class::<PyPermanent>()?;
     m.add_class::<PyContinuousEffect>()?;
+    m.add_class::<PyCopyEffect>()?;
     m.add_class::<PyAction>()?;
     m.add_class::<PyActionSpace>()?;
     m.add_class::<PyStackTarget>()?;

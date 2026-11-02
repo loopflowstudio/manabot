@@ -6,7 +6,9 @@ use crate::{
         turn::{PhaseKind, PlayerTurnHistory, StepKind},
     },
     state::{
-        effect::{Affected, ContinuousEffect, Modification},
+        ability::PaymentCost,
+        card::{CardDefId, CardTypes},
+        effect::{Affected, ContinuousEffect, CopyEffect, Modification},
         game_object::{CardId, ObjectId, PlayerId, Target},
         mana::{ManaCost, ManaUse, SPEND_SUBTYPES},
         permanent::{CounterKind, Permanent},
@@ -187,6 +189,31 @@ pub struct CardTypeData {
     pub is_battle: bool,
 }
 
+impl CardTypeData {
+    pub fn from_types(types: &CardTypes) -> Self {
+        Self {
+            is_castable: types.is_castable(),
+            is_permanent: types.is_permanent(),
+            is_non_land_permanent: types.is_non_land_permanent(),
+            is_non_creature_permanent: types.is_non_creature_permanent(),
+            is_spell: types.is_spell(),
+            is_creature: types.is_creature(),
+            is_land: types.is_land(),
+            is_planeswalker: types.is_planeswalker(),
+            is_enchantment: types.is_enchantment(),
+            is_artifact: types.is_artifact(),
+            is_kindred: types.is_kindred(),
+            is_battle: types.is_battle(),
+        }
+    }
+}
+
+/// A card in any zone. Every field that states a characteristic (name,
+/// power/toughness, types, supertypes, subtypes, keywords, ward) reads
+/// `Game::characteristics` while the card is on the battlefield and the
+/// printed card elsewhere; identity, token status and the costs paid when
+/// casting are printed by definition. `tests/cards/observability.rs`
+/// classifies each field as layered or printed.
 #[derive(Clone, Debug, PartialEq, Eq, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CardData {
@@ -414,25 +441,85 @@ impl PermanentData {
     }
 }
 
+/// The copy effect that made a permanent a copy (CR 707.2). The
+/// permanent's definition is already the copiable values it produced.
+#[derive(Clone, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CopyData {
+    /// The printed definition at the root of the copy chain.
+    pub registry_key: i32,
+    pub name: String,
+    /// Exceptions that are part of its copiable values (CR 707.9b), in the
+    /// order they applied: modifications with the copied definition as
+    /// source, the permanent's own timestamp and an `Indefinite` duration.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exceptions: Vec<ContinuousEffectData>,
+}
+
+impl CopyData {
+    fn new(game: &Game, copy: &CopyEffect, timestamp: i32) -> Self {
+        Self {
+            registry_key: copy.of.0 as i32,
+            name: game
+                .state
+                .content
+                .definition(copy.of)
+                .map(|definition| definition.name.clone())
+                .unwrap_or_default(),
+            exceptions: copy
+                .exceptions
+                .iter()
+                .map(|exception| {
+                    ContinuousEffectData::of_modification(
+                        game,
+                        exception,
+                        "Indefinite".into(),
+                        Some(copy.of),
+                        timestamp,
+                    )
+                })
+                .collect(),
+        }
+    }
+}
+
 impl ContinuousEffectData {
     fn new(game: &Game, effect: &ContinuousEffect) -> Self {
+        Self::of_modification(
+            game,
+            &effect.modification,
+            format!("{:?}", effect.duration),
+            effect.source,
+            effect.timestamp.0 as i32,
+        )
+    }
+
+    /// One modification with its provenance: a record's, or a copy
+    /// exception's (`CopyData`).
+    fn of_modification(
+        game: &Game,
+        modification: &Modification,
+        duration: String,
+        source: Option<CardDefId>,
+        timestamp: i32,
+    ) -> Self {
         let mut data = Self {
             modification: String::new(),
-            duration: format!("{:?}", effect.duration),
-            source_registry_key: effect.source.map(|id| id.0 as i32),
-            source_name: effect
-                .source
+            duration,
+            source_registry_key: source.map(|id| id.0 as i32),
+            source_name: source
                 .and_then(|id| game.state.content.definition(id))
                 .map(|definition| definition.name.clone()),
-            timestamp: effect.timestamp.0 as i32,
+            timestamp,
             ..Default::default()
         };
-        data.modification = match &effect.modification {
+        data.modification = match modification {
             Modification::AddSubtypes(subtypes) => {
                 data.subtypes = subtypes.clone();
                 "AddSubtypes"
             }
             Modification::BecomeArtifactCreature => "BecomeArtifactCreature",
+            Modification::Nonlegendary => "Nonlegendary",
             Modification::AddKeywords(keywords) => {
                 data.keywords = keywords.names().into_iter().map(str::to_owned).collect();
                 "AddKeywords"
@@ -527,8 +614,8 @@ pub struct PermanentData {
     pub granted_firebending: i32,
     pub temp_subtypes: Vec<String>,
     /// Effective keywords — printed keywords unioned with until-EOT grants
-    /// (Yip Yip! flying, Enter the Avatar State, ...). The card entry keeps
-    /// printed keywords; this is what the permanent can actually do now.
+    /// (Yip Yip! flying, Enter the Avatar State, ...): what the permanent can
+    /// actually do now. The battlefield card entry reads the same layered view.
     pub keywords: KeywordData,
     /// Counters other than +1/+1 by kind (CR 122.1; `CounterKind` names in
     /// snake case), only the kinds present.
@@ -570,6 +657,9 @@ pub struct PermanentData {
     /// with (an attachment renews it).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub timestamp: Option<i32>,
+    /// The copy effect that made it a copy; absent for an original.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub copy: Option<CopyData>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -1101,7 +1191,7 @@ impl Observation {
                     .map(|creature_type| creature_type.to_string())
                     .collect()
             }),
-            is_granted_land: characteristics.is_land
+            is_granted_land: characteristics.is_land()
                 && !game.state.cards[permanent.card].types.is_land(),
             blocking: game.state.combat.as_ref().and_then(|combat| {
                 combat
@@ -1123,6 +1213,10 @@ impl Observation {
             effects: ContinuousEffectData::list(game, game.affected_permanent(perm_id)),
             timestamp: (permanent.timestamp != permanent.id)
                 .then_some(permanent.timestamp.0 as i32),
+            copy: game.state.cards[permanent.card]
+                .copy
+                .as_ref()
+                .map(|copy| CopyData::new(game, copy, permanent.timestamp.0 as i32)),
         };
 
         if permanent.controller.0 == self.agent.player_index as usize {
@@ -1137,7 +1231,31 @@ impl Observation {
         );
     }
 
+    /// A card's row. On the battlefield every characteristic reads the
+    /// layered view (`Game::characteristics`); elsewhere the printed card.
     fn card_data(game: &Game, card_id: CardId, zone: ZoneType) -> CardData {
+        let printed = Self::printed_card_data(game, card_id, zone);
+        match game.state.card_to_permanent[card_id] {
+            Some(permanent) if zone == ZoneType::Battlefield => {
+                let view = game.characteristics(permanent);
+                CardData {
+                    name: view.name.clone(),
+                    power: view.power,
+                    toughness: view.toughness,
+                    is_legendary: view.is_legendary,
+                    is_ally: view.has_subtype("Ally"),
+                    is_lesson: view.has_subtype("Lesson"),
+                    ward_cost: ward_value(view.ward.as_ref()),
+                    card_types: CardTypeData::from_types(&view.types),
+                    keywords: KeywordData::from_keywords(&view.keywords),
+                    ..printed
+                }
+            }
+            _ => printed,
+        }
+    }
+
+    fn printed_card_data(game: &Game, card_id: CardId, zone: ZoneType) -> CardData {
         let card = &game.state.cards[card_id];
         CardData {
             zone,
@@ -1149,40 +1267,15 @@ impl Observation {
             power: card.power.unwrap_or(0),
             toughness: card.toughness.unwrap_or(0),
             is_token: card.is_token,
-            is_legendary: card
-                .supertypes
-                .iter()
-                .any(|s| s.eq_ignore_ascii_case("legendary")),
-            // A characteristic-setting effect replaces a permanent's types.
-            is_ally: match game.state.card_to_permanent[card_id] {
-                Some(permanent) if zone == ZoneType::Battlefield => {
-                    game.characteristics(permanent).has_subtype("Ally")
-                }
-                _ => card.has_subtype("Ally"),
-            },
+            is_legendary: card.is_legendary(),
+            is_ally: card.has_subtype("Ally"),
             is_lesson: card.has_subtype("Lesson"),
-            ward_cost: card
-                .ward()
-                .map(|cost| i32::from(cost.mana_cost().mana_value))
-                .unwrap_or(0),
+            ward_cost: ward_value(card.ward()),
             kicker_cost: card
                 .optional_cost()
                 .map(|cost| i32::from(cost.mana_value))
                 .unwrap_or(0),
-            card_types: CardTypeData {
-                is_castable: card.types.is_castable(),
-                is_permanent: card.types.is_permanent(),
-                is_non_land_permanent: card.types.is_non_land_permanent(),
-                is_non_creature_permanent: card.types.is_non_creature_permanent(),
-                is_spell: card.types.is_spell(),
-                is_creature: card.types.is_creature(),
-                is_land: card.types.is_land(),
-                is_planeswalker: card.types.is_planeswalker(),
-                is_enchantment: card.types.is_enchantment(),
-                is_artifact: card.types.is_artifact(),
-                is_kindred: card.types.is_kindred(),
-                is_battle: card.types.is_battle(),
-            },
+            card_types: CardTypeData::from_types(&card.types),
             keywords: KeywordData::from_keywords(&card.keywords),
             mana_cost: card.mana_cost.clone().unwrap_or_default(),
             face_down: zone == ZoneType::Exile && game.is_foretold(card_id),
@@ -1916,4 +2009,9 @@ impl Observation {
         })
         .to_string()
     }
+}
+
+/// A ward cost's mana value; 0 without ward.
+fn ward_value(cost: Option<&PaymentCost>) -> i32 {
+    cost.map_or(0, |cost| i32::from(cost.mana_cost().mana_value))
 }

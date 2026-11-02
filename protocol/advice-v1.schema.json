@@ -1651,6 +1651,28 @@
       "title": "ContinuousEffectView",
       "type": "object"
     },
+    "CopyView": {
+      "additionalProperties": false,
+      "description": "A copy effect: the printed card it copies and its exceptions (CR 707.9b).",
+      "properties": {
+        "exceptions": {
+          "items": {
+            "$ref": "#/$defs/ContinuousEffectView"
+          },
+          "title": "Exceptions",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "CopyView",
+      "type": "object"
+    },
     "DecisionContextView": {
       "additionalProperties": false,
       "properties": {
@@ -2557,6 +2579,17 @@
           "minimum": 0,
           "title": "Controller Id",
           "type": "integer"
+        },
+        "copy_of": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CopyView"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "counters": {
           "additionalProperties": {

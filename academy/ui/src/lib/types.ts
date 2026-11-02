@@ -119,6 +119,14 @@ export interface PermanentState {
   dealt_damage_this_turn?: boolean;
   /** Continuous effects on it, in timestamp order. */
   effects?: ContinuousEffect[];
+  /** The copy effect that made it a copy (CR 707.2). */
+  copy_of?: CopyEffect;
+}
+
+/** A copy effect: the printed card it copies and the exceptions in its copiable values (CR 707.9b). */
+export interface CopyEffect {
+  name: string;
+  exceptions?: ContinuousEffect[];
 }
 
 export interface SideboardCard {

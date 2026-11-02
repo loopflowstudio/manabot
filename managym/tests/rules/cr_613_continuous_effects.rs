@@ -4,6 +4,7 @@
 //! the records are hashed and forked like the rest of the match state.
 
 use managym::{
+    agent::action::ActionSpaceKind,
     flow::turn::StepKind,
     state::{
         card::Keywords,
@@ -191,4 +192,22 @@ fn equal_records_give_equal_deterministic_hashes() {
         .effects
         .iter()
         .any(|effect| effect.affected == Affected::Player(PlayerId(1))));
+}
+
+/// CR 205.4, 704.5j: a permanent that isn't legendary through an effect is
+/// outside the legend rule while the effect lasts.
+#[test]
+fn a_nonlegendary_record_exempts_its_permanent_from_the_legend_rule() {
+    let mut s = ur_lessons_setup();
+    let first = put_onto_battlefield(&mut s, 0, "Gran-Gran");
+    until_end_of_turn(&mut s, first, Modification::Nonlegendary);
+    let second = put_onto_battlefield(&mut s, 0, "Gran-Gran");
+    s.pass_priority();
+    assert_ne!(s.action_space().kind, ActionSpaceKind::LegendRule);
+    for id in [first, second] {
+        assert_eq!(
+            s.game().state.zones.zone_of(card_of(&s, id)),
+            Some(ZoneType::Battlefield)
+        );
+    }
 }

@@ -114,9 +114,9 @@
       "digest": "8e64f1d38a247e3939da490305931fb15bfb67cdd36060fb81d2098808f92768",
       "frame": {
         "protocol": 1,
-        "match_id": "Ycu_0AmkALDds1_eKQs3ng",
+        "match_id": "HriGXG9oOsVqqe0xvS2X6w",
         "revision": 75,
-        "frame_hash": "aaa573df46a1afce238c5adaef2c12746c73ccf6fb5f966f216e66645be739ad",
+        "frame_hash": "d5932316dd46eb13f8b17ec37b3073fc0044a624c0e3bdd45108133c5a416ba2",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -727,8 +727,8 @@
                 "summoning_sick": false,
                 "power": 2,
                 "toughness": 3,
-                "base_power": 1,
-                "base_toughness": 2,
+                "base_power": 2,
+                "base_toughness": 3,
                 "plus1_counters": 0
               }
             ]
@@ -1051,7 +1051,7 @@
                 "summoning_sick": false,
                 "power": 9,
                 "toughness": 4,
-                "base_power": 0,
+                "base_power": 9,
                 "base_toughness": 4,
                 "plus1_counters": 0
               },
@@ -1774,9 +1774,9 @@
       "digest": "d2ae0e9145ae4e97f486613ce52ede3637cd96f705b0692574937beee1d4fca6",
       "frame": {
         "protocol": 1,
-        "match_id": "Nu5Bl-RJI7-mvJHkzLyv4Q",
+        "match_id": "2d5Wgp0H-BQZ8YGMgbsSFQ",
         "revision": 64,
-        "frame_hash": "633abd4de7470dc4312aa366f4efcc9057e0518f9846024c44aa05eedaa561b5",
+        "frame_hash": "a1fcf418bfb85525a699cd9982884eeda02044ec52ebdfedb039e1a8f1eae752",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -2478,8 +2478,8 @@
                 "summoning_sick": false,
                 "power": 4,
                 "toughness": 4,
-                "base_power": 2,
-                "base_toughness": 2,
+                "base_power": 4,
+                "base_toughness": 4,
                 "plus1_counters": 2
               },
               {
@@ -2526,8 +2526,8 @@
                 "summoning_sick": false,
                 "power": 5,
                 "toughness": 5,
-                "base_power": 1,
-                "base_toughness": 1,
+                "base_power": 5,
+                "base_toughness": 5,
                 "plus1_counters": 4
               },
               {
@@ -3055,9 +3055,9 @@
       "digest": "9ee4de4cffcf8139aea772b8d9074e97cc0716946b6440b89251a5c5bf16b90c",
       "frame": {
         "protocol": 1,
-        "match_id": "EI1bK8x4ty0Mlb_u67XoFQ",
+        "match_id": "9CX2oFWwux9bnyuYBBBbaw",
         "revision": 90,
-        "frame_hash": "3a1eafbb0f19bd868062801fe2c84d9f22364d4150f50ec2305da7a18a690023",
+        "frame_hash": "272bac3eec0294340a89534b9bd7709c112df0b97f8631373566eac0ddd38fbb",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -3740,8 +3740,8 @@
                 "summoning_sick": false,
                 "power": 2,
                 "toughness": 2,
-                "base_power": 0,
-                "base_toughness": 0,
+                "base_power": 2,
+                "base_toughness": 2,
                 "plus1_counters": 2
               },
               {
@@ -3836,8 +3836,8 @@
                 "summoning_sick": false,
                 "power": 1,
                 "toughness": 1,
-                "base_power": 0,
-                "base_toughness": 0,
+                "base_power": 1,
+                "base_toughness": 1,
                 "plus1_counters": 1
               },
               {
@@ -3860,8 +3860,8 @@
                 "summoning_sick": false,
                 "power": 3,
                 "toughness": 3,
-                "base_power": 2,
-                "base_toughness": 2,
+                "base_power": 3,
+                "base_toughness": 3,
                 "plus1_counters": 0
               },
               {
@@ -3884,8 +3884,8 @@
                 "summoning_sick": false,
                 "power": 3,
                 "toughness": 3,
-                "base_power": 2,
-                "base_toughness": 2,
+                "base_power": 3,
+                "base_toughness": 3,
                 "plus1_counters": 0
               },
               {
@@ -4350,9 +4350,9 @@
       "digest": "5fba47de33986c30b7730795c95391cee9977a597ac6e2cf464e2aa2619a4ff5",
       "frame": {
         "protocol": 1,
-        "match_id": "zxg-4QdkRrvG8_hsePexZw",
+        "match_id": "6j9el5KTGtc6Re4TtsbYPQ",
         "revision": 36,
-        "frame_hash": "c5a67de76fb85f186fe47ada3c3c6f317eba8af0c04bca146af0d00c8fee9b00",
+        "frame_hash": "eba708a890d1f87e88036f6f099a74e95f361436b3625aa441e9a656d9f5f787",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -4920,8 +4920,8 @@
                 "summoning_sick": false,
                 "power": 3,
                 "toughness": 3,
-                "base_power": 2,
-                "base_toughness": 2,
+                "base_power": 3,
+                "base_toughness": 3,
                 "plus1_counters": 1,
                 "attacking": true
               },
@@ -4969,8 +4969,8 @@
                 "summoning_sick": false,
                 "power": 2,
                 "toughness": 2,
-                "base_power": 1,
-                "base_toughness": 1,
+                "base_power": 2,
+                "base_toughness": 2,
                 "plus1_counters": 1,
                 "attacking": true
               },
@@ -5277,9 +5277,9 @@
       "digest": "98145c0467f4f407a6fe048ce3c2ba8aa8216be9c69f8e30fe4c06dba6dcdbd0",
       "frame": {
         "protocol": 1,
-        "match_id": "Nx7jKF5K8KLYYF-UYpd4XA",
+        "match_id": "TOgQcnoIf2r2txbqdaW-sA",
         "revision": 56,
-        "frame_hash": "871b57ec38b1fa3b0b3a8bfd6eda2c7053c165871508a709024d07acb76fa90c",
+        "frame_hash": "524a6919b0885229ae46544ab2243be8aa222c60644db051e27e613aa02034a4",
         "content_hash": "legacy-content-unversioned",
         "asset_manifest_hash": "f5c70dc828de578ed7ee3b833195dd57b65a1f4bcde2dc979710d4feff6f681d",
         "status": "ready",
@@ -5996,8 +5996,8 @@
                 "summoning_sick": false,
                 "power": 3,
                 "toughness": 3,
-                "base_power": 2,
-                "base_toughness": 2,
+                "base_power": 3,
+                "base_toughness": 3,
                 "plus1_counters": 1
               },
               {
@@ -6044,8 +6044,8 @@
                 "summoning_sick": false,
                 "power": 3,
                 "toughness": 3,
-                "base_power": 1,
-                "base_toughness": 1,
+                "base_power": 3,
+                "base_toughness": 3,
                 "plus1_counters": 2
               },
               {
@@ -6237,6 +6237,6 @@
     }
   },
   "world": "w11",
-  "source_base_commit": "072adf12627809df87625fb000b70521ebb0e1ff",
+  "source_base_commit": "e8fd88eedf184a23079fe708e4da2056186d0f74",
   "world_version": "w17"
 }
