@@ -139,9 +139,9 @@ mod tests {
     #[test]
     fn simulation_count_and_chosen_action_remain_in_digest() {
         let mut result = result(&[0.75, 0.25]);
-        let original = digest(&[result.clone()]);
+        let original = digest(std::slice::from_ref(&result));
         result.simulations += 1;
-        assert_ne!(original, digest(&[result.clone()]));
+        assert_ne!(original, digest(std::slice::from_ref(&result)));
         result.simulations -= 1;
         let mut changed_choice = blake3::Hasher::new();
         digest_decision(&mut changed_choice, &result, 1);

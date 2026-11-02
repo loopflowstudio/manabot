@@ -91,7 +91,7 @@ settled by the accepted decisions, with no open product choice:
   lists), an accepted cost or a kept speedup; compare's "baseline file" row
   says "digests do not describe the reference" and leaves recovery to the
   footer.
-- Fourth (reviewed at 078d37ef4; implementation in progress):
+- Fourth (reviewed at 078d37ef4; fixed in e5615edcc):
   the Task's score-preservation check currently protects only the chosen
   action and simulation count. `bench_search` folds
   `result.simulations + best` into `scores_digest`, never `result.scores`.
@@ -105,23 +105,16 @@ settled by the accepted decisions, with no open product choice:
   existing simulation/choice evidence. Keep the workload, timings, 10%
   tolerance, same-runner comparison and artifact adoption interaction.
 
-  Next implement direction: make the benchmark's digest cover the ordered
-  score vector with a deterministic encoding, and prove with a controlled
-  fixture that changing a losing score while preserving the winner and
-  simulation count changes the digest. Also prove identical results repeat
-  and changed digests fail even for a speedup. No engine/API redesign is
-  needed: `FlatMcResult.scores` already owns the data; the comparator and
-  baseline can keep their integer-digest shape. Describe this scope in the
-  existing usage docs. Re-record the reference through a real CI artifact
-  with a reason for the benchmark digest change; do not calculate replacement
-  baseline digests by hand or reinterpret old measurements. The existing
-  T4/T5/T6 timings remain dated evidence from the earlier digest, not proof
-  of full-score equality. Label that limitation when retaining their table.
-  Normal recovery is the existing download → `record --reason` → commit →
-  rerun path. The next PR proof must show that the strengthened digests match
-  the recorded reference and that the candidate artifact still survives a
-  reference-build failure. Outcome: design clarified; implementation work
-  remains; no unresolved product choice.
+  Implemented with length-framed little-endian IEEE-754 score bits and
+  separate simulation/choice words in BLAKE3 (first 64 bits retain the
+  integer output shape). Controlled fixtures preserve repeatability and
+  detect changed losing scores, action order, decision boundaries and
+  simulation/choice changes. Existing comparator coverage rejects changed
+  digests even during speedups. CI artifact 41540798745 records the new
+  reference through `record --reason`; old T4/T5/T6 measurements retain
+  their documented winner-only digest limitation. PR proof of matching
+  strengthened digests and candidate recovery after reference-build failure
+  remains with gate/CI. No unresolved product choice.
 
 Checked paths: PASS table and merge; 12% slower with matching digests (fix,
 or record the head and cite the delta from the failing run); a baseline whose
@@ -134,32 +127,30 @@ dedicated runner is worth buying.
 ## Status (reconciled 2026-11-02, fourth-review implement)
 
 Exists: workflow, both benchmarks, comparator, tests, baseline file,
-AGENTS.md note and `docs/development.md` section with the T4/T5/T6 table.
-Reference 4c8324a59 recorded from CI run 41517623999; full CI validated by
-workflow_dispatch run 41527511986 at 07512aa8c (Engine Budget A/B included).
-Every commit since has passed tests and actionlint locally but not CI: the
-branch has no PR and branch pushes do not trigger CI.
-Main moved to 29660d00c (docs/ARCHITECTURE.md and scratch only), merged at
-49765237c; the reference 4c8324a59 still describes the engine (checked
-2026-11-02).
+AGENTS.md note and `docs/development.md` section with the historical T4/T5/T6
+figures and their digest limitation. Completed workflow work at 078d37ef4
+is preserved. Main 29660d00c was merged at 49765237c.
 
-Implemented: length-framed little-endian score bits, simulation count and
-chosen action feed BLAKE3, truncated to the existing u64 output. Controlled
-example tests cover repeated results, a changed losing score with the same
-winner and simulation count, action order, decision boundaries and retained
-simulation/choice evidence. `test = true` includes them in ordinary CI
-`cargo test`; benchmark-only edits select the Rust job too. No engine
-source or workload changed. Historical timings now
-state their original digest limitation.
+Full-score digest implementation: e5615edcc. The focused example tests are
+included in ordinary `cargo test`; benchmark-only edits select Rust too.
+No engine source, workload, timing boundary or tolerance changed. The new
+reference is e5615edcc7f6a7f1ef7adf83ce1a15f8302ac0b9, adopted using
+`record --reason` from successful CI measurement run
+https://github.com/loopflowstudio/manabot/actions/runs/41540798745.
+Artifact: `.cache/engine-budget-score-digest`. The job recorded 120 decisions,
+409.358 s total / 14.258 s worst, and 99,923 steps in 512 games at 6,829.1/s
+on AMD EPYC 7763. Those timings are orientation only, not a cross-run delta.
+The steps digest is unchanged. The three new full-score digests come from
+that artifact, not calculations or reinterpretation of historical results.
 
-Remains: the new CI recording, then
-publication, owned by the caller: open the PR with the T4/T5/T6
-figures in its body; the PR run confirms path selection on `pull_request`,
-the PR-head checkout, the candidate-first order with its two summary blocks,
-the flagless compare step and that the artifact's `measurement.json` names
-the PR head; the first main run after merge confirms the push path; the
-`measure` path wants one dispatch before the next historical measurement
-(gate/CI).
+Remains, owned by later steps: affected gate suites and publication with the
+T4/T5/T6 figures and their limitation in the PR body. The PR run confirms
+path selection, PR-head checkout, candidate-first recovery after a reference
+build failure, the two summary blocks, flagless same-runner comparison with
+the strengthened baseline, and artifact identity. The first main run after
+merge confirms the push path. The measurement dispatch path passed in
+41540798745. Interactive demo remains its declared boundary; shipping is
+not authorized.
 
 Proposed Wave memory, not written (no step so far maintains Wave memory):
 engine speed now has a CI budget relative to a committed reference commit;
@@ -169,5 +160,5 @@ steps/s and 13.8 s worst Search-64 reply on EPYC 7763. Write it to
 
 Check: focused debug `cargo test --example bench_search -j 2` → 4 passed;
 `uv run --extra dev pytest tests/infra/test_engine_budget.py tests/infra/test_ci_selection.py -q`
-→ 57 passed; `cargo fmt --check` clean (2026-11-02). Full affected suites
+→ 57 passed; `cargo fmt --check` and focused Clippy clean (2026-11-02). Full affected suites
 and PR verification remain with gate/CI.

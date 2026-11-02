@@ -1,35 +1,35 @@
 {
   "tolerance": 0.1,
   "reference": {
-    "commit": "4c8324a59516b9738fe55f925ea35ecbb28e369c",
+    "commit": "e5615edcc7f6a7f1ef7adf83ce1a15f8302ac0b9",
     "date": "2026-11-02",
-    "run": "https://github.com/loopflowstudio/manabot/actions/runs/41517623999",
-    "runner": "GitHub-hosted ubuntu-24.04, AMD EPYC 7763 (4 vCPU), release",
-    "reason": "First reference: main at TLA batch T4, the base of MTG-237."
+    "run": "https://github.com/loopflowstudio/manabot/actions/runs/41540798745",
+    "runner": "GitHub-hosted ubuntu-24.04, AMD EPYC 7763 64-Core Processor (4 vCPU), release",
+    "reason": "Strengthen bench_search to digest every ordered action score and decision boundary, retaining simulation counts and chosen actions. No engine, workload or tolerance change; replaces the winner-only digest limitation."
   },
   "bench_search": {
-    "worst_s": 13.807,
-    "total_s": 408.912,
+    "worst_s": 14.258,
+    "total_s": 409.358,
     "seeds": {
       "1": {
-        "worst_s": 13.807,
-        "total_s": 179.272,
-        "digest": 3929171216812047577
+        "worst_s": 14.258,
+        "total_s": 179.232,
+        "digest": 5192957023818819312
       },
       "2": {
-        "worst_s": 8.519,
-        "total_s": 107.319,
-        "digest": 4710253461277237463
+        "worst_s": 8.573,
+        "total_s": 107.842,
+        "digest": 14020561159006433540
       },
       "3": {
-        "worst_s": 12.594,
-        "total_s": 122.321,
-        "digest": 8287291947930727881
+        "worst_s": 12.61,
+        "total_s": 122.284,
+        "digest": 12455483057923843581
       }
     }
   },
   "bench_steps": {
-    "steps_per_s": 6819.5,
+    "steps_per_s": 6829.1,
     "steps": 99923,
     "games": 512,
     "digest": 12247096877573042301

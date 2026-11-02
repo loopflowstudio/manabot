@@ -16,8 +16,8 @@ work. The current Task decisions follow.
 - Digests are asserted identical for both workloads, so any rules change
   reaching the curated decks (or the deal) moves the baseline deliberately
   with a reason, as the review asked for search results. The random-play
-  digest is more sensitive than the search digest: it sees every legal-action
-  count. Expected cost: one `record` per rules PR touching these cards.
+  digest also sees every legal-action count; search now covers all ordered
+  scores, not only winning actions. Expected cost: one `record` per rules PR touching these cards.
 - The budget runs as a `ci.yml` job via `workflow_call` so the Tests Result
   aggregate owns it and docs-only PRs skip it; every job is its own VM, which
   is the quiet runner. `ubuntu-24.04` is pinned rather than `ubuntu-latest` so
