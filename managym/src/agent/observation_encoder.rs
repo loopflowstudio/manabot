@@ -98,16 +98,24 @@ pub enum FactKind {
     /// A continuous-effect record (id: its `Modification`), one row per
     /// keyword, subtype or color it names.
     Effect = 6,
+    /// The copy effect that made a permanent a copy (CR 707.2); source: the
+    /// copied printed definition, order: the copy's timestamp.
+    Copy = 7,
+    /// An exception that is part of a copy's copiable values (CR 707.9b),
+    /// encoded like an `Effect` row of the same `Modification`.
+    CopyException = 8,
 }
 
 impl FactKind {
-    pub const ALL: [FactKind; 6] = [
+    pub const ALL: [FactKind; 8] = [
         FactKind::Counter,
         FactKind::AddedSubtype,
         FactKind::SetName,
         FactKind::SetCreatureType,
         FactKind::UsedAbility,
         FactKind::Effect,
+        FactKind::Copy,
+        FactKind::CopyException,
     ];
 }
 
@@ -1087,6 +1095,22 @@ fn facts(obs: &Observation) -> Vec<Fact> {
             push(object, FactKind::UsedAbility, *index as i32, 1.0);
         }
     }
+    for permanent in permanents() {
+        let Some(copy) = &permanent.copy else {
+            continue;
+        };
+        out.push(Fact {
+            object: permanent.id,
+            kind: FactKind::Copy,
+            id: name_value("CopyEffect"),
+            detail: 0,
+            values: [0.0, 0.0],
+            effect: Some((2.0, permanent.timestamp(), Some(copy.registry_key))),
+        });
+        for exception in &copy.exceptions {
+            effect_facts(permanent.id, FactKind::CopyException, exception, &mut out);
+        }
+    }
     let holders = [
         (obs.agent.id, &obs.agent.effects),
         (obs.opponent.id, &obs.opponent.effects),
@@ -1095,13 +1119,15 @@ fn facts(obs: &Observation) -> Vec<Fact> {
     .chain(permanents().map(|permanent| (permanent.id, &permanent.effects)));
     for (object, effects) in holders {
         for effect in effects {
-            effect_facts(object, effect, &mut out);
+            effect_facts(object, FactKind::Effect, effect, &mut out);
         }
     }
     out
 }
 
-fn effect_facts(object: i32, effect: &ContinuousEffectData, out: &mut Vec<Fact>) {
+/// The rows of one modification: a record (`FactKind::Effect`) or a copy
+/// exception (`FactKind::CopyException`).
+fn effect_facts(object: i32, kind: FactKind, effect: &ContinuousEffectData, out: &mut Vec<Fact>) {
     let id = name_value(&format!("Modification::{}", effect.modification));
     let duration = match effect.duration.as_str() {
         "EndOfTurn" => 1.0,
@@ -1127,7 +1153,7 @@ fn effect_facts(object: i32, effect: &ContinuousEffectData, out: &mut Vec<Fact>)
     for detail in if details.is_empty() { vec![0] } else { details } {
         out.push(Fact {
             object,
-            kind: FactKind::Effect,
+            kind,
             id,
             detail,
             values,

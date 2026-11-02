@@ -149,8 +149,10 @@ def _serialize_permanent(
         "damage": int(permanent.damage),
         "summoning_sick": bool(permanent.is_summoning_sick),
         # Effective P/T (statics, until-EOT buffs, +1/+1 counters) — what the
-        # SBA actually checks. Printed values ride alongside so the UI can
-        # show "4/4 (2/2)" on a buffed permanent.
+        # SBA actually checks. `base_power` / `base_toughness` are the card
+        # row's values; on the battlefield the card row reads the layered
+        # characteristics too, so they equal the effective values there.
+        # Printed P/T is not in the projection.
         "power": int(permanent.power),
         "toughness": int(permanent.toughness),
         "base_power": int(card.power) if card else None,
@@ -174,11 +176,13 @@ def _characteristics(permanent: managym.Permanent) -> dict[str, Any]:
         "used_abilities": list(permanent.used_abilities) or None,
         "dealt_damage_this_turn": bool(permanent.dealt_damage_this_turn) or None,
         "effects": _effects(permanent.effects) or None,
+        "copy_of": _copy(permanent.copy),
     }
     return {key: value for key, value in values.items() if value is not None}
 
 
 def _turn_history(history: managym.PlayerTurnHistory) -> dict[str, Any]:
+    """What a player has done this turn, absent facts omitted."""
     values = {
         "attacked": history.attacked,
         "permanents_sacrificed": history.permanents_sacrificed,
@@ -186,6 +190,14 @@ def _turn_history(history: managym.PlayerTurnHistory) -> dict[str, Any]:
         "cards_drawn": history.cards_drawn,
     }
     return {key: value for key, value in values.items() if value}
+
+
+def _copy(copy: managym.CopyEffect | None) -> dict[str, Any] | None:
+    """The copy effect that made a permanent a copy, or None for an original."""
+    if copy is None:
+        return None
+    exceptions = _effects(copy.exceptions)
+    return {"name": copy.name, **({"exceptions": exceptions} if exceptions else {})}
 
 
 def _effects(effects: list[managym.ContinuousEffect]) -> list[dict[str, Any]]:
